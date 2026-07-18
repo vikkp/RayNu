@@ -1,12 +1,13 @@
-//! M1.2 / M2.0 / M2.1 — VMLAUNCH under EPT: store + loop + HLT.
+//! M1.2 / M2.x — VMLAUNCH under EPT: store + loop + HLT + ownership gate.
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
-//! VERIFICATION: L1 — control words + EPTP from capability MSRs
+//! VERIFICATION: L1 — control words + EPTP + ownership registry
 //!
 //! Guest shares host CR3 (UEFI identity paging). EPT identity-maps the first
 //! 4 GiB so GPA→HPA is 1:1. Guest RIP points at an owned page that stores a
-//! magic value, runs a short increment loop, then `hlt` (M2.1).
+//! magic value, runs a short increment loop, then `hlt`. M2.2 requires the
+//! ADR-004 ownership self-test latch before emitting `RAYNU-V-M2-OWN-OK`.
 
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
@@ -16,6 +17,7 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
+use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
@@ -604,6 +606,12 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
             serial::write_line("boot: ERROR — guest store/loop verify failed");
             ok = false;
         }
+        if ept::ownership_selftest_ok() {
+            serial::write_line(M2_OWN_OK_MARKER);
+        } else {
+            serial::write_line("boot: ERROR — ADR-004 ownership latch clear");
+            ok = false;
+        }
     } else {
         serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
     }
@@ -613,7 +621,7 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M2.1 complete");
+    serial::write_line("boot: M2.2 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -658,6 +666,7 @@ mod launch_test {
         assert_eq!(M1_VMEXIT_OK_MARKER, "RAYNU-V-M1-VMEXIT-OK");
         assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
+        assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
     }
 }

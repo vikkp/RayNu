@@ -6,6 +6,7 @@
 //! M1.2: VMLAUNCH → one HLT VMEXIT.
 //! M2.0: same path under EPT identity map (`RAYNU-V-M2-EPT-OK`).
 //! M2.1: guest store + loop then HLT (`RAYNU-V-M2-GUEST-OK`).
+//! M2.2: ADR-004 ownership self-test (`RAYNU-V-M2-OWN-OK`).
 
 #![no_main]
 #![no_std]
@@ -84,7 +85,7 @@ fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
 }
 
 fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
-    boot::serial::write_line("boot: M1.1 complete — entering M2.1 guest store + EPT");
+    boot::serial::write_line("boot: M1.1 complete — entering M2.2 ownership + guest EPT");
 
     // SAFETY: VMX root; capability MSR is defined when VMX is present.
     let page_size = match unsafe { memory::ept_hw::select_page_size() } {
@@ -134,6 +135,34 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
         let _ = life.disable();
         return;
     };
+    let Some(guest_stack) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for guest stack");
+        let _ = life.disable();
+        return;
+    };
+
+    // ADR-004: claim guest pages before launch; reject HPA aliasing.
+    match memory::run_ownership_selftest(guest_code.0, guest_stack.0) {
+        Ok(()) => {
+            audit::integrity::record_event(audit::AuditEvent::EptMapped {
+                guest_id: memory::M2_BRINGUP_GUEST_ID,
+                gpa: guest_code.0,
+                hpa: guest_code.0,
+            });
+            audit::integrity::record_event(audit::AuditEvent::EptMapped {
+                guest_id: memory::M2_BRINGUP_GUEST_ID,
+                gpa: guest_stack.0,
+                hpa: guest_stack.0,
+            });
+            boot::serial::write_line("boot: ADR-004 ownership selftest ok");
+        }
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — ADR-004 ownership selftest failed");
+            let _ = life.disable();
+            return;
+        }
+    }
+
     // SAFETY: owned frame, identity-mapped by UEFI; clear NX so guest can fetch.
     unsafe {
         memory::ept_hw::write_guest_store_page(guest_code.0);
@@ -146,11 +175,6 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
 
     let Some(vmcs) = frames.alloc_frame() else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");
-        let _ = life.disable();
-        return;
-    };
-    let Some(guest_stack) = frames.alloc_frame() else {
-        boot::serial::write_line("boot: ERROR — no frame for guest stack");
         let _ = life.disable();
         return;
     };
@@ -198,7 +222,7 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
             boot::serial::write_line("boot: ERROR — run_hlt_guest returned Ok");
         }
         Err(e) => {
-            boot::serial::write_str("boot: ERROR — M2.1 launch failed: ");
+            boot::serial::write_str("boot: ERROR — M2.2 launch failed: ");
             boot::serial::write_line(launch_err_name(e));
         }
     }
