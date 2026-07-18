@@ -4,9 +4,10 @@
 //! M1.0: ExitBootServices + frame pool.
 //! M1.1: VMXON (requires VT-x; QEMU needs KVM nested).
 //! M1.2: VMLAUNCH → one HLT VMEXIT.
-//! M2.0: same path under EPT identity map (`RAYNU-V-M2-EPT-OK`).
-//! M2.1: guest store + loop then HLT (`RAYNU-V-M2-GUEST-OK`).
-//! M2.2: ADR-004 ownership self-test (`RAYNU-V-M2-OWN-OK`).
+//! M2.0: EPT identity map (`RAYNU-V-M2-EPT-OK`).
+//! M2.1: guest store + loop (`RAYNU-V-M2-GUEST-OK`).
+//! M2.2: ADR-004 ownership (`RAYNU-V-M2-OWN-OK`).
+//! M2.3: Proven Core frame allocator (`RAYNU-V-M2-ALLOC-OK`).
 
 #![no_main]
 #![no_std]
@@ -37,14 +38,41 @@ fn main() -> Status {
 
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
     let handoff = unsafe { boot::handoff::leave_firmware() };
-    let mut frames = handoff.frames;
+    let mut bump = handoff.frames;
 
     boot::serial::write_str("boot: handoff pool remaining_pages=");
-    write_dec(frames.remaining_pages());
+    write_dec(bump.remaining_pages());
     boot::serial::write_byte(b'\n');
-    boot::serial::write_line("boot: M1.0 complete — entering M1.1/M2.0 VMX+EPT");
 
-    run_m1_vmx(&mut frames);
+    let mut alloc = match memory::boot_alloc::bootstrap_from_bump(&mut bump) {
+        Ok(a) => a,
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — frame allocator bootstrap failed");
+            boot::serial::qemu_exit_failure();
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+    };
+    boot::serial::write_str("boot: FrameAllocator capacity_pages=");
+    write_dec(alloc.capacity());
+    boot::serial::write_str(" base=0x");
+    write_hex(alloc.base_phys());
+    boot::serial::write_byte(b'\n');
+
+    match memory::run_allocator_selftest(&mut alloc) {
+        Ok(()) => boot::serial::write_line("boot: allocator selftest ok"),
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — allocator selftest failed");
+            boot::serial::qemu_exit_failure();
+            loop {
+                core::hint::spin_loop();
+            }
+        }
+    }
+
+    boot::serial::write_line("boot: M1.0 complete — entering M1.1/M2 VMX+EPT");
+    run_m1_vmx(&mut alloc);
 
     boot::serial::write_line("boot: M1 path finished without VMEXIT marker");
     boot::serial::qemu_exit_success();
@@ -54,28 +82,35 @@ fn main() -> Status {
     }
 }
 
-fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
+fn alloc_phys(alloc: &mut memory::FrameAllocator) -> Option<u64> {
+    alloc.allocate_frame().map(|f| {
+        audit::integrity::record_event(audit::AuditEvent::FrameAllocated { frame: f.0 });
+        f.to_phys()
+    })
+}
+
+fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
     if !arch::cpu::vmx_supported() {
         boot::serial::write_line("boot: CPUID.VMX clear — need KVM nested / VT-x");
         boot::serial::write_line(vmx::M1_VMXON_SKIP_MARKER);
         return;
     }
 
-    let Some(vmxon_region) = frames.alloc_frame() else {
+    let Some(vmxon_region) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMXON region");
         return;
     };
 
     boot::serial::write_str("boot: VMXON region phys=0x");
-    write_hex(vmxon_region.0);
+    write_hex(vmxon_region);
     boot::serial::write_byte(b'\n');
 
     let mut life = vmx::VmxLifecycle::new();
-    match life.enable(vmxon_region.0) {
+    match life.enable(vmxon_region) {
         Ok(()) => {
             boot::serial::write_line(vmx::M1_VMXON_OK_MARKER);
             audit::integrity::record_event(audit::AuditEvent::VmxEnabled { vcpu_id: 0 });
-            run_m2_ept_launch(frames, &mut life);
+            run_m2_ept_launch(alloc, &mut life);
         }
         Err(e) => {
             boot::serial::write_str("boot: ERROR — VMXON failed: ");
@@ -84,8 +119,8 @@ fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
     }
 }
 
-fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
-    boot::serial::write_line("boot: M1.1 complete — entering M2.2 ownership + guest EPT");
+fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLifecycle) {
+    boot::serial::write_line("boot: M1.1 complete — entering M2 EPT + guest");
 
     // SAFETY: VMX root; capability MSR is defined when VMX is present.
     let page_size = match unsafe { memory::ept_hw::select_page_size() } {
@@ -110,12 +145,12 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
         return;
     }
     for slot in ept_frames.iter_mut().take(ept_need) {
-        let Some(f) = frames.alloc_frame() else {
+        let Some(f) = alloc_phys(alloc) else {
             boot::serial::write_line("boot: ERROR — no frame for EPT tables");
             let _ = life.disable();
             return;
         };
-        *slot = f.0;
+        *slot = f;
     }
 
     // SAFETY: frames exclusively owned by this path.
@@ -130,29 +165,29 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
         }
     };
 
-    let Some(guest_code) = frames.alloc_frame() else {
+    let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
         let _ = life.disable();
         return;
     };
-    let Some(guest_stack) = frames.alloc_frame() else {
+    let Some(guest_stack) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest stack");
         let _ = life.disable();
         return;
     };
 
     // ADR-004: claim guest pages before launch; reject HPA aliasing.
-    match memory::run_ownership_selftest(guest_code.0, guest_stack.0) {
+    match memory::run_ownership_selftest(guest_code, guest_stack) {
         Ok(()) => {
             audit::integrity::record_event(audit::AuditEvent::EptMapped {
                 guest_id: memory::M2_BRINGUP_GUEST_ID,
-                gpa: guest_code.0,
-                hpa: guest_code.0,
+                gpa: guest_code,
+                hpa: guest_code,
             });
             audit::integrity::record_event(audit::AuditEvent::EptMapped {
                 guest_id: memory::M2_BRINGUP_GUEST_ID,
-                gpa: guest_stack.0,
-                hpa: guest_stack.0,
+                gpa: guest_stack,
+                hpa: guest_stack,
             });
             boot::serial::write_line("boot: ADR-004 ownership selftest ok");
         }
@@ -165,53 +200,53 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
 
     // SAFETY: owned frame, identity-mapped by UEFI; clear NX so guest can fetch.
     unsafe {
-        memory::ept_hw::write_guest_store_page(guest_code.0);
-        if !arch::cpu::clear_nx_identity(guest_code.0) {
+        memory::ept_hw::write_guest_store_page(guest_code);
+        if !arch::cpu::clear_nx_identity(guest_code) {
             boot::serial::write_line("boot: ERROR — could not clear NX on guest code page");
             let _ = life.disable();
             return;
         }
     };
 
-    let Some(vmcs) = frames.alloc_frame() else {
+    let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");
         let _ = life.disable();
         return;
     };
-    let Some(host_stack) = frames.alloc_frame() else {
+    let Some(host_stack) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for host stack");
         let _ = life.disable();
         return;
     };
-    let Some(tss) = frames.alloc_frame() else {
+    let Some(tss) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for TSS");
         let _ = life.disable();
         return;
     };
-    let Some(gdt) = frames.alloc_frame() else {
+    let Some(gdt) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for GDT");
         let _ = life.disable();
         return;
     };
-    let msr_bitmap = frames.alloc_frame();
-    let io_a = frames.alloc_frame();
-    let io_b = frames.alloc_frame();
+    let msr_bitmap = alloc_phys(alloc);
+    let io_a = alloc_phys(alloc);
+    let io_b = alloc_phys(alloc);
 
     let launch_frames = vmx::LaunchFrames {
-        vmcs_phys: vmcs.0,
-        guest_stack_phys: guest_stack.0,
-        host_stack_phys: host_stack.0,
-        tss_phys: tss.0,
-        gdt_phys: gdt.0,
+        vmcs_phys: vmcs,
+        guest_stack_phys: guest_stack,
+        host_stack_phys: host_stack,
+        tss_phys: tss,
+        gdt_phys: gdt,
         eptp,
-        guest_code_phys: guest_code.0,
-        msr_bitmap_phys: msr_bitmap.map(|p| p.0),
-        io_bitmap_a_phys: io_a.map(|p| p.0),
-        io_bitmap_b_phys: io_b.map(|p| p.0),
+        guest_code_phys: guest_code,
+        msr_bitmap_phys: msr_bitmap,
+        io_bitmap_a_phys: io_a,
+        io_bitmap_b_phys: io_b,
     };
 
     boot::serial::write_str("boot: VMCS phys=0x");
-    write_hex(vmcs.0);
+    write_hex(vmcs);
     boot::serial::write_str(" EPTP=0x");
     write_hex(eptp);
     boot::serial::write_byte(b'\n');
@@ -222,7 +257,7 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
             boot::serial::write_line("boot: ERROR — run_hlt_guest returned Ok");
         }
         Err(e) => {
-            boot::serial::write_str("boot: ERROR — M2.2 launch failed: ");
+            boot::serial::write_str("boot: ERROR — M2 launch failed: ");
             boot::serial::write_line(launch_err_name(e));
         }
     }

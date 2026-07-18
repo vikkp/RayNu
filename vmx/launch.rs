@@ -8,6 +8,7 @@
 //! 4 GiB so GPA→HPA is 1:1. Guest RIP points at an owned page that stores a
 //! magic value, runs a short increment loop, then `hlt`. M2.2 requires the
 //! ADR-004 ownership self-test latch before emitting `RAYNU-V-M2-OWN-OK`.
+//! M2.3 requires the frame-allocator self-test latch for `RAYNU-V-M2-ALLOC-OK`.
 
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
@@ -19,6 +20,7 @@ use crate::arch::cpu::{
 use crate::boot::serial;
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
+use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
@@ -612,6 +614,12 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
             serial::write_line("boot: ERROR — ADR-004 ownership latch clear");
             ok = false;
         }
+        if frame_allocator::allocator_selftest_ok() {
+            serial::write_line(M2_ALLOC_OK_MARKER);
+        } else {
+            serial::write_line("boot: ERROR — frame allocator latch clear");
+            ok = false;
+        }
     } else {
         serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
     }
@@ -621,7 +629,7 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M2.2 complete");
+    serial::write_line("boot: M2.3 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -667,6 +675,7 @@ mod launch_test {
         assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
         assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");
+        assert_eq!(M2_ALLOC_OK_MARKER, "RAYNU-V-M2-ALLOC-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
     }
 }

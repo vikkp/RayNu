@@ -208,17 +208,6 @@ impl Default for EptMap {
     }
 }
 
-impl PhysFrame {
-    /// 4K frame number for a physical address.
-    pub const fn from_phys(phys: u64) -> Self {
-        Self(phys >> 12)
-    }
-
-    pub const fn to_phys(self) -> u64 {
-        self.0 << 12
-    }
-}
-
 /// Claim bring-up guest pages and prove exclusive ownership (ADR-004).
 ///
 /// Registers `code_phys` and `stack_phys` for [`M2_BRINGUP_GUEST_ID`], then

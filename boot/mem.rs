@@ -68,6 +68,20 @@ impl FrameBump {
         self.next += PAGE_SIZE;
         Some(PhysAddr(frame))
     }
+
+    /// Take the entire remaining contiguous span as `(start_phys, page_count)`.
+    ///
+    /// Empties the bump. Used when promoting the pool into the Proven Core
+    /// frame allocator (`memory::frame_allocator`).
+    pub fn take_remaining(&mut self) -> Option<(u64, u64)> {
+        let pages = self.remaining_pages();
+        if pages == 0 {
+            return None;
+        }
+        let start = self.next;
+        self.next = self.end;
+        Some((start, pages))
+    }
 }
 
 /// Choose a conventional-memory region suitable for the early HV pool.
