@@ -17,6 +17,7 @@ pub struct VmcsOpError;
 #[inline]
 pub unsafe fn vmwrite(encoding: u64, value: u64) -> Result<(), VmcsOpError> {
     let mut failed: u8;
+    // Intel syntax: VMWRITE r64, r/m64 — value first, field encoding second (SDM Vol. 2).
     core::arch::asm!(
         "vmwrite {value}, {encoding}",
         "setbe {failed}",

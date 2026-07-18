@@ -150,7 +150,7 @@ fn launch_err_name(e: vmx::LaunchError) -> &'static str {
         vmx::LaunchError::PrepareFailed => "PrepareFailed",
         vmx::LaunchError::ClearFailed => "ClearFailed",
         vmx::LaunchError::PtrldFailed => "PtrldFailed",
-        vmx::LaunchError::VmwriteFailed => "VmwriteFailed",
+        vmx::LaunchError::VmwriteFailed { .. } => "VmwriteFailed",
         vmx::LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }
 }
