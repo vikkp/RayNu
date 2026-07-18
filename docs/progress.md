@@ -35,6 +35,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.1** CPUID filter (`RAYNU-V-M3-CPUID-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for M3.1 (`RAYNU-V-M3-CPUID-OK`).
 2. M3.2 kernel load → M3.3 earlyprintk.
 3. Verus L3 proofs for EPT / allocator (parallel).

@@ -57,6 +57,8 @@ Status: **closed on Latitude** (`RAYNU-V-M3-IO-OK`). No kernel assets.
 - Wire / extend `sched/msr_firewall` patterns for CPUID policy (host tests)
 - Guest smoke: CPUID then HLT; serial confirms filtered leaf
 
+Status: **in flight** (see PR).
+
 ### M3.2 — Kernel load — `RAYNU-V-M3-LOAD-OK`
 
 - Place bzImage + initrd + `boot_params` (setup header, e820, cmdline, ramdisk ptrs) in GPA

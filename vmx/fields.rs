@@ -139,6 +139,8 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 
 // ── primary proc-based control bits ─────────────────────────────────
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
+/// CPUID exiting (M3.1).
+pub const CPU_BASED_CPUID_EXITING: u32 = 1 << 21;
 /// Unconditional I/O exiting (ignored if USE_IO_BITMAPS is 1).
 pub const CPU_BASED_UNCONDITIONAL_IO: u32 = 1 << 24;
 pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;
@@ -159,6 +161,8 @@ pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
 
 /// Basic exit reason: external interrupt.
 pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
+/// Basic exit reason: CPUID.
+pub const EXIT_REASON_CPUID: u32 = 10;
 /// Basic exit reason: HLT.
 pub const EXIT_REASON_HLT: u32 = 12;
 /// Basic exit reason: I/O instruction.

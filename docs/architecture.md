@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.0 closed on Latitude; M2.6 L2 host gate closed): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership → VMLAUNCH → guest COM1 OUT (I/O VMEXIT) → software inject ISR → arm LAPIC one-shot → external-IRQ VMEXIT → EOI → re-inject → VMXOFF. Verification: L2 specs + Kani for `EptMap` / allocator. Later: Linux guest.
+Boot path today (M3.0 closed on Latitude; M3.1 in flight): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership → VMLAUNCH → guest COM1 OUT + CPUID filter → software inject ISR → LAPIC one-shot → external-IRQ VMEXIT → EOI → re-inject → VMXOFF. Verification: L2 specs + Kani for `EptMap` / allocator. Later: Linux guest.
 
 Lived gate history: [docs/progress.md](progress.md).
 

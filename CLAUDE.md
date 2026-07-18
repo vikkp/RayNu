@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.0 closed** on Latitude (`RAYNU-V-M3-IO-OK`); M2.6 L2 host gate closed. Next: M3.1 CPUID filter. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.0 closed** on Latitude (`RAYNU-V-M3-IO-OK`); **M3.1 in flight**: CPUID filter (`RAYNU-V-M3-CPUID-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 
