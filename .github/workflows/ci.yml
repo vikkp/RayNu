@@ -44,7 +44,7 @@ jobs:
 
   # Boot gate: M0 + M1.0 + M1.1 VMXON (KVM nested when /dev/kvm exists).
   qemu-boot:
-    name: QEMU boot gate (M0–M1.1)
+    name: QEMU boot gate (M0-M1.1)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,15 +59,6 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
       - name: QEMU boot-to-serial gate
         run: |
-<<<<<<< Updated upstream
-          if [[ -e /dev/kvm ]]; then
-            echo "KVM available — requiring VMXON"
-            # Nested VT-x (best-effort on Actions)
-            echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
-            REQUIRE_VMX=1 ./tools/qemu-boot-test.sh
-          else
-            echo "No /dev/kvm — allowing VMXON-SKIP"
-=======
           # Actions runners often have /dev/kvm root-only; open it for the job.
           if [[ -e /dev/kvm ]]; then
             sudo chmod a+rw /dev/kvm || true
@@ -76,11 +67,10 @@ jobs:
           fi
           ls -l /dev/kvm 2>&1 || true
           if [[ -r /dev/kvm && -w /dev/kvm ]]; then
-            echo "KVM usable — requiring VMXON"
+            echo "KVM usable - requiring VMXON"
             REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
           else
-            echo "KVM not usable — allowing VMXON-SKIP"
->>>>>>> Stashed changes
+            echo "KVM not usable - allowing VMXON-SKIP"
             REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
           fi
       - name: Upload serial log
@@ -103,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: placeholder
         run: |
-          echo "Verus not pinned for execution yet — see verus-version.toml"
+          echo "Verus not pinned for execution yet - see verus-version.toml"
           echo "When L2 specs land, replace this job with cargo verus --verify"
           exit 1
 
