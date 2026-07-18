@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RayNu-V — Formally verified bare-metal hypervisor</title>
+    <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a clean-slate Type-1 hypervisor in Rust. One binary. Memory isolation isn't tested — it's proved."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. Memory isolation as a proveable invariant — not a test suite."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="The world's first formally verified bare-metal hypervisor. Optimized for Dell PowerEdge."
+      content="A commercially targeted, single-binary hypervisor designed for formal verification from day one. Dell PowerEdge R640 first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -40,8 +40,8 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          A clean-slate Type-1 bare-metal hypervisor in Rust — one EFI binary,
-          Dell PowerEdge first, formal verification as the north star.
+          A commercially targeted, single-binary Type-1 hypervisor designed for
+          formal verification from day one — Dell PowerEdge first.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -49,14 +49,26 @@
           >
           <a
             class="cta__secondary"
-            href="https://github.com/vikkp/RayNu/blob/main/CLAUDE.md"
-            >Read the governance</a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/architecture.md"
+            >Read the architecture</a
           >
         </div>
       </div>
     </header>
 
     <main>
+      <section class="section section--status" id="status">
+        <div class="section__inner">
+          <h2 class="section__title">Where we are</h2>
+          <p class="section__lede">
+            That tagline is the north star — not a claim about today’s binary.
+            <strong>M0 is live:</strong> one EFI image boots under QEMU and
+            prints a COM1 marker in CI. VMX, EPT, and machine-checked proofs are
+            the work ahead.
+          </p>
+        </div>
+      </section>
+
       <section class="section section--pillars" id="pillars">
         <div class="section__inner">
           <h2 class="section__title">Four pillars. Every line serves one.</h2>
@@ -92,7 +104,7 @@
       <section class="section section--proof" id="proof">
         <div class="section__inner section__inner--split">
           <div>
-            <h2 class="section__title">The headline theorem</h2>
+            <h2 class="section__title">The invariant we will prove</h2>
             <p class="section__lede">
               For every valid EPT mapping from guest-physical to host-physical,
               that frame is exclusively owned by one guest — and belongs to
@@ -102,32 +114,34 @@
           <blockquote class="theorem" data-reveal>
             <p>
               Proven Core only. Everything else stays outside the verification
-              budget — by design, not by accident.
+              budget — by design. Specs and proofs land incrementally; the first
+              machine-checked invariant in CI is the credibility milestone.
             </p>
-            <cite>ADR-002 · ADR-004</cite>
+            <cite>ADR-002 · ADR-004 · ADR-006</cite>
           </blockquote>
         </div>
       </section>
 
       <section class="section section--ship" id="ship">
         <div class="section__inner">
-          <h2 class="section__title">One binary. Boots. That’s it.</h2>
+          <h2 class="section__title">One binary. One server family.</h2>
           <p class="section__lede">
-            No host OS. No packages. No config sprawl. Copy
-            <code>r640-hypervisor.efi</code>, boot from USB or iDRAC virtual
-            media, and the machine is yours.
+            No host OS. No packages. No config sprawl. Optimized first for Dell
+            PowerEdge R640 / R650 / R660 — hardware we can own and test on.
+            We ship for the iron we verify on.
           </p>
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
-./tools/run-qemu.sh</code></pre>
+./tools/qemu-boot-test.sh</code></pre>
         </div>
       </section>
 
       <section class="section section--close" id="start">
         <div class="section__inner">
-          <h2 class="section__title">Start from the source</h2>
+          <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M0 scaffolding is on <code>main</code>: governance, ADRs, and a
-            buildable UEFI entry. VMX and EPT land next.
+            QEMU-first VMX bring-up, then EPT and a guest that runs real code —
+            with one small Verus-checked invariant on every commit. That artifact
+            matters more than the marketing.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -135,8 +149,8 @@
             >
             <a
               class="cta__secondary"
-              href="https://github.com/vikkp/RayNu/blob/main/docs/architecture.md"
-              >Architecture notes</a
+              href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-004.md"
+              >EPT isolation ADR</a
             >
           </div>
         </div>
@@ -146,7 +160,7 @@
     <footer class="footer">
       <p>
         <span class="brand brand--footer">RayNu-V</span>
-        · Formally verified bare-metal hypervisor
+        · Designed for formal verification from day one
       </p>
       <p class="footer__meta">
         <a href="https://github.com/vikkp/RayNu">GitHub</a>

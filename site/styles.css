@@ -241,6 +241,16 @@ code {
   color: var(--ink-soft);
 }
 
+.section--status {
+  padding-top: calc(var(--space) * 1.6);
+  padding-bottom: calc(var(--space) * 1.2);
+}
+
+.section--status .section__lede strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .section--pillars {
   background:
     linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.35)),

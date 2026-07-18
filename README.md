@@ -1,12 +1,11 @@
 # RayNu-V
 
-**The world's first formally verified bare-metal hypervisor.**
+**A commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one.**
 
-One binary. Boots in 90 seconds. Knows your Dell hardware by name.
-Imports your VMware VMs in one command. Passes your SOX audit with
-mathematical proof — not just test results.
+One binary. Dell PowerEdge first (R640 / R650 / R660) — hardware we can own and test on.
+Built toward VMware import, SOX-ready audit trails, and machine-checked memory isolation.
 
-Memory isolation isn't tested. It's proved.
+North star: *Memory isolation isn't tested. It's proved.* (roadmap — not a claim about today's binary.)
 
 ## Four Pillars
 
