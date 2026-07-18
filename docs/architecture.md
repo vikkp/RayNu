@@ -40,6 +40,6 @@ Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). Scaffolding sh
 
 When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail) > simplicity ([Z]) > hardware depth ([D]).
 
-## Next Milestone Gate (M2 continue)
+## Next Milestone Gate (M3)
 
 **M2.6 closed** (`RAYNU-V-M2-L2-OK` via `cargo test`). Next: **M3** unmodified Linux guest; Verus L3 proofs in parallel.
