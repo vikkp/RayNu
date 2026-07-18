@@ -62,6 +62,7 @@ pub const VM_INSTRUCTION_ERROR: u64 = 0x0000_4400;
 pub const EXIT_REASON: u64 = 0x0000_4402;
 /// VM-exit interruption information (valid when ack-interrupt-on-exit).
 pub const VM_EXIT_INTR_INFO: u64 = 0x0000_4404;
+pub const VM_EXIT_INSTRUCTION_LEN: u64 = 0x0000_440C;
 pub const EXIT_QUALIFICATION: u64 = 0x0000_6400;
 
 // ── 32-bit guest state ──────────────────────────────────────────────
@@ -138,6 +139,8 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 
 // ── primary proc-based control bits ─────────────────────────────────
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
+/// Unconditional I/O exiting (ignored if USE_IO_BITMAPS is 1).
+pub const CPU_BASED_UNCONDITIONAL_IO: u32 = 1 << 24;
 pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;
 pub const CPU_BASED_USE_MSR_BITMAPS: u32 = 1 << 28;
 pub const CPU_BASED_ACTIVATE_SECONDARY: u32 = 1 << 31;
@@ -158,6 +161,8 @@ pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
 pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
 /// Basic exit reason: HLT.
 pub const EXIT_REASON_HLT: u32 = 12;
+/// Basic exit reason: I/O instruction.
+pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
 
 #[cfg(test)]
 mod fields_test {

@@ -11,7 +11,8 @@
 //! interruption-info and VMRESUMEs; the guest ISR acks and HLTs again.
 //! M2.5 arms a host LAPIC one-shot; guest waits in real HLT; external-interrupt
 //! VMEXIT → EOI → re-inject → `RAYNU-V-M2-TIMER-OK`.
-//! Markers: OWN (M2.2), ALLOC (M2.3), IRQ (M2.4), TIMER (M2.5).
+//! M3.0: guest COM1 `out` → I/O VMEXIT → host UART → `RAYNU-V-M3-IO-OK`.
+//! Markers: OWN (M2.2), ALLOC (M2.3), IRQ (M2.4), TIMER (M2.5), IO (M3.0).
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -22,6 +23,7 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
+use crate::devices::serial_pio::{self, M3_IO_OK_MARKER};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -34,8 +36,11 @@ use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 /// 0 = first HLT → software inject
 /// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
 /// 2 = external-interrupt VMEXIT → EOI → re-inject
-/// 3 = ISR HLT after timer path → TIMER-OK
+/// 3 = ISR HLT after timer path → TIMER-OK (+ M3.0 I/O gate)
 static mut EXIT_PHASE: u8 = 0;
+
+/// Guest RAX saved by the naked VMEXIT trampoline before Rust clobbers GPRs.
+static mut SAVED_GUEST_RAX: u64 = 0;
 
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
 pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
@@ -325,10 +330,12 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         IA32_VMX_ENTRY_CTLS
     };
 
-    // External-interrupt exiting + ack-on-exit (M2.5 LAPIC timer path).
+    // External-interrupt exiting + ack-on-exit (M2.5) + I/O exiting (M3.0).
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
-        CPU_BASED_HLT_EXITING | CPU_BASED_ACTIVATE_SECONDARY,
+        CPU_BASED_HLT_EXITING
+            | CPU_BASED_UNCONDITIONAL_IO
+            | CPU_BASED_ACTIVATE_SECONDARY,
         proc_msr,
     );
     if primary & CPU_BASED_ACTIVATE_SECONDARY == 0 {
@@ -361,11 +368,16 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     let io_bitmaps = if primary & CPU_BASED_USE_IO_BITMAPS != 0 {
+        // Bitmaps override unconditional I/O exiting — trap COM1 explicitly.
         let a = frames.io_bitmap_a_phys.ok_or(LaunchError::PrepareFailed)?;
         let b = frames.io_bitmap_b_phys.ok_or(LaunchError::PrepareFailed)?;
         core::ptr::write_bytes(a as *mut u8, 0, 4096);
         core::ptr::write_bytes(b as *mut u8, 0, 4096);
+        serial_pio::trap_com1_in_bitmap_a(a);
         Some((a, b))
+    } else if primary & CPU_BASED_UNCONDITIONAL_IO == 0 {
+        serial::write_line("boot: ERROR — neither unconditional I/O nor I/O bitmaps available");
+        return Err(LaunchError::PrepareFailed);
     } else {
         None
     };
@@ -614,18 +626,35 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     Ok(())
 }
 
-/// HOST_RIP target — runs after each VMEXIT with host RSP restored.
+/// HOST_RIP trampoline — save guest RAX before Rust clobbers GPRs, then continue.
 ///
-/// See [`EXIT_PHASE`] for the M2.4/M2.5 state machine.
-///
-/// GPRs still hold guest values; only use stack locals / known addresses.
+/// Guest GPRs are not in the VMCS; they live in host registers across VMEXIT.
+#[unsafe(naked)]
 pub unsafe extern "C" fn vmexit_landing() -> ! {
+    core::arch::naked_asm!(
+        "mov [{slot}], rax",
+        "jmp {cont}",
+        slot = sym SAVED_GUEST_RAX,
+        cont = sym vmexit_continue,
+    );
+}
+
+/// HOST_RIP continuation after [`vmexit_landing`] saves RAX.
+///
+/// See [`EXIT_PHASE`] for the M2.4/M2.5 state machine. I/O exits (M3.0) are
+/// handled before the phase dispatch and always VMRESUME.
+pub unsafe extern "C" fn vmexit_continue() -> ! {
+    let guest_rax = SAVED_GUEST_RAX;
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let basic = reason & 0xFFFF;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
+
+    if basic == EXIT_REASON_IO_INSTRUCTION {
+        handle_io_and_resume(qual, guest_rax, guest_rip);
+    }
 
     serial::write_str("boot: VMEXIT phase=");
     write_hex_u32(phase as u32);
@@ -647,6 +676,39 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
             finish_boot(false);
         }
     }
+}
+
+unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    let info = serial_pio::parse_qualification(qual);
+    match serial_pio::handle_pio(&info, guest_rax) {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            // IN would require restoring guest RAX across clobbered GPRs.
+            serial::write_line("boot: ERROR — guest IN not supported in M3.0");
+            finish_boot(false);
+        }
+        Err(()) => {
+            serial::write_str("boot: ERROR — unhandled PIO port=0x");
+            write_hex_u32(info.port as u32);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+
+    if serial_pio::guest_io_ok() {
+        // Emit once when magic completes (may appear before TIMER-OK).
+        static mut IO_MARKED: bool = false;
+        if !IO_MARKED {
+            IO_MARKED = true;
+            serial::write_byte(b'\n');
+            serial::write_line(M3_IO_OK_MARKER);
+        }
+    }
+
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    resume_or_die();
 }
 
 unsafe fn phase0_first_hlt(basic: u32, guest_page: u64) -> ! {
@@ -758,13 +820,23 @@ unsafe fn phase3_timer_ok(basic: u32, guest_page: u64) -> ! {
         serial::write_line("boot: ERROR — phase3 expected HLT");
         finish_boot(false);
     }
+    let mut ok = true;
     if ept_hw::verify_guest_irq(guest_page) {
         serial::write_line(M2_TIMER_OK_MARKER);
-        finish_boot(true);
     } else {
         serial::write_line("boot: ERROR — timer-path IRQ ack missing");
-        finish_boot(false);
+        ok = false;
     }
+    if serial_pio::guest_io_ok() {
+        if !ok {
+            // Still surface the marker if timer failed after I/O succeeded.
+        }
+        // Marker may already have been printed when magic completed.
+    } else {
+        serial::write_line("boot: ERROR — guest COM1 I/O magic missing");
+        ok = false;
+    }
+    finish_boot(ok);
 }
 
 unsafe fn inject_and_resume(tag: &str) -> ! {
@@ -824,7 +896,7 @@ fn finish_boot(ok: bool) -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M2.5 complete");
+    serial::write_line("boot: M3.0 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -873,9 +945,12 @@ mod launch_test {
         assert_eq!(M2_ALLOC_OK_MARKER, "RAYNU-V-M2-ALLOC-OK");
         assert_eq!(M2_IRQ_OK_MARKER, "RAYNU-V-M2-IRQ-OK");
         assert_eq!(M2_TIMER_OK_MARKER, "RAYNU-V-M2-TIMER-OK");
+        assert_eq!(M3_IO_OK_MARKER, "RAYNU-V-M3-IO-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
+        assert_eq!(EXIT_REASON_IO_INSTRUCTION, 30);
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
+        assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
     }
 }

@@ -17,8 +17,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M2.4 | `RAYNU-V-M2-IRQ-OK` | Inject vector 0x21 → guest ISR ack + HLT |
 | M2.5 | `RAYNU-V-M2-TIMER-OK` | LAPIC one-shot → ext-IRQ VMEXIT → EOI → re-inject |
 | M2.6 | `RAYNU-V-M2-L2-OK` | Host L2 specs + Kani harnesses for EptMap / FrameAllocator |
+| M3.0 | `RAYNU-V-M3-IO-OK` | Guest COM1 PIO → I/O VMEXIT (pending Latitude) |
 
-## Verification checkpoint (as of M2.6)
+## Verification checkpoint (as of M3.0)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -33,5 +34,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3:** unmodified Linux guest — plan: [m3_plan.md](m3_plan.md). First code slice: **M3.0** guest COM1 I/O (`RAYNU-V-M3-IO-OK`).
-2. Verus L3 proofs for EPT / allocator (parallel to M3/M4).
+1. Latitude gate for M3.0 (`RAYNU-V-M3-IO-OK`).
+2. **M3.1** CPUID filter — see [m3_plan.md](m3_plan.md).
+3. Verus L3 proofs for EPT / allocator (parallel).

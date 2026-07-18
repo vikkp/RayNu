@@ -44,12 +44,12 @@ Each gate = one branch `cursor/m3-N-…-a623`, marker, Latitude/QEMU or host tes
 **Why first:** Without console I/O, every later hang is silent.
 
 - Unconditional I/O exiting (or bitmaps covering `0x3F8–0x3FF`)
-- `devices/serial_pio.rs`: 16550 decode; passthrough or minimal emu → host COM1
-- Continuous-capable exit handler for exit reason **IO instruction** (keep M2.5 path behind a bring-up flag)
-- Synthetic guest: `out` a magic string to COM1, then `hlt`
+- `devices/serial_pio.rs`: 16550 decode; passthrough → host COM1; magic latch
+- Naked VMEXIT trampoline saves guest RAX; I/O exits VMRESUME into M2 phase machine
+- Synthetic guest: after store/loop, `mov edx,0x3f8` / `out dx,al` for `RAYNU-V-M3-IO`, then `hlt`
 - Extend `tools/qemu-boot-test.sh`
 
-**First PR to start coding.** No kernel assets.
+Status: **in flight** (see PR). No kernel assets.
 
 ### M3.1 — CPUID filter — `RAYNU-V-M3-CPUID-OK`
 

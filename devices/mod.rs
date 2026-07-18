@@ -4,6 +4,10 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 
+pub mod serial_pio;
+
+pub use serial_pio::{guest_io_ok, M3_IO_OK_MARKER};
+
 /// Device class stub for future virtio / serial / RTC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceKind {
@@ -15,7 +19,7 @@ pub enum DeviceKind {
     Passthrough,
 }
 
-/// Registry placeholder — real MMIO/PIO handlers in M3+.
+/// Registry — serial PIO is live (M3.0); others still stubs.
 pub fn supported_kinds() -> &'static [DeviceKind] {
     &[DeviceKind::Serial]
 }
