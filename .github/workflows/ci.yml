@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-host:
+    name: host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src, rustfmt, clippy
+      - name: cargo test (host, no UEFI)
+        run: cargo test --no-default-features
+
+  build-uefi:
+    name: UEFI release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: build r640-hypervisor.efi
+        run: ./tools/build.sh
+      - name: size budget (ADR-003)
+        run: ./tools/check-size.sh
+      - name: upload efi artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: r640-hypervisor.efi
+          path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
+
+  # Soft-fail until Verus/Kani are installed in CI (ADR-001, ADR-008).
+  verus-soft:
+    name: verus (soft-fail scaffold)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: placeholder
+        run: |
+          echo "Verus not pinned for execution yet — see verus-version.toml"
+          echo "When L2 specs land, replace this job with cargo verus --verify"
+          exit 1
+
+  kani-soft:
+    name: kani (soft-fail scaffold)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: placeholder
+        run: |
+          echo "Kani not installed in CI yet — see ADR-001"
+          echo "When unsafe KANI-TARGET harnesses land, replace with cargo kani"
+          exit 1

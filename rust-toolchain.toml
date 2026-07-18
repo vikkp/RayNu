@@ -1,0 +1,6 @@
+# Pinned nightly per ADR-008 (Proof Maintenance & Toolchain Pinning).
+# Bump only via a dedicated toolchain-upgrade task; re-verify Proven Core after.
+[toolchain]
+channel = "nightly-2026-06-01"
+components = ["rust-src", "rustfmt", "clippy"]
+targets = ["x86_64-unknown-uefi"]

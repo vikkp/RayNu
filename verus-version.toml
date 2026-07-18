@@ -1,0 +1,14 @@
+# Verus pin per ADR-008.
+# Scaffolding is L0 only — `cargo verus --verify` is not yet a hard CI gate.
+# When Proven Core reaches L2/L3, pin an exact Verus release here and wire CI.
+
+[verus]
+# Placeholder: replace with an exact git tag / release when Verus is installed in CI.
+version = "unpinned-scaffold"
+# Example future pin:
+# version = "0.2025.12.01"
+# git = "https://github.com/verus-lang/verus"
+# rev = "REPLACE_ME"
+
+[notes]
+status = "M0 scaffold — Verus optional / soft-fail in CI until first L2 specs land"
