@@ -99,6 +99,16 @@ fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecyc
         let _ = life.disable();
         return;
     };
+    let Some(tss) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(gdt) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for GDT");
+        let _ = life.disable();
+        return;
+    };
     // Optional control pages (used only if capability MSRs force the bits).
     let msr_bitmap = frames.alloc_frame();
     let io_a = frames.alloc_frame();
@@ -108,6 +118,8 @@ fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecyc
         vmcs_phys: vmcs.0,
         guest_stack_phys: guest_stack.0,
         host_stack_phys: host_stack.0,
+        tss_phys: tss.0,
+        gdt_phys: gdt.0,
         msr_bitmap_phys: msr_bitmap.map(|p| p.0),
         io_bitmap_a_phys: io_a.map(|p| p.0),
         io_bitmap_b_phys: io_b.map(|p| p.0),

@@ -237,10 +237,21 @@ pub unsafe fn sgdt() -> DescriptorTablePtr {
 }
 
 #[inline]
+pub unsafe fn lgdt(ptr: &DescriptorTablePtr) {
+    core::arch::asm!("lgdt [{}]", in(reg) ptr, options(readonly, nostack, preserves_flags));
+}
+
+#[inline]
 pub unsafe fn sidt() -> DescriptorTablePtr {
     let mut p = DescriptorTablePtr { limit: 0, base: 0 };
     core::arch::asm!("sidt [{}]", in(reg) &mut p, options(nostack, preserves_flags));
     p
+}
+
+/// Load the task register (LTR). Descriptor type must be available TSS (9).
+#[inline]
+pub unsafe fn load_tr(selector: u16) {
+    core::arch::asm!("ltr {0:x}", in(reg) selector, options(nostack, preserves_flags));
 }
 
 /// Segment limit via LSL (0 if unusable/null).

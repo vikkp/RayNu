@@ -52,11 +52,18 @@ pub struct LaunchFrames {
     pub vmcs_phys: u64,
     pub guest_stack_phys: u64,
     pub host_stack_phys: u64,
+    /// Zeroed page for a 64-bit TSS (OVMF often has TR=0 — invalid host state).
+    pub tss_phys: u64,
+    /// Page to hold a copy of the GDT plus a TSS descriptor.
+    pub gdt_phys: u64,
     /// Optional MSR bitmap (only if primary controls force USE_MSR_BITMAPS).
     pub msr_bitmap_phys: Option<u64>,
     pub io_bitmap_a_phys: Option<u64>,
     pub io_bitmap_b_phys: Option<u64>,
 }
+
+/// Minimal IA-32e TSS size (SDM Vol. 3A §7.7) — enough for LTR / host TR.
+const TSS_BYTES: usize = 0x68;
 
 /// Guest entry: execute HLT (exit reason 12), then spin if ever resumed.
 ///
@@ -90,20 +97,69 @@ fn ar_busy_tr(mut ar: u32) -> u32 {
     ar
 }
 
-/// Flip GDT TSS type from available (9) to busy (B) so VMEXIT can reload TR.
+/// Build a host TSS + GDT and load them (LGDT/LTR).
 ///
-/// SAFETY: `gdt_base` is the live GDTR base; `tr` selects a TSS descriptor.
-unsafe fn ensure_tr_busy(gdt_base: u64, tr: u16) {
-    if tr & 0xFFFC == 0 {
-        return;
+/// UEFI/OVMF commonly leaves TR=0. Host-state checks then fail VMLAUNCH with
+/// insn error 8 (invalid host-state). We always install our own TSS.
+///
+/// Returns `(new_gdtr_base, new_gdtr_limit, tr_selector, tr_base)`.
+///
+/// SAFETY: `gdt_phys`/`tss_phys` are owned zeroable frames; interrupts off.
+unsafe fn install_host_tss(
+    gdt_phys: u64,
+    tss_phys: u64,
+) -> Result<(u64, u16, u16, u64), LaunchError> {
+    let old = cpu::sgdt();
+    let old_size = (old.limit as usize) + 1;
+    // Need room for a 16-byte system descriptor after the existing table.
+    if old_size + 16 > 4096 || old_size < 8 {
+        return Err(LaunchError::PrepareFailed);
     }
-    let index = (tr >> 3) as usize;
-    let desc = (gdt_base as *mut u64).add(index);
-    let d0 = core::ptr::read_unaligned(desc);
-    let ty = ((d0 >> 40) & 0xF) as u8;
-    if ty == 0x9 {
-        core::ptr::write_unaligned(desc, d0 | (0x2u64 << 40));
+
+    core::ptr::write_bytes(gdt_phys as *mut u8, 0, 4096);
+    core::ptr::write_bytes(tss_phys as *mut u8, 0, 4096);
+    core::ptr::copy_nonoverlapping(old.base as *const u8, gdt_phys as *mut u8, old_size);
+
+    // Append available 64-bit TSS descriptor at the next 8-byte aligned slot.
+    let tss_index = (old_size + 7) / 8; // qword index; may skip a pad entry
+    let tss_off = tss_index * 8;
+    if tss_off + 16 > 4096 {
+        return Err(LaunchError::PrepareFailed);
     }
+
+    let base = tss_phys;
+    let limit = (TSS_BYTES - 1) as u64;
+    // Low qword: limit[15:0] | base[23:0]<<16 | type/S/DPL/P | limit/flags | base[31:24]
+    // Type 0x9 = available 64-bit TSS; S=0; DPL=0; P=1.
+    let d0 = (limit & 0xFFFF)
+        | ((base & 0xFF_FFFF) << 16)
+        | (0x89u64 << 40) // P=1, DPL=0, S=0, type=9
+        | (((limit >> 16) & 0xF) << 48)
+        | (((base >> 24) & 0xFF) << 56);
+    let d1 = (base >> 32) & 0xFFFF_FFFF;
+    let desc = (gdt_phys as *mut u64).add(tss_index);
+    core::ptr::write_unaligned(desc, d0);
+    core::ptr::write_unaligned(desc.add(1), d1);
+
+    let new_limit = (tss_off + 16 - 1) as u16;
+    let gdtr = cpu::DescriptorTablePtr {
+        limit: new_limit,
+        base: gdt_phys,
+    };
+    cpu::lgdt(&gdtr);
+
+    let tr_sel = (tss_off as u16) & 0xFFF8;
+    cpu::load_tr(tr_sel);
+
+    serial::write_str("boot: host TSS sel=0x");
+    write_hex_u32(tr_sel as u32);
+    serial::write_str(" base=0x");
+    write_hex_u64(tss_phys);
+    serial::write_str(" gdtr=0x");
+    write_hex_u64(gdt_phys);
+    serial::write_byte(b'\n');
+
+    Ok((gdt_phys, new_limit, tr_sel, tss_phys))
 }
 
 unsafe fn seg_ar(gdt_base: u64, sel: u16) -> u32 {
@@ -142,11 +198,10 @@ unsafe fn report_vmwrite_fail(tag: &str, field: u64, kind: VmFailKind, expected_
         write_dec_u32(ierr as u32);
         serial::write_byte(b'\n');
         if ierr == 12 {
+            // SDM: 12 = unsupported VMCS component. Common causes under QEMU:
+            // swapped AT&T vmwrite operands, or host kvm_intel shadow VMCS.
             serial::write_line(
-                "boot: hint: error 12 = nested shadow VMCS rejected VMWRITE",
-            );
-            serial::write_line(
-                "boot: fix on host: sudo ./tools/enable-nested-kvm.sh",
+                "boot: hint: error 12 = unsupported VMCS field (check VMWRITE operands / shadow VMCS)",
             );
         }
     }
@@ -210,6 +265,13 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
             serial::write_str("boot: ERROR — VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
             serial::write_byte(b'\n');
+            if ierr == 8 {
+                serial::write_line(
+                    "boot: hint: error 8 = invalid host-state (TR/CS/CR/EFER/canonical)",
+                );
+            } else if ierr == 7 {
+                serial::write_line("boot: hint: error 7 = invalid VMX control field(s)");
+            }
             Err(LaunchError::LaunchFailed {
                 instruction_error: ierr,
             })
@@ -218,6 +280,11 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
 }
 
 unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
+    // ── Phase 0: host TSS (before any TR-dependent gather) ──
+    // OVMF often has TR=0 → VMLAUNCH fails with insn error 8.
+    let (gdt_base, gdt_limit, tr, tr_base) =
+        install_host_tss(frames.gdt_phys, frames.tss_phys)?;
+
     // ── Phase 1: gather everything that may VM-exit under nested VT-x ──
     // (RDMSR, serial, GDT walks). No current-VMCS required yet.
     let use_true = true_ctl_msrs_supported();
@@ -252,6 +319,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let entry_ctls = adjust_vmx_controls(entry_wanted, entry_msr);
 
     let secondary = if primary & CPU_BASED_ACTIVATE_SECONDARY != 0 {
+        // Keep secondary minimal: no EPT / unrestricted guest for M1.2.
         Some(adjust_vmx_controls(0, IA32_VMX_PROCBASED_CTLS2))
     } else {
         None
@@ -281,9 +349,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let efer = cpu::rdmsr(IA32_EFER);
     let pat = cpu::rdmsr(IA32_PAT);
     let dr7 = cpu::read_dr7();
-    let gdtr = cpu::sgdt();
     let idtr = cpu::sidt();
-    let gdt_base = gdtr.base;
 
     let cs = cpu::read_cs();
     let ss = cpu::read_ss();
@@ -291,8 +357,8 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let es = cpu::read_es();
     let fs = cpu::read_fs();
     let gs = cpu::read_gs();
-    let tr = cpu::read_tr();
     let ldtr = cpu::read_ldtr();
+    // `tr` / `tr_base` / `gdt_base` come from install_host_tss (LTR already done).
 
     let fs_base = cpu::rdmsr(IA32_FS_BASE);
     let gs_base = cpu::rdmsr(IA32_GS_BASE);
@@ -305,7 +371,6 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let ss_base = cpu::segment_base(gdt_base, ss);
     let ds_base = cpu::segment_base(gdt_base, ds);
     let ldtr_base = cpu::segment_base(gdt_base, ldtr);
-    let tr_base = cpu::segment_base(gdt_base, tr);
 
     let es_limit = cpu::segment_limit(es) as u64;
     let cs_limit = cpu::segment_limit(cs) as u64;
@@ -314,7 +379,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let fs_limit = cpu::segment_limit(fs) as u64;
     let gs_limit = cpu::segment_limit(gs) as u64;
     let ldtr_limit = cpu::segment_limit(ldtr) as u64;
-    let tr_limit = cpu::segment_limit(tr) as u64;
+    let tr_limit = (TSS_BYTES - 1) as u64;
 
     let es_ar = seg_ar(gdt_base, es) as u64;
     let cs_ar = seg_ar(gdt_base, cs) as u64;
@@ -323,6 +388,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let fs_ar = seg_ar(gdt_base, fs) as u64;
     let gs_ar = seg_ar(gdt_base, gs) as u64;
     let ldtr_ar = seg_ar(gdt_base, ldtr) as u64;
+    // After LTR the GDT type is busy (B); AR must reflect that for guest TR.
     let tr_ar = seg_ar(gdt_base, tr) as u64;
 
     let need_efer = (exit_ctls & (VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER)) != 0
@@ -336,9 +402,6 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
     let host_rip = vmexit_landing as *const () as u64;
 
-    // Host TR load on VMEXIT requires a busy TSS descriptor in the GDT.
-    ensure_tr_busy(gdt_base, tr);
-
     serial::write_str("boot: VMCS ctls pin=0x");
     write_hex_u32(pin);
     serial::write_str(" primary=0x");
@@ -347,6 +410,15 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     write_hex_u32(exit_ctls);
     serial::write_str(" entry=0x");
     write_hex_u32(entry_ctls);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: host CS=0x");
+    write_hex_u32(cs as u32);
+    serial::write_str(" SS=0x");
+    write_hex_u32(ss as u32);
+    serial::write_str(" TR=0x");
+    write_hex_u32(tr as u32);
+    serial::write_str(" EFER=0x");
+    write_hex_u64(efer);
     serial::write_byte(b'\n');
 
     // ── Phase 2: VMPTRLD + VMWRITE burst (no RDMSR / serial / I/O) ──
@@ -416,7 +488,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_GS_BASE, gs_base)?;
     vw(GUEST_LDTR_BASE, ldtr_base)?;
     vw(GUEST_TR_BASE, tr_base)?;
-    vw(GUEST_GDTR_BASE, gdtr.base)?;
+    vw(GUEST_GDTR_BASE, gdt_base)?;
     vw(GUEST_IDTR_BASE, idtr.base)?;
 
     vw(GUEST_ES_LIMIT, es_limit)?;
@@ -427,7 +499,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_GS_LIMIT, gs_limit)?;
     vw(GUEST_LDTR_LIMIT, ldtr_limit)?;
     vw(GUEST_TR_LIMIT, tr_limit)?;
-    vw(GUEST_GDTR_LIMIT, gdtr.limit as u64)?;
+    vw(GUEST_GDTR_LIMIT, gdt_limit as u64)?;
     vw(GUEST_IDTR_LIMIT, idtr.limit as u64)?;
 
     vw(GUEST_ES_ACCESS_RIGHTS, es_ar)?;
@@ -478,7 +550,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(HOST_FS_BASE, fs_base)?;
     vw(HOST_GS_BASE, gs_base)?;
     vw(HOST_TR_BASE, tr_base)?;
-    vw(HOST_GDTR_BASE, gdtr.base)?;
+    vw(HOST_GDTR_BASE, gdt_base)?;
     vw(HOST_IDTR_BASE, idtr.base)?;
     vw(HOST_IA32_SYSENTER_CS, sysenter_cs as u64)?;
     vw(HOST_IA32_SYSENTER_ESP, sysenter_esp)?;
