@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M2.5 closed on Latitude; M2.6 L2 host gate closed): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership (code/stack/IDT) → VMLAUNCH → software inject ISR → arm LAPIC one-shot → guest HLT wait → external-IRQ VMEXIT → EOI → re-inject ISR → VMXOFF. Verification: L2 specs + Kani for `EptMap` / allocator. Later: Linux guest.
+Boot path today (M3.0 closed on Latitude; M2.6 L2 host gate closed): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership → VMLAUNCH → guest COM1 OUT (I/O VMEXIT) → software inject ISR → arm LAPIC one-shot → external-IRQ VMEXIT → EOI → re-inject → VMXOFF. Verification: L2 specs + Kani for `EptMap` / allocator. Later: Linux guest.
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (M3)
 
-**M3.0 gate:** `RAYNU-V-M3-IO-OK` — guest COM1 `out` → I/O VMEXIT → host UART passthrough. Plan: [m3_plan.md](m3_plan.md).
+**M3.1 gate:** `RAYNU-V-M3-CPUID-OK` — CPUID exiting; hide VMX from guest. Plan: [m3_plan.md](m3_plan.md).

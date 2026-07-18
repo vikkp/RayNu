@@ -60,16 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.0: guest COM1 I/O.</h2>
+          <h2 class="section__title">M3.0 closed. Next: CPUID filter.</h2>
           <p class="section__lede">
-            Guest <code>out</code> to COM1 causes an I/O VMEXIT; the host
-            forwards bytes to the UART and latches magic
-            <code>RAYNU-V-M3-IO</code>. Marker <code>RAYNU-V-M3-IO-OK</code>.
+            Latitude boot gate passed through guest COM1 I/O
+            (<code>RAYNU-V-M3-IO-OK</code>). Next subgate: M3.1 hide VMX from
+            the guest via CPUID exiting — <code>RAYNU-V-M3-CPUID-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-IO
-RAYNU-V-M3-IO-OK
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-IO-OK
 RAYNU-V-M2-TIMER-OK
-boot: M3.0 complete</code></pre>
+boot: M3.0 complete
+==&gt; Boot gate PASSED (M0 → M3.0)</code></pre>
         </div>
       </section>
 
@@ -143,7 +143,7 @@ boot: M3.0 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.0 guest I/O is the current gate. Next: CPUID filter (M3.1),
+            M3.0 is closed on Latitude. Current gate: CPUID filter (M3.1),
             then kernel load and earlyprintk — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
