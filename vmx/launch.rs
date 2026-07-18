@@ -1,11 +1,12 @@
-//! M1.2 — minimal VMLAUNCH → one VMEXIT (guest HLT), no EPT.
+//! M1.2 / M2.0 — VMLAUNCH → HLT VMEXIT under EPT identity map.
 //!
 //! Pillar: [V]
-//! Proven Core: **inside** (ADR-002)
-//! VERIFICATION: L1 — control words adjusted from capability MSRs
+//! Proven Core: **inside** (ADR-002, ADR-004)
+//! VERIFICATION: L1 — control words + EPTP from capability MSRs
 //!
-//! Guest shares the host address space (same CR3). Guest RIP points at a
-//! `hlt` stub in the HV `.text` section (OVMF often maps bump frames NX).
+//! Guest shares host CR3 (UEFI identity paging). EPT identity-maps the first
+//! 4 GiB so GPA→HPA is 1:1. Guest RIP points at an owned page containing `hlt`
+//! (not HV `.text`) to prove execute-via-EPT.
 
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
@@ -15,6 +16,7 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
+use crate::memory::ept_hw::M2_EPT_OK_MARKER;
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
@@ -35,6 +37,8 @@ pub enum LaunchError {
     PrepareFailed,
     ClearFailed,
     PtrldFailed,
+    /// Secondary controls / EPT capability missing.
+    EptUnsupported,
     /// VMWRITE failed; `field` is the VMCS encoding that was rejected.
     VmwriteFailed { field: u64 },
     LaunchFailed { instruction_error: u32 },
@@ -47,7 +51,7 @@ impl From<VmcsOpError> for LaunchError {
     }
 }
 
-/// Physical frames needed for the M1.2 HLT guest.
+/// Physical frames needed for the M1.2/M2.0 HLT guest under EPT.
 pub struct LaunchFrames {
     pub vmcs_phys: u64,
     pub guest_stack_phys: u64,
@@ -56,6 +60,10 @@ pub struct LaunchFrames {
     pub tss_phys: u64,
     /// Page to hold a copy of the GDT plus a TSS descriptor.
     pub gdt_phys: u64,
+    /// Packed EPTP (PML4 already built).
+    pub eptp: u64,
+    /// Guest code page (contains `hlt`); identity-mapped via EPT + host CR3.
+    pub guest_code_phys: u64,
     /// Optional MSR bitmap (only if primary controls force USE_MSR_BITMAPS).
     pub msr_bitmap_phys: Option<u64>,
     pub io_bitmap_a_phys: Option<u64>,
@@ -64,17 +72,6 @@ pub struct LaunchFrames {
 
 /// Minimal IA-32e TSS size (SDM Vol. 3A §7.7) — enough for LTR / host TR.
 const TSS_BYTES: usize = 0x68;
-
-/// Guest entry: execute HLT (exit reason 12), then spin if ever resumed.
-///
-/// Lives in HV `.text` so the page is executable under typical OVMF identity maps.
-#[unsafe(naked)]
-pub unsafe extern "C" fn guest_hlt_entry() {
-    core::arch::naked_asm!(
-        "hlt",
-        "2: jmp 2b",
-    );
-}
 
 /// Prepare VMCS revision ID in the first dword (same as VMXON region).
 ///
@@ -251,7 +248,7 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
     setup_vmcs(frames)?;
 
-    serial::write_line("boot: VMLAUNCH → guest HLT");
+    serial::write_line("boot: VMLAUNCH → guest HLT (EPT)");
     match ops::vmlaunch() {
         Ok(()) => {
             // Architecturally unreachable: success transfers to HOST_RIP.
@@ -311,19 +308,25 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     let pin = adjust_vmx_controls(0, pin_msr);
-    let primary = adjust_vmx_controls(CPU_BASED_HLT_EXITING, proc_msr);
+    let primary = adjust_vmx_controls(
+        CPU_BASED_HLT_EXITING | CPU_BASED_ACTIVATE_SECONDARY,
+        proc_msr,
+    );
+    if primary & CPU_BASED_ACTIVATE_SECONDARY == 0 {
+        serial::write_line("boot: ERROR — secondary controls not allowed (need EPT)");
+        return Err(LaunchError::EptUnsupported);
+    }
     let exit_wanted =
         VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER;
     let entry_wanted = VM_ENTRY_IA32E_MODE | VM_ENTRY_LOAD_IA32_EFER;
     let exit_ctls = adjust_vmx_controls(exit_wanted, exit_msr);
     let entry_ctls = adjust_vmx_controls(entry_wanted, entry_msr);
 
-    let secondary = if primary & CPU_BASED_ACTIVATE_SECONDARY != 0 {
-        // Keep secondary minimal: no EPT / unrestricted guest for M1.2.
-        Some(adjust_vmx_controls(0, IA32_VMX_PROCBASED_CTLS2))
-    } else {
-        None
-    };
+    let secondary = adjust_vmx_controls(SECONDARY_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2);
+    if secondary & SECONDARY_ENABLE_EPT == 0 {
+        serial::write_line("boot: ERROR — enable-EPT not allowed by PROCBASED_CTLS2");
+        return Err(LaunchError::EptUnsupported);
+    }
 
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
         let bmp = frames.msr_bitmap_phys.ok_or(LaunchError::PrepareFailed)?;
@@ -397,7 +400,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let need_debugctl = (exit_ctls & VM_EXIT_SAVE_DEBUG_CONTROLS) != 0
         || (entry_ctls & VM_ENTRY_LOAD_DEBUG_CONTROLS) != 0;
 
-    let guest_rip = guest_hlt_entry as *const () as u64;
+    let guest_rip = frames.guest_code_phys;
     let guest_rsp = frames.guest_stack_phys + 4096;
     let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
     let host_rip = vmexit_landing as *const () as u64;
@@ -406,10 +409,17 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     write_hex_u32(pin);
     serial::write_str(" primary=0x");
     write_hex_u32(primary);
+    serial::write_str(" secondary=0x");
+    write_hex_u32(secondary);
     serial::write_str(" exit=0x");
     write_hex_u32(exit_ctls);
     serial::write_str(" entry=0x");
     write_hex_u32(entry_ctls);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: EPTP=0x");
+    write_hex_u64(frames.eptp);
+    serial::write_str(" guest_code=0x");
+    write_hex_u64(guest_rip);
     serial::write_byte(b'\n');
     serial::write_str("boot: host CS=0x");
     write_hex_u32(cs as u32);
@@ -460,9 +470,8 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(CR4_READ_SHADOW, 0)?;
     // VMCS_LINK_POINTER already written as the VMPTRLD canary above.
 
-    if let Some(sec) = secondary {
-        vw(SECONDARY_VM_EXEC_CONTROL, sec as u64)?;
-    }
+    vw(SECONDARY_VM_EXEC_CONTROL, secondary as u64)?;
+    vw(EPT_POINTER, frames.eptp)?;
     if let Some(bmp) = msr_bitmap {
         vw(MSR_BITMAP, bmp)?;
     }
@@ -585,6 +594,7 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
 
     if basic == EXIT_REASON_HLT {
         serial::write_line(M1_VMEXIT_OK_MARKER);
+        serial::write_line(M2_EPT_OK_MARKER);
     } else {
         serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
     }
@@ -594,7 +604,7 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M1.2 complete");
+    serial::write_line("boot: M2.0 complete");
     if basic == EXIT_REASON_HLT {
         serial::qemu_exit_success();
     } else {
@@ -637,6 +647,7 @@ mod launch_test {
     #[test]
     fn marker_stable() {
         assert_eq!(M1_VMEXIT_OK_MARKER, "RAYNU-V-M1-VMEXIT-OK");
+        assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
     }
 }

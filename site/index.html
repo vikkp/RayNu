@@ -60,23 +60,19 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0–M1.2: first guest, first VMEXIT.</h2>
+          <h2 class="section__title">M2.0: first guest under EPT.</h2>
           <p class="section__lede">
-            Past firmware handoff, RayNu-V enters VMX root, launches a tiny
-            long-mode guest that executes <code>HLT</code>, handles one
-            VMEXIT, then <code>VMXOFF</code>. Markers:
-            <code>RAYNU-V-M0-BOOT-OK</code>,
-            <code>RAYNU-V-M1-EBS-OK</code>,
-            <code>RAYNU-V-M1-VMXON-OK</code>,
-            <code>RAYNU-V-M1-VMEXIT-OK</code>.
+            Past firmware handoff, RayNu-V enters VMX root, builds an EPT
+            identity map, launches a guest <code>HLT</code> page through that
+            map, handles one VMEXIT, then <code>VMXOFF</code>. Markers through
+            <code>RAYNU-V-M2-EPT-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M0-BOOT-OK
-RAYNU-V-M1-EBS-OK
-RAYNU-V-M1-VMXON-OK
-boot: VMLAUNCH → guest HLT
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M1-VMXON-OK
+boot: VMLAUNCH → guest HLT (EPT)
 boot: VMEXIT reason=0x0000000c
 RAYNU-V-M1-VMEXIT-OK
-boot: M1.2 complete</code></pre>
+RAYNU-V-M2-EPT-OK
+boot: M2.0 complete</code></pre>
         </div>
       </section>
 
@@ -150,9 +146,9 @@ boot: M1.2 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M1.2 VMLAUNCH/VMEXIT is closed. Next: EPT identity map for a
-            real guest page, then one small Verus-checked invariant on every
-            commit. That artifact matters more than the marketing.
+            M2.0 EPT identity map is closed. Next: guest runs real code,
+            EPT exclusive-ownership asserts (ADR-004), then interrupt
+            virtualization — the hard middle of M2.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

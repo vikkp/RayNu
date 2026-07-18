@@ -26,6 +26,8 @@ pub const IA32_VMX_CR0_FIXED1: u32 = 0x487;
 pub const IA32_VMX_CR4_FIXED0: u32 = 0x488;
 pub const IA32_VMX_CR4_FIXED1: u32 = 0x489;
 pub const IA32_VMX_PROCBASED_CTLS2: u32 = 0x48B;
+/// EPT/VPID capability (SDM Appendix A.10).
+pub const IA32_VMX_EPT_VPID_CAP: u32 = 0x48C;
 pub const IA32_VMX_TRUE_PINBASED_CTLS: u32 = 0x48D;
 pub const IA32_VMX_TRUE_PROCBASED_CTLS: u32 = 0x48E;
 pub const IA32_VMX_TRUE_EXIT_CTLS: u32 = 0x48F;
@@ -180,6 +182,11 @@ pub unsafe fn read_cr3() -> u64 {
 }
 
 #[inline]
+pub unsafe fn write_cr3(v: u64) {
+    core::arch::asm!("mov cr3, {}", in(reg) v, options(nostack, preserves_flags));
+}
+
+#[inline]
 pub unsafe fn read_dr7() -> u64 {
     let v: u64;
     core::arch::asm!("mov {}, dr7", out(reg) v, options(nomem, nostack, preserves_flags));
@@ -313,6 +320,56 @@ pub unsafe fn segment_base(gdt_base: u64, selector: u16) -> u64 {
     base
 }
 
+/// Clear the NX bit on the identity-mapped page containing `phys`.
+///
+/// OVMF often marks conventional-memory frames non-executable. A guest that
+/// shares host CR3 cannot `HLT` from a bump-allocated page until NX is cleared.
+///
+/// SAFETY: `phys` is identity-mapped; page tables are writable; TLB may need
+/// shootdown (single-CPU bring-up: reload CR3).
+pub unsafe fn clear_nx_identity(phys: u64) -> bool {
+    const NX: u64 = 1 << 63;
+    const PRESENT: u64 = 1;
+    const LARGE: u64 = 1 << 7;
+    let va = phys;
+    let cr3 = read_cr3() & !0xfff;
+    let pml4e = *((cr3 + ((va >> 39) & 0x1ff) * 8) as *const u64);
+    if pml4e & PRESENT == 0 {
+        return false;
+    }
+    let pdpt = pml4e & 0x000f_ffff_ffff_f000;
+    let pdpte = *((pdpt + ((va >> 30) & 0x1ff) * 8) as *const u64);
+    if pdpte & PRESENT == 0 {
+        return false;
+    }
+    if pdpte & LARGE != 0 {
+        // 1 GiB page
+        *((pdpt + ((va >> 30) & 0x1ff) * 8) as *mut u64) = pdpte & !NX;
+        write_cr3(read_cr3());
+        return true;
+    }
+    let pd = pdpte & 0x000f_ffff_ffff_f000;
+    let pde = *((pd + ((va >> 21) & 0x1ff) * 8) as *const u64);
+    if pde & PRESENT == 0 {
+        return false;
+    }
+    if pde & LARGE != 0 {
+        // 2 MiB page
+        *((pd + ((va >> 21) & 0x1ff) * 8) as *mut u64) = pde & !NX;
+        write_cr3(read_cr3());
+        return true;
+    }
+    let pt = pde & 0x000f_ffff_ffff_f000;
+    let pte_ptr = (pt + ((va >> 12) & 0x1ff) * 8) as *mut u64;
+    let pte = *pte_ptr;
+    if pte & PRESENT == 0 {
+        return false;
+    }
+    *pte_ptr = pte & !NX;
+    write_cr3(read_cr3());
+    true
+}
+
 /// Adjust VM-execution control word against allowed0/allowed1 in an MSR.
 pub unsafe fn adjust_vmx_controls(wanted: u32, msr: u32) -> u32 {
     let v = rdmsr(msr);
@@ -333,6 +390,7 @@ mod cpu_test {
     fn constants_match_sdm() {
         assert_eq!(IA32_FEATURE_CONTROL, 0x3A);
         assert_eq!(IA32_VMX_BASIC, 0x480);
+        assert_eq!(IA32_VMX_EPT_VPID_CAP, 0x48C);
         assert_eq!(CR4_VMXE, 1 << 13);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }

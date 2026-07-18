@@ -4,6 +4,7 @@
 # M1.0: RAYNU-V-M1-EBS-OK
 # M1.1: RAYNU-V-M1-VMXON-OK (or SKIP without usable KVM unless REQUIRE_VMX=1)
 # M1.2: RAYNU-V-M1-VMEXIT-OK (required when VMXON succeeds / REQUIRE_VMX=1)
+# M2.0: RAYNU-V-M2-EPT-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -13,6 +14,7 @@ MARKER_M10="${MARKER_M10:-RAYNU-V-M1-EBS-OK}"
 MARKER_VMXON="${MARKER_VMXON:-RAYNU-V-M1-VMXON-OK}"
 MARKER_VMX_SKIP="${MARKER_VMX_SKIP:-RAYNU-V-M1-VMXON-SKIP}"
 MARKER_VMEXIT="${MARKER_VMEXIT:-RAYNU-V-M1-VMEXIT-OK}"
+MARKER_EPT="${MARKER_EPT:-RAYNU-V-M2-EPT-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -42,7 +44,7 @@ if [[ "$REQUIRE_VMX" == "1" ]] && [[ -f /sys/module/kvm_intel/parameters/enable_
   shadow="$(cat /sys/module/kvm_intel/parameters/enable_shadow_vmcs)"
   echo "==> kvm_intel.enable_shadow_vmcs=${shadow}"
   if [[ "$shadow" != "0" && "$shadow" != "N" && "$shadow" != "n" ]]; then
-    echo "error: kvm_intel shadow VMCS is ON — M1.2 VMWRITE fails with insn error 12" >&2
+    echo "error: kvm_intel shadow VMCS is ON — nested VMWRITE fails with insn error 12" >&2
     echo "error: fix on this host (quit QEMU first):" >&2
     echo "error:   sudo $ROOT/tools/enable-nested-kvm.sh" >&2
     echo "error: then re-run ./tools/qemu-boot-test.sh" >&2
@@ -96,6 +98,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_VMEXIT' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_EPT" "$SERIAL_LOG"; then
+    echo "==> M2.0 EPT marker found"
+  else
+    echo "error: marker '$MARKER_EPT' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -114,5 +122,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 + M1.0 + M1.1 + M1.2; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 + M1.0 + M1.1 + M1.2 + M2.0; qemu status=$QEMU_STATUS)"
 exit 0

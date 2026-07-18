@@ -3,14 +3,15 @@
 //! M0: COM1 banner + boot marker.
 //! M1.0: ExitBootServices + frame pool.
 //! M1.1: VMXON (requires VT-x; QEMU needs KVM nested).
-//! M1.2: VMLAUNCH → one HLT VMEXIT → VMXOFF.
+//! M1.2: VMLAUNCH → one HLT VMEXIT.
+//! M2.0: same path under EPT identity map (`RAYNU-V-M2-EPT-OK`).
 
 #![no_main]
 #![no_std]
 
 extern crate alloc;
 
-use r640_hypervisor::{arch, audit, boot, vmx, BOOT_BANNER};
+use r640_hypervisor::{arch, audit, boot, memory, vmx, BOOT_BANNER};
 use uefi::prelude::*;
 use uefi::println;
 
@@ -39,7 +40,7 @@ fn main() -> Status {
     boot::serial::write_str("boot: handoff pool remaining_pages=");
     write_dec(frames.remaining_pages());
     boot::serial::write_byte(b'\n');
-    boot::serial::write_line("boot: M1.0 complete — entering M1.1/M1.2 VMX");
+    boot::serial::write_line("boot: M1.0 complete — entering M1.1/M2.0 VMX+EPT");
 
     run_m1_vmx(&mut frames);
 
@@ -72,7 +73,7 @@ fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
         Ok(()) => {
             boot::serial::write_line(vmx::M1_VMXON_OK_MARKER);
             audit::integrity::record_event(audit::AuditEvent::VmxEnabled { vcpu_id: 0 });
-            run_m1_2_launch(frames, &mut life);
+            run_m2_ept_launch(frames, &mut life);
         }
         Err(e) => {
             boot::serial::write_str("boot: ERROR — VMXON failed: ");
@@ -81,8 +82,66 @@ fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
     }
 }
 
-fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
-    boot::serial::write_line("boot: M1.1 complete — entering M1.2 VMLAUNCH");
+fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
+    boot::serial::write_line("boot: M1.1 complete — entering M2.0 EPT + VMLAUNCH");
+
+    // SAFETY: VMX root; capability MSR is defined when VMX is present.
+    let page_size = match unsafe { memory::ept_hw::select_page_size() } {
+        Ok(ps) => ps,
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — EPT 1G/2M identity map unsupported");
+            let _ = life.disable();
+            return;
+        }
+    };
+    let ept_need = memory::ept_hw::frames_required(page_size);
+    boot::serial::write_str("boot: EPT page_size=");
+    boot::serial::write_line(match page_size {
+        memory::EptPageSize::OneGib => "1G",
+        memory::EptPageSize::TwoMib => "2M",
+    });
+
+    let mut ept_frames = [0u64; 8];
+    if ept_need > ept_frames.len() {
+        boot::serial::write_line("boot: ERROR — EPT frame budget too small");
+        let _ = life.disable();
+        return;
+    }
+    for slot in ept_frames.iter_mut().take(ept_need) {
+        let Some(f) = frames.alloc_frame() else {
+            boot::serial::write_line("boot: ERROR — no frame for EPT tables");
+            let _ = life.disable();
+            return;
+        };
+        *slot = f.0;
+    }
+
+    // SAFETY: frames exclusively owned by this path.
+    let eptp = match unsafe {
+        memory::ept_hw::build_identity_4g(page_size, &mut ept_frames[..ept_need])
+    } {
+        Ok(v) => v,
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — EPT identity build failed");
+            let _ = life.disable();
+            return;
+        }
+    };
+
+    let Some(guest_code) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for guest code");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: owned frame, identity-mapped by UEFI; clear NX so guest can fetch.
+    unsafe {
+        memory::ept_hw::write_guest_hlt_page(guest_code.0);
+        if !arch::cpu::clear_nx_identity(guest_code.0) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on guest code page");
+            let _ = life.disable();
+            return;
+        }
+    };
 
     let Some(vmcs) = frames.alloc_frame() else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");
@@ -109,7 +168,6 @@ fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecyc
         let _ = life.disable();
         return;
     };
-    // Optional control pages (used only if capability MSRs force the bits).
     let msr_bitmap = frames.alloc_frame();
     let io_a = frames.alloc_frame();
     let io_b = frames.alloc_frame();
@@ -120,6 +178,8 @@ fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecyc
         host_stack_phys: host_stack.0,
         tss_phys: tss.0,
         gdt_phys: gdt.0,
+        eptp,
+        guest_code_phys: guest_code.0,
         msr_bitmap_phys: msr_bitmap.map(|p| p.0),
         io_bitmap_a_phys: io_a.map(|p| p.0),
         io_bitmap_b_phys: io_b.map(|p| p.0),
@@ -127,16 +187,17 @@ fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecyc
 
     boot::serial::write_str("boot: VMCS phys=0x");
     write_hex(vmcs.0);
+    boot::serial::write_str(" EPTP=0x");
+    write_hex(eptp);
     boot::serial::write_byte(b'\n');
 
     // SAFETY: VMX root; frames exclusively owned by this bring-up path.
     match unsafe { vmx::launch::run_hlt_guest(&launch_frames) } {
         Ok(()) => {
-            // Success path transfers to HOST_RIP; falling through is a bug.
             boot::serial::write_line("boot: ERROR — run_hlt_guest returned Ok");
         }
         Err(e) => {
-            boot::serial::write_str("boot: ERROR — M1.2 launch failed: ");
+            boot::serial::write_str("boot: ERROR — M2.0 launch failed: ");
             boot::serial::write_line(launch_err_name(e));
         }
     }
@@ -162,6 +223,7 @@ fn launch_err_name(e: vmx::LaunchError) -> &'static str {
         vmx::LaunchError::PrepareFailed => "PrepareFailed",
         vmx::LaunchError::ClearFailed => "ClearFailed",
         vmx::LaunchError::PtrldFailed => "PtrldFailed",
+        vmx::LaunchError::EptUnsupported => "EptUnsupported",
         vmx::LaunchError::VmwriteFailed { .. } => "VmwriteFailed",
         vmx::LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }

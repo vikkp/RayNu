@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M0 scaffold): UEFI entry in `src/main.rs` → `boot` bring-up → serial banner. Later milestones add VMX, EPT, devices, and management.
+Boot path today (M2.0): UEFI entry → ExitBootServices → frame pool → VMXON → EPT identity map (4 GiB) → VMLAUNCH HLT guest → VMEXIT → VMXOFF. Later milestones add interrupt virtualization, a real guest image, devices, and management.
 
 ## Subsystems
 
@@ -38,6 +38,6 @@ Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). Scaffolding sh
 
 When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail) > simplicity ([Z]) > hardware depth ([D]).
 
-## Next Milestone Gate (M0)
+## Next Milestone Gate (M2 continue)
 
-Boots on R640 (or QEMU+OVMF in CI), COM1 serial works, Verus CI job is wired (may be soft-fail until proofs exist).
+M2.0 gate: `RAYNU-V-M2-EPT-OK` under QEMU+KVM (or bare metal). Remaining M2 work: guest runs non-trivial code, EPT exclusive-ownership spec (L2) + runtime asserts, interrupt virtualization bring-up.

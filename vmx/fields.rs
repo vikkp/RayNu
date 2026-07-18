@@ -29,6 +29,8 @@ pub const HOST_TR_SELECTOR: u64 = 0x0000_0C0C;
 pub const IO_BITMAP_A: u64 = 0x0000_2000;
 pub const IO_BITMAP_B: u64 = 0x0000_2002;
 pub const MSR_BITMAP: u64 = 0x0000_2004;
+/// EPT pointer (EPTP).
+pub const EPT_POINTER: u64 = 0x0000_201A;
 pub const VMCS_LINK_POINTER: u64 = 0x0000_2800;
 pub const GUEST_IA32_DEBUGCTL: u64 = 0x0000_2802;
 pub const GUEST_IA32_PAT: u64 = 0x0000_2804;
@@ -133,6 +135,9 @@ pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;
 pub const CPU_BASED_USE_MSR_BITMAPS: u32 = 1 << 28;
 pub const CPU_BASED_ACTIVATE_SECONDARY: u32 = 1 << 31;
 
+/// Secondary proc-based: enable EPT.
+pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
+
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
 pub const VM_EXIT_SAVE_IA32_EFER: u32 = 1 << 20;
@@ -151,8 +156,10 @@ mod fields_test {
     fn encodings_match_sdm_appendix_b() {
         assert_eq!(GUEST_RIP, 0x681E);
         assert_eq!(HOST_RIP, 0x6C16);
+        assert_eq!(EPT_POINTER, 0x201A);
         assert_eq!(EXIT_REASON, 0x4402);
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
+        assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
     }
 }

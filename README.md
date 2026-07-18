@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 · M1.0 · M1.1 · M1.2** — EFI boots, exits boot services, enters VMX root, then **VMLAUNCH** a tiny HLT guest and handles one **VMEXIT** (`RAYNU-V-M1-VMEXIT-OK`). QEMU needs **KVM** (`/dev/kvm`); TCG prints `RAYNU-V-M1-VMXON-SKIP`. On the Dell Latitude: ensure virtualization is enabled in BIOS, then `./tools/qemu-boot-test.sh`. Next: EPT for a real guest mapping.
+**M0 → M2.0** — EFI boots, exits boot services, enters VMX root, builds an **EPT identity map** (first 4 GiB), **VMLAUNCH**es a guest `HLT` page under EPT, and handles one **VMEXIT**. Markers: `RAYNU-V-M1-VMEXIT-OK`, `RAYNU-V-M2-EPT-OK`. QEMU needs **KVM** (`/dev/kvm`); TCG prints `RAYNU-V-M1-VMXON-SKIP`. On the Dell Latitude: BIOS VT-x on, `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Next: richer guest code + EPT ownership asserts (M2 continue).
 
 ## Repository Layout
 
@@ -61,7 +61,7 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M1.2 markers (requires KVM + nested VT-x for VMEXIT)
+# Boot gate: M0 → M2.0 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
