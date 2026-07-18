@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.1** — EFI boots, VMXON, **EPT identity map** (4 GiB), guest **store + loop + HLT** under EPT, one **VMEXIT**. Markers: `RAYNU-V-M2-EPT-OK`, `RAYNU-V-M2-GUEST-OK`. QEMU needs **KVM**; TCG prints `RAYNU-V-M1-VMXON-SKIP`. Latitude: BIOS VT-x on, `sudo ./tools/enable-nested-kvm.sh`, `./tools/qemu-boot-test.sh`. Next: EPT ownership asserts (ADR-004) / allocator (M2 continue).
+**M0 → M2.2** — EFI boots, VMXON, **EPT identity map**, guest **store + loop + HLT**, plus **ADR-004 ownership** self-test (exclusive HPA claim). Markers: `RAYNU-V-M2-GUEST-OK`, `RAYNU-V-M2-OWN-OK`. QEMU needs **KVM**. Latitude: `sudo ./tools/enable-nested-kvm.sh`, `./tools/qemu-boot-test.sh`. Next: frame allocator promotion, then interrupt virtualization.
 
 ## Repository Layout
 

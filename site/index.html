@@ -60,18 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.1: guest store under EPT.</h2>
+          <h2 class="section__title">M2.2: EPT ownership (ADR-004).</h2>
           <p class="section__lede">
-            Past firmware handoff, RayNu-V enters VMX root, builds an EPT
-            identity map, runs guest code that stores a magic value and a
-            short loop, then <code>HLT</code>. Host verifies the stores on
-            VMEXIT. Marker: <code>RAYNU-V-M2-GUEST-OK</code>.
+            Guest pages are claimed in the exclusive-ownership registry before
+            launch. A second guest cannot alias the same host frame. Markers
+            through <code>RAYNU-V-M2-OWN-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: VMLAUNCH → guest store+loop+HLT (EPT)
-boot: VMEXIT reason=0x0000000c
-RAYNU-V-M2-EPT-OK
+          <pre class="ship-code milestone-log" data-reveal><code>boot: ADR-004 ownership selftest ok
 RAYNU-V-M2-GUEST-OK
-boot: M2.1 complete</code></pre>
+RAYNU-V-M2-OWN-OK
+boot: M2.2 complete</code></pre>
         </div>
       </section>
 
@@ -145,8 +143,8 @@ boot: M2.1 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M2.1 guest store under EPT is closed. Next: EPT
-            exclusive-ownership asserts (ADR-004), frame allocator, then
+            M2.2 ownership registry is closed. Next: promote the frame
+            allocator, deepen the ADR-004 spec toward L2/Kani, then
             interrupt virtualization — the hard middle of M2.
           </p>
           <div class="cta">

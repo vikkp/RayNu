@@ -6,6 +6,7 @@
 # M1.2: RAYNU-V-M1-VMEXIT-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M2.0: RAYNU-V-M2-EPT-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
 # M2.1: RAYNU-V-M2-GUEST-OK (required when VMXON succeeds / REQUIRE_VMX=1)
+# M2.2: RAYNU-V-M2-OWN-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -17,6 +18,7 @@ MARKER_VMX_SKIP="${MARKER_VMX_SKIP:-RAYNU-V-M1-VMXON-SKIP}"
 MARKER_VMEXIT="${MARKER_VMEXIT:-RAYNU-V-M1-VMEXIT-OK}"
 MARKER_EPT="${MARKER_EPT:-RAYNU-V-M2-EPT-OK}"
 MARKER_GUEST="${MARKER_GUEST:-RAYNU-V-M2-GUEST-OK}"
+MARKER_OWN="${MARKER_OWN:-RAYNU-V-M2-OWN-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -112,6 +114,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_GUEST' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_OWN" "$SERIAL_LOG"; then
+    echo "==> M2.2 ownership marker found"
+  else
+    echo "error: marker '$MARKER_OWN' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -130,5 +138,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 + M1.0 + M1.1 + M1.2 + M2.0 + M2.1; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M2.2; qemu status=$QEMU_STATUS)"
 exit 0
