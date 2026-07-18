@@ -20,38 +20,73 @@ if [[ ! -d /sys/module/kvm_intel ]]; then
   exit 1
 fi
 
-echo "==> current kvm_intel params"
-for p in nested enable_shadow_vmcs; do
-  f="/sys/module/kvm_intel/parameters/$p"
+param() {
+  local f="/sys/module/kvm_intel/parameters/$1"
   if [[ -f "$f" ]]; then
-    echo "    $p=$(cat "$f")"
+    cat "$f"
   else
-    echo "    $p=(not present on this kernel)"
+    echo "(missing)"
   fi
-done
+}
 
-echo "==> reloading kvm_intel with nested=1 enable_shadow_vmcs=0"
-echo "    (quit any QEMU/VMs first if modprobe -r fails)"
+echo "==> current kvm_intel params"
+echo "    nested=$(param nested)"
+echo "    enable_shadow_vmcs=$(param enable_shadow_vmcs)"
 
-modprobe -r kvm_intel 2>/dev/null || true
-# Keep kvm core if other modules depend on it; reload intel with flags.
-modprobe kvm_intel nested=1 enable_shadow_vmcs=0
+if [[ ! -f /sys/module/kvm_intel/parameters/enable_shadow_vmcs ]]; then
+  echo "error: this kernel has no enable_shadow_vmcs module param" >&2
+  echo "       M1.2 under nested QEMU needs a kernel that exposes it, or bare-metal boot." >&2
+  exit 1
+fi
+
+shadow_before="$(param enable_shadow_vmcs)"
+if [[ "$shadow_before" == "0" || "$shadow_before" == "N" || "$shadow_before" == "n" ]]; then
+  echo "==> shadow VMCS already off — nothing to reload"
+else
+  echo "==> reloading kvm_intel with nested=1 enable_shadow_vmcs=0"
+  echo "    (all QEMU/VMs using KVM must be quit first)"
+
+  # Do NOT swallow unload failure: if the module stays loaded, modprobe
+  # will not apply new parameters and M1.2 will keep failing with error 12.
+  if ! modprobe -r kvm_intel; then
+    echo "error: could not unload kvm_intel (is QEMU still running?)" >&2
+    echo "       quit every VM, then re-run: sudo $0" >&2
+    fuser -v /dev/kvm 2>&1 || true
+    exit 1
+  fi
+
+  modprobe kvm_intel nested=1 enable_shadow_vmcs=0
+fi
 
 echo "==> new kvm_intel params"
-for p in nested enable_shadow_vmcs; do
-  f="/sys/module/kvm_intel/parameters/$p"
-  if [[ -f "$f" ]]; then
-    echo "    $p=$(cat "$f")"
-  fi
-done
+echo "    nested=$(param nested)"
+echo "    enable_shadow_vmcs=$(param enable_shadow_vmcs)"
+
+shadow_after="$(param enable_shadow_vmcs)"
+if [[ "$shadow_after" != "0" && "$shadow_after" != "N" && "$shadow_after" != "n" ]]; then
+  echo "error: enable_shadow_vmcs is still '${shadow_after}' (want 0/N)" >&2
+  echo "       check /etc/modprobe.d for overrides, then retry." >&2
+  exit 1
+fi
+
+nested_after="$(param nested)"
+if [[ "$nested_after" != "Y" && "$nested_after" != "y" && "$nested_after" != "1" ]]; then
+  echo "error: nested is '${nested_after}' (want Y/1)" >&2
+  exit 1
+fi
 
 if [[ -e /dev/kvm ]]; then
   chmod a+rw /dev/kvm 2>/dev/null || true
   ls -l /dev/kvm
 fi
 
+conf=/etc/modprobe.d/kvm-raynu.conf
+if [[ ! -f "$conf" ]] || ! grep -q 'enable_shadow_vmcs=0' "$conf" 2>/dev/null; then
+  echo
+  echo "Persistent (optional, survives reboot):"
+  echo "  echo 'options kvm_intel nested=1 enable_shadow_vmcs=0' | sudo tee $conf"
+fi
+
 echo
-echo "Persistent (optional):"
-echo "  echo 'options kvm_intel nested=1 enable_shadow_vmcs=0' | sudo tee /etc/modprobe.d/kvm-raynu.conf"
-echo
-echo "Then: cd ~/raynu && ./tools/qemu-boot-test.sh"
+echo "OK — host ready for M1.2. Then:"
+echo "  cd ~/raynu && ./tools/qemu-boot-test.sh"
