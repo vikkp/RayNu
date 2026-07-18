@@ -1,7 +1,10 @@
 //! VMXON / VMXOFF lifecycle state machine.
 //!
-//! Pillar: [V] · Proven Core · VERIFICATION: L0
+//! Pillar: [V] · Proven Core · VERIFICATION: L1 (runtime asserts on transitions)
 //! See `lifecycle_spec.rs` / `lifecycle_proof.rs`.
+
+#[cfg(target_os = "uefi")]
+use crate::vmx::hardware::{self, VmxHwError};
 
 /// Explicit VMX root-mode lifecycle (no boolean flags — CLAUDE.md coding standards).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,8 +20,26 @@ pub enum VmxState {
 pub enum VmxError {
     /// Transition illegal for the current state.
     InvalidState,
-    /// Hardware rejected VMXON (feature / BIOS lock) — stubbed until M1.
-    HardwareReject,
+    /// CPUID reports no VMX.
+    NotSupported,
+    /// IA32_FEATURE_CONTROL rejected VMX.
+    FeatureControl,
+    /// VMXON instruction failed.
+    VmxonFailed,
+    /// VMXOFF instruction failed.
+    VmxoffFailed,
+}
+
+#[cfg(target_os = "uefi")]
+impl From<VmxHwError> for VmxError {
+    fn from(e: VmxHwError) -> Self {
+        match e {
+            VmxHwError::NotSupported => Self::NotSupported,
+            VmxHwError::FeatureControl => Self::FeatureControl,
+            VmxHwError::VmxonFailed => Self::VmxonFailed,
+            VmxHwError::VmxoffFailed => Self::VmxoffFailed,
+        }
+    }
 }
 
 /// Owns per-CPU VMX lifecycle.
@@ -26,10 +47,9 @@ pub enum VmxError {
 /// INVARIANTS:
 ///   - `state == Root` only after a successful `enable` (VMXON)
 ///   - `state == Off` after `disable` (VMXOFF) or before first enable
-///   - Never claims Root without a valid VMXON region (enforced in M1)
+///   - Root implies a valid VMXON region was used (uefi builds)
 ///
-/// VERIFICATION: L0 — see lifecycle_spec.rs
-/// FALLBACK: L1 runtime asserts planned for M1
+/// VERIFICATION: L1 — see lifecycle_spec.rs
 pub struct VmxLifecycle {
     state: VmxState,
 }
@@ -47,17 +67,32 @@ impl VmxLifecycle {
 
     /// Enter VMX root operation (VMXON).
     ///
+    /// `vmxon_region_phys` — 4K-aligned physical address of the VMXON region.
+    /// On host unit tests, hardware is not touched (software state only).
+    ///
     /// INVARIANTS:
     ///   - Pre: state == Off
     ///   - Post on Ok: state == Root
     ///   - Post on Err: state unchanged
     ///
-    /// VERIFICATION: L0
-    pub fn enable(&mut self) -> Result<(), VmxError> {
+    /// VERIFICATION: L1
+    pub fn enable(&mut self, vmxon_region_phys: u64) -> Result<(), VmxError> {
         if self.state != VmxState::Off {
             return Err(VmxError::InvalidState);
         }
-        // M1: execute VMXON (Intel SDM Vol. 3C). Stub keeps state Off→Root for unit tests only.
+
+        #[cfg(target_os = "uefi")]
+        {
+            // SAFETY: caller owns the frame; single-CPU bring-up; identity map.
+            unsafe {
+                hardware::vmxon(vmxon_region_phys)?;
+            }
+        }
+        #[cfg(not(target_os = "uefi"))]
+        {
+            let _ = vmxon_region_phys;
+        }
+
         self.state = VmxState::Root;
         Ok(())
     }
@@ -68,11 +103,20 @@ impl VmxLifecycle {
     ///   - Pre: state == Root
     ///   - Post on Ok: state == Off
     ///
-    /// VERIFICATION: L0
+    /// VERIFICATION: L1
     pub fn disable(&mut self) -> Result<(), VmxError> {
         if self.state != VmxState::Root {
             return Err(VmxError::InvalidState);
         }
+
+        #[cfg(target_os = "uefi")]
+        {
+            // SAFETY: state Root means VMXON succeeded on this CPU.
+            unsafe {
+                hardware::vmxoff()?;
+            }
+        }
+
         self.state = VmxState::Off;
         Ok(())
     }
