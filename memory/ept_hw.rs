@@ -1,4 +1,4 @@
-//! Hardware EPT page-table builder (M2.0).
+//! Hardware EPT page-table builder + guest pages (M2.0 / M2.1).
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
@@ -8,11 +8,25 @@
 //! 1 GiB pages when available, else 2 MiB pages. That covers OVMF page tables
 //! and the early frame pool so a long-mode guest sharing host CR3 can run
 //! under EPT.
+//!
+//! M2.1 guest page: store a magic qword, run a short increment loop, then HLT.
 
 use crate::arch::cpu::{self, IA32_VMX_EPT_VPID_CAP};
 
 /// COM1 marker when the guest runs under EPT (M2.0 gate).
 pub const M2_EPT_OK_MARKER: &str = "RAYNU-V-M2-EPT-OK";
+
+/// COM1 marker when guest store + loop are verified after HLT (M2.1 gate).
+pub const M2_GUEST_OK_MARKER: &str = "RAYNU-V-M2-GUEST-OK";
+
+/// Magic value the guest writes via EPT (ASCII-ish `M21STORE`).
+pub const GUEST_STORE_MAGIC: u64 = 0x4D32_3153_544F_5245;
+
+/// Guest increment-loop trip count (written to data slot +8).
+pub const GUEST_LOOP_ITERS: u64 = 4;
+
+/// Offset of the data region within the guest code page.
+pub const GUEST_DATA_OFF: u64 = 0x800;
 
 /// Secondary proc-based: enable EPT (SDM Vol. 3).
 pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
@@ -149,17 +163,83 @@ pub unsafe fn build_identity_4g(
     Ok(pack_eptp(pml4, mt))
 }
 
-/// Write a tiny guest entry into an owned frame: `hlt` then spin.
+fn write_u64_le(p: *mut u8, v: u64) {
+    for i in 0..8 {
+        unsafe {
+            core::ptr::write_volatile(p.add(i), ((v >> (8 * i)) & 0xff) as u8);
+        }
+    }
+}
+
+/// Write M2.1 guest code into an owned frame (identity GPA/HPA).
+///
+/// Layout: code at `+0`, data at [`GUEST_DATA_OFF`] (magic + loop counter).
+/// Guest: `*data = MAGIC`; increment `*(data+8)` four times; `hlt`.
 ///
 /// SAFETY: `page_phys` is a writable identity-mapped frame.
-pub unsafe fn write_guest_hlt_page(page_phys: u64) {
+pub unsafe fn write_guest_store_page(page_phys: u64) {
     let p = page_phys as *mut u8;
     core::ptr::write_bytes(p, 0, 4096);
-    // hlt
-    core::ptr::write_volatile(p, 0xF4);
-    // jmp $ (EB FE)
-    core::ptr::write_volatile(p.add(1), 0xEB);
-    core::ptr::write_volatile(p.add(2), 0xFE);
+
+    let data = page_phys + GUEST_DATA_OFF;
+    let counter = data + 8;
+    let mut o = 0usize;
+
+    // movabs rax, MAGIC
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xB8);
+    write_u64_le(p.add(o + 2), GUEST_STORE_MAGIC);
+    o += 10;
+
+    // mov moffs64, rax  (store RAX to absolute data address)
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xA3);
+    write_u64_le(p.add(o + 2), data);
+    o += 10;
+
+    // mov ecx, GUEST_LOOP_ITERS
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xC7);
+    core::ptr::write_volatile(p.add(o + 2), 0xC1);
+    core::ptr::write_volatile(p.add(o + 3), GUEST_LOOP_ITERS as u8);
+    core::ptr::write_volatile(p.add(o + 4), 0);
+    core::ptr::write_volatile(p.add(o + 5), 0);
+    core::ptr::write_volatile(p.add(o + 6), 0);
+    o += 7;
+
+    // movabs rbx, counter
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xBB);
+    write_u64_le(p.add(o + 2), counter);
+    o += 10;
+
+    // loop body:
+    //   inc qword [rbx]   ; 48 FF 03
+    //   loop body         ; E2 FB  (rel8 = -5)
+    let _loop = o;
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xFF);
+    core::ptr::write_volatile(p.add(o + 2), 0x03);
+    o += 3;
+    core::ptr::write_volatile(p.add(o), 0xE2);
+    core::ptr::write_volatile(p.add(o + 1), 0xFB); // -5 → back to inc
+    o += 2;
+
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
+/// Read back M2.1 guest stores from the code page's data region.
+///
+/// SAFETY: `page_phys` is the guest page previously passed to
+/// [`write_guest_store_page`]; guest has exited.
+pub unsafe fn verify_guest_store(page_phys: u64) -> bool {
+    let data = (page_phys + GUEST_DATA_OFF) as *const u64;
+    let magic = core::ptr::read_volatile(data);
+    let iters = core::ptr::read_volatile(data.add(1));
+    magic == GUEST_STORE_MAGIC && iters == GUEST_LOOP_ITERS
 }
 
 #[cfg(test)]
@@ -169,6 +249,9 @@ mod ept_hw_test {
     #[test]
     fn marker_stable() {
         assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
+        assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
+        assert_eq!(GUEST_STORE_MAGIC, 0x4D32_3153_544F_5245);
+        assert_eq!(GUEST_LOOP_ITERS, 4);
     }
 
     #[test]
@@ -183,5 +266,26 @@ mod ept_hw_test {
         assert_eq!(eptp & 0x7, 6);
         assert_eq!((eptp >> 3) & 0x7, 3);
         assert_eq!(eptp & !0xfff, 0x2000);
+    }
+
+    #[test]
+    fn guest_store_page_encodes_magic_address() {
+        let mut page = [0u8; 4096];
+        let phys = page.as_mut_ptr() as u64;
+        // SAFETY: test buffer is writable; phys is the buffer address.
+        unsafe { write_guest_store_page(phys) };
+        // Opcode stream starts with movabs rax, imm64
+        assert_eq!(page[0], 0x48);
+        assert_eq!(page[1], 0xB8);
+        let mut imm = 0u64;
+        for i in 0..8 {
+            imm |= (page[2 + i] as u64) << (8 * i);
+        }
+        assert_eq!(imm, GUEST_STORE_MAGIC);
+        // Data slots start zeroed
+        assert_eq!(
+            unsafe { core::ptr::read_unaligned((page.as_ptr() as u64 + GUEST_DATA_OFF) as *const u64) },
+            0
+        );
     }
 }

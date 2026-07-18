@@ -60,19 +60,18 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.0: first guest under EPT.</h2>
+          <h2 class="section__title">M2.1: guest store under EPT.</h2>
           <p class="section__lede">
             Past firmware handoff, RayNu-V enters VMX root, builds an EPT
-            identity map, launches a guest <code>HLT</code> page through that
-            map, handles one VMEXIT, then <code>VMXOFF</code>. Markers through
-            <code>RAYNU-V-M2-EPT-OK</code>.
+            identity map, runs guest code that stores a magic value and a
+            short loop, then <code>HLT</code>. Host verifies the stores on
+            VMEXIT. Marker: <code>RAYNU-V-M2-GUEST-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M1-VMXON-OK
-boot: VMLAUNCH → guest HLT (EPT)
+          <pre class="ship-code milestone-log" data-reveal><code>boot: VMLAUNCH → guest store+loop+HLT (EPT)
 boot: VMEXIT reason=0x0000000c
-RAYNU-V-M1-VMEXIT-OK
 RAYNU-V-M2-EPT-OK
-boot: M2.0 complete</code></pre>
+RAYNU-V-M2-GUEST-OK
+boot: M2.1 complete</code></pre>
         </div>
       </section>
 
@@ -146,9 +145,9 @@ boot: M2.0 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M2.0 EPT identity map is closed. Next: guest runs real code,
-            EPT exclusive-ownership asserts (ADR-004), then interrupt
-            virtualization — the hard middle of M2.
+            M2.1 guest store under EPT is closed. Next: EPT
+            exclusive-ownership asserts (ADR-004), frame allocator, then
+            interrupt virtualization — the hard middle of M2.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

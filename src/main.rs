@@ -5,6 +5,7 @@
 //! M1.1: VMXON (requires VT-x; QEMU needs KVM nested).
 //! M1.2: VMLAUNCH → one HLT VMEXIT.
 //! M2.0: same path under EPT identity map (`RAYNU-V-M2-EPT-OK`).
+//! M2.1: guest store + loop then HLT (`RAYNU-V-M2-GUEST-OK`).
 
 #![no_main]
 #![no_std]
@@ -83,7 +84,7 @@ fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
 }
 
 fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
-    boot::serial::write_line("boot: M1.1 complete — entering M2.0 EPT + VMLAUNCH");
+    boot::serial::write_line("boot: M1.1 complete — entering M2.1 guest store + EPT");
 
     // SAFETY: VMX root; capability MSR is defined when VMX is present.
     let page_size = match unsafe { memory::ept_hw::select_page_size() } {
@@ -135,7 +136,7 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
     };
     // SAFETY: owned frame, identity-mapped by UEFI; clear NX so guest can fetch.
     unsafe {
-        memory::ept_hw::write_guest_hlt_page(guest_code.0);
+        memory::ept_hw::write_guest_store_page(guest_code.0);
         if !arch::cpu::clear_nx_identity(guest_code.0) {
             boot::serial::write_line("boot: ERROR — could not clear NX on guest code page");
             let _ = life.disable();
@@ -197,7 +198,7 @@ fn run_m2_ept_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifec
             boot::serial::write_line("boot: ERROR — run_hlt_guest returned Ok");
         }
         Err(e) => {
-            boot::serial::write_str("boot: ERROR — M2.0 launch failed: ");
+            boot::serial::write_str("boot: ERROR — M2.1 launch failed: ");
             boot::serial::write_line(launch_err_name(e));
         }
     }
