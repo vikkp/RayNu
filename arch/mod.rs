@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 
+pub mod apic;
 pub mod cpu;
 
 /// Stub for future SMBIOS vendor logging (Tier 1, ADR-005).

@@ -299,12 +299,20 @@ pub unsafe fn verify_guest_store(page_phys: u64) -> bool {
     magic == GUEST_STORE_MAGIC && iters == GUEST_LOOP_ITERS
 }
 
-/// Read back M2.4 ISR ack from the code page.
+/// Read back M2.4/M2.5 ISR ack from the code page.
 ///
 /// SAFETY: guest ISR has run (or not); page is the bring-up code frame.
 pub unsafe fn verify_guest_irq(page_phys: u64) -> bool {
     let slot = (page_phys + GUEST_IRQ_SLOT_OFF) as *const u64;
     core::ptr::read_volatile(slot) == GUEST_IRQ_MAGIC
+}
+
+/// Clear the IRQ ack slot so a later ISR run can be distinguished (M2.5).
+///
+/// SAFETY: page is the bring-up code frame; guest not running.
+pub unsafe fn clear_guest_irq(page_phys: u64) {
+    let slot = (page_phys + GUEST_IRQ_SLOT_OFF) as *mut u64;
+    core::ptr::write_volatile(slot, 0);
 }
 
 #[cfg(test)]

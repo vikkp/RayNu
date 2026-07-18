@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.4 closed** — EFI boots, VMXON, EPT, guest store/loop/HLT, ADR-004 ownership, frame allocator, plus **IRQ inject** (VM-entry interruption-info → guest ISR). Latest marker: `RAYNU-V-M2-IRQ-OK` (Latitude + QEMU gate). Prep: `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Gate history: [docs/progress.md](docs/progress.md). Next: APIC timer / EOI, or ADR-004 L2 + Kani.
+**M0 → M2.5** — through M2.4 IRQ inject, plus **LAPIC one-shot timer** → external-interrupt VMEXIT → EOI → re-inject. Latest marker: `RAYNU-V-M2-TIMER-OK`. Prep: `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Gate history: [docs/progress.md](docs/progress.md). Next after Latitude: ADR-004 L2 + Kani, then Linux (M3).
 
 ## Repository Layout
 
@@ -61,7 +61,7 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M2.4 markers (requires KVM + nested VT-x for EPT/VMEXIT)
+# Boot gate: M0 → M2.5 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)

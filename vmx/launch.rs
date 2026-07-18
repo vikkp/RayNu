@@ -9,8 +9,11 @@
 //! magic value, runs a short increment loop, then `hlt`. On the first HLT
 //! exit the host injects vector [`crate::sched::M2_IRQ_VECTOR`] via VM-entry
 //! interruption-info and VMRESUMEs; the guest ISR acks and HLTs again.
-//! Markers: OWN (M2.2), ALLOC (M2.3), IRQ (M2.4).
+//! M2.5 arms a host LAPIC one-shot; guest waits in real HLT; external-interrupt
+//! VMEXIT → EOI → re-inject → `RAYNU-V-M2-TIMER-OK`.
+//! Markers: OWN (M2.2), ALLOC (M2.3), IRQ (M2.4), TIMER (M2.5).
 
+use crate::arch::apic;
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
     IA32_PAT, IA32_SYSENTER_CS, IA32_SYSENTER_EIP, IA32_SYSENTER_ESP, IA32_VMX_BASIC,
@@ -22,12 +25,16 @@ use crate::boot::serial;
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
-use crate::sched::interrupt::{self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR};
+use crate::sched::interrupt::{self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR, M2_TIMER_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
-/// 0 = waiting for first HLT; 1 = waiting for ISR HLT after inject.
+/// Exit-phase state machine (M2.4 / M2.5):
+/// 0 = first HLT → software inject
+/// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
+/// 2 = external-interrupt VMEXIT → EOI → re-inject
+/// 3 = ISR HLT after timer path → TIMER-OK
 static mut EXIT_PHASE: u8 = 0;
 
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
@@ -318,7 +325,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         IA32_VMX_ENTRY_CTLS
     };
 
-    // External-interrupt exiting armed (host stays CLI; real APIC timer deferred).
+    // External-interrupt exiting + ack-on-exit (M2.5 LAPIC timer path).
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING | CPU_BASED_ACTIVATE_SECONDARY,
@@ -328,11 +335,16 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         serial::write_line("boot: ERROR — secondary controls not allowed (need EPT)");
         return Err(LaunchError::EptUnsupported);
     }
-    let exit_wanted =
-        VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER;
+    let exit_wanted = VM_EXIT_HOST_ADDR_SPACE_SIZE
+        | VM_EXIT_ACK_INTERRUPT_ON_EXIT
+        | VM_EXIT_SAVE_IA32_EFER
+        | VM_EXIT_LOAD_IA32_EFER;
     let entry_wanted = VM_ENTRY_IA32E_MODE | VM_ENTRY_LOAD_IA32_EFER;
     let exit_ctls = adjust_vmx_controls(exit_wanted, exit_msr);
     let entry_ctls = adjust_vmx_controls(entry_wanted, entry_msr);
+    if exit_ctls & VM_EXIT_ACK_INTERRUPT_ON_EXIT == 0 {
+        serial::write_line("boot: WARN — ack-interrupt-on-exit not allowed; EOI still used");
+    }
 
     let secondary = adjust_vmx_controls(SECONDARY_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2);
     if secondary & SECONDARY_ENABLE_EPT == 0 {
@@ -604,8 +616,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
 /// HOST_RIP target — runs after each VMEXIT with host RSP restored.
 ///
-/// Phase 0: first HLT → verify store/OWN/ALLOC, inject IRQ, VMRESUME.
-/// Phase 1: ISR HLT → verify IRQ magic, emit `RAYNU-V-M2-IRQ-OK`, VMXOFF.
+/// See [`EXIT_PHASE`] for the M2.4/M2.5 state machine.
 ///
 /// GPRs still hold guest values; only use stack locals / known addresses.
 pub unsafe extern "C" fn vmexit_landing() -> ! {
@@ -626,82 +637,184 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
     write_hex_u64(guest_rip);
     serial::write_byte(b'\n');
 
+    match phase {
+        0 => phase0_first_hlt(basic, guest_page),
+        1 => phase1_irq_ok_arm_timer(basic, guest_page),
+        2 => phase2_external_irq(basic),
+        3 => phase3_timer_ok(basic, guest_page),
+        _ => {
+            serial::write_line("boot: ERROR — bad EXIT_PHASE");
+            finish_boot(false);
+        }
+    }
+}
+
+unsafe fn phase0_first_hlt(basic: u32, guest_page: u64) -> ! {
     if basic != EXIT_REASON_HLT {
-        serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
+        serial::write_line("boot: ERROR — phase0 expected HLT");
+        finish_boot(false);
+    }
+    serial::write_line(M1_VMEXIT_OK_MARKER);
+    serial::write_line(M2_EPT_OK_MARKER);
+    let mut ok = true;
+    if ept_hw::verify_guest_store(guest_page) {
+        serial::write_line(M2_GUEST_OK_MARKER);
+    } else {
+        serial::write_line("boot: ERROR — guest store/loop verify failed");
+        ok = false;
+    }
+    if ept::ownership_selftest_ok() {
+        serial::write_line(M2_OWN_OK_MARKER);
+    } else {
+        serial::write_line("boot: ERROR — ADR-004 ownership latch clear");
+        ok = false;
+    }
+    if frame_allocator::allocator_selftest_ok() {
+        serial::write_line(M2_ALLOC_OK_MARKER);
+    } else {
+        serial::write_line("boot: ERROR — frame allocator latch clear");
+        ok = false;
+    }
+    if !ok {
         finish_boot(false);
     }
 
-    if phase == 0 {
-        serial::write_line(M1_VMEXIT_OK_MARKER);
-        serial::write_line(M2_EPT_OK_MARKER);
-        let mut ok = true;
-        if ept_hw::verify_guest_store(guest_page) {
-            serial::write_line(M2_GUEST_OK_MARKER);
-        } else {
-            serial::write_line("boot: ERROR — guest store/loop verify failed");
-            ok = false;
-        }
-        if ept::ownership_selftest_ok() {
-            serial::write_line(M2_OWN_OK_MARKER);
-        } else {
-            serial::write_line("boot: ERROR — ADR-004 ownership latch clear");
-            ok = false;
-        }
-        if frame_allocator::allocator_selftest_ok() {
-            serial::write_line(M2_ALLOC_OK_MARKER);
-        } else {
-            serial::write_line("boot: ERROR — frame allocator latch clear");
-            ok = false;
-        }
-        if !ok {
-            finish_boot(false);
-        }
+    EXIT_PHASE = 1;
+    inject_and_resume("software inject");
+}
 
-        let info = match interrupt::prepare_external_inject(M2_IRQ_VECTOR) {
-            Ok(v) => v,
-            Err(_) => {
-                serial::write_line("boot: ERROR — inject vector rejected by firewall");
-                finish_boot(false);
-            }
-        };
-        if ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64).is_err() {
-            serial::write_line("boot: ERROR — VMWRITE interrupt-info failed");
-            finish_boot(false);
-        }
-        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-        // IF=1 so delivery state matches a normal external IRQ wake from HLT.
-        let _ = ops::vmwrite(GUEST_RFLAGS, 0x2 | (1 << 9));
-
-        EXIT_PHASE = 1;
-        serial::write_str("boot: injecting vector 0x");
-        write_hex_u32(M2_IRQ_VECTOR);
-        serial::write_line(" + VMRESUME");
-
-        match ops::vmresume() {
-            Ok(()) => {
-                serial::write_line("boot: ERROR — VMRESUME returned Ok");
-                finish_boot(false);
-            }
-            Err(_) => {
-                let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-                serial::write_str("boot: ERROR — VMRESUME failed insn_error=0x");
-                write_hex_u32(ierr);
-                serial::write_byte(b'\n');
-                finish_boot(false);
-            }
-        }
+unsafe fn phase1_irq_ok_arm_timer(basic: u32, guest_page: u64) -> ! {
+    if basic != EXIT_REASON_HLT {
+        serial::write_line("boot: ERROR — phase1 expected HLT");
+        finish_boot(false);
     }
-
-    // Phase 1: ISR should have stored the IRQ magic and HLT'd.
-    let mut ok = true;
-    if ept_hw::verify_guest_irq(guest_page) {
-        serial::write_line(M2_IRQ_OK_MARKER);
-    } else {
+    if !ept_hw::verify_guest_irq(guest_page) {
         serial::write_line("boot: ERROR — guest IRQ ack missing");
-        ok = false;
+        finish_boot(false);
     }
-    finish_boot(ok);
+    serial::write_line(M2_IRQ_OK_MARKER);
+
+    // Clear ack so the timer-path ISR must write it again.
+    ept_hw::clear_guest_irq(guest_page);
+
+    if apic::arm_bringup_timer(M2_IRQ_VECTOR as u8).is_err() {
+        serial::write_line("boot: ERROR — LAPIC timer arm failed");
+        finish_boot(false);
+    }
+    serial::write_line("boot: LAPIC one-shot armed; waiting in guest HLT");
+
+    // Drop HLT exiting so the guest actually waits; timer → reason 1.
+    if set_hlt_exiting(false).is_err() {
+        serial::write_line("boot: ERROR — clear HLT exiting failed");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 0x2 | (1 << 9));
+
+    EXIT_PHASE = 2;
+    resume_or_die();
+}
+
+unsafe fn phase2_external_irq(basic: u32) -> ! {
+    if basic != EXIT_REASON_EXTERNAL_INTERRUPT {
+        serial::write_line("boot: ERROR — phase2 expected external-interrupt exit");
+        finish_boot(false);
+    }
+
+    let exit_info = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0) as u32;
+    if (exit_info & (1 << 31)) != 0 {
+        let vec = exit_info & 0xff;
+        serial::write_str("boot: external IRQ vector=0x");
+        write_hex_u32(vec);
+        serial::write_byte(b'\n');
+        if vec != M2_IRQ_VECTOR {
+            serial::write_line("boot: ERROR — unexpected exit vector");
+            finish_boot(false);
+        }
+    } else {
+        serial::write_line("boot: external IRQ (no ack-info); assuming LAPIC timer");
+    }
+
+    if apic::eoi().is_err() {
+        serial::write_line("boot: ERROR — APIC EOI failed");
+        finish_boot(false);
+    }
+    serial::write_line("boot: APIC EOI ok");
+
+    // Re-enable HLT exiting so the re-injected ISR's HLT exits to phase 3.
+    if set_hlt_exiting(true).is_err() {
+        serial::write_line("boot: ERROR — restore HLT exiting failed");
+        finish_boot(false);
+    }
+
+    EXIT_PHASE = 3;
+    inject_and_resume("timer re-inject");
+}
+
+unsafe fn phase3_timer_ok(basic: u32, guest_page: u64) -> ! {
+    if basic != EXIT_REASON_HLT {
+        serial::write_line("boot: ERROR — phase3 expected HLT");
+        finish_boot(false);
+    }
+    if ept_hw::verify_guest_irq(guest_page) {
+        serial::write_line(M2_TIMER_OK_MARKER);
+        finish_boot(true);
+    } else {
+        serial::write_line("boot: ERROR — timer-path IRQ ack missing");
+        finish_boot(false);
+    }
+}
+
+unsafe fn inject_and_resume(tag: &str) -> ! {
+    let info = match interrupt::prepare_external_inject(M2_IRQ_VECTOR) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line("boot: ERROR — inject vector rejected by firewall");
+            finish_boot(false);
+        }
+    };
+    if ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64).is_err() {
+        serial::write_line("boot: ERROR — VMWRITE interrupt-info failed");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 0x2 | (1 << 9));
+
+    serial::write_str("boot: ");
+    serial::write_str(tag);
+    serial::write_str(" vector 0x");
+    write_hex_u32(M2_IRQ_VECTOR);
+    serial::write_line(" + VMRESUME");
+    resume_or_die();
+}
+
+unsafe fn set_hlt_exiting(on: bool) -> Result<(), ()> {
+    let cur = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).map_err(|_| ())? as u32;
+    let next = if on {
+        cur | CPU_BASED_HLT_EXITING
+    } else {
+        cur & !CPU_BASED_HLT_EXITING
+    };
+    ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
+}
+
+unsafe fn resume_or_die() -> ! {
+    match ops::vmresume() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — VMRESUME returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — VMRESUME failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
 }
 
 fn finish_boot(ok: bool) -> ! {
@@ -711,7 +824,7 @@ fn finish_boot(ok: bool) -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M2.4 complete");
+    serial::write_line("boot: M2.5 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -759,7 +872,10 @@ mod launch_test {
         assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");
         assert_eq!(M2_ALLOC_OK_MARKER, "RAYNU-V-M2-ALLOC-OK");
         assert_eq!(M2_IRQ_OK_MARKER, "RAYNU-V-M2-IRQ-OK");
+        assert_eq!(M2_TIMER_OK_MARKER, "RAYNU-V-M2-TIMER-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
+        assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
+        assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
     }
 }

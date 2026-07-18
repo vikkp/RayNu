@@ -9,6 +9,7 @@
 # M2.2: RAYNU-V-M2-OWN-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
 # M2.3: RAYNU-V-M2-ALLOC-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M2.4: RAYNU-V-M2-IRQ-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
+# M2.5: RAYNU-V-M2-TIMER-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -23,6 +24,7 @@ MARKER_GUEST="${MARKER_GUEST:-RAYNU-V-M2-GUEST-OK}"
 MARKER_OWN="${MARKER_OWN:-RAYNU-V-M2-OWN-OK}"
 MARKER_ALLOC="${MARKER_ALLOC:-RAYNU-V-M2-ALLOC-OK}"
 MARKER_IRQ="${MARKER_IRQ:-RAYNU-V-M2-IRQ-OK}"
+MARKER_TIMER="${MARKER_TIMER:-RAYNU-V-M2-TIMER-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -136,6 +138,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_IRQ' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_TIMER" "$SERIAL_LOG"; then
+    echo "==> M2.5 LAPIC-timer marker found"
+  else
+    echo "error: marker '$MARKER_TIMER' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -154,5 +162,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M2.4; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M2.5; qemu status=$QEMU_STATUS)"
 exit 0

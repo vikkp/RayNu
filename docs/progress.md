@@ -15,20 +15,22 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M2.2 | `RAYNU-V-M2-OWN-OK` | ADR-004 exclusive-ownership self-test |
 | M2.3 | `RAYNU-V-M2-ALLOC-OK` | Proven Core bitmap `FrameAllocator` |
 | M2.4 | `RAYNU-V-M2-IRQ-OK` | Inject vector 0x21 → guest ISR ack + HLT |
+| M2.5 | `RAYNU-V-M2-TIMER-OK` | LAPIC one-shot → ext-IRQ VMEXIT → EOI → re-inject (pending Latitude) |
 
-## Verification checkpoint (as of M2.4)
+## Verification checkpoint (as of M2.5)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
 | `memory/ept` ownership registry | L1 | Runtime self-test + audit `EptMapped` |
 | `memory/frame_allocator` | L1 | Alloc / free / double-free / reuse self-test |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack for inject |
+| `arch/apic` | L0 | Host LAPIC one-shot + EOI (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | Lifecycle + launch + VMRESUME inject path |
+| `vmx/*` | L0–L1 | Lifecycle + launch + VMRESUME inject / timer path |
 | Verus / Kani in CI | Soft-fail scaffold | ADR-001 / ADR-008 |
 
 ## Next
 
-1. Deeper IRQ (APIC timer / EOI) — remaining R03 surface.
+1. Latitude gate for M2.5 (`RAYNU-V-M2-TIMER-OK`).
 2. ADR-004 + allocator toward L2 (Verus) / Kani.
 3. M3: unmodified Linux guest.
