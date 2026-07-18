@@ -42,6 +42,34 @@ jobs:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 
+  # M0 gate: EFI boots under QEMU+OVMF and prints COM1 marker.
+  qemu-boot:
+    name: M0 QEMU serial boot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
+      - name: QEMU boot-to-serial gate
+        run: ./tools/qemu-boot-test.sh
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m0-serial-log
+          path: |
+            target/m0-serial.log
+            target/m0-qemu-stdout.log
+            target/m0-qemu-stderr.log
+          if-no-files-found: ignore
+
   # Soft-fail until Verus/Kani are installed in CI (ADR-001, ADR-008).
   verus-soft:
     name: verus (soft-fail scaffold)

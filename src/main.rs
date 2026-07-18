@@ -1,7 +1,7 @@
 //! UEFI entry for `r640-hypervisor.efi` [Z].
 //!
-//! M0 gate path: firmware handoff → serial banner → halt-friendly return.
-//! VMX/EPT are not enabled in this scaffold.
+//! M0 gate path: firmware handoff → COM1 serial banner → QEMU exit / halt.
+//! VMX/EPT are not enabled yet (M1).
 
 #![no_main]
 #![no_std]
@@ -16,16 +16,24 @@ use uefi::println;
 fn main() -> Status {
     uefi::helpers::init().expect("uefi helpers init");
 
-    println!("{BOOT_BANNER}");
-    println!("pillars: [V] verified · [Z] single-binary · [D] iDRAC · [A] audit");
-
+    // COM1 first: reliable on QEMU `-serial stdio` and iDRAC virtual console [D].
     boot::early_init();
+    boot::serial::print_m0_banner(BOOT_BANNER);
+
+    // Also attempt UEFI ConOut (may be invisible under -display none).
+    println!("{BOOT_BANNER}");
+    println!("{}", boot::serial::M0_BOOT_OK_MARKER);
+
     arch::log_cpu_vendor_stub();
 
     audit::integrity::record_event(audit::AuditEvent::BootStarted {
         milestone: audit::Milestone::M0,
     });
 
-    println!("boot: early_init complete; awaiting M1 VMX bring-up");
+    boot::serial::write_line("boot: early_init complete; awaiting M1 VMX bring-up");
+
+    // Clean exit under QEMU CI; no-op on real hardware.
+    boot::serial::qemu_exit_success();
+
     Status::SUCCESS
 }

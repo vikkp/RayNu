@@ -58,10 +58,14 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 ## Test in QEMU
 
 ```bash
+# Interactive: COM1 on stdio (guest exits via isa-debug-exit)
 ./tools/run-qemu.sh
+
+# M0 CI gate: build + boot + require RAYNU-V-M0-BOOT-OK on serial
+./tools/qemu-boot-test.sh
 ```
 
-Requires `qemu-system-x86_64` and OVMF firmware (e.g. `/usr/share/OVMF/OVMF_CODE.fd`).
+Requires `qemu-system-x86_64` and OVMF (`qemu-system-x86` + `ovmf` packages).
 
 ## Project site
 

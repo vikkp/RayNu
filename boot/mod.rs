@@ -4,11 +4,17 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A (outside core) — unit tests only
 
-/// Perform minimal post-UEFI early init (M0 stub).
+pub mod serial;
+
+/// Perform minimal post-UEFI early init (M0).
 ///
-/// Real bring-up (GDT/IDT, AP wake, memory map ownership) lands in M0–M1.
+/// Initializes COM1 so diagnostic output reaches QEMU `-serial stdio` and
+/// iDRAC virtual console. Memory-map ownership / ExitBootServices land next.
+///
+/// On host unit-test builds this is a no-op (no port I/O in userspace).
 pub fn early_init() {
-    // Placeholder: serial is owned by UEFI helpers for now.
+    #[cfg(target_os = "uefi")]
+    serial::init();
 }
 
 #[cfg(test)]
