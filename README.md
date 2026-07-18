@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.6 closed** — through M2.5 LAPIC timer (Latitude), plus **L2 specs + Kani** for ADR-004 `EptMap` and `FrameAllocator`. Host marker: `RAYNU-V-M2-L2-OK` (`cargo test`). Gate history: [docs/progress.md](docs/progress.md). Next: Linux (M3).
+**M0 → M2.6 closed** — through M2.5 LAPIC timer (Latitude), plus **L2 specs + Kani** for ADR-004 `EptMap` and `FrameAllocator`. Host marker: `RAYNU-V-M2-L2-OK` (`cargo test`). Gate history: [docs/progress.md](docs/progress.md). Next: **M3** Linux — [docs/m3_plan.md](docs/m3_plan.md) (start at M3.0 guest I/O).
 
 ## Repository Layout
 
@@ -93,6 +93,7 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [CLAUDE.md](CLAUDE.md) | Governing rules for all code and reviews |
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
+| [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (M3.0–M3.5) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
 

@@ -33,5 +33,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3:** unmodified Linux guest.
+1. **M3:** unmodified Linux guest — plan: [m3_plan.md](m3_plan.md). First code slice: **M3.0** guest COM1 I/O (`RAYNU-V-M3-IO-OK`).
 2. Verus L3 proofs for EPT / allocator (parallel to M3/M4).

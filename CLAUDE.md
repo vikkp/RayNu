@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M2.6 closed**: Latitude boot through M2.5 (`RAYNU-V-M2-TIMER-OK`); host L2 specs + Kani for `EptMap` / `FrameAllocator` (`RAYNU-V-M2-L2-OK`). Runtime L1 asserts kept. Verus L3 proofs still open. Next milestone: **M3** Linux. See [docs/progress.md](docs/progress.md).
+**Through M2.6 closed**: Latitude boot through M2.5 (`RAYNU-V-M2-TIMER-OK`); host L2 specs + Kani for `EptMap` / `FrameAllocator` (`RAYNU-V-M2-L2-OK`). Runtime L1 asserts kept. Verus L3 proofs still open. Next milestone: **M3** Linux — plan and subgates in [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 
