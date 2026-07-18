@@ -1,6 +1,6 @@
 //! Extended Page Tables (EPT) ownership registry (ADR-004).
 //!
-//! Pillar: [V] · Proven Core · VERIFICATION: L1 (runtime asserts, M2.2)
+//! Pillar: [V] · Proven Core · VERIFICATION: L2 (spec M2.6) + L1 runtime
 //! Per ADR-004: every valid GPA→HPA mapping is exclusively owned by one guest
 //! and belongs to neither the hypervisor nor any other guest.
 //!

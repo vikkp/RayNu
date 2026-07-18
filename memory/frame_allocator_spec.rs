@@ -1,28 +1,50 @@
-//! Verus specifications for the physical frame allocator.
+//! Verus-shaped specifications for the physical frame allocator.
 //!
-//! VERIFICATION: L1 posts (M2.3) — L2/L3 ghost model still TODO.
+//! VERIFICATION: **L2** (spec written, M2.6) — ghost allocated-set + posts.
+//! Machine-checked Verus proofs remain L0/L3 (`frame_allocator_proof.rs`);
+//! Kani covers bitmap allocate/free in `frame_allocator_test.rs`.
+//!
+//! # Ghost model
+//!
+//! ```text
+//! ghost Allocated: Set<PhysFrame>
+//! ghost Pool: { base_frame .. base_frame + capacity }
+//!
+//! invariant Allocated ⊆ Pool
+//! invariant |Allocated| == allocated_count
+//! invariant bitmap bit i set  ⇔  (base_frame + i) ∈ Allocated
+//! ```
+//!
+//! Double-alloc and UAF are critical isolation failures (ADR-002).
 //!
 //! # `FrameAllocator::allocate_frame`
 //! requires
-//!   - `allocated_count < capacity`
+//!   - (none; may return `None` when exhausted)
 //! ensures
-//!   - on `Some(f)`: `f` was free; after return `is_allocated(f)`
-//!   - on `None`: pool exhausted; map unchanged
+//!   - on `Some(f)`:
+//!       `f ∈ Pool`
+//!       `f ∉ Allocated` (pre-state)
+//!       after: `f ∈ Allocated` ∧ `|Allocated|` increased by 1
+//!       no other frame's membership changed
+//!   - on `None`: `Allocated` unchanged ∧ pool exhausted
 //!
-//! # `FrameAllocator::free_frame`
+//! # `FrameAllocator::free_frame(f)`
 //! requires
-//!   - `f` in pool
+//!   - (none; errors encode precondition failures)
 //! ensures
-//!   - on `Ok`: was allocated; after return not allocated
-//!   - on `Err(DoubleFree)`: was already free; map unchanged
+//!   - on `Ok`:
+//!       `f ∈ Allocated` (pre-state)
+//!       after: `f ∉ Allocated` ∧ `|Allocated|` decreased by 1
+//!   - on `Err(DoubleFree)`: `f ∈ Pool ∧ f ∉ Allocated`; set unchanged
+//!   - on `Err(InvalidFrame)`: `f ∉ Pool`; set unchanged
 //!
 //! # `run_allocator_selftest`
 //! ensures
-//!   - allocate ≠ allocate
-//!   - double-free rejected
-//!   - freed frame is reused on next allocate
-//!   - pool `allocated_count` restored
+//!   - two successive allocates yield distinct frames
+//!   - double-free of the same frame is rejected
+//!   - a freed frame is reused on the next allocate
+//!   - `allocated_count` restored to the pre-selftest value
 //!
-//! TODO(M2 L2/L3): ghost allocated-set; Kani harness.
+//! TODO(M3/M4): Verus L3 proof over the bitmap (`frame_allocator_proof.rs`).
 
 #![allow(dead_code)]

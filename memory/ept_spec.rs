@@ -1,33 +1,56 @@
-//! Verus specifications for the EPT engine (ADR-004).
+//! Verus-shaped specifications for the EPT ownership registry (ADR-004).
 //!
-//! VERIFICATION: L1 posts (documented) — L2 ghost model still TODO.
+//! VERIFICATION: **L2** (spec written, M2.6) — ghost model + precise posts.
+//! Machine-checked Verus proofs remain L0/L3 (`ept_proof.rs`); Kani covers
+//! bounded map/unmap in `ept_test.rs`.
 //!
-//! # ADR-004 exclusive ownership (M2.2)
+//! # Ghost model
 //!
-//! ## `EptMap::map`
+//! ```text
+//! ghost Owned: Map<PhysFrame /* HPA */, GuestId>
+//! ghost ByGpa: Map<(GuestId, Gpa), PhysFrame>
+//!
+//! invariant forall f. Owned.contains(f) <==> exists g,a. ByGpa[(g,a)] == f
+//! invariant forall g,a,a'. ByGpa[(g,a)] == ByGpa[(g,a')] ==> a == a'  // unique GPA/guest
+//! invariant |Owned| == |ByGpa| == EptMap.len
+//! ```
+//!
+//! ADR-004: every mapped HPA is exclusively owned by exactly one guest.
+//!
+//! # `EptMap::map(guest_id, gpa, frame, perms)`
 //! requires
 //!   - `guest_id != 0`
-//!   - no existing mapping with the same `frame` (HPA)
-//!   - no existing mapping with the same `(guest_id, gpa)`
 //! ensures
-//!   - on `Ok`: `owner_of(frame) == Some(guest_id)`
-//!   - on `Ok`: `check_invariants()`
-//!   - on `Err(AlreadyOwned)`: map unchanged
+//!   - on `Ok`:
+//!       `Owned[frame] == guest_id`
+//!       `ByGpa[(guest_id, gpa)] == frame`
+//!       `check_invariants()`
+//!   - on `Err(AlreadyOwned)`: `Owned` / `ByGpa` unchanged
+//!   - on `Err(AlreadyMapped)`: unchanged
+//!   - on `Err(InvalidGuest)`: unchanged (`guest_id == 0`)
 //!
-//! ## `EptMap::unmap`
+//! # `EptMap::unmap(guest_id, gpa)`
 //! requires
-//!   - a mapping exists for `(guest_id, gpa)`
+//!   - `ByGpa` contains `(guest_id, gpa)`
 //! ensures
-//!   - on `Ok`: `owner_of(returned_frame) == None`
-//!   - on `Ok`: `check_invariants()`
+//!   - on `Ok(frame)`:
+//!       `!Owned.contains(frame)`
+//!       `!ByGpa.contains((guest_id, gpa))`
+//!       `check_invariants()`
+//!   - on `Err(NotMapped)`: unchanged
 //!
-//! ## `run_ownership_selftest`
+//! # `EptMap::owner_of` / `check_invariants`
+//! ensures
+//!   - `owner_of(f) == Owned.get(f)`
+//!   - `check_invariants()` ⇔ ghost invariants hold over the concrete table
+//!
+//! # `run_ownership_selftest`
 //! ensures
 //!   - bring-up guest uniquely owns code + stack + IDT frames
-//!   - a second guest cannot map the code HPA
+//!   - a second guest cannot map the code HPA (`AlreadyOwned`)
 //!   - unmap then remap of stack succeeds
 //!
-//! TODO(M2 L2): exclusive-ownership ghost set; Kani harness for map/unmap.
-//! TODO(M3): proof attempt for 4K single-guest.
+//! TODO(M3): Verus proof attempt for 4K single-guest (`ept_proof.rs`).
+//! TODO(M4): N guests + large pages in ghost model.
 
 #![allow(dead_code)]

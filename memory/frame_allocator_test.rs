@@ -63,3 +63,20 @@ fn marker_and_geometry() {
     let f = PhysFrame::from_phys(0x1784000);
     assert_eq!(f.to_phys(), 0x1784000);
 }
+
+/// Bounded ADR-002 check: distinct alloc + double-free rejected.
+#[cfg(kani)]
+#[kani::proof]
+fn kani_alloc_no_alias_double_free_rejected() {
+    let mut words = [0u64; 64];
+    // SAFETY: stack bitmap; capacity 4 fits in words.
+    let mut a = unsafe { tiny_alloc(4, &mut words) };
+    let f0 = a.allocate_frame().unwrap();
+    let f1 = a.allocate_frame().unwrap();
+    assert_ne!(f0, f1);
+    assert!(a.is_allocated(f0) && a.is_allocated(f1));
+    a.free_frame(f0).unwrap();
+    assert_eq!(a.free_frame(f0), Err(AllocError::DoubleFree));
+    let f2 = a.allocate_frame().unwrap();
+    assert_eq!(f2, f0);
+}

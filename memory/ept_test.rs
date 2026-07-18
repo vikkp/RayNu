@@ -52,3 +52,23 @@ fn marker_stable() {
     assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");
     assert_eq!(M2_BRINGUP_GUEST_ID, 1);
 }
+
+/// Bounded ADR-004 check: two guests cannot own the same HPA.
+#[cfg(kani)]
+#[kani::proof]
+fn kani_no_double_map_same_hpa() {
+    let mut ept = EptMap::new();
+    let gpa1: u64 = kani::any();
+    let gpa2: u64 = kani::any();
+    kani::assume(gpa1 != gpa2);
+    let frame = PhysFrame(3);
+    assert!(ept
+        .map(1, gpa1, frame, EptPermissions::READ_WRITE)
+        .is_ok());
+    assert_eq!(
+        ept.map(2, gpa2, frame, EptPermissions::READ_WRITE),
+        Err(EptError::AlreadyOwned)
+    );
+    assert!(ept.check_invariants());
+    assert_eq!(ept.owner_of(frame), Some(1));
+}

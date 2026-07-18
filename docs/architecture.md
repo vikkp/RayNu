@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (M2 continue)
 
-**M2.5 closed** (`RAYNU-V-M2-TIMER-OK` on Latitude). Next: deepen ADR-004 / allocator toward L2 + Kani, then M3 Linux.
+**M2.6 gate:** `RAYNU-V-M2-L2-OK` (host) — L2 ghost specs for `EptMap` + `FrameAllocator`, Kani harnesses, `memory::run_l2_gate`. No new serial boot marker. Next after close: M3 Linux.

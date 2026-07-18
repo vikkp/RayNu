@@ -1,6 +1,6 @@
 //! Physical frame allocator (Proven Core).
 //!
-//! Pillar: [V] · Proven Core · VERIFICATION: L1 (M2.3)
+//! Pillar: [V] · Proven Core · VERIFICATION: L2 (spec M2.6) + L1 runtime
 //! Double-alloc / UAF are critical isolation failures (ADR-002).
 //!
 //! Bitmap-backed pool over a contiguous HPA range. Boot straps this from the
@@ -73,6 +73,7 @@ impl FrameAllocator {
     ///
     /// SAFETY: bitmap storage is exclusively owned and identity-mapped writable
     /// for at least `ceil(capacity/64)*8` bytes.
+    /// KANI-TARGET: capacity>0; bitmap spans `ceil(capacity/64)` qwords.
     pub unsafe fn new(base_phys: u64, capacity: u64, bitmap_phys: u64) -> Result<Self, AllocError> {
         if capacity == 0 || (base_phys & 0xfff) != 0 {
             return Err(AllocError::Bootstrap);
@@ -117,12 +118,14 @@ impl FrameAllocator {
         }
         let (ptr, bit) = self.bit_ptr(index);
         // SAFETY: index in range; bitmap owned by self.
+        // KANI-TARGET: index < capacity; ptr within bitmap_words.
         unsafe { (*ptr >> bit) & 1 == 1 }
     }
 
     fn set_bit(&mut self, index: u64, on: bool) {
         let (ptr, bit) = self.bit_ptr(index);
         // SAFETY: index in range; bitmap owned by self.
+        // KANI-TARGET: index < capacity; ptr within bitmap_words.
         unsafe {
             if on {
                 *ptr |= 1u64 << bit;

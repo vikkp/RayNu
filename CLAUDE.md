@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M2.5 closed** on Latitude/QEMU: boot → EBS → VMXON → EPT → guest store/loop/HLT → ADR-004 ownership → frame allocator → IRQ inject → LAPIC timer → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Remaining M2: L2 EPT spec / Kani, L3 allocator. See [docs/progress.md](docs/progress.md).
+**Through M2.5 closed** on Latitude; **M2.6 in flight**: L2 ghost specs + Kani for `EptMap` / `FrameAllocator` (`RAYNU-V-M2-L2-OK` host gate). Runtime L1 asserts kept. Verus L3 proofs still open. See [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 
@@ -382,6 +382,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 - Integration test: boot-to-halt (M0), VMLAUNCH/VMEXIT cycle (M1),
   guest code execution through M2.5 (`./tools/qemu-boot-test.sh`),
+  L2 host gate M2.6 (`cargo test` → `RAYNU-V-M2-L2-OK`),
   Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
   (see [docs/progress.md](docs/progress.md))
