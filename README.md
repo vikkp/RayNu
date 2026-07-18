@@ -67,7 +67,15 @@ Requires `qemu-system-x86_64` and OVMF firmware (e.g. `/usr/share/OVMF/OVMF_CODE
 
 GitHub Pages: [https://vikkp.github.io/RayNu/](https://vikkp.github.io/RayNu/)
 
-Source lives in [`site/`](site/) and deploys from `main` via `.github/workflows/pages.yml`.
+Source lives in [`site/`](site/). On each push to `main`, CI publishes it to the `gh-pages` branch.
+
+**Enable once (required):** repo **Settings → Pages → Build and deployment**
+
+1. Source: **Deploy from a branch**
+2. Branch: **`gh-pages`** / folder **`/` (root)**
+3. Save
+
+Then open https://vikkp.github.io/RayNu/ (may take a minute).
 
 ## Documentation
 
