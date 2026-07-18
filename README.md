@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.6 closed** — through M2.5 LAPIC timer (Latitude), plus **L2 specs + Kani** for ADR-004 `EptMap` and `FrameAllocator`. Host marker: `RAYNU-V-M2-L2-OK` (`cargo test`). Gate history: [docs/progress.md](docs/progress.md). Next: **M3** Linux — [docs/m3_plan.md](docs/m3_plan.md) (start at M3.0 guest I/O).
+**M0 → M3.0** — through M2.6 L2 host gate, plus **guest COM1 I/O** (`RAYNU-V-M3-IO-OK`). Boot gate on Latitude through M3.0. Plan: [docs/m3_plan.md](docs/m3_plan.md). Next: M3.1 CPUID filter.
 
 ## Repository Layout
 
@@ -61,7 +61,7 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M2.5 markers (requires KVM + nested VT-x for EPT/VMEXIT)
+# Boot gate: M0 → M3.0 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)

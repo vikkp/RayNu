@@ -10,6 +10,7 @@
 //! M2.3: Proven Core frame allocator (`RAYNU-V-M2-ALLOC-OK`).
 //! M2.4: inject IRQ → guest ISR (`RAYNU-V-M2-IRQ-OK`).
 //! M2.5: LAPIC timer → external-IRQ VMEXIT → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`).
+//! M3.0: guest COM1 OUT → I/O VMEXIT (`RAYNU-V-M3-IO-OK`).
 
 #![no_main]
 #![no_std]

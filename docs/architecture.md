@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (M3)
 
-**M2.6 closed** (`RAYNU-V-M2-L2-OK` via `cargo test`). Next: **M3** unmodified Linux guest — see [m3_plan.md](m3_plan.md). First slice: M3.0 guest I/O (`RAYNU-V-M3-IO-OK`).
+**M3.0 gate:** `RAYNU-V-M3-IO-OK` — guest COM1 `out` → I/O VMEXIT → host UART passthrough. Plan: [m3_plan.md](m3_plan.md).

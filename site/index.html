@@ -60,15 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.6 closed: L2 specs + Kani (ADR-004).</h2>
+          <h2 class="section__title">M3.0: guest COM1 I/O.</h2>
           <p class="section__lede">
-            Ghost models for exclusive EPT ownership and the frame allocator,
-            plus bounded Kani harnesses. Host gate
-            <code>RAYNU-V-M2-L2-OK</code> — closed via <code>cargo test</code>.
+            Guest <code>out</code> to COM1 causes an I/O VMEXIT; the host
+            forwards bytes to the UART and latches magic
+            <code>RAYNU-V-M3-IO</code>. Marker <code>RAYNU-V-M3-IO-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>cargo test --no-default-features
-# m2_6_l2_gate_passes
-RAYNU-V-M2-L2-OK</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-IO
+RAYNU-V-M3-IO-OK
+RAYNU-V-M2-TIMER-OK
+boot: M3.0 complete</code></pre>
         </div>
       </section>
 
@@ -142,9 +143,8 @@ RAYNU-V-M2-L2-OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M0–M2.6 closed. Next: M3 Linux (plan in
-            <code>docs/m3_plan.md</code>) — start with guest COM1 I/O, then
-            earlyprintk, then shell.
+            M3.0 guest I/O is the current gate. Next: CPUID filter (M3.1),
+            then kernel load and earlyprintk — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

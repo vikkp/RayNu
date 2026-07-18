@@ -11,8 +11,10 @@
 //!
 //! M2.1 guest page: store a magic qword, run a short increment loop, then HLT.
 //! M2.4: ISR at [`GUEST_ISR_OFF`] stores [`GUEST_IRQ_MAGIC`] then HLT again.
+//! M3.0: after the loop, `out 0x3f8, al` for each [`crate::devices::serial_pio::GUEST_IO_MAGIC`] byte.
 
 use crate::arch::cpu::{self, IA32_VMX_EPT_VPID_CAP};
+use crate::devices::serial_pio::GUEST_IO_MAGIC;
 
 /// COM1 marker when the guest runs under EPT (M2.0 gate).
 pub const M2_EPT_OK_MARKER: &str = "RAYNU-V-M2-EPT-OK";
@@ -184,7 +186,7 @@ fn write_u64_le(p: *mut u8, v: u64) {
 /// Write M2.1/M2.4 guest code into an owned frame (identity GPA/HPA).
 ///
 /// Layout:
-/// - `+0`: store MAGIC, loop 4×, `hlt`
+/// - `+0`: store MAGIC, loop 4×, COM1 OUT magic, `hlt`
 /// - [`GUEST_ISR_OFF`]: ISR stores [`GUEST_IRQ_MAGIC`], then `hlt`
 /// - [`GUEST_DATA_OFF`]: magic + counter + IRQ ack slot
 ///
@@ -236,10 +238,21 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
     core::ptr::write_volatile(p.add(o + 1), 0xFB); // -5 → back to inc
     o += 2;
 
+    // M3.0: out each magic byte to COM1 (mov al,imm8; out 0x3f8, al).
+    for &byte in GUEST_IO_MAGIC {
+        core::ptr::write_volatile(p.add(o), 0xB0);
+        core::ptr::write_volatile(p.add(o + 1), byte);
+        o += 2;
+        core::ptr::write_volatile(p.add(o), 0xE6);
+        core::ptr::write_volatile(p.add(o + 1), 0xF8);
+        o += 2;
+    }
+
     // hlt ; jmp $
     core::ptr::write_volatile(p.add(o), 0xF4);
     core::ptr::write_volatile(p.add(o + 1), 0xEB);
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
+    o += 3;
 
     debug_assert!(o < GUEST_ISR_OFF as usize);
     write_guest_isr(page_phys);
