@@ -58,18 +58,19 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 
 ```bash
 # Host prep for M1.1/M1.2 nested VT-x (once per boot; Latitude / Intel)
+# Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
-
-# Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
-./tools/run-qemu.sh
 
 # Boot gate: M0 → M1.2 markers (requires KVM + nested VT-x for VMEXIT)
 ./tools/qemu-boot-test.sh
+
+# Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
+./tools/run-qemu.sh
 ```
 
 Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** (`sudo usermod -aG kvm $USER` then re-login).
 
-If serial shows `VM_INSTRUCTION_ERROR=12`, the host still has KVM **VMCS shadowing** on — re-run `sudo ./tools/enable-nested-kvm.sh` (sets `enable_shadow_vmcs=0`).
+**M1.2 nested prerequisite:** `kvm_intel.enable_shadow_vmcs=0`. With shadowing on, serial shows `VM_INSTRUCTION_ERROR=12` on the first VMWRITE (link pointer) even though `VMPTRST` matches. The boot gate now fails fast if shadow is still on — run `sudo ./tools/enable-nested-kvm.sh` before re-testing.
 
 ## Project site
 
