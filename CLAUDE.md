@@ -326,6 +326,10 @@ cargo verus --verify                                    # Formal proofs (Proven 
 | M5.5 | VMware Migration Workstream     | 60–70  | 10+ VMs migrated from vCenter in one command           |
 | M6   | Production Ready                | 68–100 | HA, security hardened, 72-hr soak, external audit      |
 
+### Current progress (lived, not aspirational)
+
+**Through M2.3 closed** on Latitude/QEMU: boot → EBS → VMXON → EPT identity → guest store/loop/HLT → ADR-004 ownership self-test → Proven Core bitmap `FrameAllocator` (`RAYNU-V-M2-ALLOC-OK`). EPT ownership registry and frame allocator are at **L1** (runtime asserts + self-tests). Full M2 (L2 EPT spec, interrupt virtualization, L3 allocator) is still open. See [docs/progress.md](docs/progress.md).
+
 ### Risk Hotspots
 
 - **M2 is the #1 risk.** EPT + interrupt virtualization is where hypervisors stall. Plan 14–18 weeks.
@@ -377,8 +381,10 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Per-Milestone (Gate)
 
 - Integration test: boot-to-halt (M0), VMLAUNCH/VMEXIT cycle (M1),
-  guest code execution (M2), Linux shell (M3), multi-VM (M4)
+  guest code execution through M2.3 (`./tools/qemu-boot-test.sh`),
+  Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
+  (see [docs/progress.md](docs/progress.md))
 - Audit trail validation: all expected events present and correctly sequenced
 - Binary size check: within 15 MB target
 

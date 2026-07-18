@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.3** — EFI boots, VMXON, **EPT identity map**, guest **store + loop + HLT**, **ADR-004 ownership**, plus Proven Core **frame allocator** (bitmap over the post-EBS pool). Markers: `RAYNU-V-M2-OWN-OK`, `RAYNU-V-M2-ALLOC-OK`. QEMU needs **KVM**. Latitude: `sudo ./tools/enable-nested-kvm.sh`, `./tools/qemu-boot-test.sh`. Next: interrupt virtualization, then deeper ADR-004 L2/Kani.
+**M0 → M2.3 closed** — EFI boots, VMXON, **EPT identity map**, guest **store + loop + HLT**, **ADR-004 ownership**, Proven Core **frame allocator**. Latest marker: `RAYNU-V-M2-ALLOC-OK` (Latitude + QEMU gate). QEMU needs **KVM**. Prep: `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Gate history: [docs/progress.md](docs/progress.md). Next: interrupt virtualization, then ADR-004 / allocator L2 + Kani.
 
 ## Repository Layout
 
@@ -61,7 +61,7 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M2.0 markers (requires KVM + nested VT-x for EPT/VMEXIT)
+# Boot gate: M0 → M2.3 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
@@ -92,6 +92,7 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 |-----|---------|
 | [CLAUDE.md](CLAUDE.md) | Governing rules for all code and reviews |
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
+| [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
 
