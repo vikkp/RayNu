@@ -63,6 +63,12 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 
 Requires `qemu-system-x86_64` and OVMF firmware (e.g. `/usr/share/OVMF/OVMF_CODE.fd`).
 
+## Project site
+
+GitHub Pages: [https://vikkp.github.io/RayNu/](https://vikkp.github.io/RayNu/)
+
+Source lives in [`site/`](site/) and deploys from `main` via `.github/workflows/pages.yml`.
+
 ## Documentation
 
 | Doc | Purpose |
