@@ -1,16 +1,19 @@
-//! Interrupt injection firewall (M2.4 / M2.5).
+//! Interrupt injection firewall (M2.4 / M2.5 / M3.4).
 //!
 //! Pillar: [V] · Proven Core · VERIFICATION: L1
 //!
 //! Packs VM-entry interruption-information values for software-injected
-//! external interrupts. M2.5 adds host LAPIC-timer → external-interrupt
-//! VMEXIT → EOI → re-inject through this same path.
+//! external interrupts. M2.5 / M3.4 use host LAPIC-timer → external-interrupt
+//! VMEXIT → EOI → re-inject through this same path (M3.4 is post-proto).
 
 /// COM1 marker when the injected guest ISR runs and HLTs (M2.4 gate).
 pub const M2_IRQ_OK_MARKER: &str = "RAYNU-V-M2-IRQ-OK";
 
 /// COM1 marker when LAPIC timer → VMEXIT → EOI → re-inject ISR HLTs (M2.5).
 pub const M2_TIMER_OK_MARKER: &str = "RAYNU-V-M2-TIMER-OK";
+
+/// COM1 marker when post-proto guest timer → EOI → inject ISR HLTs (M3.4).
+pub const M3_GTIMER_OK_MARKER: &str = "RAYNU-V-M3-GTIMER-OK";
 
 /// Bring-up vector for inject and LAPIC timer LVT.
 pub const M2_IRQ_VECTOR: u32 = 0x21;

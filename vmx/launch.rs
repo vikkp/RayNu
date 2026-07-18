@@ -14,7 +14,8 @@
 //! M3.0: guest COM1 `out` → I/O VMEXIT → host UART → `RAYNU-V-M3-IO-OK`.
 //! M3.1: guest CPUID → filter (hide VMX) → `RAYNU-V-M3-CPUID-OK`.
 //! M3.3: after timer path, enter proto-kernel (RSI=`boot_params`) → early OK.
-//! Markers: OWN/ALLOC/IRQ/TIMER/IO/CPUID/LOAD/EARLY.
+//! M3.4: post-proto guest timer → ext-IRQ → EOI → inject → `RAYNU-V-M3-GTIMER-OK`.
+//! Markers: OWN/ALLOC/IRQ/TIMER/IO/CPUID/LOAD/EARLY/GTIMER.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -29,19 +30,26 @@ use crate::devices::serial_pio::{self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
-use crate::sched::interrupt::{self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR, M2_TIMER_OK_MARKER};
+use crate::sched::interrupt::{
+    self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR, M2_TIMER_OK_MARKER, M3_GTIMER_OK_MARKER,
+};
 use crate::sched::msr_firewall::{self, M3_CPUID_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
-/// Exit-phase state machine (M2.4 / M2.5 / M3.3):
+/// Exit-phase state machine (M2.4 / M2.5 / M3.3 / M3.4):
 /// 0 = first HLT → software inject
 /// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
 /// 2 = external-interrupt VMEXIT → EOI → re-inject
 /// 3 = ISR HLT after timer path → TIMER-OK (+ M3.0/M3.1) → enter proto-kernel
-/// 4 = proto-kernel HLT → EARLY-OK
+/// 4 = proto-kernel HLT → EARLY-OK → arm guest timer
+/// 5 = post-proto external-interrupt → EOI → inject
+/// 6 = ISR HLT → GTIMER-OK
 static mut EXIT_PHASE: u8 = 0;
+
+/// Bring-up guest code page (store/ISR); ack slot lives here across M3.4 inject.
+static mut BRINGUP_GUEST_CODE_PHYS: u64 = 0;
 
 /// Guest GPRs saved by the naked VMEXIT trampoline before Rust clobbers them.
 /// CPUID needs RAX–RDX; M3.3 proto-kernel needs RSI=`boot_params` preserved.
@@ -284,6 +292,7 @@ fn write_dec_u32(mut n: u32) {
 ///
 /// SAFETY: CPU in VMX root; frames exclusively owned; identity map.
 pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
     prepare_vmcs_region(frames.vmcs_phys)?;
 
     ops::vmclear(frames.vmcs_phys).map_err(|_| LaunchError::ClearFailed)?;
@@ -732,6 +741,8 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
         2 => phase2_external_irq(basic),
         3 => phase3_timer_ok(basic, guest_page),
         4 => phase4_early_ok(basic, guest_page),
+        5 => phase5_guest_timer_irq(basic),
+        6 => phase6_gtimer_ok(basic, guest_page),
         _ => {
             serial::write_line("boot: ERROR — bad EXIT_PHASE");
             finish_boot(false);
@@ -996,6 +1007,95 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
         serial::write_line("boot: ERROR — proto-kernel early magic missing");
         ok = false;
     }
+    if !ok {
+        finish_boot(false);
+    }
+
+    // M3.4: arm a second host LAPIC one-shot while RIP is still the proto-kernel.
+    // Distinct from M2.5 by lifecycle (post-EARLY) and marker, not by a new API.
+    let bringup = BRINGUP_GUEST_CODE_PHYS;
+    if bringup == 0 {
+        serial::write_line("boot: ERROR — missing bring-up guest code for GTIMER");
+        finish_boot(false);
+    }
+    ept_hw::clear_guest_irq(bringup);
+
+    if apic::arm_bringup_timer(M2_IRQ_VECTOR as u8).is_err() {
+        serial::write_line("boot: ERROR — guest timer arm failed");
+        finish_boot(false);
+    }
+    serial::write_line("boot: guest timer armed (post-proto); waiting in guest HLT");
+
+    if set_hlt_exiting(false).is_err() {
+        serial::write_line("boot: ERROR — clear HLT exiting for guest timer failed");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 0x2 | (1 << 9));
+
+    EXIT_PHASE = 5;
+    resume_or_die();
+}
+
+unsafe fn phase5_guest_timer_irq(basic: u32) -> ! {
+    if basic != EXIT_REASON_EXTERNAL_INTERRUPT {
+        serial::write_line("boot: ERROR — phase5 expected external-interrupt exit");
+        finish_boot(false);
+    }
+
+    let exit_info = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0) as u32;
+    if (exit_info & (1 << 31)) != 0 {
+        let vec = exit_info & 0xff;
+        serial::write_str("boot: guest-timer IRQ vector=0x");
+        write_hex_u32(vec);
+        serial::write_byte(b'\n');
+        if vec != M2_IRQ_VECTOR {
+            serial::write_line("boot: ERROR — unexpected guest-timer exit vector");
+            finish_boot(false);
+        }
+    } else {
+        serial::write_line("boot: guest-timer IRQ (no ack-info); assuming LAPIC");
+    }
+
+    if apic::eoi().is_err() {
+        serial::write_line("boot: ERROR — APIC EOI failed (guest timer)");
+        finish_boot(false);
+    }
+    serial::write_line("boot: guest-timer APIC EOI ok");
+
+    if set_hlt_exiting(true).is_err() {
+        serial::write_line("boot: ERROR — restore HLT exiting after guest timer failed");
+        finish_boot(false);
+    }
+
+    EXIT_PHASE = 6;
+    inject_and_resume("guest timer re-inject");
+}
+
+unsafe fn phase6_gtimer_ok(basic: u32, guest_page: u64) -> ! {
+    if basic != EXIT_REASON_HLT {
+        serial::write_line("boot: ERROR — phase6 expected HLT");
+        finish_boot(false);
+    }
+    let mut ok = true;
+    let bringup = BRINGUP_GUEST_CODE_PHYS;
+    let ack_page = if guest_page == (bringup & !0xfff) {
+        guest_page
+    } else {
+        bringup
+    };
+    if ept_hw::verify_guest_irq(ack_page) {
+        serial::write_line(M3_GTIMER_OK_MARKER);
+    } else {
+        serial::write_line("boot: ERROR — guest-timer IRQ ack missing");
+        ok = false;
+    }
+    if !serial_pio::guest_early_ok() {
+        serial::write_line("boot: ERROR — early marker cleared before GTIMER");
+        ok = false;
+    }
     finish_boot(ok);
 }
 
@@ -1056,7 +1156,7 @@ fn finish_boot(ok: bool) -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M3.3 complete");
+    serial::write_line("boot: M3.4 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -1108,6 +1208,7 @@ mod launch_test {
         assert_eq!(M3_IO_OK_MARKER, "RAYNU-V-M3-IO-OK");
         assert_eq!(M3_CPUID_OK_MARKER, "RAYNU-V-M3-CPUID-OK");
         assert_eq!(M3_EARLY_OK_MARKER, "RAYNU-V-M3-EARLY-OK");
+        assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(EXIT_REASON_CPUID, 10);

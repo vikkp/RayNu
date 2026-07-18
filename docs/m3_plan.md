@@ -83,6 +83,8 @@ Status: **closed on Latitude** (`RAYNU-V-M3-EARLY-OK`). Proto-kernel; real bzIma
 - Distinct from M2.5 host LAPIC path
 - Enough for jiffies / `init` scheduling
 
+Status: **in flight** — post-proto second LAPIC one-shot → EOI → inject (APIC MMIO later).
+
 ### M3.5 — Shell / init marker — `RAYNU-V-M3-SHELL-OK`
 
 - `init` prints `RAYNU-V-M3-SHELL-OK` on COM1

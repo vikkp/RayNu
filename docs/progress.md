@@ -40,6 +40,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.4** guest timer (`RAYNU-V-M3-GTIMER-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for M3.4 (`RAYNU-V-M3-GTIMER-OK`).
 2. M3.5 shell / init marker.
 3. Verus L3 proofs for EPT / allocator (parallel).

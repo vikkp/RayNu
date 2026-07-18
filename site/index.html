@@ -60,15 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.3 closed. Next: guest timer.</h2>
+          <h2 class="section__title">M3.4: guest timer.</h2>
           <p class="section__lede">
-            Latitude boot gate passed through proto-kernel early serial
-            (<code>RAYNU-V-M3-EARLY-OK</code>). Next: M3.4 guest-facing timer
-            path — <code>RAYNU-V-M3-GTIMER-OK</code>.
+            After proto-kernel early serial, arm a second LAPIC one-shot while
+            RIP is still the proto entry; EOI + inject proves the guest-facing
+            timer path. Marker <code>RAYNU-V-M3-GTIMER-OK</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-EARLY-OK
-boot: M3.3 complete
-==&gt; Boot gate PASSED (M0 → M3.3)</code></pre>
+boot: guest timer armed (post-proto)
+RAYNU-V-M3-GTIMER-OK
+boot: M3.4 complete</code></pre>
         </div>
       </section>
 
@@ -142,8 +143,8 @@ boot: M3.3 complete
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.3 is closed on Latitude. Current gate: guest timer (M3.4),
-            then shell — see <code>docs/m3_plan.md</code>.
+            Current gate: guest timer (M3.4). Next: shell (M3.5) —
+            see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

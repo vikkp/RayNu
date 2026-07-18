@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.3 closed** — Latitude through proto-kernel early serial (`RAYNU-V-M3-EARLY-OK`). Next: M3.4 guest timer. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.3 closed** — Latitude through proto-kernel early serial (`RAYNU-V-M3-EARLY-OK`). **M3.4 in flight**: guest timer (`RAYNU-V-M3-GTIMER-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 
