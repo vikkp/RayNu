@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M2.4 closed** on Latitude; **M2.5 in flight**: LAPIC one-shot → external-IRQ VMEXIT → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Remaining M2: L2 EPT spec / Kani, L3 allocator. See [docs/progress.md](docs/progress.md).
+**Through M2.5 closed** on Latitude/QEMU: boot → EBS → VMXON → EPT → guest store/loop/HLT → ADR-004 ownership → frame allocator → IRQ inject → LAPIC timer → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Remaining M2: L2 EPT spec / Kani, L3 allocator. See [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 
