@@ -7,8 +7,12 @@
 //! SAFETY: All entry points require VMX root operation and a current VMCS
 //! where the SDM requires one (everything except VMCLEAR/VMPTRLD prep).
 //!
-//! VMWRITE uses the Linux/KVM register convention with an explicit encoding:
-//!   RAX = field, RDX = value, opcode 0F 79 D0 (`vmwrite %rax, %rdx` AT&T).
+//! Operand order (AT&T / Linux / syzkaller):
+//!   `vmwrite %value, %field`   — primary = value, secondary = field encoding
+//!   `vmread  %field, %dest`    — source = field encoding, dest = output
+//!
+//! A swapped VMWRITE looks like Intel error 12 (unsupported field) because the
+//! CPU treats the value register as the field encoding (e.g. `!0`).
 
 /// VMX instruction failed (RFLAGS.CF and/or ZF set).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,21 +52,20 @@ pub unsafe fn vmwrite(encoding: u64, value: u64) -> Result<(), VmcsOpError> {
 
 /// VMWRITE with CF/ZF breakdown (for bring-up diagnostics).
 ///
-/// Uses the exact Linux `ASM_VMX_VMWRITE_RAX_RDX` convention so the opcode
-/// bytes cannot be assembled “backwards” relative to the SDM.
+/// AT&T: `vmwrite %rax, %rdx` with RAX=value, RDX=field (Linux `vmx_asm2` /
+/// syzkaller `VMSET`). Encodes as `0F 79 D0`.
 ///
 /// SAFETY: same as [`vmwrite`].
 #[inline(always)]
 pub unsafe fn vmwrite_detailed(encoding: u64, value: u64) -> Result<(), VmFailKind> {
     let mut cf: u8;
     let mut zf: u8;
-    // Linux: vmwrite %rax, %rdx  with RAX=field, RDX=value → bytes 0F 79 D0.
     core::arch::asm!(
         "vmwrite %rax, %rdx",
         "setc {cf}",
         "setz {zf}",
-        in("rax") encoding,
-        in("rdx") value,
+        in("rax") value,
+        in("rdx") encoding,
         cf = lateout(reg_byte) cf,
         zf = lateout(reg_byte) zf,
         options(nostack, att_syntax),
@@ -76,12 +79,13 @@ pub unsafe fn vmwrite_detailed(encoding: u64, value: u64) -> Result<(), VmFailKi
 
 /// Read VMCS field `encoding`.
 ///
+/// AT&T: `vmread %rax, %rdx` with RAX=field, RDX=dest (Linux / SDM).
+///
 /// SAFETY: CPU in VMX root; VMCS current; field valid.
 #[inline(always)]
 pub unsafe fn vmread(encoding: u64) -> Result<u64, VmcsOpError> {
     let value: u64;
     let mut failed: u8;
-    // Linux: vmread %rax, %rdx with RAX=field, RDX=dest → we use named regs.
     core::arch::asm!(
         "vmread %rax, %rdx",
         "setbe {failed}",
@@ -160,7 +164,7 @@ pub unsafe fn vmptrst() -> Result<u64, VmcsOpError> {
     }
 }
 
-/// VMPTRLD then VMWRITE using Linux register convention in one asm block.
+/// VMPTRLD then VMWRITE in one asm block (no intervening exits).
 ///
 /// SAFETY: `region_phys` is a cleared, owned VMCS frame; CPU in VMX root.
 #[inline(always)]
@@ -177,7 +181,7 @@ pub unsafe fn vmptrld_and_vmwrite(
         "setbe {tmp}",
         "test {tmp}, {tmp}",
         "jnz 1f",
-        // Linux ASM_VMX_VMWRITE_RAX_RDX: RAX=field, RDX=value.
+        // AT&T: vmwrite %value, %field  (RAX=value, RDX=field).
         "vmwrite %rax, %rdx",
         "setc {cf}",
         "setz {zf}",
@@ -187,8 +191,8 @@ pub unsafe fn vmptrld_and_vmwrite(
         "movb $0, {zf}",
         "2:",
         ptr = in(reg) &mut ptr,
-        in("rax") encoding,
-        in("rdx") value,
+        in("rax") value,
+        in("rdx") encoding,
         tmp = out(reg_byte) _,
         cf = out(reg_byte) cf,
         zf = out(reg_byte) zf,

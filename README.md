@@ -70,7 +70,7 @@ sudo ./tools/enable-nested-kvm.sh
 
 Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** (`sudo usermod -aG kvm $USER` then re-login).
 
-**M1.2 nested prerequisite:** `kvm_intel.enable_shadow_vmcs=0`. With shadowing on, serial shows `VM_INSTRUCTION_ERROR=12` on the first VMWRITE (link pointer) even though `VMPTRST` matches. The boot gate now fails fast if shadow is still on — run `sudo ./tools/enable-nested-kvm.sh` before re-testing.
+**M1.2 nested prerequisite:** `kvm_intel.enable_shadow_vmcs=0` (the boot gate fails fast if shadow is still on). Run `sudo ./tools/enable-nested-kvm.sh` once per boot.
 
 ## Project site
 

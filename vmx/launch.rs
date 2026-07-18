@@ -142,11 +142,10 @@ unsafe fn report_vmwrite_fail(tag: &str, field: u64, kind: VmFailKind, expected_
         write_dec_u32(ierr as u32);
         serial::write_byte(b'\n');
         if ierr == 12 {
+            // SDM: 12 = unsupported VMCS component. Common causes under QEMU:
+            // swapped AT&T vmwrite operands, or host kvm_intel shadow VMCS.
             serial::write_line(
-                "boot: hint: error 12 = nested shadow VMCS rejected VMWRITE",
-            );
-            serial::write_line(
-                "boot: fix on host: sudo ./tools/enable-nested-kvm.sh",
+                "boot: hint: error 12 = unsupported VMCS field (check VMWRITE operands / shadow VMCS)",
             );
         }
     }
