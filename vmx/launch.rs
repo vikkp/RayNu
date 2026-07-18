@@ -121,17 +121,58 @@ fn fail_kind_name(k: VmFailKind) -> &'static str {
     }
 }
 
+unsafe fn report_vmwrite_fail(tag: &str, field: u64, kind: VmFailKind, expected_vmcs: u64) {
+    serial::write_str("boot: ");
+    serial::write_str(tag);
+    serial::write_str(" failed field=0x");
+    write_hex_u32(field as u32);
+    serial::write_str(" kind=");
+    serial::write_str(fail_kind_name(kind));
+    serial::write_byte(b'\n');
+    if let Ok(cur) = ops::vmptrst() {
+        serial::write_str("boot: VMPTRST=0x");
+        write_hex_u64(cur);
+        serial::write_str(" expected=0x");
+        write_hex_u64(expected_vmcs);
+        serial::write_byte(b'\n');
+    }
+    // SDM App. C: 12 = unsupported field, 13 = write to read-only field.
+    if let Ok(ierr) = ops::vmread(VM_INSTRUCTION_ERROR) {
+        serial::write_str("boot: VM_INSTRUCTION_ERROR=");
+        write_dec_u32(ierr as u32);
+        serial::write_byte(b'\n');
+        if ierr == 12 {
+            serial::write_line(
+                "boot: hint: error 12 under nested VT-x — try host: modprobe kvm_intel enable_shadow_vmcs=0",
+            );
+        }
+    }
+}
+
 unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
     match ops::vmwrite_detailed(field, value) {
         Ok(()) => Ok(()),
         Err(kind) => {
-            serial::write_str("boot: VMWRITE failed field=0x");
-            write_hex_u32(field as u32);
-            serial::write_str(" kind=");
-            serial::write_str(fail_kind_name(kind));
-            serial::write_byte(b'\n');
+            report_vmwrite_fail("VMWRITE", field, kind, 0);
             Err(LaunchError::VmwriteFailed { field })
         }
+    }
+}
+
+fn write_dec_u32(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = buf.len();
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
     }
 }
 
@@ -144,6 +185,9 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
     prepare_vmcs_region(frames.vmcs_phys)?;
 
     ops::vmclear(frames.vmcs_phys).map_err(|_| LaunchError::ClearFailed)?;
+    // Nested VT-x has been observed to disturb the revision dword across
+    // VMCLEAR; rewrite it before any VMPTRLD.
+    prepare_vmcs_region(frames.vmcs_phys)?;
     // VMPTRLD is deferred until after all RDMSR/serial gather work inside
     // setup_vmcs (nested VT-x can drop current-VMCS across those exits).
 
@@ -303,23 +347,21 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     serial::write_byte(b'\n');
 
     // ── Phase 2: VMPTRLD + VMWRITE burst (no RDMSR / serial / I/O) ──
-    match ops::vmptrld_and_vmwrite(
-        frames.vmcs_phys,
-        PIN_BASED_VM_EXEC_CONTROL,
-        pin as u64,
-    ) {
+    // Canary: VMCS link pointer is a universally supported RW field.
+    match ops::vmptrld_and_vmwrite(frames.vmcs_phys, VMCS_LINK_POINTER, !0u64) {
         Ok(()) => {}
         Err(kind) => {
-            serial::write_str("boot: VMPTRLD+VMWRITE(pin) failed kind=");
-            serial::write_str(fail_kind_name(kind));
-            serial::write_byte(b'\n');
-            if let Ok(cur) = ops::vmptrst() {
-                serial::write_str("boot: VMPTRST=0x");
-                write_hex_u64(cur);
-                serial::write_str(" expected=0x");
-                write_hex_u64(frames.vmcs_phys);
-                serial::write_byte(b'\n');
-            }
+            report_vmwrite_fail("VMPTRLD+VMWRITE(link)", VMCS_LINK_POINTER, kind, frames.vmcs_phys);
+            return Err(LaunchError::VmwriteFailed {
+                field: VMCS_LINK_POINTER,
+            });
+        }
+    }
+
+    match ops::vmwrite_detailed(PIN_BASED_VM_EXEC_CONTROL, pin as u64) {
+        Ok(()) => {}
+        Err(kind) => {
+            report_vmwrite_fail("VMWRITE(pin)", PIN_BASED_VM_EXEC_CONTROL, kind, frames.vmcs_phys);
             return Err(LaunchError::VmwriteFailed {
                 field: PIN_BASED_VM_EXEC_CONTROL,
             });
@@ -341,7 +383,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(CR4_GUEST_HOST_MASK, 0)?;
     vw(CR0_READ_SHADOW, 0)?;
     vw(CR4_READ_SHADOW, 0)?;
-    vw(VMCS_LINK_POINTER, !0u64)?;
+    // VMCS_LINK_POINTER already written as the VMPTRLD canary above.
 
     if let Some(sec) = secondary {
         vw(SECONDARY_VM_EXEC_CONTROL, sec as u64)?;
