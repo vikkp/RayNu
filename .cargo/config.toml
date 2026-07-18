@@ -1,0 +1,2 @@
+# Host `cargo test` uses the host triple.
+# Firmware: cargo build --release --target x86_64-unknown-uefi --features uefi-bin

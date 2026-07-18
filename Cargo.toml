@@ -1,0 +1,32 @@
+[package]
+name = "r640-hypervisor"
+version = "0.1.0"
+edition = "2021"
+description = "RayNu-V — formally verified bare-metal hypervisor (Dell R640-first)"
+license = "Apache-2.0 OR MIT"
+publish = false
+default-run = "r640-hypervisor"
+
+[lib]
+name = "r640_hypervisor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "r640-hypervisor"
+path = "src/main.rs"
+required-features = ["uefi-bin"]
+
+[features]
+# Host `cargo test` uses default features (no UEFI).
+# Firmware build: --features uefi-bin --target x86_64-unknown-uefi
+default = []
+uefi-bin = ["dep:uefi"]
+
+[dependencies]
+uefi = { version = "0.33", optional = true, features = ["panic_handler", "logger", "alloc", "global_allocator"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+strip = "symbols"
