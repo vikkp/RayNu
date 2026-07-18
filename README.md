@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 scaffolding** — project definition, ADRs, and a minimal UEFI binary that prints a boot banner. VMX/EPT and guest execution land in later milestones.
+**M0 in progress** — UEFI binary boots under QEMU with a COM1 serial marker enforced in CI. Next: memory-map ownership, then QEMU-first VMX bring-up; EPT and the first machine-checked Verus invariant follow.
 
 ## Repository Layout
 

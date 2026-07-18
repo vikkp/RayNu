@@ -462,10 +462,12 @@ Full risk register: see `docs/risk_register.md` (14 risks total).
 
 ## Identity Statement
 
-> **RayNu-V** — The world's first formally verified bare-metal hypervisor.
+> **RayNu-V** — A commercially targeted, single-binary Type-1 hypervisor
+> designed for formal verification from day one.
 >
-> One binary. Boots in 90 seconds. Knows your Dell hardware by name.
-> Imports your VMware VMs in one command. Passes your SOX audit with
-> mathematical proof — not just test results.
+> One binary. Dell PowerEdge first (hardware we own and test on).
+> Built toward VMware import, SOX-ready audit trails, and a machine-checked
+> Proven Core — not just test results.
 >
-> Memory isolation isn't tested. It's proved.
+> North star: Memory isolation isn't tested. It's proved.
+> (Roadmap tense — proofs are earned incrementally; see ADR-006.)
