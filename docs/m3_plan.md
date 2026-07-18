@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.1: [progress.md](progress.md).
+Lived gates through M3.2: [progress.md](progress.md).
 
 ---
 
@@ -15,7 +15,7 @@ Lived gates through M3.1: [progress.md](progress.md).
 | VMLAUNCH / VMRESUME, HLT exiting | Continuous exit loop (not finish-after-timer) |
 | 4 GiB identity EPT | Same OK for first shell; precise EPT later |
 | Software inject + host LAPIC timer | Guest-visible timer (xAPIC MMIO or TSC) |
-| Synthetic guest page (store/ISR) | bzImage + initrd + `boot_params` / e820 |
+| Synthetic load + packed `boot_params` (M3.2) | 64-bit entry + real/proto early serial |
 | Guest COM1 OUT passthrough (M3.0) | Broader 16550 / virtio later |
 | CPUID filter hides VMX (M3.1) | MSR exits still stub |
 | `devices/` stub | Serial PIO first; virtio deferred |
@@ -66,7 +66,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-CPUID-OK`).
 - Host unit tests for boot-protocol packing
 - QEMU: HV prints load addresses + setup magic (no entry yet)
 
-Status: **in flight** (synthetic stub assets; real bzImage at M3.3).
+Status: **closed on Latitude** (`RAYNU-V-M3-LOAD-OK`). Synthetic stubs; real bzImage still M3.3+.
 
 ### M3.3 — Early printk — `RAYNU-V-M3-EARLY-OK`
 
@@ -74,6 +74,8 @@ Status: **in flight** (synthetic stub assets; real bzImage at M3.3).
 - Continuous exit loop: I/O + CPUID (+ MSR stubs as needed)
 - Serial shows Linux banner / earlyprintk
 - **First real Linux signal on Latitude**
+
+Status: **in flight** — 64-bit **proto-kernel** (HdrS check + Linux-style early line via COM1). Real bzImage still next.
 
 ### M3.4 — Guest timer — `RAYNU-V-M3-GTIMER-OK`
 
@@ -125,9 +127,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0 I/O / M3.1 CPUID~~ — done.
-2. **M3.2** — kernel load / `boot_params` packing (next code PR).
-3. M3.3 earlyprintk (schedule checkpoint) → M3.4 → M3.5.
+1. ~~Plan / M3.0–M3.2~~ — done.
+2. **M3.3** — 64-bit entry + early serial (schedule checkpoint).
+3. M3.4 guest timer → M3.5 shell.
 
 ---
 

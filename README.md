@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.1 closed** — Latitude through CPUID filter (`RAYNU-V-M3-CPUID-OK`). **M3.2 in flight**: synthetic kernel load (`RAYNU-V-M3-LOAD-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.2 closed** — Latitude through synthetic kernel load (`RAYNU-V-M3-LOAD-OK`). **M3.3 in flight**: 64-bit proto-kernel early serial (`RAYNU-V-M3-EARLY-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 

@@ -1,17 +1,22 @@
-//! Linux x86_64 boot-protocol packing + synthetic load (M3.2).
+//! Linux x86_64 boot-protocol packing + synthetic load / proto-kernel (M3.2/M3.3).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002) — protocol glue only; frames claimed
 //! via Proven Core `FrameAllocator` + `EptMap`.
 //!
-//! M3.2 places a synthetic bzImage stub, initrd stub, cmdline, and packed
-//! `boot_params` (zero page) into GPA. Does **not** enter the kernel (M3.3).
+//! M3.2 places a proto-kernel page, initrd stub, cmdline, and packed
+//! `boot_params` into GPA. M3.3 enters the proto-kernel at 64-bit with
+//! RSI=`boot_params` (real bzImage deferred).
 
+use crate::devices::serial_pio::GUEST_EARLY_MAGIC;
 use crate::memory::ept::{EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID};
 use crate::memory::{FrameAllocator, PhysFrame};
 
 /// COM1 marker when synthetic load + packing succeeds (M3.2 gate).
 pub const M3_LOAD_OK_MARKER: &str = "RAYNU-V-M3-LOAD-OK";
+
+/// Linux-style early console line the proto-kernel OUTs before the magic.
+pub const PROTO_EARLY_LINE: &[u8] = b"Linux version RayNu-V-proto (early console)\n";
 
 /// `setup_header.header` magic — ASCII `"HdrS"` (LE).
 pub const SETUP_HEADER_MAGIC: u32 = 0x5372_6448;
@@ -115,7 +120,7 @@ pub fn claim_load_pages(pages: &[(u64, PhysFrame)]) -> Result<(), EptError> {
 /// Allocate frames, pack synthetic assets, claim ownership, copy into GPA.
 ///
 /// Layout (identity-mapped):
-/// - `kernel` — 1 page synthetic stub (magic dword at +0)
+/// - `kernel` — 1 page 64-bit proto-kernel (earlyprintk-style OUT + HLT)
 /// - `initrd` — 1 page synthetic stub
 /// - `cmdline` — 1 page with [`DEFAULT_CMDLINE`]
 /// - `boot_params` — packed zero page
@@ -176,12 +181,98 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
     })
 }
 
-/// ASCII-ish stub marker at the start of the synthetic kernel page (`M32KRNL`).
-pub const SYNTH_KERNEL_MAGIC: u64 = 0x4D33_324B_524E_4C00;
+/// Write the M3.3 64-bit proto-kernel at `phys`.
+///
+/// Entry convention (Linux x86_64): `RSI` = `boot_params`. Verifies HdrS at
+/// `[rsi+0x202]`, OUTs [`PROTO_EARLY_LINE`] then [`GUEST_EARLY_MAGIC`], HLT.
+///
+/// SAFETY: `phys` is an owned writable identity-mapped frame.
+pub unsafe fn write_synth_kernel(phys: u64) {
+    let p = phys as *mut u8;
+    core::ptr::write_bytes(p, 0, SYNTH_KERNEL_SIZE);
+    let mut o = 0usize;
 
-unsafe fn write_synth_kernel(phys: u64) {
-    core::ptr::write_bytes(phys as *mut u8, 0, SYNTH_KERNEL_SIZE);
-    core::ptr::write_unaligned(phys as *mut u64, SYNTH_KERNEL_MAGIC);
+    // test rsi, rsi
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0x85);
+    core::ptr::write_volatile(p.add(o + 2), 0xF6);
+    o += 3;
+    // jz fail (rel8 patched below)
+    let jz_off = o;
+    core::ptr::write_volatile(p.add(o), 0x74);
+    core::ptr::write_volatile(p.add(o + 1), 0x00);
+    o += 2;
+
+    // cmp dword [rsi+0x202], SETUP_HEADER_MAGIC
+    core::ptr::write_volatile(p.add(o), 0x81);
+    core::ptr::write_volatile(p.add(o + 1), 0xBE);
+    core::ptr::write_volatile(p.add(o + 2), 0x02);
+    core::ptr::write_volatile(p.add(o + 3), 0x02);
+    core::ptr::write_volatile(p.add(o + 4), 0x00);
+    core::ptr::write_volatile(p.add(o + 5), 0x00);
+    let magic = SETUP_HEADER_MAGIC.to_le_bytes();
+    for i in 0..4 {
+        core::ptr::write_volatile(p.add(o + 6 + i), magic[i]);
+    }
+    o += 10;
+    // jne fail (rel8 patched below)
+    let jne_off = o;
+    core::ptr::write_volatile(p.add(o), 0x75);
+    core::ptr::write_volatile(p.add(o + 1), 0x00);
+    o += 2;
+
+    // jmp outs (over the fail stub)
+    let jmp_outs_off = o;
+    core::ptr::write_volatile(p.add(o), 0xEB);
+    core::ptr::write_volatile(p.add(o + 1), 0x00);
+    o += 2;
+
+    // fail: hlt ; jmp $
+    let fail_off = o;
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+    o += 3;
+
+    let outs_off = o;
+    o = emit_com1_string(p, o, PROTO_EARLY_LINE);
+    o = emit_com1_string(p, o, GUEST_EARLY_MAGIC);
+
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+    o += 3;
+
+    let jz_rel = (fail_off as isize) - (jz_off as isize + 2);
+    let jne_rel = (fail_off as isize) - (jne_off as isize + 2);
+    let jmp_rel = (outs_off as isize) - (jmp_outs_off as isize + 2);
+    debug_assert!((-128..128).contains(&jz_rel));
+    debug_assert!((-128..128).contains(&jne_rel));
+    debug_assert!((-128..128).contains(&jmp_rel));
+    core::ptr::write_volatile(p.add(jz_off + 1), jz_rel as u8);
+    core::ptr::write_volatile(p.add(jne_off + 1), jne_rel as u8);
+    core::ptr::write_volatile(p.add(jmp_outs_off + 1), jmp_rel as u8);
+
+    debug_assert!(o <= SYNTH_KERNEL_SIZE);
+}
+
+/// Emit `mov edx,0x3f8` / `mov al,imm` / `out dx,al` for each byte.
+unsafe fn emit_com1_string(p: *mut u8, mut o: usize, bytes: &[u8]) -> usize {
+    for &byte in bytes {
+        core::ptr::write_volatile(p.add(o), 0xBA);
+        core::ptr::write_volatile(p.add(o + 1), 0xF8);
+        core::ptr::write_volatile(p.add(o + 2), 0x03);
+        core::ptr::write_volatile(p.add(o + 3), 0x00);
+        core::ptr::write_volatile(p.add(o + 4), 0x00);
+        o += 5;
+        core::ptr::write_volatile(p.add(o), 0xB0);
+        core::ptr::write_volatile(p.add(o + 1), byte);
+        o += 2;
+        core::ptr::write_volatile(p.add(o), 0xEE);
+        o += 1;
+    }
+    o
 }
 
 unsafe fn write_synth_initrd(phys: u64) {

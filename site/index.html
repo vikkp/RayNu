@@ -60,15 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.2: kernel load.</h2>
+          <h2 class="section__title">M3.3: earlyprintk.</h2>
           <p class="section__lede">
-            Pack <code>boot_params</code> (HdrS), place synthetic kernel/initrd
-            in GPA, claim frames via ADR-004. Marker
-            <code>RAYNU-V-M3-LOAD-OK</code> — no kernel entry yet.
+            After the bring-up guest, enter a 64-bit proto-kernel with
+            <code>RSI=boot_params</code>; it verifies HdrS and prints a
+            Linux-style early line. Marker <code>RAYNU-V-M3-EARLY-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: load kernel=0x… magic=0x53726448
-RAYNU-V-M3-LOAD-OK
-boot: M3.2 complete</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>Linux version RayNu-V-proto (early console)
+RAYNU-V-M3-EARLY-OK
+boot: M3.3 complete</code></pre>
         </div>
       </section>
 
@@ -142,7 +142,7 @@ boot: M3.2 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Current gate: kernel load (M3.2). Next: earlyprintk (M3.3) —
+            Current gate: earlyprintk (M3.3). Next: guest timer / shell —
             see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
