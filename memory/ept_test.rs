@@ -43,7 +43,7 @@ fn from_phys_roundtrip() {
 
 #[test]
 fn ownership_selftest_happy_path() {
-    assert!(run_ownership_selftest(0x2000, 0x3000).is_ok());
+    assert!(run_ownership_selftest(0x2000, 0x3000, 0x4000).is_ok());
     assert!(ownership_selftest_ok());
 }
 

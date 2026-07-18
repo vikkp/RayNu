@@ -8,6 +8,7 @@
 //! M2.1: guest store + loop (`RAYNU-V-M2-GUEST-OK`).
 //! M2.2: ADR-004 ownership (`RAYNU-V-M2-OWN-OK`).
 //! M2.3: Proven Core frame allocator (`RAYNU-V-M2-ALLOC-OK`).
+//! M2.4: inject IRQ → guest ISR (`RAYNU-V-M2-IRQ-OK`).
 
 #![no_main]
 #![no_std]
@@ -175,9 +176,14 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         let _ = life.disable();
         return;
     };
+    let Some(guest_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for guest IDT");
+        let _ = life.disable();
+        return;
+    };
 
     // ADR-004: claim guest pages before launch; reject HPA aliasing.
-    match memory::run_ownership_selftest(guest_code, guest_stack) {
+    match memory::run_ownership_selftest(guest_code, guest_stack, guest_idt) {
         Ok(()) => {
             audit::integrity::record_event(audit::AuditEvent::EptMapped {
                 guest_id: memory::M2_BRINGUP_GUEST_ID,
@@ -188,6 +194,11 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 guest_id: memory::M2_BRINGUP_GUEST_ID,
                 gpa: guest_stack,
                 hpa: guest_stack,
+            });
+            audit::integrity::record_event(audit::AuditEvent::EptMapped {
+                guest_id: memory::M2_BRINGUP_GUEST_ID,
+                gpa: guest_idt,
+                hpa: guest_idt,
             });
             boot::serial::write_line("boot: ADR-004 ownership selftest ok");
         }
@@ -240,6 +251,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         gdt_phys: gdt,
         eptp,
         guest_code_phys: guest_code,
+        guest_idt_phys: guest_idt,
         msr_bitmap_phys: msr_bitmap,
         io_bitmap_a_phys: io_a,
         io_bitmap_b_phys: io_b,

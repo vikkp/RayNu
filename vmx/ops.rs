@@ -227,6 +227,28 @@ pub unsafe fn vmlaunch() -> Result<(), VmcsOpError> {
     }
 }
 
+/// VMRESUME — re-enter guest after a VMEXIT. Returns `Err` on failure.
+///
+/// On success this does not return: the next VMEXIT transfers to HOST_RIP.
+///
+/// SAFETY: current VMCS launched; guest/host state valid for resume; any
+/// VM-entry interruption-info programmed intentionally.
+#[inline]
+pub unsafe fn vmresume() -> Result<(), VmcsOpError> {
+    let mut failed: u8;
+    core::arch::asm!(
+        "vmresume",
+        "setbe {}",
+        lateout(reg_byte) failed,
+        options(nostack),
+    );
+    if failed != 0 {
+        Err(VmcsOpError)
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod ops_test {
     #[test]

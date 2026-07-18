@@ -10,6 +10,7 @@
 //! under EPT.
 //!
 //! M2.1 guest page: store a magic qword, run a short increment loop, then HLT.
+//! M2.4: ISR at [`GUEST_ISR_OFF`] stores [`GUEST_IRQ_MAGIC`] then HLT again.
 
 use crate::arch::cpu::{self, IA32_VMX_EPT_VPID_CAP};
 
@@ -27,6 +28,15 @@ pub const GUEST_LOOP_ITERS: u64 = 4;
 
 /// Offset of the data region within the guest code page.
 pub const GUEST_DATA_OFF: u64 = 0x800;
+
+/// Offset of the M2.4 ISR within the guest code page.
+pub const GUEST_ISR_OFF: u64 = 0x100;
+
+/// Guest IRQ ack slot (qword after magic + loop counter).
+pub const GUEST_IRQ_SLOT_OFF: u64 = GUEST_DATA_OFF + 16;
+
+/// Magic value the injected ISR writes (ASCII-ish `M24IRQOK`).
+pub const GUEST_IRQ_MAGIC: u64 = 0x4D32_3449_5251_4F4B;
 
 /// Secondary proc-based: enable EPT (SDM Vol. 3).
 pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
@@ -171,10 +181,12 @@ fn write_u64_le(p: *mut u8, v: u64) {
     }
 }
 
-/// Write M2.1 guest code into an owned frame (identity GPA/HPA).
+/// Write M2.1/M2.4 guest code into an owned frame (identity GPA/HPA).
 ///
-/// Layout: code at `+0`, data at [`GUEST_DATA_OFF`] (magic + loop counter).
-/// Guest: `*data = MAGIC`; increment `*(data+8)` four times; `hlt`.
+/// Layout:
+/// - `+0`: store MAGIC, loop 4×, `hlt`
+/// - [`GUEST_ISR_OFF`]: ISR stores [`GUEST_IRQ_MAGIC`], then `hlt`
+/// - [`GUEST_DATA_OFF`]: magic + counter + IRQ ack slot
 ///
 /// SAFETY: `page_phys` is a writable identity-mapped frame.
 pub unsafe fn write_guest_store_page(page_phys: u64) {
@@ -216,7 +228,6 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
     // loop body:
     //   inc qword [rbx]   ; 48 FF 03
     //   loop body         ; E2 FB  (rel8 = -5)
-    let _loop = o;
     core::ptr::write_volatile(p.add(o), 0x48);
     core::ptr::write_volatile(p.add(o + 1), 0xFF);
     core::ptr::write_volatile(p.add(o + 2), 0x03);
@@ -229,6 +240,52 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
     core::ptr::write_volatile(p.add(o), 0xF4);
     core::ptr::write_volatile(p.add(o + 1), 0xEB);
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
+
+    debug_assert!(o < GUEST_ISR_OFF as usize);
+    write_guest_isr(page_phys);
+}
+
+/// Write the M2.4 ISR at [`GUEST_ISR_OFF`].
+unsafe fn write_guest_isr(page_phys: u64) {
+    let p = (page_phys + GUEST_ISR_OFF) as *mut u8;
+    let irq_slot = page_phys + GUEST_IRQ_SLOT_OFF;
+    let mut o = 0usize;
+
+    // movabs rax, IRQ_MAGIC
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xB8);
+    write_u64_le(p.add(o + 2), GUEST_IRQ_MAGIC);
+    o += 10;
+
+    // mov moffs64, rax
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xA3);
+    write_u64_le(p.add(o + 2), irq_slot);
+    o += 10;
+
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
+/// Build a guest IDT with one 64-bit interrupt gate at `vector`.
+///
+/// SAFETY: `idt_phys` is an owned writable frame; `handler` is executable
+/// guest code (identity-mapped).
+pub unsafe fn write_guest_idt(idt_phys: u64, handler: u64, cs: u16, vector: u8) {
+    let base = idt_phys as *mut u8;
+    core::ptr::write_bytes(base, 0, 4096);
+
+    let off = (vector as usize) * 16;
+    let d0 = (handler & 0xFFFF)
+        | ((cs as u64) << 16)
+        | (0x8Eu64 << 40) // P=1, DPL=0, type=interrupt gate
+        | (((handler >> 16) & 0xFFFF) << 48);
+    let d1 = (handler >> 32) & 0xFFFF_FFFF;
+    let slot = (idt_phys as *mut u64).add(off / 8);
+    core::ptr::write_unaligned(slot, d0);
+    core::ptr::write_unaligned(slot.add(1), d1);
 }
 
 /// Read back M2.1 guest stores from the code page's data region.
@@ -242,6 +299,14 @@ pub unsafe fn verify_guest_store(page_phys: u64) -> bool {
     magic == GUEST_STORE_MAGIC && iters == GUEST_LOOP_ITERS
 }
 
+/// Read back M2.4 ISR ack from the code page.
+///
+/// SAFETY: guest ISR has run (or not); page is the bring-up code frame.
+pub unsafe fn verify_guest_irq(page_phys: u64) -> bool {
+    let slot = (page_phys + GUEST_IRQ_SLOT_OFF) as *const u64;
+    core::ptr::read_volatile(slot) == GUEST_IRQ_MAGIC
+}
+
 #[cfg(test)]
 mod ept_hw_test {
     use super::*;
@@ -252,6 +317,24 @@ mod ept_hw_test {
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
         assert_eq!(GUEST_STORE_MAGIC, 0x4D32_3153_544F_5245);
         assert_eq!(GUEST_LOOP_ITERS, 4);
+        assert_eq!(GUEST_IRQ_MAGIC, 0x4D32_3449_5251_4F4B);
+        assert_eq!(GUEST_ISR_OFF, 0x100);
+    }
+
+    #[test]
+    fn guest_idt_gate_encodes_handler() {
+        let mut idt = [0u8; 4096];
+        let phys = idt.as_mut_ptr() as u64;
+        let handler = 0x1_0000_0100u64;
+        // SAFETY: test buffer.
+        unsafe { write_guest_idt(phys, handler, 0x08, 0x21) };
+        let slot = unsafe { (phys as *const u64).add((0x21 * 16) / 8) };
+        let d0 = unsafe { core::ptr::read_unaligned(slot) };
+        let d1 = unsafe { core::ptr::read_unaligned(slot.add(1)) };
+        assert_eq!(d0 & 0xFFFF, handler & 0xFFFF);
+        assert_eq!((d0 >> 16) & 0xFFFF, 0x08);
+        assert_eq!((d0 >> 40) & 0xFF, 0x8E);
+        assert_eq!(d1 & 0xFFFF_FFFF, (handler >> 32) & 0xFFFF_FFFF);
     }
 
     #[test]

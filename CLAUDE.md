@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M2.3 closed** on Latitude/QEMU: boot → EBS → VMXON → EPT identity → guest store/loop/HLT → ADR-004 ownership self-test → Proven Core bitmap `FrameAllocator` (`RAYNU-V-M2-ALLOC-OK`). EPT ownership registry and frame allocator are at **L1** (runtime asserts + self-tests). Full M2 (L2 EPT spec, interrupt virtualization, L3 allocator) is still open. See [docs/progress.md](docs/progress.md).
+**Through M2.3 closed** on Latitude; **M2.4 in flight**: IRQ inject via VM-entry interruption-info + guest ISR (`RAYNU-V-M2-IRQ-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Full M2 (APIC timer path, L2 EPT spec, L3 allocator) still open. See [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 

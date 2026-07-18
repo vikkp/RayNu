@@ -53,6 +53,7 @@ pub const VM_EXIT_MSR_LOAD_COUNT: u64 = 0x0000_4010;
 pub const VM_ENTRY_CONTROLS: u64 = 0x0000_4012;
 pub const VM_ENTRY_MSR_LOAD_COUNT: u64 = 0x0000_4014;
 pub const VM_ENTRY_INTERRUPTION_INFO: u64 = 0x0000_4016;
+pub const VM_ENTRY_EXCEPTION_ERROR_CODE: u64 = 0x0000_4018;
 pub const TPR_THRESHOLD: u64 = 0x0000_401C;
 pub const SECONDARY_VM_EXEC_CONTROL: u64 = 0x0000_401E;
 
@@ -129,6 +130,10 @@ pub const HOST_IA32_SYSENTER_EIP: u64 = 0x0000_6C12;
 pub const HOST_RSP: u64 = 0x0000_6C14;
 pub const HOST_RIP: u64 = 0x0000_6C16;
 
+// ── pin-based control bits ──────────────────────────────────────────
+/// External-interrupt exiting (SDM Vol. 3C).
+pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
+
 // ── primary proc-based control bits ─────────────────────────────────
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
 pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;
@@ -145,6 +150,8 @@ pub const VM_EXIT_LOAD_IA32_EFER: u32 = 1 << 21;
 pub const VM_ENTRY_IA32E_MODE: u32 = 1 << 9;
 pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
 
+/// Basic exit reason: external interrupt.
+pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
 /// Basic exit reason: HLT.
 pub const EXIT_REASON_HLT: u32 = 12;
 

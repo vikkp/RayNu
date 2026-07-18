@@ -23,7 +23,7 @@
 //!
 //! ## `run_ownership_selftest`
 //! ensures
-//!   - bring-up guest uniquely owns code + stack frames
+//!   - bring-up guest uniquely owns code + stack + IDT frames
 //!   - a second guest cannot map the code HPA
 //!   - unmap then remap of stack succeeds
 //!
