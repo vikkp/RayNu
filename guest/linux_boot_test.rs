@@ -7,6 +7,35 @@ fn marker_and_magic() {
     // "HdrS" little-endian bytes
     let bytes = SETUP_HEADER_MAGIC.to_le_bytes();
     assert_eq!(&bytes, b"HdrS");
+    assert!(PROTO_EARLY_LINE.starts_with(b"Linux version"));
+}
+
+#[test]
+fn proto_kernel_encodes_hdrs_check_and_outs() {
+    let mut page = [0u8; 4096];
+    let phys = page.as_mut_ptr() as u64;
+    unsafe { write_synth_kernel(phys) };
+    // Starts with test rsi,rsi
+    assert_eq!(&page[0..3], &[0x48, 0x85, 0xF6]);
+    // Contains out dx,al (0xEE) and mov edx,0x3f8
+    assert!(page[..512].windows(5).any(|w| w == [0xBA, 0xF8, 0x03, 0x00, 0x00]));
+    assert!(page[..512].contains(&0xEE));
+    // First OUT byte of early line is 'L'
+    let mut found_l = false;
+    let mut i = 0;
+    while i + 7 < 512 {
+        if page[i] == 0xBA
+            && page[i + 1] == 0xF8
+            && page[i + 5] == 0xB0
+            && page[i + 6] == b'L'
+            && page[i + 7] == 0xEE
+        {
+            found_l = true;
+            break;
+        }
+        i += 1;
+    }
+    assert!(found_l, "expected first COM1 OUT of 'Linux version…'");
 }
 
 #[test]

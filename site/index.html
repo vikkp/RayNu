@@ -60,15 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.2 closed. Next: earlyprintk.</h2>
+          <h2 class="section__title">M3.3: earlyprintk.</h2>
           <p class="section__lede">
-            Latitude boot gate passed through synthetic kernel load
-            (<code>RAYNU-V-M3-LOAD-OK</code>). Next: M3.3 64-bit entry with
-            <code>boot_params</code> — <code>RAYNU-V-M3-EARLY-OK</code>.
+            After the bring-up guest, enter a 64-bit proto-kernel with
+            <code>RSI=boot_params</code>; it verifies HdrS and prints a
+            Linux-style early line. Marker <code>RAYNU-V-M3-EARLY-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-LOAD-OK
-boot: M3.2 complete
-==&gt; Boot gate PASSED (M0 → M3.2)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>Linux version RayNu-V-proto (early console)
+RAYNU-V-M3-EARLY-OK
+boot: M3.3 complete</code></pre>
         </div>
       </section>
 
@@ -142,7 +142,7 @@ boot: M3.2 complete
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.2 is closed on Latitude. Current gate: earlyprintk (M3.3) —
+            Current gate: earlyprintk (M3.3). Next: guest timer / shell —
             see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">

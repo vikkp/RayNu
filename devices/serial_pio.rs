@@ -12,6 +12,12 @@ pub const M3_IO_OK_MARKER: &str = "RAYNU-V-M3-IO-OK";
 /// Bytes the synthetic guest writes via `out dx, al` (DX=COM1).
 pub const GUEST_IO_MAGIC: &[u8] = b"RAYNU-V-M3-IO";
 
+/// Bytes the M3.3 proto-kernel writes after its Linux-style early line.
+pub const GUEST_EARLY_MAGIC: &[u8] = b"RAYNU-V-M3-EARLY";
+
+/// COM1 marker when proto-kernel early magic is observed (M3.3 gate).
+pub const M3_EARLY_OK_MARKER: &str = "RAYNU-V-M3-EARLY-OK";
+
 pub const COM1_DATA: u16 = 0x3F8;
 pub const COM1_IER: u16 = 0x3F9;
 pub const COM1_LSR: u16 = 0x3FD;
@@ -19,6 +25,9 @@ pub const COM1_LSR: u16 = 0x3FD;
 /// Set when [`GUEST_IO_MAGIC`] has been fully received from guest OUTs.
 static mut IO_MAGIC_OK: bool = false;
 static mut MAGIC_POS: usize = 0;
+/// Set when [`GUEST_EARLY_MAGIC`] has been fully received.
+static mut EARLY_MAGIC_OK: bool = false;
+static mut EARLY_POS: usize = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoExitInfo {
@@ -69,7 +78,8 @@ pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
     } else {
         let byte = (rax & 0xFF) as u8;
         if info.port == COM1_DATA {
-            note_magic_byte(byte);
+            note_io_magic(byte);
+            note_early_magic(byte);
             // Passthrough so the magic is visible on the QEMU serial log.
             // Skip port I/O under host `cargo test` (no COM1).
             #[cfg(not(test))]
@@ -79,7 +89,7 @@ pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
     }
 }
 
-fn note_magic_byte(byte: u8) {
+fn note_io_magic(byte: u8) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
         if IO_MAGIC_OK {
@@ -96,9 +106,31 @@ fn note_magic_byte(byte: u8) {
     }
 }
 
+fn note_early_magic(byte: u8) {
+    // SAFETY: single-threaded VMEXIT path.
+    unsafe {
+        if EARLY_MAGIC_OK {
+            return;
+        }
+        if EARLY_POS < GUEST_EARLY_MAGIC.len() && byte == GUEST_EARLY_MAGIC[EARLY_POS] {
+            EARLY_POS += 1;
+            if EARLY_POS == GUEST_EARLY_MAGIC.len() {
+                EARLY_MAGIC_OK = true;
+            }
+        } else {
+            EARLY_POS = if byte == GUEST_EARLY_MAGIC[0] { 1 } else { 0 };
+        }
+    }
+}
+
 pub fn guest_io_ok() -> bool {
     // SAFETY: written on BSP VMEXIT path; read after magic completes.
     unsafe { IO_MAGIC_OK }
+}
+
+pub fn guest_early_ok() -> bool {
+    // SAFETY: written on BSP VMEXIT path; read after early magic completes.
+    unsafe { EARLY_MAGIC_OK }
 }
 
 /// Trap COM1 ports in an I/O bitmap A page (ports 0x0000–0x7FFF).

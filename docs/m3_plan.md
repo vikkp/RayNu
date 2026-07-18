@@ -75,6 +75,8 @@ Status: **closed on Latitude** (`RAYNU-V-M3-LOAD-OK`). Synthetic stubs; real bzI
 - Serial shows Linux banner / earlyprintk
 - **First real Linux signal on Latitude**
 
+Status: **in flight** — 64-bit **proto-kernel** (HdrS check + Linux-style early line via COM1). Real bzImage still next.
+
 ### M3.4 — Guest timer — `RAYNU-V-M3-GTIMER-OK`
 
 - Guest-usable timer: trap xAPIC MMIO (or TSC deadline) + inject via `sched/interrupt`

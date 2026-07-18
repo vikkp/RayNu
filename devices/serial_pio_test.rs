@@ -3,7 +3,9 @@ use super::*;
 #[test]
 fn marker_and_magic() {
     assert_eq!(M3_IO_OK_MARKER, "RAYNU-V-M3-IO-OK");
+    assert_eq!(M3_EARLY_OK_MARKER, "RAYNU-V-M3-EARLY-OK");
     assert_eq!(GUEST_IO_MAGIC, b"RAYNU-V-M3-IO");
+    assert_eq!(GUEST_EARLY_MAGIC, b"RAYNU-V-M3-EARLY");
 }
 
 #[test]

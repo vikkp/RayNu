@@ -6,7 +6,7 @@
 
 pub mod serial_pio;
 
-pub use serial_pio::{guest_io_ok, M3_IO_OK_MARKER};
+pub use serial_pio::{guest_early_ok, guest_io_ok, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER};
 
 /// Device class stub for future virtio / serial / RTC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
