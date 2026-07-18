@@ -9,7 +9,7 @@
 /// COM1 marker when guest OUT magic is observed (M3.0 gate).
 pub const M3_IO_OK_MARKER: &str = "RAYNU-V-M3-IO-OK";
 
-/// Bytes the synthetic guest writes via `out 0x3f8, al`.
+/// Bytes the synthetic guest writes via `out dx, al` (DX=COM1).
 pub const GUEST_IO_MAGIC: &[u8] = b"RAYNU-V-M3-IO";
 
 pub const COM1_DATA: u16 = 0x3F8;

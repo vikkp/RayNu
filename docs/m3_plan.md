@@ -46,7 +46,7 @@ Each gate = one branch `cursor/m3-N-…-a623`, marker, Latitude/QEMU or host tes
 - Unconditional I/O exiting (or bitmaps covering `0x3F8–0x3FF`)
 - `devices/serial_pio.rs`: 16550 decode; passthrough → host COM1; magic latch
 - Naked VMEXIT trampoline saves guest RAX; I/O exits VMRESUME into M2 phase machine
-- Synthetic guest: after store/loop, `out 0x3f8, al` for `RAYNU-V-M3-IO`, then `hlt`
+- Synthetic guest: after store/loop, `mov edx,0x3f8` / `out dx,al` for `RAYNU-V-M3-IO`, then `hlt`
 - Extend `tools/qemu-boot-test.sh`
 
 Status: **in flight** (see PR). No kernel assets.

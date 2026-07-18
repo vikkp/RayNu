@@ -11,7 +11,8 @@
 //!
 //! M2.1 guest page: store a magic qword, run a short increment loop, then HLT.
 //! M2.4: ISR at [`GUEST_ISR_OFF`] stores [`GUEST_IRQ_MAGIC`] then HLT again.
-//! M3.0: after the loop, `out 0x3f8, al` for each [`crate::devices::serial_pio::GUEST_IO_MAGIC`] byte.
+//! M3.0: after the loop, `mov edx,0x3f8` / `out dx,al` for each
+//! [`crate::devices::serial_pio::GUEST_IO_MAGIC`] byte (`out imm8` cannot encode COM1).
 
 use crate::arch::cpu::{self, IA32_VMX_EPT_VPID_CAP};
 use crate::devices::serial_pio::GUEST_IO_MAGIC;
@@ -238,14 +239,23 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
     core::ptr::write_volatile(p.add(o + 1), 0xFB); // -5 → back to inc
     o += 2;
 
-    // M3.0: out each magic byte to COM1 (mov al,imm8; out 0x3f8, al).
+    // M3.0: out each magic byte to COM1 via DX (imm8 OUT only has an 8-bit port).
+    // Reload EDX before every OUT — host Rust clobbers GPRs before VMRESUME.
     for &byte in GUEST_IO_MAGIC {
+        // mov edx, 0x3F8
+        core::ptr::write_volatile(p.add(o), 0xBA);
+        core::ptr::write_volatile(p.add(o + 1), 0xF8);
+        core::ptr::write_volatile(p.add(o + 2), 0x03);
+        core::ptr::write_volatile(p.add(o + 3), 0x00);
+        core::ptr::write_volatile(p.add(o + 4), 0x00);
+        o += 5;
+        // mov al, imm8
         core::ptr::write_volatile(p.add(o), 0xB0);
         core::ptr::write_volatile(p.add(o + 1), byte);
         o += 2;
-        core::ptr::write_volatile(p.add(o), 0xE6);
-        core::ptr::write_volatile(p.add(o + 1), 0xF8);
-        o += 2;
+        // out dx, al
+        core::ptr::write_volatile(p.add(o), 0xEE);
+        o += 1;
     }
 
     // hlt ; jmp $
@@ -391,5 +401,33 @@ mod ept_hw_test {
             unsafe { core::ptr::read_unaligned((page.as_ptr() as u64 + GUEST_DATA_OFF) as *const u64) },
             0
         );
+    }
+
+    #[test]
+    fn guest_store_page_encodes_com1_out_dx() {
+        let mut page = [0u8; 4096];
+        let phys = page.as_mut_ptr() as u64;
+        unsafe { write_guest_store_page(phys) };
+        // Find first `mov edx, 0x3F8` (BA F8 03 00 00) then `mov al,'R'` / `out dx,al`.
+        let mut found = false;
+        let mut i = 0usize;
+        while i + 8 < 256 {
+            if page[i] == 0xBA
+                && page[i + 1] == 0xF8
+                && page[i + 2] == 0x03
+                && page[i + 3] == 0x00
+                && page[i + 4] == 0x00
+                && page[i + 5] == 0xB0
+                && page[i + 6] == b'R'
+                && page[i + 7] == 0xEE
+            {
+                found = true;
+                break;
+            }
+            i += 1;
+        }
+        assert!(found, "expected mov edx,0x3f8 / mov al,'R' / out dx,al");
+        // Must not use 8-bit imm OUT (E6 F8) — that targets port 0xF8, not COM1.
+        assert!(!page[..256].windows(2).any(|w| w == [0xE6, 0xF8]));
     }
 }
