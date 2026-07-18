@@ -83,6 +83,13 @@ pub fn qemu_exit_success() {
     }
 }
 
+/// Exit QEMU with a failure code (`0x21` → status 67). No-op on real hardware.
+pub fn qemu_exit_failure() {
+    unsafe {
+        outb(0xf4, 0x21);
+    }
+}
+
 #[inline]
 unsafe fn outb(port: u16, val: u8) {
     core::arch::asm!(

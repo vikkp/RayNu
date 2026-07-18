@@ -60,20 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0–M1.1: boots into VMX root.</h2>
+          <h2 class="section__title">M0–M1.2: first guest, first VMEXIT.</h2>
           <p class="section__lede">
-            Past firmware handoff, RayNu-V executes real <code>VMXON</code> /
-            <code>VMXOFF</code> under nested VT-x (QEMU+KVM or bare-metal VT-x).
-            Markers:
+            Past firmware handoff, RayNu-V enters VMX root, launches a tiny
+            long-mode guest that executes <code>HLT</code>, handles one
+            VMEXIT, then <code>VMXOFF</code>. Markers:
             <code>RAYNU-V-M0-BOOT-OK</code>,
             <code>RAYNU-V-M1-EBS-OK</code>,
-            <code>RAYNU-V-M1-VMXON-OK</code>.
+            <code>RAYNU-V-M1-VMXON-OK</code>,
+            <code>RAYNU-V-M1-VMEXIT-OK</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M0-BOOT-OK
 RAYNU-V-M1-EBS-OK
 RAYNU-V-M1-VMXON-OK
-boot: VMXOFF ok
-boot: M1.1 complete; awaiting M1.2 VMLAUNCH</code></pre>
+boot: VMLAUNCH → guest HLT
+boot: VMEXIT reason=0x0000000c
+RAYNU-V-M1-VMEXIT-OK
+boot: M1.2 complete</code></pre>
         </div>
       </section>
 
@@ -147,9 +150,9 @@ boot: M1.1 complete; awaiting M1.2 VMLAUNCH</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M1.1 VMXON is closed. Next: VMLAUNCH / VMEXIT with a tiny guest,
-            then EPT and one small Verus-checked invariant on every commit.
-            That artifact matters more than the marketing.
+            M1.2 VMLAUNCH/VMEXIT is closed. Next: EPT identity map for a
+            real guest page, then one small Verus-checked invariant on every
+            commit. That artifact matters more than the marketing.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

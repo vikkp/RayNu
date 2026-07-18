@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 · M1.0 · M1.1** — EFI boots, exits boot services, then executes **VMXON/VMXOFF** when VT-x is available (`RAYNU-V-M1-VMXON-OK`). QEMU needs **KVM** (`/dev/kvm`); TCG prints `RAYNU-V-M1-VMXON-SKIP`. On the Dell Latitude: ensure virtualization is enabled in BIOS, then `./tools/qemu-boot-test.sh`. Next: M1.2 VMLAUNCH/VMEXIT.
+**M0 · M1.0 · M1.1 · M1.2** — EFI boots, exits boot services, enters VMX root, then **VMLAUNCH** a tiny HLT guest and handles one **VMEXIT** (`RAYNU-V-M1-VMEXIT-OK`). QEMU needs **KVM** (`/dev/kvm`); TCG prints `RAYNU-V-M1-VMXON-SKIP`. On the Dell Latitude: ensure virtualization is enabled in BIOS, then `./tools/qemu-boot-test.sh`. Next: EPT for a real guest mapping.
 
 ## Repository Layout
 
