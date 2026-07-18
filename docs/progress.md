@@ -19,8 +19,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M2.6 | `RAYNU-V-M2-L2-OK` | Host L2 specs + Kani harnesses for EptMap / FrameAllocator |
 | M3.0 | `RAYNU-V-M3-IO-OK` | Guest COM1 `out dx,al` → I/O VMEXIT → host UART |
 | M3.1 | `RAYNU-V-M3-CPUID-OK` | CPUID exiting; leaf 1 hides VMX from guest |
+| M3.2 | `RAYNU-V-M3-LOAD-OK` | Synthetic kernel/initrd + packed `boot_params` (HdrS) |
 
-## Verification checkpoint (as of M3.1)
+## Verification checkpoint (as of M3.2)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -29,6 +30,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack for inject |
 | `sched/msr_firewall` | L0→L1-ish | CPUID filter (hide VMX); MSR stub allow-list |
 | `devices/serial_pio` | L0→L1-ish | COM1 OUT passthrough + magic latch (outside Proven Core) |
+| `guest/linux_boot` | L0 | boot_params packing + synthetic load (outside Proven Core) |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
 | `vmx/*` | L0–L1 | Lifecycle + launch + VMRESUME inject / timer / I/O / CPUID |
@@ -37,6 +39,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. Latitude gate for M3.2 (`RAYNU-V-M3-LOAD-OK`).
-2. M3.3 earlyprintk → M3.4 guest timer → M3.5 shell.
+1. **M3.3** earlyprintk (`RAYNU-V-M3-EARLY-OK`) — see [m3_plan.md](m3_plan.md).
+2. M3.4 guest timer → M3.5 shell.
 3. Verus L3 proofs for EPT / allocator (parallel).
