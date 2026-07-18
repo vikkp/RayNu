@@ -60,17 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.5 closed: LAPIC timer → guest re-inject.</h2>
+          <h2 class="section__title">M2.6: L2 specs + Kani (ADR-004).</h2>
           <p class="section__lede">
-            After software inject, the host arms a one-shot LAPIC timer. The
-            guest waits in HLT; the timer causes an external-interrupt VMEXIT.
-            EOI, then re-inject through the same firewall. Marker
-            <code>RAYNU-V-M2-TIMER-OK</code> — gated on Latitude.
+            Ghost models for exclusive EPT ownership and the frame allocator,
+            plus bounded Kani harnesses. Host gate
+            <code>RAYNU-V-M2-L2-OK</code> — no new serial boot marker.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: LAPIC one-shot armed; waiting in guest HLT
-boot: APIC EOI ok
-RAYNU-V-M2-TIMER-OK
-boot: M2.5 complete</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>cargo test --no-default-features
+# m2_6_l2_gate_passes
+RAYNU-V-M2-L2-OK</code></pre>
         </div>
       </section>
 
@@ -144,8 +142,8 @@ boot: M2.5 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M0–M2.5 closed on Latitude. Next: deepen ADR-004 and the allocator
-            toward L2/Kani — before Linux (M3).
+            M2.6 is the verification checkpoint. Next: unmodified Linux guest
+            (M3) — the second schedule risk after interrupt virtualization.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

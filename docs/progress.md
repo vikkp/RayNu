@@ -16,20 +16,22 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M2.3 | `RAYNU-V-M2-ALLOC-OK` | Proven Core bitmap `FrameAllocator` |
 | M2.4 | `RAYNU-V-M2-IRQ-OK` | Inject vector 0x21 → guest ISR ack + HLT |
 | M2.5 | `RAYNU-V-M2-TIMER-OK` | LAPIC one-shot → ext-IRQ VMEXIT → EOI → re-inject |
+| M2.6 | `RAYNU-V-M2-L2-OK` | Host L2 specs + Kani harnesses for EptMap / FrameAllocator |
 
-## Verification checkpoint (as of M2.5)
+## Verification checkpoint (as of M2.6)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | L1 | Runtime self-test + audit `EptMapped` |
-| `memory/frame_allocator` | L1 | Alloc / free / double-free / reuse self-test |
+| `memory/ept` ownership registry | **L2** | Ghost model in `ept_spec.rs`; L1 runtime kept |
+| `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack for inject |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
 | `vmx/*` | L0–L1 | Lifecycle + launch + VMRESUME inject / timer path |
-| Verus / Kani in CI | Soft-fail scaffold | ADR-001 / ADR-008 |
+| Verus proofs (`*_proof.rs`) | L0 | L3 deferred M3+ |
+| Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
-1. ADR-004 + allocator toward L2 (Verus) / Kani.
+1. Merge M2.6; confirm host gate in CI (`RAYNU-V-M2-L2-OK`).
 2. M3: unmodified Linux guest.
