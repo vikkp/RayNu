@@ -59,6 +59,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
       - name: QEMU boot-to-serial gate
         run: |
+<<<<<<< Updated upstream
           if [[ -e /dev/kvm ]]; then
             echo "KVM available — requiring VMXON"
             # Nested VT-x (best-effort on Actions)
@@ -66,6 +67,20 @@ jobs:
             REQUIRE_VMX=1 ./tools/qemu-boot-test.sh
           else
             echo "No /dev/kvm — allowing VMXON-SKIP"
+=======
+          # Actions runners often have /dev/kvm root-only; open it for the job.
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod a+rw /dev/kvm || true
+            echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
+            echo 1 | sudo tee /sys/module/kvm_amd/parameters/nested 2>/dev/null || true
+          fi
+          ls -l /dev/kvm 2>&1 || true
+          if [[ -r /dev/kvm && -w /dev/kvm ]]; then
+            echo "KVM usable — requiring VMXON"
+            REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
+          else
+            echo "KVM not usable — allowing VMXON-SKIP"
+>>>>>>> Stashed changes
             REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
           fi
       - name: Upload serial log
