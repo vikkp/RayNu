@@ -320,13 +320,17 @@ pub unsafe fn segment_base(gdt_base: u64, selector: u16) -> u64 {
     base
 }
 
+/// CR0.WP — supervisor write-protect (OVMF keeps this set; page tables are often RO).
+const CR0_WP: u64 = 1 << 16;
+
 /// Clear the NX bit on the identity-mapped page containing `phys`.
 ///
 /// OVMF often marks conventional-memory frames non-executable. A guest that
 /// shares host CR3 cannot `HLT` from a bump-allocated page until NX is cleared.
+/// Page-table pages themselves are typically read-only under CR0.WP, so this
+/// temporarily clears WP around the PTE store.
 ///
-/// SAFETY: `phys` is identity-mapped; page tables are writable; TLB may need
-/// shootdown (single-CPU bring-up: reload CR3).
+/// SAFETY: `phys` is identity-mapped; single-CPU bring-up (CR3 reload for TLB).
 pub unsafe fn clear_nx_identity(phys: u64) -> bool {
     const NX: u64 = 1 << 63;
     const PRESENT: u64 = 1;
@@ -342,30 +346,35 @@ pub unsafe fn clear_nx_identity(phys: u64) -> bool {
     if pdpte & PRESENT == 0 {
         return false;
     }
+
+    let entry_ptr: *mut u64;
+    let entry: u64;
     if pdpte & LARGE != 0 {
-        // 1 GiB page
-        *((pdpt + ((va >> 30) & 0x1ff) * 8) as *mut u64) = pdpte & !NX;
-        write_cr3(read_cr3());
-        return true;
+        entry_ptr = (pdpt + ((va >> 30) & 0x1ff) * 8) as *mut u64;
+        entry = pdpte;
+    } else {
+        let pd = pdpte & 0x000f_ffff_ffff_f000;
+        let pde = *((pd + ((va >> 21) & 0x1ff) * 8) as *const u64);
+        if pde & PRESENT == 0 {
+            return false;
+        }
+        if pde & LARGE != 0 {
+            entry_ptr = (pd + ((va >> 21) & 0x1ff) * 8) as *mut u64;
+            entry = pde;
+        } else {
+            let pt = pde & 0x000f_ffff_ffff_f000;
+            entry_ptr = (pt + ((va >> 12) & 0x1ff) * 8) as *mut u64;
+            entry = *entry_ptr;
+            if entry & PRESENT == 0 {
+                return false;
+            }
+        }
     }
-    let pd = pdpte & 0x000f_ffff_ffff_f000;
-    let pde = *((pd + ((va >> 21) & 0x1ff) * 8) as *const u64);
-    if pde & PRESENT == 0 {
-        return false;
-    }
-    if pde & LARGE != 0 {
-        // 2 MiB page
-        *((pd + ((va >> 21) & 0x1ff) * 8) as *mut u64) = pde & !NX;
-        write_cr3(read_cr3());
-        return true;
-    }
-    let pt = pde & 0x000f_ffff_ffff_f000;
-    let pte_ptr = (pt + ((va >> 12) & 0x1ff) * 8) as *mut u64;
-    let pte = *pte_ptr;
-    if pte & PRESENT == 0 {
-        return false;
-    }
-    *pte_ptr = pte & !NX;
+
+    let cr0 = read_cr0();
+    write_cr0(cr0 & !CR0_WP);
+    core::ptr::write_volatile(entry_ptr, entry & !NX);
+    write_cr0(cr0);
     write_cr3(read_cr3());
     true
 }
