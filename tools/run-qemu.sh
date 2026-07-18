@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Boot r640-hypervisor.efi under QEMU+OVMF with COM1 on a chardev.
-# Prefers KVM when /dev/kvm exists (required for M1.1 VMXON).
+# Prefers KVM when /dev/kvm is usable (required for M1.1 VMXON).
 # SERIAL_CHARDEV defaults to stdio; CI sets file:/path/to/log.
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 set -euo pipefail
@@ -57,15 +57,27 @@ else
   FW_ARGS+=(-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE")
 fi
 
+kvm_usable() {
+  [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]
+}
+
 ACCEL_ARGS=()
 if [[ "$QEMU_ACCEL" == "tcg" ]]; then
   echo "==> accel: tcg (VMXON will SKIP)"
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
-elif [[ "$QEMU_ACCEL" == "kvm" || ( "$QEMU_ACCEL" == "auto" && -e /dev/kvm ) ]]; then
+elif [[ "$QEMU_ACCEL" == "kvm" ]]; then
+  if ! kvm_usable; then
+    echo "error: QEMU_ACCEL=kvm but /dev/kvm is not usable (permission?)" >&2
+    ls -l /dev/kvm 2>&1 || true
+    exit 1
+  fi
+  echo "==> accel: kvm (nested VT-x for M1.1 VMXON)"
+  ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+elif [[ "$QEMU_ACCEL" == "auto" ]] && kvm_usable; then
   echo "==> accel: kvm (nested VT-x for M1.1 VMXON)"
   ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
 else
-  echo "==> accel: tcg fallback (no /dev/kvm; VMXON will SKIP)"
+  echo "==> accel: tcg fallback (/dev/kvm missing or not writable; VMXON will SKIP)"
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
 fi
 

@@ -2,7 +2,7 @@
 # Boot integration gate: build EFI, boot under QEMU, require serial markers.
 # M0:   RAYNU-V-M0-BOOT-OK
 # M1.0: RAYNU-V-M1-EBS-OK
-# M1.1: RAYNU-V-M1-VMXON-OK (or SKIP without KVM unless REQUIRE_VMX=1)
+# M1.1: RAYNU-V-M1-VMXON-OK (or SKIP without usable KVM unless REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -15,9 +15,13 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
 
-# Auto-require VMX when KVM is present unless overridden.
+kvm_usable() {
+  [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]
+}
+
+# Auto-require VMX when KVM is usable unless overridden.
 if [[ -z "${REQUIRE_VMX:-}" ]]; then
-  if [[ -e /dev/kvm && "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
+  if kvm_usable && [[ "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
     REQUIRE_VMX=1
   else
     REQUIRE_VMX=0
@@ -47,6 +51,8 @@ if [[ ! -s "$SERIAL_LOG" ]]; then
   echo "error: serial log empty or missing" >&2
   echo "----- qemu stderr -----"
   cat "$ROOT/target/m0-qemu-stderr.log" || true
+  echo "----- qemu stdout -----"
+  cat "$ROOT/target/m0-qemu-stdout.log" || true
   exit 1
 fi
 
