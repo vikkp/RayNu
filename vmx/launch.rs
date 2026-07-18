@@ -143,7 +143,10 @@ unsafe fn report_vmwrite_fail(tag: &str, field: u64, kind: VmFailKind, expected_
         serial::write_byte(b'\n');
         if ierr == 12 {
             serial::write_line(
-                "boot: hint: error 12 under nested VT-x — try host: modprobe kvm_intel enable_shadow_vmcs=0",
+                "boot: hint: error 12 = nested shadow VMCS rejected VMWRITE",
+            );
+            serial::write_line(
+                "boot: fix on host: sudo ./tools/enable-nested-kvm.sh",
             );
         }
     }

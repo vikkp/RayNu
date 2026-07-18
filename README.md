@@ -57,14 +57,19 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 ## Test in QEMU
 
 ```bash
+# Host prep for M1.1/M1.2 nested VT-x (once per boot; Latitude / Intel)
+sudo ./tools/enable-nested-kvm.sh
+
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh
 
-# Boot gate: M0 + M1.0 + M1.1 markers (requires KVM for VMXON)
+# Boot gate: M0 → M1.2 markers (requires KVM + nested VT-x for VMEXIT)
 ./tools/qemu-boot-test.sh
 ```
 
-Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** for M1.1 VMXON (`sudo usermod -aG kvm $USER` then re-login).
+Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** (`sudo usermod -aG kvm $USER` then re-login).
+
+If serial shows `VM_INSTRUCTION_ERROR=12`, the host still has KVM **VMCS shadowing** on — re-run `sudo ./tools/enable-nested-kvm.sh` (sets `enable_shadow_vmcs=0`).
 
 ## Project site
 
