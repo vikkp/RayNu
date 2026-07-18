@@ -71,11 +71,23 @@ elif [[ "$QEMU_ACCEL" == "kvm" ]]; then
     ls -l /dev/kvm 2>&1 || true
     exit 1
   fi
-  echo "==> accel: kvm (nested VT-x for M1.1 VMXON)"
-  ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+  echo "==> accel: kvm (nested VT-x for M1.1/M1.2)"
+  # Only request +vmx when the host CPU advertises it; many cloud runners
+  # expose /dev/kvm without nested VT-x (QEMU then clears guest CPUID.VMX).
+  if grep -qw vmx /proc/cpuinfo 2>/dev/null; then
+    ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host,+vmx)
+  else
+    echo "==> note: host CPUID lacks vmx — guest VMXON will SKIP"
+    ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+  fi
 elif [[ "$QEMU_ACCEL" == "auto" ]] && kvm_usable; then
-  echo "==> accel: kvm (nested VT-x for M1.1 VMXON)"
-  ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+  echo "==> accel: kvm (nested VT-x for M1.1/M1.2)"
+  if grep -qw vmx /proc/cpuinfo 2>/dev/null; then
+    ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host,+vmx)
+  else
+    echo "==> note: host CPUID lacks vmx — guest VMXON will SKIP"
+    ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+  fi
 else
   echo "==> accel: tcg fallback (/dev/kvm missing or not writable; VMXON will SKIP)"
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)

@@ -17,10 +17,35 @@ pub const FEATURE_CONTROL_VMXON_OUTSIDE_SMX: u64 = 1 << 2;
 
 /// VMX capability MSRs (Intel SDM Vol. 3D / Appendix A).
 pub const IA32_VMX_BASIC: u32 = 0x480;
+pub const IA32_VMX_PINBASED_CTLS: u32 = 0x481;
+pub const IA32_VMX_PROCBASED_CTLS: u32 = 0x482;
+pub const IA32_VMX_EXIT_CTLS: u32 = 0x483;
+pub const IA32_VMX_ENTRY_CTLS: u32 = 0x484;
 pub const IA32_VMX_CR0_FIXED0: u32 = 0x486;
 pub const IA32_VMX_CR0_FIXED1: u32 = 0x487;
 pub const IA32_VMX_CR4_FIXED0: u32 = 0x488;
 pub const IA32_VMX_CR4_FIXED1: u32 = 0x489;
+pub const IA32_VMX_PROCBASED_CTLS2: u32 = 0x48B;
+pub const IA32_VMX_TRUE_PINBASED_CTLS: u32 = 0x48D;
+pub const IA32_VMX_TRUE_PROCBASED_CTLS: u32 = 0x48E;
+pub const IA32_VMX_TRUE_EXIT_CTLS: u32 = 0x48F;
+pub const IA32_VMX_TRUE_ENTRY_CTLS: u32 = 0x490;
+
+pub const IA32_EFER: u32 = 0xC000_0080;
+pub const IA32_FS_BASE: u32 = 0xC000_0100;
+pub const IA32_GS_BASE: u32 = 0xC000_0101;
+pub const IA32_SYSENTER_CS: u32 = 0x174;
+pub const IA32_SYSENTER_ESP: u32 = 0x175;
+pub const IA32_SYSENTER_EIP: u32 = 0x176;
+pub const IA32_PAT: u32 = 0x277;
+
+/// Descriptor-table register pointer (SGDT/SIDT).
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
+pub struct DescriptorTablePtr {
+    pub limit: u16,
+    pub base: u64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuidResult {
@@ -147,6 +172,148 @@ pub unsafe fn cli() {
     core::arch::asm!("cli", options(nomem, nostack, preserves_flags));
 }
 
+#[inline]
+pub unsafe fn read_cr3() -> u64 {
+    let v: u64;
+    core::arch::asm!("mov {}, cr3", out(reg) v, options(nomem, nostack, preserves_flags));
+    v
+}
+
+#[inline]
+pub unsafe fn read_dr7() -> u64 {
+    let v: u64;
+    core::arch::asm!("mov {}, dr7", out(reg) v, options(nomem, nostack, preserves_flags));
+    v
+}
+
+#[inline]
+pub unsafe fn read_rflags() -> u64 {
+    let v: u64;
+    core::arch::asm!("pushfq; pop {}", out(reg) v, options(nostack));
+    v
+}
+
+macro_rules! read_segment {
+    ($name:ident, $seg:literal) => {
+        #[inline]
+        pub unsafe fn $name() -> u16 {
+            let v: u16;
+            core::arch::asm!(
+                concat!("mov {0:x}, ", $seg),
+                out(reg) v,
+                options(nomem, nostack, preserves_flags)
+            );
+            v
+        }
+    };
+}
+
+read_segment!(read_cs, "cs");
+read_segment!(read_ss, "ss");
+read_segment!(read_ds, "ds");
+read_segment!(read_es, "es");
+read_segment!(read_fs, "fs");
+read_segment!(read_gs, "gs");
+
+#[inline]
+pub unsafe fn read_tr() -> u16 {
+    let v: u16;
+    core::arch::asm!("str {0:x}", out(reg) v, options(nomem, nostack, preserves_flags));
+    v
+}
+
+#[inline]
+pub unsafe fn read_ldtr() -> u16 {
+    let v: u16;
+    core::arch::asm!("sldt {0:x}", out(reg) v, options(nomem, nostack, preserves_flags));
+    v
+}
+
+#[inline]
+pub unsafe fn sgdt() -> DescriptorTablePtr {
+    let mut p = DescriptorTablePtr { limit: 0, base: 0 };
+    core::arch::asm!("sgdt [{}]", in(reg) &mut p, options(nostack, preserves_flags));
+    p
+}
+
+#[inline]
+pub unsafe fn sidt() -> DescriptorTablePtr {
+    let mut p = DescriptorTablePtr { limit: 0, base: 0 };
+    core::arch::asm!("sidt [{}]", in(reg) &mut p, options(nostack, preserves_flags));
+    p
+}
+
+/// Segment limit via LSL (0 if unusable/null).
+#[inline]
+pub unsafe fn segment_limit(selector: u16) -> u32 {
+    if selector & 0xFFFC == 0 {
+        return 0;
+    }
+    let mut limit: u32;
+    let mut ok: u8;
+    core::arch::asm!(
+        "lsl {0:e}, {1:x}",
+        "setz {2}",
+        out(reg) limit,
+        in(reg) selector,
+        out(reg_byte) ok,
+        options(nomem, nostack),
+    );
+    if ok == 0 {
+        0
+    } else {
+        limit
+    }
+}
+
+/// VMCS access-rights encoding from a GDT/LDT descriptor (SDM Vol. 3C).
+///
+/// SAFETY: `gdt_base` must point at a valid GDT; selector must be in-range or 0.
+pub unsafe fn segment_access_rights(gdt_base: u64, selector: u16) -> u32 {
+    if selector & 0xFFFC == 0 {
+        return 1 << 16; // unusable
+    }
+    let index = (selector >> 3) as u64;
+    let desc = (gdt_base as *const u64).add(index as usize);
+    let d0 = core::ptr::read_unaligned(desc);
+    // Byte 5 = access; bits 55:52 = G,D/B,L,AVL → VMCS AR[15:12].
+    let access = ((d0 >> 40) & 0xFF) as u32;
+    let ar = access | (((d0 >> 52) as u32 & 0x0F) << 12);
+    ar & 0xF0FF
+}
+
+/// Segment base from a legacy GDT descriptor (system descriptors use 16 bytes).
+pub unsafe fn segment_base(gdt_base: u64, selector: u16) -> u64 {
+    if selector & 0xFFFC == 0 {
+        return 0;
+    }
+    let index = (selector >> 3) as usize;
+    let desc = (gdt_base as *const u64).add(index);
+    let d0 = core::ptr::read_unaligned(desc);
+    let mut base = (d0 >> 16) & 0xFF_FFFF;
+    base |= (d0 >> 32) & 0xFF00_0000;
+    // TSS/LDT 64-bit system descriptors have base in next qword high half.
+    let type_s = ((d0 >> 40) & 0x1F) as u8;
+    let s_bit = ((d0 >> 44) & 1) as u8;
+    if s_bit == 0 && (type_s == 0x9 || type_s == 0xB || type_s == 0x2) {
+        let d1 = core::ptr::read_unaligned(desc.add(1));
+        base |= (d1 & 0xFFFF_FFFF) << 32;
+    }
+    base
+}
+
+/// Adjust VM-execution control word against allowed0/allowed1 in an MSR.
+pub unsafe fn adjust_vmx_controls(wanted: u32, msr: u32) -> u32 {
+    let v = rdmsr(msr);
+    let allowed0 = v as u32;
+    let allowed1 = (v >> 32) as u32;
+    (wanted | allowed0) & allowed1
+}
+
+pub unsafe fn true_ctl_msrs_supported() -> bool {
+    (rdmsr(IA32_VMX_BASIC) & (1u64 << 55)) != 0
+}
+
 #[cfg(test)]
 mod cpu_test {
     use super::*;
@@ -156,5 +323,6 @@ mod cpu_test {
         assert_eq!(IA32_FEATURE_CONTROL, 0x3A);
         assert_eq!(IA32_VMX_BASIC, 0x480);
         assert_eq!(CR4_VMXE, 1 << 13);
+        assert_eq!(IA32_EFER, 0xC000_0080);
     }
 }

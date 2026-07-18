@@ -42,9 +42,9 @@ jobs:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 
-  # Boot gate: M0 + M1.0 + M1.1 VMXON (KVM nested when /dev/kvm exists).
+  # Boot gate: M0 + M1.0 + M1.1 VMXON + M1.2 VMEXIT (KVM nested when /dev/kvm exists).
   qemu-boot:
-    name: QEMU boot gate (M0-M1.1)
+    name: QEMU boot gate (M0-M1.2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,11 +66,18 @@ jobs:
             echo 1 | sudo tee /sys/module/kvm_amd/parameters/nested 2>/dev/null || true
           fi
           ls -l /dev/kvm 2>&1 || true
-          if [[ -r /dev/kvm && -w /dev/kvm ]]; then
-            echo "KVM usable - requiring VMXON"
+          echo -n "host cpu flags vmx/svm: "
+          grep -E -o '\b(vmx|svm)\b' /proc/cpuinfo | sort -u | tr '\n' ' ' || true
+          echo
+          # Nested VT-x requires host CPUID.VMX; many cloud VMs expose KVM without it.
+          if [[ -r /dev/kvm && -w /dev/kvm ]] && grep -qw vmx /proc/cpuinfo; then
+            echo "KVM + host VMX — requiring VMXON + VMEXIT"
             REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
+          elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
+            echo "KVM without host VMX — boot gate allows VMXON-SKIP"
+            REQUIRE_VMX=0 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
           else
-            echo "KVM not usable - allowing VMXON-SKIP"
+            echo "KVM not usable — TCG boot gate allows VMXON-SKIP"
             REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
           fi
       - name: Upload serial log

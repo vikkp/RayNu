@@ -3,6 +3,7 @@
 # M0:   RAYNU-V-M0-BOOT-OK
 # M1.0: RAYNU-V-M1-EBS-OK
 # M1.1: RAYNU-V-M1-VMXON-OK (or SKIP without usable KVM unless REQUIRE_VMX=1)
+# M1.2: RAYNU-V-M1-VMEXIT-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -11,6 +12,7 @@ MARKER_M0="${MARKER_M0:-RAYNU-V-M0-BOOT-OK}"
 MARKER_M10="${MARKER_M10:-RAYNU-V-M1-EBS-OK}"
 MARKER_VMXON="${MARKER_VMXON:-RAYNU-V-M1-VMXON-OK}"
 MARKER_VMX_SKIP="${MARKER_VMX_SKIP:-RAYNU-V-M1-VMXON-SKIP}"
+MARKER_VMEXIT="${MARKER_VMEXIT:-RAYNU-V-M1-VMEXIT-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -19,9 +21,15 @@ kvm_usable() {
   [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]
 }
 
-# Auto-require VMX when KVM is usable unless overridden.
+# Nested Intel VT-x needs host CPUID.VMX — /dev/kvm alone is not enough
+# (GitHub-hosted runners often lack nested virtualization).
+host_has_vmx() {
+  grep -qw vmx /proc/cpuinfo 2>/dev/null
+}
+
+# Auto-require VMX when nested VT-x is actually available unless overridden.
 if [[ -z "${REQUIRE_VMX:-}" ]]; then
-  if kvm_usable && [[ "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
+  if kvm_usable && host_has_vmx && [[ "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
     REQUIRE_VMX=1
   else
     REQUIRE_VMX=0
@@ -70,6 +78,12 @@ done
 
 if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   echo "==> M1.1 VMXON marker found"
+  if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then
+    echo "==> M1.2 VMEXIT marker found"
+  else
+    echo "error: marker '$MARKER_VMEXIT' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -88,5 +102,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 + M1.0 + M1.1; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 + M1.0 + M1.1 + M1.2; qemu status=$QEMU_STATUS)"
 exit 0

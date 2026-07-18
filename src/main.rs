@@ -2,7 +2,8 @@
 //!
 //! M0: COM1 banner + boot marker.
 //! M1.0: ExitBootServices + frame pool.
-//! M1.1: VMXON / VMXOFF (requires VT-x; QEMU needs KVM nested).
+//! M1.1: VMXON (requires VT-x; QEMU needs KVM nested).
+//! M1.2: VMLAUNCH → one HLT VMEXIT → VMXOFF.
 
 #![no_main]
 #![no_std]
@@ -38,11 +39,11 @@ fn main() -> Status {
     boot::serial::write_str("boot: handoff pool remaining_pages=");
     write_dec(frames.remaining_pages());
     boot::serial::write_byte(b'\n');
-    boot::serial::write_line("boot: M1.0 complete — entering M1.1 VMXON");
+    boot::serial::write_line("boot: M1.0 complete — entering M1.1/M1.2 VMX");
 
-    run_m1_1_vmxon(&mut frames);
+    run_m1_vmx(&mut frames);
 
-    boot::serial::write_line("boot: M1.1 complete; awaiting M1.2 VMLAUNCH");
+    boot::serial::write_line("boot: M1 path finished without VMEXIT marker");
     boot::serial::qemu_exit_success();
 
     loop {
@@ -50,36 +51,87 @@ fn main() -> Status {
     }
 }
 
-fn run_m1_1_vmxon(frames: &mut boot::mem::FrameBump) {
+fn run_m1_vmx(frames: &mut boot::mem::FrameBump) {
     if !arch::cpu::vmx_supported() {
         boot::serial::write_line("boot: CPUID.VMX clear — need KVM nested / VT-x");
         boot::serial::write_line(vmx::M1_VMXON_SKIP_MARKER);
         return;
     }
 
-    let Some(region) = frames.alloc_frame() else {
+    let Some(vmxon_region) = frames.alloc_frame() else {
         boot::serial::write_line("boot: ERROR — no frame for VMXON region");
         return;
     };
 
     boot::serial::write_str("boot: VMXON region phys=0x");
-    write_hex(region.0);
+    write_hex(vmxon_region.0);
     boot::serial::write_byte(b'\n');
 
     let mut life = vmx::VmxLifecycle::new();
-    match life.enable(region.0) {
+    match life.enable(vmxon_region.0) {
         Ok(()) => {
             boot::serial::write_line(vmx::M1_VMXON_OK_MARKER);
             audit::integrity::record_event(audit::AuditEvent::VmxEnabled { vcpu_id: 0 });
-            match life.disable() {
-                Ok(()) => boot::serial::write_line("boot: VMXOFF ok"),
-                Err(_) => boot::serial::write_line("boot: ERROR — VMXOFF failed"),
-            }
+            run_m1_2_launch(frames, &mut life);
         }
         Err(e) => {
             boot::serial::write_str("boot: ERROR — VMXON failed: ");
             boot::serial::write_line(vmx_err_name(e));
         }
+    }
+}
+
+fn run_m1_2_launch(frames: &mut boot::mem::FrameBump, life: &mut vmx::VmxLifecycle) {
+    boot::serial::write_line("boot: M1.1 complete — entering M1.2 VMLAUNCH");
+
+    let Some(vmcs) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(guest_stack) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for guest stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(host_stack) = frames.alloc_frame() else {
+        boot::serial::write_line("boot: ERROR — no frame for host stack");
+        let _ = life.disable();
+        return;
+    };
+    // Optional control pages (used only if capability MSRs force the bits).
+    let msr_bitmap = frames.alloc_frame();
+    let io_a = frames.alloc_frame();
+    let io_b = frames.alloc_frame();
+
+    let launch_frames = vmx::LaunchFrames {
+        vmcs_phys: vmcs.0,
+        guest_stack_phys: guest_stack.0,
+        host_stack_phys: host_stack.0,
+        msr_bitmap_phys: msr_bitmap.map(|p| p.0),
+        io_bitmap_a_phys: io_a.map(|p| p.0),
+        io_bitmap_b_phys: io_b.map(|p| p.0),
+    };
+
+    boot::serial::write_str("boot: VMCS phys=0x");
+    write_hex(vmcs.0);
+    boot::serial::write_byte(b'\n');
+
+    // SAFETY: VMX root; frames exclusively owned by this bring-up path.
+    match unsafe { vmx::launch::run_hlt_guest(&launch_frames) } {
+        Ok(()) => {
+            // Success path transfers to HOST_RIP; falling through is a bug.
+            boot::serial::write_line("boot: ERROR — run_hlt_guest returned Ok");
+        }
+        Err(e) => {
+            boot::serial::write_str("boot: ERROR — M1.2 launch failed: ");
+            boot::serial::write_line(launch_err_name(e));
+        }
+    }
+
+    match life.disable() {
+        Ok(()) => boot::serial::write_line("boot: VMXOFF ok"),
+        Err(_) => boot::serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 }
 
@@ -90,6 +142,16 @@ fn vmx_err_name(e: vmx::VmxError) -> &'static str {
         vmx::VmxError::FeatureControl => "FeatureControl",
         vmx::VmxError::VmxonFailed => "VmxonFailed",
         vmx::VmxError::VmxoffFailed => "VmxoffFailed",
+    }
+}
+
+fn launch_err_name(e: vmx::LaunchError) -> &'static str {
+    match e {
+        vmx::LaunchError::PrepareFailed => "PrepareFailed",
+        vmx::LaunchError::ClearFailed => "ClearFailed",
+        vmx::LaunchError::PtrldFailed => "PtrldFailed",
+        vmx::LaunchError::VmwriteFailed => "VmwriteFailed",
+        vmx::LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }
 }
 
