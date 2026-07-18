@@ -59,13 +59,19 @@
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <h2 class="section__title">Where we are</h2>
+          <p class="milestone-kicker" data-reveal>Milestone · July 2026</p>
+          <h2 class="section__title">M0 achieved: it boots.</h2>
           <p class="section__lede">
-            That tagline is the north star — not a claim about today’s binary.
-            <strong>M0 is live:</strong> one EFI image boots under QEMU and
-            prints a COM1 marker in CI. VMX, EPT, and machine-checked proofs are
-            the work ahead.
+            <code>r640-hypervisor.efi</code> boots under QEMU+OVMF, prints the
+            RayNu-V banner on COM1, and emits
+            <code>RAYNU-V-M0-BOOT-OK</code> — verified in GitHub Actions and on a
+            Dell Latitude i5 laptop running Ubuntu. The north-star tagline is
+            still ahead of us; the boot gate is not.
           </p>
+          <pre class="ship-code milestone-log" data-reveal><code>RayNu-V r640-hypervisor — formally verified bare-metal hypervisor (M0 scaffold)
+pillars: [V] verified · [Z] single-binary · [D] iDRAC · [A] audit
+RAYNU-V-M0-BOOT-OK
+boot: early_init complete; awaiting M1 VMX bring-up</code></pre>
         </div>
       </section>
 
@@ -139,9 +145,9 @@
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            QEMU-first VMX bring-up, then EPT and a guest that runs real code —
-            with one small Verus-checked invariant on every commit. That artifact
-            matters more than the marketing.
+            M0 is closed. Next: own the UEFI memory map, then QEMU-first VMX
+            bring-up — then EPT and one small Verus-checked invariant on every
+            commit. That artifact matters more than the marketing.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
