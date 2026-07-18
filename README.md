@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 in progress** — UEFI binary boots under QEMU with a COM1 serial marker enforced in CI. Next: memory-map ownership, then QEMU-first VMX bring-up; EPT and the first machine-checked Verus invariant follow.
+**M0 achieved (July 2026)** — `r640-hypervisor.efi` boots under QEMU+OVMF, prints `RAYNU-V-M0-BOOT-OK` on COM1, and passes the gate in GitHub Actions and on a Dell Latitude i5 (Ubuntu). Next: memory-map ownership, then QEMU-first VMX bring-up; EPT and the first machine-checked Verus invariant follow.
 
 ## Repository Layout
 
