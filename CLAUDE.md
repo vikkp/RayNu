@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M2.3 closed** on Latitude; **M2.4 in flight**: IRQ inject via VM-entry interruption-info + guest ISR (`RAYNU-V-M2-IRQ-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Full M2 (APIC timer path, L2 EPT spec, L3 allocator) still open. See [docs/progress.md](docs/progress.md).
+**Through M2.4 closed** on Latitude/QEMU: boot → EBS → VMXON → EPT → guest store/loop/HLT → ADR-004 ownership → frame allocator → IRQ inject + guest ISR (`RAYNU-V-M2-IRQ-OK`). EPT ownership, frame allocator, and interrupt firewall are at **L1**. Full M2 (APIC timer / EOI, L2 EPT spec, L3 allocator) still open. See [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 
@@ -381,7 +381,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Per-Milestone (Gate)
 
 - Integration test: boot-to-halt (M0), VMLAUNCH/VMEXIT cycle (M1),
-  guest code execution through M2.3 (`./tools/qemu-boot-test.sh`),
+  guest code execution through M2.4 (`./tools/qemu-boot-test.sh`),
   Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
   (see [docs/progress.md](docs/progress.md))

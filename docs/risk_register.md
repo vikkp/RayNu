@@ -22,7 +22,7 @@ Derived from Production Roadmap v1.2. Severity: HIGH / MEDIUM-HIGH / MEDIUM / LO
 ## Hotspots
 
 - **M2** — EPT + interrupt virtualization (R01, R03). Primary schedule risk.
-  Partial mitigation landed: M2.2 ownership L1 + M2.3 allocator L1 + M2.4
+  Partial mitigation landed: M2.2–M2.4 on Latitude — ownership L1, allocator L1,
   software inject / guest ISR (see [progress.md](progress.md)).
   **R03 remains open** until APIC-timer / real external-IRQ path is gated.
 - **M3** — Real Linux kernels (R04). Secondary schedule risk.
