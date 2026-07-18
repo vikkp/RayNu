@@ -38,6 +38,15 @@ fi
 
 mkdir -p "$(dirname "$SERIAL_LOG")" "$ESP/EFI/BOOT"
 
+if [[ "$REQUIRE_VMX" == "1" ]] && [[ -f /sys/module/kvm_intel/parameters/enable_shadow_vmcs ]]; then
+  shadow="$(cat /sys/module/kvm_intel/parameters/enable_shadow_vmcs)"
+  echo "==> kvm_intel.enable_shadow_vmcs=${shadow}"
+  if [[ "$shadow" != "0" && "$shadow" != "N" && "$shadow" != "n" ]]; then
+    echo "warning: shadow VMCS is ON — L1 VMWRITE often fails with insn error 12" >&2
+    echo "warning: fix: sudo $ROOT/tools/enable-nested-kvm.sh" >&2
+  fi
+fi
+
 echo "==> Building EFI"
 "$ROOT/tools/build.sh"
 
