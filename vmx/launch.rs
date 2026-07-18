@@ -17,7 +17,7 @@ use crate::arch::cpu::{
 use crate::boot::serial;
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
-use crate::vmx::ops::{self, VmcsOpError};
+use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
 pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
@@ -113,12 +113,22 @@ unsafe fn seg_ar(gdt_base: u64, sel: u16) -> u32 {
     ar_busy_tr(cpu::segment_access_rights(gdt_base, sel))
 }
 
+fn fail_kind_name(k: VmFailKind) -> &'static str {
+    match k {
+        VmFailKind::Invalid => "Invalid(CF=no-current-VMCS)",
+        VmFailKind::Valid => "Valid(ZF=insn-error)",
+        VmFailKind::Both => "Both(CF+ZF)",
+    }
+}
+
 unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
-    match ops::vmwrite(field, value) {
+    match ops::vmwrite_detailed(field, value) {
         Ok(()) => Ok(()),
-        Err(_) => {
+        Err(kind) => {
             serial::write_str("boot: VMWRITE failed field=0x");
             write_hex_u32(field as u32);
+            serial::write_str(" kind=");
+            serial::write_str(fail_kind_name(kind));
             serial::write_byte(b'\n');
             Err(LaunchError::VmwriteFailed { field })
         }
@@ -134,7 +144,8 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
     prepare_vmcs_region(frames.vmcs_phys)?;
 
     ops::vmclear(frames.vmcs_phys).map_err(|_| LaunchError::ClearFailed)?;
-    ops::vmptrld(frames.vmcs_phys).map_err(|_| LaunchError::PtrldFailed)?;
+    // VMPTRLD is deferred until after all RDMSR/serial gather work inside
+    // setup_vmcs (nested VT-x can drop current-VMCS across those exits).
 
     setup_vmcs(frames)?;
 
@@ -160,6 +171,8 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
 }
 
 unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
+    // ── Phase 1: gather everything that may VM-exit under nested VT-x ──
+    // (RDMSR, serial, GDT walks). No current-VMCS required yet.
     let use_true = true_ctl_msrs_supported();
 
     let pin_msr = if use_true {
@@ -185,64 +198,36 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
     let pin = adjust_vmx_controls(0, pin_msr);
     let primary = adjust_vmx_controls(CPU_BASED_HLT_EXITING, proc_msr);
-    // Request 64-bit host/guest; EFER/PAT bits stick only if allowed1 permits
-    // (or allowed0 forces). Nested VT-x often strips EFER/PAT — do not VMWRITE
-    // those guest/host state fields unless the final control word keeps them.
     let exit_wanted =
         VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER;
     let entry_wanted = VM_ENTRY_IA32E_MODE | VM_ENTRY_LOAD_IA32_EFER;
     let exit_ctls = adjust_vmx_controls(exit_wanted, exit_msr);
     let entry_ctls = adjust_vmx_controls(entry_wanted, entry_msr);
 
-    serial::write_str("boot: VMCS ctls pin=0x");
-    write_hex_u32(pin);
-    serial::write_str(" primary=0x");
-    write_hex_u32(primary);
-    serial::write_str(" exit=0x");
-    write_hex_u32(exit_ctls);
-    serial::write_str(" entry=0x");
-    write_hex_u32(entry_ctls);
-    serial::write_byte(b'\n');
+    let secondary = if primary & CPU_BASED_ACTIVATE_SECONDARY != 0 {
+        Some(adjust_vmx_controls(0, IA32_VMX_PROCBASED_CTLS2))
+    } else {
+        None
+    };
 
-    vw(PIN_BASED_VM_EXEC_CONTROL, pin as u64)?;
-    vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
-    vw(VM_EXIT_CONTROLS, exit_ctls as u64)?;
-    vw(VM_ENTRY_CONTROLS, entry_ctls as u64)?;
-    vw(EXCEPTION_BITMAP, 0)?;
-    vw(PAGE_FAULT_ERROR_CODE_MASK, 0)?;
-    vw(PAGE_FAULT_ERROR_CODE_MATCH, 0)?;
-    vw(CR3_TARGET_COUNT, 0)?;
-    vw(VM_EXIT_MSR_STORE_COUNT, 0)?;
-    vw(VM_EXIT_MSR_LOAD_COUNT, 0)?;
-    vw(VM_ENTRY_MSR_LOAD_COUNT, 0)?;
-    vw(VM_ENTRY_INTERRUPTION_INFO, 0)?;
-    vw(CR0_GUEST_HOST_MASK, 0)?;
-    vw(CR4_GUEST_HOST_MASK, 0)?;
-    vw(CR0_READ_SHADOW, 0)?;
-    vw(CR4_READ_SHADOW, 0)?;
-    vw(VMCS_LINK_POINTER, !0u64)?;
-
-    if primary & CPU_BASED_ACTIVATE_SECONDARY != 0 {
-        let secondary = adjust_vmx_controls(0, IA32_VMX_PROCBASED_CTLS2);
-        vw(SECONDARY_VM_EXEC_CONTROL, secondary as u64)?;
-    }
-
-    if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
+    let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
         let bmp = frames.msr_bitmap_phys.ok_or(LaunchError::PrepareFailed)?;
         core::ptr::write_bytes(bmp as *mut u8, 0, 4096);
-        vw(MSR_BITMAP, bmp)?;
-    }
+        Some(bmp)
+    } else {
+        None
+    };
 
-    if primary & CPU_BASED_USE_IO_BITMAPS != 0 {
+    let io_bitmaps = if primary & CPU_BASED_USE_IO_BITMAPS != 0 {
         let a = frames.io_bitmap_a_phys.ok_or(LaunchError::PrepareFailed)?;
         let b = frames.io_bitmap_b_phys.ok_or(LaunchError::PrepareFailed)?;
         core::ptr::write_bytes(a as *mut u8, 0, 4096);
         core::ptr::write_bytes(b as *mut u8, 0, 4096);
-        vw(IO_BITMAP_A, a)?;
-        vw(IO_BITMAP_B, b)?;
-    }
+        Some((a, b))
+    } else {
+        None
+    };
 
-    // Host + guest share current CR0/CR3/CR4/EFER (no EPT).
     let cr0 = cpu::read_cr0();
     let cr3 = cpu::read_cr3();
     let cr4 = cpu::read_cr4();
@@ -268,7 +253,107 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let sysenter_esp = cpu::rdmsr(IA32_SYSENTER_ESP);
     let sysenter_eip = cpu::rdmsr(IA32_SYSENTER_EIP);
 
-    // ── Guest segments ──────────────────────────────────────────────
+    let es_base = cpu::segment_base(gdt_base, es);
+    let cs_base = cpu::segment_base(gdt_base, cs);
+    let ss_base = cpu::segment_base(gdt_base, ss);
+    let ds_base = cpu::segment_base(gdt_base, ds);
+    let ldtr_base = cpu::segment_base(gdt_base, ldtr);
+    let tr_base = cpu::segment_base(gdt_base, tr);
+
+    let es_limit = cpu::segment_limit(es) as u64;
+    let cs_limit = cpu::segment_limit(cs) as u64;
+    let ss_limit = cpu::segment_limit(ss) as u64;
+    let ds_limit = cpu::segment_limit(ds) as u64;
+    let fs_limit = cpu::segment_limit(fs) as u64;
+    let gs_limit = cpu::segment_limit(gs) as u64;
+    let ldtr_limit = cpu::segment_limit(ldtr) as u64;
+    let tr_limit = cpu::segment_limit(tr) as u64;
+
+    let es_ar = seg_ar(gdt_base, es) as u64;
+    let cs_ar = seg_ar(gdt_base, cs) as u64;
+    let ss_ar = seg_ar(gdt_base, ss) as u64;
+    let ds_ar = seg_ar(gdt_base, ds) as u64;
+    let fs_ar = seg_ar(gdt_base, fs) as u64;
+    let gs_ar = seg_ar(gdt_base, gs) as u64;
+    let ldtr_ar = seg_ar(gdt_base, ldtr) as u64;
+    let tr_ar = seg_ar(gdt_base, tr) as u64;
+
+    let need_efer = (exit_ctls & (VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER)) != 0
+        || (entry_ctls & VM_ENTRY_LOAD_IA32_EFER) != 0;
+    let need_pat = (exit_ctls & (VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT)) != 0;
+    let need_debugctl = (exit_ctls & VM_EXIT_SAVE_DEBUG_CONTROLS) != 0
+        || (entry_ctls & VM_ENTRY_LOAD_DEBUG_CONTROLS) != 0;
+
+    let guest_rip = guest_hlt_entry as *const () as u64;
+    let guest_rsp = frames.guest_stack_phys + 4096;
+    let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
+    let host_rip = vmexit_landing as *const () as u64;
+
+    // Host TR load on VMEXIT requires a busy TSS descriptor in the GDT.
+    ensure_tr_busy(gdt_base, tr);
+
+    serial::write_str("boot: VMCS ctls pin=0x");
+    write_hex_u32(pin);
+    serial::write_str(" primary=0x");
+    write_hex_u32(primary);
+    serial::write_str(" exit=0x");
+    write_hex_u32(exit_ctls);
+    serial::write_str(" entry=0x");
+    write_hex_u32(entry_ctls);
+    serial::write_byte(b'\n');
+
+    // ── Phase 2: VMPTRLD + VMWRITE burst (no RDMSR / serial / I/O) ──
+    match ops::vmptrld_and_vmwrite(
+        frames.vmcs_phys,
+        PIN_BASED_VM_EXEC_CONTROL,
+        pin as u64,
+    ) {
+        Ok(()) => {}
+        Err(kind) => {
+            serial::write_str("boot: VMPTRLD+VMWRITE(pin) failed kind=");
+            serial::write_str(fail_kind_name(kind));
+            serial::write_byte(b'\n');
+            if let Ok(cur) = ops::vmptrst() {
+                serial::write_str("boot: VMPTRST=0x");
+                write_hex_u64(cur);
+                serial::write_str(" expected=0x");
+                write_hex_u64(frames.vmcs_phys);
+                serial::write_byte(b'\n');
+            }
+            return Err(LaunchError::VmwriteFailed {
+                field: PIN_BASED_VM_EXEC_CONTROL,
+            });
+        }
+    }
+
+    vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
+    vw(VM_EXIT_CONTROLS, exit_ctls as u64)?;
+    vw(VM_ENTRY_CONTROLS, entry_ctls as u64)?;
+    vw(EXCEPTION_BITMAP, 0)?;
+    vw(PAGE_FAULT_ERROR_CODE_MASK, 0)?;
+    vw(PAGE_FAULT_ERROR_CODE_MATCH, 0)?;
+    vw(CR3_TARGET_COUNT, 0)?;
+    vw(VM_EXIT_MSR_STORE_COUNT, 0)?;
+    vw(VM_EXIT_MSR_LOAD_COUNT, 0)?;
+    vw(VM_ENTRY_MSR_LOAD_COUNT, 0)?;
+    vw(VM_ENTRY_INTERRUPTION_INFO, 0)?;
+    vw(CR0_GUEST_HOST_MASK, 0)?;
+    vw(CR4_GUEST_HOST_MASK, 0)?;
+    vw(CR0_READ_SHADOW, 0)?;
+    vw(CR4_READ_SHADOW, 0)?;
+    vw(VMCS_LINK_POINTER, !0u64)?;
+
+    if let Some(sec) = secondary {
+        vw(SECONDARY_VM_EXEC_CONTROL, sec as u64)?;
+    }
+    if let Some(bmp) = msr_bitmap {
+        vw(MSR_BITMAP, bmp)?;
+    }
+    if let Some((a, b)) = io_bitmaps {
+        vw(IO_BITMAP_A, a)?;
+        vw(IO_BITMAP_B, b)?;
+    }
+
     vw(GUEST_ES_SELECTOR, es as u64)?;
     vw(GUEST_CS_SELECTOR, cs as u64)?;
     vw(GUEST_SS_SELECTOR, ss as u64)?;
@@ -278,65 +363,54 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_LDTR_SELECTOR, ldtr as u64)?;
     vw(GUEST_TR_SELECTOR, tr as u64)?;
 
-    vw(GUEST_ES_BASE, cpu::segment_base(gdt_base, es))?;
-    vw(GUEST_CS_BASE, cpu::segment_base(gdt_base, cs))?;
-    vw(GUEST_SS_BASE, cpu::segment_base(gdt_base, ss))?;
-    vw(GUEST_DS_BASE, cpu::segment_base(gdt_base, ds))?;
+    vw(GUEST_ES_BASE, es_base)?;
+    vw(GUEST_CS_BASE, cs_base)?;
+    vw(GUEST_SS_BASE, ss_base)?;
+    vw(GUEST_DS_BASE, ds_base)?;
     vw(GUEST_FS_BASE, fs_base)?;
     vw(GUEST_GS_BASE, gs_base)?;
-    vw(GUEST_LDTR_BASE, cpu::segment_base(gdt_base, ldtr))?;
-    vw(GUEST_TR_BASE, cpu::segment_base(gdt_base, tr))?;
+    vw(GUEST_LDTR_BASE, ldtr_base)?;
+    vw(GUEST_TR_BASE, tr_base)?;
     vw(GUEST_GDTR_BASE, gdtr.base)?;
     vw(GUEST_IDTR_BASE, idtr.base)?;
 
-    vw(GUEST_ES_LIMIT, cpu::segment_limit(es) as u64)?;
-    vw(GUEST_CS_LIMIT, cpu::segment_limit(cs) as u64)?;
-    vw(GUEST_SS_LIMIT, cpu::segment_limit(ss) as u64)?;
-    vw(GUEST_DS_LIMIT, cpu::segment_limit(ds) as u64)?;
-    vw(GUEST_FS_LIMIT, cpu::segment_limit(fs) as u64)?;
-    vw(GUEST_GS_LIMIT, cpu::segment_limit(gs) as u64)?;
-    vw(GUEST_LDTR_LIMIT, cpu::segment_limit(ldtr) as u64)?;
-    vw(GUEST_TR_LIMIT, cpu::segment_limit(tr) as u64)?;
+    vw(GUEST_ES_LIMIT, es_limit)?;
+    vw(GUEST_CS_LIMIT, cs_limit)?;
+    vw(GUEST_SS_LIMIT, ss_limit)?;
+    vw(GUEST_DS_LIMIT, ds_limit)?;
+    vw(GUEST_FS_LIMIT, fs_limit)?;
+    vw(GUEST_GS_LIMIT, gs_limit)?;
+    vw(GUEST_LDTR_LIMIT, ldtr_limit)?;
+    vw(GUEST_TR_LIMIT, tr_limit)?;
     vw(GUEST_GDTR_LIMIT, gdtr.limit as u64)?;
     vw(GUEST_IDTR_LIMIT, idtr.limit as u64)?;
 
-    vw(GUEST_ES_ACCESS_RIGHTS, seg_ar(gdt_base, es) as u64)?;
-    vw(GUEST_CS_ACCESS_RIGHTS, seg_ar(gdt_base, cs) as u64)?;
-    vw(GUEST_SS_ACCESS_RIGHTS, seg_ar(gdt_base, ss) as u64)?;
-    vw(GUEST_DS_ACCESS_RIGHTS, seg_ar(gdt_base, ds) as u64)?;
-    vw(GUEST_FS_ACCESS_RIGHTS, seg_ar(gdt_base, fs) as u64)?;
-    vw(GUEST_GS_ACCESS_RIGHTS, seg_ar(gdt_base, gs) as u64)?;
-    vw(GUEST_LDTR_ACCESS_RIGHTS, seg_ar(gdt_base, ldtr) as u64)?;
-    vw(GUEST_TR_ACCESS_RIGHTS, seg_ar(gdt_base, tr) as u64)?;
+    vw(GUEST_ES_ACCESS_RIGHTS, es_ar)?;
+    vw(GUEST_CS_ACCESS_RIGHTS, cs_ar)?;
+    vw(GUEST_SS_ACCESS_RIGHTS, ss_ar)?;
+    vw(GUEST_DS_ACCESS_RIGHTS, ds_ar)?;
+    vw(GUEST_FS_ACCESS_RIGHTS, fs_ar)?;
+    vw(GUEST_GS_ACCESS_RIGHTS, gs_ar)?;
+    vw(GUEST_LDTR_ACCESS_RIGHTS, ldtr_ar)?;
+    vw(GUEST_TR_ACCESS_RIGHTS, tr_ar)?;
 
     vw(GUEST_CR0, cr0)?;
     vw(GUEST_CR3, cr3)?;
     vw(GUEST_CR4, cr4)?;
     vw(GUEST_DR7, dr7)?;
 
-    let need_efer = (exit_ctls & (VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER)) != 0
-        || (entry_ctls & VM_ENTRY_LOAD_IA32_EFER) != 0;
     if need_efer {
         vw(GUEST_IA32_EFER, efer)?;
     }
-
-    let need_pat = (exit_ctls & (VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT)) != 0;
     if need_pat {
         vw(GUEST_IA32_PAT, pat)?;
     }
-
-    let need_debugctl = (exit_ctls & VM_EXIT_SAVE_DEBUG_CONTROLS) != 0
-        || (entry_ctls & VM_ENTRY_LOAD_DEBUG_CONTROLS) != 0;
     if need_debugctl {
-        // Field exists when save/load debug controls is allowed; value 0 is fine.
         vw(GUEST_IA32_DEBUGCTL, 0)?;
     }
 
-    // Host TR load on VMEXIT requires a busy TSS descriptor in the GDT.
-    ensure_tr_busy(gdt_base, tr);
-
-    vw(GUEST_RSP, frames.guest_stack_phys + 4096)?;
-    vw(GUEST_RIP, guest_hlt_entry as *const () as u64)?;
+    vw(GUEST_RSP, guest_rsp)?;
+    vw(GUEST_RIP, guest_rip)?;
     vw(GUEST_RFLAGS, 0x2)?;
     vw(GUEST_ACTIVITY_STATE, 0)?;
     vw(GUEST_INTERRUPTIBILITY_STATE, 0)?;
@@ -345,8 +419,6 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_IA32_SYSENTER_ESP, sysenter_esp)?;
     vw(GUEST_IA32_SYSENTER_EIP, sysenter_eip)?;
 
-    // ── Host state ──────────────────────────────────────────────────
-    // Host selectors: RPL/TI must be 0 for CS/TR; ES/DS/SS/FS/GS TI=0.
     vw(HOST_ES_SELECTOR, (es & 0xF8) as u64)?;
     vw(HOST_CS_SELECTOR, (cs & 0xF8) as u64)?;
     vw(HOST_SS_SELECTOR, (ss & 0xF8) as u64)?;
@@ -360,7 +432,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(HOST_CR4, cr4)?;
     vw(HOST_FS_BASE, fs_base)?;
     vw(HOST_GS_BASE, gs_base)?;
-    vw(HOST_TR_BASE, cpu::segment_base(gdt_base, tr))?;
+    vw(HOST_TR_BASE, tr_base)?;
     vw(HOST_GDTR_BASE, gdtr.base)?;
     vw(HOST_IDTR_BASE, idtr.base)?;
     vw(HOST_IA32_SYSENTER_CS, sysenter_cs as u64)?;
@@ -374,9 +446,8 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         vw(HOST_IA32_PAT, pat)?;
     }
 
-    let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
     vw(HOST_RSP, host_rsp)?;
-    vw(HOST_RIP, vmexit_landing as *const () as u64)?;
+    vw(HOST_RIP, host_rip)?;
 
     Ok(())
 }
