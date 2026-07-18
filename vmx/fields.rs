@@ -60,6 +60,8 @@ pub const SECONDARY_VM_EXEC_CONTROL: u64 = 0x0000_401E;
 // ── 32-bit read-only data ───────────────────────────────────────────
 pub const VM_INSTRUCTION_ERROR: u64 = 0x0000_4400;
 pub const EXIT_REASON: u64 = 0x0000_4402;
+/// VM-exit interruption information (valid when ack-interrupt-on-exit).
+pub const VM_EXIT_INTR_INFO: u64 = 0x0000_4404;
 pub const EXIT_QUALIFICATION: u64 = 0x0000_6400;
 
 // ── 32-bit guest state ──────────────────────────────────────────────
@@ -145,6 +147,8 @@ pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
 
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
+/// Acknowledge interrupt on exit (vector in VM_EXIT_INTR_INFO).
+pub const VM_EXIT_ACK_INTERRUPT_ON_EXIT: u32 = 1 << 15;
 pub const VM_EXIT_SAVE_IA32_EFER: u32 = 1 << 20;
 pub const VM_EXIT_LOAD_IA32_EFER: u32 = 1 << 21;
 pub const VM_ENTRY_IA32E_MODE: u32 = 1 << 9;

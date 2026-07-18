@@ -22,9 +22,9 @@ Derived from Production Roadmap v1.2. Severity: HIGH / MEDIUM-HIGH / MEDIUM / LO
 ## Hotspots
 
 - **M2** — EPT + interrupt virtualization (R01, R03). Primary schedule risk.
-  Partial mitigation landed: M2.2–M2.4 on Latitude — ownership L1, allocator L1,
-  software inject / guest ISR (see [progress.md](progress.md)).
-  **R03 remains open** until APIC-timer / real external-IRQ path is gated.
+  Mitigation through M2.5: ownership L1, allocator L1, software inject, and
+  LAPIC one-shot → external-IRQ VMEXIT → EOI → re-inject (see [progress.md](progress.md)).
+  **R03 softens** once Latitude confirms `RAYNU-V-M2-TIMER-OK`.
 - **M3** — Real Linux kernels (R04). Secondary schedule risk.
 - **EPT proof** — Spec M2, partial L3 M4, full incl. migration M6 (R01, R05, R08, R09).
 

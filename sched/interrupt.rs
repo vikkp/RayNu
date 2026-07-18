@@ -1,15 +1,18 @@
-//! Interrupt injection firewall (M2.4).
+//! Interrupt injection firewall (M2.4 / M2.5).
 //!
 //! Pillar: [V] · Proven Core · VERIFICATION: L1
 //!
 //! Packs VM-entry interruption-information values for software-injected
-//! external interrupts. Real host IRQ → VMEXIT (APIC timer) is deferred;
-//! this gate proves vector validation + guest ISR delivery via VMRESUME.
+//! external interrupts. M2.5 adds host LAPIC-timer → external-interrupt
+//! VMEXIT → EOI → re-inject through this same path.
 
 /// COM1 marker when the injected guest ISR runs and HLTs (M2.4 gate).
 pub const M2_IRQ_OK_MARKER: &str = "RAYNU-V-M2-IRQ-OK";
 
-/// Bring-up vector injected on the first HLT VMEXIT.
+/// COM1 marker when LAPIC timer → VMEXIT → EOI → re-inject ISR HLTs (M2.5).
+pub const M2_TIMER_OK_MARKER: &str = "RAYNU-V-M2-TIMER-OK";
+
+/// Bring-up vector for inject and LAPIC timer LVT.
 pub const M2_IRQ_VECTOR: u32 = 0x21;
 
 /// VM-entry interruption type: external interrupt (SDM Vol. 3C).
