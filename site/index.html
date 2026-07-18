@@ -60,15 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.3: earlyprintk.</h2>
+          <h2 class="section__title">M3.3 closed. Next: guest timer.</h2>
           <p class="section__lede">
-            After the bring-up guest, enter a 64-bit proto-kernel with
-            <code>RSI=boot_params</code>; it verifies HdrS and prints a
-            Linux-style early line. Marker <code>RAYNU-V-M3-EARLY-OK</code>.
+            Latitude boot gate passed through proto-kernel early serial
+            (<code>RAYNU-V-M3-EARLY-OK</code>). Next: M3.4 guest-facing timer
+            path — <code>RAYNU-V-M3-GTIMER-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>Linux version RayNu-V-proto (early console)
-RAYNU-V-M3-EARLY-OK
-boot: M3.3 complete</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-EARLY-OK
+boot: M3.3 complete
+==&gt; Boot gate PASSED (M0 → M3.3)</code></pre>
         </div>
       </section>
 
@@ -142,8 +142,8 @@ boot: M3.3 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Current gate: earlyprintk (M3.3). Next: guest timer / shell —
-            see <code>docs/m3_plan.md</code>.
+            M3.3 is closed on Latitude. Current gate: guest timer (M3.4),
+            then shell — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

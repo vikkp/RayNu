@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.2: [progress.md](progress.md).
+Lived gates through M3.3: [progress.md](progress.md).
 
 ---
 
@@ -75,7 +75,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-LOAD-OK`). Synthetic stubs; real bzI
 - Serial shows Linux banner / earlyprintk
 - **First real Linux signal on Latitude**
 
-Status: **in flight** — 64-bit **proto-kernel** (HdrS check + Linux-style early line via COM1). Real bzImage still next.
+Status: **closed on Latitude** (`RAYNU-V-M3-EARLY-OK`). Proto-kernel; real bzImage still deferred.
 
 ### M3.4 — Guest timer — `RAYNU-V-M3-GTIMER-OK`
 
@@ -127,9 +127,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.2~~ — done.
-2. **M3.3** — 64-bit entry + early serial (schedule checkpoint).
-3. M3.4 guest timer → M3.5 shell.
+1. ~~Plan / M3.0–M3.3~~ — done (proto-kernel early path).
+2. **M3.4** — guest-facing timer after proto entry.
+3. M3.5 shell / init marker.
 
 ---
 
