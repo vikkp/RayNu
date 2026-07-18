@@ -974,7 +974,7 @@ fn finish_boot(ok: bool) -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M3.1 complete");
+    serial::write_line("boot: M3.2 complete");
     if ok {
         serial::qemu_exit_success();
     } else {

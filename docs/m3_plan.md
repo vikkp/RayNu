@@ -66,6 +66,8 @@ Status: **closed on Latitude** (`RAYNU-V-M3-CPUID-OK`).
 - Host unit tests for boot-protocol packing
 - QEMU: HV prints load addresses + setup magic (no entry yet)
 
+Status: **in flight** (synthetic stub assets; real bzImage at M3.3).
+
 ### M3.3 — Early printk — `RAYNU-V-M3-EARLY-OK`
 
 - Jump to 64-bit kernel entry with valid `boot_params`

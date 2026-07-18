@@ -37,6 +37,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.2** kernel load (`RAYNU-V-M3-LOAD-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for M3.2 (`RAYNU-V-M3-LOAD-OK`).
 2. M3.3 earlyprintk → M3.4 guest timer → M3.5 shell.
 3. Verus L3 proofs for EPT / allocator (parallel).

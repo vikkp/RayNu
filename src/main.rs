@@ -12,13 +12,14 @@
 //! M2.5: LAPIC timer → external-IRQ VMEXIT → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`).
 //! M3.0: guest COM1 OUT → I/O VMEXIT (`RAYNU-V-M3-IO-OK`).
 //! M3.1: guest CPUID filter hide VMX (`RAYNU-V-M3-CPUID-OK`).
+//! M3.2: synthetic kernel/initrd + `boot_params` load (`RAYNU-V-M3-LOAD-OK`).
 
 #![no_main]
 #![no_std]
 
 extern crate alloc;
 
-use r640_hypervisor::{arch, audit, boot, memory, vmx, BOOT_BANNER};
+use r640_hypervisor::{arch, audit, boot, guest, memory, vmx, BOOT_BANNER};
 use uefi::prelude::*;
 use uefi::println;
 
@@ -207,6 +208,34 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
         Err(_) => {
             boot::serial::write_line("boot: ERROR — ADR-004 ownership selftest failed");
+            let _ = life.disable();
+            return;
+        }
+    }
+
+    // M3.2: pack boot_params + place synthetic kernel/initrd (no entry yet).
+    match guest::load_synthetic_guest(alloc) {
+        Ok(info) => {
+            boot::serial::write_str("boot: load kernel=0x");
+            write_hex(info.kernel_phys);
+            boot::serial::write_str(" initrd=0x");
+            write_hex(info.initrd_phys);
+            boot::serial::write_str(" boot_params=0x");
+            write_hex(info.boot_params_phys);
+            boot::serial::write_str(" cmdline=0x");
+            write_hex(info.cmdline_phys);
+            boot::serial::write_str(" magic=0x");
+            write_hex(info.setup_magic as u64);
+            boot::serial::write_byte(b'\n');
+            if info.setup_magic != guest::SETUP_HEADER_MAGIC {
+                boot::serial::write_line("boot: ERROR — setup header magic mismatch");
+                let _ = life.disable();
+                return;
+            }
+            boot::serial::write_line(guest::M3_LOAD_OK_MARKER);
+        }
+        Err(()) => {
+            boot::serial::write_line("boot: ERROR — M3.2 synthetic load failed");
             let _ = life.disable();
             return;
         }
