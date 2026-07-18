@@ -210,14 +210,20 @@ impl Default for EptMap {
 
 /// Claim bring-up guest pages and prove exclusive ownership (ADR-004).
 ///
-/// Registers `code_phys` and `stack_phys` for [`M2_BRINGUP_GUEST_ID`], then
-/// asserts that a second guest cannot alias the same HPA.
+/// Registers `code_phys`, `stack_phys`, and `idt_phys` for
+/// [`M2_BRINGUP_GUEST_ID`], then asserts that a second guest cannot alias
+/// the same HPA.
 ///
 /// Returns `Ok(())` and sets the VMEXIT marker latch on success.
-pub fn run_ownership_selftest(code_phys: u64, stack_phys: u64) -> Result<(), EptError> {
+pub fn run_ownership_selftest(
+    code_phys: u64,
+    stack_phys: u64,
+    idt_phys: u64,
+) -> Result<(), EptError> {
     let mut map = EptMap::new();
     let code = PhysFrame::from_phys(code_phys);
     let stack = PhysFrame::from_phys(stack_phys);
+    let idt = PhysFrame::from_phys(idt_phys);
 
     map.map(
         M2_BRINGUP_GUEST_ID,
@@ -229,6 +235,12 @@ pub fn run_ownership_selftest(code_phys: u64, stack_phys: u64) -> Result<(), Ept
         M2_BRINGUP_GUEST_ID,
         stack_phys,
         stack,
+        EptPermissions::READ_WRITE,
+    )?;
+    map.map(
+        M2_BRINGUP_GUEST_ID,
+        idt_phys,
+        idt,
         EptPermissions::READ_WRITE,
     )?;
 
@@ -245,7 +257,10 @@ pub fn run_ownership_selftest(code_phys: u64, stack_phys: u64) -> Result<(), Ept
     if map.owner_of(stack) != Some(M2_BRINGUP_GUEST_ID) {
         return Err(EptError::Invariant);
     }
-    if !map.check_invariants() || map.len() != 2 {
+    if map.owner_of(idt) != Some(M2_BRINGUP_GUEST_ID) {
+        return Err(EptError::Invariant);
+    }
+    if !map.check_invariants() || map.len() != 3 {
         return Err(EptError::Invariant);
     }
 

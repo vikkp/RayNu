@@ -10,5 +10,8 @@ pub mod msr_firewall;
 pub mod scheduler;
 pub mod vcpu;
 
+pub use interrupt::{
+    prepare_external_inject, validate_vector, InjectError, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR,
+};
 pub use scheduler::{CreditScheduler, SchedError};
 pub use vcpu::{Vcpu, VcpuState};

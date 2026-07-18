@@ -1,14 +1,15 @@
-//! M1.2 / M2.x — VMLAUNCH under EPT: store + loop + HLT + ownership gate.
+//! M1.2 / M2.x — VMLAUNCH under EPT: store + loop + HLT + IRQ inject.
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
-//! VERIFICATION: L1 — control words + EPTP + ownership registry
+//! VERIFICATION: L1 — control words + EPTP + ownership + inject firewall
 //!
 //! Guest shares host CR3 (UEFI identity paging). EPT identity-maps the first
 //! 4 GiB so GPA→HPA is 1:1. Guest RIP points at an owned page that stores a
-//! magic value, runs a short increment loop, then `hlt`. M2.2 requires the
-//! ADR-004 ownership self-test latch before emitting `RAYNU-V-M2-OWN-OK`.
-//! M2.3 requires the frame-allocator self-test latch for `RAYNU-V-M2-ALLOC-OK`.
+//! magic value, runs a short increment loop, then `hlt`. On the first HLT
+//! exit the host injects vector [`crate::sched::M2_IRQ_VECTOR`] via VM-entry
+//! interruption-info and VMRESUMEs; the guest ISR acks and HLTs again.
+//! Markers: OWN (M2.2), ALLOC (M2.3), IRQ (M2.4).
 
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
@@ -19,11 +20,15 @@ use crate::arch::cpu::{
 };
 use crate::boot::serial;
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
-use crate::memory::ept_hw::{self, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
+use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
+use crate::sched::interrupt::{self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
+
+/// 0 = waiting for first HLT; 1 = waiting for ISR HLT after inject.
+static mut EXIT_PHASE: u8 = 0;
 
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
 pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
@@ -55,7 +60,7 @@ impl From<VmcsOpError> for LaunchError {
     }
 }
 
-/// Physical frames needed for the M1.2/M2.0 HLT guest under EPT.
+/// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
 pub struct LaunchFrames {
     pub vmcs_phys: u64,
     pub guest_stack_phys: u64,
@@ -66,8 +71,10 @@ pub struct LaunchFrames {
     pub gdt_phys: u64,
     /// Packed EPTP (PML4 already built).
     pub eptp: u64,
-    /// Guest code page (contains `hlt`); identity-mapped via EPT + host CR3.
+    /// Guest code page (store/loop/HLT + ISR); identity-mapped via EPT + host CR3.
     pub guest_code_phys: u64,
+    /// Guest IDT page (one interrupt gate for the inject vector).
+    pub guest_idt_phys: u64,
     /// Optional MSR bitmap (only if primary controls force USE_MSR_BITMAPS).
     pub msr_bitmap_phys: Option<u64>,
     pub io_bitmap_a_phys: Option<u64>,
@@ -252,7 +259,7 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
     setup_vmcs(frames)?;
 
-    serial::write_line("boot: VMLAUNCH → guest store+loop+HLT (EPT)");
+    serial::write_line("boot: VMLAUNCH → guest store+loop+HLT + IRQ inject (EPT)");
     match ops::vmlaunch() {
         Ok(()) => {
             // Architecturally unreachable: success transfers to HOST_RIP.
@@ -311,7 +318,8 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         IA32_VMX_ENTRY_CTLS
     };
 
-    let pin = adjust_vmx_controls(0, pin_msr);
+    // External-interrupt exiting armed (host stays CLI; real APIC timer deferred).
+    let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING | CPU_BASED_ACTIVATE_SECONDARY,
         proc_msr,
@@ -404,10 +412,22 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let need_debugctl = (exit_ctls & VM_EXIT_SAVE_DEBUG_CONTROLS) != 0
         || (entry_ctls & VM_ENTRY_LOAD_DEBUG_CONTROLS) != 0;
 
+    // Guest IDT: one gate → ISR on the code page (M2.4).
+    ept_hw::write_guest_idt(
+        frames.guest_idt_phys,
+        frames.guest_code_phys + GUEST_ISR_OFF,
+        cs,
+        M2_IRQ_VECTOR as u8,
+    );
+
     let guest_rip = frames.guest_code_phys;
     let guest_rsp = frames.guest_stack_phys + 4096;
     let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
     let host_rip = vmexit_landing as *const () as u64;
+
+    // IA-32e interrupt delivery always loads RSP from the TSS (RSP0 when IST=0).
+    // Point RSP0 at the guest stack so the injected ISR has a valid stack.
+    core::ptr::write_volatile((frames.tss_phys + 4) as *mut u64, guest_rsp);
 
     serial::write_str("boot: VMCS ctls pin=0x");
     write_hex_u32(pin);
@@ -502,7 +522,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_LDTR_BASE, ldtr_base)?;
     vw(GUEST_TR_BASE, tr_base)?;
     vw(GUEST_GDTR_BASE, gdt_base)?;
-    vw(GUEST_IDTR_BASE, idtr.base)?;
+    vw(GUEST_IDTR_BASE, frames.guest_idt_phys)?;
 
     vw(GUEST_ES_LIMIT, es_limit)?;
     vw(GUEST_CS_LIMIT, cs_limit)?;
@@ -513,7 +533,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_LDTR_LIMIT, ldtr_limit)?;
     vw(GUEST_TR_LIMIT, tr_limit)?;
     vw(GUEST_GDTR_LIMIT, gdt_limit as u64)?;
-    vw(GUEST_IDTR_LIMIT, idtr.limit as u64)?;
+    vw(GUEST_IDTR_LIMIT, 4095)?;
 
     vw(GUEST_ES_ACCESS_RIGHTS, es_ar)?;
     vw(GUEST_CS_ACCESS_RIGHTS, cs_ar)?;
@@ -582,7 +602,10 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     Ok(())
 }
 
-/// HOST_RIP target — runs after the first VMEXIT with host RSP restored.
+/// HOST_RIP target — runs after each VMEXIT with host RSP restored.
+///
+/// Phase 0: first HLT → verify store/OWN/ALLOC, inject IRQ, VMRESUME.
+/// Phase 1: ISR HLT → verify IRQ magic, emit `RAYNU-V-M2-IRQ-OK`, VMXOFF.
 ///
 /// GPRs still hold guest values; only use stack locals / known addresses.
 pub unsafe extern "C" fn vmexit_landing() -> ! {
@@ -591,17 +614,27 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let guest_page = guest_rip & !0xfff;
+    let phase = EXIT_PHASE;
 
-    serial::write_str("boot: VMEXIT reason=0x");
+    serial::write_str("boot: VMEXIT phase=");
+    write_hex_u32(phase as u32);
+    serial::write_str(" reason=0x");
     write_hex_u32(basic);
     serial::write_str(" qual=0x");
     write_hex_u64(qual);
+    serial::write_str(" rip=0x");
+    write_hex_u64(guest_rip);
     serial::write_byte(b'\n');
 
-    let mut ok = basic == EXIT_REASON_HLT;
-    if ok {
+    if basic != EXIT_REASON_HLT {
+        serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
+        finish_boot(false);
+    }
+
+    if phase == 0 {
         serial::write_line(M1_VMEXIT_OK_MARKER);
         serial::write_line(M2_EPT_OK_MARKER);
+        let mut ok = true;
         if ept_hw::verify_guest_store(guest_page) {
             serial::write_line(M2_GUEST_OK_MARKER);
         } else {
@@ -620,16 +653,65 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
             serial::write_line("boot: ERROR — frame allocator latch clear");
             ok = false;
         }
-    } else {
-        serial::write_line("boot: ERROR — expected HLT exit (reason 12)");
+        if !ok {
+            finish_boot(false);
+        }
+
+        let info = match interrupt::prepare_external_inject(M2_IRQ_VECTOR) {
+            Ok(v) => v,
+            Err(_) => {
+                serial::write_line("boot: ERROR — inject vector rejected by firewall");
+                finish_boot(false);
+            }
+        };
+        if ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64).is_err() {
+            serial::write_line("boot: ERROR — VMWRITE interrupt-info failed");
+            finish_boot(false);
+        }
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        // IF=1 so delivery state matches a normal external IRQ wake from HLT.
+        let _ = ops::vmwrite(GUEST_RFLAGS, 0x2 | (1 << 9));
+
+        EXIT_PHASE = 1;
+        serial::write_str("boot: injecting vector 0x");
+        write_hex_u32(M2_IRQ_VECTOR);
+        serial::write_line(" + VMRESUME");
+
+        match ops::vmresume() {
+            Ok(()) => {
+                serial::write_line("boot: ERROR — VMRESUME returned Ok");
+                finish_boot(false);
+            }
+            Err(_) => {
+                let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+                serial::write_str("boot: ERROR — VMRESUME failed insn_error=0x");
+                write_hex_u32(ierr);
+                serial::write_byte(b'\n');
+                finish_boot(false);
+            }
+        }
     }
 
-    match hardware::vmxoff() {
+    // Phase 1: ISR should have stored the IRQ magic and HLT'd.
+    let mut ok = true;
+    if ept_hw::verify_guest_irq(guest_page) {
+        serial::write_line(M2_IRQ_OK_MARKER);
+    } else {
+        serial::write_line("boot: ERROR — guest IRQ ack missing");
+        ok = false;
+    }
+    finish_boot(ok);
+}
+
+fn finish_boot(ok: bool) -> ! {
+    // SAFETY: still in VMX root after VMEXIT; tear down before QEMU exit.
+    match unsafe { hardware::vmxoff() } {
         Ok(()) => serial::write_line("boot: VMXOFF ok"),
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M2.3 complete");
+    serial::write_line("boot: M2.4 complete");
     if ok {
         serial::qemu_exit_success();
     } else {
@@ -676,6 +758,8 @@ mod launch_test {
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
         assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");
         assert_eq!(M2_ALLOC_OK_MARKER, "RAYNU-V-M2-ALLOC-OK");
+        assert_eq!(M2_IRQ_OK_MARKER, "RAYNU-V-M2-IRQ-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
+        assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
     }
 }

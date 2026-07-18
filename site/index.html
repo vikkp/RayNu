@@ -60,17 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.3 closed: Proven Core frame allocator.</h2>
+          <h2 class="section__title">M2.4: interrupt inject (guest ISR).</h2>
           <p class="section__lede">
-            The post-EBS bump pool is drained into a bitmap-backed
-            <code>FrameAllocator</code>. Alloc, free, double-free reject, and
-            reuse are self-tested before VMXON. Marker
-            <code>RAYNU-V-M2-ALLOC-OK</code> — gated on Latitude.
+            After the first HLT, the host injects vector <code>0x21</code> through
+            the Proven Core firewall and VMRESUMEs. The guest ISR acks a magic
+            value and HLTs. Marker <code>RAYNU-V-M2-IRQ-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: allocator selftest ok
-RAYNU-V-M2-OWN-OK
+          <pre class="ship-code milestone-log" data-reveal><code>boot: injecting vector 0x21 + VMRESUME
 RAYNU-V-M2-ALLOC-OK
-boot: M2.3 complete</code></pre>
+RAYNU-V-M2-IRQ-OK
+boot: M2.4 complete</code></pre>
         </div>
       </section>
 
@@ -144,9 +143,9 @@ boot: M2.3 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M0–M2.3 closed on Latitude. Next: interrupt virtualization —
-            the hard middle of M2 — then deepen ADR-004 and the allocator
-            toward L2/Kani.
+            M2.4 IRQ inject is the current gate. Next after Latitude: deeper
+            interrupt virtualization (APIC timer / EOI), then ADR-004 and the
+            allocator toward L2/Kani — before Linux (M3).
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

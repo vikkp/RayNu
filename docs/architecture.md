@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M2.3 closed): UEFI entry → ExitBootServices → bump pool → Proven Core `FrameAllocator` (bitmap) → VMXON → EPT identity map → ADR-004 ownership claim (guest code/stack) → VMLAUNCH (store + loop + HLT) → verify → VMEXIT → VMXOFF. Later: interrupt virtualization, Linux guest.
+Boot path today (M2.4): UEFI entry → ExitBootServices → bump pool → Proven Core `FrameAllocator` → VMXON → EPT identity map → ADR-004 ownership (code/stack/IDT) → VMLAUNCH (store + loop + HLT) → inject IRQ + VMRESUME → guest ISR ack + HLT → verify → VMXOFF. Later: APIC timer path, Linux guest.
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (M2 continue)
 
-**M2.3 closed** (`RAYNU-V-M2-ALLOC-OK` on Latitude). Next: interrupt virtualization (R03), then deepen ADR-004 / allocator toward L2 + Kani.
+**M2.4 gate:** `RAYNU-V-M2-IRQ-OK` (VM-entry inject vector 0x21 → guest ISR; pin-based external-interrupt exiting armed). Next after Latitude close: APIC timer / EOI, or deepen ADR-004 / allocator toward L2 + Kani.
