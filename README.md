@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.6** — through M2.5 LAPIC timer, plus **L2 specs + Kani** for ADR-004 `EptMap` and `FrameAllocator`. Host marker: `RAYNU-V-M2-L2-OK` (`cargo test`). Boot gate still through M2.5 on Latitude. Gate history: [docs/progress.md](docs/progress.md). Next after M2.6: Linux (M3).
+**M0 → M2.6 closed** — through M2.5 LAPIC timer (Latitude), plus **L2 specs + Kani** for ADR-004 `EptMap` and `FrameAllocator`. Host marker: `RAYNU-V-M2-L2-OK` (`cargo test`). Gate history: [docs/progress.md](docs/progress.md). Next: Linux (M3).
 
 ## Repository Layout
 

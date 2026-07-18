@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M2.5 closed): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership (code/stack/IDT) → VMLAUNCH → software inject ISR → arm LAPIC one-shot → guest HLT wait → external-IRQ VMEXIT → EOI → re-inject ISR → `RAYNU-V-M2-TIMER-OK` → VMXOFF. Later: Linux guest.
+Boot path today (M2.5 closed on Latitude; M2.6 L2 host gate closed): UEFI entry → ExitBootServices → bump pool → `FrameAllocator` → VMXON → EPT → ownership (code/stack/IDT) → VMLAUNCH → software inject ISR → arm LAPIC one-shot → guest HLT wait → external-IRQ VMEXIT → EOI → re-inject ISR → VMXOFF. Verification: L2 specs + Kani for `EptMap` / allocator. Later: Linux guest.
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -40,6 +40,6 @@ Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). Scaffolding sh
 
 When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail) > simplicity ([Z]) > hardware depth ([D]).
 
-## Next Milestone Gate (M2 continue)
+## Next Milestone Gate (M3)
 
-**M2.6 gate:** `RAYNU-V-M2-L2-OK` (host) — L2 ghost specs for `EptMap` + `FrameAllocator`, Kani harnesses, `memory::run_l2_gate`. No new serial boot marker. Next after close: M3 Linux.
+**M2.6 closed** (`RAYNU-V-M2-L2-OK` via `cargo test`). Next: **M3** unmodified Linux guest; Verus L3 proofs in parallel.

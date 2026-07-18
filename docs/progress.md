@@ -33,5 +33,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. Merge M2.6; confirm host gate in CI (`RAYNU-V-M2-L2-OK`).
-2. M3: unmodified Linux guest.
+1. **M3:** unmodified Linux guest.
+2. Verus L3 proofs for EPT / allocator (parallel to M3/M4).
