@@ -60,12 +60,12 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.5: LAPIC timer → guest re-inject.</h2>
+          <h2 class="section__title">M2.5 closed: LAPIC timer → guest re-inject.</h2>
           <p class="section__lede">
             After software inject, the host arms a one-shot LAPIC timer. The
             guest waits in HLT; the timer causes an external-interrupt VMEXIT.
             EOI, then re-inject through the same firewall. Marker
-            <code>RAYNU-V-M2-TIMER-OK</code>.
+            <code>RAYNU-V-M2-TIMER-OK</code> — gated on Latitude.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>boot: LAPIC one-shot armed; waiting in guest HLT
 boot: APIC EOI ok
@@ -144,8 +144,8 @@ boot: M2.5 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M2.5 LAPIC timer is the current gate. Next after Latitude: deepen
-            ADR-004 and the allocator toward L2/Kani — before Linux (M3).
+            M0–M2.5 closed on Latitude. Next: deepen ADR-004 and the allocator
+            toward L2/Kani — before Linux (M3).
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.5** — through M2.4 IRQ inject, plus **LAPIC one-shot timer** → external-interrupt VMEXIT → EOI → re-inject. Latest marker: `RAYNU-V-M2-TIMER-OK`. Prep: `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Gate history: [docs/progress.md](docs/progress.md). Next after Latitude: ADR-004 L2 + Kani, then Linux (M3).
+**M0 → M2.5 closed** — through M2.4 IRQ inject, plus **LAPIC one-shot timer** → external-interrupt VMEXIT → EOI → re-inject. Latest marker: `RAYNU-V-M2-TIMER-OK` (Latitude + QEMU gate). Prep: `sudo ./tools/enable-nested-kvm.sh`, then `./tools/qemu-boot-test.sh`. Gate history: [docs/progress.md](docs/progress.md). Next: ADR-004 L2 + Kani, then Linux (M3).
 
 ## Repository Layout
 
