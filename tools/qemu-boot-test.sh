@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# M0 integration gate: build EFI, boot under QEMU, require serial marker.
+# Boot integration gate: build EFI, boot under QEMU, require serial markers.
+# M0: RAYNU-V-M0-BOOT-OK
+# M1.0: RAYNU-V-M1-EBS-OK (must appear after ExitBootServices)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-MARKER="${MARKER:-RAYNU-V-M0-BOOT-OK}"
+MARKER_M0="${MARKER_M0:-RAYNU-V-M0-BOOT-OK}"
+MARKER_M1="${MARKER_M1:-RAYNU-V-M1-EBS-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -42,12 +45,31 @@ echo "----- serial begin -----"
 cat "$SERIAL_LOG" || true
 echo "----- serial end -----"
 
-if ! grep -qF "$MARKER" "$SERIAL_LOG"; then
-  echo "error: M0 marker '$MARKER' not found on serial output" >&2
+fail=0
+if ! grep -qF "$MARKER_M0" "$SERIAL_LOG"; then
+  echo "error: M0 marker '$MARKER_M0' not found on serial output" >&2
+  fail=1
+fi
+if ! grep -qF "$MARKER_M1" "$SERIAL_LOG"; then
+  echo "error: M1.0 marker '$MARKER_M1' not found on serial output" >&2
+  fail=1
+fi
+
+# M1.0 marker must appear after M0 marker in the log (ordering check).
+if [[ "$fail" -eq 0 ]]; then
+  m0_line=$(grep -nF "$MARKER_M0" "$SERIAL_LOG" | head -1 | cut -d: -f1)
+  m1_line=$(grep -nF "$MARKER_M1" "$SERIAL_LOG" | head -1 | cut -d: -f1)
+  if [[ -n "$m0_line" && -n "$m1_line" && "$m1_line" -le "$m0_line" ]]; then
+    echo "error: M1.0 marker appeared before M0 marker (ordering)" >&2
+    fail=1
+  fi
+fi
+
+if [[ "$fail" -ne 0 ]]; then
   echo "----- qemu stderr -----"
   cat "$ROOT/target/m0-qemu-stderr.log" || true
   exit 1
 fi
 
-echo "==> M0 QEMU boot gate PASSED (marker found; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 + M1.0 markers; qemu status=$QEMU_STATUS)"
 exit 0

@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 achieved (July 2026)** — `r640-hypervisor.efi` boots under QEMU+OVMF, prints `RAYNU-V-M0-BOOT-OK` on COM1, and passes the gate in GitHub Actions and on a Dell Latitude i5 (Ubuntu). Next: memory-map ownership, then QEMU-first VMX bring-up; EPT and the first machine-checked Verus invariant follow.
+**M0 achieved · M1.0 in progress** — EFI boots under QEMU+OVMF with `RAYNU-V-M0-BOOT-OK` on COM1 (CI + Dell Latitude). M1.0 adds `ExitBootServices`, a conventional-memory frame bump pool, and `RAYNU-V-M1-EBS-OK` after firmware handoff. Next: M1.1 VMXON (QEMU+KVM first).
 
 ## Repository Layout
 

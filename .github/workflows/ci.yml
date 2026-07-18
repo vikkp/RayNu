@@ -42,9 +42,9 @@ jobs:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 
-  # M0 gate: EFI boots under QEMU+OVMF and prints COM1 marker.
+  # Boot gate: M0 COM1 marker + M1.0 ExitBootServices marker.
   qemu-boot:
-    name: M0 QEMU serial boot
+    name: QEMU boot gate (M0 + M1.0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
