@@ -60,12 +60,12 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.3: Proven Core frame allocator.</h2>
+          <h2 class="section__title">M2.3 closed: Proven Core frame allocator.</h2>
           <p class="section__lede">
             The post-EBS bump pool is drained into a bitmap-backed
             <code>FrameAllocator</code>. Alloc, free, double-free reject, and
             reuse are self-tested before VMXON. Marker
-            <code>RAYNU-V-M2-ALLOC-OK</code>.
+            <code>RAYNU-V-M2-ALLOC-OK</code> — gated on Latitude.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>boot: allocator selftest ok
 RAYNU-V-M2-OWN-OK
