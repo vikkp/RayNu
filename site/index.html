@@ -60,15 +60,16 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.1: CPUID filter.</h2>
+          <h2 class="section__title">M3.1 closed. Next: kernel load.</h2>
           <p class="section__lede">
-            Guest <code>cpuid</code> exits; the host returns a filtered leaf 1
-            with VMX hidden. Marker <code>RAYNU-V-M3-CPUID-OK</code>.
+            Latitude boot gate passed through CPUID filter
+            (<code>RAYNU-V-M3-CPUID-OK</code>). Next: M3.2 pack
+            <code>boot_params</code> and place synthetic kernel/initrd —
+            <code>RAYNU-V-M3-LOAD-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-IO-OK
-RAYNU-V-M3-CPUID-OK
-RAYNU-V-M2-TIMER-OK
-boot: M3.1 complete</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-CPUID-OK
+boot: M3.1 complete
+==&gt; Boot gate PASSED (M0 → M3.1)</code></pre>
         </div>
       </section>
 
@@ -142,8 +143,8 @@ boot: M3.1 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Current gate: CPUID filter (M3.1). Next: kernel load and
-            earlyprintk — see <code>docs/m3_plan.md</code>.
+            M3.1 is closed on Latitude. Current gate: kernel load (M3.2),
+            then earlyprintk — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

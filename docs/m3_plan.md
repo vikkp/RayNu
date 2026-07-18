@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.0: [progress.md](progress.md).
+Lived gates through M3.1: [progress.md](progress.md).
 
 ---
 
@@ -17,7 +17,7 @@ Lived gates through M3.0: [progress.md](progress.md).
 | Software inject + host LAPIC timer | Guest-visible timer (xAPIC MMIO or TSC) |
 | Synthetic guest page (store/ISR) | bzImage + initrd + `boot_params` / e820 |
 | Guest COM1 OUT passthrough (M3.0) | Broader 16550 / virtio later |
-| CPUID/MSR firewall stubs | Wired to VMEXIT handlers |
+| CPUID filter hides VMX (M3.1) | MSR exits still stub |
 | `devices/` stub | Serial PIO first; virtio deferred |
 
 ---
@@ -57,7 +57,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-IO-OK`). No kernel assets.
 - Wire / extend `sched/msr_firewall` patterns for CPUID policy (host tests)
 - Guest smoke: CPUID then HLT; serial confirms filtered leaf
 
-Status: **in flight** (see PR).
+Status: **closed on Latitude** (`RAYNU-V-M3-CPUID-OK`).
 
 ### M3.2 — Kernel load — `RAYNU-V-M3-LOAD-OK`
 
@@ -123,10 +123,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~This plan~~ / ~~M3.0 guest COM1 I/O~~ — done.
-2. **M3.1** — CPUID filter (next code PR).
-3. M3.2 → M3.3 (earlyprintk is the schedule checkpoint).
-4. M3.4 → M3.5 close M3.
+1. ~~Plan / M3.0 I/O / M3.1 CPUID~~ — done.
+2. **M3.2** — kernel load / `boot_params` packing (next code PR).
+3. M3.3 earlyprintk (schedule checkpoint) → M3.4 → M3.5.
 
 ---
 
