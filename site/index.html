@@ -60,11 +60,12 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.4: interrupt inject (guest ISR).</h2>
+          <h2 class="section__title">M2.4 closed: interrupt inject (guest ISR).</h2>
           <p class="section__lede">
             After the first HLT, the host injects vector <code>0x21</code> through
             the Proven Core firewall and VMRESUMEs. The guest ISR acks a magic
-            value and HLTs. Marker <code>RAYNU-V-M2-IRQ-OK</code>.
+            value and HLTs. Marker <code>RAYNU-V-M2-IRQ-OK</code> — gated on
+            Latitude.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>boot: injecting vector 0x21 + VMRESUME
 RAYNU-V-M2-ALLOC-OK
@@ -143,9 +144,9 @@ boot: M2.4 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M2.4 IRQ inject is the current gate. Next after Latitude: deeper
-            interrupt virtualization (APIC timer / EOI), then ADR-004 and the
-            allocator toward L2/Kani — before Linux (M3).
+            M0–M2.4 closed on Latitude. Next: deeper interrupt virtualization
+            (APIC timer / EOI), then ADR-004 and the allocator toward L2/Kani —
+            before Linux (M3).
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

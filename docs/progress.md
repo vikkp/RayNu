@@ -14,7 +14,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M2.1 | `RAYNU-V-M2-GUEST-OK` | Guest store + loop + HLT; host verify |
 | M2.2 | `RAYNU-V-M2-OWN-OK` | ADR-004 exclusive-ownership self-test |
 | M2.3 | `RAYNU-V-M2-ALLOC-OK` | Proven Core bitmap `FrameAllocator` |
-| M2.4 | `RAYNU-V-M2-IRQ-OK` | Inject vector 0x21 → guest ISR ack + HLT (pending Latitude) |
+| M2.4 | `RAYNU-V-M2-IRQ-OK` | Inject vector 0x21 → guest ISR ack + HLT |
 
 ## Verification checkpoint (as of M2.4)
 
@@ -29,6 +29,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. Latitude gate for M2.4 (`RAYNU-V-M2-IRQ-OK`).
-2. Deeper IRQ (APIC timer / EOI) or ADR-004 + allocator toward L2 / Kani.
+1. Deeper IRQ (APIC timer / EOI) — remaining R03 surface.
+2. ADR-004 + allocator toward L2 (Verus) / Kani.
 3. M3: unmodified Linux guest.
