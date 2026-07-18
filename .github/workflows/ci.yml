@@ -42,9 +42,9 @@ jobs:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 
-  # Boot gate: M0 → M3.1 CPUID filter (KVM nested when available).
+  # Boot gate: M0 → M3.2 kernel load (KVM nested when available).
   qemu-boot:
-    name: QEMU boot gate (M0-M3.1)
+    name: QEMU boot gate (M0-M3.2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +71,7 @@ jobs:
           echo
           # Nested VT-x requires host CPUID.VMX; many cloud VMs expose KVM without it.
           if [[ -r /dev/kvm && -w /dev/kvm ]] && grep -qw vmx /proc/cpuinfo; then
-            echo "KVM + host VMX — requiring VMXON through M3.1 CPUID filter"
+            echo "KVM + host VMX — requiring VMXON through M3.2 kernel load"
             REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
           elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
             echo "KVM without host VMX — boot gate allows VMXON-SKIP"

@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.0 closed** — Latitude through guest COM1 I/O (`RAYNU-V-M3-IO-OK`). **M3.1 in flight**: CPUID filter (`RAYNU-V-M3-CPUID-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.1 closed** — Latitude through CPUID filter (`RAYNU-V-M3-CPUID-OK`). **M3.2 in flight**: synthetic kernel load (`RAYNU-V-M3-LOAD-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 

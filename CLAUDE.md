@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.0 closed** on Latitude (`RAYNU-V-M3-IO-OK`); **M3.1 in flight**: CPUID filter (`RAYNU-V-M3-CPUID-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.1 closed** on Latitude (`RAYNU-V-M3-CPUID-OK`); **M3.2 in flight**: kernel load (`RAYNU-V-M3-LOAD-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 
