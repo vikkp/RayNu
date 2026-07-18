@@ -10,6 +10,17 @@ fn bump_allocates_then_exhausts() {
 }
 
 #[test]
+fn take_remaining_drains_pool() {
+    let mut bump = FrameBump::new(0x1000, 4);
+    assert_eq!(bump.alloc_frame().unwrap().0, 0x1000);
+    let (start, pages) = bump.take_remaining().unwrap();
+    assert_eq!(start, 0x2000);
+    assert_eq!(pages, 3);
+    assert!(bump.take_remaining().is_none());
+    assert!(bump.alloc_frame().is_none());
+}
+
+#[test]
 fn pick_skips_low_memory() {
     let regions = [(0x0, 100u64), (0x200000, 16u64)];
     let (start, pages) = pick_conventional_region(&regions, 8).unwrap();

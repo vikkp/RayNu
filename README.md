@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M2.2** — EFI boots, VMXON, **EPT identity map**, guest **store + loop + HLT**, plus **ADR-004 ownership** self-test (exclusive HPA claim). Markers: `RAYNU-V-M2-GUEST-OK`, `RAYNU-V-M2-OWN-OK`. QEMU needs **KVM**. Latitude: `sudo ./tools/enable-nested-kvm.sh`, `./tools/qemu-boot-test.sh`. Next: frame allocator promotion, then interrupt virtualization.
+**M0 → M2.3** — EFI boots, VMXON, **EPT identity map**, guest **store + loop + HLT**, **ADR-004 ownership**, plus Proven Core **frame allocator** (bitmap over the post-EBS pool). Markers: `RAYNU-V-M2-OWN-OK`, `RAYNU-V-M2-ALLOC-OK`. QEMU needs **KVM**. Latitude: `sudo ./tools/enable-nested-kvm.sh`, `./tools/qemu-boot-test.sh`. Next: interrupt virtualization, then deeper ADR-004 L2/Kani.
 
 ## Repository Layout
 

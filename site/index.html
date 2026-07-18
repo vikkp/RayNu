@@ -60,16 +60,17 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M2.2: EPT ownership (ADR-004).</h2>
+          <h2 class="section__title">M2.3: Proven Core frame allocator.</h2>
           <p class="section__lede">
-            Guest pages are claimed in the exclusive-ownership registry before
-            launch. A second guest cannot alias the same host frame. Markers
-            through <code>RAYNU-V-M2-OWN-OK</code>.
+            The post-EBS bump pool is drained into a bitmap-backed
+            <code>FrameAllocator</code>. Alloc, free, double-free reject, and
+            reuse are self-tested before VMXON. Marker
+            <code>RAYNU-V-M2-ALLOC-OK</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: ADR-004 ownership selftest ok
-RAYNU-V-M2-GUEST-OK
+          <pre class="ship-code milestone-log" data-reveal><code>boot: allocator selftest ok
 RAYNU-V-M2-OWN-OK
-boot: M2.2 complete</code></pre>
+RAYNU-V-M2-ALLOC-OK
+boot: M2.3 complete</code></pre>
         </div>
       </section>
 
@@ -143,9 +144,9 @@ boot: M2.2 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M2.2 ownership registry is closed. Next: promote the frame
-            allocator, deepen the ADR-004 spec toward L2/Kani, then
-            interrupt virtualization — the hard middle of M2.
+            M2.3 frame allocator is closed. Next: interrupt virtualization —
+            the hard middle of M2 — then deepen ADR-004 and the allocator
+            toward L2/Kani.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
