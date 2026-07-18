@@ -21,9 +21,15 @@ kvm_usable() {
   [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]
 }
 
-# Auto-require VMX when KVM is usable unless overridden.
+# Nested Intel VT-x needs host CPUID.VMX — /dev/kvm alone is not enough
+# (GitHub-hosted runners often lack nested virtualization).
+host_has_vmx() {
+  grep -qw vmx /proc/cpuinfo 2>/dev/null
+}
+
+# Auto-require VMX when nested VT-x is actually available unless overridden.
 if [[ -z "${REQUIRE_VMX:-}" ]]; then
-  if kvm_usable && [[ "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
+  if kvm_usable && host_has_vmx && [[ "${QEMU_ACCEL:-auto}" != "tcg" ]]; then
     REQUIRE_VMX=1
   else
     REQUIRE_VMX=0
