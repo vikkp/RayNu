@@ -13,8 +13,9 @@
 //! M2.4: ISR at [`GUEST_ISR_OFF`] stores [`GUEST_IRQ_MAGIC`] then HLT again.
 //! M3.0: after the loop, `mov edx,0x3f8` / `out dx,al` for each
 //! [`crate::devices::serial_pio::GUEST_IO_MAGIC`] byte (`out imm8` cannot encode COM1).
+//! M3.1: `cpuid` leaf 1, store filtered ECX, then `hlt`.
 
-use crate::arch::cpu::{self, IA32_VMX_EPT_VPID_CAP};
+use crate::arch::cpu::{self, CPUID_ECX_VMX, IA32_VMX_EPT_VPID_CAP};
 use crate::devices::serial_pio::GUEST_IO_MAGIC;
 
 /// COM1 marker when the guest runs under EPT (M2.0 gate).
@@ -37,6 +38,9 @@ pub const GUEST_ISR_OFF: u64 = 0x100;
 
 /// Guest IRQ ack slot (qword after magic + loop counter).
 pub const GUEST_IRQ_SLOT_OFF: u64 = GUEST_DATA_OFF + 16;
+
+/// Guest CPUID leaf-1 ECX store (M3.1); dword after IRQ ack slot.
+pub const GUEST_CPUID_ECX_OFF: u64 = GUEST_DATA_OFF + 24;
 
 /// Magic value the injected ISR writes (ASCII-ish `M24IRQOK`).
 pub const GUEST_IRQ_MAGIC: u64 = 0x4D32_3449_5251_4F4B;
@@ -187,9 +191,9 @@ fn write_u64_le(p: *mut u8, v: u64) {
 /// Write M2.1/M2.4 guest code into an owned frame (identity GPA/HPA).
 ///
 /// Layout:
-/// - `+0`: store MAGIC, loop 4×, COM1 OUT magic, `hlt`
+/// - `+0`: store MAGIC, loop 4×, COM1 OUT magic, CPUID leaf 1, store ECX, `hlt`
 /// - [`GUEST_ISR_OFF`]: ISR stores [`GUEST_IRQ_MAGIC`], then `hlt`
-/// - [`GUEST_DATA_OFF`]: magic + counter + IRQ ack slot
+/// - [`GUEST_DATA_OFF`]: magic + counter + IRQ ack + CPUID ECX
 ///
 /// SAFETY: `page_phys` is a writable identity-mapped frame.
 pub unsafe fn write_guest_store_page(page_phys: u64) {
@@ -198,6 +202,7 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
 
     let data = page_phys + GUEST_DATA_OFF;
     let counter = data + 8;
+    let cpuid_ecx = page_phys + GUEST_CPUID_ECX_OFF;
     let mut o = 0usize;
 
     // movabs rax, MAGIC
@@ -257,6 +262,32 @@ pub unsafe fn write_guest_store_page(page_phys: u64) {
         core::ptr::write_volatile(p.add(o), 0xEE);
         o += 1;
     }
+
+    // M3.1: CPUID leaf 1, store filtered ECX for host verify.
+    // mov eax, 1
+    core::ptr::write_volatile(p.add(o), 0xB8);
+    core::ptr::write_volatile(p.add(o + 1), 0x01);
+    core::ptr::write_volatile(p.add(o + 2), 0x00);
+    core::ptr::write_volatile(p.add(o + 3), 0x00);
+    core::ptr::write_volatile(p.add(o + 4), 0x00);
+    o += 5;
+    // xor ecx, ecx
+    core::ptr::write_volatile(p.add(o), 0x31);
+    core::ptr::write_volatile(p.add(o + 1), 0xC9);
+    o += 2;
+    // cpuid
+    core::ptr::write_volatile(p.add(o), 0x0F);
+    core::ptr::write_volatile(p.add(o + 1), 0xA2);
+    o += 2;
+    // movabs rax, cpuid_ecx_slot
+    core::ptr::write_volatile(p.add(o), 0x48);
+    core::ptr::write_volatile(p.add(o + 1), 0xB8);
+    write_u64_le(p.add(o + 2), cpuid_ecx);
+    o += 10;
+    // mov [rax], ecx
+    core::ptr::write_volatile(p.add(o), 0x89);
+    core::ptr::write_volatile(p.add(o + 1), 0x08);
+    o += 2;
 
     // hlt ; jmp $
     core::ptr::write_volatile(p.add(o), 0xF4);
@@ -320,6 +351,15 @@ pub unsafe fn verify_guest_store(page_phys: u64) -> bool {
     let magic = core::ptr::read_volatile(data);
     let iters = core::ptr::read_volatile(data.add(1));
     magic == GUEST_STORE_MAGIC && iters == GUEST_LOOP_ITERS
+}
+
+/// Read back M3.1 filtered CPUID leaf-1 ECX (VMX bit must be clear).
+///
+/// SAFETY: guest ran CPUID + store; page is the bring-up code frame.
+pub unsafe fn verify_guest_cpuid_filtered(page_phys: u64) -> bool {
+    let slot = (page_phys + GUEST_CPUID_ECX_OFF) as *const u32;
+    let ecx = core::ptr::read_volatile(slot);
+    ecx != 0 && (ecx & CPUID_ECX_VMX) == 0
 }
 
 /// Read back M2.4/M2.5 ISR ack from the code page.
@@ -429,5 +469,32 @@ mod ept_hw_test {
         assert!(found, "expected mov edx,0x3f8 / mov al,'R' / out dx,al");
         // Must not use 8-bit imm OUT (E6 F8) — that targets port 0xF8, not COM1.
         assert!(!page[..256].windows(2).any(|w| w == [0xE6, 0xF8]));
+    }
+
+    #[test]
+    fn guest_store_page_encodes_cpuid_leaf1() {
+        let mut page = [0u8; 4096];
+        let phys = page.as_mut_ptr() as u64;
+        unsafe { write_guest_store_page(phys) };
+        // Find `mov eax,1` / `xor ecx,ecx` / `cpuid`.
+        let mut found = false;
+        let mut i = 0usize;
+        while i + 9 < 256 {
+            if page[i] == 0xB8
+                && page[i + 1] == 0x01
+                && page[i + 2] == 0x00
+                && page[i + 3] == 0x00
+                && page[i + 4] == 0x00
+                && page[i + 5] == 0x31
+                && page[i + 6] == 0xC9
+                && page[i + 7] == 0x0F
+                && page[i + 8] == 0xA2
+            {
+                found = true;
+                break;
+            }
+            i += 1;
+        }
+        assert!(found, "expected mov eax,1 / xor ecx,ecx / cpuid before HLT");
     }
 }

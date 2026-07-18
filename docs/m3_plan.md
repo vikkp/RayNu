@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M2.6: [progress.md](progress.md).
+Lived gates through M3.0: [progress.md](progress.md).
 
 ---
 
@@ -16,7 +16,7 @@ Lived gates through M2.6: [progress.md](progress.md).
 | 4 GiB identity EPT | Same OK for first shell; precise EPT later |
 | Software inject + host LAPIC timer | Guest-visible timer (xAPIC MMIO or TSC) |
 | Synthetic guest page (store/ISR) | bzImage + initrd + `boot_params` / e820 |
-| Host COM1 only | Trap guest PIO → 16550 emu / passthrough |
+| Guest COM1 OUT passthrough (M3.0) | Broader 16550 / virtio later |
 | CPUID/MSR firewall stubs | Wired to VMEXIT handlers |
 | `devices/` stub | Serial PIO first; virtio deferred |
 
@@ -49,13 +49,15 @@ Each gate = one branch `cursor/m3-N-…-a623`, marker, Latitude/QEMU or host tes
 - Synthetic guest: after store/loop, `mov edx,0x3f8` / `out dx,al` for `RAYNU-V-M3-IO`, then `hlt`
 - Extend `tools/qemu-boot-test.sh`
 
-Status: **in flight** (see PR). No kernel assets.
+Status: **closed on Latitude** (`RAYNU-V-M3-IO-OK`). No kernel assets.
 
 ### M3.1 — CPUID filter — `RAYNU-V-M3-CPUID-OK`
 
 - CPUID exiting; filter leaves (hide VMX from guest; sensible vendor/features)
 - Wire / extend `sched/msr_firewall` patterns for CPUID policy (host tests)
 - Guest smoke: CPUID then HLT; serial confirms filtered leaf
+
+Status: **in flight** (see PR).
 
 ### M3.2 — Kernel load — `RAYNU-V-M3-LOAD-OK`
 
@@ -121,11 +123,10 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. **This plan** lands in-tree (docs only).
-2. **M3.0** — guest COM1 I/O (first code PR).
-3. M3.1 → M3.2 (can overlap host load tests with I/O polish).
-4. M3.3 is the schedule checkpoint (earlyprintk).
-5. M3.4 → M3.5 close M3.
+1. ~~This plan~~ / ~~M3.0 guest COM1 I/O~~ — done.
+2. **M3.1** — CPUID filter (next code PR).
+3. M3.2 → M3.3 (earlyprintk is the schedule checkpoint).
+4. M3.4 → M3.5 close M3.
 
 ---
 

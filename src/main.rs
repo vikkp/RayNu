@@ -11,6 +11,7 @@
 //! M2.4: inject IRQ → guest ISR (`RAYNU-V-M2-IRQ-OK`).
 //! M2.5: LAPIC timer → external-IRQ VMEXIT → EOI → re-inject (`RAYNU-V-M2-TIMER-OK`).
 //! M3.0: guest COM1 OUT → I/O VMEXIT (`RAYNU-V-M3-IO-OK`).
+//! M3.1: guest CPUID filter hide VMX (`RAYNU-V-M3-CPUID-OK`).
 
 #![no_main]
 #![no_std]
@@ -298,6 +299,7 @@ fn launch_err_name(e: vmx::LaunchError) -> &'static str {
         vmx::LaunchError::ClearFailed => "ClearFailed",
         vmx::LaunchError::PtrldFailed => "PtrldFailed",
         vmx::LaunchError::EptUnsupported => "EptUnsupported",
+        vmx::LaunchError::CpuidExitingUnsupported => "CpuidExitingUnsupported",
         vmx::LaunchError::VmwriteFailed { .. } => "VmwriteFailed",
         vmx::LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }

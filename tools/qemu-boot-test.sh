@@ -11,6 +11,7 @@
 # M2.4: RAYNU-V-M2-IRQ-OK   (required when VMXON succeeds / REQUIRE_VMX=1)
 # M2.5: RAYNU-V-M2-TIMER-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.0: RAYNU-V-M3-IO-OK    (required when VMXON succeeds / REQUIRE_VMX=1)
+# M3.1: RAYNU-V-M3-CPUID-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -27,6 +28,7 @@ MARKER_ALLOC="${MARKER_ALLOC:-RAYNU-V-M2-ALLOC-OK}"
 MARKER_IRQ="${MARKER_IRQ:-RAYNU-V-M2-IRQ-OK}"
 MARKER_TIMER="${MARKER_TIMER:-RAYNU-V-M2-TIMER-OK}"
 MARKER_IO="${MARKER_IO:-RAYNU-V-M3-IO-OK}"
+MARKER_CPUID="${MARKER_CPUID:-RAYNU-V-M3-CPUID-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -152,6 +154,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_IO' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_CPUID" "$SERIAL_LOG"; then
+    echo "==> M3.1 CPUID-filter marker found"
+  else
+    echo "error: marker '$MARKER_CPUID' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -170,5 +178,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.0; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.1; qemu status=$QEMU_STATUS)"
 exit 0
