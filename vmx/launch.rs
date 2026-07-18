@@ -22,18 +22,28 @@ use crate::vmx::ops::{self, VmcsOpError};
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
 pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
 
+/// Exit-control bits for IA32_PAT load/save (SDM Vol. 3).
+const VM_EXIT_SAVE_IA32_PAT: u32 = 1 << 18;
+const VM_EXIT_LOAD_IA32_PAT: u32 = 1 << 19;
+/// Exit-control: save debug controls (often forced in allowed0).
+const VM_EXIT_SAVE_DEBUG_CONTROLS: u32 = 1 << 2;
+/// Entry-control: load debug controls.
+const VM_ENTRY_LOAD_DEBUG_CONTROLS: u32 = 1 << 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaunchError {
     PrepareFailed,
     ClearFailed,
     PtrldFailed,
-    VmwriteFailed,
+    /// VMWRITE failed; `field` is the VMCS encoding that was rejected.
+    VmwriteFailed { field: u64 },
     LaunchFailed { instruction_error: u32 },
 }
 
 impl From<VmcsOpError> for LaunchError {
     fn from(_: VmcsOpError) -> Self {
-        Self::VmwriteFailed
+        // Prefer the typed `vw()` path which records the field encoding.
+        Self::VmwriteFailed { field: 0xffff_ffff }
     }
 }
 
@@ -104,7 +114,15 @@ unsafe fn seg_ar(gdt_base: u64, sel: u16) -> u32 {
 }
 
 unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
-    ops::vmwrite(field, value).map_err(|_| LaunchError::VmwriteFailed)
+    match ops::vmwrite(field, value) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            serial::write_str("boot: VMWRITE failed field=0x");
+            write_hex_u32(field as u32);
+            serial::write_byte(b'\n');
+            Err(LaunchError::VmwriteFailed { field })
+        }
+    }
 }
 
 /// Program a minimal long-mode guest that executes HLT (no EPT).
@@ -167,11 +185,24 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
     let pin = adjust_vmx_controls(0, pin_msr);
     let primary = adjust_vmx_controls(CPU_BASED_HLT_EXITING, proc_msr);
+    // Request 64-bit host/guest; EFER/PAT bits stick only if allowed1 permits
+    // (or allowed0 forces). Nested VT-x often strips EFER/PAT — do not VMWRITE
+    // those guest/host state fields unless the final control word keeps them.
     let exit_wanted =
         VM_EXIT_HOST_ADDR_SPACE_SIZE | VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER;
     let entry_wanted = VM_ENTRY_IA32E_MODE | VM_ENTRY_LOAD_IA32_EFER;
     let exit_ctls = adjust_vmx_controls(exit_wanted, exit_msr);
     let entry_ctls = adjust_vmx_controls(entry_wanted, entry_msr);
+
+    serial::write_str("boot: VMCS ctls pin=0x");
+    write_hex_u32(pin);
+    serial::write_str(" primary=0x");
+    write_hex_u32(primary);
+    serial::write_str(" exit=0x");
+    write_hex_u32(exit_ctls);
+    serial::write_str(" entry=0x");
+    write_hex_u32(entry_ctls);
+    serial::write_byte(b'\n');
 
     vw(PIN_BASED_VM_EXEC_CONTROL, pin as u64)?;
     vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
@@ -282,10 +313,24 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_CR3, cr3)?;
     vw(GUEST_CR4, cr4)?;
     vw(GUEST_DR7, dr7)?;
-    vw(GUEST_IA32_EFER, efer)?;
-    // PAT / DEBUGCTL are optional fields — ignore VMWRITE failure if unsupported.
-    let _ = ops::vmwrite(GUEST_IA32_PAT, pat);
-    let _ = ops::vmwrite(GUEST_IA32_DEBUGCTL, 0);
+
+    let need_efer = (exit_ctls & (VM_EXIT_SAVE_IA32_EFER | VM_EXIT_LOAD_IA32_EFER)) != 0
+        || (entry_ctls & VM_ENTRY_LOAD_IA32_EFER) != 0;
+    if need_efer {
+        vw(GUEST_IA32_EFER, efer)?;
+    }
+
+    let need_pat = (exit_ctls & (VM_EXIT_SAVE_IA32_PAT | VM_EXIT_LOAD_IA32_PAT)) != 0;
+    if need_pat {
+        vw(GUEST_IA32_PAT, pat)?;
+    }
+
+    let need_debugctl = (exit_ctls & VM_EXIT_SAVE_DEBUG_CONTROLS) != 0
+        || (entry_ctls & VM_ENTRY_LOAD_DEBUG_CONTROLS) != 0;
+    if need_debugctl {
+        // Field exists when save/load debug controls is allowed; value 0 is fine.
+        vw(GUEST_IA32_DEBUGCTL, 0)?;
+    }
 
     // Host TR load on VMEXIT requires a busy TSS descriptor in the GDT.
     ensure_tr_busy(gdt_base, tr);
@@ -321,8 +366,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(HOST_IA32_SYSENTER_CS, sysenter_cs as u64)?;
     vw(HOST_IA32_SYSENTER_ESP, sysenter_esp)?;
     vw(HOST_IA32_SYSENTER_EIP, sysenter_eip)?;
-    vw(HOST_IA32_EFER, efer)?;
-    let _ = ops::vmwrite(HOST_IA32_PAT, pat);
+
+    if need_efer {
+        vw(HOST_IA32_EFER, efer)?;
+    }
+    if need_pat {
+        vw(HOST_IA32_PAT, pat)?;
+    }
 
     let host_rsp = (frames.host_stack_phys + 4096) & !0xFu64;
     vw(HOST_RSP, host_rsp)?;
