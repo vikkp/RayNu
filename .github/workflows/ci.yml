@@ -42,9 +42,9 @@ jobs:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 
-  # Boot gate: M0 COM1 marker + M1.0 ExitBootServices marker.
+  # Boot gate: M0 + M1.0 + M1.1 VMXON (KVM nested when /dev/kvm exists).
   qemu-boot:
-    name: QEMU boot gate (M0 + M1.0)
+    name: QEMU boot gate (M0–M1.1)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +58,16 @@ jobs:
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
       - name: QEMU boot-to-serial gate
-        run: ./tools/qemu-boot-test.sh
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            echo "KVM available — requiring VMXON"
+            # Nested VT-x (best-effort on Actions)
+            echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
+            REQUIRE_VMX=1 ./tools/qemu-boot-test.sh
+          else
+            echo "No /dev/kvm — allowing VMXON-SKIP"
+            REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
+          fi
       - name: Upload serial log
         if: always()
         uses: actions/upload-artifact@v4

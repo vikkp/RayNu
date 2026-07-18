@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Boot r640-hypervisor.efi under QEMU+OVMF with COM1 on a chardev.
+# Prefers KVM when /dev/kvm exists (required for M1.1 VMXON).
 # SERIAL_CHARDEV defaults to stdio; CI sets file:/path/to/log.
+# Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -9,6 +11,7 @@ TARGET="${TARGET:-x86_64-unknown-uefi}"
 PROFILE="${PROFILE:-release}"
 EFI="target/${TARGET}/${PROFILE}/r640-hypervisor.efi"
 SERIAL_CHARDEV="${SERIAL_CHARDEV:-stdio}"
+QEMU_ACCEL="${QEMU_ACCEL:-auto}"
 
 if [[ ! -f "$EFI" ]]; then
   echo "==> EFI missing; building first"
@@ -54,11 +57,22 @@ else
   FW_ARGS+=(-drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE")
 fi
 
+ACCEL_ARGS=()
+if [[ "$QEMU_ACCEL" == "tcg" ]]; then
+  echo "==> accel: tcg (VMXON will SKIP)"
+  ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
+elif [[ "$QEMU_ACCEL" == "kvm" || ( "$QEMU_ACCEL" == "auto" && -e /dev/kvm ) ]]; then
+  echo "==> accel: kvm (nested VT-x for M1.1 VMXON)"
+  ACCEL_ARGS+=(-machine q35,accel=kvm -enable-kvm -cpu host)
+else
+  echo "==> accel: tcg fallback (no /dev/kvm; VMXON will SKIP)"
+  ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
+fi
+
 echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
-  -machine q35,accel=tcg \
-  -cpu qemu64 \
+  "${ACCEL_ARGS[@]}" \
   -m 512M \
   -display none \
   -serial "$SERIAL_CHARDEV" \

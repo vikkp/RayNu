@@ -60,18 +60,20 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 + M1.0: boots past firmware.</h2>
+          <h2 class="section__title">M0–M1.1: boots into VMX root.</h2>
           <p class="section__lede">
-            <code>r640-hypervisor.efi</code> boots under QEMU+OVMF, prints
-            <code>RAYNU-V-M0-BOOT-OK</code> on COM1, then calls
-            <code>ExitBootServices</code>, owns a conventional-memory frame pool,
-            and still talks serial with <code>RAYNU-V-M1-EBS-OK</code>. M0 was
-            verified in CI and on a Dell Latitude i5. Next is VMXON.
+            Past firmware handoff, RayNu-V executes real <code>VMXON</code> /
+            <code>VMXOFF</code> under nested VT-x (QEMU+KVM or bare-metal VT-x).
+            Markers:
+            <code>RAYNU-V-M0-BOOT-OK</code>,
+            <code>RAYNU-V-M1-EBS-OK</code>,
+            <code>RAYNU-V-M1-VMXON-OK</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M0-BOOT-OK
-boot: ExitBootServices returned; scanning conventional memory
 RAYNU-V-M1-EBS-OK
-boot: M1.0 complete; awaiting M1.1 VMXON</code></pre>
+RAYNU-V-M1-VMXON-OK
+boot: VMXOFF ok
+boot: M1.1 complete; awaiting M1.2 VMLAUNCH</code></pre>
         </div>
       </section>
 
@@ -145,9 +147,9 @@ boot: M1.0 complete; awaiting M1.1 VMXON</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M0 and M1.0 are closed. Next: QEMU-first VMXON / VMLAUNCH, then EPT
-            and one small Verus-checked invariant on every commit. That artifact
-            matters more than the marketing.
+            M1.1 VMXON is closed. Next: VMLAUNCH / VMEXIT with a tiny guest,
+            then EPT and one small Verus-checked invariant on every commit.
+            That artifact matters more than the marketing.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

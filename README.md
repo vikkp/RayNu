@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 achieved · M1.0 in progress** — EFI boots under QEMU+OVMF with `RAYNU-V-M0-BOOT-OK` on COM1 (CI + Dell Latitude). M1.0 adds `ExitBootServices`, a conventional-memory frame bump pool, and `RAYNU-V-M1-EBS-OK` after firmware handoff. Next: M1.1 VMXON (QEMU+KVM first).
+**M0 · M1.0 · M1.1** — EFI boots, exits boot services, then executes **VMXON/VMXOFF** when VT-x is available (`RAYNU-V-M1-VMXON-OK`). QEMU needs **KVM** (`/dev/kvm`); TCG prints `RAYNU-V-M1-VMXON-SKIP`. On the Dell Latitude: ensure virtualization is enabled in BIOS, then `./tools/qemu-boot-test.sh`. Next: M1.2 VMLAUNCH/VMEXIT.
 
 ## Repository Layout
 
@@ -57,14 +57,14 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 ## Test in QEMU
 
 ```bash
-# Interactive: COM1 on stdio (guest exits via isa-debug-exit)
+# Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh
 
-# M0 CI gate: build + boot + require RAYNU-V-M0-BOOT-OK on serial
+# Boot gate: M0 + M1.0 + M1.1 markers (requires KVM for VMXON)
 ./tools/qemu-boot-test.sh
 ```
 
-Requires `qemu-system-x86_64` and OVMF (`qemu-system-x86` + `ovmf` packages).
+Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** for M1.1 VMXON (`sudo usermod -aG kvm $USER` then re-login).
 
 ## Project site
 
