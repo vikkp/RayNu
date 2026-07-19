@@ -107,6 +107,7 @@ static mut SHADOW_SPEC_CTRL: u64 = 0;
 /// INVARIANTS:
 ///   - Sensitive host MSRs (FEATURE_CONTROL, VMX caps, APIC_BASE write) → InjectGp
 ///   - VMCS-backed guest state MSRs use Vmcs*
+///   - Syscall path MSRs (STAR/LSTAR/SFMASK/KERNEL_GS/TSC_AUX) → HostPassthrough
 ///   - Unknown defaults: read→0, write→ignore (bring-up; tighten later)
 ///
 /// VERIFICATION: L0 — see msr_firewall_spec.rs
