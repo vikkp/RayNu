@@ -131,8 +131,11 @@ Status: **closed on Latitude** (`RAYNU-V-M3-BZIMAGE-OK`). Minimal fixture; real 
 - Marker distinct from synthetic `M3-EARLY-OK`
 
 Status: **in flight** — relocatable tinyconfig bzImage + banner latch.
-Known trap: Linux `startup_64` clears CR4.VMXE → #GP under VMX; host-own via
-`CR4_GUEST_HOST_MASK` / `CR4_READ_SHADOW` at Linux entry.
+Known traps:
+- Linux `startup_64` clears CR4.VMXE → #GP under VMX; host-own via
+  `CR4_GUEST_HOST_MASK` / `CR4_READ_SHADOW` at Linux entry.
+- Relocate window is `[align_up(load, 2MiB), align_up+init_size)` — reserve
+  `init_size + kernel_alignment` and place the PM image on a 2 MiB boundary.
 
 ### M3.9 — Guest timer / MSR harden — `RAYNU-V-M3-GTIMER2-OK`
 

@@ -97,8 +97,32 @@ pub struct BootLoadInfo {
 /// Images larger than the minimal fixture are treated as real Linux.
 pub const REAL_LINUX_MIN_BYTES: usize = 32 * 1024;
 
-/// Max PM / decompress workspace pages for [`load_bzimage_guest`] (~16 MiB).
-pub const BZIMAGE_MAX_PAGES: usize = 4096;
+/// Max PM / decompress workspace pages for [`load_bzimage_guest`] (~18 MiB).
+/// Real kernels need `init_size` plus up to `kernel_alignment` (2 MiB) slack so
+/// `startup_64` can place its relocate window at `align_up(load, 2M)`.
+pub const BZIMAGE_MAX_PAGES: usize = 4608;
+
+/// Align `addr` up to `align` (power-of-two). `align <= 1` returns `addr`.
+pub fn align_up_u64(addr: u64, align: u64) -> u64 {
+    if align <= 1 {
+        return addr;
+    }
+    (addr + (align - 1)) & !(align - 1)
+}
+
+/// Contiguous bytes to reserve for a bzImage load.
+///
+/// Real Linux uses `[align_up(load, kernel_alignment), align_up(load)+init_size)`.
+/// Reserving `init_size + alignment` from an arbitrary base lets us place the
+/// PM image on a `kernel_alignment` boundary inside the allocation.
+pub fn bzimage_workspace_bytes(pm_size: usize, init_size: usize, align: usize, real: bool) -> usize {
+    let base = core::cmp::max(pm_size, init_size);
+    if real && align > 4096 {
+        base.saturating_add(align)
+    } else {
+        base
+    }
+}
 
 /// Parsed bzImage layout (file-relative).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -310,24 +334,47 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         // Non-relocatable images must sit at pref_address; our allocator cannot.
         return Err(());
     }
-    // Real kernels need `init_size` workspace for in-place decompress.
+    // Real kernels need `init_size` workspace for in-place decompress, plus
+    // alignment slack: `startup_64` sets output=`align_up(load, kernel_alignment)`
+    // and uses `[output, output+init_size)` (stack/relocated ZO live at the top).
     let init_size = if image.len() > OFF_INIT_SIZE + 4 {
         read_u32(image, OFF_INIT_SIZE) as usize
     } else {
         0
     };
-    let need = core::cmp::max(info.pm_size, init_size);
+    let align = if image.len() > OFF_KERNEL_ALIGNMENT + 4 {
+        let a = read_u32(image, OFF_KERNEL_ALIGNMENT) as usize;
+        if a == 0 {
+            0x20_0000
+        } else {
+            a
+        }
+    } else {
+        0x20_0000
+    };
+    let need = bzimage_workspace_bytes(info.pm_size, init_size, align, real);
     let pages = (need + 4095) / 4096;
     if pages == 0 || pages > BZIMAGE_MAX_PAGES {
         return Err(());
     }
 
-    let kernel = alloc.allocate_contiguous(pages as u64).ok_or(())?;
+    let raw = alloc.allocate_contiguous(pages as u64).ok_or(())?;
     let initrd = alloc.allocate_frame().ok_or(())?;
     let cmdline = alloc.allocate_frame().ok_or(())?;
     let boot_params = alloc.allocate_frame().ok_or(())?;
 
-    let kernel_phys = kernel.to_phys();
+    let raw_phys = raw.to_phys();
+    let alloc_bytes = (pages as u64) * 4096;
+    let kernel_phys = if real {
+        let aligned = align_up_u64(raw_phys, align as u64);
+        let window = core::cmp::max(info.pm_size, init_size) as u64;
+        if aligned + window > raw_phys + alloc_bytes {
+            return Err(());
+        }
+        aligned
+    } else {
+        raw_phys
+    };
     let initrd_phys = initrd.to_phys();
     let cmdline_phys = cmdline.to_phys();
     let boot_params_phys = boot_params.to_phys();
@@ -336,10 +383,14 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     // Ownership smoke: claim endpoints + metadata (full map may exceed MAP_CAP).
     let mut claim = [(0u64, PhysFrame::from_phys(0)); 8];
     let mut nclaim = 0usize;
-    claim[nclaim] = (kernel_phys, kernel);
+    claim[nclaim] = (raw_phys, raw);
     nclaim += 1;
+    if kernel_phys != raw_phys {
+        claim[nclaim] = (kernel_phys, PhysFrame::from_phys(kernel_phys));
+        nclaim += 1;
+    }
     if pages > 1 {
-        let last = PhysFrame::from_phys(kernel_phys + ((pages as u64) - 1) * 4096);
+        let last = PhysFrame::from_phys(raw_phys + alloc_bytes - 4096);
         claim[nclaim] = (last.to_phys(), last);
         nclaim += 1;
     }
@@ -353,7 +404,7 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
 
     // SAFETY: freshly allocated identity-mapped frames.
     unsafe {
-        core::ptr::write_bytes(kernel_phys as *mut u8, 0, pages * 4096);
+        core::ptr::write_bytes(raw_phys as *mut u8, 0, pages * 4096);
         core::ptr::copy_nonoverlapping(pm.as_ptr(), kernel_phys as *mut u8, info.pm_size);
         write_proto_init(initrd_phys);
         write_cmdline(cmdline_phys);
@@ -405,7 +456,7 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: true,
         is_real_linux: real,
-        kernel_bytes: (pages as u64) * 4096,
+        kernel_bytes: alloc_bytes,
     })
 }
 
