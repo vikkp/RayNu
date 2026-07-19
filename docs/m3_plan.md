@@ -10,7 +10,7 @@ Lived gates through **M3.14**: [progress.md](progress.md). Post-shell: [m3_post_
 
 ## Where we are
 
-**M3.0–M3.14 closed** — real Linux SHELL on Latitude through precise EPT + APIC; host Verus L3 attempt (`RAYNU-V-M3-L3-OK`). Historical bring-up notes below kept for context.
+**M3.0–M3.17 closed** — real Linux SHELL on Latitude through precise EPT + APIC; true L3 for scoped ghost exclusivity (`RAYNU-V-M3-L3-VERIFY-OK`). Historical bring-up notes below kept for context.
 
 | Have (synthetic) | Need for real Linux |
 |------------------|---------------------|
