@@ -217,6 +217,9 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     else
       echo "error: marker '$MARKER_SHELL' not found after GTIMER2 (need real /init)" >&2
       fail=1
+      echo "==> M3.10 diagnostics (e820 / panic / init clues):" >&2
+      grep -E "e820_entries=|BIOS-e820|BIOS-e801|memmap=|alloc_low_pages|Kernel panic|Run /init|No init|Failed to execute|/init|waiting for real init" \
+        "$SERIAL_LOG" >&2 || true
     fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else

@@ -42,6 +42,8 @@ make tinyconfig
 ./scripts/config --enable TMPFS
 ./scripts/config --enable PROC_FS
 ./scripts/config --enable SYSFS
+# Allow /init iopl(3)+outb COM1 fallback when console nodes are missing.
+./scripts/config --enable X86_IOPL_IOPERM
 ./scripts/config --set-str DEFAULT_HOSTNAME raynu-v
 make olddefconfig
 echo "==> make bzImage"
