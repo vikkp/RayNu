@@ -1069,12 +1069,53 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     vmresume_with_gprs();
 }
 
+/// Guest can accept a VM-entry external interrupt (IF=1, no STI/MOV-SS block).
+/// Injecting with IF=0 → VM-entry failure reason 33 (`0x80000021`).
+unsafe fn guest_can_accept_extint() -> bool {
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    if (rflags & (1 << 9)) == 0 {
+        return false;
+    }
+    let int_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
+    // Bit 0: blocking by STI; bit 1: blocking by MOV SS.
+    (int_state & 0x3) == 0
+}
+
+/// Deliver pending virtual APIC timer IRQ if the guest can accept it.
+/// Returns true if VM-entry interruption-info was programmed.
+unsafe fn try_inject_guest_apic_timer() -> bool {
+    if !lapic_virt::host_timer_armed_for_guest() {
+        return false;
+    }
+    if !guest_can_accept_extint() {
+        let _ = set_interrupt_window_exiting(true);
+        return false;
+    }
+    let Some(vec) = lapic_virt::take_guest_timer_inject() else {
+        return false;
+    };
+    if lapic_virt::gtimer3_ok() {
+        static mut GTIMER3_MARKED: bool = false;
+        if !GTIMER3_MARKED {
+            GTIMER3_MARKED = true;
+            serial::write_line(M3_GTIMER3_OK_MARKER);
+        }
+    }
+    if let Ok(info) = interrupt::prepare_external_inject(vec) {
+        let _ = set_interrupt_window_exiting(false);
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
+}
+
 unsafe fn try_inject_linux_com1_tx() -> bool {
     if !serial_pio::com1_tx_irq_pending() {
         return false;
     }
-    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
-    if (rflags & (1 << 9)) == 0 {
+    if !guest_can_accept_extint() {
         return false;
     }
     let _ = set_interrupt_window_exiting(false);
@@ -1480,6 +1521,13 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         }
         EXIT_REASON_INTERRUPT_WINDOW => {
             let _ = set_interrupt_window_exiting(false);
+            // M3.11: deliver deferred guest APIC timer when IF becomes 1.
+            if try_inject_guest_apic_timer() {
+                if lapic_virt::host_timer_armed_for_guest() {
+                    arm_linux_tick();
+                }
+                vmresume_with_gprs();
+            }
             if try_inject_linux_com1_tx() {
                 vmresume_with_gprs();
             }
@@ -1490,30 +1538,28 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
                 // M3.11: virtual APIC timer (host one-shot → guest LVT vector).
-                if let Some(vec) = lapic_virt::take_guest_timer_inject() {
-                    if lapic_virt::gtimer3_ok() {
-                        static mut GTIMER3_MARKED: bool = false;
-                        if !GTIMER3_MARKED {
-                            GTIMER3_MARKED = true;
-                            serial::write_line(M3_GTIMER3_OK_MARKER);
-                        }
+                // Only inject when IF=1; else arm interrupt-window (avoids
+                // VM-entry failure 0x80000021 / reason 33).
+                if try_inject_guest_apic_timer() {
+                    // Periodic mode re-arms HOST_TIMER_FOR_GUEST inside take().
+                    if lapic_virt::host_timer_armed_for_guest() {
+                        arm_linux_tick();
                     }
-                    if let Ok(info) = interrupt::prepare_external_inject(vec) {
-                        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
-                        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-                        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-                        vmresume_with_gprs();
-                    }
+                    vmresume_with_gprs();
                 }
                 // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
                 if try_inject_linux_com1_tx() {
                     vmresume_with_gprs();
                 }
                 maybe_arm_interrupt_window_for_tx();
-                // Until the guest programs its APIC timer (GTIMER3), keep the
-                // host→IRQ0 jiffies crutch. After GTIMER3, only re-arm when the
-                // virtual APIC asked for a host one-shot.
-                if !lapic_virt::gtimer3_ok() {
+                if lapic_virt::host_timer_armed_for_guest() {
+                    // Pending guest timer — keep host one-shot alive and wait
+                    // for interrupt window (or next tick) to deliver.
+                    let _ = set_interrupt_window_exiting(true);
+                    arm_linux_tick();
+                } else if !lapic_virt::gtimer3_ok() {
+                    // Until the guest programs its APIC timer (GTIMER3), keep
+                    // the host→IRQ0 jiffies crutch.
                     arm_linux_tick();
                     let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
                     let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
@@ -1528,8 +1574,6 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
                             vmresume_with_gprs();
                         }
                     }
-                } else if lapic_virt::host_timer_armed_for_guest() {
-                    arm_linux_tick();
                 }
             }
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
@@ -1554,8 +1598,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             finish_boot(false);
         }
         _ => {
+            let full = ops::vmread(EXIT_REASON).unwrap_or(basic as u64) as u32;
             serial::write_str("boot: linux unhandled exit reason=0x");
-            write_hex_u32(basic);
+            write_hex_u32(full);
+            if (full & (1 << 31)) != 0 {
+                serial::write_str(" (VM-entry failure)");
+            }
             serial::write_byte(b'\n');
             dump_linux_guest_state();
             finish_boot(false);
