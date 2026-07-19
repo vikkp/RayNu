@@ -3,7 +3,7 @@
 **Status:** M3.11–M3.19 closed; **post-L3 track** next is M3.20 (as needed) / M3.21–M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and dropped ISA IRQ0/IRQ4 software inject. Active track: EPT/Kani/assets polish (M3.20–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and M3.19 NOIRQ (no IRQ4; IRQ0 only until SHELL). Active track: EPT/Kani/assets polish (M3.20–M3.22).
 
 ---
 
@@ -157,23 +157,17 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 
 ### M3.19 — No IRQ4 + earlyprintk-only console — `RAYNU-V-M3-NOIRQ-OK`
 
-**Status: open** — host gate updated; Latitude `./tools/qemu-boot-test.sh` pending.
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.19)`.
 
-Latitude showed that dropping **both** ISA software injects stalls Linux: APIC
-calibration needs IRQ0 for jiffies, and `console=ttyS0` needs IRQ4 for 8250 TX
-(hang at `serial8250: ttyS0 at I/O 0x3f8`). M3.19 therefore:
+Dropping **both** ISA software injects stalled Linux (APIC calibrate needs IRQ0
+jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
-1. **Drop IRQ4** COM1 TX software inject (`try_inject_linux_com1_tx` gone).
+1. **Dropped IRQ4** COM1 TX software inject (`try_inject_linux_com1_tx` gone).
 2. SHELL latches via CPUID (`note_shell_cpuid`); cmdline omits `console=ttyS0`
-   (earlyprintk only) so 8250 IRQ TX is not required.
-3. **Keep IRQ0 only until SHELL** — APIC calibrate verify still needs jiffies;
-   no IRQ0 after `guest_shell_ok()`.
-4. Marker `RAYNU-V-M3-NOIRQ-OK` at finish; `qemu-boot-test.sh` requires it
-   (pass line M0→M3.19).
+   (earlyprintk only).
+3. **IRQ0 only until SHELL** — APIC calibrate jiffies; stops at `guest_shell_ok()`.
+4. Marker `RAYNU-V-M3-NOIRQ-OK`; `qemu-boot-test.sh` pass line M0→M3.19.
 5. **`noapic` retained** — IOAPIC still stubbed (future work).
-
-**Done when (Latitude):** `RAYNU-V-M3-SHELL-OK` + `RAYNU-V-M3-NOIRQ-OK` and
-`Boot gate PASSED (M0 → M3.19)`.
 
 **Files:** `vmx/launch.rs`, `vmx/noirq_gate.rs`, `devices/serial_pio.rs`,
 `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
@@ -207,13 +201,13 @@ calibration needs IRQ0 for jiffies, and `console=ttyS0` needs IRQ4 for 8250 TX
 ## Execution order
 
 ```
-M3.11 → … → M3.18 refine → M3.19 NOIRQ (open — Latitude pending)
-M3.20 EPT3 (as needed)  ← optional after M3.19
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed)
+M3.20 EPT3 (as needed)  ← optional next
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**Next: close M3.19 on Latitude, then M3.20 (optional) or M3.21/M3.22.**
+**M3.19 closed on Latitude. Next: M3.20 (optional) or M3.21/M3.22.**
 
 ---
 
@@ -272,12 +266,13 @@ RAYNU-V-M3-L3-REFINE-OK
 # host CI + Latitude ~/raynu
 ```
 
-## M3.19 acceptance (met)
+## M3.19 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-NOIRQ-OK
 RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
 ==> Boot gate PASSED (M0 → M3.19; qemu status=33)
 # host CI + Latitude ~/raynu
 ```
