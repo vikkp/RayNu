@@ -151,6 +151,8 @@ pub const CPU_BASED_ACTIVATE_SECONDARY: u32 = 1 << 31;
 
 /// Secondary proc-based: enable EPT.
 pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
+/// Secondary proc-based: allow RDTSCP in guest (else #UD — Linux clocksource).
+pub const SECONDARY_ENABLE_RDTSCP: u32 = 1 << 3;
 
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
@@ -210,5 +212,6 @@ mod fields_test {
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
+        assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
     }
 }

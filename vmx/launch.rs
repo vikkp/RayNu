@@ -447,10 +447,17 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         serial::write_line("boot: WARN — ack-interrupt-on-exit not allowed; EOI still used");
     }
 
-    let secondary = adjust_vmx_controls(SECONDARY_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2);
+    // RDTSCP: without secondary bit 3, guest `rdtscp` #UD (Linux tsc clocksource).
+    let secondary = adjust_vmx_controls(
+        SECONDARY_ENABLE_EPT | SECONDARY_ENABLE_RDTSCP,
+        IA32_VMX_PROCBASED_CTLS2,
+    );
     if secondary & SECONDARY_ENABLE_EPT == 0 {
         serial::write_line("boot: ERROR — enable-EPT not allowed by PROCBASED_CTLS2");
         return Err(LaunchError::EptUnsupported);
+    }
+    if secondary & SECONDARY_ENABLE_RDTSCP == 0 {
+        serial::write_line("boot: WARN — enable-RDTSCP not allowed; Linux may #UD on rdtscp");
     }
 
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
