@@ -63,6 +63,8 @@ static mut SHADOW_DLL: u8 = 1;
 static mut SHADOW_DLM: u8 = 0;
 /// Port 0x61 (NMI status / speaker): toggle bit 4 so Linux delay loops advance.
 static mut PORT61_SHADOW: u8 = 0;
+/// PIT channel-0 latch counter (decrements on data-port reads).
+static mut PIT0_COUNT: u16 = 0xFFFF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoExitInfo {
@@ -176,19 +178,33 @@ fn handle_misc_pio(info: &IoExitInfo, rax: u64) -> Option<u64> {
                     PORT61_SHADOW as u64
                 }
             }
-            0x80 => 0,                  // POST / io_delay
-            0x40..=0x43 => 0,           // PIT
-            0x70 | 0x71 => 0,           // CMOS
+            0x80 => 0, // POST / io_delay
+            0x40 => {
+                // PIT ch0 data: return a moving count so calibrate loops advance.
+                // SAFETY: single-threaded VMEXIT path.
+                unsafe {
+                    let v = PIT0_COUNT as u64;
+                    PIT0_COUNT = PIT0_COUNT.wrapping_sub(0x40);
+                    v & 0xFF
+                }
+            }
+            0x41..=0x43 => 0,                     // PIT ch1/ch2 / command
+            0x70 | 0x71 => 0,                     // CMOS
             0x20 | 0x21 | 0xA0 | 0xA1 => 0xFF, // PIC
             _ => 0xFF,
         };
         Some((rax & !mask) | (val & mask))
     } else {
-        if info.port == 0x61 {
-            // SAFETY: single-threaded VMEXIT path.
-            unsafe {
+        // SAFETY: single-threaded VMEXIT path.
+        unsafe {
+            if info.port == 0x61 {
                 // Keep toggle bit from reads; accept speaker enable bits from guest.
                 PORT61_SHADOW = (rax as u8 & !0x10) | (PORT61_SHADOW & 0x10);
+            } else if info.port == 0x40 {
+                PIT0_COUNT = (rax as u16) | 0x00FF;
+            } else if info.port == 0x43 {
+                // Mode command — reset latch high so subsequent reads look alive.
+                PIT0_COUNT = 0xFFFF;
             }
         }
         None

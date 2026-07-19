@@ -138,6 +138,9 @@ fn real_linux_cmdline_has_memmap_backup() {
     assert!(s.contains("rdinit=/init"));
     assert!(s.contains("memmap=640K@0"));
     assert!(s.contains("memmap=1023M@1M"));
+    assert!(s.contains("nolapic"));
+    assert!(s.contains("lpj="));
+    assert!(s.contains("idle=poll"));
 }
 
 #[test]

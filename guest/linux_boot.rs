@@ -80,9 +80,10 @@ pub const DEFAULT_CMDLINE: &[u8] =
 
 /// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
 ///
-/// `memmap=` is a belt-and-suspenders RAM supply if zeropage e820 is ignored
-/// (`append_e820_table` requires ≥2 entries; e801 fallback is only ~640 KiB).
-pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nokaslr maxcpus=1 memmap=640K@0 memmap=1023M@1M\0";
+/// - `memmap=` — RAM if zeropage e820 is ignored (`append_e820_table` needs ≥2)
+/// - `nolapic noapic` — avoid guest touching host LAPIC via identity EPT
+/// - `lpj=` / `no_timer_check` / `idle=poll` — skip PIT/TSC calibrate + HLT idle
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nolapic noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll memmap=640K@0 memmap=1023M@1M\0";
 
 /// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
 pub const INITRD_MAX_PAGES: usize = 64;

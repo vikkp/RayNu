@@ -5,7 +5,7 @@
 //! M3.1: CPUID leaf-1 hides VMX. M3.9: classify guest RDMSR/WRMSR so the
 //! VMM can emulate via VMCS fields, host passthrough, shadows, or `#GP`.
 
-use crate::arch::cpu::{self, CPUID_ECX_VMX};
+use crate::arch::cpu::{self, CPUID_ECX_VMX, CPUID_EDX_APIC};
 
 /// COM1 marker when guest CPUID leaf 1 is filtered (M3.1 gate).
 pub const M3_CPUID_OK_MARKER: &str = "RAYNU-V-M3-CPUID-OK";
@@ -217,6 +217,8 @@ pub fn msr_firewall_ok() -> bool {
 /// Emulate guest CPUID: host result, then policy filters.
 ///
 /// M3.1 policy: leaf 1 clears ECX.VMX so the guest cannot see nested VT-x.
+/// M3.10: also clear EDX.APIC so Linux does not program the host LAPIC page
+/// (identity EPT would alias GPA 0xFEE00000 onto the real APIC).
 pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     // SAFETY: CPUID is architecturally defined for these leaves.
     let r = unsafe { cpu::cpuid(leaf, subleaf) };
@@ -228,6 +230,7 @@ pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     };
     if leaf == 1 {
         out.ecx &= !CPUID_ECX_VMX;
+        out.edx &= !CPUID_EDX_APIC;
         note_leaf1_filtered(out.ecx);
     }
     out

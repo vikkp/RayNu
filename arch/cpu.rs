@@ -6,6 +6,8 @@
 
 /// CPUID leaf 1 ECX bit 5 — VMX supported.
 pub const CPUID_ECX_VMX: u32 = 1 << 5;
+/// CPUID.1:EDX bit 9 — local APIC on chip (hide so guest skips host APIC MMIO).
+pub const CPUID_EDX_APIC: u32 = 1 << 9;
 
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;

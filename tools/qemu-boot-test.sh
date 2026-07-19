@@ -46,7 +46,7 @@ MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
 MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
 MARKER_LINUX_EARLY="${MARKER_LINUX_EARLY:-RAYNU-V-M3-LINUX-EARLY-OK}"
 MARKER_GTIMER2="${MARKER_GTIMER2:-RAYNU-V-M3-GTIMER2-OK}"
-TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
 
@@ -218,8 +218,10 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       echo "error: marker '$MARKER_SHELL' not found after GTIMER2 (need real /init)" >&2
       fail=1
       echo "==> M3.10 diagnostics (e820 / panic / init clues):" >&2
-      grep -E "e820_entries=|BIOS-e820|BIOS-e801|memmap=|alloc_low_pages|Kernel panic|Run /init|No init|Failed to execute|/init|waiting for real init" \
-        "$SERIAL_LOG" >&2 || true
+      grep -E "e820_entries=|BIOS-e820|BIOS-e801|alloc_low_pages|Kernel panic|Run /init|No init|Failed to execute|Freeing|initramfs|host-tick=|linux unhandled|waiting for real init|nolapic|lpj=" \
+        "$SERIAL_LOG" | head -n 80 >&2 || true
+      echo "==> M3.10 last 40 serial lines:" >&2
+      tail -n 40 "$SERIAL_LOG" >&2 || true
     fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else

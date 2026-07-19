@@ -54,6 +54,7 @@ fn filter_leaf1_hides_vmx() {
     let r = filter_cpuid(1, 0);
     assert!(vmx_hidden(&r));
     assert_eq!(r.ecx & CPUID_ECX_VMX, 0);
+    assert_eq!(r.edx & crate::arch::cpu::CPUID_EDX_APIC, 0);
     assert!(cpuid_filter_ok());
 }
 
