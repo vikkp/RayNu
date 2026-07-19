@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.4 closed** — Latitude through guest timer (`RAYNU-V-M3-GTIMER-OK`). **M3.5 in flight**: proto-init shell marker (`RAYNU-V-M3-SHELL-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.5 closed** — Latitude through proto-init shell (`RAYNU-V-M3-SHELL-OK`); **synthetic M3 complete**. Next: real bzImage + busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 

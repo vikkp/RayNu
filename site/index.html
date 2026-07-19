@@ -60,14 +60,14 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.5: shell marker.</h2>
+          <h2 class="section__title">Synthetic M3 closed.</h2>
           <p class="section__lede">
-            After the guest timer, enter proto-init; it prints
-            <code>init: RayNu-V proto shell</code> and latches
-            <code>RAYNU-V-M3-SHELL-OK</code> — closing synthetic M3.
+            Latitude passed through proto-init shell
+            (<code>RAYNU-V-M3-SHELL-OK</code>). Synthetic Linux path complete;
+            real bzImage is next.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>init: RayNu-V proto shell
-RAYNU-V-M3-SHELL-OK
+          <pre class="ship-code milestone-log" data-reveal><code>==> M3.5 shell/init marker found
+==> Boot gate PASSED (M0 → M3.5)
 boot: M3.5 complete — synthetic M3 closed</code></pre>
         </div>
       </section>
@@ -142,8 +142,8 @@ boot: M3.5 complete — synthetic M3 closed</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Current gate: shell marker (M3.5). Closes synthetic M3; real
-            bzImage next — see <code>docs/m3_plan.md</code>.
+            Real bzImage + busybox/<code>init</code> on COM1 — see
+            <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

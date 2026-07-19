@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.4: [progress.md](progress.md).
+Lived gates through M3.5 (**synthetic M3 closed**): [progress.md](progress.md).
 
 ---
 
@@ -91,7 +91,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER-OK`).
 - Full QEMU gate; Latitude required
 - Docs / site celebrate M3 closed
 
-Status: **in flight** — proto-init (synthetic); real busybox/`init` deferred post-M3.
+Status: **closed on Latitude** (`RAYNU-V-M3-SHELL-OK`). Proto-init (synthetic); real busybox/`init` next.
 
 ---
 
@@ -131,9 +131,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.4~~ — done.
-2. **M3.5** — shell / init marker (closes synthetic M3).
-3. Real bzImage + busybox init (post-M3).
+1. ~~Plan / M3.0–M3.5~~ — done (**synthetic M3 closed**).
+2. **Real bzImage** + busybox/`init` on COM1.
+3. Verus L3 / precise EPT (parallel; does not gate first real shell).
 
 ---
 

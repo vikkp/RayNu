@@ -22,8 +22,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.2 | `RAYNU-V-M3-LOAD-OK` | Synthetic kernel/initrd + packed `boot_params` (HdrS) |
 | M3.3 | `RAYNU-V-M3-EARLY-OK` | 64-bit proto-kernel entry; Linux-style early serial |
 | M3.4 | `RAYNU-V-M3-GTIMER-OK` | Post-proto guest timer → EOI → inject |
+| M3.5 | `RAYNU-V-M3-SHELL-OK` | Proto-init shell marker; **synthetic M3 closed** |
 
-## Verification checkpoint (as of M3.4)
+## Verification checkpoint (as of M3.5)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -31,16 +32,16 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack for inject (M2.5 / M3.4) |
 | `sched/msr_firewall` | L0→L1-ish | CPUID filter (hide VMX); MSR stub allow-list |
-| `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY magic latches |
-| `guest/linux_boot` | L0→L1-ish | boot_params packing + 64-bit proto-kernel |
-| `arch/apic` | L0 | Host LAPIC one-shot + EOI (outside Proven Core) |
+| `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY/SHELL magic latches |
+| `guest/linux_boot` | L0→L1-ish | boot_params + proto-kernel + proto-init |
+| `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | Lifecycle + launch through proto early + guest timer |
+| `vmx/*` | L0–L1 | Lifecycle + launch through synthetic M3 (shell) |
 | Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
-1. Latitude gate for M3.5 (`RAYNU-V-M3-SHELL-OK`) — closes synthetic M3.
-2. Real bzImage / busybox init (post-synthetic M3).
-3. Verus L3 proofs for EPT / allocator (parallel).
+1. Real bzImage + busybox/`init` (post-synthetic M3) — see [m3_plan.md](m3_plan.md).
+2. Verus L3 proofs for EPT / allocator (parallel).
+3. Precise EPT / drop identity scaffold (as needed for real Linux).
