@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.17 closed (true L3 for 4K single-guest ghost exclusivity).  
+**Status:** M3.11–M3.17 closed; **post-L3 track** next is M3.18.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches, drafted the ADR-004 L3 attempt, froze Verus, linked the EptMap ghost model, and discharged true L3 (no `admit`). Parallel: drop IRQ0/IRQ4 when ready.
+M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and delivered scoped true L3 (`ept_model`). Active track: ghost↔exec refinement + remaining guest/infra polish (M3.18–M3.22).
 
 ---
 
@@ -124,27 +124,79 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 1. Green `cargo verus verify -p ept_model` with **no `admit()`** on map/unmap exclusivity lemmas + `theorem_single_guest_4k_map_unmap_exclusive`.
 2. `tools/verus-verify-smoke.sh` rejects `admit(` and requires a positive verified count.
 3. Host gate `memory/l3_verify_gate.rs` + CI `verus-verify` hard-fail job.
-4. **ADR-006 L3** for scoped ghost property (4K, single guest, map/unmap). Live `EptMap` stays L2 until refinement (remaining GAPs in `ept_proof.rs`).
+4. **ADR-006 L3** for scoped ghost property (4K, single guest, map/unmap). Live `EptMap` stays L2 until M3.18 refinement.
 
 **Files:** `ept_model/src/lib.rs`, `tools/verus-verify-smoke.sh`, `memory/l3_verify_gate.rs`, `.github/workflows/ci.yml`.
 
-### Parallel (any time)
+---
 
-- PE `.assets.*` embed (ADR-003) when size budget allows
-- Harden Kani CI
-- Drop IRQ0/IRQ4 crutches when lapic/serial fully own those paths
-- Tighter-than-1 GiB EPT windows if needed
+## Post-L3 track (M3.18–M3.22)
+
+Numbered gates after true L3. Each = branch `cursor/m3-N-…-a623`, marker, Latitude and/or host gate, docs touch. Out of band until **M4**: N guests, large pages, migration proofs.
+
+```
+M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
+                 M3.21 Kani harden (parallel)
+                 M3.22 PE assets (parallel)
+```
+
+### M3.18 — Ghost↔exec refinement — `RAYNU-V-M3-L3-REFINE-OK`
+
+**Status: planned.** ← **next to build**
+
+**Goal:** Connect live `EptMap` (and map/unmap exec path) to the verified `GhostEptMap` so 4K single-guest steps refine into the L3 model. Close `GAP(M3.18): Ghost model not yet refined against concrete EptMap exec path` in `ept_proof.rs`. Host gate (+ Verus proof obligations where they fit the pin); Latitude: M0→M3.13 no-regression.
+
+**In scope:** refinement relation / abstraction function; exec map/unmap preserve exclusivity via the ghost model; marker + CI/host smoke.
+
+**Out of scope:** N guests, large pages, HW PTE identity builder, frame-allocator coupling (later GAPs / M4+).
+
+**Files (expected):** `ept_model/`, `memory/ept.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, new host gate + smoke as needed.
+
+### M3.19 — Drop IRQ0/IRQ4 crutches — `RAYNU-V-M3-NOIRQ-OK`
+
+**Status: planned.**
+
+**Goal:** Remove software IRQ0 (calibrate jiffies) and IRQ4 (COM1 TX) inject once guest lapic/serial paths own those roles; keep SHELL green on Latitude without those crutches. `noapic` may remain until IOAPIC work is ready (document if so).
+
+**Files (expected):** `vmx/launch.rs`, `devices/lapic_virt.rs`, `devices/serial_pio.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
+
+### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
+
+**Status: planned** (build when needed; may stay deferred if 1 GiB remains sufficient).
+
+**Goal:** Shrink precise identity below `[0, 1 GiB)` where e820/UEFI allow, with ADR-004 range claims updated; retain APIC unmapped-by-omission; SHELL + EPT2 chain still green (or successor markers).
+
+**Files (expected):** `memory/ept_hw.rs`, `memory/ept.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+
+### M3.21 — Harden Kani CI — `RAYNU-V-M3-KANI-OK`
+
+**Status: planned** (parallel with M3.18–M3.20).
+
+**Goal:** M2.6 harnesses (`kani_no_double_map_same_hpa`, `kani_alloc_no_alias_double_free_rejected`) pass reliably in CI — hard-fail preferred; document pin/toolchain if soft-fail must remain temporarily.
+
+**Files (expected):** `.github/workflows/ci.yml`, Kani harness modules, docs.
+
+### M3.22 — PE `.assets.*` embed — `RAYNU-V-M3-ASSETS-OK`
+
+**Status: planned** (parallel; size-budget gated, ADR-003).
+
+**Goal:** Embed kernel/initrd (or successor assets) as PE `.assets.*` sections when under the 15 MB target / 20 MB hard limit; boot path prefers embed with ESP fallback retained.
+
+**Files (expected):** `boot/` / build scripts, `tools/build.sh`, size-check, ADR-003 notes.
 
 ---
 
 ## Execution order
 
 ```
-M3.11 → M3.12 → M3.13 → M3.14 (closed)
-M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify (closed)
+M3.11 → … → M3.17 (closed — true L3)
+M3.18 refine  ← next
+M3.19 NOIRQ → M3.20 EPT3 (as needed)
+M3.21 Kani + M3.22 assets (parallel any time)
+→ M4 (N-guest platform)
 ```
 
-**M3.17 closed (true L3 for scoped ghost exclusivity).**
+**M3.17 closed. Now planning: M3.18.**
 
 ---
 

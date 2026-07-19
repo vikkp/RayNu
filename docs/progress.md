@@ -55,9 +55,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
-## Next
+## Next (numbered)
 
-Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
+Post-shell / post-L3 plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. Ghost↔exec refinement for live `EptMap` (remaining GAP in `ept_proof.rs`)
-2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed; N-guest / large-page proofs (M4–M6).
+| Gate | Marker | Goal |
+|------|--------|------|
+| **M3.18** ← next | `RAYNU-V-M3-L3-REFINE-OK` | Ghost↔exec refinement (live `EptMap` ↔ verified `ept_model`) |
+| M3.19 | `RAYNU-V-M3-NOIRQ-OK` | Drop IRQ0/IRQ4 software-inject crutches |
+| M3.20 | `RAYNU-V-M3-EPT3-OK` | Tighter-than-1 GiB EPT windows (when needed) |
+| M3.21 | `RAYNU-V-M3-KANI-OK` | Harden Kani CI (hard-fail preferred) |
+| M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.assets.*` embed (ADR-003, size-budget) |
+| M4+ | — | N-guest / large-page / migration proofs |
