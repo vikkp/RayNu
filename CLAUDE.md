@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.14 closed**; **M3.15 in progress** (pin Verus → `RAYNU-V-M3-VERUS-OK`). True L3: M3.15→M3.17. Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**Through M3.15 closed** (pinned Verus → `RAYNU-V-M3-VERUS-OK`). Next true L3: M3.16 link → M3.17 verify. Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 

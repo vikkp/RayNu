@@ -90,17 +90,17 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 
 ### M3.15 — Pin Verus toolchain — `RAYNU-V-M3-VERUS-OK`
 
-**Status: in progress.**
+**Status: closed on host** (`./tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK`).
 
-**Goal:**
+**Shipped:**
 
-1. Exact Verus weekly release in `verus-version.toml` (ADR-008).
-2. `tools/install-verus.sh` downloads the pinned Linux binary + installs its Rust toolchain.
-3. `tools/verus-smoke.sh` runs `verus --version` + `cargo verus verify` (crate may not opt into proofs yet).
-4. Host pin gate + CI hard-pass smoke → `RAYNU-V-M3-VERUS-OK`.
-5. Full Proven Core proof discharge still deferred (soft path until M3.17).
+1. Exact weekly Verus `0.2026.07.12.0b42f4c` in `verus-version.toml` (ADR-008).
+2. `tools/install-verus.sh` downloads the pinned Linux binary + installs its Rust toolchain (`1.96.0`).
+3. `tools/verus-smoke.sh` runs `verus --version` + `cargo verus verify` (crate not opted into proofs yet — M3.16).
+4. Host pin gate `memory/verus_gate.rs` + CI hard-pass `verus-smoke` job.
+5. Full Proven Core proof discharge still deferred to M3.17.
 
-**Files:** `verus-version.toml`, `tools/install-verus.sh`, `tools/verus-smoke.sh`, `memory/verus_gate.rs`, `.github/workflows/ci.yml`.
+**Files:** `verus-version.toml`, `tools/install-verus.sh`, `tools/verus-smoke.sh`, `memory/verus_gate.rs`, `memory/verus_gate_test.rs`, `.github/workflows/ci.yml`.
 
 ### M3.16 — Verus-linkable EptMap — `RAYNU-V-M3-L3-LINK-OK`
 
@@ -130,7 +130,7 @@ M3.11 → M3.12 → M3.13 → M3.14 (closed)
 M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify   ← now
 ```
 
-**Now executing: M3.15.**
+**M3.15 closed (host). Now executing: M3.16.**
 
 ---
 
@@ -154,7 +154,7 @@ RAYNU-V-M3-L3-OK
 ==> Boot gate PASSED (M0 → M3.13; qemu status=33)
 ```
 
-## M3.15 acceptance (target)
+## M3.15 acceptance (met on host)
 
 ```text
 RAYNU-V-M3-VERUS-OK

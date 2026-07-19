@@ -32,9 +32,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.12 | `RAYNU-V-M3-APIC-OK` | IRR/ISR LVT inject + EOI decode; SHELL (Latitude) |
 | M3.13 | `RAYNU-V-M3-EPT2-OK` | Precise `[0,1GiB)` EPT + range claims; SHELL (Latitude) |
 | M3.14 | `RAYNU-V-M3-L3-OK` | Host Verus L3 *attempt* (4K single-guest lemmas + gaps); Latitude M0→M3.13 still green |
-| M3.15 | `RAYNU-V-M3-VERUS-OK` | *(in progress)* Pin weekly Verus + CI/host smoke (`cargo verus`) |
+| M3.15 | `RAYNU-V-M3-VERUS-OK` | Pinned Verus `0.2026.07.12.0b42f4c` + CI/host smoke (`cargo verus`) |
 
-## Verification checkpoint (as of M3.14; true L3 track open)
+## Verification checkpoint (as of M3.15; true L3 track)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -49,14 +49,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
 | `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
-| Verus proofs (`ept_proof.rs`) | L3-attempt | Lemmas + GAP list (M3.14); Verus unpinned — not ADR-006 L3 |
+| Verus proofs (`ept_proof.rs`) | L3-attempt | Lemmas + GAP list (M3.14); toolchain pinned (M3.15) — not ADR-006 L3 yet |
+| Verus toolchain | Pinned | `verus-version.toml` + `tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK` |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.15** — pin Verus → `RAYNU-V-M3-VERUS-OK` *(now)*
-2. **M3.16** — Verus-linkable EptMap → `RAYNU-V-M3-L3-LINK-OK`
-3. **M3.17** — green `cargo verus --verify` on exclusivity theorem → `RAYNU-V-M3-L3-VERIFY-OK` (true L3)
-4. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.
+1. **M3.16** — Verus-linkable EptMap → `RAYNU-V-M3-L3-LINK-OK`
+2. **M3.17** — green `cargo verus --verify` on exclusivity theorem → `RAYNU-V-M3-L3-VERIFY-OK` (true L3)
+3. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.
