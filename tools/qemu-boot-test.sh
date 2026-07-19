@@ -19,6 +19,7 @@
 # M3.6: RAYNU-V-M3-LOOP-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.7: RAYNU-V-M3-BZIMAGE-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.8: RAYNU-V-M3-LINUX-EARLY-OK (required for real Linux; proto keeps EARLY..LOOP)
+# M3.9: RAYNU-V-M3-GTIMER2-OK (required for real Linux after earlyprintk)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -43,6 +44,7 @@ MARKER_SHELL="${MARKER_SHELL:-RAYNU-V-M3-SHELL-OK}"
 MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
 MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
 MARKER_LINUX_EARLY="${MARKER_LINUX_EARLY:-RAYNU-V-M3-LINUX-EARLY-OK}"
+MARKER_GTIMER2="${MARKER_GTIMER2:-RAYNU-V-M3-GTIMER2-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -199,6 +201,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   # M3.8 real Linux vs proto fixture: mutually exclusive post-entry markers.
   if grep -qF "$MARKER_LINUX_EARLY" "$SERIAL_LOG"; then
     echo "==> M3.8 Linux earlyprintk marker found"
+    if grep -qF "$MARKER_GTIMER2" "$SERIAL_LOG"; then
+      echo "==> M3.9 Linux GTIMER2 marker found"
+    else
+      echo "error: marker '$MARKER_GTIMER2' not found after LINUX-EARLY" >&2
+      fail=1
+    fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/SHELL/LOOP checks"
   else
     if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
@@ -244,5 +252,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.8; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.9; qemu status=$QEMU_STATUS)"
 exit 0

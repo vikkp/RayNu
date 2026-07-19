@@ -46,6 +46,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.9** MSR / guest-timer harden (`RAYNU-V-M3-GTIMER2-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for **M3.9** (`RAYNU-V-M3-GTIMER2-OK`) — MSR firewall + post-banner LAPIC.
 2. **M3.10** busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
 3. Verus L3 / precise EPT (parallel; not on the shell critical path).

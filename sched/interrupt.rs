@@ -15,6 +15,9 @@ pub const M2_TIMER_OK_MARKER: &str = "RAYNU-V-M2-TIMER-OK";
 /// COM1 marker when post-proto guest timer → EOI → inject ISR HLTs (M3.4).
 pub const M3_GTIMER_OK_MARKER: &str = "RAYNU-V-M3-GTIMER-OK";
 
+/// COM1 marker when post-earlyprintk host LAPIC → ext-IRQ VMEXIT (M3.9).
+pub const M3_GTIMER2_OK_MARKER: &str = "RAYNU-V-M3-GTIMER2-OK";
+
 /// Bring-up vector for inject and LAPIC timer LVT.
 pub const M2_IRQ_VECTOR: u32 = 0x21;
 
