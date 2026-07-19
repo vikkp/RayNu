@@ -136,6 +136,8 @@ Known traps:
   `CR4_GUEST_HOST_MASK` / `CR4_READ_SHADOW` at Linux entry.
 - Relocate window is `[align_up(load, 2MiB), align_up+init_size)` — reserve
   `init_size + kernel_alignment` and place the PM image on a 2 MiB boundary.
+- Do not intercept `#PF`: ZO `do_boot_page_fault` demand-maps the decompress
+  output (and later early identity ranges).
 
 ### M3.9 — Guest timer / MSR harden — `RAYNU-V-M3-GTIMER2-OK`
 

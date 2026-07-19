@@ -1271,10 +1271,10 @@ unsafe fn dump_linux_exception_exit() {
         write_hex_u32(ec);
     }
     if vector == 14 {
-        // #PF — CR2 is not VMCS-switched; still holds the fault address.
-        let cr2 = cpu::read_cr2();
-        serial::write_str(" cr2=0x");
-        write_hex_u64(cr2);
+        // Intercepted #PF: fault address is EXIT_QUALIFICATION (CR2 may be stale).
+        let addr = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+        serial::write_str(" pfaddr=0x");
+        write_hex_u64(addr);
     }
     serial::write_byte(b'\n');
     dump_linux_guest_state();

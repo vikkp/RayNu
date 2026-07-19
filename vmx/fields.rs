@@ -180,7 +180,10 @@ pub const EXIT_REASON_MSR_READ: u32 = 31;
 /// WRMSR
 pub const EXIT_REASON_MSR_WRITE: u32 = 32;
 
-/// Exception bitmap: catch faults before they escalate to triple fault (M3.8).
+/// Exception bitmap: catch fatal faults before they escalate to triple fault.
+///
+/// Do **not** intercept `#PF`: the compressed kernel demand-maps identity
+/// ranges in `do_boot_page_fault()` during decompress/earlyprintk.
 pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
     | (1 << 6) // #UD
     | (1 << 8) // #DF
@@ -188,7 +191,6 @@ pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
     | (1 << 11) // #NP
     | (1 << 12) // #SS
     | (1 << 13) // #GP
-    | (1 << 14) // #PF
     | (1 << 17) // #AC
     | (1 << 19); // #XF
 
