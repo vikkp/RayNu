@@ -26,6 +26,7 @@
 # M3.13: RAYNU-V-M3-EPT2-OK (precise EPT identity + range claims)
 # M3.19: RAYNU-V-M3-NOIRQ-OK (no IRQ4 inject; IRQ0 only until SHELL)
 # M3.20: RAYNU-V-M3-EPT3-OK (tight EPT [0,512MiB); QEMU -m 512M)
+# M3.22: RAYNU-V-M3-ASSETS-OK (PE .askern/.asinit embed; ESP fallback)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -56,6 +57,7 @@ MARKER_APIC="${MARKER_APIC:-RAYNU-V-M3-APIC-OK}"
 MARKER_EPT2="${MARKER_EPT2:-RAYNU-V-M3-EPT2-OK}"
 MARKER_EPT3="${MARKER_EPT3:-RAYNU-V-M3-EPT3-OK}"
 MARKER_NOIRQ="${MARKER_NOIRQ:-RAYNU-V-M3-NOIRQ-OK}"
+MARKER_ASSETS="${MARKER_ASSETS:-RAYNU-V-M3-ASSETS-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -144,6 +146,13 @@ for m in "$MARKER_M0" "$MARKER_M10"; do
     fail=1
   fi
 done
+
+if grep -qF "$MARKER_ASSETS" "$SERIAL_LOG"; then
+  echo "==> M3.22 PE assets marker found"
+else
+  echo "error: marker '$MARKER_ASSETS' not found (need PE .askern/.asinit embed)" >&2
+  fail=1
+fi
 
 if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   echo "==> M1.1 VMXON marker found"
@@ -308,5 +317,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.20; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.22; qemu status=$QEMU_STATUS)"
 exit 0

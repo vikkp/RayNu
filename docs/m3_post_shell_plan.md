@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.21 closed; **post-L3 track** next is M3.22.  
+**Status:** M3.11–M3.22 **closed**; next track is **M4**.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, refine, NOIRQ, tight EPT, and hard-fail Kani. Active: M3.22 PE assets.
+M3’s first-shell goal is closed. Post-shell harden delivered L3, refine, NOIRQ, tight EPT, Kani, and PE asset embed. Active: M4 platform work.
 
 ---
 
@@ -205,23 +205,32 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ### M3.22 — PE `.assets.*` embed — `RAYNU-V-M3-ASSETS-OK`
 
-**Status: planned** (parallel; size-budget gated, ADR-003).
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.22)`.
 
-**Goal:** Embed kernel/initrd (or successor assets) as PE `.assets.*` sections when under the 15 MB target / 20 MB hard limit; boot path prefers embed with ESP fallback retained.
+**Shipped:**
 
-**Files (expected):** `boot/` / build scripts, `tools/build.sh`, size-check, ADR-003 notes.
+1. Embed `assets/bzImage` + `assets/initrd` as PE sections `.askern` / `.asinit`
+   (8-char COFF aliases for ADR-003 `.assets.kernel` / `.assets.initrd`).
+2. Boot prefers PE → ESP → runtime minimal → synthetic.
+3. Emit `RAYNU-V-M3-ASSETS-OK` when PE embed is present.
+4. `tools/check-pe-assets.sh` + `build.sh` verify sections; `check-size.sh` still enforces 15/20 MB.
+5. Host gate `boot/assets_gate.rs`; qemu pass line M0→M3.22.
+
+**Deferred:** zstd, webui/schemas/vmconfigs (still under budget without them).
+
+**Files:** `boot/pe_assets.rs`, `boot/assets_gate.rs`, `src/main.rs`, `tools/build.sh`,
+`tools/check-pe-assets.sh`, `tools/qemu-boot-test.sh`, `docs/adr/ADR-003.md`.
 
 ---
 
 ## Execution order
 
 ```
-M3.11 → … → M3.20 EPT3 (closed) → M3.21 Kani (closed)
-M3.22 assets ← next
+M3.11 → … → M3.21 Kani (closed) → M3.22 assets (closed)
 → M4 (N-guest platform)
 ```
 
-**M3.21 closed on CI + Latitude. Next: M3.22 PE assets.**
+**M3.22 closed on Latitude. Next: M4.**
 
 ---
 
@@ -309,4 +318,15 @@ Complete - 2 successfully verified harnesses, 0 failures, 2 total.
 RAYNU-V-M3-KANI-OK
 ==> Kani smoke PASSED (M3.21)
 # CI job kani (M3.21 hard-fail) + Latitude ~/raynu
+```
+
+## M3.22 acceptance (met on Latitude)
+
+```text
+RAYNU-V-M3-ASSETS-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
+==> Boot gate PASSED (M0 → M3.22; qemu status=33)
+# host CI + Latitude ~/raynu
 ```

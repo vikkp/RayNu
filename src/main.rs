@@ -22,6 +22,7 @@
 //! M3.9: MSR firewall + post-banner LAPIC (`RAYNU-V-M3-GTIMER2-OK`).
 //! M3.10: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`.
 //! M3.13/M3.20: precise EPT `[0,512MiB)` + range claims (`EPT2`/`EPT3`).
+//! M3.22: PE `.askern`/`.asinit` embed prefer + ESP fallback (`ASSETS-OK`).
 
 #![no_main]
 #![no_std]
@@ -50,17 +51,21 @@ fn main() -> Status {
 
     boot::serial::write_line("boot: M0 complete — entering M1.0 firmware handoff");
 
-    // M3.7/M3.10: stage ESP bzImage (+ INITRD) before ExitBootServices.
+    // M3.22: prefer PE-embedded assets (ADR-003); ESP is split-mode fallback.
+    // Probe ESP before EBS so fallback remains available if PE is empty.
     boot::esp_assets::probe_bzimage();
-    if boot::esp_assets::initrd_bytes().is_none() {
-        // Embedded gzip+cpio with static /init (M3.10).
-        let embedded: &[u8] = include_bytes!("../assets/initrd");
-        let _ = boot::esp_assets::stage_initrd(embedded);
-    }
-    if boot::esp_assets::bzimage_bytes().is_none() {
-        boot::serial::write_line("boot: ESP BZIMAGE missing — will use embedded minimal");
+    if boot::pe_assets::embedded_present() {
+        boot::serial::write_line("boot: PE assets embedded (.askern/.asinit) — prefer PE");
+        boot::serial::write_line(boot::M3_ASSETS_OK_MARKER);
+    } else if boot::esp_assets::bzimage_bytes().is_some() {
+        boot::serial::write_line("boot: ESP BZIMAGE staged (PE embed missing)");
+        if boot::esp_assets::initrd_bytes().is_none() {
+            if let Some(initrd) = boot::pe_assets::initrd_bytes() {
+                let _ = boot::esp_assets::stage_initrd(initrd);
+            }
+        }
     } else {
-        boot::serial::write_line("boot: ESP BZIMAGE staged");
+        boot::serial::write_line("boot: no PE/ESP bzImage — will use embedded minimal");
     }
 
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
@@ -253,8 +258,10 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     }
 
-    // M3.7 / M3.2: prefer bzImage (ESP or embedded minimal), else synthetic.
-    if boot::esp_assets::bzimage_bytes().is_none() {
+    // M3.22 / M3.7: prefer PE embed → ESP stage → runtime minimal → synthetic.
+    let mut kernel = boot::pe_assets::bzimage_bytes().or_else(boot::esp_assets::bzimage_bytes);
+    let initrd = boot::pe_assets::initrd_bytes().or_else(boot::esp_assets::initrd_bytes);
+    if kernel.is_none() {
         let mut minimal = [0u8; guest::MINIMAL_BZIMAGE_CAP];
         let n = guest::build_minimal_bzimage(&mut minimal);
         if boot::esp_assets::stage_bzimage(&minimal[..n]).is_err() {
@@ -262,9 +269,10 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             let _ = life.disable();
             return;
         }
+        kernel = boot::esp_assets::bzimage_bytes();
     }
-    let load = if let Some(img) = boot::esp_assets::bzimage_bytes() {
-        match guest::load_bzimage_guest(alloc, img, boot::esp_assets::initrd_bytes()) {
+    let load = if let Some(img) = kernel {
+        match guest::load_bzimage_guest(alloc, img, initrd) {
             Ok(info) => Ok(info),
             Err(()) => {
                 boot::serial::write_line("boot: bzImage load failed — synthetic fallback");
