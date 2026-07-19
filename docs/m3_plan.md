@@ -190,7 +190,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.11~~ — done (real Linux SHELL + virtual APIC / GTIMER3).
-2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.12** faithful APIC inject next.
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.12** faithful APIC inject (in progress).
 3. M3.13 precise EPT; M3.14 Verus L3 parallel.
 
 ---
@@ -199,8 +199,8 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.11** GTIMER3 + CPUID SHELL |
-| `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC timer (M3.11) |
+| `vmx/launch.rs` | Exit phase machine → **M3.12** APIC IRR inject + CPUID SHELL |
+| `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC + IRR/ISR (M3.12) |
 | `vmx/mmio_decode.rs` | APIC MMIO mov decode (EPT violation) |
 | `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
 | `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |

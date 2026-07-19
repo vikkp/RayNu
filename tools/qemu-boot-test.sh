@@ -21,6 +21,8 @@
 # M3.8: RAYNU-V-M3-LINUX-EARLY-OK (required for real Linux; proto keeps EARLY..LOOP)
 # M3.9: RAYNU-V-M3-GTIMER2-OK (required for real Linux after earlyprintk)
 # M3.10: RAYNU-V-M3-SHELL-OK (required for real Linux after GTIMER2)
+# M3.11: RAYNU-V-M3-GTIMER3-OK (virtual APIC timer)
+# M3.12: RAYNU-V-M3-APIC-OK (IRR/ISR LVT inject; drop IRQ0 crutch)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -47,6 +49,7 @@ MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
 MARKER_LINUX_EARLY="${MARKER_LINUX_EARLY:-RAYNU-V-M3-LINUX-EARLY-OK}"
 MARKER_GTIMER2="${MARKER_GTIMER2:-RAYNU-V-M3-GTIMER2-OK}"
 MARKER_GTIMER3="${MARKER_GTIMER3:-RAYNU-V-M3-GTIMER3-OK}"
+MARKER_APIC="${MARKER_APIC:-RAYNU-V-M3-APIC-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -230,6 +233,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       echo "error: marker '$MARKER_GTIMER3' not found (need virtual APIC timer)" >&2
       fail=1
     fi
+    if grep -qF "$MARKER_APIC" "$SERIAL_LOG"; then
+      echo "==> M3.12 faithful APIC inject marker found"
+    else
+      echo "error: marker '$MARKER_APIC' not found (need IRR/ISR LVT inject)" >&2
+      fail=1
+    fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else
     if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
@@ -275,5 +284,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.11; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.12; qemu status=$QEMU_STATUS)"
 exit 0

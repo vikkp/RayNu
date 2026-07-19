@@ -40,12 +40,14 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.12 — Faithful APIC inject + drop IRQ crutches — `RAYNU-V-M3-APIC-OK`
 
-- Virtual IRR/ISR + EOI so guest LVT timer inject does not panic (`Fatal exception in interrupt` on Latitude)
-- Emulate enough 8259 *or* move serial to polling/virt path so ttyS0 TX works without IRQ4 inject
-- Remove CPL0-only IRQ0 inject; remove interrupt-window TX hack if APIC owns it
-- Cmdline: drop `noapic` when IOAPIC stub exists **or** document PIC-only stay
+**In progress** on `cursor/m3-12-apic-inject-a623`.
 
-Marker: durable Linux run with APIC timer inject + SHELL without host→IRQ0.
+- Virtual IRR/ISR + EOI so guest LVT timer inject does not panic (`Fatal exception in interrupt` on Latitude)
+- Real `CUR_COUNT` so lapic calibrate can succeed; host one-shot → IRR → interrupt-window inject
+- Drop host→IRQ0 after first APIC-OK deliver (keep IRQ4 COM1 TX until serial is poll-safe)
+- Cmdline: keep `noapic` for now (IOAPIC stub → later); document PIC-only stay for ISA
+
+Marker: durable Linux run with APIC timer inject + SHELL without host→IRQ0 after APIC-OK.
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 

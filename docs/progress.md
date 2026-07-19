@@ -39,7 +39,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
 | `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY/SHELL + LINUX-EARLY banner latch |
-| `devices/lapic_virt` | L0 | Virtual xAPIC/x2APIC; GTIMER3 latch; LVT inject → M3.12 |
+| `devices/lapic_virt` | L0 | Virtual xAPIC/x2APIC; IRR/ISR + EOI; M3.12 APIC-OK |
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
@@ -52,5 +52,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.12** — faithful APIC LVT inject + drop host→IRQ0 / IRQ4 crutches.
+1. **M3.12** (in progress) — faithful APIC LVT inject + drop host→IRQ0 after APIC-OK.
 2. **M3.13** — precise EPT; **M3.14** — Verus L3 (parallel).
