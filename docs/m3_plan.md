@@ -198,9 +198,10 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.8** real Linux early path |
+| `vmx/launch.rs` | Exit phase machine → **M3.9** GTIMER2 after LINUX-EARLY |
 | `guest/linux_boot.rs` | Relocatable bzImage load + aligned `init_size` workspace |
 | `devices/serial_pio.rs` | COM1 latch → **M3.8** `LINUX-EARLY-OK` |
+| `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9** |
 
 | `devices/mod.rs` | Device stubs → serial PIO |
 | `memory/ept_hw.rs` | 4 GiB identity (keep for M3 bring-up) |
