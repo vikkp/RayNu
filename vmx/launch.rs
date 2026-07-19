@@ -828,6 +828,10 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     {
         handle_msr_and_resume(basic);
     }
+    // M3.10: XSETBV always exits; Linux enables XSAVE early after fpu init.
+    if REAL_LINUX_GUEST && basic == EXIT_REASON_XSETBV {
+        handle_xsetbv_and_resume(guest_rip);
+    }
     // M3.10: after GTIMER2, quiet-dispatch EXT_INT / HLT — logging every tick
     // on COM1 interleaves with Linux printk and starves guest progress.
     if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE && phase == 4 {
@@ -946,6 +950,40 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
         arm_linux_gtimer2();
     }
     // Preserve RSI across OUT storms in the proto-kernel.
+    vmresume_with_gprs();
+}
+
+/// Emulate guest XSETBV (exit reason 55). Only XCR0 is accepted.
+unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
+    let xcr = SAVED_GUEST_RCX as u32;
+    let value =
+        (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
+    if xcr != 0 {
+        inject_gp0();
+        vmresume_with_gprs();
+    }
+    // Mask to host-supported XCR0 features (CPUID.0D:0).
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    // XCR0 bit 0 (x87) must stay set.
+    let mut v = (value & host_mask) | 1;
+    if v & 0x6 == 0x4 {
+        // AVX (bit 2) requires SSE (bit 1).
+        v |= 0x2;
+    }
+    // SAFETY: VMX root; CR4.OSXSAVE already set for host bring-up / guest.
+    unsafe {
+        cpu::xsetbv(0, v);
+    }
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(3);
+    if insn_len == 0 || insn_len > 15 {
+        serial::write_line("boot: ERROR — XSETBV bad insn len");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     vmresume_with_gprs();
 }
 
@@ -1274,6 +1312,7 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             finish_boot(false);
         }
         EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => handle_msr_and_resume(basic),
+        EXIT_REASON_XSETBV => handle_xsetbv_and_resume(ops::vmread(GUEST_RIP).unwrap_or(0)),
         EXIT_REASON_CR_ACCESS => {
             serial::write_line("boot: ERROR — unexpected CR-access exit");
             dump_linux_guest_state();
@@ -1727,6 +1766,7 @@ mod launch_test {
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(EXIT_REASON_CPUID, 10);
         assert_eq!(EXIT_REASON_IO_INSTRUCTION, 30);
+        assert_eq!(EXIT_REASON_XSETBV, 55);
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
         assert_eq!(CPU_BASED_CPUID_EXITING, 1 << 21);

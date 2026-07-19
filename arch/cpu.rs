@@ -106,6 +106,35 @@ pub unsafe fn write_cr4(v: u64) {
     core::arch::asm!("mov cr4, {}", in(reg) v, options(nostack, preserves_flags));
 }
 
+/// Read XCR0 (or other XCR). `xcr` is typically 0.
+#[inline]
+pub unsafe fn xgetbv(xcr: u32) -> u64 {
+    let lo: u32;
+    let hi: u32;
+    core::arch::asm!(
+        "xgetbv",
+        in("ecx") xcr,
+        out("eax") lo,
+        out("edx") hi,
+        options(nostack, preserves_flags),
+    );
+    ((hi as u64) << 32) | (lo as u64)
+}
+
+/// Write XCR (usually XCR0). Caller must ensure CR4.OSXSAVE and valid bits.
+#[inline]
+pub unsafe fn xsetbv(xcr: u32, value: u64) {
+    let lo = value as u32;
+    let hi = (value >> 32) as u32;
+    core::arch::asm!(
+        "xsetbv",
+        in("ecx") xcr,
+        in("eax") lo,
+        in("edx") hi,
+        options(nostack, preserves_flags),
+    );
+}
+
 #[inline]
 pub unsafe fn rdmsr(msr: u32) -> u64 {
     let lo: u32;

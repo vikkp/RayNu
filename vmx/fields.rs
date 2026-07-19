@@ -179,6 +179,8 @@ pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
 pub const EXIT_REASON_MSR_READ: u32 = 31;
 /// WRMSR
 pub const EXIT_REASON_MSR_WRITE: u32 = 32;
+/// XSETBV (always exits from non-root).
+pub const EXIT_REASON_XSETBV: u32 = 55;
 
 /// Exception bitmap: catch fatal faults before they escalate to triple fault.
 ///
