@@ -62,9 +62,10 @@
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
           <h2 class="section__title">M3.14: Verus L3 attempt.</h2>
           <p class="section__lede">
-            ADR-004 exclusivity lemmas for 4K single-guest map/unmap — host
-            <code>RAYNU-V-M3-L3-OK</code>. Not machine-checked yet; EptMap stays
-            L2 until Verus is pinned.
+            We drafted machine-checkable exclusivity lemmas for guest memory
+            map/unmap — latched by host marker
+            <code>RAYNU-V-M3-L3-OK</code>. Lemmas are not yet discharged by
+            Verus; isolation specs stay at “written,” not “proved.”
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-L3-OK
 RAYNU-V-M3-EPT2-OK
@@ -79,8 +80,10 @@ host: M3.14 complete — L3 attempt OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">M1.0 → M3.14: how we got here</h2>
           <p class="section__lede">
-            Every closed gate is a marker — COM1 on nested KVM, or host
-            <code>cargo test</code>. From leaving UEFI to a Verus L3 attempt.
+            A closed gate proves one acceptance property under automation —
+            COM1 markers on nested KVM for boot behavior, or host
+            <code>cargo test</code> for verification artifacts — not that the
+            product is finished.
           </p>
 
           <div class="journey">
@@ -122,7 +125,7 @@ host: M3.14 complete — L3 attempt OK</code></pre>
                 <li>
                   <span class="journey__gate">M2.4–M2.6</span>
                   <span class="journey__text"
-                    >IRQ + timer path; L2 specs + Kani</span
+                    >IRQ + timer; Verus specs written + bounded Kani</span
                   >
                 </li>
               </ol>
@@ -185,28 +188,53 @@ host: M3.14 complete — L3 attempt OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">Four pillars. Every line serves one.</h2>
           <p class="section__lede">
-            If a change doesn’t advance trust, simplicity, hardware depth, or
-            auditability — it doesn’t ship.
+            Proof work is the trust product a buyer can take to an auditor;
+            iDRAC is how that story lands on iron you operate; the audit trail
+            turns hypervisor events into compliance evidence — not a slide deck.
           </p>
           <ol class="pillars">
             <li class="pillars__item" data-reveal>
               <span class="pillars__tag">[V]</span>
-              <span class="pillars__name">Formally Verified Core</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Formally Verified Core</span>
+                <span class="pillars__why"
+                  >Isolation claims you can machine-check, not re-test every
+                  release.</span
+                >
+              </div>
               <span class="pillars__note">North star</span>
             </li>
             <li class="pillars__item" data-reveal>
               <span class="pillars__tag">[Z]</span>
-              <span class="pillars__name">Zero-Config Single Binary</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Zero-Config Single Binary</span>
+                <span class="pillars__why"
+                  >One EFI artifact — smaller surface, clearer attestation
+                  target.</span
+                >
+              </div>
               <span class="pillars__note">Near-term</span>
             </li>
             <li class="pillars__item" data-reveal>
               <span class="pillars__tag">[D]</span>
-              <span class="pillars__name">Dell iDRAC-Native</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Dell iDRAC-Native</span>
+                <span class="pillars__why"
+                  >Deploy and attest on PowerEdge you own, via Redfish — not a
+                  mystery appliance.</span
+                >
+              </div>
               <span class="pillars__note">Near-term</span>
             </li>
             <li class="pillars__item" data-reveal>
               <span class="pillars__tag">[A]</span>
-              <span class="pillars__name">Audit-First / FinOps</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Audit-First / FinOps</span>
+                <span class="pillars__why"
+                  >Sequenced events for SOX/ISO evidence and capacity truth —
+                  not after-the-fact forensics.</span
+                >
+              </div>
               <span class="pillars__note">Medium-term</span>
             </li>
           </ol>
@@ -222,12 +250,21 @@ host: M3.14 complete — L3 attempt OK</code></pre>
               that frame is exclusively owned by one guest — and belongs to
               neither the hypervisor nor any other guest.
             </p>
+            <p class="section__lede section__lede--follow" data-reveal>
+              <strong>L2</strong> means Verus ghost specs and pre/post
+              conditions are written (with runtime asserts + bounded Kani on
+              unsafe paths). <strong>L3</strong> means
+              <code>cargo verus --verify</code> machine-checks those specs for
+              all inputs. M3.14 is an <strong>L3 attempt</strong>: lemmas
+              drafted, Verus still unpinned — we do not claim proof-complete.
+            </p>
           </div>
           <blockquote class="theorem" data-reveal>
             <p>
-              Proven Core only. L2 specs and an L3 attempt are in-tree (M3.14);
-              the first green <code>cargo verus --verify</code> in CI is still
-              the credibility milestone.
+              Proven Core only. The first green
+              <code>cargo verus --verify</code> in CI is the credibility
+              milestone — until then, markers prove gates closed, not theorems
+              discharged.
             </p>
             <cite>ADR-002 · ADR-004 · ADR-006</cite>
           </blockquote>
@@ -251,8 +288,8 @@ host: M3.14 complete — L3 attempt OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Pin Verus and discharge the 4K exclusivity theorem — true L3 —
-            see <code>docs/m3_post_shell_plan.md</code>.
+            Pin Verus and get a green <code>cargo verus --verify</code> on the
+            4K exclusivity theorem — true L3, not an attempt.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

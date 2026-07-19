@@ -390,11 +390,24 @@ code {
   color: var(--teal);
 }
 
+.pillars__body {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
 .pillars__name {
   font-family: var(--font-brand);
   font-weight: 700;
   font-size: clamp(1.15rem, 2vw, 1.45rem);
   letter-spacing: -0.02em;
+}
+
+.pillars__why {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  max-width: 46ch;
 }
 
 .pillars__note {
@@ -405,6 +418,17 @@ code {
   letter-spacing: 0.06em;
 }
 
+@media (max-width: 700px) {
+  .pillars__item {
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 1rem;
+  }
+
+  .pillars__note {
+    grid-column: 2;
+  }
+}
+
 .section--proof {
   background: linear-gradient(135deg, var(--steel) 0%, #0f2a36 55%, #0a3d3a 100%);
   color: var(--hero-ink);
@@ -412,6 +436,19 @@ code {
 
 .section--proof .section__lede {
   color: rgba(243, 246, 248, 0.82);
+}
+
+.section__lede--follow {
+  margin-top: 1.25rem;
+}
+
+.section--proof .section__lede--follow strong {
+  color: var(--hero-ink);
+  font-weight: 600;
+}
+
+.section--proof .section__lede--follow code {
+  color: rgba(243, 246, 248, 0.95);
 }
 
 .theorem {
