@@ -94,10 +94,10 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 
 **Shipped:**
 
-1. Exact weekly Verus `0.2026.07.12.0b42f4c` in `verus-version.toml` (ADR-008).
-2. `tools/install-verus.sh` downloads the pinned Linux binary + installs its Rust toolchain (`1.96.0`).
+1. Frozen weekly Verus `0.2026.07.12.0b42f4c` in `verus-version.toml` — exact `tag` + 40-char `commit` + `sha256_linux` (never `latest` / rolling).
+2. `tools/install-verus.sh` downloads that asset only, checks sha256 + `version.json` commit, installs Rust `1.96.0`.
 3. `tools/verus-smoke.sh` runs `verus --version` + `cargo verus verify` (crate not opted into proofs yet — M3.16).
-4. Host pin gate `memory/verus_gate.rs` + CI hard-pass `verus-smoke` job.
+4. Host pin gate `memory/verus_gate.rs` + CI asserts pin fields then hard-passes `verus-smoke`.
 5. Full Proven Core proof discharge still deferred to M3.17.
 
 **Files:** `verus-version.toml`, `tools/install-verus.sh`, `tools/verus-smoke.sh`, `memory/verus_gate.rs`, `memory/verus_gate_test.rs`, `.github/workflows/ci.yml`.

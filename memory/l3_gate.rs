@@ -8,8 +8,9 @@
 //! present and that the concrete 4K single-guest exclusivity properties those
 //! lemmas claim still hold.
 //!
-//! This gate does **not** claim ADR-006 L3 maturity. Verus is unpinned; live
-//! `EptMap` remains L2 until `cargo verus --verify` is green.
+//! This gate does **not** claim ADR-006 L3 maturity. Verus is pinned (M3.15)
+//! but proofs are not linked/discharged; live `EptMap` remains L2 until
+//! `cargo verus --verify` is green (M3.17).
 
 use crate::memory::ept::{self, EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID};
 use crate::memory::frame_allocator::PhysFrame;
@@ -25,7 +26,7 @@ pub fn ept_proof_is_l3_attempt() -> bool {
         && s.contains("lemma_map_ok_exclusive")
         && s.contains("lemma_unmap_ok_exclusive")
         && s.contains("theorem_single_guest_4k_map_unmap_exclusive")
-        && s.contains("GAP: Verus toolchain not installed or pinned")
+        && s.contains("GAP: Lemmas not yet in a `verus!` module")
         && s.contains("GAP: N concurrent guests")
         && s.contains("GAP: Live migration page transfer")
         && s.contains("GAP: Hardware EPT PTE correspondence")

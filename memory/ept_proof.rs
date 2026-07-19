@@ -1,7 +1,8 @@
 //! Verus L3 proof *attempt* for EPT isolation (ADR-004), M3.14.
 //!
 //! VERIFICATION: **L3-attempt** — exclusivity lemmas drafted for 4K single-guest
-//! map/unmap. Not machine-checked: Verus remains unpinned (`verus-version.toml`).
+//! map/unmap. Not machine-checked yet: Verus is frozen in `verus-version.toml`
+//! (M3.15) but lemmas are not linked/discharged (M3.16/M3.17).
 //! Live `EptMap` maturity stays **L2** until `cargo verus --verify` is green
 //! (ADR-006). Runtime asserts and Kani harnesses remain defense-in-depth.
 //!
@@ -15,7 +16,7 @@
 //! # Out of scope / documented gaps
 //!
 //! ```text
-//! GAP: Verus toolchain not installed or pinned — no `cargo verus --verify`
+//! GAP: Lemmas not yet in a `verus!` module under `cargo verus --verify` (M3.16/17)
 //! GAP: Lemmas are ghost/prose; not yet linked to concrete `EptMap` via `exec`
 //! GAP: N concurrent guests (ADR-004 M4 row)
 //! GAP: Large pages (2M/1G) in ghost model and proof (M4/M5)
@@ -118,7 +119,7 @@
 //!     ensures
 //!         exclusive_ownership(fold_steps(m, steps)),
 //! {
-//!     // GAP: inductive body not discharged by Verus yet (toolchain unpinned).
+//!     // GAP: inductive body not discharged by Verus yet (link + verify = M3.16/17).
 //!     // Intended: induct on steps; case-split map Ok / AlreadyOwned / unmap Ok / NotMapped
 //!     // using lemma_map_ok_exclusive, lemma_map_already_owned_unchanged,
 //!     // lemma_unmap_ok_exclusive.

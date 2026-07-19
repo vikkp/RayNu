@@ -8,7 +8,7 @@ fn m3_14_l3_gate_passes() {
     );
     assert!(
         ept_proof_does_not_claim_l3_complete(),
-        "ept_proof.rs must not claim machine-checked L3 while Verus is unpinned"
+        "ept_proof.rs must not claim machine-checked L3 before M3.17 green verify"
     );
     assert!(run_l3_gate(), "M3.14 L3-attempt property gate failed");
     assert_eq!(M3_L3_OK_MARKER, "RAYNU-V-M3-L3-OK");
