@@ -60,15 +60,14 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.8 closed.</h2>
+          <h2 class="section__title">M3.9 closed.</h2>
           <p class="section__lede">
-            Latitude passed real Linux earlyprintk
-            (<code>RAYNU-V-M3-LINUX-EARLY-OK</code>). Next: MSR/timer harden →
-            busybox/<code>init</code>.
+            Latitude passed MSR firewall + post-banner LAPIC
+            (<code>RAYNU-V-M3-GTIMER2-OK</code>). Next: busybox/<code>init</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>Linux version 6
-RAYNU-V-M3-LINUX-EARLY-OK
-==> Boot gate PASSED (M0 → M3.8)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-GTIMER2-OK
+==> Boot gate PASSED (M0 → M3.9)
+boot: M3.9 complete — Linux GTIMER2 OK</code></pre>
         </div>
       </section>
 
@@ -142,7 +141,7 @@ RAYNU-V-M3-LINUX-EARLY-OK
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.9 MSR/timer harden, then busybox/<code>init</code> —
+            M3.10 busybox/<code>init</code> → real shell marker —
             see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">

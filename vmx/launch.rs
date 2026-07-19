@@ -19,9 +19,10 @@
 //! M3.6: after SHELL-OK, continuous HLT resume loop → `RAYNU-V-M3-LOOP-OK`.
 //! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
 //! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
+//! M3.9: MSR allow-list emulate + post-banner host LAPIC → `RAYNU-V-M3-GTIMER2-OK`.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
-//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY.
+//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY/GTIMER2.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -39,9 +40,10 @@ use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
 use crate::sched::interrupt::{
-    self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR, M2_TIMER_OK_MARKER, M3_GTIMER_OK_MARKER,
+    self, M2_IRQ_OK_MARKER, M2_IRQ_VECTOR, M2_TIMER_OK_MARKER, M3_GTIMER2_OK_MARKER,
+    M3_GTIMER_OK_MARKER,
 };
-use crate::sched::msr_firewall::{self, M3_CPUID_OK_MARKER};
+use crate::sched::msr_firewall::{self, MsrAccess, MsrAction, M3_CPUID_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
@@ -95,6 +97,9 @@ static mut LOAD_INIT_PHYS: u64 = 0;
 /// When set, phase 4+ follows the real-Linux early path (skip GTIMER/SHELL/LOOP).
 static mut REAL_LINUX_GUEST: bool = false;
 
+/// M3.9: host LAPIC armed after LINUX-EARLY; waiting for ext-IRQ → GTIMER2-OK.
+static mut LINUX_GTIMER2_ARMED: bool = false;
+
 /// Record kernel entry / boot_params / proto-init for later VMRESUME.
 ///
 /// `entry_phys` is the 64-bit entry RIP (bzImage: PM base + 0x200).
@@ -107,11 +112,12 @@ pub fn set_linux_load(entry_phys: u64, boot_params_phys: u64, init_phys: u64) {
     }
 }
 
-/// Select real-Linux post-entry handling (M3.8) vs synthetic proto path.
+/// Select real-Linux post-entry handling (M3.8+) vs synthetic proto path.
 pub fn set_real_linux(real: bool) {
     // SAFETY: single-threaded boot before VMLAUNCH.
     unsafe {
         REAL_LINUX_GUEST = real;
+        LINUX_GTIMER2_ARMED = false;
     }
 }
 
@@ -807,6 +813,12 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     if basic == EXIT_REASON_CPUID {
         handle_cpuid_and_resume(guest_rip);
     }
+    // M3.9: emulate allow-listed MSRs without phase-log spam (real Linux).
+    if REAL_LINUX_GUEST
+        && (basic == EXIT_REASON_MSR_READ || basic == EXIT_REASON_MSR_WRITE)
+    {
+        handle_msr_and_resume(basic);
+    }
 
     serial::write_str("boot: VMEXIT phase=");
     write_hex_u32(phase as u32);
@@ -900,16 +912,16 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             LINUX_EARLY_MARKED = true;
             serial::write_byte(b'\n');
             serial::write_line(M3_LINUX_EARLY_OK_MARKER);
-            // Real Linux gate closes on banner; don't wait for a later HLT.
-            if REAL_LINUX_GUEST {
-                finish_boot(true);
-            }
         }
     }
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    // M3.9: after real banner, arm host LAPIC and wait for GTIMER2 (not finish yet).
+    if REAL_LINUX_GUEST && serial_pio::guest_linux_early_ok() && !LINUX_GTIMER2_ARMED {
+        arm_linux_gtimer2();
+    }
     // Preserve RSI across OUT storms in the proto-kernel.
     vmresume_with_gprs();
 }
@@ -1191,20 +1203,25 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
     resume_or_die();
 }
 
-/// Real Linux post-entry loop: wait for earlyprintk banner, then finish.
+/// Real Linux post-entry loop: banner → MSR emulate → GTIMER2 → finish.
 unsafe fn phase4_linux_early(basic: u32) -> ! {
-    if serial_pio::guest_linux_early_ok() {
-        serial::write_line("boot: real Linux earlyprintk observed");
+    // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9).
+    if LINUX_GTIMER2_ARMED && basic == EXIT_REASON_EXTERNAL_INTERRUPT {
+        let _ = apic::eoi();
+        serial::write_line(M3_GTIMER2_OK_MARKER);
+        if msr_firewall::msr_firewall_ok() {
+            serial::write_line("boot: MSR firewall exercised");
+        }
         finish_boot(true);
     }
 
     match basic {
         EXIT_REASON_HLT => {
-            // Idle: re-execute HLT.
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
         EXIT_REASON_EXTERNAL_INTERRUPT => {
+            // Pre-GTIMER2 arm (noise) or post-banner before arm races.
             let _ = apic::eoi();
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
@@ -1214,30 +1231,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             finish_boot(false);
         }
         EXIT_REASON_TRIPLE_FAULT => {
-            // Instruction length is undefined — never advance RIP (causes storms).
             serial::write_line("boot: ERROR — Linux triple fault");
             dump_linux_guest_state();
             finish_boot(false);
         }
-        EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => {
-            // M3.9 will harden; for M3.8 skip the insn and resume.
-            serial::write_str("boot: linux MSR stub reason=0x");
-            write_hex_u32(basic);
-            serial::write_byte(b'\n');
-            let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-            let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
-            if insn_len == 0 || insn_len > 15 {
-                serial::write_line("boot: ERROR — MSR exit with bad insn len");
-                dump_linux_guest_state();
-                finish_boot(false);
-            }
-            let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
-            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
-            vmresume_with_gprs();
-        }
+        EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => handle_msr_and_resume(basic),
         EXIT_REASON_CR_ACCESS => {
-            // Guest-owned CR bits pass through; host-owned CR4.VMXE should not
-            // exit unless the guest tries to *set* VMXE (Linux never does).
             serial::write_line("boot: ERROR — unexpected CR-access exit");
             dump_linux_guest_state();
             finish_boot(false);
@@ -1247,10 +1246,113 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             write_hex_u32(basic);
             serial::write_byte(b'\n');
             dump_linux_guest_state();
-            // Do not advance RIP: insn length is often undefined.
             finish_boot(false);
         }
     }
+}
+
+/// Arm host LAPIC after LINUX-EARLY; next ext-IRQ closes M3.9.
+unsafe fn arm_linux_gtimer2() -> ! {
+    LINUX_GTIMER2_ARMED = true;
+    if apic::arm_bringup_timer(M2_IRQ_VECTOR as u8).is_err() {
+        serial::write_line("boot: ERROR — Linux GTIMER2 arm failed");
+        finish_boot(false);
+    }
+    serial::write_line("boot: Linux GTIMER2 armed; waiting for host LAPIC");
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    vmresume_with_gprs();
+}
+
+/// Emulate guest RDMSR/WRMSR via allow-list (M3.9).
+unsafe fn handle_msr_and_resume(basic: u32) -> ! {
+    let index = SAVED_GUEST_RCX as u32;
+    let write_val = (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
+    let is_write = basic == EXIT_REASON_MSR_WRITE;
+    let access = if is_write {
+        MsrAccess::Write
+    } else {
+        MsrAccess::Read
+    };
+    let action = msr_firewall::classify_msr(index, access);
+
+    match action {
+        MsrAction::InjectGp => {
+            serial::write_str("boot: MSR #GP index=0x");
+            write_hex_u32(index);
+            serial::write_byte(b'\n');
+            inject_gp0();
+            vmresume_with_gprs();
+        }
+        MsrAction::HostPassthrough => {
+            if is_write {
+                // SAFETY: allow-listed host MSR write.
+                cpu::wrmsr(index, write_val);
+            } else {
+                // SAFETY: allow-listed host MSR read.
+                let v = cpu::rdmsr(index);
+                SAVED_GUEST_RAX = v as u32 as u64;
+                SAVED_GUEST_RDX = v >> 32;
+            }
+            msr_firewall::note_msr_emulated();
+        }
+        MsrAction::VmcsEfer => msr_vmcs_u64(GUEST_IA32_EFER, is_write, write_val),
+        MsrAction::VmcsPat => msr_vmcs_u64(GUEST_IA32_PAT, is_write, write_val),
+        MsrAction::VmcsSysenterCs => msr_vmcs_u64(GUEST_IA32_SYSENTER_CS, is_write, write_val),
+        MsrAction::VmcsSysenterEsp => msr_vmcs_u64(GUEST_IA32_SYSENTER_ESP, is_write, write_val),
+        MsrAction::VmcsSysenterEip => msr_vmcs_u64(GUEST_IA32_SYSENTER_EIP, is_write, write_val),
+        MsrAction::VmcsFsBase => msr_vmcs_u64(GUEST_FS_BASE, is_write, write_val),
+        MsrAction::VmcsGsBase => msr_vmcs_u64(GUEST_GS_BASE, is_write, write_val),
+        MsrAction::Shadow => {
+            if is_write {
+                msr_firewall::shadow_write(index, write_val);
+            } else {
+                let v = msr_firewall::shadow_read(index);
+                SAVED_GUEST_RAX = v as u32 as u64;
+                SAVED_GUEST_RDX = v >> 32;
+            }
+            msr_firewall::note_msr_emulated();
+        }
+        MsrAction::ReadZero => {
+            SAVED_GUEST_RAX = 0;
+            SAVED_GUEST_RDX = 0;
+        }
+        MsrAction::IgnoreWrite => {}
+    }
+
+    let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+    if insn_len == 0 || insn_len > 15 {
+        serial::write_line("boot: ERROR — MSR exit with bad insn len");
+        dump_linux_guest_state();
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    vmresume_with_gprs();
+}
+
+unsafe fn msr_vmcs_u64(field: u64, is_write: bool, write_val: u64) {
+    if is_write {
+        if ops::vmwrite(field, write_val).is_err() {
+            serial::write_line("boot: ERROR — MSR VMCS write failed");
+            finish_boot(false);
+        }
+    } else {
+        let v = ops::vmread(field).unwrap_or(0);
+        SAVED_GUEST_RAX = v as u32 as u64;
+        SAVED_GUEST_RDX = v >> 32;
+    }
+    msr_firewall::note_msr_emulated();
+}
+
+/// Inject `#GP(0)` on the next VM-entry (do not advance RIP).
+unsafe fn inject_gp0() {
+    // vector=13, type=hardware exception (3), error-code valid, valid.
+    let info: u64 = 13 | (3 << 8) | (1 << 11) | (1 << 31);
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info);
+    let _ = ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
 }
 
 unsafe fn dump_linux_exception_exit() {
@@ -1524,13 +1626,13 @@ fn finish_boot(ok: bool) -> ! {
     if ok {
         // SAFETY: boot single-threaded; flag set before VMLAUNCH.
         if unsafe { REAL_LINUX_GUEST } {
-            serial::write_line("boot: M3.8 complete — Linux earlyprintk OK");
+            serial::write_line("boot: M3.9 complete — Linux GTIMER2 OK");
         } else {
-            serial::write_line("boot: M3.8 complete — proto path OK");
+            serial::write_line("boot: M3.9 complete — proto path OK");
         }
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.8 complete");
+        serial::write_line("boot: M3.9 complete");
         serial::qemu_exit_failure();
     }
 

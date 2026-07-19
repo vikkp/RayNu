@@ -19,6 +19,7 @@
 //! M3.6: continuous HLT exit loop (`RAYNU-V-M3-LOOP-OK`).
 //! M3.7: bzImage load (`RAYNU-V-M3-BZIMAGE-OK`).
 //! M3.8: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`).
+//! M3.9: MSR firewall + post-banner LAPIC (`RAYNU-V-M3-GTIMER2-OK`).
 
 #![no_main]
 #![no_std]

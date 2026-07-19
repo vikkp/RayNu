@@ -15,6 +15,7 @@ fn pack_external_inject() {
     assert_eq!(M2_IRQ_OK_MARKER, "RAYNU-V-M2-IRQ-OK");
     assert_eq!(M2_TIMER_OK_MARKER, "RAYNU-V-M2-TIMER-OK");
     assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
+    assert_eq!(M3_GTIMER2_OK_MARKER, "RAYNU-V-M3-GTIMER2-OK");
 }
 
 #[test]
