@@ -417,10 +417,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     // Ext-IRQ (M2.5) + I/O (M3.0) + CPUID (M3.1) exiting.
+    // Prefer I/O bitmaps (COM1 only): unconditional I/O makes every Linux
+    // `io_delay` (port 0x80) a VMEXIT and stalls mid mem-init.
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
             | CPU_BASED_CPUID_EXITING
+            | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
             | CPU_BASED_ACTIVATE_SECONDARY,
         proc_msr,
@@ -465,11 +468,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         core::ptr::write_bytes(a as *mut u8, 0, 4096);
         core::ptr::write_bytes(b as *mut u8, 0, 4096);
         serial_pio::trap_com1_in_bitmap_a(a);
+        serial::write_line("boot: I/O exiting via COM1 bitmaps");
         Some((a, b))
     } else if primary & CPU_BASED_UNCONDITIONAL_IO == 0 {
         serial::write_line("boot: ERROR — neither unconditional I/O nor I/O bitmaps available");
         return Err(LaunchError::PrepareFailed);
     } else {
+        serial::write_line("boot: WARN — I/O bitmaps unavailable; unconditional I/O (slow)");
         None
     };
 
