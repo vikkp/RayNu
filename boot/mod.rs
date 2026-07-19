@@ -4,10 +4,15 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A (outside core) — unit tests only
 
+pub mod assets_gate;
 pub mod esp_assets;
 pub mod handoff;
 pub mod mem;
+pub mod pe_assets;
 pub mod serial;
+
+pub use assets_gate::run_assets_gate;
+pub use pe_assets::M3_ASSETS_OK_MARKER;
 
 /// Perform minimal post-UEFI early init (M0).
 ///

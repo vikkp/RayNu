@@ -25,3 +25,10 @@ fi
 
 echo "==> Output: $OUT"
 ls -la "$OUT" 2>/dev/null || ls -la "target/${TARGET}/${PROFILE}/r640-hypervisor"*
+
+# M3.22: PE .askern / .asinit must be present (ADR-003).
+if [[ -f "$OUT" ]]; then
+  "$ROOT/tools/check-pe-assets.sh" "$OUT"
+elif [[ -f "target/${TARGET}/${PROFILE}/r640-hypervisor" ]]; then
+  "$ROOT/tools/check-pe-assets.sh" "target/${TARGET}/${PROFILE}/r640-hypervisor"
+fi

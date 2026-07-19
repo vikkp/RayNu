@@ -40,6 +40,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.20 | `RAYNU-V-M3-EPT3-OK` | Tight EPT `[0,512MiB)` @ 2M; QEMU `-m 512M` (Latitude) |
 | M3.21 | `RAYNU-V-M3-KANI-OK` | Hard-fail Kani CI pin `0.67.0`; 2 harnesses (CI + Latitude) |
 
+## In progress
+
+| Gate | Marker | Notes |
+|------|--------|-------|
+| M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.askern`/`.asinit` embed; ESP fallback; awaiting Latitude |
+
 ## Verification checkpoint (as of M3.21)
 
 | Module | Maturity | Notes |
@@ -65,5 +71,5 @@ Post-shell / post-L3 plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M3.22** ← next | `RAYNU-V-M3-ASSETS-OK` | PE `.assets.*` embed (ADR-003, size-budget) |
+| **M3.22** ← next | `RAYNU-V-M3-ASSETS-OK` | PE `.askern`/`.asinit` embed (this PR) |
 | M4+ | — | N-guest / large-page / migration proofs |

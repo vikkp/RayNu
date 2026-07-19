@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.21 closed** — real Linux shell + tight EPT + true L3/refine + NOIRQ + hard-fail Kani → `RAYNU-V-M3-KANI-OK`. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.21 closed**; **M3.22 open** — PE `.askern`/`.asinit` embed → `RAYNU-V-M3-ASSETS-OK` (awaiting Latitude). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
