@@ -140,7 +140,7 @@ intercept (ZO demand-map); MSR exits stub-skipped through banner.
 - Stop identity-mapping host LAPIC into the guest if that is the hang
 - Reuse `sched/interrupt` inject firewall
 
-Status: **in flight** — MSR allow-list emulate + post-banner host LAPIC → GTIMER2.
+Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER2-OK`).
 
 ### M3.10 — Real shell / init — `RAYNU-V-M3-SHELL-OK` (real guest)
 
@@ -148,7 +148,7 @@ Status: **in flight** — MSR allow-list emulate + post-banner host LAPIC → GT
 - Same marker string as synthetic M3.5; gate proves **real** userspace
 - Docs/site: “unmodified Linux to init marker”
 
-Status: planned. Depends on M3.8 (and M3.9 if required).
+Status: planned (next after M3.9).
 
 ---
 
@@ -188,10 +188,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.8~~ — done (through real Linux earlyprintk).
-2. **M3.9** — MSR allow-list + post-banner GTIMER2 on Latitude.
-3. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-4. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.9~~ — done (through MSR firewall + GTIMER2).
+2. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
+3. Verus L3 / precise EPT / PE asset embed (parallel).
 
 ---
 

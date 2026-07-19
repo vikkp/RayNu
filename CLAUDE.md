@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.8 closed** on Latitude (`RAYNU-V-M3-LINUX-EARLY-OK`). **M3.9 in flight**: MSR firewall + GTIMER2. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.9 closed** on Latitude (`RAYNU-V-M3-GTIMER2-OK`). Next: **M3.10** busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 

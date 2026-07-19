@@ -26,26 +26,26 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.6 | `RAYNU-V-M3-LOOP-OK` | Continuous HLT exit loop after shell; fuller GPR save |
 | M3.7 | `RAYNU-V-M3-BZIMAGE-OK` | ESP/embedded bzImage parse+place; entry at PM+0x200 |
 | M3.8 | `RAYNU-V-M3-LINUX-EARLY-OK` | Real tinyconfig Linux earlyprintk banner on COM1 |
+| M3.9 | `RAYNU-V-M3-GTIMER2-OK` | MSR allow-list emulate + post-banner host LAPIC |
 
-## Verification checkpoint (as of M3.8)
+## Verification checkpoint (as of M3.9)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
 | `memory/ept` ownership registry | **L2** | Ghost model in `ept_spec.rs`; L1 runtime kept |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
-| `sched/interrupt` | L1 | Vector firewall + VM-entry pack for inject (M2.5 / M3.4) |
-| `sched/msr_firewall` | L0→L1-ish | CPUID filter (hide VMX); MSR stub skip for early boot |
+| `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
+| `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify (VMCS/host/shadow/`#GP`) |
 | `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY/SHELL + LINUX-EARLY banner latch |
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | CR4.VMXE host-own; no `#PF` intercept; real Linux entry |
+| `vmx/*` | L0–L1 | Real Linux entry through GTIMER2; MSR emulate path |
 | Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
-1. Latitude gate for **M3.9** (`RAYNU-V-M3-GTIMER2-OK`) — MSR firewall + post-banner LAPIC.
-2. **M3.10** busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-3. Verus L3 / precise EPT (parallel; not on the shell critical path).
+1. **M3.10** busybox/`init` → real `RAYNU-V-M3-SHELL-OK` — see [m3_plan.md](m3_plan.md).
+2. Verus L3 / precise EPT (parallel; not on the shell critical path).
