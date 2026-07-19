@@ -90,7 +90,7 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 
 ### M3.15 — Pin Verus toolchain — `RAYNU-V-M3-VERUS-OK`
 
-**Status: closed on host** (`./tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK`).
+**Status: closed** — host/CI + Latitude `./tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK`.
 
 **Shipped:**
 
@@ -130,7 +130,7 @@ M3.11 → M3.12 → M3.13 → M3.14 (closed)
 M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify   ← now
 ```
 
-**M3.15 closed (host). Now executing: M3.16.**
+**M3.15 closed. Now executing: M3.16.**
 
 ---
 
@@ -154,9 +154,10 @@ RAYNU-V-M3-L3-OK
 ==> Boot gate PASSED (M0 → M3.13; qemu status=33)
 ```
 
-## M3.15 acceptance (met on host)
+## M3.15 acceptance (met)
 
 ```text
 RAYNU-V-M3-VERUS-OK
-==> Host Verus pin + smoke PASSED (install + verus --version + cargo verus)
+==> Verus pin smoke PASSED (M3.15)
+# host CI + Latitude ~/raynu
 ```
