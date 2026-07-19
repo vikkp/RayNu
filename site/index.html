@@ -60,15 +60,14 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">Synthetic M3 closed.</h2>
+          <h2 class="section__title">M3.6: exit loop.</h2>
           <p class="section__lede">
-            Latitude passed through proto-init shell
-            (<code>RAYNU-V-M3-SHELL-OK</code>). Synthetic Linux path complete;
-            real bzImage is next.
+            After proto-init shell, keep resuming through HLT exits and latch
+            <code>RAYNU-V-M3-LOOP-OK</code> — foundation for a real Linux guest.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>==> M3.5 shell/init marker found
-==> Boot gate PASSED (M0 → M3.5)
-boot: M3.5 complete — synthetic M3 closed</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>boot: entering continuous exit loop
+RAYNU-V-M3-LOOP-OK
+boot: M3.6 complete — exit loop OK</code></pre>
         </div>
       </section>
 
@@ -142,7 +141,7 @@ boot: M3.5 complete — synthetic M3 closed</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.6 continuous exit loop, then real bzImage → earlyprintk →
+            Latitude gate for M3.6, then real bzImage → earlyprintk →
             busybox/<code>init</code> — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">

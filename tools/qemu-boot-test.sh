@@ -16,6 +16,7 @@
 # M3.3: RAYNU-V-M3-EARLY-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.4: RAYNU-V-M3-GTIMER-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.5: RAYNU-V-M3-SHELL-OK (required when VMXON succeeds / REQUIRE_VMX=1)
+# M3.6: RAYNU-V-M3-LOOP-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -37,6 +38,7 @@ MARKER_LOAD="${MARKER_LOAD:-RAYNU-V-M3-LOAD-OK}"
 MARKER_EARLY="${MARKER_EARLY:-RAYNU-V-M3-EARLY-OK}"
 MARKER_GTIMER="${MARKER_GTIMER:-RAYNU-V-M3-GTIMER-OK}"
 MARKER_SHELL="${MARKER_SHELL:-RAYNU-V-M3-SHELL-OK}"
+MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -192,6 +194,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_SHELL' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_LOOP" "$SERIAL_LOG"; then
+    echo "==> M3.6 exit-loop marker found"
+  else
+    echo "error: marker '$MARKER_LOOP' not found after successful VMXON" >&2
+    fail=1
+  fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
     echo "error: VMXON skipped but REQUIRE_VMX=1 (need nested KVM / VT-x)" >&2
@@ -210,5 +218,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.5; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.6; qemu status=$QEMU_STATUS)"
 exit 0

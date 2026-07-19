@@ -42,6 +42,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.6** continuous exit loop (`RAYNU-V-M3-LOOP-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for **M3.6** (`RAYNU-V-M3-LOOP-OK`) — continuous exit loop.
 2. M3.7–M3.10: real bzImage → earlyprintk → timer/MSR harden → busybox/`init`.
 3. Verus L3 / precise EPT (parallel; not on the shell critical path).

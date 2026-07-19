@@ -16,7 +16,8 @@
 //! M3.3: after timer path, enter proto-kernel (RSI=`boot_params`) → early OK.
 //! M3.4: post-proto guest timer → ext-IRQ → EOI → inject → `RAYNU-V-M3-GTIMER-OK`.
 //! M3.5: proto-init OUT shell marker → `RAYNU-V-M3-SHELL-OK` (closes synthetic M3).
-//! Markers: …/EARLY/GTIMER/SHELL.
+//! M3.6: after SHELL-OK, continuous HLT resume loop → `RAYNU-V-M3-LOOP-OK`.
+//! Markers: …/EARLY/GTIMER/SHELL/LOOP.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -39,7 +40,7 @@ use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
-/// Exit-phase state machine (M2.4 / M2.5 / M3.3 / M3.4):
+/// Exit-phase state machine (M2.4 / M2.5 / M3.3–M3.6):
 /// 0 = first HLT → software inject
 /// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
 /// 2 = external-interrupt VMEXIT → EOI → re-inject
@@ -47,19 +48,39 @@ use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 /// 4 = proto-kernel HLT → EARLY-OK → arm guest timer
 /// 5 = post-proto external-interrupt → EOI → inject
 /// 6 = ISR HLT → GTIMER-OK → enter proto-init
-/// 7 = proto-init HLT → SHELL-OK
+/// 7 = proto-init HLT → SHELL-OK → enter continuous loop
+/// 8 = durable HLT resume loop → LOOP-OK
 static mut EXIT_PHASE: u8 = 0;
 
 /// Bring-up guest code page (store/ISR); ack slot lives here across M3.4 inject.
 static mut BRINGUP_GUEST_CODE_PHYS: u64 = 0;
 
 /// Guest GPRs saved by the naked VMEXIT trampoline before Rust clobbers them.
-/// CPUID needs RAX–RDX; M3.3 proto-kernel needs RSI=`boot_params` preserved.
+/// RSP/RIP/RFLAGS live in the VMCS; general regs must be saved here for Linux.
 static mut SAVED_GUEST_RAX: u64 = 0;
 static mut SAVED_GUEST_RBX: u64 = 0;
 static mut SAVED_GUEST_RCX: u64 = 0;
 static mut SAVED_GUEST_RDX: u64 = 0;
 static mut SAVED_GUEST_RSI: u64 = 0;
+static mut SAVED_GUEST_RDI: u64 = 0;
+static mut SAVED_GUEST_RBP: u64 = 0;
+static mut SAVED_GUEST_R8: u64 = 0;
+static mut SAVED_GUEST_R9: u64 = 0;
+static mut SAVED_GUEST_R10: u64 = 0;
+static mut SAVED_GUEST_R11: u64 = 0;
+static mut SAVED_GUEST_R12: u64 = 0;
+static mut SAVED_GUEST_R13: u64 = 0;
+static mut SAVED_GUEST_R14: u64 = 0;
+static mut SAVED_GUEST_R15: u64 = 0;
+
+/// HLT VMEXITs counted in phase 8 after SHELL-OK.
+static mut LOOP_HLT_COUNT: u32 = 0;
+
+/// Resumes required in the continuous loop before [`M3_LOOP_OK_MARKER`].
+pub const LOOP_HLT_TARGET: u32 = 4;
+
+/// COM1 marker when the post-shell exit loop survives [`LOOP_HLT_TARGET`] HLTs.
+pub const M3_LOOP_OK_MARKER: &str = "RAYNU-V-M3-LOOP-OK";
 
 /// M3.2–M3.5 load addresses (set before [`run_hlt_guest`]).
 static mut LOAD_KERNEL_PHYS: u64 = 0;
@@ -668,7 +689,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     Ok(())
 }
 
-/// HOST_RIP trampoline — save guest RAX–RDX + RSI before Rust clobbers GPRs.
+/// HOST_RIP trampoline — save guest GPRs before Rust clobbers them.
 ///
 /// Guest GPRs are not in the VMCS; they live in host registers across VMEXIT.
 #[unsafe(naked)]
@@ -679,17 +700,37 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
         "mov [{slot_rcx}], rcx",
         "mov [{slot_rdx}], rdx",
         "mov [{slot_rsi}], rsi",
+        "mov [{slot_rdi}], rdi",
+        "mov [{slot_rbp}], rbp",
+        "mov [{slot_r8}], r8",
+        "mov [{slot_r9}], r9",
+        "mov [{slot_r10}], r10",
+        "mov [{slot_r11}], r11",
+        "mov [{slot_r12}], r12",
+        "mov [{slot_r13}], r13",
+        "mov [{slot_r14}], r14",
+        "mov [{slot_r15}], r15",
         "jmp {cont}",
         slot_rax = sym SAVED_GUEST_RAX,
         slot_rbx = sym SAVED_GUEST_RBX,
         slot_rcx = sym SAVED_GUEST_RCX,
         slot_rdx = sym SAVED_GUEST_RDX,
         slot_rsi = sym SAVED_GUEST_RSI,
+        slot_rdi = sym SAVED_GUEST_RDI,
+        slot_rbp = sym SAVED_GUEST_RBP,
+        slot_r8 = sym SAVED_GUEST_R8,
+        slot_r9 = sym SAVED_GUEST_R9,
+        slot_r10 = sym SAVED_GUEST_R10,
+        slot_r11 = sym SAVED_GUEST_R11,
+        slot_r12 = sym SAVED_GUEST_R12,
+        slot_r13 = sym SAVED_GUEST_R13,
+        slot_r14 = sym SAVED_GUEST_R14,
+        slot_r15 = sym SAVED_GUEST_R15,
         cont = sym vmexit_continue,
     );
 }
 
-/// Restore saved RAX–RDX + RSI and VMRESUME (CPUID / I/O / early entry).
+/// Restore saved GPRs and VMRESUME (CPUID / I/O / loop / entry).
 #[unsafe(naked)]
 unsafe extern "C" fn vmresume_with_gprs() -> ! {
     core::arch::naked_asm!(
@@ -698,6 +739,16 @@ unsafe extern "C" fn vmresume_with_gprs() -> ! {
         "mov rcx, [{slot_rcx}]",
         "mov rdx, [{slot_rdx}]",
         "mov rsi, [{slot_rsi}]",
+        "mov rdi, [{slot_rdi}]",
+        "mov rbp, [{slot_rbp}]",
+        "mov r8, [{slot_r8}]",
+        "mov r9, [{slot_r9}]",
+        "mov r10, [{slot_r10}]",
+        "mov r11, [{slot_r11}]",
+        "mov r12, [{slot_r12}]",
+        "mov r13, [{slot_r13}]",
+        "mov r14, [{slot_r14}]",
+        "mov r15, [{slot_r15}]",
         "vmresume",
         "jmp {fail}",
         slot_rax = sym SAVED_GUEST_RAX,
@@ -705,6 +756,16 @@ unsafe extern "C" fn vmresume_with_gprs() -> ! {
         slot_rcx = sym SAVED_GUEST_RCX,
         slot_rdx = sym SAVED_GUEST_RDX,
         slot_rsi = sym SAVED_GUEST_RSI,
+        slot_rdi = sym SAVED_GUEST_RDI,
+        slot_rbp = sym SAVED_GUEST_RBP,
+        slot_r8 = sym SAVED_GUEST_R8,
+        slot_r9 = sym SAVED_GUEST_R9,
+        slot_r10 = sym SAVED_GUEST_R10,
+        slot_r11 = sym SAVED_GUEST_R11,
+        slot_r12 = sym SAVED_GUEST_R12,
+        slot_r13 = sym SAVED_GUEST_R13,
+        slot_r14 = sym SAVED_GUEST_R14,
+        slot_r15 = sym SAVED_GUEST_R15,
         fail = sym vmresume_gprs_failed,
     );
 }
@@ -748,11 +809,31 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
         5 => phase5_guest_timer_irq(basic),
         6 => phase6_gtimer_ok(basic, guest_page),
         7 => phase7_shell_ok(basic, guest_page),
+        8 => phase8_exit_loop(basic),
         _ => {
             serial::write_line("boot: ERROR — bad EXIT_PHASE");
             finish_boot(false);
         }
     }
+}
+
+/// Zero general regs; set RSI (proto-kernel / proto-init `boot_params`).
+unsafe fn reset_saved_gprs(rsi: u64) {
+    SAVED_GUEST_RAX = 0;
+    SAVED_GUEST_RBX = 0;
+    SAVED_GUEST_RCX = 0;
+    SAVED_GUEST_RDX = 0;
+    SAVED_GUEST_RSI = rsi;
+    SAVED_GUEST_RDI = 0;
+    SAVED_GUEST_RBP = 0;
+    SAVED_GUEST_R8 = 0;
+    SAVED_GUEST_R9 = 0;
+    SAVED_GUEST_R10 = 0;
+    SAVED_GUEST_R11 = 0;
+    SAVED_GUEST_R12 = 0;
+    SAVED_GUEST_R13 = 0;
+    SAVED_GUEST_R14 = 0;
+    SAVED_GUEST_R15 = 0;
 }
 
 unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
@@ -994,11 +1075,7 @@ unsafe fn enter_proto_kernel() -> ! {
     let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
     let _ = ops::vmwrite(GUEST_RFLAGS, 0x2);
 
-    SAVED_GUEST_RAX = 0;
-    SAVED_GUEST_RBX = 0;
-    SAVED_GUEST_RCX = 0;
-    SAVED_GUEST_RDX = 0;
-    SAVED_GUEST_RSI = boot_params;
+    reset_saved_gprs(boot_params);
     EXIT_PHASE = 4;
     vmresume_with_gprs();
 }
@@ -1143,11 +1220,7 @@ unsafe fn enter_proto_init() -> ! {
     let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
     let _ = ops::vmwrite(GUEST_RFLAGS, 0x2);
 
-    SAVED_GUEST_RAX = 0;
-    SAVED_GUEST_RBX = 0;
-    SAVED_GUEST_RCX = 0;
-    SAVED_GUEST_RDX = 0;
-    SAVED_GUEST_RSI = LOAD_BOOT_PARAMS_PHYS;
+    reset_saved_gprs(LOAD_BOOT_PARAMS_PHYS);
     EXIT_PHASE = 7;
     vmresume_with_gprs();
 }
@@ -1173,7 +1246,49 @@ unsafe fn phase7_shell_ok(basic: u32, guest_page: u64) -> ! {
         serial::write_line("boot: ERROR — early marker missing at shell");
         ok = false;
     }
-    finish_boot(ok);
+    if !ok {
+        finish_boot(false);
+    }
+    enter_exit_loop();
+}
+
+/// After SHELL-OK: keep HLT exiting and resume into a durable HLT loop.
+unsafe fn enter_exit_loop() -> ! {
+    if set_hlt_exiting(true).is_err() {
+        serial::write_line("boot: ERROR — HLT exiting off before exit loop");
+        finish_boot(false);
+    }
+    let _ = apic::mask_timer();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    LOOP_HLT_COUNT = 0;
+    EXIT_PHASE = 8;
+    serial::write_line("boot: entering continuous exit loop");
+    // Re-execute the proto-init HLT (RIP unchanged) for LOOP_HLT_TARGET exits.
+    vmresume_with_gprs();
+}
+
+unsafe fn phase8_exit_loop(basic: u32) -> ! {
+    // I/O / CPUID already resumed above. HLT proves the durable loop.
+    if basic != EXIT_REASON_HLT {
+        serial::write_str("boot: loop stub — unexpected exit reason=0x");
+        write_hex_u32(basic);
+        serial::write_byte(b'\n');
+        // Safe halt for M3.6: do not resume unknown reasons yet (MSR/EPT later).
+        finish_boot(false);
+    }
+
+    LOOP_HLT_COUNT = LOOP_HLT_COUNT.saturating_add(1);
+    if LOOP_HLT_COUNT >= LOOP_HLT_TARGET {
+        if !serial_pio::guest_shell_ok() {
+            serial::write_line("boot: ERROR — shell latch cleared during loop");
+            finish_boot(false);
+        }
+        serial::write_line(M3_LOOP_OK_MARKER);
+        finish_boot(true);
+    }
+
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    vmresume_with_gprs();
 }
 
 unsafe fn inject_and_resume(tag: &str) -> ! {
@@ -1234,10 +1349,10 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
-        serial::write_line("boot: M3.5 complete — synthetic M3 closed");
+        serial::write_line("boot: M3.6 complete — exit loop OK");
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.5 complete");
+        serial::write_line("boot: M3.6 complete");
         serial::qemu_exit_failure();
     }
 
@@ -1288,6 +1403,8 @@ mod launch_test {
         assert_eq!(M3_EARLY_OK_MARKER, "RAYNU-V-M3-EARLY-OK");
         assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
         assert_eq!(M3_SHELL_OK_MARKER, "RAYNU-V-M3-SHELL-OK");
+        assert_eq!(M3_LOOP_OK_MARKER, "RAYNU-V-M3-LOOP-OK");
+        assert_eq!(LOOP_HLT_TARGET, 4);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(EXIT_REASON_CPUID, 10);

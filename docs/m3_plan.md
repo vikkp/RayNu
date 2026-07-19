@@ -112,7 +112,7 @@ Keep synthetic path as fallback until each real gate replaces it.
 - Expand GPR save/restore beyond RAX–RDX+RSI
 - Host test or QEMU marker that the loop survived N resumes after shell magic
 
-Status: **next**.
+Status: **in flight**.
 
 ### M3.7 — Real bzImage load — `RAYNU-V-M3-BZIMAGE-OK`
 
