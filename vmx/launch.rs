@@ -1128,8 +1128,10 @@ unsafe fn try_inject_guest_apic_timer() -> bool {
     false
 }
 
+/// Arm interrupt-window when IRR is pending but we are delivering something
+/// else first (IRQ0), or the guest cannot accept yet (IF=0).
 unsafe fn maybe_arm_interrupt_window_for_apic() {
-    if lapic_virt::has_deliverable_irr() && !guest_can_accept_extint() {
+    if lapic_virt::has_deliverable_irr() {
         let _ = set_interrupt_window_exiting(true);
     }
 }
@@ -1512,6 +1514,36 @@ unsafe fn arm_linux_tick() {
     let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
 }
 
+/// Keep host one-shots running for IRQ0 / guest APIC until SHELL.
+unsafe fn arm_linux_tick_if_needed() {
+    if !serial_pio::guest_shell_ok()
+        || lapic_virt::host_timer_armed_for_guest()
+        || lapic_virt::has_deliverable_irr()
+        || serial_pio::com1_tx_irq_pending()
+    {
+        arm_linux_tick();
+    }
+}
+
+/// Inject ISA IRQ0 (jiffies) when the guest can accept an external IRQ.
+unsafe fn try_inject_linux_irq0() -> bool {
+    if !guest_can_accept_extint() {
+        return false;
+    }
+    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+    if (cs & 3) != 0 {
+        return false;
+    }
+    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
+        // Do not clear interrupt-window here — caller may need it for APIC IRR.
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
+}
+
 /// Real Linux post-entry loop: banner → MSR → GTIMER2 → wait for init SHELL.
 unsafe fn phase4_linux_early(basic: u32) -> ! {
     // Close once both SHELL and APIC-OK are latched (either order).
@@ -1547,11 +1579,9 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         }
         EXIT_REASON_INTERRUPT_WINDOW => {
             let _ = set_interrupt_window_exiting(false);
-            // Prefer APIC timer once armed — timekeeping beats UART TX.
+            // Window after IRQ0: deliver deferred APIC IRR (calibrate verify).
             if try_inject_guest_apic_timer() {
-                if lapic_virt::host_timer_armed_for_guest() {
-                    arm_linux_tick();
-                }
+                arm_linux_tick_if_needed();
                 vmresume_with_gprs();
             }
             if try_inject_linux_com1_tx() {
@@ -1564,43 +1594,36 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
-                // Host one-shot → virtual APIC IRR (M3.12). Inject only when
-                // IF=1; else interrupt-window (avoids 0x80000021).
+                // Host one-shot → virtual APIC IRR (M3.12).
                 let _ = lapic_virt::on_host_timer_fire();
                 emit_lapic_markers();
-                if try_inject_guest_apic_timer() {
-                    if lapic_virt::host_timer_armed_for_guest() {
-                        arm_linux_tick();
-                    }
+                // Prefer COM1 TX so ttyS0 can finish SHELL magic.
+                if try_inject_linux_com1_tx() {
+                    arm_linux_tick_if_needed();
+                    maybe_arm_interrupt_window_for_apic();
                     vmresume_with_gprs();
                 }
-                // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
-                if try_inject_linux_com1_tx() {
+                // Until SHELL: inject IRQ0 for jiffies first, defer APIC to
+                // the interrupt window. Linux calibrate verify counts APIC
+                // IRQs while checking jiffies delta — if we only inject APIC
+                // (and drop IRQ0 on APIC-OK), jiffies freeze →
+                // "APIC timer disabled due to verification failure" → stall.
+                if !serial_pio::guest_shell_ok() {
+                    if try_inject_linux_irq0() {
+                        // IRQ0 inject clears window-exiting; re-arm for APIC.
+                        maybe_arm_interrupt_window_for_apic();
+                        arm_linux_tick_if_needed();
+                        vmresume_with_gprs();
+                    }
+                    maybe_arm_interrupt_window_for_apic();
+                }
+                // After SHELL (or if IRQ0 could not run): deliver APIC IRR.
+                if try_inject_guest_apic_timer() {
+                    arm_linux_tick_if_needed();
                     vmresume_with_gprs();
                 }
                 maybe_arm_interrupt_window_for_tx();
-                if lapic_virt::host_timer_armed_for_guest()
-                    || lapic_virt::has_deliverable_irr()
-                    || !lapic_virt::apic_ok()
-                {
-                    arm_linux_tick();
-                }
-                // IRQ0 jiffies crutch until first faithful APIC deliver.
-                if !lapic_virt::apic_ok() {
-                    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
-                    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
-                    let cpl = cs & 3;
-                    if (rflags & (1 << 9)) != 0 && cpl == 0 {
-                        if let Ok(info) =
-                            interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR)
-                        {
-                            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
-                            let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-                            let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-                            vmresume_with_gprs();
-                        }
-                    }
-                }
+                arm_linux_tick_if_needed();
             }
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);

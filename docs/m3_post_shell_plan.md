@@ -44,10 +44,10 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 - Virtual IRR/ISR + EOI so guest LVT timer inject does not panic (`Fatal exception in interrupt` on Latitude)
 - Real `CUR_COUNT` so lapic calibrate can succeed; host one-shot → IRR → interrupt-window inject
-- Drop host→IRQ0 after first APIC-OK deliver (keep IRQ4 COM1 TX until serial is poll-safe)
+- Keep host→IRQ0 through SHELL (needed for calibrate *verification* jiffies); IRQ4 COM1 TX until serial is poll-safe
 - Cmdline: keep `noapic` for now (IOAPIC stub → later); document PIC-only stay for ISA
 
-Marker: durable Linux run with APIC timer inject + SHELL without host→IRQ0 after APIC-OK.
+Marker: durable Linux run with APIC IRR/ISR inject (`APIC-OK`) + SHELL.
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 
