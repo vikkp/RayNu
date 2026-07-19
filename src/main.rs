@@ -15,6 +15,7 @@
 //! M3.2: synthetic kernel/initrd + `boot_params` load (`RAYNU-V-M3-LOAD-OK`).
 //! M3.3: 64-bit proto-kernel entry + early serial (`RAYNU-V-M3-EARLY-OK`).
 //! M3.4: post-proto guest timer → inject (`RAYNU-V-M3-GTIMER-OK`).
+//! M3.5: proto-init shell marker (`RAYNU-V-M3-SHELL-OK`).
 
 #![no_main]
 #![no_std]
@@ -235,10 +236,19 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 return;
             }
             boot::serial::write_line(guest::M3_LOAD_OK_MARKER);
-            vmx::launch::set_linux_load(info.kernel_phys, info.boot_params_phys);
-            // SAFETY: owned proto-kernel frame; clear NX for 64-bit entry fetch.
+            vmx::launch::set_linux_load(
+                info.kernel_phys,
+                info.boot_params_phys,
+                info.init_phys,
+            );
+            // SAFETY: owned proto-kernel / proto-init frames; clear NX for fetch.
             if !unsafe { arch::cpu::clear_nx_identity(info.kernel_phys) } {
                 boot::serial::write_line("boot: ERROR — could not clear NX on proto-kernel");
+                let _ = life.disable();
+                return;
+            }
+            if !unsafe { arch::cpu::clear_nx_identity(info.init_phys) } {
+                boot::serial::write_line("boot: ERROR — could not clear NX on proto-init");
                 let _ = life.disable();
                 return;
             }

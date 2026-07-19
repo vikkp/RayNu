@@ -8,7 +8,7 @@
 //! `boot_params` into GPA. M3.3 enters the proto-kernel at 64-bit with
 //! RSI=`boot_params` (real bzImage deferred).
 
-use crate::devices::serial_pio::GUEST_EARLY_MAGIC;
+use crate::devices::serial_pio::{GUEST_EARLY_MAGIC, GUEST_SHELL_MAGIC};
 use crate::memory::ept::{EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID};
 use crate::memory::{FrameAllocator, PhysFrame};
 
@@ -17,6 +17,9 @@ pub const M3_LOAD_OK_MARKER: &str = "RAYNU-V-M3-LOAD-OK";
 
 /// Linux-style early console line the proto-kernel OUTs before the magic.
 pub const PROTO_EARLY_LINE: &[u8] = b"Linux version RayNu-V-proto (early console)\n";
+
+/// Line the M3.5 proto-init OUTs before the shell magic.
+pub const PROTO_SHELL_LINE: &[u8] = b"init: RayNu-V proto shell\n";
 
 /// `setup_header.header` magic — ASCII `"HdrS"` (LE).
 pub const SETUP_HEADER_MAGIC: u32 = 0x5372_6448;
@@ -58,6 +61,8 @@ pub struct BootLoadInfo {
     pub boot_params_phys: u64,
     pub kernel_phys: u64,
     pub initrd_phys: u64,
+    /// Executable proto-init (same frame as synthetic initrd for M3.5).
+    pub init_phys: u64,
     pub cmdline_phys: u64,
     pub setup_magic: u32,
     pub ramdisk_image: u32,
@@ -121,7 +126,7 @@ pub fn claim_load_pages(pages: &[(u64, PhysFrame)]) -> Result<(), EptError> {
 ///
 /// Layout (identity-mapped):
 /// - `kernel` — 1 page 64-bit proto-kernel (earlyprintk-style OUT + HLT)
-/// - `initrd` — 1 page synthetic stub
+/// - `initrd` / `init` — 1 page proto-init (shell marker OUT + HLT)
 /// - `cmdline` — 1 page with [`DEFAULT_CMDLINE`]
 /// - `boot_params` — packed zero page
 pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, ()> {
@@ -146,7 +151,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
     // SAFETY: freshly allocated frames; identity-mapped by UEFI + EPT.
     unsafe {
         write_synth_kernel(kernel_phys);
-        write_synth_initrd(initrd_phys);
+        write_proto_init(initrd_phys);
         write_cmdline(cmdline_phys);
     }
 
@@ -173,6 +178,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
         boot_params_phys,
         kernel_phys,
         initrd_phys,
+        init_phys: initrd_phys,
         cmdline_phys,
         setup_magic: magic,
         ramdisk_image: initrd_phys as u32,
@@ -275,11 +281,22 @@ unsafe fn emit_com1_string(p: *mut u8, mut o: usize, bytes: &[u8]) -> usize {
     o
 }
 
-unsafe fn write_synth_initrd(phys: u64) {
-    core::ptr::write_bytes(phys as *mut u8, 0, SYNTH_INITRD_SIZE);
-    // Minimal "cpio" lookalike tag for debug (not a real archive).
-    let tag = b"RAYNUINITRD";
-    core::ptr::copy_nonoverlapping(tag.as_ptr(), phys as *mut u8, tag.len());
+/// Write M3.5 proto-init at `phys` (synthetic initrd frame doubles as init).
+///
+/// OUTs [`PROTO_SHELL_LINE`] then [`GUEST_SHELL_MAGIC`], then HLT.
+///
+/// SAFETY: `phys` is an owned writable identity-mapped frame.
+pub unsafe fn write_proto_init(phys: u64) {
+    let p = phys as *mut u8;
+    core::ptr::write_bytes(p, 0, SYNTH_INITRD_SIZE);
+    let mut o = 0usize;
+    o = emit_com1_string(p, o, PROTO_SHELL_LINE);
+    o = emit_com1_string(p, o, GUEST_SHELL_MAGIC);
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+    o += 3;
+    debug_assert!(o <= SYNTH_INITRD_SIZE);
 }
 
 unsafe fn write_cmdline(phys: u64) {

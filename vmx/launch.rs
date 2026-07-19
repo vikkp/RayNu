@@ -15,7 +15,8 @@
 //! M3.1: guest CPUID → filter (hide VMX) → `RAYNU-V-M3-CPUID-OK`.
 //! M3.3: after timer path, enter proto-kernel (RSI=`boot_params`) → early OK.
 //! M3.4: post-proto guest timer → ext-IRQ → EOI → inject → `RAYNU-V-M3-GTIMER-OK`.
-//! Markers: OWN/ALLOC/IRQ/TIMER/IO/CPUID/LOAD/EARLY/GTIMER.
+//! M3.5: proto-init OUT shell marker → `RAYNU-V-M3-SHELL-OK` (closes synthetic M3).
+//! Markers: …/EARLY/GTIMER/SHELL.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -26,7 +27,7 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
-use crate::devices::serial_pio::{self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER};
+use crate::devices::serial_pio::{self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_SHELL_OK_MARKER};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -45,7 +46,8 @@ use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 /// 3 = ISR HLT after timer path → TIMER-OK (+ M3.0/M3.1) → enter proto-kernel
 /// 4 = proto-kernel HLT → EARLY-OK → arm guest timer
 /// 5 = post-proto external-interrupt → EOI → inject
-/// 6 = ISR HLT → GTIMER-OK
+/// 6 = ISR HLT → GTIMER-OK → enter proto-init
+/// 7 = proto-init HLT → SHELL-OK
 static mut EXIT_PHASE: u8 = 0;
 
 /// Bring-up guest code page (store/ISR); ack slot lives here across M3.4 inject.
@@ -59,16 +61,18 @@ static mut SAVED_GUEST_RCX: u64 = 0;
 static mut SAVED_GUEST_RDX: u64 = 0;
 static mut SAVED_GUEST_RSI: u64 = 0;
 
-/// M3.2/M3.3 load addresses (set before [`run_hlt_guest`]).
+/// M3.2–M3.5 load addresses (set before [`run_hlt_guest`]).
 static mut LOAD_KERNEL_PHYS: u64 = 0;
 static mut LOAD_BOOT_PARAMS_PHYS: u64 = 0;
+static mut LOAD_INIT_PHYS: u64 = 0;
 
-/// Record synthetic load addresses for the M3.3 proto-kernel entry.
-pub fn set_linux_load(kernel_phys: u64, boot_params_phys: u64) {
+/// Record synthetic load addresses for proto-kernel / proto-init entry.
+pub fn set_linux_load(kernel_phys: u64, boot_params_phys: u64, init_phys: u64) {
     // SAFETY: single-threaded boot before VMLAUNCH.
     unsafe {
         LOAD_KERNEL_PHYS = kernel_phys;
         LOAD_BOOT_PARAMS_PHYS = boot_params_phys;
+        LOAD_INIT_PHYS = init_phys;
     }
 }
 
@@ -743,6 +747,7 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
         4 => phase4_early_ok(basic, guest_page),
         5 => phase5_guest_timer_irq(basic),
         6 => phase6_gtimer_ok(basic, guest_page),
+        7 => phase7_shell_ok(basic, guest_page),
         _ => {
             serial::write_line("boot: ERROR — bad EXIT_PHASE");
             finish_boot(false);
@@ -780,6 +785,14 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             EARLY_MARKED = true;
             serial::write_byte(b'\n');
             serial::write_line(M3_EARLY_OK_MARKER);
+        }
+    }
+    if serial_pio::guest_shell_ok() {
+        static mut SHELL_MARKED: bool = false;
+        if !SHELL_MARKED {
+            SHELL_MARKED = true;
+            serial::write_byte(b'\n');
+            serial::write_line(M3_SHELL_OK_MARKER);
         }
     }
 
@@ -1096,6 +1109,61 @@ unsafe fn phase6_gtimer_ok(basic: u32, guest_page: u64) -> ! {
         serial::write_line("boot: ERROR — early marker cleared before GTIMER");
         ok = false;
     }
+    if !ok {
+        finish_boot(false);
+    }
+    enter_proto_init();
+}
+
+unsafe fn enter_proto_init() -> ! {
+    let init = LOAD_INIT_PHYS;
+    if init == 0 {
+        serial::write_line("boot: ERROR — missing proto-init load address");
+        finish_boot(false);
+    }
+    serial::write_str("boot: entering proto-init rip=0x");
+    write_hex_u64(init);
+    serial::write_byte(b'\n');
+
+    if ops::vmwrite(GUEST_RIP, init).is_err() {
+        serial::write_line("boot: ERROR — VMWRITE guest RIP for proto-init failed");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_RFLAGS, 0x2);
+
+    SAVED_GUEST_RAX = 0;
+    SAVED_GUEST_RBX = 0;
+    SAVED_GUEST_RCX = 0;
+    SAVED_GUEST_RDX = 0;
+    SAVED_GUEST_RSI = LOAD_BOOT_PARAMS_PHYS;
+    EXIT_PHASE = 7;
+    vmresume_with_gprs();
+}
+
+unsafe fn phase7_shell_ok(basic: u32, guest_page: u64) -> ! {
+    if basic != EXIT_REASON_HLT {
+        serial::write_line("boot: ERROR — phase7 expected HLT");
+        finish_boot(false);
+    }
+    let init_page = LOAD_INIT_PHYS & !0xfff;
+    let mut ok = true;
+    if guest_page != init_page {
+        serial::write_line("boot: ERROR — proto-init HLT on unexpected page");
+        ok = false;
+    }
+    if serial_pio::guest_shell_ok() {
+        // Marker may already have been printed when magic completed.
+    } else {
+        serial::write_line("boot: ERROR — proto-init shell magic missing");
+        ok = false;
+    }
+    if !serial_pio::guest_early_ok() {
+        serial::write_line("boot: ERROR — early marker missing at shell");
+        ok = false;
+    }
     finish_boot(ok);
 }
 
@@ -1156,10 +1224,11 @@ fn finish_boot(ok: bool) -> ! {
         Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
     }
 
-    serial::write_line("boot: M3.4 complete");
     if ok {
+        serial::write_line("boot: M3.5 complete — synthetic M3 closed");
         serial::qemu_exit_success();
     } else {
+        serial::write_line("boot: M3.5 complete");
         serial::qemu_exit_failure();
     }
 
@@ -1209,6 +1278,7 @@ mod launch_test {
         assert_eq!(M3_CPUID_OK_MARKER, "RAYNU-V-M3-CPUID-OK");
         assert_eq!(M3_EARLY_OK_MARKER, "RAYNU-V-M3-EARLY-OK");
         assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
+        assert_eq!(M3_SHELL_OK_MARKER, "RAYNU-V-M3-SHELL-OK");
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(EXIT_REASON_CPUID, 10);

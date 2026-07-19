@@ -60,15 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.4 closed. Next: shell.</h2>
+          <h2 class="section__title">M3.5: shell marker.</h2>
           <p class="section__lede">
-            Latitude boot gate passed through guest timer
-            (<code>RAYNU-V-M3-GTIMER-OK</code>). Next: M3.5 proto-init shell
-            marker — <code>RAYNU-V-M3-SHELL-OK</code>.
+            After the guest timer, enter proto-init; it prints
+            <code>init: RayNu-V proto shell</code> and latches
+            <code>RAYNU-V-M3-SHELL-OK</code> — closing synthetic M3.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-GTIMER-OK
-boot: M3.4 complete
-==&gt; Boot gate PASSED (M0 → M3.4)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>init: RayNu-V proto shell
+RAYNU-V-M3-SHELL-OK
+boot: M3.5 complete — synthetic M3 closed</code></pre>
         </div>
       </section>
 
@@ -142,8 +142,8 @@ boot: M3.4 complete
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.4 is closed on Latitude. Current gate: shell marker (M3.5) —
-            see <code>docs/m3_plan.md</code>.
+            Current gate: shell marker (M3.5). Closes synthetic M3; real
+            bzImage next — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

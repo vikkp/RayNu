@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.4 closed** on Latitude (`RAYNU-V-M3-GTIMER-OK`). Next: M3.5 shell marker. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.4 closed** on Latitude (`RAYNU-V-M3-GTIMER-OK`); **M3.5 in flight**: shell marker (`RAYNU-V-M3-SHELL-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 

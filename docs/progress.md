@@ -41,6 +41,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.5** shell / init marker (`RAYNU-V-M3-SHELL-OK`) — see [m3_plan.md](m3_plan.md).
-2. Real bzImage / busybox init (post-synthetic M3 close).
+1. Latitude gate for M3.5 (`RAYNU-V-M3-SHELL-OK`) — closes synthetic M3.
+2. Real bzImage / busybox init (post-synthetic M3).
 3. Verus L3 proofs for EPT / allocator (parallel).

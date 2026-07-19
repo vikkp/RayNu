@@ -91,6 +91,8 @@ Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER-OK`).
 - Full QEMU gate; Latitude required
 - Docs / site celebrate M3 closed
 
+Status: **in flight** — proto-init (synthetic); real busybox/`init` deferred post-M3.
+
 ---
 
 ## Parallel (does not gate shell)

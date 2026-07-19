@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.4 closed on Latitude): UEFI entry → load → VMLAUNCH → COM1/CPUID/inject/timer → proto-kernel early serial → **post-proto guest timer** → VMXOFF. Verification: L2 specs + Kani. Next: shell / init marker.
+Boot path today (M3.4 closed; M3.5 in flight): UEFI entry → load → VMLAUNCH → … → proto-kernel early → guest timer → **proto-init shell marker** → VMXOFF. Verification: L2 specs + Kani.
 
 Lived gate history: [docs/progress.md](progress.md).
 
