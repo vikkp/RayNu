@@ -18,6 +18,7 @@
 //! M3.5: proto-init shell marker (`RAYNU-V-M3-SHELL-OK`).
 //! M3.6: continuous HLT exit loop (`RAYNU-V-M3-LOOP-OK`).
 //! M3.7: bzImage load (`RAYNU-V-M3-BZIMAGE-OK`).
+//! M3.8: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`).
 
 #![no_main]
 #![no_std]
@@ -271,23 +272,28 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             if info.from_bzimage {
                 boot::serial::write_line(guest::M3_BZIMAGE_OK_MARKER);
             }
+            if info.is_real_linux {
+                boot::serial::write_line("boot: real Linux bzImage detected");
+            }
             vmx::launch::set_linux_load(
                 info.entry_phys,
                 info.boot_params_phys,
                 info.init_phys,
             );
+            vmx::launch::set_real_linux(info.is_real_linux);
             // SAFETY: owned kernel / proto-init frames; clear NX for fetch.
-            if !unsafe { arch::cpu::clear_nx_identity(info.kernel_phys) } {
-                boot::serial::write_line("boot: ERROR — could not clear NX on kernel");
-                let _ = life.disable();
-                return;
-            }
-            if info.entry_phys != info.kernel_phys
-                && !unsafe { arch::cpu::clear_nx_identity(info.entry_phys) }
+            // Stride 2 MiB to cover large-page PTEs across the decompress window.
             {
-                boot::serial::write_line("boot: ERROR — could not clear NX on kernel entry");
-                let _ = life.disable();
-                return;
+                let mut a = info.kernel_phys & !0xfff;
+                let end = info.kernel_phys.saturating_add(info.kernel_bytes);
+                while a < end {
+                    if !unsafe { arch::cpu::clear_nx_identity(a) } {
+                        boot::serial::write_line("boot: ERROR — could not clear NX on kernel");
+                        let _ = life.disable();
+                        return;
+                    }
+                    a = a.saturating_add(0x20_0000);
+                }
             }
             if !unsafe { arch::cpu::clear_nx_identity(info.init_phys) } {
                 boot::serial::write_line("boot: ERROR — could not clear NX on proto-init");

@@ -115,6 +115,26 @@ fn pack_boot_params_fields() {
 }
 
 #[test]
+fn align_up_and_workspace_slack() {
+    assert_eq!(align_up_u64(0x178b_000, 0x20_0000), 0x180_0000);
+    assert_eq!(align_up_u64(0x180_0000, 0x20_0000), 0x180_0000);
+    assert_eq!(align_up_u64(0x178b_000, 1), 0x178b_000);
+    // Fixture path: no alignment slack.
+    assert_eq!(bzimage_workspace_bytes(4096, 4096, 0x1000_0000, false), 4096);
+    // Real Linux: init_size + 2MiB so align_up(load) + init_size fits.
+    let init = 0x9b_2000;
+    let align = 0x20_0000;
+    assert_eq!(bzimage_workspace_bytes(930_816, init, align, true), init + align);
+    // Latitude bug: unaligned load at 0x178b000 needed through 0x1800000+init.
+    let load = 0x178b_000u64;
+    let output = align_up_u64(load, align as u64);
+    assert_eq!(output, 0x180_0000);
+    let need_end = output + init as u64;
+    let alloc_end = load + bzimage_workspace_bytes(930_816, init, align, true) as u64;
+    assert!(alloc_end >= need_end, "0x{alloc_end:x} < 0x{need_end:x}");
+}
+
+#[test]
 fn claim_load_pages_exclusive() {
     let pages = [
         (0x10_0000, PhysFrame::from_phys(0x10_0000)),

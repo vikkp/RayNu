@@ -1,10 +1,10 @@
-//! Guest COM1 (0x3F8) PIO emulation / passthrough (M3.0).
+//! Guest COM1 (0x3F8) PIO emulation / passthrough (M3.0 / M3.8).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002)
 //!
 //! On I/O VMEXIT, OUT to the COM1 data port is forwarded to the host UART.
-//! Tracks a magic guest string for the `RAYNU-V-M3-IO-OK` gate.
+//! Tracks magic guest strings and (M3.8) a real Linux earlyprintk banner.
 
 /// COM1 marker when guest OUT magic is observed (M3.0 gate).
 pub const M3_IO_OK_MARKER: &str = "RAYNU-V-M3-IO-OK";
@@ -24,9 +24,22 @@ pub const GUEST_SHELL_MAGIC: &[u8] = b"RAYNU-V-M3-SHELL";
 /// COM1 marker when proto-init shell magic is observed (M3.5 gate).
 pub const M3_SHELL_OK_MARKER: &str = "RAYNU-V-M3-SHELL-OK";
 
+/// Prefix of a real Linux banner (`earlyprintk` / `printk`).
+pub const LINUX_BANNER_PREFIX: &[u8] = b"Linux version ";
+
+/// COM1 marker when a real Linux banner is observed (M3.8 gate).
+pub const M3_LINUX_EARLY_OK_MARKER: &str = "RAYNU-V-M3-LINUX-EARLY-OK";
+
 pub const COM1_DATA: u16 = 0x3F8;
 pub const COM1_IER: u16 = 0x3F9;
+pub const COM1_IIR_FCR: u16 = 0x3FA;
+pub const COM1_LCR: u16 = 0x3FB;
+pub const COM1_MCR: u16 = 0x3FC;
 pub const COM1_LSR: u16 = 0x3FD;
+pub const COM1_MSR: u16 = 0x3FE;
+pub const COM1_SCR: u16 = 0x3FF;
+
+const LCR_DLAB: u8 = 1 << 7;
 
 /// Set when [`GUEST_IO_MAGIC`] has been fully received from guest OUTs.
 static mut IO_MAGIC_OK: bool = false;
@@ -37,6 +50,17 @@ static mut EARLY_POS: usize = 0;
 /// Set when [`GUEST_SHELL_MAGIC`] has been fully received.
 static mut SHELL_MAGIC_OK: bool = false;
 static mut SHELL_POS: usize = 0;
+/// Real Linux earlyprintk banner latch (digit after [`LINUX_BANNER_PREFIX`]).
+static mut LINUX_EARLY_OK: bool = false;
+static mut LINUX_POS: usize = 0;
+static mut LINUX_NEED_DIGIT: bool = false;
+
+/// Soft 16550 shadow (enough for early_serial_init).
+static mut SHADOW_LCR: u8 = 0x03; // 8n1
+static mut SHADOW_IER: u8 = 0;
+static mut SHADOW_MCR: u8 = 0;
+static mut SHADOW_DLL: u8 = 1;
+static mut SHADOW_DLM: u8 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoExitInfo {
@@ -65,8 +89,8 @@ pub fn is_com1_port(port: u16) -> bool {
 
 /// Handle a guest PIO access. `rax` is the guest RAX at VMEXIT.
 ///
-/// For OUT: forwards COM1 data bytes to host serial and updates the magic latch.
-/// For IN on LSR: returns THR-empty so a polling guest would not spin (unused in M3.0).
+/// For OUT: forwards COM1 data bytes to host serial and updates latches.
+/// For IN: returns LSR/LCR/IER/… shadows so earlyprintk polling works.
 ///
 /// Returns `Some(new_rax)` when guest RAX must be updated (IN); `None` for OUT.
 pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
@@ -78,22 +102,48 @@ pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
     }
 
     if info.is_in {
-        let val = match info.port {
-            COM1_LSR => 0x60u64, // THR empty + transmitter empty
-            COM1_IER => 0,
-            _ => 0,
+        // SAFETY: single-threaded VMEXIT path.
+        let val = unsafe {
+            let dlab = SHADOW_LCR & LCR_DLAB != 0;
+            match info.port {
+                COM1_DATA if dlab => SHADOW_DLL as u64,
+                COM1_IER if dlab => SHADOW_DLM as u64,
+                COM1_DATA => 0, // no RX
+                COM1_IER => SHADOW_IER as u64,
+                COM1_IIR_FCR => 0x01, // no interrupt pending
+                COM1_LCR => SHADOW_LCR as u64,
+                COM1_MCR => SHADOW_MCR as u64,
+                COM1_LSR => 0x60u64, // THR empty + TEMT
+                COM1_MSR => 0x30,    // DSR+CTS
+                COM1_SCR => 0,
+                _ => 0,
+            }
         };
         Ok(Some((rax & !0xFF) | val))
     } else {
         let byte = (rax & 0xFF) as u8;
-        if info.port == COM1_DATA {
-            note_io_magic(byte);
-            note_early_magic(byte);
-            note_shell_magic(byte);
-            // Passthrough so the magic is visible on the QEMU serial log.
-            // Skip port I/O under host `cargo test` (no COM1).
-            #[cfg(not(test))]
-            crate::boot::serial::write_byte(byte);
+        // SAFETY: single-threaded VMEXIT path.
+        unsafe {
+            let dlab = SHADOW_LCR & LCR_DLAB != 0;
+            match info.port {
+                COM1_DATA if dlab => SHADOW_DLL = byte,
+                COM1_IER if dlab => SHADOW_DLM = byte,
+                COM1_DATA => {
+                    note_io_magic(byte);
+                    note_early_magic(byte);
+                    note_shell_magic(byte);
+                    note_linux_early(byte);
+                    // Passthrough so banner/magic appear on the QEMU serial log.
+                    #[cfg(not(test))]
+                    crate::boot::serial::write_byte(byte);
+                }
+                COM1_IER => SHADOW_IER = byte,
+                COM1_IIR_FCR => {} // FCR write ignored
+                COM1_LCR => SHADOW_LCR = byte,
+                COM1_MCR => SHADOW_MCR = byte,
+                COM1_SCR => {}
+                _ => {}
+            }
         }
         Ok(None)
     }
@@ -133,16 +183,6 @@ fn note_early_magic(byte: u8) {
     }
 }
 
-pub fn guest_io_ok() -> bool {
-    // SAFETY: written on BSP VMEXIT path; read after magic completes.
-    unsafe { IO_MAGIC_OK }
-}
-
-pub fn guest_early_ok() -> bool {
-    // SAFETY: written on BSP VMEXIT path; read after early magic completes.
-    unsafe { EARLY_MAGIC_OK }
-}
-
 fn note_shell_magic(byte: u8) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
@@ -160,9 +200,52 @@ fn note_shell_magic(byte: u8) {
     }
 }
 
+fn note_linux_early(byte: u8) {
+    // SAFETY: single-threaded VMEXIT path.
+    unsafe {
+        if LINUX_EARLY_OK {
+            return;
+        }
+        if LINUX_NEED_DIGIT {
+            if byte.is_ascii_digit() {
+                // Real: "Linux version 6…" — not "Linux version RayNu-V-proto".
+                LINUX_EARLY_OK = true;
+                LINUX_NEED_DIGIT = false;
+            } else {
+                LINUX_NEED_DIGIT = false;
+                LINUX_POS = if byte == LINUX_BANNER_PREFIX[0] { 1 } else { 0 };
+            }
+            return;
+        }
+        if LINUX_POS < LINUX_BANNER_PREFIX.len() && byte == LINUX_BANNER_PREFIX[LINUX_POS] {
+            LINUX_POS += 1;
+            if LINUX_POS == LINUX_BANNER_PREFIX.len() {
+                LINUX_NEED_DIGIT = true;
+            }
+        } else {
+            LINUX_POS = if byte == LINUX_BANNER_PREFIX[0] { 1 } else { 0 };
+        }
+    }
+}
+
+pub fn guest_io_ok() -> bool {
+    // SAFETY: written on BSP VMEXIT path; read after magic completes.
+    unsafe { IO_MAGIC_OK }
+}
+
+pub fn guest_early_ok() -> bool {
+    // SAFETY: written on BSP VMEXIT path; read after early magic completes.
+    unsafe { EARLY_MAGIC_OK }
+}
+
 pub fn guest_shell_ok() -> bool {
     // SAFETY: written on BSP VMEXIT path; read after shell magic completes.
     unsafe { SHELL_MAGIC_OK }
+}
+
+pub fn guest_linux_early_ok() -> bool {
+    // SAFETY: written on BSP VMEXIT path; read after banner latch.
+    unsafe { LINUX_EARLY_OK }
 }
 
 /// Trap COM1 ports in an I/O bitmap A page (ports 0x0000–0x7FFF).

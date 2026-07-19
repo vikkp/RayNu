@@ -18,6 +18,7 @@
 # M3.5: RAYNU-V-M3-SHELL-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.6: RAYNU-V-M3-LOOP-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.7: RAYNU-V-M3-BZIMAGE-OK (required when VMXON succeeds / REQUIRE_VMX=1)
+# M3.8: RAYNU-V-M3-LINUX-EARLY-OK (required for real Linux; proto keeps EARLY..LOOP)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -41,7 +42,8 @@ MARKER_GTIMER="${MARKER_GTIMER:-RAYNU-V-M3-GTIMER-OK}"
 MARKER_SHELL="${MARKER_SHELL:-RAYNU-V-M3-SHELL-OK}"
 MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
 MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
-TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
+MARKER_LINUX_EARLY="${MARKER_LINUX_EARLY:-RAYNU-V-M3-LINUX-EARLY-OK}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
 
@@ -81,10 +83,14 @@ fi
 echo "==> Building EFI"
 "$ROOT/tools/build.sh"
 
-# M3.7 fixture on ESP (run-qemu.sh also stages; ensure asset exists first).
+# M3.8: prefer real tinyconfig asset; proto fixture only if nothing present.
 if [[ ! -f "$ROOT/assets/bzImage" ]]; then
-  echo "==> Generating minimal bzImage asset"
-  "$ROOT/tools/gen-minimal-bzimage.sh" "$ROOT/assets/bzImage"
+  if [[ -f "$ROOT/assets/bzImage.real" ]]; then
+    cp "$ROOT/assets/bzImage.real" "$ROOT/assets/bzImage"
+  else
+    echo "==> Generating minimal bzImage asset"
+    "$ROOT/tools/gen-minimal-bzimage.sh" "$ROOT/assets/bzImage"
+  fi
 fi
 
 echo "==> Running QEMU boot test (timeout ${TIMEOUT_SECS}s, REQUIRE_VMX=${REQUIRE_VMX})"
@@ -190,29 +196,35 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_BZIMAGE' not found after successful VMXON" >&2
     fail=1
   fi
-  if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
-    echo "==> M3.3 earlyprintk marker found"
+  # M3.8 real Linux vs proto fixture: mutually exclusive post-entry markers.
+  if grep -qF "$MARKER_LINUX_EARLY" "$SERIAL_LOG"; then
+    echo "==> M3.8 Linux earlyprintk marker found"
+    echo "==> real Linux path — skipping synthetic EARLY/GTIMER/SHELL/LOOP checks"
   else
-    echo "error: marker '$MARKER_EARLY' not found after successful VMXON" >&2
-    fail=1
-  fi
-  if grep -qF "$MARKER_GTIMER" "$SERIAL_LOG"; then
-    echo "==> M3.4 guest-timer marker found"
-  else
-    echo "error: marker '$MARKER_GTIMER' not found after successful VMXON" >&2
-    fail=1
-  fi
-  if grep -qF "$MARKER_SHELL" "$SERIAL_LOG"; then
-    echo "==> M3.5 shell/init marker found"
-  else
-    echo "error: marker '$MARKER_SHELL' not found after successful VMXON" >&2
-    fail=1
-  fi
-  if grep -qF "$MARKER_LOOP" "$SERIAL_LOG"; then
-    echo "==> M3.6 exit-loop marker found"
-  else
-    echo "error: marker '$MARKER_LOOP' not found after successful VMXON" >&2
-    fail=1
+    if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
+      echo "==> M3.3 earlyprintk marker found (proto)"
+    else
+      echo "error: neither '$MARKER_LINUX_EARLY' nor '$MARKER_EARLY' found" >&2
+      fail=1
+    fi
+    if grep -qF "$MARKER_GTIMER" "$SERIAL_LOG"; then
+      echo "==> M3.4 guest-timer marker found"
+    else
+      echo "error: marker '$MARKER_GTIMER' not found after successful VMXON" >&2
+      fail=1
+    fi
+    if grep -qF "$MARKER_SHELL" "$SERIAL_LOG"; then
+      echo "==> M3.5 shell/init marker found"
+    else
+      echo "error: marker '$MARKER_SHELL' not found after successful VMXON" >&2
+      fail=1
+    fi
+    if grep -qF "$MARKER_LOOP" "$SERIAL_LOG"; then
+      echo "==> M3.6 exit-loop marker found"
+    else
+      echo "error: marker '$MARKER_LOOP' not found after successful VMXON" >&2
+      fail=1
+    fi
   fi
 elif grep -qF "$MARKER_VMX_SKIP" "$SERIAL_LOG"; then
   if [[ "$REQUIRE_VMX" == "1" ]]; then
@@ -232,5 +244,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.7; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.8; qemu status=$QEMU_STATUS)"
 exit 0

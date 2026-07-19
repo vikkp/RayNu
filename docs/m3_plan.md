@@ -130,7 +130,9 @@ Status: **closed on Latitude** (`RAYNU-V-M3-BZIMAGE-OK`). Minimal fixture; real 
 - Stub or handle first MSR / exception exits that appear in the log
 - Marker distinct from synthetic `M3-EARLY-OK`
 
-Status: planned. Depends on M3.7.
+Status: **closed on Latitude** (`RAYNU-V-M3-LINUX-EARLY-OK`).
+Closed with: CR4.VMXE host-own; 2 MiB-aligned `init_size` workspace; no `#PF`
+intercept (ZO demand-map); MSR exits stub-skipped through banner.
 
 ### M3.9 — Guest timer / MSR harden — `RAYNU-V-M3-GTIMER2-OK`
 
@@ -138,7 +140,7 @@ Status: planned. Depends on M3.7.
 - Stop identity-mapping host LAPIC into the guest if that is the hang
 - Reuse `sched/interrupt` inject firewall
 
-Status: planned; may interleave with M3.8 if the kernel stalls before banner/`init`.
+Status: planned (next after M3.8).
 
 ### M3.10 — Real shell / init — `RAYNU-V-M3-SHELL-OK` (real guest)
 
@@ -186,11 +188,10 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.7~~ — done (through bzImage load).
-2. **M3.8** — real earlyprintk on Latitude (tinyconfig bzImage).
-3. **M3.9** — MSR / guest timer only as blockers appear.
-4. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-5. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.8~~ — done (through real Linux earlyprintk).
+2. **M3.9** — MSR / guest timer only as blockers appear.
+3. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
+4. Verus L3 / precise EPT / PE asset embed (parallel).
 
 ---
 
@@ -198,8 +199,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.6** continuous loop |
-| `guest/linux_boot.rs` | Synthetic load today → **M3.7** real bzImage |
+| `vmx/launch.rs` | Exit phase machine → **M3.8** real Linux early path |
+| `guest/linux_boot.rs` | Relocatable bzImage load + aligned `init_size` workspace |
+| `devices/serial_pio.rs` | COM1 latch → **M3.8** `LINUX-EARLY-OK` |
 
 | `devices/mod.rs` | Device stubs → serial PIO |
 | `memory/ept_hw.rs` | 4 GiB identity (keep for M3 bring-up) |

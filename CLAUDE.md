@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.7 closed** on Latitude (`RAYNU-V-M3-BZIMAGE-OK`). Next: **M3.8** real Linux earlyprintk. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.8 closed** on Latitude (`RAYNU-V-M3-LINUX-EARLY-OK`). Next: **M3.9** MSR/timer harden → **M3.10** busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 

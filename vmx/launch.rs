@@ -18,7 +18,10 @@
 //! M3.5: proto-init OUT shell marker → `RAYNU-V-M3-SHELL-OK` (closes synthetic M3).
 //! M3.6: after SHELL-OK, continuous HLT resume loop → `RAYNU-V-M3-LOOP-OK`.
 //! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
-//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE.
+//! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
+//! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
+//! guest-visible CR4 without #GP.
+//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -29,7 +32,9 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
-use crate::devices::serial_pio::{self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_SHELL_OK_MARKER};
+use crate::devices::serial_pio::{
+    self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
+};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -87,6 +92,8 @@ pub const M3_LOOP_OK_MARKER: &str = "RAYNU-V-M3-LOOP-OK";
 static mut LOAD_KERNEL_PHYS: u64 = 0;
 static mut LOAD_BOOT_PARAMS_PHYS: u64 = 0;
 static mut LOAD_INIT_PHYS: u64 = 0;
+/// When set, phase 4+ follows the real-Linux early path (skip GTIMER/SHELL/LOOP).
+static mut REAL_LINUX_GUEST: bool = false;
 
 /// Record kernel entry / boot_params / proto-init for later VMRESUME.
 ///
@@ -97,6 +104,14 @@ pub fn set_linux_load(entry_phys: u64, boot_params_phys: u64, init_phys: u64) {
         LOAD_KERNEL_PHYS = entry_phys;
         LOAD_BOOT_PARAMS_PHYS = boot_params_phys;
         LOAD_INIT_PHYS = init_phys;
+    }
+}
+
+/// Select real-Linux post-entry handling (M3.8) vs synthetic proto path.
+pub fn set_real_linux(real: bool) {
+    // SAFETY: single-threaded boot before VMLAUNCH.
+    unsafe {
+        REAL_LINUX_GUEST = real;
     }
 }
 
@@ -879,6 +894,18 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             serial::write_line(M3_SHELL_OK_MARKER);
         }
     }
+    if serial_pio::guest_linux_early_ok() {
+        static mut LINUX_EARLY_MARKED: bool = false;
+        if !LINUX_EARLY_MARKED {
+            LINUX_EARLY_MARKED = true;
+            serial::write_byte(b'\n');
+            serial::write_line(M3_LINUX_EARLY_OK_MARKER);
+            // Real Linux gate closes on banner; don't wait for a later HLT.
+            if REAL_LINUX_GUEST {
+                finish_boot(true);
+            }
+        }
+    }
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
@@ -1063,15 +1090,44 @@ unsafe fn enter_proto_kernel() -> ! {
         serial::write_line("boot: ERROR — missing load info for proto-kernel");
         finish_boot(false);
     }
-    serial::write_str("boot: entering 64-bit proto-kernel rip=0x");
+    if REAL_LINUX_GUEST {
+        serial::write_str("boot: entering 64-bit Linux rip=0x");
+    } else {
+        serial::write_str("boot: entering 64-bit proto-kernel rip=0x");
+    }
     write_hex_u64(kernel);
     serial::write_str(" rsi=0x");
     write_hex_u64(boot_params);
     serial::write_byte(b'\n');
 
     if ops::vmwrite(GUEST_RIP, kernel).is_err() {
-        serial::write_line("boot: ERROR — VMWRITE guest RIP for proto-kernel failed");
+        serial::write_line("boot: ERROR — VMWRITE guest RIP for kernel entry failed");
         finish_boot(false);
+    }
+    if REAL_LINUX_GUEST {
+        // Bring-up IDT is not a Linux IDT — intercept faults before triple-fault.
+        if ops::vmwrite(EXCEPTION_BITMAP, LINUX_EXCEPTION_BITMAP as u64).is_err()
+            || ops::vmwrite(PAGE_FAULT_ERROR_CODE_MASK, 0).is_err()
+            || ops::vmwrite(PAGE_FAULT_ERROR_CODE_MATCH, 0).is_err()
+        {
+            serial::write_line("boot: ERROR — exception bitmap VMWRITE failed");
+            finish_boot(false);
+        }
+        serial::write_line("boot: Linux exception bitmap armed");
+
+        // Host-own CR4.VMXE. `startup_64` does `cr4 &= 0x1060` then `mov %rax,%cr4`,
+        // which clears VMXE. Under VMX that write is #GP(0). Keep VMXE set in the
+        // VMCS guest CR4 and hide it via mask + read-shadow (guest sees VMXE=0).
+        let guest_cr4 = ops::vmread(GUEST_CR4).unwrap_or(0) | cpu::CR4_VMXE;
+        let shadow = guest_cr4 & !cpu::CR4_VMXE;
+        if ops::vmwrite(GUEST_CR4, guest_cr4).is_err()
+            || ops::vmwrite(CR4_GUEST_HOST_MASK, cpu::CR4_VMXE).is_err()
+            || ops::vmwrite(CR4_READ_SHADOW, shadow).is_err()
+        {
+            serial::write_line("boot: ERROR — CR4.VMXE mask VMWRITE failed");
+            finish_boot(false);
+        }
+        serial::write_line("boot: Linux CR4.VMXE host-owned");
     }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
@@ -1084,6 +1140,9 @@ unsafe fn enter_proto_kernel() -> ! {
 }
 
 unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
+    if REAL_LINUX_GUEST {
+        phase4_linux_early(basic);
+    }
     if basic != EXIT_REASON_HLT {
         serial::write_line("boot: ERROR — phase4 expected HLT");
         finish_boot(false);
@@ -1130,6 +1189,117 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
 
     EXIT_PHASE = 5;
     resume_or_die();
+}
+
+/// Real Linux post-entry loop: wait for earlyprintk banner, then finish.
+unsafe fn phase4_linux_early(basic: u32) -> ! {
+    if serial_pio::guest_linux_early_ok() {
+        serial::write_line("boot: real Linux earlyprintk observed");
+        finish_boot(true);
+    }
+
+    match basic {
+        EXIT_REASON_HLT => {
+            // Idle: re-execute HLT.
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EXCEPTION_NMI => {
+            dump_linux_exception_exit();
+            finish_boot(false);
+        }
+        EXIT_REASON_TRIPLE_FAULT => {
+            // Instruction length is undefined — never advance RIP (causes storms).
+            serial::write_line("boot: ERROR — Linux triple fault");
+            dump_linux_guest_state();
+            finish_boot(false);
+        }
+        EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => {
+            // M3.9 will harden; for M3.8 skip the insn and resume.
+            serial::write_str("boot: linux MSR stub reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+            let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+            if insn_len == 0 || insn_len > 15 {
+                serial::write_line("boot: ERROR — MSR exit with bad insn len");
+                dump_linux_guest_state();
+                finish_boot(false);
+            }
+            let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_CR_ACCESS => {
+            // Guest-owned CR bits pass through; host-owned CR4.VMXE should not
+            // exit unless the guest tries to *set* VMXE (Linux never does).
+            serial::write_line("boot: ERROR — unexpected CR-access exit");
+            dump_linux_guest_state();
+            finish_boot(false);
+        }
+        _ => {
+            serial::write_str("boot: linux unhandled exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            dump_linux_guest_state();
+            // Do not advance RIP: insn length is often undefined.
+            finish_boot(false);
+        }
+    }
+}
+
+unsafe fn dump_linux_exception_exit() {
+    let info = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    let vector = (info & 0xff) as u32;
+    let typ = ((info >> 8) & 7) as u32;
+    let ec_valid = (info & (1 << 11)) != 0;
+    let valid = (info & (1 << 31)) != 0;
+    serial::write_str("boot: Linux exception valid=");
+    serial::write_byte(if valid { b'1' } else { b'0' });
+    serial::write_str(" type=0x");
+    write_hex_u32(typ);
+    serial::write_str(" vec=0x");
+    write_hex_u32(vector);
+    if ec_valid {
+        let ec = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0) as u32;
+        serial::write_str(" err=0x");
+        write_hex_u32(ec);
+    }
+    if vector == 14 {
+        // Intercepted #PF: fault address is EXIT_QUALIFICATION (CR2 may be stale).
+        let addr = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+        serial::write_str(" pfaddr=0x");
+        write_hex_u64(addr);
+    }
+    serial::write_byte(b'\n');
+    dump_linux_guest_state();
+}
+
+unsafe fn dump_linux_guest_state() {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
+    let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+    let cr4 = ops::vmread(GUEST_CR4).unwrap_or(0);
+    let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+    serial::write_str("boot: guest rip=0x");
+    write_hex_u64(rip);
+    serial::write_str(" rsp=0x");
+    write_hex_u64(rsp);
+    serial::write_str(" cr0=0x");
+    write_hex_u64(cr0);
+    serial::write_str(" cr3=0x");
+    write_hex_u64(cr3);
+    serial::write_str(" cr4=0x");
+    write_hex_u64(cr4);
+    serial::write_str(" qual=0x");
+    write_hex_u64(qual);
+    serial::write_byte(b'\n');
 }
 
 unsafe fn phase5_guest_timer_irq(basic: u32) -> ! {
@@ -1352,10 +1522,15 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
-        serial::write_line("boot: M3.7 complete — bzImage load OK");
+        // SAFETY: boot single-threaded; flag set before VMLAUNCH.
+        if unsafe { REAL_LINUX_GUEST } {
+            serial::write_line("boot: M3.8 complete — Linux earlyprintk OK");
+        } else {
+            serial::write_line("boot: M3.8 complete — proto path OK");
+        }
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.7 complete");
+        serial::write_line("boot: M3.8 complete");
         serial::qemu_exit_failure();
     }
 
