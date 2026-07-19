@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.7 closed**. **M3.8 in flight**: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.8 closed** — Latitude through real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`). Next: **M3.9** MSR/timer → **M3.10** busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 
