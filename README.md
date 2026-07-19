@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.17 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **true L3** for 4K single-guest ghost exclusivity (`ept_model`, no `admit`) → `RAYNU-V-M3-L3-VERIFY-OK`. Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.17 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **first true L3**: 4K single-guest ghost exclusivity machine-checked (`ept_model`, `13 verified, 0 errors`, no `admit`) → `RAYNU-V-M3-L3-VERIFY-OK`. Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 

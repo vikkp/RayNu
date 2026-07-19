@@ -6,7 +6,7 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. Memory isolation as a provable invariant — not a test suite."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. First true L3: scoped EPT exclusivity machine-checked (RAYNU-V-M3-L3-VERIFY-OK)."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
@@ -60,23 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.15: frozen Verus pin.</h2>
+          <h2 class="section__title">M3.17: true L3.</h2>
           <p class="section__lede">
-            CI installs an exact Verus release tag, git commit, and asset
-            sha256 — never “latest” — latched by
-            <code>RAYNU-V-M3-VERUS-OK</code>. Lemmas are drafted; true L3
-            verify is next.
+            First machine-checked exclusivity proof on the frozen Verus pin —
+            4K single-guest map/unmap, <strong>no admit</strong> — latched by
+            <code>RAYNU-V-M3-L3-VERIFY-OK</code>. That is
+            <strong>ADR-006 L3</strong> for the ghost model; live
+            <code>EptMap</code> stays L2 until refinement.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-VERUS-OK
-tag=release/0.2026.07.12.0b42f4c
-commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
-==> Verus pin smoke PASSED (M3.15)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-L3-VERIFY-OK
+==> Verus L3-verify smoke PASSED (M3.17)
+# cargo verus verify -p ept_model → 13 verified, 0 errors (no admit)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M3.15: how we got here</h2>
+          <h2 class="section__title">M1.0 → M3.17: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -166,14 +166,21 @@ commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
                 <li>
                   <span class="journey__gate">M3.13–M3.14</span>
                   <span class="journey__text"
-                    >Precise EPT; Verus L3 attempt (lemmas, not proved)</span
+                    >Precise EPT; Verus L3 attempt (lemmas drafted)</span
                   >
                 </li>
                 <li>
-                  <span class="journey__gate">M3.15</span>
+                  <span class="journey__gate">M3.15–M3.16</span>
                   <span class="journey__text"
-                    >Frozen Verus pin →
-                    <code>RAYNU-V-M3-VERUS-OK</code></span
+                    >Frozen Verus pin + linkable
+                    <code>ept_model</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.17</span>
+                  <span class="journey__text"
+                    >True L3 verify →
+                    <code>RAYNU-V-M3-L3-VERIFY-OK</code></span
                   >
                 </li>
               </ol>
@@ -242,7 +249,7 @@ commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
       <section class="section section--proof" id="proof">
         <div class="section__inner section__inner--split">
           <div>
-            <h2 class="section__title">The invariant we will prove</h2>
+            <h2 class="section__title">The invariant we prove</h2>
             <p class="section__lede">
               For every valid EPT mapping from guest-physical to host-physical,
               that frame is exclusively owned by one guest — and belongs to
@@ -250,13 +257,13 @@ commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
             </p>
             <p class="section__lede section__lede--follow" data-reveal>
               <strong>L2</strong> means Verus ghost specs and pre/post
-              conditions are written (with runtime asserts + bounded Kani on
-              unsafe paths). <strong>L3</strong> means
-              <code>cargo verus --verify</code> machine-checks those specs for
-              all inputs. M3.14 drafted an <strong>L3 attempt</strong>; M3.15
-              froze the Verus toolchain (tag + commit + sha256). We still do
-              claim scoped proof-complete for 4K single-guest ghost
-              exclusivity after green verify (M3.17).
+              conditions are written (with runtime asserts + bounded Kani).
+              <strong>L3</strong> means
+              <code>cargo verus --verify</code> machine-checks those specs.
+              M3.14–M3.16 drafted, pinned, and linked the model.
+              <strong>M3.17</strong> discharged scoped exclusivity —
+              <code>13 verified, 0 errors</code>, no <code>admit</code> —
+              <strong>ADR-006 L3</strong> for the ghost model.
             </p>
           </div>
           <blockquote class="theorem" data-reveal>
@@ -290,8 +297,8 @@ commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            True L3 for scoped ghost exclusivity is closed (M3.17). Next:
-            refine the live EptMap against the ghost model, and keep hardening
+            Scoped true L3 is closed. Next: refine live
+            <code>EptMap</code> against the ghost model, then keep hardening
             the real-Linux guest path.
           </p>
           <div class="cta">

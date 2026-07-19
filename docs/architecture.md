@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.13+ closed): UEFI entry → tiny bzImage + initrd → earlyprintk → guest APIC / GTIMER3 → real `/init` SHELL → VMXOFF. Precise EPT `[0,1 GiB)`. Verification: L2 specs + Kani + M3.14 L3 attempt; Verus toolchain frozen at M3.15 (`verus-version.toml`).
+Boot path today (M3.13+ closed): UEFI entry → tiny bzImage + initrd → earlyprintk → guest APIC / GTIMER3 → real `/init` SHELL → VMXOFF. Precise EPT `[0,1 GiB)`. Verification: live EptMap **L2**; scoped ghost exclusivity **L3** (`ept_model`, M3.17, `RAYNU-V-M3-L3-VERIFY-OK`); Verus frozen at M3.15 (`verus-version.toml`).
 
 Lived gate history: [docs/progress.md](progress.md).
 
