@@ -26,23 +26,17 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.11 — Guest APIC timer — `RAYNU-V-M3-GTIMER3-OK`
 
-**Goal:** Guest programs a *virtual* local APIC timer; HV injects the guest’s vector. Drop post-SHELL host→IRQ0 inject scaffold.
+**Status: closed on Latitude** (`Boot gate PASSED (M0 → M3.11)`).
 
-**Approach (chosen):**
+**Shipped:**
 
-1. **EPT hole** at GPA `0xFEE00000` (split identity large page → 4K; leave APIC page not-present).
-2. **EPT violation** handler emulates xAPIC MMIO (enough for Linux bring-up):
-   - ID, VERSION, SVR, EOI, TPR/PPR stubs
-   - LVT timer, divide, init/current count
-3. Guest write to `INIT_COUNT` → internal TSC countdown; latch `GTIMER3` when the model drops.
-4. Guest-visible `CUR_COUNT` stays at INIT so `calibrate_APIC_clock` fails closed ("too slow") and Linux does not take the lapic clockevent — IRQ0 crutch reaches SHELL.
-5. **Guest LVT inject deferred to M3.12** (IRR/ISR). Latitude: `nolapic` removed; `GTIMER3` + `SHELL`.
+1. **EPT hole** at GPA `0xFEE00000` + guest CR3 walk for MMIO insn fetch.
+2. Virtual xAPIC MMIO / x2APIC MSRs (`devices/lapic_virt.rs`); CPUID shows APIC+x2APIC, hides TSC-deadline; `APIC_BASE` shadowed.
+3. Internal TSC countdown latches `GTIMER3`; guest-visible `CUR_COUNT` stuck so calibrate fails closed (keeps IRQ0 path for SHELL).
+4. Cmdline: **`nolapic` removed** (keep `noapic`).
+5. **LVT inject deferred to M3.12** (bare inject panicked without IRR/ISR).
 
-**Non-goals:** IOAPIC, TSC-deadline mode, full IRR/ISR bitmap fidelity.
-
-**In scope:** minimal xAPIC MMIO + x2APIC MSR path (INIT_COUNT / LVT timer); CPUID hides TSC-deadline.
-
-**Files:** `memory/ept_hw.rs`, `devices/lapic_virt.rs`, `vmx/mmio_decode.rs`, `vmx/launch.rs`, `guest/linux_boot.rs` (cmdline), `tools/qemu-boot-test.sh`.
+**Files:** `memory/ept_hw.rs`, `devices/lapic_virt.rs`, `vmx/guest_pt.rs`, `vmx/mmio_decode.rs`, `vmx/launch.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.12 — Faithful APIC inject + drop IRQ crutches — `RAYNU-V-M3-APIC-OK`
 
@@ -81,17 +75,14 @@ M3.11 guest APIC timer  →  M3.12 drop IRQ crutches  →  M3.13 precise EPT
                          M3.14 Verus L3 (parallel after M3.11 lands)
 ```
 
-**Now executing: M3.11.**
+**Now executing: M3.12.**
 
 ---
 
-## M3.11 acceptance
+## M3.11 acceptance (met on Latitude)
 
 ```text
-RAYNU-V-M3-GTIMER3-OK          # emulated APIC timer fired + inject
-RAYNU-V-M3-SHELL-OK            # still required
-# cmdline without nolapic
-==> Boot gate PASSED (M0 → M3.11)
+RAYNU-V-M3-GTIMER3-OK
+RAYNU-V-M3-SHELL-OK
+==> Boot gate PASSED (M0 → M3.11; qemu status=33)
 ```
-
-Latitude: `./tools/qemu-boot-test.sh` after pull.

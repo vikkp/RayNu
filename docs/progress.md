@@ -28,21 +28,23 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.8 | `RAYNU-V-M3-LINUX-EARLY-OK` | Real tinyconfig Linux earlyprintk banner on COM1 |
 | M3.9 | `RAYNU-V-M3-GTIMER2-OK` | MSR allow-list emulate + post-banner host LAPIC |
 | M3.10 | `RAYNU-V-M3-SHELL-OK` | Real `/init` on initrd; CPUID SHELL hypercall (Latitude) |
+| M3.11 | `RAYNU-V-M3-GTIMER3-OK` | Virtual APIC + EPT hole; `nolapic` dropped (Latitude) |
 
-## Verification checkpoint (as of M3.10)
+## Verification checkpoint (as of M3.11)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
 | `memory/ept` ownership registry | **L2** | Ghost model in `ept_spec.rs`; L1 runtime kept |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
-| `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify (VMCS/host/shadow/`#GP`) |
+| `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
 | `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY/SHELL + LINUX-EARLY banner latch |
+| `devices/lapic_virt` | L0 | Virtual xAPIC/x2APIC; GTIMER3 latch; LVT inject → M3.12 |
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
-| `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | Real Linux through GTIMER2 + CPUID SHELL (M3.10) |
+| `memory/ept_hw` identity builder | L0→L1-ish | APIC MMIO hole punch (M3.11); precise maps later |
+| `vmx/*` | L0–L1 | Real Linux through GTIMER3 + SHELL (M3.11) |
 | Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
@@ -50,6 +52,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.11** — guest APIC timer (`RAYNU-V-M3-GTIMER3-OK`); drop `nolapic`.
-2. **M3.12** — drop host→IRQ0 / IRQ4 inject crutches.
-3. **M3.13** — precise EPT; **M3.14** — Verus L3 (parallel).
+1. **M3.12** — faithful APIC LVT inject + drop host→IRQ0 / IRQ4 crutches.
+2. **M3.13** — precise EPT; **M3.14** — Verus L3 (parallel).
