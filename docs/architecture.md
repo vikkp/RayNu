@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.10 closed): UEFI entry → tiny bzImage + initrd → earlyprintk → GTIMER2 → real `/init` SHELL (CPUID hypercall) → VMXOFF. Verification: L2 specs + Kani.
+Boot path today (M3.13+ closed): UEFI entry → tiny bzImage + initrd → earlyprintk → guest APIC / GTIMER3 → real `/init` SHELL → VMXOFF. Precise EPT `[0,1 GiB)`. Verification: L2 specs + Kani + M3.14 L3 attempt (host).
 
 Lived gate history: [docs/progress.md](progress.md).
 
