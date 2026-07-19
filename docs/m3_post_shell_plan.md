@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.19 closed; **M3.20 open** (tight EPT); then M3.21–M3.22.  
+**Status:** M3.11–M3.20 closed; **post-L3 track** next is M3.21 / M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and M3.19 NOIRQ. Active: M3.20 tight EPT (`[0,512MiB)`).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, M3.19 NOIRQ, and M3.20 tight EPT (`[0,512MiB)`). Active: Kani / PE assets (M3.21–M3.22).
 
 ---
 
@@ -174,18 +174,15 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
 
-**Status: open** — host gate ready; Latitude `./tools/qemu-boot-test.sh` pending.
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.20)`.
 
-**Shipped (this PR):**
+**Shipped:**
 
-1. Precise identity shrinks to `[0, 512 MiB)` via new `build_identity_2m_bytes` (2M leaves).
+1. Precise identity shrinks to `[0, 512 MiB)` via `build_identity_2m_bytes` (2M leaves).
 2. QEMU `-m 512M` so machine RAM matches the EPT window (guest e820 stays 256 MiB).
 3. ADR-004 `claim_precise_identity_ranges` uses `PRECISE_BYTES`; asserts window `< 1 GiB`.
 4. Emit `RAYNU-V-M3-EPT2-OK` + `RAYNU-V-M3-EPT3-OK`; APIC remains unmapped-by-omission.
 5. Host gate `memory/ept3_gate.rs`; `qemu-boot-test.sh` pass line M0→M3.20.
-
-**Done when (Latitude):** `RAYNU-V-M3-EPT3-OK` + retained SHELL/NOIRQ chain and
-`Boot gate PASSED (M0 → M3.20)`.
 
 **Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `memory/ept3_gate.rs`, `src/main.rs`,
 `tools/run-qemu.sh`, `tools/qemu-boot-test.sh`.
@@ -211,12 +208,12 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 ## Execution order
 
 ```
-M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed) → M3.20 EPT3 (open)
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed) → M3.20 EPT3 (closed)
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**Next: close M3.20 on Latitude, then M3.21/M3.22.**
+**M3.20 closed on Latitude. Next: M3.21 Kani and/or M3.22 PE assets.**
 
 ---
 
@@ -286,13 +283,13 @@ RAYNU-V-M3-SHELL-OK
 # host CI + Latitude ~/raynu
 ```
 
-## M3.20 acceptance (pending Latitude)
+## M3.20 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-EPT3-OK
-RAYNU-V-M3-EPT2-OK
-boot: precise EPT [0,512MiB); APIC MMIO unmapped
-==> M3.20 tight EPT marker found
-==> Boot gate PASSED (M0 → M3.20; qemu status=…)
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
+==> Boot gate PASSED (M0 → M3.20; qemu status=33)
 # host CI + Latitude ~/raynu
 ```
