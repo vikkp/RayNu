@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.10 closed** on Latitude (`RAYNU-V-M3-SHELL-OK` — real `/init` via CPUID hypercall). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.14 closed** — Latitude `Boot gate PASSED (M0 → M3.13)`; host `RAYNU-V-M3-L3-OK` (Verus L3 attempt; EptMap still L2). Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 

@@ -60,15 +60,124 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.10: real /init.</h2>
+          <h2 class="section__title">M3.14: Verus L3 attempt.</h2>
           <p class="section__lede">
-            Boot a gzip cpio initrd whose static <code>/init</code> prints
-            <code>RAYNU-V-M3-SHELL-OK</code> on COM1 — unmodified Linux to
-            userspace marker.
+            ADR-004 exclusivity lemmas for 4K single-guest map/unmap — host
+            <code>RAYNU-V-M3-L3-OK</code>. Not machine-checked yet; EptMap stays
+            L2 until Verus is pinned.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-GTIMER2-OK
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-L3-OK
+RAYNU-V-M3-EPT2-OK
+RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
-boot: M3.10 complete — Linux SHELL OK</code></pre>
+==> Boot gate PASSED (M0 → M3.13)
+host: M3.14 complete — L3 attempt OK</code></pre>
+        </div>
+      </section>
+
+      <section class="section section--journey" id="journey">
+        <div class="section__inner">
+          <h2 class="section__title">M1.0 → M3.14: how we got here</h2>
+          <p class="section__lede">
+            Every closed gate is a marker — COM1 on nested KVM, or host
+            <code>cargo test</code>. From leaving UEFI to a Verus L3 attempt.
+          </p>
+
+          <div class="journey">
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M1 · Root mode</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M1.0</span>
+                  <span class="journey__text"
+                    >ExitBootServices — own the machine after firmware</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M1.1</span>
+                  <span class="journey__text">Real VMXON / VMXOFF</span>
+                </li>
+                <li>
+                  <span class="journey__gate">M1.2</span>
+                  <span class="journey__text">VMLAUNCH → guest HLT → VMEXIT</span>
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M2 · Guest under EPT</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M2.0–M2.1</span>
+                  <span class="journey__text"
+                    >Identity EPT; guest store, loop, HLT</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M2.2–M2.3</span>
+                  <span class="journey__text"
+                    >Exclusive EPT ownership + Proven Core allocator</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M2.4–M2.6</span>
+                  <span class="journey__text"
+                    >IRQ + timer path; L2 specs + Kani</span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M3 · Unmodified Linux</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M3.0–M3.7</span>
+                  <span class="journey__text"
+                    >I/O through bzImage — synthetic shell, then real kernel</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.8–M3.9</span>
+                  <span class="journey__text"
+                    >Real earlyprintk; MSR firewall + GTIMER2</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.10</span>
+                  <span class="journey__text"
+                    >Real <code>/init</code> →
+                    <code>RAYNU-V-M3-SHELL-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">Post-shell</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M3.11–M3.12</span>
+                  <span class="journey__text"
+                    >Guest APIC timer + faithful IRR/ISR inject</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.13</span>
+                  <span class="journey__text"
+                    >Precise <code>[0,1 GiB)</code> EPT + range claims</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.14</span>
+                  <span class="journey__text"
+                    >Verus L3 attempt →
+                    <code>RAYNU-V-M3-L3-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -116,9 +225,9 @@ boot: M3.10 complete — Linux SHELL OK</code></pre>
           </div>
           <blockquote class="theorem" data-reveal>
             <p>
-              Proven Core only. Everything else stays outside the verification
-              budget — by design. Specs and proofs land incrementally; the first
-              machine-checked invariant in CI is the credibility milestone.
+              Proven Core only. L2 specs and an L3 attempt are in-tree (M3.14);
+              the first green <code>cargo verus --verify</code> in CI is still
+              the credibility milestone.
             </p>
             <cite>ADR-002 · ADR-004 · ADR-006</cite>
           </blockquote>
@@ -142,8 +251,8 @@ boot: M3.10 complete — Linux SHELL OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Latitude gate for M3.10, then precise EPT / Verus —
-            see <code>docs/m3_plan.md</code>.
+            Pin Verus and discharge the 4K exclusivity theorem — true L3 —
+            see <code>docs/m3_post_shell_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

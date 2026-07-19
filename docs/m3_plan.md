@@ -4,13 +4,13 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.5 (**synthetic M3 closed**): [progress.md](progress.md).
+Lived gates through **M3.14**: [progress.md](progress.md). Post-shell: [m3_post_shell_plan.md](m3_post_shell_plan.md).
 
 ---
 
 ## Where we are
 
-**Synthetic M3.0–M3.5 closed** on Latitude (proto-kernel / proto-init phase machine).
+**M3.0–M3.14 closed** — real Linux SHELL on Latitude through precise EPT + APIC; host Verus L3 attempt (`RAYNU-V-M3-L3-OK`). Historical bring-up notes below kept for context.
 
 | Have (synthetic) | Need for real Linux |
 |------------------|---------------------|

@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** active after Latitude `RAYNU-V-M3-SHELL-OK` (M0→M3.10).  
+**Status:** M3.11–M3.14 closed (Latitude through M3.13; host L3-attempt M3.14).  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. This plan replaces bring-up crutches with guest-owned mechanisms and starts ADR-004 L3 / precise EPT work.
+M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and drafted the ADR-004 L3 attempt. Remaining: pin Verus for true L3; drop IRQ0/IRQ4 when ready.
 
 ---
 

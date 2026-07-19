@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.10 closed** — real Linux `/init` → `RAYNU-V-M3-SHELL-OK` (CPUID hypercall). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.14 closed** — real Linux shell + guest APIC + precise EPT on Latitude; host Verus L3 *attempt* → `RAYNU-V-M3-L3-OK` (EptMap still L2 until Verus is pinned). Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
@@ -61,8 +61,11 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M3.8 markers (requires KVM + nested VT-x for EPT/VMEXIT)
+# Boot gate: M0 → M3.13 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
+
+# Host verification gates (no QEMU):
+cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh
@@ -93,7 +96,8 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [CLAUDE.md](CLAUDE.md) | Governing rules for all code and reviews |
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
-| [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (M3.0–M3.5) |
+| [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
+| [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell harden (M3.11–M3.14) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
 
