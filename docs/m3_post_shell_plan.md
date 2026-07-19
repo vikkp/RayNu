@@ -93,7 +93,7 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT  →  M3.14 Verus L3
 ```
 
-**M3.14 closed (host). Next: pin Verus for true L3, or parallel IRQ/EPT debt.**
+**M3.14 closed. Next: pin Verus for true L3, or parallel IRQ/EPT debt.**
 
 ---
 
