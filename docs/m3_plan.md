@@ -148,7 +148,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER2-OK`).
 - Same marker string as synthetic M3.5; gate proves **real** userspace
 - Docs/site: “unmodified Linux to init marker”
 
-Status: planned (next after M3.9).
+Status: **in flight** — static `/init` on gzip cpio initrd; continue past GTIMER2.
 
 ---
 
@@ -189,7 +189,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.9~~ — done (through MSR firewall + GTIMER2).
-2. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
+2. **M3.10** — static `/init` initrd → real `RAYNU-V-M3-SHELL-OK`.
 3. Verus L3 / precise EPT / PE asset embed (parallel).
 
 ---

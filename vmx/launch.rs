@@ -20,9 +20,10 @@
 //! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
 //! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
 //! M3.9: MSR allow-list emulate + post-banner host LAPIC → `RAYNU-V-M3-GTIMER2-OK`.
+//! M3.10: real `/init` on initrd prints shell magic → `RAYNU-V-M3-SHELL-OK`.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
-//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY/GTIMER2.
+//! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/SHELL (real).
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -99,6 +100,8 @@ static mut REAL_LINUX_GUEST: bool = false;
 
 /// M3.9: host LAPIC armed after LINUX-EARLY; waiting for ext-IRQ → GTIMER2-OK.
 static mut LINUX_GTIMER2_ARMED: bool = false;
+/// M3.9 done; M3.10 waits for real init `RAYNU-V-M3-SHELL` magic.
+static mut LINUX_GTIMER2_DONE: bool = false;
 
 /// Record kernel entry / boot_params / proto-init for later VMRESUME.
 ///
@@ -118,6 +121,7 @@ pub fn set_real_linux(real: bool) {
     unsafe {
         REAL_LINUX_GUEST = real;
         LINUX_GTIMER2_ARMED = false;
+        LINUX_GTIMER2_DONE = false;
     }
 }
 
@@ -904,6 +908,10 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             SHELL_MARKED = true;
             serial::write_byte(b'\n');
             serial::write_line(M3_SHELL_OK_MARKER);
+            // M3.10: real init printed the shell magic after GTIMER2.
+            if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+                finish_boot(true);
+            }
         }
     }
     if serial_pio::guest_linux_early_ok() {
@@ -1203,16 +1211,21 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
     resume_or_die();
 }
 
-/// Real Linux post-entry loop: banner → MSR emulate → GTIMER2 → finish.
+/// Real Linux post-entry loop: banner → MSR → GTIMER2 → wait for init SHELL.
 unsafe fn phase4_linux_early(basic: u32) -> ! {
-    // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9).
-    if LINUX_GTIMER2_ARMED && basic == EXIT_REASON_EXTERNAL_INTERRUPT {
+    // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9), then
+    // keep running until real `/init` prints the shell magic (M3.10).
+    if LINUX_GTIMER2_ARMED && !LINUX_GTIMER2_DONE && basic == EXIT_REASON_EXTERNAL_INTERRUPT {
         let _ = apic::eoi();
+        LINUX_GTIMER2_DONE = true;
+        LINUX_GTIMER2_ARMED = false;
         serial::write_line(M3_GTIMER2_OK_MARKER);
         if msr_firewall::msr_firewall_ok() {
             serial::write_line("boot: MSR firewall exercised");
         }
-        finish_boot(true);
+        serial::write_line("boot: waiting for real init SHELL marker");
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+        vmresume_with_gprs();
     }
 
     match basic {
@@ -1626,13 +1639,13 @@ fn finish_boot(ok: bool) -> ! {
     if ok {
         // SAFETY: boot single-threaded; flag set before VMLAUNCH.
         if unsafe { REAL_LINUX_GUEST } {
-            serial::write_line("boot: M3.9 complete — Linux GTIMER2 OK");
+            serial::write_line("boot: M3.10 complete — Linux SHELL OK");
         } else {
-            serial::write_line("boot: M3.9 complete — proto path OK");
+            serial::write_line("boot: M3.10 complete — proto path OK");
         }
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.9 complete");
+        serial::write_line("boot: M3.10 complete");
         serial::qemu_exit_failure();
     }
 

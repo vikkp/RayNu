@@ -47,5 +47,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.10** busybox/`init` → real `RAYNU-V-M3-SHELL-OK` — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for **M3.10** (`RAYNU-V-M3-SHELL-OK`) — real `/init` on initrd.
 2. Verus L3 / precise EPT (parallel; not on the shell critical path).

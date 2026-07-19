@@ -20,6 +20,7 @@
 # M3.7: RAYNU-V-M3-BZIMAGE-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.8: RAYNU-V-M3-LINUX-EARLY-OK (required for real Linux; proto keeps EARLY..LOOP)
 # M3.9: RAYNU-V-M3-GTIMER2-OK (required for real Linux after earlyprintk)
+# M3.10: RAYNU-V-M3-SHELL-OK (required for real Linux after GTIMER2)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -45,7 +46,7 @@ MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
 MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
 MARKER_LINUX_EARLY="${MARKER_LINUX_EARLY:-RAYNU-V-M3-LINUX-EARLY-OK}"
 MARKER_GTIMER2="${MARKER_GTIMER2:-RAYNU-V-M3-GTIMER2-OK}"
-TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
 
@@ -93,6 +94,10 @@ if [[ ! -f "$ROOT/assets/bzImage" ]]; then
     echo "==> Generating minimal bzImage asset"
     "$ROOT/tools/gen-minimal-bzimage.sh" "$ROOT/assets/bzImage"
   fi
+fi
+if [[ ! -f "$ROOT/assets/initrd" ]]; then
+  echo "==> Building tiny initrd"
+  "$ROOT/tools/build-tiny-initrd.sh" "$ROOT/assets/initrd"
 fi
 
 echo "==> Running QEMU boot test (timeout ${TIMEOUT_SECS}s, REQUIRE_VMX=${REQUIRE_VMX})"
@@ -207,7 +212,13 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       echo "error: marker '$MARKER_GTIMER2' not found after LINUX-EARLY" >&2
       fail=1
     fi
-    echo "==> real Linux path — skipping synthetic EARLY/GTIMER/SHELL/LOOP checks"
+    if grep -qF "$MARKER_SHELL" "$SERIAL_LOG"; then
+      echo "==> M3.10 real shell/init marker found"
+    else
+      echo "error: marker '$MARKER_SHELL' not found after GTIMER2 (need real /init)" >&2
+      fail=1
+    fi
+    echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else
     if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
       echo "==> M3.3 earlyprintk marker found (proto)"
@@ -252,5 +263,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.9; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.10; qemu status=$QEMU_STATUS)"
 exit 0

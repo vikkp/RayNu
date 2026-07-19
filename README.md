@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.9 closed** — Latitude through MSR firewall + GTIMER2 (`RAYNU-V-M3-GTIMER2-OK`). Next: **M3.10** busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.9 closed**. **M3.10 in flight**: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 

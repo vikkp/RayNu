@@ -35,6 +35,13 @@ make tinyconfig
 ./scripts/config --enable SERIAL_8250_CONSOLE
 ./scripts/config --enable TTY
 ./scripts/config --enable BINFMT_ELF
+./scripts/config --enable BLK_DEV_INITRD
+./scripts/config --enable RD_GZIP
+./scripts/config --enable DEVTMPFS
+./scripts/config --enable DEVTMPFS_MOUNT
+./scripts/config --enable TMPFS
+./scripts/config --enable PROC_FS
+./scripts/config --enable SYSFS
 ./scripts/config --set-str DEFAULT_HOSTNAME raynu-v
 make olddefconfig
 echo "==> make bzImage"
@@ -43,3 +50,7 @@ mkdir -p "$(dirname "$OUT")"
 cp -f arch/x86/boot/bzImage "$OUT"
 ls -la "$OUT"
 echo "==> wrote $OUT"
+# Companion initrd (M3.10) when requested.
+if [[ "${BUILD_INITRD:-1}" == "1" ]]; then
+  "$ROOT/tools/build-tiny-initrd.sh" "$ROOT/assets/initrd"
+fi

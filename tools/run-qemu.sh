@@ -64,6 +64,12 @@ if [[ ! -f "$BZIMAGE_SRC" ]]; then
 fi
 cp "$BZIMAGE_SRC" "$ESP/EFI/BOOT/BZIMAGE"
 echo "==> ESP BZIMAGE: $ESP/EFI/BOOT/BZIMAGE ($(wc -c <"$ESP/EFI/BOOT/BZIMAGE") bytes) from $BZIMAGE_SRC"
+# M3.10: optional real initrd (static /init → SHELL-OK).
+INITRD_SRC="${INITRD_SRC:-$ROOT/assets/initrd}"
+if [[ -f "$INITRD_SRC" ]]; then
+  cp "$INITRD_SRC" "$ESP/EFI/BOOT/INITRD"
+  echo "==> ESP INITRD: $ESP/EFI/BOOT/INITRD ($(wc -c <"$ESP/EFI/BOOT/INITRD") bytes)"
+fi
 
 FW_ARGS=()
 if [[ -n "${OVMF_BIOS}" ]]; then

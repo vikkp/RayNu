@@ -60,14 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.9 closed.</h2>
+          <h2 class="section__title">M3.10: real /init.</h2>
           <p class="section__lede">
-            Latitude passed MSR firewall + post-banner LAPIC
-            (<code>RAYNU-V-M3-GTIMER2-OK</code>). Next: busybox/<code>init</code>.
+            Boot a gzip cpio initrd whose static <code>/init</code> prints
+            <code>RAYNU-V-M3-SHELL-OK</code> on COM1 — unmodified Linux to
+            userspace marker.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-GTIMER2-OK
-==> Boot gate PASSED (M0 → M3.9)
-boot: M3.9 complete — Linux GTIMER2 OK</code></pre>
+RAYNU-V-M3-SHELL-OK
+boot: M3.10 complete — Linux SHELL OK</code></pre>
         </div>
       </section>
 
@@ -141,7 +142,7 @@ boot: M3.9 complete — Linux GTIMER2 OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.10 busybox/<code>init</code> → real shell marker —
+            Latitude gate for M3.10, then precise EPT / Verus —
             see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">

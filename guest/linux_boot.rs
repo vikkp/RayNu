@@ -67,6 +67,12 @@ pub const SYNTH_INITRD_SIZE: usize = 4096;
 pub const DEFAULT_CMDLINE: &[u8] =
     b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 acpi=off nokaslr maxcpus=1\0";
 
+/// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nokaslr maxcpus=1\0";
+
+/// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
+pub const INITRD_MAX_PAGES: usize = 64;
+
 /// e820 type: usable RAM.
 pub const E820_RAM: u32 = 1;
 
@@ -90,6 +96,8 @@ pub struct BootLoadInfo {
     pub from_bzimage: bool,
     /// True when the image looks like a real (non-fixture) Linux bzImage (M3.8).
     pub is_real_linux: bool,
+    /// True when a real cpio/gzip initrd was placed (M3.10).
+    pub has_real_initrd: bool,
     /// Bytes reserved for PM image + decompress workspace.
     pub kernel_bytes: u64,
 }
@@ -216,7 +224,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
     unsafe {
         write_synth_kernel(kernel_phys);
         write_proto_init(initrd_phys);
-        write_cmdline(cmdline_phys);
+        write_cmdline_bytes(cmdline_phys, DEFAULT_CMDLINE);
     }
 
     let mut bp = [0u8; BOOT_PARAMS_SIZE];
@@ -251,6 +259,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: false,
         is_real_linux: false,
+        has_real_initrd: false,
         kernel_bytes: SYNTH_KERNEL_SIZE as u64,
     })
 }
@@ -325,8 +334,15 @@ pub fn build_minimal_bzimage(out: &mut [u8; MINIMAL_BZIMAGE_CAP]) -> usize {
     pm_offset + 4096
 }
 
-/// Place a bzImage into GPA: PM kernel page(s), proto-init, cmdline, boot_params.
-pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<BootLoadInfo, ()> {
+/// Place a bzImage into GPA: PM kernel, initrd (real or proto), cmdline, boot_params.
+///
+/// When `initrd_blob` is present and `image` is a real Linux bzImage, the blob
+/// is placed as the ramdisk (M3.10). Otherwise a one-page proto-init is used.
+pub fn load_bzimage_guest(
+    alloc: &mut FrameAllocator,
+    image: &[u8],
+    initrd_blob: Option<&[u8]>,
+) -> Result<BootLoadInfo, ()> {
     let info = parse_bzimage(image)?;
     let pm = &image[info.pm_offset..];
     let real = image.len() >= REAL_LINUX_MIN_BYTES;
@@ -358,8 +374,19 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         return Err(());
     }
 
+    let use_real_initrd = real && initrd_blob.map(|b| !b.is_empty()).unwrap_or(false);
+    let initrd_len = if use_real_initrd {
+        initrd_blob.map(|b| b.len()).unwrap_or(0)
+    } else {
+        SYNTH_INITRD_SIZE
+    };
+    let initrd_pages = (initrd_len + 4095) / 4096;
+    if initrd_pages == 0 || initrd_pages > INITRD_MAX_PAGES {
+        return Err(());
+    }
+
     let raw = alloc.allocate_contiguous(pages as u64).ok_or(())?;
-    let initrd = alloc.allocate_frame().ok_or(())?;
+    let initrd = alloc.allocate_contiguous(initrd_pages as u64).ok_or(())?;
     let cmdline = alloc.allocate_frame().ok_or(())?;
     let boot_params = alloc.allocate_frame().ok_or(())?;
 
@@ -381,7 +408,7 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     let entry_phys = kernel_phys + BZIMAGE_ENTRY_OFFSET as u64;
 
     // Ownership smoke: claim endpoints + metadata (full map may exceed MAP_CAP).
-    let mut claim = [(0u64, PhysFrame::from_phys(0)); 8];
+    let mut claim = [(0u64, PhysFrame::from_phys(0)); 10];
     let mut nclaim = 0usize;
     claim[nclaim] = (raw_phys, raw);
     nclaim += 1;
@@ -396,6 +423,11 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     }
     claim[nclaim] = (initrd_phys, initrd);
     nclaim += 1;
+    if initrd_pages > 1 {
+        let last = PhysFrame::from_phys(initrd_phys + ((initrd_pages as u64) - 1) * 4096);
+        claim[nclaim] = (last.to_phys(), last);
+        nclaim += 1;
+    }
     claim[nclaim] = (cmdline_phys, cmdline);
     nclaim += 1;
     claim[nclaim] = (boot_params_phys, boot_params);
@@ -406,8 +438,15 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     unsafe {
         core::ptr::write_bytes(raw_phys as *mut u8, 0, pages * 4096);
         core::ptr::copy_nonoverlapping(pm.as_ptr(), kernel_phys as *mut u8, info.pm_size);
-        write_proto_init(initrd_phys);
-        write_cmdline(cmdline_phys);
+        core::ptr::write_bytes(initrd_phys as *mut u8, 0, initrd_pages * 4096);
+        if use_real_initrd {
+            let blob = initrd_blob.unwrap();
+            core::ptr::copy_nonoverlapping(blob.as_ptr(), initrd_phys as *mut u8, blob.len());
+            write_cmdline_bytes(cmdline_phys, REAL_LINUX_CMDLINE);
+        } else {
+            write_proto_init(initrd_phys);
+            write_cmdline_bytes(cmdline_phys, DEFAULT_CMDLINE);
+        }
     }
 
     let mut bp = [0u8; BOOT_PARAMS_SIZE];
@@ -420,7 +459,7 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     bp[OFF_LOADFLAGS] |= LOADFLAGS_LOADED_HIGH;
     write_u32(&mut bp, OFF_CODE32_START, kernel_phys as u32);
     write_u32(&mut bp, OFF_RAMDISK_IMAGE, initrd_phys as u32);
-    write_u32(&mut bp, OFF_RAMDISK_SIZE, SYNTH_INITRD_SIZE as u32);
+    write_u32(&mut bp, OFF_RAMDISK_SIZE, initrd_len as u32);
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
     let mem_bytes = if real {
@@ -452,10 +491,11 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         cmdline_phys,
         setup_magic: magic,
         ramdisk_image: initrd_phys as u32,
-        ramdisk_size: SYNTH_INITRD_SIZE as u32,
+        ramdisk_size: initrd_len as u32,
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: true,
         is_real_linux: real,
+        has_real_initrd: use_real_initrd,
         kernel_bytes: alloc_bytes,
     })
 }
@@ -572,9 +612,10 @@ pub unsafe fn write_proto_init(phys: u64) {
     debug_assert!(o <= SYNTH_INITRD_SIZE);
 }
 
-unsafe fn write_cmdline(phys: u64) {
+unsafe fn write_cmdline_bytes(phys: u64, cmdline: &[u8]) {
     core::ptr::write_bytes(phys as *mut u8, 0, 4096);
-    core::ptr::copy_nonoverlapping(DEFAULT_CMDLINE.as_ptr(), phys as *mut u8, DEFAULT_CMDLINE.len());
+    let n = cmdline.len().min(4096);
+    core::ptr::copy_nonoverlapping(cmdline.as_ptr(), phys as *mut u8, n);
 }
 
 fn write_u16(buf: &mut [u8], off: usize, v: u16) {
