@@ -121,7 +121,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-LOOP-OK`).
 - Jump to 64-bit entry (`code32_start` / handover entry) with RSI=`boot_params`
 - Serial: load addresses + setup magic (HdrS) — entry may still fault until M3.8
 
-Status: planned. Depends on M3.6.
+Status: **in flight** — ESP/embedded minimal bzImage; PM+0x200 entry (proto payload until M3.8).
 
 ### M3.8 — Real earlyprintk — `RAYNU-V-M3-LINUX-EARLY-OK`
 

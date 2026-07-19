@@ -6,6 +6,7 @@
 pub mod linux_boot;
 
 pub use linux_boot::{
-    claim_load_pages, load_synthetic_guest, pack_boot_params, BootLoadInfo, M3_LOAD_OK_MARKER,
-    SETUP_HEADER_MAGIC,
+    build_minimal_bzimage, claim_load_pages, load_bzimage_guest, load_synthetic_guest,
+    pack_boot_params, parse_bzimage, BootLoadInfo, BzImageInfo, M3_BZIMAGE_OK_MARKER,
+    M3_LOAD_OK_MARKER, MINIMAL_BZIMAGE_CAP, SETUP_HEADER_MAGIC,
 };

@@ -3,11 +3,42 @@ use super::*;
 #[test]
 fn marker_and_magic() {
     assert_eq!(M3_LOAD_OK_MARKER, "RAYNU-V-M3-LOAD-OK");
+    assert_eq!(M3_BZIMAGE_OK_MARKER, "RAYNU-V-M3-BZIMAGE-OK");
     assert_eq!(SETUP_HEADER_MAGIC, 0x5372_6448);
     // "HdrS" little-endian bytes
     let bytes = SETUP_HEADER_MAGIC.to_le_bytes();
     assert_eq!(&bytes, b"HdrS");
     assert!(PROTO_EARLY_LINE.starts_with(b"Linux version"));
+}
+
+#[test]
+fn minimal_bzimage_parses_and_entry_offset() {
+    let mut buf = [0u8; MINIMAL_BZIMAGE_CAP];
+    let n = build_minimal_bzimage(&mut buf);
+    let img = &buf[..n];
+    let info = parse_bzimage(img).expect("parse minimal bzImage");
+    assert_eq!(info.setup_magic, SETUP_HEADER_MAGIC);
+    assert_eq!(info.setup_sects, 4);
+    assert_eq!(info.pm_offset, 5 * 512);
+    assert_eq!(info.entry_file_off, info.pm_offset + BZIMAGE_ENTRY_OFFSET);
+    assert!(info.pm_size >= BZIMAGE_ENTRY_OFFSET + 64);
+    // Proto starts with test rsi,rsi at the 64-bit entry.
+    assert_eq!(
+        &img[info.entry_file_off..info.entry_file_off + 3],
+        &[0x48, 0x85, 0xF6]
+    );
+}
+
+/// Optional fixture writer: `RAYNU_WRITE_BZIMAGE=path cargo test …write_minimal…`
+#[test]
+fn write_minimal_bzimage_fixture() {
+    let mut buf = [0u8; MINIMAL_BZIMAGE_CAP];
+    let n = build_minimal_bzimage(&mut buf);
+    assert!(parse_bzimage(&buf[..n]).is_ok());
+    if let Ok(path) = std::env::var("RAYNU_WRITE_BZIMAGE") {
+        std::fs::write(&path, &buf[..n]).unwrap_or_else(|e| panic!("write {path}: {e}"));
+        eprintln!("wrote {path} ({n} bytes)");
+    }
 }
 
 #[test]

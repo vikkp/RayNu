@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A (outside core) — unit tests only
 
+pub mod esp_assets;
 pub mod handoff;
 pub mod mem;
 pub mod serial;
