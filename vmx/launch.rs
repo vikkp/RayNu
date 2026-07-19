@@ -19,6 +19,8 @@
 //! M3.6: after SHELL-OK, continuous HLT resume loop → `RAYNU-V-M3-LOOP-OK`.
 //! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
 //! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
+//! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
+//! guest-visible CR4 without #GP.
 //! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY.
 
 use crate::arch::apic;
@@ -1112,6 +1114,20 @@ unsafe fn enter_proto_kernel() -> ! {
             finish_boot(false);
         }
         serial::write_line("boot: Linux exception bitmap armed");
+
+        // Host-own CR4.VMXE. `startup_64` does `cr4 &= 0x1060` then `mov %rax,%cr4`,
+        // which clears VMXE. Under VMX that write is #GP(0). Keep VMXE set in the
+        // VMCS guest CR4 and hide it via mask + read-shadow (guest sees VMXE=0).
+        let guest_cr4 = ops::vmread(GUEST_CR4).unwrap_or(0) | cpu::CR4_VMXE;
+        let shadow = guest_cr4 & !cpu::CR4_VMXE;
+        if ops::vmwrite(GUEST_CR4, guest_cr4).is_err()
+            || ops::vmwrite(CR4_GUEST_HOST_MASK, cpu::CR4_VMXE).is_err()
+            || ops::vmwrite(CR4_READ_SHADOW, shadow).is_err()
+        {
+            serial::write_line("boot: ERROR — CR4.VMXE mask VMWRITE failed");
+            finish_boot(false);
+        }
+        serial::write_line("boot: Linux CR4.VMXE host-owned");
     }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
@@ -1220,9 +1236,9 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             vmresume_with_gprs();
         }
         EXIT_REASON_CR_ACCESS => {
-            // Allow CR reads/writes through by skipping? Safer: dump — CR3
-            // switches are expected during Linux bring-up and must not exit.
-            serial::write_line("boot: ERROR — unexpected CR-access exit (enable passthrough)");
+            // Guest-owned CR bits pass through; host-owned CR4.VMXE should not
+            // exit unless the guest tries to *set* VMXE (Linux never does).
+            serial::write_line("boot: ERROR — unexpected CR-access exit");
             dump_linux_guest_state();
             finish_boot(false);
         }
