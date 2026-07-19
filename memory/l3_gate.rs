@@ -35,7 +35,7 @@ pub fn ept_proof_is_l3_attempt() -> bool {
 pub fn ept_proof_does_not_claim_l3_complete() -> bool {
     let s = include_str!("ept_proof.rs");
     s.contains("Live `EptMap` maturity stays **L2**")
-        && s.contains("GAP: Ghost model not yet refined against concrete `EptMap` exec path")
+        && s.contains("GAP(M3.18): Ghost model not yet refined against concrete `EptMap` exec path")
 }
 
 /// Concrete 4K single-guest map/unmap exclusivity (lemma target of M3.14).

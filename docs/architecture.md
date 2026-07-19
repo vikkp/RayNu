@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.17 closed:** true L3 for 4K single-guest ghost exclusivity → `RAYNU-V-M3-L3-VERIFY-OK`. Next: ghost↔exec refinement / post-shell polish — [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.17 closed:** true L3 for 4K single-guest ghost exclusivity → `RAYNU-V-M3-L3-VERIFY-OK`. Next: **M3.18** ghost↔exec refinement → `RAYNU-V-M3-L3-REFINE-OK` — [m3_post_shell_plan.md](m3_post_shell_plan.md).

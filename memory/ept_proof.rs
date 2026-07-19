@@ -23,7 +23,7 @@
 //!
 //! ```text
 //! GAP(CLOSED M3.17): Linked `ept_model` lemmas discharged without `admit()`
-//! GAP: Ghost model not yet refined against concrete `EptMap` exec path
+//! GAP(M3.18): Ghost model not yet refined against concrete `EptMap` exec path
 //! GAP: N concurrent guests (ADR-004 M4 row)
 //! GAP: Large pages (2M/1G) in ghost model and proof (M4/M5)
 //! GAP: EPT violation handler preserves exclusivity
