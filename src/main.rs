@@ -14,6 +14,7 @@
 //! M3.1: guest CPUID filter hide VMX (`RAYNU-V-M3-CPUID-OK`).
 //! M3.2: synthetic kernel/initrd + `boot_params` load (`RAYNU-V-M3-LOAD-OK`).
 //! M3.3: 64-bit proto-kernel entry + early serial (`RAYNU-V-M3-EARLY-OK`).
+//! M3.4: post-proto guest timer → inject (`RAYNU-V-M3-GTIMER-OK`).
 
 #![no_main]
 #![no_std]
