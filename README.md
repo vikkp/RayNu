@@ -61,7 +61,7 @@ rustup target add x86_64-unknown-uefi --toolchain nightly
 # Must print enable_shadow_vmcs=0 (or N). Quit QEMU first if reload fails.
 sudo ./tools/enable-nested-kvm.sh
 
-# Boot gate: M0 → M3.0 markers (requires KVM + nested VT-x for EPT/VMEXIT)
+# Boot gate: M0 → M3.5 markers (requires KVM + nested VT-x for EPT/VMEXIT)
 ./tools/qemu-boot-test.sh
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
