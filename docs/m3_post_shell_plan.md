@@ -249,7 +249,7 @@ RAYNU-V-M3-L3-VERIFY-OK
 # host CI + Latitude ~/raynu
 ```
 
-## M3.18 acceptance (met)
+## M3.18 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-L3-REFINE-OK
