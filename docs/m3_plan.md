@@ -156,7 +156,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-SHELL-OK`; boot gate M0 → M3.10).
 ## Parallel (does not gate first real shell)
 
 - ~~Verus L3 attempt on 4K single-guest EPT~~ (M3.14 host `RAYNU-V-M3-L3-OK`; Verus still unpinned)
-- Harden Kani CI beyond soft-fail
+- Harden Kani CI (M3.21 hard-fail via `kani-smoke.sh`)
 - Precise EPT / drop identity scaffold (post-shell or late M3)
 
 ---
