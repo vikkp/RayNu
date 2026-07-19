@@ -1061,8 +1061,8 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     SAVED_GUEST_R13 = gprs[13];
     SAVED_GUEST_R14 = gprs[14];
     SAVED_GUEST_R15 = gprs[15];
-    if lapic_virt::host_timer_armed_for_guest() {
-        let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+    if lapic_virt::take_gtimer3_latch() {
+        serial::write_line(M3_GTIMER3_OK_MARKER);
     }
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(mov.len as u64));
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
@@ -1079,20 +1079,6 @@ unsafe fn guest_can_accept_extint() -> bool {
     let int_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
     // Bit 0: blocking by STI; bit 1: blocking by MOV SS.
     (int_state & 0x3) == 0
-}
-
-/// Latch M3.11 when the guest-programmed APIC timer's host one-shot fires.
-/// Guest LVT inject is deferred (M3.12) — see [`lapic_virt::acknowledge_guest_timer_fire`].
-unsafe fn maybe_mark_gtimer3() {
-    if !lapic_virt::acknowledge_guest_timer_fire() {
-        return;
-    }
-    static mut GTIMER3_MARKED: bool = false;
-    // SAFETY: single-threaded VMEXIT path.
-    if !GTIMER3_MARKED {
-        GTIMER3_MARKED = true;
-        serial::write_line(M3_GTIMER3_OK_MARKER);
-    }
 }
 
 unsafe fn try_inject_linux_com1_tx() -> bool {
@@ -1514,15 +1500,13 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
-                // M3.11: guest programmed APIC timer → host one-shot fired.
-                // Do not inject the LVT vector yet (panics Linux without
-                // IRR/ISR); keep IRQ0 jiffies crutch through SHELL.
-                maybe_mark_gtimer3();
                 // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
                 if try_inject_linux_com1_tx() {
                     vmresume_with_gprs();
                 }
                 maybe_arm_interrupt_window_for_tx();
+                // IRQ0 jiffies crutch through SHELL (lapic clockevent is
+                // intentionally failed-closed via stuck CUR_COUNT — M3.11).
                 arm_linux_tick();
                 let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
                 let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
@@ -1596,12 +1580,13 @@ unsafe fn handle_msr_and_resume(basic: u32) -> ! {
     // M3.11: x2APIC MSRs → virtual LAPIC.
     if lapic_virt::is_x2apic_msr(index) {
         if is_write {
-            if let Some(true) = lapic_virt::wrmsr(index, write_val) {
-                let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
-            }
+            let _ = lapic_virt::wrmsr(index, write_val);
         } else if let Some(v) = lapic_virt::rdmsr(index) {
             SAVED_GUEST_RAX = v as u32 as u64;
             SAVED_GUEST_RDX = v >> 32;
+        }
+        if lapic_virt::take_gtimer3_latch() {
+            serial::write_line(M3_GTIMER3_OK_MARKER);
         }
         let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
         let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);

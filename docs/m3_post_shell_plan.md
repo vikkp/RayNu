@@ -34,9 +34,9 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 2. **EPT violation** handler emulates xAPIC MMIO (enough for Linux bring-up):
    - ID, VERSION, SVR, EOI, TPR/PPR stubs
    - LVT timer, divide, init/current count
-3. Guest write to `INIT_COUNT` → arm **host** one-shot (HV-private); on fire → latch `GTIMER3` (CUR_COUNT must countdown for calibrate).
-4. **Guest LVT inject deferred to M3.12** — bare VM-entry inject without IRR/ISR panicked Latitude (`Fatal exception in interrupt`). IRQ0 crutch stays through SHELL.
-5. Latitude: boot with **`nolapic` removed** (keep `noapic` until M3.12); marker after guest-armed timer expires; SHELL still passes.
+3. Guest write to `INIT_COUNT` → internal TSC countdown; latch `GTIMER3` when the model drops.
+4. Guest-visible `CUR_COUNT` stays at INIT so `calibrate_APIC_clock` fails closed ("too slow") and Linux does not take the lapic clockevent — IRQ0 crutch reaches SHELL.
+5. **Guest LVT inject deferred to M3.12** (IRR/ISR). Latitude: `nolapic` removed; `GTIMER3` + `SHELL`.
 
 **Non-goals:** IOAPIC, TSC-deadline mode, full IRR/ISR bitmap fidelity.
 
