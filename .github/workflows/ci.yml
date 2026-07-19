@@ -174,21 +174,15 @@ jobs:
       - name: Verus L3-refine smoke → RAYNU-V-M3-L3-REFINE-OK
         run: ./tools/verus-refine-smoke.sh
 
-  # Best-effort Kani (M2.6 harnesses). Soft-fail until install is reliable on nightly.
-  kani-soft:
-    name: kani (soft-fail M2.6 harnesses)
+  # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
+  kani:
+    name: kani (M3.21 hard-fail)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly
-          components: rust-src, llvm-tools-preview
-      - name: Install Kani and run harnesses
-        run: |
-          cargo install --locked kani-verifier || cargo install kani-verifier
-          cargo kani setup
-          cargo kani --tests \
-            --harness kani_no_double_map_same_hpa \
-            --harness kani_alloc_no_alias_double_free_rejected
+          toolchain: stable
+          components: rust-src
+      - name: Kani smoke → RAYNU-V-M3-KANI-OK
+        run: ./tools/kani-smoke.sh

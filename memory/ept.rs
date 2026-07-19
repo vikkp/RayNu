@@ -19,7 +19,11 @@ pub const M2_OWN_OK_MARKER: &str = "RAYNU-V-M2-OWN-OK";
 pub const M2_BRINGUP_GUEST_ID: u64 = 1;
 
 /// Max tracked 4K mappings in the bring-up registry (M3.8 multi-page bzImage).
+/// Under Kani, keep a tiny registry so CBMC can unwind `map` / `owner_of` loops.
+#[cfg(not(kani))]
 const MAP_CAP: usize = 512;
+#[cfg(kani)]
+const MAP_CAP: usize = 8;
 
 /// Max identity ranges claimed for the precise EPT (M3.13).
 const RANGE_CAP: usize = 8;

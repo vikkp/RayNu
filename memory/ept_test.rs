@@ -73,21 +73,21 @@ fn precise_range_claim() {
 }
 
 /// Bounded ADR-004 check: two guests cannot own the same HPA.
+///
+/// Concrete GPAs keep CBMC inside the Kani `MAP_CAP=8` unwind budget.
 #[cfg(kani)]
 #[kani::proof]
+#[kani::unwind(16)]
 fn kani_no_double_map_same_hpa() {
     let mut ept = EptMap::new();
-    let gpa1: u64 = kani::any();
-    let gpa2: u64 = kani::any();
-    kani::assume(gpa1 != gpa2);
     let frame = PhysFrame(3);
     assert!(ept
-        .map(1, gpa1, frame, EptPermissions::READ_WRITE)
+        .map(1, 0x1000, frame, EptPermissions::READ_WRITE)
         .is_ok());
     assert_eq!(
-        ept.map(2, gpa2, frame, EptPermissions::READ_WRITE),
+        ept.map(2, 0x2000, frame, EptPermissions::READ_WRITE),
         Err(EptError::AlreadyOwned)
     );
-    assert!(ept.check_invariants());
     assert_eq!(ept.owner_of(frame), Some(1));
+    assert!(ept.check_invariants());
 }

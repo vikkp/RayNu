@@ -1,0 +1,18 @@
+# Kani pin for M3.21 (hard-fail CI harnesses).
+#
+# FROZEN — bump only via a dedicated upgrade PR; re-run ./tools/kani-smoke.sh.
+
+[kani]
+version = "0.67.0"
+# Toolchain pulled by `cargo kani setup` for this verifier release.
+setup_toolchain = "nightly-2025-11-21"
+crate = "kani-verifier"
+
+[notes]
+status = "M3.21 hard-fail M2.6 harnesses → RAYNU-V-M3-KANI-OK"
+host_marker = "RAYNU-V-M3-KANI-OK"
+harnesses = [
+  "kani_no_double_map_same_hpa",
+  "kani_alloc_no_alias_double_free_rejected",
+]
+policy = "CI installs exact version; cargo kani --lib --tests (skip uefi-bin binary)"
