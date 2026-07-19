@@ -9,6 +9,7 @@ pub mod ept;
 pub mod ept_hw;
 pub mod ept3_gate;
 pub mod frame_allocator;
+pub mod kani_gate;
 pub mod l2_gate;
 pub mod l3_gate;
 pub mod l3_link_gate;
@@ -26,6 +27,7 @@ pub use ept_hw::{
     M3_EPT3_OK_MARKER, PRECISE_BYTES, PRECISE_GIB, PRECISE_MIB, SECONDARY_ENABLE_EPT,
 };
 pub use ept3_gate::run_ept3_gate;
+pub use kani_gate::{run_kani_gate, M3_KANI_OK_MARKER};
 pub use frame_allocator::{
     allocator_selftest_ok, run_allocator_selftest, AllocError, FrameAllocator, PhysFrame,
     M2_ALLOC_OK_MARKER,

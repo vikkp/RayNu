@@ -67,6 +67,7 @@ fn marker_and_geometry() {
 /// Bounded ADR-002 check: distinct alloc + double-free rejected.
 #[cfg(kani)]
 #[kani::proof]
+#[kani::unwind(16)]
 fn kani_alloc_no_alias_double_free_rejected() {
     let mut words = [0u64; 64];
     // SAFETY: stack bitmap; capacity 4 fits in words.

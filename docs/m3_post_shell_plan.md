@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.20 closed; **post-L3 track** next is M3.21 / M3.22.  
+**Status:** M3.11–M3.21 closed; **post-L3 track** next is M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, M3.19 NOIRQ, and M3.20 tight EPT (`[0,512MiB)`). Active: Kani / PE assets (M3.21–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, refine, NOIRQ, tight EPT, and hard-fail Kani. Active: M3.22 PE assets.
 
 ---
 
@@ -189,11 +189,19 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ### M3.21 — Harden Kani CI — `RAYNU-V-M3-KANI-OK`
 
-**Status: planned** (parallel with M3.18–M3.20).
+**Status: closed** — CI `kani (M3.21 hard-fail)` green + Latitude `./tools/kani-smoke.sh`.
 
-**Goal:** M2.6 harnesses (`kani_no_double_map_same_hpa`, `kani_alloc_no_alias_double_free_rejected`) pass reliably in CI — hard-fail preferred; document pin/toolchain if soft-fail must remain temporarily.
+**Shipped:**
 
-**Files (expected):** `.github/workflows/ci.yml`, Kani harness modules, docs.
+1. Pin `kani-verifier` **0.67.0** in `kani-version.toml`.
+2. CI job hard-fails via `./tools/kani-smoke.sh` (`cargo kani --lib --tests`).
+3. Harnesses bounded: `#[kani::unwind(16)]`; under `cfg(kani)` `MAP_CAP=8`.
+4. Skip UEFI `[[bin]]` (needs `uefi-bin`) — was the soft-fail root cause.
+5. Host gate `memory/kani_gate.rs` → marker `RAYNU-V-M3-KANI-OK`.
+
+**Files:** `tools/kani-smoke.sh`, `kani-version.toml`, `.github/workflows/ci.yml`,
+`memory/ept.rs`, `memory/ept_test.rs`, `memory/frame_allocator_test.rs`,
+`memory/kani_gate.rs`, `src/lib.rs`.
 
 ### M3.22 — PE `.assets.*` embed — `RAYNU-V-M3-ASSETS-OK`
 
@@ -208,12 +216,12 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 ## Execution order
 
 ```
-M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed) → M3.20 EPT3 (closed)
-M3.21 Kani + M3.22 assets (parallel any time)
+M3.11 → … → M3.20 EPT3 (closed) → M3.21 Kani (closed)
+M3.22 assets ← next
 → M4 (N-guest platform)
 ```
 
-**M3.20 closed on Latitude. Next: M3.21 Kani and/or M3.22 PE assets.**
+**M3.21 closed on CI + Latitude. Next: M3.22 PE assets.**
 
 ---
 
@@ -292,4 +300,13 @@ RAYNU-V-M3-APIC-OK
 ==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
 ==> Boot gate PASSED (M0 → M3.20; qemu status=33)
 # host CI + Latitude ~/raynu
+```
+
+## M3.21 acceptance (met on CI + Latitude)
+
+```text
+Complete - 2 successfully verified harnesses, 0 failures, 2 total.
+RAYNU-V-M3-KANI-OK
+==> Kani smoke PASSED (M3.21)
+# CI job kani (M3.21 hard-fail) + Latitude ~/raynu
 ```

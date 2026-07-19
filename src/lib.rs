@@ -6,6 +6,10 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(dead_code)]
 
+// Kani injects its lib under cfg(kani); no_std crates must import it explicitly.
+#[cfg(kani)]
+extern crate kani;
+
 #[path = "../boot/mod.rs"]
 pub mod boot;
 
