@@ -1077,6 +1077,8 @@ unsafe fn phase5_guest_timer_irq(basic: u32) -> ! {
         finish_boot(false);
     }
     serial::write_line("boot: guest-timer APIC EOI ok");
+    // Stop further LAPIC timer IRQs before proto-init OUT storm (M3.5).
+    let _ = apic::mask_timer();
 
     if set_hlt_exiting(true).is_err() {
         serial::write_line("boot: ERROR — restore HLT exiting after guest timer failed");
@@ -1121,6 +1123,13 @@ unsafe fn enter_proto_init() -> ! {
         serial::write_line("boot: ERROR — missing proto-init load address");
         finish_boot(false);
     }
+    // Defensive: must HLT-exit out of proto-init (phase4 may have cleared this).
+    if set_hlt_exiting(true).is_err() {
+        serial::write_line("boot: ERROR — HLT exiting off before proto-init");
+        finish_boot(false);
+    }
+    let _ = apic::mask_timer();
+
     serial::write_str("boot: entering proto-init rip=0x");
     write_hex_u64(init);
     serial::write_byte(b'\n');
