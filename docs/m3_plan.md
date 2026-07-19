@@ -121,7 +121,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-LOOP-OK`).
 - Jump to 64-bit entry (`code32_start` / handover entry) with RSI=`boot_params`
 - Serial: load addresses + setup magic (HdrS) — entry may still fault until M3.8
 
-Status: **in flight** — ESP/embedded minimal bzImage; PM+0x200 entry (proto payload until M3.8).
+Status: **closed on Latitude** (`RAYNU-V-M3-BZIMAGE-OK`). Minimal fixture; real tinyconfig next (M3.8).
 
 ### M3.8 — Real earlyprintk — `RAYNU-V-M3-LINUX-EARLY-OK`
 
@@ -186,12 +186,11 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.6~~ — done (synthetic M3 + exit loop).
-2. **M3.7** — ESP bzImage / initrd load + 64-bit entry.
-3. **M3.8** — real earlyprintk on Latitude.
-4. **M3.9** — MSR / guest timer only as blockers appear.
-5. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-6. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.7~~ — done (through bzImage load).
+2. **M3.8** — real earlyprintk on Latitude (tinyconfig bzImage).
+3. **M3.9** — MSR / guest timer only as blockers appear.
+4. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
+5. Verus L3 / precise EPT / PE asset embed (parallel).
 
 ---
 

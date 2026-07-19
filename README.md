@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.6 closed**. **M3.7 in flight**: bzImage load (`RAYNU-V-M3-BZIMAGE-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.7 closed** — Latitude through bzImage load (`RAYNU-V-M3-BZIMAGE-OK`). Next: **M3.8** real earlyprintk. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 
