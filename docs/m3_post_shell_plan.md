@@ -66,7 +66,7 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.14 — Verus L3 attempt (ADR-004) — `RAYNU-V-M3-L3-OK`
 
-**Status: closed on host** (`cargo test` → `RAYNU-V-M3-L3-OK`; no Latitude).
+**Status: closed** — host `RAYNU-V-M3-L3-OK`; Latitude regression `Boot gate PASSED (M0 → M3.13)`.
 
 **Shipped:**
 
@@ -74,6 +74,7 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 2. Host gate `memory/l3_gate.rs` (retains L2 floor; does not claim ADR-006 L3 — Verus unpinned).
 3. Docs: ADR-004 / progress / `verus-version.toml` note the attempt vs machine-checked L3.
 4. Kani stays soft-fail.
+5. Latitude: M3.13 QEMU chain still green on this branch (EPT2 + GTIMER3 + APIC + SHELL).
 
 **Files:** `memory/ept_proof.rs`, `memory/l3_gate.rs`, `memory/l3_gate_test.rs`, `memory/ept_spec.rs`, `memory/mod.rs`, `verus-version.toml`.
 
@@ -106,9 +107,12 @@ RAYNU-V-M3-SHELL-OK
 ==> Boot gate PASSED (M0 → M3.13; qemu status=33)
 ```
 
-## M3.14 acceptance (met on host)
+## M3.14 acceptance (met)
 
 ```text
 RAYNU-V-M3-L3-OK
 ==> Host L3-attempt gate PASSED (cargo test; Verus still unpinned)
+
+# Latitude no-regression (same branch):
+==> Boot gate PASSED (M0 → M3.13; qemu status=33)
 ```
