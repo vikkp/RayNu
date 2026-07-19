@@ -27,8 +27,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.7 | `RAYNU-V-M3-BZIMAGE-OK` | ESP/embedded bzImage parse+place; entry at PM+0x200 |
 | M3.8 | `RAYNU-V-M3-LINUX-EARLY-OK` | Real tinyconfig Linux earlyprintk banner on COM1 |
 | M3.9 | `RAYNU-V-M3-GTIMER2-OK` | MSR allow-list emulate + post-banner host LAPIC |
+| M3.10 | `RAYNU-V-M3-SHELL-OK` | Real `/init` on initrd; CPUID SHELL hypercall (Latitude) |
 
-## Verification checkpoint (as of M3.9)
+## Verification checkpoint (as of M3.10)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -41,11 +42,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | Real Linux entry through GTIMER2; MSR emulate path |
+| `vmx/*` | L0–L1 | Real Linux through GTIMER2 + CPUID SHELL (M3.10) |
 | Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
-1. Latitude gate for **M3.10** (`RAYNU-V-M3-SHELL-OK`) — real `/init` on initrd.
-2. Verus L3 / precise EPT (parallel; not on the shell critical path).
+1. Verus L3 / precise EPT (parallel).
+2. Guest-usable timer (replace host-LAPIC tick inject scaffold).
+3. Broader device model / drop `nolapic` bring-up crutches where safe.

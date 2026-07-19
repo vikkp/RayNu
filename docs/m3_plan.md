@@ -144,11 +144,12 @@ Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER2-OK`).
 
 ### M3.10 — Real shell / init — `RAYNU-V-M3-SHELL-OK` (real guest)
 
-- busybox (or static) `init` on initrd prints the shell marker on COM1
-- Same marker string as synthetic M3.5; gate proves **real** userspace
+- Static freestanding `/init` on gzip+cpio initrd
+- Signals SHELL via CPUID hypercall (`0x524E550A` / `0x5348454C`); HV latches marker
+- (UART `/dev/ttyS0` TX is IRQ-driven under `noapic` and was unreliable for the latch)
 - Docs/site: “unmodified Linux to init marker”
 
-Status: **in flight** — static `/init` on gzip cpio initrd; continue past GTIMER2.
+Status: **closed on Latitude** (`RAYNU-V-M3-SHELL-OK`; boot gate M0 → M3.10).
 
 ---
 
@@ -188,9 +189,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.9~~ — done (through MSR firewall + GTIMER2).
-2. **M3.10** — static `/init` initrd → real `RAYNU-V-M3-SHELL-OK`.
-3. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.10~~ — done (real Linux `/init` SHELL).
+2. Verus L3 / precise EPT / PE asset embed (parallel).
+3. Guest-usable timer / drop host-LAPIC tick scaffold (post-shell).
 
 ---
 
@@ -198,9 +199,10 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.9** GTIMER2 after LINUX-EARLY |
-| `guest/linux_boot.rs` | Relocatable bzImage load + aligned `init_size` workspace |
-| `devices/serial_pio.rs` | COM1 latch → **M3.8** `LINUX-EARLY-OK` |
+| `vmx/launch.rs` | Exit phase machine → **M3.10** CPUID SHELL after GTIMER2 |
+| `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
+| `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |
+| `devices/serial_pio.rs` | COM1 latch + SHELL CPUID constants |
 | `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9** |
 
 | `devices/mod.rs` | Device stubs → serial PIO |
