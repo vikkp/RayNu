@@ -155,7 +155,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-SHELL-OK`; boot gate M0 → M3.10).
 
 ## Parallel (does not gate first real shell)
 
-- Verus L3 attempt on 4K single-guest EPT (ADR-004 M3 row)
+- ~~Verus L3 attempt on 4K single-guest EPT~~ (M3.14 host `RAYNU-V-M3-L3-OK`; Verus still unpinned)
 - Harden Kani CI beyond soft-fail
 - Precise EPT / drop identity scaffold (post-shell or late M3)
 
@@ -190,7 +190,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
-2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.14** Verus L3 next.
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.14 L3-attempt closed; pin Verus for true L3.
 3. Parallel: drop IRQ crutches; site/PE embed.
 
 ---

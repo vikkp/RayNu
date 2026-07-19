@@ -383,6 +383,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 - Integration test: boot-to-halt (M0), VMLAUNCH/VMEXIT cycle (M1),
   guest code execution through M2.5 (`./tools/qemu-boot-test.sh`),
   L2 host gate M2.6 (`cargo test` → `RAYNU-V-M2-L2-OK`),
+  L3-attempt host gate M3.14 (`cargo test` → `RAYNU-V-M3-L3-OK`; Verus unpinned),
   Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
   (see [docs/progress.md](docs/progress.md))

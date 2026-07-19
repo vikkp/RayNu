@@ -64,11 +64,18 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 **Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
-### M3.14 — Verus L3 attempt (ADR-004) — host marker / doc gate
+### M3.14 — Verus L3 attempt (ADR-004) — `RAYNU-V-M3-L3-OK`
 
-- `ept_proof.rs` L3 attempt for 4K single-guest map/unmap exclusivity
-- Document gaps; Kani stays soft-fail until green
-- No Latitude requirement if proofs are host-only
+**Status: closed on host** (`cargo test` → `RAYNU-V-M3-L3-OK`; no Latitude).
+
+**Shipped:**
+
+1. `ept_proof.rs` L3 *attempt*: exclusivity lemmas for 4K single-guest map/unmap + explicit GAP list.
+2. Host gate `memory/l3_gate.rs` (retains L2 floor; does not claim ADR-006 L3 — Verus unpinned).
+3. Docs: ADR-004 / progress / `verus-version.toml` note the attempt vs machine-checked L3.
+4. Kani stays soft-fail.
+
+**Files:** `memory/ept_proof.rs`, `memory/l3_gate.rs`, `memory/l3_gate_test.rs`, `memory/ept_spec.rs`, `memory/mod.rs`, `verus-version.toml`.
 
 ### Parallel (any time)
 
@@ -85,7 +92,7 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT  →  M3.14 Verus L3
 ```
 
-**Now executing: M3.14.**
+**M3.14 closed (host). Next: pin Verus for true L3, or parallel IRQ/EPT debt.**
 
 ---
 
@@ -97,4 +104,11 @@ RAYNU-V-M3-GTIMER3-OK
 RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
 ==> Boot gate PASSED (M0 → M3.13; qemu status=33)
+```
+
+## M3.14 acceptance (met on host)
+
+```text
+RAYNU-V-M3-L3-OK
+==> Host L3-attempt gate PASSED (cargo test; Verus still unpinned)
 ```

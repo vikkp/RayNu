@@ -2,13 +2,14 @@
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
-//! VERIFICATION: L2 — EPT ownership + frame allocator specs (M2.6); L1 runtime
+//! VERIFICATION: L2 — EPT ownership + frame allocator specs (M2.6); L3-attempt (M3.14)
 
 pub mod boot_alloc;
 pub mod ept;
 pub mod ept_hw;
 pub mod frame_allocator;
 pub mod l2_gate;
+pub mod l3_gate;
 
 pub use ept::{
     claim_precise_identity_ranges, ownership_selftest_ok, precise_ranges_ok,
@@ -24,3 +25,4 @@ pub use frame_allocator::{
     M2_ALLOC_OK_MARKER,
 };
 pub use l2_gate::{run_l2_gate, M2_L2_OK_MARKER};
+pub use l3_gate::{run_l3_gate, M3_L3_OK_MARKER};

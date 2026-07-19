@@ -31,12 +31,13 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.11 | `RAYNU-V-M3-GTIMER3-OK` | Virtual APIC + EPT hole; `nolapic` dropped (Latitude) |
 | M3.12 | `RAYNU-V-M3-APIC-OK` | IRR/ISR LVT inject + EOI decode; SHELL (Latitude) |
 | M3.13 | `RAYNU-V-M3-EPT2-OK` | Precise `[0,1GiB)` EPT + range claims; SHELL (Latitude) |
+| M3.14 | `RAYNU-V-M3-L3-OK` | Host Verus L3 *attempt* (4K single-guest lemmas + gaps); not machine-checked |
 
-## Verification checkpoint (as of M3.13)
+## Verification checkpoint (as of M3.14)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | **L2** | Ghost model + M3.13 range claims for precise window |
+| `memory/ept` ownership registry | **L2** | Ghost model + M3.13 range claims; L3-attempt lemmas in `ept_proof.rs` |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
@@ -47,12 +48,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
 | `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
-| Verus proofs (`*_proof.rs`) | L0 | L3 → M3.14 |
+| Verus proofs (`ept_proof.rs`) | L3-attempt | Lemmas + GAP list (M3.14); Verus unpinned — not ADR-006 L3 |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.14** — Verus L3 attempt (ADR-004).
+1. Pin Verus and discharge `theorem_single_guest_4k_map_unmap_exclusive` (true L3).
 2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.
