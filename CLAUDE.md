@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.16 closed** (`ept_model` Verus-linked → `RAYNU-V-M3-L3-LINK-OK`). Next true L3: M3.17 discharge without `admit`. Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**Through M3.17 closed** (true L3: `ept_model` exclusivity discharged → `RAYNU-V-M3-L3-VERIFY-OK`). Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 

@@ -34,7 +34,7 @@ Only security-critical modules receive Verus specs and proofs. Default is **outs
 
 Headline theorem (ADR-004): every valid EPT GPA→HPA mapping is **exclusively owned** by one guest and belongs to neither the hypervisor nor any other guest.
 
-Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). EPT ownership + frame allocator are **L2**; M3.14 drafted an L3 *attempt*; M3.15 froze Verus (tag + commit + sha256). Not machine-checked until M3.17. Lived checkpoint: [progress.md](progress.md).
+Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). Live EPT ownership + frame allocator are **L2**; scoped ghost exclusivity in `ept_model` is **L3** (M3.17, no `admit`). Lived checkpoint: [progress.md](progress.md).
 
 ## Conflict Resolution
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.16 closed:** `ept_model` Verus-linked → `RAYNU-V-M3-L3-LINK-OK`. Next: **M3.17** discharge without `admit` (true L3) — [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.17 closed:** true L3 for 4K single-guest ghost exclusivity → `RAYNU-V-M3-L3-VERIFY-OK`. Next: ghost↔exec refinement / post-shell polish — [m3_post_shell_plan.md](m3_post_shell_plan.md).

@@ -33,13 +33,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.13 | `RAYNU-V-M3-EPT2-OK` | Precise `[0,1GiB)` EPT + range claims; SHELL (Latitude) |
 | M3.14 | `RAYNU-V-M3-L3-OK` | Host Verus L3 *attempt* (4K single-guest lemmas + gaps); Latitude M0→M3.13 still green |
 | M3.15 | `RAYNU-V-M3-VERUS-OK` | Frozen Verus `0.2026.07.12.0b42f4c` (tag + commit + sha256); CI + Latitude smoke |
-| M3.16 | `RAYNU-V-M3-L3-LINK-OK` | Host-only `ept_model` `verus!` linked; CI + Latitude; `admit` gaps until M3.17 |
+| M3.16 | `RAYNU-V-M3-L3-LINK-OK` | Host-only `ept_model` `verus!` linked; CI + Latitude |
+| M3.17 | `RAYNU-V-M3-L3-VERIFY-OK` | True L3: exclusivity lemmas discharged (no `admit`); CI + Latitude `13 verified, 0 errors` |
 
-## Verification checkpoint (as of M3.16; true L3 track)
+## Verification checkpoint (as of M3.17)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | **L2** | Ghost model + M3.13 range claims; L3-attempt lemmas in `ept_proof.rs` |
+| `memory/ept` ownership registry | **L2** | Live registry + M3.13 range claims; ghost exclusivity L3 in `ept_model` |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
@@ -50,7 +51,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
 | `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
-| Verus proofs (`ept_model`) | L3-linked | `verus!` model + lemmas (M3.16); `admit` until M3.17 — not ADR-006 L3 yet |
+| Verus proofs (`ept_model`) | **L3** (scoped) | 4K single-guest map/unmap exclusivity discharged (M3.17); no `admit` |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
@@ -58,5 +59,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.17** — discharge exclusivity lemmas without `admit` → `RAYNU-V-M3-L3-VERIFY-OK` (true L3)
-2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.
+1. Ghost↔exec refinement for live `EptMap` (remaining GAP in `ept_proof.rs`)
+2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed; N-guest / large-page proofs (M4–M6).

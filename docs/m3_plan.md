@@ -190,8 +190,8 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
-2. **Post-shell / true L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.16 link closed; **M3.17** verify (no `admit`).
-3. Parallel: drop IRQ crutches; site/PE embed.
+2. ~~Post-shell / true L3~~ — M3.17 closed (`RAYNU-V-M3-L3-VERIFY-OK`); see [m3_post_shell_plan.md](m3_post_shell_plan.md).
+3. Parallel: drop IRQ crutches; ghost↔exec refinement; site/PE embed.
 
 ---
 
