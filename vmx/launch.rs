@@ -40,7 +40,7 @@ use crate::devices::serial_pio::{
     self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
-use crate::vmx::mmio_decode;
+use crate::vmx::{guest_pt, mmio_decode};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -992,13 +992,31 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         finish_boot(false);
     }
     let is_write = (qual & 0x2) != 0;
-    // Read up to 15 bytes of guest insn (identity-mapped).
+    // Guest RIP is a linear address (high kernel VA after Linux paging).
+    // Walk guest CR3 → GPA, then read via identity EPT — never deref GVA as HVA.
+    let guest_cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
     let mut insn = [0u8; 15];
-    for (i, b) in insn.iter_mut().enumerate() {
-        *b = core::ptr::read_volatile((guest_rip as *const u8).add(i));
+    if guest_pt::copy_from_guest_va(guest_cr3, guest_rip, &mut insn).is_err() {
+        serial::write_line("boot: ERROR — APIC MMIO insn fetch (guest PT walk)");
+        serial::write_str("boot: guest cr3=0x");
+        write_hex_u64(guest_cr3);
+        serial::write_str(" rip=0x");
+        write_hex_u64(guest_rip);
+        serial::write_byte(b'\n');
+        dump_linux_guest_state();
+        finish_boot(false);
     }
     let Some(mov) = mmio_decode::decode_mov_mmio(&insn) else {
         serial::write_line("boot: ERROR — APIC MMIO undecoded insn");
+        serial::write_str("boot: insn=");
+        for &b in insn.iter().take(8) {
+            let hi = b >> 4;
+            let lo = b & 0xf;
+            serial::write_byte(if hi < 10 { b'0' + hi } else { b'a' + (hi - 10) });
+            serial::write_byte(if lo < 10 { b'0' + lo } else { b'a' + (lo - 10) });
+            serial::write_byte(b' ');
+        }
+        serial::write_byte(b'\n');
         dump_linux_guest_state();
         finish_boot(false);
     };

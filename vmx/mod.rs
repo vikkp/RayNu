@@ -5,6 +5,7 @@
 //! VERIFICATION: L0/L1 — see `*_spec.rs` placeholders
 
 pub mod fields;
+pub mod guest_pt;
 pub mod hardware;
 pub mod launch;
 pub mod lifecycle;
