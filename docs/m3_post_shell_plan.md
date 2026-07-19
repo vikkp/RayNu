@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.14 closed; **true L3 track** M3.15→M3.17 in progress.  
+**Status:** M3.11–M3.15 closed; **true L3 track** next is M3.16 → M3.17.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and drafted the ADR-004 L3 attempt. Active track: pin Verus and discharge true L3. Parallel: drop IRQ0/IRQ4 when ready.
+M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches, drafted the ADR-004 L3 attempt, and froze the Verus toolchain (exact tag + commit + sha256). Active track: link lemmas and discharge true L3. Parallel: drop IRQ0/IRQ4 when ready.
 
 ---
 

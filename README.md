@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.14 closed** — real Linux shell + guest APIC + precise EPT on Latitude; host Verus L3 *attempt* → `RAYNU-V-M3-L3-OK` (EptMap still L2 until Verus is pinned). Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.15 closed** — real Linux shell + guest APIC + precise EPT on Latitude; Verus L3 *attempt* (M3.14); **frozen Verus pin** (exact tag + commit + sha256) → `RAYNU-V-M3-VERUS-OK`. EptMap still L2 until true L3 verify (M3.17). Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
@@ -66,6 +66,7 @@ sudo ./tools/enable-nested-kvm.sh
 
 # Host verification gates (no QEMU):
 cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-OK
+./tools/verus-smoke.sh             # frozen pin → RAYNU-V-M3-VERUS-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh
@@ -97,7 +98,8 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
 | [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
-| [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell harden (M3.11–M3.14) |
+| [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 track (M3.11–M3.17) |
+| [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
 
