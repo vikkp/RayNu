@@ -21,6 +21,7 @@
 //! M3.8: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`).
 //! M3.9: MSR firewall + post-banner LAPIC (`RAYNU-V-M3-GTIMER2-OK`).
 //! M3.10: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`.
+//! M3.13: precise EPT `[0,1GiB)` + range claims (`RAYNU-V-M3-EPT2-OK`).
 
 #![no_main]
 #![no_std]
@@ -179,35 +180,34 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         *slot = f;
     }
 
+    // M3.13: precise identity [0, 1 GiB) — APIC at 0xFEE00000 stays unmapped.
     // SAFETY: frames exclusively owned by this path.
     let eptp = match unsafe {
-        memory::ept_hw::build_identity_4g(page_size, &mut ept_frames[..ept_need])
+        memory::ept_hw::build_precise_identity(page_size, &mut ept_frames[..ept_need])
     } {
         Ok(v) => v,
         Err(_) => {
-            boot::serial::write_line("boot: ERROR — EPT identity build failed");
+            boot::serial::write_line("boot: ERROR — EPT precise identity build failed");
             let _ = life.disable();
             return;
         }
     };
 
-    // M3.11: GPA 0xFEE00000 not-present — guest APIC MMIO → EPT violation.
-    let mut apic_hole = [0u64; memory::ept_hw::APIC_HOLE_EXTRA_FRAMES];
-    for slot in apic_hole.iter_mut() {
-        let Some(f) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for APIC EPT hole");
-            let _ = life.disable();
-            return;
-        };
-        *slot = f;
-    }
-    // SAFETY: PML4 from identity build; hole frames owned.
-    if unsafe { memory::ept_hw::punch_apic_mmio_hole(ept_frames[0], &mut apic_hole) }.is_err() {
-        boot::serial::write_line("boot: ERROR — APIC EPT hole failed");
+    // SAFETY: PML4 from precise build; APIC must not be present.
+    let apic_gpa = arch::apic::DEFAULT_APIC_PHYS;
+    if unsafe { memory::ept_hw::gpa_is_mapped(ept_frames[0], apic_gpa) } {
+        boot::serial::write_line("boot: ERROR — APIC GPA mapped in precise EPT");
         let _ = life.disable();
         return;
     }
-    boot::serial::write_line("boot: APIC MMIO EPT hole at 0xFEE00000");
+    boot::serial::write_line("boot: precise EPT [0,1GiB); APIC MMIO unmapped");
+
+    if memory::claim_precise_identity_ranges().is_err() {
+        boot::serial::write_line("boot: ERROR — precise EPT range claim failed");
+        let _ = life.disable();
+        return;
+    }
+    boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
 
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");

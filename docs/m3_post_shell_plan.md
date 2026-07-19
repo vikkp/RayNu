@@ -53,9 +53,11 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 
-- Replace full 4 GiB identity with: identity for RAM windows from e820 + explicit MMIO holes
-- Ownership registry claims for every mapped GPA (ADR-004)
-- Host tests + Latitude: still boots to SHELL
+**In progress** on `cursor/m3-13-precise-ept-a623`.
+
+- Replace full 4 GiB identity with precise `[0, 1 GiB)` (QEMU `-m 1G`; covers e820/memmap RAM + UEFI CR3)
+- Local APIC `0xFEE00000` unmapped by omission (no hole punch)
+- ADR-004 range claim for the precise window; still boots to SHELL + APIC-OK
 
 ### M3.14 — Verus L3 attempt (ADR-004) — host marker / doc gate
 

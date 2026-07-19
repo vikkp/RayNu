@@ -190,7 +190,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.12~~ — done (real Linux SHELL + virtual APIC IRR inject).
-2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.13** precise EPT next.
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.13** precise EPT (in progress).
 3. M3.14 Verus L3 parallel.
 
 ---

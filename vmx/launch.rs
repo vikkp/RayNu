@@ -2068,7 +2068,9 @@ fn finish_boot(ok: bool) -> ! {
     if ok {
         // SAFETY: boot single-threaded; flag set before VMLAUNCH.
         if unsafe { REAL_LINUX_GUEST } {
-            if lapic_virt::apic_ok() {
+            if crate::memory::precise_ranges_ok() && lapic_virt::apic_ok() {
+                serial::write_line("boot: M3.13 complete — precise EPT + APIC + SHELL OK");
+            } else if lapic_virt::apic_ok() {
                 serial::write_line("boot: M3.12 complete — Linux APIC inject + SHELL OK");
             } else if lapic_virt::gtimer3_ok() {
                 serial::write_line("boot: M3.11 complete — Linux GTIMER3 + SHELL OK");

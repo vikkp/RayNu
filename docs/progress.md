@@ -53,5 +53,5 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.13** — precise EPT slice (`EPT2-OK`).
+1. **M3.13** (in progress) — precise EPT slice (`EPT2-OK`).
 2. **M3.14** — Verus L3 (parallel); later drop IRQ0/IRQ4 when lapic/serial own those paths.
