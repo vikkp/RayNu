@@ -1,7 +1,11 @@
-//! Minimal guest instruction decode for APIC MMIO EPT violations (M3.11).
+//! Minimal guest instruction decode for APIC MMIO EPT violations (M3.11/M3.12).
 //!
 //! Supports 32-bit `mov r/m, r` / `mov r, r/m` (opcodes 0x89 / 0x8B) with
 //! optional REX — enough for Linux `native_apic_mem_{read,write}`.
+//!
+//! Must parse SIB+disp32 correctly: Linux `native_apic_mem_eoi` is
+//! `mov %eax, disp32` (`89 04 25 xx xx xx xx`). A short length advances
+//! guest RIP into the displacement and panics (`Fatal exception in interrupt`).
 
 /// Result of decoding a simple GPR↔memory MOV at guest RIP.
 #[derive(Debug, Clone, Copy)]
@@ -52,25 +56,43 @@ pub fn decode_mov_mmio(insn: &[u8]) -> Option<MovMmio> {
     let reg = ((modrm >> 3) & 7) | (rex_r << 3);
     let rm = modrm & 7;
 
-    // SIB byte
-    if mod_ != 3 && rm == 4 {
+    if mod_ == 3 {
+        return None; // register-register — not MMIO
+    }
+
+    // SIB byte when rm == 4.
+    let mut sib_base = None;
+    if rm == 4 {
         if i >= insn.len() {
             return None;
         }
-        i += 1; // SIB
+        let sib = insn[i];
+        i += 1;
+        sib_base = Some(sib & 7);
     }
-    // Displacement
-    match mod_ {
+
+    // Displacement (Intel Vol. 2: ModRM / SIB forms).
+    let disp = match mod_ {
         0 => {
             if rm == 5 {
-                // disp32 (RIP-relative or abs in 32-bit — both skip 4)
-                i += 4;
+                // [RIP+disp32] (64-bit) / abs disp32 (32-bit)
+                4
+            } else if rm == 4 && sib_base == Some(5) {
+                // SIB with base=5, mod=0 → [index*scale + disp32] (no base)
+                4
+            } else {
+                0
             }
         }
-        1 => i += 1,
-        2 => i += 4,
-        3 => return None, // register-register — not MMIO
-        _ => {}
+        1 => 1,
+        2 => 4,
+        _ => return None,
+    };
+    if disp != 0 {
+        if i + disp > insn.len() {
+            return None;
+        }
+        i += disp;
     }
     if i > 15 {
         return None;
@@ -120,5 +142,23 @@ mod mmio_decode_test {
         assert!(!m.is_write);
         assert_eq!(m.reg, 0);
         assert_eq!(m.len, 2);
+    }
+
+    #[test]
+    fn decode_linux_apic_eoi_abs_store() {
+        // native_apic_mem_eoi: xor %eax,%eax; mov %eax,0xff5fd0b0
+        //   89 04 25 b0 d0 5f ff
+        let m = decode_mov_mmio(&[0x89, 0x04, 0x25, 0xb0, 0xd0, 0x5f, 0xff]).unwrap();
+        assert!(m.is_write);
+        assert_eq!(m.reg, 0);
+        assert_eq!(m.len, 7, "short len resumes inside disp32 and panics Linux");
+    }
+
+    #[test]
+    fn decode_sib_base_no_disp() {
+        // mov [rsp], eax → 89 04 24  (SIB base=rsp, index=none)
+        let m = decode_mov_mmio(&[0x89, 0x04, 0x24]).unwrap();
+        assert!(m.is_write);
+        assert_eq!(m.len, 3);
     }
 }
