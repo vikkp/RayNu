@@ -2,8 +2,13 @@
 //!
 //! Pillar: [Z] · Proven Core: **outside** (ADR-002)
 //! Timer fire still uses the host LAPIC one-shot; inject uses `sched/interrupt`.
+//!
+//! CUR_COUNT decreases based on host TSC even while LVT is masked — Linux
+//! `calibrate_APIC_clock` polls TMCCT with a masked LVTT and disables the
+//! timer if the delta is ~0 ("APIC frequency too slow").
 
 use crate::arch::apic::DEFAULT_APIC_PHYS;
+use crate::arch::cpu;
 
 /// COM1 marker when emulated guest APIC timer has fired + inject once.
 pub const M3_GTIMER3_OK_MARKER: &str = "RAYNU-V-M3-GTIMER3-OK";
@@ -27,20 +32,29 @@ const REG_CUR_COUNT: u32 = 0x390;
 const REG_DIVIDE: u32 = 0x3E0;
 
 const LVT_MASKED: u32 = 1 << 16;
+const LVT_PERIODIC: u32 = 1 << 17;
 const SVR_ENABLED: u32 = 1 << 8;
+
+/// TSC ticks per undivided APIC-bus cycle (~100 MHz bus @ ~3.2 GHz TSC).
+/// Nested TSC rates vary; this stays fast enough that a ~100 ms calibrate
+/// window sees a large TMCCT delta, and slow enough not to hit 0 early on
+/// Linux's 0x0fffffff INIT_COUNT.
+const TSC_PER_BUS_CYCLE: u64 = 32;
 
 static mut APIC_ID: u32 = 0;
 static mut APIC_TPR: u32 = 0;
 static mut APIC_SVR: u32 = 0xFF | SVR_ENABLED;
 static mut APIC_LVT_TIMER: u32 = LVT_MASKED | 0xEF;
-static mut APIC_DIVIDE: u32 = 0b1011;
+static mut APIC_DIVIDE: u32 = 0b0011; // ÷16 (Linux calibrate default)
 static mut APIC_INIT_COUNT: u32 = 0;
-static mut APIC_CUR_COUNT: u32 = 0;
-/// Host one-shot armed on behalf of guest INIT_COUNT write.
+/// Host one-shot armed on behalf of guest (LVT unmasked + counting).
 static mut HOST_TIMER_FOR_GUEST: bool = false;
 static mut GTIMER3_OK: bool = false;
 /// Pending guest vector to inject after host timer VMEXIT.
 static mut PENDING_VECTOR: Option<u8> = None;
+/// TSC when INIT_COUNT was last written (countdown base).
+static mut TIMER_START_TSC: u64 = 0;
+static mut TIMER_RUNNING: bool = false;
 
 pub fn is_x2apic_msr(index: u32) -> bool {
     (X2APIC_MSR_BASE..=X2APIC_MSR_LAST).contains(&index)
@@ -57,6 +71,70 @@ fn reg_from_gpa(gpa: u64) -> Option<u32> {
     Some((gpa - APIC_GPA) as u32)
 }
 
+/// Decode APIC divide-configuration register → divisor.
+fn divide_value(dcr: u32) -> u32 {
+    match dcr & 0b1011 {
+        0b0000 => 2,
+        0b0001 => 4,
+        0b0010 => 8,
+        0b0011 => 16,
+        0b1000 => 1,
+        0b1001 => 32,
+        0b1010 => 64,
+        0b1011 => 128,
+        _ => 16,
+    }
+}
+
+fn timer_should_deliver() -> bool {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        (APIC_LVT_TIMER & LVT_MASKED) == 0 && (APIC_SVR & SVR_ENABLED) != 0
+    }
+}
+
+fn arm_guest_delivery_if_needed() {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        if TIMER_RUNNING && timer_should_deliver() && current_count_raw() != 0 {
+            HOST_TIMER_FOR_GUEST = true;
+            PENDING_VECTOR = Some((APIC_LVT_TIMER & 0xFF) as u8);
+        }
+    }
+}
+
+/// Elapsed APIC timer counts since INIT_COUNT write (may exceed INIT).
+fn elapsed_counts() -> u64 {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        if !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+            return 0;
+        }
+        let elapsed_tsc = cpu::rdtsc().wrapping_sub(TIMER_START_TSC);
+        let bus = elapsed_tsc / TSC_PER_BUS_CYCLE;
+        bus / divide_value(APIC_DIVIDE) as u64
+    }
+}
+
+fn current_count_raw() -> u32 {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        if !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+            return 0;
+        }
+        let init = APIC_INIT_COUNT as u64;
+        let elapsed = elapsed_counts();
+        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 {
+            let phase = elapsed % init;
+            (init - phase) as u32
+        } else if elapsed >= init {
+            0
+        } else {
+            (init - elapsed) as u32
+        }
+    }
+}
+
 fn read_reg(reg: u32) -> u32 {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
@@ -68,37 +146,50 @@ fn read_reg(reg: u32) -> u32 {
             REG_SVR => APIC_SVR,
             REG_LVT_TIMER => APIC_LVT_TIMER,
             REG_INIT_COUNT => APIC_INIT_COUNT,
-            REG_CUR_COUNT => APIC_CUR_COUNT,
+            REG_CUR_COUNT => current_count_raw(),
             REG_DIVIDE => APIC_DIVIDE,
             _ => 0,
         }
     }
 }
 
-/// Returns `Some(host_vector_hint)` when the host one-shot should be armed.
-fn write_reg(reg: u32, val: u32) -> Option<()> {
+/// Start / restart the virtual countdown from `val`.
+fn start_countdown(val: u32) {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        APIC_INIT_COUNT = val;
+        if val == 0 {
+            TIMER_RUNNING = false;
+            HOST_TIMER_FOR_GUEST = false;
+            PENDING_VECTOR = None;
+            return;
+        }
+        TIMER_START_TSC = cpu::rdtsc();
+        TIMER_RUNNING = true;
+        arm_guest_delivery_if_needed();
+    }
+}
+
+fn write_reg(reg: u32, val: u32) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
         match reg {
             REG_TPR => APIC_TPR = val,
             REG_EOI => {}
-            REG_SVR => APIC_SVR = val,
-            REG_LVT_TIMER => APIC_LVT_TIMER = val,
-            REG_DIVIDE => APIC_DIVIDE = val & 0b1011,
-            REG_INIT_COUNT => {
-                APIC_INIT_COUNT = val;
-                APIC_CUR_COUNT = val;
-                if val != 0 && (APIC_LVT_TIMER & LVT_MASKED) == 0 && (APIC_SVR & SVR_ENABLED) != 0
-                {
-                    HOST_TIMER_FOR_GUEST = true;
-                    PENDING_VECTOR = Some((APIC_LVT_TIMER & 0xFF) as u8);
-                }
+            REG_SVR => {
+                APIC_SVR = val;
+                arm_guest_delivery_if_needed();
             }
+            REG_LVT_TIMER => {
+                APIC_LVT_TIMER = val;
+                arm_guest_delivery_if_needed();
+            }
+            REG_DIVIDE => APIC_DIVIDE = val & 0b1011,
+            REG_INIT_COUNT => start_countdown(val),
             REG_ID | REG_VERSION | REG_CUR_COUNT => {}
             _ => {}
         }
     }
-    Some(())
 }
 
 pub fn host_timer_armed_for_guest() -> bool {
@@ -114,8 +205,10 @@ pub fn take_guest_timer_inject() -> Option<u32> {
         if !HOST_TIMER_FOR_GUEST {
             return None;
         }
+        // Only deliver once the virtual countdown has actually expired (or
+        // we're in periodic mode and a period boundary is acceptable). For
+        // bring-up, accept the host one-shot as the deadline signal.
         HOST_TIMER_FOR_GUEST = false;
-        APIC_CUR_COUNT = 0;
         let v = match PENDING_VECTOR {
             Some(x) => {
                 PENDING_VECTOR = None;
@@ -125,6 +218,14 @@ pub fn take_guest_timer_inject() -> Option<u32> {
         };
         if !GTIMER3_OK {
             GTIMER3_OK = true;
+        }
+        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 && APIC_INIT_COUNT != 0 {
+            // Reload period and ask host to arm again.
+            TIMER_START_TSC = cpu::rdtsc();
+            TIMER_RUNNING = true;
+            arm_guest_delivery_if_needed();
+        } else {
+            TIMER_RUNNING = false;
         }
         Some(v)
     }

@@ -155,6 +155,23 @@ pub unsafe fn rdmsr(msr: u32) -> u64 {
     ((hi as u64) << 32) | (lo as u64)
 }
 
+/// Read the host time-stamp counter (for virtual APIC CUR_COUNT, etc.).
+#[inline]
+pub fn rdtsc() -> u64 {
+    let lo: u32;
+    let hi: u32;
+    // SAFETY: RDTSC is always available on our bring-up CPUs.
+    unsafe {
+        core::arch::asm!(
+            "rdtsc",
+            out("eax") lo,
+            out("edx") hi,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
+    ((hi as u64) << 32) | (lo as u64)
+}
+
 #[inline]
 pub unsafe fn wrmsr(msr: u32, value: u64) {
     let lo = value as u32;
