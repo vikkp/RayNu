@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.3 closed** on Latitude (`RAYNU-V-M3-EARLY-OK`); **M3.4 in flight**: guest timer (`RAYNU-V-M3-GTIMER-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.5 closed** on Latitude (`RAYNU-V-M3-SHELL-OK`); **synthetic M3 complete**. Next: real bzImage + busybox/`init`. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 

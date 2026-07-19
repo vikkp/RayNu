@@ -18,6 +18,12 @@ pub const GUEST_EARLY_MAGIC: &[u8] = b"RAYNU-V-M3-EARLY";
 /// COM1 marker when proto-kernel early magic is observed (M3.3 gate).
 pub const M3_EARLY_OK_MARKER: &str = "RAYNU-V-M3-EARLY-OK";
 
+/// Bytes the M3.5 proto-init writes on COM1.
+pub const GUEST_SHELL_MAGIC: &[u8] = b"RAYNU-V-M3-SHELL";
+
+/// COM1 marker when proto-init shell magic is observed (M3.5 gate).
+pub const M3_SHELL_OK_MARKER: &str = "RAYNU-V-M3-SHELL-OK";
+
 pub const COM1_DATA: u16 = 0x3F8;
 pub const COM1_IER: u16 = 0x3F9;
 pub const COM1_LSR: u16 = 0x3FD;
@@ -28,6 +34,9 @@ static mut MAGIC_POS: usize = 0;
 /// Set when [`GUEST_EARLY_MAGIC`] has been fully received.
 static mut EARLY_MAGIC_OK: bool = false;
 static mut EARLY_POS: usize = 0;
+/// Set when [`GUEST_SHELL_MAGIC`] has been fully received.
+static mut SHELL_MAGIC_OK: bool = false;
+static mut SHELL_POS: usize = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoExitInfo {
@@ -80,6 +89,7 @@ pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
         if info.port == COM1_DATA {
             note_io_magic(byte);
             note_early_magic(byte);
+            note_shell_magic(byte);
             // Passthrough so the magic is visible on the QEMU serial log.
             // Skip port I/O under host `cargo test` (no COM1).
             #[cfg(not(test))]
@@ -131,6 +141,28 @@ pub fn guest_io_ok() -> bool {
 pub fn guest_early_ok() -> bool {
     // SAFETY: written on BSP VMEXIT path; read after early magic completes.
     unsafe { EARLY_MAGIC_OK }
+}
+
+fn note_shell_magic(byte: u8) {
+    // SAFETY: single-threaded VMEXIT path.
+    unsafe {
+        if SHELL_MAGIC_OK {
+            return;
+        }
+        if SHELL_POS < GUEST_SHELL_MAGIC.len() && byte == GUEST_SHELL_MAGIC[SHELL_POS] {
+            SHELL_POS += 1;
+            if SHELL_POS == GUEST_SHELL_MAGIC.len() {
+                SHELL_MAGIC_OK = true;
+            }
+        } else {
+            SHELL_POS = if byte == GUEST_SHELL_MAGIC[0] { 1 } else { 0 };
+        }
+    }
+}
+
+pub fn guest_shell_ok() -> bool {
+    // SAFETY: written on BSP VMEXIT path; read after shell magic completes.
+    unsafe { SHELL_MAGIC_OK }
 }
 
 /// Trap COM1 ports in an I/O bitmap A page (ports 0x0000–0x7FFF).

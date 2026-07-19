@@ -145,6 +145,24 @@ pub unsafe fn arm_bringup_timer(vector: u8) -> Result<(), ApicError> {
     arm_oneshot_timer(vector, ONESHOT_COUNT)
 }
 
+/// Mask the LAPIC timer LVT and zero the initial count (stop further fires).
+///
+/// SAFETY: APIC enabled; called from VMX root after the bring-up timer path.
+pub unsafe fn mask_timer() -> Result<(), ApicError> {
+    match probe()? {
+        ApicMode::XApic { base } => {
+            mmio_write(base, OFF_LVT_TIMER, LVT_MASKED | 0xFF);
+            mmio_write(base, OFF_INIT_COUNT, 0);
+            Ok(())
+        }
+        ApicMode::X2Apic => {
+            cpu::wrmsr(MSR_LVT_TIMER, (LVT_MASKED | 0xFF) as u64);
+            cpu::wrmsr(MSR_INIT_COUNT, 0);
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod apic_test {
     use super::*;

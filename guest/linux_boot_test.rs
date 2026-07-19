@@ -39,6 +39,31 @@ fn proto_kernel_encodes_hdrs_check_and_outs() {
 }
 
 #[test]
+fn proto_init_encodes_shell_outs() {
+    let mut page = [0u8; 4096];
+    let phys = page.as_mut_ptr() as u64;
+    unsafe { write_proto_init(phys) };
+    assert!(PROTO_SHELL_LINE.starts_with(b"init:"));
+    // First OUT is 'i' of init:
+    let mut found = false;
+    let mut i = 0;
+    while i + 7 < 256 {
+        if page[i] == 0xBA
+            && page[i + 1] == 0xF8
+            && page[i + 5] == 0xB0
+            && page[i + 6] == b'i'
+            && page[i + 7] == 0xEE
+        {
+            found = true;
+            break;
+        }
+        i += 1;
+    }
+    assert!(found, "expected proto-init COM1 OUT of 'init:…'");
+    assert!(page[..512].contains(&0xF4)); // hlt (OUTs are ~8 bytes each)
+}
+
+#[test]
 fn pack_boot_params_fields() {
     let mut buf = [0u8; BOOT_PARAMS_SIZE];
     pack_boot_params(&mut buf, 0x2000_0000, 0x1000, 0x1000_0000, 64 * 1024 * 1024);

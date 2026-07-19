@@ -60,16 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.4: guest timer.</h2>
+          <h2 class="section__title">Synthetic M3 closed.</h2>
           <p class="section__lede">
-            After proto-kernel early serial, arm a second LAPIC one-shot while
-            RIP is still the proto entry; EOI + inject proves the guest-facing
-            timer path. Marker <code>RAYNU-V-M3-GTIMER-OK</code>.
+            Latitude passed through proto-init shell
+            (<code>RAYNU-V-M3-SHELL-OK</code>). Synthetic Linux path complete;
+            real bzImage is next.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-EARLY-OK
-boot: guest timer armed (post-proto)
-RAYNU-V-M3-GTIMER-OK
-boot: M3.4 complete</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>==> M3.5 shell/init marker found
+==> Boot gate PASSED (M0 → M3.5)
+boot: M3.5 complete — synthetic M3 closed</code></pre>
         </div>
       </section>
 
@@ -143,8 +142,8 @@ boot: M3.4 complete</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Current gate: guest timer (M3.4). Next: shell (M3.5) —
-            see <code>docs/m3_plan.md</code>.
+            Real bzImage + busybox/<code>init</code> on COM1 — see
+            <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
