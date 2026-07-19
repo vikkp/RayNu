@@ -60,25 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.14: Verus L3 attempt.</h2>
+          <h2 class="section__title">M3.15: frozen Verus pin.</h2>
           <p class="section__lede">
-            We drafted machine-checkable exclusivity lemmas for guest memory
-            map/unmap — latched by host marker
-            <code>RAYNU-V-M3-L3-OK</code>. Lemmas are not yet discharged by
-            Verus; isolation specs stay at “written,” not “proved.”
+            CI installs an exact Verus release tag, git commit, and asset
+            sha256 — never “latest” — latched by
+            <code>RAYNU-V-M3-VERUS-OK</code>. Lemmas are drafted; true L3
+            verify is next.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-L3-OK
-RAYNU-V-M3-EPT2-OK
-RAYNU-V-M3-APIC-OK
-RAYNU-V-M3-SHELL-OK
-==> Boot gate PASSED (M0 → M3.13)
-host: M3.14 complete — L3 attempt OK</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-VERUS-OK
+tag=release/0.2026.07.12.0b42f4c
+commit=0b42f4cee92a178937608cf55e512371d2fd8cd4
+==> Verus pin smoke PASSED (M3.15)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M3.14: how we got here</h2>
+          <h2 class="section__title">M1.0 → M3.15: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -166,16 +164,16 @@ host: M3.14 complete — L3 attempt OK</code></pre>
                   >
                 </li>
                 <li>
-                  <span class="journey__gate">M3.13</span>
+                  <span class="journey__gate">M3.13–M3.14</span>
                   <span class="journey__text"
-                    >Precise <code>[0,1 GiB)</code> EPT + range claims</span
+                    >Precise EPT; Verus L3 attempt (lemmas, not proved)</span
                   >
                 </li>
                 <li>
-                  <span class="journey__gate">M3.14</span>
+                  <span class="journey__gate">M3.15</span>
                   <span class="journey__text"
-                    >Verus L3 attempt →
-                    <code>RAYNU-V-M3-L3-OK</code></span
+                    >Frozen Verus pin →
+                    <code>RAYNU-V-M3-VERUS-OK</code></span
                   >
                 </li>
               </ol>
@@ -255,18 +253,19 @@ host: M3.14 complete — L3 attempt OK</code></pre>
               conditions are written (with runtime asserts + bounded Kani on
               unsafe paths). <strong>L3</strong> means
               <code>cargo verus --verify</code> machine-checks those specs for
-              all inputs. M3.14 is an <strong>L3 attempt</strong>: lemmas
-              drafted, Verus still unpinned — we do not claim proof-complete.
+              all inputs. M3.14 drafted an <strong>L3 attempt</strong>; M3.15
+              froze the Verus toolchain (tag + commit + sha256). We still do
+              not claim proof-complete until green verify (M3.17).
             </p>
           </div>
           <blockquote class="theorem" data-reveal>
             <p>
               Proven Core only. The first green
-              <code>cargo verus --verify</code> in CI is the credibility
-              milestone — until then, markers prove gates closed, not theorems
-              discharged.
+              <code>cargo verus --verify</code> against the frozen pin is the
+              credibility milestone — until then, markers prove gates closed,
+              not theorems discharged.
             </p>
-            <cite>ADR-002 · ADR-004 · ADR-006</cite>
+            <cite>ADR-002 · ADR-004 · ADR-006 · ADR-008</cite>
           </blockquote>
         </div>
       </section>
@@ -288,8 +287,9 @@ host: M3.14 complete — L3 attempt OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Pin Verus and get a green <code>cargo verus --verify</code> on the
-            4K exclusivity theorem — true L3, not an attempt.
+            Link the EptMap lemmas into Verus (M3.16), then discharge a green
+            <code>cargo verus --verify</code> on the frozen pin (M3.17) — true
+            L3.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.13+ closed): UEFI entry → tiny bzImage + initrd → earlyprintk → guest APIC / GTIMER3 → real `/init` SHELL → VMXOFF. Precise EPT `[0,1 GiB)`. Verification: L2 specs + Kani + M3.14 L3 attempt (host).
+Boot path today (M3.13+ closed): UEFI entry → tiny bzImage + initrd → earlyprintk → guest APIC / GTIMER3 → real `/init` SHELL → VMXOFF. Precise EPT `[0,1 GiB)`. Verification: L2 specs + Kani + M3.14 L3 attempt; Verus toolchain frozen at M3.15 (`verus-version.toml`).
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -34,7 +34,7 @@ Only security-critical modules receive Verus specs and proofs. Default is **outs
 
 Headline theorem (ADR-004): every valid EPT GPA→HPA mapping is **exclusively owned** by one guest and belongs to neither the hypervisor nor any other guest.
 
-Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). EPT ownership + frame allocator are **L2**; M3.14 drafted an L3 *attempt* (not machine-checked). Lived checkpoint: [progress.md](progress.md).
+Maturity levels L0→L3 are defined in [ADR-006](adr/ADR-006.md). EPT ownership + frame allocator are **L2**; M3.14 drafted an L3 *attempt*; M3.15 froze Verus (tag + commit + sha256). Not machine-checked until M3.17. Lived checkpoint: [progress.md](progress.md).
 
 ## Conflict Resolution
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.14 closed:** host `RAYNU-V-M3-L3-OK` (Verus L3 attempt) + Latitude `Boot gate PASSED (M0 → M3.13)`. Next: pin Verus for true L3 — [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.15 closed:** frozen Verus pin → `RAYNU-V-M3-VERUS-OK`. Next: **M3.16** link EptMap into Verus → **M3.17** green verify (true L3) — [m3_post_shell_plan.md](m3_post_shell_plan.md).
