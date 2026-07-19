@@ -533,7 +533,9 @@ pub fn load_bzimage_guest(
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
     // Must be ≥2 e820 entries — Linux rejects a single-region map.
-    // Real guests match QEMU `-m 1G` (512M is a known alloc_low_pages footgun).
+    // Guest e820 stays at GUEST_RAM_BYTES (256 MiB). Do not advertise 512 MiB
+    // e820 — that is a known Linux alloc_low_pages footgun. QEMU `-m 512M`
+    // (M3.20) sizes the machine/EPT window; e820 remains the tighter guest map.
     let mem_bytes = if real {
         GUEST_RAM_BYTES
     } else {

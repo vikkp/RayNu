@@ -25,6 +25,7 @@
 # M3.12: RAYNU-V-M3-APIC-OK (IRR/ISR LVT inject; drop IRQ0 crutch)
 # M3.13: RAYNU-V-M3-EPT2-OK (precise EPT identity + range claims)
 # M3.19: RAYNU-V-M3-NOIRQ-OK (no IRQ4 inject; IRQ0 only until SHELL)
+# M3.20: RAYNU-V-M3-EPT3-OK (tight EPT [0,512MiB); QEMU -m 512M)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -53,6 +54,7 @@ MARKER_GTIMER2="${MARKER_GTIMER2:-RAYNU-V-M3-GTIMER2-OK}"
 MARKER_GTIMER3="${MARKER_GTIMER3:-RAYNU-V-M3-GTIMER3-OK}"
 MARKER_APIC="${MARKER_APIC:-RAYNU-V-M3-APIC-OK}"
 MARKER_EPT2="${MARKER_EPT2:-RAYNU-V-M3-EPT2-OK}"
+MARKER_EPT3="${MARKER_EPT3:-RAYNU-V-M3-EPT3-OK}"
 MARKER_NOIRQ="${MARKER_NOIRQ:-RAYNU-V-M3-NOIRQ-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
@@ -161,6 +163,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "==> M3.13 precise EPT marker found"
   else
     echo "error: marker '$MARKER_EPT2' not found after successful VMXON" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_EPT3" "$SERIAL_LOG"; then
+    echo "==> M3.20 tight EPT marker found"
+  else
+    echo "error: marker '$MARKER_EPT3' not found (need EPT [0,512MiB))" >&2
     fail=1
   fi
   if grep -qF "$MARKER_GUEST" "$SERIAL_LOG"; then
@@ -300,5 +308,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.19; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.20; qemu status=$QEMU_STATUS)"
 exit 0

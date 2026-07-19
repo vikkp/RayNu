@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.19 closed; **post-L3 track** next is M3.20 (as needed) / M3.21–M3.22.  
+**Status:** M3.11–M3.19 closed; **M3.20 open** (tight EPT); then M3.21–M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and M3.19 NOIRQ (no IRQ4; IRQ0 only until SHELL). Active track: EPT/Kani/assets polish (M3.20–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and M3.19 NOIRQ. Active: M3.20 tight EPT (`[0,512MiB)`).
 
 ---
 
@@ -174,11 +174,21 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
 
-**Status: planned** (build when needed; may stay deferred if 1 GiB remains sufficient).
+**Status: open** — host gate ready; Latitude `./tools/qemu-boot-test.sh` pending.
 
-**Goal:** Shrink precise identity below `[0, 1 GiB)` where e820/UEFI allow, with ADR-004 range claims updated; retain APIC unmapped-by-omission; SHELL + EPT2 chain still green (or successor markers).
+**Shipped (this PR):**
 
-**Files (expected):** `memory/ept_hw.rs`, `memory/ept.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+1. Precise identity shrinks to `[0, 512 MiB)` via new `build_identity_2m_bytes` (2M leaves).
+2. QEMU `-m 512M` so machine RAM matches the EPT window (guest e820 stays 256 MiB).
+3. ADR-004 `claim_precise_identity_ranges` uses `PRECISE_BYTES`; asserts window `< 1 GiB`.
+4. Emit `RAYNU-V-M3-EPT2-OK` + `RAYNU-V-M3-EPT3-OK`; APIC remains unmapped-by-omission.
+5. Host gate `memory/ept3_gate.rs`; `qemu-boot-test.sh` pass line M0→M3.20.
+
+**Done when (Latitude):** `RAYNU-V-M3-EPT3-OK` + retained SHELL/NOIRQ chain and
+`Boot gate PASSED (M0 → M3.20)`.
+
+**Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `memory/ept3_gate.rs`, `src/main.rs`,
+`tools/run-qemu.sh`, `tools/qemu-boot-test.sh`.
 
 ### M3.21 — Harden Kani CI — `RAYNU-V-M3-KANI-OK`
 
@@ -201,13 +211,12 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 ## Execution order
 
 ```
-M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed)
-M3.20 EPT3 (as needed)  ← optional next
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed) → M3.20 EPT3 (open)
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**M3.19 closed on Latitude. Next: M3.20 (optional) or M3.21/M3.22.**
+**Next: close M3.20 on Latitude, then M3.21/M3.22.**
 
 ---
 
@@ -274,5 +283,16 @@ RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
 ==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
 ==> Boot gate PASSED (M0 → M3.19; qemu status=33)
+# host CI + Latitude ~/raynu
+```
+
+## M3.20 acceptance (pending Latitude)
+
+```text
+RAYNU-V-M3-EPT3-OK
+RAYNU-V-M3-EPT2-OK
+boot: precise EPT [0,512MiB); APIC MMIO unmapped
+==> M3.20 tight EPT marker found
+==> Boot gate PASSED (M0 → M3.20; qemu status=…)
 # host CI + Latitude ~/raynu
 ```

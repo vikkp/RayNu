@@ -7,6 +7,7 @@
 pub mod boot_alloc;
 pub mod ept;
 pub mod ept_hw;
+pub mod ept3_gate;
 pub mod frame_allocator;
 pub mod l2_gate;
 pub mod l3_gate;
@@ -22,8 +23,9 @@ pub use ept::{
 };
 pub use ept_hw::{
     EptHwError, EptPageSize, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER, M3_EPT2_OK_MARKER,
-    PRECISE_BYTES, PRECISE_GIB, SECONDARY_ENABLE_EPT,
+    M3_EPT3_OK_MARKER, PRECISE_BYTES, PRECISE_GIB, PRECISE_MIB, SECONDARY_ENABLE_EPT,
 };
+pub use ept3_gate::run_ept3_gate;
 pub use frame_allocator::{
     allocator_selftest_ok, run_allocator_selftest, AllocError, FrameAllocator, PhysFrame,
     M2_ALLOC_OK_MARKER,

@@ -5,7 +5,7 @@
 //! VERIFICATION: L1 — control words + EPTP + ownership + inject firewall
 //!
 //! Guest shares host CR3 (UEFI identity paging). EPT identity-maps the first
-//! 4 GiB so GPA→HPA is 1:1. Guest RIP points at an owned page that stores a
+//! precise window so GPA→HPA is 1:1. Guest RIP points at an owned page that stores a
 //! magic value, runs a short increment loop, then `hlt`. On the first HLT
 //! exit the host injects vector [`crate::sched::M2_IRQ_VECTOR`] via VM-entry
 //! interruption-info and VMRESUMEs; the guest ISR acks and HLTs again.

@@ -191,7 +191,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
 2. ~~Post-shell / true L3~~ — M3.17 closed (`RAYNU-V-M3-L3-VERIFY-OK`).
-3. **Post-L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.19 NOIRQ closed; M3.20 EPT3 (optional); parallel M3.21 Kani + M3.22 assets.
+3. **Post-L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.19 NOIRQ closed; M3.20 EPT3 open (Latitude pending); parallel M3.21 Kani + M3.22 assets.
 
 ---
 
@@ -201,7 +201,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 |------|------|
 | `vmx/launch.rs` | Exit phase machine → **M3.13** EPT2 + APIC IRR inject + SHELL |
 | `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC + IRR/ISR (M3.12) |
-| `memory/ept_hw.rs` | Precise `[0,1GiB)` identity EPT (M3.13) |
+| `memory/ept_hw.rs` | Precise `[0,512MiB)` identity EPT @ 2M (M3.20) |
 | `vmx/mmio_decode.rs` | APIC MMIO mov decode (EPT violation) |
 | `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
 | `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |

@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.19 closed** — real Linux shell + guest APIC + precise EPT; true L3 + refine; **no IRQ4 inject** (SHELL via CPUID; IRQ0 only until SHELL) → `RAYNU-V-M3-NOIRQ-OK`. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.19 closed**; **M3.20 open** — tight EPT `[0,512MiB)` → `RAYNU-V-M3-EPT3-OK` (awaiting Latitude). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 

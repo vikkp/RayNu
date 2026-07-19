@@ -21,7 +21,7 @@
 //! M3.8: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`).
 //! M3.9: MSR firewall + post-banner LAPIC (`RAYNU-V-M3-GTIMER2-OK`).
 //! M3.10: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`.
-//! M3.13: precise EPT `[0,1GiB)` + range claims (`RAYNU-V-M3-EPT2-OK`).
+//! M3.13/M3.20: precise EPT `[0,512MiB)` + range claims (`EPT2`/`EPT3`).
 
 #![no_main]
 #![no_std]
@@ -149,21 +149,15 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
 fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLifecycle) {
     boot::serial::write_line("boot: M1.1 complete — entering M2 EPT + guest");
 
+    // M3.20: tight precise path always uses 2M leaves (sub-GiB window).
     // SAFETY: VMX root; capability MSR is defined when VMX is present.
-    let page_size = match unsafe { memory::ept_hw::select_page_size() } {
-        Ok(ps) => ps,
-        Err(_) => {
-            boot::serial::write_line("boot: ERROR — EPT 1G/2M identity map unsupported");
-            let _ = life.disable();
-            return;
-        }
-    };
-    let ept_need = memory::ept_hw::frames_required(page_size);
-    boot::serial::write_str("boot: EPT page_size=");
-    boot::serial::write_line(match page_size {
-        memory::EptPageSize::OneGib => "1G",
-        memory::EptPageSize::TwoMib => "2M",
-    });
+    if unsafe { memory::ept_hw::ensure_2m_capable() }.is_err() {
+        boot::serial::write_line("boot: ERROR — EPT 2M identity map unsupported");
+        let _ = life.disable();
+        return;
+    }
+    let ept_need = memory::ept_hw::frames_required_precise();
+    boot::serial::write_line("boot: EPT page_size=2M");
 
     let mut ept_frames = [0u64; 8];
     if ept_need > ept_frames.len() {
@@ -180,11 +174,10 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         *slot = f;
     }
 
-    // M3.13: precise identity [0, 1 GiB) — APIC at 0xFEE00000 stays unmapped.
+    // M3.20: precise identity [0, 512 MiB) — APIC at 0xFEE00000 stays unmapped.
     // SAFETY: frames exclusively owned by this path.
-    let eptp = match unsafe {
-        memory::ept_hw::build_precise_identity(page_size, &mut ept_frames[..ept_need])
-    } {
+    let eptp = match unsafe { memory::ept_hw::build_precise_identity(&mut ept_frames[..ept_need]) }
+    {
         Ok(v) => v,
         Err(_) => {
             boot::serial::write_line("boot: ERROR — EPT precise identity build failed");
@@ -193,14 +186,21 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     };
 
-    // SAFETY: PML4 from precise build; APIC must not be present.
+    // SAFETY: PML4 from precise build; window edges + APIC must check out.
+    let pml4 = ept_frames[0];
     let apic_gpa = arch::apic::DEFAULT_APIC_PHYS;
-    if unsafe { memory::ept_hw::gpa_is_mapped(ept_frames[0], apic_gpa) } {
-        boot::serial::write_line("boot: ERROR — APIC GPA mapped in precise EPT");
+    let last_in = memory::PRECISE_BYTES - 0x1000;
+    if unsafe {
+        !memory::ept_hw::gpa_is_mapped(pml4, 0)
+            || !memory::ept_hw::gpa_is_mapped(pml4, last_in)
+            || memory::ept_hw::gpa_is_mapped(pml4, memory::PRECISE_BYTES)
+            || memory::ept_hw::gpa_is_mapped(pml4, apic_gpa)
+    } {
+        boot::serial::write_line("boot: ERROR — precise EPT window / APIC check failed");
         let _ = life.disable();
         return;
     }
-    boot::serial::write_line("boot: precise EPT [0,1GiB); APIC MMIO unmapped");
+    boot::serial::write_line("boot: precise EPT [0,512MiB); APIC MMIO unmapped");
 
     if memory::claim_precise_identity_ranges().is_err() {
         boot::serial::write_line("boot: ERROR — precise EPT range claim failed");
@@ -208,6 +208,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         return;
     }
     boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
+    boot::serial::write_line(memory::M3_EPT3_OK_MARKER);
 
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
