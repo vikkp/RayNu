@@ -4,10 +4,11 @@
 //! Per ADR-004: every valid GPA→HPA mapping is exclusively owned by one guest
 //! and belongs to neither the hypervisor nor any other guest.
 //!
-//! M2.2 tracks **explicitly claimed** guest pages (code/stack). The 4 GiB
-//! identity EPT in `ept_hw` remains a bring-up scaffold; precise per-GPA maps
-//! replace it later while this registry stays the ownership source of truth.
+//! M2.2 tracks **explicitly claimed** 4K guest pages (code/stack).
+//! M3.13 adds a durable **range** registry for the precise identity window
+//! (`ept_hw::PRECISE_BYTES`) so every mapped GPA span is claimed.
 
+use crate::memory::ept_hw::{self, PRECISE_BYTES};
 use crate::memory::PhysFrame;
 
 /// COM1 marker when ADR-004 ownership self-test passes (M2.2 gate).
@@ -16,11 +17,20 @@ pub const M2_OWN_OK_MARKER: &str = "RAYNU-V-M2-OWN-OK";
 /// Guest id used by the M2 bring-up single guest.
 pub const M2_BRINGUP_GUEST_ID: u64 = 1;
 
-/// Max tracked mappings in the bring-up registry (M3.8 multi-page bzImage).
+/// Max tracked 4K mappings in the bring-up registry (M3.8 multi-page bzImage).
 const MAP_CAP: usize = 512;
+
+/// Max identity ranges claimed for the precise EPT (M3.13).
+const RANGE_CAP: usize = 8;
 
 /// Set when [`run_ownership_selftest`] succeeds (read on VMEXIT for marker order).
 static mut OWNERSHIP_SELFTEST_OK: bool = false;
+
+/// Set when [`claim_precise_identity_ranges`] succeeds (M3.13).
+static mut PRECISE_RANGES_OK: bool = false;
+
+/// Durable range registry for the precise EPT identity window.
+static mut PRECISE_RANGES: EptRangeMap = EptRangeMap::new();
 
 /// EPT permission bits (subset).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,6 +216,101 @@ impl Default for EptMap {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Identity GPA span claimed for a guest (ADR-004 range unit, M3.13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EptRange {
+    pub guest_id: u64,
+    pub gpa: u64,
+    pub len: u64,
+}
+
+/// Small registry of exclusive identity ranges (precise EPT windows).
+pub struct EptRangeMap {
+    ranges: [Option<EptRange>; RANGE_CAP],
+    len: usize,
+}
+
+impl EptRangeMap {
+    pub const fn new() -> Self {
+        Self {
+            ranges: [None; RANGE_CAP],
+            len: 0,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Claim an identity span `[gpa, gpa+len)`. Rejects overlap / bad args.
+    pub fn claim_range(&mut self, guest_id: u64, gpa: u64, len: u64) -> Result<(), EptError> {
+        if guest_id == 0 {
+            return Err(EptError::InvalidGuest);
+        }
+        if len == 0 || (gpa & 0xfff) != 0 || (len & 0xfff) != 0 {
+            return Err(EptError::Invariant);
+        }
+        let end = gpa.checked_add(len).ok_or(EptError::Invariant)?;
+        for r in self.ranges.iter().flatten() {
+            let r_end = r.gpa.wrapping_add(r.len);
+            let overlap = gpa < r_end && r.gpa < end;
+            if overlap {
+                return Err(EptError::AlreadyOwned);
+            }
+        }
+        for slot in self.ranges.iter_mut() {
+            if slot.is_none() {
+                *slot = Some(EptRange {
+                    guest_id,
+                    gpa,
+                    len,
+                });
+                self.len += 1;
+                return Ok(());
+            }
+        }
+        Err(EptError::Full)
+    }
+
+    pub fn contains_gpa(&self, guest_id: u64, gpa: u64) -> bool {
+        self.ranges.iter().flatten().any(|r| {
+            r.guest_id == guest_id && gpa >= r.gpa && gpa < r.gpa.wrapping_add(r.len)
+        })
+    }
+}
+
+/// Claim the M3.13 precise identity window for the bring-up guest.
+pub fn claim_precise_identity_ranges() -> Result<(), EptError> {
+    // SAFETY: single-threaded boot; called once before VMLAUNCH.
+    unsafe {
+        let ranges = core::ptr::addr_of_mut!(PRECISE_RANGES);
+        *ranges = EptRangeMap::new();
+        (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, PRECISE_BYTES)?;
+        // Guest RAM windows from e820/memmap are inside [0, PRECISE_BYTES).
+        let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
+        if guest_ram > PRECISE_BYTES {
+            return Err(EptError::Invariant);
+        }
+        if !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0)
+            || !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, guest_ram - 0x1000)
+        {
+            return Err(EptError::Invariant);
+        }
+        // APIC MMIO must remain outside claimed/mapped precise window.
+        if ept_hw::PRECISE_BYTES > crate::arch::apic::DEFAULT_APIC_PHYS {
+            return Err(EptError::Invariant);
+        }
+        PRECISE_RANGES_OK = true;
+    }
+    Ok(())
+}
+
+/// True after [`claim_precise_identity_ranges`] on this boot.
+pub fn precise_ranges_ok() -> bool {
+    // SAFETY: written once on BSP before VMLAUNCH.
+    unsafe { PRECISE_RANGES_OK }
 }
 
 /// Claim bring-up guest pages and prove exclusive ownership (ADR-004).

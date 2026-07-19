@@ -103,15 +103,48 @@ fn pack_boot_params_fields() {
     assert_eq!(read_u32(&buf, OFF_RAMDISK_IMAGE), 0x2000_0000);
     assert_eq!(read_u32(&buf, OFF_RAMDISK_SIZE), 0x1000);
     assert_eq!(read_u32(&buf, OFF_CMD_LINE_PTR), 0x1000_0000);
-    assert_eq!(buf[OFF_E820_ENTRIES], 1);
+    // Linux append_e820_table() rejects nr_entries < 2.
+    assert_eq!(buf[OFF_E820_ENTRIES], 3);
+    assert_eq!(buf[OFF_SENTINEL], 0);
     assert_eq!(buf[OFF_LOADFLAGS] & LOADFLAGS_LOADED_HIGH, LOADFLAGS_LOADED_HIGH);
     assert_eq!(read_u16(&buf, OFF_VERSION), 0x020C);
     assert_eq!(read_u16(&buf, OFF_BOOT_FLAG), 0xAA55);
 
-    // e820[0] = { addr=0, size=64MiB, type=RAM }
+    // e820[0] low RAM; e820[1] reserved hole; e820[2] extended above 1 MiB.
     assert_eq!(read_u64(&buf, OFF_E820_TABLE), 0);
-    assert_eq!(read_u64(&buf, OFF_E820_TABLE + 8), 64 * 1024 * 1024);
+    assert_eq!(read_u64(&buf, OFF_E820_TABLE + 8), E820_LOW_RAM_END);
     assert_eq!(read_u32(&buf, OFF_E820_TABLE + 16), E820_RAM);
+    let e1 = OFF_E820_TABLE + E820_ENTRY_SIZE;
+    assert_eq!(read_u64(&buf, e1), E820_LOW_RAM_END);
+    assert_eq!(read_u64(&buf, e1 + 8), E820_HIGH_RAM_START - E820_LOW_RAM_END);
+    assert_eq!(read_u32(&buf, e1 + 16), E820_RESERVED);
+    let e2 = OFF_E820_TABLE + 2 * E820_ENTRY_SIZE;
+    assert_eq!(read_u64(&buf, e2), E820_HIGH_RAM_START);
+    assert_eq!(
+        read_u64(&buf, e2 + 8),
+        64 * 1024 * 1024 - E820_HIGH_RAM_START
+    );
+    assert_eq!(read_u32(&buf, e2 + 16), E820_RAM);
+    assert_eq!(
+        read_u32(&buf, OFF_ALT_MEM_K),
+        ((64 * 1024 * 1024 - E820_HIGH_RAM_START) / 1024) as u32
+    );
+    assert!(read_u16(&buf, OFF_EXT_MEM_K) > 0);
+}
+
+#[test]
+fn real_linux_cmdline_has_memmap_backup() {
+    let s = core::str::from_utf8(REAL_LINUX_CMDLINE).unwrap();
+    assert!(s.contains("rdinit=/init"));
+    assert!(s.contains("memmap=640K@0"));
+    assert!(s.contains("memmap=255M@1M"));
+    assert!(!s.contains("nolapic"));
+    assert!(s.contains("noapic"));
+    assert!(s.contains("lpj="));
+    assert!(s.contains("clocksource=tsc"));
+    assert!(s.contains("tsc=reliable"));
+    assert!(s.contains("idle=poll"));
+    assert!(!s.contains("notsc"));
 }
 
 #[test]

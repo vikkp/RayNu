@@ -91,7 +91,8 @@ jobs:
             target/m0-qemu-stderr.log
           if-no-files-found: ignore
 
-  # Soft-fail until Verus is pinned (ADR-001, ADR-008). L2 specs landed M2.6.
+  # Soft-fail until Verus is pinned (ADR-001, ADR-008).
+  # M2.6 L2 specs; M3.14 L3-attempt lemmas in memory/ept_proof.rs (host RAYNU-V-M3-L3-OK).
   verus-soft:
     name: verus (soft-fail scaffold)
     runs-on: ubuntu-latest
@@ -101,6 +102,7 @@ jobs:
       - name: placeholder
         run: |
           echo "L2 specs landed for EptMap + FrameAllocator (M2.6) — see memory/*_spec.rs"
+          echo "M3.14 L3-attempt lemmas in memory/ept_proof.rs (host marker RAYNU-V-M3-L3-OK)"
           echo "Verus not pinned for execution yet - see verus-version.toml"
           echo "Replace this job with cargo verus --verify when the toolchain is pinned"
           exit 1

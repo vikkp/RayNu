@@ -20,6 +20,8 @@
 //! M3.7: bzImage load (`RAYNU-V-M3-BZIMAGE-OK`).
 //! M3.8: real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`).
 //! M3.9: MSR firewall + post-banner LAPIC (`RAYNU-V-M3-GTIMER2-OK`).
+//! M3.10: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`.
+//! M3.13: precise EPT `[0,1GiB)` + range claims (`RAYNU-V-M3-EPT2-OK`).
 
 #![no_main]
 #![no_std]
@@ -48,8 +50,13 @@ fn main() -> Status {
 
     boot::serial::write_line("boot: M0 complete — entering M1.0 firmware handoff");
 
-    // M3.7: stage ESP bzImage before ExitBootServices tears down file I/O.
+    // M3.7/M3.10: stage ESP bzImage (+ INITRD) before ExitBootServices.
     boot::esp_assets::probe_bzimage();
+    if boot::esp_assets::initrd_bytes().is_none() {
+        // Embedded gzip+cpio with static /init (M3.10).
+        let embedded: &[u8] = include_bytes!("../assets/initrd");
+        let _ = boot::esp_assets::stage_initrd(embedded);
+    }
     if boot::esp_assets::bzimage_bytes().is_none() {
         boot::serial::write_line("boot: ESP BZIMAGE missing — will use embedded minimal");
     } else {
@@ -173,17 +180,34 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         *slot = f;
     }
 
+    // M3.13: precise identity [0, 1 GiB) — APIC at 0xFEE00000 stays unmapped.
     // SAFETY: frames exclusively owned by this path.
     let eptp = match unsafe {
-        memory::ept_hw::build_identity_4g(page_size, &mut ept_frames[..ept_need])
+        memory::ept_hw::build_precise_identity(page_size, &mut ept_frames[..ept_need])
     } {
         Ok(v) => v,
         Err(_) => {
-            boot::serial::write_line("boot: ERROR — EPT identity build failed");
+            boot::serial::write_line("boot: ERROR — EPT precise identity build failed");
             let _ = life.disable();
             return;
         }
     };
+
+    // SAFETY: PML4 from precise build; APIC must not be present.
+    let apic_gpa = arch::apic::DEFAULT_APIC_PHYS;
+    if unsafe { memory::ept_hw::gpa_is_mapped(ept_frames[0], apic_gpa) } {
+        boot::serial::write_line("boot: ERROR — APIC GPA mapped in precise EPT");
+        let _ = life.disable();
+        return;
+    }
+    boot::serial::write_line("boot: precise EPT [0,1GiB); APIC MMIO unmapped");
+
+    if memory::claim_precise_identity_ranges().is_err() {
+        boot::serial::write_line("boot: ERROR — precise EPT range claim failed");
+        let _ = life.disable();
+        return;
+    }
+    boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
 
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
@@ -239,7 +263,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     }
     let load = if let Some(img) = boot::esp_assets::bzimage_bytes() {
-        match guest::load_bzimage_guest(alloc, img) {
+        match guest::load_bzimage_guest(alloc, img, boot::esp_assets::initrd_bytes()) {
             Ok(info) => Ok(info),
             Err(()) => {
                 boot::serial::write_line("boot: bzImage load failed — synthetic fallback");
@@ -275,6 +299,21 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             }
             if info.is_real_linux {
                 boot::serial::write_line("boot: real Linux bzImage detected");
+                // Prove zeropage e820 survived packing (Latitude: must not be BIOS-e801).
+                // SAFETY: boot_params frame just written by load_bzimage_guest.
+                let entries = unsafe {
+                    core::ptr::read_volatile(
+                        (info.boot_params_phys as *const u8).add(guest::linux_boot::OFF_E820_ENTRIES),
+                    )
+                };
+                boot::serial::write_str("boot: e820_entries=");
+                write_hex(entries as u64);
+                boot::serial::write_byte(b'\n');
+            }
+            if info.has_real_initrd {
+                boot::serial::write_str("boot: real initrd bytes=0x");
+                write_hex(info.ramdisk_size as u64);
+                boot::serial::write_byte(b'\n');
             }
             vmx::launch::set_linux_load(
                 info.entry_phys,
@@ -296,7 +335,10 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                     a = a.saturating_add(0x20_0000);
                 }
             }
-            if !unsafe { arch::cpu::clear_nx_identity(info.init_phys) } {
+            // Proto-init is executable; real initrd is data only (loaded by kernel).
+            if !info.has_real_initrd
+                && !unsafe { arch::cpu::clear_nx_identity(info.init_phys) }
+            {
                 boot::serial::write_line("boot: ERROR — could not clear NX on proto-init");
                 let _ = life.disable();
                 return;

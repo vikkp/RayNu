@@ -4,13 +4,13 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.5 (**synthetic M3 closed**): [progress.md](progress.md).
+Lived gates through **M3.14**: [progress.md](progress.md). Post-shell: [m3_post_shell_plan.md](m3_post_shell_plan.md).
 
 ---
 
 ## Where we are
 
-**Synthetic M3.0–M3.5 closed** on Latitude (proto-kernel / proto-init phase machine).
+**M3.0–M3.14 closed** — real Linux SHELL on Latitude through precise EPT + APIC; host Verus L3 attempt (`RAYNU-V-M3-L3-OK`). Historical bring-up notes below kept for context.
 
 | Have (synthetic) | Need for real Linux |
 |------------------|---------------------|
@@ -144,17 +144,18 @@ Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER2-OK`).
 
 ### M3.10 — Real shell / init — `RAYNU-V-M3-SHELL-OK` (real guest)
 
-- busybox (or static) `init` on initrd prints the shell marker on COM1
-- Same marker string as synthetic M3.5; gate proves **real** userspace
+- Static freestanding `/init` on gzip+cpio initrd
+- Signals SHELL via CPUID hypercall (`0x524E550A` / `0x5348454C`); HV latches marker
+- (UART `/dev/ttyS0` TX is IRQ-driven under `noapic` and was unreliable for the latch)
 - Docs/site: “unmodified Linux to init marker”
 
-Status: planned (next after M3.9).
+Status: **closed on Latitude** (`RAYNU-V-M3-SHELL-OK`; boot gate M0 → M3.10).
 
 ---
 
 ## Parallel (does not gate first real shell)
 
-- Verus L3 attempt on 4K single-guest EPT (ADR-004 M3 row)
+- ~~Verus L3 attempt on 4K single-guest EPT~~ (M3.14 host `RAYNU-V-M3-L3-OK`; Verus still unpinned)
 - Harden Kani CI beyond soft-fail
 - Precise EPT / drop identity scaffold (post-shell or late M3)
 
@@ -188,9 +189,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.9~~ — done (through MSR firewall + GTIMER2).
-2. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-3. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.14 L3-attempt closed; pin Verus for true L3.
+3. Parallel: drop IRQ crutches; site/PE embed.
 
 ---
 
@@ -198,10 +199,14 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.9** GTIMER2 after LINUX-EARLY |
-| `guest/linux_boot.rs` | Relocatable bzImage load + aligned `init_size` workspace |
-| `devices/serial_pio.rs` | COM1 latch → **M3.8** `LINUX-EARLY-OK` |
-| `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9** |
+| `vmx/launch.rs` | Exit phase machine → **M3.13** EPT2 + APIC IRR inject + SHELL |
+| `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC + IRR/ISR (M3.12) |
+| `memory/ept_hw.rs` | Precise `[0,1GiB)` identity EPT (M3.13) |
+| `vmx/mmio_decode.rs` | APIC MMIO mov decode (EPT violation) |
+| `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
+| `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |
+| `devices/serial_pio.rs` | COM1 latch + SHELL CPUID constants |
+| `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9**+APIC_BASE shadow |
 
 | `devices/mod.rs` | Device stubs → serial PIO |
 | `memory/ept_hw.rs` | 4 GiB identity (keep for M3 bring-up) |

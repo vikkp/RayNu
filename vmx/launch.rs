@@ -20,9 +20,12 @@
 //! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
 //! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
 //! M3.9: MSR allow-list emulate + post-banner host LAPIC → `RAYNU-V-M3-GTIMER2-OK`.
+//! M3.10: real `/init` on initrd prints shell magic → `RAYNU-V-M3-SHELL-OK`.
+//! M3.11: EPT hole + virtual LAPIC timer → `RAYNU-V-M3-GTIMER3-OK` (drop `nolapic`).
+//! M3.12: IRR/ISR LVT inject → `RAYNU-V-M3-APIC-OK`; drop host→IRQ0 after APIC-OK.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
-//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE/LINUX-EARLY/GTIMER2.
+//! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL (real).
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -33,9 +36,12 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
+use crate::devices::lapic_virt::{self, M3_APIC_OK_MARKER, M3_GTIMER3_OK_MARKER};
 use crate::devices::serial_pio::{
     self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
+    SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
+use crate::vmx::{guest_pt, mmio_decode};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -99,6 +105,8 @@ static mut REAL_LINUX_GUEST: bool = false;
 
 /// M3.9: host LAPIC armed after LINUX-EARLY; waiting for ext-IRQ → GTIMER2-OK.
 static mut LINUX_GTIMER2_ARMED: bool = false;
+/// M3.9 done; M3.10 waits for real init `RAYNU-V-M3-SHELL` magic.
+static mut LINUX_GTIMER2_DONE: bool = false;
 
 /// Record kernel entry / boot_params / proto-init for later VMRESUME.
 ///
@@ -118,6 +126,7 @@ pub fn set_real_linux(real: bool) {
     unsafe {
         REAL_LINUX_GUEST = real;
         LINUX_GTIMER2_ARMED = false;
+        LINUX_GTIMER2_DONE = false;
     }
 }
 
@@ -413,11 +422,15 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     // Ext-IRQ (M2.5) + I/O (M3.0) + CPUID (M3.1) exiting.
+    // Prefer I/O bitmaps (COM1 only): unconditional I/O makes every Linux
+    // `io_delay` (port 0x80) a VMEXIT and stalls mid mem-init.
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
             | CPU_BASED_CPUID_EXITING
+            | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
+            | CPU_BASED_USE_MSR_BITMAPS
             | CPU_BASED_ACTIVATE_SECONDARY,
         proc_msr,
     );
@@ -440,17 +453,27 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         serial::write_line("boot: WARN — ack-interrupt-on-exit not allowed; EOI still used");
     }
 
-    let secondary = adjust_vmx_controls(SECONDARY_ENABLE_EPT, IA32_VMX_PROCBASED_CTLS2);
+    // RDTSCP: without secondary bit 3, guest `rdtscp` #UD (Linux tsc clocksource).
+    let secondary = adjust_vmx_controls(
+        SECONDARY_ENABLE_EPT | SECONDARY_ENABLE_RDTSCP,
+        IA32_VMX_PROCBASED_CTLS2,
+    );
     if secondary & SECONDARY_ENABLE_EPT == 0 {
         serial::write_line("boot: ERROR — enable-EPT not allowed by PROCBASED_CTLS2");
         return Err(LaunchError::EptUnsupported);
+    }
+    if secondary & SECONDARY_ENABLE_RDTSCP == 0 {
+        serial::write_line("boot: WARN — enable-RDTSCP not allowed; Linux may #UD on rdtscp");
     }
 
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
         let bmp = frames.msr_bitmap_phys.ok_or(LaunchError::PrepareFailed)?;
         core::ptr::write_bytes(bmp as *mut u8, 0, 4096);
+        // M3.11: trap x2APIC + APIC_BASE for virtual LAPIC.
+        crate::devices::lapic_virt::trap_x2apic_msrs(bmp);
         Some(bmp)
     } else {
+        serial::write_line("boot: WARN — MSR bitmaps unavailable; x2APIC may hit host");
         None
     };
 
@@ -461,11 +484,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         core::ptr::write_bytes(a as *mut u8, 0, 4096);
         core::ptr::write_bytes(b as *mut u8, 0, 4096);
         serial_pio::trap_com1_in_bitmap_a(a);
+        serial::write_line("boot: I/O exiting via COM1 bitmaps");
         Some((a, b))
     } else if primary & CPU_BASED_UNCONDITIONAL_IO == 0 {
         serial::write_line("boot: ERROR — neither unconditional I/O nor I/O bitmaps available");
         return Err(LaunchError::PrepareFailed);
     } else {
+        serial::write_line("boot: WARN — I/O bitmaps unavailable; unconditional I/O (slow)");
         None
     };
 
@@ -810,6 +835,9 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     if basic == EXIT_REASON_IO_INSTRUCTION {
         handle_io_and_resume(qual, guest_rax, guest_rip);
     }
+    if basic == EXIT_REASON_EPT_VIOLATION {
+        handle_ept_violation_and_resume(qual, guest_rip);
+    }
     if basic == EXIT_REASON_CPUID {
         handle_cpuid_and_resume(guest_rip);
     }
@@ -818,6 +846,15 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
         && (basic == EXIT_REASON_MSR_READ || basic == EXIT_REASON_MSR_WRITE)
     {
         handle_msr_and_resume(basic);
+    }
+    // M3.10: XSETBV always exits; Linux enables XSAVE early after fpu init.
+    if REAL_LINUX_GUEST && basic == EXIT_REASON_XSETBV {
+        handle_xsetbv_and_resume(guest_rip);
+    }
+    // M3.10: after GTIMER2, quiet-dispatch EXT_INT / HLT — logging every tick
+    // on COM1 interleaves with Linux printk and starves guest progress.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE && phase == 4 {
+        phase4_linux_early(basic);
     }
 
     serial::write_str("boot: VMEXIT phase=");
@@ -874,6 +911,7 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             SAVED_GUEST_RAX = new_rax;
         }
         Err(()) => {
+            // Should be rare after misc-port stubs; keep as hard fail.
             serial::write_str("boot: ERROR — unhandled PIO port=0x");
             write_hex_u32(info.port as u32);
             serial::write_byte(b'\n');
@@ -905,6 +943,7 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             serial::write_byte(b'\n');
             serial::write_line(M3_SHELL_OK_MARKER);
         }
+        maybe_finish_m312();
     }
     if serial_pio::guest_linux_early_ok() {
         static mut LINUX_EARLY_MARKED: bool = false;
@@ -917,18 +956,272 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
-    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
-    // M3.9: after real banner, arm host LAPIC and wait for GTIMER2 (not finish yet).
-    if REAL_LINUX_GUEST && serial_pio::guest_linux_early_ok() && !LINUX_GTIMER2_ARMED {
+    // M3.9: after real banner, arm host LAPIC once (not again after GTIMER2-OK).
+    if REAL_LINUX_GUEST
+        && serial_pio::guest_linux_early_ok()
+        && !LINUX_GTIMER2_ARMED
+        && !LINUX_GTIMER2_DONE
+    {
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         arm_linux_gtimer2();
     }
+    // M3.10: after COM1 TX, inject IRQ4 so 8250 can send the next byte.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+        if try_inject_linux_com1_tx() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_tx();
+    }
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     // Preserve RSI across OUT storms in the proto-kernel.
+    vmresume_with_gprs();
+}
+
+/// Inject ISA IRQ4 when the emulated 8250 has a pending THR-empty IRQ.
+/// Returns true if VM-entry interruption-info was programmed.
+/// Emulate APIC MMIO at the EPT hole (GPA 0xFEE00000).
+unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
+    let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+    if !(lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa) {
+        serial::write_str("boot: ERROR — EPT violation GPA=0x");
+        write_hex_u64(gpa);
+        serial::write_byte(b'\n');
+        dump_linux_guest_state();
+        finish_boot(false);
+    }
+    let is_write = (qual & 0x2) != 0;
+    // Guest RIP is a linear address (high kernel VA after Linux paging).
+    // Walk guest CR3 → GPA, then read via identity EPT — never deref GVA as HVA.
+    let guest_cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+    let mut insn = [0u8; 15];
+    if guest_pt::copy_from_guest_va(guest_cr3, guest_rip, &mut insn).is_err() {
+        serial::write_line("boot: ERROR — APIC MMIO insn fetch (guest PT walk)");
+        serial::write_str("boot: guest cr3=0x");
+        write_hex_u64(guest_cr3);
+        serial::write_str(" rip=0x");
+        write_hex_u64(guest_rip);
+        serial::write_byte(b'\n');
+        dump_linux_guest_state();
+        finish_boot(false);
+    }
+    let Some(mov) = mmio_decode::decode_mov_mmio(&insn) else {
+        serial::write_line("boot: ERROR — APIC MMIO undecoded insn");
+        serial::write_str("boot: insn=");
+        for &b in insn.iter().take(8) {
+            let hi = b >> 4;
+            let lo = b & 0xf;
+            serial::write_byte(if hi < 10 { b'0' + hi } else { b'a' + (hi - 10) });
+            serial::write_byte(if lo < 10 { b'0' + lo } else { b'a' + (lo - 10) });
+            serial::write_byte(b' ');
+        }
+        serial::write_byte(b'\n');
+        dump_linux_guest_state();
+        finish_boot(false);
+    };
+    if mov.is_write != is_write {
+        serial::write_line("boot: WARN — APIC mov direction ≠ EPT qual");
+    }
+    // Intel GPR order in ModRM: RAX RCX RDX RBX RSP RBP RSI RDI R8…R15
+    let mut gprs = [
+        SAVED_GUEST_RAX,
+        SAVED_GUEST_RCX,
+        SAVED_GUEST_RDX,
+        SAVED_GUEST_RBX,
+        ops::vmread(GUEST_RSP).unwrap_or(0),
+        SAVED_GUEST_RBP,
+        SAVED_GUEST_RSI,
+        SAVED_GUEST_RDI,
+        SAVED_GUEST_R8,
+        SAVED_GUEST_R9,
+        SAVED_GUEST_R10,
+        SAVED_GUEST_R11,
+        SAVED_GUEST_R12,
+        SAVED_GUEST_R13,
+        SAVED_GUEST_R14,
+        SAVED_GUEST_R15,
+    ];
+    if mmio_decode::apply_apic_mov(mov, gpa, &mut gprs).is_err() {
+        serial::write_line("boot: ERROR — APIC MMIO apply failed");
+        finish_boot(false);
+    }
+    SAVED_GUEST_RAX = gprs[0];
+    SAVED_GUEST_RCX = gprs[1];
+    SAVED_GUEST_RDX = gprs[2];
+    SAVED_GUEST_RBX = gprs[3];
+    SAVED_GUEST_RBP = gprs[5];
+    SAVED_GUEST_RSI = gprs[6];
+    SAVED_GUEST_RDI = gprs[7];
+    SAVED_GUEST_R8 = gprs[8];
+    SAVED_GUEST_R9 = gprs[9];
+    SAVED_GUEST_R10 = gprs[10];
+    SAVED_GUEST_R11 = gprs[11];
+    SAVED_GUEST_R12 = gprs[12];
+    SAVED_GUEST_R13 = gprs[13];
+    SAVED_GUEST_R14 = gprs[14];
+    SAVED_GUEST_R15 = gprs[15];
+    emit_lapic_markers();
+    if lapic_virt::host_timer_armed_for_guest() {
+        let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(mov.len as u64));
+    if try_inject_guest_apic_timer() {
+        vmresume_with_gprs();
+    }
+    maybe_arm_interrupt_window_for_apic();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    vmresume_with_gprs();
+}
+
+/// Guest can accept a VM-entry external interrupt (IF=1, no STI/MOV-SS block).
+/// Injecting with IF=0 → VM-entry failure reason 33 (`0x80000021`).
+unsafe fn guest_can_accept_extint() -> bool {
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    if (rflags & (1 << 9)) == 0 {
+        return false;
+    }
+    let int_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
+    // Bit 0: blocking by STI; bit 1: blocking by MOV SS.
+    (int_state & 0x3) == 0
+}
+
+fn emit_lapic_markers() {
+    if lapic_virt::take_gtimer3_latch() {
+        serial::write_line(M3_GTIMER3_OK_MARKER);
+    }
+    if lapic_virt::take_apic_ok_latch() {
+        serial::write_line(M3_APIC_OK_MARKER);
+    }
+}
+
+/// M3.12 gate: real `/init` SHELL **and** at least one IRR/ISR LVT deliver.
+unsafe fn maybe_finish_m312() {
+    if REAL_LINUX_GUEST
+        && LINUX_GTIMER2_DONE
+        && serial_pio::guest_shell_ok()
+        && lapic_virt::apic_ok()
+    {
+        finish_boot(true);
+    }
+}
+
+/// Deliver a pending virtual APIC IRR vector when the guest can accept it.
+/// Moves IRR→ISR inside [`lapic_virt::take_deliverable_vector`].
+unsafe fn try_inject_guest_apic_timer() -> bool {
+    if !lapic_virt::has_deliverable_irr() {
+        return false;
+    }
+    if !guest_can_accept_extint() {
+        let _ = set_interrupt_window_exiting(true);
+        return false;
+    }
+    let Some(vec) = lapic_virt::take_deliverable_vector() else {
+        return false;
+    };
+    emit_lapic_markers();
+    if let Ok(info) = interrupt::prepare_external_inject(vec) {
+        let _ = set_interrupt_window_exiting(false);
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
+}
+
+/// Arm interrupt-window when IRR is pending but we are delivering something
+/// else first (IRQ0), or the guest cannot accept yet (IF=0).
+unsafe fn maybe_arm_interrupt_window_for_apic() {
+    if lapic_virt::has_deliverable_irr() {
+        let _ = set_interrupt_window_exiting(true);
+    }
+}
+
+unsafe fn try_inject_linux_com1_tx() -> bool {
+    if !serial_pio::com1_tx_irq_pending() {
+        return false;
+    }
+    if !guest_can_accept_extint() {
+        return false;
+    }
+    let _ = set_interrupt_window_exiting(false);
+    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ4_VECTOR) {
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
+}
+
+/// If COM1 TX IRQ or APIC IRR is pending but guest IF=0, exit on the next STI.
+unsafe fn maybe_arm_interrupt_window_for_tx() {
+    let need = serial_pio::com1_tx_irq_pending() || lapic_virt::has_deliverable_irr();
+    if !need {
+        return;
+    }
+    if !guest_can_accept_extint() {
+        let _ = set_interrupt_window_exiting(true);
+    }
+}
+
+/// Emulate guest XSETBV (exit reason 55). Only XCR0 is accepted.
+unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
+    let xcr = SAVED_GUEST_RCX as u32;
+    let value =
+        (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
+    if xcr != 0 {
+        inject_gp0();
+        vmresume_with_gprs();
+    }
+    // Mask to host-supported XCR0 features (CPUID.0D:0).
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    // XCR0 bit 0 (x87) must stay set.
+    let mut v = (value & host_mask) | 1;
+    if v & 0x6 == 0x4 {
+        // AVX (bit 2) requires SSE (bit 1).
+        v |= 0x2;
+    }
+    // Host CR4 often lacks OSXSAVE after UEFI bring-up; xsetbv #UD without it
+    // (Latitude crash: RIP in r640_hypervisor, CR4=0x2668).
+    // SAFETY: VMX root; OSXSAVE is not CR4-fixed0-forbidden on this CPU.
+    let cr4 = cpu::read_cr4();
+    if cr4 & cpu::CR4_OSXSAVE == 0 {
+        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
+    }
+    cpu::xsetbv(0, v);
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(3);
+    if insn_len == 0 || insn_len > 15 {
+        serial::write_line("boot: ERROR — XSETBV bad insn len");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     vmresume_with_gprs();
 }
 
 unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     let leaf = SAVED_GUEST_RAX as u32;
     let subleaf = SAVED_GUEST_RCX as u32;
+
+    // M3.10: real `/init` SHELL hypercall (before any UART TX that may stall).
+    // M3.12: do not close until APIC-OK as well (maybe_finish_m312).
+    if leaf == SHELL_CPUID_LEAF
+        && subleaf == SHELL_CPUID_SUBLEAF
+        && REAL_LINUX_GUEST
+        && LINUX_GTIMER2_DONE
+    {
+        static mut SHELL_CPUID_MARKED: bool = false;
+        if !SHELL_CPUID_MARKED {
+            SHELL_CPUID_MARKED = true;
+            serial::write_byte(b'\n');
+            serial::write_line(M3_SHELL_OK_MARKER);
+        }
+        maybe_finish_m312();
+    }
+
     let regs = msr_firewall::filter_cpuid(leaf, subleaf);
     SAVED_GUEST_RAX = regs.eax as u64;
     SAVED_GUEST_RBX = regs.ebx as u64;
@@ -945,6 +1238,13 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    // COM1 TX may be waiting with IF=0; arm interrupt-window if needed.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+        if try_inject_linux_com1_tx() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_tx();
+    }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     vmresume_with_gprs();
 }
@@ -1203,16 +1503,73 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
     resume_or_die();
 }
 
-/// Real Linux post-entry loop: banner → MSR emulate → GTIMER2 → finish.
+/// Linux ISA IRQ0 vector (`IRQ0_VECTOR` / `ISA_IRQ_VECTOR(0)` ≈ 0x30).
+const LINUX_IRQ0_VECTOR: u32 = 0x30;
+/// Linux ISA IRQ4 (COM1) — ttyS0 TX is interrupt-driven after first char.
+const LINUX_IRQ4_VECTOR: u32 = 0x34;
+/// Faster host one-shot for post-GTIMER2 guest ticks (ONESHOT_COUNT / 16).
+const LINUX_TICK_COUNT: u32 = 0x0010_0000;
+
+unsafe fn arm_linux_tick() {
+    let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+}
+
+/// Keep host one-shots running for IRQ0 / guest APIC until SHELL.
+unsafe fn arm_linux_tick_if_needed() {
+    if !serial_pio::guest_shell_ok()
+        || lapic_virt::host_timer_armed_for_guest()
+        || lapic_virt::has_deliverable_irr()
+        || serial_pio::com1_tx_irq_pending()
+    {
+        arm_linux_tick();
+    }
+}
+
+/// Inject ISA IRQ0 (jiffies) when the guest can accept an external IRQ.
+unsafe fn try_inject_linux_irq0() -> bool {
+    if !guest_can_accept_extint() {
+        return false;
+    }
+    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+    if (cs & 3) != 0 {
+        return false;
+    }
+    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
+        // Do not clear interrupt-window here — caller may need it for APIC IRR.
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
+}
+
+/// Real Linux post-entry loop: banner → MSR → GTIMER2 → wait for init SHELL.
 unsafe fn phase4_linux_early(basic: u32) -> ! {
-    // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9).
-    if LINUX_GTIMER2_ARMED && basic == EXIT_REASON_EXTERNAL_INTERRUPT {
+    // Close once both SHELL and APIC-OK are latched (either order).
+    maybe_finish_m312();
+
+    // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9), then
+    // keep running until real `/init` prints the shell magic (M3.10).
+    if LINUX_GTIMER2_ARMED && !LINUX_GTIMER2_DONE && basic == EXIT_REASON_EXTERNAL_INTERRUPT {
         let _ = apic::eoi();
+        LINUX_GTIMER2_DONE = true;
+        LINUX_GTIMER2_ARMED = false;
         serial::write_line(M3_GTIMER2_OK_MARKER);
         if msr_firewall::msr_firewall_ok() {
             serial::write_line("boot: MSR firewall exercised");
         }
-        finish_boot(true);
+        serial::write_line("boot: waiting for real init SHELL marker");
+        // Quiet path (no per-tick COM1 logs). Re-arm host ticks and inject
+        // guest IRQ0 so jiffies advance under nolapic/PIC (else boot stalls
+        // after ttyS0 with refined-jiffies). SHELL still via COM1 I/O exits.
+        let _ = set_hlt_exiting(false);
+        let _ = ops::vmwrite(EXCEPTION_BITMAP, 0);
+        arm_linux_tick();
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        vmresume_with_gprs();
     }
 
     match basic {
@@ -1220,10 +1577,57 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
-        EXIT_REASON_EXTERNAL_INTERRUPT => {
-            // Pre-GTIMER2 arm (noise) or post-banner before arm races.
-            let _ = apic::eoi();
+        EXIT_REASON_INTERRUPT_WINDOW => {
+            let _ = set_interrupt_window_exiting(false);
+            // Window after IRQ0: deliver deferred APIC IRR (calibrate verify).
+            if try_inject_guest_apic_timer() {
+                arm_linux_tick_if_needed();
+                vmresume_with_gprs();
+            }
+            if try_inject_linux_com1_tx() {
+                vmresume_with_gprs();
+            }
+            maybe_arm_interrupt_window_for_tx();
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            if LINUX_GTIMER2_DONE {
+                // Host one-shot → virtual APIC IRR (M3.12).
+                let _ = lapic_virt::on_host_timer_fire();
+                emit_lapic_markers();
+                // Prefer COM1 TX so ttyS0 can finish SHELL magic.
+                if try_inject_linux_com1_tx() {
+                    arm_linux_tick_if_needed();
+                    maybe_arm_interrupt_window_for_apic();
+                    vmresume_with_gprs();
+                }
+                // Until SHELL: inject IRQ0 for jiffies first, defer APIC to
+                // the interrupt window. Linux calibrate verify counts APIC
+                // IRQs while checking jiffies delta — if we only inject APIC
+                // (and drop IRQ0 on APIC-OK), jiffies freeze →
+                // "APIC timer disabled due to verification failure" → stall.
+                if !serial_pio::guest_shell_ok() {
+                    if try_inject_linux_irq0() {
+                        // IRQ0 inject clears window-exiting; re-arm for APIC.
+                        maybe_arm_interrupt_window_for_apic();
+                        arm_linux_tick_if_needed();
+                        vmresume_with_gprs();
+                    }
+                    maybe_arm_interrupt_window_for_apic();
+                }
+                // After SHELL (or if IRQ0 could not run): deliver APIC IRR.
+                if try_inject_guest_apic_timer() {
+                    arm_linux_tick_if_needed();
+                    vmresume_with_gprs();
+                }
+                maybe_arm_interrupt_window_for_tx();
+                arm_linux_tick_if_needed();
+            }
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+            let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
             vmresume_with_gprs();
         }
         EXIT_REASON_EXCEPTION_NMI => {
@@ -1236,14 +1640,19 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             finish_boot(false);
         }
         EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => handle_msr_and_resume(basic),
+        EXIT_REASON_XSETBV => handle_xsetbv_and_resume(ops::vmread(GUEST_RIP).unwrap_or(0)),
         EXIT_REASON_CR_ACCESS => {
             serial::write_line("boot: ERROR — unexpected CR-access exit");
             dump_linux_guest_state();
             finish_boot(false);
         }
         _ => {
+            let full = ops::vmread(EXIT_REASON).unwrap_or(basic as u64) as u32;
             serial::write_str("boot: linux unhandled exit reason=0x");
-            write_hex_u32(basic);
+            write_hex_u32(full);
+            if (full & (1 << 31)) != 0 {
+                serial::write_str(" (VM-entry failure)");
+            }
             serial::write_byte(b'\n');
             dump_linux_guest_state();
             finish_boot(false);
@@ -1270,6 +1679,29 @@ unsafe fn handle_msr_and_resume(basic: u32) -> ! {
     let index = SAVED_GUEST_RCX as u32;
     let write_val = (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
     let is_write = basic == EXIT_REASON_MSR_WRITE;
+
+    // M3.11/M3.12: x2APIC MSRs → virtual LAPIC (+ host arm / IRR inject).
+    if lapic_virt::is_x2apic_msr(index) {
+        if is_write {
+            if let Some(true) = lapic_virt::wrmsr(index, write_val) {
+                let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+            }
+        } else if let Some(v) = lapic_virt::rdmsr(index) {
+            SAVED_GUEST_RAX = v as u32 as u64;
+            SAVED_GUEST_RDX = v >> 32;
+        }
+        emit_lapic_markers();
+        let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+        let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+        let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+        if try_inject_guest_apic_timer() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_apic();
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+        vmresume_with_gprs();
+    }
+
     let access = if is_write {
         MsrAccess::Write
     } else {
@@ -1600,6 +2032,16 @@ unsafe fn set_hlt_exiting(on: bool) -> Result<(), ()> {
     ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
 }
 
+unsafe fn set_interrupt_window_exiting(on: bool) -> Result<(), ()> {
+    let cur = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).map_err(|_| ())? as u32;
+    let next = if on {
+        cur | CPU_BASED_INTERRUPT_WINDOW_EXITING
+    } else {
+        cur & !CPU_BASED_INTERRUPT_WINDOW_EXITING
+    };
+    ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
+}
+
 unsafe fn resume_or_die() -> ! {
     match ops::vmresume() {
         Ok(()) => {
@@ -1626,13 +2068,21 @@ fn finish_boot(ok: bool) -> ! {
     if ok {
         // SAFETY: boot single-threaded; flag set before VMLAUNCH.
         if unsafe { REAL_LINUX_GUEST } {
-            serial::write_line("boot: M3.9 complete — Linux GTIMER2 OK");
+            if crate::memory::precise_ranges_ok() && lapic_virt::apic_ok() {
+                serial::write_line("boot: M3.13 complete — precise EPT + APIC + SHELL OK");
+            } else if lapic_virt::apic_ok() {
+                serial::write_line("boot: M3.12 complete — Linux APIC inject + SHELL OK");
+            } else if lapic_virt::gtimer3_ok() {
+                serial::write_line("boot: M3.11 complete — Linux GTIMER3 + SHELL OK");
+            } else {
+                serial::write_line("boot: M3.10 complete — Linux SHELL OK");
+            }
         } else {
-            serial::write_line("boot: M3.9 complete — proto path OK");
+            serial::write_line("boot: M3.10 complete — proto path OK");
         }
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.9 complete");
+        serial::write_line("boot: boot gate failed");
         serial::qemu_exit_failure();
     }
 
@@ -1689,6 +2139,7 @@ mod launch_test {
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);
         assert_eq!(EXIT_REASON_CPUID, 10);
         assert_eq!(EXIT_REASON_IO_INSTRUCTION, 30);
+        assert_eq!(EXIT_REASON_XSETBV, 55);
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
         assert_eq!(CPU_BASED_CPUID_EXITING, 1 << 21);

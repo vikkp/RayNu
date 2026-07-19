@@ -10,6 +10,8 @@ fn marker_and_magic() {
     assert_eq!(GUEST_EARLY_MAGIC, b"RAYNU-V-M3-EARLY");
     assert_eq!(GUEST_SHELL_MAGIC, b"RAYNU-V-M3-SHELL");
     assert_eq!(LINUX_BANNER_PREFIX, b"Linux version ");
+    assert_eq!(SHELL_CPUID_LEAF, 0x524E_550A);
+    assert_eq!(SHELL_CPUID_SUBLEAF, 0x5348_454C);
 }
 
 #[test]
@@ -67,7 +69,7 @@ fn handle_out_advances_magic() {
 }
 
 #[test]
-fn reject_string_io() {
+fn string_io_stubbed() {
     let info = IoExitInfo {
         port: COM1_DATA,
         size: 1,
@@ -75,7 +77,21 @@ fn reject_string_io() {
         string: true,
         rep: false,
     };
-    assert!(handle_pio(&info, 0).is_err());
+    assert!(handle_pio(&info, 0).is_ok());
+}
+
+#[test]
+fn port61_refresh_toggles() {
+    let inp = IoExitInfo {
+        port: 0x61,
+        size: 1,
+        is_in: true,
+        string: false,
+        rep: false,
+    };
+    let a = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
+    let b = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
+    assert_ne!(a & 0x10, b & 0x10, "refresh bit must toggle");
 }
 
 #[test]
@@ -83,4 +99,36 @@ fn com1_range() {
     assert!(is_com1_port(0x3F8));
     assert!(is_com1_port(0x3FF));
     assert!(!is_com1_port(0x2F8));
+}
+
+#[test]
+fn com1_etbei_raises_tx_irq() {
+    // Clear DLAB so port 0x3F9 is IER (not divisor latch).
+    let lcr = IoExitInfo {
+        port: COM1_LCR,
+        size: 1,
+        is_in: false,
+        string: false,
+        rep: false,
+    };
+    assert!(handle_pio(&lcr, 0x03).is_ok());
+    let ier = IoExitInfo {
+        port: COM1_IER,
+        size: 1,
+        is_in: false,
+        string: false,
+        rep: false,
+    };
+    assert!(handle_pio(&ier, 0x02).is_ok()); // ETBEI
+    assert!(com1_tx_irq_pending());
+    let iir = IoExitInfo {
+        port: COM1_IIR_FCR,
+        size: 1,
+        is_in: true,
+        string: false,
+        rep: false,
+    };
+    let v = handle_pio(&iir, 0).unwrap().unwrap() & 0xFF;
+    assert_eq!(v, 0x02); // THRE
+    assert!(!com1_tx_irq_pending());
 }

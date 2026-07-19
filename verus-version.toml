@@ -1,6 +1,8 @@
 # Verus pin per ADR-008.
-# Scaffolding is L0 only — `cargo verus --verify` is not yet a hard CI gate.
-# When Proven Core reaches L2/L3, pin an exact Verus release here and wire CI.
+# M3.14 landed an L3 *attempt* (lemmas + gaps in memory/ept_proof.rs) gated by
+# host `cargo test` → RAYNU-V-M3-L3-OK. `cargo verus --verify` is still not a
+# hard CI gate — Verus remains unpinned. Pin an exact release here before
+# claiming ADR-006 L3 maturity for EptMap.
 
 [verus]
 # Placeholder: replace with an exact git tag / release when Verus is installed in CI.
@@ -11,4 +13,6 @@ version = "unpinned-scaffold"
 # rev = "REPLACE_ME"
 
 [notes]
-status = "M0 scaffold — Verus optional / soft-fail in CI until first L2 specs land"
+status = "M3.14 L3-attempt for ADR-004 (4K single-guest); Verus optional / soft-fail until pin + green verify"
+l3_attempt = "memory/ept_proof.rs"
+host_marker = "RAYNU-V-M3-L3-OK"

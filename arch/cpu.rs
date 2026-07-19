@@ -6,9 +6,17 @@
 
 /// CPUID leaf 1 ECX bit 5 — VMX supported.
 pub const CPUID_ECX_VMX: u32 = 1 << 5;
+/// CPUID.1:EDX bit 9 — local APIC on chip (M3.11: shown; MMIO trapped via EPT hole).
+pub const CPUID_EDX_APIC: u32 = 1 << 9;
+/// CPUID.1:ECX bit 21 — x2APIC (prefer MSR path for timer emulate).
+pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
+/// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
+pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
 
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
+/// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
+pub const CR4_OSXSAVE: u64 = 1 << 18;
 
 /// IA32_FEATURE_CONTROL (MSR 0x3A).
 pub const IA32_FEATURE_CONTROL: u32 = 0x3A;
@@ -104,6 +112,35 @@ pub unsafe fn write_cr4(v: u64) {
     core::arch::asm!("mov cr4, {}", in(reg) v, options(nostack, preserves_flags));
 }
 
+/// Read XCR0 (or other XCR). `xcr` is typically 0.
+#[inline]
+pub unsafe fn xgetbv(xcr: u32) -> u64 {
+    let lo: u32;
+    let hi: u32;
+    core::arch::asm!(
+        "xgetbv",
+        in("ecx") xcr,
+        out("eax") lo,
+        out("edx") hi,
+        options(nostack, preserves_flags),
+    );
+    ((hi as u64) << 32) | (lo as u64)
+}
+
+/// Write XCR (usually XCR0). Caller must ensure CR4.OSXSAVE and valid bits.
+#[inline]
+pub unsafe fn xsetbv(xcr: u32, value: u64) {
+    let lo = value as u32;
+    let hi = (value >> 32) as u32;
+    core::arch::asm!(
+        "xsetbv",
+        in("ecx") xcr,
+        in("eax") lo,
+        in("edx") hi,
+        options(nostack, preserves_flags),
+    );
+}
+
 #[inline]
 pub unsafe fn rdmsr(msr: u32) -> u64 {
     let lo: u32;
@@ -115,6 +152,23 @@ pub unsafe fn rdmsr(msr: u32) -> u64 {
         out("edx") hi,
         options(nostack, preserves_flags),
     );
+    ((hi as u64) << 32) | (lo as u64)
+}
+
+/// Read the host time-stamp counter (for virtual APIC CUR_COUNT, etc.).
+#[inline]
+pub fn rdtsc() -> u64 {
+    let lo: u32;
+    let hi: u32;
+    // SAFETY: RDTSC is always available on our bring-up CPUs.
+    unsafe {
+        core::arch::asm!(
+            "rdtsc",
+            out("eax") lo,
+            out("edx") hi,
+            options(nomem, nostack, preserves_flags),
+        );
+    }
     ((hi as u64) << 32) | (lo as u64)
 }
 

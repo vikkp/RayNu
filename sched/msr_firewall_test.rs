@@ -9,7 +9,7 @@ fn fail_closed_sensitive() {
     );
     assert_eq!(
         check_msr(MSR_APIC_BASE, MsrAccess::Write),
-        FirewallDecision::Block
+        FirewallDecision::Allow
     );
     assert_eq!(
         classify_msr(MSR_VMX_BASIC, MsrAccess::Read),
@@ -25,10 +25,25 @@ fn allow_list_early_linux() {
     );
     assert_eq!(classify_msr(MSR_EFER, MsrAccess::Write), MsrAction::VmcsEfer);
     assert_eq!(classify_msr(MSR_FS_BASE, MsrAccess::Read), MsrAction::VmcsFsBase);
-    assert_eq!(classify_msr(MSR_LSTAR, MsrAccess::Write), MsrAction::Shadow);
+    assert_eq!(
+        classify_msr(MSR_LSTAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_KERNEL_GS_BASE, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_STAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_SFMASK, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
     assert_eq!(
         classify_msr(MSR_APIC_BASE, MsrAccess::Read),
-        MsrAction::HostPassthrough
+        MsrAction::Shadow
     );
     assert_eq!(
         classify_msr(0xDEAD_BEEF, MsrAccess::Read),
@@ -38,8 +53,8 @@ fn allow_list_early_linux() {
 
 #[test]
 fn shadow_roundtrip() {
-    shadow_write(MSR_LSTAR, 0xFFFF_FFFF_8100_0000);
-    assert_eq!(shadow_read(MSR_LSTAR), 0xFFFF_FFFF_8100_0000);
+    shadow_write(MSR_SPEC_CTRL, 0x2);
+    assert_eq!(shadow_read(MSR_SPEC_CTRL), 0x2);
     note_msr_emulated();
     assert!(msr_firewall_ok());
 }
@@ -54,6 +69,9 @@ fn filter_leaf1_hides_vmx() {
     let r = filter_cpuid(1, 0);
     assert!(vmx_hidden(&r));
     assert_eq!(r.ecx & CPUID_ECX_VMX, 0);
+    assert_ne!(r.edx & crate::arch::cpu::CPUID_EDX_APIC, 0);
+    assert_ne!(r.ecx & crate::arch::cpu::CPUID_ECX_X2APIC, 0);
+    assert_eq!(r.ecx & crate::arch::cpu::CPUID_ECX_TSC_DEADLINE, 0);
     assert!(cpuid_filter_ok());
 }
 

@@ -32,7 +32,10 @@ pub const SETUP_HEADER_MAGIC: u32 = 0x5372_6448;
 pub const BOOT_PARAMS_SIZE: usize = 4096;
 
 /// Absolute offsets into `boot_params` (Linux `struct boot_params`).
+pub const OFF_EXT_MEM_K: usize = 0x02; // screen_info.ext_mem_k (BIOS-88 fallback)
+pub const OFF_ALT_MEM_K: usize = 0x1E0; // e801-style extended mem (KB above 1 MiB)
 pub const OFF_E820_ENTRIES: usize = 0x1E8;
+pub const OFF_SENTINEL: usize = 0x1EF;
 pub const OFF_SETUP_SECTS: usize = 0x1F1;
 pub const OFF_BOOT_FLAG: usize = 0x1FE;
 pub const OFF_HEADER: usize = 0x202;
@@ -48,6 +51,14 @@ pub const OFF_RELOCATABLE_KERNEL: usize = 0x234;
 pub const OFF_PREF_ADDRESS: usize = 0x258;
 pub const OFF_INIT_SIZE: usize = 0x260;
 pub const OFF_E820_TABLE: usize = 0x2D0;
+
+/// Size of one `boot_e820_entry` (addr + size + type).
+pub const E820_ENTRY_SIZE: usize = 20;
+
+/// Low conventional RAM end (below EBDA / VGA hole), matching classic PC maps.
+pub const E820_LOW_RAM_END: u64 = 0x9_FC00;
+/// Start of extended RAM above the 1 MiB hole.
+pub const E820_HIGH_RAM_START: u64 = 0x10_0000;
 
 /// `loadflags` bit 0 — `LOADED_HIGH` (kernel above 1 MiB).
 pub const LOADFLAGS_LOADED_HIGH: u8 = 1 << 0;
@@ -67,8 +78,25 @@ pub const SYNTH_INITRD_SIZE: usize = 4096;
 pub const DEFAULT_CMDLINE: &[u8] =
     b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 acpi=off nokaslr maxcpus=1\0";
 
+/// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
+///
+/// - `memmap=` — RAM if zeropage e820 is ignored (`append_e820_table` needs ≥2)
+/// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11 EPT hole)
+/// - `lpj=` / `idle=poll` — skip PIT calibrate; keep TSC for clocksource
+/// - `tsc=reliable clocksource=tsc` — nested virt often fails PIT/HPET calibrate
+/// - 256 MiB window — enough for tinyconfig; 1 GiB mem-init is too slow nested
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc memmap=640K@0 memmap=255M@1M\0";
+
+/// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
+pub const INITRD_MAX_PAGES: usize = 64;
+
+/// Guest RAM size advertised via e820 / memmap (256 MiB bring-up window).
+pub const GUEST_RAM_BYTES: u64 = 256 * 1024 * 1024;
+
 /// e820 type: usable RAM.
 pub const E820_RAM: u32 = 1;
+/// e820 type: reserved (VGA / EBDA hole).
+pub const E820_RESERVED: u32 = 2;
 
 /// Result of placing kernel / initrd / boot_params in GPA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +118,8 @@ pub struct BootLoadInfo {
     pub from_bzimage: bool,
     /// True when the image looks like a real (non-fixture) Linux bzImage (M3.8).
     pub is_real_linux: bool,
+    /// True when a real cpio/gzip initrd was placed (M3.10).
+    pub has_real_initrd: bool,
     /// Bytes reserved for PM image + decompress workspace.
     pub kernel_bytes: u64,
 }
@@ -134,10 +164,60 @@ pub struct BzImageInfo {
     pub entry_file_off: usize,
 }
 
+/// Write a classic PC e820 RAM map into `boot_params`.
+///
+/// Linux `append_e820_table()` **rejects maps with fewer than two entries**
+/// and falls back to BIOS-e801 (~640 KiB). A single `[0, mem)` region is
+/// therefore fatal for real kernels loaded above 1 MiB.
+///
+/// Layout (QEMU/SeaBIOS-style):
+/// - `[0, E820_LOW_RAM_END)` RAM
+/// - `[E820_LOW_RAM_END, E820_HIGH_RAM_START)` reserved (EBDA/VGA/BIOS hole)
+/// - `[E820_HIGH_RAM_START, mem_bytes)` RAM
+///
+/// Also fills `alt_mem_k` (**u32** KB above 1 MiB) and `ext_mem_k` as e801/88
+/// backups, and clears the setup sentinel so `sanitize_boot_params` keeps
+/// the map.
+pub fn write_e820_ram_map(buf: &mut [u8; BOOT_PARAMS_SIZE], mem_bytes: u64) {
+    // Whole zeropage must be cleared before hdr/e820; callers zero `buf`.
+    buf[OFF_SENTINEL] = 0;
+
+    let high_end = if mem_bytes > E820_HIGH_RAM_START {
+        mem_bytes
+    } else {
+        E820_HIGH_RAM_START + 16 * 1024 * 1024
+    };
+    let high_size = high_end - E820_HIGH_RAM_START;
+    let hole_size = E820_HIGH_RAM_START - E820_LOW_RAM_END;
+
+    // e820[0]: low conventional RAM
+    write_u64(buf, OFF_E820_TABLE, 0);
+    write_u64(buf, OFF_E820_TABLE + 8, E820_LOW_RAM_END);
+    write_u32(buf, OFF_E820_TABLE + 16, E820_RAM);
+    // e820[1]: reserved hole (EBDA / VGA / ROM)
+    let e1 = OFF_E820_TABLE + E820_ENTRY_SIZE;
+    write_u64(buf, e1, E820_LOW_RAM_END);
+    write_u64(buf, e1 + 8, hole_size);
+    write_u32(buf, e1 + 16, E820_RESERVED);
+    // e820[2]: extended RAM above 1 MiB
+    let e2 = OFF_E820_TABLE + 2 * E820_ENTRY_SIZE;
+    write_u64(buf, e2, E820_HIGH_RAM_START);
+    write_u64(buf, e2 + 8, high_size);
+    write_u32(buf, e2 + 16, E820_RAM);
+    buf[OFF_E820_ENTRIES] = 3;
+
+    // e801 path uses alt_mem_k as KB above 1 MiB (u32 in modern boot_params).
+    let alt_kb = (high_size / 1024) as u32;
+    write_u32(buf, OFF_ALT_MEM_K, alt_kb);
+    // BIOS-88 field is still u16; clamp.
+    let ext_kb = (high_size / 1024).min(u16::MAX as u64) as u16;
+    write_u16(buf, OFF_EXT_MEM_K, ext_kb);
+}
+
 /// Pack a Linux `boot_params` zero page.
 ///
 /// Writes setup header magic, version, loader type, ramdisk ptrs, cmdline
-/// pointer, and a single e820 usable entry covering `[0, mem_bytes)`.
+/// pointer, and a two-entry e820 RAM map covering low + extended memory.
 pub fn pack_boot_params(
     buf: &mut [u8; BOOT_PARAMS_SIZE],
     ramdisk_image: u32,
@@ -157,11 +237,7 @@ pub fn pack_boot_params(
     write_u32(buf, OFF_RAMDISK_SIZE, ramdisk_size);
     write_u32(buf, OFF_CMD_LINE_PTR, cmd_line_ptr);
 
-    // One e820 RAM entry for the bring-up window.
-    buf[OFF_E820_ENTRIES] = 1;
-    write_u64(buf, OFF_E820_TABLE, 0);
-    write_u64(buf, OFF_E820_TABLE + 8, mem_bytes);
-    write_u32(buf, OFF_E820_TABLE + 16, E820_RAM);
+    write_e820_ram_map(buf, mem_bytes);
 }
 
 /// Read back setup header magic from a packed buffer (host verify / serial).
@@ -216,7 +292,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
     unsafe {
         write_synth_kernel(kernel_phys);
         write_proto_init(initrd_phys);
-        write_cmdline(cmdline_phys);
+        write_cmdline_bytes(cmdline_phys, DEFAULT_CMDLINE);
     }
 
     let mut bp = [0u8; BOOT_PARAMS_SIZE];
@@ -251,6 +327,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: false,
         is_real_linux: false,
+        has_real_initrd: false,
         kernel_bytes: SYNTH_KERNEL_SIZE as u64,
     })
 }
@@ -325,8 +402,15 @@ pub fn build_minimal_bzimage(out: &mut [u8; MINIMAL_BZIMAGE_CAP]) -> usize {
     pm_offset + 4096
 }
 
-/// Place a bzImage into GPA: PM kernel page(s), proto-init, cmdline, boot_params.
-pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<BootLoadInfo, ()> {
+/// Place a bzImage into GPA: PM kernel, initrd (real or proto), cmdline, boot_params.
+///
+/// When `initrd_blob` is present and `image` is a real Linux bzImage, the blob
+/// is placed as the ramdisk (M3.10). Otherwise a one-page proto-init is used.
+pub fn load_bzimage_guest(
+    alloc: &mut FrameAllocator,
+    image: &[u8],
+    initrd_blob: Option<&[u8]>,
+) -> Result<BootLoadInfo, ()> {
     let info = parse_bzimage(image)?;
     let pm = &image[info.pm_offset..];
     let real = image.len() >= REAL_LINUX_MIN_BYTES;
@@ -358,8 +442,19 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         return Err(());
     }
 
+    let use_real_initrd = real && initrd_blob.map(|b| !b.is_empty()).unwrap_or(false);
+    let initrd_len = if use_real_initrd {
+        initrd_blob.map(|b| b.len()).unwrap_or(0)
+    } else {
+        SYNTH_INITRD_SIZE
+    };
+    let initrd_pages = (initrd_len + 4095) / 4096;
+    if initrd_pages == 0 || initrd_pages > INITRD_MAX_PAGES {
+        return Err(());
+    }
+
     let raw = alloc.allocate_contiguous(pages as u64).ok_or(())?;
-    let initrd = alloc.allocate_frame().ok_or(())?;
+    let initrd = alloc.allocate_contiguous(initrd_pages as u64).ok_or(())?;
     let cmdline = alloc.allocate_frame().ok_or(())?;
     let boot_params = alloc.allocate_frame().ok_or(())?;
 
@@ -381,7 +476,7 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     let entry_phys = kernel_phys + BZIMAGE_ENTRY_OFFSET as u64;
 
     // Ownership smoke: claim endpoints + metadata (full map may exceed MAP_CAP).
-    let mut claim = [(0u64, PhysFrame::from_phys(0)); 8];
+    let mut claim = [(0u64, PhysFrame::from_phys(0)); 10];
     let mut nclaim = 0usize;
     claim[nclaim] = (raw_phys, raw);
     nclaim += 1;
@@ -396,6 +491,11 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     }
     claim[nclaim] = (initrd_phys, initrd);
     nclaim += 1;
+    if initrd_pages > 1 {
+        let last = PhysFrame::from_phys(initrd_phys + ((initrd_pages as u64) - 1) * 4096);
+        claim[nclaim] = (last.to_phys(), last);
+        nclaim += 1;
+    }
     claim[nclaim] = (cmdline_phys, cmdline);
     nclaim += 1;
     claim[nclaim] = (boot_params_phys, boot_params);
@@ -406,8 +506,15 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     unsafe {
         core::ptr::write_bytes(raw_phys as *mut u8, 0, pages * 4096);
         core::ptr::copy_nonoverlapping(pm.as_ptr(), kernel_phys as *mut u8, info.pm_size);
-        write_proto_init(initrd_phys);
-        write_cmdline(cmdline_phys);
+        core::ptr::write_bytes(initrd_phys as *mut u8, 0, initrd_pages * 4096);
+        if use_real_initrd {
+            let blob = initrd_blob.unwrap();
+            core::ptr::copy_nonoverlapping(blob.as_ptr(), initrd_phys as *mut u8, blob.len());
+            write_cmdline_bytes(cmdline_phys, REAL_LINUX_CMDLINE);
+        } else {
+            write_proto_init(initrd_phys);
+            write_cmdline_bytes(cmdline_phys, DEFAULT_CMDLINE);
+        }
     }
 
     let mut bp = [0u8; BOOT_PARAMS_SIZE];
@@ -420,18 +527,17 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     bp[OFF_LOADFLAGS] |= LOADFLAGS_LOADED_HIGH;
     write_u32(&mut bp, OFF_CODE32_START, kernel_phys as u32);
     write_u32(&mut bp, OFF_RAMDISK_IMAGE, initrd_phys as u32);
-    write_u32(&mut bp, OFF_RAMDISK_SIZE, SYNTH_INITRD_SIZE as u32);
+    write_u32(&mut bp, OFF_RAMDISK_SIZE, initrd_len as u32);
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
+    // Must be ≥2 e820 entries — Linux rejects a single-region map.
+    // Real guests match QEMU `-m 1G` (512M is a known alloc_low_pages footgun).
     let mem_bytes = if real {
-        512 * 1024 * 1024u64
+        GUEST_RAM_BYTES
     } else {
         64 * 1024 * 1024u64
     };
-    bp[OFF_E820_ENTRIES] = 1;
-    write_u64(&mut bp, OFF_E820_TABLE, 0);
-    write_u64(&mut bp, OFF_E820_TABLE + 8, mem_bytes);
-    write_u32(&mut bp, OFF_E820_TABLE + 16, E820_RAM);
+    write_e820_ram_map(&mut bp, mem_bytes);
 
     // SAFETY: owned boot_params frame.
     unsafe {
@@ -452,10 +558,11 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         cmdline_phys,
         setup_magic: magic,
         ramdisk_image: initrd_phys as u32,
-        ramdisk_size: SYNTH_INITRD_SIZE as u32,
+        ramdisk_size: initrd_len as u32,
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: true,
         is_real_linux: real,
+        has_real_initrd: use_real_initrd,
         kernel_bytes: alloc_bytes,
     })
 }
@@ -572,9 +679,10 @@ pub unsafe fn write_proto_init(phys: u64) {
     debug_assert!(o <= SYNTH_INITRD_SIZE);
 }
 
-unsafe fn write_cmdline(phys: u64) {
+unsafe fn write_cmdline_bytes(phys: u64, cmdline: &[u8]) {
     core::ptr::write_bytes(phys as *mut u8, 0, 4096);
-    core::ptr::copy_nonoverlapping(DEFAULT_CMDLINE.as_ptr(), phys as *mut u8, DEFAULT_CMDLINE.len());
+    let n = cmdline.len().min(4096);
+    core::ptr::copy_nonoverlapping(cmdline.as_ptr(), phys as *mut u8, n);
 }
 
 fn write_u16(buf: &mut [u8], off: usize, v: u16) {

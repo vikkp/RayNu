@@ -140,6 +140,8 @@ pub const HOST_RIP: u64 = 0x0000_6C16;
 pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 
 // ── primary proc-based control bits ─────────────────────────────────
+/// Interrupt-window exiting (inject when guest IF becomes 1).
+pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
 /// CPUID exiting (M3.1).
 pub const CPU_BASED_CPUID_EXITING: u32 = 1 << 21;
@@ -151,6 +153,8 @@ pub const CPU_BASED_ACTIVATE_SECONDARY: u32 = 1 << 31;
 
 /// Secondary proc-based: enable EPT.
 pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
+/// Secondary proc-based: allow RDTSCP in guest (else #UD — Linux clocksource).
+pub const SECONDARY_ENABLE_RDTSCP: u32 = 1 << 3;
 
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
@@ -167,6 +171,8 @@ pub const EXIT_REASON_EXCEPTION_NMI: u32 = 0;
 pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
 /// Basic exit reason: triple fault.
 pub const EXIT_REASON_TRIPLE_FAULT: u32 = 2;
+/// Basic exit reason: interrupt window.
+pub const EXIT_REASON_INTERRUPT_WINDOW: u32 = 7;
 /// Basic exit reason: CPUID.
 pub const EXIT_REASON_CPUID: u32 = 10;
 /// Basic exit reason: HLT.
@@ -179,14 +185,22 @@ pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
 pub const EXIT_REASON_MSR_READ: u32 = 31;
 /// WRMSR
 pub const EXIT_REASON_MSR_WRITE: u32 = 32;
+/// EPT violation.
+pub const EXIT_REASON_EPT_VIOLATION: u32 = 48;
+/// XSETBV (always exits from non-root).
+pub const EXIT_REASON_XSETBV: u32 = 55;
+
+/// Guest-physical address (EPT violation / misconfig).
+pub const GUEST_PHYSICAL_ADDRESS: u64 = 0x0000_2400;
 
 /// Exception bitmap: catch fatal faults before they escalate to triple fault.
 ///
 /// Do **not** intercept `#PF`: ZO demand-maps identity ranges.
 /// Do **not** intercept `#GP`: MSR firewall injects `#GP(0)` for blocked MSRs
 /// and Linux has a stage2 IDT handler after relocate.
+/// Do **not** intercept `#UD`: Linux uses it for feature probes / alternatives;
+/// intercepting after IDT install killed boot at serial8250 (M3.10).
 pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
-    | (1 << 6) // #UD
     | (1 << 8) // #DF
     | (1 << 10) // #TS
     | (1 << 11) // #NP
@@ -207,5 +221,8 @@ mod fields_test {
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
+        assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
+        assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
+        assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }
 }

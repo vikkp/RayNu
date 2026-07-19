@@ -53,6 +53,25 @@ fn marker_stable() {
     assert_eq!(M2_BRINGUP_GUEST_ID, 1);
 }
 
+#[test]
+fn precise_range_claim() {
+    assert!(claim_precise_identity_ranges().is_ok());
+    assert!(precise_ranges_ok());
+    let ranges = core::ptr::addr_of!(PRECISE_RANGES);
+    // SAFETY: single-threaded test; ranges filled by claim above.
+    unsafe {
+        assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0));
+        assert!((*ranges).contains_gpa(
+            M2_BRINGUP_GUEST_ID,
+            crate::guest::linux_boot::GUEST_RAM_BYTES - 0x1000
+        ));
+        assert!(!(*ranges).contains_gpa(
+            M2_BRINGUP_GUEST_ID,
+            crate::arch::apic::DEFAULT_APIC_PHYS
+        ));
+    }
+}
+
 /// Bounded ADR-004 check: two guests cannot own the same HPA.
 #[cfg(kani)]
 #[kani::proof]
