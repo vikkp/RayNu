@@ -112,7 +112,7 @@ Keep synthetic path as fallback until each real gate replaces it.
 - Expand GPR save/restore beyond RAX–RDX+RSI
 - Host test or QEMU marker that the loop survived N resumes after shell magic
 
-Status: **next**.
+Status: **closed on Latitude** (`RAYNU-V-M3-LOOP-OK`).
 
 ### M3.7 — Real bzImage load — `RAYNU-V-M3-BZIMAGE-OK`
 
@@ -186,13 +186,12 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.5~~ — done (**synthetic M3 closed**).
-2. **M3.6** — continuous exit loop + fuller GPR save.
-3. **M3.7** — ESP bzImage / initrd load + 64-bit entry.
-4. **M3.8** — real earlyprintk on Latitude.
-5. **M3.9** — MSR / guest timer only as blockers appear.
-6. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
-7. Verus L3 / precise EPT / PE asset embed (parallel).
+1. ~~Plan / M3.0–M3.6~~ — done (synthetic M3 + exit loop).
+2. **M3.7** — ESP bzImage / initrd load + 64-bit entry.
+3. **M3.8** — real earlyprintk on Latitude.
+4. **M3.9** — MSR / guest timer only as blockers appear.
+5. **M3.10** — busybox/`init` → real `RAYNU-V-M3-SHELL-OK`.
+6. Verus L3 / precise EPT / PE asset embed (parallel).
 
 ---
 

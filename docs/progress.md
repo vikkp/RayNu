@@ -23,8 +23,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.3 | `RAYNU-V-M3-EARLY-OK` | 64-bit proto-kernel entry; Linux-style early serial |
 | M3.4 | `RAYNU-V-M3-GTIMER-OK` | Post-proto guest timer → EOI → inject |
 | M3.5 | `RAYNU-V-M3-SHELL-OK` | Proto-init shell marker; **synthetic M3 closed** |
+| M3.6 | `RAYNU-V-M3-LOOP-OK` | Continuous HLT exit loop after shell; fuller GPR save |
 
-## Verification checkpoint (as of M3.5)
+## Verification checkpoint (as of M3.6)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -36,12 +37,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `guest/linux_boot` | L0→L1-ish | boot_params + proto-kernel + proto-init |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L0→L1-ish | Bring-up scaffold; precise per-GPA maps later |
-| `vmx/*` | L0–L1 | Lifecycle + launch through synthetic M3 (shell) |
+| `vmx/*` | L0–L1 | Lifecycle + launch through continuous exit loop (M3.6) |
 | Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
-1. **M3.6** continuous exit loop (`RAYNU-V-M3-LOOP-OK`) — see [m3_plan.md](m3_plan.md).
-2. M3.7–M3.10: real bzImage → earlyprintk → timer/MSR harden → busybox/`init`.
+1. **M3.7** real bzImage load (`RAYNU-V-M3-BZIMAGE-OK`) — see [m3_plan.md](m3_plan.md).
+2. M3.8–M3.10: real earlyprintk → timer/MSR harden → busybox/`init`.
 3. Verus L3 / precise EPT (parallel; not on the shell critical path).

@@ -16,6 +16,7 @@
 //! M3.3: 64-bit proto-kernel entry + early serial (`RAYNU-V-M3-EARLY-OK`).
 //! M3.4: post-proto guest timer → inject (`RAYNU-V-M3-GTIMER-OK`).
 //! M3.5: proto-init shell marker (`RAYNU-V-M3-SHELL-OK`).
+//! M3.6: continuous HLT exit loop (`RAYNU-V-M3-LOOP-OK`).
 
 #![no_main]
 #![no_std]
