@@ -17,6 +17,7 @@
 //! M3.4: post-proto guest timer → inject (`RAYNU-V-M3-GTIMER-OK`).
 //! M3.5: proto-init shell marker (`RAYNU-V-M3-SHELL-OK`).
 //! M3.6: continuous HLT exit loop (`RAYNU-V-M3-LOOP-OK`).
+//! M3.7: bzImage load (`RAYNU-V-M3-BZIMAGE-OK`).
 
 #![no_main]
 #![no_std]
@@ -44,6 +45,14 @@ fn main() -> Status {
     });
 
     boot::serial::write_line("boot: M0 complete — entering M1.0 firmware handoff");
+
+    // M3.7: stage ESP bzImage before ExitBootServices tears down file I/O.
+    boot::esp_assets::probe_bzimage();
+    if boot::esp_assets::bzimage_bytes().is_none() {
+        boot::serial::write_line("boot: ESP BZIMAGE missing — will use embedded minimal");
+    } else {
+        boot::serial::write_line("boot: ESP BZIMAGE staged");
+    }
 
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
     let handoff = unsafe { boot::handoff::leave_firmware() };
@@ -217,11 +226,33 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     }
 
-    // M3.2: pack boot_params + place synthetic kernel/initrd (no entry yet).
-    match guest::load_synthetic_guest(alloc) {
+    // M3.7 / M3.2: prefer bzImage (ESP or embedded minimal), else synthetic.
+    if boot::esp_assets::bzimage_bytes().is_none() {
+        let mut minimal = [0u8; guest::MINIMAL_BZIMAGE_CAP];
+        let n = guest::build_minimal_bzimage(&mut minimal);
+        if boot::esp_assets::stage_bzimage(&minimal[..n]).is_err() {
+            boot::serial::write_line("boot: ERROR — could not stage minimal bzImage");
+            let _ = life.disable();
+            return;
+        }
+    }
+    let load = if let Some(img) = boot::esp_assets::bzimage_bytes() {
+        match guest::load_bzimage_guest(alloc, img) {
+            Ok(info) => Ok(info),
+            Err(()) => {
+                boot::serial::write_line("boot: bzImage load failed — synthetic fallback");
+                guest::load_synthetic_guest(alloc)
+            }
+        }
+    } else {
+        guest::load_synthetic_guest(alloc)
+    };
+    match load {
         Ok(info) => {
             boot::serial::write_str("boot: load kernel=0x");
             write_hex(info.kernel_phys);
+            boot::serial::write_str(" entry=0x");
+            write_hex(info.entry_phys);
             boot::serial::write_str(" initrd=0x");
             write_hex(info.initrd_phys);
             boot::serial::write_str(" boot_params=0x");
@@ -237,14 +268,24 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 return;
             }
             boot::serial::write_line(guest::M3_LOAD_OK_MARKER);
+            if info.from_bzimage {
+                boot::serial::write_line(guest::M3_BZIMAGE_OK_MARKER);
+            }
             vmx::launch::set_linux_load(
-                info.kernel_phys,
+                info.entry_phys,
                 info.boot_params_phys,
                 info.init_phys,
             );
-            // SAFETY: owned proto-kernel / proto-init frames; clear NX for fetch.
+            // SAFETY: owned kernel / proto-init frames; clear NX for fetch.
             if !unsafe { arch::cpu::clear_nx_identity(info.kernel_phys) } {
-                boot::serial::write_line("boot: ERROR — could not clear NX on proto-kernel");
+                boot::serial::write_line("boot: ERROR — could not clear NX on kernel");
+                let _ = life.disable();
+                return;
+            }
+            if info.entry_phys != info.kernel_phys
+                && !unsafe { arch::cpu::clear_nx_identity(info.entry_phys) }
+            {
+                boot::serial::write_line("boot: ERROR — could not clear NX on kernel entry");
                 let _ = life.disable();
                 return;
             }
@@ -255,7 +296,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             }
         }
         Err(()) => {
-            boot::serial::write_line("boot: ERROR — M3.2 synthetic load failed");
+            boot::serial::write_line("boot: ERROR — kernel load failed");
             let _ = life.disable();
             return;
         }

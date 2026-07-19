@@ -16,8 +16,8 @@ pub const M2_OWN_OK_MARKER: &str = "RAYNU-V-M2-OWN-OK";
 /// Guest id used by the M2 bring-up single guest.
 pub const M2_BRINGUP_GUEST_ID: u64 = 1;
 
-/// Max tracked mappings in the bring-up registry.
-const MAP_CAP: usize = 32;
+/// Max tracked mappings in the bring-up registry (M3.7 multi-page loads).
+const MAP_CAP: usize = 128;
 
 /// Set when [`run_ownership_selftest`] succeeds (read on VMEXIT for marker order).
 static mut OWNERSHIP_SELFTEST_OK: bool = false;

@@ -47,6 +47,14 @@ fi
 ESP="${ESP:-$ROOT/esp}"
 mkdir -p "$ESP/EFI/BOOT"
 cp "$EFI" "$ESP/EFI/BOOT/BOOTX64.EFI"
+# M3.7: stage bzImage on ESP (generate minimal fixture if missing).
+BZIMAGE_SRC="${BZIMAGE_SRC:-$ROOT/assets/bzImage}"
+if [[ ! -f "$BZIMAGE_SRC" ]]; then
+  echo "==> generating minimal bzImage fixture"
+  "$ROOT/tools/gen-minimal-bzimage.sh" "$BZIMAGE_SRC"
+fi
+cp "$BZIMAGE_SRC" "$ESP/EFI/BOOT/BZIMAGE"
+echo "==> ESP BZIMAGE: $ESP/EFI/BOOT/BZIMAGE ($(wc -c <"$ESP/EFI/BOOT/BZIMAGE") bytes)"
 
 FW_ARGS=()
 if [[ -n "${OVMF_BIOS}" ]]; then

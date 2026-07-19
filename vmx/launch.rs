@@ -17,7 +17,8 @@
 //! M3.4: post-proto guest timer → ext-IRQ → EOI → inject → `RAYNU-V-M3-GTIMER-OK`.
 //! M3.5: proto-init OUT shell marker → `RAYNU-V-M3-SHELL-OK` (closes synthetic M3).
 //! M3.6: after SHELL-OK, continuous HLT resume loop → `RAYNU-V-M3-LOOP-OK`.
-//! Markers: …/EARLY/GTIMER/SHELL/LOOP.
+//! M3.7: bzImage PM+0x200 entry via [`set_linux_load`] → `RAYNU-V-M3-BZIMAGE-OK`.
+//! Markers: …/EARLY/GTIMER/SHELL/LOOP/BZIMAGE.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -87,11 +88,13 @@ static mut LOAD_KERNEL_PHYS: u64 = 0;
 static mut LOAD_BOOT_PARAMS_PHYS: u64 = 0;
 static mut LOAD_INIT_PHYS: u64 = 0;
 
-/// Record synthetic load addresses for proto-kernel / proto-init entry.
-pub fn set_linux_load(kernel_phys: u64, boot_params_phys: u64, init_phys: u64) {
+/// Record kernel entry / boot_params / proto-init for later VMRESUME.
+///
+/// `entry_phys` is the 64-bit entry RIP (bzImage: PM base + 0x200).
+pub fn set_linux_load(entry_phys: u64, boot_params_phys: u64, init_phys: u64) {
     // SAFETY: single-threaded boot before VMLAUNCH.
     unsafe {
-        LOAD_KERNEL_PHYS = kernel_phys;
+        LOAD_KERNEL_PHYS = entry_phys;
         LOAD_BOOT_PARAMS_PHYS = boot_params_phys;
         LOAD_INIT_PHYS = init_phys;
     }
@@ -1349,10 +1352,10 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
-        serial::write_line("boot: M3.6 complete — exit loop OK");
+        serial::write_line("boot: M3.7 complete — bzImage load OK");
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.6 complete");
+        serial::write_line("boot: M3.7 complete");
         serial::qemu_exit_failure();
     }
 

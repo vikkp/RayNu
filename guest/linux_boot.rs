@@ -1,12 +1,13 @@
-//! Linux x86_64 boot-protocol packing + synthetic load / proto-kernel (M3.2/M3.3).
+//! Linux x86_64 boot-protocol packing + synthetic / bzImage load (M3.2–M3.7).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002) — protocol glue only; frames claimed
 //! via Proven Core `FrameAllocator` + `EptMap`.
 //!
 //! M3.2 places a proto-kernel page, initrd stub, cmdline, and packed
-//! `boot_params` into GPA. M3.3 enters the proto-kernel at 64-bit with
-//! RSI=`boot_params` (real bzImage deferred).
+//! `boot_params` into GPA. M3.3 enters at 64-bit with RSI=`boot_params`.
+//! M3.7 loads a bzImage-shaped payload (ESP or embedded minimal) and jumps
+//! to the 64-bit entry at PM+0x200.
 
 use crate::devices::serial_pio::{GUEST_EARLY_MAGIC, GUEST_SHELL_MAGIC};
 use crate::memory::ept::{EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID};
@@ -14,6 +15,9 @@ use crate::memory::{FrameAllocator, PhysFrame};
 
 /// COM1 marker when synthetic load + packing succeeds (M3.2 gate).
 pub const M3_LOAD_OK_MARKER: &str = "RAYNU-V-M3-LOAD-OK";
+
+/// COM1 marker when bzImage parse + place succeeds (M3.7 gate).
+pub const M3_BZIMAGE_OK_MARKER: &str = "RAYNU-V-M3-BZIMAGE-OK";
 
 /// Linux-style early console line the proto-kernel OUTs before the magic.
 pub const PROTO_EARLY_LINE: &[u8] = b"Linux version RayNu-V-proto (early console)\n";
@@ -37,11 +41,22 @@ pub const OFF_TYPE_OF_LOADER: usize = 0x210;
 pub const OFF_LOADFLAGS: usize = 0x211;
 pub const OFF_RAMDISK_IMAGE: usize = 0x218;
 pub const OFF_RAMDISK_SIZE: usize = 0x21C;
+pub const OFF_CODE32_START: usize = 0x214;
 pub const OFF_CMD_LINE_PTR: usize = 0x228;
+pub const OFF_KERNEL_ALIGNMENT: usize = 0x230;
+pub const OFF_RELOCATABLE_KERNEL: usize = 0x234;
+pub const OFF_PREF_ADDRESS: usize = 0x258;
+pub const OFF_INIT_SIZE: usize = 0x260;
 pub const OFF_E820_TABLE: usize = 0x2D0;
 
 /// `loadflags` bit 0 — `LOADED_HIGH` (kernel above 1 MiB).
 pub const LOADFLAGS_LOADED_HIGH: u8 = 1 << 0;
+
+/// 64-bit Linux entry offset within the protected-mode kernel image.
+pub const BZIMAGE_ENTRY_OFFSET: usize = 0x200;
+
+/// Capacity of [`build_minimal_bzimage`] output.
+pub const MINIMAL_BZIMAGE_CAP: usize = 8192;
 
 /// Synthetic kernel stub size (one page; not a real bzImage).
 pub const SYNTH_KERNEL_SIZE: usize = 4096;
@@ -55,11 +70,14 @@ pub const DEFAULT_CMDLINE: &[u8] =
 /// e820 type: usable RAM.
 pub const E820_RAM: u32 = 1;
 
-/// Result of placing synthetic kernel / initrd / boot_params in GPA.
+/// Result of placing kernel / initrd / boot_params in GPA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BootLoadInfo {
     pub boot_params_phys: u64,
+    /// Physical base of the protected-mode kernel image.
     pub kernel_phys: u64,
+    /// 64-bit entry RIP (`kernel_phys + 0x200` for bzImage; same as base for synth).
+    pub entry_phys: u64,
     pub initrd_phys: u64,
     /// Executable proto-init (same frame as synthetic initrd for M3.5).
     pub init_phys: u64,
@@ -68,6 +86,18 @@ pub struct BootLoadInfo {
     pub ramdisk_image: u32,
     pub ramdisk_size: u32,
     pub cmd_line_ptr: u32,
+    /// True when loaded from a bzImage-shaped payload (M3.7).
+    pub from_bzimage: bool,
+}
+
+/// Parsed bzImage layout (file-relative).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BzImageInfo {
+    pub setup_sects: u8,
+    pub pm_offset: usize,
+    pub pm_size: usize,
+    pub setup_magic: u32,
+    pub entry_file_off: usize,
 }
 
 /// Pack a Linux `boot_params` zero page.
@@ -177,6 +207,7 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
     Ok(BootLoadInfo {
         boot_params_phys,
         kernel_phys,
+        entry_phys: kernel_phys,
         initrd_phys,
         init_phys: initrd_phys,
         cmdline_phys,
@@ -184,6 +215,167 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
         ramdisk_image: initrd_phys as u32,
         ramdisk_size: SYNTH_INITRD_SIZE as u32,
         cmd_line_ptr: cmdline_phys as u32,
+        from_bzimage: false,
+    })
+}
+
+/// Parse a bzImage / `vmlinux` boot+setup header.
+pub fn parse_bzimage(image: &[u8]) -> Result<BzImageInfo, ()> {
+    if image.len() < 0x250 {
+        return Err(());
+    }
+    let boot_flag = image[OFF_BOOT_FLAG] as u16 | ((image[OFF_BOOT_FLAG + 1] as u16) << 8);
+    if boot_flag != 0xAA55 {
+        return Err(());
+    }
+    let magic = read_u32(image, OFF_HEADER);
+    if magic != SETUP_HEADER_MAGIC {
+        return Err(());
+    }
+    let mut setup_sects = image[OFF_SETUP_SECTS];
+    if setup_sects == 0 {
+        setup_sects = 4;
+    }
+    let pm_offset = (setup_sects as usize + 1) * 512;
+    if pm_offset + BZIMAGE_ENTRY_OFFSET >= image.len() {
+        return Err(());
+    }
+    let pm_size = image.len() - pm_offset;
+    if pm_size == 0 {
+        return Err(());
+    }
+    Ok(BzImageInfo {
+        setup_sects,
+        pm_offset,
+        pm_size,
+        setup_magic: magic,
+        entry_file_off: pm_offset + BZIMAGE_ENTRY_OFFSET,
+    })
+}
+
+/// Build a minimal bzImage: setup header + proto-kernel at PM+0x200.
+///
+/// Used as ESP fixture / embedded fallback so M3.7 exercises real format
+/// load while keeping the synthetic early/shell path alive until M3.8.
+pub fn build_minimal_bzimage(out: &mut [u8; MINIMAL_BZIMAGE_CAP]) -> usize {
+    out.fill(0);
+    let setup_sects: u8 = 4;
+    let pm_offset = (setup_sects as usize + 1) * 512;
+    let entry_off = pm_offset + BZIMAGE_ENTRY_OFFSET;
+    debug_assert!(entry_off + 1024 <= MINIMAL_BZIMAGE_CAP);
+
+    out[OFF_SETUP_SECTS] = setup_sects;
+    write_u16_slice(out, OFF_BOOT_FLAG, 0xAA55);
+    write_u32_slice(out, OFF_HEADER, SETUP_HEADER_MAGIC);
+    write_u16_slice(out, OFF_VERSION, 0x020C);
+    out[OFF_TYPE_OF_LOADER] = 0xFF;
+    out[OFF_LOADFLAGS] = LOADFLAGS_LOADED_HIGH;
+    write_u32_slice(out, OFF_KERNEL_ALIGNMENT, 0x1000_0000);
+    out[OFF_RELOCATABLE_KERNEL] = 1;
+    write_u64_slice(out, OFF_PREF_ADDRESS, 0);
+    write_u32_slice(out, OFF_INIT_SIZE, 4096);
+    write_u32_slice(out, OFF_CODE32_START, 0);
+
+    let mut page = [0u8; SYNTH_KERNEL_SIZE];
+    // SAFETY: stack buffer owned by this function.
+    unsafe {
+        write_synth_kernel(page.as_mut_ptr() as u64);
+    }
+    // Proto fits well under a page; copy into PM at the 64-bit entry offset.
+    let n = 1024.min(MINIMAL_BZIMAGE_CAP - entry_off);
+    out[entry_off..entry_off + n].copy_from_slice(&page[..n]);
+
+    // PM image is one page (entry at +0x200 inside it).
+    pm_offset + 4096
+}
+
+/// Place a bzImage into GPA: PM kernel page(s), proto-init, cmdline, boot_params.
+pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<BootLoadInfo, ()> {
+    let info = parse_bzimage(image)?;
+    let pm = &image[info.pm_offset..];
+    let pages = (info.pm_size + 4095) / 4096;
+    if pages == 0 || pages > 32 {
+        return Err(());
+    }
+
+    let kernel = alloc.allocate_frame().ok_or(())?;
+    // Multi-page: require contiguous frames from an unfragmented scan.
+    let mut kernel_frames = [PhysFrame::from_phys(0); 32];
+    kernel_frames[0] = kernel;
+    for i in 1..pages {
+        let f = alloc.allocate_frame().ok_or(())?;
+        let expect = kernel.to_phys() + (i as u64) * 4096;
+        if f.to_phys() != expect {
+            return Err(());
+        }
+        kernel_frames[i] = f;
+    }
+    let initrd = alloc.allocate_frame().ok_or(())?;
+    let cmdline = alloc.allocate_frame().ok_or(())?;
+    let boot_params = alloc.allocate_frame().ok_or(())?;
+
+    let kernel_phys = kernel.to_phys();
+    let initrd_phys = initrd.to_phys();
+    let cmdline_phys = cmdline.to_phys();
+    let boot_params_phys = boot_params.to_phys();
+    let entry_phys = kernel_phys + BZIMAGE_ENTRY_OFFSET as u64;
+
+    let mut claim = [(0u64, PhysFrame::from_phys(0)); 36];
+    for i in 0..pages {
+        claim[i] = (kernel_phys + (i as u64) * 4096, kernel_frames[i]);
+    }
+    claim[pages] = (initrd_phys, initrd);
+    claim[pages + 1] = (cmdline_phys, cmdline);
+    claim[pages + 2] = (boot_params_phys, boot_params);
+    claim_load_pages(&claim[..pages + 3]).map_err(|_| ())?;
+
+    // SAFETY: freshly allocated identity-mapped frames.
+    unsafe {
+        core::ptr::write_bytes(kernel_phys as *mut u8, 0, pages * 4096);
+        core::ptr::copy_nonoverlapping(pm.as_ptr(), kernel_phys as *mut u8, info.pm_size);
+        write_proto_init(initrd_phys);
+        write_cmdline(cmdline_phys);
+    }
+
+    let mut bp = [0u8; BOOT_PARAMS_SIZE];
+    // Copy setup header from the bzImage (boot_params mirrors those offsets).
+    let hdr_end = core::cmp::min(image.len(), 0x280);
+    if hdr_end > 0x1F1 {
+        bp[0x1F1..hdr_end].copy_from_slice(&image[0x1F1..hdr_end]);
+    }
+    bp[OFF_TYPE_OF_LOADER] = 0xFF;
+    bp[OFF_LOADFLAGS] |= LOADFLAGS_LOADED_HIGH;
+    write_u32(&mut bp, OFF_CODE32_START, kernel_phys as u32);
+    write_u32(&mut bp, OFF_RAMDISK_IMAGE, initrd_phys as u32);
+    write_u32(&mut bp, OFF_RAMDISK_SIZE, SYNTH_INITRD_SIZE as u32);
+    write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
+    bp[OFF_E820_ENTRIES] = 1;
+    write_u64(&mut bp, OFF_E820_TABLE, 0);
+    write_u64(&mut bp, OFF_E820_TABLE + 8, 64 * 1024 * 1024);
+    write_u32(&mut bp, OFF_E820_TABLE + 16, E820_RAM);
+
+    // SAFETY: owned boot_params frame.
+    unsafe {
+        core::ptr::copy_nonoverlapping(bp.as_ptr(), boot_params_phys as *mut u8, BOOT_PARAMS_SIZE);
+    }
+
+    let magic = setup_magic(&bp);
+    if magic != SETUP_HEADER_MAGIC {
+        return Err(());
+    }
+
+    Ok(BootLoadInfo {
+        boot_params_phys,
+        kernel_phys,
+        entry_phys,
+        initrd_phys,
+        init_phys: initrd_phys,
+        cmdline_phys,
+        setup_magic: magic,
+        ramdisk_image: initrd_phys as u32,
+        ramdisk_size: SYNTH_INITRD_SIZE as u32,
+        cmd_line_ptr: cmdline_phys as u32,
+        from_bzimage: true,
     })
 }
 
@@ -319,6 +511,18 @@ fn write_u64(buf: &mut [u8], off: usize, v: u64) {
     for i in 0..8 {
         buf[off + i] = (v >> (8 * i)) as u8;
     }
+}
+
+fn write_u16_slice(buf: &mut [u8], off: usize, v: u16) {
+    write_u16(buf, off, v);
+}
+
+fn write_u32_slice(buf: &mut [u8], off: usize, v: u32) {
+    write_u32(buf, off, v);
+}
+
+fn write_u64_slice(buf: &mut [u8], off: usize, v: u64) {
+    write_u64(buf, off, v);
 }
 
 fn read_u32(buf: &[u8], off: usize) -> u32 {

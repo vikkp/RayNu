@@ -17,6 +17,7 @@
 # M3.4: RAYNU-V-M3-GTIMER-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.5: RAYNU-V-M3-SHELL-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 # M3.6: RAYNU-V-M3-LOOP-OK (required when VMXON succeeds / REQUIRE_VMX=1)
+# M3.7: RAYNU-V-M3-BZIMAGE-OK (required when VMXON succeeds / REQUIRE_VMX=1)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -39,6 +40,7 @@ MARKER_EARLY="${MARKER_EARLY:-RAYNU-V-M3-EARLY-OK}"
 MARKER_GTIMER="${MARKER_GTIMER:-RAYNU-V-M3-GTIMER-OK}"
 MARKER_SHELL="${MARKER_SHELL:-RAYNU-V-M3-SHELL-OK}"
 MARKER_LOOP="${MARKER_LOOP:-RAYNU-V-M3-LOOP-OK}"
+MARKER_BZIMAGE="${MARKER_BZIMAGE:-RAYNU-V-M3-BZIMAGE-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-60}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -78,6 +80,12 @@ fi
 
 echo "==> Building EFI"
 "$ROOT/tools/build.sh"
+
+# M3.7 fixture on ESP (run-qemu.sh also stages; ensure asset exists first).
+if [[ ! -f "$ROOT/assets/bzImage" ]]; then
+  echo "==> Generating minimal bzImage asset"
+  "$ROOT/tools/gen-minimal-bzimage.sh" "$ROOT/assets/bzImage"
+fi
 
 echo "==> Running QEMU boot test (timeout ${TIMEOUT_SECS}s, REQUIRE_VMX=${REQUIRE_VMX})"
 rm -f "$SERIAL_LOG"
@@ -176,6 +184,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_LOAD' not found after successful VMXON" >&2
     fail=1
   fi
+  if grep -qF "$MARKER_BZIMAGE" "$SERIAL_LOG"; then
+    echo "==> M3.7 bzImage-load marker found"
+  else
+    echo "error: marker '$MARKER_BZIMAGE' not found after successful VMXON" >&2
+    fail=1
+  fi
   if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
     echo "==> M3.3 earlyprintk marker found"
   else
@@ -218,5 +232,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.6; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M3.7; qemu status=$QEMU_STATUS)"
 exit 0
