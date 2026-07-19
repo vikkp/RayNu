@@ -53,11 +53,16 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 
-**In progress** on `cursor/m3-13-precise-ept-a623`.
+**Status: closed on Latitude** (`Boot gate PASSED (M0 → M3.13)`).
 
-- Replace full 4 GiB identity with precise `[0, 1 GiB)` (QEMU `-m 1G`; covers e820/memmap RAM + UEFI CR3)
-- Local APIC `0xFEE00000` unmapped by omission (no hole punch)
-- ADR-004 range claim for the precise window; still boots to SHELL + APIC-OK
+**Shipped:**
+
+1. Precise identity EPT `[0, 1 GiB)` (QEMU `-m 1G`; covers e820/memmap RAM + UEFI CR3).
+2. Local APIC `0xFEE00000` unmapped by omission (no hole punch).
+3. ADR-004 range claim for the precise window (`claim_precise_identity_ranges`).
+4. Gate: `EPT2-OK` + retained APIC/SHELL/GTIMER3 chain.
+
+**Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.14 — Verus L3 attempt (ADR-004) — host marker / doc gate
 
@@ -70,26 +75,26 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 - PE `.assets.*` embed (ADR-003) when size budget allows
 - Harden Kani CI
 - Site copy: “unmodified Linux to init”
+- Drop IRQ0/IRQ4 crutches when lapic/serial fully own those paths
 
 ---
 
 ## Execution order
 
 ```
-M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT
-                              ↘
-                         M3.14 Verus L3 (parallel)
+M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT  →  M3.14 Verus L3
 ```
 
-**Now executing: M3.13.**
+**Now executing: M3.14.**
 
 ---
 
-## M3.12 acceptance (met on Latitude)
+## M3.13 acceptance (met on Latitude)
 
 ```text
+RAYNU-V-M3-EPT2-OK
 RAYNU-V-M3-GTIMER3-OK
 RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
-==> Boot gate PASSED (M0 → M3.12; qemu status=33)
+==> Boot gate PASSED (M0 → M3.13; qemu status=33)
 ```

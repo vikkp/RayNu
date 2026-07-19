@@ -30,12 +30,13 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.10 | `RAYNU-V-M3-SHELL-OK` | Real `/init` on initrd; CPUID SHELL hypercall (Latitude) |
 | M3.11 | `RAYNU-V-M3-GTIMER3-OK` | Virtual APIC + EPT hole; `nolapic` dropped (Latitude) |
 | M3.12 | `RAYNU-V-M3-APIC-OK` | IRR/ISR LVT inject + EOI decode; SHELL (Latitude) |
+| M3.13 | `RAYNU-V-M3-EPT2-OK` | Precise `[0,1GiB)` EPT + range claims; SHELL (Latitude) |
 
-## Verification checkpoint (as of M3.12)
+## Verification checkpoint (as of M3.13)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | **L2** | Ghost model in `ept_spec.rs`; L1 runtime kept |
+| `memory/ept` ownership registry | **L2** | Ghost model + M3.13 range claims for precise window |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
@@ -44,14 +45,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
-| `memory/ept_hw` identity builder | L0→L1-ish | APIC MMIO hole punch (M3.11); precise maps later |
-| `vmx/*` | L0–L1 | Real Linux through APIC-OK + SHELL (M3.12) |
-| Verus proofs (`*_proof.rs`) | L0 | L3 deferred |
+| `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
+| `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
+| Verus proofs (`*_proof.rs`) | L0 | L3 → M3.14 |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. **M3.13** (in progress) — precise EPT slice (`EPT2-OK`).
-2. **M3.14** — Verus L3 (parallel); later drop IRQ0/IRQ4 when lapic/serial own those paths.
+1. **M3.14** — Verus L3 attempt (ADR-004).
+2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.

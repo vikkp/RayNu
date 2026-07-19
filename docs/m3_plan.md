@@ -189,9 +189,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.12~~ — done (real Linux SHELL + virtual APIC IRR inject).
-2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.13** precise EPT (in progress).
-3. M3.14 Verus L3 parallel.
+1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.14** Verus L3 next.
+3. Parallel: drop IRQ crutches; site/PE embed.
 
 ---
 
@@ -199,8 +199,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.12** APIC IRR inject + CPUID SHELL |
+| `vmx/launch.rs` | Exit phase machine → **M3.13** EPT2 + APIC IRR inject + SHELL |
 | `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC + IRR/ISR (M3.12) |
+| `memory/ept_hw.rs` | Precise `[0,1GiB)` identity EPT (M3.13) |
 | `vmx/mmio_decode.rs` | APIC MMIO mov decode (EPT violation) |
 | `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
 | `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |
