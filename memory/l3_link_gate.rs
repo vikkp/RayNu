@@ -5,7 +5,8 @@
 //!
 //! Checks in-tree that `ept_model` opts into Verus and carries the linked
 //! exclusivity lemmas. Runtime `cargo verus verify -p ept_model` is exercised
-//! by `tools/verus-link-smoke.sh`.
+//! by `tools/verus-link-smoke.sh`. True L3 (no `admit`) is M3.17 /
+//! `l3_verify_gate`.
 
 /// Host / CI marker when the M3.16 L3-link gate passes.
 pub const M3_L3_LINK_OK_MARKER: &str = "RAYNU-V-M3-L3-LINK-OK";
@@ -28,9 +29,7 @@ pub fn ept_model_is_linked() -> bool {
         && s.contains("lemma_map_ok_exclusive")
         && s.contains("lemma_unmap_ok_exclusive")
         && s.contains("theorem_single_guest_4k_map_unmap_exclusive")
-        && s.contains("admit()")
         && s.contains(M3_L3_LINK_OK_MARKER)
-        && s.contains("GAP(M3.17)")
 }
 
 /// True when the link smoke script is present.

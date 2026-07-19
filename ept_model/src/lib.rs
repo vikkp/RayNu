@@ -1,14 +1,21 @@
-//! Verus-linkable ghost model for ADR-004 EPT exclusive ownership (M3.16).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
-//! the UEFI binary. Lemmas typecheck under the frozen Verus pin; incomplete
-//! inductive proofs use `admit()` until M3.17 discharges them.
+//! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
+//! single-guest map/unmap are discharged with **no `admit()`**.
 //!
-//! Marker (via tools/verus-link-smoke.sh): `RAYNU-V-M3-L3-LINK-OK`.
+//! Markers:
+//! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
+//! - M3.17 true L3: `RAYNU-V-M3-L3-VERIFY-OK` (via tools/verus-verify-smoke.sh)
 
 use vstd::prelude::*;
 
 verus! {
+
+broadcast use {
+    vstd::map::group_map_lemmas,
+    vstd::set::group_set_lemmas,
+};
 
 /// Bring-up single-guest id (matches `memory::ept::M2_BRINGUP_GUEST_ID`).
 pub const BRINGUP_GUEST: u64 = 1;
@@ -72,16 +79,106 @@ pub open spec fn exclusive_ownership(m: GhostEptMap) -> bool {
     &&& m.owned.len() == m.by_gpa.len()
 }
 
-/// Empty map is exclusive (discharged).
+/// One map or unmap step for the bring-up guest (4K).
+pub enum MapUnmapStep {
+    Map { gpa: Gpa, frame: FrameId },
+    Unmap { gpa: Gpa },
+}
+
+pub open spec fn step_guest_ok(step: MapUnmapStep) -> bool {
+    match step {
+        MapUnmapStep::Map { gpa, frame: _ } => page_aligned_4k(gpa),
+        MapUnmapStep::Unmap { gpa } => page_aligned_4k(gpa),
+    }
+}
+
+pub open spec fn step_enabled(m: GhostEptMap, step: MapUnmapStep) -> bool {
+    match step {
+        MapUnmapStep::Map { gpa, frame } =>
+            !m.owned.dom().contains(frame) && !m.by_gpa.dom().contains((BRINGUP_GUEST, gpa)),
+        MapUnmapStep::Unmap { gpa } => m.by_gpa.dom().contains((BRINGUP_GUEST, gpa)),
+    }
+}
+
+pub open spec fn apply_step(m: GhostEptMap, step: MapUnmapStep) -> GhostEptMap {
+    match step {
+        MapUnmapStep::Map { gpa, frame } => m.ghost_map(BRINGUP_GUEST, gpa, frame),
+        MapUnmapStep::Unmap { gpa } => m.ghost_unmap(BRINGUP_GUEST, gpa),
+    }
+}
+
+pub open spec fn fold_steps(m: GhostEptMap, steps: Seq<MapUnmapStep>) -> GhostEptMap
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+        m
+    } else {
+        fold_steps(apply_step(m, steps[0]), steps.skip(1))
+    }
+}
+
+pub open spec fn steps_ok(m: GhostEptMap, steps: Seq<MapUnmapStep>) -> bool
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+        true
+    } else {
+        &&& step_guest_ok(steps[0])
+        &&& step_enabled(m, steps[0])
+        &&& steps_ok(apply_step(m, steps[0]), steps.skip(1))
+    }
+}
+
+/// Empty map is exclusive.
 pub proof fn lemma_empty_exclusive()
     ensures
         exclusive_ownership(GhostEptMap::empty()),
 {
 }
 
+/// Every by_gpa entry has a matching owned entry.
+pub proof fn lemma_by_gpa_owned(m: GhostEptMap, g: GuestId, a: Gpa)
+    requires
+        exclusive_ownership(m),
+        m.by_gpa.dom().contains((g, a)),
+    ensures
+        m.owned.dom().contains(m.by_gpa[(g, a)]),
+        m.owned[m.by_gpa[(g, a)]] == g,
+{
+}
+
+/// Owned frames are injective under by_gpa keys.
+pub proof fn lemma_by_gpa_unique_frame(
+    m: GhostEptMap,
+    g1: GuestId,
+    a1: Gpa,
+    g2: GuestId,
+    a2: Gpa,
+)
+    requires
+        exclusive_ownership(m),
+        m.by_gpa.dom().contains((g1, a1)),
+        m.by_gpa.dom().contains((g2, a2)),
+        m.by_gpa[(g1, a1)] == m.by_gpa[(g2, a2)],
+    ensures
+        g1 == g2,
+        a1 == a2,
+{
+}
+
+/// No by_gpa entry can point at a free frame.
+pub proof fn lemma_free_frame_unmapped(m: GhostEptMap, frame: FrameId, g: GuestId, a: Gpa)
+    requires
+        exclusive_ownership(m),
+        !m.owned.dom().contains(frame),
+        m.by_gpa.dom().contains((g, a)),
+    ensures
+        m.by_gpa[(g, a)] != frame,
+{
+    lemma_by_gpa_owned(m, g, a);
+}
+
 /// Map Ok preserves exclusivity for the bring-up guest on a free 4K GPA/HPA.
-///
-/// M3.16: typechecks; body admitted until M3.17.
 pub proof fn lemma_map_ok_exclusive(
     m: GhostEptMap,
     guest: GuestId,
@@ -100,12 +197,91 @@ pub proof fn lemma_map_ok_exclusive(
         m.ghost_map(guest, gpa, frame).by_gpa[(guest, gpa)] == frame,
 {
     let m2 = m.ghost_map(guest, gpa, frame);
-    assert(m2.owned.dom().contains(frame));
-    assert(m2.by_gpa.dom().contains((guest, gpa)));
+
+    assert(m2.owned.dom() == m.owned.dom().insert(frame));
+    assert(m2.by_gpa.dom() == m.by_gpa.dom().insert((guest, gpa)));
     assert(m2.owned[frame] == guest);
     assert(m2.by_gpa[(guest, gpa)] == frame);
-    // GAP(M3.17): discharge exclusive_ownership(m2) without admit.
-    admit();
+    assert(m2.owned.len() == m.owned.len() + 1);
+    assert(m2.by_gpa.len() == m.by_gpa.len() + 1);
+
+    assert forall|f: FrameId|
+        m2.owned.dom().contains(f) implies exists|g: GuestId, a: Gpa|
+            #![trigger m2.by_gpa[(g, a)]]
+            m2.by_gpa.dom().contains((g, a)) && m2.by_gpa[(g, a)] == f && m2.owned[f] == g
+    by {
+        if f == frame {
+            assert(m2.by_gpa.dom().contains((guest, gpa)));
+            assert(m2.by_gpa[(guest, gpa)] == f);
+            assert(m2.owned[f] == guest);
+        } else {
+            assert(m.owned.dom().contains(f));
+            assert(exists|g0: GuestId, a0: Gpa|
+                #![trigger m.by_gpa[(g0, a0)]]
+                m.by_gpa.dom().contains((g0, a0)) && m.by_gpa[(g0, a0)] == f && m.owned[f]
+                    == g0);
+            let (g0, a0): (GuestId, Gpa) = choose|g0: GuestId, a0: Gpa|
+                #![trigger m.by_gpa[(g0, a0)]]
+                m.by_gpa.dom().contains((g0, a0)) && m.by_gpa[(g0, a0)] == f && m.owned[f]
+                    == g0;
+            assert(m.by_gpa.dom().contains((g0, a0)));
+            assert(m.by_gpa[(g0, a0)] == f);
+            assert(m.owned[f] == g0);
+            lemma_free_frame_unmapped(m, frame, g0, a0);
+            assert((g0, a0) != (guest, gpa));
+            assert(m2.by_gpa.dom().contains((g0, a0)));
+            assert(m2.by_gpa[(g0, a0)] == f);
+            assert(m2.owned[f] == g0);
+        }
+    };
+
+    assert forall|g: GuestId, a: Gpa|
+        #![auto]
+        m2.by_gpa.dom().contains((g, a)) implies m2.owned.dom().contains(m2.by_gpa[(g, a)])
+            && m2.owned[m2.by_gpa[(g, a)]] == g
+    by {
+        if g == guest && a == gpa {
+            assert(m2.by_gpa[(g, a)] == frame);
+            assert(m2.owned.dom().contains(frame));
+            assert(m2.owned[frame] == guest);
+        } else {
+            assert(m.by_gpa.dom().contains((g, a)));
+            lemma_by_gpa_owned(m, g, a);
+            let fr = m.by_gpa[(g, a)];
+            lemma_free_frame_unmapped(m, frame, g, a);
+            assert(fr != frame);
+            assert(m2.by_gpa[(g, a)] == fr);
+            assert(m2.owned.dom().contains(fr));
+            assert(m2.owned[fr] == g);
+        }
+    };
+
+    assert forall|g1: GuestId, a1: Gpa, g2: GuestId, a2: Gpa|
+        #![auto]
+        m2.by_gpa.dom().contains((g1, a1)) && m2.by_gpa.dom().contains((g2, a2))
+            && m2.by_gpa[(g1, a1)] == m2.by_gpa[(g2, a2)] implies g1 == g2 && a1 == a2
+    by {
+        let f1 = m2.by_gpa[(g1, a1)];
+        if f1 == frame {
+            if (g1, a1) != (guest, gpa) {
+                assert(m.by_gpa.dom().contains((g1, a1)));
+                lemma_free_frame_unmapped(m, frame, g1, a1);
+            }
+            if (g2, a2) != (guest, gpa) {
+                assert(m.by_gpa.dom().contains((g2, a2)));
+                lemma_free_frame_unmapped(m, frame, g2, a2);
+            }
+            assert((g1, a1) == (guest, gpa));
+            assert((g2, a2) == (guest, gpa));
+        } else {
+            assert((g1, a1) != (guest, gpa));
+            assert((g2, a2) != (guest, gpa));
+            assert(m.by_gpa.dom().contains((g1, a1)));
+            assert(m.by_gpa.dom().contains((g2, a2)));
+            assert(m.by_gpa[(g1, a1)] == m.by_gpa[(g2, a2)]);
+            lemma_by_gpa_unique_frame(m, g1, a1, g2, a2);
+        }
+    };
 }
 
 /// Rejected map (HPA or GPA already taken) leaves the abstract state unchanged.
@@ -124,8 +300,6 @@ pub proof fn lemma_map_already_owned_unchanged(
 }
 
 /// Unmap Ok restores exclusivity for a mapped (guest, GPA).
-///
-/// M3.16: typechecks; body admitted until M3.17.
 pub proof fn lemma_unmap_ok_exclusive(m: GhostEptMap, guest: GuestId, gpa: Gpa)
     requires
         guest == BRINGUP_GUEST,
@@ -138,31 +312,118 @@ pub proof fn lemma_unmap_ok_exclusive(m: GhostEptMap, guest: GuestId, gpa: Gpa)
 {
     let frame = m.by_gpa[(guest, gpa)];
     let m2 = m.ghost_unmap(guest, gpa);
+
+    lemma_by_gpa_owned(m, guest, gpa);
+    assert(m.owned.dom().contains(frame));
+    assert(m.owned[frame] == guest);
+    assert(m2.owned.dom() == m.owned.dom().remove(frame));
+    assert(m2.by_gpa.dom() == m.by_gpa.dom().remove((guest, gpa)));
     assert(!m2.by_gpa.dom().contains((guest, gpa)));
     assert(!m2.owned.dom().contains(frame));
-    // GAP(M3.17): discharge exclusive_ownership(m2) without admit.
-    admit();
+    assert(m2.owned.len() + 1 == m.owned.len());
+    assert(m2.by_gpa.len() + 1 == m.by_gpa.len());
+
+    assert forall|f: FrameId|
+        m2.owned.dom().contains(f) implies exists|g: GuestId, a: Gpa|
+            #![trigger m2.by_gpa[(g, a)]]
+            m2.by_gpa.dom().contains((g, a)) && m2.by_gpa[(g, a)] == f && m2.owned[f] == g
+    by {
+        assert(m.owned.dom().contains(f));
+        assert(f != frame);
+        assert(exists|g0: GuestId, a0: Gpa|
+            #![trigger m.by_gpa[(g0, a0)]]
+            m.by_gpa.dom().contains((g0, a0)) && m.by_gpa[(g0, a0)] == f && m.owned[f] == g0);
+        let (g0, a0): (GuestId, Gpa) = choose|g0: GuestId, a0: Gpa|
+            #![trigger m.by_gpa[(g0, a0)]]
+            m.by_gpa.dom().contains((g0, a0)) && m.by_gpa[(g0, a0)] == f && m.owned[f] == g0;
+        assert(m.by_gpa.dom().contains((g0, a0)));
+        assert(m.by_gpa[(g0, a0)] == f);
+        assert(m.owned[f] == g0);
+        assert(m.by_gpa[(g0, a0)] != frame);
+        if (g0, a0) == (guest, gpa) {
+            assert(m.by_gpa[(g0, a0)] == frame);
+        }
+        assert((g0, a0) != (guest, gpa));
+        assert(m2.by_gpa.dom().contains((g0, a0)));
+        assert(m2.by_gpa[(g0, a0)] == f);
+        assert(m2.owned[f] == g0);
+    };
+
+    assert forall|g: GuestId, a: Gpa|
+        #![auto]
+        m2.by_gpa.dom().contains((g, a)) implies m2.owned.dom().contains(m2.by_gpa[(g, a)])
+            && m2.owned[m2.by_gpa[(g, a)]] == g
+    by {
+        assert(m.by_gpa.dom().contains((g, a)));
+        assert((g, a) != (guest, gpa));
+        lemma_by_gpa_owned(m, g, a);
+        let fr = m.by_gpa[(g, a)];
+        // Uniqueness: only (guest, gpa) maps to `frame`.
+        if fr == frame {
+            lemma_by_gpa_unique_frame(m, g, a, guest, gpa);
+        }
+        assert(fr != frame);
+        assert(m2.by_gpa[(g, a)] == fr);
+        assert(m2.owned.dom().contains(fr));
+        assert(m2.owned[fr] == g);
+    };
+
+    assert forall|g1: GuestId, a1: Gpa, g2: GuestId, a2: Gpa|
+        #![auto]
+        m2.by_gpa.dom().contains((g1, a1)) && m2.by_gpa.dom().contains((g2, a2))
+            && m2.by_gpa[(g1, a1)] == m2.by_gpa[(g2, a2)] implies g1 == g2 && a1 == a2
+    by {
+        assert(m.by_gpa.dom().contains((g1, a1)));
+        assert(m.by_gpa.dom().contains((g2, a2)));
+        assert(m.by_gpa[(g1, a1)] == m.by_gpa[(g2, a2)]);
+        lemma_by_gpa_unique_frame(m, g1, a1, g2, a2);
+    };
 }
 
-/// Target theorem for M3.17: single-guest 4K map/unmap steps preserve exclusivity.
-///
-/// M3.16 links the statement under Verus; proof body admitted.
-pub proof fn theorem_single_guest_4k_map_unmap_exclusive(m: GhostEptMap)
+/// Applying one enabled step preserves exclusivity.
+pub proof fn lemma_apply_step_exclusive(m: GhostEptMap, step: MapUnmapStep)
     requires
         exclusive_ownership(m),
+        step_guest_ok(step),
+        step_enabled(m, step),
     ensures
-        exclusive_ownership(m),
+        exclusive_ownership(apply_step(m, step)),
 {
-    // GAP(M3.17): induct over a Seq of MapUnmapStep using the lemmas above.
-    admit();
+    match step {
+        MapUnmapStep::Map { gpa, frame } => {
+            lemma_map_ok_exclusive(m, BRINGUP_GUEST, gpa, frame);
+        },
+        MapUnmapStep::Unmap { gpa } => {
+            lemma_unmap_ok_exclusive(m, BRINGUP_GUEST, gpa);
+        },
+    }
 }
 
-/// Host marker string for M3.16 (also asserted by `memory/l3_link_gate.rs`).
-pub open spec fn m3_l3_link_ok_marker() -> bool {
-    true
+/// Target theorem (M3.17): any finite sequence of enabled 4K single-guest
+/// map/unmap steps preserves exclusive ownership.
+pub proof fn theorem_single_guest_4k_map_unmap_exclusive(
+    m: GhostEptMap,
+    steps: Seq<MapUnmapStep>,
+)
+    requires
+        exclusive_ownership(m),
+        steps_ok(m, steps),
+    ensures
+        exclusive_ownership(fold_steps(m, steps)),
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+    } else {
+        lemma_apply_step_exclusive(m, steps[0]);
+        theorem_single_guest_4k_map_unmap_exclusive(
+            apply_step(m, steps[0]),
+            steps.skip(1),
+        );
+    }
 }
 
 } // verus!
 
-/// Exec-visible marker for host tests / smoke scripts.
+/// Exec-visible markers for host tests / smoke scripts.
 pub const M3_L3_LINK_OK_MARKER: &str = "RAYNU-V-M3-L3-LINK-OK";
+pub const M3_L3_VERIFY_OK_MARKER: &str = "RAYNU-V-M3-L3-VERIFY-OK";
