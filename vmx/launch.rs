@@ -1081,34 +1081,18 @@ unsafe fn guest_can_accept_extint() -> bool {
     (int_state & 0x3) == 0
 }
 
-/// Deliver pending virtual APIC timer IRQ if the guest can accept it.
-/// Returns true if VM-entry interruption-info was programmed.
-unsafe fn try_inject_guest_apic_timer() -> bool {
-    if !lapic_virt::host_timer_armed_for_guest() {
-        return false;
+/// Latch M3.11 when the guest-programmed APIC timer's host one-shot fires.
+/// Guest LVT inject is deferred (M3.12) — see [`lapic_virt::acknowledge_guest_timer_fire`].
+unsafe fn maybe_mark_gtimer3() {
+    if !lapic_virt::acknowledge_guest_timer_fire() {
+        return;
     }
-    if !guest_can_accept_extint() {
-        let _ = set_interrupt_window_exiting(true);
-        return false;
+    static mut GTIMER3_MARKED: bool = false;
+    // SAFETY: single-threaded VMEXIT path.
+    if !GTIMER3_MARKED {
+        GTIMER3_MARKED = true;
+        serial::write_line(M3_GTIMER3_OK_MARKER);
     }
-    let Some(vec) = lapic_virt::take_guest_timer_inject() else {
-        return false;
-    };
-    if lapic_virt::gtimer3_ok() {
-        static mut GTIMER3_MARKED: bool = false;
-        if !GTIMER3_MARKED {
-            GTIMER3_MARKED = true;
-            serial::write_line(M3_GTIMER3_OK_MARKER);
-        }
-    }
-    if let Ok(info) = interrupt::prepare_external_inject(vec) {
-        let _ = set_interrupt_window_exiting(false);
-        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
-        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-        return true;
-    }
-    false
 }
 
 unsafe fn try_inject_linux_com1_tx() -> bool {
@@ -1521,13 +1505,6 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         }
         EXIT_REASON_INTERRUPT_WINDOW => {
             let _ = set_interrupt_window_exiting(false);
-            // M3.11: deliver deferred guest APIC timer when IF becomes 1.
-            if try_inject_guest_apic_timer() {
-                if lapic_virt::host_timer_armed_for_guest() {
-                    arm_linux_tick();
-                }
-                vmresume_with_gprs();
-            }
             if try_inject_linux_com1_tx() {
                 vmresume_with_gprs();
             }
@@ -1537,42 +1514,27 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
-                // M3.11: virtual APIC timer (host one-shot → guest LVT vector).
-                // Only inject when IF=1; else arm interrupt-window (avoids
-                // VM-entry failure 0x80000021 / reason 33).
-                if try_inject_guest_apic_timer() {
-                    // Periodic mode re-arms HOST_TIMER_FOR_GUEST inside take().
-                    if lapic_virt::host_timer_armed_for_guest() {
-                        arm_linux_tick();
-                    }
-                    vmresume_with_gprs();
-                }
+                // M3.11: guest programmed APIC timer → host one-shot fired.
+                // Do not inject the LVT vector yet (panics Linux without
+                // IRR/ISR); keep IRQ0 jiffies crutch through SHELL.
+                maybe_mark_gtimer3();
                 // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
                 if try_inject_linux_com1_tx() {
                     vmresume_with_gprs();
                 }
                 maybe_arm_interrupt_window_for_tx();
-                if lapic_virt::host_timer_armed_for_guest() {
-                    // Pending guest timer — keep host one-shot alive and wait
-                    // for interrupt window (or next tick) to deliver.
-                    let _ = set_interrupt_window_exiting(true);
-                    arm_linux_tick();
-                } else if !lapic_virt::gtimer3_ok() {
-                    // Until the guest programs its APIC timer (GTIMER3), keep
-                    // the host→IRQ0 jiffies crutch.
-                    arm_linux_tick();
-                    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
-                    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
-                    let cpl = cs & 3;
-                    if (rflags & (1 << 9)) != 0 && cpl == 0 {
-                        if let Ok(info) =
-                            interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR)
-                        {
-                            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
-                            let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
-                            let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
-                            vmresume_with_gprs();
-                        }
+                arm_linux_tick();
+                let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+                let cpl = cs & 3;
+                if (rflags & (1 << 9)) != 0 && cpl == 0 {
+                    if let Ok(info) =
+                        interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR)
+                    {
+                        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+                        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+                        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+                        vmresume_with_gprs();
                     }
                 }
             }

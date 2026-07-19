@@ -197,36 +197,44 @@ pub fn host_timer_armed_for_guest() -> bool {
     unsafe { HOST_TIMER_FOR_GUEST }
 }
 
-/// Called on host external-interrupt VMEXIT. If this was our guest timer,
-/// returns the guest vector to inject and clears the arm flag.
-pub fn take_guest_timer_inject() -> Option<u32> {
+/// Called on host external-interrupt VMEXIT when the guest virtual timer
+/// asked for a host one-shot. Marks GTIMER3 and clears the arm flag.
+///
+/// Returns `true` if this consumed a guest-armed host timer. Does **not**
+/// supply a guest vector — Latitude showed that VM-entry inject of the LVT
+/// vector (even with IF=1) panics Linux (`Fatal exception in interrupt`)
+/// without IRR/ISR fidelity. M3.11 gate = arm + expire; inject is M3.12.
+pub fn acknowledge_guest_timer_fire() -> bool {
     // SAFETY: VMEXIT path.
+    unsafe {
+        if !HOST_TIMER_FOR_GUEST {
+            return false;
+        }
+        HOST_TIMER_FOR_GUEST = false;
+        PENDING_VECTOR = None;
+        if !GTIMER3_OK {
+            GTIMER3_OK = true;
+        }
+        // Keep countdown model for CUR_COUNT reads; do not re-request inject.
+        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 && APIC_INIT_COUNT != 0 {
+            TIMER_START_TSC = cpu::rdtsc();
+            TIMER_RUNNING = true;
+        } else {
+            TIMER_RUNNING = false;
+        }
+        true
+    }
+}
+
+/// Legacy helper for unit tests: acknowledge + return the would-be vector.
+pub fn take_guest_timer_inject() -> Option<u32> {
+    // SAFETY: test / VMEXIT path.
     unsafe {
         if !HOST_TIMER_FOR_GUEST {
             return None;
         }
-        // Only deliver once the virtual countdown has actually expired (or
-        // we're in periodic mode and a period boundary is acceptable). For
-        // bring-up, accept the host one-shot as the deadline signal.
-        HOST_TIMER_FOR_GUEST = false;
-        let v = match PENDING_VECTOR {
-            Some(x) => {
-                PENDING_VECTOR = None;
-                x as u32
-            }
-            None => 0xEF,
-        };
-        if !GTIMER3_OK {
-            GTIMER3_OK = true;
-        }
-        if (APIC_LVT_TIMER & LVT_PERIODIC) != 0 && APIC_INIT_COUNT != 0 {
-            // Reload period and ask host to arm again.
-            TIMER_START_TSC = cpu::rdtsc();
-            TIMER_RUNNING = true;
-            arm_guest_delivery_if_needed();
-        } else {
-            TIMER_RUNNING = false;
-        }
+        let v = PENDING_VECTOR.unwrap_or(0xEF) as u32;
+        let _ = acknowledge_guest_timer_fire();
         Some(v)
     }
 }

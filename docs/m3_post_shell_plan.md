@@ -34,9 +34,9 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 2. **EPT violation** handler emulates xAPIC MMIO (enough for Linux bring-up):
    - ID, VERSION, SVR, EOI, TPR/PPR stubs
    - LVT timer, divide, init/current count
-3. Guest write to `INIT_COUNT` → arm **host** one-shot (HV-private); on fire → inject guest LVT vector via `sched/interrupt`.
-4. Guest EOI → clear in-service shadow.
-5. Latitude: boot with **`nolapic` removed** (keep `noapic` until M3.12); marker after first emulated timer inject during Linux run; SHELL still passes.
+3. Guest write to `INIT_COUNT` → arm **host** one-shot (HV-private); on fire → latch `GTIMER3` (CUR_COUNT must countdown for calibrate).
+4. **Guest LVT inject deferred to M3.12** — bare VM-entry inject without IRR/ISR panicked Latitude (`Fatal exception in interrupt`). IRQ0 crutch stays through SHELL.
+5. Latitude: boot with **`nolapic` removed** (keep `noapic` until M3.12); marker after guest-armed timer expires; SHELL still passes.
 
 **Non-goals:** IOAPIC, TSC-deadline mode, full IRR/ISR bitmap fidelity.
 
@@ -44,14 +44,14 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 **Files:** `memory/ept_hw.rs`, `devices/lapic_virt.rs`, `vmx/mmio_decode.rs`, `vmx/launch.rs`, `guest/linux_boot.rs` (cmdline), `tools/qemu-boot-test.sh`.
 
-### M3.12 — Drop PIC / IRQ inject crutches — `RAYNU-V-M3-APIC-OK`
+### M3.12 — Faithful APIC inject + drop IRQ crutches — `RAYNU-V-M3-APIC-OK`
 
+- Virtual IRR/ISR + EOI so guest LVT timer inject does not panic (`Fatal exception in interrupt` on Latitude)
 - Emulate enough 8259 *or* move serial to polling/virt path so ttyS0 TX works without IRQ4 inject
-- Prefer: keep COM1 THR IRQ via virtual APIC (ISA IRQ4 → APIC redirection later) **or** force `uart` poll console for `/dev/console`
 - Remove CPL0-only IRQ0 inject; remove interrupt-window TX hack if APIC owns it
 - Cmdline: drop `noapic` when IOAPIC stub exists **or** document PIC-only stay
 
-Marker: durable Linux run with APIC timer + SHELL without host→IRQ0.
+Marker: durable Linux run with APIC timer inject + SHELL without host→IRQ0.
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 
