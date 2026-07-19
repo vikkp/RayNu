@@ -40,14 +40,16 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 ### M3.12 — Faithful APIC inject + drop IRQ crutches — `RAYNU-V-M3-APIC-OK`
 
-**In progress** on `cursor/m3-12-apic-inject-a623`.
+**Status: closed on Latitude** (`Boot gate PASSED (M0 → M3.12)`).
 
-- Virtual IRR/ISR + EOI so guest LVT timer inject does not panic (`Fatal exception in interrupt` on Latitude)
-- Real `CUR_COUNT` so lapic calibrate can succeed; host one-shot → IRR → interrupt-window inject
-- Keep host→IRQ0 through SHELL (needed for calibrate *verification* jiffies); IRQ4 COM1 TX until serial is poll-safe
-- Cmdline: keep `noapic` for now (IOAPIC stub → later); document PIC-only stay for ISA
+**Shipped:**
 
-Marker: durable Linux run with APIC IRR/ISR inject (`APIC-OK`) + SHELL.
+1. Virtual IRR/ISR + EOI; real `CUR_COUNT`; host one-shot → IRR → interrupt-window LVT inject.
+2. MMIO decode fix for Linux `native_apic_mem_eoi` SIB abs disp32 (was panicking on EOI).
+3. IRQ0 kept through SHELL for calibrate verification jiffies; IRQ4 COM1 TX retained; `noapic` stays.
+4. Gate: `APIC-OK` + `SHELL` (+ retained `GTIMER3`).
+
+**Files:** `devices/lapic_virt.rs`, `vmx/mmio_decode.rs`, `vmx/launch.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.13 — Precise EPT slice — `RAYNU-V-M3-EPT2-OK`
 
@@ -72,19 +74,20 @@ Marker: durable Linux run with APIC IRR/ISR inject (`APIC-OK`) + SHELL.
 ## Execution order
 
 ```
-M3.11 guest APIC timer  →  M3.12 drop IRQ crutches  →  M3.13 precise EPT
+M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT
                               ↘
-                         M3.14 Verus L3 (parallel after M3.11 lands)
+                         M3.14 Verus L3 (parallel)
 ```
 
-**Now executing: M3.12.**
+**Now executing: M3.13.**
 
 ---
 
-## M3.11 acceptance (met on Latitude)
+## M3.12 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-GTIMER3-OK
+RAYNU-V-M3-APIC-OK
 RAYNU-V-M3-SHELL-OK
-==> Boot gate PASSED (M0 → M3.11; qemu status=33)
+==> Boot gate PASSED (M0 → M3.12; qemu status=33)
 ```
