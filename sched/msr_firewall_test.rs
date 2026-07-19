@@ -25,7 +25,22 @@ fn allow_list_early_linux() {
     );
     assert_eq!(classify_msr(MSR_EFER, MsrAccess::Write), MsrAction::VmcsEfer);
     assert_eq!(classify_msr(MSR_FS_BASE, MsrAccess::Read), MsrAction::VmcsFsBase);
-    assert_eq!(classify_msr(MSR_LSTAR, MsrAccess::Write), MsrAction::Shadow);
+    assert_eq!(
+        classify_msr(MSR_LSTAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_KERNEL_GS_BASE, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_STAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_SFMASK, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
     assert_eq!(
         classify_msr(MSR_APIC_BASE, MsrAccess::Read),
         MsrAction::HostPassthrough
@@ -38,8 +53,8 @@ fn allow_list_early_linux() {
 
 #[test]
 fn shadow_roundtrip() {
-    shadow_write(MSR_LSTAR, 0xFFFF_FFFF_8100_0000);
-    assert_eq!(shadow_read(MSR_LSTAR), 0xFFFF_FFFF_8100_0000);
+    shadow_write(MSR_SPEC_CTRL, 0x2);
+    assert_eq!(shadow_read(MSR_SPEC_CTRL), 0x2);
     note_msr_emulated();
     assert!(msr_firewall_ok());
 }

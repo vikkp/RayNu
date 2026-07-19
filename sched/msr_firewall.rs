@@ -76,7 +76,7 @@ pub enum MsrAction {
     VmcsFsBase,
     /// Guest GS base in VMCS.
     VmcsGsBase,
-    /// VMM-owned shadow (STAR / LSTAR / CSTAR / SFMASK / KERNEL_GS / TSC_AUX).
+    /// VMM-owned shadow (SPEC_CTRL and similar — not used by `syscall`).
     Shadow,
     /// Unknown read: return 0 (Linux probes).
     ReadZero,
@@ -101,13 +101,7 @@ static mut CPUID_FILTER_OK: bool = false;
 /// Set when at least one allow-listed MSR was emulated (M3.9).
 static mut MSR_FW_OK: bool = false;
 
-/// Guest MSR shadows (not in the VMCS).
-static mut SHADOW_STAR: u64 = 0;
-static mut SHADOW_LSTAR: u64 = 0;
-static mut SHADOW_CSTAR: u64 = 0;
-static mut SHADOW_SFMASK: u64 = 0;
-static mut SHADOW_KERNEL_GS: u64 = 0;
-static mut SHADOW_TSC_AUX: u64 = 0;
+/// Guest MSR shadows (not in the VMCS). Syscall MSRs are host-passthrough.
 static mut SHADOW_SPEC_CTRL: u64 = 0;
 
 /// INVARIANTS:
@@ -144,13 +138,15 @@ pub fn classify_msr(index: u32, access: MsrAccess) -> MsrAction {
         (MSR_FS_BASE, _) => MsrAction::VmcsFsBase,
         (MSR_GS_BASE, _) => MsrAction::VmcsGsBase,
 
+        // Must hit real hardware: `syscall`/`sysret`/`swapgs` read these MSRs
+        // directly. Shadow-only broke `/init` (kernel RIP + user RSP → #DF).
         (MSR_STAR, _)
         | (MSR_LSTAR, _)
         | (MSR_CSTAR, _)
         | (MSR_SFMASK, _)
         | (MSR_KERNEL_GS_BASE, _)
-        | (MSR_TSC_AUX, _)
-        | (MSR_SPEC_CTRL, _) => MsrAction::Shadow,
+        | (MSR_TSC_AUX, _) => MsrAction::HostPassthrough,
+        (MSR_SPEC_CTRL, _) => MsrAction::Shadow,
         (MSR_PRED_CMD, MsrAccess::Write) => MsrAction::IgnoreWrite,
         (MSR_PRED_CMD, MsrAccess::Read) => MsrAction::ReadZero,
 
@@ -173,12 +169,6 @@ pub fn shadow_read(index: u32) -> u64 {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
         match index {
-            MSR_STAR => SHADOW_STAR,
-            MSR_LSTAR => SHADOW_LSTAR,
-            MSR_CSTAR => SHADOW_CSTAR,
-            MSR_SFMASK => SHADOW_SFMASK,
-            MSR_KERNEL_GS_BASE => SHADOW_KERNEL_GS,
-            MSR_TSC_AUX => SHADOW_TSC_AUX,
             MSR_SPEC_CTRL => SHADOW_SPEC_CTRL,
             _ => 0,
         }
@@ -189,15 +179,8 @@ pub fn shadow_read(index: u32) -> u64 {
 pub fn shadow_write(index: u32, value: u64) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
-        match index {
-            MSR_STAR => SHADOW_STAR = value,
-            MSR_LSTAR => SHADOW_LSTAR = value,
-            MSR_CSTAR => SHADOW_CSTAR = value,
-            MSR_SFMASK => SHADOW_SFMASK = value,
-            MSR_KERNEL_GS_BASE => SHADOW_KERNEL_GS = value,
-            MSR_TSC_AUX => SHADOW_TSC_AUX = value,
-            MSR_SPEC_CTRL => SHADOW_SPEC_CTRL = value,
-            _ => {}
+        if index == MSR_SPEC_CTRL {
+            SHADOW_SPEC_CTRL = value;
         }
     }
 }

@@ -1318,9 +1318,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
                 arm_linux_tick();
-                // Deliver PIC timer only when guest IF=1 (else VM-entry fails).
+                // Kernel-only ticks: IF=1 and CPL=0. Injecting IRQ0 into
+                // userspace raced `/init` and double-faulted (user RSP).
                 let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
-                if (rflags & (1 << 9)) != 0 {
+                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+                let cpl = cs & 3;
+                if (rflags & (1 << 9)) != 0 && cpl == 0 {
                     if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
                         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
                         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
