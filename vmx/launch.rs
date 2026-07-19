@@ -1102,6 +1102,17 @@ unsafe fn enter_proto_kernel() -> ! {
         serial::write_line("boot: ERROR — VMWRITE guest RIP for kernel entry failed");
         finish_boot(false);
     }
+    if REAL_LINUX_GUEST {
+        // Bring-up IDT is not a Linux IDT — intercept faults before triple-fault.
+        if ops::vmwrite(EXCEPTION_BITMAP, LINUX_EXCEPTION_BITMAP as u64).is_err()
+            || ops::vmwrite(PAGE_FAULT_ERROR_CODE_MASK, 0).is_err()
+            || ops::vmwrite(PAGE_FAULT_ERROR_CODE_MATCH, 0).is_err()
+        {
+            serial::write_line("boot: ERROR — exception bitmap VMWRITE failed");
+            finish_boot(false);
+        }
+        serial::write_line("boot: Linux exception bitmap armed");
+    }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
     let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
@@ -1182,6 +1193,16 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
+        EXIT_REASON_EXCEPTION_NMI => {
+            dump_linux_exception_exit();
+            finish_boot(false);
+        }
+        EXIT_REASON_TRIPLE_FAULT => {
+            // Instruction length is undefined — never advance RIP (causes storms).
+            serial::write_line("boot: ERROR — Linux triple fault");
+            dump_linux_guest_state();
+            finish_boot(false);
+        }
         EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => {
             // M3.9 will harden; for M3.8 skip the insn and resume.
             serial::write_str("boot: linux MSR stub reason=0x");
@@ -1189,24 +1210,80 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             serial::write_byte(b'\n');
             let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
             let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+            if insn_len == 0 || insn_len > 15 {
+                serial::write_line("boot: ERROR — MSR exit with bad insn len");
+                dump_linux_guest_state();
+                finish_boot(false);
+            }
             let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
+        EXIT_REASON_CR_ACCESS => {
+            // Allow CR reads/writes through by skipping? Safer: dump — CR3
+            // switches are expected during Linux bring-up and must not exit.
+            serial::write_line("boot: ERROR — unexpected CR-access exit (enable passthrough)");
+            dump_linux_guest_state();
+            finish_boot(false);
+        }
         _ => {
-            serial::write_str("boot: linux stub exit reason=0x");
+            serial::write_str("boot: linux unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
-            let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-            let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-            if insn_len > 0 && insn_len <= 15 {
-                let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
-                let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
-                vmresume_with_gprs();
-            }
+            dump_linux_guest_state();
+            // Do not advance RIP: insn length is often undefined.
             finish_boot(false);
         }
     }
+}
+
+unsafe fn dump_linux_exception_exit() {
+    let info = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    let vector = (info & 0xff) as u32;
+    let typ = ((info >> 8) & 7) as u32;
+    let ec_valid = (info & (1 << 11)) != 0;
+    let valid = (info & (1 << 31)) != 0;
+    serial::write_str("boot: Linux exception valid=");
+    serial::write_byte(if valid { b'1' } else { b'0' });
+    serial::write_str(" type=0x");
+    write_hex_u32(typ);
+    serial::write_str(" vec=0x");
+    write_hex_u32(vector);
+    if ec_valid {
+        let ec = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0) as u32;
+        serial::write_str(" err=0x");
+        write_hex_u32(ec);
+    }
+    if vector == 14 {
+        // #PF — CR2 is not VMCS-switched; still holds the fault address.
+        let cr2 = cpu::read_cr2();
+        serial::write_str(" cr2=0x");
+        write_hex_u64(cr2);
+    }
+    serial::write_byte(b'\n');
+    dump_linux_guest_state();
+}
+
+unsafe fn dump_linux_guest_state() {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
+    let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+    let cr4 = ops::vmread(GUEST_CR4).unwrap_or(0);
+    let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+    serial::write_str("boot: guest rip=0x");
+    write_hex_u64(rip);
+    serial::write_str(" rsp=0x");
+    write_hex_u64(rsp);
+    serial::write_str(" cr0=0x");
+    write_hex_u64(cr0);
+    serial::write_str(" cr3=0x");
+    write_hex_u64(cr3);
+    serial::write_str(" cr4=0x");
+    write_hex_u64(cr4);
+    serial::write_str(" qual=0x");
+    write_hex_u64(qual);
+    serial::write_byte(b'\n');
 }
 
 unsafe fn phase5_guest_timer_irq(basic: u32) -> ! {

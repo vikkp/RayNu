@@ -175,6 +175,12 @@ pub unsafe fn cli() {
 }
 
 #[inline]
+pub unsafe fn read_cr2() -> u64 {
+    let v: u64;
+    core::arch::asm!("mov {}, cr2", out(reg) v, options(nostack, nomem, preserves_flags));
+    v
+}
+
 pub unsafe fn read_cr3() -> u64 {
     let v: u64;
     core::arch::asm!("mov {}, cr3", out(reg) v, options(nomem, nostack, preserves_flags));

@@ -62,6 +62,8 @@ pub const VM_INSTRUCTION_ERROR: u64 = 0x0000_4400;
 pub const EXIT_REASON: u64 = 0x0000_4402;
 /// VM-exit interruption information (valid when ack-interrupt-on-exit).
 pub const VM_EXIT_INTR_INFO: u64 = 0x0000_4404;
+/// VM-exit interruption error code (when bit 11 of intr info is set).
+pub const VM_EXIT_INTR_ERROR_CODE: u64 = 0x0000_4406;
 pub const VM_EXIT_INSTRUCTION_LEN: u64 = 0x0000_440C;
 pub const EXIT_QUALIFICATION: u64 = 0x0000_6400;
 
@@ -159,18 +161,36 @@ pub const VM_EXIT_LOAD_IA32_EFER: u32 = 1 << 21;
 pub const VM_ENTRY_IA32E_MODE: u32 = 1 << 9;
 pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
 
+/// Basic exit reason: exception or NMI.
+pub const EXIT_REASON_EXCEPTION_NMI: u32 = 0;
 /// Basic exit reason: external interrupt.
 pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
+/// Basic exit reason: triple fault.
+pub const EXIT_REASON_TRIPLE_FAULT: u32 = 2;
 /// Basic exit reason: CPUID.
 pub const EXIT_REASON_CPUID: u32 = 10;
 /// Basic exit reason: HLT.
 pub const EXIT_REASON_HLT: u32 = 12;
+/// Basic exit reason: control-register access.
+pub const EXIT_REASON_CR_ACCESS: u32 = 28;
 /// Basic exit reason: I/O instruction.
 pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
 /// RDMSR
 pub const EXIT_REASON_MSR_READ: u32 = 31;
 /// WRMSR
 pub const EXIT_REASON_MSR_WRITE: u32 = 32;
+
+/// Exception bitmap: catch faults before they escalate to triple fault (M3.8).
+pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
+    | (1 << 6) // #UD
+    | (1 << 8) // #DF
+    | (1 << 10) // #TS
+    | (1 << 11) // #NP
+    | (1 << 12) // #SS
+    | (1 << 13) // #GP
+    | (1 << 14) // #PF
+    | (1 << 17) // #AC
+    | (1 << 19); // #XF
 
 #[cfg(test)]
 mod fields_test {
