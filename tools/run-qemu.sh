@@ -120,7 +120,7 @@ echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); guest exits via isa-debug-exit
 
 exec qemu-system-x86_64 \
   "${ACCEL_ARGS[@]}" \
-  -m 512M \
+  -m 1G \
   -display none \
   -serial "$SERIAL_CHARDEV" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \

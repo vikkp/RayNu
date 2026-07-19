@@ -79,13 +79,21 @@ pub const DEFAULT_CMDLINE: &[u8] =
     b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 acpi=off nokaslr maxcpus=1\0";
 
 /// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
-pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nokaslr maxcpus=1\0";
+///
+/// `memmap=` is a belt-and-suspenders RAM supply if zeropage e820 is ignored
+/// (`append_e820_table` requires ≥2 entries; e801 fallback is only ~640 KiB).
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nokaslr maxcpus=1 memmap=640K@0 memmap=1023M@1M\0";
 
 /// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
 pub const INITRD_MAX_PAGES: usize = 64;
 
+/// Guest RAM size advertised via e820 / memmap (match QEMU `-m`).
+pub const GUEST_RAM_BYTES: u64 = 1024 * 1024 * 1024;
+
 /// e820 type: usable RAM.
 pub const E820_RAM: u32 = 1;
+/// e820 type: reserved (VGA / EBDA hole).
+pub const E820_RESERVED: u32 = 2;
 
 /// Result of placing kernel / initrd / boot_params in GPA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,19 +161,22 @@ pub struct BzImageInfo {
     pub entry_file_off: usize,
 }
 
-/// Write a classic two-region e820 RAM map into `boot_params`.
+/// Write a classic PC e820 RAM map into `boot_params`.
 ///
 /// Linux `append_e820_table()` **rejects maps with fewer than two entries**
 /// and falls back to BIOS-e801 (~640 KiB). A single `[0, mem)` region is
 /// therefore fatal for real kernels loaded above 1 MiB.
 ///
-/// Layout (PC-compatible hole for VGA/BIOS):
+/// Layout (QEMU/SeaBIOS-style):
 /// - `[0, E820_LOW_RAM_END)` RAM
+/// - `[E820_LOW_RAM_END, E820_HIGH_RAM_START)` reserved (EBDA/VGA/BIOS hole)
 /// - `[E820_HIGH_RAM_START, mem_bytes)` RAM
 ///
-/// Also fills `alt_mem_k` / `ext_mem_k` (u16-capped) as a weak e801/88 backup
-/// and clears the setup sentinel so `sanitize_boot_params` keeps the map.
+/// Also fills `alt_mem_k` (**u32** KB above 1 MiB) and `ext_mem_k` as e801/88
+/// backups, and clears the setup sentinel so `sanitize_boot_params` keeps
+/// the map.
 pub fn write_e820_ram_map(buf: &mut [u8; BOOT_PARAMS_SIZE], mem_bytes: u64) {
+    // Whole zeropage must be cleared before hdr/e820; callers zero `buf`.
     buf[OFF_SENTINEL] = 0;
 
     let high_end = if mem_bytes > E820_HIGH_RAM_START {
@@ -174,22 +185,30 @@ pub fn write_e820_ram_map(buf: &mut [u8; BOOT_PARAMS_SIZE], mem_bytes: u64) {
         E820_HIGH_RAM_START + 16 * 1024 * 1024
     };
     let high_size = high_end - E820_HIGH_RAM_START;
+    let hole_size = E820_HIGH_RAM_START - E820_LOW_RAM_END;
 
     // e820[0]: low conventional RAM
     write_u64(buf, OFF_E820_TABLE, 0);
     write_u64(buf, OFF_E820_TABLE + 8, E820_LOW_RAM_END);
     write_u32(buf, OFF_E820_TABLE + 16, E820_RAM);
-    // e820[1]: extended RAM above 1 MiB
+    // e820[1]: reserved hole (EBDA / VGA / ROM)
     let e1 = OFF_E820_TABLE + E820_ENTRY_SIZE;
-    write_u64(buf, e1, E820_HIGH_RAM_START);
-    write_u64(buf, e1 + 8, high_size);
-    write_u32(buf, e1 + 16, E820_RAM);
-    buf[OFF_E820_ENTRIES] = 2;
+    write_u64(buf, e1, E820_LOW_RAM_END);
+    write_u64(buf, e1 + 8, hole_size);
+    write_u32(buf, e1 + 16, E820_RESERVED);
+    // e820[2]: extended RAM above 1 MiB
+    let e2 = OFF_E820_TABLE + 2 * E820_ENTRY_SIZE;
+    write_u64(buf, e2, E820_HIGH_RAM_START);
+    write_u64(buf, e2 + 8, high_size);
+    write_u32(buf, e2 + 16, E820_RAM);
+    buf[OFF_E820_ENTRIES] = 3;
 
-    // e801/88 fallbacks are u16 KB; clamp so they stay valid if e820 is ignored.
-    let alt_kb = (high_size / 1024).min(u16::MAX as u64) as u16;
-    write_u16(buf, OFF_ALT_MEM_K, alt_kb);
-    write_u16(buf, OFF_EXT_MEM_K, alt_kb);
+    // e801 path uses alt_mem_k as KB above 1 MiB (u32 in modern boot_params).
+    let alt_kb = (high_size / 1024) as u32;
+    write_u32(buf, OFF_ALT_MEM_K, alt_kb);
+    // BIOS-88 field is still u16; clamp.
+    let ext_kb = (high_size / 1024).min(u16::MAX as u64) as u16;
+    write_u16(buf, OFF_EXT_MEM_K, ext_kb);
 }
 
 /// Pack a Linux `boot_params` zero page.
@@ -509,8 +528,9 @@ pub fn load_bzimage_guest(
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
     // Must be ≥2 e820 entries — Linux rejects a single-region map.
+    // Real guests match QEMU `-m 1G` (512M is a known alloc_low_pages footgun).
     let mem_bytes = if real {
-        512 * 1024 * 1024u64
+        GUEST_RAM_BYTES
     } else {
         64 * 1024 * 1024u64
     };

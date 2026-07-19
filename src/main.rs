@@ -281,6 +281,16 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             }
             if info.is_real_linux {
                 boot::serial::write_line("boot: real Linux bzImage detected");
+                // Prove zeropage e820 survived packing (Latitude: must not be BIOS-e801).
+                // SAFETY: boot_params frame just written by load_bzimage_guest.
+                let entries = unsafe {
+                    core::ptr::read_volatile(
+                        (info.boot_params_phys as *const u8).add(guest::linux_boot::OFF_E820_ENTRIES),
+                    )
+                };
+                boot::serial::write_str("boot: e820_entries=");
+                write_hex(entries as u64);
+                boot::serial::write_byte(b'\n');
             }
             if info.has_real_initrd {
                 boot::serial::write_str("boot: real initrd bytes=0x");
