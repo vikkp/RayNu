@@ -200,7 +200,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → grow into exit loop |
+| `vmx/launch.rs` | Exit phase machine → **M3.6** continuous loop |
+| `guest/linux_boot.rs` | Synthetic load today → **M3.7** real bzImage |
+
 | `devices/mod.rs` | Device stubs → serial PIO |
 | `memory/ept_hw.rs` | 4 GiB identity (keep for M3 bring-up) |
 | `memory/ept.rs` | Ownership claims for kernel/initrd pages |
