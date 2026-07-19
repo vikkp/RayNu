@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.21 closed; **M3.22 open** (PE assets); then M4.  
+**Status:** M3.11–M3.22 **closed**; next track is **M4**.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered L3, refine, NOIRQ, tight EPT, and Kani. Active: M3.22 PE `.assets.*` embed.
+M3’s first-shell goal is closed. Post-shell harden delivered L3, refine, NOIRQ, tight EPT, Kani, and PE asset embed. Active: M4 platform work.
 
 ---
 
@@ -205,9 +205,9 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ### M3.22 — PE `.assets.*` embed — `RAYNU-V-M3-ASSETS-OK`
 
-**Status: open** — host gate + UEFI PE sections green; Latitude `./tools/qemu-boot-test.sh` pending.
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.22)`.
 
-**Shipped (this PR):**
+**Shipped:**
 
 1. Embed `assets/bzImage` + `assets/initrd` as PE sections `.askern` / `.asinit`
    (8-char COFF aliases for ADR-003 `.assets.kernel` / `.assets.initrd`).
@@ -215,8 +215,6 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 3. Emit `RAYNU-V-M3-ASSETS-OK` when PE embed is present.
 4. `tools/check-pe-assets.sh` + `build.sh` verify sections; `check-size.sh` still enforces 15/20 MB.
 5. Host gate `boot/assets_gate.rs`; qemu pass line M0→M3.22.
-
-**Done when (Latitude):** `RAYNU-V-M3-ASSETS-OK` + `Boot gate PASSED (M0 → M3.22)`.
 
 **Deferred:** zstd, webui/schemas/vmconfigs (still under budget without them).
 
@@ -228,11 +226,11 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 ## Execution order
 
 ```
-M3.11 → … → M3.21 Kani (closed) → M3.22 assets (open)
+M3.11 → … → M3.21 Kani (closed) → M3.22 assets (closed)
 → M4 (N-guest platform)
 ```
 
-**Next: close M3.22 on Latitude, then M4.**
+**M3.22 closed on Latitude. Next: M4.**
 
 ---
 
@@ -322,12 +320,13 @@ RAYNU-V-M3-KANI-OK
 # CI job kani (M3.21 hard-fail) + Latitude ~/raynu
 ```
 
-## M3.22 acceptance (pending Latitude)
+## M3.22 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-ASSETS-OK
-boot: PE assets embedded (.askern/.asinit) — prefer PE
-==> M3.22 PE assets marker found
-==> Boot gate PASSED (M0 → M3.22; qemu status=…)
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
+==> Boot gate PASSED (M0 → M3.22; qemu status=33)
 # host CI + Latitude ~/raynu
 ```
