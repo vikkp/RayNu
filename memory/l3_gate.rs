@@ -8,9 +8,8 @@
 //! present and that the concrete 4K single-guest exclusivity properties those
 //! lemmas claim still hold.
 //!
-//! This gate does **not** claim ADR-006 L3 maturity. Verus is pinned (M3.15)
-//! but proofs are not linked/discharged; live `EptMap` remains L2 until
-//! `cargo verus --verify` is green (M3.17).
+//! Ghost-model true L3 is M3.17 (`l3_verify_gate` / `RAYNU-V-M3-L3-VERIFY-OK`).
+//! Live `EptMap` remains L2 until ghost↔exec refinement.
 
 use crate::memory::ept::{self, EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID};
 use crate::memory::frame_allocator::PhysFrame;
@@ -19,25 +18,24 @@ use crate::memory::l2_gate::{self, ept_spec_is_l2};
 /// Host / CI marker when the M3.14 L3-attempt gate passes.
 pub const M3_L3_OK_MARKER: &str = "RAYNU-V-M3-L3-OK";
 
-/// True when `ept_proof.rs` still documents the M3.14 L3 attempt + gaps.
+/// True when `ept_proof.rs` documents the M3.14 L3 attempt + remaining gaps.
 pub fn ept_proof_is_l3_attempt() -> bool {
     let s = include_str!("ept_proof.rs");
     s.contains("VERIFICATION: **L3-attempt**")
         && s.contains("lemma_map_ok_exclusive")
         && s.contains("lemma_unmap_ok_exclusive")
         && s.contains("theorem_single_guest_4k_map_unmap_exclusive")
-        && s.contains("GAP: Lemmas not yet in a `verus!` module")
+        && s.contains("GAP(CLOSED M3.17): Linked `ept_model` lemmas discharged without `admit()`")
         && s.contains("GAP: N concurrent guests")
         && s.contains("GAP: Live migration page transfer")
         && s.contains("GAP: Hardware EPT PTE correspondence")
 }
 
-/// True when the proof file still refuses to claim machine-checked L3.
+/// True when the proof file does not claim live `EptMap` is fully L3.
 pub fn ept_proof_does_not_claim_l3_complete() -> bool {
     let s = include_str!("ept_proof.rs");
-    s.contains("Not machine-checked")
-        && s.contains("Live `EptMap` maturity stays **L2**")
-        && !s.contains("VERIFICATION: **L3**")
+    s.contains("Live `EptMap` maturity stays **L2**")
+        && s.contains("GAP: Ghost model not yet refined against concrete `EptMap` exec path")
 }
 
 /// Concrete 4K single-guest map/unmap exclusivity (lemma target of M3.14).

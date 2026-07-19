@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.15 closed** (pinned Verus → `RAYNU-V-M3-VERUS-OK`). Next true L3: M3.16 link → M3.17 verify. Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**Through M3.17 closed** (true L3: `ept_model` exclusivity discharged → `RAYNU-V-M3-L3-VERIFY-OK`). Lived: [docs/progress.md](docs/progress.md). Post-shell: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 
@@ -385,6 +385,8 @@ cargo verus --verify                                    # Formal proofs (Proven 
   L2 host gate M2.6 (`cargo test` → `RAYNU-V-M2-L2-OK`),
   L3-attempt host gate M3.14 (`cargo test` → `RAYNU-V-M3-L3-OK`),
   frozen Verus pin M3.15 (`./tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK`),
+  Verus L3-link M3.16 (`./tools/verus-link-smoke.sh` → `RAYNU-V-M3-L3-LINK-OK`),
+  true L3 verify M3.17 (`./tools/verus-verify-smoke.sh` → `RAYNU-V-M3-L3-VERIFY-OK`),
   Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
   (see [docs/progress.md](docs/progress.md))

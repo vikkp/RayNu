@@ -1,12 +1,18 @@
-//! Verus L3 proof *attempt* for EPT isolation (ADR-004), M3.14.
+//! Verus L3 proof sketch for EPT isolation (ADR-004), M3.14 → M3.17.
 //!
-//! VERIFICATION: **L3-attempt** — exclusivity lemmas drafted for 4K single-guest
-//! map/unmap. Not machine-checked yet: Verus is frozen in `verus-version.toml`
-//! (M3.15) but lemmas are not linked/discharged (M3.16/M3.17).
-//! Live `EptMap` maturity stays **L2** until `cargo verus --verify` is green
-//! (ADR-006). Runtime asserts and Kani harnesses remain defense-in-depth.
+//! VERIFICATION: **L3** (scoped ghost model) — `ept_model` exclusivity lemmas
+//! for 4K single-guest map/unmap are discharged under the frozen Verus pin
+//! (M3.17) with **no `admit()`** → `RAYNU-V-M3-L3-VERIFY-OK`.
+//! Live `EptMap` maturity stays **L2** until ghost↔exec refinement (GAPs below).
+//! Runtime asserts and Kani harnesses remain defense-in-depth.
 //!
-//! # Scope (M3.14)
+//! Historical M3.14 tag retained for the host L3-attempt gate:
+//! VERIFICATION: **L3-attempt**
+//!
+//! Linked + verified model: `ept_model/` → `RAYNU-V-M3-L3-LINK-OK` /
+//! `RAYNU-V-M3-L3-VERIFY-OK`.
+//!
+//! # Scope (M3.14–M3.17)
 //!
 //! - Single guest (`guest_id = BRINGUP_GUEST`)
 //! - 4K page granularity (GPA/HPA page-aligned)
@@ -16,8 +22,8 @@
 //! # Out of scope / documented gaps
 //!
 //! ```text
-//! GAP: Lemmas not yet in a `verus!` module under `cargo verus --verify` (M3.16/17)
-//! GAP: Lemmas are ghost/prose; not yet linked to concrete `EptMap` via `exec`
+//! GAP(CLOSED M3.17): Linked `ept_model` lemmas discharged without `admit()`
+//! GAP: Ghost model not yet refined against concrete `EptMap` exec path
 //! GAP: N concurrent guests (ADR-004 M4 row)
 //! GAP: Large pages (2M/1G) in ghost model and proof (M4/M5)
 //! GAP: EPT violation handler preserves exclusivity
@@ -36,11 +42,10 @@
 //!
 //! # Lemmas (Verus-shaped sketch)
 //!
-//! The blocks below are the M3.14 proof attempt. They are written in Verus
-//! surface syntax so a future pin can paste them into a `verus!` module.
-//! Until then, [`l3_gate`](crate::memory::l3_gate) checks that this file still
-//! contains the lemma names and GAP list, and re-runs the concrete 4K
-//! single-guest properties those lemmas claim.
+//! The blocks below are the M3.14 proof attempt. Discharged bodies live in
+//! `ept_model/src/lib.rs`. [`l3_gate`](crate::memory::l3_gate) checks that this
+//! file still contains the lemma names and GAP list, and re-runs the concrete
+//! 4K single-guest properties those lemmas claim.
 //!
 //! ```text
 //! // ---- lemma: empty map is exclusive ----
@@ -68,7 +73,7 @@
 //!         exclusive_ownership(m2),
 //!         m2.Owned[frame] == guest,
 //!         m2.ByGpa[(guest, gpa)] == frame,
-//! { /* induction on |Owned|; uniqueness of HPA and (guest,gpa) */ }
+//! { /* discharged in ept_model (M3.17) */ }
 //!
 //! // ---- lemma: map AlreadyOwned leaves state unchanged ----
 //! proof fn lemma_map_already_owned_unchanged(
@@ -105,9 +110,9 @@
 //!         exclusive_ownership(m2),
 //!         !m2.Owned.contains(frame),
 //!         !m2.ByGpa.contains((guest, gpa)),
-//! { /* remove unique (guest,gpa) and its HPA */ }
+//! { /* discharged in ept_model (M3.17) */ }
 //!
-//! // ---- theorem (M3.14 target): single-guest 4K map/unmap preserve exclusivity ----
+//! // ---- theorem: single-guest 4K map/unmap preserve exclusivity ----
 //! proof fn theorem_single_guest_4k_map_unmap_exclusive(
 //!     m: GhostEptMap,
 //!     steps: Seq<MapUnmapStep>,
@@ -119,10 +124,8 @@
 //!     ensures
 //!         exclusive_ownership(fold_steps(m, steps)),
 //! {
-//!     // GAP: inductive body not discharged by Verus yet (link + verify = M3.16/17).
-//!     // Intended: induct on steps; case-split map Ok / AlreadyOwned / unmap Ok / NotMapped
-//!     // using lemma_map_ok_exclusive, lemma_map_already_owned_unchanged,
-//!     // lemma_unmap_ok_exclusive.
+//!     // Discharged in ept_model (M3.17): induct on steps; case-split map/unmap
+//!     // via lemma_map_ok_exclusive / lemma_unmap_ok_exclusive.
 //! }
 //! ```
 //!

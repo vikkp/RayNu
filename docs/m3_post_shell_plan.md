@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.15 closed; **true L3 track** next is M3.16 → M3.17.  
+**Status:** M3.11–M3.17 closed (true L3 for 4K single-guest ghost exclusivity).  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches, drafted the ADR-004 L3 attempt, and froze the Verus toolchain (exact tag + commit + sha256). Active track: link lemmas and discharge true L3. Parallel: drop IRQ0/IRQ4 when ready.
+M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches, drafted the ADR-004 L3 attempt, froze Verus, linked the EptMap ghost model, and discharged true L3 (no `admit`). Parallel: drop IRQ0/IRQ4 when ready.
 
 ---
 
@@ -98,21 +98,35 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 2. `tools/install-verus.sh` downloads that asset only, checks sha256 + `version.json` commit, installs Rust `1.96.0`.
 3. `tools/verus-smoke.sh` runs `verus --version` + `cargo verus verify` (crate not opted into proofs yet — M3.16).
 4. Host pin gate `memory/verus_gate.rs` + CI asserts pin fields then hard-passes `verus-smoke`.
-5. Full Proven Core proof discharge still deferred to M3.17.
+5. Full Proven Core proof discharge deferred to M3.17 (now closed for scoped exclusivity).
 
 **Files:** `verus-version.toml`, `tools/install-verus.sh`, `tools/verus-smoke.sh`, `memory/verus_gate.rs`, `memory/verus_gate_test.rs`, `.github/workflows/ci.yml`.
 
 ### M3.16 — Verus-linkable EptMap — `RAYNU-V-M3-L3-LINK-OK`
 
-**Status: planned.**
+**Status: closed** — host/CI + Latitude `./tools/verus-link-smoke.sh` → `RAYNU-V-M3-L3-LINK-OK`.
 
-**Goal:** Lemmas / ghost model are Verus-checkable (not prose-only): `verus!` path for map/unmap exclusivity; crate opts into verification. Marker when the linked model typechecks under the pinned Verus (proofs may still be `assume` / incomplete).
+**Shipped:**
+
+1. Host-only `ept_model` crate with `package.metadata.verus.verify = true` (not linked into EFI).
+2. `verus!` ghost model: `GhostEptMap`, `exclusive_ownership`, map/unmap lemmas + target theorem.
+3. Incomplete inductive bodies used `admit()` until M3.17 discharged them.
+4. `tools/verus-link-smoke.sh` + host gate `memory/l3_link_gate.rs` + CI `verus-link` job.
+
+**Files:** `ept_model/`, `tools/verus-link-smoke.sh`, `memory/l3_link_gate.rs`, `Cargo.toml` (workspace), `.github/workflows/ci.yml`.
 
 ### M3.17 — True L3 verify — `RAYNU-V-M3-L3-VERIFY-OK`
 
-**Status: planned.**
+**Status: closed** — host/CI + Latitude `./tools/verus-verify-smoke.sh` → `RAYNU-V-M3-L3-VERIFY-OK`.
 
-**Goal:** Green `cargo verus --verify` on `theorem_single_guest_4k_map_unmap_exclusive` → **ADR-006 L3** for that scope; CI hard-fails on verify; promote `EptMap` maturity from L2 / L3-attempt to L3.
+**Shipped:**
+
+1. Green `cargo verus verify -p ept_model` with **no `admit()`** on map/unmap exclusivity lemmas + `theorem_single_guest_4k_map_unmap_exclusive`.
+2. `tools/verus-verify-smoke.sh` rejects `admit(` and requires a positive verified count.
+3. Host gate `memory/l3_verify_gate.rs` + CI `verus-verify` hard-fail job.
+4. **ADR-006 L3** for scoped ghost property (4K, single guest, map/unmap). Live `EptMap` stays L2 until refinement (remaining GAPs in `ept_proof.rs`).
+
+**Files:** `ept_model/src/lib.rs`, `tools/verus-verify-smoke.sh`, `memory/l3_verify_gate.rs`, `.github/workflows/ci.yml`.
 
 ### Parallel (any time)
 
@@ -127,10 +141,10 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 
 ```
 M3.11 → M3.12 → M3.13 → M3.14 (closed)
-M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify   ← now
+M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify (closed)
 ```
 
-**M3.15 closed. Now executing: M3.16.**
+**M3.17 closed (true L3 for scoped ghost exclusivity).**
 
 ---
 
@@ -159,5 +173,23 @@ RAYNU-V-M3-L3-OK
 ```text
 RAYNU-V-M3-VERUS-OK
 ==> Verus pin smoke PASSED (M3.15)
+# host CI + Latitude ~/raynu
+```
+
+## M3.16 acceptance (met)
+
+```text
+RAYNU-V-M3-L3-LINK-OK
+==> Verus L3-link smoke PASSED (M3.16)
+# cargo verus verify -p ept_model → 7 verified, 0 errors (admit gaps OK)
+# host CI + Latitude ~/raynu
+```
+
+## M3.17 acceptance (met on Latitude)
+
+```text
+RAYNU-V-M3-L3-VERIFY-OK
+==> Verus L3-verify smoke PASSED (M3.17)
+# cargo verus verify -p ept_model → 13 verified, 0 errors (no admit)
 # host CI + Latitude ~/raynu
 ```

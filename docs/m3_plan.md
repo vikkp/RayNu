@@ -10,7 +10,7 @@ Lived gates through **M3.14**: [progress.md](progress.md). Post-shell: [m3_post_
 
 ## Where we are
 
-**M3.0–M3.14 closed** — real Linux SHELL on Latitude through precise EPT + APIC; host Verus L3 attempt (`RAYNU-V-M3-L3-OK`). Historical bring-up notes below kept for context.
+**M3.0–M3.17 closed** — real Linux SHELL on Latitude through precise EPT + APIC; true L3 for scoped ghost exclusivity (`RAYNU-V-M3-L3-VERIFY-OK`). Historical bring-up notes below kept for context.
 
 | Have (synthetic) | Need for real Linux |
 |------------------|---------------------|
@@ -190,8 +190,8 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
-2. **Post-shell / true L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.15 pin closed; **M3.16** link → **M3.17** verify.
-3. Parallel: drop IRQ crutches; site/PE embed.
+2. ~~Post-shell / true L3~~ — M3.17 closed (`RAYNU-V-M3-L3-VERIFY-OK`); see [m3_post_shell_plan.md](m3_post_shell_plan.md).
+3. Parallel: drop IRQ crutches; ghost↔exec refinement; site/PE embed.
 
 ---
 

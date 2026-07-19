@@ -1,0 +1,26 @@
+# Host-only Verus-verified EPT ghost model (M3.17 true L3).
+# Not linked into r640-hypervisor.efi. Verify with:
+#   ./tools/verus-verify-smoke.sh
+# under the frozen pin in ../verus-version.toml.
+
+[package]
+name = "ept_model"
+version = "0.1.0"
+edition = "2021"
+description = "ADR-004 EPT exclusive-ownership ghost model (Verus)"
+license = "Apache-2.0 OR MIT"
+publish = false
+
+[dependencies]
+# vstd version must stay compatible with the frozen Verus binary pin.
+vstd = "=0.0.0-2026-06-14-0213"
+
+[package.metadata.verus]
+verify = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(verus_only)',
+  'cfg(verus_keep_ghost)',
+  'cfg(verus_keep_ghost_body)',
+] }

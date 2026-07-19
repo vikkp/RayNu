@@ -17,7 +17,8 @@ asset_linux = "verus-0.2026.07.12.0b42f4c-x86-linux.zip"
 sha256_linux = "f6f4f5d08e07d3e1ad721d775bda5ba96b9dd0c73b48fc17f2e071866fbd01c0"
 
 [notes]
-status = "M3.15 frozen weekly Verus pin; smoke → RAYNU-V-M3-VERUS-OK; true L3 verify → M3.17"
+status = "M3.15 frozen weekly Verus pin; M3.17 true L3 → RAYNU-V-M3-L3-VERIFY-OK (13 verified, 0 errors)"
 host_marker = "RAYNU-V-M3-VERUS-OK"
 l3_attempt_marker = "RAYNU-V-M3-L3-OK"
+l3_verify_marker = "RAYNU-V-M3-L3-VERIFY-OK"
 policy = "CI installs only this tag+sha256; never releases/latest"
