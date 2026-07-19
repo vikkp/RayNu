@@ -1,9 +1,10 @@
 //! Verus L3 proof sketch for EPT isolation (ADR-004), M3.14 → M3.17.
 //!
-//! VERIFICATION: **L3** (scoped ghost model) — `ept_model` exclusivity lemmas
-//! for 4K single-guest map/unmap are discharged under the frozen Verus pin
-//! (M3.17) with **no `admit()`** → `RAYNU-V-M3-L3-VERIFY-OK`.
-//! Live `EptMap` maturity stays **L2** until ghost↔exec refinement (GAPs below).
+//! VERIFICATION: **L3** (scoped ghost model + refine) — `ept_model` exclusivity
+//! lemmas for 4K single-guest map/unmap are discharged (M3.17) and refined
+//! against a concrete ownership view of `EptMap` (M3.18) with **no `admit()`**
+//! → `RAYNU-V-M3-L3-VERIFY-OK` / `RAYNU-V-M3-L3-REFINE-OK`.
+//! Live `EptMap` runtime maturity stays **L2** (asserts + Kani); remaining GAPs below.
 //! Runtime asserts and Kani harnesses remain defense-in-depth.
 //!
 //! Historical M3.14 tag retained for the host L3-attempt gate:
@@ -23,7 +24,7 @@
 //!
 //! ```text
 //! GAP(CLOSED M3.17): Linked `ept_model` lemmas discharged without `admit()`
-//! GAP(M3.18): Ghost model not yet refined against concrete `EptMap` exec path
+//! GAP(CLOSED M3.18): Ghost model refined against concrete ownership view of `EptMap`
 //! GAP: N concurrent guests (ADR-004 M4 row)
 //! GAP: Large pages (2M/1G) in ghost model and proof (M4/M5)
 //! GAP: EPT violation handler preserves exclusivity

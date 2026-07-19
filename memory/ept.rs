@@ -1,8 +1,9 @@
 //! Extended Page Tables (EPT) ownership registry (ADR-004).
 //!
-//! Pillar: [V] · Proven Core · VERIFICATION: L2 (spec M2.6) + L1 runtime
-//! Per ADR-004: every valid GPA→HPA mapping is exclusively owned by one guest
-//! and belongs to neither the hypervisor nor any other guest.
+//! Pillar: [V] · Proven Core · VERIFICATION: L2 runtime (M2.6); ownership
+//! content refined to verified `ept_model` ghost (M3.18) for 4K bring-up
+//! map/unmap. Per ADR-004: every valid GPA→HPA mapping is exclusively owned
+//! by one guest and belongs to neither the hypervisor nor any other guest.
 //!
 //! M2.2 tracks **explicitly claimed** 4K guest pages (code/stack).
 //! M3.13 adds a durable **range** registry for the precise identity window
