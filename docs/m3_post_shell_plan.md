@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.17 closed; **post-L3 track** next is M3.18.  
+**Status:** M3.11–M3.18 closed; **post-L3 track** next is M3.19.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and delivered scoped true L3 (`ept_model`). Active track: ghost↔exec refinement + remaining guest/infra polish (M3.18–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3 and ghost↔exec refinement (`ept_model`). Active track: guest/infra polish (M3.19–M3.22).
 
 ---
 
@@ -142,15 +142,18 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 
 ### M3.18 — Ghost↔exec refinement — `RAYNU-V-M3-L3-REFINE-OK`
 
-**Status: planned.** ← **next to build**
+**Status: closed** — host/CI + Latitude `./tools/verus-refine-smoke.sh` → `RAYNU-V-M3-L3-REFINE-OK`.
 
-**Goal:** Connect live `EptMap` (and map/unmap exec path) to the verified `GhostEptMap` so 4K single-guest steps refine into the L3 model. Close `GAP(M3.18): Ghost model not yet refined against concrete EptMap exec path` in `ept_proof.rs`. Host gate (+ Verus proof obligations where they fit the pin); Latitude: M0→M3.13 no-regression.
+**Shipped:**
 
-**In scope:** refinement relation / abstraction function; exec map/unmap preserve exclusivity via the ghost model; marker + CI/host smoke.
+1. `ConcreteEptMap` + `abs` / `refines` in `ept_model`; map/unmap commute with ghost under abs.
+2. `theorem_concrete_single_guest_4k_refine` discharged (no `admit`).
+3. Host gate `memory/l3_refine_gate.rs` (live `EptMap` correspondence) + CI `verus-refine` job.
+4. Closed `GAP(CLOSED M3.18)` in `ept_proof.rs`.
 
-**Out of scope:** N guests, large pages, HW PTE identity builder, frame-allocator coupling (later GAPs / M4+).
+**Out of scope (still open):** N guests, large pages, HW PTE identity builder, frame-allocator coupling (M4+).
 
-**Files (expected):** `ept_model/`, `memory/ept.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, new host gate + smoke as needed.
+**Files:** `ept_model/src/lib.rs`, `tools/verus-refine-smoke.sh`, `memory/l3_refine_gate.rs`, `.github/workflows/ci.yml`.
 
 ### M3.19 — Drop IRQ0/IRQ4 crutches — `RAYNU-V-M3-NOIRQ-OK`
 
@@ -189,14 +192,14 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 ## Execution order
 
 ```
-M3.11 → … → M3.17 (closed — true L3)
-M3.18 refine  ← next
-M3.19 NOIRQ → M3.20 EPT3 (as needed)
+M3.11 → … → M3.17 (true L3) → M3.18 refine (closed)
+M3.19 NOIRQ  ← next
+M3.20 EPT3 (as needed)
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**M3.17 closed. Now planning: M3.18.**
+**M3.18 closed. Next: M3.19.**
 
 ---
 
@@ -243,5 +246,14 @@ RAYNU-V-M3-L3-LINK-OK
 RAYNU-V-M3-L3-VERIFY-OK
 ==> Verus L3-verify smoke PASSED (M3.17)
 # cargo verus verify -p ept_model → 13 verified, 0 errors (no admit)
+# host CI + Latitude ~/raynu
+```
+
+## M3.18 acceptance (met)
+
+```text
+RAYNU-V-M3-L3-REFINE-OK
+==> Verus L3-refine smoke PASSED (M3.18)
+# cargo verus verify -p ept_model → 22 verified, 0 errors (no admit)
 # host CI + Latitude ~/raynu
 ```

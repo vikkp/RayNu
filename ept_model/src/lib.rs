@@ -1,12 +1,15 @@
-//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
 //! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
-//! single-guest map/unmap are discharged with **no `admit()`**.
+//! single-guest map/unmap are discharged with **no `admit()`**. M3.18 adds
+//! ghost↔exec refinement: a concrete ownership view of live `EptMap` that
+//! abstracts to `GhostEptMap` and preserves `refines` under map/unmap.
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
 //! - M3.17 true L3: `RAYNU-V-M3-L3-VERIFY-OK` (via tools/verus-verify-smoke.sh)
+//! - M3.18 refine: `RAYNU-V-M3-L3-REFINE-OK` (via tools/verus-refine-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -422,8 +425,195 @@ pub proof fn theorem_single_guest_4k_map_unmap_exclusive(
     }
 }
 
+// ---------------------------------------------------------------------------
+// M3.18 — ghost↔exec refinement
+//
+// `ConcreteEptMap` is the ownership content of live `memory::ept::EptMap`
+// after collecting occupied slots (permissions / slot indices elided).
+// `abs` projects to the verified ghost model; `refines` = exclusive ownership
+// of that projection. Concrete map/unmap Ok steps commute with ghost steps.
+// ---------------------------------------------------------------------------
+
+/// Concrete ownership view of the live EPT registry (slot array abstracted).
+pub struct ConcreteEptMap {
+    pub owned: Map<FrameId, GuestId>,
+    pub by_gpa: Map<(GuestId, Gpa), FrameId>,
+}
+
+impl ConcreteEptMap {
+    pub open spec fn empty() -> Self {
+        ConcreteEptMap { owned: Map::empty(), by_gpa: Map::empty() }
+    }
+
+    pub open spec fn concrete_map(self, guest: GuestId, gpa: Gpa, frame: FrameId) -> Self {
+        ConcreteEptMap {
+            owned: self.owned.insert(frame, guest),
+            by_gpa: self.by_gpa.insert((guest, gpa), frame),
+        }
+    }
+
+    pub open spec fn concrete_unmap(self, guest: GuestId, gpa: Gpa) -> Self {
+        let frame = self.by_gpa[(guest, gpa)];
+        ConcreteEptMap {
+            owned: self.owned.remove(frame),
+            by_gpa: self.by_gpa.remove((guest, gpa)),
+        }
+    }
+}
+
+/// Abstraction function: concrete ownership view → verified ghost model.
+pub open spec fn abs(c: ConcreteEptMap) -> GhostEptMap {
+    GhostEptMap { owned: c.owned, by_gpa: c.by_gpa }
+}
+
+/// Concrete state refines the L3 ghost exclusivity invariant.
+pub open spec fn refines(c: ConcreteEptMap) -> bool {
+    exclusive_ownership(abs(c))
+}
+
+pub open spec fn concrete_step_enabled(c: ConcreteEptMap, step: MapUnmapStep) -> bool {
+    step_enabled(abs(c), step)
+}
+
+pub open spec fn apply_concrete_step(c: ConcreteEptMap, step: MapUnmapStep) -> ConcreteEptMap {
+    match step {
+        MapUnmapStep::Map { gpa, frame } => c.concrete_map(BRINGUP_GUEST, gpa, frame),
+        MapUnmapStep::Unmap { gpa } => c.concrete_unmap(BRINGUP_GUEST, gpa),
+    }
+}
+
+pub open spec fn fold_concrete_steps(c: ConcreteEptMap, steps: Seq<MapUnmapStep>) -> ConcreteEptMap
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+        c
+    } else {
+        fold_concrete_steps(apply_concrete_step(c, steps[0]), steps.skip(1))
+    }
+}
+
+pub open spec fn concrete_steps_ok(c: ConcreteEptMap, steps: Seq<MapUnmapStep>) -> bool
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+        true
+    } else {
+        &&& step_guest_ok(steps[0])
+        &&& concrete_step_enabled(c, steps[0])
+        &&& concrete_steps_ok(apply_concrete_step(c, steps[0]), steps.skip(1))
+    }
+}
+
+/// Empty concrete registry refines.
+pub proof fn lemma_empty_refines()
+    ensures
+        refines(ConcreteEptMap::empty()),
+        abs(ConcreteEptMap::empty()) == GhostEptMap::empty(),
+{
+    lemma_empty_exclusive();
+}
+
+/// Map Ok on concrete commutes with ghost_map under abs.
+pub proof fn lemma_abs_map_commutes(c: ConcreteEptMap, gpa: Gpa, frame: FrameId)
+    requires
+        refines(c),
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Map { gpa, frame }),
+    ensures
+        abs(c.concrete_map(BRINGUP_GUEST, gpa, frame)) == abs(c).ghost_map(
+            BRINGUP_GUEST,
+            gpa,
+            frame,
+        ),
+{
+}
+
+/// Unmap Ok on concrete commutes with ghost_unmap under abs.
+pub proof fn lemma_abs_unmap_commutes(c: ConcreteEptMap, gpa: Gpa)
+    requires
+        refines(c),
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Unmap { gpa }),
+    ensures
+        abs(c.concrete_unmap(BRINGUP_GUEST, gpa)) == abs(c).ghost_unmap(BRINGUP_GUEST, gpa),
+{
+}
+
+/// Concrete map Ok preserves refinement.
+pub proof fn lemma_concrete_map_ok_refines(c: ConcreteEptMap, gpa: Gpa, frame: FrameId)
+    requires
+        refines(c),
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Map { gpa, frame }),
+    ensures
+        refines(c.concrete_map(BRINGUP_GUEST, gpa, frame)),
+{
+    lemma_abs_map_commutes(c, gpa, frame);
+    lemma_map_ok_exclusive(abs(c), BRINGUP_GUEST, gpa, frame);
+}
+
+/// Concrete unmap Ok preserves refinement.
+pub proof fn lemma_concrete_unmap_ok_refines(c: ConcreteEptMap, gpa: Gpa)
+    requires
+        refines(c),
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Unmap { gpa }),
+    ensures
+        refines(c.concrete_unmap(BRINGUP_GUEST, gpa)),
+{
+    lemma_abs_unmap_commutes(c, gpa);
+    lemma_unmap_ok_exclusive(abs(c), BRINGUP_GUEST, gpa);
+}
+
+/// One enabled concrete step preserves refinement.
+pub proof fn lemma_apply_concrete_step_refines(c: ConcreteEptMap, step: MapUnmapStep)
+    requires
+        refines(c),
+        step_guest_ok(step),
+        concrete_step_enabled(c, step),
+    ensures
+        refines(apply_concrete_step(c, step)),
+        abs(apply_concrete_step(c, step)) == apply_step(abs(c), step),
+{
+    match step {
+        MapUnmapStep::Map { gpa, frame } => {
+            lemma_abs_map_commutes(c, gpa, frame);
+            lemma_concrete_map_ok_refines(c, gpa, frame);
+        },
+        MapUnmapStep::Unmap { gpa } => {
+            lemma_abs_unmap_commutes(c, gpa);
+            lemma_concrete_unmap_ok_refines(c, gpa);
+        },
+    }
+}
+
+/// Target theorem (M3.18): concrete 4K single-guest steps preserve refinement
+/// into the verified ghost exclusivity model.
+pub proof fn theorem_concrete_single_guest_4k_refine(
+    c: ConcreteEptMap,
+    steps: Seq<MapUnmapStep>,
+)
+    requires
+        refines(c),
+        concrete_steps_ok(c, steps),
+    ensures
+        refines(fold_concrete_steps(c, steps)),
+        abs(fold_concrete_steps(c, steps)) == fold_steps(abs(c), steps),
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+    } else {
+        lemma_apply_concrete_step_refines(c, steps[0]);
+        theorem_concrete_single_guest_4k_refine(
+            apply_concrete_step(c, steps[0]),
+            steps.skip(1),
+        );
+    }
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
 pub const M3_L3_LINK_OK_MARKER: &str = "RAYNU-V-M3-L3-LINK-OK";
 pub const M3_L3_VERIFY_OK_MARKER: &str = "RAYNU-V-M3-L3-VERIFY-OK";
+pub const M3_L3_REFINE_OK_MARKER: &str = "RAYNU-V-M3-L3-REFINE-OK";

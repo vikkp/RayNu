@@ -1,6 +1,6 @@
-# Host-only Verus-verified EPT ghost model (M3.17 true L3).
+# Host-only Verus-verified EPT ghost model (M3.17 true L3 + M3.18 refine).
 # Not linked into r640-hypervisor.efi. Verify with:
-#   ./tools/verus-verify-smoke.sh
+#   ./tools/verus-refine-smoke.sh
 # under the frozen pin in ../verus-version.toml.
 
 [package]

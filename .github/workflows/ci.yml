@@ -159,6 +159,21 @@ jobs:
       - name: Verus L3-verify smoke → RAYNU-V-M3-L3-VERIFY-OK
         run: ./tools/verus-verify-smoke.sh
 
+  # M3.18: ghost↔exec refinement. Hard-fail.
+  verus-refine:
+    name: verus L3-refine (M3.18)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus L3-refine smoke → RAYNU-V-M3-L3-REFINE-OK
+        run: ./tools/verus-refine-smoke.sh
+
   # Best-effort Kani (M2.6 harnesses). Soft-fail until install is reliable on nightly.
   kani-soft:
     name: kani (soft-fail M2.6 harnesses)

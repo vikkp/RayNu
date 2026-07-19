@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.17 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **first true L3**: 4K single-guest ghost exclusivity machine-checked (`ept_model`, `13 verified, 0 errors`, no `admit`) → `RAYNU-V-M3-L3-VERIFY-OK`. Next: **M3.18** ghost↔exec refine. Lived gates: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.18 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin; **true L3** + ghost↔exec refine (`ept_model`) → `RAYNU-V-M3-L3-REFINE-OK`. Next: **M3.19** drop IRQ crutches. Lived gates: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
@@ -69,6 +69,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/verus-smoke.sh             # frozen pin → RAYNU-V-M3-VERUS-OK
 ./tools/verus-link-smoke.sh        # ept_model verus! → RAYNU-V-M3-L3-LINK-OK
 ./tools/verus-verify-smoke.sh      # true L3, no admit → RAYNU-V-M3-L3-VERIFY-OK
+./tools/verus-refine-smoke.sh      # ghost↔exec refine → RAYNU-V-M3-L3-REFINE-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

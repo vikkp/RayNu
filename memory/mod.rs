@@ -2,7 +2,7 @@
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
-//! VERIFICATION: L2 live EptMap (M2.6); ghost exclusivity L3 in `ept_model` (M3.17)
+//! VERIFICATION: L2 live EptMap (M2.6); ghost L3 + refine (M3.17–M3.18) in `ept_model`
 
 pub mod boot_alloc;
 pub mod ept;
@@ -11,6 +11,7 @@ pub mod frame_allocator;
 pub mod l2_gate;
 pub mod l3_gate;
 pub mod l3_link_gate;
+pub mod l3_refine_gate;
 pub mod l3_verify_gate;
 pub mod verus_gate;
 
@@ -30,5 +31,6 @@ pub use frame_allocator::{
 pub use l2_gate::{run_l2_gate, M2_L2_OK_MARKER};
 pub use l3_gate::{run_l3_gate, M3_L3_OK_MARKER};
 pub use l3_link_gate::{run_l3_link_gate, M3_L3_LINK_OK_MARKER};
+pub use l3_refine_gate::{run_l3_refine_gate, M3_L3_REFINE_OK_MARKER};
 pub use l3_verify_gate::{run_l3_verify_gate, M3_L3_VERIFY_OK_MARKER};
 pub use verus_gate::{run_verus_pin_gate, M3_VERUS_OK_MARKER};

@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.17 closed** (true L3: `ept_model` exclusivity discharged → `RAYNU-V-M3-L3-VERIFY-OK`). Next: **M3.18** ghost↔exec refine (`RAYNU-V-M3-L3-REFINE-OK`). Lived: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**Through M3.18 closed** (true L3 + refine → `RAYNU-V-M3-L3-REFINE-OK`). Next: **M3.19** NOIRQ. Lived: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 
@@ -387,6 +387,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
   frozen Verus pin M3.15 (`./tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK`),
   Verus L3-link M3.16 (`./tools/verus-link-smoke.sh` → `RAYNU-V-M3-L3-LINK-OK`),
   true L3 verify M3.17 (`./tools/verus-verify-smoke.sh` → `RAYNU-V-M3-L3-VERIFY-OK`),
+  L3 refine M3.18 (`./tools/verus-refine-smoke.sh` → `RAYNU-V-M3-L3-REFINE-OK`),
   Linux shell (M3), multi-VM (M4)
 - Verification checkpoint: which modules are at L0/L1/L2/L3
   (see [docs/progress.md](docs/progress.md))
