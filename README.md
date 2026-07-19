@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.17 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **first true L3**: 4K single-guest ghost exclusivity machine-checked (`ept_model`, `13 verified, 0 errors`, no `admit`) → `RAYNU-V-M3-L3-VERIFY-OK`. Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.17 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **first true L3**: 4K single-guest ghost exclusivity machine-checked (`ept_model`, `13 verified, 0 errors`, no `admit`) → `RAYNU-V-M3-L3-VERIFY-OK`. Next: **M3.18** ghost↔exec refine. Lived gates: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
@@ -100,7 +100,7 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
 | [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
-| [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 track (M3.11–M3.17) |
+| [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 + post-L3 (M3.11–M3.22) |
 | [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
