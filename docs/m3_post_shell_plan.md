@@ -104,7 +104,7 @@ M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true 
 
 ### M3.16 — Verus-linkable EptMap — `RAYNU-V-M3-L3-LINK-OK`
 
-**Status: closed on host** (`./tools/verus-link-smoke.sh` → `RAYNU-V-M3-L3-LINK-OK`).
+**Status: closed** — host/CI + Latitude `./tools/verus-link-smoke.sh` → `RAYNU-V-M3-L3-LINK-OK`.
 
 **Shipped:**
 
@@ -137,7 +137,7 @@ M3.11 → M3.12 → M3.13 → M3.14 (closed)
 M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify   ← now
 ```
 
-**M3.16 closed (host). Now executing: M3.17.**
+**M3.16 closed. Now executing: M3.17.**
 
 ---
 
@@ -169,10 +169,11 @@ RAYNU-V-M3-VERUS-OK
 # host CI + Latitude ~/raynu
 ```
 
-## M3.16 acceptance (met on host)
+## M3.16 acceptance (met)
 
 ```text
 RAYNU-V-M3-L3-LINK-OK
 ==> Verus L3-link smoke PASSED (M3.16)
-# cargo verus verify -p ept_model → 0 errors (admit gaps OK)
+# cargo verus verify -p ept_model → 7 verified, 0 errors (admit gaps OK)
+# host CI + Latitude ~/raynu
 ```
