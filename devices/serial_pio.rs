@@ -24,6 +24,11 @@ pub const GUEST_SHELL_MAGIC: &[u8] = b"RAYNU-V-M3-SHELL";
 /// COM1 marker when proto-init shell magic is observed (M3.5 gate).
 pub const M3_SHELL_OK_MARKER: &str = "RAYNU-V-M3-SHELL-OK";
 
+/// CPUID leaf / subleaf for real `/init` SHELL hypercall (M3.10).
+/// Avoids ttyS0 IRQ-driven TX which stalls under `noapic`.
+pub const SHELL_CPUID_LEAF: u32 = 0x524E_550A; // RNU\n
+pub const SHELL_CPUID_SUBLEAF: u32 = 0x5348_454C; // SHEL
+
 /// Prefix of a real Linux banner (`earlyprintk` / `printk`).
 pub const LINUX_BANNER_PREFIX: &[u8] = b"Linux version ";
 

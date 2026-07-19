@@ -36,6 +36,7 @@ use crate::arch::cpu::{
 use crate::boot::serial;
 use crate::devices::serial_pio::{
     self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
+    SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
@@ -957,8 +958,11 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
         arm_linux_gtimer2();
     }
     // M3.10: after COM1 TX, inject IRQ4 so 8250 can send the next byte.
-    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE && try_inject_linux_com1_tx() {
-        vmresume_with_gprs();
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+        if try_inject_linux_com1_tx() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_tx();
     }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     // Preserve RSI across OUT storms in the proto-kernel.
@@ -975,6 +979,7 @@ unsafe fn try_inject_linux_com1_tx() -> bool {
     if (rflags & (1 << 9)) == 0 {
         return false;
     }
+    let _ = set_interrupt_window_exiting(false);
     if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ4_VECTOR) {
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
@@ -982,6 +987,18 @@ unsafe fn try_inject_linux_com1_tx() -> bool {
         return true;
     }
     false
+}
+
+/// If COM1 TX IRQ is pending but guest IF=0, exit on the next STI.
+unsafe fn maybe_arm_interrupt_window_for_tx() {
+    if !serial_pio::com1_tx_irq_pending() {
+        let _ = set_interrupt_window_exiting(false);
+        return;
+    }
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    if (rflags & (1 << 9)) == 0 {
+        let _ = set_interrupt_window_exiting(true);
+    }
 }
 
 /// Emulate guest XSETBV (exit reason 55). Only XCR0 is accepted.
@@ -1025,6 +1042,22 @@ unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
 unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     let leaf = SAVED_GUEST_RAX as u32;
     let subleaf = SAVED_GUEST_RCX as u32;
+
+    // M3.10: real `/init` SHELL hypercall (before any UART TX that may stall).
+    if leaf == SHELL_CPUID_LEAF
+        && subleaf == SHELL_CPUID_SUBLEAF
+        && REAL_LINUX_GUEST
+        && LINUX_GTIMER2_DONE
+    {
+        static mut SHELL_CPUID_MARKED: bool = false;
+        if !SHELL_CPUID_MARKED {
+            SHELL_CPUID_MARKED = true;
+            serial::write_byte(b'\n');
+            serial::write_line(M3_SHELL_OK_MARKER);
+            finish_boot(true);
+        }
+    }
+
     let regs = msr_firewall::filter_cpuid(leaf, subleaf);
     SAVED_GUEST_RAX = regs.eax as u64;
     SAVED_GUEST_RBX = regs.ebx as u64;
@@ -1041,6 +1074,13 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    // COM1 TX may be waiting with IF=0; arm interrupt-window if needed.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+        if try_inject_linux_com1_tx() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_tx();
+    }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     vmresume_with_gprs();
 }
@@ -1340,6 +1380,14 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
+        EXIT_REASON_INTERRUPT_WINDOW => {
+            let _ = set_interrupt_window_exiting(false);
+            if try_inject_linux_com1_tx() {
+                vmresume_with_gprs();
+            }
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
@@ -1348,6 +1396,7 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
                 if try_inject_linux_com1_tx() {
                     vmresume_with_gprs();
                 }
+                maybe_arm_interrupt_window_for_tx();
                 // Kernel-only ticks: IF=1 and CPL=0. Injecting IRQ0 into
                 // userspace raced `/init` and double-faulted (user RSP).
                 let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
@@ -1738,6 +1787,16 @@ unsafe fn set_hlt_exiting(on: bool) -> Result<(), ()> {
         cur | CPU_BASED_HLT_EXITING
     } else {
         cur & !CPU_BASED_HLT_EXITING
+    };
+    ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
+}
+
+unsafe fn set_interrupt_window_exiting(on: bool) -> Result<(), ()> {
+    let cur = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).map_err(|_| ())? as u32;
+    let next = if on {
+        cur | CPU_BASED_INTERRUPT_WINDOW_EXITING
+    } else {
+        cur & !CPU_BASED_INTERRUPT_WINDOW_EXITING
     };
     ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
 }

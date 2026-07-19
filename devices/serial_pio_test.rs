@@ -10,6 +10,8 @@ fn marker_and_magic() {
     assert_eq!(GUEST_EARLY_MAGIC, b"RAYNU-V-M3-EARLY");
     assert_eq!(GUEST_SHELL_MAGIC, b"RAYNU-V-M3-SHELL");
     assert_eq!(LINUX_BANNER_PREFIX, b"Linux version ");
+    assert_eq!(SHELL_CPUID_LEAF, 0x524E_550A);
+    assert_eq!(SHELL_CPUID_SUBLEAF, 0x5348_454C);
 }
 
 #[test]

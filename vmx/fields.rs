@@ -140,6 +140,8 @@ pub const HOST_RIP: u64 = 0x0000_6C16;
 pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 
 // ── primary proc-based control bits ─────────────────────────────────
+/// Interrupt-window exiting (inject when guest IF becomes 1).
+pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
 /// CPUID exiting (M3.1).
 pub const CPU_BASED_CPUID_EXITING: u32 = 1 << 21;
@@ -169,6 +171,8 @@ pub const EXIT_REASON_EXCEPTION_NMI: u32 = 0;
 pub const EXIT_REASON_EXTERNAL_INTERRUPT: u32 = 1;
 /// Basic exit reason: triple fault.
 pub const EXIT_REASON_TRIPLE_FAULT: u32 = 2;
+/// Basic exit reason: interrupt window.
+pub const EXIT_REASON_INTERRUPT_WINDOW: u32 = 7;
 /// Basic exit reason: CPUID.
 pub const EXIT_REASON_CPUID: u32 = 10;
 /// Basic exit reason: HLT.
@@ -213,5 +217,7 @@ mod fields_test {
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
         assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
+        assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
+        assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }
 }
