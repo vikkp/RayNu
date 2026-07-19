@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.18 closed; **post-L3 track** next is M3.19.  
+**Status:** M3.11–M3.19 closed; **post-L3 track** next is M3.20 (as needed) / M3.21–M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3 and ghost↔exec refinement (`ept_model`). Active track: guest/infra polish (M3.19–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, and dropped ISA IRQ0/IRQ4 software inject. Active track: EPT/Kani/assets polish (M3.20–M3.22).
 
 ---
 
@@ -157,11 +157,17 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 
 ### M3.19 — Drop IRQ0/IRQ4 crutches — `RAYNU-V-M3-NOIRQ-OK`
 
-**Status: planned.**
+**Status: closed** — host gate + Latitude `./tools/qemu-boot-test.sh` → `RAYNU-V-M3-NOIRQ-OK`.
 
-**Goal:** Remove software IRQ0 (calibrate jiffies) and IRQ4 (COM1 TX) inject once guest lapic/serial paths own those roles; keep SHELL green on Latitude without those crutches. `noapic` may remain until IOAPIC work is ready (document if so).
+**Shipped:**
 
-**Files (expected):** `vmx/launch.rs`, `devices/lapic_virt.rs`, `devices/serial_pio.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
+1. Removed `try_inject_linux_irq0` / `try_inject_linux_com1_tx` (and ISA vector constants).
+2. SHELL latches via CPUID hypercall (`note_shell_cpuid`) — no IRQ4 COM1 TX inject.
+3. Host ticks feed virtual APIC IRR/LVT only; jiffies/ticks via guest lapic (`lpj=` / `no_timer_check` retained).
+4. Marker `RAYNU-V-M3-NOIRQ-OK` at finish; `qemu-boot-test.sh` requires it (pass line M0→M3.19).
+5. **`noapic` retained** — IOAPIC still stubbed (future work).
+
+**Files:** `vmx/launch.rs`, `vmx/noirq_gate.rs`, `devices/serial_pio.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
 
@@ -192,14 +198,13 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 ## Execution order
 
 ```
-M3.11 → … → M3.17 (true L3) → M3.18 refine (closed)
-M3.19 NOIRQ  ← next
-M3.20 EPT3 (as needed)
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed)
+M3.20 EPT3 (as needed)  ← optional next
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**M3.18 closed. Next: M3.19.**
+**M3.19 closed. Next: M3.20 (optional) or M3.21/M3.22.**
 
 ---
 
@@ -255,5 +260,15 @@ RAYNU-V-M3-L3-VERIFY-OK
 RAYNU-V-M3-L3-REFINE-OK
 ==> Verus L3-refine smoke PASSED (M3.18)
 # cargo verus verify -p ept_model → 22 verified, 0 errors (no admit)
+# host CI + Latitude ~/raynu
+```
+
+## M3.19 acceptance (met)
+
+```text
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+RAYNU-V-M3-SHELL-OK
+==> Boot gate PASSED (M0 → M3.19; qemu status=33)
 # host CI + Latitude ~/raynu
 ```

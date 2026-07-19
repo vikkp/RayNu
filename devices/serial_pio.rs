@@ -58,8 +58,10 @@ static mut MAGIC_POS: usize = 0;
 /// Set when [`GUEST_EARLY_MAGIC`] has been fully received.
 static mut EARLY_MAGIC_OK: bool = false;
 static mut EARLY_POS: usize = 0;
-/// Set when [`GUEST_SHELL_MAGIC`] has been fully received.
+/// Set when [`GUEST_SHELL_MAGIC`] has been fully received on COM1.
 static mut SHELL_MAGIC_OK: bool = false;
+/// Set when real `/init` SHELL CPUID hypercall runs (M3.19 — no IRQ4 TX needed).
+static mut SHELL_CPUID_OK: bool = false;
 static mut SHELL_POS: usize = 0;
 /// Real Linux earlyprintk banner latch (digit after [`LINUX_BANNER_PREFIX`]).
 static mut LINUX_EARLY_OK: bool = false;
@@ -334,8 +336,17 @@ pub fn guest_early_ok() -> bool {
 }
 
 pub fn guest_shell_ok() -> bool {
-    // SAFETY: written on BSP VMEXIT path; read after shell magic completes.
-    unsafe { SHELL_MAGIC_OK }
+    // SAFETY: written on BSP VMEXIT path; read after shell latch.
+    // M3.19: CPUID hypercall alone is enough (COM1 magic optional).
+    unsafe { SHELL_MAGIC_OK || SHELL_CPUID_OK }
+}
+
+/// Latch SHELL from the M3.10 CPUID hypercall (no ttyS0 IRQ4 required).
+pub fn note_shell_cpuid() {
+    // SAFETY: single-threaded VMEXIT path.
+    unsafe {
+        SHELL_CPUID_OK = true;
+    }
 }
 
 pub fn guest_linux_early_ok() -> bool {

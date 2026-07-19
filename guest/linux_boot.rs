@@ -81,7 +81,8 @@ pub const DEFAULT_CMDLINE: &[u8] =
 /// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
 ///
 /// - `memmap=` — RAM if zeropage e820 is ignored (`append_e820_table` needs ≥2)
-/// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11 EPT hole)
+/// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11). M3.19
+///   drops ISA IRQ0/IRQ4 software inject but keeps `noapic` until IOAPIC exists.
 /// - `lpj=` / `idle=poll` — skip PIT calibrate; keep TSC for clocksource
 /// - `tsc=reliable clocksource=tsc` — nested virt often fails PIT/HPET calibrate
 /// - 256 MiB window — enough for tinyconfig; 1 GiB mem-init is too slow nested

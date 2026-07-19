@@ -36,8 +36,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.16 | `RAYNU-V-M3-L3-LINK-OK` | Host-only `ept_model` `verus!` linked; CI + Latitude |
 | M3.17 | `RAYNU-V-M3-L3-VERIFY-OK` | True L3: exclusivity lemmas discharged (no `admit`); CI + Latitude `13 verified, 0 errors` |
 | M3.18 | `RAYNU-V-M3-L3-REFINE-OK` | Ghost↔exec refine; CI + Latitude `22 verified, 0 errors` |
+| M3.19 | `RAYNU-V-M3-NOIRQ-OK` | Dropped ISA IRQ0/IRQ4 software inject; SHELL via CPUID; `noapic` kept |
 
-## Verification checkpoint (as of M3.18)
+## Verification checkpoint (as of M3.19)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -62,8 +63,7 @@ Post-shell / post-L3 plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M3.19** ← next | `RAYNU-V-M3-NOIRQ-OK` | Drop IRQ0/IRQ4 software-inject crutches |
 | M3.20 | `RAYNU-V-M3-EPT3-OK` | Tighter-than-1 GiB EPT windows (when needed) |
-| M3.21 | `RAYNU-V-M3-KANI-OK` | Harden Kani CI (hard-fail preferred) |
+| **M3.21** ← parallel | `RAYNU-V-M3-KANI-OK` | Harden Kani CI (hard-fail preferred) |
 | M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.assets.*` embed (ADR-003, size-budget) |
 | M4+ | — | N-guest / large-page / migration proofs |

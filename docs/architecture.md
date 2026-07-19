@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.18 closed:** ghost↔exec refine → `RAYNU-V-M3-L3-REFINE-OK`. Next: **M3.19** drop IRQ crutches → `RAYNU-V-M3-NOIRQ-OK` — [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.19 closed:** no ISA IRQ crutches → `RAYNU-V-M3-NOIRQ-OK`. Next: M3.20 EPT3 (optional) or M3.21/M3.22 — [m3_post_shell_plan.md](m3_post_shell_plan.md).
