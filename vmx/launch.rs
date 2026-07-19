@@ -878,6 +878,7 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
             SAVED_GUEST_RAX = new_rax;
         }
         Err(()) => {
+            // Should be rare after misc-port stubs; keep as hard fail.
             serial::write_str("boot: ERROR — unhandled PIO port=0x");
             write_hex_u32(info.port as u32);
             serial::write_byte(b'\n');
@@ -926,8 +927,12 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
-    // M3.9: after real banner, arm host LAPIC and wait for GTIMER2 (not finish yet).
-    if REAL_LINUX_GUEST && serial_pio::guest_linux_early_ok() && !LINUX_GTIMER2_ARMED {
+    // M3.9: after real banner, arm host LAPIC once (not again after GTIMER2-OK).
+    if REAL_LINUX_GUEST
+        && serial_pio::guest_linux_early_ok()
+        && !LINUX_GTIMER2_ARMED
+        && !LINUX_GTIMER2_DONE
+    {
         arm_linux_gtimer2();
     }
     // Preserve RSI across OUT storms in the proto-kernel.

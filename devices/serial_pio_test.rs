@@ -67,7 +67,7 @@ fn handle_out_advances_magic() {
 }
 
 #[test]
-fn reject_string_io() {
+fn string_io_stubbed() {
     let info = IoExitInfo {
         port: COM1_DATA,
         size: 1,
@@ -75,7 +75,21 @@ fn reject_string_io() {
         string: true,
         rep: false,
     };
-    assert!(handle_pio(&info, 0).is_err());
+    assert!(handle_pio(&info, 0).is_ok());
+}
+
+#[test]
+fn port61_refresh_toggles() {
+    let inp = IoExitInfo {
+        port: 0x61,
+        size: 1,
+        is_in: true,
+        string: false,
+        rep: false,
+    };
+    let a = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
+    let b = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
+    assert_ne!(a & 0x10, b & 0x10, "refresh bit must toggle");
 }
 
 #[test]

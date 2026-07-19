@@ -61,6 +61,8 @@ static mut SHADOW_IER: u8 = 0;
 static mut SHADOW_MCR: u8 = 0;
 static mut SHADOW_DLL: u8 = 1;
 static mut SHADOW_DLM: u8 = 0;
+/// Port 0x61 (NMI status / speaker): toggle bit 4 so Linux delay loops advance.
+static mut PORT61_SHADOW: u8 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoExitInfo {
@@ -89,18 +91,26 @@ pub fn is_com1_port(port: u16) -> bool {
 
 /// Handle a guest PIO access. `rax` is the guest RAX at VMEXIT.
 ///
-/// For OUT: forwards COM1 data bytes to host serial and updates latches.
-/// For IN: returns LSR/LCR/IER/… shadows so earlyprintk polling works.
+/// COM1: earlyprintk / magic latches. Other ISA ports: stubbed so real Linux
+/// can probe PIT/CMOS/speaker (port 0x61 refresh bit toggles on IN).
 ///
 /// Returns `Some(new_rax)` when guest RAX must be updated (IN); `None` for OUT.
 pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
-    if info.string || info.rep || info.size != 1 {
-        return Err(());
+    // String/rep I/O: ignore for bring-up (kernel rarely needs it on COM1).
+    if info.string || info.rep {
+        return Ok(if info.is_in { Some(rax) } else { None });
     }
-    if !is_com1_port(info.port) {
-        return Err(());
+    if is_com1_port(info.port) {
+        return handle_com1_pio(info, rax);
     }
+    Ok(handle_misc_pio(info, rax))
+}
 
+fn handle_com1_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
+    if info.size != 1 {
+        // Widen to byte access on the data port only if needed later.
+        return Ok(handle_misc_pio(info, rax));
+    }
     if info.is_in {
         // SAFETY: single-threaded VMEXIT path.
         let val = unsafe {
@@ -146,6 +156,42 @@ pub fn handle_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
             }
         }
         Ok(None)
+    }
+}
+
+/// Stub non-COM1 ISA ports under unconditional I/O exiting (M3.10).
+fn handle_misc_pio(info: &IoExitInfo, rax: u64) -> Option<u64> {
+    let mask = match info.size {
+        1 => 0xFFu64,
+        2 => 0xFFFFu64,
+        _ => 0xFFFF_FFFFu64,
+    };
+    if info.is_in {
+        let val = match info.port {
+            0x61 => {
+                // SAFETY: single-threaded VMEXIT path.
+                unsafe {
+                    // DRAM refresh toggle (bit 4) — Linux `io_delay` / speaker polls this.
+                    PORT61_SHADOW ^= 0x10;
+                    PORT61_SHADOW as u64
+                }
+            }
+            0x80 => 0,                  // POST / io_delay
+            0x40..=0x43 => 0,           // PIT
+            0x70 | 0x71 => 0,           // CMOS
+            0x20 | 0x21 | 0xA0 | 0xA1 => 0xFF, // PIC
+            _ => 0xFF,
+        };
+        Some((rax & !mask) | (val & mask))
+    } else {
+        if info.port == 0x61 {
+            // SAFETY: single-threaded VMEXIT path.
+            unsafe {
+                // Keep toggle bit from reads; accept speaker enable bits from guest.
+                PORT61_SHADOW = (rax as u8 & !0x10) | (PORT61_SHADOW & 0x10);
+            }
+        }
+        None
     }
 }
 
