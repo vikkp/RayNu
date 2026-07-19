@@ -11,6 +11,8 @@ pub const CPUID_EDX_APIC: u32 = 1 << 9;
 
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
+/// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
+pub const CR4_OSXSAVE: u64 = 1 << 18;
 
 /// IA32_FEATURE_CONTROL (MSR 0x3A).
 pub const IA32_FEATURE_CONTROL: u32 = 0x3A;

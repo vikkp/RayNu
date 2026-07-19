@@ -973,10 +973,14 @@ unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
         // AVX (bit 2) requires SSE (bit 1).
         v |= 0x2;
     }
-    // SAFETY: VMX root; CR4.OSXSAVE already set for host bring-up / guest.
-    unsafe {
-        cpu::xsetbv(0, v);
+    // Host CR4 often lacks OSXSAVE after UEFI bring-up; xsetbv #UD without it
+    // (Latitude crash: RIP in r640_hypervisor, CR4=0x2668).
+    // SAFETY: VMX root; OSXSAVE is not CR4-fixed0-forbidden on this CPU.
+    let cr4 = cpu::read_cr4();
+    if cr4 & cpu::CR4_OSXSAVE == 0 {
+        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
     }
+    cpu::xsetbv(0, v);
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(3);
     if insn_len == 0 || insn_len > 15 {
         serial::write_line("boot: ERROR — XSETBV bad insn len");
