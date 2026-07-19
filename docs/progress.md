@@ -36,12 +36,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.16 | `RAYNU-V-M3-L3-LINK-OK` | Host-only `ept_model` `verus!` linked; CI + Latitude |
 | M3.17 | `RAYNU-V-M3-L3-VERIFY-OK` | True L3: exclusivity lemmas discharged (no `admit`); CI + Latitude `13 verified, 0 errors` |
 | M3.18 | `RAYNU-V-M3-L3-REFINE-OK` | Ghost↔exec refine; CI + Latitude `22 verified, 0 errors` |
+| M3.19 | `RAYNU-V-M3-NOIRQ-OK` | Dropped IRQ4 inject; IRQ0 only until SHELL; no `console=ttyS0` (Latitude) |
+| M3.20 | `RAYNU-V-M3-EPT3-OK` | Tight EPT `[0,512MiB)` @ 2M; QEMU `-m 512M` (Latitude) |
 
-## Verification checkpoint (as of M3.18)
+## Verification checkpoint (as of M3.20)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | **L2** runtime | Live registry + M3.13 ranges; ownership content refined to L3 ghost (M3.18) |
+| `memory/ept` ownership registry | **L2** runtime | Live registry + precise ranges; ownership content refined to L3 ghost (M3.18) |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
@@ -50,8 +52,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
-| `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
-| `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
+| `memory/ept_hw` identity builder | L1-ish | Precise `[0,512MiB)` @ 2M (M3.20); APIC unmapped by omission |
+| `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL + NOIRQ (M3.19) |
 | Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
@@ -62,8 +64,6 @@ Post-shell / post-L3 plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M3.19** ← next | `RAYNU-V-M3-NOIRQ-OK` | Drop IRQ0/IRQ4 software-inject crutches |
-| M3.20 | `RAYNU-V-M3-EPT3-OK` | Tighter-than-1 GiB EPT windows (when needed) |
-| M3.21 | `RAYNU-V-M3-KANI-OK` | Harden Kani CI (hard-fail preferred) |
+| **M3.21** ← parallel | `RAYNU-V-M3-KANI-OK` | Harden Kani CI (hard-fail preferred) |
 | M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.assets.*` embed (ADR-003, size-budget) |
 | M4+ | — | N-guest / large-page / migration proofs |

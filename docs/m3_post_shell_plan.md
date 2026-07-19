@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.18 closed; **post-L3 track** next is M3.19.  
+**Status:** M3.11–M3.20 closed; **post-L3 track** next is M3.21 / M3.22.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3 and ghost↔exec refinement (`ept_model`). Active track: guest/infra polish (M3.19–M3.22).
+M3’s first-shell goal is closed. Post-shell harden delivered scoped true L3, ghost↔exec refinement, M3.19 NOIRQ, and M3.20 tight EPT (`[0,512MiB)`). Active: Kani / PE assets (M3.21–M3.22).
 
 ---
 
@@ -155,21 +155,37 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 
 **Files:** `ept_model/src/lib.rs`, `tools/verus-refine-smoke.sh`, `memory/l3_refine_gate.rs`, `.github/workflows/ci.yml`.
 
-### M3.19 — Drop IRQ0/IRQ4 crutches — `RAYNU-V-M3-NOIRQ-OK`
+### M3.19 — No IRQ4 + earlyprintk-only console — `RAYNU-V-M3-NOIRQ-OK`
 
-**Status: planned.**
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.19)`.
 
-**Goal:** Remove software IRQ0 (calibrate jiffies) and IRQ4 (COM1 TX) inject once guest lapic/serial paths own those roles; keep SHELL green on Latitude without those crutches. `noapic` may remain until IOAPIC work is ready (document if so).
+Dropping **both** ISA software injects stalled Linux (APIC calibrate needs IRQ0
+jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
-**Files (expected):** `vmx/launch.rs`, `devices/lapic_virt.rs`, `devices/serial_pio.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
+1. **Dropped IRQ4** COM1 TX software inject (`try_inject_linux_com1_tx` gone).
+2. SHELL latches via CPUID (`note_shell_cpuid`); cmdline omits `console=ttyS0`
+   (earlyprintk only).
+3. **IRQ0 only until SHELL** — APIC calibrate jiffies; stops at `guest_shell_ok()`.
+4. Marker `RAYNU-V-M3-NOIRQ-OK`; `qemu-boot-test.sh` pass line M0→M3.19.
+5. **`noapic` retained** — IOAPIC still stubbed (future work).
+
+**Files:** `vmx/launch.rs`, `vmx/noirq_gate.rs`, `devices/serial_pio.rs`,
+`guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
 
-**Status: planned** (build when needed; may stay deferred if 1 GiB remains sufficient).
+**Status: closed** — Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M3.20)`.
 
-**Goal:** Shrink precise identity below `[0, 1 GiB)` where e820/UEFI allow, with ADR-004 range claims updated; retain APIC unmapped-by-omission; SHELL + EPT2 chain still green (or successor markers).
+**Shipped:**
 
-**Files (expected):** `memory/ept_hw.rs`, `memory/ept.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+1. Precise identity shrinks to `[0, 512 MiB)` via `build_identity_2m_bytes` (2M leaves).
+2. QEMU `-m 512M` so machine RAM matches the EPT window (guest e820 stays 256 MiB).
+3. ADR-004 `claim_precise_identity_ranges` uses `PRECISE_BYTES`; asserts window `< 1 GiB`.
+4. Emit `RAYNU-V-M3-EPT2-OK` + `RAYNU-V-M3-EPT3-OK`; APIC remains unmapped-by-omission.
+5. Host gate `memory/ept3_gate.rs`; `qemu-boot-test.sh` pass line M0→M3.20.
+
+**Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `memory/ept3_gate.rs`, `src/main.rs`,
+`tools/run-qemu.sh`, `tools/qemu-boot-test.sh`.
 
 ### M3.21 — Harden Kani CI — `RAYNU-V-M3-KANI-OK`
 
@@ -192,14 +208,12 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 ## Execution order
 
 ```
-M3.11 → … → M3.17 (true L3) → M3.18 refine (closed)
-M3.19 NOIRQ  ← next
-M3.20 EPT3 (as needed)
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed) → M3.20 EPT3 (closed)
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**M3.18 closed. Next: M3.19.**
+**M3.20 closed on Latitude. Next: M3.21 Kani and/or M3.22 PE assets.**
 
 ---
 
@@ -255,5 +269,27 @@ RAYNU-V-M3-L3-VERIFY-OK
 RAYNU-V-M3-L3-REFINE-OK
 ==> Verus L3-refine smoke PASSED (M3.18)
 # cargo verus verify -p ept_model → 22 verified, 0 errors (no admit)
+# host CI + Latitude ~/raynu
+```
+
+## M3.19 acceptance (met on Latitude)
+
+```text
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+RAYNU-V-M3-SHELL-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
+==> Boot gate PASSED (M0 → M3.19; qemu status=33)
+# host CI + Latitude ~/raynu
+```
+
+## M3.20 acceptance (met on Latitude)
+
+```text
+RAYNU-V-M3-EPT3-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-APIC-OK
+==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)
+==> Boot gate PASSED (M0 → M3.20; qemu status=33)
 # host CI + Latitude ~/raynu
 ```

@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.18 closed** (true L3 + refine → `RAYNU-V-M3-L3-REFINE-OK`). Next: **M3.19** NOIRQ. Lived: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**Through M3.20 closed** (EPT3 → `RAYNU-V-M3-EPT3-OK`). Next: M3.21 Kani / M3.22 assets. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ### Risk Hotspots
 

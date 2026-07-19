@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.18 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin; **true L3** + ghost↔exec refine (`ept_model`) → `RAYNU-V-M3-L3-REFINE-OK`. Next: **M3.19** drop IRQ crutches. Lived gates: [docs/progress.md](docs/progress.md). Post-L3 plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.20 closed** — real Linux shell + guest APIC + tight EPT `[0,512MiB)`; true L3 + refine; NOIRQ → `RAYNU-V-M3-EPT3-OK`. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 

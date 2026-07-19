@@ -81,11 +81,13 @@ pub const DEFAULT_CMDLINE: &[u8] =
 /// Cmdline for real Linux + initrd (`rdinit=/init` → M3.10 shell marker).
 ///
 /// - `memmap=` — RAM if zeropage e820 is ignored (`append_e820_table` needs ≥2)
-/// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11 EPT hole)
+/// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11). Kept in M3.19.
+/// - No `console=ttyS0` — M3.19 drops IRQ4 COM1 TX inject; earlyprintk is enough
+///   until `/init` SHELL CPUID (8250 IRQ TX would stall without IRQ4).
 /// - `lpj=` / `idle=poll` — skip PIT calibrate; keep TSC for clocksource
 /// - `tsc=reliable clocksource=tsc` — nested virt often fails PIT/HPET calibrate
 /// - 256 MiB window — enough for tinyconfig; 1 GiB mem-init is too slow nested
-pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc memmap=640K@0 memmap=255M@1M\0";
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc memmap=640K@0 memmap=255M@1M\0";
 
 /// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
 pub const INITRD_MAX_PAGES: usize = 64;
@@ -531,7 +533,9 @@ pub fn load_bzimage_guest(
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
     // Must be ≥2 e820 entries — Linux rejects a single-region map.
-    // Real guests match QEMU `-m 1G` (512M is a known alloc_low_pages footgun).
+    // Guest e820 stays at GUEST_RAM_BYTES (256 MiB). Do not advertise 512 MiB
+    // e820 — that is a known Linux alloc_low_pages footgun. QEMU `-m 512M`
+    // (M3.20) sizes the machine/EPT window; e820 remains the tighter guest map.
     let mem_bytes = if real {
         GUEST_RAM_BYTES
     } else {

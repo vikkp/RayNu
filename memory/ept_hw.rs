@@ -1,13 +1,14 @@
-//! Hardware EPT page-table builder + guest pages (M2.0 / M2.1 / M3.13).
+//! Hardware EPT page-table builder + guest pages (M2.0 / M2.1 / M3.13 / M3.20).
 //!
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
 //! VERIFICATION: L1 — capability MSR gated; identity map only
 //!
-//! M3.13 precise EPT identity-maps GPA→HPA for [`PRECISE_GIB`] GiB (QEMU `-m 1G`)
-//! with 1G pages when available, else 2M. That covers OVMF page tables, the
-//! early frame pool, and guest RAM (`GUEST_RAM_BYTES` ≤ 256 MiB) while leaving
-//! the local APIC at `0xFEE00000` unmapped by omission (no hole punch).
+//! M3.20 tight precise EPT identity-maps GPA→HPA for [`PRECISE_MIB`] MiB
+//! (QEMU `-m 512M`) with 2M pages. That covers OVMF page tables, the early
+//! frame pool, and guest RAM (`GUEST_RAM_BYTES` = 256 MiB) while leaving the
+//! local APIC at `0xFEE00000` unmapped by omission (no hole punch). Window is
+//! strictly below 1 GiB (`RAYNU-V-M3-EPT3-OK`).
 //!
 //! M2.1 guest page: store a magic qword, run a short increment loop, then HLT.
 //! M2.4: ISR at [`GUEST_ISR_OFF`] stores [`GUEST_IRQ_MAGIC`] then HLT again.
@@ -23,6 +24,9 @@ pub const M2_EPT_OK_MARKER: &str = "RAYNU-V-M2-EPT-OK";
 
 /// COM1 marker when precise (non–4 GiB) EPT is installed (M3.13 gate).
 pub const M3_EPT2_OK_MARKER: &str = "RAYNU-V-M3-EPT2-OK";
+
+/// COM1 marker when precise EPT is tighter than 1 GiB (M3.20 gate).
+pub const M3_EPT3_OK_MARKER: &str = "RAYNU-V-M3-EPT3-OK";
 
 /// COM1 marker when guest store + loop are verified after HLT (M2.1 gate).
 pub const M2_GUEST_OK_MARKER: &str = "RAYNU-V-M2-GUEST-OK";
@@ -63,12 +67,22 @@ const EPT_CAP_1G: u64 = 1 << 17;
 /// Legacy full identity window (pre–M3.13 scaffold).
 pub const IDENTITY_GIB: u64 = 4;
 
-/// M3.13 precise identity window: first 1 GiB (matches QEMU `-m 1G`).
+/// 2 MiB leaf size used by the M3.20 tight builder.
+pub const TWO_MIB: u64 = 2 * 1024 * 1024;
+
+/// M3.20 tight precise identity window (MiB). Matches QEMU `-m 512M`.
+/// Guest e820 stays at [`crate::guest::linux_boot::GUEST_RAM_BYTES`] (256 MiB).
 /// Local APIC GPA `0xFEE00000` lies outside this range → EPT violation.
+pub const PRECISE_MIB: u64 = 512;
+
+/// Legacy whole-GiB count (M3.13). Live precise path uses [`PRECISE_MIB`].
 pub const PRECISE_GIB: u64 = 1;
 
-/// Byte length of the precise identity window.
-pub const PRECISE_BYTES: u64 = PRECISE_GIB << 30;
+/// Byte length of the live precise identity window (M3.20: 512 MiB).
+pub const PRECISE_BYTES: u64 = PRECISE_MIB * 1024 * 1024;
+
+const _: () = assert!(PRECISE_BYTES < (1u64 << 30));
+const _: () = assert!(PRECISE_BYTES % TWO_MIB == 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EptHwError {
@@ -92,9 +106,23 @@ pub fn frames_required_gib(page_size: EptPageSize, gib: u64) -> usize {
     }
 }
 
-/// Frames for the M3.13 precise map ([`PRECISE_GIB`]).
+/// Frames for a whole-GiB identity map (legacy / tests).
 pub fn frames_required(page_size: EptPageSize) -> usize {
     frames_required_gib(page_size, PRECISE_GIB)
+}
+
+/// Frames for the live M3.20 precise map (`[0, PRECISE_BYTES)` via 2M leaves).
+pub fn frames_required_precise() -> usize {
+    frames_required_2m_bytes(PRECISE_BYTES)
+}
+
+/// Frames for [`build_identity_2m_bytes`]: PML4 + PDPT + one PD per GiB spanned.
+pub fn frames_required_2m_bytes(bytes: u64) -> usize {
+    if bytes == 0 {
+        return 0;
+    }
+    let gibs = (bytes + (1 << 30) - 1) >> 30;
+    2 + gibs as usize
 }
 
 /// Probe IA32_VMX_EPT_VPID_CAP for a usable identity-map strategy.
@@ -112,6 +140,17 @@ pub unsafe fn select_page_size() -> Result<EptPageSize, EptHwError> {
     } else {
         Err(EptHwError::Unsupported)
     }
+}
+
+/// Require 4-level walk + 2 MiB leaves (M3.20 tight precise path).
+///
+/// SAFETY: MSR is architecturally defined when VMX is present.
+pub unsafe fn ensure_2m_capable() -> Result<(), EptHwError> {
+    let cap = cpu::rdmsr(IA32_VMX_EPT_VPID_CAP);
+    if (cap & EPT_CAP_WALK4) == 0 || (cap & EPT_CAP_2M) == 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    Ok(())
 }
 
 /// EPTP memory type: WB (6) if supported, else UC (0).
@@ -199,14 +238,63 @@ pub unsafe fn build_identity_gib(
     Ok(pack_eptp(pml4, mt))
 }
 
-/// M3.13: identity-map [`PRECISE_GIB`] GiB (APIC MMIO stays outside → hole).
+/// Build identity EPT for `[0, bytes)` using 2 MiB leaves (partial last GiB OK).
+///
+/// `bytes` must be a non-zero multiple of [`TWO_MIB`], at most 512 GiB, and must
+/// not reach the local APIC MMIO base (hole-by-omission).
 ///
 /// SAFETY: see [`build_identity_gib`].
-pub unsafe fn build_precise_identity(
-    page_size: EptPageSize,
+pub unsafe fn build_identity_2m_bytes(
+    bytes: u64,
     frames: &mut [u64],
 ) -> Result<u64, EptHwError> {
-    build_identity_gib(page_size, PRECISE_GIB, frames)
+    if bytes == 0 || bytes & (TWO_MIB - 1) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    if bytes > crate::arch::apic::DEFAULT_APIC_PHYS {
+        return Err(EptHwError::Unsupported);
+    }
+    let need = frames_required_2m_bytes(bytes);
+    if frames.len() < need {
+        return Err(EptHwError::OutOfFrames);
+    }
+    for &f in frames.iter().take(need) {
+        if f & 0xfff != 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        core::ptr::write_bytes(f as *mut u8, 0, 4096);
+    }
+
+    let mt = eptp_memory_type();
+    let pml4 = frames[0];
+    let pdpt = frames[1];
+    let pml4_entries = pml4 as *mut u64;
+    let pdpt_entries = pdpt as *mut u64;
+    core::ptr::write_volatile(pml4_entries, ept_link(pdpt));
+
+    let two_m_pages = bytes / TWO_MIB;
+    let gibs = (two_m_pages + 511) / 512;
+    for i in 0..gibs {
+        let pd = frames[2 + i as usize];
+        core::ptr::write_volatile(pdpt_entries.add(i as usize), ept_link(pd));
+        let pd_entries = pd as *mut u64;
+        let base_j = i * 512;
+        let end_j = core::cmp::min(base_j + 512, two_m_pages);
+        for j in base_j..end_j {
+            let hpa = j * TWO_MIB;
+            let slot = (j - base_j) as usize;
+            core::ptr::write_volatile(pd_entries.add(slot), ept_leaf_large(hpa, mt));
+        }
+    }
+
+    Ok(pack_eptp(pml4, mt))
+}
+
+/// M3.20: identity-map [`PRECISE_BYTES`] with 2M leaves (APIC stays outside).
+///
+/// SAFETY: see [`build_identity_gib`].
+pub unsafe fn build_precise_identity(frames: &mut [u64]) -> Result<u64, EptHwError> {
+    build_identity_2m_bytes(PRECISE_BYTES, frames)
 }
 
 /// Legacy `[0, 4 GiB)` identity (kept for host tests / rollback).
@@ -579,10 +667,17 @@ mod ept_hw_test {
     #[test]
     fn frames_required_counts() {
         assert_eq!(frames_required(EptPageSize::OneGib), 2);
-        assert_eq!(frames_required(EptPageSize::TwoMib), 3); // precise 1G
+        assert_eq!(frames_required(EptPageSize::TwoMib), 3); // legacy 1 GiB @ 2M
         assert_eq!(frames_required_gib(EptPageSize::TwoMib, 4), 6);
+        assert_eq!(frames_required_precise(), 3); // 512 MiB @ 2M → one PD
+        assert_eq!(frames_required_2m_bytes(PRECISE_BYTES), 3);
+        assert_eq!(PRECISE_BYTES, 512 * 1024 * 1024);
+        assert!(PRECISE_BYTES < (1 << 30), "M3.20 window must be < 1 GiB");
+        assert!(PRECISE_BYTES > crate::guest::linux_boot::GUEST_RAM_BYTES);
         assert!(PRECISE_BYTES <= crate::arch::apic::DEFAULT_APIC_PHYS);
+        assert_eq!(PRECISE_BYTES % TWO_MIB, 0);
         assert_eq!(M3_EPT2_OK_MARKER, "RAYNU-V-M3-EPT2-OK");
+        assert_eq!(M3_EPT3_OK_MARKER, "RAYNU-V-M3-EPT3-OK");
     }
 
     #[test]

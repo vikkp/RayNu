@@ -15,6 +15,13 @@ fn marker_and_magic() {
 }
 
 #[test]
+fn shell_cpuid_latch_sets_guest_shell_ok() {
+    // M3.19: CPUID hypercall alone latches SHELL (no IRQ4 COM1 TX).
+    note_shell_cpuid();
+    assert!(guest_shell_ok());
+}
+
+#[test]
 fn lcr_dlab_shadow_roundtrip() {
     let out = IoExitInfo {
         port: COM1_LCR,

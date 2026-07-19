@@ -303,6 +303,10 @@ pub fn claim_precise_identity_ranges() -> Result<(), EptError> {
         if ept_hw::PRECISE_BYTES > crate::arch::apic::DEFAULT_APIC_PHYS {
             return Err(EptError::Invariant);
         }
+        // M3.20: live precise window must stay strictly below 1 GiB.
+        if ept_hw::PRECISE_BYTES >= (1 << 30) {
+            return Err(EptError::Invariant);
+        }
         PRECISE_RANGES_OK = true;
     }
     Ok(())
