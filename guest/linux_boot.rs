@@ -32,7 +32,10 @@ pub const SETUP_HEADER_MAGIC: u32 = 0x5372_6448;
 pub const BOOT_PARAMS_SIZE: usize = 4096;
 
 /// Absolute offsets into `boot_params` (Linux `struct boot_params`).
+pub const OFF_EXT_MEM_K: usize = 0x02; // screen_info.ext_mem_k (BIOS-88 fallback)
+pub const OFF_ALT_MEM_K: usize = 0x1E0; // e801-style extended mem (KB above 1 MiB)
 pub const OFF_E820_ENTRIES: usize = 0x1E8;
+pub const OFF_SENTINEL: usize = 0x1EF;
 pub const OFF_SETUP_SECTS: usize = 0x1F1;
 pub const OFF_BOOT_FLAG: usize = 0x1FE;
 pub const OFF_HEADER: usize = 0x202;
@@ -48,6 +51,14 @@ pub const OFF_RELOCATABLE_KERNEL: usize = 0x234;
 pub const OFF_PREF_ADDRESS: usize = 0x258;
 pub const OFF_INIT_SIZE: usize = 0x260;
 pub const OFF_E820_TABLE: usize = 0x2D0;
+
+/// Size of one `boot_e820_entry` (addr + size + type).
+pub const E820_ENTRY_SIZE: usize = 20;
+
+/// Low conventional RAM end (below EBDA / VGA hole), matching classic PC maps.
+pub const E820_LOW_RAM_END: u64 = 0x9_FC00;
+/// Start of extended RAM above the 1 MiB hole.
+pub const E820_HIGH_RAM_START: u64 = 0x10_0000;
 
 /// `loadflags` bit 0 — `LOADED_HIGH` (kernel above 1 MiB).
 pub const LOADFLAGS_LOADED_HIGH: u8 = 1 << 0;
@@ -142,10 +153,49 @@ pub struct BzImageInfo {
     pub entry_file_off: usize,
 }
 
+/// Write a classic two-region e820 RAM map into `boot_params`.
+///
+/// Linux `append_e820_table()` **rejects maps with fewer than two entries**
+/// and falls back to BIOS-e801 (~640 KiB). A single `[0, mem)` region is
+/// therefore fatal for real kernels loaded above 1 MiB.
+///
+/// Layout (PC-compatible hole for VGA/BIOS):
+/// - `[0, E820_LOW_RAM_END)` RAM
+/// - `[E820_HIGH_RAM_START, mem_bytes)` RAM
+///
+/// Also fills `alt_mem_k` / `ext_mem_k` (u16-capped) as a weak e801/88 backup
+/// and clears the setup sentinel so `sanitize_boot_params` keeps the map.
+pub fn write_e820_ram_map(buf: &mut [u8; BOOT_PARAMS_SIZE], mem_bytes: u64) {
+    buf[OFF_SENTINEL] = 0;
+
+    let high_end = if mem_bytes > E820_HIGH_RAM_START {
+        mem_bytes
+    } else {
+        E820_HIGH_RAM_START + 16 * 1024 * 1024
+    };
+    let high_size = high_end - E820_HIGH_RAM_START;
+
+    // e820[0]: low conventional RAM
+    write_u64(buf, OFF_E820_TABLE, 0);
+    write_u64(buf, OFF_E820_TABLE + 8, E820_LOW_RAM_END);
+    write_u32(buf, OFF_E820_TABLE + 16, E820_RAM);
+    // e820[1]: extended RAM above 1 MiB
+    let e1 = OFF_E820_TABLE + E820_ENTRY_SIZE;
+    write_u64(buf, e1, E820_HIGH_RAM_START);
+    write_u64(buf, e1 + 8, high_size);
+    write_u32(buf, e1 + 16, E820_RAM);
+    buf[OFF_E820_ENTRIES] = 2;
+
+    // e801/88 fallbacks are u16 KB; clamp so they stay valid if e820 is ignored.
+    let alt_kb = (high_size / 1024).min(u16::MAX as u64) as u16;
+    write_u16(buf, OFF_ALT_MEM_K, alt_kb);
+    write_u16(buf, OFF_EXT_MEM_K, alt_kb);
+}
+
 /// Pack a Linux `boot_params` zero page.
 ///
 /// Writes setup header magic, version, loader type, ramdisk ptrs, cmdline
-/// pointer, and a single e820 usable entry covering `[0, mem_bytes)`.
+/// pointer, and a two-entry e820 RAM map covering low + extended memory.
 pub fn pack_boot_params(
     buf: &mut [u8; BOOT_PARAMS_SIZE],
     ramdisk_image: u32,
@@ -165,11 +215,7 @@ pub fn pack_boot_params(
     write_u32(buf, OFF_RAMDISK_SIZE, ramdisk_size);
     write_u32(buf, OFF_CMD_LINE_PTR, cmd_line_ptr);
 
-    // One e820 RAM entry for the bring-up window.
-    buf[OFF_E820_ENTRIES] = 1;
-    write_u64(buf, OFF_E820_TABLE, 0);
-    write_u64(buf, OFF_E820_TABLE + 8, mem_bytes);
-    write_u32(buf, OFF_E820_TABLE + 16, E820_RAM);
+    write_e820_ram_map(buf, mem_bytes);
 }
 
 /// Read back setup header magic from a packed buffer (host verify / serial).
@@ -462,15 +508,13 @@ pub fn load_bzimage_guest(
     write_u32(&mut bp, OFF_RAMDISK_SIZE, initrd_len as u32);
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
     // Cover the load address + decompress window (real kernels may sit high).
+    // Must be ≥2 e820 entries — Linux rejects a single-region map.
     let mem_bytes = if real {
         512 * 1024 * 1024u64
     } else {
         64 * 1024 * 1024u64
     };
-    bp[OFF_E820_ENTRIES] = 1;
-    write_u64(&mut bp, OFF_E820_TABLE, 0);
-    write_u64(&mut bp, OFF_E820_TABLE + 8, mem_bytes);
-    write_u32(&mut bp, OFF_E820_TABLE + 16, E820_RAM);
+    write_e820_ram_map(&mut bp, mem_bytes);
 
     // SAFETY: owned boot_params frame.
     unsafe {
