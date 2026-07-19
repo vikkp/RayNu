@@ -32,8 +32,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.12 | `RAYNU-V-M3-APIC-OK` | IRR/ISR LVT inject + EOI decode; SHELL (Latitude) |
 | M3.13 | `RAYNU-V-M3-EPT2-OK` | Precise `[0,1GiB)` EPT + range claims; SHELL (Latitude) |
 | M3.14 | `RAYNU-V-M3-L3-OK` | Host Verus L3 *attempt* (4K single-guest lemmas + gaps); Latitude M0→M3.13 still green |
+| M3.15 | `RAYNU-V-M3-VERUS-OK` | *(in progress)* Pin weekly Verus + CI/host smoke (`cargo verus`) |
 
-## Verification checkpoint (as of M3.14)
+## Verification checkpoint (as of M3.14; true L3 track open)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -55,5 +56,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
-1. Pin Verus and discharge `theorem_single_guest_4k_map_unmap_exclusive` (true L3).
-2. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.
+1. **M3.15** — pin Verus → `RAYNU-V-M3-VERUS-OK` *(now)*
+2. **M3.16** — Verus-linkable EptMap → `RAYNU-V-M3-L3-LINK-OK`
+3. **M3.17** — green `cargo verus --verify` on exclusivity theorem → `RAYNU-V-M3-L3-VERIFY-OK` (true L3)
+4. Later: drop IRQ0/IRQ4 crutches; tighter-than-1GiB EPT windows if needed.

@@ -91,21 +91,21 @@ jobs:
             target/m0-qemu-stderr.log
           if-no-files-found: ignore
 
-  # Soft-fail until Verus is pinned (ADR-001, ADR-008).
-  # M2.6 L2 specs; M3.14 L3-attempt lemmas in memory/ept_proof.rs (host RAYNU-V-M3-L3-OK).
-  verus-soft:
-    name: verus (soft-fail scaffold)
+  # M3.15: pinned Verus smoke (ADR-008). Hard-pass install + cargo verus.
+  # True L3 proof discharge remains M3.17 (crate does not opt into verify yet).
+  verus-smoke:
+    name: verus pin smoke (M3.15)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: placeholder
-        run: |
-          echo "L2 specs landed for EptMap + FrameAllocator (M2.6) — see memory/*_spec.rs"
-          echo "M3.14 L3-attempt lemmas in memory/ept_proof.rs (host marker RAYNU-V-M3-L3-OK)"
-          echo "Verus not pinned for execution yet - see verus-version.toml"
-          echo "Replace this job with cargo verus --verify when the toolchain is pinned"
-          exit 1
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus pin smoke → RAYNU-V-M3-VERUS-OK
+        run: ./tools/verus-smoke.sh
 
   # Best-effort Kani (M2.6 harnesses). Soft-fail until install is reliable on nightly.
   kani-soft:

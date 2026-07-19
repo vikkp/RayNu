@@ -1,18 +1,17 @@
-# Verus pin per ADR-008.
-# M3.14 landed an L3 *attempt* (lemmas + gaps in memory/ept_proof.rs) gated by
-# host `cargo test` → RAYNU-V-M3-L3-OK. `cargo verus --verify` is still not a
-# hard CI gate — Verus remains unpinned. Pin an exact release here before
-# claiming ADR-006 L3 maturity for EptMap.
+# Verus pin per ADR-008 (M3.15).
+# Weekly point release (not rolling pre-release). Bump only via a dedicated
+# toolchain-upgrade task; re-run tools/verus-smoke.sh after any change.
 
 [verus]
-# Placeholder: replace with an exact git tag / release when Verus is installed in CI.
-version = "unpinned-scaffold"
-# Example future pin:
-# version = "0.2025.12.01"
-# git = "https://github.com/verus-lang/verus"
-# rev = "REPLACE_ME"
+version = "0.2026.07.12.0b42f4c"
+tag = "release/0.2026.07.12.0b42f4c"
+commit = "0b42f4cee92a178937608cf55e512371d2fd8cd4"
+# Rust toolchain required by this Verus binary (from its version.json).
+toolchain = "1.96.0-x86_64-unknown-linux-gnu"
+git = "https://github.com/verus-lang/verus"
+# Linux CI asset: verus-${version}-x86-linux.zip under the release tag.
 
 [notes]
-status = "M3.14 L3-attempt for ADR-004 (4K single-guest); Verus optional / soft-fail until pin + green verify"
-l3_attempt = "memory/ept_proof.rs"
-host_marker = "RAYNU-V-M3-L3-OK"
+status = "M3.15 pinned weekly Verus; smoke → RAYNU-V-M3-VERUS-OK; true L3 verify → M3.17"
+host_marker = "RAYNU-V-M3-VERUS-OK"
+l3_attempt_marker = "RAYNU-V-M3-L3-OK"

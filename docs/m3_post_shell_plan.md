@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.14 closed (Latitude through M3.13; host L3-attempt M3.14).  
+**Status:** M3.11–M3.14 closed; **true L3 track** M3.15→M3.17 in progress.  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and drafted the ADR-004 L3 attempt. Remaining: pin Verus for true L3; drop IRQ0/IRQ4 when ready.
+M3’s first-shell goal is closed. Post-shell harden replaced APIC/EPT crutches and drafted the ADR-004 L3 attempt. Active track: pin Verus and discharge true L3. Parallel: drop IRQ0/IRQ4 when ready.
 
 ---
 
@@ -78,22 +78,59 @@ Each = branch `cursor/m3-N-…-a623`, marker, Latitude (or host) gate, docs touc
 
 **Files:** `memory/ept_proof.rs`, `memory/l3_gate.rs`, `memory/l3_gate_test.rs`, `memory/ept_spec.rs`, `memory/mod.rs`, `verus-version.toml`.
 
+---
+
+## True L3 track (ADR-004 / ADR-006 / ADR-008)
+
+Host-only gates. Scope through M3.17: **4K, single guest, map/unmap exclusivity**. Out of band until M4–M6: N guests, large pages, EPT violation, migration, HW PTE correspondence.
+
+```
+M3.15 Verus pin  →  M3.16 Verus-linkable model  →  M3.17 green verify (true L3)
+```
+
+### M3.15 — Pin Verus toolchain — `RAYNU-V-M3-VERUS-OK`
+
+**Status: in progress.**
+
+**Goal:**
+
+1. Exact Verus weekly release in `verus-version.toml` (ADR-008).
+2. `tools/install-verus.sh` downloads the pinned Linux binary + installs its Rust toolchain.
+3. `tools/verus-smoke.sh` runs `verus --version` + `cargo verus verify` (crate may not opt into proofs yet).
+4. Host pin gate + CI hard-pass smoke → `RAYNU-V-M3-VERUS-OK`.
+5. Full Proven Core proof discharge still deferred (soft path until M3.17).
+
+**Files:** `verus-version.toml`, `tools/install-verus.sh`, `tools/verus-smoke.sh`, `memory/verus_gate.rs`, `.github/workflows/ci.yml`.
+
+### M3.16 — Verus-linkable EptMap — `RAYNU-V-M3-L3-LINK-OK`
+
+**Status: planned.**
+
+**Goal:** Lemmas / ghost model are Verus-checkable (not prose-only): `verus!` path for map/unmap exclusivity; crate opts into verification. Marker when the linked model typechecks under the pinned Verus (proofs may still be `assume` / incomplete).
+
+### M3.17 — True L3 verify — `RAYNU-V-M3-L3-VERIFY-OK`
+
+**Status: planned.**
+
+**Goal:** Green `cargo verus --verify` on `theorem_single_guest_4k_map_unmap_exclusive` → **ADR-006 L3** for that scope; CI hard-fails on verify; promote `EptMap` maturity from L2 / L3-attempt to L3.
+
 ### Parallel (any time)
 
 - PE `.assets.*` embed (ADR-003) when size budget allows
 - Harden Kani CI
-- Site copy: “unmodified Linux to init”
 - Drop IRQ0/IRQ4 crutches when lapic/serial fully own those paths
+- Tighter-than-1 GiB EPT windows if needed
 
 ---
 
 ## Execution order
 
 ```
-M3.11 guest APIC timer  →  M3.12 APIC inject  →  M3.13 precise EPT  →  M3.14 Verus L3
+M3.11 → M3.12 → M3.13 → M3.14 (closed)
+M3.15 Verus pin → M3.16 L3-link → M3.17 L3-verify   ← now
 ```
 
-**M3.14 closed. Next: pin Verus for true L3, or parallel IRQ/EPT debt.**
+**Now executing: M3.15.**
 
 ---
 
@@ -115,4 +152,11 @@ RAYNU-V-M3-L3-OK
 
 # Latitude no-regression (same branch):
 ==> Boot gate PASSED (M0 → M3.13; qemu status=33)
+```
+
+## M3.15 acceptance (target)
+
+```text
+RAYNU-V-M3-VERUS-OK
+==> Host Verus pin + smoke PASSED (install + verus --version + cargo verus)
 ```
