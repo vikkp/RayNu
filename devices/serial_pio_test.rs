@@ -5,9 +5,32 @@ fn marker_and_magic() {
     assert_eq!(M3_IO_OK_MARKER, "RAYNU-V-M3-IO-OK");
     assert_eq!(M3_EARLY_OK_MARKER, "RAYNU-V-M3-EARLY-OK");
     assert_eq!(M3_SHELL_OK_MARKER, "RAYNU-V-M3-SHELL-OK");
+    assert_eq!(M3_LINUX_EARLY_OK_MARKER, "RAYNU-V-M3-LINUX-EARLY-OK");
     assert_eq!(GUEST_IO_MAGIC, b"RAYNU-V-M3-IO");
     assert_eq!(GUEST_EARLY_MAGIC, b"RAYNU-V-M3-EARLY");
     assert_eq!(GUEST_SHELL_MAGIC, b"RAYNU-V-M3-SHELL");
+    assert_eq!(LINUX_BANNER_PREFIX, b"Linux version ");
+}
+
+#[test]
+fn lcr_dlab_shadow_roundtrip() {
+    let out = IoExitInfo {
+        port: COM1_LCR,
+        size: 1,
+        is_in: false,
+        string: false,
+        rep: false,
+    };
+    assert!(handle_pio(&out, 0x80).is_ok()); // set DLAB
+    let inp = IoExitInfo {
+        port: COM1_LCR,
+        size: 1,
+        is_in: true,
+        string: false,
+        rep: false,
+    };
+    let rax = handle_pio(&inp, 0).unwrap().unwrap();
+    assert_eq!(rax & 0xFF, 0x80);
 }
 
 #[test]

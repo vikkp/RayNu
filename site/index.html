@@ -60,14 +60,15 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.7 closed.</h2>
+          <h2 class="section__title">M3.8: Linux earlyprintk.</h2>
           <p class="section__lede">
-            Latitude passed bzImage load
-            (<code>RAYNU-V-M3-BZIMAGE-OK</code>). Next: real Linux earlyprintk.
+            Boot a relocatable tinyconfig bzImage and latch
+            <code>RAYNU-V-M3-LINUX-EARLY-OK</code> from the real
+            <code>Linux version</code> banner.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>==> M3.7 bzImage-load marker found
-==> Boot gate PASSED (M0 → M3.7)
-boot: M3.7 complete — bzImage load OK</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>Linux version 6.12…
+RAYNU-V-M3-LINUX-EARLY-OK
+boot: M3.8 complete — Linux earlyprintk OK</code></pre>
         </div>
       </section>
 
@@ -141,8 +142,8 @@ boot: M3.7 complete — bzImage load OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            M3.8 real Linux earlyprintk, then busybox/<code>init</code> —
-            see <code>docs/m3_plan.md</code>.
+            Latitude gate for M3.8, then MSR/timer harden → busybox/<code>init</code>
+            — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"

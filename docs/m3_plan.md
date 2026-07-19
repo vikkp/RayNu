@@ -130,7 +130,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-BZIMAGE-OK`). Minimal fixture; real 
 - Stub or handle first MSR / exception exits that appear in the log
 - Marker distinct from synthetic `M3-EARLY-OK`
 
-Status: planned. Depends on M3.7.
+Status: **in flight** — relocatable tinyconfig bzImage + banner latch.
 
 ### M3.9 — Guest timer / MSR harden — `RAYNU-V-M3-GTIMER2-OK`
 

@@ -167,6 +167,10 @@ pub const EXIT_REASON_CPUID: u32 = 10;
 pub const EXIT_REASON_HLT: u32 = 12;
 /// Basic exit reason: I/O instruction.
 pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
+/// RDMSR
+pub const EXIT_REASON_MSR_READ: u32 = 31;
+/// WRMSR
+pub const EXIT_REASON_MSR_WRITE: u32 = 32;
 
 #[cfg(test)]
 mod fields_test {

@@ -45,6 +45,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. **M3.8** real Linux earlyprintk (`RAYNU-V-M3-LINUX-EARLY-OK`) — see [m3_plan.md](m3_plan.md).
+1. Latitude gate for **M3.8** (`RAYNU-V-M3-LINUX-EARLY-OK`) — real earlyprintk.
 2. M3.9–M3.10: timer/MSR harden → busybox/`init`.
 3. Verus L3 / precise EPT (parallel; not on the shell critical path).

@@ -6,8 +6,8 @@
 //! ExitBootServices tears down file protocols — read `\EFI\BOOT\BZIMAGE`
 //! into a static buffer before handoff. Host tests stub as empty.
 
-/// Max bzImage staged from ESP (tinyconfig / minimal fixture).
-pub const BZIMAGE_CAP: usize = 256 * 1024;
+/// Max bzImage staged from ESP (tinyconfig ~1–2 MiB).
+pub const BZIMAGE_CAP: usize = 2 * 1024 * 1024;
 
 static mut BZIMAGE_BUF: [u8; BZIMAGE_CAP] = [0; BZIMAGE_CAP];
 static mut BZIMAGE_LEN: usize = 0;

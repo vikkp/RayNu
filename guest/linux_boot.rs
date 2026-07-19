@@ -88,7 +88,17 @@ pub struct BootLoadInfo {
     pub cmd_line_ptr: u32,
     /// True when loaded from a bzImage-shaped payload (M3.7).
     pub from_bzimage: bool,
+    /// True when the image looks like a real (non-fixture) Linux bzImage (M3.8).
+    pub is_real_linux: bool,
+    /// Bytes reserved for PM image + decompress workspace.
+    pub kernel_bytes: u64,
 }
+
+/// Images larger than the minimal fixture are treated as real Linux.
+pub const REAL_LINUX_MIN_BYTES: usize = 32 * 1024;
+
+/// Max PM / decompress workspace pages for [`load_bzimage_guest`] (~16 MiB).
+pub const BZIMAGE_MAX_PAGES: usize = 4096;
 
 /// Parsed bzImage layout (file-relative).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,6 +226,8 @@ pub fn load_synthetic_guest(alloc: &mut FrameAllocator) -> Result<BootLoadInfo, 
         ramdisk_size: SYNTH_INITRD_SIZE as u32,
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: false,
+        is_real_linux: false,
+        kernel_bytes: SYNTH_KERNEL_SIZE as u64,
     })
 }
 
@@ -293,23 +305,24 @@ pub fn build_minimal_bzimage(out: &mut [u8; MINIMAL_BZIMAGE_CAP]) -> usize {
 pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<BootLoadInfo, ()> {
     let info = parse_bzimage(image)?;
     let pm = &image[info.pm_offset..];
-    let pages = (info.pm_size + 4095) / 4096;
-    if pages == 0 || pages > 32 {
+    let real = image.len() >= REAL_LINUX_MIN_BYTES;
+    if real && image.len() > OFF_RELOCATABLE_KERNEL && image[OFF_RELOCATABLE_KERNEL] == 0 {
+        // Non-relocatable images must sit at pref_address; our allocator cannot.
+        return Err(());
+    }
+    // Real kernels need `init_size` workspace for in-place decompress.
+    let init_size = if image.len() > OFF_INIT_SIZE + 4 {
+        read_u32(image, OFF_INIT_SIZE) as usize
+    } else {
+        0
+    };
+    let need = core::cmp::max(info.pm_size, init_size);
+    let pages = (need + 4095) / 4096;
+    if pages == 0 || pages > BZIMAGE_MAX_PAGES {
         return Err(());
     }
 
-    let kernel = alloc.allocate_frame().ok_or(())?;
-    // Multi-page: require contiguous frames from an unfragmented scan.
-    let mut kernel_frames = [PhysFrame::from_phys(0); 32];
-    kernel_frames[0] = kernel;
-    for i in 1..pages {
-        let f = alloc.allocate_frame().ok_or(())?;
-        let expect = kernel.to_phys() + (i as u64) * 4096;
-        if f.to_phys() != expect {
-            return Err(());
-        }
-        kernel_frames[i] = f;
-    }
+    let kernel = alloc.allocate_contiguous(pages as u64).ok_or(())?;
     let initrd = alloc.allocate_frame().ok_or(())?;
     let cmdline = alloc.allocate_frame().ok_or(())?;
     let boot_params = alloc.allocate_frame().ok_or(())?;
@@ -320,14 +333,23 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     let boot_params_phys = boot_params.to_phys();
     let entry_phys = kernel_phys + BZIMAGE_ENTRY_OFFSET as u64;
 
-    let mut claim = [(0u64, PhysFrame::from_phys(0)); 36];
-    for i in 0..pages {
-        claim[i] = (kernel_phys + (i as u64) * 4096, kernel_frames[i]);
+    // Ownership smoke: claim endpoints + metadata (full map may exceed MAP_CAP).
+    let mut claim = [(0u64, PhysFrame::from_phys(0)); 8];
+    let mut nclaim = 0usize;
+    claim[nclaim] = (kernel_phys, kernel);
+    nclaim += 1;
+    if pages > 1 {
+        let last = PhysFrame::from_phys(kernel_phys + ((pages as u64) - 1) * 4096);
+        claim[nclaim] = (last.to_phys(), last);
+        nclaim += 1;
     }
-    claim[pages] = (initrd_phys, initrd);
-    claim[pages + 1] = (cmdline_phys, cmdline);
-    claim[pages + 2] = (boot_params_phys, boot_params);
-    claim_load_pages(&claim[..pages + 3]).map_err(|_| ())?;
+    claim[nclaim] = (initrd_phys, initrd);
+    nclaim += 1;
+    claim[nclaim] = (cmdline_phys, cmdline);
+    nclaim += 1;
+    claim[nclaim] = (boot_params_phys, boot_params);
+    nclaim += 1;
+    claim_load_pages(&claim[..nclaim]).map_err(|_| ())?;
 
     // SAFETY: freshly allocated identity-mapped frames.
     unsafe {
@@ -349,9 +371,15 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
     write_u32(&mut bp, OFF_RAMDISK_IMAGE, initrd_phys as u32);
     write_u32(&mut bp, OFF_RAMDISK_SIZE, SYNTH_INITRD_SIZE as u32);
     write_u32(&mut bp, OFF_CMD_LINE_PTR, cmdline_phys as u32);
+    // Cover the load address + decompress window (real kernels may sit high).
+    let mem_bytes = if real {
+        512 * 1024 * 1024u64
+    } else {
+        64 * 1024 * 1024u64
+    };
     bp[OFF_E820_ENTRIES] = 1;
     write_u64(&mut bp, OFF_E820_TABLE, 0);
-    write_u64(&mut bp, OFF_E820_TABLE + 8, 64 * 1024 * 1024);
+    write_u64(&mut bp, OFF_E820_TABLE + 8, mem_bytes);
     write_u32(&mut bp, OFF_E820_TABLE + 16, E820_RAM);
 
     // SAFETY: owned boot_params frame.
@@ -376,6 +404,8 @@ pub fn load_bzimage_guest(alloc: &mut FrameAllocator, image: &[u8]) -> Result<Bo
         ramdisk_size: SYNTH_INITRD_SIZE as u32,
         cmd_line_ptr: cmdline_phys as u32,
         from_bzimage: true,
+        is_real_linux: real,
+        kernel_bytes: (pages as u64) * 4096,
     })
 }
 

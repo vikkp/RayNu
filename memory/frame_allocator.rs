@@ -172,6 +172,41 @@ impl FrameAllocator {
         None
     }
 
+    /// Allocate `n` contiguous frames; returns the base frame.
+    ///
+    /// Used by M3.7/M3.8 multi-page bzImage placement.
+    pub fn allocate_contiguous(&mut self, n: u64) -> Option<PhysFrame> {
+        if n == 0 {
+            return None;
+        }
+        if n == 1 {
+            return self.allocate_frame();
+        }
+        if n > self.capacity || self.allocated_count + n > self.capacity {
+            return None;
+        }
+        let max_start = self.capacity - n;
+        for start in 0..=max_start {
+            let mut free = true;
+            for j in 0..n {
+                if self.test_bit(start + j) {
+                    free = false;
+                    break;
+                }
+            }
+            if !free {
+                continue;
+            }
+            for j in 0..n {
+                self.set_bit(start + j, true);
+            }
+            self.allocated_count += n;
+            self.scan_hint = (start + n) % self.capacity;
+            return Some(PhysFrame(self.base_frame + start));
+        }
+        None
+    }
+
     /// Free a previously allocated frame.
     ///
     /// INVARIANTS:
