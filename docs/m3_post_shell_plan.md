@@ -185,11 +185,11 @@ RAYNU-V-M3-L3-LINK-OK
 # host CI + Latitude ~/raynu
 ```
 
-## M3.17 acceptance (met)
+## M3.17 acceptance (met on Latitude)
 
 ```text
 RAYNU-V-M3-L3-VERIFY-OK
 ==> Verus L3-verify smoke PASSED (M3.17)
-# cargo verus verify -p ept_model → N verified, 0 errors (no admit)
+# cargo verus verify -p ept_model → 13 verified, 0 errors (no admit)
 # host CI + Latitude ~/raynu
 ```
