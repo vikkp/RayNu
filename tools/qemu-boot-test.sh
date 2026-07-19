@@ -24,7 +24,7 @@
 # M3.11: RAYNU-V-M3-GTIMER3-OK (virtual APIC timer)
 # M3.12: RAYNU-V-M3-APIC-OK (IRR/ISR LVT inject; drop IRQ0 crutch)
 # M3.13: RAYNU-V-M3-EPT2-OK (precise EPT identity + range claims)
-# M3.19: RAYNU-V-M3-NOIRQ-OK (no ISA IRQ0/IRQ4 software inject)
+# M3.19: RAYNU-V-M3-NOIRQ-OK (no IRQ4 inject; IRQ0 only until SHELL)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -250,9 +250,9 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       fail=1
     fi
     if grep -qF "$MARKER_NOIRQ" "$SERIAL_LOG"; then
-      echo "==> M3.19 no-IRQ-crutch marker found"
+      echo "==> M3.19 NOIRQ marker found (no IRQ4; IRQ0 until SHELL)"
     else
-      echo "error: marker '$MARKER_NOIRQ' not found (need IRQ0/IRQ4 crutches dropped)" >&2
+      echo "error: marker '$MARKER_NOIRQ' not found (need no IRQ4 + SHELL)" >&2
       fail=1
     fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"

@@ -155,19 +155,28 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 
 **Files:** `ept_model/src/lib.rs`, `tools/verus-refine-smoke.sh`, `memory/l3_refine_gate.rs`, `.github/workflows/ci.yml`.
 
-### M3.19 — Drop IRQ0/IRQ4 crutches — `RAYNU-V-M3-NOIRQ-OK`
+### M3.19 — No IRQ4 + earlyprintk-only console — `RAYNU-V-M3-NOIRQ-OK`
 
-**Status: closed** — host gate + Latitude `./tools/qemu-boot-test.sh` → `RAYNU-V-M3-NOIRQ-OK`.
+**Status: open** — host gate updated; Latitude `./tools/qemu-boot-test.sh` pending.
 
-**Shipped:**
+Latitude showed that dropping **both** ISA software injects stalls Linux: APIC
+calibration needs IRQ0 for jiffies, and `console=ttyS0` needs IRQ4 for 8250 TX
+(hang at `serial8250: ttyS0 at I/O 0x3f8`). M3.19 therefore:
 
-1. Removed `try_inject_linux_irq0` / `try_inject_linux_com1_tx` (and ISA vector constants).
-2. SHELL latches via CPUID hypercall (`note_shell_cpuid`) — no IRQ4 COM1 TX inject.
-3. Host ticks feed virtual APIC IRR/LVT only; jiffies/ticks via guest lapic (`lpj=` / `no_timer_check` retained).
-4. Marker `RAYNU-V-M3-NOIRQ-OK` at finish; `qemu-boot-test.sh` requires it (pass line M0→M3.19).
+1. **Drop IRQ4** COM1 TX software inject (`try_inject_linux_com1_tx` gone).
+2. SHELL latches via CPUID (`note_shell_cpuid`); cmdline omits `console=ttyS0`
+   (earlyprintk only) so 8250 IRQ TX is not required.
+3. **Keep IRQ0 only until SHELL** — APIC calibrate verify still needs jiffies;
+   no IRQ0 after `guest_shell_ok()`.
+4. Marker `RAYNU-V-M3-NOIRQ-OK` at finish; `qemu-boot-test.sh` requires it
+   (pass line M0→M3.19).
 5. **`noapic` retained** — IOAPIC still stubbed (future work).
 
-**Files:** `vmx/launch.rs`, `vmx/noirq_gate.rs`, `devices/serial_pio.rs`, `guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
+**Done when (Latitude):** `RAYNU-V-M3-SHELL-OK` + `RAYNU-V-M3-NOIRQ-OK` and
+`Boot gate PASSED (M0 → M3.19)`.
+
+**Files:** `vmx/launch.rs`, `vmx/noirq_gate.rs`, `devices/serial_pio.rs`,
+`guest/linux_boot.rs`, `tools/qemu-boot-test.sh`.
 
 ### M3.20 — Tighter EPT windows — `RAYNU-V-M3-EPT3-OK`
 
@@ -198,13 +207,13 @@ M3.18 refine  →  M3.19 drop IRQ crutches  →  M3.20 tighter EPT
 ## Execution order
 
 ```
-M3.11 → … → M3.18 refine → M3.19 NOIRQ (closed)
-M3.20 EPT3 (as needed)  ← optional next
+M3.11 → … → M3.18 refine → M3.19 NOIRQ (open — Latitude pending)
+M3.20 EPT3 (as needed)  ← optional after M3.19
 M3.21 Kani + M3.22 assets (parallel any time)
 → M4 (N-guest platform)
 ```
 
-**M3.19 closed. Next: M3.20 (optional) or M3.21/M3.22.**
+**Next: close M3.19 on Latitude, then M3.20 (optional) or M3.21/M3.22.**
 
 ---
 

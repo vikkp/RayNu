@@ -36,9 +36,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.16 | `RAYNU-V-M3-L3-LINK-OK` | Host-only `ept_model` `verus!` linked; CI + Latitude |
 | M3.17 | `RAYNU-V-M3-L3-VERIFY-OK` | True L3: exclusivity lemmas discharged (no `admit`); CI + Latitude `13 verified, 0 errors` |
 | M3.18 | `RAYNU-V-M3-L3-REFINE-OK` | Ghost↔exec refine; CI + Latitude `22 verified, 0 errors` |
-| M3.19 | `RAYNU-V-M3-NOIRQ-OK` | Dropped ISA IRQ0/IRQ4 software inject; SHELL via CPUID; `noapic` kept |
 
-## Verification checkpoint (as of M3.19)
+## In progress
+
+| Gate | Marker | Notes |
+|------|--------|-------|
+| M3.19 | `RAYNU-V-M3-NOIRQ-OK` | Drop IRQ4 inject; IRQ0 only until SHELL; no `console=ttyS0`; awaiting Latitude |
+
+## Verification checkpoint (as of M3.18)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|

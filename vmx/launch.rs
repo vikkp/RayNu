@@ -23,8 +23,8 @@
 //! M3.10: real `/init` on initrd prints shell magic → `RAYNU-V-M3-SHELL-OK`.
 //! M3.11: EPT hole + virtual LAPIC timer → `RAYNU-V-M3-GTIMER3-OK` (drop `nolapic`).
 //! M3.12: IRR/ISR LVT inject → `RAYNU-V-M3-APIC-OK`; drop host→IRQ0 after APIC-OK.
-//! M3.19: drop ISA IRQ0/IRQ4 software inject; SHELL via CPUID; APIC owns ticks
-//! → `RAYNU-V-M3-NOIRQ-OK` (`noapic` retained until IOAPIC).
+//! M3.19: drop ISA IRQ4 COM1 TX inject; SHELL via CPUID; no `console=ttyS0`.
+//! IRQ0 retained only until SHELL (APIC calibrate jiffies). → `RAYNU-V-M3-NOIRQ-OK`.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
 //! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL/NOIRQ (real).
@@ -44,7 +44,7 @@ use crate::devices::serial_pio::{
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
 
-/// COM1 / finish marker when ISA IRQ0/IRQ4 software inject is gone (M3.19).
+/// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
 use crate::vmx::{guest_pt, mmio_decode};
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
@@ -1096,7 +1096,7 @@ fn emit_lapic_markers() {
     }
 }
 
-/// M3.12/M3.19 gate: real `/init` SHELL + APIC-OK (no ISA IRQ crutches).
+/// M3.12/M3.19 gate: real `/init` SHELL + APIC-OK (no IRQ4; IRQ0 already stopped).
 unsafe fn maybe_finish_m312() {
     if REAL_LINUX_GUEST
         && LINUX_GTIMER2_DONE
@@ -1484,6 +1484,8 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
     resume_or_die();
 }
 
+/// Linux ISA IRQ0 vector — jiffies during APIC calibrate only (dropped after SHELL).
+const LINUX_IRQ0_VECTOR: u32 = 0x30;
 /// Faster host one-shot for post-GTIMER2 guest ticks (ONESHOT_COUNT / 16).
 const LINUX_TICK_COUNT: u32 = 0x0010_0000;
 
@@ -1491,7 +1493,7 @@ unsafe fn arm_linux_tick() {
     let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
 }
 
-/// Keep host one-shots running for the virtual guest APIC until SHELL.
+/// Keep host one-shots running for IRQ0/APIC until SHELL.
 unsafe fn arm_linux_tick_if_needed() {
     if !serial_pio::guest_shell_ok()
         || lapic_virt::host_timer_armed_for_guest()
@@ -1499,6 +1501,28 @@ unsafe fn arm_linux_tick_if_needed() {
     {
         arm_linux_tick();
     }
+}
+
+/// Inject ISA IRQ0 (jiffies) until SHELL — needed so APIC calibrate verify sees
+/// jiffies advance. M3.19: no IRQ4; IRQ0 stops once `guest_shell_ok()`.
+unsafe fn try_inject_linux_irq0() -> bool {
+    if serial_pio::guest_shell_ok() {
+        return false;
+    }
+    if !guest_can_accept_extint() {
+        return false;
+    }
+    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+    if (cs & 3) != 0 {
+        return false;
+    }
+    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
 }
 
 /// Real Linux post-entry loop: banner → MSR → GTIMER2 → wait for init SHELL.
@@ -1517,7 +1541,7 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             serial::write_line("boot: MSR firewall exercised");
         }
         serial::write_line("boot: waiting for real init SHELL marker");
-        // Quiet path: host ticks feed virtual APIC IRR only (M3.19 — no IRQ0).
+        // Quiet path: host ticks → IRQ0 (jiffies) + APIC IRR until SHELL.
         let _ = set_hlt_exiting(false);
         let _ = ops::vmwrite(EXCEPTION_BITMAP, 0);
         arm_linux_tick();
@@ -1534,7 +1558,7 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         }
         EXIT_REASON_INTERRUPT_WINDOW => {
             let _ = set_interrupt_window_exiting(false);
-            // Deliver deferred APIC IRR when the guest can accept it.
+            // Window after IRQ0: deliver deferred APIC IRR (calibrate verify).
             if try_inject_guest_apic_timer() {
                 arm_linux_tick_if_needed();
                 vmresume_with_gprs();
@@ -1546,10 +1570,16 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
-                // Host one-shot → virtual APIC IRR → LVT inject (M3.12/M3.19).
-                // No ISA IRQ0/IRQ4 software inject.
+                // Host one-shot → virtual APIC IRR (M3.12).
                 let _ = lapic_virt::on_host_timer_fire();
                 emit_lapic_markers();
+                // Until SHELL: IRQ0 for jiffies (APIC calibrate), then APIC LVT.
+                // M3.19: no IRQ4 COM1 TX inject (earlyprintk + CPUID SHELL).
+                if try_inject_linux_irq0() {
+                    maybe_arm_interrupt_window_for_apic();
+                    arm_linux_tick_if_needed();
+                    vmresume_with_gprs();
+                }
                 if try_inject_guest_apic_timer() {
                     arm_linux_tick_if_needed();
                     vmresume_with_gprs();
