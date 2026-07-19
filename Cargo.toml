@@ -7,6 +7,13 @@ license = "Apache-2.0 OR MIT"
 publish = false
 default-run = "r640-hypervisor"
 
+# Host-only Verus model crate (`ept_model`) is a workspace member but not a
+# dependency of the UEFI binary. `default-members` keeps `cargo test` on root.
+[workspace]
+members = [".", "ept_model"]
+default-members = ["."]
+resolver = "2"
+
 [lib]
 name = "r640_hypervisor"
 path = "src/lib.rs"

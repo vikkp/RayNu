@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.15 closed:** frozen Verus pin → `RAYNU-V-M3-VERUS-OK`. Next: **M3.16** link EptMap into Verus → **M3.17** green verify (true L3) — [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.16 closed:** `ept_model` Verus-linked → `RAYNU-V-M3-L3-LINK-OK`. Next: **M3.17** discharge without `admit` (true L3) — [m3_post_shell_plan.md](m3_post_shell_plan.md).

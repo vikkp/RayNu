@@ -1,10 +1,12 @@
 //! Verus L3 proof *attempt* for EPT isolation (ADR-004), M3.14.
 //!
 //! VERIFICATION: **L3-attempt** — exclusivity lemmas drafted for 4K single-guest
-//! map/unmap. Not machine-checked yet: Verus is frozen in `verus-version.toml`
-//! (M3.15) but lemmas are not linked/discharged (M3.16/M3.17).
+//! map/unmap. Not machine-checked: M3.16 links the ghost model in host-only
+//! `ept_model` (`verus!` + `admit` gaps); discharge without `admit` is M3.17.
 //! Live `EptMap` maturity stays **L2** until `cargo verus --verify` is green
 //! (ADR-006). Runtime asserts and Kani harnesses remain defense-in-depth.
+//!
+//! Linked model: `ept_model/` crate → `RAYNU-V-M3-L3-LINK-OK`.
 //!
 //! # Scope (M3.14)
 //!
@@ -16,8 +18,8 @@
 //! # Out of scope / documented gaps
 //!
 //! ```text
-//! GAP: Lemmas not yet in a `verus!` module under `cargo verus --verify` (M3.16/17)
-//! GAP: Lemmas are ghost/prose; not yet linked to concrete `EptMap` via `exec`
+//! GAP: Linked `ept_model` lemmas still use `admit()` (discharge in M3.17)
+//! GAP: Ghost model not yet refined against concrete `EptMap` exec path
 //! GAP: N concurrent guests (ADR-004 M4 row)
 //! GAP: Large pages (2M/1G) in ghost model and proof (M4/M5)
 //! GAP: EPT violation handler preserves exclusivity
