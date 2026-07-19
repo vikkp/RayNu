@@ -4,7 +4,7 @@
 **Risk:** R04 — real kernels expose every emulation gap.  
 **Proven Core:** Linux boot protocol and device emulation stay **outside** (ADR-002). EPT ownership / allocator / inject firewall stay **inside**.
 
-Lived gates through M3.3: [progress.md](progress.md).
+Lived gates through M3.4: [progress.md](progress.md).
 
 ---
 
@@ -83,7 +83,7 @@ Status: **closed on Latitude** (`RAYNU-V-M3-EARLY-OK`). Proto-kernel; real bzIma
 - Distinct from M2.5 host LAPIC path
 - Enough for jiffies / `init` scheduling
 
-Status: **in flight** — post-proto second LAPIC one-shot → EOI → inject (APIC MMIO later).
+Status: **closed on Latitude** (`RAYNU-V-M3-GTIMER-OK`).
 
 ### M3.5 — Shell / init marker — `RAYNU-V-M3-SHELL-OK`
 
@@ -129,9 +129,9 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 ## Suggested start order
 
-1. ~~Plan / M3.0–M3.3~~ — done (proto-kernel early path).
-2. **M3.4** — guest-facing timer after proto entry.
-3. M3.5 shell / init marker.
+1. ~~Plan / M3.0–M3.4~~ — done.
+2. **M3.5** — shell / init marker (closes synthetic M3).
+3. Real bzImage + busybox init (post-M3).
 
 ---
 

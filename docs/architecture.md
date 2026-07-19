@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.3 closed; M3.4 in flight): UEFI entry → … → proto-kernel early serial → **post-proto guest timer** (LAPIC → EOI → inject) → VMXOFF. Verification: L2 specs + Kani.
+Boot path today (M3.4 closed on Latitude): UEFI entry → load → VMLAUNCH → COM1/CPUID/inject/timer → proto-kernel early serial → **post-proto guest timer** → VMXOFF. Verification: L2 specs + Kani. Next: shell / init marker.
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (M3)
 
-**M3.4 gate:** `RAYNU-V-M3-GTIMER-OK` — post-proto guest timer → ext-IRQ → EOI → inject. Plan: [m3_plan.md](m3_plan.md).
+**M3.5 gate:** `RAYNU-V-M3-SHELL-OK` — proto-init prints shell marker on COM1. Plan: [m3_plan.md](m3_plan.md).
