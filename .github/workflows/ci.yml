@@ -129,6 +129,22 @@ jobs:
       - name: Verus pin smoke → RAYNU-V-M3-VERUS-OK
         run: ./tools/verus-smoke.sh
 
+  # M3.16: Verus-linkable EptMap (`ept_model`). Hard-pass under frozen pin.
+  # Incomplete lemmas may use admit(); discharge without admit is M3.17.
+  verus-link:
+    name: verus L3-link (M3.16)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus L3-link smoke → RAYNU-V-M3-L3-LINK-OK
+        run: ./tools/verus-link-smoke.sh
+
   # Best-effort Kani (M2.6 harnesses). Soft-fail until install is reliable on nightly.
   kani-soft:
     name: kani (soft-fail M2.6 harnesses)

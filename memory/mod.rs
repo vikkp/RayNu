@@ -10,6 +10,7 @@ pub mod ept_hw;
 pub mod frame_allocator;
 pub mod l2_gate;
 pub mod l3_gate;
+pub mod l3_link_gate;
 pub mod verus_gate;
 
 pub use ept::{
@@ -27,4 +28,5 @@ pub use frame_allocator::{
 };
 pub use l2_gate::{run_l2_gate, M2_L2_OK_MARKER};
 pub use l3_gate::{run_l3_gate, M3_L3_OK_MARKER};
+pub use l3_link_gate::{run_l3_link_gate, M3_L3_LINK_OK_MARKER};
 pub use verus_gate::{run_verus_pin_gate, M3_VERUS_OK_MARKER};

@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.15 closed** — real Linux shell + guest APIC + precise EPT on Latitude; Verus L3 *attempt* (M3.14); **frozen Verus pin** (exact tag + commit + sha256) → `RAYNU-V-M3-VERUS-OK`. EptMap still L2 until true L3 verify (M3.17). Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
+**M0 → M3.16 closed** — real Linux shell + guest APIC + precise EPT; frozen Verus pin (M3.15); **Verus-linked EptMap ghost model** (`ept_model`) → `RAYNU-V-M3-L3-LINK-OK`. True L3 (no `admit`) is M3.17. Lived gates: [docs/progress.md](docs/progress.md). Post-shell plan: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md).
 
 ## Repository Layout
 
@@ -67,6 +67,7 @@ sudo ./tools/enable-nested-kvm.sh
 # Host verification gates (no QEMU):
 cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-OK
 ./tools/verus-smoke.sh             # frozen pin → RAYNU-V-M3-VERUS-OK
+./tools/verus-link-smoke.sh        # ept_model verus! → RAYNU-V-M3-L3-LINK-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

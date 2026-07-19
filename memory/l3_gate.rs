@@ -26,7 +26,7 @@ pub fn ept_proof_is_l3_attempt() -> bool {
         && s.contains("lemma_map_ok_exclusive")
         && s.contains("lemma_unmap_ok_exclusive")
         && s.contains("theorem_single_guest_4k_map_unmap_exclusive")
-        && s.contains("GAP: Lemmas not yet in a `verus!` module")
+        && s.contains("GAP: Linked `ept_model` lemmas still use `admit()`")
         && s.contains("GAP: N concurrent guests")
         && s.contains("GAP: Live migration page transfer")
         && s.contains("GAP: Hardware EPT PTE correspondence")
