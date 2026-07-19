@@ -6,7 +6,7 @@ Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native 
 
 Everything links into one `r640-hypervisor.efi` (PE/COFF). Non-critical assets are planned as lazy-decompressed PE sections (ADR-003). Target size 15 MB; hard limit 20 MB.
 
-Boot path today (M3.8 in flight): UEFI entry → real/tiny bzImage → earlyprintk banner → VMXOFF. Verification: L2 specs + Kani.
+Boot path today (**M3.8 closed**): UEFI entry → relocatable tiny bzImage → real earlyprintk → VMXOFF. Verification: L2 specs + Kani.
 
 Lived gate history: [docs/progress.md](progress.md).
 
@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (post-synthetic M3)
 
-**M3.8 gate:** `RAYNU-V-M3-LINUX-EARLY-OK` — real Linux `earlyprintk` banner on COM1. Plan: [m3_plan.md](m3_plan.md).
+**M3.8 closed** on Latitude (`RAYNU-V-M3-LINUX-EARLY-OK`). Next: **M3.9** MSR/timer harden → **M3.10** busybox/`init`. Plan: [m3_plan.md](m3_plan.md).
