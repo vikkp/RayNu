@@ -3,7 +3,7 @@ name = "r640-hypervisor"
 version = "0.1.0"
 edition = "2021"
 description = "RayNu-V — formally verified bare-metal hypervisor (Dell R640-first)"
-license = "Apache-2.0 OR MIT"
+license = "BUSL-1.1"
 publish = false
 default-run = "r640-hypervisor"
 
