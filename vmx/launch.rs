@@ -823,6 +823,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     {
         handle_msr_and_resume(basic);
     }
+    // M3.10: after GTIMER2, quiet-dispatch EXT_INT / HLT — logging every tick
+    // on COM1 interleaves with Linux printk and starves guest progress.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE && phase == 4 {
+        phase4_linux_early(basic);
+    }
 
     serial::write_str("boot: VMEXIT phase=");
     write_hex_u32(phase as u32);
@@ -1229,10 +1234,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             serial::write_line("boot: MSR firewall exercised");
         }
         serial::write_line("boot: waiting for real init SHELL marker");
-        // Let the guest HLT for real; host ticks wake the VM. I/O exiting still
-        // catches COM1 so /init can latch SHELL without a HLT-exit spin.
+        // Stop host LAPIC ticks — further EXT_INT VMEXITs + COM1 logging were
+        // starving Linux printk (same UART). Guest uses idle=poll / lpj=; SHELL
+        // arrives via I/O exiting on /init COM1 OUTs. Clear HLT exiting so a
+        // later pause/HLT does not spin the exit path.
+        let _ = apic::mask_timer();
         let _ = set_hlt_exiting(false);
-        let _ = apic::arm_bringup_timer(M2_IRQ_VECTOR as u8);
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
         let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
@@ -1241,23 +1248,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
 
     match basic {
         EXIT_REASON_HLT => {
-            // Should be rare once HLT exiting is cleared post-GTIMER2.
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             vmresume_with_gprs();
         }
         EXIT_REASON_EXTERNAL_INTERRUPT => {
-            // Host LAPIC tick: EOI, re-arm, resume (wakes guest after HLT).
+            // Spurious host IRQ after mask (or pre-arm race): EOI and continue.
             let _ = apic::eoi();
-            if LINUX_GTIMER2_DONE {
-                let _ = apic::arm_bringup_timer(M2_IRQ_VECTOR as u8);
-                static mut TICK_LOG: u32 = 0;
-                TICK_LOG = TICK_LOG.wrapping_add(1);
-                if TICK_LOG == 1 || TICK_LOG == 100 || TICK_LOG == 1000 {
-                    serial::write_str("boot: linux host-tick=");
-                    write_hex_u32(TICK_LOG);
-                    serial::write_byte(b'\n');
-                }
-            }
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
             let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
