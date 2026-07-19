@@ -1268,6 +1268,15 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
     resume_or_die();
 }
 
+/// Linux ISA IRQ0 vector (`IRQ0_VECTOR` / `ISA_IRQ_VECTOR(0)` ≈ 0x30).
+const LINUX_IRQ0_VECTOR: u32 = 0x30;
+/// Faster host one-shot for post-GTIMER2 guest ticks (ONESHOT_COUNT / 16).
+const LINUX_TICK_COUNT: u32 = 0x0010_0000;
+
+unsafe fn arm_linux_tick() {
+    let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+}
+
 /// Real Linux post-entry loop: banner → MSR → GTIMER2 → wait for init SHELL.
 unsafe fn phase4_linux_early(basic: u32) -> ! {
     // Post-banner: host LAPIC one-shot → ext-IRQ → GTIMER2-OK (M3.9), then
@@ -1281,14 +1290,12 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             serial::write_line("boot: MSR firewall exercised");
         }
         serial::write_line("boot: waiting for real init SHELL marker");
-        // Stop host LAPIC ticks — further EXT_INT VMEXITs + COM1 logging were
-        // starving Linux printk (same UART). Guest uses idle=poll / lpj=; SHELL
-        // arrives via I/O exiting on /init COM1 OUTs. Clear HLT exiting so a
-        // later pause/HLT does not spin the exit path.
-        let _ = apic::mask_timer();
+        // Quiet path (no per-tick COM1 logs). Re-arm host ticks and inject
+        // guest IRQ0 so jiffies advance under nolapic/PIC (else boot stalls
+        // after ttyS0 with refined-jiffies). SHELL still via COM1 I/O exits.
         let _ = set_hlt_exiting(false);
-        // Linux IDT is live — deliver exceptions to the guest (not the HV).
         let _ = ops::vmwrite(EXCEPTION_BITMAP, 0);
+        arm_linux_tick();
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
         let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
@@ -1301,8 +1308,20 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             vmresume_with_gprs();
         }
         EXIT_REASON_EXTERNAL_INTERRUPT => {
-            // Spurious host IRQ after mask (or pre-arm race): EOI and continue.
             let _ = apic::eoi();
+            if LINUX_GTIMER2_DONE {
+                arm_linux_tick();
+                // Deliver PIC timer only when guest IF=1 (else VM-entry fails).
+                let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+                if (rflags & (1 << 9)) != 0 {
+                    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
+                        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+                        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+                        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+                        vmresume_with_gprs();
+                    }
+                }
+            }
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
             let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
             let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);

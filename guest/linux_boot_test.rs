@@ -140,8 +140,10 @@ fn real_linux_cmdline_has_memmap_backup() {
     assert!(s.contains("memmap=255M@1M"));
     assert!(s.contains("nolapic"));
     assert!(s.contains("lpj="));
-    assert!(s.contains("notsc"));
+    assert!(s.contains("clocksource=tsc"));
+    assert!(s.contains("tsc=reliable"));
     assert!(s.contains("idle=poll"));
+    assert!(!s.contains("notsc"));
 }
 
 #[test]

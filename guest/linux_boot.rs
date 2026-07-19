@@ -82,9 +82,10 @@ pub const DEFAULT_CMDLINE: &[u8] =
 ///
 /// - `memmap=` — RAM if zeropage e820 is ignored (`append_e820_table` needs ≥2)
 /// - `nolapic noapic` — avoid guest touching host LAPIC via identity EPT
-/// - `lpj=` / `notsc` / `idle=poll` — skip calibrate hangs
+/// - `lpj=` / `idle=poll` — skip PIT calibrate; keep TSC for clocksource
+/// - `tsc=reliable clocksource=tsc` — nested virt often fails PIT/HPET calibrate
 /// - 256 MiB window — enough for tinyconfig; 1 GiB mem-init is too slow nested
-pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nolapic noapic nokaslr maxcpus=1 lpj=4194304 notsc no_timer_check idle=poll memmap=640K@0 memmap=255M@1M\0";
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 rdinit=/init acpi=off nolapic noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc memmap=640K@0 memmap=255M@1M\0";
 
 /// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
 pub const INITRD_MAX_PAGES: usize = 64;
