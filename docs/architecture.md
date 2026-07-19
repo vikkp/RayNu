@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate (post-synthetic M3)
 
-**Synthetic M3 closed** on Latitude (`RAYNU-V-M3-SHELL-OK`). Next: real bzImage + busybox/`init`. Plan: [m3_plan.md](m3_plan.md).
+**Synthetic M3 closed** on Latitude (`RAYNU-V-M3-SHELL-OK`). Next: **M3.6** continuous exit loop, then real bzImage path (M3.7–M3.10). Plan: [m3_plan.md](m3_plan.md).
