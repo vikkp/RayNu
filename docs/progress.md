@@ -48,6 +48,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next
 
-1. Verus L3 / precise EPT (parallel).
-2. Guest-usable timer (replace host-LAPIC tick inject scaffold).
-3. Broader device model / drop `nolapic` bring-up crutches where safe.
+Post-shell plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
+
+1. **M3.11** — guest APIC timer (`RAYNU-V-M3-GTIMER3-OK`); drop `nolapic`.
+2. **M3.12** — drop host→IRQ0 / IRQ4 inject crutches.
+3. **M3.13** — precise EPT; **M3.14** — Verus L3 (parallel).

@@ -8,6 +8,7 @@ pub mod fields;
 pub mod hardware;
 pub mod launch;
 pub mod lifecycle;
+pub mod mmio_decode;
 pub mod ops;
 pub mod vmcs;
 

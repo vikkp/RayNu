@@ -180,6 +180,102 @@ pub unsafe fn build_identity_4g(
     Ok(pack_eptp(pml4, mt))
 }
 
+/// Frames needed beyond identity build to punch the local-APIC MMIO hole.
+pub const APIC_HOLE_EXTRA_FRAMES: usize = 2;
+
+/// Leave GPA [`crate::arch::apic::DEFAULT_APIC_PHYS`] not-present in an identity EPT.
+///
+/// Splits the covering 1G/2M leaf down to 4K and clears the APIC PTE so guest
+/// APIC MMIO causes EPT violation (M3.11). `scratch` = [PD frame, PT frame].
+///
+/// SAFETY: `pml4_phys` from [`build_identity_4g`]; scratch frames exclusively owned.
+pub unsafe fn punch_apic_mmio_hole(
+    pml4_phys: u64,
+    scratch: &mut [u64; APIC_HOLE_EXTRA_FRAMES],
+) -> Result<(), EptHwError> {
+    let apic = crate::arch::apic::DEFAULT_APIC_PHYS;
+    let mt = eptp_memory_type();
+    let pdpt = {
+        let e = core::ptr::read_volatile((pml4_phys as *const u64).add(0));
+        if e & 0b111 == 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        e & !0xfff
+    };
+    let pdpt_i = (apic >> 30) as usize;
+    let mut pdpt_e = core::ptr::read_volatile((pdpt as *const u64).add(pdpt_i));
+    let pd = if (pdpt_e & (1 << 7)) != 0 {
+        // 1G leaf → split to 512×2M
+        let pd = scratch[0];
+        if pd & 0xfff != 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        core::ptr::write_bytes(pd as *mut u8, 0, 4096);
+        let base = (pdpt_i as u64) << 30;
+        let pd_entries = pd as *mut u64;
+        for j in 0..512u64 {
+            core::ptr::write_volatile(
+                pd_entries.add(j as usize),
+                ept_leaf_large(base + (j << 21), mt),
+            );
+        }
+        pdpt_e = ept_link(pd);
+        core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i), pdpt_e);
+        pd
+    } else {
+        pdpt_e & !0xfff
+    };
+
+    let pd_i = ((apic >> 21) & 0x1ff) as usize;
+    let mut pd_e = core::ptr::read_volatile((pd as *const u64).add(pd_i));
+    let pt = if (pd_e & (1 << 7)) != 0 {
+        let pt = scratch[1];
+        if pt & 0xfff != 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        core::ptr::write_bytes(pt as *mut u8, 0, 4096);
+        let base = (apic >> 21) << 21;
+        let pt_entries = pt as *mut u64;
+        for j in 0..512u64 {
+            let hpa = base + (j << 12);
+            // 4K leaf: R/W/X + MT, no large bit
+            let leaf = ept_rwe() | ((mt & 0x7) << 3) | (hpa & !0xfff);
+            core::ptr::write_volatile(pt_entries.add(j as usize), leaf);
+        }
+        pd_e = ept_link(pt);
+        core::ptr::write_volatile((pd as *mut u64).add(pd_i), pd_e);
+        pt
+    } else {
+        pd_e & !0xfff
+    };
+
+    let pt_i = ((apic >> 12) & 0x1ff) as usize;
+    core::ptr::write_volatile((pt as *mut u64).add(pt_i), 0); // not present
+    invept_global();
+    Ok(())
+}
+
+/// INVEPT type 2 — all-context (invalidate all EPT-derived TLB).
+unsafe fn invept_global() {
+    #[repr(C, align(16))]
+    struct Desc {
+        eptp: u64,
+        reserved: u64,
+    }
+    let desc = Desc {
+        eptp: 0,
+        reserved: 0,
+    };
+    let typ: u64 = 2;
+    // Ignore CF/ZF failure — nested KVM may synthesize; next walk is still coherent.
+    core::arch::asm!(
+        "invept {typ}, [{desc}]",
+        typ = in(reg) typ,
+        desc = in(reg) core::ptr::addr_of!(desc),
+        options(nostack),
+    );
+}
+
 fn write_u64_le(p: *mut u8, v: u64) {
     for i in 0..8 {
         unsafe {

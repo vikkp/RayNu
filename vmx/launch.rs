@@ -21,9 +21,10 @@
 //! M3.8: real Linux earlyprintk banner → `RAYNU-V-M3-LINUX-EARLY-OK`.
 //! M3.9: MSR allow-list emulate + post-banner host LAPIC → `RAYNU-V-M3-GTIMER2-OK`.
 //! M3.10: real `/init` on initrd prints shell magic → `RAYNU-V-M3-SHELL-OK`.
+//! M3.11: EPT hole + virtual LAPIC timer → `RAYNU-V-M3-GTIMER3-OK` (drop `nolapic`).
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
-//! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/SHELL (real).
+//! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/SHELL (real).
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -34,10 +35,12 @@ use crate::arch::cpu::{
     IA32_VMX_TRUE_PINBASED_CTLS, IA32_VMX_TRUE_PROCBASED_CTLS,
 };
 use crate::boot::serial;
+use crate::devices::lapic_virt::{self, M3_GTIMER3_OK_MARKER};
 use crate::devices::serial_pio::{
     self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
+use crate::vmx::mmio_decode;
 use crate::memory::ept::{self, M2_OWN_OK_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
@@ -426,6 +429,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
             | CPU_BASED_CPUID_EXITING
             | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
+            | CPU_BASED_USE_MSR_BITMAPS
             | CPU_BASED_ACTIVATE_SECONDARY,
         proc_msr,
     );
@@ -464,8 +468,11 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
         let bmp = frames.msr_bitmap_phys.ok_or(LaunchError::PrepareFailed)?;
         core::ptr::write_bytes(bmp as *mut u8, 0, 4096);
+        // M3.11: trap x2APIC + APIC_BASE for virtual LAPIC.
+        crate::devices::lapic_virt::trap_x2apic_msrs(bmp);
         Some(bmp)
     } else {
+        serial::write_line("boot: WARN — MSR bitmaps unavailable; x2APIC may hit host");
         None
     };
 
@@ -827,6 +834,9 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     if basic == EXIT_REASON_IO_INSTRUCTION {
         handle_io_and_resume(qual, guest_rax, guest_rip);
     }
+    if basic == EXIT_REASON_EPT_VIOLATION {
+        handle_ept_violation_and_resume(qual, guest_rip);
+    }
     if basic == EXIT_REASON_CPUID {
         handle_cpuid_and_resume(guest_rip);
     }
@@ -971,6 +981,76 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
 
 /// Inject ISA IRQ4 when the emulated 8250 has a pending THR-empty IRQ.
 /// Returns true if VM-entry interruption-info was programmed.
+/// Emulate APIC MMIO at the EPT hole (GPA 0xFEE00000).
+unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
+    let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+    if !(lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa) {
+        serial::write_str("boot: ERROR — EPT violation GPA=0x");
+        write_hex_u64(gpa);
+        serial::write_byte(b'\n');
+        dump_linux_guest_state();
+        finish_boot(false);
+    }
+    let is_write = (qual & 0x2) != 0;
+    // Read up to 15 bytes of guest insn (identity-mapped).
+    let mut insn = [0u8; 15];
+    for (i, b) in insn.iter_mut().enumerate() {
+        *b = core::ptr::read_volatile((guest_rip as *const u8).add(i));
+    }
+    let Some(mov) = mmio_decode::decode_mov_mmio(&insn) else {
+        serial::write_line("boot: ERROR — APIC MMIO undecoded insn");
+        dump_linux_guest_state();
+        finish_boot(false);
+    };
+    if mov.is_write != is_write {
+        serial::write_line("boot: WARN — APIC mov direction ≠ EPT qual");
+    }
+    // Intel GPR order in ModRM: RAX RCX RDX RBX RSP RBP RSI RDI R8…R15
+    let mut gprs = [
+        SAVED_GUEST_RAX,
+        SAVED_GUEST_RCX,
+        SAVED_GUEST_RDX,
+        SAVED_GUEST_RBX,
+        ops::vmread(GUEST_RSP).unwrap_or(0),
+        SAVED_GUEST_RBP,
+        SAVED_GUEST_RSI,
+        SAVED_GUEST_RDI,
+        SAVED_GUEST_R8,
+        SAVED_GUEST_R9,
+        SAVED_GUEST_R10,
+        SAVED_GUEST_R11,
+        SAVED_GUEST_R12,
+        SAVED_GUEST_R13,
+        SAVED_GUEST_R14,
+        SAVED_GUEST_R15,
+    ];
+    if mmio_decode::apply_apic_mov(mov, gpa, &mut gprs).is_err() {
+        serial::write_line("boot: ERROR — APIC MMIO apply failed");
+        finish_boot(false);
+    }
+    SAVED_GUEST_RAX = gprs[0];
+    SAVED_GUEST_RCX = gprs[1];
+    SAVED_GUEST_RDX = gprs[2];
+    SAVED_GUEST_RBX = gprs[3];
+    SAVED_GUEST_RBP = gprs[5];
+    SAVED_GUEST_RSI = gprs[6];
+    SAVED_GUEST_RDI = gprs[7];
+    SAVED_GUEST_R8 = gprs[8];
+    SAVED_GUEST_R9 = gprs[9];
+    SAVED_GUEST_R10 = gprs[10];
+    SAVED_GUEST_R11 = gprs[11];
+    SAVED_GUEST_R12 = gprs[12];
+    SAVED_GUEST_R13 = gprs[13];
+    SAVED_GUEST_R14 = gprs[14];
+    SAVED_GUEST_R15 = gprs[15];
+    if lapic_virt::host_timer_armed_for_guest() {
+        let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(mov.len as u64));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    vmresume_with_gprs();
+}
+
 unsafe fn try_inject_linux_com1_tx() -> bool {
     if !serial_pio::com1_tx_irq_pending() {
         return false;
@@ -1391,24 +1471,47 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         EXIT_REASON_EXTERNAL_INTERRUPT => {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
-                arm_linux_tick();
-                // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
-                if try_inject_linux_com1_tx() {
-                    vmresume_with_gprs();
-                }
-                maybe_arm_interrupt_window_for_tx();
-                // Kernel-only ticks: IF=1 and CPL=0. Injecting IRQ0 into
-                // userspace raced `/init` and double-faulted (user RSP).
-                let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
-                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
-                let cpl = cs & 3;
-                if (rflags & (1 << 9)) != 0 && cpl == 0 {
-                    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR) {
+                // M3.11: virtual APIC timer (host one-shot → guest LVT vector).
+                if let Some(vec) = lapic_virt::take_guest_timer_inject() {
+                    if lapic_virt::gtimer3_ok() {
+                        static mut GTIMER3_MARKED: bool = false;
+                        if !GTIMER3_MARKED {
+                            GTIMER3_MARKED = true;
+                            serial::write_line(M3_GTIMER3_OK_MARKER);
+                        }
+                    }
+                    if let Ok(info) = interrupt::prepare_external_inject(vec) {
                         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
                         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
                         let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
                         vmresume_with_gprs();
                     }
+                }
+                // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
+                if try_inject_linux_com1_tx() {
+                    vmresume_with_gprs();
+                }
+                maybe_arm_interrupt_window_for_tx();
+                // Until the guest programs its APIC timer (GTIMER3), keep the
+                // host→IRQ0 jiffies crutch. After GTIMER3, only re-arm when the
+                // virtual APIC asked for a host one-shot.
+                if !lapic_virt::gtimer3_ok() {
+                    arm_linux_tick();
+                    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+                    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+                    let cpl = cs & 3;
+                    if (rflags & (1 << 9)) != 0 && cpl == 0 {
+                        if let Ok(info) =
+                            interrupt::prepare_external_inject(LINUX_IRQ0_VECTOR)
+                        {
+                            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+                            let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+                            let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+                            vmresume_with_gprs();
+                        }
+                    }
+                } else if lapic_virt::host_timer_armed_for_guest() {
+                    arm_linux_tick();
                 }
             }
             let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
@@ -1461,6 +1564,24 @@ unsafe fn handle_msr_and_resume(basic: u32) -> ! {
     let index = SAVED_GUEST_RCX as u32;
     let write_val = (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
     let is_write = basic == EXIT_REASON_MSR_WRITE;
+
+    // M3.11: x2APIC MSRs → virtual LAPIC.
+    if lapic_virt::is_x2apic_msr(index) {
+        if is_write {
+            if let Some(true) = lapic_virt::wrmsr(index, write_val) {
+                let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+            }
+        } else if let Some(v) = lapic_virt::rdmsr(index) {
+            SAVED_GUEST_RAX = v as u32 as u64;
+            SAVED_GUEST_RDX = v >> 32;
+        }
+        let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+        let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
+        let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+        vmresume_with_gprs();
+    }
+
     let access = if is_write {
         MsrAccess::Write
     } else {
@@ -1827,13 +1948,17 @@ fn finish_boot(ok: bool) -> ! {
     if ok {
         // SAFETY: boot single-threaded; flag set before VMLAUNCH.
         if unsafe { REAL_LINUX_GUEST } {
-            serial::write_line("boot: M3.10 complete — Linux SHELL OK");
+            if lapic_virt::gtimer3_ok() {
+                serial::write_line("boot: M3.11 complete — Linux GTIMER3 + SHELL OK");
+            } else {
+                serial::write_line("boot: M3.10 complete — Linux SHELL OK");
+            }
         } else {
             serial::write_line("boot: M3.10 complete — proto path OK");
         }
         serial::qemu_exit_success();
     } else {
-        serial::write_line("boot: M3.10 complete");
+        serial::write_line("boot: boot gate failed");
         serial::qemu_exit_failure();
     }
 

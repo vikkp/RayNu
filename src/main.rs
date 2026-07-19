@@ -191,6 +191,24 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     };
 
+    // M3.11: GPA 0xFEE00000 not-present — guest APIC MMIO → EPT violation.
+    let mut apic_hole = [0u64; memory::ept_hw::APIC_HOLE_EXTRA_FRAMES];
+    for slot in apic_hole.iter_mut() {
+        let Some(f) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for APIC EPT hole");
+            let _ = life.disable();
+            return;
+        };
+        *slot = f;
+    }
+    // SAFETY: PML4 from identity build; hole frames owned.
+    if unsafe { memory::ept_hw::punch_apic_mmio_hole(ept_frames[0], &mut apic_hole) }.is_err() {
+        boot::serial::write_line("boot: ERROR — APIC EPT hole failed");
+        let _ = life.disable();
+        return;
+    }
+    boot::serial::write_line("boot: APIC MMIO EPT hole at 0xFEE00000");
+
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
         let _ = life.disable();

@@ -5,14 +5,16 @@
 //! M3.1: CPUID leaf-1 hides VMX. M3.9: classify guest RDMSR/WRMSR so the
 //! VMM can emulate via VMCS fields, host passthrough, shadows, or `#GP`.
 
-use crate::arch::cpu::{self, CPUID_ECX_VMX, CPUID_EDX_APIC};
+use crate::arch::cpu::{
+    self, CPUID_ECX_TSC_DEADLINE, CPUID_ECX_VMX, CPUID_ECX_X2APIC, CPUID_EDX_APIC,
+};
 
 /// COM1 marker when guest CPUID leaf 1 is filtered (M3.1 gate).
 pub const M3_CPUID_OK_MARKER: &str = "RAYNU-V-M3-CPUID-OK";
 
 /// IA32_TIME_STAMP_COUNTER
 pub const MSR_TSC: u32 = 0x10;
-/// IA32_APIC_BASE — read OK; writes blocked (host APIC).
+/// IA32_APIC_BASE — guest shadow (M3.11); do not touch host APIC.
 pub const MSR_APIC_BASE: u32 = 0x1B;
 /// IA32_FEATURE_CONTROL — always block.
 pub const MSR_FEATURE_CONTROL: u32 = 0x3A;
@@ -103,9 +105,12 @@ static mut MSR_FW_OK: bool = false;
 
 /// Guest MSR shadows (not in the VMCS). Syscall MSRs are host-passthrough.
 static mut SHADOW_SPEC_CTRL: u64 = 0;
+/// Guest IA32_APIC_BASE (do not touch host APIC).
+static mut SHADOW_APIC_BASE: u64 = 0xFEE0_0000 | (1 << 11);
 
 /// INVARIANTS:
-///   - Sensitive host MSRs (FEATURE_CONTROL, VMX caps, APIC_BASE write) → InjectGp
+///   - Sensitive host MSRs (FEATURE_CONTROL, VMX caps) → InjectGp
+///   - APIC_BASE → Shadow (virtual APIC; host LAPIC untouched)
 ///   - VMCS-backed guest state MSRs use Vmcs*
 ///   - Syscall path MSRs (STAR/LSTAR/SFMASK/KERNEL_GS/TSC_AUX) → HostPassthrough
 ///   - Unknown defaults: read→0, write→ignore (bring-up; tighten later)
@@ -125,8 +130,8 @@ pub fn classify_msr(index: u32, access: MsrAccess) -> MsrAction {
     }
     match (index, access) {
         (MSR_FEATURE_CONTROL, _) => MsrAction::InjectGp,
-        (MSR_APIC_BASE, MsrAccess::Write) => MsrAction::InjectGp,
-        (MSR_APIC_BASE, MsrAccess::Read) => MsrAction::HostPassthrough,
+        // M3.11: guest APIC base is shadowed (EPT hole + x2APIC MSRs).
+        (MSR_APIC_BASE, _) => MsrAction::Shadow,
 
         (MSR_TSC, MsrAccess::Read) => MsrAction::HostPassthrough,
         (MSR_TSC, MsrAccess::Write) => MsrAction::IgnoreWrite,
@@ -171,6 +176,7 @@ pub fn shadow_read(index: u32) -> u64 {
     unsafe {
         match index {
             MSR_SPEC_CTRL => SHADOW_SPEC_CTRL,
+            MSR_APIC_BASE => SHADOW_APIC_BASE,
             _ => 0,
         }
     }
@@ -180,8 +186,10 @@ pub fn shadow_read(index: u32) -> u64 {
 pub fn shadow_write(index: u32, value: u64) {
     // SAFETY: single-threaded VMEXIT path.
     unsafe {
-        if index == MSR_SPEC_CTRL {
-            SHADOW_SPEC_CTRL = value;
+        match index {
+            MSR_SPEC_CTRL => SHADOW_SPEC_CTRL = value,
+            MSR_APIC_BASE => SHADOW_APIC_BASE = value,
+            _ => {}
         }
     }
 }
@@ -201,8 +209,7 @@ pub fn msr_firewall_ok() -> bool {
 /// Emulate guest CPUID: host result, then policy filters.
 ///
 /// M3.1 policy: leaf 1 clears ECX.VMX so the guest cannot see nested VT-x.
-/// M3.10: also clear EDX.APIC so Linux does not program the host LAPIC page
-/// (identity EPT would alias GPA 0xFEE00000 onto the real APIC).
+/// M3.11: show EDX.APIC + ECX.X2APIC — guest APIC is virtual (EPT hole / MSRs).
 pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     // SAFETY: CPUID is architecturally defined for these leaves.
     let r = unsafe { cpu::cpuid(leaf, subleaf) };
@@ -214,7 +221,9 @@ pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     };
     if leaf == 1 {
         out.ecx &= !CPUID_ECX_VMX;
-        out.edx &= !CPUID_EDX_APIC;
+        out.ecx &= !CPUID_ECX_TSC_DEADLINE;
+        out.ecx |= CPUID_ECX_X2APIC;
+        out.edx |= CPUID_EDX_APIC;
         note_leaf1_filtered(out.ecx);
     }
     out

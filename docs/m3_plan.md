@@ -190,8 +190,8 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 ## Suggested start order
 
 1. ~~Plan / M3.0–M3.10~~ — done (real Linux `/init` SHELL).
-2. Verus L3 / precise EPT / PE asset embed (parallel).
-3. Guest-usable timer / drop host-LAPIC tick scaffold (post-shell).
+2. **Post-shell:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — **M3.11 guest APIC timer** in progress.
+3. M3.12 drop IRQ crutches → M3.13 precise EPT; M3.14 Verus L3 parallel.
 
 ---
 
@@ -199,11 +199,13 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 | Path | Role |
 |------|------|
-| `vmx/launch.rs` | Exit phase machine → **M3.10** CPUID SHELL after GTIMER2 |
+| `vmx/launch.rs` | Exit phase machine → **M3.11** GTIMER3 + CPUID SHELL |
+| `devices/lapic_virt.rs` | Virtual xAPIC/x2APIC timer (M3.11) |
+| `vmx/mmio_decode.rs` | APIC MMIO mov decode (EPT violation) |
 | `guest/linux_boot.rs` | Relocatable bzImage + real initrd load |
 | `tools/init/init.c` | Static `/init` — CPUID SHELL hypercall |
 | `devices/serial_pio.rs` | COM1 latch + SHELL CPUID constants |
-| `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9** |
+| `sched/msr_firewall.rs` | MSR classify / emulate → **M3.9**+APIC_BASE shadow |
 
 | `devices/mod.rs` | Device stubs → serial PIO |
 | `memory/ept_hw.rs` | 4 GiB identity (keep for M3 bring-up) |

@@ -6,8 +6,12 @@
 
 /// CPUID leaf 1 ECX bit 5 — VMX supported.
 pub const CPUID_ECX_VMX: u32 = 1 << 5;
-/// CPUID.1:EDX bit 9 — local APIC on chip (hide so guest skips host APIC MMIO).
+/// CPUID.1:EDX bit 9 — local APIC on chip (M3.11: shown; MMIO trapped via EPT hole).
 pub const CPUID_EDX_APIC: u32 = 1 << 9;
+/// CPUID.1:ECX bit 21 — x2APIC (prefer MSR path for timer emulate).
+pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
+/// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
+pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
 
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
