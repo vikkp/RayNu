@@ -1,9 +1,9 @@
 /*
  * Minimal static init for RayNu-V M3.10.
  *
- * The hypervisor latches SHELL from COM1 OUT bytes (port 0x3f8) on I/O
- * VMEXIT. Prefer kernel tty writes (CPL0 OUT → bitmap exit). Do not use
- * userspace `outb`: without IOPL, nested KVM injects #GP and kills init.
+ * HV latches SHELL from COM1 OUT on I/O VMEXIT. Prefer /dev/kmsg (printk →
+ * polling console) so we do not depend on ttyS0's IRQ-driven TX. Also try
+ * ttyS0/console; HV injects COM1 THR IRQ for that path.
  *
  * Built with: gcc -static -nostdlib -o init init.c
  */
@@ -20,8 +20,10 @@
 #define O_WRONLY 1
 #define S_IFCHR 0x2000
 #define TTYS0_DEV 0x440 /* makedev(4, 64) */
+#define KMSG_DEV 0x10b  /* makedev(1, 11) */
 
 static const char msg[] = "RAYNU-V-M3-SHELL-OK\n";
+static const char path_kmsg[] = "/dev/kmsg";
 static const char path_console[] = "/dev/console";
 static const char path_ttys0[] = "/dev/ttyS0";
 static const char path_dev[] = "/dev";
@@ -61,20 +63,21 @@ static void write_path(const char *path) {
     }
 }
 
-static void ensure_ttys0(void) {
-    long fd = syscall3(SYS_openat, AT_FDCWD, (long)path_ttys0, O_WRONLY);
+static void ensure_node(const char *path, long dev) {
+    long fd = syscall3(SYS_openat, AT_FDCWD, (long)path, O_WRONLY);
     if (fd >= 0) {
         (void)syscall3(SYS_close, fd, 0, 0);
         return;
     }
     (void)syscall3(SYS_mkdir, (long)path_dev, 0755, 0);
-    (void)syscall4(SYS_mknodat, AT_FDCWD, (long)path_ttys0, S_IFCHR | 0666, TTYS0_DEV);
+    (void)syscall4(SYS_mknodat, AT_FDCWD, (long)path, S_IFCHR | 0666, dev);
 }
 
 void _start(void) {
-    ensure_ttys0();
-    /* Repeat: first opens may race devtmpfs; HV latches on COM1 OUTs. */
+    ensure_node(path_kmsg, KMSG_DEV);
+    ensure_node(path_ttys0, TTYS0_DEV);
     for (int round = 0; round < 8; round++) {
+        write_path(path_kmsg);
         write_fd(1);
         write_fd(2);
         write_path(path_console);

@@ -98,3 +98,35 @@ fn com1_range() {
     assert!(is_com1_port(0x3FF));
     assert!(!is_com1_port(0x2F8));
 }
+
+#[test]
+fn com1_etbei_raises_tx_irq() {
+    // Clear DLAB so port 0x3F9 is IER (not divisor latch).
+    let lcr = IoExitInfo {
+        port: COM1_LCR,
+        size: 1,
+        is_in: false,
+        string: false,
+        rep: false,
+    };
+    assert!(handle_pio(&lcr, 0x03).is_ok());
+    let ier = IoExitInfo {
+        port: COM1_IER,
+        size: 1,
+        is_in: false,
+        string: false,
+        rep: false,
+    };
+    assert!(handle_pio(&ier, 0x02).is_ok()); // ETBEI
+    assert!(com1_tx_irq_pending());
+    let iir = IoExitInfo {
+        port: COM1_IIR_FCR,
+        size: 1,
+        is_in: true,
+        string: false,
+        rep: false,
+    };
+    let v = handle_pio(&iir, 0).unwrap().unwrap() & 0xFF;
+    assert_eq!(v, 0x02); // THRE
+    assert!(!com1_tx_irq_pending());
+}

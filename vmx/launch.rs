@@ -947,17 +947,41 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
-    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     // M3.9: after real banner, arm host LAPIC once (not again after GTIMER2-OK).
     if REAL_LINUX_GUEST
         && serial_pio::guest_linux_early_ok()
         && !LINUX_GTIMER2_ARMED
         && !LINUX_GTIMER2_DONE
     {
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         arm_linux_gtimer2();
     }
+    // M3.10: after COM1 TX, inject IRQ4 so 8250 can send the next byte.
+    if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE && try_inject_linux_com1_tx() {
+        vmresume_with_gprs();
+    }
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     // Preserve RSI across OUT storms in the proto-kernel.
     vmresume_with_gprs();
+}
+
+/// Inject ISA IRQ4 when the emulated 8250 has a pending THR-empty IRQ.
+/// Returns true if VM-entry interruption-info was programmed.
+unsafe fn try_inject_linux_com1_tx() -> bool {
+    if !serial_pio::com1_tx_irq_pending() {
+        return false;
+    }
+    let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+    if (rflags & (1 << 9)) == 0 {
+        return false;
+    }
+    if let Ok(info) = interrupt::prepare_external_inject(LINUX_IRQ4_VECTOR) {
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        return true;
+    }
+    false
 }
 
 /// Emulate guest XSETBV (exit reason 55). Only XCR0 is accepted.
@@ -1277,6 +1301,8 @@ unsafe fn phase4_early_ok(basic: u32, guest_page: u64) -> ! {
 
 /// Linux ISA IRQ0 vector (`IRQ0_VECTOR` / `ISA_IRQ_VECTOR(0)` ≈ 0x30).
 const LINUX_IRQ0_VECTOR: u32 = 0x30;
+/// Linux ISA IRQ4 (COM1) — ttyS0 TX is interrupt-driven after first char.
+const LINUX_IRQ4_VECTOR: u32 = 0x34;
 /// Faster host one-shot for post-GTIMER2 guest ticks (ONESHOT_COUNT / 16).
 const LINUX_TICK_COUNT: u32 = 0x0010_0000;
 
@@ -1318,6 +1344,10 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
             let _ = apic::eoi();
             if LINUX_GTIMER2_DONE {
                 arm_linux_tick();
+                // Prefer COM1 TX IRQ so ttyS0 write can finish SHELL magic.
+                if try_inject_linux_com1_tx() {
+                    vmresume_with_gprs();
+                }
                 // Kernel-only ticks: IF=1 and CPL=0. Injecting IRQ0 into
                 // userspace raced `/init` and double-faulted (user RSP).
                 let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);

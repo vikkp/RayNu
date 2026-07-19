@@ -40,6 +40,12 @@ pub const COM1_MSR: u16 = 0x3FE;
 pub const COM1_SCR: u16 = 0x3FF;
 
 const LCR_DLAB: u8 = 1 << 7;
+/// IER bit 1: enable THR-empty interrupt (8250 ETBEI).
+const IER_ETBEI: u8 = 1 << 1;
+/// IIR: no interrupt pending.
+const IIR_NO_INT: u8 = 0x01;
+/// IIR: THR empty (tx ready) interrupt.
+const IIR_THRE: u8 = 0x02;
 
 /// Set when [`GUEST_IO_MAGIC`] has been fully received from guest OUTs.
 static mut IO_MAGIC_OK: bool = false;
@@ -61,6 +67,8 @@ static mut SHADOW_IER: u8 = 0;
 static mut SHADOW_MCR: u8 = 0;
 static mut SHADOW_DLL: u8 = 1;
 static mut SHADOW_DLM: u8 = 0;
+/// THR-empty IRQ pending (Linux ttyS0 TX is interrupt-driven).
+static mut TX_IRQ_PENDING: bool = false;
 /// Port 0x61 (NMI status / speaker): toggle bit 4 so Linux delay loops advance.
 static mut PORT61_SHADOW: u8 = 0;
 /// PIT channel-0 latch counter (decrements on data-port reads).
@@ -122,7 +130,15 @@ fn handle_com1_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
                 COM1_IER if dlab => SHADOW_DLM as u64,
                 COM1_DATA => 0, // no RX
                 COM1_IER => SHADOW_IER as u64,
-                COM1_IIR_FCR => 0x01, // no interrupt pending
+                COM1_IIR_FCR => {
+                    // Reading IIR acknowledges THR-empty IRQ.
+                    if TX_IRQ_PENDING && (SHADOW_IER & IER_ETBEI) != 0 {
+                        TX_IRQ_PENDING = false;
+                        IIR_THRE as u64
+                    } else {
+                        IIR_NO_INT as u64
+                    }
+                }
                 COM1_LCR => SHADOW_LCR as u64,
                 COM1_MCR => SHADOW_MCR as u64,
                 COM1_LSR => 0x60u64, // THR empty + TEMT
@@ -148,8 +164,20 @@ fn handle_com1_pio(info: &IoExitInfo, rax: u64) -> Result<Option<u64>, ()> {
                     // Passthrough so banner/magic appear on the QEMU serial log.
                     #[cfg(not(test))]
                     crate::boot::serial::write_byte(byte);
+                    // tty write kicks TX IRQ for the next byte (else stalls after 1).
+                    if (SHADOW_IER & IER_ETBEI) != 0 {
+                        TX_IRQ_PENDING = true;
+                    }
                 }
-                COM1_IER => SHADOW_IER = byte,
+                COM1_IER => {
+                    SHADOW_IER = byte;
+                    // Enabling ETBEI while THR empty raises THRE immediately.
+                    if (byte & IER_ETBEI) != 0 {
+                        TX_IRQ_PENDING = true;
+                    } else {
+                        TX_IRQ_PENDING = false;
+                    }
+                }
                 COM1_IIR_FCR => {} // FCR write ignored
                 COM1_LCR => SHADOW_LCR = byte,
                 COM1_MCR => SHADOW_MCR = byte,
@@ -308,6 +336,12 @@ pub fn guest_shell_ok() -> bool {
 pub fn guest_linux_early_ok() -> bool {
     // SAFETY: written on BSP VMEXIT path; read after banner latch.
     unsafe { LINUX_EARLY_OK }
+}
+
+/// True when the 8250 guest needs ISA IRQ4 (THR-empty) to continue TX.
+pub fn com1_tx_irq_pending() -> bool {
+    // SAFETY: single-threaded VMEXIT path.
+    unsafe { TX_IRQ_PENDING && (SHADOW_IER & IER_ETBEI) != 0 }
 }
 
 /// Trap COM1 ports in an I/O bitmap A page (ports 0x0000–0x7FFF).
