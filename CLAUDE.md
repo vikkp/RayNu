@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M3.5 closed** on Latitude (`RAYNU-V-M3-SHELL-OK`); **synthetic M3 complete**. **M3.6 in flight**: continuous exit loop (`RAYNU-V-M3-LOOP-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**Through M3.6 closed** on Latitude (`RAYNU-V-M3-LOOP-OK`); synthetic M3 + exit loop done. Next: **M3.7** real bzImage load. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ### Risk Hotspots
 

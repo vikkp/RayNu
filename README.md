@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.5 closed** (synthetic M3). **M3.6 in flight**: continuous exit loop (`RAYNU-V-M3-LOOP-OK`). Plan: [docs/m3_plan.md](docs/m3_plan.md).
+**M0 → M3.6 closed** — Latitude through continuous exit loop (`RAYNU-V-M3-LOOP-OK`). Next: **M3.7** real bzImage load. Plan: [docs/m3_plan.md](docs/m3_plan.md).
 
 ## Repository Layout
 

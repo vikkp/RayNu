@@ -60,13 +60,13 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.6: exit loop.</h2>
+          <h2 class="section__title">M3.6 closed.</h2>
           <p class="section__lede">
-            After proto-init shell, keep resuming through HLT exits and latch
-            <code>RAYNU-V-M3-LOOP-OK</code> — foundation for a real Linux guest.
+            Latitude passed the continuous exit loop
+            (<code>RAYNU-V-M3-LOOP-OK</code>). Next: real bzImage load.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>boot: entering continuous exit loop
-RAYNU-V-M3-LOOP-OK
+          <pre class="ship-code milestone-log" data-reveal><code>==> M3.6 exit-loop marker found
+==> Boot gate PASSED (M0 → M3.6)
 boot: M3.6 complete — exit loop OK</code></pre>
         </div>
       </section>
@@ -141,8 +141,8 @@ boot: M3.6 complete — exit loop OK</code></pre>
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Latitude gate for M3.6, then real bzImage → earlyprintk →
-            busybox/<code>init</code> — see <code>docs/m3_plan.md</code>.
+            M3.7 real bzImage load, then earlyprintk → busybox/<code>init</code>
+            — see <code>docs/m3_plan.md</code>.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
