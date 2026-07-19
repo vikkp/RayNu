@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.21 open:** hard-fail Kani CI → `RAYNU-V-M3-KANI-OK` (CI/Latitude pending). See [m3_post_shell_plan.md](m3_post_shell_plan.md).
+**M3.21 closed:** hard-fail Kani CI → `RAYNU-V-M3-KANI-OK`. Next: M3.22 PE assets — [m3_post_shell_plan.md](m3_post_shell_plan.md).
