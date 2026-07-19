@@ -1287,6 +1287,8 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         // later pause/HLT does not spin the exit path.
         let _ = apic::mask_timer();
         let _ = set_hlt_exiting(false);
+        // Linux IDT is live — deliver exceptions to the guest (not the HV).
+        let _ = ops::vmwrite(EXCEPTION_BITMAP, 0);
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
         let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);

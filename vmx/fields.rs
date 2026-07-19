@@ -187,8 +187,9 @@ pub const EXIT_REASON_XSETBV: u32 = 55;
 /// Do **not** intercept `#PF`: ZO demand-maps identity ranges.
 /// Do **not** intercept `#GP`: MSR firewall injects `#GP(0)` for blocked MSRs
 /// and Linux has a stage2 IDT handler after relocate.
+/// Do **not** intercept `#UD`: Linux uses it for feature probes / alternatives;
+/// intercepting after IDT install killed boot at serial8250 (M3.10).
 pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
-    | (1 << 6) // #UD
     | (1 << 8) // #DF
     | (1 << 10) // #TS
     | (1 << 11) // #NP
