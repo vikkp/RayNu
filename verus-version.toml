@@ -1,6 +1,9 @@
 # Verus pin per ADR-008 (M3.15).
-# Weekly point release (not rolling pre-release). Bump only via a dedicated
-# toolchain-upgrade task; re-run tools/verus-smoke.sh after any change.
+#
+# FROZEN TOOLCHAIN — do not use GitHub "latest", rolling pre-releases, or an
+# unpinned channel. Proofs must reproduce against this exact release tag +
+# commit + asset digest. Bump only via a dedicated upgrade PR; re-run
+# ./tools/verus-smoke.sh and re-verify Proven Core after any change.
 
 [verus]
 version = "0.2026.07.12.0b42f4c"
@@ -9,9 +12,12 @@ commit = "0b42f4cee92a178937608cf55e512371d2fd8cd4"
 # Rust toolchain required by this Verus binary (from its version.json).
 toolchain = "1.96.0-x86_64-unknown-linux-gnu"
 git = "https://github.com/verus-lang/verus"
-# Linux CI asset: verus-${version}-x86-linux.zip under the release tag.
+# Content-addressed Linux CI asset (sha256 of the release zip).
+asset_linux = "verus-0.2026.07.12.0b42f4c-x86-linux.zip"
+sha256_linux = "f6f4f5d08e07d3e1ad721d775bda5ba96b9dd0c73b48fc17f2e071866fbd01c0"
 
 [notes]
-status = "M3.15 pinned weekly Verus; smoke → RAYNU-V-M3-VERUS-OK; true L3 verify → M3.17"
+status = "M3.15 frozen weekly Verus pin; smoke → RAYNU-V-M3-VERUS-OK; true L3 verify → M3.17"
 host_marker = "RAYNU-V-M3-VERUS-OK"
 l3_attempt_marker = "RAYNU-V-M3-L3-OK"
+policy = "CI installs only this tag+sha256; never releases/latest"

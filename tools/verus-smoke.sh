@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M3.15 host/CI smoke: install pinned Verus, run verus + cargo verus, print marker.
+# M3.15 host/CI smoke: install frozen Verus pin, run verus + cargo verus, print marker.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,6 +8,9 @@ cd "$ROOT"
 MARKER="${MARKER_VERUS:-RAYNU-V-M3-VERUS-OK}"
 PIN="$ROOT/verus-version.toml"
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$PIN" | head -1)"
+commit="$(sed -n 's/^commit = "\([^"]*\)"/\1/p' "$PIN" | head -1)"
+tag="$(sed -n 's/^tag = "\([^"]*\)"/\1/p' "$PIN" | head -1)"
+sha256="$(sed -n 's/^sha256_linux = "\([^"]*\)"/\1/p' "$PIN" | head -1)"
 VERUS_HOME="${VERUS_HOME:-$ROOT/target/verus}"
 
 "$ROOT/tools/install-verus.sh"
@@ -31,3 +34,4 @@ cargo verus verify --no-default-features
 
 echo "$MARKER"
 echo "==> Verus pin smoke PASSED (M3.15)"
+echo "    reproducible against tag=$tag commit=$commit sha256_linux=$sha256"

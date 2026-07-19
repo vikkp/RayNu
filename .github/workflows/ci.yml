@@ -91,19 +91,41 @@ jobs:
             target/m0-qemu-stderr.log
           if-no-files-found: ignore
 
-  # M3.15: pinned Verus smoke (ADR-008). Hard-pass install + cargo verus.
+  # M3.15: frozen Verus pin smoke (ADR-008). Hard-pass install + cargo verus.
+  # Installs ONLY the exact tag/commit/sha256 in verus-version.toml — never "latest".
   # True L3 proof discharge remains M3.17 (crate does not opt into verify yet).
   verus-smoke:
     name: verus pin smoke (M3.15)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Host crate build uses the repo rust-toolchain.toml pin (not floating nightly).
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-06-01
           components: rust-src
       - name: Install unzip (Verus release zip)
         run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Assert frozen Verus pin (exact tag + commit + sha256)
+        run: |
+          set -euo pipefail
+          pin=verus-version.toml
+          test -f "$pin"
+          grep -E '^version = "0\.[0-9]{4}\.' "$pin"
+          grep -E '^tag = "release/' "$pin"
+          grep -E '^commit = "[0-9a-f]{40}"' "$pin"
+          grep -E '^sha256_linux = "[0-9a-f]{64}"' "$pin"
+          grep -E '^toolchain = "' "$pin"
+          if grep -E '^(tag|asset_linux|version) = ".*latest' "$pin"; then
+            echo "error: pin must not reference latest" >&2
+            exit 1
+          fi
+          if grep -E '^tag = ".*rolling' "$pin"; then
+            echo "error: pin must not use rolling pre-release" >&2
+            exit 1
+          fi
+          echo "Frozen pin OK:"
+          grep -E '^(version|tag|commit|toolchain|asset_linux|sha256_linux) = ' "$pin"
       - name: Verus pin smoke → RAYNU-V-M3-VERUS-OK
         run: ./tools/verus-smoke.sh
 

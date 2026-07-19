@@ -50,7 +50,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,1GiB)` identity; APIC unmapped by omission (M3.13) |
 | `vmx/*` | L0–L1 | Real Linux through EPT2 + APIC + SHELL (M3.13) |
 | Verus proofs (`ept_proof.rs`) | L3-attempt | Lemmas + GAP list (M3.14); toolchain pinned (M3.15) — not ADR-006 L3 yet |
-| Verus toolchain | Pinned | `verus-version.toml` + `tools/verus-smoke.sh` → `RAYNU-V-M3-VERUS-OK` |
+| Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Soft-fail best-effort | Harnesses: no HPA alias; alloc integrity |
 
 ## Next
