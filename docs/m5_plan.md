@@ -154,9 +154,9 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 **Shipped / wiring:**
 
 1. Mock Redfish Tier‑1 thermal/fan/PSU (`assets/idrac/mock_redfish.json`) via `read_tier1_health`.
-2. SMBIOS DIMM + ACPI MADT/SRAT/SLIT topology → `TopologySnapshot`.
+2. SMBIOS DIMM + ACPI MADT/SRAT/SLIT topology (`assets/idrac/mock_topology.txt`) → `TopologySnapshot`.
 3. Host gate `idrac/m5_idrac_gate.rs` + `tools/m5-idrac-smoke.sh` + CI `m5-idrac`.
-4. Live BMC HTTP and Tier‑2 OEM remain documented GAPs.
+4. Live BMC HTTP and Tier‑2 OEM remain documented GAPs (`GAP: live Redfish BMC → polish`, `GAP: Dell Tier-2 OEM`).
 
 **Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-IDRAC-OK`.
 

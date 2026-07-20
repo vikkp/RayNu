@@ -1,0 +1,21 @@
+# RayNu-V M5.6 mock SMBIOS / ACPI topology (CI / QEMU path)
+# Format:
+#   dimm <socket> <size_mb> <numa_node>
+#   cpu  <cpu_id> <apic_id> <socket>     # MADT-style
+#   numa <node_id> <socket>              # SRAT-style
+#   slit <from> <to> <distance>          # SLIT-style (optional)
+#
+dimm 0 32768 0
+dimm 0 32768 0
+dimm 1 32768 1
+dimm 1 32768 1
+cpu 0 0 0
+cpu 1 1 0
+cpu 2 2 1
+cpu 3 3 1
+numa 0 0
+numa 1 1
+slit 0 0 10
+slit 0 1 21
+slit 1 0 21
+slit 1 1 10
