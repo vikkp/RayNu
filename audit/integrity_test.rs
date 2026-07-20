@@ -38,3 +38,19 @@ fn ring_rejects_when_full() {
         .is_err());
     assert!(ring.verify_chain());
 }
+
+#[test]
+fn mandatory_events_chain() {
+    assert!(prop_mandatory_events_chain());
+}
+
+#[test]
+fn tamper_is_detected() {
+    assert!(prop_tamper_detected());
+}
+
+#[test]
+fn audit_integrity_gate_bundle() {
+    assert!(prop_audit_integrity_gate());
+    assert!(boot_ring_verify());
+}

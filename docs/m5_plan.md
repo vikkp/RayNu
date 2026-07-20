@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.2 closed on Latitude (Track A mgmt done); next is **M5.3** (audit ring).  
-**Prior:** M5.2 closed on Latitude (`RAYNU-V-M5-WEBUI-OK`).  
+**Status:** **open** — M5.0–M5.3 closed on Latitude; next is **M5.4** (SOX/ISO reports).  
+**Prior:** M5.3 closed on Latitude (`RAYNU-V-M5-AUDIT-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -113,22 +113,23 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.3 — Audit ring + hash chain — `RAYNU-V-M5-AUDIT-OK`
 
-**Status: open** ← next
+**Status: closed** (Latitude `./tools/m5-audit-smoke.sh` → `RAYNU-V-M5-AUDIT-OK`)
 
 **Goal:** Append-only audit ring with hash chaining; security-relevant actions from M5.0+ land in the ring. Builds on existing `audit/integrity` + `audit_log!` (L0).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. `audit/` ring buffer + hash chain; tamper-evident verify path (host gate).
-2. Mandatory events for VMCS/EPT/lifecycle at least (existing `audit_log!` categories).
-3. Marker `RAYNU-V-M5-AUDIT-OK`.
-4. Report templates are M5.4 — this gate is integrity of the log itself.
+1. `AuditRing` append + `verify_chain` + `tamper_hash_at`; public `boot_ring_verify`.
+2. Mandatory categories on-chain: VMCS / EPT map+unmap / MSR block / lifecycle.
+3. Call-site wiring: `vmx/vmcs` (`VmcsCreated`), `main` (`EptMapped`), `ept::unmap` firmware
+   (`EptUnmapped`), `launch` MSR #GP (`MsrBlocked`), `mgmt` lifecycle.
+4. Host gate `audit/m5_audit_gate.rs` + `tools/m5-audit-smoke.sh` + CI `m5-audit`.
 
-**Likely files:** `audit/`, host gate, CI smoke.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-AUDIT-OK`. Reports are M5.4.
 
 ### M5.4 — SOX / ISO-style reports — `RAYNU-V-M5-REPORT-OK`
 
-**Status: open** (**M5 product exit criterion** with M5.0–M5.3)
+**Status: open** ← next (**M5 product exit criterion** with M5.0–M5.3)
 
 **Goal:** Generate auditor-facing reports (JSON/CSV minimum; PDF optional) from the audit ring using embedded schemas (ADR-003 `.assets.schemas`).
 
@@ -283,4 +284,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-Draft accepted. **M5.0–M5.2 closed** on Latitude (Track A: LIFE + API + WEBUI). Next: **M5.3** (`RAYNU-V-M5-AUDIT-OK`) — audit ring + hash chain.
+Draft accepted. **M5.0–M5.3 closed** on Latitude. Next: **M5.4** (`RAYNU-V-M5-REPORT-OK`) — SOX / ISO-style reports from the audit ring.

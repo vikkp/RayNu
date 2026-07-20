@@ -2731,6 +2731,10 @@ unsafe fn handle_msr_and_resume(basic: u32) -> ! {
 
     match action {
         MsrAction::InjectGp => {
+            crate::audit_log!(crate::audit::AuditEvent::MsrBlocked {
+                vcpu_id: 0,
+                msr_index: index,
+            });
             serial::write_str("boot: MSR #GP index=0x");
             write_hex_u32(index);
             serial::write_byte(b'\n');
