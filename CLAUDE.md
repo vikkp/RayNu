@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M4.9 closed** (N-guest refine → `RAYNU-V-M4-REFINE-OK`). M4 Track A–C complete. Active: **M5** (operationally viable → [docs/m5_plan.md](docs/m5_plan.md)). Lived: [docs/progress.md](docs/progress.md). Prior: [docs/m4_plan.md](docs/m4_plan.md).
+**Through M5.0 closed** (VM lifecycle → `RAYNU-V-M5-LIFE-OK`). Active: **M5.1** (CLI + REST → `RAYNU-V-M5-API-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
 
 ### Risk Hotspots
 

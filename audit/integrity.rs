@@ -32,6 +32,14 @@ pub enum AuditEvent {
     MsrBlocked { vcpu_id: u32, msr_index: u32 },
     FrameAllocated { frame: u64 },
     FrameFreed { frame: u64 },
+    /// Management-plane VM created (Defined). M5.0.
+    VmCreated { guest_id: u64 },
+    /// Management-plane VM started (Running). M5.0.
+    VmStarted { guest_id: u64 },
+    /// Management-plane VM stopped. M5.0.
+    VmStopped { guest_id: u64 },
+    /// Management-plane VM destroyed. M5.0.
+    VmDestroyed { guest_id: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -155,6 +163,10 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::MsrBlocked { .. } => 6,
         AuditEvent::FrameAllocated { .. } => 7,
         AuditEvent::FrameFreed { .. } => 8,
+        AuditEvent::VmCreated { .. } => 9,
+        AuditEvent::VmStarted { .. } => 10,
+        AuditEvent::VmStopped { .. } => 11,
+        AuditEvent::VmDestroyed { .. } => 12,
     }
 }
 

@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M4 Track A–C closed on Latitude; next is Track A **M5.0** (VM lifecycle API).  
-**Prior:** M4.9 closed on Latitude (`RAYNU-V-M4-REFINE-OK`).  
+**Status:** **open** — M5.0 closed on host; next is **M5.1** (CLI + REST).  
+**Prior:** M5.0 closed on host (`RAYNU-V-M5-LIFE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -60,22 +60,24 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.0 — VM lifecycle API — `RAYNU-V-M5-LIFE-OK`
 
-**Status: open** ← next (host-first; Latitude when a boot path exists)
+**Status: closed** (host `./tools/m5-life-smoke.sh` → `RAYNU-V-M5-LIFE-OK`)
 
 **Goal:** Create / start / stop / destroy guests through a durable lifecycle surface (`mgmt/`), not only hardcoded bring-up in `src/main.rs`. Stubs already exist (`mgmt::VmLifecycle`); this gate makes them real against the M4 multi-guest spine.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Lifecycle state machine (at least: Defined → Running → Stopped → Destroyed) for ≥1 guest.
-2. Operations emit mandatory audit events (ADR-[A] categories: create/start/stop/destroy).
-3. Host gate + marker `RAYNU-V-M5-LIFE-OK`; Latitude optional if a serial latch exists.
-4. Does not require Web UI or REST — those are M5.1 / M5.2.
+1. `VmTable` with `create` / `start` / `stop` / `destroy` (Defined → Running → Stopped → Destroyed).
+2. Audit events `VmCreated` / `VmStarted` / `VmStopped` / `VmDestroyed` via `audit_log!`.
+3. Host gate `mgmt/m5_life_gate.rs` + `tools/m5-life-smoke.sh` + CI `m5-life`.
+4. Live VMLAUNCH path remains in `src/main.rs` / `vmx/launch.rs` — mgmt is the durable ops surface for M5.1+.
 
-**Likely files:** `mgmt/`, `audit/`, `vmx/launch.rs`, host gate + smoke.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M5-LIFE-OK`. Does not require Web UI or REST (M5.1 / M5.2).
+
+**Files:** `mgmt/mod.rs`, `mgmt/m5_life_gate.rs`, `audit/integrity.rs`, `tools/m5-life-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M5.1 — Control plane: CLI + REST — `RAYNU-V-M5-API-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Operator can drive lifecycle over CLI and a minimal REST API (same ops as M5.0).
 
