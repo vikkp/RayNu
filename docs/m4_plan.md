@@ -178,7 +178,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 1. `MapUnmapStep` carries explicit `guest`; lemmas apply for any `guest != 0`.
 2. `theorem_n_guest_4k_map_unmap_exclusive` in `ept_model` (no `admit`); marker embedded.
-3. Closed `TODO(M4): N guests` in `ept_spec.rs`; `GAP(CLOSED M4.6)` in `ept_proof.rs`; open `GAP: N-guest L3 discharge` → M4.7.
+3. Closed `TODO(M4): N guests` in `ept_spec.rs`; `GAP(CLOSED M4.6)` in `ept_proof.rs`; N-guest L3 claim closed in **M4.7**.
 4. Host gate `memory/m4_nguest_spec_gate.rs` + CI job `verus-nguest-spec`.
 
 **Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`. Does **not** claim ADR-006 L3 for N guests (M4.7).
