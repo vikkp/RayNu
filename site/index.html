@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.2 closed: ≥4 concurrent guests under EPT + credit scheduler."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.3 closed: ≥4 concurrent guests under EPT + virtio-blk probe."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.2 closed — ≥4 concurrent guests under EPT. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.3 closed — ≥4 concurrent guests under EPT + virtio-blk. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,23 +60,22 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M4.2 closed · M4.3 in flight.</h2>
+          <h2 class="section__title">M0 → M4.3 closed.</h2>
           <p class="section__lede">
-            Four concurrent guests under distinct EPT ownership — G0 real Linux
-            to SHELL, G1–G3 SHELL via CPUID — time-sliced by the credit
-            scheduler and latched by <code>RAYNU-V-M4-NVM-OK</code> on Latitude.
-            Next: virtio-blk (M4.3) → <code>RAYNU-V-M4-BLK-OK</code>.
+            Four concurrent guests under distinct EPT ownership, then a
+            virtio-mmio block probe that write+readbacks host-owned disk frames
+            and latches <code>RAYNU-V-M4-BLK-OK</code> on Latitude.
+            Next: virtio-net (M4.4).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-SLICE-G3
-RAYNU-V-M4-SCHED-OK
-RAYNU-V-M4-NVM-OK
-==> Boot gate PASSED (M0 → M4.2; qemu status=33)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-NVM-OK
+RAYNU-V-M4-BLK-OK
+==> Boot gate PASSED (M0 → M4.3; qemu status=33)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M4.2: how we got here</h2>
+          <h2 class="section__title">M1.0 → M4.3: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -223,6 +222,13 @@ RAYNU-V-M4-NVM-OK
                     <code>RAYNU-V-M4-NVM-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M4.3</span>
+                  <span class="journey__text"
+                    >Virtio-mmio blk probe →
+                    <code>RAYNU-V-M4-BLK-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -329,7 +335,7 @@ RAYNU-V-M4-NVM-OK
           </p>
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit
-./tools/qemu-boot-test.sh       # M0 → M4.2
+./tools/qemu-boot-test.sh       # M0 → M4.3
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -342,8 +348,8 @@ RAYNU-V-M4-NVM-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            Multi-guest through M4.2 is closed; next is
-            <strong>M4.3</strong> (virtio-blk).
+            Multi-guest through M4.3 is closed; next is
+            <strong>M4.4</strong> (virtio-net).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
