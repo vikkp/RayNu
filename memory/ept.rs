@@ -537,6 +537,94 @@ pub fn apply_violation_disposition(
     }
 }
 
+/// M6.3: hand off an HPA frame from `src_guest`@`src_gpa` to `dst_guest`@`dst_gpa`.
+///
+/// Unmap at source then map the same frame at destination. Fail-closed if the
+/// destination map cannot install (restores source mapping when possible).
+pub fn transfer_page(
+    map: &mut EptMap,
+    src_guest: u64,
+    src_gpa: u64,
+    dst_guest: u64,
+    dst_gpa: u64,
+    permissions: EptPermissions,
+) -> Result<PhysFrame, EptError> {
+    if src_guest == 0 || dst_guest == 0 || src_guest == dst_guest {
+        return Err(EptError::InvalidGuest);
+    }
+    let src_gpa = src_gpa & !0xfff;
+    let dst_gpa = dst_gpa & !0xfff;
+    // Destination GPA must be free before we unmap.
+    if map.owner_of_gpa(dst_guest, dst_gpa).is_some() {
+        return Err(EptError::AlreadyOwned);
+    }
+    let frame = map.unmap(src_guest, src_gpa)?;
+    match map.map(dst_guest, dst_gpa, frame, permissions) {
+        Ok(()) => Ok(frame),
+        Err(e) => {
+            // Best-effort restore so ownership is not dropped on map failure.
+            let _ = map.map(src_guest, src_gpa, frame, permissions);
+            Err(e)
+        }
+    }
+}
+
+/// Host-testable: page transfer preserves exclusivity; steal rejected.
+pub fn prop_page_transfer_preserves_exclusive() -> bool {
+    let mut map = EptMap::new();
+    let g0 = M2_BRINGUP_GUEST_ID;
+    let g1 = M4_GUEST1_ID;
+    let f0 = PhysFrame(70);
+    let f1 = PhysFrame(71);
+
+    if map
+        .map(g0, 0, f0, EptPermissions::READ_WRITE)
+        .is_err()
+    {
+        return false;
+    }
+    if map.owner_of(f0) != Some(g0) || !map.check_invariants() {
+        return false;
+    }
+
+    match transfer_page(
+        &mut map,
+        g0,
+        0,
+        g1,
+        0x1000,
+        EptPermissions::READ_WRITE,
+    ) {
+        Ok(f) if f == f0 => {}
+        _ => return false,
+    }
+    if map.owner_of(f0) != Some(g1) || !map.check_invariants() {
+        return false;
+    }
+    // Source mapping gone.
+    if map.unmap(g0, 0).is_ok() {
+        return false;
+    }
+    // Steal of transferred frame rejected.
+    if !matches!(
+        map.map(g0, 0x2000, f0, EptPermissions::READ_WRITE),
+        Err(EptError::AlreadyOwned)
+    ) {
+        return false;
+    }
+    // Distinct frame still maps for source guest.
+    if map
+        .map(g0, 0x2000, f1, EptPermissions::READ_WRITE)
+        .is_err()
+    {
+        return false;
+    }
+    map.check_invariants()
+        && map.owner_of(f0) == Some(g1)
+        && map.owner_of(f1) == Some(g0)
+        && map.len() == 2
+}
+
 /// Host-testable: emulate/reject/claim preserve exclusivity; steal rejected.
 pub fn prop_violation_preserves_exclusive() -> bool {
     let mut map = EptMap::new();

@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M6.2 closed** (NUMA-L3 → `RAYNU-V-M6-NUMA-L3-OK`). Active: **M6.3** (migrate-xfer → `RAYNU-V-M6-MIGRATE-XFER-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**Through M6.3 closed** (migrate-xfer → `RAYNU-V-M6-MIGRATE-XFER-OK`). Active: **M6.4** (AUTH → `RAYNU-V-M6-AUTH-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
 
 ### Risk Hotspots
 

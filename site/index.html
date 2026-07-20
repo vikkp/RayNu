@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.2 closed: multi-guest platform through M5 plus EPT-violation, HW PTE, and NUMA affinity L3."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.3 closed: multi-guest platform through M5 plus EPT-violation, HW PTE, NUMA-L3, and migrate page transfer."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.2 closed — multi-guest platform through M5 plus EPT-violation, HW PTE, and NUMA affinity L3. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.3 closed — multi-guest platform through M5 plus EPT-violation, HW PTE, NUMA-L3, and migrate page transfer. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,24 +60,24 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.2 closed.</h2>
+          <h2 class="section__title">M0 → M6.3 closed.</h2>
           <p class="section__lede">
             Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
-            and NUMA affinity L3 on the production-ready track —
-            <code>RAYNU-V-M6-NUMA-L3-OK</code> on host
-            (<code>77 verified, 0 errors</code>). Next: M6.3 (live migration
-            page transfer — see <code>docs/m6_plan.md</code>).
+            NUMA affinity L3, and migrate page transfer on the production-ready
+            track — <code>RAYNU-V-M6-MIGRATE-XFER-OK</code> on host
+            (<code>80 verified, 0 errors</code>). Next: M6.4 (REST auth —
+            see <code>docs/m6_plan.md</code>).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-HWPTE-OK
-RAYNU-V-M6-NUMA-L3-OK
-==> Verus HW PTE smoke PASSED (M6.1)
-==> Verus NUMA affinity L3 smoke PASSED (M6.2)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-NUMA-L3-OK
+RAYNU-V-M6-MIGRATE-XFER-OK
+==> Verus NUMA affinity L3 smoke PASSED (M6.2)
+==> Verus migrate page-transfer smoke PASSED (M6.3)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.2: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6.3: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -370,6 +370,13 @@ RAYNU-V-M6-NUMA-L3-OK
                     <code>RAYNU-V-M6-NUMA-L3-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M6.3</span>
+                  <span class="journey__text"
+                    >Migrate page transfer →
+                    <code>RAYNU-V-M6-MIGRATE-XFER-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -484,6 +491,7 @@ RAYNU-V-M6-NUMA-L3-OK
 ./tools/verus-eptvio-smoke.sh   # M6.0 → RAYNU-V-M6-EPTVIO-OK
 ./tools/verus-hwpte-smoke.sh    # M6.1 → RAYNU-V-M6-HWPTE-OK
 ./tools/verus-numa-l3-smoke.sh  # M6.2 → RAYNU-V-M6-NUMA-L3-OK
+./tools/verus-migrate-xfer-smoke.sh # M6.3 → RAYNU-V-M6-MIGRATE-XFER-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -496,9 +504,8 @@ RAYNU-V-M6-NUMA-L3-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.2 is closed (M5 ops + proof + EPT-violation + HW PTE + NUMA-L3);
-            next is <strong>M6.3</strong> (migrate-xfer — see
-            <code>docs/m6_plan.md</code>).
+            M0→M6.3 is closed (M5 ops + proof through migrate-xfer); next is
+            <strong>M6.4</strong> (AUTH — see <code>docs/m6_plan.md</code>).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

@@ -50,7 +50,9 @@
 //! GAP(CLOSED M6.0): EPT violation handler preserves exclusivity
 //!   (marker RAYNU-V-M6-EPTVIO-OK; theorem_ept_violation_preserves_exclusive /
 //!   EptViolationDisposition EmulateNoMap|Reject|ClaimMap)
-//! GAP: Live migration page transfer (M6)
+//! GAP(CLOSED M6.3): Live migration page transfer
+//!   (marker RAYNU-V-M6-MIGRATE-XFER-OK; theorem_page_transfer_preserves_exclusive /
+//!   PageTransferStep / transfer_enabled / apply_transfer)
 //! GAP(CLOSED M6.1): Hardware EPT PTE bit-decode
 //!   (marker RAYNU-V-M6-HWPTE-OK; ept_leaf_large_enc / hw_2m_identity_leaf_ok /
 //!   theorem_hw_2m_leaf_refines_identity / lemma_ept_leaf_large_decode)

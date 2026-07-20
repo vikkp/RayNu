@@ -6,7 +6,7 @@
 //! N-guest L3 (M4.6–M4.7); large-page ghost *spec* (M4.8); N-guest refine (M4.9);
 //! large-page L3 (M5.7); NUMA ghost *spec* (M5.8); allocator↔EPT refine (M5.9);
 //! EPT-violation exclusivity (M6.0); HW PTE bit-decode (M6.1);
-//! NUMA affinity L3 (M6.2)
+//! NUMA affinity L3 (M6.2); live migration page transfer (M6.3)
 
 pub mod boot_alloc;
 pub mod ept;
@@ -29,6 +29,7 @@ pub mod m5_lpage_verify_gate;
 pub mod m5_numa_gate;
 pub mod m6_eptvio_gate;
 pub mod m6_hwpte_gate;
+pub mod m6_migrate_gate;
 pub mod m6_numa_gate;
 pub mod numa;
 pub mod verus_gate;
@@ -49,6 +50,7 @@ pub use m5_lpage_verify_gate::{run_m5_lpage_verify_gate, M5_LPAGE_VERIFY_OK_MARK
 pub use m5_numa_gate::{run_m5_numa_gate, M5_NUMA_GATE_MARKER};
 pub use m6_eptvio_gate::{run_m6_eptvio_gate, M6_EPTVIO_OK_MARKER};
 pub use m6_hwpte_gate::{run_m6_hwpte_gate, M6_HWPTE_OK_MARKER};
+pub use m6_migrate_gate::{run_m6_migrate_gate, M6_MIGRATE_XFER_OK_MARKER};
 pub use m6_numa_gate::{run_m6_numa_gate, M6_NUMA_L3_GATE_MARKER};
 pub use numa::{
     from_mock_topology, prop_mock_numa_runtime, prop_numa_affinity_l3, HostNumaTopology,

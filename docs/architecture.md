@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
-**Next M6.3:** Live migration page transfer → `RAYNU-V-M6-MIGRATE-XFER-OK` — [m6_plan.md](m6_plan.md) / [progress.md](progress.md). M6.2 closed on Latitude (`RAYNU-V-M6-NUMA-L3-OK`; `77 verified, 0 errors`).
+**Next M6.4:** REST auth → `RAYNU-V-M6-AUTH-OK` — [m6_plan.md](m6_plan.md) / [progress.md](progress.md). M6.3 closed on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`). Track A through migrate-xfer green.

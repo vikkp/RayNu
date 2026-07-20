@@ -22,6 +22,8 @@
 //! M6.2 discharges NUMA affinity under map/unmap
 //! (`theorem_numa_map_unmap_affinity` / `guest_frames_on_node`) →
 //! `RAYNU-V-M6-NUMA-L3-OK`.
+//! M6.3 discharges live-migration page transfer exclusivity
+//! (`theorem_page_transfer_preserves_exclusive`) → `RAYNU-V-M6-MIGRATE-XFER-OK`.
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -37,6 +39,7 @@
 //! - M6.0 EPT-violation: `RAYNU-V-M6-EPTVIO-OK` (via tools/verus-eptvio-smoke.sh)
 //! - M6.1 HW PTE: `RAYNU-V-M6-HWPTE-OK` (via tools/verus-hwpte-smoke.sh)
 //! - M6.2 NUMA affinity L3: `RAYNU-V-M6-NUMA-L3-OK` (via tools/verus-numa-l3-smoke.sh)
+//! - M6.3 migrate page transfer: `RAYNU-V-M6-MIGRATE-XFER-OK` (via tools/verus-migrate-xfer-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -2228,6 +2231,111 @@ pub proof fn lemma_ept_violation_emulate_then_claim(
     );
 }
 
+// ---------------------------------------------------------------------------
+// M6.3 — Live migration page transfer preserves exclusive ownership (ADR-004)
+// Ownership handoff of an HPA frame from src guest to dst guest (unmap→map).
+// Full cross-host live migrate product remains outside Proven Core.
+// ---------------------------------------------------------------------------
+
+/// One live-migration page transfer: hand off the HPA behind `(src_guest, src_gpa)`
+/// to `(dst_guest, dst_gpa)`.
+pub struct PageTransferStep {
+    pub src_guest: GuestId,
+    pub src_gpa: Gpa,
+    pub dst_guest: GuestId,
+    pub dst_gpa: Gpa,
+}
+
+/// Enabled when src mapping exists, dst GPA free, guests distinct and non-zero.
+pub open spec fn transfer_enabled(m: GhostEptMap, s: PageTransferStep) -> bool {
+    &&& s.src_guest != 0
+    &&& s.dst_guest != 0
+    &&& s.src_guest != s.dst_guest
+    &&& page_aligned_4k(s.src_gpa)
+    &&& page_aligned_4k(s.dst_gpa)
+    &&& m.by_gpa.dom().contains((s.src_guest, s.src_gpa))
+    &&& !m.by_gpa.dom().contains((s.dst_guest, s.dst_gpa))
+}
+
+/// Unmap at src then map the same HPA frame at dst.
+pub open spec fn apply_transfer(m: GhostEptMap, s: PageTransferStep) -> GhostEptMap {
+    let frame = m.by_gpa[(s.src_guest, s.src_gpa)];
+    m.ghost_unmap(s.src_guest, s.src_gpa).ghost_map(s.dst_guest, s.dst_gpa, frame)
+}
+
+/// Transfer posts: dst owns the frame at dst GPA; src mapping is gone.
+pub open spec fn transfer_posts(m: GhostEptMap, s: PageTransferStep, m2: GhostEptMap) -> bool {
+    let frame = m.by_gpa[(s.src_guest, s.src_gpa)];
+    &&& m2.owned[frame] == s.dst_guest
+    &&& m2.by_gpa[(s.dst_guest, s.dst_gpa)] == frame
+    &&& !m2.by_gpa.dom().contains((s.src_guest, s.src_gpa))
+}
+
+/// M6.3: enabled page transfer preserves exclusive ownership and handoff posts.
+pub proof fn lemma_transfer_preserves_exclusive(m: GhostEptMap, s: PageTransferStep)
+    requires
+        exclusive_ownership(m),
+        transfer_enabled(m, s),
+    ensures
+        exclusive_ownership(apply_transfer(m, s)),
+        transfer_posts(m, s, apply_transfer(m, s)),
+{
+    let frame = m.by_gpa[(s.src_guest, s.src_gpa)];
+    lemma_unmap_ok_exclusive(m, s.src_guest, s.src_gpa);
+    let m1 = m.ghost_unmap(s.src_guest, s.src_gpa);
+    assert(!m1.owned.dom().contains(frame));
+    assert(!m1.by_gpa.dom().contains((s.dst_guest, s.dst_gpa)));
+    assert(step_enabled(m1, MapUnmapStep::Map {
+        guest: s.dst_guest,
+        gpa: s.dst_gpa,
+        frame,
+    }));
+    lemma_map_ok_exclusive(m1, s.dst_guest, s.dst_gpa, frame);
+}
+
+/// M6.3 headline: page transfer preserves exclusivity (ADR-004 live-migrate row).
+pub proof fn theorem_page_transfer_preserves_exclusive(m: GhostEptMap, s: PageTransferStep)
+    requires
+        exclusive_ownership(m),
+        transfer_enabled(m, s),
+    ensures
+        exclusive_ownership(apply_transfer(m, s)),
+        transfer_posts(m, s, apply_transfer(m, s)),
+{
+    lemma_transfer_preserves_exclusive(m, s);
+}
+
+/// Bring-up mock: BRINGUP maps frame 0 at GPA 0, then transfers to guest 2 at GPA 0x1000.
+pub proof fn lemma_mock_page_transfer_exclusive()
+    ensures
+        ({
+            let m0 = GhostEptMap::empty().ghost_map(BRINGUP_GUEST, 0, 0);
+            let s = PageTransferStep {
+                src_guest: BRINGUP_GUEST,
+                src_gpa: 0,
+                dst_guest: 2,
+                dst_gpa: PAGE_4K,
+            };
+            exclusive_ownership(m0)
+                && transfer_enabled(m0, s)
+                && exclusive_ownership(apply_transfer(m0, s))
+                && apply_transfer(m0, s).owned[0] == 2
+                && !apply_transfer(m0, s).by_gpa.dom().contains((BRINGUP_GUEST, 0))
+        }),
+{
+    let m0 = GhostEptMap::empty().ghost_map(BRINGUP_GUEST, 0, 0);
+    lemma_empty_exclusive();
+    lemma_map_ok_exclusive(GhostEptMap::empty(), BRINGUP_GUEST, 0, 0);
+    let s = PageTransferStep {
+        src_guest: BRINGUP_GUEST,
+        src_gpa: 0,
+        dst_guest: 2,
+        dst_gpa: PAGE_4K,
+    };
+    assert(transfer_enabled(m0, s));
+    theorem_page_transfer_preserves_exclusive(m0, s);
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -2254,3 +2362,5 @@ pub const M6_EPTVIO_OK_MARKER: &str = "RAYNU-V-M6-EPTVIO-OK";
 pub const M6_HWPTE_OK_MARKER: &str = "RAYNU-V-M6-HWPTE-OK";
 /// M6.2: NUMA affinity L3 under map/unmap (no `admit`).
 pub const M6_NUMA_L3_OK_MARKER: &str = "RAYNU-V-M6-NUMA-L3-OK";
+/// M6.3: live migration page transfer preserves exclusivity (no `admit`).
+pub const M6_MIGRATE_XFER_OK_MARKER: &str = "RAYNU-V-M6-MIGRATE-XFER-OK";

@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.2 closed on Latitude; next **M6.3** migrate-xfer.  
-**Prior:** M6.2 closed on Latitude (`RAYNU-V-M6-NUMA-L3-OK`; `77 verified, 0 errors`); M6.1 closed; M6.0 closed; M5 closed.  
+**Status:** **open** — M6.3 closed on Latitude; Track A proof debt closed through migrate-xfer. Next: Track B **M6.4** AUTH.  
+**Prior:** M6.3 closed on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`); M6.2–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -128,7 +128,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.3 — Live migration page transfer — `RAYNU-V-M6-MIGRATE-XFER-OK`
 
-**Status: open** (host-first)
+**Status: closed** (Latitude `./tools/verus-migrate-xfer-smoke.sh` → `RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`)
 
 **Goal:** ADR-004 M6 row — exclusive ownership preserved across **live migration page transfer** (handoff of HPA frames between guests / hosts under the ghost model). Distinct from M5.5 inventory import (`RAYNU-V-M5-MIGRATE-OK`).
 
@@ -138,7 +138,16 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Marker `RAYNU-V-M6-MIGRATE-XFER-OK`.
 3. Full cross-host live migrate product may remain outside Proven Core; ownership handoff is the proof gate.
 
-**Likely files:** `ept_model/`, `memory/ept*.rs`, optional `migrate/` companion (outside Proven Core).
+**Delivered (host-first):**
+
+1. Ghost: `PageTransferStep` / `transfer_enabled` / `apply_transfer` /
+   `lemma_transfer_preserves_exclusive` / `theorem_page_transfer_preserves_exclusive` /
+   `lemma_mock_page_transfer_exclusive`.
+2. Runtime: `transfer_page` / `prop_page_transfer_preserves_exclusive` in `ept.rs`.
+3. Host gate `memory/m6_migrate_gate.rs` + `tools/verus-migrate-xfer-smoke.sh` + CI `verus-migrate-xfer`.
+4. `GAP(CLOSED M6.3): Live migration page transfer`.
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-MIGRATE-XFER-OK`.
 
 ---
 
@@ -285,4 +294,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.2 closed** on Latitude (`RAYNU-V-M6-NUMA-L3-OK`; `77 verified, 0 errors`). Next: **M6.3** (`RAYNU-V-M6-MIGRATE-XFER-OK`) — live migration page transfer.
+**M6.3 closed** on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`). Track A through migrate-xfer is green. Next: **M6.4** (`RAYNU-V-M6-AUTH-OK`) — REST auth.
