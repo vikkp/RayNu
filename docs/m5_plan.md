@@ -147,7 +147,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.6 — Dell Tier‑1 health + topology — `RAYNU-V-M5-IDRAC-OK`
 
-**Status: open** (host wiring landed; Latitude `./tools/m5-idrac-smoke.sh` pending)
+**Status: closed** (Latitude `./tools/m5-idrac-smoke.sh` → `RAYNU-V-M5-IDRAC-OK`)
 
 **Goal:** iDRAC / Redfish Tier‑1 health (thermal, fan, PSU) + SMBIOS/ACPI topology visible to ops (ADR-005). Builds on `idrac/` stubs (`IdracTier::Tier1`).
 
@@ -158,7 +158,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 3. Host gate `idrac/m5_idrac_gate.rs` + `tools/m5-idrac-smoke.sh` + CI `m5-idrac`.
 4. Live BMC HTTP and Tier‑2 OEM remain documented GAPs (`GAP: live Redfish BMC → polish`, `GAP: Dell Tier-2 OEM`).
 
-**Acceptance:** Latitude smoke + gate → `RAYNU-V-M5-IDRAC-OK`.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-IDRAC-OK`.
 
 **Numbering note:** **M5.5** is reserved for the VMware workstream (below), so Dell health is **M5.6**.
 
