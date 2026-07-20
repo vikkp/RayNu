@@ -1,17 +1,18 @@
-//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6–M4.7).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
 //! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
 //! map/unmap are discharged with **no `admit()`**. M3.18 adds ghost↔exec
-//! refinement. M4.6 extends `MapUnmapStep` with an explicit `guest` field so
-//! N-guest sequences are in the ghost model (`theorem_n_guest_4k_map_unmap_exclusive`);
-//! ADR-006 L3 *claim* for N guests remains M4.7.
+//! refinement. M4.6 extends `MapUnmapStep` with an explicit `guest` field;
+//! M4.7 claims ADR-006 L3 for N-guest 4K map/unmap exclusivity
+//! (`theorem_n_guest_4k_map_unmap_exclusive` / `lemma_two_guests_map_distinct_frames_exclusive`).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
 //! - M3.17 true L3: `RAYNU-V-M3-L3-VERIFY-OK` (via tools/verus-verify-smoke.sh)
 //! - M3.18 refine: `RAYNU-V-M3-L3-REFINE-OK` (via tools/verus-refine-smoke.sh)
 //! - M4.6 N-guest spec: `RAYNU-V-M4-NGUEST-SPEC-OK` (via tools/verus-nguest-spec-smoke.sh)
+//! - M4.7 N-guest L3: `RAYNU-V-M4-NGUEST-VERIFY-OK` (via tools/verus-nguest-verify-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -435,9 +436,9 @@ pub proof fn theorem_single_guest_4k_map_unmap_exclusive(
     }
 }
 
-/// M4.6 target: N-guest 4K map/unmap exclusivity in the ghost model.
+/// M4.6/M4.7: N-guest 4K map/unmap exclusivity in the ghost model.
 /// Same discharge as the historical single-guest theorem; named so host/CI
-/// can assert the N-guest post is present. ADR-006 L3 *claim* is M4.7.
+/// can assert the N-guest post. ADR-006 L3 claim → `RAYNU-V-M4-NGUEST-VERIFY-OK`.
 pub proof fn theorem_n_guest_4k_map_unmap_exclusive(
     m: GhostEptMap,
     steps: Seq<MapUnmapStep>,
@@ -449,6 +450,41 @@ pub proof fn theorem_n_guest_4k_map_unmap_exclusive(
         exclusive_ownership(fold_steps(m, steps)),
 {
     theorem_single_guest_4k_map_unmap_exclusive(m, steps);
+}
+
+/// M4.7: two distinct non-zero guests mapping distinct free 4K frames
+/// preserves exclusive ownership (concrete ≥2-guest post for ADR-006).
+pub proof fn lemma_two_guests_map_distinct_frames_exclusive(
+    m: GhostEptMap,
+    g1: GuestId,
+    gpa1: Gpa,
+    f1: FrameId,
+    g2: GuestId,
+    gpa2: Gpa,
+    f2: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        g1 != 0,
+        g2 != 0,
+        g1 != g2,
+        page_aligned_4k(gpa1),
+        page_aligned_4k(gpa2),
+        f1 != f2,
+        !m.owned.dom().contains(f1),
+        !m.owned.dom().contains(f2),
+        !m.by_gpa.dom().contains((g1, gpa1)),
+        !m.by_gpa.dom().contains((g2, gpa2)),
+    ensures
+        exclusive_ownership(m.ghost_map(g1, gpa1, f1).ghost_map(g2, gpa2, f2)),
+        m.ghost_map(g1, gpa1, f1).ghost_map(g2, gpa2, f2).owned[f1] == g1,
+        m.ghost_map(g1, gpa1, f1).ghost_map(g2, gpa2, f2).owned[f2] == g2,
+{
+    lemma_map_ok_exclusive(m, g1, gpa1, f1);
+    let m1 = m.ghost_map(g1, gpa1, f1);
+    assert(!m1.owned.dom().contains(f2));
+    assert(!m1.by_gpa.dom().contains((g2, gpa2)));
+    lemma_map_ok_exclusive(m1, g2, gpa2, f2);
 }
 
 // ---------------------------------------------------------------------------
@@ -649,5 +685,7 @@ pub proof fn theorem_concrete_single_guest_4k_refine(
 pub const M3_L3_LINK_OK_MARKER: &str = "RAYNU-V-M3-L3-LINK-OK";
 pub const M3_L3_VERIFY_OK_MARKER: &str = "RAYNU-V-M3-L3-VERIFY-OK";
 pub const M3_L3_REFINE_OK_MARKER: &str = "RAYNU-V-M3-L3-REFINE-OK";
-/// M4.6: N-guest ghost map/unmap is in the model (spec OK; ADR-006 claim is M4.7).
+/// M4.6: N-guest ghost map/unmap is in the model (spec OK).
 pub const M4_NGUEST_SPEC_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-SPEC-OK";
+/// M4.7: ADR-006 L3 for N-guest 4K map/unmap exclusivity (no `admit`).
+pub const M4_NGUEST_VERIFY_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-VERIFY-OK";

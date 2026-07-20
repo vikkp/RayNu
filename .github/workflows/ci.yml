@@ -189,6 +189,21 @@ jobs:
       - name: Verus N-guest-spec smoke → RAYNU-V-M4-NGUEST-SPEC-OK
         run: ./tools/verus-nguest-spec-smoke.sh
 
+  # M4.7: true L3 N-guest exclusivity (ADR-006). Hard-fail.
+  verus-nguest-verify:
+    name: verus N-guest-verify (M4.7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus N-guest-verify smoke → RAYNU-V-M4-NGUEST-VERIFY-OK
+        run: ./tools/verus-nguest-verify-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)

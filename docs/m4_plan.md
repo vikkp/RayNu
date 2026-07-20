@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.6 closed on host; next is Track C **M4.7** (N-guest L3 verify).  
-**Prior:** M4.6 closed on host (`RAYNU-V-M4-NGUEST-SPEC-OK`).  
+**Status:** **open** — M4.7 closed on host (M4 exit criterion met for N-guest L3); next is **M4.8** (large-page spec).  
+**Prior:** M4.7 closed on host (`RAYNU-V-M4-NGUEST-VERIFY-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -187,21 +187,24 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.7 — True L3 N-guest verify — `RAYNU-V-M4-NGUEST-VERIFY-OK`
 
-**Status: open** ← next (host-first; **M4 exit criterion**)
+**Status: closed** (host `./tools/verus-nguest-verify-smoke.sh` → `RAYNU-V-M4-NGUEST-VERIFY-OK`; **M4 exit criterion**)
 
 **Goal:** Green `cargo verus verify -p ept_model` for N-guest map/unmap exclusivity — **no `admit`**.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Theorem(s) for ≥2 guests; marker `RAYNU-V-M4-NGUEST-VERIFY-OK`.
-2. CI hard-fail job (same pattern as M3.17).
-3. Live multi-VM path keeps runtime asserts; full ghost↔exec refine is M4.9.
+1. `theorem_n_guest_4k_map_unmap_exclusive` + `lemma_two_guests_map_distinct_frames_exclusive` discharged (no `admit`).
+2. Marker `RAYNU-V-M4-NGUEST-VERIFY-OK`; CI hard-fail job `verus-nguest-verify`.
+3. `GAP(CLOSED M4.7)` in `ept_proof.rs`; ADR-004 / ADR-006 N-guest L3 claim recorded.
+4. Live multi-VM path keeps runtime asserts; full ghost↔exec N-guest refine is **M4.9**.
 
-**Likely files:** `ept_model/`, verify smoke, CI, ADR-004 / ADR-006 notes.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-VERIFY-OK` (`24 verified, 0 errors`).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, `memory/m4_nguest_verify_gate.rs`, `tools/verus-nguest-verify-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.8 — Large-page (2M/1G) in ghost spec — `RAYNU-V-M4-LPAGE-OK`
 
-**Status: open** (host-first)
+**Status: open** ← next (host-first)
 
 **Goal:** Large pages in the **ghost spec** (ADR-004: may stay L2). Proof attempt deferred to **M5**.
 
@@ -273,4 +276,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.6 closed** on host (`RAYNU-V-M4-NGUEST-SPEC-OK`). Next: Track C **M4.7** N-guest L3 verify → `RAYNU-V-M4-NGUEST-VERIFY-OK`.
+**M4.7 closed** on host (`RAYNU-V-M4-NGUEST-VERIFY-OK`). N-guest L3 exit criterion met. Next: **M4.8** large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`.

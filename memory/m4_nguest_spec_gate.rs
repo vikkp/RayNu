@@ -5,8 +5,8 @@
 //!
 //! Checks that `ept_model` carries `theorem_n_guest_4k_map_unmap_exclusive`,
 //! that `ept_spec` / `ept_proof` close the N-guest TODO/GAP (spec side), and
-//! that live `EptMap` rejects HPA sharing across two guests. Does **not** claim
-//! ADR-006 L3 for N guests (`RAYNU-V-M4-NGUEST-VERIFY-OK` is M4.7).
+//! that live `EptMap` rejects HPA sharing across two guests.
+//! ADR-006 L3 claim for N guests is M4.7 (`m4_nguest_verify_gate`).
 //! Runtime `cargo verus verify -p ept_model` is exercised by
 //! `tools/verus-nguest-spec-smoke.sh`.
 
@@ -47,7 +47,6 @@ pub fn ept_model_has_n_guest_spec() -> bool {
         && s.contains("step_guest_ok")
         && s.contains(M4_NGUEST_SPEC_OK_MARKER)
         && !source_has_admit_call(s)
-        && !s.contains("RAYNU-V-M4-NGUEST-VERIFY-OK")
 }
 
 /// True when ept_spec / ept_proof close N-guest TODO/GAP on the spec side.
@@ -58,7 +57,8 @@ pub fn ept_spec_closes_n_guest_todo() -> bool {
         && spec.contains("TODO(M4.8): large pages")
         && !spec.contains("TODO(M4): N guests + large pages")
         && proof.contains("GAP(CLOSED M4.6): N concurrent guests")
-        && proof.contains("GAP: N-guest L3 discharge")
+        && (proof.contains("GAP: N-guest L3 discharge")
+            || proof.contains("GAP(CLOSED M4.7): N-guest L3 discharge"))
         && proof.contains("theorem_n_guest_4k_map_unmap_exclusive")
 }
 

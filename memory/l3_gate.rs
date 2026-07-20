@@ -27,7 +27,7 @@ pub fn ept_proof_is_l3_attempt() -> bool {
         && s.contains("theorem_single_guest_4k_map_unmap_exclusive")
         && s.contains("GAP(CLOSED M3.17): Linked `ept_model` lemmas discharged without `admit()`")
         && s.contains("GAP(CLOSED M4.6): N concurrent guests")
-        && s.contains("GAP: N-guest L3 discharge")
+        && s.contains("GAP(CLOSED M4.7): N-guest L3 discharge")
         && s.contains("GAP: Live migration page transfer")
         && s.contains("GAP: Hardware EPT PTE correspondence")
 }
