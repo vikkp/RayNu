@@ -273,19 +273,19 @@ RAYNU-V-M3-L3-REFINE-OK
               conditions are written (with runtime asserts + bounded Kani).
               <strong>L3</strong> means
               <code>cargo verus --verify</code> machine-checks those specs.
-              M3.14–M3.16 drafted, pinned, and linked the model.
-              <strong>M3.17</strong> discharged scoped exclusivity —
-              <code>13 verified, 0 errors</code>, no <code>admit</code> —
-              <strong>ADR-006 L3</strong> for the ghost model.
+              <strong>M3.17</strong> discharged scoped exclusivity;
+              <strong>M3.18</strong> refined ghost↔exec
+              <code>ConcreteEptMap</code> —
+              <code>22 verified, 0 errors</code>, no <code>admit</code>.
             </p>
           </div>
           <blockquote class="theorem" data-reveal>
             <p>
               Proven Core only. Scoped
-              <code>cargo verus --verify</code> on the frozen pin is green
-              for 4K single-guest exclusivity
-              (<code>RAYNU-V-M3-L3-VERIFY-OK</code>) — live EptMap refinement
-              remains ahead.
+              <code>cargo verus --verify</code> on the frozen pin is green for
+              4K single-guest exclusivity and concrete refine
+              (<code>RAYNU-V-M3-L3-VERIFY-OK</code> /
+              <code>RAYNU-V-M3-L3-REFINE-OK</code>).
             </p>
             <cite>ADR-002 · ADR-004 · ADR-006 · ADR-008</cite>
           </blockquote>
