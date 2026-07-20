@@ -208,17 +208,22 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.9 — Allocator↔EPT + HW PTE correspondence — `RAYNU-V-M5-ALLOC-REFINE-OK`
 
-**Status: open** (host-first)
+**Status: open** (host/CI wired; Latitude smoke pending)
 
 **Goal:** Deepen refine: frame-allocator coupling and/or HW PTE identity-builder correspondence under `abs` / `refines` (close M4.9 deferred GAPs as far as feasible).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. No `admit` on theorems in scope; marker `RAYNU-V-M5-ALLOC-REFINE-OK`.
-2. Remaining HW PTE / EPT-violation gaps explicitly listed → M6.
-3. Live multi-VM path keeps runtime asserts.
+1. `GhostFramePool` + `alloc_ept_refines` / `alloc_map_enabled` in `ept_model` (no `admit`).
+2. Discharged: `theorem_alloc_map_unmap_refines`, `lemma_alloc_map_ok_refines`,
+   `lemma_alloc_unmap_ok_refines`, `lemma_allocate_preserves_pool`.
+3. Scoped precise-identity GPA==HPA: `PRECISE_IDENTITY_FRAMES` / `identity_leaf_ok` /
+   `lemma_identity_leaf_gpa_eq_hpa` (matches `ept_hw::PRECISE_BYTES`).
+4. `GAP(CLOSED M5.9)` for allocator coupling + identity abs; open
+   `GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)`.
+5. Host gate `memory/m5_alloc_refine_gate.rs` + `tools/verus-alloc-refine-smoke.sh` + CI `verus-alloc-refine`.
 
-**Likely files:** `ept_model/`, `memory/frame_allocator*.rs`, `memory/ept_hw.rs`, refine smoke + gate.
+**Acceptance:** Latitude `./tools/verus-alloc-refine-smoke.sh` → `RAYNU-V-M5-ALLOC-REFINE-OK` (then close docs/site).
 
 ---
 
@@ -295,4 +300,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-**M5.0–M5.8 closed** on Latitude (incl. migrate + iDRAC + large-page L3 + NUMA *spec*). Next: **M5.9** (`RAYNU-V-M5-ALLOC-REFINE-OK`) for full M5 close (or ADR waiver).
+**M5.0–M5.8 closed** on Latitude. **M5.9** wired host/CI (`RAYNU-V-M5-ALLOC-REFINE-OK`); Latitude smoke pending — then M5 close (or ADR waiver for remaining M6 GAPs).

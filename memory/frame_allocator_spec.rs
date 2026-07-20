@@ -45,6 +45,8 @@
 //!   - a freed frame is reused on the next allocate
 //!   - `allocated_count` restored to the pre-selftest value
 //!
-//! TODO(M3/M4): Verus L3 proof over the bitmap (`frame_allocator_proof.rs`).
+//! TODO(M5.9 CLOSED): allocator↔EPT coupled refine in `ept_model`
+//!   (`GhostFramePool` / `alloc_ept_refines` / `theorem_alloc_map_unmap_refines`).
+//!   Bitmap bit↔set L3 remains open (`frame_allocator_proof.rs` → M6 polish).
 
 #![allow(dead_code)]

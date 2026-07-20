@@ -68,7 +68,9 @@
 //!   Full NUMA affinity / exclusivity L3 remains M6.
 //! TODO(M4.9 CLOSED): N-guest ghost↔exec refine — `theorem_concrete_n_guest_4k_refine`
 //!   + `lemma_concrete_two_guests_map_refines` → `RAYNU-V-M4-REFINE-OK`.
-//!   HW PTE identity correspondence and deeper allocator↔EPT L3 coupling remain M5.
+//! TODO(M5.9 CLOSED): allocator↔EPT refine — `GhostFramePool` / `alloc_ept_refines` /
+//!   `theorem_alloc_map_unmap_refines` + scoped `identity_leaf_ok` →
+//!   `RAYNU-V-M5-ALLOC-REFINE-OK`. Full HW PTE bit-decode / EPT-violation → M6.
 //!
 //! # Large-page map (M4.8 — L2 spec)
 //!
@@ -86,5 +88,13 @@
 //! affinity on the preferred node. Bring-up mock `mock_bringup_numa` matches
 //! `assets/idrac/mock_topology.txt` (2 nodes, local 10 / remote 21). Host runtime
 //! hook: `memory/numa.rs` ← `idrac::TopologySnapshot`. Affinity L3 → M6.
+//!
+//! # Allocator ↔ EPT refine (M5.9)
+//!
+//! `GhostFramePool` tracks the allocated-set. `alloc_ept_refines` requires
+//! `refines(c)` and every owned frame ∈ allocated. `theorem_alloc_map_unmap_refines`
+//! discharges allocate→map→unmap under that coupling. Scoped precise-identity
+//! correspondence: `identity_leaf_ok` (GPA==HPA frame inside 512 MiB window).
+//! Full HW PTE bit-decode / EPT-violation → M6.
 
 #![allow(dead_code)]

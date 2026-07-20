@@ -107,5 +107,5 @@ Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5.9** ← next | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
+| **M5.9** ← next | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT refine (host/CI wired; Latitude pending) |
 | M6 | — | Production ready (see CLAUDE.md) |
