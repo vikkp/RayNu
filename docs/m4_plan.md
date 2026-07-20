@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.3 closed on Latitude; next platform gate is **M4.4** (virtio-net).  
+**Status:** **open** — M4.4 in progress (virtio-net → `RAYNU-V-M4-NET-OK`).  
 **Prior:** M4.3 closed on Latitude (`RAYNU-V-M4-BLK-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
@@ -132,17 +132,19 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.4 — Virtio-net + minimal vSwitch — `RAYNU-V-M4-NET-OK`
 
-**Status: open** ← next
+**Status: in progress** ← current
 
 **Goal:** Guest↔guest or guest↔host networking via Virtio-net + L2 learning switch (`net/` stub → real).
 
+**Accepted MV (this gate):** two virtio-mmio net BARs + host L2 learning `VSwitch`. A bare-metal probe guest handshakes both ports to `DRIVER_OK`; the host injects an Ethernet frame port0→port1 into allocator-backed RX buffers and latches `RAYNU-V-M4-NET-OK`. Full Linux virtio-net / TAP is later polish.
+
 **Acceptance sketch:**
 
-1. At least two VMs exchange a packet (or guest pings host tap).
-2. Marker `RAYNU-V-M4-NET-OK`.
-3. No EPT ownership bypass for packet buffers.
+1. `devices/virtio_net.rs` + `net::VSwitch` forward/learn; MMIO exit path.
+2. Latitude: marker after successful dual-port exchange (post BLK-OK probe).
+3. Packet buffers stay outside guest-exclusive RAM ownership (allocator pool).
 
-**Likely files:** `net/mod.rs`, `devices/` virtio-net, `vmx/` MMIO.
+**Likely files:** `net/mod.rs`, `devices/virtio_net.rs`, `vmx/launch.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.5 — SMP guest (2+ vCPUs) — `RAYNU-V-M4-SMP-OK`
 
@@ -266,4 +268,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.3 closed** on Latitude (`RAYNU-V-M4-BLK-OK`). Next: **M4.4** virtio-net on branch `cursor/m4-4-net-a623`.
+**M4.4 in progress** on branch `cursor/m4-4-net-a623` (`RAYNU-V-M4-NET-OK`). Do not start M4.5 until Latitude is green.

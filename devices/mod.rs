@@ -6,8 +6,10 @@
 
 pub mod lapic_virt;
 pub mod m4_blk_gate;
+pub mod m4_net_gate;
 pub mod serial_pio;
 pub mod virtio_blk;
+pub mod virtio_net;
 
 pub use lapic_virt::M3_GTIMER3_OK_MARKER;
 pub use serial_pio::{
@@ -15,6 +17,7 @@ pub use serial_pio::{
     M3_SHELL_OK_MARKER,
 };
 pub use virtio_blk::M4_BLK_OK_MARKER;
+pub use virtio_net::M4_NET_OK_MARKER;
 
 /// Device class stub for future virtio / serial / RTC.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,9 +30,9 @@ pub enum DeviceKind {
     Passthrough,
 }
 
-/// Registry — serial PIO is live (M3.0); virtio-blk MMIO is live (M4.3).
+/// Registry — serial (M3.0), virtio-blk (M4.3), virtio-net (M4.4).
 pub fn supported_kinds() -> &'static [DeviceKind] {
-    &[DeviceKind::Serial, DeviceKind::VirtioBlk]
+    &[DeviceKind::Serial, DeviceKind::VirtioBlk, DeviceKind::VirtioNet]
 }
 
 #[cfg(test)]

@@ -9,3 +9,8 @@ fn serial_listed() {
 fn virtio_blk_listed() {
     assert!(supported_kinds().contains(&DeviceKind::VirtioBlk));
 }
+
+#[test]
+fn virtio_net_listed() {
+    assert!(supported_kinds().contains(&DeviceKind::VirtioNet));
+}

@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M4.3 closed:** virtio-mmio blk probe → `RAYNU-V-M4-BLK-OK`.  
-**Next M4.4:** virtio-net + minimal vSwitch → `RAYNU-V-M4-NET-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).
+**Next M4.4 (in progress):** virtio-net + minimal vSwitch → `RAYNU-V-M4-NET-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).

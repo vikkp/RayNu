@@ -31,6 +31,7 @@
 # M4.1: RAYNU-V-M4-SCHED-OK (credit scheduler time-slices G0↔G1)
 # M4.2: RAYNU-V-M4-NVM-OK (G0 + G1–G3 ≥4 concurrent under scheduler)
 # M4.3: RAYNU-V-M4-BLK-OK (virtio-blk MMIO handshake + host write/readback)
+# M4.4: RAYNU-V-M4-NET-OK (virtio-net dual-port + vSwitch exchange)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -66,6 +67,7 @@ MARKER_2VM="${MARKER_2VM:-RAYNU-V-M4-2VM-OK}"
 MARKER_SCHED="${MARKER_SCHED:-RAYNU-V-M4-SCHED-OK}"
 MARKER_NVM="${MARKER_NVM:-RAYNU-V-M4-NVM-OK}"
 MARKER_BLK="${MARKER_BLK:-RAYNU-V-M4-BLK-OK}"
+MARKER_NET="${MARKER_NET:-RAYNU-V-M4-NET-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -304,6 +306,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       echo "error: marker '$MARKER_BLK' not found (need virtio-blk DRIVER_OK readback)" >&2
       fail=1
     fi
+    if grep -qF "$MARKER_NET" "$SERIAL_LOG"; then
+      echo "==> M4.4 NET marker found (virtio-net dual-port vSwitch exchange)"
+    else
+      echo "error: marker '$MARKER_NET' not found (need virtio-net port0→port1 exchange)" >&2
+      fail=1
+    fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else
     if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
@@ -349,5 +357,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M4.3; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M4.4; qemu status=$QEMU_STATUS)"
 exit 0

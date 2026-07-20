@@ -32,6 +32,7 @@
 //! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
 //! M4.2: scale to G0+G1+G2+G3 (≥4) → `RAYNU-V-M4-NVM-OK`.
 //! M4.3: after NVM-OK, virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`.
+//! M4.4: after BLK-OK, virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -48,6 +49,7 @@ use crate::devices::serial_pio::{
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
 use crate::devices::virtio_blk::{self, M4_BLK_OK_MARKER};
+use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
 
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
@@ -232,6 +234,12 @@ static mut BLK_PROBE_MODE: bool = false;
 /// Guest id for the blk probe VMCS (not part of the G0–G3 scheduler set).
 const M4_BLK_PROBE_GUEST_ID: u64 = 5;
 
+/// M4.4: virtio-net probe guest frames (launched after BLK-OK).
+static mut NET_PROBE_FRAMES: Option<LaunchFrames> = None;
+static mut HAS_NET_PROBE: bool = false;
+static mut NET_PROBE_MODE: bool = false;
+const M4_NET_PROBE_GUEST_ID: u64 = 6;
+
 /// Per-guest GPR banks (SAVED_* is the live working set for the active guest).
 #[derive(Clone, Copy)]
 struct GuestGprBank {
@@ -322,6 +330,15 @@ pub fn set_blk_probe(frames: LaunchFrames) {
     unsafe {
         BLK_PROBE_FRAMES = Some(frames);
         HAS_BLK_PROBE = true;
+    }
+}
+
+/// Register the M4.4 virtio-net probe guest (launched after BLK-OK).
+pub fn set_net_probe(frames: LaunchFrames) {
+    // SAFETY: single-threaded boot before first VMLAUNCH.
+    unsafe {
+        NET_PROBE_FRAMES = Some(frames);
+        HAS_NET_PROBE = true;
     }
 }
 
@@ -1024,6 +1041,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
 
+    // M4.4: virtio-net probe runs after BLK-OK.
+    if NET_PROBE_MODE {
+        handle_net_probe_vmexit(basic, qual, guest_rax, guest_rip);
+    }
+
     // M4.3: virtio-blk probe runs after NVM-OK (scheduler paused).
     if BLK_PROBE_MODE {
         handle_blk_probe_vmexit(basic, qual, guest_rax, guest_rip);
@@ -1188,7 +1210,7 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
 unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
     let is_apic = (lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa);
-    let is_virtio = virtio_blk::bar_contains(gpa);
+    let is_virtio = virtio_blk::bar_contains(gpa) || virtio_net::bar_contains(gpa);
     if !is_apic && !is_virtio {
         serial::write_str("boot: ERROR — EPT violation GPA=0x");
         write_hex_u64(gpa);
@@ -1276,6 +1298,9 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     if is_virtio {
         if virtio_blk::take_blk_ok_latch() {
             serial::write_line(M4_BLK_OK_MARKER);
+        }
+        if virtio_net::take_net_ok_latch() {
+            serial::write_line(M4_NET_OK_MARKER);
         }
     } else {
         emit_lapic_markers();
@@ -1801,6 +1826,10 @@ unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 serial::write_line(
                     "boot: M4.3 complete — virtio-blk MMIO handshake + write/readback",
                 );
+                BLK_PROBE_MODE = false;
+                if HAS_NET_PROBE {
+                    try_launch_net_probe();
+                }
                 finish_boot(true);
             }
             serial::write_line("boot: ERROR — blk probe HLT without DRIVER_OK readback");
@@ -1808,6 +1837,104 @@ unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
         }
         _ => {
             serial::write_str("boot: ERROR — blk probe unhandled exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+
+/// M4.4: after BLK-OK, VMLAUNCH the virtio-net dual-port probe guest.
+unsafe fn try_launch_net_probe() -> ! {
+    let frames = match core::ptr::addr_of!(NET_PROBE_FRAMES).read() {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — net probe frames missing");
+            finish_boot(false);
+        }
+    };
+    SCHED_MODE = false;
+    BLK_PROBE_MODE = false;
+    NET_PROBE_MODE = true;
+    ACTIVE_GUEST_ID = M4_NET_PROBE_GUEST_ID;
+    REAL_LINUX_GUEST = false;
+    LINUX_GTIMER2_DONE = false;
+    LINUX_GTIMER2_ARMED = false;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
+
+    serial::write_line("boot: M4.4 — launching virtio-net probe guest");
+
+    apic::mask_pic();
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    ept_hw::invept_global();
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — net probe VMCS prepare failed");
+        finish_boot(false);
+    }
+    if ops::vmclear(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — net probe VMCLEAR failed");
+        finish_boot(false);
+    }
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — net probe VMCS re-prepare failed");
+        finish_boot(false);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: ERROR — net probe setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        finish_boot(false);
+    }
+
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+
+    serial::write_line("boot: VMLAUNCH → virtio-net dual-port probe");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — net probe VMLAUNCH returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — net probe VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+/// Exit path for the M4.4 virtio-net probe guest.
+unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    match basic {
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            let _ = apic::mask_timer();
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
+        EXIT_REASON_IO_INSTRUCTION => handle_io_and_resume(qual, guest_rax, guest_rip),
+        EXIT_REASON_HLT => {
+            if virtio_net::net_ok() {
+                if virtio_net::take_net_ok_latch() {
+                    serial::write_line(M4_NET_OK_MARKER);
+                }
+                serial::write_line(
+                    "boot: M4.4 complete — virtio-net dual-port vSwitch exchange",
+                );
+                finish_boot(true);
+            }
+            serial::write_line("boot: ERROR — net probe HLT without port exchange");
+            finish_boot(false);
+        }
+        _ => {
+            serial::write_str("boot: ERROR — net probe unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
             finish_boot(false);
@@ -2763,7 +2890,9 @@ fn finish_boot(ok: bool) -> ! {
 
     if ok {
         // SAFETY: boot single-threaded; flags set before / during guest path.
-        if unsafe { BLK_PROBE_MODE } {
+        if unsafe { NET_PROBE_MODE } {
+            serial::write_line("boot: M4.4 complete — virtio-net path OK");
+        } else if unsafe { BLK_PROBE_MODE } {
             serial::write_line("boot: M4.3 complete — virtio-blk path OK");
         } else if unsafe { SCHED_MODE } {
             serial::write_line("boot: M4.2 complete — multi-guest sched path OK");
