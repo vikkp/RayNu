@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.3 in progress (virtio-blk → `RAYNU-V-M4-BLK-OK`).  
-**Prior:** M4.2 closed on Latitude (`RAYNU-V-M4-NVM-OK`).  
+**Status:** **open** — M4.3 closed on Latitude; next platform gate is **M4.4** (virtio-net).  
+**Prior:** M4.3 closed on Latitude (`RAYNU-V-M4-BLK-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -116,23 +116,23 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.3 — Virtio-blk (guest disk) — `RAYNU-V-M4-BLK-OK`
 
-**Status: in progress** ← current
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.3)`)
 
 **Goal:** Guest root or data disk via Virtio-blk (or documented equivalent); guest can read/write without host COM1 crutches.
 
 **Accepted MV (this gate):** virtio-mmio over an EPT hole + bare-metal probe guest. On `DRIVER_OK` the host write+readbacks an in-memory disk image (FrameAllocator-backed, not guest-exclusive) and latches `RAYNU-V-M4-BLK-OK`. Full Linux root-on-virtio is later polish — not required to close M4.3.
 
-**Acceptance sketch:**
+**Acceptance (met):**
 
-1. Implement beyond `devices/` stub; MMIO exit path + config (`devices/virtio_blk.rs`).
-2. Latitude: marker after successful block I/O (write+readback on `DRIVER_OK`).
-3. Frames backing the disk image stay outside guest-exclusive RAM ownership (allocator pool).
+1. `devices/virtio_blk.rs` MMIO config/status + EPT violation path (`apply_virtio_mov`).
+2. Latitude: `RAYNU-V-M4-BLK-OK` after DRIVER_OK write/readback (post NVM-OK probe guest).
+3. Disk frames from FrameAllocator pool (host-owned; not guest-exclusive slabs).
 
-**Likely files:** `devices/virtio_blk.rs`, `vmx/launch.rs`, `vmx/mmio_decode.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+**Files:** `devices/virtio_blk.rs`, `devices/m4_blk_gate.rs`, `memory/ept_hw.rs`, `vmx/launch.rs`, `vmx/mmio_decode.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.4 — Virtio-net + minimal vSwitch — `RAYNU-V-M4-NET-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Guest↔guest or guest↔host networking via Virtio-net + L2 learning switch (`net/` stub → real).
 
@@ -266,4 +266,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.3 in progress** on branch `cursor/m4-3-blk-a623` (`RAYNU-V-M4-BLK-OK`). Do not start M4.4 until Latitude is green.
+**M4.3 closed** on Latitude (`RAYNU-V-M4-BLK-OK`). Next: **M4.4** virtio-net on branch `cursor/m4-4-net-a623`.
