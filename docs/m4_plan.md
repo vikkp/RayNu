@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.8 closed on host; next is **M4.9** (N-guest refine).  
-**Prior:** M4.8 closed on host (`RAYNU-V-M4-LPAGE-OK`).  
+**Status:** **open** — M4.8 closed on Latitude; next is **M4.9** (N-guest refine).  
+**Prior:** M4.8 closed on Latitude (`RAYNU-V-M4-LPAGE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -204,7 +204,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.8 — Large-page (2M/1G) in ghost spec — `RAYNU-V-M4-LPAGE-OK`
 
-**Status: closed** (host `./tools/verus-lpage-spec-smoke.sh` → `RAYNU-V-M4-LPAGE-OK`)
+**Status: closed** (Latitude `./tools/verus-lpage-spec-smoke.sh` → `RAYNU-V-M4-LPAGE-OK`)
 
 **Goal:** Large pages in the **ghost spec** (ADR-004: may stay L2). Proof attempt deferred to **M5**.
 
@@ -215,7 +215,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 3. Host gate `memory/m4_lpage_gate.rs` (span exclusivity + 2 MiB range overlap) + CI `verus-lpage-spec`.
 4. Size lemmas (`lemma_2m_covers_512_frames`, `lemma_1g_covers_262144_frames`) discharged; exclusivity across large map/unmap remains M5.
 
-**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-LPAGE-OK` (`29 verified, 0 errors`). Does **not** claim large-page L3 (M5).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M4-LPAGE-OK` (`29 verified, 0 errors`). Does **not** claim large-page L3 (M5).
 
 **Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_lpage_gate.rs`, `tools/verus-lpage-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
@@ -280,4 +280,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.8 closed** on host (`RAYNU-V-M4-LPAGE-OK`). Next: **M4.9** N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`.
+**M4.8 closed** on Latitude (`RAYNU-V-M4-LPAGE-OK`). Next: **M4.9** N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`.
