@@ -10,7 +10,7 @@
 //!
 //! Live `handle_ept_violation_and_resume` remains EmulateNoMap / Reject for
 //! MMIO; ClaimMap is the demand-fill path covered by the ghost theorem.
-//! Full HW PTE bit-decode remains M6.1.
+//! HW PTE bit-decode is M6.1 (`RAYNU-V-M6-HWPTE-OK`).
 
 use crate::memory::ept::prop_violation_preserves_exclusive;
 

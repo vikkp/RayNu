@@ -169,17 +169,68 @@ pub fn pack_eptp(pml4_phys: u64, memory_type: u64) -> u64 {
     (memory_type & 0x7) | ((walk_len_minus_1 & 0x7) << 3) | (pml4_phys & !0xfff)
 }
 
-fn ept_rwe() -> u64 {
+/// R/W/X bits (2:0). Public for M6.1 HW PTE correspondence checks.
+pub fn ept_rwe() -> u64 {
     0b111 // read | write | execute
 }
 
-fn ept_leaf_large(hpa: u64, memory_type: u64) -> u64 {
+/// Pack a large-page EPT leaf (2 MiB / 1 GiB). Matches `ept_model::ept_leaf_large_enc`.
+pub fn ept_leaf_large(hpa: u64, memory_type: u64) -> u64 {
     // bit 7 = large page; bits 5:3 = EPT memory type
     ept_rwe() | ((memory_type & 0x7) << 3) | (1 << 7) | (hpa & !0xfff)
 }
 
-fn ept_link(next_phys: u64) -> u64 {
+/// Pack a non-leaf EPT link to the next table (no large bit).
+pub fn ept_link(next_phys: u64) -> u64 {
     ept_rwe() | (next_phys & !0xfff)
+}
+
+/// HPA from PTE bits [63:12] (matches `ept_model::ept_hpa_from_pte`).
+pub fn ept_hpa_from_pte(pte: u64) -> u64 {
+    pte & !0xfff
+}
+
+/// True when bits 2:0 are R|W|X (matches `ept_model::ept_rwe_present`).
+pub fn ept_rwe_present(pte: u64) -> bool {
+    (pte & 0x7) == 0x7
+}
+
+/// True when large-page bit 7 is set (matches `ept_model::ept_large_bit`).
+pub fn ept_large_bit(pte: u64) -> bool {
+    (pte & (1 << 7)) != 0
+}
+
+/// M6.1: identity-builder 2 MiB leaves decode to matching HPA + RWE + large,
+/// and 4 KiB frames under those leaves keep GPA==HPA frame correspondence
+/// inside [`PRECISE_BYTES`]. Full multi-level walk → polish.
+pub fn prop_hw_pte_identity_correspondence() -> bool {
+    const MT_WB: u64 = 6;
+    let leaves = [0u64, TWO_MIB, 2 * TWO_MIB, PRECISE_BYTES - TWO_MIB];
+    for &hpa in &leaves {
+        if hpa >= PRECISE_BYTES || hpa % TWO_MIB != 0 {
+            return false;
+        }
+        let pte = ept_leaf_large(hpa, MT_WB);
+        if !ept_rwe_present(pte) || !ept_large_bit(pte) || ept_hpa_from_pte(pte) != hpa {
+            return false;
+        }
+        // First four 4 KiB frames under the leaf: frame id == gpa / 4096.
+        for i in 0..4u64 {
+            let gpa = hpa + i * 4096;
+            if gpa >= PRECISE_BYTES {
+                return false;
+            }
+            if gpa / 4096 != hpa / 4096 + i {
+                return false;
+            }
+        }
+    }
+    // Non-leaf link: RWE present, large bit clear, HPA preserved.
+    let link = ept_link(0x1000);
+    ept_rwe_present(link)
+        && !ept_large_bit(link)
+        && ept_hpa_from_pte(link) == 0x1000
+        && PRECISE_BYTES / 4096 == 131072
 }
 
 /// Build identity EPT for `[0, gib GiB)` into caller-owned frames.
@@ -976,6 +1027,22 @@ mod ept_hw_test {
         assert_eq!(eptp & 0x7, 6);
         assert_eq!((eptp >> 3) & 0x7, 3);
         assert_eq!(eptp & !0xfff, 0x2000);
+    }
+
+    #[test]
+    fn hw_pte_identity_correspondence() {
+        assert!(prop_hw_pte_identity_correspondence());
+        let pte = ept_leaf_large(0, 6);
+        assert!(ept_rwe_present(pte));
+        assert!(ept_large_bit(pte));
+        assert_eq!(ept_hpa_from_pte(pte), 0);
+        assert_eq!(pte, 0xb7);
+        let pte2 = ept_leaf_large(TWO_MIB, 6);
+        assert_eq!(ept_hpa_from_pte(pte2), TWO_MIB);
+        let link = ept_link(0x2000);
+        assert!(ept_rwe_present(link));
+        assert!(!ept_large_bit(link));
+        assert_eq!(ept_hpa_from_pte(link), 0x2000);
     }
 
     #[test]

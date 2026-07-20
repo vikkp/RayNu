@@ -279,6 +279,21 @@ jobs:
       - name: Verus EPT-violation smoke → RAYNU-V-M6-EPTVIO-OK
         run: ./tools/verus-eptvio-smoke.sh
 
+  # M6.1: HW PTE bit-decode correspondence. Hard-fail.
+  verus-hwpte:
+    name: verus HW PTE (M6.1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus HW PTE smoke → RAYNU-V-M6-HWPTE-OK
+        run: ./tools/verus-hwpte-smoke.sh
+
   # M4.9: N-guest ghost↔exec refine. Hard-fail.
   verus-nguest-refine:
     name: verus N-guest-refine (M4.9)

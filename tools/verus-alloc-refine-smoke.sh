@@ -61,8 +61,8 @@ if ! grep -q 'GAP(CLOSED M5.9): Precise-identity GPA==HPA correspondence' "$ROOT
   echo "error: ept_proof must close Precise-identity correspondence for M5.9" >&2
   exit 1
 fi
-if ! grep -q 'GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)' "$ROOT/memory/ept_proof.rs"; then
-  echo "error: ept_proof must document HW PTE bit-decode GAP → M6" >&2
+if ! grep -qE 'GAP: Hardware EPT PTE bit-decode / EPT-violation \(M6\)|GAP\(CLOSED M6\.1\): Hardware EPT PTE bit-decode' "$ROOT/memory/ept_proof.rs"; then
+  echo "error: ept_proof must document or close HW PTE bit-decode GAP" >&2
   exit 1
 fi
 if ! grep -q 'TODO(M5.9 CLOSED): allocator↔EPT refine' "$ROOT/memory/ept_spec.rs"; then

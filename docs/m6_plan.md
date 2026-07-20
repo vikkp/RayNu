@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.0 closed on Latitude; next **M6.1** HW PTE.  
-**Prior:** M6.0 closed on Latitude (`RAYNU-V-M6-EPTVIO-OK`; `65 verified, 0 errors`); M5 closed.  
+**Status:** **open** — M6.1 closed on Latitude; next **M6.2** NUMA-L3.  
+**Prior:** M6.1 closed on Latitude (`RAYNU-V-M6-HWPTE-OK`; `72 verified, 0 errors`); M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -83,7 +83,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.1 — HW PTE bit-decode correspondence — `RAYNU-V-M6-HWPTE-OK`
 
-**Status: open** (host-first)
+**Status: closed** (Latitude `./tools/verus-hwpte-smoke.sh` → `RAYNU-V-M6-HWPTE-OK`; `72 verified, 0 errors`)
 
 **Goal:** Deepen M5.9’s scoped `identity_leaf_ok` into correspondence between `ept_hw` identity-builder leaves and the ghost/concrete ownership view (bit-level or leaf-level abs as far as feasible).
 
@@ -93,7 +93,16 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Remaining decode / walk gaps listed explicitly → polish or ADR waiver.
 3. Live precise identity path keeps runtime asserts.
 
-**Likely files:** `ept_model/`, `memory/ept_hw.rs`, refine smoke + gate.
+**Delivered (host-first):**
+
+1. Ghost: `ept_leaf_large_enc` / `ept_rwe_present` / `ept_large_bit` / `ept_hpa_from_pte` /
+   `hw_2m_identity_leaf_ok` / `lemma_ept_leaf_large_decode` /
+   `theorem_hw_2m_leaf_refines_identity` / `lemma_hw_2m_leaf_at_two_mib`.
+2. Runtime: public `ept_leaf_large` / decode helpers + `prop_hw_pte_identity_correspondence` in `ept_hw.rs`.
+3. Host gate `memory/m6_hwpte_gate.rs` + `tools/verus-hwpte-smoke.sh` + CI `verus-hwpte`.
+4. `GAP(CLOSED M6.1): Hardware EPT PTE bit-decode`; full multi-level walk → polish GAP.
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-HWPTE-OK`.
 
 ### M6.2 — NUMA affinity L3 — `RAYNU-V-M6-NUMA-L3-OK`
 
@@ -268,4 +277,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.0 closed** on Latitude (`RAYNU-V-M6-EPTVIO-OK`; `65 verified, 0 errors`). Next: **M6.1** (`RAYNU-V-M6-HWPTE-OK`) — HW PTE bit-decode correspondence.
+**M6.1 closed** on Latitude (`RAYNU-V-M6-HWPTE-OK`; `72 verified, 0 errors`). Next: **M6.2** (`RAYNU-V-M6-NUMA-L3-OK`) — NUMA affinity L3.

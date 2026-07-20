@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.0 closed: multi-guest platform through M5 plus EPT-violation exclusivity."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.1 closed: multi-guest platform through M5 plus EPT-violation and HW PTE bit-decode."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.0 closed — multi-guest platform through M5 plus EPT-violation exclusivity. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.1 closed — multi-guest platform through M5 plus EPT-violation and HW PTE bit-decode. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,24 +60,24 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.0 closed.</h2>
+          <h2 class="section__title">M0 → M6.1 closed.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT through M5, plus EPT-violation
-            exclusivity on the production-ready track —
-            <code>RAYNU-V-M6-EPTVIO-OK</code> on host
-            (<code>65 verified, 0 errors</code>). Next: M6.1 (HW PTE bit-decode —
+            Multi-guest platform under EPT through M5, plus EPT-violation and
+            HW PTE bit-decode on the production-ready track —
+            <code>RAYNU-V-M6-HWPTE-OK</code> on host
+            (<code>72 verified, 0 errors</code>). Next: M6.2 (NUMA affinity L3 —
             see <code>docs/m6_plan.md</code>).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M5-ALLOC-REFINE-OK
-RAYNU-V-M6-EPTVIO-OK
-==> Verus alloc-refine smoke PASSED (M5.9)
-==> Verus EPT-violation smoke PASSED (M6.0)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-EPTVIO-OK
+RAYNU-V-M6-HWPTE-OK
+==> Verus EPT-violation smoke PASSED (M6.0)
+==> Verus HW PTE smoke PASSED (M6.1)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.0: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6.1: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -356,6 +356,13 @@ RAYNU-V-M6-EPTVIO-OK
                     <code>RAYNU-V-M6-EPTVIO-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M6.1</span>
+                  <span class="journey__text"
+                    >HW PTE bit-decode →
+                    <code>RAYNU-V-M6-HWPTE-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -468,6 +475,7 @@ RAYNU-V-M6-EPTVIO-OK
 ./tools/verus-numa-smoke.sh     # M5.8 → RAYNU-V-M5-NUMA-OK
 ./tools/verus-alloc-refine-smoke.sh # M5.9 → RAYNU-V-M5-ALLOC-REFINE-OK
 ./tools/verus-eptvio-smoke.sh   # M6.0 → RAYNU-V-M6-EPTVIO-OK
+./tools/verus-hwpte-smoke.sh    # M6.1 → RAYNU-V-M6-HWPTE-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -480,8 +488,8 @@ RAYNU-V-M6-EPTVIO-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.0 is closed (M5 ops + proof + EPT-violation); next is
-            <strong>M6.1</strong> (HW PTE — see <code>docs/m6_plan.md</code>).
+            M0→M6.1 is closed (M5 ops + proof + EPT-violation + HW PTE); next is
+            <strong>M6.2</strong> (NUMA-L3 — see <code>docs/m6_plan.md</code>).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
