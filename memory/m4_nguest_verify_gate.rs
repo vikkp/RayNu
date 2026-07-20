@@ -8,7 +8,7 @@
 //! contains **no** `admit(`. Runtime `cargo verus verify -p ept_model` is
 //! exercised by `tools/verus-nguest-verify-smoke.sh`.
 //!
-//! Full ghost↔exec N-guest refine remains M4.9.
+//! Full ghost↔exec N-guest refine is M4.9 (`m4_nguest_refine_gate`).
 
 use crate::memory::ept::{EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID, M4_GUEST1_ID};
 use crate::memory::frame_allocator::PhysFrame;

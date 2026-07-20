@@ -1,4 +1,4 @@
-//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6–M4.8).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6–M4.9).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
 //! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
@@ -8,6 +8,7 @@
 //! (`theorem_n_guest_4k_map_unmap_exclusive` / `lemma_two_guests_map_distinct_frames_exclusive`).
 //! M4.8 adds 2M/1G leaf sizes and span predicates to the ghost *spec*
 //! (`GhostPageSize` / `large_map_enabled`); large-page L3 discharge remains M5.
+//! M4.9 extends concrete refine to N guests (`theorem_concrete_n_guest_4k_refine`).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -16,6 +17,7 @@
 //! - M4.6 N-guest spec: `RAYNU-V-M4-NGUEST-SPEC-OK` (via tools/verus-nguest-spec-smoke.sh)
 //! - M4.7 N-guest L3: `RAYNU-V-M4-NGUEST-VERIFY-OK` (via tools/verus-nguest-verify-smoke.sh)
 //! - M4.8 large-page spec: `RAYNU-V-M4-LPAGE-OK` (via tools/verus-lpage-spec-smoke.sh)
+//! - M4.9 N-guest refine: `RAYNU-V-M4-REFINE-OK` (via tools/verus-nguest-refine-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -682,6 +684,69 @@ pub proof fn theorem_concrete_single_guest_4k_refine(
     }
 }
 
+/// M4.9 target: concrete 4K map/unmap steps for any non-zero guest(s) preserve
+/// refinement into the verified ghost exclusivity model (no `admit`).
+pub proof fn theorem_concrete_n_guest_4k_refine(
+    c: ConcreteEptMap,
+    steps: Seq<MapUnmapStep>,
+)
+    requires
+        refines(c),
+        concrete_steps_ok(c, steps),
+    ensures
+        refines(fold_concrete_steps(c, steps)),
+        abs(fold_concrete_steps(c, steps)) == fold_steps(abs(c), steps),
+    decreases steps.len(),
+{
+    if steps.len() == 0 {
+    } else {
+        lemma_apply_concrete_step_refines(c, steps[0]);
+        theorem_concrete_n_guest_4k_refine(
+            apply_concrete_step(c, steps[0]),
+            steps.skip(1),
+        );
+    }
+}
+
+/// M4.9: two distinct guests mapping distinct free frames on concrete preserves
+/// refinement (exec-side ≥2-guest post under `abs` / `refines`).
+pub proof fn lemma_concrete_two_guests_map_refines(
+    c: ConcreteEptMap,
+    g1: GuestId,
+    gpa1: Gpa,
+    f1: FrameId,
+    g2: GuestId,
+    gpa2: Gpa,
+    f2: FrameId,
+)
+    requires
+        refines(c),
+        g1 != 0,
+        g2 != 0,
+        g1 != g2,
+        page_aligned_4k(gpa1),
+        page_aligned_4k(gpa2),
+        f1 != f2,
+        concrete_step_enabled(c, MapUnmapStep::Map { guest: g1, gpa: gpa1, frame: f1 }),
+        concrete_step_enabled(
+            c.concrete_map(g1, gpa1, f1),
+            MapUnmapStep::Map { guest: g2, gpa: gpa2, frame: f2 },
+        ),
+    ensures
+        refines(c.concrete_map(g1, gpa1, f1).concrete_map(g2, gpa2, f2)),
+        abs(c.concrete_map(g1, gpa1, f1).concrete_map(g2, gpa2, f2)) == abs(c).ghost_map(
+            g1,
+            gpa1,
+            f1,
+        ).ghost_map(g2, gpa2, f2),
+{
+    lemma_concrete_map_ok_refines(c, g1, gpa1, f1);
+    let c1 = c.concrete_map(g1, gpa1, f1);
+    lemma_abs_map_commutes(c, g1, gpa1, f1);
+    lemma_concrete_map_ok_refines(c1, g2, gpa2, f2);
+    lemma_abs_map_commutes(c1, g2, gpa2, f2);
+}
+
 // ---------------------------------------------------------------------------
 // M4.8 — large-page (2M/1G) ghost *spec* (ADR-004; may stay L2)
 //
@@ -807,3 +872,5 @@ pub const M4_NGUEST_SPEC_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-SPEC-OK";
 pub const M4_NGUEST_VERIFY_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-VERIFY-OK";
 /// M4.8: large-page (2M/1G) ghost *spec* (L3 discharge → M5).
 pub const M4_LPAGE_OK_MARKER: &str = "RAYNU-V-M4-LPAGE-OK";
+/// M4.9: N-guest ghost↔exec refine (no `admit`).
+pub const M4_REFINE_OK_MARKER: &str = "RAYNU-V-M4-REFINE-OK";

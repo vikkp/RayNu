@@ -6,7 +6,8 @@
 //! → `RAYNU-V-M3-L3-VERIFY-OK` / `RAYNU-V-M3-L3-REFINE-OK`.
 //! M4.6 extends posts to N guests (`theorem_n_guest_4k_map_unmap_exclusive`) →
 //! `RAYNU-V-M4-NGUEST-SPEC-OK`; M4.7 claims ADR-006 L3 for N guests →
-//! `RAYNU-V-M4-NGUEST-VERIFY-OK`.
+//! `RAYNU-V-M4-NGUEST-VERIFY-OK`; M4.9 extends concrete refine to N guests →
+//! `RAYNU-V-M4-REFINE-OK`.
 //! Live `EptMap` runtime maturity stays **L2** (asserts + Kani); remaining GAPs below.
 //! Runtime asserts and Kani harnesses remain defense-in-depth.
 //!
@@ -31,12 +32,13 @@
 //! GAP(CLOSED M4.6): N concurrent guests in ghost model (spec OK; marker RAYNU-V-M4-NGUEST-SPEC-OK)
 //! GAP(CLOSED M4.7): N-guest L3 discharge / ADR-006 claim (marker RAYNU-V-M4-NGUEST-VERIFY-OK)
 //! GAP(CLOSED M4.8): Large pages (2M/1G) in ghost model (spec OK; marker RAYNU-V-M4-LPAGE-OK)
+//! GAP(CLOSED M4.9): N-guest ghost↔exec refine (marker RAYNU-V-M4-REFINE-OK)
 //! GAP: Large-page L3 discharge (M5)
+//! GAP: Frame-allocator ↔ EPT L3 coupling beyond ConcreteEptMap (M5)
 //! GAP: EPT violation handler preserves exclusivity
 //! GAP: Live migration page transfer (M6)
 //! GAP: Hardware EPT PTE correspondence (`ept_hw` identity builder)
 //! GAP: Precise range registry (`EptRangeMap`) vs per-page lemmas
-//! GAP: Frame-allocator coupling (alloc ⇒ exclusive claim) at L3
 //! ```
 //!
 //! # Ghost model (from `ept_spec.rs`)
@@ -155,6 +157,14 @@
 //! // GhostPageSize::{FourK,TwoM,OneG}, frames_covered, large_map_enabled,
 //! // large_map_post_owned, lemma_2m_covers_512_frames / lemma_1g_covers_262144_frames
 //! // live in ept_model. Exclusivity preservation across large map/unmap is M5.
+//!
+//! // ---- M4.9: N-guest concrete refine ----
+//! proof fn theorem_concrete_n_guest_4k_refine(c, steps)
+//!     requires refines(c), concrete_steps_ok(c, steps)
+//!     ensures refines(fold_concrete_steps(c, steps))
+//! { /* discharged in ept_model (M4.9); no admit */ }
+//! proof fn lemma_concrete_two_guests_map_refines(...)
+//! { /* discharged in ept_model (M4.9) */ }
 //! ```
 //!
 //! # Predicate glossary

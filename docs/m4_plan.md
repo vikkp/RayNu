@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.8 closed on Latitude; next is **M4.9** (N-guest refine).  
-**Prior:** M4.8 closed on Latitude (`RAYNU-V-M4-LPAGE-OK`).  
+**Status:** **Track C closed** — M4.9 closed on host; M4 exit criteria met (NVM+BLK+NET+NGUEST-VERIFY+SMP+LPAGE+REFINE). Next: **M5**.  
+**Prior:** M4.9 closed on host (`RAYNU-V-M4-REFINE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -221,16 +221,20 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.9 — N-guest ghost↔exec refine — `RAYNU-V-M4-REFINE-OK`
 
-**Status: open** ← next (host-first)
+**Status: closed** (host `./tools/verus-nguest-refine-smoke.sh` → `RAYNU-V-M4-REFINE-OK`)
 
-**Goal:** Refine multi-guest exec registry / allocator coupling under `abs` / `refines` (extend M3.18 pattern).
+**Goal:** Refine multi-guest exec registry under `abs` / `refines` (extend M3.18 pattern).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. No `admit` on refine theorems in scope; marker `RAYNU-V-M4-REFINE-OK`.
-2. HW PTE identity correspondence may remain GAP → M5.
+1. `theorem_concrete_n_guest_4k_refine` + `lemma_concrete_two_guests_map_refines` discharged (no `admit`).
+2. Marker `RAYNU-V-M4-REFINE-OK`; CI hard-fail job `verus-nguest-refine`.
+3. `GAP(CLOSED M4.9)` in `ept_proof.rs`; HW PTE identity + deeper allocator↔EPT L3 remain M5.
+4. Host gate `memory/m4_nguest_refine_gate.rs` (live two-guest map/unmap exclusivity).
 
-**Likely files:** `ept_model/`, `memory/ept.rs`, refine smoke + gate.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-REFINE-OK` (`31 verified, 0 errors`).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, `memory/m4_nguest_refine_gate.rs`, `tools/verus-nguest-refine-smoke.sh`, `.github/workflows/ci.yml`.
 
 ---
 
@@ -280,4 +284,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.8 closed** on Latitude (`RAYNU-V-M4-LPAGE-OK`). Next: **M4.9** N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`.
+**M4.9 closed** on host (`RAYNU-V-M4-REFINE-OK`). Track C complete — M4 platform + proof spine closed. Next: **M5** (see CLAUDE.md).

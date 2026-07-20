@@ -219,6 +219,21 @@ jobs:
       - name: Verus large-page-spec smoke → RAYNU-V-M4-LPAGE-OK
         run: ./tools/verus-lpage-spec-smoke.sh
 
+  # M4.9: N-guest ghost↔exec refine. Hard-fail.
+  verus-nguest-refine:
+    name: verus N-guest-refine (M4.9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus N-guest-refine smoke → RAYNU-V-M4-REFINE-OK
+        run: ./tools/verus-nguest-refine-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)
