@@ -1,6 +1,6 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M5 closed on Latitude; first action **M6.0** (EPT-violation exclusivity).  
+**Status:** **open** — M5 closed on Latitude; **M6.0** EPT-violation wired host/CI (Latitude pending).  
 **Prior:** M5.0–M5.9 closed (`RAYNU-V-M5-ALLOC-REFINE-OK`; `61 verified, 0 errors`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -63,17 +63,23 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.0 — EPT-violation exclusivity — `RAYNU-V-M6-EPTVIO-OK`
 
-**Status: open** (host-first)
+**Status: open** (host/CI wired; Latitude smoke pending)
 
 **Goal:** Show that the EPT-violation / miss-handling path preserves exclusive ownership (ADR-004: must hold across violation handling). Ghost lemmas in `ept_model` + live `EptMap` / exit path asserts; no `admit` on theorems in scope.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Spec + discharged lemmas for violation-induced map/claim (or explicit reject) under `exclusive_ownership`.
-2. Host gate + smoke; marker `RAYNU-V-M6-EPTVIO-OK`.
-3. Remaining handler edge cases documented → later M6 polish or ADR waiver.
+1. `EptViolationDisposition` { `EmulateNoMap`, `Reject`, `ClaimMap` } + `violation_enabled` /
+   `apply_violation` in `ept_model` (no `admit`).
+2. Discharged: `theorem_ept_violation_preserves_exclusive`,
+   `lemma_violation_noop_preserves_exclusive`, `lemma_violation_claim_preserves_exclusive`,
+   `lemma_ept_violation_emulate_then_claim`.
+3. Runtime hook `apply_violation_disposition` / `prop_violation_preserves_exclusive` in `ept.rs`.
+4. `GAP(CLOSED M6.0)` in `ept_proof.rs`; `TODO(M6.0 CLOSED)` in `ept_spec.rs`.
+5. Host gate `memory/m6_eptvio_gate.rs` + `tools/verus-eptvio-smoke.sh` + CI `verus-eptvio`.
+6. Live MMIO path remains EmulateNoMap; unexpected GPA Reject; ClaimMap is demand-fill.
 
-**Likely files:** `ept_model/`, `memory/ept*.rs`, `vmx/` exit path, host gate + smoke + CI.
+**Acceptance:** Latitude `./tools/verus-eptvio-smoke.sh` → `RAYNU-V-M6-EPTVIO-OK` (then close docs/site).
 
 ### M6.1 — HW PTE bit-decode correspondence — `RAYNU-V-M6-HWPTE-OK`
 
@@ -262,4 +268,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M5 closed.** Next: **M6.0** (`RAYNU-V-M6-EPTVIO-OK`) — EPT-violation exclusivity in ghost + live path.
+**M5 closed.** **M6.0** wired host/CI (`RAYNU-V-M6-EPTVIO-OK`); Latitude smoke pending. Then **M6.1** HW PTE.

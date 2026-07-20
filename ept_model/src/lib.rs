@@ -13,8 +13,10 @@
 //! M5.8 adds NUMA domains to the ghost *spec* (`GhostNumaTopology` / SRAT·SLIT
 //! bring-up mock) → `RAYNU-V-M5-NUMA-OK` (full NUMA affinity L3 → M6).
 //! M5.9 couples the ghost frame pool with concrete EPT refine (`alloc_ept_refines`)
-//! and scoped precise-identity GPA==HPA correspondence → `RAYNU-V-M5-ALLOC-REFINE-OK`
-//! (full HW PTE decode / EPT-violation → M6).
+//! and scoped precise-identity GPA==HPA correspondence → `RAYNU-V-M5-ALLOC-REFINE-OK`.
+//! M6.0 discharges EPT-violation handling under exclusivity
+//! (`theorem_ept_violation_preserves_exclusive`) → `RAYNU-V-M6-EPTVIO-OK`
+//! (full HW PTE bit-decode → M6.1).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -27,6 +29,7 @@
 //! - M5.7 large-page L3: `RAYNU-V-M5-LPAGE-VERIFY-OK` (via tools/verus-lpage-verify-smoke.sh)
 //! - M5.8 NUMA ghost spec: `RAYNU-V-M5-NUMA-OK` (via tools/verus-numa-smoke.sh)
 //! - M5.9 alloc↔EPT refine: `RAYNU-V-M5-ALLOC-REFINE-OK` (via tools/verus-alloc-refine-smoke.sh)
+//! - M6.0 EPT-violation: `RAYNU-V-M6-EPTVIO-OK` (via tools/verus-eptvio-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -1857,6 +1860,122 @@ pub proof fn lemma_identity_leaf_zero()
     lemma_identity_leaf_gpa_eq_hpa(0);
 }
 
+// ---------------------------------------------------------------------------
+// M6.0 — EPT-violation handling preserves exclusive ownership (ADR-004)
+// ---------------------------------------------------------------------------
+
+/// Disposition taken by the EPT-violation / miss handler.
+pub enum EptViolationDisposition {
+    /// Emulate access without installing a mapping (APIC / virtio MMIO).
+    EmulateNoMap,
+    /// Fail-closed reject; ownership unchanged.
+    Reject,
+    /// Demand-fill: install a 4K mapping for the faulting GPA.
+    ClaimMap { guest: GuestId, gpa: Gpa, frame: FrameId },
+}
+
+/// Enabled when ClaimMap would be a legal map step; emulate/reject always OK.
+pub open spec fn violation_enabled(m: GhostEptMap, d: EptViolationDisposition) -> bool {
+    match d {
+        EptViolationDisposition::EmulateNoMap => true,
+        EptViolationDisposition::Reject => true,
+        EptViolationDisposition::ClaimMap { guest, gpa, frame } =>
+            guest != 0 && page_aligned_4k(gpa) && step_enabled(
+                m,
+                MapUnmapStep::Map { guest, gpa, frame },
+            ),
+    }
+}
+
+pub open spec fn apply_violation(m: GhostEptMap, d: EptViolationDisposition) -> GhostEptMap {
+    match d {
+        EptViolationDisposition::EmulateNoMap => m,
+        EptViolationDisposition::Reject => m,
+        EptViolationDisposition::ClaimMap { guest, gpa, frame } => m.ghost_map(guest, gpa, frame),
+    }
+}
+
+/// Emulate / reject leave the ownership registry unchanged.
+pub proof fn lemma_violation_noop_preserves_exclusive(m: GhostEptMap, d: EptViolationDisposition)
+    requires
+        exclusive_ownership(m),
+        d is EmulateNoMap || d is Reject,
+    ensures
+        exclusive_ownership(apply_violation(m, d)),
+        apply_violation(m, d) == m,
+{
+}
+
+/// Demand-fill ClaimMap preserves exclusivity (uses 4K map lemma).
+pub proof fn lemma_violation_claim_preserves_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        violation_enabled(m, EptViolationDisposition::ClaimMap { guest, gpa, frame }),
+    ensures
+        exclusive_ownership(
+            apply_violation(m, EptViolationDisposition::ClaimMap { guest, gpa, frame }),
+        ),
+        apply_violation(m, EptViolationDisposition::ClaimMap { guest, gpa, frame }).owned[frame]
+            == guest,
+{
+    lemma_map_ok_exclusive(m, guest, gpa, frame);
+}
+
+/// M6.0: every enabled EPT-violation disposition preserves exclusive ownership.
+pub proof fn theorem_ept_violation_preserves_exclusive(m: GhostEptMap, d: EptViolationDisposition)
+    requires
+        exclusive_ownership(m),
+        violation_enabled(m, d),
+    ensures
+        exclusive_ownership(apply_violation(m, d)),
+{
+    match d {
+        EptViolationDisposition::EmulateNoMap => {
+            lemma_violation_noop_preserves_exclusive(m, d);
+        },
+        EptViolationDisposition::Reject => {
+            lemma_violation_noop_preserves_exclusive(m, d);
+        },
+        EptViolationDisposition::ClaimMap { guest, gpa, frame } => {
+            lemma_violation_claim_preserves_exclusive(m, guest, gpa, frame);
+        },
+    }
+}
+
+/// Concrete post: emulate then claim still exclusive.
+pub proof fn lemma_ept_violation_emulate_then_claim(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        guest != 0,
+        page_aligned_4k(gpa),
+        step_enabled(m, MapUnmapStep::Map { guest, gpa, frame }),
+    ensures
+        exclusive_ownership(
+            apply_violation(
+                apply_violation(m, EptViolationDisposition::EmulateNoMap),
+                EptViolationDisposition::ClaimMap { guest, gpa, frame },
+            ),
+        ),
+{
+    lemma_violation_noop_preserves_exclusive(m, EptViolationDisposition::EmulateNoMap);
+    let m2 = apply_violation(m, EptViolationDisposition::EmulateNoMap);
+    assert(violation_enabled(m2, EptViolationDisposition::ClaimMap { guest, gpa, frame }));
+    theorem_ept_violation_preserves_exclusive(
+        m2,
+        EptViolationDisposition::ClaimMap { guest, gpa, frame },
+    );
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -1877,3 +1996,5 @@ pub const M5_LPAGE_VERIFY_OK_MARKER: &str = "RAYNU-V-M5-LPAGE-VERIFY-OK";
 pub const M5_NUMA_OK_MARKER: &str = "RAYNU-V-M5-NUMA-OK";
 /// M5.9: allocator↔EPT coupled refine + scoped identity correspondence.
 pub const M5_ALLOC_REFINE_OK_MARKER: &str = "RAYNU-V-M5-ALLOC-REFINE-OK";
+/// M6.0: EPT-violation handling preserves exclusive ownership (no `admit`).
+pub const M6_EPTVIO_OK_MARKER: &str = "RAYNU-V-M6-EPTVIO-OK";

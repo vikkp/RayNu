@@ -44,7 +44,9 @@
 //! GAP(CLOSED M5.9): Precise-identity GPA==HPA correspondence
 //!   (PRECISE_IDENTITY_FRAMES / identity_leaf_ok / lemma_identity_leaf_gpa_eq_hpa)
 //! GAP: NUMA affinity / exclusivity L3 (M6)
-//! GAP: EPT violation handler preserves exclusivity
+//! GAP(CLOSED M6.0): EPT violation handler preserves exclusivity
+//!   (marker RAYNU-V-M6-EPTVIO-OK; theorem_ept_violation_preserves_exclusive /
+//!   EptViolationDisposition EmulateNoMap|Reject|ClaimMap)
 //! GAP: Live migration page transfer (M6)
 //! GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)
 //! GAP: Precise range registry (`EptRangeMap`) vs per-page lemmas

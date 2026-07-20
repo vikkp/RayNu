@@ -74,6 +74,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/verus-lpage-verify-smoke.sh # large-page L3 → RAYNU-V-M5-LPAGE-VERIFY-OK
 ./tools/verus-numa-smoke.sh        # NUMA ghost spec → RAYNU-V-M5-NUMA-OK
 ./tools/verus-alloc-refine-smoke.sh # alloc↔EPT refine → RAYNU-V-M5-ALLOC-REFINE-OK
+./tools/verus-eptvio-smoke.sh      # EPT-violation exclusivity → RAYNU-V-M6-EPTVIO-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

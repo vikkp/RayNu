@@ -108,7 +108,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M6.0** ← next | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity |
+| **M6.0** ← next | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity (host/CI wired; Latitude pending) |
 | M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence |
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |

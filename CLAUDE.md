@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M5 closed** (M5.0–M5.9; ALLOC-REFINE → `RAYNU-V-M5-ALLOC-REFINE-OK`). Active: **M6** (production ready) — first gate **M6.0** (`RAYNU-V-M6-EPTVIO-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**Through M5 closed** (M5.0–M5.9; ALLOC-REFINE → `RAYNU-V-M5-ALLOC-REFINE-OK`). Active: **M6.0** (EPT-violation → `RAYNU-V-M6-EPTVIO-OK`; Latitude pending). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
 
 ### Risk Hotspots
 
