@@ -1,20 +1,33 @@
-//! M5.1 control plane: CLI + minimal REST over `VmTable`.
+//! M5.1 / M6.4 control plane: CLI + minimal REST over `VmTable`.
 //!
 //! Pillar: [Z] [A]
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 //!
 //! No TCP stack and no HTTP crate — request/response shapes are host-testable
-//! dispatch over the M5.0 lifecycle table. Auth is stubbed
-//! (`GAP: REST auth → M6`).
+//! dispatch over the M5.0 lifecycle table. M6.4 closes REST auth with a
+//! bring-up mock token (`RAYNU-V-M6-AUTH-OK`).
+
+use crate::audit_log;
+use crate::audit::AuditEvent;
 
 use super::{LifecycleError, VmLifecycle, VmTable, MGMT_GUEST_CAP};
 
 /// Host / CI marker when the M5.1 API gate passes.
 pub const M5_API_OK_MARKER: &str = "RAYNU-V-M5-API-OK";
 
-/// Documented auth gap: REST accepts any (or missing) token until M6.
-pub const AUTH_GAP_NOTE: &str = "GAP: REST auth stubbed → M6";
+/// Host / CI marker when the M6.4 REST auth gate passes.
+pub const M6_AUTH_OK_MARKER: &str = "RAYNU-V-M6-AUTH-OK";
+
+/// Closed auth GAP (was open stub through M5.1; closed in M6.4).
+pub const AUTH_GAP_NOTE: &str = "GAP(CLOSED M6.4): REST auth stubbed → M6";
+
+/// Bring-up mock REST token (documented; replace for production).
+pub const BRINGUP_AUTH_TOKEN: &str = "raynu-v-bringup";
+
+/// Token source note for operators / CI.
+pub const AUTH_TOKEN_SOURCE_NOTE: &str =
+    "bring-up mock: BRINGUP_AUTH_TOKEN (M6.4; replace for production)";
 
 /// CLI verb over the management plane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +71,7 @@ pub enum RestMethod {
 pub struct RestRequest<'a> {
     pub method: RestMethod,
     pub path: &'a str,
-    /// Present but ignored — stub accepts all (`GAP: REST auth → M6`).
+    /// Required for M6.4: must equal [`BRINGUP_AUTH_TOKEN`] (bring-up mock).
     pub auth_token: Option<&'a str>,
 }
 
@@ -69,12 +82,22 @@ pub struct RestResponse {
     pub reply: Option<ApiReply>,
 }
 
-/// Auth stub: always allows. Documented GAP → M6.
+/// Method tag for audit AuthAllowed / AuthDenied (stable small ints).
+fn rest_method_tag(m: RestMethod) -> u8 {
+    match m {
+        RestMethod::Get => 1,
+        RestMethod::Post => 2,
+        RestMethod::Delete => 3,
+    }
+}
+
+/// M6.4: allow only the documented bring-up mock token.
 #[inline]
-pub fn auth_allows(_token: Option<&str>) -> bool {
-    // GAP: REST auth stubbed → M6
+pub fn auth_allows(token: Option<&str>) -> bool {
     let _ = AUTH_GAP_NOTE;
-    true
+    let _ = AUTH_TOKEN_SOURCE_NOTE;
+    let _ = M6_AUTH_OK_MARKER;
+    matches!(token, Some(t) if t == BRINGUP_AUTH_TOKEN)
 }
 
 /// Parse a single CLI line: `create|start|stop|destroy <id>` or `list`.
@@ -170,12 +193,15 @@ pub fn parse_rest_method(s: &str) -> Result<RestMethod, ApiParseError> {
 /// - `POST /vms/{id}/stop`    → stop
 /// - `DELETE /vms/{id}`       → destroy
 pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse {
+    let tag = rest_method_tag(req.method);
     if !auth_allows(req.auth_token) {
+        audit_log!(AuditEvent::AuthDenied { method_tag: tag });
         return RestResponse {
             status: 401,
             reply: None,
         };
     }
+    audit_log!(AuditEvent::AuthAllowed { method_tag: tag });
 
     match route_rest(req.method, req.path) {
         Ok(RestOp::List) => match dispatch_cli(table, CliCommand::List) {
@@ -282,6 +308,7 @@ fn route_rest(method: RestMethod, path: &str) -> Result<RestOp, ApiParseError> {
 /// Host-testable CLI + REST round-trip over one guest.
 pub fn prop_cli_rest_roundtrip() -> bool {
     let mut t = VmTable::new();
+    let tok = Some(BRINGUP_AUTH_TOKEN);
 
     // CLI create → start → stop
     let create = match parse_cli("create 7") {
@@ -304,7 +331,7 @@ pub fn prop_cli_rest_roundtrip() -> bool {
         RestRequest {
             method: RestMethod::Get,
             path: "/vms",
-            auth_token: None, // stub auth
+            auth_token: tok,
         },
     );
     if list.status != 200 || list.reply != Some(ApiReply::Listed { count: 1 }) {
@@ -317,7 +344,7 @@ pub fn prop_cli_rest_roundtrip() -> bool {
         RestRequest {
             method: RestMethod::Get,
             path: "/vms/7",
-            auth_token: Some("ignored"),
+            auth_token: tok,
         },
     );
     if get.status != 200
@@ -336,7 +363,7 @@ pub fn prop_cli_rest_roundtrip() -> bool {
         RestRequest {
             method: RestMethod::Delete,
             path: "/vms/7",
-            auth_token: None,
+            auth_token: tok,
         },
     );
     if del.status != 200 || del.reply != Some(ApiReply::Ok) {
@@ -345,9 +372,59 @@ pub fn prop_cli_rest_roundtrip() -> bool {
 
     // CLI list empty
     match dispatch_cli(&mut t, CliCommand::List) {
-        Ok(ApiReply::Listed { count: 0 }) => t.get(7).is_none() && AUTH_GAP_NOTE.contains("M6"),
+        Ok(ApiReply::Listed { count: 0 }) => {
+            t.get(7).is_none() && AUTH_GAP_NOTE.contains("CLOSED M6.4")
+        }
         _ => false,
     }
+}
+
+/// M6.4: missing/wrong token → 401 and no mutation; good token → create OK.
+pub fn prop_auth_deny_allow() -> bool {
+    let mut t = VmTable::new();
+
+    let denied_none = dispatch_rest(
+        &mut t,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/vms/11",
+            auth_token: None,
+        },
+    );
+    if denied_none.status != 401 || t.get(11).is_some() {
+        return false;
+    }
+
+    let denied_bad = dispatch_rest(
+        &mut t,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/vms/11",
+            auth_token: Some("wrong-token"),
+        },
+    );
+    if denied_bad.status != 401 || t.get(11).is_some() {
+        return false;
+    }
+
+    let allowed = dispatch_rest(
+        &mut t,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/vms/11",
+            auth_token: Some(BRINGUP_AUTH_TOKEN),
+        },
+    );
+    if allowed.status != 201 || t.get(11).map(|r| r.state) != Some(VmLifecycle::Defined) {
+        return false;
+    }
+
+    !auth_allows(None)
+        && !auth_allows(Some("anything"))
+        && auth_allows(Some(BRINGUP_AUTH_TOKEN))
+        && AUTH_GAP_NOTE.contains("CLOSED M6.4")
+        && AUTH_TOKEN_SOURCE_NOTE.contains("BRINGUP_AUTH_TOKEN")
+        && M6_AUTH_OK_MARKER == "RAYNU-V-M6-AUTH-OK"
 }
 
 /// True when CLI verbs parse as documented.

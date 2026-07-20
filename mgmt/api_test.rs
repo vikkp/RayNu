@@ -13,12 +13,13 @@ fn cli_rest_roundtrip() {
 #[test]
 fn rest_create_start_via_routes() {
     let mut t = VmTable::new();
+    let tok = Some(BRINGUP_AUTH_TOKEN);
     let created = dispatch_rest(
         &mut t,
         RestRequest {
             method: RestMethod::Post,
             path: "/vms/9",
-            auth_token: None,
+            auth_token: tok,
         },
     );
     assert_eq!(created.status, 201);
@@ -27,7 +28,7 @@ fn rest_create_start_via_routes() {
         RestRequest {
             method: RestMethod::Post,
             path: "/vms/9/start",
-            auth_token: Some("stub"),
+            auth_token: tok,
         },
     );
     assert_eq!(started.status, 200);
@@ -35,10 +36,13 @@ fn rest_create_start_via_routes() {
 }
 
 #[test]
-fn auth_stub_documents_gap() {
-    assert!(auth_allows(None));
-    assert!(auth_allows(Some("anything")));
-    assert!(AUTH_GAP_NOTE.contains("M6"));
+fn auth_deny_allow() {
+    assert!(prop_auth_deny_allow());
+    assert!(!auth_allows(None));
+    assert!(!auth_allows(Some("anything")));
+    assert!(auth_allows(Some(BRINGUP_AUTH_TOKEN)));
+    assert!(AUTH_GAP_NOTE.contains("CLOSED M6.4"));
+    assert_eq!(M6_AUTH_OK_MARKER, "RAYNU-V-M6-AUTH-OK");
 }
 
 #[test]

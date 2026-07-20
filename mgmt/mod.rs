@@ -7,6 +7,7 @@
 //! M5.0: durable create / start / stop / destroy surface over a guest table.
 //! M5.1: CLI + REST dispatch (`api`) over that table.
 //! M5.2: embedded Web UI SPA (`webui`, PE `.aswebui`) drives list/start/stop.
+//! M6.4: REST auth with bring-up mock token (`m6_auth_gate`).
 //! Bring-up in `src/main.rs` remains the live VMLAUNCH path; this module is the
 //! management-plane state machine those ops drive.
 
@@ -233,15 +234,18 @@ pub mod api;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;
+pub mod m6_auth_gate;
 pub mod webui;
 
 pub use api::{
-    dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_cli_rest_roundtrip,
-    ApiReply, CliCommand, RestMethod, RestRequest, RestResponse, AUTH_GAP_NOTE,
+    dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_auth_deny_allow,
+    prop_cli_rest_roundtrip, ApiReply, CliCommand, RestMethod, RestRequest, RestResponse,
+    AUTH_GAP_NOTE, BRINGUP_AUTH_TOKEN, M6_AUTH_OK_MARKER,
 };
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 pub use m5_webui_gate::run_m5_webui_gate;
+pub use m6_auth_gate::{run_m6_auth_gate, M6_AUTH_GATE_MARKER};
 pub use webui::{
     dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction,
 };
