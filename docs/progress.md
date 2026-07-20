@@ -96,7 +96,6 @@ Prior track: [m4_plan.md](m4_plan.md)
 |------|--------|------|
 | **M5.2** ← next | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI |
 | M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
-| M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
 | M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
 | M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |
 | M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
