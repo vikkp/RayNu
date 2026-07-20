@@ -908,13 +908,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
 
-    // M4.0: always log G1 exits (bring-up diagnostics).
+    // M4.0: G1 uses a dedicated exit path — never the G0 EXIT_PHASE machine.
+    // Host LAPIC ticks from G0 Linux can still fire on G1 entry (EXT_INT);
+    // EOI + resume until SHELL CPUID finishes the gate.
     if ACTIVE_GUEST_ID == M4_GUEST1_ID {
-        serial::write_str("boot: G1 VMEXIT reason=0x");
-        write_hex_u32(basic);
-        serial::write_str(" rip=0x");
-        write_hex_u64(guest_rip);
-        serial::write_byte(b'\n');
+        handle_g1_vmexit(basic, qual, guest_rax, guest_rip);
     }
 
     if basic == EXIT_REASON_IO_INSTRUCTION {
@@ -1198,6 +1196,40 @@ unsafe fn maybe_finish_m312() {
     }
 }
 
+/// M4.0 G1 exit handler: drain host IRQs, run SHELL CPUID, ignore G0 phases.
+unsafe fn handle_g1_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    serial::write_str("boot: G1 VMEXIT reason=0x");
+    write_hex_u32(basic);
+    serial::write_str(" rip=0x");
+    write_hex_u64(guest_rip);
+    serial::write_byte(b'\n');
+
+    match basic {
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            let _ = apic::mask_timer();
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+            let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_IO_INSTRUCTION => handle_io_and_resume(qual, guest_rax, guest_rip),
+        EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
+        EXIT_REASON_CPUID => handle_cpuid_and_resume(guest_rip),
+        EXIT_REASON_HLT => {
+            // Shell page HLTs after CPUID; gate should have finished on CPUID.
+            serial::write_line("boot: ERROR — G1 HLT without SHELL CPUID");
+            finish_boot(false);
+        }
+        _ => {
+            serial::write_str("boot: ERROR — unexpected G1 exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
 /// M4.0: VMPTRLD G1 under its private EPT and VMLAUNCH (SHELL CPUID guest).
 unsafe fn try_launch_second_guest() -> ! {
     let frames = match SECOND_GUEST {
@@ -1209,12 +1241,19 @@ unsafe fn try_launch_second_guest() -> ! {
     };
     SECOND_GUEST_STARTED = true;
     ACTIVE_GUEST_ID = M4_GUEST1_ID;
-    EXIT_PHASE = 0;
+    // Do not reuse G0 EXIT_PHASE — G1 exits go through [`handle_g1_vmexit`].
     REAL_LINUX_GUEST = false;
     LINUX_GTIMER2_DONE = false;
+    LINUX_GTIMER2_ARMED = false;
     BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
 
     serial::write_line("boot: M4.0 — launching G1 under private EPT slab");
+
+    // Stop G0 Linux host ticks so G1 is not interrupted before SHELL CPUID.
+    apic::mask_pic();
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
 
     // Drop stale EPT TLB after G0 leaf clear + new G1 EPTP.
     // SAFETY: VMX root; INVEPT allowed.
@@ -1237,6 +1276,11 @@ unsafe fn try_launch_second_guest() -> ! {
         serial::write_line(launch_err_name(e));
         finish_boot(false);
     }
+
+    // Drain again after setup (serial/timer may have pending host IRQ).
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
 
     serial::write_line("boot: VMLAUNCH → G1 SHELL CPUID (M4.0)");
     match ops::vmlaunch() {
