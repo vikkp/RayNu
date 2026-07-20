@@ -104,8 +104,17 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M5 closed.** Prior track: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M5 closed.** Next track: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M6** ← next | — | Production ready (HA, harden, soak, external audit; CLAUDE.md) |
+| **M6.0** ← next | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity |
+| M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence |
+| M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
+| M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
+| M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |
+| M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
+| M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden |
+| M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite |
+| M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak |
+| M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + spec review |
