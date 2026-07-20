@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.7 closed on host (M4 exit criterion met for N-guest L3); next is **M4.8** (large-page spec).  
-**Prior:** M4.7 closed on host (`RAYNU-V-M4-NGUEST-VERIFY-OK`).  
+**Status:** **open** — M4.7 closed on Latitude (M4 exit criterion met for N-guest L3); next is **M4.8** (large-page spec).  
+**Prior:** M4.7 closed on Latitude (`RAYNU-V-M4-NGUEST-VERIFY-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -187,7 +187,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.7 — True L3 N-guest verify — `RAYNU-V-M4-NGUEST-VERIFY-OK`
 
-**Status: closed** (host `./tools/verus-nguest-verify-smoke.sh` → `RAYNU-V-M4-NGUEST-VERIFY-OK`; **M4 exit criterion**)
+**Status: closed** (Latitude `./tools/verus-nguest-verify-smoke.sh` → `RAYNU-V-M4-NGUEST-VERIFY-OK`; **M4 exit criterion**)
 
 **Goal:** Green `cargo verus verify -p ept_model` for N-guest map/unmap exclusivity — **no `admit`**.
 
@@ -198,7 +198,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 3. `GAP(CLOSED M4.7)` in `ept_proof.rs`; ADR-004 / ADR-006 N-guest L3 claim recorded.
 4. Live multi-VM path keeps runtime asserts; full ghost↔exec N-guest refine is **M4.9**.
 
-**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-VERIFY-OK` (`24 verified, 0 errors`).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M4-NGUEST-VERIFY-OK` (`24 verified, 0 errors`); boot regression still `Boot gate PASSED (M0 → M4.5)`.
 
 **Files:** `ept_model/src/lib.rs`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, `memory/m4_nguest_verify_gate.rs`, `tools/verus-nguest-verify-smoke.sh`, `.github/workflows/ci.yml`.
 
@@ -276,4 +276,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.7 closed** on host (`RAYNU-V-M4-NGUEST-VERIFY-OK`). N-guest L3 exit criterion met. Next: **M4.8** large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`.
+**M4.7 closed** on Latitude (`RAYNU-V-M4-NGUEST-VERIFY-OK`). N-guest L3 exit criterion met. Next: **M4.8** large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`.

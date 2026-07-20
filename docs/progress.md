@@ -47,7 +47,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.4 | `RAYNU-V-M4-NET-OK` | Dual virtio-net BARs + L2 vSwitch port0→port1 exchange (Latitude) |
 | M4.5 | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared EPT; host AP wake (Latitude) |
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model (host) |
-| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify; ADR-006 claim (host; M4 exit) |
+| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify; ADR-006 claim (CI + Latitude; M4 exit) |
 
 ## Verification checkpoint (as of M4.7)
 
