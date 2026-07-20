@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.5 closed on Latitude (Track A+B + migrate); **M5.7** host wiring landed (Latitude pending); M5.6 parallel.  
-**Prior:** M5.5 closed on Latitude (`RAYNU-V-M5-MIGRATE-OK`).  
+**Status:** **open** — M5.0–M5.7 closed on Latitude (Track A+B + migrate + Dell Tier‑1 + large-page L3); next **M5.8** NUMA.  
+**Prior:** M5.7 closed on Latitude (`RAYNU-V-M5-LPAGE-VERIFY-OK`); M5.6 closed (`RAYNU-V-M5-IDRAC-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -147,18 +147,18 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.6 — Dell Tier‑1 health + topology — `RAYNU-V-M5-IDRAC-OK`
 
-**Status: open** (may start after M5.0; parallel)
+**Status: closed** (Latitude `./tools/m5-idrac-smoke.sh` → `RAYNU-V-M5-IDRAC-OK`)
 
 **Goal:** iDRAC / Redfish Tier‑1 health (thermal, fan, PSU) + SMBIOS/ACPI topology visible to ops (ADR-005). Builds on `idrac/` stubs (`IdracTier::Tier1`).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Redfish client reads thermal/fan/PSU (or documented QEMU/mock path for CI).
-2. SMBIOS DIMM / ACPI MADT (+ SRAT/SLIT if available) surfaces NUMA/socket layout to mgmt.
-3. Marker `RAYNU-V-M5-IDRAC-OK`.
-4. Tier‑2 (PERC OEM, predictive failure) explicitly out of scope — documented GAP.
+1. Mock Redfish Tier‑1 thermal/fan/PSU (`assets/idrac/mock_redfish.json`) via `read_tier1_health`.
+2. SMBIOS DIMM + ACPI MADT/SRAT/SLIT topology → `TopologySnapshot`.
+3. Host gate `idrac/m5_idrac_gate.rs` + `tools/m5-idrac-smoke.sh` + CI `m5-idrac`.
+4. Live BMC HTTP and Tier‑2 OEM remain documented GAPs.
 
-**Likely files:** `idrac/`, `mgmt/`, host gate; Latitude when hardware available.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-IDRAC-OK`.
 
 **Numbering note:** **M5.5** is reserved for the VMware workstream (below), so Dell health is **M5.6**.
 
@@ -170,8 +170,8 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.7 — Large-page L3 discharge — `RAYNU-V-M5-LPAGE-VERIFY-OK`
 
-**Status: open** (host wiring landed; Latitude `./tools/verus-lpage-verify-smoke.sh` pending)
-(**M5 proof exit criterion**)
+**Status: closed** (Latitude `./tools/verus-lpage-verify-smoke.sh` → `RAYNU-V-M5-LPAGE-VERIFY-OK`; `47 verified, 0 errors`)
+(**M5 proof exit criterion** — met)
 
 **Goal:** Green `cargo verus verify -p ept_model` for large-page (2M/1G) map/unmap exclusivity — **no `admit`**. Closes `GAP: Large-page L3 discharge`.
 
@@ -184,7 +184,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 3. Host gate `memory/m5_lpage_verify_gate.rs` + `tools/verus-lpage-verify-smoke.sh` + CI `verus-lpage-verify`.
 4. Live path may keep 4K registry + HW large leaves; full HW correspondence is M5.9 / M6.
 
-**Acceptance:** Latitude smoke + gate → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 
 ### M5.8 — NUMA in ghost spec — `RAYNU-V-M5-NUMA-OK`
 
@@ -289,4 +289,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-Draft accepted. **M5.0–M5.5 closed** on Latitude (incl. parallel migrate). **M5.7** host wiring landed (Latitude `verus-lpage-verify-smoke` pending). M5.6 remains parallel / slip-ok.
+**M5.0–M5.7 closed** on Latitude (incl. migrate + iDRAC + large-page L3). Next: **M5.8** (`RAYNU-V-M5-NUMA-OK`). NUMA + ALLOC-REFINE remain for full M5 close (or ADR waiver).
