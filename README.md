@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.22 closed** — real Linux shell + tight EPT + L3/refine + NOIRQ + hard-fail Kani + PE asset embed → `RAYNU-V-M3-ASSETS-OK`. Active: **M4.0** (dual VMCS / private EPT) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.0 closed** — real Linux shell + dual VMCS / distinct EPT → `RAYNU-V-M4-2VM-OK`. Active: **M4.1** (scheduler) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 
