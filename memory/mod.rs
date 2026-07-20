@@ -4,7 +4,8 @@
 //! Proven Core: **inside** (ADR-002, ADR-004)
 //! VERIFICATION: L2 live EptMap (M2.6); ghost L3 + refine (M3.17–M3.18) in `ept_model`;
 //! N-guest L3 (M4.6–M4.7); large-page ghost *spec* (M4.8); N-guest refine (M4.9);
-//! large-page L3 (M5.7); NUMA ghost *spec* (M5.8); allocator↔EPT refine (M5.9)
+//! large-page L3 (M5.7); NUMA ghost *spec* (M5.8); allocator↔EPT refine (M5.9);
+//! EPT-violation exclusivity (M6.0)
 
 pub mod boot_alloc;
 pub mod ept;
@@ -25,6 +26,7 @@ pub mod m4_nguest_verify_gate;
 pub mod m5_alloc_refine_gate;
 pub mod m5_lpage_verify_gate;
 pub mod m5_numa_gate;
+pub mod m6_eptvio_gate;
 pub mod numa;
 pub mod verus_gate;
 
@@ -42,6 +44,7 @@ pub use m4_nguest_verify_gate::{run_m4_nguest_verify_gate, M4_NGUEST_VERIFY_OK_M
 pub use m5_alloc_refine_gate::{run_m5_alloc_refine_gate, M5_ALLOC_REFINE_OK_MARKER};
 pub use m5_lpage_verify_gate::{run_m5_lpage_verify_gate, M5_LPAGE_VERIFY_OK_MARKER};
 pub use m5_numa_gate::{run_m5_numa_gate, M5_NUMA_GATE_MARKER};
+pub use m6_eptvio_gate::{run_m6_eptvio_gate, M6_EPTVIO_OK_MARKER};
 pub use numa::{from_mock_topology, prop_mock_numa_runtime, HostNumaTopology, M5_NUMA_OK_MARKER};
 pub use ept_hw::{
     EptHwError, EptPageSize, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER, M3_EPT2_OK_MARKER,

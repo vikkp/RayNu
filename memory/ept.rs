@@ -503,6 +503,115 @@ pub fn ownership_selftest_ok() -> bool {
     unsafe { OWNERSHIP_SELFTEST_OK }
 }
 
+/// Host-visible EPT-violation disposition (mirrors `ept_model::EptViolationDisposition`).
+///
+/// Live `handle_ept_violation_and_resume` today uses EmulateNoMap (APIC/virtio)
+/// or Reject (unexpected GPA). ClaimMap covers demand-fill under exclusivity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViolationDisposition {
+    EmulateNoMap,
+    Reject,
+    ClaimMap {
+        guest_id: u64,
+        gpa: u64,
+        frame: PhysFrame,
+        permissions: EptPermissions,
+    },
+}
+
+/// Apply a violation disposition to the ownership registry (ADR-004).
+///
+/// Emulate/Reject leave `map` unchanged. ClaimMap is a normal exclusive map.
+pub fn apply_violation_disposition(
+    map: &mut EptMap,
+    d: ViolationDisposition,
+) -> Result<(), EptError> {
+    match d {
+        ViolationDisposition::EmulateNoMap | ViolationDisposition::Reject => Ok(()),
+        ViolationDisposition::ClaimMap {
+            guest_id,
+            gpa,
+            frame,
+            permissions,
+        } => map.map(guest_id, gpa, frame, permissions),
+    }
+}
+
+/// Host-testable: emulate/reject/claim preserve exclusivity; steal rejected.
+pub fn prop_violation_preserves_exclusive() -> bool {
+    let mut map = EptMap::new();
+    let g0 = M2_BRINGUP_GUEST_ID;
+    let g1 = M4_GUEST1_ID;
+    let gpa = 0x1000u64;
+    let f0 = PhysFrame(60);
+    let f1 = PhysFrame(61);
+
+    if apply_violation_disposition(&mut map, ViolationDisposition::EmulateNoMap).is_err() {
+        return false;
+    }
+    if !map.is_empty() || !map.check_invariants() {
+        return false;
+    }
+    if apply_violation_disposition(&mut map, ViolationDisposition::Reject).is_err() {
+        return false;
+    }
+    if !map.is_empty() || !map.check_invariants() {
+        return false;
+    }
+
+    if apply_violation_disposition(
+        &mut map,
+        ViolationDisposition::ClaimMap {
+            guest_id: g0,
+            gpa,
+            frame: f0,
+            permissions: EptPermissions::READ_WRITE,
+        },
+    )
+    .is_err()
+    {
+        return false;
+    }
+    if map.owner_of(f0) != Some(g0) || !map.check_invariants() {
+        return false;
+    }
+
+    // Steal of claimed frame on a second violation must fail (AlreadyOwned).
+    if !matches!(
+        apply_violation_disposition(
+            &mut map,
+            ViolationDisposition::ClaimMap {
+                guest_id: g1,
+                gpa: 0x2000,
+                frame: f0,
+                permissions: EptPermissions::READ_WRITE,
+            },
+        ),
+        Err(EptError::AlreadyOwned)
+    ) {
+        return false;
+    }
+
+    // Distinct frame claim for another guest succeeds.
+    if apply_violation_disposition(
+        &mut map,
+        ViolationDisposition::ClaimMap {
+            guest_id: g1,
+            gpa: 0x2000,
+            frame: f1,
+            permissions: EptPermissions::READ_WRITE,
+        },
+    )
+    .is_err()
+    {
+        return false;
+    }
+    map.check_invariants()
+        && map.owner_of(f0) == Some(g0)
+        && map.owner_of(f1) == Some(g1)
+        && map.len() == 2
+}
+
 #[cfg(test)]
 #[path = "ept_test.rs"]
 mod ept_test;

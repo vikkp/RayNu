@@ -70,7 +70,10 @@
 //!   + `lemma_concrete_two_guests_map_refines` → `RAYNU-V-M4-REFINE-OK`.
 //! TODO(M5.9 CLOSED): allocator↔EPT refine — `GhostFramePool` / `alloc_ept_refines` /
 //!   `theorem_alloc_map_unmap_refines` + scoped `identity_leaf_ok` →
-//!   `RAYNU-V-M5-ALLOC-REFINE-OK`. Full HW PTE bit-decode / EPT-violation → M6.
+//!   `RAYNU-V-M5-ALLOC-REFINE-OK`. Full HW PTE bit-decode → M6.1.
+//! TODO(M6.0 CLOSED): EPT-violation exclusivity —
+//!   `theorem_ept_violation_preserves_exclusive` / `EptViolationDisposition`
+//!   (EmulateNoMap | Reject | ClaimMap) → `RAYNU-V-M6-EPTVIO-OK`.
 //!
 //! # Large-page map (M4.8 — L2 spec)
 //!
@@ -95,6 +98,14 @@
 //! `refines(c)` and every owned frame ∈ allocated. `theorem_alloc_map_unmap_refines`
 //! discharges allocate→map→unmap under that coupling. Scoped precise-identity
 //! correspondence: `identity_leaf_ok` (GPA==HPA frame inside 512 MiB window).
-//! Full HW PTE bit-decode / EPT-violation → M6.
+//! Full HW PTE bit-decode → M6.1.
+//!
+//! # EPT-violation (M6.0)
+//!
+//! `EptViolationDisposition` models EmulateNoMap / Reject (ownership unchanged)
+//! and ClaimMap (demand-fill via `ghost_map`). `theorem_ept_violation_preserves_exclusive`
+//! discharges exclusivity for every enabled disposition. Live MMIO path uses
+//! EmulateNoMap; unexpected GPA is Reject. Runtime hook:
+//! `apply_violation_disposition` in `ept.rs`.
 
 #![allow(dead_code)]
