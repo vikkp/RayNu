@@ -1,0 +1,16 @@
+{
+  "id": "sox_access_control",
+  "version": "1",
+  "standard": "SOX-style",
+  "title": "Access and control change summary",
+  "description": "Auditor-facing summary of VMCS, lifecycle, and MSR-block control events from a frozen RayNu-V audit ring snapshot.",
+  "fields": [
+    "tip_hash",
+    "event_count",
+    "vmcs_created",
+    "lifecycle_mutations",
+    "msr_blocks",
+    "chain_ok"
+  ],
+  "formats": ["json", "csv"]
+}

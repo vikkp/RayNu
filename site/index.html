@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M5.3 closed: multi-guest platform, N-guest L3, mgmt plane, audit ring."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M5.4 closed: multi-guest platform, N-guest L3, mgmt plane, audit ring + SOX/ISO reports."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M5.3 closed — multi-guest platform, N-guest L3, lifecycle/API/Web UI, audit ring. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M5.4 closed — multi-guest platform, N-guest L3, lifecycle/API/Web UI, audit ring, SOX/ISO reports. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,24 +60,26 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M5.3 closed.</h2>
+          <h2 class="section__title">M0 → M5.4 closed.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT, N-guest L3 + refine, then the ops
-            spine — lifecycle, CLI/REST, embedded Web UI — and a tamper-evident
-            audit ring latched by <code>RAYNU-V-M5-AUDIT-OK</code> on host.
-            Next: M5.4 (SOX / ISO-style reports).
+            Multi-guest platform under EPT, N-guest L3 + refine, ops spine
+            (lifecycle, CLI/REST, Web UI), tamper-evident audit ring, and
+            deterministic SOX/ISO reports —
+            <code>RAYNU-V-M5-REPORT-OK</code> on host. Track A+B complete.
+            Next: M5.7 (large-page L3 verify).
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M5-LIFE-OK
 RAYNU-V-M5-API-OK
 RAYNU-V-M5-WEBUI-OK
 RAYNU-V-M5-AUDIT-OK
-==> M5.3 audit smoke PASSED</code></pre>
+RAYNU-V-M5-REPORT-OK
+==> M5.4 report smoke PASSED</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M5.3: how we got here</h2>
+          <h2 class="section__title">M1.0 → M5.4: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -307,6 +309,13 @@ RAYNU-V-M5-AUDIT-OK
                     <code>RAYNU-V-M5-AUDIT-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M5.4</span>
+                  <span class="journey__text"
+                    >SOX / ISO-style reports from ring snapshot →
+                    <code>RAYNU-V-M5-REPORT-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -414,7 +423,7 @@ RAYNU-V-M5-AUDIT-OK
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
 ./tools/qemu-boot-test.sh       # M0 → M4.5
-./tools/m5-audit-smoke.sh       # M5.3 → RAYNU-V-M5-AUDIT-OK
+./tools/m5-report-smoke.sh      # M5.4 → RAYNU-V-M5-REPORT-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -427,8 +436,8 @@ RAYNU-V-M5-AUDIT-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M5.3 is closed (mgmt spine + audit ring); next is
-            <strong>M5.4</strong> (SOX / ISO-style reports).
+            M0→M5.4 is closed (mgmt + audit reports); next critical for M5 close is
+            <strong>M5.7</strong> (large-page L3 verify).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

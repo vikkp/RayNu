@@ -1,0 +1,19 @@
+{
+  "id": "iso_event_inventory",
+  "version": "1",
+  "standard": "ISO-style",
+  "title": "Security event inventory",
+  "description": "Auditor-facing category inventory of security-relevant events from a frozen RayNu-V audit ring snapshot (ISO-style evidence pack).",
+  "fields": [
+    "tip_hash",
+    "total",
+    "vmcs",
+    "ept_map",
+    "ept_unmap",
+    "msr_block",
+    "lifecycle",
+    "other",
+    "chain_ok"
+  ],
+  "formats": ["json", "csv"]
+}

@@ -42,5 +42,5 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M5.3 closed:** audit ring + hash chain → `RAYNU-V-M5-AUDIT-OK`.  
-**Next M5.4:** SOX / ISO-style reports → `RAYNU-V-M5-REPORT-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
+**M5.4 closed:** SOX / ISO-style reports → `RAYNU-V-M5-REPORT-OK`.  
+**Next M5.7:** Large-page L3 verify → `RAYNU-V-M5-LPAGE-VERIFY-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).

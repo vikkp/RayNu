@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.3 closed on Latitude; next is **M5.4** (SOX/ISO reports).  
-**Prior:** M5.3 closed on Latitude (`RAYNU-V-M5-AUDIT-OK`).  
+**Status:** **open** — M5.0–M5.4 closed on Latitude (Track A+B done; LIFE+API+AUDIT+REPORT green); next critical for M5 close is **M5.7** (large-page L3).  
+**Prior:** M5.4 closed on Latitude (`RAYNU-V-M5-REPORT-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -129,18 +129,17 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.4 — SOX / ISO-style reports — `RAYNU-V-M5-REPORT-OK`
 
-**Status: open** ← next (**M5 product exit criterion** with M5.0–M5.3)
+**Status: closed** (Latitude `./tools/m5-report-smoke.sh` → `RAYNU-V-M5-REPORT-OK`)
 
 **Goal:** Generate auditor-facing reports (JSON/CSV minimum; PDF optional) from the audit ring using embedded schemas (ADR-003 `.assets.schemas`).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. At least one SOX-style and one ISO-style (or documented equivalent) report template.
-2. Report generation is deterministic given a frozen ring snapshot.
-3. Marker `RAYNU-V-M5-REPORT-OK`.
-4. External auditor sign-off is **M6** — this gate is generator + templates.
+1. Schemas: `assets/schemas/sox_access_control.json` + `iso_event_inventory.json` (PE `.aschema`).
+2. `RingSnapshot::from_ring` + deterministic `render_report` (JSON/CSV); PDF = `GAP: PDF report → M6`.
+3. Host gate `audit/m5_report_gate.rs` + `tools/m5-report-smoke.sh` + CI `m5-report`.
 
-**Likely files:** `audit/`, report assets, host gate.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-REPORT-OK`. Track B (audit) complete. External auditor sign-off remains **M6**.
 
 ---
 
@@ -148,7 +147,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.6 — Dell Tier‑1 health + topology — `RAYNU-V-M5-IDRAC-OK`
 
-**Status: open** (may start after M5.0; parallel with Track B)
+**Status: open** (may start after M5.0; parallel)
 
 **Goal:** iDRAC / Redfish Tier‑1 health (thermal, fan, PSU) + SMBIOS/ACPI topology visible to ops (ADR-005). Builds on `idrac/` stubs (`IdracTier::Tier1`).
 
@@ -171,7 +170,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.7 — Large-page L3 discharge — `RAYNU-V-M5-LPAGE-VERIFY-OK`
 
-**Status: open** (host-first; **M5 proof exit criterion**)
+**Status: open** ← next (host-first; **M5 proof exit criterion**)
 
 **Goal:** Green `cargo verus verify -p ept_model` for large-page (2M/1G) map/unmap exclusivity — **no `admit`**. Closes `GAP: Large-page L3 discharge`.
 
@@ -284,4 +283,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-Draft accepted. **M5.0–M5.3 closed** on Latitude. Next: **M5.4** (`RAYNU-V-M5-REPORT-OK`) — SOX / ISO-style reports from the audit ring.
+Draft accepted. **M5.0–M5.4 closed** on Latitude (Track A+B: LIFE+API+WEBUI+AUDIT+REPORT). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`). M5.5/M5.6 remain parallel / slip-ok.
