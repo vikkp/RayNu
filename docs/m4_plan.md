@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.5 in progress (SMP → `RAYNU-V-M4-SMP-OK`).  
-**Prior:** M4.4 closed on Latitude (`RAYNU-V-M4-NET-OK`).  
+**Status:** **open** — M4.5 closed on Latitude; next is Track C **M4.6** (N-guest exclusivity spec).  
+**Prior:** M4.5 closed on Latitude (`RAYNU-V-M4-SMP-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -148,19 +148,19 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.5 — SMP guest (2+ vCPUs) — `RAYNU-V-M4-SMP-OK`
 
-**Status: in progress** ← current
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.5)`)
 
 **Goal:** One guest with **2+ vCPUs** reaches shell (AP bring-up under virtual APIC).
 
-**Accepted MV (this gate):** bare-metal **BSP + AP** under two VMCS, **same guest id**, **shared EPT** (G0 EPTP). After NET-OK the host VMLAUNCHes the BSP; when BSP stores a ready flag and HLTs, the host performs a **documented AP wake** (VMLAUNCH of the AP VMCS — INIT-SIPI equivalent for this gate). When both ready flags are seen, latch `RAYNU-V-M4-SMP-OK`. Full Linux `CONFIG_SMP` / ICR Wait-for-SIPI / IOAPIC is deferred (slip-ok vs proof track).
+**Accepted MV (this gate):** bare-metal **BSP + AP** under two VMCS, **same guest id**, **shared EPT** (G0 EPTP). After NET-OK the host VMLAUNCHes the BSP; when BSP stores a ready flag and HLTs, the host performs a **documented AP wake** (VMLAUNCH of the AP VMCS — INIT-SIPI equivalent for this gate). When both ready flags are seen, latch `RAYNU-V-M4-SMP-OK`. Full Linux `CONFIG_SMP` / ICR Wait-for-SIPI / IOAPIC is deferred.
 
-**Acceptance sketch:**
+**Acceptance (met):**
 
-1. Second VMCS/vCPU for same guest id; shared EPT; INIT-SIPI or documented AP wake. ✅
-2. May retain `noapic` only if SMP still works; prefer progress toward IOAPIC if blocked. (Linux UP retained; probe does not need IOAPIC.)
-3. Marker `RAYNU-V-M4-SMP-OK`.
+1. Second VMCS/vCPU for same guest id; shared EPT; documented AP wake (host VMLAUNCH).
+2. Linux remains UP (`maxcpus=1` / `noapic`); probe does not need IOAPIC.
+3. Latitude: `RAYNU-V-M4-SMP-OK` after BSP+AP ready flags.
 
-**Likely files:** `sched/smp_probe.rs`, `vmx/launch.rs`, `memory/ept_hw.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+**Files:** `sched/smp_probe.rs`, `sched/m4_smp_gate.rs`, `memory/ept_hw.rs`, `vmx/launch.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ---
 
@@ -170,7 +170,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.6 — N-guest exclusivity in ghost model — `RAYNU-V-M4-NGUEST-SPEC-OK`
 
-**Status: open** (host-first)
+**Status: open** ← next (host-first)
 
 **Goal:** Extend `ept_model` ghost map/unmap to **N guests**; L2→L3 *attempt* with explicit gaps documented.
 
@@ -270,4 +270,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.5 in progress** on branch `cursor/m4-5-smp-a623` (`RAYNU-V-M4-SMP-OK`). Do not start M4.6 until Latitude is green (or explicitly slip SMP and start Track C).
+**M4.5 closed** on Latitude (`RAYNU-V-M4-SMP-OK`). Track B complete. Next: Track C **M4.6** N-guest exclusivity spec on `cursor/m4-6-nguest-spec-a623`.

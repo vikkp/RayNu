@@ -45,8 +45,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.2 | `RAYNU-V-M4-NVM-OK` | G0 Linux + G1–G3 SHELL (≥4 concurrent; Latitude) |
 | M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-mmio BAR + probe guest; DRIVER_OK write/readback (Latitude) |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Dual virtio-net BARs + L2 vSwitch port0→port1 exchange (Latitude) |
+| M4.5 | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared EPT; host AP wake (Latitude) |
 
-## Verification checkpoint (as of M4.4)
+## Verification checkpoint (as of M4.5)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -59,17 +60,19 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `devices/virtio_blk` | L0→L1-ish | Virtio-mmio config/status; DRIVER_OK host write/readback (M4.3) |
 | `devices/virtio_net` | L0→L1-ish | Dual virtio-mmio net BARs; DRIVER_OK → vSwitch exchange (M4.4) |
 | `net::VSwitch` | L0→L1-ish | L2 MAC learning + unicast forward (M4.4) |
+| `sched/smp_probe` | L0→L1-ish | Dual-vCPU BSP+AP ready flags; host AP wake (M4.5) |
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,512MiB)` @ 2M (M3.20); APIC unmapped by omission |
-| `vmx/*` | L0–L1 | Multi-VMCS + credit sched + blk/net probes (M4.4) |
+| `vmx/*` | L0–L1 | Multi-VMCS + credit sched + blk/net/SMP probes (M4.5) |
 | `memory/m4_2vm_gate` | L0 | Host artifact gate for dual-VMCS / dual-EPT path |
 | `sched/scheduler` | L0→L1-ish | Credit quantum + fair pick; M4.1/M4.2 |
 | `sched/m4_sched_gate` | L0 | Host artifact gate for dual-VMCS scheduling |
 | `sched/m4_nvm_gate` | L0 | Host artifact gate for ≥4 concurrent guests |
 | `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
 | `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
+| `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
 | Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
@@ -81,8 +84,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.5** ← active | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared-EPT probe |
-| M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
+| **M4.6** ← next | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
 | M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
 | M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |
 | M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
