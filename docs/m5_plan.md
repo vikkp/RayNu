@@ -62,7 +62,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 **Status: open** ← next (host-first; Latitude when a boot path exists)
 
-**Goal:** Create / start / stop / destroy guests through a durable lifecycle surface (`mgmt/`), not only hardcoded bring-up in `src/main.rs`.
+**Goal:** Create / start / stop / destroy guests through a durable lifecycle surface (`mgmt/`), not only hardcoded bring-up in `src/main.rs`. Stubs already exist (`mgmt::VmLifecycle`); this gate makes them real against the M4 multi-guest spine.
 
 **Acceptance sketch:**
 
@@ -111,7 +111,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 **Status: open**
 
-**Goal:** Append-only audit ring with hash chaining; security-relevant actions from M5.0+ land in the ring.
+**Goal:** Append-only audit ring with hash chaining; security-relevant actions from M5.0+ land in the ring. Builds on existing `audit/integrity` + `audit_log!` (L0).
 
 **Acceptance sketch:**
 
@@ -145,7 +145,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 **Status: open** (may start after M5.0; parallel with Track B)
 
-**Goal:** iDRAC / Redfish Tier‑1 health (thermal, fan, PSU) + SMBIOS/ACPI topology visible to ops (ADR-005).
+**Goal:** iDRAC / Redfish Tier‑1 health (thermal, fan, PSU) + SMBIOS/ACPI topology visible to ops (ADR-005). Builds on `idrac/` stubs (`IdracTier::Tier1`).
 
 **Acceptance sketch:**
 
