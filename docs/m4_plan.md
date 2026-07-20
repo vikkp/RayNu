@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.0 closed on Latitude; **M4.1 in progress**.  
+**Status:** **open** — M4.1 closed on Latitude; next spine gate is **M4.2**.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -76,7 +76,7 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.1 — Scheduler time-slices ≥2 VMs — `RAYNU-V-M4-SCHED-OK`
 
-**Status: in progress** (branch `cursor/m4-1-sched-a623`)
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.1)`)
 
 **Goal:** Credit (or equivalent) scheduler runs ≥2 runnable VMs; both make forward progress under preemption / yield (not “boot VM0 then freeze”).
 
@@ -88,13 +88,13 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 4. Per-guest GPR banks; markers `RAYNU-V-M4-SLICE-G0` / `SLICE-G1` then `RAYNU-V-M4-SCHED-OK`.
 5. Host gate `sched/m4_sched_gate.rs`; qemu pass line `M0 → M4.1`.
 
-**Acceptance:** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.1)` with M4.0 chain + `RAYNU-V-M4-SCHED-OK`.
+**Acceptance (met):** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.1)` with M4.0 chain + `RAYNU-V-M4-SCHED-OK`.
 
-**Likely files:** `sched/scheduler.rs`, `sched/m4_sched_gate.rs`, `vmx/launch.rs`, `tools/qemu-boot-test.sh`.
+**Files:** `sched/scheduler.rs`, `sched/m4_sched_gate.rs`, `vmx/launch.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.2 — Scale gate: 4+ concurrent shells — `RAYNU-V-M4-NVM-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** **4+** concurrent Linux guests to shell under EPT — roadmap “4+ VMs” gate.
 
@@ -260,4 +260,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.1** is open on `cursor/m4-1-sched-a623` — close on Latitude when `RAYNU-V-M4-SCHED-OK` latches.
+**M4.1 closed** on Latitude (`RAYNU-V-M4-SCHED-OK`). Next: **M4.2** scale gate (`RAYNU-V-M4-NVM-OK`) on branch `cursor/m4-2-nvm-a623`.
