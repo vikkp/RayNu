@@ -1218,7 +1218,7 @@ unsafe fn try_launch_second_guest() -> ! {
 
     // Drop stale EPT TLB after G0 leaf clear + new G1 EPTP.
     // SAFETY: VMX root; INVEPT allowed.
-    memory::ept_hw::invept_global();
+    ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
         serial::write_line("boot: ERROR — G1 VMCS prepare failed");
