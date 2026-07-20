@@ -22,8 +22,8 @@ pub use api::M5_API_OK_MARKER;
 /// Host / CI marker when the M5.2 Web UI gate passes (re-export).
 pub use webui::M5_WEBUI_OK_MARKER;
 
-/// Max guests tracked by the management-plane table (M4 NVM spine = 4).
-pub const MGMT_GUEST_CAP: usize = 8;
+/// Max guests tracked by the management-plane table (M5.5 migrate needs ≥10).
+pub const MGMT_GUEST_CAP: usize = 16;
 
 /// VM lifecycle state for the management plane (not Proven Core vCPU state).
 ///

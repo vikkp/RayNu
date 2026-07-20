@@ -47,6 +47,12 @@ pub enum AuditEvent {
     VmStopped { guest_id: u64 },
     /// Management-plane VM destroyed. M5.0.
     VmDestroyed { guest_id: u64 },
+    /// VMware migrate batch started (ADR-007 / M5.5).
+    MigrateStarted { batch_id: u64, count: u32 },
+    /// VMware migrate batch completed successfully.
+    MigrateCompleted { batch_id: u64, count: u32 },
+    /// VMware migrate batch failed.
+    MigrateFailed { batch_id: u64, count: u32 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -201,6 +207,9 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::VmStarted { .. } => 10,
         AuditEvent::VmStopped { .. } => 11,
         AuditEvent::VmDestroyed { .. } => 12,
+        AuditEvent::MigrateStarted { .. } => 13,
+        AuditEvent::MigrateCompleted { .. } => 14,
+        AuditEvent::MigrateFailed { .. } => 15,
     }
 }
 

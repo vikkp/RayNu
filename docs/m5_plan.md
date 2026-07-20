@@ -216,19 +216,29 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.5 — VMware / vCenter import — `RAYNU-V-M5-MIGRATE-OK`
 
-**Status: open** (ADR-007; **outside Proven Core**)
+**Status: open** — code on branch; awaiting Latitude smoke
+(ADR-007; **outside Proven Core**; slip-ok for M5 closed)
 
 **Goal:** Migrate **10+** VMs from vCenter in one command (`migrate/`).
 
-**Acceptance sketch:**
+**What lands:**
 
-1. One-command import path (VMDK/OVF as documented).
+1. One-command `migrate_one_command` over a documented OVF/VMDK inventory
+   (`assets/migrate/sample_inventory.txt`, ≥12 guests).
+2. Audit events `MigrateStarted` / `MigrateCompleted` / `MigrateFailed`.
+3. Guests land in `VmTable` as `Defined` (`MGMT_GUEST_CAP` raised to 16).
+4. Host gate `migrate/m5_migrate_gate.rs` + `tools/m5-migrate-smoke.sh` + CI `m5-migrate`.
+5. Live vCenter SOAP/REST client: `GAP: live vCenter API → polish`.
+
+**Acceptance:**
+
+1. One-command import path (VMDK/OVF inventory as documented).
 2. Audit events for migrate start/complete/fail ([A]).
-3. Marker `RAYNU-V-M5-MIGRATE-OK`.
-4. Must not pull new modules into Proven Core without a separate ADR.
-5. May close after or during late M5; **M5 closed does not require M5.5**.
+3. Host/CI smoke → `RAYNU-V-M5-MIGRATE-OK` (Latitude confirms close).
+4. Must not pull new modules into Proven Core (ADR-007 — met).
+5. **M5 closed does not require M5.5**.
 
-**Likely files:** `migrate/`, assets, ops docs.
+**Likely files:** `migrate/`, `assets/migrate/`, docs.
 
 ---
 
@@ -283,4 +293,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-Draft accepted. **M5.0–M5.4 closed** on Latitude (Track A+B: LIFE+API+WEBUI+AUDIT+REPORT). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`). M5.5/M5.6 remain parallel / slip-ok.
+Draft accepted. **M5.0–M5.4 closed** on Latitude. **M5.5** (parallel) code lands `RAYNU-V-M5-MIGRATE-OK`; close after Latitude `./tools/m5-migrate-smoke.sh`. Critical path for M5 close remains **M5.7**.

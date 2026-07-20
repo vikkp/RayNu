@@ -299,6 +299,19 @@ jobs:
       - name: M5.4 report smoke → RAYNU-V-M5-REPORT-OK
         run: ./tools/m5-report-smoke.sh
 
+  # M5.5: VMware migrate (ADR-007). Hard-fail.
+  m5-migrate:
+    name: M5.5 migrate (MIGRATE-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.5 migrate smoke → RAYNU-V-M5-MIGRATE-OK
+        run: ./tools/m5-migrate-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)

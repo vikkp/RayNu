@@ -1,0 +1,15 @@
+# RayNu-V M5.5 sample vCenter export inventory (one-command import).
+# Columns: guest_id source name
+# source = vmdk | ovf
+1 vmdk web01
+2 vmdk web02
+3 ovf db01
+4 ovf db02
+5 vmdk cache01
+6 ovf batch01
+7 vmdk batch02
+8 ovf mq01
+9 vmdk mq02
+10 ovf mon01
+11 vmdk mon02
+12 ovf bastion
