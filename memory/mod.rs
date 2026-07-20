@@ -19,9 +19,10 @@ pub mod m4_2vm_gate;
 pub mod verus_gate;
 
 pub use ept::{
-    claim_precise_identity_ranges, claim_precise_with_guest1_hole, ownership_selftest_ok,
-    precise_ranges_ok, run_ownership_selftest, EptError, EptMap, EptPermissions,
-    M2_BRINGUP_GUEST_ID, M2_OWN_OK_MARKER, M4_2VM_OK_MARKER, M4_GUEST1_ID, M4_SHELL_G1_MARKER,
+    claim_precise_identity_ranges, claim_precise_with_guest1_hole, claim_precise_with_shell_holes,
+    ownership_selftest_ok, precise_ranges_ok, run_ownership_selftest, EptError, EptMap,
+    EptPermissions, M2_BRINGUP_GUEST_ID, M2_OWN_OK_MARKER, M4_2VM_OK_MARKER, M4_GUEST1_ID,
+    M4_GUEST2_ID, M4_GUEST3_ID, M4_NVM_OK_MARKER, M4_SHELL_G1_MARKER,
 };
 pub use m4_2vm_gate::run_m4_2vm_gate;
 pub use ept_hw::{

@@ -42,5 +42,5 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M4.1 closed:** credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.  
-**Next M4.2:** 4+ concurrent shells → `RAYNU-V-M4-NVM-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).
+**M4.2 closed:** ≥4 concurrent guests (G0 Linux + G1–G3 SHELL) → `RAYNU-V-M4-NVM-OK`.  
+**Next M4.3:** virtio-blk guest disk → `RAYNU-V-M4-BLK-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).

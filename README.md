@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.1 closed** — dual VMCS + credit scheduler → `RAYNU-V-M4-SCHED-OK`. Active: **M4.2** (4+ VMs) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.2 closed** — ≥4 concurrent guests under EPT → `RAYNU-V-M4-NVM-OK`. Active: **M4.3** (virtio-blk) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 

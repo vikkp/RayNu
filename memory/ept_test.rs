@@ -90,6 +90,33 @@ fn precise_range_claim_with_g1_hole() {
     }
 }
 
+#[test]
+fn precise_range_claim_with_shell_holes() {
+    use super::{
+        claim_precise_with_shell_holes, M4_GUEST1_ID, M4_GUEST2_ID, M4_GUEST3_ID,
+    };
+    use crate::memory::ept_hw::TWO_MIB;
+    let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
+    let g1 = guest_ram;
+    let g2 = guest_ram + TWO_MIB;
+    let g3 = guest_ram + 2 * TWO_MIB;
+    assert!(claim_precise_with_shell_holes(&[
+        (g1, TWO_MIB, M4_GUEST1_ID),
+        (g2, TWO_MIB, M4_GUEST2_ID),
+        (g3, TWO_MIB, M4_GUEST3_ID),
+    ])
+    .is_ok());
+    let ranges = core::ptr::addr_of!(PRECISE_RANGES);
+    // SAFETY: single-threaded test.
+    unsafe {
+        assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0));
+        assert!((*ranges).contains_gpa(M4_GUEST1_ID, g1));
+        assert!((*ranges).contains_gpa(M4_GUEST2_ID, g2));
+        assert!((*ranges).contains_gpa(M4_GUEST3_ID, g3));
+        assert!(!(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, g2));
+    }
+}
+
 /// Bounded ADR-004 check: two guests cannot own the same HPA.
 ///
 /// Concrete GPAs keep CBMC inside the Kani `MAP_CAP=8` unwind budget.

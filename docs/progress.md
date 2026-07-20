@@ -42,12 +42,13 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.askern`/`.asinit` embed; ESP fallback (Latitude) |
 | M4.0 | `RAYNU-V-M4-2VM-OK` | G0 Linux SHELL + G1 SHELL under distinct EPT (dual VMCS; Latitude) |
 | M4.1 | `RAYNU-V-M4-SCHED-OK` | Credit scheduler time-slices G0↔G1 (Latitude) |
+| M4.2 | `RAYNU-V-M4-NVM-OK` | G0 Linux + G1–G3 SHELL (≥4 concurrent; Latitude) |
 
-## Verification checkpoint (as of M4.1)
+## Verification checkpoint (as of M4.2)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
-| `memory/ept` ownership registry | **L2** runtime | Live registry + precise ranges; ownership content refined to L3 ghost (M3.18) |
+| `memory/ept` ownership registry | **L2** runtime | Live registry + multi-hole precise ranges; L3 ghost (M3.18) for 4K |
 | `memory/frame_allocator` | **L2** | Ghost allocated-set in `frame_allocator_spec.rs`; L1 runtime kept |
 | `sched/interrupt` | L1 | Vector firewall + VM-entry pack; M3.9 GTIMER2 marker |
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
@@ -57,10 +58,11 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,512MiB)` @ 2M (M3.20); APIC unmapped by omission |
-| `vmx/*` | L0–L1 | Dual VMCS + credit sched G0↔G1 (M4.1); EPT3 + APIC + NOIRQ |
+| `vmx/*` | L0–L1 | 4 VMCS (G0 Linux + G1–G3 SHELL) + credit sched (M4.2) |
 | `memory/m4_2vm_gate` | L0 | Host artifact gate for dual-VMCS / dual-EPT path |
-| `sched/scheduler` | L0→L1-ish | Credit quantum + fair pick; M4.1 SCHED-OK |
+| `sched/scheduler` | L0→L1-ish | Credit quantum + fair pick; M4.1/M4.2 |
 | `sched/m4_sched_gate` | L0 | Host artifact gate for dual-VMCS scheduling |
+| `sched/m4_nvm_gate` | L0 | Host artifact gate for ≥4 concurrent guests |
 | Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
@@ -72,8 +74,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.2** ← next | `RAYNU-V-M4-NVM-OK` | 4+ concurrent Linux shells |
-| M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
+| **M4.3** ← next | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
 | M4.5 | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs blk/net |
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |

@@ -20,12 +20,18 @@ pub const M2_BRINGUP_GUEST_ID: u64 = 1;
 
 /// Guest id for the M4.0 second guest (G1) under a private EPT slab.
 pub const M4_GUEST1_ID: u64 = 2;
+/// M4.2 shell guests G2 / G3.
+pub const M4_GUEST2_ID: u64 = 3;
+pub const M4_GUEST3_ID: u64 = 4;
 
 /// COM1 marker when both G0 and G1 have latched SHELL under distinct EPT ownership.
 pub const M4_2VM_OK_MARKER: &str = "RAYNU-V-M4-2VM-OK";
 
 /// COM1 marker when G1 SHELL CPUID fires (M4.0).
 pub const M4_SHELL_G1_MARKER: &str = "RAYNU-V-M4-SHELL-G1";
+
+/// COM1 marker when ≥4 concurrent guests have progressed under the scheduler (M4.2).
+pub const M4_NVM_OK_MARKER: &str = "RAYNU-V-M4-NVM-OK";
 
 /// Max tracked 4K mappings in the bring-up registry (M3.8 multi-page bzImage).
 /// Under Kani, keep a tiny registry so CBMC can unwind `map` / `owner_of` loops.
@@ -34,8 +40,8 @@ const MAP_CAP: usize = 512;
 #[cfg(kani)]
 const MAP_CAP: usize = 8;
 
-/// Max identity ranges claimed for the precise EPT (M3.13).
-const RANGE_CAP: usize = 8;
+/// Max identity ranges claimed for the precise EPT (M3.13 / M4.2 multi-hole).
+const RANGE_CAP: usize = 16;
 
 /// Set when [`run_ownership_selftest`] succeeds (read on VMEXIT for marker order).
 static mut OWNERSHIP_SELFTEST_OK: bool = false;
@@ -306,46 +312,84 @@ pub fn claim_precise_identity_ranges() -> Result<(), EptError> {
 /// (M3.13/M3.20 behavior). When `g1_len > 0`, punches that HPA span out of G0
 /// and claims it for [`M4_GUEST1_ID`] (M4.0).
 pub fn claim_precise_with_guest1_hole(g1_hpa: u64, g1_len: u64) -> Result<(), EptError> {
+    if g1_len == 0 {
+        claim_precise_with_shell_holes(&[])
+    } else {
+        claim_precise_with_shell_holes(&[(g1_hpa, g1_len, M4_GUEST1_ID)])
+    }
+}
+
+/// Claim precise identity for G0 with zero or more private shell-guest HPA slabs.
+///
+/// Each hole is `(hpa, len, guest_id)`. Holes must be page-aligned, non-overlapping,
+/// inside `[0, PRECISE_BYTES)`, and above G0 guest e820 (when non-empty).
+pub fn claim_precise_with_shell_holes(holes: &[(u64, u64, u64)]) -> Result<(), EptError> {
     // SAFETY: single-threaded boot; called once before VMLAUNCH.
     unsafe {
         let ranges = core::ptr::addr_of_mut!(PRECISE_RANGES);
         *ranges = EptRangeMap::new();
 
-        if g1_len != 0 {
-            if (g1_hpa & 0xfff) != 0 || (g1_len & 0xfff) != 0 {
-                return Err(EptError::Invariant);
+        // Insertion-sort a tiny stack copy by HPA (≤3 shell holes for M4.2).
+        let mut ordered: [(u64, u64, u64); 8] = [(0, 0, 0); 8];
+        if holes.len() > ordered.len() {
+            return Err(EptError::Full);
+        }
+        for (i, h) in holes.iter().enumerate() {
+            ordered[i] = *h;
+        }
+        let n = holes.len();
+        for i in 1..n {
+            let mut j = i;
+            while j > 0 && ordered[j].0 < ordered[j - 1].0 {
+                ordered.swap(j, j - 1);
+                j -= 1;
             }
-            let g1_end = g1_hpa.checked_add(g1_len).ok_or(EptError::Invariant)?;
-            if g1_end > PRECISE_BYTES {
-                return Err(EptError::Invariant);
-            }
-            (*ranges).claim_range(M4_GUEST1_ID, g1_hpa, g1_len)?;
-            if g1_hpa > 0 {
-                (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, g1_hpa)?;
-            }
-            if g1_end < PRECISE_BYTES {
-                (*ranges).claim_range(M2_BRINGUP_GUEST_ID, g1_end, PRECISE_BYTES - g1_end)?;
-            }
-        } else {
-            (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, PRECISE_BYTES)?;
         }
 
-        // Guest RAM windows from e820/memmap are inside [0, PRECISE_BYTES).
         let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
         if guest_ram > PRECISE_BYTES {
             return Err(EptError::Invariant);
         }
-        // G1 private slab must sit above G0 guest e820 so Linux RAM stays G0-owned.
-        if g1_len != 0 && g1_hpa < guest_ram {
-            return Err(EptError::Invariant);
+
+        let mut cursor = 0u64;
+        for &(hpa, len, gid) in ordered.iter().take(n) {
+            if len == 0 || (hpa & 0xfff) != 0 || (len & 0xfff) != 0 {
+                return Err(EptError::Invariant);
+            }
+            if gid == 0 || gid == M2_BRINGUP_GUEST_ID {
+                return Err(EptError::InvalidGuest);
+            }
+            let end = hpa.checked_add(len).ok_or(EptError::Invariant)?;
+            if end > PRECISE_BYTES || hpa < cursor {
+                return Err(EptError::Invariant);
+            }
+            if hpa < guest_ram {
+                return Err(EptError::Invariant);
+            }
+            if hpa > cursor {
+                (*ranges).claim_range(M2_BRINGUP_GUEST_ID, cursor, hpa - cursor)?;
+            }
+            (*ranges).claim_range(gid, hpa, len)?;
+            cursor = end;
         }
+        if cursor < PRECISE_BYTES {
+            (*ranges).claim_range(M2_BRINGUP_GUEST_ID, cursor, PRECISE_BYTES - cursor)?;
+        } else if n == 0 {
+            (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, PRECISE_BYTES)?;
+        }
+
         if !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0)
             || !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, guest_ram - 0x1000)
         {
             return Err(EptError::Invariant);
         }
-        if g1_len != 0 && !(*ranges).contains_gpa(M4_GUEST1_ID, g1_hpa) {
-            return Err(EptError::Invariant);
+        for &(hpa, _, gid) in ordered.iter().take(n) {
+            if !(*ranges).contains_gpa(gid, hpa) {
+                return Err(EptError::Invariant);
+            }
+            if (*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, hpa) {
+                return Err(EptError::Invariant);
+            }
         }
         // APIC MMIO must remain outside claimed/mapped precise window.
         if ept_hw::PRECISE_BYTES > crate::arch::apic::DEFAULT_APIC_PHYS {
