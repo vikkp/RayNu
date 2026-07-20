@@ -1,6 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.2 closed on Latitude; next platform gate is **M4.3** (virtio-blk).  
+**Status:** **open** — M4.3 in progress (virtio-blk → `RAYNU-V-M4-BLK-OK`).  
+**Prior:** M4.2 closed on Latitude (`RAYNU-V-M4-NVM-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -115,17 +116,19 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.3 — Virtio-blk (guest disk) — `RAYNU-V-M4-BLK-OK`
 
-**Status: open** ← next
+**Status: in progress** ← current
 
 **Goal:** Guest root or data disk via Virtio-blk (or documented equivalent); guest can read/write without host COM1 crutches.
 
+**Accepted MV (this gate):** virtio-mmio over an EPT hole + bare-metal probe guest. On `DRIVER_OK` the host write+readbacks an in-memory disk image (FrameAllocator-backed, not guest-exclusive) and latches `RAYNU-V-M4-BLK-OK`. Full Linux root-on-virtio is later polish — not required to close M4.3.
+
 **Acceptance sketch:**
 
-1. Implement beyond `devices/` stub; MMIO/PIO exit path + config.
-2. Latitude: guest marker after successful block I/O (e.g. write+readback or mount).
-3. Frames backing the disk image stay outside guest-exclusive RAM ownership (or are explicitly modeled).
+1. Implement beyond `devices/` stub; MMIO exit path + config (`devices/virtio_blk.rs`).
+2. Latitude: marker after successful block I/O (write+readback on `DRIVER_OK`).
+3. Frames backing the disk image stay outside guest-exclusive RAM ownership (allocator pool).
 
-**Likely files:** `devices/` (virtio-blk), `vmx/` exit handlers, assets/disk if needed.
+**Likely files:** `devices/virtio_blk.rs`, `vmx/launch.rs`, `vmx/mmio_decode.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.4 — Virtio-net + minimal vSwitch — `RAYNU-V-M4-NET-OK`
 
@@ -263,4 +266,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.2 closed** on Latitude (`RAYNU-V-M4-NVM-OK`). Multi-guest spine is real — Track B (**M4.3** virtio-blk) and Track C proof may proceed. Next: **M4.3** on branch `cursor/m4-3-blk-a623`.
+**M4.3 in progress** on branch `cursor/m4-3-blk-a623` (`RAYNU-V-M4-BLK-OK`). Do not start M4.4 until Latitude is green.

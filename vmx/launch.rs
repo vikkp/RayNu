@@ -31,6 +31,7 @@
 //! M4.0: after G0 SHELL+APIC, VMLAUNCH G1 under private EPT → `RAYNU-V-M4-2VM-OK`.
 //! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
 //! M4.2: scale to G0+G1+G2+G3 (≥4) → `RAYNU-V-M4-NVM-OK`.
+//! M4.3: after NVM-OK, virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -46,6 +47,7 @@ use crate::devices::serial_pio::{
     self, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER, M3_LINUX_EARLY_OK_MARKER, M3_SHELL_OK_MARKER,
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
+use crate::devices::virtio_blk::{self, M4_BLK_OK_MARKER};
 
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
@@ -223,6 +225,13 @@ static mut SCHED_SLICE: [bool; M4_NVM_GUEST_SLOTS] = [false; M4_NVM_GUEST_SLOTS]
 static mut SCHED_OK_LATCHED: bool = false;
 static mut TWO_VM_LATCHED: bool = false;
 
+/// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
+static mut BLK_PROBE_FRAMES: Option<LaunchFrames> = None;
+static mut HAS_BLK_PROBE: bool = false;
+static mut BLK_PROBE_MODE: bool = false;
+/// Guest id for the blk probe VMCS (not part of the G0–G3 scheduler set).
+const M4_BLK_PROBE_GUEST_ID: u64 = 5;
+
 /// Per-guest GPR banks (SAVED_* is the live working set for the active guest).
 #[derive(Clone, Copy)]
 struct GuestGprBank {
@@ -305,6 +314,15 @@ pub fn set_shell_guest(slot: usize, frames: LaunchFrames) {
 /// Register G1 (M4.0 compatibility wrapper).
 pub fn set_second_guest(frames: LaunchFrames) {
     set_shell_guest(1, frames);
+}
+
+/// Register the M4.3 virtio-blk probe guest (launched after NVM-OK).
+pub fn set_blk_probe(frames: LaunchFrames) {
+    // SAFETY: single-threaded boot before first VMLAUNCH.
+    unsafe {
+        BLK_PROBE_FRAMES = Some(frames);
+        HAS_BLK_PROBE = true;
+    }
 }
 
 /// Minimal IA-32e TSS size (SDM Vol. 3A §7.7) — enough for LTR / host TR.
@@ -1006,6 +1024,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
 
+    // M4.3: virtio-blk probe runs after NVM-OK (scheduler paused).
+    if BLK_PROBE_MODE {
+        handle_blk_probe_vmexit(basic, qual, guest_rax, guest_rip);
+    }
+
     // M4.1: credit scheduler owns both guests after 2VM-OK.
     if SCHED_MODE {
         handle_sched_vmexit(basic, qual, guest_rax, guest_rip);
@@ -1161,10 +1184,12 @@ unsafe fn handle_io_and_resume(qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
     vmresume_with_gprs();
 }
 
-/// Emulate APIC MMIO at the EPT hole (GPA 0xFEE00000).
+/// Emulate APIC MMIO (GPA 0xFEE00000) or virtio-blk BAR (M4.3).
 unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
-    if !(lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa) {
+    let is_apic = (lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa);
+    let is_virtio = virtio_blk::bar_contains(gpa);
+    if !is_apic && !is_virtio {
         serial::write_str("boot: ERROR — EPT violation GPA=0x");
         write_hex_u64(gpa);
         serial::write_str(" guest_id=");
@@ -1179,7 +1204,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     let guest_cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
     let mut insn = [0u8; 15];
     if guest_pt::copy_from_guest_va(guest_cr3, guest_rip, &mut insn).is_err() {
-        serial::write_line("boot: ERROR — APIC MMIO insn fetch (guest PT walk)");
+        serial::write_line("boot: ERROR — MMIO insn fetch (guest PT walk)");
         serial::write_str("boot: guest cr3=0x");
         write_hex_u64(guest_cr3);
         serial::write_str(" rip=0x");
@@ -1189,7 +1214,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         finish_boot(false);
     }
     let Some(mov) = mmio_decode::decode_mov_mmio(&insn) else {
-        serial::write_line("boot: ERROR — APIC MMIO undecoded insn");
+        serial::write_line("boot: ERROR — MMIO undecoded insn");
         serial::write_str("boot: insn=");
         for &b in insn.iter().take(8) {
             let hi = b >> 4;
@@ -1203,7 +1228,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         finish_boot(false);
     };
     if mov.is_write != is_write {
-        serial::write_line("boot: WARN — APIC mov direction ≠ EPT qual");
+        serial::write_line("boot: WARN — MMIO mov direction ≠ EPT qual");
     }
     // Intel GPR order in ModRM: RAX RCX RDX RBX RSP RBP RSI RDI R8…R15
     let mut gprs = [
@@ -1224,7 +1249,12 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         SAVED_GUEST_R14,
         SAVED_GUEST_R15,
     ];
-    if mmio_decode::apply_apic_mov(mov, gpa, &mut gprs).is_err() {
+    if is_virtio {
+        if mmio_decode::apply_virtio_mov(mov, gpa, &mut gprs).is_err() {
+            serial::write_line("boot: ERROR — virtio-blk MMIO apply failed");
+            finish_boot(false);
+        }
+    } else if mmio_decode::apply_apic_mov(mov, gpa, &mut gprs).is_err() {
         serial::write_line("boot: ERROR — APIC MMIO apply failed");
         finish_boot(false);
     }
@@ -1243,15 +1273,23 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     SAVED_GUEST_R13 = gprs[13];
     SAVED_GUEST_R14 = gprs[14];
     SAVED_GUEST_R15 = gprs[15];
-    emit_lapic_markers();
-    if lapic_virt::host_timer_armed_for_guest() {
-        let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+    if is_virtio {
+        if virtio_blk::take_blk_ok_latch() {
+            serial::write_line(M4_BLK_OK_MARKER);
+        }
+    } else {
+        emit_lapic_markers();
+        if lapic_virt::host_timer_armed_for_guest() {
+            let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, LINUX_TICK_COUNT);
+        }
     }
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(mov.len as u64));
-    if try_inject_guest_apic_timer() {
-        vmresume_with_gprs();
+    if !is_virtio {
+        if try_inject_guest_apic_timer() {
+            vmresume_with_gprs();
+        }
+        maybe_arm_interrupt_window_for_apic();
     }
-    maybe_arm_interrupt_window_for_apic();
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     vmresume_with_gprs();
 }
@@ -1404,6 +1442,9 @@ fn note_sched_slice(slot: usize) {
                 serial::write_line(
                     "boot: M4.2 complete — ≥4 concurrent guests under credit scheduler",
                 );
+                if HAS_BLK_PROBE {
+                    try_launch_blk_probe();
+                }
                 finish_boot(true);
             }
         } else if SCHED_OK_LATCHED {
@@ -1676,6 +1717,102 @@ fn launch_err_name(e: LaunchError) -> &'static str {
 /// M4.0 compatibility: launch G1.
 unsafe fn try_launch_second_guest() -> ! {
     launch_shell_guest(1);
+}
+
+/// M4.3: after NVM-OK, VMLAUNCH the virtio-blk probe guest (G0 EPTP + host CR3).
+unsafe fn try_launch_blk_probe() -> ! {
+    let frames = match core::ptr::addr_of!(BLK_PROBE_FRAMES).read() {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — blk probe frames missing");
+            finish_boot(false);
+        }
+    };
+    SCHED_MODE = false;
+    BLK_PROBE_MODE = true;
+    ACTIVE_GUEST_ID = M4_BLK_PROBE_GUEST_ID;
+    REAL_LINUX_GUEST = false;
+    LINUX_GTIMER2_DONE = false;
+    LINUX_GTIMER2_ARMED = false;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
+
+    serial::write_line("boot: M4.3 — launching virtio-blk probe guest");
+
+    apic::mask_pic();
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    ept_hw::invept_global();
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — blk probe VMCS prepare failed");
+        finish_boot(false);
+    }
+    if ops::vmclear(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — blk probe VMCLEAR failed");
+        finish_boot(false);
+    }
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — blk probe VMCS re-prepare failed");
+        finish_boot(false);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: ERROR — blk probe setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        finish_boot(false);
+    }
+
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+
+    serial::write_line("boot: VMLAUNCH → virtio-blk status probe");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — blk probe VMLAUNCH returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — blk probe VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+/// Exit path for the M4.3 virtio-blk probe guest.
+unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    match basic {
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            let _ = apic::mask_timer();
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
+        EXIT_REASON_IO_INSTRUCTION => handle_io_and_resume(qual, guest_rax, guest_rip),
+        EXIT_REASON_HLT => {
+            if virtio_blk::blk_ok() {
+                if virtio_blk::take_blk_ok_latch() {
+                    serial::write_line(M4_BLK_OK_MARKER);
+                }
+                serial::write_line(
+                    "boot: M4.3 complete — virtio-blk MMIO handshake + write/readback",
+                );
+                finish_boot(true);
+            }
+            serial::write_line("boot: ERROR — blk probe HLT without DRIVER_OK readback");
+            finish_boot(false);
+        }
+        _ => {
+            serial::write_str("boot: ERROR — blk probe unhandled exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
 }
 
 /// Deliver a pending virtual APIC IRR vector when the guest can accept it.
@@ -2626,7 +2763,9 @@ fn finish_boot(ok: bool) -> ! {
 
     if ok {
         // SAFETY: boot single-threaded; flags set before / during guest path.
-        if unsafe { SCHED_MODE } {
+        if unsafe { BLK_PROBE_MODE } {
+            serial::write_line("boot: M4.3 complete — virtio-blk path OK");
+        } else if unsafe { SCHED_MODE } {
             serial::write_line("boot: M4.2 complete — multi-guest sched path OK");
         } else if unsafe { SECOND_GUEST_STARTED } {
             serial::write_line("boot: M4.0 complete — dual VMCS path OK");

@@ -74,7 +74,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.3** ← next | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
+| **M4.3** ← active | `RAYNU-V-M4-BLK-OK` | Virtio-blk MMIO + write/readback |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
 | M4.5 | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs blk/net |
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
