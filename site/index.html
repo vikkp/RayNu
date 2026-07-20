@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. First true L3: scoped EPT exclusivity machine-checked (RAYNU-V-M3-L3-VERIFY-OK)."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. Post-shell harden closed through M3.22: true L3, refine, NOIRQ, tight EPT, Kani, PE assets."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. First true L3: scoped EPT exclusivity machine-checked. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M3.22 closed — true L3, refine, real Linux, PE assets. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,23 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M3.17: true L3.</h2>
+          <h2 class="section__title">M0 → M3.22 closed.</h2>
           <p class="section__lede">
-            First machine-checked exclusivity proof on the frozen Verus pin —
-            4K single-guest map/unmap, <strong>no admit</strong> — latched by
-            <code>RAYNU-V-M3-L3-VERIFY-OK</code>. That is
-            <strong>ADR-006 L3</strong> for the ghost model; live
-            <code>EptMap</code> stays L2 until refinement.
+            Real Linux under EPT, scoped true L3 + refine, faithful APIC, no
+            IRQ4 crutch, tight <code>[0,512MiB)</code> EPT, hard-fail Kani, and
+            PE-embedded kernel/initrd — latched by
+            <code>RAYNU-V-M3-ASSETS-OK</code> on Latitude.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-L3-VERIFY-OK
-==> Verus L3-verify smoke PASSED (M3.17)
-# cargo verus verify -p ept_model → 13 verified, 0 errors (no admit)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-ASSETS-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M3-L3-REFINE-OK
+==> Boot gate PASSED (M0 → M3.22; qemu status=33)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M3.17: how we got here</h2>
+          <h2 class="section__title">M1.0 → M3.22: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -177,10 +177,23 @@
                   >
                 </li>
                 <li>
-                  <span class="journey__gate">M3.17</span>
+                  <span class="journey__gate">M3.17–M3.18</span>
                   <span class="journey__text"
-                    >True L3 verify →
-                    <code>RAYNU-V-M3-L3-VERIFY-OK</code></span
+                    >True L3 verify + ghost↔exec refine</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.19–M3.20</span>
+                  <span class="journey__text"
+                    >NOIRQ policy + tight EPT
+                    <code>[0,512MiB)</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.21–M3.22</span>
+                  <span class="journey__text"
+                    >Hard-fail Kani + PE
+                    <code>.askern</code>/<code>.asinit</code> embed</span
                   >
                 </li>
               </ol>
@@ -260,19 +273,19 @@
               conditions are written (with runtime asserts + bounded Kani).
               <strong>L3</strong> means
               <code>cargo verus --verify</code> machine-checks those specs.
-              M3.14–M3.16 drafted, pinned, and linked the model.
-              <strong>M3.17</strong> discharged scoped exclusivity —
-              <code>13 verified, 0 errors</code>, no <code>admit</code> —
-              <strong>ADR-006 L3</strong> for the ghost model.
+              <strong>M3.17</strong> discharged scoped exclusivity;
+              <strong>M3.18</strong> refined ghost↔exec
+              <code>ConcreteEptMap</code> —
+              <code>22 verified, 0 errors</code>, no <code>admit</code>.
             </p>
           </div>
           <blockquote class="theorem" data-reveal>
             <p>
               Proven Core only. Scoped
-              <code>cargo verus --verify</code> on the frozen pin is green
-              for 4K single-guest exclusivity
-              (<code>RAYNU-V-M3-L3-VERIFY-OK</code>) — live EptMap refinement
-              remains ahead.
+              <code>cargo verus --verify</code> on the frozen pin is green for
+              4K single-guest exclusivity and concrete refine
+              (<code>RAYNU-V-M3-L3-VERIFY-OK</code> /
+              <code>RAYNU-V-M3-L3-REFINE-OK</code>).
             </p>
             <cite>ADR-002 · ADR-004 · ADR-006 · ADR-008</cite>
           </blockquote>
@@ -288,8 +301,9 @@
             We ship for the iron we verify on.
           </p>
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
-./tools/qemu-boot-test.sh
-./tools/verus-verify-smoke.sh   # true L3 → RAYNU-V-M3-L3-VERIFY-OK</code></pre>
+./tools/check-pe-assets.sh      # .askern / .asinit
+./tools/qemu-boot-test.sh       # M0 → M3.22
+./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
 
@@ -297,8 +311,9 @@
         <div class="section__inner">
           <h2 class="section__title">What’s next</h2>
           <p class="section__lede">
-            Post-shell harden through M3.22 is closed (L3, refine, NOIRQ,
-            tight EPT, Kani, PE assets). Next: M4 platform work.
+            Post-shell harden through M3.22 is closed. Next is
+            <strong>M4</strong> — N-guest / large-page / migration proofs and
+            platform scale-out on the iron we verify on.
           </p>
           <div class="cta">
             <a class="cta__primary" href="https://github.com/vikkp/RayNu"
