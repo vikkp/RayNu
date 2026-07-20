@@ -281,4 +281,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAY
 
 ## First action
 
-Draft accepted. Next: branch `cursor/m5-0-lifecycle-a623` and land **M5.0** (`RAYNU-V-M5-LIFE-OK`) — VM lifecycle surface over the M4 multi-guest spine.
+Draft accepted. **M5.0 closed** on host (`RAYNU-V-M5-LIFE-OK`). Next: **M5.1** (`RAYNU-V-M5-API-OK`) — CLI + REST over the lifecycle surface.
