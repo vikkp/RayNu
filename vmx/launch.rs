@@ -2233,8 +2233,10 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
-        // SAFETY: boot single-threaded; flag set before VMLAUNCH.
-        if unsafe { REAL_LINUX_GUEST } {
+        // SAFETY: boot single-threaded; flags set before / during guest path.
+        if unsafe { SECOND_GUEST_STARTED } {
+            serial::write_line("boot: M4.0 complete — dual VMCS path OK");
+        } else if unsafe { REAL_LINUX_GUEST } {
             if lapic_virt::apic_ok() && crate::memory::precise_ranges_ok() {
                 serial::write_line(
                     "boot: M3.19 complete — no ISA IRQ crutches + precise EPT + APIC + SHELL OK",
