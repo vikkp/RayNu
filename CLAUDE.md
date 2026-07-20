@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M5.6 closed** (Dell Tier‑1 → `RAYNU-V-M5-IDRAC-OK`). Active: **M5.7** (large-page L3 → `RAYNU-V-M5-LPAGE-VERIFY-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
+**Through M5.7 closed** (large-page L3 → `RAYNU-V-M5-LPAGE-VERIFY-OK`; iDRAC Tier‑1 → `RAYNU-V-M5-IDRAC-OK`). Active: **M5.8** (NUMA in ghost spec). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
 
 ### Risk Hotspots
 

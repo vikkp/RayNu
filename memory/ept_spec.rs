@@ -60,7 +60,9 @@
 //!   `RAYNU-V-M4-NGUEST-VERIFY-OK` (`lemma_two_guests_map_distinct_frames_exclusive`).
 //! TODO(M4.8 CLOSED): large pages (2M/1G) in ghost *spec* — `GhostPageSize` /
 //!   `large_map_enabled` / `frames_covered` in `ept_model` → `RAYNU-V-M4-LPAGE-OK`.
-//!   Large-page L3 discharge remains M5.
+//! TODO(M5.7 CLOSED): large-page L3 — `theorem_large_page_map_unmap_exclusive` /
+//!   `lemma_2m_map_unmap_exclusive` / `lemma_1g_map_unmap_exclusive` (no `admit`) →
+//!   `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 //! TODO(M4.9 CLOSED): N-guest ghost↔exec refine — `theorem_concrete_n_guest_4k_refine`
 //!   + `lemma_concrete_two_guests_map_refines` → `RAYNU-V-M4-REFINE-OK`.
 //!   HW PTE identity correspondence and deeper allocator↔EPT L3 coupling remain M5.
@@ -72,6 +74,6 @@
 //! (`large_span_free`) and GPA/base are leaf-aligned. On Ok, every frame in the
 //! span is exclusively owned by `guest` (`large_map_post_owned`). Live `EptMap`
 //! remains per-4K; HW large leaves are built by `ept_hw` (M3.20). L3 for these
-//! posts is M5.
+//! posts is closed in M5.7 (`theorem_large_page_map_unmap_exclusive`).
 
 #![allow(dead_code)]

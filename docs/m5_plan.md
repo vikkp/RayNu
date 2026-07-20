@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.6 closed on Latitude (Track A+B + migrate + Dell Tier‑1); next critical for M5 close is **M5.7** (large-page L3).  
-**Prior:** M5.6 closed on Latitude (`RAYNU-V-M5-IDRAC-OK`).  
+**Status:** **open** — M5.0–M5.7 closed on Latitude (Track A+B + migrate + Dell Tier‑1 + large-page L3); next **M5.8** NUMA.  
+**Prior:** M5.7 closed on Latitude (`RAYNU-V-M5-LPAGE-VERIFY-OK`); M5.6 closed (`RAYNU-V-M5-IDRAC-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -170,17 +170,21 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.7 — Large-page L3 discharge — `RAYNU-V-M5-LPAGE-VERIFY-OK`
 
-**Status: open** ← next (host-first; **M5 proof exit criterion**)
+**Status: closed** (Latitude `./tools/verus-lpage-verify-smoke.sh` → `RAYNU-V-M5-LPAGE-VERIFY-OK`; `47 verified, 0 errors`)
+(**M5 proof exit criterion** — met)
 
 **Goal:** Green `cargo verus verify -p ept_model` for large-page (2M/1G) map/unmap exclusivity — **no `admit`**. Closes `GAP: Large-page L3 discharge`.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Theorems for large-page span exclusivity; marker `RAYNU-V-M5-LPAGE-VERIFY-OK`.
-2. CI hard-fail job (same pattern as M4.7).
-3. Live path may keep 4K registry + HW large leaves; full HW correspondence is M5.9 / M6.
+1. `ghost_large_map` / `ghost_large_unmap` + `theorem_large_page_map_unmap_exclusive`,
+   `lemma_2m_map_unmap_exclusive`, `lemma_1g_map_unmap_exclusive`,
+   `lemma_two_guests_large_map_distinct_spans_exclusive` in `ept_model` (no `admit`).
+2. `GAP(CLOSED M5.7)` in `ept_proof.rs`; `TODO(M5.7 CLOSED)` in `ept_spec.rs`.
+3. Host gate `memory/m5_lpage_verify_gate.rs` + `tools/verus-lpage-verify-smoke.sh` + CI `verus-lpage-verify`.
+4. Live path may keep 4K registry + HW large leaves; full HW correspondence is M5.9 / M6.
 
-**Likely files:** `ept_model/`, `memory/ept_proof.rs`, verify smoke, CI, ADR-004 / ADR-006.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 
 ### M5.8 — NUMA in ghost spec — `RAYNU-V-M5-NUMA-OK`
 
@@ -285,4 +289,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-**M5.0–M5.6 closed** on Latitude (incl. migrate + iDRAC). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`).
+**M5.0–M5.7 closed** on Latitude (incl. migrate + iDRAC + large-page L3). Next: **M5.8** (`RAYNU-V-M5-NUMA-OK`). NUMA + ALLOC-REFINE remain for full M5 close (or ADR waiver).

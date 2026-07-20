@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M5.5 closed: multi-guest platform, N-guest L3, mgmt plane, audit reports, VMware import."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M5.7 closed: multi-guest platform, N-guest + large-page L3, mgmt plane, audit reports, VMware import, Dell Tier-1 iDRAC."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M5.5 closed — multi-guest platform, N-guest L3, lifecycle/API/Web UI, audit reports, VMware import. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M5.7 closed — multi-guest platform, N-guest + large-page L3, lifecycle/API/Web UI, audit reports, VMware import, Dell Tier-1. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,27 +60,25 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M5.5 closed.</h2>
+          <h2 class="section__title">M0 → M5.7 closed.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT, N-guest L3 + refine, ops spine
+            Multi-guest platform under EPT, N-guest + large-page L3, ops spine
             (lifecycle, CLI/REST, Web UI), tamper-evident audit + SOX/ISO
-            reports, and one-command VMware inventory import (≥10 guests) —
-            <code>RAYNU-V-M5-MIGRATE-OK</code> on host. Next critical for M5
-            close: M5.7 (large-page L3 verify).
+            reports, VMware inventory import, and Dell Tier‑1 iDRAC health —
+            <code>RAYNU-V-M5-LPAGE-VERIFY-OK</code> on host
+            (<code>47 verified, 0 errors</code>). Next: M5.8 (NUMA in ghost
+            spec).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M5-LIFE-OK
-RAYNU-V-M5-API-OK
-RAYNU-V-M5-WEBUI-OK
-RAYNU-V-M5-AUDIT-OK
-RAYNU-V-M5-REPORT-OK
-RAYNU-V-M5-MIGRATE-OK
-==> M5.5 migrate smoke PASSED</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M5-IDRAC-OK
+RAYNU-V-M5-LPAGE-VERIFY-OK
+==> M5.6 idrac smoke PASSED
+==> Verus large-page L3-verify smoke PASSED (M5.7)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M5.5: how we got here</h2>
+          <h2 class="section__title">M1.0 → M5.7: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -324,6 +322,20 @@ RAYNU-V-M5-MIGRATE-OK
                     <code>RAYNU-V-M5-MIGRATE-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M5.6</span>
+                  <span class="journey__text"
+                    >Dell Tier‑1 mock Redfish + SMBIOS/ACPI topology →
+                    <code>RAYNU-V-M5-IDRAC-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.7</span>
+                  <span class="journey__text"
+                    >Large-page (2M/1G) L3 verify — no admit →
+                    <code>RAYNU-V-M5-LPAGE-VERIFY-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -431,7 +443,8 @@ RAYNU-V-M5-MIGRATE-OK
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
 ./tools/qemu-boot-test.sh       # M0 → M4.5
-./tools/m5-migrate-smoke.sh     # M5.5 → RAYNU-V-M5-MIGRATE-OK
+./tools/m5-idrac-smoke.sh       # M5.6 → RAYNU-V-M5-IDRAC-OK
+./tools/verus-lpage-verify-smoke.sh # M5.7 → RAYNU-V-M5-LPAGE-VERIFY-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -444,8 +457,8 @@ RAYNU-V-M5-MIGRATE-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M5.5 is closed (mgmt + audit reports + VMware import); next critical
-            for M5 close is <strong>M5.7</strong> (large-page L3 verify).
+            M0→M5.7 is closed (mgmt + audit + VMware import + iDRAC + large-page
+            L3); next is <strong>M5.8</strong> (NUMA in ghost spec).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

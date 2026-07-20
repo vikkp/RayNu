@@ -62,7 +62,8 @@ pub fn ept_spec_closes_lpage_todo() -> bool {
     spec.contains("TODO(M4.8 CLOSED): large pages")
         && spec.contains("large_map_enabled")
         && proof.contains("GAP(CLOSED M4.8): Large pages")
-        && proof.contains("GAP: Large-page L3 discharge")
+        && (proof.contains("GAP: Large-page L3 discharge")
+            || proof.contains("GAP(CLOSED M5.7): Large-page L3 discharge"))
 }
 
 /// True when the large-page-spec smoke script is present.

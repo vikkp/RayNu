@@ -71,6 +71,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/verus-verify-smoke.sh      # true L3, no admit → RAYNU-V-M3-L3-VERIFY-OK
 ./tools/verus-refine-smoke.sh      # ghost↔exec refine → RAYNU-V-M3-L3-REFINE-OK
 ./tools/m5-idrac-smoke.sh          # Dell Tier-1 mock → RAYNU-V-M5-IDRAC-OK
+./tools/verus-lpage-verify-smoke.sh # large-page L3 → RAYNU-V-M5-LPAGE-VERIFY-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

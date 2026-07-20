@@ -49,8 +49,9 @@ if ! grep -q 'GAP(CLOSED M4.8): Large pages' "$ROOT/memory/ept_proof.rs"; then
   echo "error: ept_proof must close GAP Large pages for M4.8 (spec)" >&2
   exit 1
 fi
-if ! grep -q 'GAP: Large-page L3 discharge' "$ROOT/memory/ept_proof.rs"; then
-  echo "error: ept_proof must leave Large-page L3 discharge open for M5" >&2
+# M4.8 historically left L3 open; M5.7 closes it. Accept either form.
+if ! grep -qE 'GAP(: |\(CLOSED M5\.7\): )Large-page L3 discharge' "$ROOT/memory/ept_proof.rs"; then
+  echo "error: ept_proof must document Large-page L3 discharge (open or CLOSED M5.7)" >&2
   exit 1
 fi
 if ! grep -q 'TODO(M4.8 CLOSED): large pages' "$ROOT/memory/ept_spec.rs"; then
