@@ -24,6 +24,7 @@
 //! M3.13/M3.20: precise EPT `[0,512MiB)` + range claims (`EPT2`/`EPT3`).
 //! M3.22: PE `.askern`/`.asinit` embed prefer + ESP fallback (`ASSETS-OK`).
 //! M4.0: second guest under private 2 MiB EPT slab → `RAYNU-V-M4-2VM-OK`.
+//! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
 
 #![no_main]
 #![no_std]
