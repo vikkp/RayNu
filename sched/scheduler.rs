@@ -73,7 +73,7 @@ impl CreditScheduler {
             }
             match best {
                 None => best = Some((id, c)),
-                Some((bid, bc)) if c > bc => best = Some((id, c)),
+                Some((_, bc)) if c > bc => best = Some((id, c)),
                 Some((bid, bc)) if c == bc => {
                     // Tie: prefer switching away from the current vCPU.
                     if prefer_not == Some(bid) {
