@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0 closed on host; next is **M5.1** (CLI + REST).  
-**Prior:** M5.0 closed on host (`RAYNU-V-M5-LIFE-OK`).  
+**Status:** **open** — M5.0 closed on Latitude; next is **M5.1** (CLI + REST).  
+**Prior:** M5.0 closed on Latitude (`RAYNU-V-M5-LIFE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -60,7 +60,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.0 — VM lifecycle API — `RAYNU-V-M5-LIFE-OK`
 
-**Status: closed** (host `./tools/m5-life-smoke.sh` → `RAYNU-V-M5-LIFE-OK`)
+**Status: closed** (Latitude `./tools/m5-life-smoke.sh` → `RAYNU-V-M5-LIFE-OK`)
 
 **Goal:** Create / start / stop / destroy guests through a durable lifecycle surface (`mgmt/`), not only hardcoded bring-up in `src/main.rs`. Stubs already exist (`mgmt::VmLifecycle`); this gate makes them real against the M4 multi-guest spine.
 
@@ -71,7 +71,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 3. Host gate `mgmt/m5_life_gate.rs` + `tools/m5-life-smoke.sh` + CI `m5-life`.
 4. Live VMLAUNCH path remains in `src/main.rs` / `vmx/launch.rs` — mgmt is the durable ops surface for M5.1+.
 
-**Acceptance (met):** Host smoke + gate → `RAYNU-V-M5-LIFE-OK`. Does not require Web UI or REST (M5.1 / M5.2).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-LIFE-OK`. Does not require Web UI or REST (M5.1 / M5.2).
 
 **Files:** `mgmt/mod.rs`, `mgmt/m5_life_gate.rs`, `audit/integrity.rs`, `tools/m5-life-smoke.sh`, `.github/workflows/ci.yml`.
 
@@ -281,4 +281,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAY
 
 ## First action
 
-Draft accepted. **M5.0 closed** on host (`RAYNU-V-M5-LIFE-OK`). Next: **M5.1** (`RAYNU-V-M5-API-OK`) — CLI + REST over the lifecycle surface.
+Draft accepted. **M5.0 closed** on Latitude (`RAYNU-V-M5-LIFE-OK`). Next: **M5.1** (`RAYNU-V-M5-API-OK`) — CLI + REST over the lifecycle surface.
