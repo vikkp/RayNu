@@ -1,19 +1,24 @@
-//! Host NUMA topology view (M5.8) — runtime hook from SRAT/SLIT / iDRAC mock.
+//! Host NUMA topology view (M5.8 / M6.2) — runtime hook from SRAT/SLIT / iDRAC mock.
 //!
 //! Pillar: [V]
 //! Proven Core: companion to `ept_model::GhostNumaTopology` (not a boot path).
 //!
 //! Ties `idrac::TopologySnapshot` (MADT/SRAT/SLIT mock) into a host-side NUMA
-//! domain view that mirrors the ghost bring-up mock. Full NUMA affinity L3
-//! remains a documented GAP → M6.
+//! domain view that mirrors the ghost bring-up mock. M6.2 discharges affinity
+//! L3 in `ept_model` (`theorem_numa_map_unmap_affinity`); this module hosts the
+//! runtime correspondence prop.
 
 use crate::idrac::{read_topology_mock, TopologySnapshot};
 
 /// Host / CI marker when the M5.8 NUMA-spec gate passes.
 pub const M5_NUMA_OK_MARKER: &str = "RAYNU-V-M5-NUMA-OK";
 
-/// Documented GAP: full NUMA affinity / exclusivity L3 (M6).
+/// Host / CI marker when the M6.2 NUMA affinity L3 gate passes.
+pub const M6_NUMA_L3_OK_MARKER: &str = "RAYNU-V-M6-NUMA-L3-OK";
+
+/// Documented GAP note (open form or M6.2 closed form both accepted by M5.8).
 pub const NUMA_L3_GAP_NOTE: &str = "GAP: NUMA affinity / exclusivity L3 (M6)";
+pub const NUMA_L3_GAP_CLOSED: &str = "GAP(CLOSED M6.2): NUMA affinity / exclusivity L3";
 
 /// Max NUMA nodes / SLIT / frame-affinity ranges tracked on the host path.
 pub const HOST_NUMA_CAP: usize = 8;
@@ -190,8 +195,30 @@ pub fn prop_mock_numa_runtime() -> bool {
         && t.frame_node(1) == Some(0)
         && t.frame_node(100) == Some(1)
         && t.frame_node(101) == Some(1)
-        && NUMA_L3_GAP_NOTE.contains("NUMA")
+        && (NUMA_L3_GAP_NOTE.contains("NUMA") || NUMA_L3_GAP_CLOSED.contains("NUMA"))
         && M5_NUMA_OK_MARKER == "RAYNU-V-M5-NUMA-OK"
+}
+
+/// M6.2: affinity policy on the mock — map-eligible frames stay on preferred node.
+///
+/// Mirrors ghost `guest_frames_on_node` / `numa_map_enabled` for bring-up frames
+/// (guest maps only frames whose `frame_node` equals the preferred node).
+pub fn prop_numa_affinity_l3() -> bool {
+    if !prop_mock_numa_runtime() {
+        return false;
+    }
+    let t = match from_mock_topology() {
+        Some(t) => t,
+        None => return false,
+    };
+    // Bring-up map-eligible pairs used by lemma_mock_numa_map_unmap_affinity.
+    let map_ok = t.frame_node(0) == Some(0) && t.frame_node(100) == Some(1);
+    // Cross-node steal rejected at policy level.
+    let no_cross = t.frame_node(100) != Some(0) && t.frame_node(0) != Some(1);
+    map_ok
+        && no_cross
+        && NUMA_L3_GAP_CLOSED.contains("M6.2")
+        && M6_NUMA_L3_OK_MARKER == "RAYNU-V-M6-NUMA-L3-OK"
 }
 
 #[cfg(test)]

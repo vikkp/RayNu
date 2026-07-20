@@ -11,7 +11,7 @@
 //! map/unmap exclusivity (no `admit`) → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 //! M4.9 extends concrete refine to N guests (`theorem_concrete_n_guest_4k_refine`).
 //! M5.8 adds NUMA domains to the ghost *spec* (`GhostNumaTopology` / SRAT·SLIT
-//! bring-up mock) → `RAYNU-V-M5-NUMA-OK` (full NUMA affinity L3 → M6).
+//! bring-up mock) → `RAYNU-V-M5-NUMA-OK`.
 //! M5.9 couples the ghost frame pool with concrete EPT refine (`alloc_ept_refines`)
 //! and scoped precise-identity GPA==HPA correspondence → `RAYNU-V-M5-ALLOC-REFINE-OK`.
 //! M6.0 discharges EPT-violation handling under exclusivity
@@ -19,6 +19,9 @@
 //! M6.1 deepens HW PTE bit-decode for 2M identity leaves
 //! (`hw_2m_identity_leaf_ok` / `theorem_hw_2m_leaf_refines_identity`) →
 //! `RAYNU-V-M6-HWPTE-OK` (full multi-level walk → polish).
+//! M6.2 discharges NUMA affinity under map/unmap
+//! (`theorem_numa_map_unmap_affinity` / `guest_frames_on_node`) →
+//! `RAYNU-V-M6-NUMA-L3-OK`.
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -33,6 +36,7 @@
 //! - M5.9 alloc↔EPT refine: `RAYNU-V-M5-ALLOC-REFINE-OK` (via tools/verus-alloc-refine-smoke.sh)
 //! - M6.0 EPT-violation: `RAYNU-V-M6-EPTVIO-OK` (via tools/verus-eptvio-smoke.sh)
 //! - M6.1 HW PTE: `RAYNU-V-M6-HWPTE-OK` (via tools/verus-hwpte-smoke.sh)
+//! - M6.2 NUMA affinity L3: `RAYNU-V-M6-NUMA-L3-OK` (via tools/verus-numa-l3-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -1483,7 +1487,8 @@ pub proof fn lemma_1g_map_unmap_exclusive(
 }
 
 // ---------------------------------------------------------------------------
-// M5.8 — NUMA in ghost spec (SRAT / SLIT bring-up; affinity L3 → M6)
+// M5.8 — NUMA in ghost spec (SRAT / SLIT bring-up)
+// M6.2 — NUMA affinity L3 (`guest_frames_on_node` under map/unmap)
 // ---------------------------------------------------------------------------
 
 /// ACPI / SRAT-style NUMA node identifier.
@@ -1614,6 +1619,141 @@ pub proof fn lemma_numa_map_ok_exclusive(
         m.ghost_map(guest, gpa, frame).by_gpa[(guest, gpa)] == frame,
 {
     lemma_map_ok_exclusive(m, guest, gpa, frame);
+}
+
+/// Empty registry vacuously satisfies guest→node affinity.
+pub proof fn lemma_empty_guest_frames_on_node(
+    t: GhostNumaTopology,
+    guest: GuestId,
+    node: NumaNodeId,
+)
+    ensures
+        guest_frames_on_node(GhostEptMap::empty(), t, guest, node),
+{
+}
+
+/// M6.2: NUMA-aware map preserves exclusivity and establishes guest→node affinity.
+pub proof fn lemma_numa_map_establishes_affinity(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+    node: NumaNodeId,
+)
+    requires
+        exclusive_ownership(m),
+        guest_frames_on_node(m, t, guest, node),
+        numa_map_enabled(m, t, guest, gpa, frame, node),
+    ensures
+        exclusive_ownership(m.ghost_map(guest, gpa, frame)),
+        guest_frames_on_node(m.ghost_map(guest, gpa, frame), t, guest, node),
+        m.ghost_map(guest, gpa, frame).owned[frame] == guest,
+{
+    lemma_numa_map_ok_exclusive(m, t, guest, gpa, frame, node);
+    let m2 = m.ghost_map(guest, gpa, frame);
+    assert forall|f: FrameId|
+        #![auto]
+        m2.owned.dom().contains(f) && m2.owned[f] == guest implies t.frame_node.dom().contains(f)
+            && t.frame_node[f] == node
+    by {
+        if f == frame {
+            assert(t.frame_node.dom().contains(frame));
+            assert(t.frame_node[frame] == node);
+        } else {
+            assert(m.owned.dom().contains(f));
+            assert(m.owned[f] == guest);
+        }
+    };
+}
+
+/// M6.2: unmap preserves guest→node affinity (owned set shrinks).
+pub proof fn lemma_numa_unmap_preserves_affinity(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    gpa: Gpa,
+    node: NumaNodeId,
+)
+    requires
+        exclusive_ownership(m),
+        guest != 0,
+        page_aligned_4k(gpa),
+        m.by_gpa.dom().contains((guest, gpa)),
+        guest_frames_on_node(m, t, guest, node),
+    ensures
+        exclusive_ownership(m.ghost_unmap(guest, gpa)),
+        guest_frames_on_node(m.ghost_unmap(guest, gpa), t, guest, node),
+{
+    lemma_unmap_ok_exclusive(m, guest, gpa);
+    let m2 = m.ghost_unmap(guest, gpa);
+    assert forall|f: FrameId|
+        #![auto]
+        m2.owned.dom().contains(f) && m2.owned[f] == guest implies t.frame_node.dom().contains(f)
+            && t.frame_node[f] == node
+    by {
+        assert(m.owned.dom().contains(f));
+        assert(m.owned[f] == guest);
+    };
+}
+
+/// M6.2: map→unmap under NUMA affinity preserves exclusivity and affinity posts.
+pub proof fn theorem_numa_map_unmap_affinity(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+    node: NumaNodeId,
+)
+    requires
+        exclusive_ownership(m),
+        guest_frames_on_node(m, t, guest, node),
+        numa_map_enabled(m, t, guest, gpa, frame, node),
+    ensures
+        exclusive_ownership(m.ghost_map(guest, gpa, frame).ghost_unmap(guest, gpa)),
+        guest_frames_on_node(m.ghost_map(guest, gpa, frame), t, guest, node),
+        guest_frames_on_node(
+            m.ghost_map(guest, gpa, frame).ghost_unmap(guest, gpa),
+            t,
+            guest,
+            node,
+        ),
+{
+    lemma_numa_map_establishes_affinity(m, t, guest, gpa, frame, node);
+    let m2 = m.ghost_map(guest, gpa, frame);
+    assert(m2.by_gpa.dom().contains((guest, gpa)));
+    lemma_numa_unmap_preserves_affinity(m2, t, guest, gpa, node);
+}
+
+/// M6.2: bring-up mock — empty map + frame 0 on node 0 is NUMA-map-enabled and
+/// affinity-preserving through map→unmap.
+pub proof fn lemma_mock_numa_map_unmap_affinity()
+    ensures
+        ({
+            let t = mock_bringup_numa();
+            let m = GhostEptMap::empty();
+            numa_map_enabled(m, t, BRINGUP_GUEST, 0, 0, 0)
+                && guest_frames_on_node(m, t, BRINGUP_GUEST, 0)
+                && exclusive_ownership(
+                    m.ghost_map(BRINGUP_GUEST, 0, 0).ghost_unmap(BRINGUP_GUEST, 0),
+                )
+                && guest_frames_on_node(
+                    m.ghost_map(BRINGUP_GUEST, 0, 0).ghost_unmap(BRINGUP_GUEST, 0),
+                    t,
+                    BRINGUP_GUEST,
+                    0,
+                )
+        }),
+{
+    let t = mock_bringup_numa();
+    let m = GhostEptMap::empty();
+    lemma_empty_exclusive();
+    lemma_empty_guest_frames_on_node(t, BRINGUP_GUEST, 0);
+    lemma_mock_bringup_numa_facts();
+    assert(numa_well_formed(t));
+    assert(numa_map_enabled(m, t, BRINGUP_GUEST, 0, 0, 0));
+    theorem_numa_map_unmap_affinity(m, t, BRINGUP_GUEST, 0, 0, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -2112,3 +2252,5 @@ pub const M5_ALLOC_REFINE_OK_MARKER: &str = "RAYNU-V-M5-ALLOC-REFINE-OK";
 pub const M6_EPTVIO_OK_MARKER: &str = "RAYNU-V-M6-EPTVIO-OK";
 /// M6.1: Hardware EPT PTE bit-decode for 2M identity leaves (no `admit`).
 pub const M6_HWPTE_OK_MARKER: &str = "RAYNU-V-M6-HWPTE-OK";
+/// M6.2: NUMA affinity L3 under map/unmap (no `admit`).
+pub const M6_NUMA_L3_OK_MARKER: &str = "RAYNU-V-M6-NUMA-L3-OK";

@@ -65,7 +65,9 @@
 //!   `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 //! TODO(M5.8 CLOSED): NUMA in ghost spec — `GhostNumaTopology` / `numa_map_enabled` /
 //!   `mock_bringup_numa` (SRAT/SLIT bring-up) → `RAYNU-V-M5-NUMA-OK`.
-//!   Full NUMA affinity / exclusivity L3 remains M6.
+//! TODO(M6.2 CLOSED): NUMA affinity / exclusivity L3 —
+//!   `theorem_numa_map_unmap_affinity` / `guest_frames_on_node` →
+//!   `RAYNU-V-M6-NUMA-L3-OK`.
 //! TODO(M4.9 CLOSED): N-guest ghost↔exec refine — `theorem_concrete_n_guest_4k_refine`
 //!   + `lemma_concrete_two_guests_map_refines` → `RAYNU-V-M4-REFINE-OK`.
 //! TODO(M5.9 CLOSED): allocator↔EPT refine — `GhostFramePool` / `alloc_ept_refines` /
@@ -93,7 +95,8 @@
 //! distances. `numa_map_enabled` requires ordinary 4K map enablement plus frame
 //! affinity on the preferred node. Bring-up mock `mock_bringup_numa` matches
 //! `assets/idrac/mock_topology.txt` (2 nodes, local 10 / remote 21). Host runtime
-//! hook: `memory/numa.rs` ← `idrac::TopologySnapshot`. Affinity L3 → M6.
+//! hook: `memory/numa.rs` ← `idrac::TopologySnapshot`. Affinity L3 closed in M6.2
+//! (`theorem_numa_map_unmap_affinity`).
 //!
 //! # Allocator ↔ EPT refine (M5.9)
 //!
@@ -118,5 +121,11 @@
 //! identity-builder 2 MiB leaves refine `identity_leaf_ok` at the leaf base (and
 //! first covered 4 KiB frames). Runtime prop: `prop_hw_pte_identity_correspondence`.
 //! Full multi-level walk → polish.
+//!
+//! # NUMA affinity L3 (M6.2)
+//!
+//! `guest_frames_on_node` is the affinity policy post. Under `numa_map_enabled`,
+//! `theorem_numa_map_unmap_affinity` discharges that map→unmap preserves exclusivity
+//! and affinity. Runtime prop: `prop_numa_affinity_l3` in `memory/numa.rs`.
 
 #![allow(dead_code)]
