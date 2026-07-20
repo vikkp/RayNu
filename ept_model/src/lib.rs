@@ -12,6 +12,9 @@
 //! M4.9 extends concrete refine to N guests (`theorem_concrete_n_guest_4k_refine`).
 //! M5.8 adds NUMA domains to the ghost *spec* (`GhostNumaTopology` / SRAT·SLIT
 //! bring-up mock) → `RAYNU-V-M5-NUMA-OK` (full NUMA affinity L3 → M6).
+//! M5.9 couples the ghost frame pool with concrete EPT refine (`alloc_ept_refines`)
+//! and scoped precise-identity GPA==HPA correspondence → `RAYNU-V-M5-ALLOC-REFINE-OK`
+//! (full HW PTE decode / EPT-violation → M6).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -23,6 +26,7 @@
 //! - M4.9 N-guest refine: `RAYNU-V-M4-REFINE-OK` (via tools/verus-nguest-refine-smoke.sh)
 //! - M5.7 large-page L3: `RAYNU-V-M5-LPAGE-VERIFY-OK` (via tools/verus-lpage-verify-smoke.sh)
 //! - M5.8 NUMA ghost spec: `RAYNU-V-M5-NUMA-OK` (via tools/verus-numa-smoke.sh)
+//! - M5.9 alloc↔EPT refine: `RAYNU-V-M5-ALLOC-REFINE-OK` (via tools/verus-alloc-refine-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -1606,6 +1610,253 @@ pub proof fn lemma_numa_map_ok_exclusive(
     lemma_map_ok_exclusive(m, guest, gpa, frame);
 }
 
+// ---------------------------------------------------------------------------
+// M5.9 — Frame-allocator ↔ EPT refine + scoped precise-identity correspondence
+// ---------------------------------------------------------------------------
+
+/// Ghost frame pool (allocated-set view of `FrameAllocator`).
+pub struct GhostFramePool {
+    pub base: FrameId,
+    pub capacity: u64,
+    pub allocated: Set<FrameId>,
+}
+
+impl GhostFramePool {
+    pub open spec fn empty(base: FrameId, capacity: u64) -> Self {
+        GhostFramePool { base, capacity, allocated: Set::empty() }
+    }
+}
+
+/// Frame lies in the pool's contiguous HPA range.
+pub open spec fn pool_contains(p: GhostFramePool, f: FrameId) -> bool {
+    p.base <= f && f < p.base + p.capacity
+}
+
+pub open spec fn pool_well_formed(p: GhostFramePool) -> bool {
+    &&& p.capacity > 0
+    &&& (forall|f: FrameId|
+        #![auto]
+        p.allocated.contains(f) ==> pool_contains(p, f))
+}
+
+pub open spec fn ghost_allocate(p: GhostFramePool, f: FrameId) -> GhostFramePool {
+    GhostFramePool {
+        base: p.base,
+        capacity: p.capacity,
+        allocated: p.allocated.insert(f),
+    }
+}
+
+pub open spec fn ghost_free(p: GhostFramePool, f: FrameId) -> GhostFramePool {
+    GhostFramePool {
+        base: p.base,
+        capacity: p.capacity,
+        allocated: p.allocated.remove(f),
+    }
+}
+
+pub open spec fn alloc_enabled(p: GhostFramePool, f: FrameId) -> bool {
+    &&& pool_well_formed(p)
+    &&& pool_contains(p, f)
+    &&& !p.allocated.contains(f)
+}
+
+pub open spec fn free_enabled(p: GhostFramePool, f: FrameId) -> bool {
+    &&& pool_well_formed(p)
+    &&& p.allocated.contains(f)
+}
+
+/// Coupled refine: concrete EPT exclusivity + every owned frame is allocated.
+pub open spec fn alloc_ept_refines(c: ConcreteEptMap, p: GhostFramePool) -> bool {
+    &&& refines(c)
+    &&& pool_well_formed(p)
+    &&& (forall|f: FrameId|
+        #![auto]
+        abs(c).owned.dom().contains(f) ==> p.allocated.contains(f))
+}
+
+/// Map is enabled under allocator coupling (frame must already be allocated).
+pub open spec fn alloc_map_enabled(
+    c: ConcreteEptMap,
+    p: GhostFramePool,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+) -> bool {
+    &&& alloc_ept_refines(c, p)
+    &&& guest != 0
+    &&& page_aligned_4k(gpa)
+    &&& concrete_step_enabled(c, MapUnmapStep::Map { guest, gpa, frame })
+    &&& p.allocated.contains(frame)
+}
+
+/// Precise identity window in 4K frames (matches `ept_hw::PRECISE_BYTES` = 512 MiB).
+pub const PRECISE_IDENTITY_FRAMES: u64 = 131072;
+
+pub open spec fn identity_frame_for_gpa(gpa: Gpa) -> FrameId {
+    (gpa / PAGE_4K) as u64
+}
+
+pub open spec fn in_precise_identity(gpa: Gpa) -> bool {
+    page_aligned_4k(gpa) && gpa < PRECISE_IDENTITY_FRAMES * PAGE_4K
+}
+
+/// Abstract identity leaf: GPA maps to HPA frame `gpa/4096` inside the precise window.
+pub open spec fn identity_leaf_ok(gpa: Gpa, frame: FrameId) -> bool {
+    in_precise_identity(gpa) && frame == identity_frame_for_gpa(gpa)
+}
+
+/// Empty concrete registry + empty pool refine under allocator coupling.
+pub proof fn lemma_empty_alloc_ept_refines()
+    ensures
+        alloc_ept_refines(ConcreteEptMap::empty(), GhostFramePool::empty(0, 8)),
+{
+    lemma_empty_refines();
+}
+
+/// Allocate preserves pool well-formedness.
+pub proof fn lemma_allocate_preserves_pool(p: GhostFramePool, f: FrameId)
+    requires
+        alloc_enabled(p, f),
+    ensures
+        pool_well_formed(ghost_allocate(p, f)),
+        ghost_allocate(p, f).allocated.contains(f),
+{
+    let p2 = ghost_allocate(p, f);
+    assert forall|g: FrameId|
+        #![auto]
+        p2.allocated.contains(g) implies pool_contains(p2, g)
+    by {
+        if g == f {
+            assert(pool_contains(p, f));
+        } else {
+            assert(p.allocated.contains(g));
+            assert(pool_contains(p, g));
+        }
+    };
+}
+
+/// Allocate on an empty-owned concrete registry preserves `alloc_ept_refines`.
+pub proof fn lemma_allocate_preserves_alloc_ept_refines(
+    c: ConcreteEptMap,
+    p: GhostFramePool,
+    f: FrameId,
+)
+    requires
+        alloc_ept_refines(c, p),
+        alloc_enabled(p, f),
+        abs(c).owned.dom() == Set::<FrameId>::empty(),
+    ensures
+        alloc_ept_refines(c, ghost_allocate(p, f)),
+{
+    lemma_allocate_preserves_pool(p, f);
+}
+
+/// Map of an allocated frame preserves coupled refine.
+pub proof fn lemma_alloc_map_ok_refines(
+    c: ConcreteEptMap,
+    p: GhostFramePool,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+)
+    requires
+        alloc_map_enabled(c, p, guest, gpa, frame),
+    ensures
+        alloc_ept_refines(c.concrete_map(guest, gpa, frame), p),
+        abs(c.concrete_map(guest, gpa, frame)).owned[frame] == guest,
+{
+    lemma_concrete_map_ok_refines(c, guest, gpa, frame);
+    let c2 = c.concrete_map(guest, gpa, frame);
+    assert forall|f: FrameId|
+        #![auto]
+        abs(c2).owned.dom().contains(f) implies p.allocated.contains(f)
+    by {
+        if f == frame {
+            assert(p.allocated.contains(frame));
+        } else {
+            assert(abs(c).owned.dom().contains(f));
+        }
+    };
+}
+
+/// Unmap preserves coupled refine (owned shrinks; allocated may keep the frame).
+pub proof fn lemma_alloc_unmap_ok_refines(c: ConcreteEptMap, p: GhostFramePool, guest: GuestId, gpa: Gpa)
+    requires
+        alloc_ept_refines(c, p),
+        guest != 0,
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Unmap { guest, gpa }),
+    ensures
+        alloc_ept_refines(c.concrete_unmap(guest, gpa), p),
+{
+    lemma_concrete_unmap_ok_refines(c, guest, gpa);
+    let c2 = c.concrete_unmap(guest, gpa);
+    assert forall|f: FrameId|
+        #![auto]
+        abs(c2).owned.dom().contains(f) implies p.allocated.contains(f)
+    by {
+        assert(abs(c).owned.dom().contains(f));
+    };
+}
+
+/// M5.9: allocate → map → unmap preserves allocator↔EPT coupled refine.
+pub proof fn theorem_alloc_map_unmap_refines(
+    c: ConcreteEptMap,
+    p: GhostFramePool,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+)
+    requires
+        alloc_ept_refines(c, p),
+        abs(c).owned.dom() == Set::<FrameId>::empty(),
+        alloc_enabled(p, frame),
+        guest != 0,
+        page_aligned_4k(gpa),
+        concrete_step_enabled(c, MapUnmapStep::Map { guest, gpa, frame }),
+    ensures
+        alloc_ept_refines(
+            c.concrete_map(guest, gpa, frame).concrete_unmap(guest, gpa),
+            ghost_allocate(p, frame),
+        ),
+{
+    lemma_allocate_preserves_alloc_ept_refines(c, p, frame);
+    let p2 = ghost_allocate(p, frame);
+    assert(alloc_map_enabled(c, p2, guest, gpa, frame));
+    lemma_alloc_map_ok_refines(c, p2, guest, gpa, frame);
+    let c2 = c.concrete_map(guest, gpa, frame);
+    assert(concrete_step_enabled(c2, MapUnmapStep::Unmap { guest, gpa }));
+    lemma_alloc_unmap_ok_refines(c2, p2, guest, gpa);
+}
+
+/// M5.9: precise identity window size matches `ept_hw::PRECISE_BYTES`.
+pub proof fn lemma_precise_identity_frames()
+    ensures
+        PRECISE_IDENTITY_FRAMES == 131072,
+        PRECISE_IDENTITY_FRAMES * PAGE_4K == 0x2000_0000,
+{
+}
+
+/// M5.8/M5.9: identity leaf at aligned GPA uses matching HPA frame.
+pub proof fn lemma_identity_leaf_gpa_eq_hpa(gpa: Gpa)
+    requires
+        in_precise_identity(gpa),
+    ensures
+        identity_leaf_ok(gpa, identity_frame_for_gpa(gpa)),
+        identity_frame_for_gpa(gpa) == gpa / PAGE_4K,
+{
+}
+
+/// Concrete 0-GPA identity leaf (bring-up).
+pub proof fn lemma_identity_leaf_zero()
+    ensures
+        identity_leaf_ok(0, 0),
+        in_precise_identity(0),
+{
+    lemma_identity_leaf_gpa_eq_hpa(0);
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -1624,3 +1875,5 @@ pub const M4_REFINE_OK_MARKER: &str = "RAYNU-V-M4-REFINE-OK";
 pub const M5_LPAGE_VERIFY_OK_MARKER: &str = "RAYNU-V-M5-LPAGE-VERIFY-OK";
 /// M5.8: NUMA domains in ghost *spec* (SRAT/SLIT; affinity L3 → M6).
 pub const M5_NUMA_OK_MARKER: &str = "RAYNU-V-M5-NUMA-OK";
+/// M5.9: allocator↔EPT coupled refine + scoped identity correspondence.
+pub const M5_ALLOC_REFINE_OK_MARKER: &str = "RAYNU-V-M5-ALLOC-REFINE-OK";

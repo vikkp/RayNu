@@ -249,6 +249,21 @@ jobs:
       - name: Verus NUMA-spec smoke → RAYNU-V-M5-NUMA-OK
         run: ./tools/verus-numa-smoke.sh
 
+  # M5.9: allocator↔EPT refine + scoped identity. Hard-fail.
+  verus-alloc-refine:
+    name: verus alloc-refine (M5.9)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus alloc-refine smoke → RAYNU-V-M5-ALLOC-REFINE-OK
+        run: ./tools/verus-alloc-refine-smoke.sh
+
   # M4.9: N-guest ghost↔exec refine. Hard-fail.
   verus-nguest-refine:
     name: verus N-guest-refine (M4.9)

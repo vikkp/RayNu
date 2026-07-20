@@ -29,7 +29,8 @@ pub fn ept_proof_is_l3_attempt() -> bool {
         && s.contains("GAP(CLOSED M4.6): N concurrent guests")
         && s.contains("GAP(CLOSED M4.7): N-guest L3 discharge")
         && s.contains("GAP: Live migration page transfer")
-        && s.contains("GAP: Hardware EPT PTE correspondence")
+        && (s.contains("GAP: Hardware EPT PTE correspondence")
+            || s.contains("GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)"))
 }
 
 /// True when the proof file does not claim live `EptMap` is fully L3.

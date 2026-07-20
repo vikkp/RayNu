@@ -9,7 +9,7 @@
 //! in the same shape. Runtime `cargo verus verify -p ept_model` is exercised by
 //! `tools/verus-nguest-refine-smoke.sh`.
 //!
-//! HW PTE identity correspondence and deeper allocator↔EPT L3 coupling remain M5.
+//! HW PTE bit-decode / EPT-violation remain M6; allocator↔EPT coupling closed in M5.9.
 
 use crate::memory::ept::{EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID, M4_GUEST1_ID};
 use crate::memory::frame_allocator::PhysFrame;
@@ -59,7 +59,8 @@ pub fn ept_spec_closes_n_guest_refine() -> bool {
     spec.contains("TODO(M4.9 CLOSED): N-guest ghost↔exec refine")
         && proof.contains("GAP(CLOSED M4.9): N-guest ghost↔exec refine")
         && proof.contains("theorem_concrete_n_guest_4k_refine")
-        && proof.contains("GAP: Frame-allocator ↔ EPT L3 coupling")
+        && (proof.contains("GAP: Frame-allocator ↔ EPT L3 coupling")
+            || proof.contains("GAP(CLOSED M5.9): Frame-allocator ↔ EPT L3 coupling"))
 }
 
 /// True when the N-guest-refine smoke script is present.

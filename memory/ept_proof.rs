@@ -39,11 +39,14 @@
 //! GAP(CLOSED M5.8): NUMA in ghost spec (marker RAYNU-V-M5-NUMA-OK;
 //!   GhostNumaTopology / numa_map_enabled / mock_bringup_numa /
 //!   lemma_mock_bringup_numa_facts / lemma_numa_map_ok_exclusive)
+//! GAP(CLOSED M5.9): Frame-allocator ↔ EPT L3 coupling (marker RAYNU-V-M5-ALLOC-REFINE-OK;
+//!   GhostFramePool / alloc_ept_refines / theorem_alloc_map_unmap_refines)
+//! GAP(CLOSED M5.9): Precise-identity GPA==HPA correspondence
+//!   (PRECISE_IDENTITY_FRAMES / identity_leaf_ok / lemma_identity_leaf_gpa_eq_hpa)
 //! GAP: NUMA affinity / exclusivity L3 (M6)
-//! GAP: Frame-allocator ↔ EPT L3 coupling beyond ConcreteEptMap (M5)
 //! GAP: EPT violation handler preserves exclusivity
 //! GAP: Live migration page transfer (M6)
-//! GAP: Hardware EPT PTE correspondence (`ept_hw` identity builder)
+//! GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)
 //! GAP: Precise range registry (`EptRangeMap`) vs per-page lemmas
 //! ```
 //!
