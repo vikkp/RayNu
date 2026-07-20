@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.5 closed on Latitude; next is Track C **M4.6** (N-guest exclusivity spec).  
-**Prior:** M4.5 closed on Latitude (`RAYNU-V-M4-SMP-OK`).  
+**Status:** **open** — M4.6 closed on host; next is Track C **M4.7** (N-guest L3 verify).  
+**Prior:** M4.6 closed on host (`RAYNU-V-M4-NGUEST-SPEC-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -170,21 +170,24 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.6 — N-guest exclusivity in ghost model — `RAYNU-V-M4-NGUEST-SPEC-OK`
 
-**Status: open** ← next (host-first)
+**Status: closed** (host `./tools/verus-nguest-spec-smoke.sh` → `RAYNU-V-M4-NGUEST-SPEC-OK`)
 
 **Goal:** Extend `ept_model` ghost map/unmap to **N guests**; L2→L3 *attempt* with explicit gaps documented.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Close `TODO(M4): N guests` in `memory/ept_spec.rs` / `ept_proof.rs` GAP list (spec side).
-2. Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`.
-3. Does not yet claim ADR-006 L3 for N guests (that is M4.7).
+1. `MapUnmapStep` carries explicit `guest`; lemmas apply for any `guest != 0`.
+2. `theorem_n_guest_4k_map_unmap_exclusive` in `ept_model` (no `admit`); marker embedded.
+3. Closed `TODO(M4): N guests` in `ept_spec.rs`; `GAP(CLOSED M4.6)` in `ept_proof.rs`; open `GAP: N-guest L3 discharge` → M4.7.
+4. Host gate `memory/m4_nguest_spec_gate.rs` + CI job `verus-nguest-spec`.
 
-**Likely files:** `ept_model/`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, tools smoke + gate.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`. Does **not** claim ADR-006 L3 for N guests (M4.7).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_nguest_spec_gate.rs`, `tools/verus-nguest-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.7 — True L3 N-guest verify — `RAYNU-V-M4-NGUEST-VERIFY-OK`
 
-**Status: open** (host-first; **M4 exit criterion**)
+**Status: open** ← next (host-first; **M4 exit criterion**)
 
 **Goal:** Green `cargo verus verify -p ept_model` for N-guest map/unmap exclusivity — **no `admit`**.
 
@@ -270,4 +273,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.5 closed** on Latitude (`RAYNU-V-M4-SMP-OK`). Track B complete. Next: Track C **M4.6** N-guest exclusivity spec on `cursor/m4-6-nguest-spec-a623`.
+**M4.6 closed** on host (`RAYNU-V-M4-NGUEST-SPEC-OK`). Next: Track C **M4.7** N-guest L3 verify → `RAYNU-V-M4-NGUEST-VERIFY-OK`.

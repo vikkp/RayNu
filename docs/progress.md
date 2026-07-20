@@ -46,8 +46,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-mmio BAR + probe guest; DRIVER_OK write/readback (Latitude) |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Dual virtio-net BARs + L2 vSwitch port0→port1 exchange (Latitude) |
 | M4.5 | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared EPT; host AP wake (Latitude) |
+| M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model (host; ADR-006 claim → M4.7) |
 
-## Verification checkpoint (as of M4.5)
+## Verification checkpoint (as of M4.6)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -73,7 +74,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
 | `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
 | `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
-| Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
+| Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + refine (M3.18) + N-guest posts (M4.6); no `admit`; ADR-006 N-guest claim → M4.7 |
+| `memory/m4_nguest_spec_gate` | L0 | Host artifact gate for N-guest ghost exclusivity (M4.6) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
 
@@ -84,8 +86,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.6** ← next | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
-| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
+| **M4.7** ← next | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
 | M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |
 | M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
 | M5 | — | Operationally viable (see CLAUDE.md) |

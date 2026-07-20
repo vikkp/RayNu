@@ -1,15 +1,17 @@
-//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
 //! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
-//! single-guest map/unmap are discharged with **no `admit()`**. M3.18 adds
-//! ghost↔exec refinement: a concrete ownership view of live `EptMap` that
-//! abstracts to `GhostEptMap` and preserves `refines` under map/unmap.
+//! map/unmap are discharged with **no `admit()`**. M3.18 adds ghost↔exec
+//! refinement. M4.6 extends `MapUnmapStep` with an explicit `guest` field so
+//! N-guest sequences are in the ghost model (`theorem_n_guest_4k_map_unmap_exclusive`);
+//! ADR-006 L3 *claim* for N guests remains M4.7.
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
 //! - M3.17 true L3: `RAYNU-V-M3-L3-VERIFY-OK` (via tools/verus-verify-smoke.sh)
 //! - M3.18 refine: `RAYNU-V-M3-L3-REFINE-OK` (via tools/verus-refine-smoke.sh)
+//! - M4.6 N-guest spec: `RAYNU-V-M4-NGUEST-SPEC-OK` (via tools/verus-nguest-spec-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -82,31 +84,38 @@ pub open spec fn exclusive_ownership(m: GhostEptMap) -> bool {
     &&& m.owned.len() == m.by_gpa.len()
 }
 
-/// One map or unmap step for the bring-up guest (4K).
+/// One map or unmap step for a non-zero guest (4K). M4.6: `guest` is explicit.
 pub enum MapUnmapStep {
-    Map { gpa: Gpa, frame: FrameId },
-    Unmap { gpa: Gpa },
+    Map { guest: GuestId, gpa: Gpa, frame: FrameId },
+    Unmap { guest: GuestId, gpa: Gpa },
+}
+
+pub open spec fn step_guest_id(step: MapUnmapStep) -> GuestId {
+    match step {
+        MapUnmapStep::Map { guest, gpa: _, frame: _ } => guest,
+        MapUnmapStep::Unmap { guest, gpa: _ } => guest,
+    }
 }
 
 pub open spec fn step_guest_ok(step: MapUnmapStep) -> bool {
     match step {
-        MapUnmapStep::Map { gpa, frame: _ } => page_aligned_4k(gpa),
-        MapUnmapStep::Unmap { gpa } => page_aligned_4k(gpa),
+        MapUnmapStep::Map { guest, gpa, frame: _ } => guest != 0 && page_aligned_4k(gpa),
+        MapUnmapStep::Unmap { guest, gpa } => guest != 0 && page_aligned_4k(gpa),
     }
 }
 
 pub open spec fn step_enabled(m: GhostEptMap, step: MapUnmapStep) -> bool {
     match step {
-        MapUnmapStep::Map { gpa, frame } =>
-            !m.owned.dom().contains(frame) && !m.by_gpa.dom().contains((BRINGUP_GUEST, gpa)),
-        MapUnmapStep::Unmap { gpa } => m.by_gpa.dom().contains((BRINGUP_GUEST, gpa)),
+        MapUnmapStep::Map { guest, gpa, frame } =>
+            !m.owned.dom().contains(frame) && !m.by_gpa.dom().contains((guest, gpa)),
+        MapUnmapStep::Unmap { guest, gpa } => m.by_gpa.dom().contains((guest, gpa)),
     }
 }
 
 pub open spec fn apply_step(m: GhostEptMap, step: MapUnmapStep) -> GhostEptMap {
     match step {
-        MapUnmapStep::Map { gpa, frame } => m.ghost_map(BRINGUP_GUEST, gpa, frame),
-        MapUnmapStep::Unmap { gpa } => m.ghost_unmap(BRINGUP_GUEST, gpa),
+        MapUnmapStep::Map { guest, gpa, frame } => m.ghost_map(guest, gpa, frame),
+        MapUnmapStep::Unmap { guest, gpa } => m.ghost_unmap(guest, gpa),
     }
 }
 
@@ -181,7 +190,7 @@ pub proof fn lemma_free_frame_unmapped(m: GhostEptMap, frame: FrameId, g: GuestI
     lemma_by_gpa_owned(m, g, a);
 }
 
-/// Map Ok preserves exclusivity for the bring-up guest on a free 4K GPA/HPA.
+/// Map Ok preserves exclusivity for any non-zero guest on a free 4K GPA/HPA (M4.6).
 pub proof fn lemma_map_ok_exclusive(
     m: GhostEptMap,
     guest: GuestId,
@@ -189,7 +198,7 @@ pub proof fn lemma_map_ok_exclusive(
     frame: FrameId,
 )
     requires
-        guest == BRINGUP_GUEST,
+        guest != 0,
         page_aligned_4k(gpa),
         exclusive_ownership(m),
         !m.owned.dom().contains(frame),
@@ -302,10 +311,10 @@ pub proof fn lemma_map_already_owned_unchanged(
 {
 }
 
-/// Unmap Ok restores exclusivity for a mapped (guest, GPA).
+/// Unmap Ok restores exclusivity for a mapped (guest, GPA) (any non-zero guest; M4.6).
 pub proof fn lemma_unmap_ok_exclusive(m: GhostEptMap, guest: GuestId, gpa: Gpa)
     requires
-        guest == BRINGUP_GUEST,
+        guest != 0,
         page_aligned_4k(gpa),
         exclusive_ownership(m),
         m.by_gpa.dom().contains((guest, gpa)),
@@ -393,17 +402,18 @@ pub proof fn lemma_apply_step_exclusive(m: GhostEptMap, step: MapUnmapStep)
         exclusive_ownership(apply_step(m, step)),
 {
     match step {
-        MapUnmapStep::Map { gpa, frame } => {
-            lemma_map_ok_exclusive(m, BRINGUP_GUEST, gpa, frame);
+        MapUnmapStep::Map { guest, gpa, frame } => {
+            lemma_map_ok_exclusive(m, guest, gpa, frame);
         },
-        MapUnmapStep::Unmap { gpa } => {
-            lemma_unmap_ok_exclusive(m, BRINGUP_GUEST, gpa);
+        MapUnmapStep::Unmap { guest, gpa } => {
+            lemma_unmap_ok_exclusive(m, guest, gpa);
         },
     }
 }
 
-/// Target theorem (M3.17): any finite sequence of enabled 4K single-guest
-/// map/unmap steps preserves exclusive ownership.
+/// Historical M3.17 name: any finite sequence of enabled 4K map/unmap steps
+/// (each step's `guest != 0`) preserves exclusive ownership. Guest ids may
+/// differ across steps — see `theorem_n_guest_4k_map_unmap_exclusive`.
 pub proof fn theorem_single_guest_4k_map_unmap_exclusive(
     m: GhostEptMap,
     steps: Seq<MapUnmapStep>,
@@ -423,6 +433,22 @@ pub proof fn theorem_single_guest_4k_map_unmap_exclusive(
             steps.skip(1),
         );
     }
+}
+
+/// M4.6 target: N-guest 4K map/unmap exclusivity in the ghost model.
+/// Same discharge as the historical single-guest theorem; named so host/CI
+/// can assert the N-guest post is present. ADR-006 L3 *claim* is M4.7.
+pub proof fn theorem_n_guest_4k_map_unmap_exclusive(
+    m: GhostEptMap,
+    steps: Seq<MapUnmapStep>,
+)
+    requires
+        exclusive_ownership(m),
+        steps_ok(m, steps),
+    ensures
+        exclusive_ownership(fold_steps(m, steps)),
+{
+    theorem_single_guest_4k_map_unmap_exclusive(m, steps);
 }
 
 // ---------------------------------------------------------------------------
@@ -477,8 +503,8 @@ pub open spec fn concrete_step_enabled(c: ConcreteEptMap, step: MapUnmapStep) ->
 
 pub open spec fn apply_concrete_step(c: ConcreteEptMap, step: MapUnmapStep) -> ConcreteEptMap {
     match step {
-        MapUnmapStep::Map { gpa, frame } => c.concrete_map(BRINGUP_GUEST, gpa, frame),
-        MapUnmapStep::Unmap { gpa } => c.concrete_unmap(BRINGUP_GUEST, gpa),
+        MapUnmapStep::Map { guest, gpa, frame } => c.concrete_map(guest, gpa, frame),
+        MapUnmapStep::Unmap { guest, gpa } => c.concrete_unmap(guest, gpa),
     }
 }
 
@@ -513,59 +539,64 @@ pub proof fn lemma_empty_refines()
     lemma_empty_exclusive();
 }
 
-/// Map Ok on concrete commutes with ghost_map under abs.
-pub proof fn lemma_abs_map_commutes(c: ConcreteEptMap, gpa: Gpa, frame: FrameId)
+/// Map Ok on concrete commutes with ghost_map under abs (any non-zero guest).
+pub proof fn lemma_abs_map_commutes(c: ConcreteEptMap, guest: GuestId, gpa: Gpa, frame: FrameId)
     requires
+        guest != 0,
         refines(c),
         page_aligned_4k(gpa),
-        concrete_step_enabled(c, MapUnmapStep::Map { gpa, frame }),
+        concrete_step_enabled(c, MapUnmapStep::Map { guest, gpa, frame }),
     ensures
-        abs(c.concrete_map(BRINGUP_GUEST, gpa, frame)) == abs(c).ghost_map(
-            BRINGUP_GUEST,
-            gpa,
-            frame,
-        ),
+        abs(c.concrete_map(guest, gpa, frame)) == abs(c).ghost_map(guest, gpa, frame),
 {
 }
 
-/// Unmap Ok on concrete commutes with ghost_unmap under abs.
-pub proof fn lemma_abs_unmap_commutes(c: ConcreteEptMap, gpa: Gpa)
+/// Unmap Ok on concrete commutes with ghost_unmap under abs (any non-zero guest).
+pub proof fn lemma_abs_unmap_commutes(c: ConcreteEptMap, guest: GuestId, gpa: Gpa)
     requires
+        guest != 0,
         refines(c),
         page_aligned_4k(gpa),
-        concrete_step_enabled(c, MapUnmapStep::Unmap { gpa }),
+        concrete_step_enabled(c, MapUnmapStep::Unmap { guest, gpa }),
     ensures
-        abs(c.concrete_unmap(BRINGUP_GUEST, gpa)) == abs(c).ghost_unmap(BRINGUP_GUEST, gpa),
+        abs(c.concrete_unmap(guest, gpa)) == abs(c).ghost_unmap(guest, gpa),
 {
 }
 
-/// Concrete map Ok preserves refinement.
-pub proof fn lemma_concrete_map_ok_refines(c: ConcreteEptMap, gpa: Gpa, frame: FrameId)
+/// Concrete map Ok preserves refinement (any non-zero guest; M4.6).
+pub proof fn lemma_concrete_map_ok_refines(
+    c: ConcreteEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+)
     requires
+        guest != 0,
         refines(c),
         page_aligned_4k(gpa),
-        concrete_step_enabled(c, MapUnmapStep::Map { gpa, frame }),
+        concrete_step_enabled(c, MapUnmapStep::Map { guest, gpa, frame }),
     ensures
-        refines(c.concrete_map(BRINGUP_GUEST, gpa, frame)),
+        refines(c.concrete_map(guest, gpa, frame)),
 {
-    lemma_abs_map_commutes(c, gpa, frame);
-    lemma_map_ok_exclusive(abs(c), BRINGUP_GUEST, gpa, frame);
+    lemma_abs_map_commutes(c, guest, gpa, frame);
+    lemma_map_ok_exclusive(abs(c), guest, gpa, frame);
 }
 
-/// Concrete unmap Ok preserves refinement.
-pub proof fn lemma_concrete_unmap_ok_refines(c: ConcreteEptMap, gpa: Gpa)
+/// Concrete unmap Ok preserves refinement (any non-zero guest; M4.6).
+pub proof fn lemma_concrete_unmap_ok_refines(c: ConcreteEptMap, guest: GuestId, gpa: Gpa)
     requires
+        guest != 0,
         refines(c),
         page_aligned_4k(gpa),
-        concrete_step_enabled(c, MapUnmapStep::Unmap { gpa }),
+        concrete_step_enabled(c, MapUnmapStep::Unmap { guest, gpa }),
     ensures
-        refines(c.concrete_unmap(BRINGUP_GUEST, gpa)),
+        refines(c.concrete_unmap(guest, gpa)),
 {
-    lemma_abs_unmap_commutes(c, gpa);
-    lemma_unmap_ok_exclusive(abs(c), BRINGUP_GUEST, gpa);
+    lemma_abs_unmap_commutes(c, guest, gpa);
+    lemma_unmap_ok_exclusive(abs(c), guest, gpa);
 }
 
-/// One enabled concrete step preserves refinement.
+/// One enabled concrete step preserves refinement (N-guest; M4.6).
 pub proof fn lemma_apply_concrete_step_refines(c: ConcreteEptMap, step: MapUnmapStep)
     requires
         refines(c),
@@ -576,18 +607,18 @@ pub proof fn lemma_apply_concrete_step_refines(c: ConcreteEptMap, step: MapUnmap
         abs(apply_concrete_step(c, step)) == apply_step(abs(c), step),
 {
     match step {
-        MapUnmapStep::Map { gpa, frame } => {
-            lemma_abs_map_commutes(c, gpa, frame);
-            lemma_concrete_map_ok_refines(c, gpa, frame);
+        MapUnmapStep::Map { guest, gpa, frame } => {
+            lemma_abs_map_commutes(c, guest, gpa, frame);
+            lemma_concrete_map_ok_refines(c, guest, gpa, frame);
         },
-        MapUnmapStep::Unmap { gpa } => {
-            lemma_abs_unmap_commutes(c, gpa);
-            lemma_concrete_unmap_ok_refines(c, gpa);
+        MapUnmapStep::Unmap { guest, gpa } => {
+            lemma_abs_unmap_commutes(c, guest, gpa);
+            lemma_concrete_unmap_ok_refines(c, guest, gpa);
         },
     }
 }
 
-/// Target theorem (M3.18): concrete 4K single-guest steps preserve refinement
+/// Target theorem (M3.18): concrete 4K bring-up-guest steps preserve refinement
 /// into the verified ghost exclusivity model.
 pub proof fn theorem_concrete_single_guest_4k_refine(
     c: ConcreteEptMap,
@@ -596,6 +627,7 @@ pub proof fn theorem_concrete_single_guest_4k_refine(
     requires
         refines(c),
         concrete_steps_ok(c, steps),
+        forall|i: int| #![auto] 0 <= i < steps.len() ==> step_guest_id(steps[i]) == BRINGUP_GUEST,
     ensures
         refines(fold_concrete_steps(c, steps)),
         abs(fold_concrete_steps(c, steps)) == fold_steps(abs(c), steps),
@@ -617,3 +649,5 @@ pub proof fn theorem_concrete_single_guest_4k_refine(
 pub const M3_L3_LINK_OK_MARKER: &str = "RAYNU-V-M3-L3-LINK-OK";
 pub const M3_L3_VERIFY_OK_MARKER: &str = "RAYNU-V-M3-L3-VERIFY-OK";
 pub const M3_L3_REFINE_OK_MARKER: &str = "RAYNU-V-M3-L3-REFINE-OK";
+/// M4.6: N-guest ghost map/unmap is in the model (spec OK; ADR-006 claim is M4.7).
+pub const M4_NGUEST_SPEC_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-SPEC-OK";

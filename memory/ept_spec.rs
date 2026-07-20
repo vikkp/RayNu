@@ -54,6 +54,9 @@
 //!
 //! TODO(M3.14 done as attempt): discharge `theorem_single_guest_4k_map_unmap_exclusive`
 //!   under a pinned Verus (`verus-version.toml`) — see GAP list in `ept_proof.rs`.
-//! TODO(M4): N guests + large pages in ghost model.
+//! TODO(M4.6 CLOSED): N guests in ghost model — `MapUnmapStep.guest` +
+//!   `theorem_n_guest_4k_map_unmap_exclusive` in `ept_model` → `RAYNU-V-M4-NGUEST-SPEC-OK`.
+//!   ADR-006 L3 *claim* for N guests is M4.7 (`RAYNU-V-M4-NGUEST-VERIFY-OK`).
+//! TODO(M4.8): large pages (2M/1G) in ghost model.
 
 #![allow(dead_code)]

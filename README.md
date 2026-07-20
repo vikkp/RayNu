@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.5 closed** — dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`. Active: **M4.6** (N-guest exclusivity spec) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.6 closed** — N-guest exclusivity in ghost model → `RAYNU-V-M4-NGUEST-SPEC-OK`. Active: **M4.7** (N-guest L3 verify) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 
