@@ -55,8 +55,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M5.2 | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI SPA (CI + Latitude) |
 | M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain (CI + Latitude) |
 | M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports (CI + Latitude) |
+| M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware inventory import (CI + Latitude; ADR-007) |
 
-## Verification checkpoint (as of M5.4)
+## Verification checkpoint (as of M5.5)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -90,6 +91,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV from ring snapshot; REPORT-OK (M5.4); PDF → M6 |
+| `migrate/` | L0 | One-command OVF/VMDK inventory → VmTable; MIGRATE-OK (M5.5); live vCenter → polish |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
 
 ## Next (numbered)
@@ -100,7 +102,6 @@ Prior track: [m4_plan.md](m4_plan.md)
 | Gate | Marker | Goal |
 |------|--------|------|
 | **M5.7** ← next | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify (M5 proof exit) |
-| M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |
 | M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
 | M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA in ghost spec |
 | M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
