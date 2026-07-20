@@ -312,6 +312,19 @@ jobs:
       - name: M5.5 migrate smoke → RAYNU-V-M5-MIGRATE-OK
         run: ./tools/m5-migrate-smoke.sh
 
+  # M5.6: Dell Tier-1 iDRAC health + topology (ADR-005). Hard-fail.
+  m5-idrac:
+    name: M5.6 iDRAC (IDRAC-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.6 iDRAC smoke → RAYNU-V-M5-IDRAC-OK
+        run: ./tools/m5-idrac-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)

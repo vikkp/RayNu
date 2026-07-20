@@ -1,0 +1,44 @@
+{
+  "Id": "MockDellRedfishTier1",
+  "Name": "System Health (CI / QEMU mock)",
+  "Thermal": {
+    "Temperatures": [
+      {
+        "Name": "CPU1 Temp",
+        "ReadingCelsius": 42,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      },
+      {
+        "Name": "Inlet Temp",
+        "ReadingCelsius": 24,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      }
+    ],
+    "Fans": [
+      {
+        "Name": "System Fan 1",
+        "Reading": 7200,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      },
+      {
+        "Name": "System Fan 2",
+        "Reading": 7100,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      }
+    ]
+  },
+  "Power": {
+    "PowerSupplies": [
+      {
+        "Name": "PSU1",
+        "LineInputVoltage": 220,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      },
+      {
+        "Name": "PSU2",
+        "LineInputVoltage": 220,
+        "Status": { "State": "Enabled", "Health": "OK" }
+      }
+    ]
+  }
+}
