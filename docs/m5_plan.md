@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.5 closed on Latitude (Track A+B + migrate); next critical for M5 close is **M5.7** (large-page L3).  
-**Prior:** M5.5 closed on Latitude (`RAYNU-V-M5-MIGRATE-OK`).  
+**Status:** **open** — M5.0–M5.6 closed on Latitude (Track A+B + migrate + Dell Tier‑1); next critical for M5 close is **M5.7** (large-page L3).  
+**Prior:** M5.6 closed on Latitude (`RAYNU-V-M5-IDRAC-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -285,4 +285,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-Draft accepted. **M5.0–M5.5 closed** on Latitude (incl. parallel migrate). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`). M5.6 host wiring landed (Latitude smoke pending); remains parallel / slip-ok.
+**M5.0–M5.6 closed** on Latitude (incl. migrate + iDRAC). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`).
