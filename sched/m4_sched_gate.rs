@@ -23,7 +23,8 @@ pub fn dual_vmcs_switch_present() -> bool {
         && launch.contains("switch_to_sched_slot")
         && launch.contains("schedule_preempt")
         && launch.contains(M4_SCHED_OK_MARKER)
-        && launch.contains("FIRST_GUEST")
+        && launch.contains("GUEST_FRAMES")
+        && launch.contains("set_shell_guest")
 }
 
 /// True when the QEMU boot gate requires M4.1.

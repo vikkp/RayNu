@@ -22,6 +22,15 @@ pub const M4_SLICE_G0_MARKER: &str = "RAYNU-V-M4-SLICE-G0";
 /// Marker when G1 ran under the M4.1 scheduler.
 pub const M4_SLICE_G1_MARKER: &str = "RAYNU-V-M4-SLICE-G1";
 
+/// Marker when G2 ran under the M4.2 scheduler.
+pub const M4_SLICE_G2_MARKER: &str = "RAYNU-V-M4-SLICE-G2";
+
+/// Marker when G3 ran under the M4.2 scheduler.
+pub const M4_SLICE_G3_MARKER: &str = "RAYNU-V-M4-SLICE-G3";
+
+/// Marker when ≥4 guests have progressed under the scheduler (M4.2).
+pub const M4_NVM_OK_MARKER: &str = "RAYNU-V-M4-NVM-OK";
+
 /// Minimal credit scheduler (M4.1).
 pub struct CreditScheduler {
     credits: [i32; 8],

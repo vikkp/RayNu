@@ -36,7 +36,7 @@ pub fn second_guest_launch_present() -> bool {
         && main.contains("set_second_guest")
         && main.contains("build_precise_identity")
         && main.contains("write_guest_shell_cpuid_page")
-        && main.contains("pick_g1_slab_hpa")
+        && main.contains("pick_shell_slab_hpa")
 }
 
 /// True when the QEMU boot gate requires M4.0.

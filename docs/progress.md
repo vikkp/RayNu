@@ -72,7 +72,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.2** ← next | `RAYNU-V-M4-NVM-OK` | 4+ concurrent Linux shells |
+| **M4.2** ← in progress | `RAYNU-V-M4-NVM-OK` | 4+ concurrent guests (G0 Linux + G1–G3 SHELL) |
 | M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
 | M4.5 | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs blk/net |

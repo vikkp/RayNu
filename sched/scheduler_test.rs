@@ -31,4 +31,7 @@ fn markers_stable() {
     assert_eq!(M4_SCHED_OK_MARKER, "RAYNU-V-M4-SCHED-OK");
     assert_eq!(M4_SLICE_G0_MARKER, "RAYNU-V-M4-SLICE-G0");
     assert_eq!(M4_SLICE_G1_MARKER, "RAYNU-V-M4-SLICE-G1");
+    assert_eq!(M4_SLICE_G2_MARKER, "RAYNU-V-M4-SLICE-G2");
+    assert_eq!(M4_SLICE_G3_MARKER, "RAYNU-V-M4-SLICE-G3");
+    assert_eq!(M4_NVM_OK_MARKER, "RAYNU-V-M4-NVM-OK");
 }

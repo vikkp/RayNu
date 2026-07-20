@@ -25,6 +25,7 @@
 //! M3.22: PE `.askern`/`.asinit` embed prefer + ESP fallback (`ASSETS-OK`).
 //! M4.0: second guest under private 2 MiB EPT slab → `RAYNU-V-M4-2VM-OK`.
 //! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
+//! M4.2: G0 + G1–G3 (≥4) under scheduler → `RAYNU-V-M4-NVM-OK`.
 
 #![no_main]
 #![no_std]
@@ -364,128 +365,170 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     };
 
-    // M4.0: private 2 MiB G1 slab in [GUEST_RAM, PRECISE) — above G0 e820 so
-    // Linux never touches it. Prefer host RAM outside the FrameAllocator pool
-    // (Latitude pool sits in low conventional memory; QEMU -m 512M still has
+    // M4.0–M4.2: private 2 MiB shell slabs in [GUEST_RAM, PRECISE) — above G0
+    // e820 so Linux never touches them. Prefer host RAM outside the FrameAllocator
+    // pool (Latitude pool sits in low conventional memory; QEMU -m 512M still has
     // [256MiB,512MiB) identity-mapped and free).
-    let g1_base = match pick_g1_slab_hpa(alloc) {
-        Some(h) => h,
-        None => {
-            boot::serial::write_line("boot: ERROR — no G1 slab above G0 guest RAM");
+    const SHELL_COUNT: usize = 3; // G1–G3 → 4 total with G0
+    let shell_ids = [
+        memory::M4_GUEST1_ID,
+        memory::M4_GUEST2_ID,
+        memory::M4_GUEST3_ID,
+    ];
+    let mut slab_hpas = [0u64; SHELL_COUNT];
+    let mut used = [0u64; SHELL_COUNT];
+    let mut used_n = 0usize;
+    for i in 0..SHELL_COUNT {
+        let hpa = match pick_shell_slab_hpa(alloc, &used[..used_n]) {
+            Some(h) => h,
+            None => {
+                boot::serial::write_line("boot: ERROR — no shell slab above G0 guest RAM");
+                let _ = life.disable();
+                return;
+            }
+        };
+        slab_hpas[i] = hpa;
+        used[used_n] = hpa;
+        used_n += 1;
+        // SAFETY: precise PML4; punch shell slab out of G0 identity.
+        if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, hpa) }.is_err() {
+            boot::serial::write_line("boot: ERROR — could not unmap shell slab from G0 EPT");
             let _ = life.disable();
             return;
         }
-    };
-    // SAFETY: precise PML4; punch G1 slab out of G0 identity.
-    if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, g1_base) }.is_err() {
-        boot::serial::write_line("boot: ERROR — could not unmap G1 slab from G0 EPT");
-        let _ = life.disable();
-        return;
     }
-    if memory::claim_precise_with_guest1_hole(g1_base, memory::ept_hw::TWO_MIB).is_err() {
-        boot::serial::write_line("boot: ERROR — dual-guest range claim failed");
+    let mut holes = [(0u64, 0u64, 0u64); SHELL_COUNT];
+    for i in 0..SHELL_COUNT {
+        holes[i] = (slab_hpas[i], memory::ept_hw::TWO_MIB, shell_ids[i]);
+    }
+    if memory::claim_precise_with_shell_holes(&holes).is_err() {
+        boot::serial::write_line("boot: ERROR — multi-guest range claim failed");
         let _ = life.disable();
         return;
     }
     boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
     boot::serial::write_line(memory::M3_EPT3_OK_MARKER);
-    boot::serial::write_str("boot: M4.0 G1 slab HPA=0x");
-    write_hex(g1_base);
-    boot::serial::write_byte(b'\n');
-
-    // Zero the slab via host identity map before installing guest code.
-    // SAFETY: HPA is in QEMU RAM, outside the allocator, identity-mapped by UEFI.
-    unsafe {
-        core::ptr::write_bytes(g1_base as *mut u8, 0, memory::ept_hw::TWO_MIB as usize);
+    for (i, &hpa) in slab_hpas.iter().enumerate() {
+        boot::serial::write_str("boot: M4.2 shell slab slot=");
+        write_dec((i + 1) as u64);
+        boot::serial::write_str(" HPA=0x");
+        write_hex(hpa);
+        boot::serial::write_byte(b'\n');
     }
 
-    // M4.0: G1 gets its own precise identity EPT (full [0,512MiB)) and shares
-    // host CR3 — same shape as G0 bring-up. G0 already had the G1 slab leaf
-    // cleared, so G0 cannot touch G1 HPA. Software ownership still exclusive.
-    // (Tight private-only EPT + slab CR3 triple-faulted on Latitude; tighten later.)
-    let g1_ept_need = memory::ept_hw::frames_required_precise();
-    let mut g1_ept_frames = [0u64; 8];
-    if g1_ept_need > g1_ept_frames.len() {
-        boot::serial::write_line("boot: ERROR — G1 EPT frame budget too small");
-        let _ = life.disable();
-        return;
-    }
-    for slot in g1_ept_frames.iter_mut().take(g1_ept_need) {
-        let Some(f) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for G1 EPT");
+    for (i, &g_base) in slab_hpas.iter().enumerate() {
+        let slot = i + 1;
+        let guest_id = shell_ids[i];
+        // Zero the slab via host identity map before installing guest code.
+        // SAFETY: HPA is in QEMU RAM, outside the allocator, identity-mapped by UEFI.
+        unsafe {
+            core::ptr::write_bytes(g_base as *mut u8, 0, memory::ept_hw::TWO_MIB as usize);
+        }
+
+        let ept_need = memory::ept_hw::frames_required_precise();
+        let mut ept_frames = [0u64; 8];
+        if ept_need > ept_frames.len() {
+            boot::serial::write_line("boot: ERROR — shell EPT frame budget too small");
+            let _ = life.disable();
+            return;
+        }
+        for fslot in ept_frames.iter_mut().take(ept_need) {
+            let Some(f) = alloc_phys(alloc) else {
+                boot::serial::write_line("boot: ERROR — no frame for shell EPT");
+                let _ = life.disable();
+                return;
+            };
+            *fslot = f;
+        }
+        // SAFETY: exclusive EPT frames for this shell guest.
+        let guest_eptp = match unsafe {
+            memory::ept_hw::build_precise_identity(&mut ept_frames[..ept_need])
+        } {
+            Ok(v) => v,
+            Err(_) => {
+                boot::serial::write_line("boot: ERROR — shell EPT build failed");
+                let _ = life.disable();
+                return;
+            }
+        };
+        let g_code = g_base + memory::ept_hw::G1_SLAB_OFF_CODE;
+        let g_stack = g_base + memory::ept_hw::G1_SLAB_OFF_STACK;
+        let g_idt = g_base + memory::ept_hw::G1_SLAB_OFF_IDT;
+        // SAFETY: pages inside shell slab; host identity still maps them for setup.
+        unsafe {
+            memory::ept_hw::write_guest_shell_cpuid_page(g_code);
+            if !arch::cpu::clear_nx_identity(g_code) {
+                boot::serial::write_line("boot: ERROR — could not clear NX on shell code");
+                let _ = life.disable();
+                return;
+            }
+        }
+        audit::integrity::record_event(audit::AuditEvent::EptMapped {
+            guest_id,
+            gpa: g_code,
+            hpa: g_code,
+        });
+
+        let Some(g_vmcs) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for shell VMCS");
             let _ = life.disable();
             return;
         };
-        *slot = f;
-    }
-    // SAFETY: exclusive EPT frames for G1.
-    let g1_eptp = match unsafe {
-        memory::ept_hw::build_precise_identity(&mut g1_ept_frames[..g1_ept_need])
-    } {
-        Ok(v) => v,
-        Err(_) => {
-            boot::serial::write_line("boot: ERROR — G1 EPT build failed");
+        let Some(g_host_stack) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for shell host stack");
             let _ = life.disable();
             return;
-        }
-    };
-    let g1_code = g1_base + memory::ept_hw::G1_SLAB_OFF_CODE;
-    let g1_stack = g1_base + memory::ept_hw::G1_SLAB_OFF_STACK;
-    let g1_idt = g1_base + memory::ept_hw::G1_SLAB_OFF_IDT;
-    // SAFETY: pages inside G1 slab; host identity still maps them for setup.
-    unsafe {
-        memory::ept_hw::write_guest_shell_cpuid_page(g1_code);
-        if !arch::cpu::clear_nx_identity(g1_code) {
-            boot::serial::write_line("boot: ERROR — could not clear NX on G1 code");
+        };
+        let Some(g_tss) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for shell TSS");
             let _ = life.disable();
             return;
+        };
+        let Some(g_gdt) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for shell GDT");
+            let _ = life.disable();
+            return;
+        };
+        let g_msr = alloc_phys(alloc);
+        let g_io_a = alloc_phys(alloc);
+        let g_io_b = alloc_phys(alloc);
+        if slot == 1 {
+            vmx::launch::set_second_guest(vmx::LaunchFrames {
+                vmcs_phys: g_vmcs,
+                guest_stack_phys: g_stack,
+                host_stack_phys: g_host_stack,
+                tss_phys: g_tss,
+                gdt_phys: g_gdt,
+                eptp: guest_eptp,
+                guest_code_phys: g_code,
+                guest_idt_phys: g_idt,
+                guest_cr3_phys: None,
+                msr_bitmap_phys: g_msr,
+                io_bitmap_a_phys: g_io_a,
+                io_bitmap_b_phys: g_io_b,
+            });
+        } else {
+            vmx::launch::set_shell_guest(
+                slot,
+                vmx::LaunchFrames {
+                    vmcs_phys: g_vmcs,
+                    guest_stack_phys: g_stack,
+                    host_stack_phys: g_host_stack,
+                    tss_phys: g_tss,
+                    gdt_phys: g_gdt,
+                    eptp: guest_eptp,
+                    guest_code_phys: g_code,
+                    guest_idt_phys: g_idt,
+                    guest_cr3_phys: None,
+                    msr_bitmap_phys: g_msr,
+                    io_bitmap_a_phys: g_io_a,
+                    io_bitmap_b_phys: g_io_b,
+                },
+            );
         }
     }
-    audit::integrity::record_event(audit::AuditEvent::EptMapped {
-        guest_id: memory::M4_GUEST1_ID,
-        gpa: g1_code,
-        hpa: g1_code,
-    });
-
-    let Some(g1_vmcs) = alloc_phys(alloc) else {
-        boot::serial::write_line("boot: ERROR — no frame for G1 VMCS");
-        let _ = life.disable();
-        return;
-    };
-    let Some(g1_host_stack) = alloc_phys(alloc) else {
-        boot::serial::write_line("boot: ERROR — no frame for G1 host stack");
-        let _ = life.disable();
-        return;
-    };
-    let Some(g1_tss) = alloc_phys(alloc) else {
-        boot::serial::write_line("boot: ERROR — no frame for G1 TSS");
-        let _ = life.disable();
-        return;
-    };
-    let Some(g1_gdt) = alloc_phys(alloc) else {
-        boot::serial::write_line("boot: ERROR — no frame for G1 GDT");
-        let _ = life.disable();
-        return;
-    };
-    let g1_msr = alloc_phys(alloc);
-    let g1_io_a = alloc_phys(alloc);
-    let g1_io_b = alloc_phys(alloc);
-    vmx::launch::set_second_guest(vmx::LaunchFrames {
-        vmcs_phys: g1_vmcs,
-        guest_stack_phys: g1_stack,
-        host_stack_phys: g1_host_stack,
-        tss_phys: g1_tss,
-        gdt_phys: g1_gdt,
-        eptp: g1_eptp,
-        guest_code_phys: g1_code,
-        guest_idt_phys: g1_idt,
-        guest_cr3_phys: None, // share host CR3; G1 EPT is full precise identity
-        msr_bitmap_phys: g1_msr,
-        io_bitmap_a_phys: g1_io_a,
-        io_bitmap_b_phys: g1_io_b,
-    });
     boot::serial::write_line(
-        "boot: M4.0 G1 prepared (precise EPT + host CR3 + SHELL CPUID in slab)",
+        "boot: M4.2 G1–G3 prepared (precise EPT + host CR3 + SHELL CPUID in slabs)",
     );
 
     let Some(vmcs) = alloc_phys(alloc) else {
@@ -572,13 +615,14 @@ fn launch_err_name(e: vmx::LaunchError) -> &'static str {
     }
 }
 
-/// Pick a 2 MiB-aligned HPA for G1 in `[GUEST_RAM, PRECISE)` outside the HV pool.
-fn pick_g1_slab_hpa(alloc: &memory::FrameAllocator) -> Option<u64> {
+/// Pick a 2 MiB-aligned HPA for a shell guest in `[GUEST_RAM, PRECISE)` outside
+/// the HV pool and not already in `used`.
+fn pick_shell_slab_hpa(alloc: &memory::FrameAllocator, used: &[u64]) -> Option<u64> {
     let guest_ram = guest::linux_boot::GUEST_RAM_BYTES;
     let two_m = memory::ept_hw::TWO_MIB;
     let mut hpa = (guest_ram + two_m - 1) & !(two_m - 1);
     while hpa.saturating_add(two_m) <= memory::PRECISE_BYTES {
-        if !alloc.owns_phys_range(hpa, two_m) {
+        if !alloc.owns_phys_range(hpa, two_m) && !used.iter().any(|&u| u == hpa) {
             return Some(hpa);
         }
         hpa = hpa.saturating_add(two_m);
