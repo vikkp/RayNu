@@ -42,5 +42,5 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M5.1 closed:** CLI + REST control plane → `RAYNU-V-M5-API-OK`.  
-**Next M5.2:** Embedded Web UI → `RAYNU-V-M5-WEBUI-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
+**M5.2 closed:** embedded Web UI → `RAYNU-V-M5-WEBUI-OK`.  
+**Next M5.3:** Audit ring + hash chain → `RAYNU-V-M5-AUDIT-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).

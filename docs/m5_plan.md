@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.1 closed on Latitude; **M5.2** code awaiting Latitude Web UI smoke.  
-**Prior:** M5.1 closed on Latitude (`RAYNU-V-M5-API-OK`).  
+**Status:** **open** — M5.0–M5.2 closed on Latitude (Track A mgmt done); next is **M5.3** (audit ring).  
+**Prior:** M5.2 closed on Latitude (`RAYNU-V-M5-WEBUI-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -92,11 +92,11 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.2 — Embedded Web UI — `RAYNU-V-M5-WEBUI-OK`
 
-**Status: open** — code on branch; awaiting Latitude smoke ← next
+**Status: closed** (Latitude `./tools/m5-webui-smoke.sh` → `RAYNU-V-M5-WEBUI-OK`)
 
 **Goal:** Embedded Web UI SPA (ADR-003 `.assets.webui`) drives the same lifecycle surface.
 
-**What lands:**
+**Shipped / wiring:**
 
 1. `assets/webui.html` — compact SPA (list / start / stop against M5.1 `/vms` routes).
 2. `mgmt/webui.rs` — PE `.aswebui` embed + first-use `load_webui()` (identity decompress;
@@ -105,22 +105,11 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
    `tools/m5-webui-smoke.sh` + CI `m5-webui`.
 4. `tools/check-pe-assets.sh` verifies `.aswebui` on the UEFI binary.
 
-**Acceptance:**
-
-1. Lazy (first-use) load path works; SPA asset PE-linked.
-2. UI can list VMs and invoke start/stop (against M5.1 API).
-3. Host/CI smoke → `RAYNU-V-M5-WEBUI-OK` (Latitude confirms close).
-4. Size budget respected (~7 KB SPA; no new crates).
-
-**Likely files:** `mgmt/webui.rs`, `assets/webui.html`, `tools/m5-webui-smoke.sh`, docs.
-
----
-
-### Track B — Audit trail ([A])
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-WEBUI-OK`. Track A (mgmt spine) complete.
 
 ### M5.3 — Audit ring + hash chain — `RAYNU-V-M5-AUDIT-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Append-only audit ring with hash chaining; security-relevant actions from M5.0+ land in the ring. Builds on existing `audit/integrity` + `audit_log!` (L0).
 
@@ -284,10 +273,10 @@ RAYNU-V-M5-LPAGE-VERIFY-OK
 ==> Host large-page L3-verify smoke PASSED
 ```
 
-Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`, `RAYNU-V-M5-MIGRATE-OK`.
+Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`, `RAYNU-V-M5-MIGRATE-OK`.
 
 ---
 
 ## First action
 
-Draft accepted. **M5.0–M5.1 closed** on Latitude. **M5.2** code lands `RAYNU-V-M5-WEBUI-OK` (embedded SPA); close after Latitude `./tools/m5-webui-smoke.sh`.
+Draft accepted. **M5.0–M5.2 closed** on Latitude (Track A: LIFE + API + WEBUI). Next: **M5.3** (`RAYNU-V-M5-AUDIT-OK`) — audit ring + hash chain.
