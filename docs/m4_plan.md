@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.0 closed on Latitude; next spine gate is **M4.1**.  
+**Status:** **open** — M4.0 closed on Latitude; **M4.1 in progress**.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -76,17 +76,21 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.1 — Scheduler time-slices ≥2 VMs — `RAYNU-V-M4-SCHED-OK`
 
-**Status: open** ← next
+**Status: in progress** (branch `cursor/m4-1-sched-a623`)
 
 **Goal:** Credit (or equivalent) scheduler runs ≥2 runnable VMs; both make forward progress under preemption / yield (not “boot VM0 then freeze”).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Replace/extend `sched/scheduler.rs` stub.
-2. Fair enough that both guests emit progress markers within the boot-gate window.
-3. No ownership regression vs M4.0.
+1. `CreditScheduler::consume_quantum` + `pick_next_fair` — alternate G0/G1.
+2. Retain G0 `LaunchFrames` (`FIRST_GUEST`); after G1 SHELL/`RAYNU-V-M4-2VM-OK`, enter `SCHED_MODE`.
+3. Host LAPIC one-shot preempt → EOI → consume → `VMPTRLD` other VMCS → VMRESUME.
+4. Per-guest GPR banks; markers `RAYNU-V-M4-SLICE-G0` / `SLICE-G1` then `RAYNU-V-M4-SCHED-OK`.
+5. Host gate `sched/m4_sched_gate.rs`; qemu pass line `M0 → M4.1`.
 
-**Likely files:** `sched/scheduler.rs`, `vmx/launch.rs`, `tools/qemu-boot-test.sh`.
+**Acceptance:** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.1)` with M4.0 chain + `RAYNU-V-M4-SCHED-OK`.
+
+**Likely files:** `sched/scheduler.rs`, `sched/m4_sched_gate.rs`, `vmx/launch.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.2 — Scale gate: 4+ concurrent shells — `RAYNU-V-M4-NVM-OK`
 
@@ -256,4 +260,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.0 closed** on Latitude (`RAYNU-V-M4-2VM-OK`). Next: **M4.1** scheduler (`RAYNU-V-M4-SCHED-OK`) on branch `cursor/m4-1-sched-a623`.
+**M4.1** is open on `cursor/m4-1-sched-a623` — close on Latitude when `RAYNU-V-M4-SCHED-OK` latches.

@@ -29,6 +29,7 @@
 //! guest-visible CR4 without #GP.
 //! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL/NOIRQ (real).
 //! M4.0: after G0 SHELL+APIC, VMLAUNCH G1 under private EPT → `RAYNU-V-M4-2VM-OK`.
+//! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -56,6 +57,9 @@ use crate::sched::interrupt::{
     M3_GTIMER_OK_MARKER,
 };
 use crate::sched::msr_firewall::{self, MsrAccess, MsrAction, M3_CPUID_OK_MARKER};
+use crate::sched::scheduler::{
+    CreditScheduler, DEFAULT_CREDIT, M4_SCHED_OK_MARKER, M4_SLICE_G0_MARKER, M4_SLICE_G1_MARKER,
+};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
@@ -195,12 +199,67 @@ pub struct LaunchFrames {
 
 /// M4.0: prepared G1 launch frames (private EPT slab).
 static mut SECOND_GUEST: Option<LaunchFrames> = None;
+/// M4.1: G0 launch frames retained so the scheduler can VMPTRLD back.
+static mut FIRST_GUEST: Option<LaunchFrames> = None;
 /// True when [`set_second_guest`] has registered G1.
 static mut HAS_SECOND_GUEST: bool = false;
 /// True after G0 SHELL+APIC and we have switched (or are switching) to G1.
 static mut SECOND_GUEST_STARTED: bool = false;
 /// Active guest id for SHELL routing (`M2_BRINGUP_GUEST_ID` or `M4_GUEST1_ID`).
 static mut ACTIVE_GUEST_ID: u64 = 1; // M2_BRINGUP_GUEST_ID
+
+/// M4.1: credit scheduler active (time-slice G0↔G1 after 2VM-OK).
+static mut SCHED_MODE: bool = false;
+static mut SCHED: CreditScheduler = CreditScheduler::new();
+static mut SCHED_SLOT_CUR: usize = 0;
+static mut SCHED_SLICE_G0: bool = false;
+static mut SCHED_SLICE_G1: bool = false;
+static mut TWO_VM_LATCHED: bool = false;
+
+/// Per-guest GPR banks (SAVED_* is the live working set for the active guest).
+#[derive(Clone, Copy)]
+struct GuestGprBank {
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rsi: u64,
+    rdi: u64,
+    rbp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+}
+
+impl GuestGprBank {
+    const ZERO: Self = Self {
+        rax: 0,
+        rbx: 0,
+        rcx: 0,
+        rdx: 0,
+        rsi: 0,
+        rdi: 0,
+        rbp: 0,
+        r8: 0,
+        r9: 0,
+        r10: 0,
+        r11: 0,
+        r12: 0,
+        r13: 0,
+        r14: 0,
+        r15: 0,
+    };
+}
+
+static mut GUEST_GPRS: [GuestGprBank; 2] = [GuestGprBank::ZERO, GuestGprBank::ZERO];
+
+/// Host one-shot ticks for an M4.1 time-slice (same scale as Linux quiet ticks).
+const SCHED_SLICE_COUNT: u32 = 0x0010_0000;
 
 /// Register a second guest to launch after G0 reaches SHELL+APIC (M4.0).
 pub fn set_second_guest(frames: LaunchFrames) {
@@ -425,6 +484,8 @@ fn write_dec_u32(mut n: u32) {
 /// SAFETY: CPU in VMX root; frames exclusively owned; identity map.
 pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
     BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    // M4.1: keep G0 frames so the scheduler can switch back after G1 SHELL.
+    FIRST_GUEST = Some(*frames);
     prepare_vmcs_region(frames.vmcs_phys)?;
 
     ops::vmclear(frames.vmcs_phys).map_err(|_| LaunchError::ClearFailed)?;
@@ -908,6 +969,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
 
+    // M4.1: credit scheduler owns both guests after 2VM-OK.
+    if SCHED_MODE {
+        handle_sched_vmexit(basic, qual, guest_rax, guest_rip);
+    }
+
     // M4.0: G1 uses a dedicated exit path — never the G0 EXIT_PHASE machine.
     // Host LAPIC ticks from G0 Linux can still fire on G1 entry (EXT_INT);
     // EOI + resume until SHELL CPUID finishes the gate.
@@ -1177,7 +1243,7 @@ fn emit_lapic_markers() {
 }
 
 /// M3.12/M3.19 gate: real `/init` SHELL + APIC-OK (no IRQ4; IRQ0 already stopped).
-/// M4.0: when a second guest is prepared, launch it instead of finishing.
+/// M4.0/M4.1: when a second guest is prepared, launch it (G0 RIP already advanced).
 unsafe fn maybe_finish_m312() {
     if REAL_LINUX_GUEST
         && LINUX_GTIMER2_DONE
@@ -1190,9 +1256,238 @@ unsafe fn maybe_finish_m312() {
             serial::write_line(M3_NOIRQ_OK_MARKER);
         }
         if HAS_SECOND_GUEST && !SECOND_GUEST_STARTED {
+            save_live_gprs_to_slot(0);
             try_launch_second_guest();
         }
-        finish_boot(true);
+        if !HAS_SECOND_GUEST {
+            finish_boot(true);
+        }
+        // Dual-guest path finishes from the M4.1 scheduler after SCHED-OK.
+    }
+}
+
+fn save_live_gprs_to_slot(slot: usize) {
+    if slot >= 2 {
+        return;
+    }
+    // SAFETY: single-threaded VMX root.
+    unsafe {
+        GUEST_GPRS[slot] = GuestGprBank {
+            rax: SAVED_GUEST_RAX,
+            rbx: SAVED_GUEST_RBX,
+            rcx: SAVED_GUEST_RCX,
+            rdx: SAVED_GUEST_RDX,
+            rsi: SAVED_GUEST_RSI,
+            rdi: SAVED_GUEST_RDI,
+            rbp: SAVED_GUEST_RBP,
+            r8: SAVED_GUEST_R8,
+            r9: SAVED_GUEST_R9,
+            r10: SAVED_GUEST_R10,
+            r11: SAVED_GUEST_R11,
+            r12: SAVED_GUEST_R12,
+            r13: SAVED_GUEST_R13,
+            r14: SAVED_GUEST_R14,
+            r15: SAVED_GUEST_R15,
+        };
+    }
+}
+
+fn load_live_gprs_from_slot(slot: usize) {
+    if slot >= 2 {
+        return;
+    }
+    // SAFETY: single-threaded VMX root.
+    unsafe {
+        let b = GUEST_GPRS[slot];
+        SAVED_GUEST_RAX = b.rax;
+        SAVED_GUEST_RBX = b.rbx;
+        SAVED_GUEST_RCX = b.rcx;
+        SAVED_GUEST_RDX = b.rdx;
+        SAVED_GUEST_RSI = b.rsi;
+        SAVED_GUEST_RDI = b.rdi;
+        SAVED_GUEST_RBP = b.rbp;
+        SAVED_GUEST_R8 = b.r8;
+        SAVED_GUEST_R9 = b.r9;
+        SAVED_GUEST_R10 = b.r10;
+        SAVED_GUEST_R11 = b.r11;
+        SAVED_GUEST_R12 = b.r12;
+        SAVED_GUEST_R13 = b.r13;
+        SAVED_GUEST_R14 = b.r14;
+        SAVED_GUEST_R15 = b.r15;
+    }
+}
+
+fn frames_for_slot(slot: usize) -> Option<LaunchFrames> {
+    // SAFETY: boot single-threaded; frames set before VMLAUNCH.
+    unsafe {
+        match slot {
+            0 => FIRST_GUEST,
+            1 => SECOND_GUEST,
+            _ => None,
+        }
+    }
+}
+
+fn arm_sched_slice() {
+    // SAFETY: VMX root; PIC already masked.
+    unsafe {
+        let _ = apic::arm_oneshot_timer(M2_IRQ_VECTOR as u8, SCHED_SLICE_COUNT);
+    }
+}
+
+fn note_sched_slice(slot: usize) {
+    // SAFETY: single-threaded.
+    unsafe {
+        if slot == 0 && !SCHED_SLICE_G0 {
+            SCHED_SLICE_G0 = true;
+            serial::write_line(M4_SLICE_G0_MARKER);
+        }
+        if slot == 1 && !SCHED_SLICE_G1 {
+            SCHED_SLICE_G1 = true;
+            serial::write_line(M4_SLICE_G1_MARKER);
+        }
+        if SCHED_SLICE_G0 && SCHED_SLICE_G1 {
+            serial::write_line(M4_SCHED_OK_MARKER);
+            serial::write_line(
+                "boot: M4.1 complete — credit scheduler time-sliced G0 + G1",
+            );
+            finish_boot(true);
+        }
+    }
+}
+
+/// VMPTRLD `slot` and VMRESUME (caller already saved live GPRs of the old guest).
+unsafe fn switch_to_sched_slot(slot: usize) -> ! {
+    let frames = match frames_for_slot(slot) {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — sched slot frames missing");
+            finish_boot(false);
+        }
+    };
+    if ops::vmptrld(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — sched VMPTRLD failed");
+        finish_boot(false);
+    }
+    SCHED_SLOT_CUR = slot;
+    ACTIVE_GUEST_ID = if slot == 0 {
+        ept::M2_BRINGUP_GUEST_ID
+    } else {
+        M4_GUEST1_ID
+    };
+    REAL_LINUX_GUEST = slot == 0;
+    // Keep Linux quiet-path helpers armed for G0 post-SHELL resumes.
+    if slot == 0 {
+        LINUX_GTIMER2_DONE = true;
+    }
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    load_live_gprs_from_slot(slot);
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+    arm_sched_slice();
+    serial::write_str("boot: sched switch → slot=");
+    write_hex_u32(slot as u32);
+    serial::write_byte(b'\n');
+    vmresume_with_gprs();
+}
+
+/// After G1 SHELL / 2VM-OK: register both vCPUs and time-slice.
+unsafe fn enter_sched_mode_from_g1() -> ! {
+    if SCHED_MODE {
+        // Already scheduling; treat as normal CPUID completion.
+        arm_sched_slice();
+        vmresume_with_gprs();
+    }
+    SCHED_MODE = true;
+    SCHED = CreditScheduler::new();
+    let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
+    let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
+    SCHED_SLOT_CUR = 1;
+    save_live_gprs_to_slot(1);
+    // G1 just ran its SHELL quantum — hand off to G0.
+    SCHED.consume_quantum(1);
+    serial::write_line("boot: M4.1 — credit scheduler armed (G0↔G1)");
+    let next = match core::ptr::addr_of!(SCHED)
+        .as_ref()
+        .unwrap()
+        .pick_next_fair(Some(1))
+    {
+        Ok(n) => n,
+        Err(_) => {
+            serial::write_line("boot: ERROR — sched no runnable after 2VM");
+            finish_boot(false);
+        }
+    };
+    switch_to_sched_slot(next);
+}
+
+/// Host LAPIC tick while SCHED_MODE: consume quantum and switch.
+unsafe fn schedule_preempt() -> ! {
+    let _ = apic::eoi();
+    let cur = SCHED_SLOT_CUR;
+    // Guest `cur` just ran a full host slice — latch progress before switch.
+    note_sched_slice(cur);
+    save_live_gprs_to_slot(cur);
+    SCHED.consume_quantum(cur);
+    let next = match core::ptr::addr_of!(SCHED)
+        .as_ref()
+        .unwrap()
+        .pick_next_fair(Some(cur))
+    {
+        Ok(n) => n,
+        Err(_) => {
+            serial::write_line("boot: ERROR — sched no runnable on preempt");
+            finish_boot(false);
+        }
+    };
+    if next == cur {
+        arm_sched_slice();
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+        vmresume_with_gprs();
+    }
+    switch_to_sched_slot(next);
+}
+
+/// M4.1 dual-guest exit path (replaces G0 phase machine + G1-only handler).
+unsafe fn handle_sched_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    match basic {
+        EXIT_REASON_EXTERNAL_INTERRUPT => schedule_preempt(),
+        EXIT_REASON_IO_INSTRUCTION => handle_io_and_resume(qual, guest_rax, guest_rip),
+        EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
+        EXIT_REASON_CPUID => handle_cpuid_and_resume(guest_rip),
+        EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => {
+            if REAL_LINUX_GUEST {
+                handle_msr_and_resume(basic);
+            }
+            serial::write_line("boot: ERROR — unexpected MSR exit on G1 in sched");
+            finish_boot(false);
+        }
+        EXIT_REASON_XSETBV => {
+            if REAL_LINUX_GUEST {
+                handle_xsetbv_and_resume(guest_rip);
+            }
+            serial::write_line("boot: ERROR — unexpected XSETBV on G1 in sched");
+            finish_boot(false);
+        }
+        EXIT_REASON_HLT => {
+            // G1 shell HLT / Linux rare HLT — stay until the slice timer fires.
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_INTERRUPT_WINDOW => {
+            let _ = set_interrupt_window_exiting(false);
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        _ => {
+            serial::write_str("boot: ERROR — sched unhandled exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_str(" guest=");
+            write_hex_u64(ACTIVE_GUEST_ID);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
     }
 }
 
@@ -1217,7 +1512,6 @@ unsafe fn handle_g1_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64
         EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
         EXIT_REASON_CPUID => handle_cpuid_and_resume(guest_rip),
         EXIT_REASON_HLT => {
-            // Shell page HLTs after CPUID; gate should have finished on CPUID.
             serial::write_line("boot: ERROR — G1 HLT without SHELL CPUID");
             finish_boot(false);
         }
@@ -1231,6 +1525,7 @@ unsafe fn handle_g1_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64
 }
 
 /// M4.0: VMPTRLD G1 under its private EPT and VMLAUNCH (SHELL CPUID guest).
+/// G0 VMCS is left launched for M4.1 switch-back.
 unsafe fn try_launch_second_guest() -> ! {
     let frames = match SECOND_GUEST {
         Some(f) => f,
@@ -1239,6 +1534,10 @@ unsafe fn try_launch_second_guest() -> ! {
             finish_boot(false);
         }
     };
+    if core::ptr::addr_of!(FIRST_GUEST).read().is_none() {
+        serial::write_line("boot: ERROR — M4.1 FIRST_GUEST missing");
+        finish_boot(false);
+    }
     SECOND_GUEST_STARTED = true;
     ACTIVE_GUEST_ID = M4_GUEST1_ID;
     // Do not reuse G0 EXIT_PHASE — G1 exits go through [`handle_g1_vmexit`].
@@ -1247,6 +1546,7 @@ unsafe fn try_launch_second_guest() -> ! {
     LINUX_GTIMER2_ARMED = false;
     BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
     reset_saved_gprs(0);
+    GUEST_GPRS[1] = GuestGprBank::ZERO;
 
     serial::write_line("boot: M4.0 — launching G1 under private EPT slab");
 
@@ -1382,20 +1682,25 @@ unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
 unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     let leaf = SAVED_GUEST_RAX as u32;
     let subleaf = SAVED_GUEST_RCX as u32;
+    let mut enter_sched_after = false;
 
     // M3.10: real `/init` SHELL hypercall (before any UART TX that may stall).
     // M3.19: latch shell on CPUID — no IRQ4 COM1 TX inject required.
     // M3.12: do not close until APIC-OK as well (maybe_finish_m312).
     // M4.0: G1 private-slab guest uses the same SHELL CPUID leaf.
+    // M4.1: after G1 SHELL, enter the credit scheduler (do not finish_boot yet).
     if leaf == SHELL_CPUID_LEAF && subleaf == SHELL_CPUID_SUBLEAF {
         if ACTIVE_GUEST_ID == M4_GUEST1_ID {
-            serial::write_byte(b'\n');
-            serial::write_line(M4_SHELL_G1_MARKER);
-            serial::write_line(M4_2VM_OK_MARKER);
-            serial::write_line(
-                "boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)",
-            );
-            finish_boot(true);
+            if !TWO_VM_LATCHED {
+                TWO_VM_LATCHED = true;
+                serial::write_byte(b'\n');
+                serial::write_line(M4_SHELL_G1_MARKER);
+                serial::write_line(M4_2VM_OK_MARKER);
+                serial::write_line(
+                    "boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)",
+                );
+                enter_sched_after = true;
+            }
         } else if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
             serial_pio::note_shell_cpuid();
             static mut SHELL_CPUID_MARKED: bool = false;
@@ -1404,7 +1709,6 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
                 serial::write_byte(b'\n');
                 serial::write_line(M3_SHELL_OK_MARKER);
             }
-            maybe_finish_m312();
         }
     }
 
@@ -1424,6 +1728,21 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
 
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(2);
     let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+
+    // G0 SHELL: RIP is past the hypercall — safe to leave the VMCS and launch G1.
+    if leaf == SHELL_CPUID_LEAF
+        && subleaf == SHELL_CPUID_SUBLEAF
+        && ACTIVE_GUEST_ID != M4_GUEST1_ID
+        && REAL_LINUX_GUEST
+        && LINUX_GTIMER2_DONE
+    {
+        maybe_finish_m312();
+    }
+
+    if enter_sched_after {
+        enter_sched_mode_from_g1();
+    }
+
     // M3.19: APIC IRR may need the interrupt window (no COM1 TX IRQ inject).
     if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
         if try_inject_guest_apic_timer() {
@@ -2234,7 +2553,9 @@ fn finish_boot(ok: bool) -> ! {
 
     if ok {
         // SAFETY: boot single-threaded; flags set before / during guest path.
-        if unsafe { SECOND_GUEST_STARTED } {
+        if unsafe { SCHED_MODE } {
+            serial::write_line("boot: M4.1 complete — dual-VMCS sched path OK");
+        } else if unsafe { SECOND_GUEST_STARTED } {
             serial::write_line("boot: M4.0 complete — dual VMCS path OK");
         } else if unsafe { REAL_LINUX_GUEST } {
             if lapic_virt::apic_ok() && crate::memory::precise_ranges_ok() {

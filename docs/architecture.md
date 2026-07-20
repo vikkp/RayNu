@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M4.0 closed:** G0 Linux SHELL + G1 SHELL under distinct EPT → `RAYNU-V-M4-2VM-OK`.  
-**Next M4.1:** scheduler time-slices ≥2 VMs → `RAYNU-V-M4-SCHED-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).
+**Active M4.1:** credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).

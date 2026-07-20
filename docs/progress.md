@@ -69,7 +69,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.1** ← next | `RAYNU-V-M4-SCHED-OK` | Scheduler time-slices ≥2 VMs |
+| **M4.1** ← in progress | `RAYNU-V-M4-SCHED-OK` | Scheduler time-slices ≥2 VMs |
 | M4.2 | `RAYNU-V-M4-NVM-OK` | 4+ concurrent Linux shells |
 | M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
