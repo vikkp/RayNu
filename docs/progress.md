@@ -51,8 +51,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page (2M/1G) ghost *spec* (CI + Latitude; L3 → M5) |
 | M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine (CI + Latitude) |
 | M5.0 | `RAYNU-V-M5-LIFE-OK` | VM lifecycle API (CI + Latitude) |
+| M5.1 | `RAYNU-V-M5-API-OK` | CLI + REST control plane (CI + Latitude) |
 
-## Verification checkpoint (as of M5.0)
+## Verification checkpoint (as of M5.1)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -93,8 +94,8 @@ Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5.1** ← next | `RAYNU-V-M5-API-OK` | CLI + REST control plane |
-| M5.2 | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI |
+| **M5.2** ← next | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI |
+| M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
 | M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
 | M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
 | M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |

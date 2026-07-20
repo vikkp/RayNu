@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M5.0 closed** (VM lifecycle → `RAYNU-V-M5-LIFE-OK`). Active: **M5.1** (CLI + REST → `RAYNU-V-M5-API-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
+**Through M5.1 closed** (CLI + REST → `RAYNU-V-M5-API-OK`). Active: **M5.2** (embedded Web UI → `RAYNU-V-M5-WEBUI-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
 
 ### Risk Hotspots
 

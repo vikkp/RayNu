@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M5.0 closed** — VM lifecycle API → `RAYNU-V-M5-LIFE-OK`. Active: **M5.1** (CLI + REST) — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M5.1 closed** — CLI + REST control plane → `RAYNU-V-M5-API-OK`. Active: **M5.2** (embedded Web UI) — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 
