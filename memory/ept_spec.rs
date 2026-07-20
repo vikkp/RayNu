@@ -74,6 +74,9 @@
 //! TODO(M6.0 CLOSED): EPT-violation exclusivity —
 //!   `theorem_ept_violation_preserves_exclusive` / `EptViolationDisposition`
 //!   (EmulateNoMap | Reject | ClaimMap) → `RAYNU-V-M6-EPTVIO-OK`.
+//! TODO(M6.1 CLOSED): HW PTE bit-decode — `ept_leaf_large_enc` /
+//!   `hw_2m_identity_leaf_ok` / `theorem_hw_2m_leaf_refines_identity` →
+//!   `RAYNU-V-M6-HWPTE-OK`. Full multi-level walk → polish.
 //!
 //! # Large-page map (M4.8 — L2 spec)
 //!
@@ -98,7 +101,7 @@
 //! `refines(c)` and every owned frame ∈ allocated. `theorem_alloc_map_unmap_refines`
 //! discharges allocate→map→unmap under that coupling. Scoped precise-identity
 //! correspondence: `identity_leaf_ok` (GPA==HPA frame inside 512 MiB window).
-//! Full HW PTE bit-decode → M6.1.
+//! HW PTE bit-decode closed in M6.1.
 //!
 //! # EPT-violation (M6.0)
 //!
@@ -107,5 +110,13 @@
 //! discharges exclusivity for every enabled disposition. Live MMIO path uses
 //! EmulateNoMap; unexpected GPA is Reject. Runtime hook:
 //! `apply_violation_disposition` in `ept.rs`.
+//!
+//! # HW PTE bit-decode (M6.1)
+//!
+//! `ept_leaf_large_enc` matches `ept_hw::ept_leaf_large` (RWE + large + MT + HPA).
+//! `hw_2m_identity_leaf_ok` / `theorem_hw_2m_leaf_refines_identity` discharge that
+//! identity-builder 2 MiB leaves refine `identity_leaf_ok` at the leaf base (and
+//! first covered 4 KiB frames). Runtime prop: `prop_hw_pte_identity_correspondence`.
+//! Full multi-level walk → polish.
 
 #![allow(dead_code)]

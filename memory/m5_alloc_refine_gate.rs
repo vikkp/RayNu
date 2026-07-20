@@ -7,9 +7,9 @@
 //! Checks that `ept_model` discharges `alloc_ept_refines` /
 //! `theorem_alloc_map_unmap_refines` and scoped precise-identity GPA==HPA
 //! lemmas (no `admit`), that docs close the allocator GAP, and that live
-//! allocate→map→unmap keeps owned frames ⊆ allocated. Full HW PTE decode /
-//! EPT-violation remain GAP → M6. Runtime verify is exercised by
-//! `tools/verus-alloc-refine-smoke.sh`.
+//! allocate→map→unmap keeps owned frames ⊆ allocated. Full HW PTE decode
+//! closed in M6.1 (`GAP(CLOSED M6.1)`); EPT-violation closed in M6.0. Runtime
+//! verify is exercised by `tools/verus-alloc-refine-smoke.sh`.
 
 use crate::memory::ept::{
     EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID, M4_GUEST1_ID,
@@ -20,8 +20,9 @@ use crate::memory::frame_allocator::{AllocError, FrameAllocator};
 /// Host / CI marker when the M5.9 alloc-refine gate passes.
 pub const M5_ALLOC_REFINE_OK_MARKER: &str = "RAYNU-V-M5-ALLOC-REFINE-OK";
 
-/// Documented GAP: full HW PTE bit decode / EPT-violation (M6).
+/// Documented GAP note (open form or M6.1 closed form both accepted).
 pub const HW_PTE_GAP_NOTE: &str = "GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)";
+pub const HW_PTE_GAP_CLOSED: &str = "GAP(CLOSED M6.1): Hardware EPT PTE bit-decode";
 
 /// True when a non-comment source line is an `admit(` statement.
 fn source_has_admit_call(s: &str) -> bool {
@@ -70,7 +71,7 @@ pub fn ept_spec_closes_alloc_refine() -> bool {
         && spec.contains("alloc_ept_refines")
         && proof.contains("GAP(CLOSED M5.9): Frame-allocator ↔ EPT L3 coupling")
         && proof.contains("GAP(CLOSED M5.9): Precise-identity GPA==HPA correspondence")
-        && proof.contains(HW_PTE_GAP_NOTE)
+        && (proof.contains(HW_PTE_GAP_NOTE) || proof.contains(HW_PTE_GAP_CLOSED))
         && proof.contains("theorem_alloc_map_unmap_refines")
         && !proof.contains("GAP: Frame-allocator ↔ EPT L3 coupling beyond ConcreteEptMap (M5)")
 }
@@ -167,7 +168,7 @@ pub fn prop_precise_identity_geometry() -> bool {
         && PRECISE_BYTES == 512 * 1024 * 1024
         && PRECISE_BYTES / 4096 == 131072
         && frames_required_precise() >= 3
-        && HW_PTE_GAP_NOTE.contains("M6")
+        && (HW_PTE_GAP_NOTE.contains("M6") || HW_PTE_GAP_CLOSED.contains("M6.1"))
 }
 
 /// Full M5.9 artifact + live coupling gate (does not run Verus).

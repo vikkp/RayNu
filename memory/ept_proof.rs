@@ -48,7 +48,10 @@
 //!   (marker RAYNU-V-M6-EPTVIO-OK; theorem_ept_violation_preserves_exclusive /
 //!   EptViolationDisposition EmulateNoMap|Reject|ClaimMap)
 //! GAP: Live migration page transfer (M6)
-//! GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)
+//! GAP(CLOSED M6.1): Hardware EPT PTE bit-decode
+//!   (marker RAYNU-V-M6-HWPTE-OK; ept_leaf_large_enc / hw_2m_identity_leaf_ok /
+//!   theorem_hw_2m_leaf_refines_identity / lemma_ept_leaf_large_decode)
+//! GAP: Full multi-level EPT walk correspondence (polish)
 //! GAP: Precise range registry (`EptRangeMap`) vs per-page lemmas
 //! ```
 //!

@@ -65,13 +65,16 @@
             Multi-guest platform under EPT through M5, plus EPT-violation
             exclusivity on the production-ready track —
             <code>RAYNU-V-M6-EPTVIO-OK</code> on host
-            (<code>65 verified, 0 errors</code>). Next: M6.1 (HW PTE bit-decode —
-            see <code>docs/m6_plan.md</code>).
+            (<code>65 verified, 0 errors</code>). M6.1 HW PTE is wired
+            (<code>RAYNU-V-M6-HWPTE-OK</code> (<code>72 verified, 0 errors</code>
+            locally; Latitude pending) — see <code>docs/m6_plan.md</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M5-ALLOC-REFINE-OK
 RAYNU-V-M6-EPTVIO-OK
+RAYNU-V-M6-HWPTE-OK
 ==> Verus alloc-refine smoke PASSED (M5.9)
-==> Verus EPT-violation smoke PASSED (M6.0)</code></pre>
+==> Verus EPT-violation smoke PASSED (M6.0)
+==> Verus HW PTE smoke PASSED (M6.1)  # Latitude pending</code></pre>
         </div>
       </section>
 
@@ -356,6 +359,13 @@ RAYNU-V-M6-EPTVIO-OK
                     <code>RAYNU-V-M6-EPTVIO-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M6.1</span>
+                  <span class="journey__text"
+                    >HW PTE bit-decode (wired; Latitude pending) →
+                    <code>RAYNU-V-M6-HWPTE-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -468,6 +478,7 @@ RAYNU-V-M6-EPTVIO-OK
 ./tools/verus-numa-smoke.sh     # M5.8 → RAYNU-V-M5-NUMA-OK
 ./tools/verus-alloc-refine-smoke.sh # M5.9 → RAYNU-V-M5-ALLOC-REFINE-OK
 ./tools/verus-eptvio-smoke.sh   # M6.0 → RAYNU-V-M6-EPTVIO-OK
+./tools/verus-hwpte-smoke.sh    # M6.1 → RAYNU-V-M6-HWPTE-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -480,8 +491,9 @@ RAYNU-V-M6-EPTVIO-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.0 is closed (M5 ops + proof + EPT-violation); next is
-            <strong>M6.1</strong> (HW PTE — see <code>docs/m6_plan.md</code>).
+            M0→M6.0 is closed (M5 ops + proof + EPT-violation); M6.1 HW PTE is
+            wired (Latitude pending — see <code>docs/m6_plan.md</code>); next
+            after close is <strong>M6.2</strong> (NUMA-L3).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

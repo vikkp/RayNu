@@ -97,6 +97,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/numa` / `m5_numa_gate` | L0 | Host NUMA view + artifact gate (M5.8); affinity L3 → M6.2 |
 | `memory/m5_alloc_refine_gate` | L0 | Host artifact gate for allocator↔EPT refine (M5.9) |
 | `memory/m6_eptvio_gate` | L0 | Host artifact gate for EPT-violation exclusivity (M6.0) |
+| `memory/m6_hwpte_gate` | L0 | Host artifact gate for HW PTE bit-decode (M6.1) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV from ring snapshot; REPORT-OK (M5.4); PDF → M6 |
@@ -110,7 +111,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M6.1** ← next | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence |
+| **M6.1** ← wired | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (Latitude pending) |
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |

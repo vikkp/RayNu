@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M6.0 closed** (EPT-violation → `RAYNU-V-M6-EPTVIO-OK`). Active: **M6.1** (HW PTE → `RAYNU-V-M6-HWPTE-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**Through M6.1 wired** (HW PTE → `RAYNU-V-M6-HWPTE-OK`; Latitude pending). Next after close: **M6.2** (NUMA-L3 → `RAYNU-V-M6-NUMA-L3-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
 
 ### Risk Hotspots
 

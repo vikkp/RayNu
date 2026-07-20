@@ -15,8 +15,10 @@
 //! M5.9 couples the ghost frame pool with concrete EPT refine (`alloc_ept_refines`)
 //! and scoped precise-identity GPA==HPA correspondence → `RAYNU-V-M5-ALLOC-REFINE-OK`.
 //! M6.0 discharges EPT-violation handling under exclusivity
-//! (`theorem_ept_violation_preserves_exclusive`) → `RAYNU-V-M6-EPTVIO-OK`
-//! (full HW PTE bit-decode → M6.1).
+//! (`theorem_ept_violation_preserves_exclusive`) → `RAYNU-V-M6-EPTVIO-OK`.
+//! M6.1 deepens HW PTE bit-decode for 2M identity leaves
+//! (`hw_2m_identity_leaf_ok` / `theorem_hw_2m_leaf_refines_identity`) →
+//! `RAYNU-V-M6-HWPTE-OK` (full multi-level walk → polish).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -30,6 +32,7 @@
 //! - M5.8 NUMA ghost spec: `RAYNU-V-M5-NUMA-OK` (via tools/verus-numa-smoke.sh)
 //! - M5.9 alloc↔EPT refine: `RAYNU-V-M5-ALLOC-REFINE-OK` (via tools/verus-alloc-refine-smoke.sh)
 //! - M6.0 EPT-violation: `RAYNU-V-M6-EPTVIO-OK` (via tools/verus-eptvio-smoke.sh)
+//! - M6.1 HW PTE: `RAYNU-V-M6-HWPTE-OK` (via tools/verus-hwpte-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -1861,6 +1864,115 @@ pub proof fn lemma_identity_leaf_zero()
 }
 
 // ---------------------------------------------------------------------------
+// M6.1 — Hardware EPT PTE bit-decode (Intel SDM Vol. 3C §28.2)
+// Matches `memory/ept_hw.rs` `ept_leaf_large` / `ept_link` packing:
+//   bits 2:0 = R/W/X, bit 7 = large page, bits 5:3 = memory type, HPA in [63:12].
+// Full multi-level walk correspondence → polish GAP.
+// ---------------------------------------------------------------------------
+
+/// 2 MiB-aligned address (matches `ept_hw::TWO_MIB` / `PAGE_2M`).
+pub open spec fn page_aligned_2m(addr: u64) -> bool {
+    addr % PAGE_2M == 0
+}
+
+/// R/W/X present (bits 2:0 = 0b111). Matches `ept_hw::ept_leaf_large` / `ept_link`.
+pub open spec fn ept_rwe_present(pte: u64) -> bool {
+    (pte & 0x7u64) == 0x7u64
+}
+
+/// Large-page leaf bit (bit 7). Set on 2 MiB / 1 GiB leaves; clear on PDE links.
+pub open spec fn ept_large_bit(pte: u64) -> bool {
+    (pte & (1u64 << 7)) != 0
+}
+
+/// Host-physical address from PTE bits [63:12] (page-aligned).
+pub open spec fn ept_hpa_from_pte(pte: u64) -> u64 {
+    pte & !0xfffu64
+}
+
+/// Encode a 2 MiB large leaf the same way `ept_hw::ept_leaf_large` does.
+pub open spec fn ept_leaf_large_enc(hpa: u64, mt: u64) -> u64 {
+    (hpa & !0xfffu64) | ((mt & 0x7u64) << 3) | (1u64 << 7) | 0x7u64
+}
+
+/// Hardware 2 MiB identity leaf for aligned `gpa` is well-formed and refines
+/// abstract identity at the leaf base (`identity_leaf_ok`).
+pub open spec fn hw_2m_identity_leaf_ok(gpa: Gpa) -> bool {
+    page_aligned_2m(gpa) && in_precise_identity(gpa) && ({
+        let pte = ept_leaf_large_enc(gpa, 6);
+        ept_rwe_present(pte)
+            && ept_large_bit(pte)
+            && ept_hpa_from_pte(pte) == gpa
+            && identity_leaf_ok(gpa, identity_frame_for_gpa(gpa))
+    })
+}
+
+/// Decode of an encoded 2 MiB leaf recovers HPA and access/large bits.
+pub proof fn lemma_ept_leaf_large_decode(hpa: u64, mt: u64)
+    requires
+        page_aligned_4k(hpa),
+        mt <= 7,
+    ensures
+        ept_rwe_present(ept_leaf_large_enc(hpa, mt)),
+        ept_large_bit(ept_leaf_large_enc(hpa, mt)),
+        ept_hpa_from_pte(ept_leaf_large_enc(hpa, mt)) == hpa,
+{
+    let pte = ept_leaf_large_enc(hpa, mt);
+    assert(hpa & !0xfffu64 == hpa) by (bit_vector)
+        requires
+            hpa % 4096u64 == 0,
+    ;
+    assert((pte & 0x7u64) == 0x7u64) by (bit_vector)
+        requires
+            pte == (hpa & !0xfffu64) | ((mt & 0x7u64) << 3) | (1u64 << 7) | 0x7u64,
+            mt <= 7u64,
+    ;
+    assert((pte & (1u64 << 7)) != 0) by (bit_vector)
+        requires
+            pte == (hpa & !0xfffu64) | ((mt & 0x7u64) << 3) | (1u64 << 7) | 0x7u64,
+            mt <= 7u64,
+    ;
+    assert((pte & !0xfffu64) == (hpa & !0xfffu64)) by (bit_vector)
+        requires
+            pte == (hpa & !0xfffu64) | ((mt & 0x7u64) << 3) | (1u64 << 7) | 0x7u64,
+            mt <= 7u64,
+    ;
+}
+
+/// Bring-up: 2 MiB identity leaf at GPA 0 (WB mt=6) refines abstract identity,
+/// including the first four 4 KiB frames covered by the leaf.
+pub proof fn theorem_hw_2m_leaf_refines_identity()
+    ensures
+        hw_2m_identity_leaf_ok(0),
+        identity_leaf_ok(0, 0),
+        identity_leaf_ok(PAGE_4K, 1),
+        identity_leaf_ok((2u64 * PAGE_4K) as u64, 2),
+        identity_leaf_ok((3u64 * PAGE_4K) as u64, 3),
+        ept_hpa_from_pte(ept_leaf_large_enc(0, 6)) == 0,
+{
+    lemma_ept_leaf_large_decode(0, 6);
+    lemma_identity_leaf_gpa_eq_hpa(0);
+    lemma_identity_leaf_gpa_eq_hpa(PAGE_4K);
+    lemma_identity_leaf_gpa_eq_hpa((2u64 * PAGE_4K) as u64);
+    lemma_identity_leaf_gpa_eq_hpa((3u64 * PAGE_4K) as u64);
+    assert(page_aligned_2m(0));
+    assert(hw_2m_identity_leaf_ok(0));
+}
+
+/// Second 2 MiB leaf inside the precise window also decodes and refines identity.
+pub proof fn lemma_hw_2m_leaf_at_two_mib()
+    ensures
+        hw_2m_identity_leaf_ok(PAGE_2M),
+        ept_hpa_from_pte(ept_leaf_large_enc(PAGE_2M, 6)) == PAGE_2M,
+{
+    lemma_ept_leaf_large_decode(PAGE_2M, 6);
+    lemma_identity_leaf_gpa_eq_hpa(PAGE_2M);
+    assert(page_aligned_2m(PAGE_2M));
+    assert(in_precise_identity(PAGE_2M));
+    assert(hw_2m_identity_leaf_ok(PAGE_2M));
+}
+
+// ---------------------------------------------------------------------------
 // M6.0 — EPT-violation handling preserves exclusive ownership (ADR-004)
 // ---------------------------------------------------------------------------
 
@@ -1998,3 +2110,5 @@ pub const M5_NUMA_OK_MARKER: &str = "RAYNU-V-M5-NUMA-OK";
 pub const M5_ALLOC_REFINE_OK_MARKER: &str = "RAYNU-V-M5-ALLOC-REFINE-OK";
 /// M6.0: EPT-violation handling preserves exclusive ownership (no `admit`).
 pub const M6_EPTVIO_OK_MARKER: &str = "RAYNU-V-M6-EPTVIO-OK";
+/// M6.1: Hardware EPT PTE bit-decode for 2M identity leaves (no `admit`).
+pub const M6_HWPTE_OK_MARKER: &str = "RAYNU-V-M6-HWPTE-OK";
