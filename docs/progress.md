@@ -110,15 +110,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6.4 wired** (Latitude pending). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.4 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (closed) |
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (closed) |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (closed) |
-| **M6.4** ← wired | `RAYNU-V-M6-AUTH-OK` | REST auth (Latitude pending) |
-| M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
+| M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (closed) |
+| **M6.5** ← next | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
 | M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden |
 | M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite |
 | M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak |
