@@ -135,8 +135,26 @@ impl FrameAllocator {
         }
     }
 
-    fn contains(&self, frame: PhysFrame) -> bool {
+    /// True if `frame` lies in this allocator's managed span (allocated or free).
+    pub fn contains(&self, frame: PhysFrame) -> bool {
         frame.0 >= self.base_frame && frame.0 < self.base_frame + self.capacity
+    }
+
+    /// True if any page in `[phys, phys+len)` is managed by this allocator.
+    pub fn owns_phys_range(&self, phys: u64, len: u64) -> bool {
+        if len == 0 {
+            return false;
+        }
+        let start = phys / 4096;
+        let end = phys.saturating_add(len).div_ceil(4096);
+        let mut f = start;
+        while f < end {
+            if self.contains(PhysFrame(f)) {
+                return true;
+            }
+            f += 1;
+        }
+        false
     }
 
     fn index_of(&self, frame: PhysFrame) -> Option<u64> {
@@ -176,17 +194,29 @@ impl FrameAllocator {
     ///
     /// Used by M3.7/M3.8 multi-page bzImage placement.
     pub fn allocate_contiguous(&mut self, n: u64) -> Option<PhysFrame> {
-        if n == 0 {
+        self.allocate_contiguous_aligned(n, 1)
+    }
+
+    /// Allocate `n` contiguous frames with page-index alignment `align_pages`
+    /// (must be a power of two). Used by M4.0 for a 2 MiB-aligned G1 slab.
+    pub fn allocate_contiguous_aligned(&mut self, n: u64, align_pages: u64) -> Option<PhysFrame> {
+        if n == 0 || align_pages == 0 || (align_pages & (align_pages - 1)) != 0 {
             return None;
         }
-        if n == 1 {
+        if n == 1 && align_pages == 1 {
             return self.allocate_frame();
         }
         if n > self.capacity || self.allocated_count + n > self.capacity {
             return None;
         }
         let max_start = self.capacity - n;
-        for start in 0..=max_start {
+        let mut start = 0u64;
+        while start <= max_start {
+            let abs = self.base_frame + start;
+            if (abs & (align_pages - 1)) != 0 {
+                start += 1;
+                continue;
+            }
             let mut free = true;
             for j in 0..n {
                 if self.test_bit(start + j) {
@@ -195,6 +225,7 @@ impl FrameAllocator {
                 }
             }
             if !free {
+                start += 1;
                 continue;
             }
             for j in 0..n {

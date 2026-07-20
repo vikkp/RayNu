@@ -15,13 +15,15 @@ pub mod l3_gate;
 pub mod l3_link_gate;
 pub mod l3_refine_gate;
 pub mod l3_verify_gate;
+pub mod m4_2vm_gate;
 pub mod verus_gate;
 
 pub use ept::{
-    claim_precise_identity_ranges, ownership_selftest_ok, precise_ranges_ok,
-    run_ownership_selftest, EptError, EptMap, EptPermissions, M2_BRINGUP_GUEST_ID,
-    M2_OWN_OK_MARKER,
+    claim_precise_identity_ranges, claim_precise_with_guest1_hole, ownership_selftest_ok,
+    precise_ranges_ok, run_ownership_selftest, EptError, EptMap, EptPermissions,
+    M2_BRINGUP_GUEST_ID, M2_OWN_OK_MARKER, M4_2VM_OK_MARKER, M4_GUEST1_ID, M4_SHELL_G1_MARKER,
 };
+pub use m4_2vm_gate::run_m4_2vm_gate;
 pub use ept_hw::{
     EptHwError, EptPageSize, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER, M3_EPT2_OK_MARKER,
     M3_EPT3_OK_MARKER, PRECISE_BYTES, PRECISE_GIB, PRECISE_MIB, SECONDARY_ENABLE_EPT,

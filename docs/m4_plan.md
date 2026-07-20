@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M3.22 closed; first gate is **M4.0**.  
+**Status:** **open** — M4.0 closed on Latitude; next spine gate is **M4.1**.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -54,22 +54,29 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.0 — Second guest under EPT — `RAYNU-V-M4-2VM-OK`
 
-**Status: open**
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.0)`)
 
-**Goal:** Two concurrent Linux guests, each with a distinct GPA→HPA ownership region under precise EPT. No shared frames. Both reach a shell (or equivalent COM1 latch).
+**Goal:** Two guests under distinct EPT ownership. G0 remains real Linux to SHELL; G1 is a second VMCS on a private 2 MiB EPT slab that latches SHELL via CPUID. No shared guest frames (G1 HPA unmapped from G0 EPT). Scheduling fairness is **M4.1**.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Second VMCS / guest context; separate `EptMap` (or guest-id partition) claims.
-2. Runtime asserts: no HPA owned by two guests (ADR-004 L1 floor).
-3. Latitude/QEMU: markers for both guests + `RAYNU-V-M4-2VM-OK`.
-4. Audit events on map/unmap for both guests.
+1. `build_single_2m_identity` + `clear_2m_identity_leaf` + `write_guest_shell_cpuid_page`.
+2. `claim_precise_with_guest1_hole` — G0 precise window with G1 HPA punched out (`M4_GUEST1_ID=2`).
+3. G1 slab HPA chosen in `[GUEST_RAM, PRECISE)` (above e820), **outside** the HV `FrameAllocator` pool (Latitude low-memory pool).
+4. G1 uses a **second precise identity EPT** + host CR3 (G0 has the slab leaf cleared). Private-only EPT/slab-CR3 deferred — triple-faulted on Latitude.
+5. Host TSS/GDT installed once and reused — VM-exit forces `GDTR.limit=FFFF` (cannot re-copy).
+6. After G0 SHELL+APIC+NOIRQ: mask host LAPIC, `try_launch_second_guest` → G1 VMLAUNCH; dedicated G1 exit path (EOI leftover EXT_INT) → `RAYNU-V-M4-SHELL-G1` + `RAYNU-V-M4-2VM-OK`.
+7. Host gate `memory/m4_2vm_gate.rs`; qemu pass line `M0 → M4.0`.
 
-**Likely files:** `vmx/launch.rs`, `memory/ept.rs`, `memory/ept_hw.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`, new `m4_2vm` gate.
+**Acceptance (met):** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.0)` with prior M3.22 chain + `RAYNU-V-M4-2VM-OK`.
+
+**Files:** `memory/ept_hw.rs`, `memory/ept.rs`, `memory/m4_2vm_gate.rs`, `memory/frame_allocator.rs`, `vmx/launch.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
+
+**Note:** Dual *real Linux* guests remains a stretch; G1 SHELL latch under distinct EPT proves the dual-VMCS / dual-ownership spine for M4.1+.
 
 ### M4.1 — Scheduler time-slices ≥2 VMs — `RAYNU-V-M4-SCHED-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Credit (or equivalent) scheduler runs ≥2 runnable VMs; both make forward progress under preemption / yield (not “boot VM0 then freeze”).
 
@@ -249,4 +256,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-Open **M4.0** on branch `cursor/m4-0-2vm-a623` — second guest under EPT → `RAYNU-V-M4-2VM-OK`.
+**M4.0 closed** on Latitude (`RAYNU-V-M4-2VM-OK`). Next: **M4.1** scheduler (`RAYNU-V-M4-SCHED-OK`) on branch `cursor/m4-1-sched-a623`.

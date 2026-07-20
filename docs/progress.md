@@ -40,8 +40,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M3.20 | `RAYNU-V-M3-EPT3-OK` | Tight EPT `[0,512MiB)` @ 2M; QEMU `-m 512M` (Latitude) |
 | M3.21 | `RAYNU-V-M3-KANI-OK` | Hard-fail Kani CI pin `0.67.0`; 2 harnesses (CI + Latitude) |
 | M3.22 | `RAYNU-V-M3-ASSETS-OK` | PE `.askern`/`.asinit` embed; ESP fallback (Latitude) |
+| M4.0 | `RAYNU-V-M4-2VM-OK` | G0 Linux SHELL + G1 SHELL under distinct EPT (dual VMCS; Latitude) |
 
-## Verification checkpoint (as of M3.22)
+## Verification checkpoint (as of M4.0)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -55,7 +56,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,512MiB)` @ 2M (M3.20); APIC unmapped by omission |
-| `vmx/*` | L0–L1 | Real Linux through EPT3 + APIC + SHELL + NOIRQ (M3.20) |
+| `vmx/*` | L0–L1 | Dual VMCS: G0 Linux + G1 SHELL (M4.0); EPT3 + APIC + NOIRQ |
+| `memory/m4_2vm_gate` | L0 | Host artifact gate for dual-VMCS / dual-EPT path |
 | Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
@@ -67,8 +69,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.0** ← next | `RAYNU-V-M4-2VM-OK` | Second guest under EPT (distinct ownership) |
-| M4.1 | `RAYNU-V-M4-SCHED-OK` | Scheduler time-slices ≥2 VMs |
+| **M4.1** ← next | `RAYNU-V-M4-SCHED-OK` | Scheduler time-slices ≥2 VMs |
 | M4.2 | `RAYNU-V-M4-NVM-OK` | 4+ concurrent Linux shells |
 | M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
 | M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |

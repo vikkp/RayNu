@@ -15,8 +15,17 @@ use crate::memory::PhysFrame;
 /// COM1 marker when ADR-004 ownership self-test passes (M2.2 gate).
 pub const M2_OWN_OK_MARKER: &str = "RAYNU-V-M2-OWN-OK";
 
-/// Guest id used by the M2 bring-up single guest.
+/// Guest id used by the M2/M3 bring-up guest (G0).
 pub const M2_BRINGUP_GUEST_ID: u64 = 1;
+
+/// Guest id for the M4.0 second guest (G1) under a private EPT slab.
+pub const M4_GUEST1_ID: u64 = 2;
+
+/// COM1 marker when both G0 and G1 have latched SHELL under distinct EPT ownership.
+pub const M4_2VM_OK_MARKER: &str = "RAYNU-V-M4-2VM-OK";
+
+/// COM1 marker when G1 SHELL CPUID fires (M4.0).
+pub const M4_SHELL_G1_MARKER: &str = "RAYNU-V-M4-SHELL-G1";
 
 /// Max tracked 4K mappings in the bring-up registry (M3.8 multi-page bzImage).
 /// Under Kani, keep a tiny registry so CBMC can unwind `map` / `owner_of` loops.
@@ -288,19 +297,54 @@ impl EptRangeMap {
 
 /// Claim the M3.13 precise identity window for the bring-up guest.
 pub fn claim_precise_identity_ranges() -> Result<(), EptError> {
+    claim_precise_with_guest1_hole(0, 0)
+}
+
+/// Claim precise identity for G0, optionally reserving a private HPA slab for G1.
+///
+/// When `g1_len == 0`, claims `[0, PRECISE_BYTES)` for [`M2_BRINGUP_GUEST_ID`]
+/// (M3.13/M3.20 behavior). When `g1_len > 0`, punches that HPA span out of G0
+/// and claims it for [`M4_GUEST1_ID`] (M4.0).
+pub fn claim_precise_with_guest1_hole(g1_hpa: u64, g1_len: u64) -> Result<(), EptError> {
     // SAFETY: single-threaded boot; called once before VMLAUNCH.
     unsafe {
         let ranges = core::ptr::addr_of_mut!(PRECISE_RANGES);
         *ranges = EptRangeMap::new();
-        (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, PRECISE_BYTES)?;
+
+        if g1_len != 0 {
+            if (g1_hpa & 0xfff) != 0 || (g1_len & 0xfff) != 0 {
+                return Err(EptError::Invariant);
+            }
+            let g1_end = g1_hpa.checked_add(g1_len).ok_or(EptError::Invariant)?;
+            if g1_end > PRECISE_BYTES {
+                return Err(EptError::Invariant);
+            }
+            (*ranges).claim_range(M4_GUEST1_ID, g1_hpa, g1_len)?;
+            if g1_hpa > 0 {
+                (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, g1_hpa)?;
+            }
+            if g1_end < PRECISE_BYTES {
+                (*ranges).claim_range(M2_BRINGUP_GUEST_ID, g1_end, PRECISE_BYTES - g1_end)?;
+            }
+        } else {
+            (*ranges).claim_range(M2_BRINGUP_GUEST_ID, 0, PRECISE_BYTES)?;
+        }
+
         // Guest RAM windows from e820/memmap are inside [0, PRECISE_BYTES).
         let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
         if guest_ram > PRECISE_BYTES {
             return Err(EptError::Invariant);
         }
+        // G1 private slab must sit above G0 guest e820 so Linux RAM stays G0-owned.
+        if g1_len != 0 && g1_hpa < guest_ram {
+            return Err(EptError::Invariant);
+        }
         if !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0)
             || !(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, guest_ram - 0x1000)
         {
+            return Err(EptError::Invariant);
+        }
+        if g1_len != 0 && !(*ranges).contains_gpa(M4_GUEST1_ID, g1_hpa) {
             return Err(EptError::Invariant);
         }
         // APIC MMIO must remain outside claimed/mapped precise window.

@@ -297,6 +297,148 @@ pub unsafe fn build_precise_identity(frames: &mut [u64]) -> Result<u64, EptHwErr
     build_identity_2m_bytes(PRECISE_BYTES, frames)
 }
 
+/// Frames for [`build_single_2m_identity`]: PML4 + PDPT + one PD.
+pub fn frames_required_single_2m() -> usize {
+    3
+}
+
+/// M4.0: identity-map a single 2 MiB GPA==HPA leaf (private guest slab).
+///
+/// `hpa_2m` must be 2 MiB-aligned and lie inside [`PRECISE_BYTES`].
+///
+/// SAFETY: see [`build_identity_gib`].
+pub unsafe fn build_single_2m_identity(
+    hpa_2m: u64,
+    frames: &mut [u64],
+) -> Result<u64, EptHwError> {
+    if hpa_2m & (TWO_MIB - 1) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    if hpa_2m >= PRECISE_BYTES || hpa_2m.saturating_add(TWO_MIB) > PRECISE_BYTES {
+        return Err(EptHwError::Unsupported);
+    }
+    let need = frames_required_single_2m();
+    if frames.len() < need {
+        return Err(EptHwError::OutOfFrames);
+    }
+    for &f in frames.iter().take(need) {
+        if f & 0xfff != 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        core::ptr::write_bytes(f as *mut u8, 0, 4096);
+    }
+
+    let mt = eptp_memory_type();
+    let pml4 = frames[0];
+    let pdpt = frames[1];
+    let pd = frames[2];
+    let pml4_i = (hpa_2m >> 39) & 0x1ff;
+    let pdpt_i = (hpa_2m >> 30) & 0x1ff;
+    let pd_i = (hpa_2m >> 21) & 0x1ff;
+    core::ptr::write_volatile((pml4 as *mut u64).add(pml4_i as usize), ept_link(pdpt));
+    core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i as usize), ept_link(pd));
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i as usize), ept_leaf_large(hpa_2m, mt));
+    Ok(pack_eptp(pml4, mt))
+}
+
+/// Clear one 2 MiB identity leaf in an existing precise EPT (unmap from G0).
+///
+/// SAFETY: `pml4_phys` from [`build_precise_identity`]; `gpa_2m` 2 MiB-aligned.
+pub unsafe fn clear_2m_identity_leaf(pml4_phys: u64, gpa_2m: u64) -> Result<(), EptHwError> {
+    if gpa_2m & (TWO_MIB - 1) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    let pml4_i = (gpa_2m >> 39) & 0x1ff;
+    let e0 = core::ptr::read_volatile((pml4_phys as *const u64).add(pml4_i as usize));
+    if e0 & 0b111 == 0 {
+        return Ok(());
+    }
+    let pdpt = e0 & !0xfff;
+    let pdpt_i = (gpa_2m >> 30) & 0x1ff;
+    let e1 = core::ptr::read_volatile((pdpt as *const u64).add(pdpt_i as usize));
+    if e1 & 0b111 == 0 {
+        return Ok(());
+    }
+    if (e1 & (1 << 7)) != 0 {
+        return Err(EptHwError::Unsupported); // unexpected 1G leaf in precise path
+    }
+    let pd = e1 & !0xfff;
+    let pd_i = (gpa_2m >> 21) & 0x1ff;
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i as usize), 0);
+    Ok(())
+}
+
+/// M4.0 guest-1 page: SHELL CPUID hypercall then HLT (private EPT slab).
+///
+/// SAFETY: `page_phys` is a writable identity-mapped frame.
+pub unsafe fn write_guest_shell_cpuid_page(page_phys: u64) {
+    let p = page_phys as *mut u8;
+    core::ptr::write_bytes(p, 0, 4096);
+    let leaf = crate::devices::serial_pio::SHELL_CPUID_LEAF;
+    let sub = crate::devices::serial_pio::SHELL_CPUID_SUBLEAF;
+    let mut o = 0usize;
+    // mov eax, imm32
+    core::ptr::write_volatile(p.add(o), 0xB8);
+    core::ptr::write_volatile(p.add(o + 1), (leaf & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 2), ((leaf >> 8) & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 3), ((leaf >> 16) & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 4), ((leaf >> 24) & 0xff) as u8);
+    o += 5;
+    // mov ecx, imm32
+    core::ptr::write_volatile(p.add(o), 0xB9);
+    core::ptr::write_volatile(p.add(o + 1), (sub & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 2), ((sub >> 8) & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 3), ((sub >> 16) & 0xff) as u8);
+    core::ptr::write_volatile(p.add(o + 4), ((sub >> 24) & 0xff) as u8);
+    o += 5;
+    // cpuid
+    core::ptr::write_volatile(p.add(o), 0x0F);
+    core::ptr::write_volatile(p.add(o + 1), 0xA2);
+    o += 2;
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
+/// Offsets within the M4.0 G1 2 MiB slab (code/stack/IDT/page tables).
+pub const G1_SLAB_OFF_CODE: u64 = 0;
+pub const G1_SLAB_OFF_STACK: u64 = 0x1000;
+pub const G1_SLAB_OFF_IDT: u64 = 0x2000;
+pub const G1_SLAB_OFF_PML4: u64 = 0x3000;
+pub const G1_SLAB_OFF_PDPT: u64 = 0x4000;
+pub const G1_SLAB_OFF_PD: u64 = 0x5000;
+
+/// Build long-mode guest page tables in the G1 slab: one 2 MiB identity map
+/// at `slab_base` (VA == GPA). Returns guest CR3 (PML4 HPA/GPA).
+///
+/// Required because G1's EPT only maps this slab — sharing the host CR3 would
+/// EPT-fault on page-table walks into low memory.
+///
+/// SAFETY: `slab_base` is a writable identity-mapped 2 MiB region; offsets
+/// [`G1_SLAB_OFF_PML4`].. are free for tables.
+pub unsafe fn write_guest_identity_2m_tables(slab_base: u64) -> u64 {
+    debug_assert_eq!(slab_base & (TWO_MIB - 1), 0);
+    let pml4 = slab_base + G1_SLAB_OFF_PML4;
+    let pdpt = slab_base + G1_SLAB_OFF_PDPT;
+    let pd = slab_base + G1_SLAB_OFF_PD;
+    core::ptr::write_bytes(pml4 as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pdpt as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pd as *mut u8, 0, 4096);
+
+    // Present | Writable (supervisor). NX clear on the 2M leaf so code fetches.
+    let present_rw: u64 = 0b011;
+    let leaf_2m: u64 = present_rw | (1 << 7) | (slab_base & !0x1f_ffff);
+
+    let pml4_i = ((slab_base >> 39) & 0x1ff) as usize;
+    let pdpt_i = ((slab_base >> 30) & 0x1ff) as usize;
+    let pd_i = ((slab_base >> 21) & 0x1ff) as usize;
+    core::ptr::write_volatile((pml4 as *mut u64).add(pml4_i), pdpt | present_rw);
+    core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i), pd | present_rw);
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i), leaf_2m);
+    pml4
+}
+
 /// Legacy `[0, 4 GiB)` identity (kept for host tests / rollback).
 ///
 /// SAFETY: see [`build_identity_gib`].
@@ -416,7 +558,9 @@ pub unsafe fn punch_apic_mmio_hole(
 }
 
 /// INVEPT type 2 — all-context (invalidate all EPT-derived TLB).
-unsafe fn invept_global() {
+///
+/// Call after EPT edits and before switching to a new EPTP (M4.0 G1).
+pub unsafe fn invept_global() {
     #[repr(C, align(16))]
     struct Desc {
         eptp: u64,
