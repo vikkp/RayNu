@@ -235,10 +235,19 @@ fn ar_busy_tr(mut ar: u32) -> u32 {
     ar
 }
 
+/// Remember host GDT/TSS from the first [`install_host_tss`] — VM-exit forces
+/// `GDTR.limit = 0xFFFF` (SDM), so a second copy-from-sgdt would look 64 KiB wide.
+static mut HOST_TSS_READY: bool = false;
+static mut HOST_GDT_BASE: u64 = 0;
+static mut HOST_GDT_LIMIT: u16 = 0;
+static mut HOST_TR_SEL: u16 = 0;
+static mut HOST_TR_BASE: u64 = 0;
+
 /// Build a host TSS + GDT and load them (LGDT/LTR).
 ///
 /// UEFI/OVMF commonly leaves TR=0. Host-state checks then fail VMLAUNCH with
-/// insn error 8 (invalid host-state). We always install our own TSS.
+/// insn error 8 (invalid host-state). We always install our own TSS once;
+/// later guests reuse it (M4.0 G1 `setup_vmcs`).
 ///
 /// Returns `(new_gdtr_base, new_gdtr_limit, tr_selector, tr_base)`.
 ///
@@ -247,19 +256,41 @@ unsafe fn install_host_tss(
     gdt_phys: u64,
     tss_phys: u64,
 ) -> Result<(u64, u16, u16, u64), LaunchError> {
+    if HOST_TSS_READY {
+        // Restore architecturally correct limit (VM-exit set limit=FFFF).
+        let gdtr = cpu::DescriptorTablePtr {
+            limit: HOST_GDT_LIMIT,
+            base: HOST_GDT_BASE,
+        };
+        cpu::lgdt(&gdtr);
+        // TR still points at our TSS; LTR again only if selector cleared.
+        if cpu::read_tr() & 0xfffc == 0 {
+            cpu::load_tr(HOST_TR_SEL);
+        }
+        serial::write_line("boot: host TSS reused (post-VMX GDTR.limit fixup)");
+        return Ok((HOST_GDT_BASE, HOST_GDT_LIMIT, HOST_TR_SEL, HOST_TR_BASE));
+    }
+
     let old = cpu::sgdt();
-    let old_size = (old.limit as usize) + 1;
+    let old_limit = old.limit;
+    let old_base = old.base;
+    let old_size = (old_limit as usize) + 1;
     // Need room for a 16-byte system descriptor after the existing table.
-    if old_size + 16 > 4096 || old_size < 8 {
+    // Cap: VMX may have already forced limit=FFFF before first install (unusual).
+    if old_size < 8 {
+        return Err(LaunchError::PrepareFailed);
+    }
+    let copy_size = core::cmp::min(old_size, 4096 - 16);
+    if copy_size < 8 {
         return Err(LaunchError::PrepareFailed);
     }
 
     core::ptr::write_bytes(gdt_phys as *mut u8, 0, 4096);
     core::ptr::write_bytes(tss_phys as *mut u8, 0, 4096);
-    core::ptr::copy_nonoverlapping(old.base as *const u8, gdt_phys as *mut u8, old_size);
+    core::ptr::copy_nonoverlapping(old_base as *const u8, gdt_phys as *mut u8, copy_size);
 
     // Append available 64-bit TSS descriptor at the next 8-byte aligned slot.
-    let tss_index = (old_size + 7) / 8; // qword index; may skip a pad entry
+    let tss_index = (copy_size + 7) / 8; // qword index; may skip a pad entry
     let tss_off = tss_index * 8;
     if tss_off + 16 > 4096 {
         return Err(LaunchError::PrepareFailed);
@@ -288,6 +319,12 @@ unsafe fn install_host_tss(
 
     let tr_sel = (tss_off as u16) & 0xFFF8;
     cpu::load_tr(tr_sel);
+
+    HOST_TSS_READY = true;
+    HOST_GDT_BASE = gdt_phys;
+    HOST_GDT_LIMIT = new_limit;
+    HOST_TR_SEL = tr_sel;
+    HOST_TR_BASE = tss_phys;
 
     serial::write_str("boot: host TSS sel=0x");
     write_hex_u32(tr_sel as u32);
