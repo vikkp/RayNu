@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M4.5 closed:** dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.  
-**Next M5:** Operationally viable milestone — [CLAUDE.md](../CLAUDE.md) / [progress.md](progress.md). M4 closed: [m4_plan.md](m4_plan.md).
+**Next M5.0:** VM lifecycle API → `RAYNU-V-M5-LIFE-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).

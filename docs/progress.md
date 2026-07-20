@@ -87,9 +87,19 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-M4 plan complete (Track A–C): [m4_plan.md](m4_plan.md)  
-Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
+M5 plan (ops spine → audit → Dell Tier‑1 → proof debt): [m5_plan.md](m5_plan.md)  
+Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5** ← next | — | Operationally viable (see CLAUDE.md) |
+| **M5.0** ← next | `RAYNU-V-M5-LIFE-OK` | VM lifecycle API |
+| M5.1 | `RAYNU-V-M5-API-OK` | CLI + REST control plane |
+| M5.2 | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI |
+| M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
+| M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
+| M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |
+| M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
+| M5.7 | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify |
+| M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA in ghost spec |
+| M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
+| M6 | — | Production ready (see CLAUDE.md) |

@@ -230,7 +230,7 @@ M3.11 → … → M3.21 Kani (closed) → M3.22 assets (closed)
 → M4 (usable VM platform) — see m4_plan.md
 ```
 
-**M3.22 closed on Latitude. M4.0–M4.9 closed (Track A–C). Next: M5.**
+**M3.22 closed on Latitude. M4.0–M4.9 closed (Track A–C). Next: [M5](m5_plan.md) (`RAYNU-V-M5-LIFE-OK`).**
 
 ---
 

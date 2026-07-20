@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.9 closed** — N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`. M4 Track A–C complete. Active: **M5** — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.9 closed** — N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`. M4 Track A–C complete. Active: **M5** — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 

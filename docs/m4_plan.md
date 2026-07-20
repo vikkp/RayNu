@@ -284,4 +284,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.9 closed** on Latitude (`RAYNU-V-M4-REFINE-OK`). Track C complete — M4 platform + proof spine closed. Next: **M5** (see CLAUDE.md).
+**M4.9 closed** on Latitude (`RAYNU-V-M4-REFINE-OK`). Track C complete — M4 platform + proof spine closed. Next: **M5** — [m5_plan.md](m5_plan.md).
