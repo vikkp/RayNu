@@ -10,6 +10,8 @@
 //! (`GhostPageSize` / `large_map_enabled`). M5.7 discharges large-page span
 //! map/unmap exclusivity (no `admit`) → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 //! M4.9 extends concrete refine to N guests (`theorem_concrete_n_guest_4k_refine`).
+//! M5.8 adds NUMA domains to the ghost *spec* (`GhostNumaTopology` / SRAT·SLIT
+//! bring-up mock) → `RAYNU-V-M5-NUMA-OK` (full NUMA affinity L3 → M6).
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -20,6 +22,7 @@
 //! - M4.8 large-page spec: `RAYNU-V-M4-LPAGE-OK` (via tools/verus-lpage-spec-smoke.sh)
 //! - M4.9 N-guest refine: `RAYNU-V-M4-REFINE-OK` (via tools/verus-nguest-refine-smoke.sh)
 //! - M5.7 large-page L3: `RAYNU-V-M5-LPAGE-VERIFY-OK` (via tools/verus-lpage-verify-smoke.sh)
+//! - M5.8 NUMA ghost spec: `RAYNU-V-M5-NUMA-OK` (via tools/verus-numa-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -1469,6 +1472,140 @@ pub proof fn lemma_1g_map_unmap_exclusive(
     theorem_large_page_map_unmap_exclusive(m, guest, gpa, base, GhostPageSize::OneG);
 }
 
+// ---------------------------------------------------------------------------
+// M5.8 — NUMA in ghost spec (SRAT / SLIT bring-up; affinity L3 → M6)
+// ---------------------------------------------------------------------------
+
+/// ACPI / SRAT-style NUMA node identifier.
+pub type NumaNodeId = u8;
+
+/// ACPI SLIT local distance (same node).
+pub const SLIT_LOCAL: u8 = 10;
+
+/// Ghost NUMA topology: node set, frame→node affinity, SLIT distances.
+pub struct GhostNumaTopology {
+    pub nodes: Set<NumaNodeId>,
+    pub frame_node: Map<FrameId, NumaNodeId>,
+    pub slit: Map<(NumaNodeId, NumaNodeId), u8>,
+}
+
+impl GhostNumaTopology {
+    pub open spec fn empty() -> Self {
+        GhostNumaTopology {
+            nodes: Set::empty(),
+            frame_node: Map::empty(),
+            slit: Map::empty(),
+        }
+    }
+}
+
+/// Affinity + SLIT rows only reference known nodes; local diagonal is `SLIT_LOCAL`.
+pub open spec fn numa_well_formed(t: GhostNumaTopology) -> bool {
+    &&& (forall|f: FrameId|
+        #![auto]
+        t.frame_node.dom().contains(f) ==> t.nodes.contains(t.frame_node[f]))
+    &&& (forall|a: NumaNodeId, b: NumaNodeId|
+        #![auto]
+        t.slit.dom().contains((a, b)) ==> t.nodes.contains(a) && t.nodes.contains(b))
+    &&& (forall|n: NumaNodeId|
+        #![auto]
+        t.nodes.contains(n) ==> t.slit.dom().contains((n, n)) && t.slit[(n, n)] == SLIT_LOCAL)
+}
+
+/// SLIT is symmetric when both directions are present.
+pub open spec fn slit_symmetric(t: GhostNumaTopology) -> bool {
+    forall|a: NumaNodeId, b: NumaNodeId|
+        #![auto]
+        t.slit.dom().contains((a, b)) && t.slit.dom().contains((b, a)) ==> t.slit[(a, b)]
+            == t.slit[(b, a)]
+}
+
+/// Every frame owned by `guest` lies on `node` (affinity policy post).
+pub open spec fn guest_frames_on_node(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    node: NumaNodeId,
+) -> bool {
+    forall|f: FrameId|
+        #![auto]
+        m.owned.dom().contains(f) && m.owned[f] == guest ==> t.frame_node.dom().contains(f)
+            && t.frame_node[f] == node
+}
+
+/// NUMA-aware 4K map: ordinary map enabled + frame affinity matches preferred node.
+pub open spec fn numa_map_enabled(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+    node: NumaNodeId,
+) -> bool {
+    &&& guest != 0
+    &&& page_aligned_4k(gpa)
+    &&& step_enabled(m, MapUnmapStep::Map { guest, gpa, frame })
+    &&& numa_well_formed(t)
+    &&& t.nodes.contains(node)
+    &&& t.frame_node.dom().contains(frame)
+    &&& t.frame_node[frame] == node
+}
+
+/// Bring-up mock matching `assets/idrac/mock_topology.txt` (2 nodes, SLIT 10/21).
+pub open spec fn mock_bringup_numa() -> GhostNumaTopology {
+    GhostNumaTopology {
+        nodes: Set::empty().insert(0).insert(1),
+        frame_node: Map::empty().insert(0, 0).insert(1, 0).insert(100, 1).insert(101, 1),
+        slit: Map::empty().insert((0, 0), 10).insert((1, 1), 10).insert((0, 1), 21).insert(
+            (1, 0),
+            21,
+        ),
+    }
+}
+
+/// M5.8: concrete facts about the SRAT/SLIT bring-up mock.
+pub proof fn lemma_mock_bringup_numa_facts()
+    ensures
+        mock_bringup_numa().nodes.contains(0),
+        mock_bringup_numa().nodes.contains(1),
+        mock_bringup_numa().frame_node[0] == 0,
+        mock_bringup_numa().frame_node[1] == 0,
+        mock_bringup_numa().frame_node[100] == 1,
+        mock_bringup_numa().frame_node[101] == 1,
+        mock_bringup_numa().slit[(0, 0)] == SLIT_LOCAL,
+        mock_bringup_numa().slit[(1, 1)] == SLIT_LOCAL,
+        mock_bringup_numa().slit[(0, 1)] == 21,
+        mock_bringup_numa().slit[(1, 0)] == 21,
+{
+}
+
+/// M5.8: local SLIT constant matches ACPI convention.
+pub proof fn lemma_slit_local_is_10()
+    ensures
+        SLIT_LOCAL == 10,
+{
+}
+
+/// M5.8: NUMA-aware map still preserves exclusive ownership (uses 4K map lemma).
+pub proof fn lemma_numa_map_ok_exclusive(
+    m: GhostEptMap,
+    t: GhostNumaTopology,
+    guest: GuestId,
+    gpa: Gpa,
+    frame: FrameId,
+    node: NumaNodeId,
+)
+    requires
+        exclusive_ownership(m),
+        numa_map_enabled(m, t, guest, gpa, frame, node),
+    ensures
+        exclusive_ownership(m.ghost_map(guest, gpa, frame)),
+        m.ghost_map(guest, gpa, frame).owned[frame] == guest,
+        m.ghost_map(guest, gpa, frame).by_gpa[(guest, gpa)] == frame,
+{
+    lemma_map_ok_exclusive(m, guest, gpa, frame);
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -1485,3 +1622,5 @@ pub const M4_LPAGE_OK_MARKER: &str = "RAYNU-V-M4-LPAGE-OK";
 pub const M4_REFINE_OK_MARKER: &str = "RAYNU-V-M4-REFINE-OK";
 /// M5.7: large-page (2M/1G) L3 map/unmap exclusivity (no `admit`).
 pub const M5_LPAGE_VERIFY_OK_MARKER: &str = "RAYNU-V-M5-LPAGE-VERIFY-OK";
+/// M5.8: NUMA domains in ghost *spec* (SRAT/SLIT; affinity L3 → M6).
+pub const M5_NUMA_OK_MARKER: &str = "RAYNU-V-M5-NUMA-OK";

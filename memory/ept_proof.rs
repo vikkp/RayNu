@@ -36,6 +36,10 @@
 //! GAP(CLOSED M5.7): Large-page L3 discharge (marker RAYNU-V-M5-LPAGE-VERIFY-OK;
 //!   theorem_large_page_map_unmap_exclusive / lemma_2m_map_unmap_exclusive /
 //!   lemma_1g_map_unmap_exclusive / lemma_two_guests_large_map_distinct_spans_exclusive)
+//! GAP(CLOSED M5.8): NUMA in ghost spec (marker RAYNU-V-M5-NUMA-OK;
+//!   GhostNumaTopology / numa_map_enabled / mock_bringup_numa /
+//!   lemma_mock_bringup_numa_facts / lemma_numa_map_ok_exclusive)
+//! GAP: NUMA affinity / exclusivity L3 (M6)
 //! GAP: Frame-allocator ↔ EPT L3 coupling beyond ConcreteEptMap (M5)
 //! GAP: EPT violation handler preserves exclusivity
 //! GAP: Live migration page transfer (M6)

@@ -63,6 +63,9 @@
 //! TODO(M5.7 CLOSED): large-page L3 — `theorem_large_page_map_unmap_exclusive` /
 //!   `lemma_2m_map_unmap_exclusive` / `lemma_1g_map_unmap_exclusive` (no `admit`) →
 //!   `RAYNU-V-M5-LPAGE-VERIFY-OK`.
+//! TODO(M5.8 CLOSED): NUMA in ghost spec — `GhostNumaTopology` / `numa_map_enabled` /
+//!   `mock_bringup_numa` (SRAT/SLIT bring-up) → `RAYNU-V-M5-NUMA-OK`.
+//!   Full NUMA affinity / exclusivity L3 remains M6.
 //! TODO(M4.9 CLOSED): N-guest ghost↔exec refine — `theorem_concrete_n_guest_4k_refine`
 //!   + `lemma_concrete_two_guests_map_refines` → `RAYNU-V-M4-REFINE-OK`.
 //!   HW PTE identity correspondence and deeper allocator↔EPT L3 coupling remain M5.
@@ -75,5 +78,13 @@
 //! span is exclusively owned by `guest` (`large_map_post_owned`). Live `EptMap`
 //! remains per-4K; HW large leaves are built by `ept_hw` (M3.20). L3 for these
 //! posts is closed in M5.7 (`theorem_large_page_map_unmap_exclusive`).
+//!
+//! # NUMA domains (M5.8 — L2/L3-spec)
+//!
+//! `GhostNumaTopology` carries SRAT-style nodes, frame→node affinity, and SLIT
+//! distances. `numa_map_enabled` requires ordinary 4K map enablement plus frame
+//! affinity on the preferred node. Bring-up mock `mock_bringup_numa` matches
+//! `assets/idrac/mock_topology.txt` (2 nodes, local 10 / remote 21). Host runtime
+//! hook: `memory/numa.rs` ← `idrac::TopologySnapshot`. Affinity L3 → M6.
 
 #![allow(dead_code)]

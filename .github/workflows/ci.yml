@@ -234,6 +234,21 @@ jobs:
       - name: Verus large-page-verify smoke → RAYNU-V-M5-LPAGE-VERIFY-OK
         run: ./tools/verus-lpage-verify-smoke.sh
 
+  # M5.8: NUMA in ghost *spec* (SRAT/SLIT; affinity L3 → M6). Hard-fail.
+  verus-numa:
+    name: verus NUMA-spec (M5.8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus NUMA-spec smoke → RAYNU-V-M5-NUMA-OK
+        run: ./tools/verus-numa-smoke.sh
+
   # M4.9: N-guest ghost↔exec refine. Hard-fail.
   verus-nguest-refine:
     name: verus N-guest-refine (M4.9)
