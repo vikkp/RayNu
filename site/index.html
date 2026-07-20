@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.3 closed: ≥4 concurrent guests under EPT + virtio-blk probe."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.4 closed: ≥4 guests under EPT + virtio-blk + virtio-net vSwitch."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.3 closed — ≥4 concurrent guests under EPT + virtio-blk. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.4 closed — multi-guest + virtio-blk + virtio-net. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,21 +60,22 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M4.3 closed · M4.4 in flight.</h2>
+          <h2 class="section__title">M0 → M4.4 closed.</h2>
           <p class="section__lede">
-            Virtio-mmio block probe latched <code>RAYNU-V-M4-BLK-OK</code> on
-            Latitude. Next: virtio-net dual-port vSwitch (M4.4) →
-            <code>RAYNU-V-M4-NET-OK</code>.
+            Multi-guest under EPT, virtio-blk probe, then dual-port virtio-net
+            through a host L2 learning switch — latched by
+            <code>RAYNU-V-M4-NET-OK</code> on Latitude.
+            Next: SMP guest (M4.5) or N-guest proof.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-NVM-OK
-RAYNU-V-M4-BLK-OK
-==> Boot gate PASSED (M0 → M4.3; qemu status=33)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-BLK-OK
+RAYNU-V-M4-NET-OK
+==> Boot gate PASSED (M0 → M4.4; qemu status=33)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M4.3: how we got here</h2>
+          <h2 class="section__title">M1.0 → M4.4: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -228,6 +229,13 @@ RAYNU-V-M4-BLK-OK
                     <code>RAYNU-V-M4-BLK-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M4.4</span>
+                  <span class="journey__text"
+                    >Virtio-net dual-port vSwitch →
+                    <code>RAYNU-V-M4-NET-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -334,7 +342,7 @@ RAYNU-V-M4-BLK-OK
           </p>
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit
-./tools/qemu-boot-test.sh       # M0 → M4.3
+./tools/qemu-boot-test.sh       # M0 → M4.4
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -347,8 +355,8 @@ RAYNU-V-M4-BLK-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            Multi-guest through M4.3 is closed; next is
-            <strong>M4.4</strong> (virtio-net).
+            Platform I/O through M4.4 is closed; next is
+            <strong>M4.5</strong> (SMP) or N-guest proof.
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

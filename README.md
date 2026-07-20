@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.3 closed** — virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`. Active: **M4.4** (virtio-net dual-port vSwitch) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.4 closed** — virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`. Active: **M4.5** (SMP) or Track C proof — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 
