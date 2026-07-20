@@ -1,6 +1,6 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.4 closed on Latitude; next **M6.5** PDF.  
+**Status:** **open** — M6.5 wired (host); Latitude smoke pending close. Next after close: **M6.6** HA.  
 **Prior:** M6.4 closed on Latitude (`RAYNU-V-M6-AUTH-OK`); M6.3–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -176,7 +176,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.5 — PDF audit reports — `RAYNU-V-M6-PDF-OK`
 
-**Status: open** (host-first)
+**Status: wired** (host gate; Latitude `./tools/m6-pdf-smoke.sh` pending close)
 
 **Goal:** Close `GAP: PDF report → M6` — emit a deterministic PDF (or PDF-shaped artifact) from the same `RingSnapshot` used for JSON/CSV (M5.4).
 
@@ -186,7 +186,12 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Marker `RAYNU-V-M6-PDF-OK`.
 3. External auditor *sign-off* remains **M6.9** (this gate is the artifact, not the audit).
 
-**Likely files:** `audit/report.rs`, gate + smoke + CI.
+**Delivered (host-first):**
+
+1. Hand-rolled PDF 1.4 via `render_report(..., ReportFormat::Pdf)` from `RingSnapshot` (SOX + ISO).
+2. `prop_pdf_reports_deterministic` + host gate `audit/m6_pdf_gate.rs` + `tools/m6-pdf-smoke.sh` + CI `m6-pdf`.
+3. `GAP(CLOSED M6.5): PDF report → M6`; schemas advertise `"pdf"`.
+4. External auditor sign-off still **M6.9**.
 
 ### M6.6 — HA / security harden — `RAYNU-V-M6-HA-OK`
 
@@ -301,4 +306,5 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.4 closed** on Latitude (`RAYNU-V-M6-AUTH-OK`). Next: **M6.5** (`RAYNU-V-M6-PDF-OK`) — PDF audit reports.
+**M6.5 wired** (host gate). Close on Latitude via `./tools/m6-pdf-smoke.sh` →
+`RAYNU-V-M6-PDF-OK`, then **M6.6** (`RAYNU-V-M6-HA-OK`).

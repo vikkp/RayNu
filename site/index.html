@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.4 closed: multi-guest platform through M5 plus EPT proof track and REST auth."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.4 closed: multi-guest platform through M5 plus EPT proof track and REST auth; M6.5 PDF reports wired (Latitude pending)."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.4 closed — EPT proof track through migrate-xfer plus REST auth. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.4 closed — EPT proof track through migrate-xfer plus REST auth; M6.5 PDF wired. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -64,13 +64,14 @@
           <p class="section__lede">
             Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
             NUMA-L3, migrate page transfer, and REST auth —
-            <code>RAYNU-V-M6-AUTH-OK</code> on host. Next: M6.5 (PDF audit
-            reports — see <code>docs/m6_plan.md</code>).
+            <code>RAYNU-V-M6-AUTH-OK</code> on host. M6.5 PDF audit reports are
+            wired <code>RAYNU-V-M6-PDF-OK</code> (Latitude pending) — see
+            <code>docs/m6_plan.md</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-MIGRATE-XFER-OK
-RAYNU-V-M6-AUTH-OK
-==> Verus migrate page-transfer smoke PASSED (M6.3)
-==> M6.4 REST auth smoke PASSED</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-AUTH-OK
+RAYNU-V-M6-PDF-OK
+==> M6.4 REST auth smoke PASSED
+==> M6.5 PDF smoke PASSED  # Latitude pending</code></pre>
         </div>
       </section>
 
@@ -383,6 +384,13 @@ RAYNU-V-M6-AUTH-OK
                     <code>RAYNU-V-M6-AUTH-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M6.5</span>
+                  <span class="journey__text"
+                    >PDF audit reports (wired; Latitude pending) →
+                    <code>RAYNU-V-M6-PDF-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -499,6 +507,7 @@ RAYNU-V-M6-AUTH-OK
 ./tools/verus-numa-l3-smoke.sh  # M6.2 → RAYNU-V-M6-NUMA-L3-OK
 ./tools/verus-migrate-xfer-smoke.sh # M6.3 → RAYNU-V-M6-MIGRATE-XFER-OK
 ./tools/m6-auth-smoke.sh       # M6.4 → RAYNU-V-M6-AUTH-OK
+./tools/m6-pdf-smoke.sh        # M6.5 → RAYNU-V-M6-PDF-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -511,8 +520,9 @@ RAYNU-V-M6-AUTH-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.4 is closed (Track A through migrate-xfer + REST auth); next is
-            <strong>M6.5</strong> (PDF — see <code>docs/m6_plan.md</code>).
+            M0→M6.4 is closed (Track A through migrate-xfer + REST auth); M6.5 PDF
+            is wired (Latitude pending — see <code>docs/m6_plan.md</code>); next
+            after close is <strong>M6.6</strong> (HA).
 
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
