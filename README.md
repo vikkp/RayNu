@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M5.2 closed** — embedded Web UI → `RAYNU-V-M5-WEBUI-OK`. Active: **M5.3** (audit ring) — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M5.3 closed** — audit ring → `RAYNU-V-M5-AUDIT-OK`. Active: **M5.4** (SOX/ISO reports) — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 

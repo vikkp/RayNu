@@ -53,8 +53,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M5.0 | `RAYNU-V-M5-LIFE-OK` | VM lifecycle API (CI + Latitude) |
 | M5.1 | `RAYNU-V-M5-API-OK` | CLI + REST control plane (CI + Latitude) |
 | M5.2 | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI SPA (CI + Latitude) |
+| M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain (CI + Latitude) |
 
-## Verification checkpoint (as of M5.2)
+## Verification checkpoint (as of M5.3)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -95,8 +96,7 @@ Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5.3** ← next | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
-| M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
+| **M5.4** ← next | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
 | M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |
 | M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
 | M5.7 | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify |
