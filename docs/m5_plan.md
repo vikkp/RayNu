@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.7 closed on Latitude (Track A+B + migrate + Dell Tier‑1 + large-page L3); next **M5.8** NUMA.  
-**Prior:** M5.7 closed on Latitude (`RAYNU-V-M5-LPAGE-VERIFY-OK`); M5.6 closed (`RAYNU-V-M5-IDRAC-OK`).  
+**Status:** **open** — M5.0–M5.8 closed on Latitude (Track A+B + migrate + Dell Tier‑1 + large-page L3 + NUMA *spec*); next **M5.9** ALLOC-REFINE.  
+**Prior:** M5.8 closed on Latitude (`RAYNU-V-M5-NUMA-OK`; `51 verified, 0 errors`); M5.7 closed (`RAYNU-V-M5-LPAGE-VERIFY-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -188,7 +188,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.8 — NUMA in ghost spec — `RAYNU-V-M5-NUMA-OK`
 
-**Status: open** (host/CI wired; Latitude smoke pending)
+**Status: closed** (Latitude `./tools/verus-numa-smoke.sh` → `RAYNU-V-M5-NUMA-OK`; `51 verified, 0 errors`)
 
 **Goal:** NUMA topology in the **ghost spec** (ADR-004 M5 row). Proof attempt may stay L2 if needed; document GAPs.
 
@@ -204,7 +204,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
    open `GAP: NUMA affinity / exclusivity L3 (M6)`.
 5. Host gate `memory/m5_numa_gate.rs` + `tools/verus-numa-smoke.sh` + CI `verus-numa`.
 
-**Acceptance:** Latitude `./tools/verus-numa-smoke.sh` → `RAYNU-V-M5-NUMA-OK` (then close docs/site).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-NUMA-OK`.
 
 ### M5.9 — Allocator↔EPT + HW PTE correspondence — `RAYNU-V-M5-ALLOC-REFINE-OK`
 
@@ -295,4 +295,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-**M5.0–M5.7 closed** on Latitude (incl. migrate + iDRAC + large-page L3). **M5.8** wired host/CI (`RAYNU-V-M5-NUMA-OK`); Latitude smoke pending. Then **M5.9** ALLOC-REFINE for full M5 close (or ADR waiver).
+**M5.0–M5.8 closed** on Latitude (incl. migrate + iDRAC + large-page L3 + NUMA *spec*). Next: **M5.9** (`RAYNU-V-M5-ALLOC-REFINE-OK`) for full M5 close (or ADR waiver).
