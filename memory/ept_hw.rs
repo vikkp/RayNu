@@ -368,6 +368,152 @@ pub unsafe fn clear_2m_identity_leaf(pml4_phys: u64, gpa_2m: u64) -> Result<(), 
     Ok(())
 }
 
+/// M4.3 virtio-blk probe: write DeviceStatus via absolute `mov`, then HLT.
+///
+/// Guest sequence (absolute `[BAR+0x70]` dword stores, decoded by
+/// [`crate::vmx::mmio_decode`]):
+///   ACKNOWLEDGE → DRIVER → FEATURES_OK → DRIVER_OK → HLT
+///
+/// Host EPT must leave `bar_gpa` unmapped so each store raises an EPT
+/// violation handled by [`crate::devices::virtio_blk::mmio_access`].
+///
+/// SAFETY: `page_phys` is a writable identity-mapped frame; `bar_gpa` fits
+/// in a 32-bit absolute addressing form (`bar_gpa + 0x70 < 4 GiB`).
+pub unsafe fn write_guest_blk_probe_page(page_phys: u64, bar_gpa: u64) {
+    let p = page_phys as *mut u8;
+    core::ptr::write_bytes(p, 0, 4096);
+    let status = bar_gpa.wrapping_add(0x70);
+    debug_assert!(status <= u32::MAX as u64);
+    let status32 = status as u32;
+    let mut o = 0usize;
+    let store_status = |page: *mut u8, off: &mut usize, val: u32| {
+        // mov eax, imm32
+        core::ptr::write_volatile(page.add(*off), 0xB8);
+        let vb = val.to_le_bytes();
+        core::ptr::write_volatile(page.add(*off + 1), vb[0]);
+        core::ptr::write_volatile(page.add(*off + 2), vb[1]);
+        core::ptr::write_volatile(page.add(*off + 3), vb[2]);
+        core::ptr::write_volatile(page.add(*off + 4), vb[3]);
+        *off += 5;
+        // mov [abs32], eax  — 89 04 25 xx xx xx xx
+        core::ptr::write_volatile(page.add(*off), 0x89);
+        core::ptr::write_volatile(page.add(*off + 1), 0x04);
+        core::ptr::write_volatile(page.add(*off + 2), 0x25);
+        let ab = status32.to_le_bytes();
+        core::ptr::write_volatile(page.add(*off + 3), ab[0]);
+        core::ptr::write_volatile(page.add(*off + 4), ab[1]);
+        core::ptr::write_volatile(page.add(*off + 5), ab[2]);
+        core::ptr::write_volatile(page.add(*off + 6), ab[3]);
+        *off += 7;
+    };
+    // virtio status bits: ACK=1, DRIVER=2, FEATURES_OK=8, DRIVER_OK=4
+    store_status(p, &mut o, 1); // ACKNOWLEDGE
+    store_status(p, &mut o, 3); // ACK | DRIVER
+    store_status(p, &mut o, 0x0B); // + FEATURES_OK
+    store_status(p, &mut o, 0x0F); // + DRIVER_OK
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
+
+/// M4.4 virtio-net probe: handshake two DeviceStatus registers then HLT.
+///
+/// Guest sequence for each BAR (absolute `[BAR+0x70]` dword stores):
+///   ACKNOWLEDGE → DRIVER → FEATURES_OK → DRIVER_OK
+/// then HLT. Host EPT must leave both BARs unmapped.
+///
+/// SAFETY: `page_phys` writable identity-mapped; BAR status addresses fit in
+/// 32-bit absolute forms.
+pub unsafe fn write_guest_net_probe_page(page_phys: u64, bar0_gpa: u64, bar1_gpa: u64) {
+    let p = page_phys as *mut u8;
+    core::ptr::write_bytes(p, 0, 4096);
+    let mut o = 0usize;
+    let store_status = |page: *mut u8, off: &mut usize, status_addr: u32, val: u32| {
+        core::ptr::write_volatile(page.add(*off), 0xB8);
+        let vb = val.to_le_bytes();
+        core::ptr::write_volatile(page.add(*off + 1), vb[0]);
+        core::ptr::write_volatile(page.add(*off + 2), vb[1]);
+        core::ptr::write_volatile(page.add(*off + 3), vb[2]);
+        core::ptr::write_volatile(page.add(*off + 4), vb[3]);
+        *off += 5;
+        core::ptr::write_volatile(page.add(*off), 0x89);
+        core::ptr::write_volatile(page.add(*off + 1), 0x04);
+        core::ptr::write_volatile(page.add(*off + 2), 0x25);
+        let ab = status_addr.to_le_bytes();
+        core::ptr::write_volatile(page.add(*off + 3), ab[0]);
+        core::ptr::write_volatile(page.add(*off + 4), ab[1]);
+        core::ptr::write_volatile(page.add(*off + 5), ab[2]);
+        core::ptr::write_volatile(page.add(*off + 6), ab[3]);
+        *off += 7;
+    };
+    for &bar in &[bar0_gpa, bar1_gpa] {
+        let status = bar.wrapping_add(0x70);
+        debug_assert!(status <= u32::MAX as u64);
+        let s = status as u32;
+        store_status(p, &mut o, s, 1);
+        store_status(p, &mut o, s, 3);
+        store_status(p, &mut o, s, 0x0B);
+        store_status(p, &mut o, s, 0x0F);
+    }
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
+
+/// M4.5 SMP BSP probe: store ready magic at `flag_gpa`, then HLT.
+///
+/// Absolute dword/byte stores so the page is relocatable. Flag GPA must be
+/// identity-mapped in the shared EPT (host allocator frame).
+///
+/// SAFETY: `page_phys` writable; `flag_gpa` fits in 32-bit absolute form.
+pub unsafe fn write_guest_smp_bsp_page(page_phys: u64, flag_gpa: u64) {
+    write_guest_smp_ready_page(page_phys, flag_gpa);
+}
+
+/// M4.5 SMP AP probe: store ready magic at `flag_gpa + OFF_AP_READY`, then HLT.
+///
+/// SAFETY: see [`write_guest_smp_bsp_page`].
+pub unsafe fn write_guest_smp_ap_page(page_phys: u64, flag_gpa: u64) {
+    write_guest_smp_ready_page(
+        page_phys,
+        flag_gpa.wrapping_add(crate::sched::smp_probe::OFF_AP_READY as u64),
+    );
+}
+
+unsafe fn write_guest_smp_ready_page(page_phys: u64, store_gpa: u64) {
+    let p = page_phys as *mut u8;
+    core::ptr::write_bytes(p, 0, 4096);
+    debug_assert!(store_gpa <= u32::MAX as u64);
+    let addr = store_gpa as u32;
+    let magic = crate::sched::smp_probe::READY_MAGIC as u32;
+    let mut o = 0usize;
+    // mov eax, magic
+    core::ptr::write_volatile(p.add(o), 0xB8);
+    let vb = magic.to_le_bytes();
+    core::ptr::write_volatile(p.add(o + 1), vb[0]);
+    core::ptr::write_volatile(p.add(o + 2), vb[1]);
+    core::ptr::write_volatile(p.add(o + 3), vb[2]);
+    core::ptr::write_volatile(p.add(o + 4), vb[3]);
+    o += 5;
+    // mov byte [abs32], al  — 88 04 25 xx xx xx xx  (8-bit store of READY_MAGIC)
+    core::ptr::write_volatile(p.add(o), 0x88);
+    core::ptr::write_volatile(p.add(o + 1), 0x04);
+    core::ptr::write_volatile(p.add(o + 2), 0x25);
+    let ab = addr.to_le_bytes();
+    core::ptr::write_volatile(p.add(o + 3), ab[0]);
+    core::ptr::write_volatile(p.add(o + 4), ab[1]);
+    core::ptr::write_volatile(p.add(o + 5), ab[2]);
+    core::ptr::write_volatile(p.add(o + 6), ab[3]);
+    o += 7;
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
 /// M4.0 guest-1 page: SHELL CPUID hypercall then HLT (private EPT slab).
 ///
 /// SAFETY: `page_phys` is a writable identity-mapped frame.

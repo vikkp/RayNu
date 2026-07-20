@@ -26,13 +26,16 @@
 //! M4.0: second guest under private 2 MiB EPT slab → `RAYNU-V-M4-2VM-OK`.
 //! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
 //! M4.2: G0 + G1–G3 (≥4) under scheduler → `RAYNU-V-M4-NVM-OK`.
+//! M4.3: virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`.
+//! M4.4: virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.
+//! M4.5: dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.
 
 #![no_main]
 #![no_std]
 
 extern crate alloc;
 
-use r640_hypervisor::{arch, audit, boot, guest, memory, vmx, BOOT_BANNER};
+use r640_hypervisor::{arch, audit, boot, devices, guest, memory, sched, vmx, BOOT_BANNER};
 use uefi::prelude::*;
 use uefi::println;
 
@@ -365,6 +368,81 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     };
 
+    // M4.3: virtio-blk MMIO BAR — 2 MiB EPT hole in [GUEST_RAM, PRECISE) so the
+    // guest page-walk succeeds (UEFI identity) but EPT raises a violation.
+    // Disk backing is a FrameAllocator page (host-owned, not a guest slab).
+    let mut used = [0u64; 5];
+    let mut used_n = 0usize;
+    let bar_hpa = match pick_shell_slab_hpa(alloc, &used[..used_n]) {
+        Some(h) => h,
+        None => {
+            boot::serial::write_line("boot: ERROR — no virtio-blk BAR hole above G0 guest RAM");
+            let _ = life.disable();
+            return;
+        }
+    };
+    used[used_n] = bar_hpa;
+    used_n += 1;
+    // SAFETY: precise PML4; punch BAR 2 MiB leaf out of G0 identity.
+    if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, bar_hpa) }.is_err() {
+        boot::serial::write_line("boot: ERROR — could not unmap virtio-blk BAR from G0 EPT");
+        let _ = life.disable();
+        return;
+    }
+    let Some(disk_phys) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for virtio-blk disk");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: disk_phys is a fresh allocator frame; BAR GPA is EPT-unmapped.
+    unsafe {
+        devices::virtio_blk::init(bar_hpa, disk_phys, 4096);
+    }
+    boot::serial::write_str("boot: M4.3 virtio-blk BAR=0x");
+    write_hex(bar_hpa);
+    boot::serial::write_str(" disk=0x");
+    write_hex(disk_phys);
+    boot::serial::write_byte(b'\n');
+
+    // M4.4: virtio-net dual BARs in one 2 MiB EPT hole; packet bufs host-owned.
+    let net_bar_hpa = match pick_shell_slab_hpa(alloc, &used[..used_n]) {
+        Some(h) => h,
+        None => {
+            boot::serial::write_line("boot: ERROR — no virtio-net BAR hole above G0 guest RAM");
+            let _ = life.disable();
+            return;
+        }
+    };
+    used[used_n] = net_bar_hpa;
+    used_n += 1;
+    // SAFETY: precise PML4; punch net BAR leaf out of G0 identity.
+    if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, net_bar_hpa) }.is_err() {
+        boot::serial::write_line("boot: ERROR — could not unmap virtio-net BAR from G0 EPT");
+        let _ = life.disable();
+        return;
+    }
+    let net_bar0 = net_bar_hpa;
+    let net_bar1 = net_bar_hpa + 0x1000;
+    let Some(net_buf0) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for virtio-net buf0");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_buf1) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for virtio-net buf1");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: host allocator frames; BARs EPT-unmapped.
+    unsafe {
+        devices::virtio_net::init(net_bar0, net_bar1, net_buf0, net_buf1);
+    }
+    boot::serial::write_str("boot: M4.4 virtio-net BAR0=0x");
+    write_hex(net_bar0);
+    boot::serial::write_str(" BAR1=0x");
+    write_hex(net_bar1);
+    boot::serial::write_byte(b'\n');
+
     // M4.0–M4.2: private 2 MiB shell slabs in [GUEST_RAM, PRECISE) — above G0
     // e820 so Linux never touches them. Prefer host RAM outside the FrameAllocator
     // pool (Latitude pool sits in low conventional memory; QEMU -m 512M still has
@@ -376,8 +454,6 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         memory::M4_GUEST3_ID,
     ];
     let mut slab_hpas = [0u64; SHELL_COUNT];
-    let mut used = [0u64; SHELL_COUNT];
-    let mut used_n = 0usize;
     for i in 0..SHELL_COUNT {
         let hpa = match pick_shell_slab_hpa(alloc, &used[..used_n]) {
             Some(h) => h,
@@ -530,6 +606,271 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     boot::serial::write_line(
         "boot: M4.2 G1–G3 prepared (precise EPT + host CR3 + SHELL CPUID in slabs)",
     );
+
+    // M4.3: bare-metal probe guest reuses G0 EPTP (BAR already punched) + host CR3.
+    // Code/stack/IDT frames come from the host allocator (not guest-exclusive slabs).
+    let Some(blk_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(blk_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for blk probe GDT");
+        let _ = life.disable();
+        return;
+    };
+    let blk_msr = alloc_phys(alloc);
+    let blk_io_a = alloc_phys(alloc);
+    let blk_io_b = alloc_phys(alloc);
+    // SAFETY: allocator frames; BAR GPA is EPT-unmapped on G0's PML4.
+    unsafe {
+        core::ptr::write_bytes(blk_idt as *mut u8, 0, 4096);
+        memory::ept_hw::write_guest_blk_probe_page(blk_code, bar_hpa);
+        if !arch::cpu::clear_nx_identity(blk_code) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on blk probe code");
+            let _ = life.disable();
+            return;
+        }
+    }
+    vmx::launch::set_blk_probe(vmx::LaunchFrames {
+        vmcs_phys: blk_vmcs,
+        guest_stack_phys: blk_stack,
+        host_stack_phys: blk_host_stack,
+        tss_phys: blk_tss,
+        gdt_phys: blk_gdt,
+        eptp,
+        guest_code_phys: blk_code,
+        guest_idt_phys: blk_idt,
+        guest_cr3_phys: None,
+        msr_bitmap_phys: blk_msr,
+        io_bitmap_a_phys: blk_io_a,
+        io_bitmap_b_phys: blk_io_b,
+    });
+    boot::serial::write_line("boot: M4.3 virtio-blk probe guest prepared (G0 EPTP + host CR3)");
+
+    // M4.4: net probe guest — dual BAR handshake then host vSwitch exchange.
+    let Some(net_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(net_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for net probe GDT");
+        let _ = life.disable();
+        return;
+    };
+    let net_msr = alloc_phys(alloc);
+    let net_io_a = alloc_phys(alloc);
+    let net_io_b = alloc_phys(alloc);
+    // SAFETY: allocator frames; net BARs EPT-unmapped on G0 PML4.
+    unsafe {
+        core::ptr::write_bytes(net_idt as *mut u8, 0, 4096);
+        memory::ept_hw::write_guest_net_probe_page(net_code, net_bar0, net_bar1);
+        if !arch::cpu::clear_nx_identity(net_code) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on net probe code");
+            let _ = life.disable();
+            return;
+        }
+    }
+    vmx::launch::set_net_probe(vmx::LaunchFrames {
+        vmcs_phys: net_vmcs,
+        guest_stack_phys: net_stack,
+        host_stack_phys: net_host_stack,
+        tss_phys: net_tss,
+        gdt_phys: net_gdt,
+        eptp,
+        guest_code_phys: net_code,
+        guest_idt_phys: net_idt,
+        guest_cr3_phys: None,
+        msr_bitmap_phys: net_msr,
+        io_bitmap_a_phys: net_io_a,
+        io_bitmap_b_phys: net_io_b,
+    });
+    boot::serial::write_line("boot: M4.4 virtio-net probe guest prepared (G0 EPTP + host CR3)");
+
+    // M4.5: dual-vCPU probe — same guest id, shared G0 EPTP; host wakes AP after BSP.
+    let Some(smp_flag) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP flag page");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: host-owned allocator frame for BSP/AP ready bytes.
+    unsafe {
+        sched::smp_probe::init(smp_flag);
+    }
+
+    let Some(bsp_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP GDT");
+        let _ = life.disable();
+        return;
+    };
+    let bsp_msr = alloc_phys(alloc);
+    let bsp_io_a = alloc_phys(alloc);
+    let bsp_io_b = alloc_phys(alloc);
+
+    let Some(ap_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP GDT");
+        let _ = life.disable();
+        return;
+    };
+    let ap_msr = alloc_phys(alloc);
+    let ap_io_a = alloc_phys(alloc);
+    let ap_io_b = alloc_phys(alloc);
+
+    // SAFETY: allocator frames; flag page identity-mapped under G0 EPT.
+    unsafe {
+        core::ptr::write_bytes(bsp_idt as *mut u8, 0, 4096);
+        core::ptr::write_bytes(ap_idt as *mut u8, 0, 4096);
+        memory::ept_hw::write_guest_smp_bsp_page(bsp_code, smp_flag);
+        memory::ept_hw::write_guest_smp_ap_page(ap_code, smp_flag);
+        if !arch::cpu::clear_nx_identity(bsp_code) || !arch::cpu::clear_nx_identity(ap_code) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on SMP probe code");
+            let _ = life.disable();
+            return;
+        }
+    }
+    vmx::launch::set_smp_probe(
+        vmx::LaunchFrames {
+            vmcs_phys: bsp_vmcs,
+            guest_stack_phys: bsp_stack,
+            host_stack_phys: bsp_host_stack,
+            tss_phys: bsp_tss,
+            gdt_phys: bsp_gdt,
+            eptp,
+            guest_code_phys: bsp_code,
+            guest_idt_phys: bsp_idt,
+            guest_cr3_phys: None,
+            msr_bitmap_phys: bsp_msr,
+            io_bitmap_a_phys: bsp_io_a,
+            io_bitmap_b_phys: bsp_io_b,
+        },
+        vmx::LaunchFrames {
+            vmcs_phys: ap_vmcs,
+            guest_stack_phys: ap_stack,
+            host_stack_phys: ap_host_stack,
+            tss_phys: ap_tss,
+            gdt_phys: ap_gdt,
+            eptp,
+            guest_code_phys: ap_code,
+            guest_idt_phys: ap_idt,
+            guest_cr3_phys: None,
+            msr_bitmap_phys: ap_msr,
+            io_bitmap_a_phys: ap_io_a,
+            io_bitmap_b_phys: ap_io_b,
+        },
+    );
+    boot::serial::write_line("boot: M4.5 SMP BSP+AP probe prepared (shared EPT + host AP wake)");
+
 
     let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");

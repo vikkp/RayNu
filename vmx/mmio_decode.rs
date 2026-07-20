@@ -122,6 +122,38 @@ pub fn apply_apic_mov(
     Ok(())
 }
 
+/// Apply decoded MMIO mov into a virtio-mmio BAR (blk M4.3 or net M4.4).
+pub fn apply_virtio_mov(
+    mov: MovMmio,
+    gpa: u64,
+    gprs: &mut [u64; 16],
+) -> Result<(), ()> {
+    if mov.is_write {
+        let val = read_gpr(mov.reg, gprs) as u32;
+        if crate::devices::virtio_blk::bar_contains(gpa) {
+            crate::devices::virtio_blk::mmio_access(gpa, true, val).ok_or(())?;
+        } else if crate::devices::virtio_net::bar_contains(gpa) {
+            crate::devices::virtio_net::mmio_access(gpa, true, val).ok_or(())?;
+        } else {
+            return Err(());
+        }
+    } else {
+        let v = if crate::devices::virtio_blk::bar_contains(gpa) {
+            crate::devices::virtio_blk::mmio_access(gpa, false, 0)
+                .ok_or(())?
+                .ok_or(())?
+        } else if crate::devices::virtio_net::bar_contains(gpa) {
+            crate::devices::virtio_net::mmio_access(gpa, false, 0)
+                .ok_or(())?
+                .ok_or(())?
+        } else {
+            return Err(());
+        };
+        write_gpr(mov.reg, v as u64, gprs);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod mmio_decode_test {
     use super::*;

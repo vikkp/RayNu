@@ -42,5 +42,5 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M4.2 closed:** ≥4 concurrent guests (G0 Linux + G1–G3 SHELL) → `RAYNU-V-M4-NVM-OK`.  
-**Next M4.3:** virtio-blk guest disk → `RAYNU-V-M4-BLK-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).
+**M4.5 closed:** dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.  
+**Next M5.0:** VM lifecycle API → `RAYNU-V-M5-LIFE-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).

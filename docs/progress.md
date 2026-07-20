@@ -43,8 +43,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.0 | `RAYNU-V-M4-2VM-OK` | G0 Linux SHELL + G1 SHELL under distinct EPT (dual VMCS; Latitude) |
 | M4.1 | `RAYNU-V-M4-SCHED-OK` | Credit scheduler time-slices G0↔G1 (Latitude) |
 | M4.2 | `RAYNU-V-M4-NVM-OK` | G0 Linux + G1–G3 SHELL (≥4 concurrent; Latitude) |
+| M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-mmio BAR + probe guest; DRIVER_OK write/readback (Latitude) |
+| M4.4 | `RAYNU-V-M4-NET-OK` | Dual virtio-net BARs + L2 vSwitch port0→port1 exchange (Latitude) |
+| M4.5 | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared EPT; host AP wake (Latitude) |
+| M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model (host) |
+| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify; ADR-006 claim (CI + Latitude; M4 exit) |
+| M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page (2M/1G) ghost *spec* (CI + Latitude; L3 → M5) |
+| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine (CI + Latitude) |
 
-## Verification checkpoint (as of M4.2)
+## Verification checkpoint (as of M4.9)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -54,31 +61,45 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `sched/msr_firewall` | L1-ish | CPUID filter + MSR classify; APIC_BASE shadow (M3.11) |
 | `devices/serial_pio` | L0→L1-ish | COM1 OUT/IN + IO/EARLY/SHELL + LINUX-EARLY banner latch |
 | `devices/lapic_virt` | L0→L1-ish | Virtual xAPIC/x2APIC; IRR/ISR + EOI; APIC-OK (M3.12) |
+| `devices/virtio_blk` | L0→L1-ish | Virtio-mmio config/status; DRIVER_OK host write/readback (M4.3) |
+| `devices/virtio_net` | L0→L1-ish | Dual virtio-mmio net BARs; DRIVER_OK → vSwitch exchange (M4.4) |
+| `net::VSwitch` | L0→L1-ish | L2 MAC learning + unicast forward (M4.4) |
+| `sched/smp_probe` | L0→L1-ish | Dual-vCPU BSP+AP ready flags; host AP wake (M4.5) |
 | `guest/linux_boot` | L0→L1-ish | Relocatable bzImage; 2 MiB-aligned `init_size` workspace |
 | `boot/esp_assets` | L0 | Pre-EBS ESP `\EFI\BOOT\BZIMAGE` stage |
 | `arch/apic` | L0 | Host LAPIC one-shot + EOI + mask (outside Proven Core) |
 | `memory/ept_hw` identity builder | L1-ish | Precise `[0,512MiB)` @ 2M (M3.20); APIC unmapped by omission |
-| `vmx/*` | L0–L1 | 4 VMCS (G0 Linux + G1–G3 SHELL) + credit sched (M4.2) |
+| `vmx/*` | L0–L1 | Multi-VMCS + credit sched + blk/net/SMP probes (M4.5) |
 | `memory/m4_2vm_gate` | L0 | Host artifact gate for dual-VMCS / dual-EPT path |
 | `sched/scheduler` | L0→L1-ish | Credit quantum + fair pick; M4.1/M4.2 |
 | `sched/m4_sched_gate` | L0 | Host artifact gate for dual-VMCS scheduling |
 | `sched/m4_nvm_gate` | L0 | Host artifact gate for ≥4 concurrent guests |
-| Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + concrete refine (M3.18); no `admit` |
+| `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
+| `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
+| `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
+| Verus proofs (`ept_model`) | **L3** (scoped) + L2 large-page | 4K exclusivity/refine/N-guest L3 + N-guest refine (M4.9); large-page L3 → M5 |
+| `memory/m4_nguest_spec_gate` | L0 | Host artifact gate for N-guest ghost exclusivity (M4.6) |
+| `memory/m4_nguest_verify_gate` | L0 | Host artifact gate for N-guest ADR-006 L3 (M4.7) |
+| `memory/m4_lpage_gate` | L0 | Host artifact gate for large-page ghost *spec* (M4.8) |
+| `memory/m4_nguest_refine_gate` | L0 | Host artifact gate for N-guest concrete refine (M4.9) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
 
 ## Next (numbered)
 
-M4 plan (platform spine → proof bolt-on): [m4_plan.md](m4_plan.md)  
-Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
+M5 plan (ops spine → audit → Dell Tier‑1 → proof debt): [m5_plan.md](m5_plan.md)  
+Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.3** ← next | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
-| M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
-| M4.5 | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs blk/net |
-| M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
-| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
-| M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |
-| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
-| M5 | — | Operationally viable (see CLAUDE.md) |
+| **M5.0** ← next | `RAYNU-V-M5-LIFE-OK` | VM lifecycle API |
+| M5.1 | `RAYNU-V-M5-API-OK` | CLI + REST control plane |
+| M5.2 | `RAYNU-V-M5-WEBUI-OK` | Embedded Web UI |
+| M5.3 | `RAYNU-V-M5-AUDIT-OK` | Audit ring + hash chain |
+| M5.4 | `RAYNU-V-M5-REPORT-OK` | SOX / ISO-style reports |
+| M5.5 | `RAYNU-V-M5-MIGRATE-OK` | VMware import (parallel; ADR-007) |
+| M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
+| M5.7 | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify |
+| M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA in ghost spec |
+| M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
+| M6 | — | Production ready (see CLAUDE.md) |

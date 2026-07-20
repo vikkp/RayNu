@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.2 closed** — ≥4 concurrent guests under EPT → `RAYNU-V-M4-NVM-OK`. Active: **M4.3** (virtio-blk) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.9 closed** — N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`. M4 Track A–C complete. Active: **M5** — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 
@@ -103,6 +103,7 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
 | [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 + post-L3 (M3.11–M3.22) |
 | [docs/m4_plan.md](docs/m4_plan.md) | M4 usable VM platform (platform spine → N-guest L3) |
+| [docs/m5_plan.md](docs/m5_plan.md) | M5 operationally viable (mgmt → audit → Dell → proof) |
 | [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |

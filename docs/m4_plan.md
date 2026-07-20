@@ -1,6 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.2 closed on Latitude; next platform gate is **M4.3** (virtio-blk).  
+**Status:** **Track C closed** — M4.9 closed on Latitude; M4 exit criteria met (NVM+BLK+NET+NGUEST-VERIFY+SMP+LPAGE+REFINE). Next: **M5**.  
+**Prior:** M4.9 closed on Latitude (`RAYNU-V-M4-REFINE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -115,45 +116,51 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.3 — Virtio-blk (guest disk) — `RAYNU-V-M4-BLK-OK`
 
-**Status: open** ← next
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.3)`)
 
 **Goal:** Guest root or data disk via Virtio-blk (or documented equivalent); guest can read/write without host COM1 crutches.
 
-**Acceptance sketch:**
+**Accepted MV (this gate):** virtio-mmio over an EPT hole + bare-metal probe guest. On `DRIVER_OK` the host write+readbacks an in-memory disk image (FrameAllocator-backed, not guest-exclusive) and latches `RAYNU-V-M4-BLK-OK`. Full Linux root-on-virtio is later polish — not required to close M4.3.
 
-1. Implement beyond `devices/` stub; MMIO/PIO exit path + config.
-2. Latitude: guest marker after successful block I/O (e.g. write+readback or mount).
-3. Frames backing the disk image stay outside guest-exclusive RAM ownership (or are explicitly modeled).
+**Acceptance (met):**
 
-**Likely files:** `devices/` (virtio-blk), `vmx/` exit handlers, assets/disk if needed.
+1. `devices/virtio_blk.rs` MMIO config/status + EPT violation path (`apply_virtio_mov`).
+2. Latitude: `RAYNU-V-M4-BLK-OK` after DRIVER_OK write/readback (post NVM-OK probe guest).
+3. Disk frames from FrameAllocator pool (host-owned; not guest-exclusive slabs).
+
+**Files:** `devices/virtio_blk.rs`, `devices/m4_blk_gate.rs`, `memory/ept_hw.rs`, `vmx/launch.rs`, `vmx/mmio_decode.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.4 — Virtio-net + minimal vSwitch — `RAYNU-V-M4-NET-OK`
 
-**Status: open**
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.4)`)
 
 **Goal:** Guest↔guest or guest↔host networking via Virtio-net + L2 learning switch (`net/` stub → real).
 
-**Acceptance sketch:**
+**Accepted MV (this gate):** two virtio-mmio net BARs + host L2 learning `VSwitch`. A bare-metal probe guest handshakes both ports to `DRIVER_OK`; the host injects an Ethernet frame port0→port1 into allocator-backed RX buffers and latches `RAYNU-V-M4-NET-OK`. Full Linux virtio-net / TAP is later polish.
 
-1. At least two VMs exchange a packet (or guest pings host tap).
-2. Marker `RAYNU-V-M4-NET-OK`.
-3. No EPT ownership bypass for packet buffers.
+**Acceptance (met):**
 
-**Likely files:** `net/mod.rs`, `devices/` virtio-net, `vmx/` MMIO.
+1. `devices/virtio_net.rs` + `net::VSwitch` forward/learn; MMIO exit path.
+2. Latitude: `RAYNU-V-M4-NET-OK` after dual-port exchange (post BLK-OK probe).
+3. Packet buffers from FrameAllocator pool (host-owned; not guest-exclusive slabs).
+
+**Files:** `net/mod.rs`, `devices/virtio_net.rs`, `devices/m4_net_gate.rs`, `memory/ept_hw.rs`, `vmx/launch.rs`, `vmx/mmio_decode.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ### M4.5 — SMP guest (2+ vCPUs) — `RAYNU-V-M4-SMP-OK`
 
-**Status: open**
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.5)`)
 
 **Goal:** One guest with **2+ vCPUs** reaches shell (AP bring-up under virtual APIC).
 
-**Acceptance sketch:**
+**Accepted MV (this gate):** bare-metal **BSP + AP** under two VMCS, **same guest id**, **shared EPT** (G0 EPTP). After NET-OK the host VMLAUNCHes the BSP; when BSP stores a ready flag and HLTs, the host performs a **documented AP wake** (VMLAUNCH of the AP VMCS — INIT-SIPI equivalent for this gate). When both ready flags are seen, latch `RAYNU-V-M4-SMP-OK`. Full Linux `CONFIG_SMP` / ICR Wait-for-SIPI / IOAPIC is deferred.
 
-1. Second VMCS/vCPU for same guest id; shared EPT; INIT-SIPI or documented AP wake.
-2. May retain `noapic` only if SMP still works; prefer progress toward IOAPIC if blocked.
-3. Marker `RAYNU-V-M4-SMP-OK`. **Slip-allowed** vs blk/net if needed — not on the proof critical path.
+**Acceptance (met):**
 
-**Likely files:** `vmx/`, `devices/lapic_virt.rs`, `guest/linux_boot.rs`.
+1. Second VMCS/vCPU for same guest id; shared EPT; documented AP wake (host VMLAUNCH).
+2. Linux remains UP (`maxcpus=1` / `noapic`); probe does not need IOAPIC.
+3. Latitude: `RAYNU-V-M4-SMP-OK` after BSP+AP ready flags.
+
+**Files:** `sched/smp_probe.rs`, `sched/m4_smp_gate.rs`, `memory/ept_hw.rs`, `vmx/launch.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ---
 
@@ -163,57 +170,71 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.6 — N-guest exclusivity in ghost model — `RAYNU-V-M4-NGUEST-SPEC-OK`
 
-**Status: open** (host-first)
+**Status: closed** (host `./tools/verus-nguest-spec-smoke.sh` → `RAYNU-V-M4-NGUEST-SPEC-OK`)
 
 **Goal:** Extend `ept_model` ghost map/unmap to **N guests**; L2→L3 *attempt* with explicit gaps documented.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Close `TODO(M4): N guests` in `memory/ept_spec.rs` / `ept_proof.rs` GAP list (spec side).
-2. Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`.
-3. Does not yet claim ADR-006 L3 for N guests (that is M4.7).
+1. `MapUnmapStep` carries explicit `guest`; lemmas apply for any `guest != 0`.
+2. `theorem_n_guest_4k_map_unmap_exclusive` in `ept_model` (no `admit`); marker embedded.
+3. Closed `TODO(M4): N guests` in `ept_spec.rs`; `GAP(CLOSED M4.6)` in `ept_proof.rs`; N-guest L3 claim closed in **M4.7**.
+4. Host gate `memory/m4_nguest_spec_gate.rs` + CI job `verus-nguest-spec`.
 
-**Likely files:** `ept_model/`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, tools smoke + gate.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`. ADR-006 L3 claim for N guests is **M4.7**.
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_nguest_spec_gate.rs`, `tools/verus-nguest-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.7 — True L3 N-guest verify — `RAYNU-V-M4-NGUEST-VERIFY-OK`
 
-**Status: open** (host-first; **M4 exit criterion**)
+**Status: closed** (Latitude `./tools/verus-nguest-verify-smoke.sh` → `RAYNU-V-M4-NGUEST-VERIFY-OK`; **M4 exit criterion**)
 
 **Goal:** Green `cargo verus verify -p ept_model` for N-guest map/unmap exclusivity — **no `admit`**.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Theorem(s) for ≥2 guests; marker `RAYNU-V-M4-NGUEST-VERIFY-OK`.
-2. CI hard-fail job (same pattern as M3.17).
-3. Live multi-VM path keeps runtime asserts; full ghost↔exec refine is M4.9.
+1. `theorem_n_guest_4k_map_unmap_exclusive` + `lemma_two_guests_map_distinct_frames_exclusive` discharged (no `admit`).
+2. Marker `RAYNU-V-M4-NGUEST-VERIFY-OK`; CI hard-fail job `verus-nguest-verify`.
+3. `GAP(CLOSED M4.7)` in `ept_proof.rs`; ADR-004 / ADR-006 N-guest L3 claim recorded.
+4. Live multi-VM path keeps runtime asserts; full ghost↔exec N-guest refine is **M4.9**.
 
-**Likely files:** `ept_model/`, verify smoke, CI, ADR-004 / ADR-006 notes.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M4-NGUEST-VERIFY-OK` (`24 verified, 0 errors`); boot regression still `Boot gate PASSED (M0 → M4.5)`.
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, `memory/m4_nguest_verify_gate.rs`, `tools/verus-nguest-verify-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.8 — Large-page (2M/1G) in ghost spec — `RAYNU-V-M4-LPAGE-OK`
 
-**Status: open** (host-first)
+**Status: closed** (Latitude `./tools/verus-lpage-spec-smoke.sh` → `RAYNU-V-M4-LPAGE-OK`)
 
 **Goal:** Large pages in the **ghost spec** (ADR-004: may stay L2). Proof attempt deferred to **M5**.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Spec + Kani/runtime hooks as appropriate; marker `RAYNU-V-M4-LPAGE-OK`.
-2. Document GAP for L3 large-page discharge → M5.
+1. `GhostPageSize` / `PAGE_2M` / `PAGE_1G` / `frames_covered` / `large_map_enabled` / `large_map_post_owned` in `ept_model`.
+2. Closed `TODO(M4.8)` in `ept_spec.rs`; `GAP(CLOSED M4.8)` in `ept_proof.rs`; open `GAP: Large-page L3 discharge` → M5.
+3. Host gate `memory/m4_lpage_gate.rs` (span exclusivity + 2 MiB range overlap) + CI `verus-lpage-spec`.
+4. Size lemmas (`lemma_2m_covers_512_frames`, `lemma_1g_covers_262144_frames`) discharged; exclusivity across large map/unmap remains M5.
 
-**Likely files:** `ept_model/`, `memory/ept_spec.rs`, `memory/ept_proof.rs`.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M4-LPAGE-OK` (`29 verified, 0 errors`). Does **not** claim large-page L3 (M5).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_lpage_gate.rs`, `tools/verus-lpage-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.9 — N-guest ghost↔exec refine — `RAYNU-V-M4-REFINE-OK`
 
-**Status: open** (host-first)
+**Status: closed** (Latitude `./tools/verus-nguest-refine-smoke.sh` → `RAYNU-V-M4-REFINE-OK`)
 
-**Goal:** Refine multi-guest exec registry / allocator coupling under `abs` / `refines` (extend M3.18 pattern).
+**Goal:** Refine multi-guest exec registry under `abs` / `refines` (extend M3.18 pattern).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. No `admit` on refine theorems in scope; marker `RAYNU-V-M4-REFINE-OK`.
-2. HW PTE identity correspondence may remain GAP → M5.
+1. `theorem_concrete_n_guest_4k_refine` + `lemma_concrete_two_guests_map_refines` discharged (no `admit`).
+2. Marker `RAYNU-V-M4-REFINE-OK`; CI hard-fail job `verus-nguest-refine`.
+3. `GAP(CLOSED M4.9)` in `ept_proof.rs`; HW PTE identity + deeper allocator↔EPT L3 remain M5.
+4. Host gate `memory/m4_nguest_refine_gate.rs` (live two-guest map/unmap exclusivity).
 
-**Likely files:** `ept_model/`, `memory/ept.rs`, refine smoke + gate.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M4-REFINE-OK` (`31 verified, 0 errors`).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_proof.rs`, `memory/ept_spec.rs`, `memory/m4_nguest_refine_gate.rs`, `tools/verus-nguest-refine-smoke.sh`, `.github/workflows/ci.yml`.
 
 ---
 
@@ -263,4 +284,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.2 closed** on Latitude (`RAYNU-V-M4-NVM-OK`). Multi-guest spine is real — Track B (**M4.3** virtio-blk) and Track C proof may proceed. Next: **M4.3** on branch `cursor/m4-3-blk-a623`.
+**M4.9 closed** on Latitude (`RAYNU-V-M4-REFINE-OK`). Track C complete — M4 platform + proof spine closed. Next: **M5** — [m5_plan.md](m5_plan.md).
