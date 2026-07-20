@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.4 closed on Latitude (Track A+B done; LIFE+API+AUDIT+REPORT green); next critical for M5 close is **M5.7** (large-page L3).  
-**Prior:** M5.4 closed on Latitude (`RAYNU-V-M5-REPORT-OK`).  
+**Status:** **open** — M5.0–M5.5 closed on Latitude (Track A+B + migrate); next critical for M5 close is **M5.7** (large-page L3).  
+**Prior:** M5.5 closed on Latitude (`RAYNU-V-M5-MIGRATE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -216,19 +216,21 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.5 — VMware / vCenter import — `RAYNU-V-M5-MIGRATE-OK`
 
-**Status: open** (ADR-007; **outside Proven Core**)
+**Status: closed** (Latitude `./tools/m5-migrate-smoke.sh` → `RAYNU-V-M5-MIGRATE-OK`)
+(ADR-007; **outside Proven Core**; not required for M5 closed)
 
 **Goal:** Migrate **10+** VMs from vCenter in one command (`migrate/`).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. One-command import path (VMDK/OVF as documented).
-2. Audit events for migrate start/complete/fail ([A]).
-3. Marker `RAYNU-V-M5-MIGRATE-OK`.
-4. Must not pull new modules into Proven Core without a separate ADR.
-5. May close after or during late M5; **M5 closed does not require M5.5**.
+1. One-command `migrate_one_command` over a documented OVF/VMDK inventory
+   (`assets/migrate/sample_inventory.txt`, ≥12 guests).
+2. Audit events `MigrateStarted` / `MigrateCompleted` / `MigrateFailed`.
+3. Guests land in `VmTable` as `Defined` (`MGMT_GUEST_CAP` raised to 16).
+4. Host gate `migrate/m5_migrate_gate.rs` + `tools/m5-migrate-smoke.sh` + CI `m5-migrate`.
+5. Live vCenter SOAP/REST client remains `GAP: live vCenter API → polish`.
 
-**Likely files:** `migrate/`, assets, ops docs.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-MIGRATE-OK`.
 
 ---
 
@@ -277,10 +279,10 @@ RAYNU-V-M5-LPAGE-VERIFY-OK
 ==> Host large-page L3-verify smoke PASSED
 ```
 
-Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`, `RAYNU-V-M5-MIGRATE-OK`.
+Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`.
 
 ---
 
 ## First action
 
-Draft accepted. **M5.0–M5.4 closed** on Latitude (Track A+B: LIFE+API+WEBUI+AUDIT+REPORT). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`). M5.5/M5.6 remain parallel / slip-ok.
+Draft accepted. **M5.0–M5.5 closed** on Latitude (incl. parallel migrate). Next critical for M5 close: **M5.7** (`RAYNU-V-M5-LPAGE-VERIFY-OK`). M5.6 remains parallel / slip-ok.

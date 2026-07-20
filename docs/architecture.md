@@ -42,5 +42,5 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M5.4 closed:** SOX / ISO-style reports → `RAYNU-V-M5-REPORT-OK`.  
+**M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
 **Next M5.7:** Large-page L3 verify → `RAYNU-V-M5-LPAGE-VERIFY-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
