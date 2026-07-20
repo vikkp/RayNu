@@ -363,19 +363,18 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     };
 
-    // M4.0: private 2 MiB G1 slab above guest e820, unmapped from G0 EPT.
-    const G1_SLAB_PAGES: u64 = memory::ept_hw::TWO_MIB / 4096;
-    let Some(g1_slab) = alloc.allocate_contiguous_aligned(G1_SLAB_PAGES, G1_SLAB_PAGES) else {
-        boot::serial::write_line("boot: ERROR — no 2MiB-aligned slab for G1");
-        let _ = life.disable();
-        return;
+    // M4.0: private 2 MiB G1 slab in [GUEST_RAM, PRECISE) — above G0 e820 so
+    // Linux never touches it. Prefer host RAM outside the FrameAllocator pool
+    // (Latitude pool sits in low conventional memory; QEMU -m 512M still has
+    // [256MiB,512MiB) identity-mapped and free).
+    let g1_base = match pick_g1_slab_hpa(alloc) {
+        Some(h) => h,
+        None => {
+            boot::serial::write_line("boot: ERROR — no G1 slab above G0 guest RAM");
+            let _ = life.disable();
+            return;
+        }
     };
-    let g1_base = g1_slab.to_phys();
-    if g1_base < guest::linux_boot::GUEST_RAM_BYTES {
-        boot::serial::write_line("boot: ERROR — G1 slab overlaps G0 guest RAM");
-        let _ = life.disable();
-        return;
-    }
     // SAFETY: precise PML4; punch G1 slab out of G0 identity.
     if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, g1_base) }.is_err() {
         boot::serial::write_line("boot: ERROR — could not unmap G1 slab from G0 EPT");
@@ -392,6 +391,12 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     boot::serial::write_str("boot: M4.0 G1 slab HPA=0x");
     write_hex(g1_base);
     boot::serial::write_byte(b'\n');
+
+    // Zero the slab via host identity map before installing guest code.
+    // SAFETY: HPA is in QEMU RAM, outside the allocator, identity-mapped by UEFI.
+    unsafe {
+        core::ptr::write_bytes(g1_base as *mut u8, 0, memory::ept_hw::TWO_MIB as usize);
+    }
 
     let g1_ept_need = memory::ept_hw::frames_required_single_2m();
     let mut g1_ept_frames = [0u64; 4];
@@ -551,6 +556,20 @@ fn launch_err_name(e: vmx::LaunchError) -> &'static str {
         vmx::LaunchError::VmwriteFailed { .. } => "VmwriteFailed",
         vmx::LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }
+}
+
+/// Pick a 2 MiB-aligned HPA for G1 in `[GUEST_RAM, PRECISE)` outside the HV pool.
+fn pick_g1_slab_hpa(alloc: &memory::FrameAllocator) -> Option<u64> {
+    let guest_ram = guest::linux_boot::GUEST_RAM_BYTES;
+    let two_m = memory::ept_hw::TWO_MIB;
+    let mut hpa = (guest_ram + two_m - 1) & !(two_m - 1);
+    while hpa.saturating_add(two_m) <= memory::PRECISE_BYTES {
+        if !alloc.owns_phys_range(hpa, two_m) {
+            return Some(hpa);
+        }
+        hpa = hpa.saturating_add(two_m);
+    }
+    None
 }
 
 fn write_dec(mut n: u64) {

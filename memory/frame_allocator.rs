@@ -135,8 +135,26 @@ impl FrameAllocator {
         }
     }
 
-    fn contains(&self, frame: PhysFrame) -> bool {
+    /// True if `frame` lies in this allocator's managed span (allocated or free).
+    pub fn contains(&self, frame: PhysFrame) -> bool {
         frame.0 >= self.base_frame && frame.0 < self.base_frame + self.capacity
+    }
+
+    /// True if any page in `[phys, phys+len)` is managed by this allocator.
+    pub fn owns_phys_range(&self, phys: u64, len: u64) -> bool {
+        if len == 0 {
+            return false;
+        }
+        let start = phys / 4096;
+        let end = phys.saturating_add(len).div_ceil(4096);
+        let mut f = start;
+        while f < end {
+            if self.contains(PhysFrame(f)) {
+                return true;
+            }
+            f += 1;
+        }
+        false
     }
 
     fn index_of(&self, frame: PhysFrame) -> Option<u64> {
