@@ -6,11 +6,14 @@
 //! Checks that `ept_model` carries `GhostNumaTopology` / `numa_map_enabled` /
 //! `mock_bringup_numa`, that `ept_spec` / `ept_proof` close the NUMA *spec* GAP,
 //! that the iDRAC SRAT/SLIT mock feeds a well-formed host view, and that the
-//! smoke script is present. Full NUMA affinity L3 remains GAP → M6.
+//! smoke script is present. NUMA affinity L3 closed in M6.2
+//! (`GAP(CLOSED M6.2)` accepted alongside the historical open note).
 //! Runtime `cargo verus verify -p ept_model` is exercised by
 //! `tools/verus-numa-smoke.sh`.
 
-use crate::memory::numa::{prop_mock_numa_runtime, M5_NUMA_OK_MARKER, NUMA_L3_GAP_NOTE};
+use crate::memory::numa::{
+    prop_mock_numa_runtime, M5_NUMA_OK_MARKER, NUMA_L3_GAP_CLOSED, NUMA_L3_GAP_NOTE,
+};
 
 /// Host / CI marker when the M5.8 NUMA-spec gate passes.
 pub const M5_NUMA_GATE_MARKER: &str = M5_NUMA_OK_MARKER;
@@ -60,7 +63,7 @@ pub fn ept_spec_closes_numa_todo() -> bool {
     spec.contains("TODO(M5.8 CLOSED): NUMA in ghost spec")
         && spec.contains("GhostNumaTopology")
         && proof.contains("GAP(CLOSED M5.8): NUMA in ghost spec")
-        && proof.contains(NUMA_L3_GAP_NOTE)
+        && (proof.contains(NUMA_L3_GAP_NOTE) || proof.contains(NUMA_L3_GAP_CLOSED))
         && proof.contains("mock_bringup_numa")
 }
 

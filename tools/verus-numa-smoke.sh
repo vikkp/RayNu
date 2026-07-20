@@ -53,8 +53,8 @@ if ! grep -q 'GAP(CLOSED M5.8): NUMA in ghost spec' "$ROOT/memory/ept_proof.rs";
   echo "error: ept_proof must close GAP NUMA in ghost spec for M5.8" >&2
   exit 1
 fi
-if ! grep -q 'GAP: NUMA affinity / exclusivity L3 (M6)' "$ROOT/memory/ept_proof.rs"; then
-  echo "error: ept_proof must document NUMA affinity L3 GAP → M6" >&2
+if ! grep -qE 'GAP: NUMA affinity / exclusivity L3 \(M6\)|GAP\(CLOSED M6\.2\): NUMA affinity / exclusivity L3' "$ROOT/memory/ept_proof.rs"; then
+  echo "error: ept_proof must document or close NUMA affinity L3 GAP" >&2
   exit 1
 fi
 if ! grep -q 'TODO(M5.8 CLOSED): NUMA in ghost spec' "$ROOT/memory/ept_spec.rs"; then

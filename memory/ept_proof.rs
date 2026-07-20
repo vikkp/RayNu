@@ -43,7 +43,10 @@
 //!   GhostFramePool / alloc_ept_refines / theorem_alloc_map_unmap_refines)
 //! GAP(CLOSED M5.9): Precise-identity GPA==HPA correspondence
 //!   (PRECISE_IDENTITY_FRAMES / identity_leaf_ok / lemma_identity_leaf_gpa_eq_hpa)
-//! GAP: NUMA affinity / exclusivity L3 (M6)
+//! GAP(CLOSED M6.2): NUMA affinity / exclusivity L3
+//!   (marker RAYNU-V-M6-NUMA-L3-OK; theorem_numa_map_unmap_affinity /
+//!   lemma_numa_map_establishes_affinity / lemma_numa_unmap_preserves_affinity /
+//!   guest_frames_on_node)
 //! GAP(CLOSED M6.0): EPT violation handler preserves exclusivity
 //!   (marker RAYNU-V-M6-EPTVIO-OK; theorem_ept_violation_preserves_exclusive /
 //!   EptViolationDisposition EmulateNoMap|Reject|ClaimMap)

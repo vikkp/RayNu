@@ -1,6 +1,6 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.1 closed on Latitude; next **M6.2** NUMA-L3.  
+**Status:** **open** — M6.2 wired (host/Verus); Latitude smoke pending close. Next after close: **M6.3** migrate-xfer.  
 **Prior:** M6.1 closed on Latitude (`RAYNU-V-M6-HWPTE-OK`; `72 verified, 0 errors`); M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -106,7 +106,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.2 — NUMA affinity L3 — `RAYNU-V-M6-NUMA-L3-OK`
 
-**Status: open** (host-first)
+**Status: wired** (host gate + Verus local; Latitude `./tools/verus-numa-l3-smoke.sh` pending close)
 
 **Goal:** Discharge NUMA affinity / exclusivity beyond M5.8’s ghost *spec* (`guest_frames_on_node` under map/unmap, or documented L2 ceiling with ADR note).
 
@@ -115,6 +115,14 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 1. Attempt L3 for affinity posts; if verify cost is high, document GAP + ADR waiver and still ship a stronger host/runtime gate.
 2. Marker `RAYNU-V-M6-NUMA-L3-OK`.
 3. Ties to `memory/numa.rs` + `idrac` SRAT/SLIT mock (already present).
+
+**Delivered (host-first):**
+
+1. Ghost: `lemma_numa_map_establishes_affinity` / `lemma_numa_unmap_preserves_affinity` /
+   `theorem_numa_map_unmap_affinity` / `lemma_mock_numa_map_unmap_affinity`.
+2. Runtime: `prop_numa_affinity_l3` in `memory/numa.rs` (mock SRAT/SLIT affinity policy).
+3. Host gate `memory/m6_numa_gate.rs` + `tools/verus-numa-l3-smoke.sh` + CI `verus-numa-l3`.
+4. `GAP(CLOSED M6.2): NUMA affinity / exclusivity L3`.
 
 **Likely files:** `ept_model/`, `memory/numa.rs`, `memory/ept_proof.rs`.
 
@@ -277,4 +285,5 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.1 closed** on Latitude (`RAYNU-V-M6-HWPTE-OK`; `72 verified, 0 errors`). Next: **M6.2** (`RAYNU-V-M6-NUMA-L3-OK`) — NUMA affinity L3.
+**M6.2 wired** (host gate + `77 verified, 0 errors` locally). Close on Latitude via
+`./tools/verus-numa-l3-smoke.sh` → `RAYNU-V-M6-NUMA-L3-OK`, then **M6.3** (`RAYNU-V-M6-MIGRATE-XFER-OK`).
