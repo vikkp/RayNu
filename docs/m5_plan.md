@@ -300,4 +300,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-**M5 closed** on Latitude (M5.0–M5.9, incl. ALLOC-REFINE). Next: **M6** (production ready) — remaining GAPs (HW PTE bit-decode, EPT-violation, migration, NUMA affinity L3) are M6 scope.
+**M5 closed** on Latitude (M5.0–M5.9, incl. ALLOC-REFINE). Next: **M6** — numbered plan [m6_plan.md](m6_plan.md); first gate **M6.0** (`RAYNU-V-M6-EPTVIO-OK`).
