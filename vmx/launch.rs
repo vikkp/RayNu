@@ -237,11 +237,15 @@ fn ar_busy_tr(mut ar: u32) -> u32 {
 
 /// Remember host GDT/TSS from the first [`install_host_tss`] — VM-exit forces
 /// `GDTR.limit = 0xFFFF` (SDM), so a second copy-from-sgdt would look 64 KiB wide.
-static mut HOST_TSS_READY: bool = false;
-static mut HOST_GDT_BASE: u64 = 0;
-static mut HOST_GDT_LIMIT: u16 = 0;
-static mut HOST_TR_SEL: u16 = 0;
-static mut HOST_TR_BASE: u64 = 0;
+///
+/// Names must not collide with VMCS field encodings in `vmx::fields` (e.g.
+/// `HOST_TR_BASE`), or `vw(HOST_TR_BASE, …)` silently uses the phys addr as the
+/// field encoding (insn error 12).
+static mut INSTALLED_HOST_TSS: bool = false;
+static mut INSTALLED_GDT_BASE: u64 = 0;
+static mut INSTALLED_GDT_LIMIT: u16 = 0;
+static mut INSTALLED_TR_SEL: u16 = 0;
+static mut INSTALLED_TR_BASE: u64 = 0;
 
 /// Build a host TSS + GDT and load them (LGDT/LTR).
 ///
@@ -256,19 +260,24 @@ unsafe fn install_host_tss(
     gdt_phys: u64,
     tss_phys: u64,
 ) -> Result<(u64, u16, u16, u64), LaunchError> {
-    if HOST_TSS_READY {
+    if INSTALLED_HOST_TSS {
         // Restore architecturally correct limit (VM-exit set limit=FFFF).
         let gdtr = cpu::DescriptorTablePtr {
-            limit: HOST_GDT_LIMIT,
-            base: HOST_GDT_BASE,
+            limit: INSTALLED_GDT_LIMIT,
+            base: INSTALLED_GDT_BASE,
         };
         cpu::lgdt(&gdtr);
         // TR still points at our TSS; LTR again only if selector cleared.
         if cpu::read_tr() & 0xfffc == 0 {
-            cpu::load_tr(HOST_TR_SEL);
+            cpu::load_tr(INSTALLED_TR_SEL);
         }
         serial::write_line("boot: host TSS reused (post-VMX GDTR.limit fixup)");
-        return Ok((HOST_GDT_BASE, HOST_GDT_LIMIT, HOST_TR_SEL, HOST_TR_BASE));
+        return Ok((
+            INSTALLED_GDT_BASE,
+            INSTALLED_GDT_LIMIT,
+            INSTALLED_TR_SEL,
+            INSTALLED_TR_BASE,
+        ));
     }
 
     let old = cpu::sgdt();
@@ -320,11 +329,11 @@ unsafe fn install_host_tss(
     let tr_sel = (tss_off as u16) & 0xFFF8;
     cpu::load_tr(tr_sel);
 
-    HOST_TSS_READY = true;
-    HOST_GDT_BASE = gdt_phys;
-    HOST_GDT_LIMIT = new_limit;
-    HOST_TR_SEL = tr_sel;
-    HOST_TR_BASE = tss_phys;
+    INSTALLED_HOST_TSS = true;
+    INSTALLED_GDT_BASE = gdt_phys;
+    INSTALLED_GDT_LIMIT = new_limit;
+    INSTALLED_TR_SEL = tr_sel;
+    INSTALLED_TR_BASE = tss_phys;
 
     serial::write_str("boot: host TSS sel=0x");
     write_hex_u32(tr_sel as u32);
