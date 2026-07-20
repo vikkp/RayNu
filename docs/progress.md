@@ -62,9 +62,19 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-Post-shell / post-L3 plan: [m3_post_shell_plan.md](m3_post_shell_plan.md)
+M4 plan (platform spine → proof bolt-on): [m4_plan.md](m4_plan.md)  
+Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4** ← next | — | N-guest / large-page / migration proofs |
-| M4+ | — | Platform scale-out (see CLAUDE.md roadmap) |
+| **M4.0** ← next | `RAYNU-V-M4-2VM-OK` | Second guest under EPT (distinct ownership) |
+| M4.1 | `RAYNU-V-M4-SCHED-OK` | Scheduler time-slices ≥2 VMs |
+| M4.2 | `RAYNU-V-M4-NVM-OK` | 4+ concurrent Linux shells |
+| M4.3 | `RAYNU-V-M4-BLK-OK` | Virtio-blk guest disk |
+| M4.4 | `RAYNU-V-M4-NET-OK` | Virtio-net + minimal vSwitch |
+| M4.5 | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs blk/net |
+| M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
+| M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
+| M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |
+| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
+| M5 | — | Operationally viable (see CLAUDE.md) |

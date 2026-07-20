@@ -191,7 +191,7 @@ sudo ./tools/enable-nested-kvm.sh   # if needed
 
 1. ~~Plan / M3.0–M3.13~~ — done (real Linux SHELL + precise EPT + APIC inject).
 2. ~~Post-shell / true L3~~ — M3.17 closed (`RAYNU-V-M3-L3-VERIFY-OK`).
-3. **Post-L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.19–M3.22 closed; next is M4.
+3. **Post-L3:** [m3_post_shell_plan.md](m3_post_shell_plan.md) — M3.19–M3.22 closed; next is [m4_plan.md](m4_plan.md).
 
 ---
 
