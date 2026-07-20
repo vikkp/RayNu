@@ -31,6 +31,10 @@ impl VmcsRegion {
     ///
     /// VERIFICATION: L0
     pub fn new(id: u64) -> Self {
+        crate::audit_log!(crate::audit::AuditEvent::VmcsCreated {
+            vcpu_id: 0,
+            vmcs_id: id,
+        });
         Self {
             handle: VmcsHandle { id },
             launched: false,

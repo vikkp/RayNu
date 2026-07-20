@@ -6,6 +6,9 @@
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+/// Host / CI marker when the M5.3 audit integrity gate passes.
+pub const M5_AUDIT_OK_MARKER: &str = "RAYNU-V-M5-AUDIT-OK";
+
 /// Genesis previous-hash for an empty chain ("RAYNU-V0" marker).
 pub const AUDIT_GENESIS_HASH: u64 = 0x5241_594E_552D_5630;
 
@@ -142,6 +145,29 @@ impl AuditRing {
         }
         true
     }
+
+    /// Read a sealed record by index (for verify/tamper hosts).
+    pub fn get(&self, index: usize) -> Option<&AuditRecord> {
+        if index >= self.len {
+            return None;
+        }
+        self.records[index].as_ref()
+    }
+
+    /// Corrupt the stored hash at `index` (tamper simulation for [A] gates).
+    ///
+    /// Returns false if the slot is empty. After success, `verify_chain` is false.
+    pub fn tamper_hash_at(&mut self, index: usize) -> bool {
+        if index >= self.len {
+            return false;
+        }
+        if let Some(rec) = self.records[index].as_mut() {
+            rec.hash ^= 0xDEAD_BEEF_CAFE_BABEu64;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for AuditRing {
@@ -206,16 +232,97 @@ pub fn record_event(event: AuditEvent) {
     let _ = with_boot_ring(|ring| ring.append(event).map(|_| ()));
 }
 
+/// Verify the live boot ring hash chain (tamper-evident path for host/firmware).
+pub fn boot_ring_verify() -> bool {
+    with_boot_ring(|ring| ring.verify_chain())
+}
+
 /// Test-only access to the boot ring length.
 #[cfg(test)]
 pub fn boot_ring_len_for_test() -> usize {
     with_boot_ring(|ring| ring.len())
 }
 
-/// Test-only: verify the live boot ring chain.
+/// Test-only alias kept for existing callers.
 #[cfg(test)]
 pub fn boot_ring_verify_for_test() -> bool {
-    with_boot_ring(|ring| ring.verify_chain())
+    boot_ring_verify()
+}
+
+/// Append the M5.3 mandatory security categories onto `ring` and verify the chain.
+///
+/// Categories: VMCS · EPT map/unmap · MSR block · lifecycle (M5.0+).
+pub fn prop_mandatory_events_chain() -> bool {
+    let mut ring = AuditRing::new();
+    let ok = ring
+        .append(AuditEvent::VmcsCreated {
+            vcpu_id: 0,
+            vmcs_id: 1,
+        })
+        .is_ok()
+        && ring
+            .append(AuditEvent::EptMapped {
+                guest_id: 1,
+                gpa: 0x1000,
+                hpa: 0x2000,
+            })
+            .is_ok()
+        && ring
+            .append(AuditEvent::EptUnmapped {
+                guest_id: 1,
+                gpa: 0x1000,
+                hpa: 0x2000,
+            })
+            .is_ok()
+        && ring
+            .append(AuditEvent::MsrBlocked {
+                vcpu_id: 0,
+                msr_index: 0x3A,
+            })
+            .is_ok()
+        && ring.append(AuditEvent::VmCreated { guest_id: 1 }).is_ok()
+        && ring.append(AuditEvent::VmStarted { guest_id: 1 }).is_ok()
+        && ring.append(AuditEvent::VmStopped { guest_id: 1 }).is_ok()
+        && ring.append(AuditEvent::VmDestroyed { guest_id: 1 }).is_ok();
+    ok && ring.len() == 8 && ring.verify_chain()
+}
+
+/// Tamper-evident: a flipped mid-chain hash makes `verify_chain` fail.
+pub fn prop_tamper_detected() -> bool {
+    let mut ring = AuditRing::new();
+    if ring
+        .append(AuditEvent::BootStarted {
+            milestone: Milestone::M5,
+        })
+        .is_err()
+        || ring
+            .append(AuditEvent::VmcsCreated {
+                vcpu_id: 0,
+                vmcs_id: 9,
+            })
+            .is_err()
+        || ring
+            .append(AuditEvent::EptMapped {
+                guest_id: 1,
+                gpa: 0,
+                hpa: 0x1000,
+            })
+            .is_err()
+    {
+        return false;
+    }
+    if !ring.verify_chain() {
+        return false;
+    }
+    if !ring.tamper_hash_at(1) {
+        return false;
+    }
+    !ring.verify_chain() && M5_AUDIT_OK_MARKER == "RAYNU-V-M5-AUDIT-OK"
+}
+
+/// Full M5.3 integrity property bundle (local ring; no boot-ring dependency).
+pub fn prop_audit_integrity_gate() -> bool {
+    prop_mandatory_events_chain() && prop_tamper_detected() && boot_ring_verify()
 }
 
 #[cfg(test)]

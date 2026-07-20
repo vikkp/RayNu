@@ -184,6 +184,14 @@ impl EptMap {
                     let frame = m.frame;
                     *slot = None;
                     self.len -= 1;
+                    // M5.3: record unmap on firmware path; host unit tests skip
+                    // to avoid flooding the shared boot ring.
+                    #[cfg(not(test))]
+                    crate::audit_log!(crate::audit::AuditEvent::EptUnmapped {
+                        guest_id,
+                        gpa,
+                        hpa: frame.0,
+                    });
                     debug_assert!(self.check_invariants());
                     return Ok(frame);
                 }

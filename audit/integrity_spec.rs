@@ -1,6 +1,5 @@
-//! Verus specifications for audit log integrity.
-//!
-//! VERIFICATION: L0 placeholder — L2 when hash-chain ghost model lands.
-//! TODO: append/verify_chain postconditions; tip_hash coupling.
+//! VERIFICATION: L0 — append/verify_chain + tamper detection exercised by
+//! `prop_mandatory_events_chain` / `prop_tamper_detected` (M5.3 host gate).
+//! TODO: Verus ghost model for tip_hash coupling (L2+).
 
 #![allow(dead_code)]

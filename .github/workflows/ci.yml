@@ -273,6 +273,19 @@ jobs:
       - name: M5.2 Web UI smoke → RAYNU-V-M5-WEBUI-OK
         run: ./tools/m5-webui-smoke.sh
 
+  # M5.3: audit ring + hash chain. Hard-fail.
+  m5-audit:
+    name: M5.3 audit (AUDIT-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.3 audit smoke → RAYNU-V-M5-AUDIT-OK
+        run: ./tools/m5-audit-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)
