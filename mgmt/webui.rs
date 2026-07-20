@@ -11,7 +11,7 @@
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use super::api::{dispatch_rest, RestMethod, RestRequest, RestResponse};
+use super::api::{dispatch_rest, BRINGUP_AUTH_TOKEN, RestMethod, RestRequest, RestResponse};
 use super::{VmLifecycle, VmTable};
 
 /// Host / CI marker when the M5.2 Web UI gate passes.
@@ -103,13 +103,14 @@ fn stop_path(guest_id: u64) -> Option<&'static str> {
 
 /// Drive list / start / stop through the M5.1 REST dispatcher.
 pub fn dispatch_webui_action(table: &mut VmTable, action: WebUiAction) -> RestResponse {
+    let tok = Some(BRINGUP_AUTH_TOKEN);
     match action {
         WebUiAction::List => dispatch_rest(
             table,
             RestRequest {
                 method: RestMethod::Get,
                 path: "/vms",
-                auth_token: None,
+                auth_token: tok,
             },
         ),
         WebUiAction::Start { guest_id } => match start_path(guest_id) {
@@ -118,7 +119,7 @@ pub fn dispatch_webui_action(table: &mut VmTable, action: WebUiAction) -> RestRe
                 RestRequest {
                     method: RestMethod::Post,
                     path,
-                    auth_token: None,
+                    auth_token: tok,
                 },
             ),
             None => RestResponse {
@@ -132,7 +133,7 @@ pub fn dispatch_webui_action(table: &mut VmTable, action: WebUiAction) -> RestRe
                 RestRequest {
                     method: RestMethod::Post,
                     path,
-                    auth_token: None,
+                    auth_token: tok,
                 },
             ),
             None => RestResponse {
@@ -179,7 +180,7 @@ pub fn prop_webui_list_start_stop() -> bool {
         RestRequest {
             method: RestMethod::Post,
             path: "/vms/1",
-            auth_token: None,
+            auth_token: Some(BRINGUP_AUTH_TOKEN),
         },
     );
     if created.status != 201 {

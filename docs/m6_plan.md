@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.3 closed on Latitude; Track A proof debt closed through migrate-xfer. Next: Track B **M6.4** AUTH.  
-**Prior:** M6.3 closed on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`); M6.2–M6.0 closed; M5 closed.  
+**Status:** **open** — M6.4 wired (host); Latitude smoke pending close. Next after close: **M6.5** PDF.  
+**Prior:** M6.3 closed on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`); Track A through migrate-xfer green; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -155,7 +155,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.4 — REST auth — `RAYNU-V-M6-AUTH-OK`
 
-**Status: open** (host-first)
+**Status: wired** (host gate; Latitude `./tools/m6-auth-smoke.sh` pending close)
 
 **Goal:** Replace M5.1 auth stub (`GAP: REST auth stubbed → M6`) with a real, host-testable auth gate for the control-plane REST shapes (still no heavy HTTP stack if ADR-003 size budget forbids it).
 
@@ -165,7 +165,12 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Marker `RAYNU-V-M6-AUTH-OK`; audit events on deny/allow as appropriate.
 3. Token/secret source documented (bring-up mock OK).
 
-**Likely files:** `mgmt/api.rs`, `mgmt/` gate + smoke + CI.
+**Delivered (host-first):**
+
+1. `auth_allows` requires `BRINGUP_AUTH_TOKEN` (`raynu-v-bringup`); missing/wrong → 401.
+2. Audit `AuthAllowed` / `AuthDenied` on REST dispatch.
+3. Host gate `mgmt/m6_auth_gate.rs` + `tools/m6-auth-smoke.sh` + CI `m6-auth`.
+4. `GAP(CLOSED M6.4): REST auth stubbed → M6`; Web UI / M5.1 REST callers use mock token.
 
 ### M6.5 — PDF audit reports — `RAYNU-V-M6-PDF-OK`
 
@@ -294,4 +299,5 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.3 closed** on Latitude (`RAYNU-V-M6-MIGRATE-XFER-OK`; `80 verified, 0 errors`). Track A through migrate-xfer is green. Next: **M6.4** (`RAYNU-V-M6-AUTH-OK`) — REST auth.
+**M6.4 wired** (host gate). Close on Latitude via `./tools/m6-auth-smoke.sh` →
+`RAYNU-V-M6-AUTH-OK`, then **M6.5** (`RAYNU-V-M6-PDF-OK`).

@@ -3,8 +3,8 @@
 //! Pillar: [Z] [A]
 //! Proven Core: outside (companion to `mgmt/` — not a boot path).
 //!
-//! Checks that CLI/REST dispatch exists over `VmTable`, auth GAP is documented,
-//! and the CLI+REST round-trip property holds.
+//! Checks that CLI/REST dispatch exists over `VmTable`, auth GAP is closed
+//! (M6.4), and the CLI+REST round-trip property holds.
 
 use super::api::{
     prop_cli_rest_roundtrip, prop_cli_verbs_parse, AUTH_GAP_NOTE, M5_API_OK_MARKER,

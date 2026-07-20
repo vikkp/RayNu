@@ -84,7 +84,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 **Shipped / wiring:**
 
 1. `mgmt/api.rs` — `parse_cli` / `dispatch_cli` for `create|start|stop|destroy|list`.
-2. Same file — `dispatch_rest` routes (`GET/POST/DELETE /vms…`); **auth stubbed** (`GAP: REST auth stubbed → M6`).
+2. Same file — `dispatch_rest` routes (`GET/POST/DELETE /vms…`); auth closed in M6.4 (`GAP(CLOSED M6.4): REST auth stubbed → M6`).
 3. `VmTable::list` for list/GET; host gate `mgmt/m5_api_gate.rs` + `tools/m5-api-smoke.sh` + CI `m5-api`.
 4. No HTTP crate / no TCP stack (keeps ADR-003 size budget); host-testable request shapes only.
 

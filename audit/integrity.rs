@@ -53,6 +53,10 @@ pub enum AuditEvent {
     MigrateCompleted { batch_id: u64, count: u32 },
     /// VMware migrate batch failed.
     MigrateFailed { batch_id: u64, count: u32 },
+    /// REST control-plane auth allowed (M6.4).
+    AuthAllowed { method_tag: u8 },
+    /// REST control-plane auth denied (M6.4).
+    AuthDenied { method_tag: u8 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -210,6 +214,8 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::MigrateStarted { .. } => 13,
         AuditEvent::MigrateCompleted { .. } => 14,
         AuditEvent::MigrateFailed { .. } => 15,
+        AuditEvent::AuthAllowed { .. } => 16,
+        AuditEvent::AuthDenied { .. } => 17,
     }
 }
 

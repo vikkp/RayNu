@@ -100,6 +100,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/m6_hwpte_gate` | L0 | Host artifact gate for HW PTE bit-decode (M6.1) |
 | `memory/m6_numa_gate` | L0 | Host artifact gate for NUMA affinity L3 (M6.2) |
 | `memory/m6_migrate_gate` | L0 | Host artifact gate for migrate page transfer (M6.3) |
+| `mgmt/m6_auth_gate` | L0 | Host artifact gate for REST auth (M6.4) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV from ring snapshot; REPORT-OK (M5.4); PDF → M6 |
@@ -109,14 +110,14 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6.3 closed** on Latitude (Track A through migrate-xfer). Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.4 wired** (Latitude pending). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (closed) |
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (closed) |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (closed) |
-| **M6.4** ← next | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |
+| **M6.4** ← wired | `RAYNU-V-M6-AUTH-OK` | REST auth (Latitude pending) |
 | M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
 | M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden |
 | M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite |

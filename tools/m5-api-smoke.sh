@@ -19,8 +19,8 @@ if ! grep -q 'fn dispatch_rest(' "$ROOT/mgmt/api.rs"; then
   echo "error: missing dispatch_rest" >&2
   exit 1
 fi
-if ! grep -q 'GAP: REST auth stubbed' "$ROOT/mgmt/api.rs"; then
-  echo "error: auth GAP note missing" >&2
+if ! grep -qE 'GAP: REST auth stubbed|GAP\(CLOSED M6\.4\): REST auth stubbed' "$ROOT/mgmt/api.rs"; then
+  echo "error: auth GAP note missing (open or CLOSED M6.4)" >&2
   exit 1
 fi
 if ! grep -q "$MARKER" "$ROOT/mgmt/api.rs"; then

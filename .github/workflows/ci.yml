@@ -365,6 +365,19 @@ jobs:
       - name: M5.1 API smoke → RAYNU-V-M5-API-OK
         run: ./tools/m5-api-smoke.sh
 
+  # M6.4: REST auth (bring-up mock token). Hard-fail.
+  m6-auth:
+    name: M6.4 REST auth (AUTH-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M6.4 REST auth smoke → RAYNU-V-M6-AUTH-OK
+        run: ./tools/m6-auth-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)
