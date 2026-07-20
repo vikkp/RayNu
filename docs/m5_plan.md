@@ -1,6 +1,6 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.8 closed on Latitude (Track A+B + migrate + Dell Tier‑1 + large-page L3 + NUMA *spec*); next **M5.9** ALLOC-REFINE.  
+**Status:** **open** — M5.0–M5.8 closed on Latitude; **M5.9** ALLOC-REFINE wired host/CI (Latitude pending).  
 **Prior:** M5.8 closed on Latitude (`RAYNU-V-M5-NUMA-OK`; `51 verified, 0 errors`); M5.7 closed (`RAYNU-V-M5-LPAGE-VERIFY-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
