@@ -6,6 +6,7 @@
 //!
 //! M5.0: durable create / start / stop / destroy surface over a guest table.
 //! M5.1: CLI + REST dispatch (`api`) over that table.
+//! M5.2: embedded Web UI SPA (`webui`, PE `.aswebui`) drives list/start/stop.
 //! Bring-up in `src/main.rs` remains the live VMLAUNCH path; this module is the
 //! management-plane state machine those ops drive.
 
@@ -17,6 +18,9 @@ pub const M5_LIFE_OK_MARKER: &str = "RAYNU-V-M5-LIFE-OK";
 
 /// Host / CI marker when the M5.1 API gate passes (re-export).
 pub use api::M5_API_OK_MARKER;
+
+/// Host / CI marker when the M5.2 Web UI gate passes (re-export).
+pub use webui::M5_WEBUI_OK_MARKER;
 
 /// Max guests tracked by the management-plane table (M4 NVM spine = 4).
 pub const MGMT_GUEST_CAP: usize = 8;
@@ -228,6 +232,8 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 pub mod api;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
+pub mod m5_webui_gate;
+pub mod webui;
 
 pub use api::{
     dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_cli_rest_roundtrip,
@@ -235,6 +241,10 @@ pub use api::{
 };
 pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
+pub use m5_webui_gate::run_m5_webui_gate;
+pub use webui::{
+    dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction,
+};
 
 #[cfg(test)]
 #[path = "mgmt_test.rs"]

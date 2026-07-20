@@ -1,6 +1,6 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.1 closed on Latitude; next is **M5.2** (embedded Web UI).  
+**Status:** **open** — M5.0–M5.1 closed on Latitude; **M5.2** code awaiting Latitude Web UI smoke.  
 **Prior:** M5.1 closed on Latitude (`RAYNU-V-M5-API-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -92,18 +92,27 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.2 — Embedded Web UI — `RAYNU-V-M5-WEBUI-OK`
 
-**Status: open** ← next
+**Status: open** — code on branch; awaiting Latitude smoke ← next
 
 **Goal:** Embedded Web UI SPA (ADR-003 `.assets.webui`) drives the same lifecycle surface.
 
-**Acceptance sketch:**
+**What lands:**
 
-1. Lazy-decompressed Web UI asset present; first-use load path works.
+1. `assets/webui.html` — compact SPA (list / start / stop against M5.1 `/vms` routes).
+2. `mgmt/webui.rs` — PE `.aswebui` embed + first-use `load_webui()` (identity decompress;
+   `GAP: webui zstd → keep under ADR-003 budget`).
+3. `dispatch_webui_action` → M5.1 REST; host gate `mgmt/m5_webui_gate.rs` +
+   `tools/m5-webui-smoke.sh` + CI `m5-webui`.
+4. `tools/check-pe-assets.sh` verifies `.aswebui` on the UEFI binary.
+
+**Acceptance:**
+
+1. Lazy (first-use) load path works; SPA asset PE-linked.
 2. UI can list VMs and invoke start/stop (against M5.1 API).
-3. Marker `RAYNU-V-M5-WEBUI-OK`; size budget respected.
-4. Polish UX is not required to close — functional ops surface is.
+3. Host/CI smoke → `RAYNU-V-M5-WEBUI-OK` (Latitude confirms close).
+4. Size budget respected (~7 KB SPA; no new crates).
 
-**Likely files:** `mgmt/`, asset pack, host gate.
+**Likely files:** `mgmt/webui.rs`, `assets/webui.html`, `tools/m5-webui-smoke.sh`, docs.
 
 ---
 
@@ -281,4 +290,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAY
 
 ## First action
 
-Draft accepted. **M5.0–M5.1 closed** on Latitude (`RAYNU-V-M5-LIFE-OK`, `RAYNU-V-M5-API-OK`). Next: **M5.2** (`RAYNU-V-M5-WEBUI-OK`) — embedded Web UI over the API surface.
+Draft accepted. **M5.0–M5.1 closed** on Latitude. **M5.2** code lands `RAYNU-V-M5-WEBUI-OK` (embedded SPA); close after Latitude `./tools/m5-webui-smoke.sh`.

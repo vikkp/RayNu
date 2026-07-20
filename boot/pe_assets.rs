@@ -13,8 +13,8 @@
 //! | `.asinit` | `.assets.initrd`    |
 //!
 //! Boot prefers these blobs; ESP `\EFI\BOOT\*` remains the split-mode fallback.
-//! zstd / webui / schemas stay deferred while the binary is under the 15 MB
-//! target (`tools/check-size.sh`).
+//! Web UI SPA lives in `mgmt/webui.rs` as PE `.aswebui` (M5.2 / ADR-003
+//! `.assets.webui`). zstd for webui/schemas remains a size-budget GAP.
 
 /// COM1 / host marker when PE-embedded assets are present and preferred.
 pub const M3_ASSETS_OK_MARKER: &str = "RAYNU-V-M3-ASSETS-OK";
