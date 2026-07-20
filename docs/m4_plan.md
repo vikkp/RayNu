@@ -63,7 +63,7 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 1. `build_single_2m_identity` + `clear_2m_identity_leaf` + `write_guest_shell_cpuid_page`.
 2. `claim_precise_with_guest1_hole` — G0 precise window with G1 HPA punched out (`M4_GUEST1_ID=2`).
 3. G1 slab HPA chosen in `[GUEST_RAM, PRECISE)` (above e820), **outside** the HV `FrameAllocator` pool (Latitude low-memory pool).
-4. G1 uses slab-local guest CR3 (private EPT cannot walk host page tables).
+4. G1 uses a **second precise identity EPT** + host CR3 (G0 has the slab leaf cleared). Private-only EPT/slab-CR3 deferred — triple-faulted on Latitude.
 5. Host TSS/GDT installed once and reused — VM-exit forces `GDTR.limit=FFFF` (cannot re-copy).
 6. After G0 SHELL+APIC+NOIRQ, `try_launch_second_guest` → G1 VMLAUNCH → `RAYNU-V-M4-SHELL-G1` + `RAYNU-V-M4-2VM-OK`.
 7. Host gate `memory/m4_2vm_gate.rs`; qemu pass line `M0 → M4.0`.

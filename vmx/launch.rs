@@ -908,6 +908,15 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
 
+    // M4.0: always log G1 exits (bring-up diagnostics).
+    if ACTIVE_GUEST_ID == M4_GUEST1_ID {
+        serial::write_str("boot: G1 VMEXIT reason=0x");
+        write_hex_u32(basic);
+        serial::write_str(" rip=0x");
+        write_hex_u64(guest_rip);
+        serial::write_byte(b'\n');
+    }
+
     if basic == EXIT_REASON_IO_INSTRUCTION {
         handle_io_and_resume(qual, guest_rax, guest_rip);
     }
@@ -1206,6 +1215,10 @@ unsafe fn try_launch_second_guest() -> ! {
     BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
 
     serial::write_line("boot: M4.0 — launching G1 under private EPT slab");
+
+    // Drop stale EPT TLB after G0 leaf clear + new G1 EPTP.
+    // SAFETY: VMX root; INVEPT allowed.
+    memory::ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
         serial::write_line("boot: ERROR — G1 VMCS prepare failed");

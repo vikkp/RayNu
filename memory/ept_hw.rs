@@ -558,7 +558,9 @@ pub unsafe fn punch_apic_mmio_hole(
 }
 
 /// INVEPT type 2 — all-context (invalidate all EPT-derived TLB).
-unsafe fn invept_global() {
+///
+/// Call after EPT edits and before switching to a new EPTP (M4.0 G1).
+pub unsafe fn invept_global() {
     #[repr(C, align(16))]
     struct Desc {
         eptp: u64,

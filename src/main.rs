@@ -398,8 +398,17 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         core::ptr::write_bytes(g1_base as *mut u8, 0, memory::ept_hw::TWO_MIB as usize);
     }
 
-    let g1_ept_need = memory::ept_hw::frames_required_single_2m();
-    let mut g1_ept_frames = [0u64; 4];
+    // M4.0: G1 gets its own precise identity EPT (full [0,512MiB)) and shares
+    // host CR3 — same shape as G0 bring-up. G0 already had the G1 slab leaf
+    // cleared, so G0 cannot touch G1 HPA. Software ownership still exclusive.
+    // (Tight private-only EPT + slab CR3 triple-faulted on Latitude; tighten later.)
+    let g1_ept_need = memory::ept_hw::frames_required_precise();
+    let mut g1_ept_frames = [0u64; 8];
+    if g1_ept_need > g1_ept_frames.len() {
+        boot::serial::write_line("boot: ERROR — G1 EPT frame budget too small");
+        let _ = life.disable();
+        return;
+    }
     for slot in g1_ept_frames.iter_mut().take(g1_ept_need) {
         let Some(f) = alloc_phys(alloc) else {
             boot::serial::write_line("boot: ERROR — no frame for G1 EPT");
@@ -408,9 +417,9 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         };
         *slot = f;
     }
-    // SAFETY: exclusive EPT frames; slab already reserved for G1.
+    // SAFETY: exclusive EPT frames for G1.
     let g1_eptp = match unsafe {
-        memory::ept_hw::build_single_2m_identity(g1_base, &mut g1_ept_frames[..g1_ept_need])
+        memory::ept_hw::build_precise_identity(&mut g1_ept_frames[..g1_ept_need])
     } {
         Ok(v) => v,
         Err(_) => {
@@ -423,20 +432,14 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     let g1_stack = g1_base + memory::ept_hw::G1_SLAB_OFF_STACK;
     let g1_idt = g1_base + memory::ept_hw::G1_SLAB_OFF_IDT;
     // SAFETY: pages inside G1 slab; host identity still maps them for setup.
-    let g1_cr3 = unsafe {
+    unsafe {
         memory::ept_hw::write_guest_shell_cpuid_page(g1_code);
         if !arch::cpu::clear_nx_identity(g1_code) {
             boot::serial::write_line("boot: ERROR — could not clear NX on G1 code");
             let _ = life.disable();
             return;
         }
-        // Slab-local guest page tables (VA==GPA for the 2MiB). Private EPT
-        // cannot walk the host CR3 into low memory.
-        memory::ept_hw::write_guest_identity_2m_tables(g1_base)
-    };
-    boot::serial::write_str("boot: M4.0 G1 guest CR3=0x");
-    write_hex(g1_cr3);
-    boot::serial::write_byte(b'\n');
+    }
     audit::integrity::record_event(audit::AuditEvent::EptMapped {
         guest_id: memory::M4_GUEST1_ID,
         gpa: g1_code,
@@ -475,12 +478,14 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp: g1_eptp,
         guest_code_phys: g1_code,
         guest_idt_phys: g1_idt,
-        guest_cr3_phys: Some(g1_cr3),
+        guest_cr3_phys: None, // share host CR3; G1 EPT is full precise identity
         msr_bitmap_phys: g1_msr,
         io_bitmap_a_phys: g1_io_a,
         io_bitmap_b_phys: g1_io_b,
     });
-    boot::serial::write_line("boot: M4.0 G1 prepared (private EPT + slab CR3 + SHELL CPUID)");
+    boot::serial::write_line(
+        "boot: M4.0 G1 prepared (precise EPT + host CR3 + SHELL CPUID in slab)",
+    );
 
     let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");

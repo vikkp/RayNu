@@ -7,14 +7,13 @@
 /// Host / serial marker when the M4.0 two-VM gate passes.
 pub const M4_2VM_OK_MARKER: &str = "RAYNU-V-M4-2VM-OK";
 
-/// True when ept_hw can build/unmap a private 2 MiB G1 slab.
+/// True when ept_hw can build/unmap a G1 slab and invalidate EPT TLB.
 pub fn private_slab_ept_present() -> bool {
     let s = include_str!("ept_hw.rs");
-    s.contains("fn build_single_2m_identity")
-        && s.contains("fn clear_2m_identity_leaf")
+    s.contains("fn clear_2m_identity_leaf")
         && s.contains("fn write_guest_shell_cpuid_page")
-        && s.contains("fn write_guest_identity_2m_tables")
-        && s.contains("frames_required_single_2m")
+        && s.contains("fn invept_global")
+        && s.contains("fn build_precise_identity")
 }
 
 /// True when ownership registry knows G1 and the hole claim.
@@ -35,8 +34,9 @@ pub fn second_guest_launch_present() -> bool {
         && launch.contains("guest_cr3_phys")
         && launch.contains(M4_2VM_OK_MARKER)
         && main.contains("set_second_guest")
-        && main.contains("build_single_2m_identity")
-        && main.contains("write_guest_identity_2m_tables")
+        && main.contains("build_precise_identity")
+        && main.contains("write_guest_shell_cpuid_page")
+        && main.contains("pick_g1_slab_hpa")
 }
 
 /// True when the QEMU boot gate requires M4.0.
