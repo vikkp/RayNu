@@ -181,7 +181,7 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 3. Closed `TODO(M4): N guests` in `ept_spec.rs`; `GAP(CLOSED M4.6)` in `ept_proof.rs`; N-guest L3 claim closed in **M4.7**.
 4. Host gate `memory/m4_nguest_spec_gate.rs` + CI job `verus-nguest-spec`.
 
-**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`. Does **not** claim ADR-006 L3 for N guests (M4.7).
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-NGUEST-SPEC-OK`. ADR-006 L3 claim for N guests is **M4.7**.
 
 **Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_nguest_spec_gate.rs`, `tools/verus-nguest-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
