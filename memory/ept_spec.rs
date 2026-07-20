@@ -79,6 +79,9 @@
 //! TODO(M6.1 CLOSED): HW PTE bit-decode — `ept_leaf_large_enc` /
 //!   `hw_2m_identity_leaf_ok` / `theorem_hw_2m_leaf_refines_identity` →
 //!   `RAYNU-V-M6-HWPTE-OK`. Full multi-level walk → polish.
+//! TODO(M6.3 CLOSED): Live migration page transfer —
+//!   `theorem_page_transfer_preserves_exclusive` / `PageTransferStep` →
+//!   `RAYNU-V-M6-MIGRATE-XFER-OK`.
 //!
 //! # Large-page map (M4.8 — L2 spec)
 //!
@@ -127,5 +130,12 @@
 //! `guest_frames_on_node` is the affinity policy post. Under `numa_map_enabled`,
 //! `theorem_numa_map_unmap_affinity` discharges that map→unmap preserves exclusivity
 //! and affinity. Runtime prop: `prop_numa_affinity_l3` in `memory/numa.rs`.
+//!
+//! # Live migration page transfer (M6.3)
+//!
+//! `PageTransferStep` hands an HPA from `(src_guest, src_gpa)` to `(dst_guest, dst_gpa)`
+//! via unmap→map. `theorem_page_transfer_preserves_exclusive` discharges exclusivity
+//! and ownership handoff posts. Runtime hook: `transfer_page` / `prop_page_transfer_preserves_exclusive`
+//! in `ept.rs`. Distinct from M5.5 inventory import. Full cross-host product → outside Proven Core.
 
 #![allow(dead_code)]

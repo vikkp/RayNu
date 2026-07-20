@@ -77,6 +77,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/verus-eptvio-smoke.sh      # EPT-violation exclusivity → RAYNU-V-M6-EPTVIO-OK
 ./tools/verus-hwpte-smoke.sh       # HW PTE bit-decode → RAYNU-V-M6-HWPTE-OK
 ./tools/verus-numa-l3-smoke.sh     # NUMA affinity L3 → RAYNU-V-M6-NUMA-L3-OK
+./tools/verus-migrate-xfer-smoke.sh # migrate page transfer → RAYNU-V-M6-MIGRATE-XFER-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

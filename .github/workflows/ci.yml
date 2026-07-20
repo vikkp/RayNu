@@ -309,6 +309,21 @@ jobs:
       - name: Verus NUMA affinity L3 smoke → RAYNU-V-M6-NUMA-L3-OK
         run: ./tools/verus-numa-l3-smoke.sh
 
+  # M6.3: live migration page transfer exclusivity. Hard-fail.
+  verus-migrate-xfer:
+    name: verus migrate-xfer (M6.3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus migrate-xfer smoke → RAYNU-V-M6-MIGRATE-XFER-OK
+        run: ./tools/verus-migrate-xfer-smoke.sh
+
   # M4.9: N-guest ghost↔exec refine. Hard-fail.
   verus-nguest-refine:
     name: verus N-guest-refine (M4.9)
