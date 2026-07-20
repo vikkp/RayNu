@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M5 closed on Latitude; **M6.0** EPT-violation wired host/CI (Latitude pending).  
-**Prior:** M5.0–M5.9 closed (`RAYNU-V-M5-ALLOC-REFINE-OK`; `61 verified, 0 errors`).  
+**Status:** **open** — M6.0 closed on Latitude; next **M6.1** HW PTE.  
+**Prior:** M6.0 closed on Latitude (`RAYNU-V-M6-EPTVIO-OK`; `65 verified, 0 errors`); M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -63,7 +63,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.0 — EPT-violation exclusivity — `RAYNU-V-M6-EPTVIO-OK`
 
-**Status: open** (host/CI wired; Latitude smoke pending)
+**Status: closed** (Latitude `./tools/verus-eptvio-smoke.sh` → `RAYNU-V-M6-EPTVIO-OK`; `65 verified, 0 errors`)
 
 **Goal:** Show that the EPT-violation / miss-handling path preserves exclusive ownership (ADR-004: must hold across violation handling). Ghost lemmas in `ept_model` + live `EptMap` / exit path asserts; no `admit` on theorems in scope.
 
@@ -79,7 +79,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 5. Host gate `memory/m6_eptvio_gate.rs` + `tools/verus-eptvio-smoke.sh` + CI `verus-eptvio`.
 6. Live MMIO path remains EmulateNoMap; unexpected GPA Reject; ClaimMap is demand-fill.
 
-**Acceptance:** Latitude `./tools/verus-eptvio-smoke.sh` → `RAYNU-V-M6-EPTVIO-OK` (then close docs/site).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-EPTVIO-OK`.
 
 ### M6.1 — HW PTE bit-decode correspondence — `RAYNU-V-M6-HWPTE-OK`
 
@@ -268,4 +268,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M5 closed.** **M6.0** wired host/CI (`RAYNU-V-M6-EPTVIO-OK`); Latitude smoke pending. Then **M6.1** HW PTE.
+**M6.0 closed** on Latitude (`RAYNU-V-M6-EPTVIO-OK`; `65 verified, 0 errors`). Next: **M6.1** (`RAYNU-V-M6-HWPTE-OK`) — HW PTE bit-decode correspondence.

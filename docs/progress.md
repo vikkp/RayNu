@@ -60,8 +60,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M5.7 | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify; `47 verified, 0 errors` (CI + Latitude) |
 | M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA ghost *spec* (SRAT/SLIT); `51 verified, 0 errors` (CI + Latitude) |
 | M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT refine + identity abs; `61 verified, 0 errors` (CI + Latitude) |
+| M6.0 | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity; `65 verified, 0 errors` (CI + Latitude) |
 
-## Verification checkpoint (as of M5.9 / M5 closed)
+## Verification checkpoint (as of M6.0)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -87,14 +88,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
 | `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
 | `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
-| Verus proofs (`ept_model`) | **L3** (scoped) | 4K + N-guest + large-page + NUMA *spec* + alloc↔EPT refine (M5.9); N-guest refine (M4.9) |
+| Verus proofs (`ept_model`) | **L3** (scoped) | 4K + N-guest + large-page + NUMA *spec* + alloc↔EPT + EPT-violation (M6.0) |
 | `memory/m4_nguest_spec_gate` | L0 | Host artifact gate for N-guest ghost exclusivity (M4.6) |
 | `memory/m4_nguest_verify_gate` | L0 | Host artifact gate for N-guest ADR-006 L3 (M4.7) |
 | `memory/m4_lpage_gate` | L0 | Host artifact gate for large-page ghost *spec* (M4.8) |
 | `memory/m4_nguest_refine_gate` | L0 | Host artifact gate for N-guest concrete refine (M4.9) |
 | `memory/m5_lpage_verify_gate` | L0 | Host artifact gate for large-page L3 (M5.7) |
-| `memory/numa` / `m5_numa_gate` | L0 | Host NUMA view + artifact gate (M5.8); affinity L3 → M6 |
+| `memory/numa` / `m5_numa_gate` | L0 | Host NUMA view + artifact gate (M5.8); affinity L3 → M6.2 |
 | `memory/m5_alloc_refine_gate` | L0 | Host artifact gate for allocator↔EPT refine (M5.9) |
+| `memory/m6_eptvio_gate` | L0 | Host artifact gate for EPT-violation exclusivity (M6.0) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV from ring snapshot; REPORT-OK (M5.4); PDF → M6 |
@@ -108,8 +110,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M6.0** ← next | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity (host/CI wired; Latitude pending) |
-| M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence |
+| **M6.1** ← next | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence |
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |
