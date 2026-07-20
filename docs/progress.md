@@ -49,7 +49,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model (host) |
 | M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify; ADR-006 claim (CI + Latitude; M4 exit) |
 | M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page (2M/1G) ghost *spec* (CI + Latitude; L3 → M5) |
-| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine (host) |
+| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine (CI + Latitude) |
 
 ## Verification checkpoint (as of M4.9)
 
