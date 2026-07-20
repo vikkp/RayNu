@@ -7,6 +7,7 @@
 pub mod integrity;
 pub mod m5_audit_gate;
 pub mod m5_report_gate;
+pub mod m6_pdf_gate;
 pub mod report;
 
 pub use integrity::{
@@ -16,9 +17,10 @@ pub use integrity::{
 };
 pub use m5_audit_gate::run_m5_audit_gate;
 pub use m5_report_gate::run_m5_report_gate;
+pub use m6_pdf_gate::run_m6_pdf_gate;
 pub use report::{
-    prop_reports_deterministic, render_report, RingSnapshot, ReportFormat, ReportKind,
-    M5_REPORT_OK_MARKER,
+    prop_pdf_reports_deterministic, prop_reports_deterministic, render_report, RingSnapshot,
+    ReportFormat, ReportKind, M5_REPORT_OK_MARKER, M6_PDF_OK_MARKER,
 };
 
 /// Emit a security-relevant audit event into the process-local stub ring.

@@ -35,8 +35,8 @@ if ! grep -q "$MARKER" "$ROOT/audit/report.rs"; then
   echo "error: report must embed marker $MARKER" >&2
   exit 1
 fi
-if ! grep -q 'GAP: PDF report' "$ROOT/audit/report.rs"; then
-  echo "error: PDF GAP note missing" >&2
+if ! grep -qE 'GAP(\(CLOSED M6\.5\))?: PDF report' "$ROOT/audit/report.rs"; then
+  echo "error: PDF GAP note missing (open or CLOSED M6.5)" >&2
   exit 1
 fi
 

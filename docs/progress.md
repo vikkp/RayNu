@@ -101,16 +101,17 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/m6_numa_gate` | L0 | Host artifact gate for NUMA affinity L3 (M6.2) |
 | `memory/m6_migrate_gate` | L0 | Host artifact gate for migrate page transfer (M6.3) |
 | `mgmt/m6_auth_gate` | L0 | Host artifact gate for REST auth (M6.4) |
+| `audit/m6_pdf_gate` | L0 | Host artifact gate for PDF reports (M6.5) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
-| `audit/report` | L0 | SOX/ISO JSON/CSV from ring snapshot; REPORT-OK (M5.4); PDF → M6 |
+| `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
 | `migrate/` | L0 | One-command OVF/VMDK inventory → VmTable; MIGRATE-OK (M5.5); live vCenter → polish |
 | `idrac/` | L0 | Mock Redfish Tier‑1 + SMBIOS/ACPI topology; IDRAC-OK (M5.6) |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
 
 ## Next (numbered)
 
-**M6.4 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.5 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
@@ -118,8 +119,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (closed) |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (closed) |
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (closed) |
-| **M6.5** ← next | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
-| M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden |
+| M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports (closed) |
+| **M6.6** ← next | `RAYNU-V-M6-HA-OK` | HA / security harden |
 | M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite |
 | M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak |
 | M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + spec review |

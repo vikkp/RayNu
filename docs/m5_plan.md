@@ -136,7 +136,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 **Shipped / wiring:**
 
 1. Schemas: `assets/schemas/sox_access_control.json` + `iso_event_inventory.json` (PE `.aschema`).
-2. `RingSnapshot::from_ring` + deterministic `render_report` (JSON/CSV); PDF = `GAP: PDF report → M6`.
+2. `RingSnapshot::from_ring` + deterministic `render_report` (JSON/CSV); PDF closed in M6.5 (`GAP(CLOSED M6.5): PDF report → M6`).
 3. Host gate `audit/m5_report_gate.rs` + `tools/m5-report-smoke.sh` + CI `m5-report`.
 
 **Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-REPORT-OK`. Track B (audit) complete. External auditor sign-off remains **M6**.

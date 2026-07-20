@@ -15,5 +15,5 @@
     "other",
     "chain_ok"
   ],
-  "formats": ["json", "csv"]
+  "formats": ["json", "csv", "pdf"]
 }

@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M6.4 closed** (AUTH → `RAYNU-V-M6-AUTH-OK`). Active: **M6.5** (PDF → `RAYNU-V-M6-PDF-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**Through M6.5 closed** (PDF → `RAYNU-V-M6-PDF-OK`). Active: **M6.6** (HA → `RAYNU-V-M6-HA-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
 
 ### Risk Hotspots
 
