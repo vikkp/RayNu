@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
-**Next M5.8:** NUMA in ghost spec → `RAYNU-V-M5-NUMA-OK` — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
+**Next M5.8:** NUMA in ghost *spec* (`GhostNumaTopology` / SRAT·SLIT mock) → `RAYNU-V-M5-NUMA-OK` (host/CI wired; Latitude pending) — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).

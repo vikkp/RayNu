@@ -105,6 +105,6 @@ Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5.8** ← next | `RAYNU-V-M5-NUMA-OK` | NUMA in ghost spec |
+| **M5.8** ← next | `RAYNU-V-M5-NUMA-OK` | NUMA ghost *spec* (host/CI wired; Latitude pending) |
 | M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
 | M6 | — | Production ready (see CLAUDE.md) |
