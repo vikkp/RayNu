@@ -107,6 +107,10 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 **Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-WEBUI-OK`. Track A (mgmt spine) complete.
 
+---
+
+### Track B — Audit trail ([A])
+
 ### M5.3 — Audit ring + hash chain — `RAYNU-V-M5-AUDIT-OK`
 
 **Status: open** ← next
