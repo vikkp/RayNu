@@ -107,12 +107,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M5 closed.** Next track: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.1 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M6.1** ← wired | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (Latitude pending) |
-| M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
+| M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (closed) |
+| **M6.2** ← next | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 |
 | M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |
 | M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
