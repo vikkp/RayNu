@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.1 closed: dual VMCS, credit scheduler time-slices G0↔G1."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.2 closed: ≥4 concurrent guests under EPT + credit scheduler."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.1 closed — dual VMCS + credit scheduler. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.2 closed — ≥4 concurrent guests under EPT. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,23 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M4.1 closed.</h2>
+          <h2 class="section__title">M0 → M4.2 closed.</h2>
           <p class="section__lede">
-            Dual VMCS under distinct EPT, then a credit scheduler that
-            time-slices G0 and G1 — latched by
-            <code>RAYNU-V-M4-SCHED-OK</code> on Latitude. Next: 4+ concurrent
-            shells (M4.2).
+            Four concurrent guests under distinct EPT ownership — G0 real Linux
+            to SHELL, G1–G3 SHELL via CPUID — time-sliced by the credit
+            scheduler and latched by <code>RAYNU-V-M4-NVM-OK</code> on Latitude.
+            Next: virtio-blk (M4.3).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-SLICE-G0
-RAYNU-V-M4-SLICE-G1
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-SLICE-G3
 RAYNU-V-M4-SCHED-OK
-==> Boot gate PASSED (M0 → M4.1; qemu status=33)</code></pre>
+RAYNU-V-M4-NVM-OK
+==> Boot gate PASSED (M0 → M4.2; qemu status=33)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M4.1: how we got here</h2>
+          <h2 class="section__title">M1.0 → M4.2: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -216,6 +216,13 @@ RAYNU-V-M4-SCHED-OK
                     <code>RAYNU-V-M4-SCHED-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M4.2</span>
+                  <span class="journey__text"
+                    >G0 + G1–G3 (≥4) →
+                    <code>RAYNU-V-M4-NVM-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -322,7 +329,7 @@ RAYNU-V-M4-SCHED-OK
           </p>
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit
-./tools/qemu-boot-test.sh       # M0 → M4.1
+./tools/qemu-boot-test.sh       # M0 → M4.2
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -335,8 +342,8 @@ RAYNU-V-M4-SCHED-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            Dual-VMCS scheduling through M4.1 is closed; next is
-            <strong>M4.2</strong> (4+ VMs).
+            Multi-guest through M4.2 is closed; next is
+            <strong>M4.3</strong> (virtio-blk).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
