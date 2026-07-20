@@ -23,6 +23,7 @@
 //! M3.10: real `/init` on initrd → `RAYNU-V-M3-SHELL-OK`.
 //! M3.13/M3.20: precise EPT `[0,512MiB)` + range claims (`EPT2`/`EPT3`).
 //! M3.22: PE `.askern`/`.asinit` embed prefer + ESP fallback (`ASSETS-OK`).
+//! M4.0: second guest under private 2 MiB EPT slab → `RAYNU-V-M4-2VM-OK`.
 
 #![no_main]
 #![no_std]
@@ -207,14 +208,6 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     }
     boot::serial::write_line("boot: precise EPT [0,512MiB); APIC MMIO unmapped");
 
-    if memory::claim_precise_identity_ranges().is_err() {
-        boot::serial::write_line("boot: ERROR — precise EPT range claim failed");
-        let _ = life.disable();
-        return;
-    }
-    boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
-    boot::serial::write_line(memory::M3_EPT3_OK_MARKER);
-
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
         let _ = life.disable();
@@ -369,6 +362,113 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             return;
         }
     };
+
+    // M4.0: private 2 MiB G1 slab above guest e820, unmapped from G0 EPT.
+    const G1_SLAB_PAGES: u64 = memory::ept_hw::TWO_MIB / 4096;
+    let Some(g1_slab) = alloc.allocate_contiguous_aligned(G1_SLAB_PAGES, G1_SLAB_PAGES) else {
+        boot::serial::write_line("boot: ERROR — no 2MiB-aligned slab for G1");
+        let _ = life.disable();
+        return;
+    };
+    let g1_base = g1_slab.to_phys();
+    if g1_base < guest::linux_boot::GUEST_RAM_BYTES {
+        boot::serial::write_line("boot: ERROR — G1 slab overlaps G0 guest RAM");
+        let _ = life.disable();
+        return;
+    }
+    // SAFETY: precise PML4; punch G1 slab out of G0 identity.
+    if unsafe { memory::ept_hw::clear_2m_identity_leaf(pml4, g1_base) }.is_err() {
+        boot::serial::write_line("boot: ERROR — could not unmap G1 slab from G0 EPT");
+        let _ = life.disable();
+        return;
+    }
+    if memory::claim_precise_with_guest1_hole(g1_base, memory::ept_hw::TWO_MIB).is_err() {
+        boot::serial::write_line("boot: ERROR — dual-guest range claim failed");
+        let _ = life.disable();
+        return;
+    }
+    boot::serial::write_line(memory::M3_EPT2_OK_MARKER);
+    boot::serial::write_line(memory::M3_EPT3_OK_MARKER);
+    boot::serial::write_str("boot: M4.0 G1 slab HPA=0x");
+    write_hex(g1_base);
+    boot::serial::write_byte(b'\n');
+
+    let g1_ept_need = memory::ept_hw::frames_required_single_2m();
+    let mut g1_ept_frames = [0u64; 4];
+    for slot in g1_ept_frames.iter_mut().take(g1_ept_need) {
+        let Some(f) = alloc_phys(alloc) else {
+            boot::serial::write_line("boot: ERROR — no frame for G1 EPT");
+            let _ = life.disable();
+            return;
+        };
+        *slot = f;
+    }
+    // SAFETY: exclusive EPT frames; slab already reserved for G1.
+    let g1_eptp = match unsafe {
+        memory::ept_hw::build_single_2m_identity(g1_base, &mut g1_ept_frames[..g1_ept_need])
+    } {
+        Ok(v) => v,
+        Err(_) => {
+            boot::serial::write_line("boot: ERROR — G1 EPT build failed");
+            let _ = life.disable();
+            return;
+        }
+    };
+    let g1_code = g1_base;
+    let g1_stack = g1_base + 0x1000;
+    let g1_idt = g1_base + 0x2000;
+    // SAFETY: pages inside G1 slab; host identity still maps them for setup.
+    unsafe {
+        memory::ept_hw::write_guest_shell_cpuid_page(g1_code);
+        if !arch::cpu::clear_nx_identity(g1_code) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on G1 code");
+            let _ = life.disable();
+            return;
+        }
+    }
+    audit::integrity::record_event(audit::AuditEvent::EptMapped {
+        guest_id: memory::M4_GUEST1_ID,
+        gpa: g1_code,
+        hpa: g1_code,
+    });
+
+    let Some(g1_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for G1 VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(g1_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for G1 host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(g1_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for G1 TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(g1_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for G1 GDT");
+        let _ = life.disable();
+        return;
+    };
+    let g1_msr = alloc_phys(alloc);
+    let g1_io_a = alloc_phys(alloc);
+    let g1_io_b = alloc_phys(alloc);
+    vmx::launch::set_second_guest(vmx::LaunchFrames {
+        vmcs_phys: g1_vmcs,
+        guest_stack_phys: g1_stack,
+        host_stack_phys: g1_host_stack,
+        tss_phys: g1_tss,
+        gdt_phys: g1_gdt,
+        eptp: g1_eptp,
+        guest_code_phys: g1_code,
+        guest_idt_phys: g1_idt,
+        msr_bitmap_phys: g1_msr,
+        io_bitmap_a_phys: g1_io_a,
+        io_bitmap_b_phys: g1_io_b,
+    });
+    boot::serial::write_line("boot: M4.0 G1 prepared (private EPT + SHELL CPUID page)");
 
     let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");

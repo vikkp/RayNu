@@ -27,6 +27,7 @@
 # M3.19: RAYNU-V-M3-NOIRQ-OK (no IRQ4 inject; IRQ0 only until SHELL)
 # M3.20: RAYNU-V-M3-EPT3-OK (tight EPT [0,512MiB); QEMU -m 512M)
 # M3.22: RAYNU-V-M3-ASSETS-OK (PE .askern/.asinit embed; ESP fallback)
+# M4.0: RAYNU-V-M4-2VM-OK (G0 Linux SHELL + G1 private EPT SHELL)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -58,6 +59,7 @@ MARKER_EPT2="${MARKER_EPT2:-RAYNU-V-M3-EPT2-OK}"
 MARKER_EPT3="${MARKER_EPT3:-RAYNU-V-M3-EPT3-OK}"
 MARKER_NOIRQ="${MARKER_NOIRQ:-RAYNU-V-M3-NOIRQ-OK}"
 MARKER_ASSETS="${MARKER_ASSETS:-RAYNU-V-M3-ASSETS-OK}"
+MARKER_2VM="${MARKER_2VM:-RAYNU-V-M4-2VM-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -272,6 +274,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
       echo "error: marker '$MARKER_NOIRQ' not found (need no IRQ4 + SHELL)" >&2
       fail=1
     fi
+    if grep -qF "$MARKER_2VM" "$SERIAL_LOG"; then
+      echo "==> M4.0 two-VM marker found (G0 + G1 SHELL under distinct EPT)"
+    else
+      echo "error: marker '$MARKER_2VM' not found (need second guest under private EPT)" >&2
+      fail=1
+    fi
     echo "==> real Linux path — skipping synthetic EARLY/GTIMER/LOOP checks"
   else
     if grep -qF "$MARKER_EARLY" "$SERIAL_LOG"; then
@@ -317,5 +325,5 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 
-echo "==> Boot gate PASSED (M0 → M3.22; qemu status=$QEMU_STATUS)"
+echo "==> Boot gate PASSED (M0 → M4.0; qemu status=$QEMU_STATUS)"
 exit 0

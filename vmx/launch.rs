@@ -28,6 +28,7 @@
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP.
 //! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL/NOIRQ (real).
+//! M4.0: after G0 SHELL+APIC, VMLAUNCH G1 under private EPT → `RAYNU-V-M4-2VM-OK`.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -47,7 +48,7 @@ use crate::devices::serial_pio::{
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
 use crate::vmx::{guest_pt, mmio_decode};
-use crate::memory::ept::{self, M2_OWN_OK_MARKER};
+use crate::memory::ept::{self, M2_OWN_OK_MARKER, M4_2VM_OK_MARKER, M4_GUEST1_ID, M4_SHELL_G1_MARKER};
 use crate::memory::ept_hw::{self, GUEST_ISR_OFF, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER};
 use crate::memory::frame_allocator::{self, M2_ALLOC_OK_MARKER};
 use crate::sched::interrupt::{
@@ -168,6 +169,7 @@ impl From<VmcsOpError> for LaunchError {
 }
 
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
+#[derive(Clone, Copy)]
 pub struct LaunchFrames {
     pub vmcs_phys: u64,
     pub guest_stack_phys: u64,
@@ -186,6 +188,24 @@ pub struct LaunchFrames {
     pub msr_bitmap_phys: Option<u64>,
     pub io_bitmap_a_phys: Option<u64>,
     pub io_bitmap_b_phys: Option<u64>,
+}
+
+/// M4.0: prepared G1 launch frames (private EPT slab).
+static mut SECOND_GUEST: Option<LaunchFrames> = None;
+/// True when [`set_second_guest`] has registered G1.
+static mut HAS_SECOND_GUEST: bool = false;
+/// True after G0 SHELL+APIC and we have switched (or are switching) to G1.
+static mut SECOND_GUEST_STARTED: bool = false;
+/// Active guest id for SHELL routing (`M2_BRINGUP_GUEST_ID` or `M4_GUEST1_ID`).
+static mut ACTIVE_GUEST_ID: u64 = 1; // M2_BRINGUP_GUEST_ID
+
+/// Register a second guest to launch after G0 reaches SHELL+APIC (M4.0).
+pub fn set_second_guest(frames: LaunchFrames) {
+    // SAFETY: single-threaded boot before first VMLAUNCH.
+    unsafe {
+        SECOND_GUEST = Some(frames);
+        HAS_SECOND_GUEST = true;
+    }
 }
 
 /// Minimal IA-32e TSS size (SDM Vol. 3A §7.7) — enough for LTR / host TR.
@@ -1097,6 +1117,7 @@ fn emit_lapic_markers() {
 }
 
 /// M3.12/M3.19 gate: real `/init` SHELL + APIC-OK (no IRQ4; IRQ0 already stopped).
+/// M4.0: when a second guest is prepared, launch it instead of finishing.
 unsafe fn maybe_finish_m312() {
     if REAL_LINUX_GUEST
         && LINUX_GTIMER2_DONE
@@ -1108,7 +1129,74 @@ unsafe fn maybe_finish_m312() {
             NOIRQ_MARKED = true;
             serial::write_line(M3_NOIRQ_OK_MARKER);
         }
+        if HAS_SECOND_GUEST && !SECOND_GUEST_STARTED {
+            try_launch_second_guest();
+        }
         finish_boot(true);
+    }
+}
+
+/// M4.0: VMPTRLD G1 under its private EPT and VMLAUNCH (SHELL CPUID guest).
+unsafe fn try_launch_second_guest() -> ! {
+    let frames = match SECOND_GUEST {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — M4.0 second guest missing");
+            finish_boot(false);
+        }
+    };
+    SECOND_GUEST_STARTED = true;
+    ACTIVE_GUEST_ID = M4_GUEST1_ID;
+    EXIT_PHASE = 0;
+    REAL_LINUX_GUEST = false;
+    LINUX_GTIMER2_DONE = false;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+
+    serial::write_line("boot: M4.0 — launching G1 under private EPT slab");
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — G1 VMCS prepare failed");
+        finish_boot(false);
+    }
+    if ops::vmclear(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — G1 VMCLEAR failed");
+        finish_boot(false);
+    }
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — G1 VMCS re-prepare failed");
+        finish_boot(false);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: ERROR — G1 setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        finish_boot(false);
+    }
+
+    serial::write_line("boot: VMLAUNCH → G1 SHELL CPUID (M4.0)");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — G1 VMLAUNCH returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — G1 VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+fn launch_err_name(e: LaunchError) -> &'static str {
+    match e {
+        LaunchError::PrepareFailed => "PrepareFailed",
+        LaunchError::ClearFailed => "ClearFailed",
+        LaunchError::PtrldFailed => "PtrldFailed",
+        LaunchError::EptUnsupported => "EptUnsupported",
+        LaunchError::CpuidExitingUnsupported => "CpuidExitingUnsupported",
+        LaunchError::VmwriteFailed { .. } => "VmwriteFailed",
+        LaunchError::LaunchFailed { .. } => "LaunchFailed",
     }
 }
 
@@ -1188,19 +1276,26 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     // M3.10: real `/init` SHELL hypercall (before any UART TX that may stall).
     // M3.19: latch shell on CPUID — no IRQ4 COM1 TX inject required.
     // M3.12: do not close until APIC-OK as well (maybe_finish_m312).
-    if leaf == SHELL_CPUID_LEAF
-        && subleaf == SHELL_CPUID_SUBLEAF
-        && REAL_LINUX_GUEST
-        && LINUX_GTIMER2_DONE
-    {
-        serial_pio::note_shell_cpuid();
-        static mut SHELL_CPUID_MARKED: bool = false;
-        if !SHELL_CPUID_MARKED {
-            SHELL_CPUID_MARKED = true;
+    // M4.0: G1 private-slab guest uses the same SHELL CPUID leaf.
+    if leaf == SHELL_CPUID_LEAF && subleaf == SHELL_CPUID_SUBLEAF {
+        if ACTIVE_GUEST_ID == M4_GUEST1_ID {
             serial::write_byte(b'\n');
-            serial::write_line(M3_SHELL_OK_MARKER);
+            serial::write_line(M4_SHELL_G1_MARKER);
+            serial::write_line(M4_2VM_OK_MARKER);
+            serial::write_line(
+                "boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)",
+            );
+            finish_boot(true);
+        } else if REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+            serial_pio::note_shell_cpuid();
+            static mut SHELL_CPUID_MARKED: bool = false;
+            if !SHELL_CPUID_MARKED {
+                SHELL_CPUID_MARKED = true;
+                serial::write_byte(b'\n');
+                serial::write_line(M3_SHELL_OK_MARKER);
+            }
+            maybe_finish_m312();
         }
-        maybe_finish_m312();
     }
 
     let regs = msr_firewall::filter_cpuid(leaf, subleaf);
