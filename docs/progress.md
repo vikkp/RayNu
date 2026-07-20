@@ -94,7 +94,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `memory/m4_lpage_gate` | L0 | Host artifact gate for large-page ghost *spec* (M4.8) |
 | `memory/m4_nguest_refine_gate` | L0 | Host artifact gate for N-guest concrete refine (M4.9) |
 | `memory/m5_lpage_verify_gate` | L0 | Host artifact gate for large-page L3 (M5.7) |
-| `memory/numa` / `m5_numa_gate` | L0 | Host NUMA view + artifact gate (M5.8); affinity L3 → M6.2 |
+| `memory/numa` / `m5_numa_gate` | L0 | Host NUMA view + artifact gate (M5.8); affinity L3 closed M6.2 |
 | `memory/m5_alloc_refine_gate` | L0 | Host artifact gate for allocator↔EPT refine (M5.9) |
 | `memory/m6_eptvio_gate` | L0 | Host artifact gate for EPT-violation exclusivity (M6.0) |
 | `memory/m6_hwpte_gate` | L0 | Host artifact gate for HW PTE bit-decode (M6.1) |
@@ -108,13 +108,13 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6.2 wired** (Latitude pending). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.2 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (closed) |
-| **M6.2** ← wired | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (Latitude pending) |
-| M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
+| M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (closed) |
+| **M6.3** ← next | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (ADR-004) |
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (replace stub) |
 | M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports |
 | M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden |

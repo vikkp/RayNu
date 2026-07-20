@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.1 closed: multi-guest platform through M5 plus EPT-violation and HW PTE bit-decode."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.2 closed: multi-guest platform through M5 plus EPT-violation, HW PTE, and NUMA affinity L3."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.1 closed — multi-guest platform through M5 plus EPT-violation and HW PTE bit-decode. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.2 closed — multi-guest platform through M5 plus EPT-violation, HW PTE, and NUMA affinity L3. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,25 +60,24 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.1 closed.</h2>
+          <h2 class="section__title">M0 → M6.2 closed.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT through M5, plus EPT-violation and
-            HW PTE bit-decode on the production-ready track —
-            <code>RAYNU-V-M6-HWPTE-OK</code> on host
-            (<code>72 verified, 0 errors</code>). M6.2 NUMA affinity L3 is wired
-            <code>RAYNU-V-M6-NUMA-L3-OK</code> (<code>77 verified, 0 errors</code>
-            locally; Latitude pending) — see <code>docs/m6_plan.md</code>.
+            Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
+            and NUMA affinity L3 on the production-ready track —
+            <code>RAYNU-V-M6-NUMA-L3-OK</code> on host
+            (<code>77 verified, 0 errors</code>). Next: M6.3 (live migration
+            page transfer — see <code>docs/m6_plan.md</code>).
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-HWPTE-OK
 RAYNU-V-M6-NUMA-L3-OK
 ==> Verus HW PTE smoke PASSED (M6.1)
-==> Verus NUMA affinity L3 smoke PASSED (M6.2)  # Latitude pending</code></pre>
+==> Verus NUMA affinity L3 smoke PASSED (M6.2)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.1: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6.2: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -367,7 +366,7 @@ RAYNU-V-M6-NUMA-L3-OK
                 <li>
                   <span class="journey__gate">M6.2</span>
                   <span class="journey__text"
-                    >NUMA affinity L3 (wired; Latitude pending) →
+                    >NUMA affinity L3 →
                     <code>RAYNU-V-M6-NUMA-L3-OK</code></span
                   >
                 </li>
@@ -497,9 +496,9 @@ RAYNU-V-M6-NUMA-L3-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.1 is closed (M5 ops + proof + EPT-violation + HW PTE); M6.2
-            NUMA-L3 is wired (Latitude pending — see <code>docs/m6_plan.md</code>);
-            next after close is <strong>M6.3</strong> (migrate-xfer).
+            M0→M6.2 is closed (M5 ops + proof + EPT-violation + HW PTE + NUMA-L3);
+            next is <strong>M6.3</strong> (migrate-xfer — see
+            <code>docs/m6_plan.md</code>).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
