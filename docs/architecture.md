@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M4.4 closed:** virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.  
-**Next M4.5:** SMP guest (2+ vCPUs) → `RAYNU-V-M4-SMP-OK` (slip-ok) — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).
+**Next M4.5 (in progress):** dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK` — [m4_plan.md](m4_plan.md) / [progress.md](progress.md).

@@ -81,7 +81,7 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.5** ← next | `RAYNU-V-M4-SMP-OK` | SMP guest (2+ vCPUs); slip-ok vs proof track |
+| **M4.5** ← active | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared-EPT probe |
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model |
 | M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify (M4 exit) |
 | M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |

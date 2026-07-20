@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M4.4 closed** (virtio-net → `RAYNU-V-M4-NET-OK`). Active: **M4.5** (SMP → `RAYNU-V-M4-SMP-OK`) or Track C proof. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
+**Through M4.4 closed** (virtio-net → `RAYNU-V-M4-NET-OK`). Active: **M4.5** (SMP → `RAYNU-V-M4-SMP-OK`) on `cursor/m4-5-smp-a623`. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
 
 ### Risk Hotspots
 

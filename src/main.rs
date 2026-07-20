@@ -28,13 +28,14 @@
 //! M4.2: G0 + G1–G3 (≥4) under scheduler → `RAYNU-V-M4-NVM-OK`.
 //! M4.3: virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`.
 //! M4.4: virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.
+//! M4.5: dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.
 
 #![no_main]
 #![no_std]
 
 extern crate alloc;
 
-use r640_hypervisor::{arch, audit, boot, devices, guest, memory, vmx, BOOT_BANNER};
+use r640_hypervisor::{arch, audit, boot, devices, guest, memory, sched, vmx, BOOT_BANNER};
 use uefi::prelude::*;
 use uefi::println;
 
@@ -736,6 +737,140 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         io_bitmap_b_phys: net_io_b,
     });
     boot::serial::write_line("boot: M4.4 virtio-net probe guest prepared (G0 EPTP + host CR3)");
+
+    // M4.5: dual-vCPU probe — same guest id, shared G0 EPTP; host wakes AP after BSP.
+    let Some(smp_flag) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP flag page");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: host-owned allocator frame for BSP/AP ready bytes.
+    unsafe {
+        sched::smp_probe::init(smp_flag);
+    }
+
+    let Some(bsp_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(bsp_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP BSP GDT");
+        let _ = life.disable();
+        return;
+    };
+    let bsp_msr = alloc_phys(alloc);
+    let bsp_io_a = alloc_phys(alloc);
+    let bsp_io_b = alloc_phys(alloc);
+
+    let Some(ap_code) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP code");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_idt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP IDT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_vmcs) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP VMCS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_host_stack) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP host stack");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_tss) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP TSS");
+        let _ = life.disable();
+        return;
+    };
+    let Some(ap_gdt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for SMP AP GDT");
+        let _ = life.disable();
+        return;
+    };
+    let ap_msr = alloc_phys(alloc);
+    let ap_io_a = alloc_phys(alloc);
+    let ap_io_b = alloc_phys(alloc);
+
+    // SAFETY: allocator frames; flag page identity-mapped under G0 EPT.
+    unsafe {
+        core::ptr::write_bytes(bsp_idt as *mut u8, 0, 4096);
+        core::ptr::write_bytes(ap_idt as *mut u8, 0, 4096);
+        memory::ept_hw::write_guest_smp_bsp_page(bsp_code, smp_flag);
+        memory::ept_hw::write_guest_smp_ap_page(ap_code, smp_flag);
+        if !arch::cpu::clear_nx_identity(bsp_code) || !arch::cpu::clear_nx_identity(ap_code) {
+            boot::serial::write_line("boot: ERROR — could not clear NX on SMP probe code");
+            let _ = life.disable();
+            return;
+        }
+    }
+    vmx::launch::set_smp_probe(
+        vmx::LaunchFrames {
+            vmcs_phys: bsp_vmcs,
+            guest_stack_phys: bsp_stack,
+            host_stack_phys: bsp_host_stack,
+            tss_phys: bsp_tss,
+            gdt_phys: bsp_gdt,
+            eptp,
+            guest_code_phys: bsp_code,
+            guest_idt_phys: bsp_idt,
+            guest_cr3_phys: None,
+            msr_bitmap_phys: bsp_msr,
+            io_bitmap_a_phys: bsp_io_a,
+            io_bitmap_b_phys: bsp_io_b,
+        },
+        vmx::LaunchFrames {
+            vmcs_phys: ap_vmcs,
+            guest_stack_phys: ap_stack,
+            host_stack_phys: ap_host_stack,
+            tss_phys: ap_tss,
+            gdt_phys: ap_gdt,
+            eptp,
+            guest_code_phys: ap_code,
+            guest_idt_phys: ap_idt,
+            guest_cr3_phys: None,
+            msr_bitmap_phys: ap_msr,
+            io_bitmap_a_phys: ap_io_a,
+            io_bitmap_b_phys: ap_io_b,
+        },
+    );
+    boot::serial::write_line("boot: M4.5 SMP BSP+AP probe prepared (shared EPT + host AP wake)");
+
 
     let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");

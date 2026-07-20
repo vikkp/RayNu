@@ -462,6 +462,58 @@ pub unsafe fn write_guest_net_probe_page(page_phys: u64, bar0_gpa: u64, bar1_gpa
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
 }
 
+
+/// M4.5 SMP BSP probe: store ready magic at `flag_gpa`, then HLT.
+///
+/// Absolute dword/byte stores so the page is relocatable. Flag GPA must be
+/// identity-mapped in the shared EPT (host allocator frame).
+///
+/// SAFETY: `page_phys` writable; `flag_gpa` fits in 32-bit absolute form.
+pub unsafe fn write_guest_smp_bsp_page(page_phys: u64, flag_gpa: u64) {
+    write_guest_smp_ready_page(page_phys, flag_gpa);
+}
+
+/// M4.5 SMP AP probe: store ready magic at `flag_gpa + OFF_AP_READY`, then HLT.
+///
+/// SAFETY: see [`write_guest_smp_bsp_page`].
+pub unsafe fn write_guest_smp_ap_page(page_phys: u64, flag_gpa: u64) {
+    write_guest_smp_ready_page(
+        page_phys,
+        flag_gpa.wrapping_add(crate::sched::smp_probe::OFF_AP_READY as u64),
+    );
+}
+
+unsafe fn write_guest_smp_ready_page(page_phys: u64, store_gpa: u64) {
+    let p = page_phys as *mut u8;
+    core::ptr::write_bytes(p, 0, 4096);
+    debug_assert!(store_gpa <= u32::MAX as u64);
+    let addr = store_gpa as u32;
+    let magic = crate::sched::smp_probe::READY_MAGIC as u32;
+    let mut o = 0usize;
+    // mov eax, magic
+    core::ptr::write_volatile(p.add(o), 0xB8);
+    let vb = magic.to_le_bytes();
+    core::ptr::write_volatile(p.add(o + 1), vb[0]);
+    core::ptr::write_volatile(p.add(o + 2), vb[1]);
+    core::ptr::write_volatile(p.add(o + 3), vb[2]);
+    core::ptr::write_volatile(p.add(o + 4), vb[3]);
+    o += 5;
+    // mov byte [abs32], al  — 88 04 25 xx xx xx xx  (8-bit store of READY_MAGIC)
+    core::ptr::write_volatile(p.add(o), 0x88);
+    core::ptr::write_volatile(p.add(o + 1), 0x04);
+    core::ptr::write_volatile(p.add(o + 2), 0x25);
+    let ab = addr.to_le_bytes();
+    core::ptr::write_volatile(p.add(o + 3), ab[0]);
+    core::ptr::write_volatile(p.add(o + 4), ab[1]);
+    core::ptr::write_volatile(p.add(o + 5), ab[2]);
+    core::ptr::write_volatile(p.add(o + 6), ab[3]);
+    o += 7;
+    // hlt ; jmp $
+    core::ptr::write_volatile(p.add(o), 0xF4);
+    core::ptr::write_volatile(p.add(o + 1), 0xEB);
+    core::ptr::write_volatile(p.add(o + 2), 0xFE);
+}
+
 /// M4.0 guest-1 page: SHELL CPUID hypercall then HLT (private EPT slab).
 ///
 /// SAFETY: `page_phys` is a writable identity-mapped frame.

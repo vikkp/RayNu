@@ -33,6 +33,7 @@
 //! M4.2: scale to G0+G1+G2+G3 (≥4) → `RAYNU-V-M4-NVM-OK`.
 //! M4.3: after NVM-OK, virtio-blk MMIO probe → `RAYNU-V-M4-BLK-OK`.
 //! M4.4: after BLK-OK, virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.
+//! M4.5: after NET-OK, dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.
 
 use crate::arch::apic;
 use crate::arch::cpu::{
@@ -68,6 +69,7 @@ use crate::sched::scheduler::{
     CreditScheduler, DEFAULT_CREDIT, M4_NVM_OK_MARKER, M4_SCHED_OK_MARKER, M4_SLICE_G0_MARKER,
     M4_SLICE_G1_MARKER, M4_SLICE_G2_MARKER, M4_SLICE_G3_MARKER,
 };
+use crate::sched::smp_probe::{self, M4_SMP_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
@@ -240,6 +242,14 @@ static mut HAS_NET_PROBE: bool = false;
 static mut NET_PROBE_MODE: bool = false;
 const M4_NET_PROBE_GUEST_ID: u64 = 6;
 
+/// M4.5: dual-vCPU SMP probe (BSP + AP), same guest id, shared EPT.
+static mut SMP_BSP_FRAMES: Option<LaunchFrames> = None;
+static mut SMP_AP_FRAMES: Option<LaunchFrames> = None;
+static mut HAS_SMP_PROBE: bool = false;
+static mut SMP_PROBE_MODE: bool = false;
+static mut SMP_AP_LAUNCHED: bool = false;
+const M4_SMP_GUEST_ID: u64 = 7;
+
 /// Per-guest GPR banks (SAVED_* is the live working set for the active guest).
 #[derive(Clone, Copy)]
 struct GuestGprBank {
@@ -339,6 +349,16 @@ pub fn set_net_probe(frames: LaunchFrames) {
     unsafe {
         NET_PROBE_FRAMES = Some(frames);
         HAS_NET_PROBE = true;
+    }
+}
+
+/// Register M4.5 BSP + AP probe frames (shared EPT; launched after NET-OK).
+pub fn set_smp_probe(bsp: LaunchFrames, ap: LaunchFrames) {
+    // SAFETY: single-threaded boot before first VMLAUNCH.
+    unsafe {
+        SMP_BSP_FRAMES = Some(bsp);
+        SMP_AP_FRAMES = Some(ap);
+        HAS_SMP_PROBE = true;
     }
 }
 
@@ -1040,6 +1060,11 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
     let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let guest_page = guest_rip & !0xfff;
     let phase = EXIT_PHASE;
+
+    // M4.5: dual-vCPU SMP probe runs after NET-OK.
+    if SMP_PROBE_MODE {
+        handle_smp_probe_vmexit(basic, qual, guest_rax, guest_rip);
+    }
 
     // M4.4: virtio-net probe runs after BLK-OK.
     if NET_PROBE_MODE {
@@ -1928,6 +1953,10 @@ unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 serial::write_line(
                     "boot: M4.4 complete — virtio-net dual-port vSwitch exchange",
                 );
+                NET_PROBE_MODE = false;
+                if HAS_SMP_PROBE {
+                    try_launch_smp_probe();
+                }
                 finish_boot(true);
             }
             serial::write_line("boot: ERROR — net probe HLT without port exchange");
@@ -1935,6 +1964,174 @@ unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
         }
         _ => {
             serial::write_str("boot: ERROR — net probe unhandled exit reason=0x");
+            write_hex_u32(basic);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+
+/// M4.5: after NET-OK, VMLAUNCH the SMP BSP (AP follows on BSP HLT).
+unsafe fn try_launch_smp_probe() -> ! {
+    let frames = match core::ptr::addr_of!(SMP_BSP_FRAMES).read() {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — SMP BSP frames missing");
+            finish_boot(false);
+        }
+    };
+    SCHED_MODE = false;
+    BLK_PROBE_MODE = false;
+    NET_PROBE_MODE = false;
+    SMP_PROBE_MODE = true;
+    SMP_AP_LAUNCHED = false;
+    ACTIVE_GUEST_ID = M4_SMP_GUEST_ID;
+    REAL_LINUX_GUEST = false;
+    LINUX_GTIMER2_DONE = false;
+    LINUX_GTIMER2_ARMED = false;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
+
+    serial::write_line("boot: M4.5 — launching SMP BSP (shared EPT; AP wake = host VMLAUNCH)");
+
+    apic::mask_pic();
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    ept_hw::invept_global();
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP BSP VMCS prepare failed");
+        finish_boot(false);
+    }
+    if ops::vmclear(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP BSP VMCLEAR failed");
+        finish_boot(false);
+    }
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP BSP VMCS re-prepare failed");
+        finish_boot(false);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: ERROR — SMP BSP setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        finish_boot(false);
+    }
+
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+
+    serial::write_line("boot: VMLAUNCH → SMP BSP ready-flag store");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — SMP BSP VMLAUNCH returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — SMP BSP VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+/// Documented AP wake: VMLAUNCH the AP VMCS after BSP ready (INIT-SIPI equivalent).
+unsafe fn launch_smp_ap() -> ! {
+    let frames = match core::ptr::addr_of!(SMP_AP_FRAMES).read() {
+        Some(f) => f,
+        None => {
+            serial::write_line("boot: ERROR — SMP AP frames missing");
+            finish_boot(false);
+        }
+    };
+    SMP_AP_LAUNCHED = true;
+    ACTIVE_GUEST_ID = M4_SMP_GUEST_ID;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
+
+    serial::write_line("boot: M4.5 — AP wake via host VMLAUNCH (documented INIT-SIPI equiv)");
+
+    ept_hw::invept_global();
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP AP VMCS prepare failed");
+        finish_boot(false);
+    }
+    if ops::vmclear(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP AP VMCLEAR failed");
+        finish_boot(false);
+    }
+    if prepare_vmcs_region(frames.vmcs_phys).is_err() {
+        serial::write_line("boot: ERROR — SMP AP VMCS re-prepare failed");
+        finish_boot(false);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: ERROR — SMP AP setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        finish_boot(false);
+    }
+
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+
+    serial::write_line("boot: VMLAUNCH → SMP AP ready-flag store");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: ERROR — SMP AP VMLAUNCH returned Ok");
+            finish_boot(false);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: ERROR — SMP AP VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_byte(b'\n');
+            finish_boot(false);
+        }
+    }
+}
+
+/// Exit path for the M4.5 SMP probe (BSP then AP under shared guest id / EPT).
+unsafe fn handle_smp_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: u64) -> ! {
+    match basic {
+        EXIT_REASON_EXTERNAL_INTERRUPT => {
+            let _ = apic::eoi();
+            let _ = apic::mask_timer();
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            vmresume_with_gprs();
+        }
+        EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
+        EXIT_REASON_IO_INSTRUCTION => handle_io_and_resume(qual, guest_rax, guest_rip),
+        EXIT_REASON_HLT => {
+            if !SMP_AP_LAUNCHED {
+                if !smp_probe::note_bsp_ready() {
+                    serial::write_line("boot: ERROR — SMP BSP HLT without ready flag");
+                    finish_boot(false);
+                }
+                serial::write_line("boot: M4.5 BSP ready — waking AP");
+                launch_smp_ap();
+            }
+            if !smp_probe::note_ap_ready() {
+                serial::write_line("boot: ERROR — SMP AP HLT without ready flag");
+                finish_boot(false);
+            }
+            if smp_probe::smp_ok() {
+                if smp_probe::take_smp_ok_latch() {
+                    serial::write_line(M4_SMP_OK_MARKER);
+                }
+                serial::write_line(
+                    "boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT",
+                );
+                finish_boot(true);
+            }
+            serial::write_line("boot: ERROR — SMP AP HLT but smp_ok not latched");
+            finish_boot(false);
+        }
+        _ => {
+            serial::write_str("boot: ERROR — SMP probe unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
             finish_boot(false);
@@ -2890,7 +3087,9 @@ fn finish_boot(ok: bool) -> ! {
 
     if ok {
         // SAFETY: boot single-threaded; flags set before / during guest path.
-        if unsafe { NET_PROBE_MODE } {
+        if unsafe { SMP_PROBE_MODE } {
+            serial::write_line("boot: M4.5 complete — SMP dual-vCPU path OK");
+        } else if unsafe { NET_PROBE_MODE } {
             serial::write_line("boot: M4.4 complete — virtio-net path OK");
         } else if unsafe { BLK_PROBE_MODE } {
             serial::write_line("boot: M4.3 complete — virtio-blk path OK");

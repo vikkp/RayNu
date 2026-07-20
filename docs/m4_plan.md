@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.4 closed on Latitude; next platform gate is **M4.5** (SMP) or Track C proof.  
+**Status:** **open** — M4.5 in progress (SMP → `RAYNU-V-M4-SMP-OK`).  
 **Prior:** M4.4 closed on Latitude (`RAYNU-V-M4-NET-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
@@ -148,17 +148,19 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.5 — SMP guest (2+ vCPUs) — `RAYNU-V-M4-SMP-OK`
 
-**Status: open** ← next
+**Status: in progress** ← current
 
 **Goal:** One guest with **2+ vCPUs** reaches shell (AP bring-up under virtual APIC).
 
+**Accepted MV (this gate):** bare-metal **BSP + AP** under two VMCS, **same guest id**, **shared EPT** (G0 EPTP). After NET-OK the host VMLAUNCHes the BSP; when BSP stores a ready flag and HLTs, the host performs a **documented AP wake** (VMLAUNCH of the AP VMCS — INIT-SIPI equivalent for this gate). When both ready flags are seen, latch `RAYNU-V-M4-SMP-OK`. Full Linux `CONFIG_SMP` / ICR Wait-for-SIPI / IOAPIC is deferred (slip-ok vs proof track).
+
 **Acceptance sketch:**
 
-1. Second VMCS/vCPU for same guest id; shared EPT; INIT-SIPI or documented AP wake.
-2. May retain `noapic` only if SMP still works; prefer progress toward IOAPIC if blocked.
-3. Marker `RAYNU-V-M4-SMP-OK`. **Slip-allowed** vs blk/net if needed — not on the proof critical path.
+1. Second VMCS/vCPU for same guest id; shared EPT; INIT-SIPI or documented AP wake. ✅
+2. May retain `noapic` only if SMP still works; prefer progress toward IOAPIC if blocked. (Linux UP retained; probe does not need IOAPIC.)
+3. Marker `RAYNU-V-M4-SMP-OK`.
 
-**Likely files:** `vmx/`, `devices/lapic_virt.rs`, `guest/linux_boot.rs`.
+**Likely files:** `sched/smp_probe.rs`, `vmx/launch.rs`, `memory/ept_hw.rs`, `src/main.rs`, `tools/qemu-boot-test.sh`.
 
 ---
 
@@ -268,4 +270,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.4 closed** on Latitude (`RAYNU-V-M4-NET-OK`). Next: **M4.5** SMP (`cursor/m4-5-smp-a623`) or Track C proof (M4.6+).
+**M4.5 in progress** on branch `cursor/m4-5-smp-a623` (`RAYNU-V-M4-SMP-OK`). Do not start M4.6 until Latitude is green (or explicitly slip SMP and start Track C).
