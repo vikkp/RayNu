@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M5.3 closed** (audit ring → `RAYNU-V-M5-AUDIT-OK`). Active: **M5.4** (SOX/ISO reports → `RAYNU-V-M5-REPORT-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
+**Through M5.4 closed** (SOX/ISO reports → `RAYNU-V-M5-REPORT-OK`). Active: **M5.7** (large-page L3 → `RAYNU-V-M5-LPAGE-VERIFY-OK`); M5.5/M5.6 parallel. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m5_plan.md](docs/m5_plan.md).
 
 ### Risk Hotspots
 
