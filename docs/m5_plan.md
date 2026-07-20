@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M4 Track A–C closed on Latitude; next is Track A **M5.0** (VM lifecycle API).  
-**Prior:** M4.9 closed on Latitude (`RAYNU-V-M4-REFINE-OK`).  
+**Status:** **open** — M5.0–M5.2 closed on Latitude (Track A mgmt done); next is **M5.3** (audit ring).  
+**Prior:** M5.2 closed on Latitude (`RAYNU-V-M5-WEBUI-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -60,48 +60,52 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.0 — VM lifecycle API — `RAYNU-V-M5-LIFE-OK`
 
-**Status: open** ← next (host-first; Latitude when a boot path exists)
+**Status: closed** (Latitude `./tools/m5-life-smoke.sh` → `RAYNU-V-M5-LIFE-OK`)
 
 **Goal:** Create / start / stop / destroy guests through a durable lifecycle surface (`mgmt/`), not only hardcoded bring-up in `src/main.rs`. Stubs already exist (`mgmt::VmLifecycle`); this gate makes them real against the M4 multi-guest spine.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Lifecycle state machine (at least: Defined → Running → Stopped → Destroyed) for ≥1 guest.
-2. Operations emit mandatory audit events (ADR-[A] categories: create/start/stop/destroy).
-3. Host gate + marker `RAYNU-V-M5-LIFE-OK`; Latitude optional if a serial latch exists.
-4. Does not require Web UI or REST — those are M5.1 / M5.2.
+1. `VmTable` with `create` / `start` / `stop` / `destroy` (Defined → Running → Stopped → Destroyed).
+2. Audit events `VmCreated` / `VmStarted` / `VmStopped` / `VmDestroyed` via `audit_log!`.
+3. Host gate `mgmt/m5_life_gate.rs` + `tools/m5-life-smoke.sh` + CI `m5-life`.
+4. Live VMLAUNCH path remains in `src/main.rs` / `vmx/launch.rs` — mgmt is the durable ops surface for M5.1+.
 
-**Likely files:** `mgmt/`, `audit/`, `vmx/launch.rs`, host gate + smoke.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-LIFE-OK`. Does not require Web UI or REST (M5.1 / M5.2).
+
+**Files:** `mgmt/mod.rs`, `mgmt/m5_life_gate.rs`, `audit/integrity.rs`, `tools/m5-life-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M5.1 — Control plane: CLI + REST — `RAYNU-V-M5-API-OK`
 
-**Status: open**
+**Status: closed** (Latitude `./tools/m5-api-smoke.sh` → `RAYNU-V-M5-API-OK`)
 
 **Goal:** Operator can drive lifecycle over CLI and a minimal REST API (same ops as M5.0).
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. CLI subcommands (or documented equivalent) for create/start/stop/destroy/list.
-2. REST endpoints covering the same verbs; auth may be stubbed with documented GAP → M6.
-3. Host/CI smoke → `RAYNU-V-M5-API-OK`.
-4. Binary size stays under ADR-003 budget (lazy assets OK).
+1. `mgmt/api.rs` — `parse_cli` / `dispatch_cli` for `create|start|stop|destroy|list`.
+2. Same file — `dispatch_rest` routes (`GET/POST/DELETE /vms…`); **auth stubbed** (`GAP: REST auth stubbed → M6`).
+3. `VmTable::list` for list/GET; host gate `mgmt/m5_api_gate.rs` + `tools/m5-api-smoke.sh` + CI `m5-api`.
+4. No HTTP crate / no TCP stack (keeps ADR-003 size budget); host-testable request shapes only.
 
-**Likely files:** `mgmt/`, `tools/`, host gate, docs.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-API-OK`. Does not require Web UI (M5.2).
 
 ### M5.2 — Embedded Web UI — `RAYNU-V-M5-WEBUI-OK`
 
-**Status: open**
+**Status: closed** (Latitude `./tools/m5-webui-smoke.sh` → `RAYNU-V-M5-WEBUI-OK`)
 
 **Goal:** Embedded Web UI SPA (ADR-003 `.assets.webui`) drives the same lifecycle surface.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Lazy-decompressed Web UI asset present; first-use load path works.
-2. UI can list VMs and invoke start/stop (against M5.1 API).
-3. Marker `RAYNU-V-M5-WEBUI-OK`; size budget respected.
-4. Polish UX is not required to close — functional ops surface is.
+1. `assets/webui.html` — compact SPA (list / start / stop against M5.1 `/vms` routes).
+2. `mgmt/webui.rs` — PE `.aswebui` embed + first-use `load_webui()` (identity decompress;
+   `GAP: webui zstd → keep under ADR-003 budget`).
+3. `dispatch_webui_action` → M5.1 REST; host gate `mgmt/m5_webui_gate.rs` +
+   `tools/m5-webui-smoke.sh` + CI `m5-webui`.
+4. `tools/check-pe-assets.sh` verifies `.aswebui` on the UEFI binary.
 
-**Likely files:** `mgmt/`, asset pack, host gate.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-WEBUI-OK`. Track A (mgmt spine) complete.
 
 ---
 
@@ -109,7 +113,7 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.3 — Audit ring + hash chain — `RAYNU-V-M5-AUDIT-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Append-only audit ring with hash chaining; security-relevant actions from M5.0+ land in the ring. Builds on existing `audit/integrity` + `audit_log!` (L0).
 
@@ -273,10 +277,10 @@ RAYNU-V-M5-LPAGE-VERIFY-OK
 ==> Host large-page L3-verify smoke PASSED
 ```
 
-Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`, `RAYNU-V-M5-MIGRATE-OK`.
+Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYNU-V-M5-ALLOC-REFINE-OK`, `RAYNU-V-M5-MIGRATE-OK`.
 
 ---
 
 ## First action
 
-Draft accepted. Next: branch `cursor/m5-0-lifecycle-a623` and land **M5.0** (`RAYNU-V-M5-LIFE-OK`) — VM lifecycle surface over the M4 multi-guest spine.
+Draft accepted. **M5.0–M5.2 closed** on Latitude (Track A: LIFE + API + WEBUI). Next: **M5.3** (`RAYNU-V-M5-AUDIT-OK`) — audit ring + hash chain.

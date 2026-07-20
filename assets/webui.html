@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RayNu-V</title>
+<style>
+  :root {
+    --ink: #0c1a22;
+    --fog: #e8f0f4;
+    --sea: #1a6b7c;
+    --sea-deep: #0e3d48;
+    --sand: #c4a574;
+    --line: rgba(12, 26, 34, 0.12);
+    --font-brand: "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif;
+    --font-ui: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    color: var(--ink);
+    background:
+      radial-gradient(120% 80% at 10% -10%, #b8d4de 0%, transparent 55%),
+      radial-gradient(90% 70% at 100% 0%, #d9c4a0 0%, transparent 45%),
+      linear-gradient(165deg, #f3f7f9 0%, #dce8ee 48%, #c5d5dc 100%);
+    animation: wash-in 0.7s ease-out both;
+  }
+  @keyframes wash-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  header {
+    padding: 2.5rem clamp(1.25rem, 4vw, 3rem) 1rem;
+    animation: rise 0.55s ease-out 0.08s both;
+  }
+  .brand {
+    font-family: var(--font-brand);
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    letter-spacing: -0.02em;
+    color: var(--sea-deep);
+    line-height: 1.05;
+  }
+  .tag {
+    margin-top: 0.4rem;
+    max-width: 28rem;
+    font-size: 1rem;
+    color: rgba(12, 26, 34, 0.72);
+  }
+  main {
+    padding: 0.5rem clamp(1.25rem, 4vw, 3rem) 3rem;
+    animation: rise 0.6s ease-out 0.18s both;
+  }
+  h2 {
+    font-family: var(--font-brand);
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--sea-deep);
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  button {
+    font-family: var(--font-ui);
+    font-size: 0.95rem;
+    padding: 0.55rem 1rem;
+    border: 1px solid var(--sea);
+    background: var(--sea);
+    color: #f7fbfc;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+  }
+  button:hover { background: var(--sea-deep); border-color: var(--sea-deep); }
+  button:active { transform: scale(0.98); }
+  button.ghost {
+    background: transparent;
+    color: var(--sea-deep);
+  }
+  button.ghost:hover { background: rgba(26, 107, 124, 0.1); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .row {
+    display: grid;
+    grid-template-columns: 4rem 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--line);
+    animation: rise 0.4s ease-out both;
+  }
+  .row .id { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sea); }
+  .row .state { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.8rem; color: rgba(12,26,34,0.65); }
+  .row .acts { display: flex; gap: 0.4rem; }
+  .status {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    color: rgba(12, 26, 34, 0.6);
+    min-height: 1.2em;
+  }
+  .empty { padding: 1.25rem 0; color: rgba(12, 26, 34, 0.55); }
+</style>
+</head>
+<body data-raynu-webui="1" data-raynu-api="/vms">
+<header>
+  <div class="brand">RayNu-V</div>
+  <p class="tag">Management plane — list guests, start and stop against the control API.</p>
+</header>
+<main>
+  <h2>Guests</h2>
+  <div class="toolbar">
+    <button type="button" id="btn-refresh" data-action="list">Refresh</button>
+    <button type="button" class="ghost" id="btn-create" data-action="create">Create demo guest</button>
+  </div>
+  <div id="vm-list" class="empty">No guests loaded yet.</div>
+  <p class="status" id="status" role="status"></p>
+</main>
+<script>
+/* RayNu-V M5.2 Web UI — drives M5.1 REST: GET /vms, POST /vms/{id}/start|stop */
+(function () {
+  const listEl = document.getElementById("vm-list");
+  const statusEl = document.getElementById("status");
+  const API = "/vms";
+
+  function setStatus(msg) { statusEl.textContent = msg || ""; }
+
+  async function api(method, path) {
+    const res = await fetch(path, { method: method, headers: { "Accept": "application/json" } });
+    return res;
+  }
+
+  async function listVms() {
+    setStatus("Listing…");
+    const res = await api("GET", API);
+    if (!res.ok) { setStatus("List failed (" + res.status + ")"); return; }
+    let body = null;
+    try { body = await res.json(); } catch (e) { body = null; }
+    const items = (body && body.vms) ? body.vms : [];
+    render(items);
+    setStatus(items.length ? (items.length + " guest(s)") : "Empty");
+  }
+
+  async function startVm(id) {
+    setStatus("Starting " + id + "…");
+    const res = await api("POST", API + "/" + id + "/start");
+    setStatus(res.ok ? ("Started " + id) : ("Start failed (" + res.status + ")"));
+    await listVms();
+  }
+
+  async function stopVm(id) {
+    setStatus("Stopping " + id + "…");
+    const res = await api("POST", API + "/" + id + "/stop");
+    setStatus(res.ok ? ("Stopped " + id) : ("Stop failed (" + res.status + ")"));
+    await listVms();
+  }
+
+  async function createDemo() {
+    const id = 1;
+    setStatus("Creating " + id + "…");
+    await api("POST", API + "/" + id);
+    await listVms();
+  }
+
+  function render(items) {
+    if (!items.length) {
+      listEl.className = "empty";
+      listEl.textContent = "No guests.";
+      return;
+    }
+    listEl.className = "";
+    listEl.innerHTML = "";
+    items.forEach(function (vm, i) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.animationDelay = (0.04 * i) + "s";
+      const id = vm.guest_id != null ? vm.guest_id : vm.id;
+      const state = vm.state || "?";
+      row.innerHTML =
+        '<span class="id">' + id + "</span>" +
+        '<span class="state">' + state + "</span>" +
+        '<span class="acts"></span>';
+      const acts = row.querySelector(".acts");
+      const bStart = document.createElement("button");
+      bStart.textContent = "Start";
+      bStart.setAttribute("data-action", "start");
+      bStart.setAttribute("data-guest-id", String(id));
+      bStart.onclick = function () { startVm(id); };
+      const bStop = document.createElement("button");
+      bStop.className = "ghost";
+      bStop.textContent = "Stop";
+      bStop.setAttribute("data-action", "stop");
+      bStop.setAttribute("data-guest-id", String(id));
+      bStop.onclick = function () { stopVm(id); };
+      if (String(state).toLowerCase() === "running") bStart.disabled = true;
+      if (String(state).toLowerCase() !== "running") bStop.disabled = true;
+      acts.appendChild(bStart);
+      acts.appendChild(bStop);
+      listEl.appendChild(row);
+    });
+  }
+
+  document.getElementById("btn-refresh").onclick = listVms;
+  document.getElementById("btn-create").onclick = createDemo;
+  window.raynuWebUi = { listVms: listVms, startVm: startVm, stopVm: stopVm };
+  listVms();
+})();
+</script>
+</body>
+</html>

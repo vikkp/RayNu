@@ -38,6 +38,7 @@ pub fn assets_scripts_present() -> bool {
     size.contains("15 * 1024 * 1024")
         && pe.contains(".askern")
         && pe.contains(".asinit")
+        && pe.contains(".aswebui")
         && build.contains("check-pe-assets.sh")
         && smoke.contains("MARKER_ASSETS")
         && smoke.contains(M3_ASSETS_OK_MARKER)

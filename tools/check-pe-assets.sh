@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M3.22 — verify PE sections .askern / .asinit on the UEFI binary (ADR-003).
+# M3.22 — verify PE sections .askern / .asinit / .aswebui on the UEFI binary (ADR-003).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -37,6 +37,11 @@ if ! grep -qE '\.asinit' <<<"$HEADERS"; then
   echo "$HEADERS" >&2
   exit 1
 fi
+if ! grep -qE '\.aswebui' <<<"$HEADERS"; then
+  echo "error: PE section .aswebui (assets.webui) missing in $OUT" >&2
+  echo "$HEADERS" >&2
+  exit 1
+fi
 
-echo "==> PE assets OK (.askern + .asinit) in $OUT"
+echo "==> PE assets OK (.askern + .asinit + .aswebui) in $OUT"
 ls -la "$OUT"

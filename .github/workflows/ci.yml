@@ -234,6 +234,45 @@ jobs:
       - name: Verus N-guest-refine smoke → RAYNU-V-M4-REFINE-OK
         run: ./tools/verus-nguest-refine-smoke.sh
 
+  # M5.0: VM lifecycle API. Hard-fail.
+  m5-life:
+    name: M5.0 lifecycle (LIFE-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.0 lifecycle smoke → RAYNU-V-M5-LIFE-OK
+        run: ./tools/m5-life-smoke.sh
+
+  # M5.1: CLI + REST control plane. Hard-fail.
+  m5-api:
+    name: M5.1 API (API-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.1 API smoke → RAYNU-V-M5-API-OK
+        run: ./tools/m5-api-smoke.sh
+
+  # M5.2: embedded Web UI. Hard-fail.
+  m5-webui:
+    name: M5.2 Web UI (WEBUI-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.2 Web UI smoke → RAYNU-V-M5-WEBUI-OK
+        run: ./tools/m5-webui-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)
