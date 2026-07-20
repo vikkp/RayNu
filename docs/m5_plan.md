@@ -1,7 +1,7 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0–M5.8 closed on Latitude; **M5.9** ALLOC-REFINE wired host/CI (Latitude pending).  
-**Prior:** M5.8 closed on Latitude (`RAYNU-V-M5-NUMA-OK`; `51 verified, 0 errors`); M5.7 closed (`RAYNU-V-M5-LPAGE-VERIFY-OK`).  
+**Status:** **closed** — M5.0–M5.9 closed on Latitude (ops + audit + migrate + Dell Tier‑1 + ADR-004 M5 proof row). Next: **M6**.  
+**Prior:** M5.9 closed on Latitude (`RAYNU-V-M5-ALLOC-REFINE-OK`; `61 verified, 0 errors`); M5.8 closed (`RAYNU-V-M5-NUMA-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -208,7 +208,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
 
 ### M5.9 — Allocator↔EPT + HW PTE correspondence — `RAYNU-V-M5-ALLOC-REFINE-OK`
 
-**Status: open** (host/CI wired; Latitude smoke pending)
+**Status: closed** (Latitude `./tools/verus-alloc-refine-smoke.sh` → `RAYNU-V-M5-ALLOC-REFINE-OK`; `61 verified, 0 errors`)
 
 **Goal:** Deepen refine: frame-allocator coupling and/or HW PTE identity-builder correspondence under `abs` / `refines` (close M4.9 deferred GAPs as far as feasible).
 
@@ -223,7 +223,7 @@ May start once M4.8/M4.9 are green (already closed). Must complete before **M5 c
    `GAP: Hardware EPT PTE bit-decode / EPT-violation (M6)`.
 5. Host gate `memory/m5_alloc_refine_gate.rs` + `tools/verus-alloc-refine-smoke.sh` + CI `verus-alloc-refine`.
 
-**Acceptance:** Latitude `./tools/verus-alloc-refine-smoke.sh` → `RAYNU-V-M5-ALLOC-REFINE-OK` (then close docs/site).
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M5-ALLOC-REFINE-OK`.
 
 ---
 
@@ -300,4 +300,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-IDRAC-OK`, `RAYNU-V-M5-NUMA-OK`, `RAYN
 
 ## First action
 
-**M5.0–M5.8 closed** on Latitude. **M5.9** wired host/CI (`RAYNU-V-M5-ALLOC-REFINE-OK`); Latitude smoke pending — then M5 close (or ADR waiver for remaining M6 GAPs).
+**M5 closed** on Latitude (M5.0–M5.9, incl. ALLOC-REFINE). Next: **M6** (production ready) — remaining GAPs (HW PTE bit-decode, EPT-violation, migration, NUMA affinity L3) are M6 scope.

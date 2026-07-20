@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
-**Next M5.9:** Allocator↔EPT refine + scoped identity → `RAYNU-V-M5-ALLOC-REFINE-OK` (host/CI wired; Latitude pending) — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
+**M5 closed.** Next **M6** (production ready). M5.9 ALLOC-REFINE closed on Latitude (`RAYNU-V-M5-ALLOC-REFINE-OK`; `61 verified, 0 errors`) — [m5_plan.md](m5_plan.md) / [progress.md](progress.md).
