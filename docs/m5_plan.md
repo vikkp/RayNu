@@ -1,6 +1,6 @@
 # M5 Plan — Operationally Viable
 
-**Status:** **open** — M5.0 closed on Latitude; next is **M5.1** (CLI + REST).  
+**Status:** **open** — M5.0 closed on Latitude; **M5.1** code awaiting Latitude API smoke.  
 **Prior:** M5.0 closed on Latitude (`RAYNU-V-M5-LIFE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M5 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m4_plan.md](m4_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · iDRAC: [adr/ADR-005.md](adr/ADR-005.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -77,18 +77,25 @@ Each = branch `cursor/m5-N-…-a623`, marker `RAYNU-V-M5-*-OK`, Latitude and/or 
 
 ### M5.1 — Control plane: CLI + REST — `RAYNU-V-M5-API-OK`
 
-**Status: open** ← next
+**Status: open** — code on branch; awaiting Latitude smoke ← next
 
 **Goal:** Operator can drive lifecycle over CLI and a minimal REST API (same ops as M5.0).
 
-**Acceptance sketch:**
+**What lands:**
 
-1. CLI subcommands (or documented equivalent) for create/start/stop/destroy/list.
-2. REST endpoints covering the same verbs; auth may be stubbed with documented GAP → M6.
-3. Host/CI smoke → `RAYNU-V-M5-API-OK`.
-4. Binary size stays under ADR-003 budget (lazy assets OK).
+1. `mgmt/api.rs` — `parse_cli` / `dispatch_cli` for `create|start|stop|destroy|list`.
+2. Same file — `dispatch_rest` routes (`GET/POST/DELETE /vms…`); **auth stubbed** (`GAP: REST auth stubbed → M6`).
+3. `VmTable::list` for list/GET; host gate `mgmt/m5_api_gate.rs` + `tools/m5-api-smoke.sh` + CI `m5-api`.
+4. No HTTP crate / no TCP stack (keeps ADR-003 size budget); host-testable request shapes only.
 
-**Likely files:** `mgmt/`, `tools/`, host gate, docs.
+**Acceptance:**
+
+1. CLI subcommands (documented line parser) for create/start/stop/destroy/list.
+2. REST endpoints covering the same verbs; auth stubbed with documented GAP → M6.
+3. Host/CI smoke → `RAYNU-V-M5-API-OK` (Latitude confirms close).
+4. Binary size stays under ADR-003 budget (no new deps).
+
+**Likely files:** `mgmt/api.rs`, `mgmt/m5_api_gate.rs`, `tools/m5-api-smoke.sh`, docs.
 
 ### M5.2 — Embedded Web UI — `RAYNU-V-M5-WEBUI-OK`
 
@@ -281,4 +288,4 @@ Optional / slip-ok with docs: `RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M5-IDRAC-OK`, `RAY
 
 ## First action
 
-Draft accepted. **M5.0 closed** on Latitude (`RAYNU-V-M5-LIFE-OK`). Next: **M5.1** (`RAYNU-V-M5-API-OK`) — CLI + REST over the lifecycle surface.
+Draft accepted. **M5.0 closed** on Latitude (`RAYNU-V-M5-LIFE-OK`). **M5.1** code lands `RAYNU-V-M5-API-OK` (CLI + REST); close after Latitude `./tools/m5-api-smoke.sh`.

@@ -5,14 +5,18 @@
 //! VERIFICATION: N/A
 //!
 //! M5.0: durable create / start / stop / destroy surface over a guest table.
+//! M5.1: CLI + REST dispatch (`api`) over that table.
 //! Bring-up in `src/main.rs` remains the live VMLAUNCH path; this module is the
-//! management-plane state machine those ops will drive (M5.1+).
+//! management-plane state machine those ops drive.
 
 use crate::audit_log;
 use crate::audit::AuditEvent;
 
 /// Host / CI marker when the M5.0 lifecycle gate passes.
 pub const M5_LIFE_OK_MARKER: &str = "RAYNU-V-M5-LIFE-OK";
+
+/// Host / CI marker when the M5.1 API gate passes (re-export).
+pub use api::M5_API_OK_MARKER;
 
 /// Max guests tracked by the management-plane table (M4 NVM spine = 4).
 pub const MGMT_GUEST_CAP: usize = 8;
@@ -164,6 +168,22 @@ impl VmTable {
             _ => Err(LifecycleError::BadState),
         }
     }
+
+    /// Copy active (non-destroyed) records into `out`; returns count written.
+    pub fn list(&self, out: &mut [Option<VmRecord>]) -> usize {
+        let mut n = 0;
+        for slot in self.slots.iter() {
+            if let Some(r) = slot {
+                if r.state != VmLifecycle::Destroyed {
+                    if n < out.len() {
+                        out[n] = Some(*r);
+                        n += 1;
+                    }
+                }
+            }
+        }
+        n
+    }
 }
 
 impl Default for VmTable {
@@ -205,8 +225,15 @@ pub fn prop_lifecycle_roundtrip() -> bool {
     t.get(gid).is_none() && t.len() == 0
 }
 
+pub mod api;
+pub mod m5_api_gate;
 pub mod m5_life_gate;
 
+pub use api::{
+    dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_cli_rest_roundtrip,
+    ApiReply, CliCommand, RestMethod, RestRequest, RestResponse, AUTH_GAP_NOTE,
+};
+pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 
 #[cfg(test)]
