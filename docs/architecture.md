@@ -42,4 +42,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 ## Next Milestone Gate
 
-**M3.22 closed:** PE `.askern`/`.asinit` embed → `RAYNU-V-M3-ASSETS-OK`. Next: M4 — [m3_post_shell_plan.md](m3_post_shell_plan.md) / [CLAUDE.md](../CLAUDE.md).
+**M3.22 closed:** PE `.askern`/`.asinit` embed → `RAYNU-V-M3-ASSETS-OK`. Next: **M4** — [m4_plan.md](m4_plan.md) / [progress.md](progress.md) / [CLAUDE.md](../CLAUDE.md).

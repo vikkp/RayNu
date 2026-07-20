@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M3.22 closed** — real Linux shell + tight EPT + L3/refine + NOIRQ + hard-fail Kani + PE asset embed → `RAYNU-V-M3-ASSETS-OK`. Lived: [docs/progress.md](docs/progress.md). Next: M4.
+**M0 → M3.22 closed** — real Linux shell + tight EPT + L3/refine + NOIRQ + hard-fail Kani + PE asset embed → `RAYNU-V-M3-ASSETS-OK`. Lived: [docs/progress.md](docs/progress.md). Next: **M4** — [docs/m4_plan.md](docs/m4_plan.md).
 
 ## Repository Layout
 

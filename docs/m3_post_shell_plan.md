@@ -1,9 +1,9 @@
 # Post–M3.10 Plan — Harden Real Linux Guest
 
-**Status:** M3.11–M3.22 **closed**; next track is **M4**.  
+**Status:** M3.11–M3.22 **closed**; next track is **M4** — [m4_plan.md](m4_plan.md).  
 **Parent:** [m3_plan.md](m3_plan.md) · lived gates: [progress.md](progress.md)
 
-M3’s first-shell goal is closed. Post-shell harden delivered L3, refine, NOIRQ, tight EPT, Kani, and PE asset embed. Active: M4 platform work.
+M3’s first-shell goal is closed. Post-shell harden delivered L3, refine, NOIRQ, tight EPT, Kani, and PE asset embed. Active: M4 platform work ([m4_plan.md](m4_plan.md)).
 
 ---
 
@@ -227,10 +227,10 @@ jiffies; `console=ttyS0` needs IRQ4 TX). Shipped policy:
 
 ```
 M3.11 → … → M3.21 Kani (closed) → M3.22 assets (closed)
-→ M4 (N-guest platform)
+→ M4 (usable VM platform) — see m4_plan.md
 ```
 
-**M3.22 closed on Latitude. Next: M4.**
+**M3.22 closed on Latitude. Next: [M4.0](m4_plan.md) (`RAYNU-V-M4-2VM-OK`).**
 
 ---
 
