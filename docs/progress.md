@@ -101,8 +101,8 @@ Prior track: [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M5.7** ← next | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify (M5 proof exit) |
-| M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology |
+| **M5.7** | `RAYNU-V-M5-LPAGE-VERIFY-OK` | Large-page L3 verify (host wiring; Latitude pending) |
+| M5.6 | `RAYNU-V-M5-IDRAC-OK` | Dell Tier‑1 health + topology (host wiring; Latitude pending) |
 | M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA in ghost spec |
 | M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT / HW PTE refine |
 | M6 | — | Production ready (see CLAUDE.md) |

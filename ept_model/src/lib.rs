@@ -7,7 +7,8 @@
 //! M4.7 claims ADR-006 L3 for N-guest 4K map/unmap exclusivity
 //! (`theorem_n_guest_4k_map_unmap_exclusive` / `lemma_two_guests_map_distinct_frames_exclusive`).
 //! M4.8 adds 2M/1G leaf sizes and span predicates to the ghost *spec*
-//! (`GhostPageSize` / `large_map_enabled`); large-page L3 discharge remains M5.
+//! (`GhostPageSize` / `large_map_enabled`). M5.7 discharges large-page span
+//! map/unmap exclusivity (no `admit`) → `RAYNU-V-M5-LPAGE-VERIFY-OK`.
 //! M4.9 extends concrete refine to N guests (`theorem_concrete_n_guest_4k_refine`).
 //!
 //! Markers:
@@ -18,6 +19,7 @@
 //! - M4.7 N-guest L3: `RAYNU-V-M4-NGUEST-VERIFY-OK` (via tools/verus-nguest-verify-smoke.sh)
 //! - M4.8 large-page spec: `RAYNU-V-M4-LPAGE-OK` (via tools/verus-lpage-spec-smoke.sh)
 //! - M4.9 N-guest refine: `RAYNU-V-M4-REFINE-OK` (via tools/verus-nguest-refine-smoke.sh)
+//! - M5.7 large-page L3: `RAYNU-V-M5-LPAGE-VERIFY-OK` (via tools/verus-lpage-verify-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -748,11 +750,12 @@ pub proof fn lemma_concrete_two_guests_map_refines(
 }
 
 // ---------------------------------------------------------------------------
-// M4.8 — large-page (2M/1G) ghost *spec* (ADR-004; may stay L2)
+// M4.8 — large-page (2M/1G) ghost *spec* (ADR-004)
+// M5.7 — large-page L3: span map/unmap exclusivity (no admit)
 //
-// Leaf sizes and span predicates live in the model so exclusivity posts can
-// talk about contiguous 4K-frame ranges. MapUnmapStep remains 4K-only;
-// large-page L3 discharge is M5 (`GAP: Large-page L3 discharge`).
+// A large leaf is modeled as `frames_covered(ps)` contiguous 4K ghost maps so
+// `exclusive_ownership` (owned.len == by_gpa.len) is preserved. MapUnmapStep
+// remains the 4K step type; large ops are separate span folds.
 // ---------------------------------------------------------------------------
 
 /// 2 MiB page size (matches `EptPageSize::TwoMib` leaves).
@@ -809,7 +812,29 @@ pub open spec fn large_span_free(m: GhostEptMap, base: FrameId, ps: GhostPageSiz
         frame_in_large_span(base, ps, f) ==> !m.owned.dom().contains(f)
 }
 
-/// Enabled predicate for a large-page map (spec only; not folded into `MapUnmapStep`).
+/// Recursive: first GPA free, then the rest.
+pub open spec fn span_gpas_free(m: GhostEptMap, guest: GuestId, gpa: Gpa, n: u64) -> bool
+    decreases n,
+{
+    if n == 0 {
+        true
+    } else {
+        &&& !m.by_gpa.dom().contains((guest, gpa))
+        &&& span_gpas_free(m, guest, (gpa + PAGE_4K) as u64, (n - 1) as u64)
+    }
+}
+
+/// Every synthetic 4K GPA in the large-page span is free for `guest`.
+pub open spec fn large_gpa_span_free(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    ps: GhostPageSize,
+) -> bool {
+    span_gpas_free(m, guest, gpa, frames_covered(ps))
+}
+
+/// Enabled predicate for a large-page map (span of 4K ghost maps).
 pub open spec fn large_map_enabled(
     m: GhostEptMap,
     guest: GuestId,
@@ -819,12 +844,15 @@ pub open spec fn large_map_enabled(
 ) -> bool {
     &&& guest != 0
     &&& page_aligned(ps, gpa)
+    &&& page_aligned_4k(gpa)
     &&& frame_base_aligned(ps, base)
     &&& large_span_free(m, base, ps)
-    &&& !m.by_gpa.dom().contains((guest, gpa))
+    &&& large_gpa_span_free(m, guest, gpa, ps)
+    &&& base <= 0xffff_ffff_ffff_ffff - frames_covered(ps)
+    &&& gpa <= 0xffff_ffff_ffff_ffff - frames_covered(ps) * PAGE_4K
 }
 
-/// Postcondition sketch: every 4K frame in the span is owned by `guest`.
+/// Postcondition: every 4K frame in the span is owned by `guest`.
 pub open spec fn large_map_post_owned(
     m: GhostEptMap,
     guest: GuestId,
@@ -836,7 +864,544 @@ pub open spec fn large_map_post_owned(
         frame_in_large_span(base, ps, f) ==> m.owned.dom().contains(f) && m.owned[f] == guest
 }
 
-/// Trivial size facts for 2M / 1G leaves (spec scaffolding; exclusivity L3 → M5).
+/// Recursive span mapped (head/tail — induction-friendly).
+pub open spec fn span_mapped(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+) -> bool
+    decreases n,
+{
+    if n == 0 {
+        true
+    } else {
+        &&& m.by_gpa.dom().contains((guest, gpa))
+        &&& m.by_gpa[(guest, gpa)] == base
+        &&& span_mapped(
+            m,
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        )
+    }
+}
+
+/// Span is fully mapped as contiguous 4K `(guest, gpa+i*4K) → base+i`.
+pub open spec fn large_span_mapped(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+) -> bool {
+    span_mapped(m, guest, gpa, base, frames_covered(ps))
+}
+
+/// Enabled predicate for a large-page unmap.
+pub open spec fn large_unmap_enabled(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+) -> bool {
+    &&& guest != 0
+    &&& page_aligned(ps, gpa)
+    &&& page_aligned_4k(gpa)
+    &&& frame_base_aligned(ps, base)
+    &&& large_span_mapped(m, guest, gpa, base, ps)
+    &&& base <= 0xffff_ffff_ffff_ffff - frames_covered(ps)
+    &&& gpa <= 0xffff_ffff_ffff_ffff - frames_covered(ps) * PAGE_4K
+}
+
+pub open spec fn ghost_map_span(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+) -> GhostEptMap
+    decreases n,
+{
+    if n == 0 {
+        m
+    } else {
+        ghost_map_span(
+            m.ghost_map(guest, gpa, base),
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        )
+    }
+}
+
+pub open spec fn ghost_unmap_span(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    n: u64,
+) -> GhostEptMap
+    decreases n,
+{
+    if n == 0 {
+        m
+    } else {
+        ghost_unmap_span(
+            m.ghost_unmap(guest, gpa),
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (n - 1) as u64,
+        )
+    }
+}
+
+pub open spec fn ghost_large_map(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+) -> GhostEptMap {
+    ghost_map_span(m, guest, gpa, base, frames_covered(ps))
+}
+
+pub open spec fn ghost_large_unmap(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    ps: GhostPageSize,
+) -> GhostEptMap {
+    ghost_unmap_span(m, guest, gpa, frames_covered(ps))
+}
+
+pub proof fn lemma_next_gpa_4k_aligned(gpa: Gpa)
+    requires
+        page_aligned_4k(gpa),
+        gpa <= 0xffff_ffff_ffff_ffff - PAGE_4K,
+    ensures
+        page_aligned_4k((gpa + PAGE_4K) as u64),
+{
+}
+
+/// Inserting `(guest,gpa_mapped)` preserves `span_gpas_free` for a disjoint GPA chain.
+pub proof fn lemma_span_gpas_free_preserved_by_map(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa_mapped: Gpa,
+    frame: FrameId,
+    gpa: Gpa,
+    n: u64,
+)
+    requires
+        span_gpas_free(m, guest, gpa, n),
+        gpa_mapped + n * PAGE_4K <= 0xffff_ffff_ffff_ffff || n == 0,
+        gpa <= 0xffff_ffff_ffff_ffff - n * PAGE_4K,
+        forall|k: u64|
+            #![trigger (gpa as int) + (k as int) * (PAGE_4K as int)]
+            k < n ==> (gpa as int) + (k as int) * (PAGE_4K as int) != gpa_mapped as int,
+    ensures
+        span_gpas_free(m.ghost_map(guest, gpa_mapped, frame), guest, gpa, n),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        let m2 = m.ghost_map(guest, gpa_mapped, frame);
+        assert((gpa as int) + (0 as int) * (PAGE_4K as int) != gpa_mapped as int);
+        assert(gpa as int != gpa_mapped as int);
+        assert(!m.by_gpa.dom().contains((guest, gpa)));
+        assert(!m2.by_gpa.dom().contains((guest, gpa)));
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)
+                != gpa_mapped as int
+        by {
+            let k2 = (1 + k) as u64;
+            assert(k2 < n);
+            assert((gpa as int) + (k2 as int) * (PAGE_4K as int) != gpa_mapped as int);
+            assert(((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) == (gpa as int) + (
+                k2 as int
+            ) * (PAGE_4K as int));
+        };
+        lemma_span_gpas_free_preserved_by_map(
+            m,
+            guest,
+            gpa_mapped,
+            frame,
+            (gpa + PAGE_4K) as u64,
+            (n - 1) as u64,
+        );
+    }
+}
+
+pub proof fn lemma_map_span_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+)
+    requires
+        exclusive_ownership(m),
+        guest != 0,
+        page_aligned_4k(gpa),
+        base <= 0xffff_ffff_ffff_ffff - n,
+        gpa <= 0xffff_ffff_ffff_ffff - n * PAGE_4K,
+        forall|f: FrameId|
+            #![auto]
+            base <= f && f < base + n ==> !m.owned.dom().contains(f),
+        span_gpas_free(m, guest, gpa, n),
+    ensures
+        exclusive_ownership(ghost_map_span(m, guest, gpa, base, n)),
+        span_mapped(ghost_map_span(m, guest, gpa, base, n), guest, gpa, base, n),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        assert(base <= base && base < base + n);
+        assert(!m.owned.dom().contains(base));
+        assert(!m.by_gpa.dom().contains((guest, gpa)));
+        lemma_map_ok_exclusive(m, guest, gpa, base);
+        let m2 = m.ghost_map(guest, gpa, base);
+
+        assert forall|f: FrameId|
+            #![auto]
+            (base + 1) as u64 <= f && f < (base + 1) as u64 + (n - 1) implies !m2.owned.dom().contains(
+                f,
+            )
+        by {
+            assert(f as int != base as int);
+            assert(base <= f && f < base + n);
+            assert(!m.owned.dom().contains(f));
+        };
+
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) != gpa
+                as int
+        by {
+            assert(((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) == (gpa as int) + ((1
+                + k) as int) * (PAGE_4K as int));
+            assert((1 + k) as int * (PAGE_4K as int) > 0);
+        };
+        lemma_span_gpas_free_preserved_by_map(
+            m,
+            guest,
+            gpa,
+            base,
+            (gpa + PAGE_4K) as u64,
+            (n - 1) as u64,
+        );
+        lemma_next_gpa_4k_aligned(gpa);
+        lemma_map_span_exclusive(
+            m2,
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        );
+
+        // Preserve head mapping through recursive maps
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) != gpa
+                as int
+        by {
+            assert(((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) == (gpa as int) + ((1
+                + k) as int) * (PAGE_4K as int));
+            assert((1 + k) as int * (PAGE_4K as int) > 0);
+        };
+        lemma_map_span_preserves_by_gpa(
+            m2,
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+            guest,
+            gpa,
+        );
+        let ms = ghost_map_span(m, guest, gpa, base, n);
+        assert(ms.by_gpa.dom().contains((guest, gpa)));
+        assert(ms.by_gpa[(guest, gpa)] == base);
+    }
+}
+
+pub proof fn lemma_map_span_preserves_by_gpa(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+    g_old: GuestId,
+    a_old: Gpa,
+)
+    requires
+        m.by_gpa.dom().contains((g_old, a_old)),
+        gpa <= 0xffff_ffff_ffff_ffff - n * PAGE_4K,
+        forall|k: u64|
+            #![trigger (gpa as int) + (k as int) * (PAGE_4K as int)]
+            k < n ==> (gpa as int) + (k as int) * (PAGE_4K as int) != a_old as int || g_old
+                != guest,
+    ensures
+        ghost_map_span(m, guest, gpa, base, n).by_gpa.dom().contains((g_old, a_old)),
+        ghost_map_span(m, guest, gpa, base, n).by_gpa[(g_old, a_old)] == m.by_gpa[(g_old, a_old)],
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        assert((gpa as int) + (0 as int) * (PAGE_4K as int) != a_old as int || g_old != guest);
+        assert((g_old, a_old) != (guest, gpa));
+        let m2 = m.ghost_map(guest, gpa, base);
+        assert(m2.by_gpa.dom().contains((g_old, a_old)));
+        assert(m2.by_gpa[(g_old, a_old)] == m.by_gpa[(g_old, a_old)]);
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) != a_old
+                as int || g_old != guest
+        by {
+            let k2 = (1 + k) as u64;
+            assert(k2 < n);
+            assert((gpa as int) + (k2 as int) * (PAGE_4K as int) != a_old as int || g_old
+                != guest);
+        };
+        lemma_map_span_preserves_by_gpa(
+            m2,
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+            g_old,
+            a_old,
+        );
+    }
+}
+
+/// Unmapping head preserves `span_mapped` for the tail.
+pub proof fn lemma_span_mapped_preserved_by_unmap(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa_unmapped: Gpa,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+)
+    requires
+        span_mapped(m, guest, gpa, base, n),
+        gpa <= 0xffff_ffff_ffff_ffff - n * PAGE_4K,
+        forall|k: u64|
+            #![trigger (gpa as int) + (k as int) * (PAGE_4K as int)]
+            k < n ==> (gpa as int) + (k as int) * (PAGE_4K as int) != gpa_unmapped as int,
+    ensures
+        span_mapped(m.ghost_unmap(guest, gpa_unmapped), guest, gpa, base, n),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        let m2 = m.ghost_unmap(guest, gpa_unmapped);
+        assert((gpa as int) + (0 as int) * (PAGE_4K as int) != gpa_unmapped as int);
+        assert(gpa as int != gpa_unmapped as int);
+        assert(m.by_gpa.dom().contains((guest, gpa)));
+        assert(m2.by_gpa.dom().contains((guest, gpa)));
+        assert(m2.by_gpa[(guest, gpa)] == m.by_gpa[(guest, gpa)]);
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)
+                != gpa_unmapped as int
+        by {
+            let k2 = (1 + k) as u64;
+            assert(k2 < n);
+            assert((gpa as int) + (k2 as int) * (PAGE_4K as int) != gpa_unmapped as int);
+        };
+        lemma_span_mapped_preserved_by_unmap(
+            m,
+            guest,
+            gpa_unmapped,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        );
+    }
+}
+
+pub proof fn lemma_unmap_span_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    n: u64,
+)
+    requires
+        exclusive_ownership(m),
+        guest != 0,
+        page_aligned_4k(gpa),
+        base <= 0xffff_ffff_ffff_ffff - n,
+        gpa <= 0xffff_ffff_ffff_ffff - n * PAGE_4K,
+        span_mapped(m, guest, gpa, base, n),
+    ensures
+        exclusive_ownership(ghost_unmap_span(m, guest, gpa, n)),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        assert(m.by_gpa.dom().contains((guest, gpa)));
+        assert(m.by_gpa[(guest, gpa)] == base);
+        lemma_unmap_ok_exclusive(m, guest, gpa);
+        let m2 = m.ghost_unmap(guest, gpa);
+        assert forall|k: u64|
+            #![trigger ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int)]
+            k < n - 1 implies ((gpa + PAGE_4K) as int) + (k as int) * (PAGE_4K as int) != gpa
+                as int
+        by {
+            assert((1 + k) as int * (PAGE_4K as int) > 0);
+        };
+        lemma_span_mapped_preserved_by_unmap(
+            m,
+            guest,
+            gpa,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        );
+        lemma_next_gpa_4k_aligned(gpa);
+        lemma_unmap_span_exclusive(
+            m2,
+            guest,
+            (gpa + PAGE_4K) as u64,
+            (base + 1) as u64,
+            (n - 1) as u64,
+        );
+    }
+}
+
+/// M5.7: large-page map preserves exclusive ownership + span_mapped.
+pub proof fn lemma_large_map_ok_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+)
+    requires
+        exclusive_ownership(m),
+        large_map_enabled(m, guest, gpa, base, ps),
+    ensures
+        exclusive_ownership(ghost_large_map(m, guest, gpa, base, ps)),
+        large_span_mapped(ghost_large_map(m, guest, gpa, base, ps), guest, gpa, base, ps),
+{
+    let n = frames_covered(ps);
+    assert forall|f: FrameId|
+        #![auto]
+        base <= f && f < base + n implies !m.owned.dom().contains(f)
+    by {
+        assert(frame_in_large_span(base, ps, f));
+    };
+    lemma_map_span_exclusive(m, guest, gpa, base, n);
+}
+
+/// M5.7: large-page unmap preserves exclusive ownership.
+pub proof fn lemma_large_unmap_ok_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+)
+    requires
+        exclusive_ownership(m),
+        large_unmap_enabled(m, guest, gpa, base, ps),
+    ensures
+        exclusive_ownership(ghost_large_unmap(m, guest, gpa, ps)),
+{
+    lemma_unmap_span_exclusive(m, guest, gpa, base, frames_covered(ps));
+}
+
+/// M5.7: map then unmap a large page preserves exclusivity.
+pub proof fn theorem_large_page_map_unmap_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+)
+    requires
+        exclusive_ownership(m),
+        large_map_enabled(m, guest, gpa, base, ps),
+    ensures
+        exclusive_ownership(
+            ghost_large_unmap(ghost_large_map(m, guest, gpa, base, ps), guest, gpa, ps),
+        ),
+{
+    lemma_large_map_ok_exclusive(m, guest, gpa, base, ps);
+    let m2 = ghost_large_map(m, guest, gpa, base, ps);
+    assert(large_unmap_enabled(m2, guest, gpa, base, ps));
+    lemma_large_unmap_ok_exclusive(m2, guest, gpa, base, ps);
+}
+
+/// M5.7 ≥2-guest post via FourK large leaves (= ordinary 4K maps).
+pub proof fn lemma_two_guests_large_map_distinct_spans_exclusive(
+    m: GhostEptMap,
+    g1: GuestId,
+    gpa1: Gpa,
+    b1: FrameId,
+    g2: GuestId,
+    gpa2: Gpa,
+    b2: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        g1 != 0,
+        g2 != 0,
+        g1 != g2,
+        large_map_enabled(m, g1, gpa1, b1, GhostPageSize::FourK),
+        large_map_enabled(m, g2, gpa2, b2, GhostPageSize::FourK),
+        b1 != b2,
+    ensures
+        exclusive_ownership(
+            ghost_large_map(
+                ghost_large_map(m, g1, gpa1, b1, GhostPageSize::FourK),
+                g2,
+                gpa2,
+                b2,
+                GhostPageSize::FourK,
+            ),
+        ),
+{
+    assert(frames_covered(GhostPageSize::FourK) == 1);
+    assert(frame_in_large_span(b1, GhostPageSize::FourK, b1));
+    assert(frame_in_large_span(b2, GhostPageSize::FourK, b2));
+    assert(!m.owned.dom().contains(b1));
+    assert(!m.owned.dom().contains(b2));
+    assert(!m.by_gpa.dom().contains((g1, gpa1)));
+    assert(!m.by_gpa.dom().contains((g2, gpa2)));
+    lemma_two_guests_map_distinct_frames_exclusive(m, g1, gpa1, b1, g2, gpa2, b2);
+    assert(ghost_map_span(m, g1, gpa1, b1, 1) == ghost_map_span(
+        m.ghost_map(g1, gpa1, b1),
+        g1,
+        (gpa1 + PAGE_4K) as u64,
+        (b1 + 1) as u64,
+        0,
+    ));
+    assert(ghost_map_span(m.ghost_map(g1, gpa1, b1), g1, (gpa1 + PAGE_4K) as u64, (b1 + 1)
+        as u64, 0) == m.ghost_map(g1, gpa1, b1));
+    assert(ghost_map_span(m.ghost_map(g1, gpa1, b1), g2, gpa2, b2, 1) == ghost_map_span(
+        m.ghost_map(g1, gpa1, b1).ghost_map(g2, gpa2, b2),
+        g2,
+        (gpa2 + PAGE_4K) as u64,
+        (b2 + 1) as u64,
+        0,
+    ));
+    assert(ghost_map_span(
+        m.ghost_map(g1, gpa1, b1).ghost_map(g2, gpa2, b2),
+        g2,
+        (gpa2 + PAGE_4K) as u64,
+        (b2 + 1) as u64,
+        0,
+    ) == m.ghost_map(g1, gpa1, b1).ghost_map(g2, gpa2, b2));
+}
+
 pub proof fn lemma_2m_covers_512_frames()
     ensures
         page_size_bytes(GhostPageSize::TwoM) == PAGE_2M,
@@ -860,6 +1425,50 @@ pub proof fn lemma_4k_is_unit_large_page()
 {
 }
 
+pub proof fn lemma_2m_map_unmap_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        large_map_enabled(m, guest, gpa, base, GhostPageSize::TwoM),
+    ensures
+        exclusive_ownership(
+            ghost_large_unmap(
+                ghost_large_map(m, guest, gpa, base, GhostPageSize::TwoM),
+                guest,
+                gpa,
+                GhostPageSize::TwoM,
+            ),
+        ),
+{
+    theorem_large_page_map_unmap_exclusive(m, guest, gpa, base, GhostPageSize::TwoM);
+}
+
+pub proof fn lemma_1g_map_unmap_exclusive(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+)
+    requires
+        exclusive_ownership(m),
+        large_map_enabled(m, guest, gpa, base, GhostPageSize::OneG),
+    ensures
+        exclusive_ownership(
+            ghost_large_unmap(
+                ghost_large_map(m, guest, gpa, base, GhostPageSize::OneG),
+                guest,
+                gpa,
+                GhostPageSize::OneG,
+            ),
+        ),
+{
+    theorem_large_page_map_unmap_exclusive(m, guest, gpa, base, GhostPageSize::OneG);
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -874,3 +1483,5 @@ pub const M4_NGUEST_VERIFY_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-VERIFY-OK";
 pub const M4_LPAGE_OK_MARKER: &str = "RAYNU-V-M4-LPAGE-OK";
 /// M4.9: N-guest ghost↔exec refine (no `admit`).
 pub const M4_REFINE_OK_MARKER: &str = "RAYNU-V-M4-REFINE-OK";
+/// M5.7: large-page (2M/1G) L3 map/unmap exclusivity (no `admit`).
+pub const M5_LPAGE_VERIFY_OK_MARKER: &str = "RAYNU-V-M5-LPAGE-VERIFY-OK";

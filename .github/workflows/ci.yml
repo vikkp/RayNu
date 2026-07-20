@@ -219,6 +219,21 @@ jobs:
       - name: Verus large-page-spec smoke → RAYNU-V-M4-LPAGE-OK
         run: ./tools/verus-lpage-spec-smoke.sh
 
+  # M5.7: large-page L3 discharge (ADR-004 / ADR-006). Hard-fail.
+  verus-lpage-verify:
+    name: verus large-page-verify (M5.7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus large-page-verify smoke → RAYNU-V-M5-LPAGE-VERIFY-OK
+        run: ./tools/verus-lpage-verify-smoke.sh
+
   # M4.9: N-guest ghost↔exec refine. Hard-fail.
   verus-nguest-refine:
     name: verus N-guest-refine (M4.9)

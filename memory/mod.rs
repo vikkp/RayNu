@@ -21,6 +21,7 @@ pub mod m4_lpage_gate;
 pub mod m4_nguest_refine_gate;
 pub mod m4_nguest_spec_gate;
 pub mod m4_nguest_verify_gate;
+pub mod m5_lpage_verify_gate;
 pub mod verus_gate;
 
 pub use ept::{
@@ -34,6 +35,7 @@ pub use m4_lpage_gate::{run_m4_lpage_gate, M4_LPAGE_OK_MARKER};
 pub use m4_nguest_refine_gate::{run_m4_nguest_refine_gate, M4_REFINE_OK_MARKER};
 pub use m4_nguest_spec_gate::{run_m4_nguest_spec_gate, M4_NGUEST_SPEC_OK_MARKER};
 pub use m4_nguest_verify_gate::{run_m4_nguest_verify_gate, M4_NGUEST_VERIFY_OK_MARKER};
+pub use m5_lpage_verify_gate::{run_m5_lpage_verify_gate, M5_LPAGE_VERIFY_OK_MARKER};
 pub use ept_hw::{
     EptHwError, EptPageSize, M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER, M3_EPT2_OK_MARKER,
     M3_EPT3_OK_MARKER, PRECISE_BYTES, PRECISE_GIB, PRECISE_MIB, SECONDARY_ENABLE_EPT,
