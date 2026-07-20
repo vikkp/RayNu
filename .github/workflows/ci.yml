@@ -286,6 +286,19 @@ jobs:
       - name: M5.3 audit smoke → RAYNU-V-M5-AUDIT-OK
         run: ./tools/m5-audit-smoke.sh
 
+  # M5.4: SOX/ISO audit reports. Hard-fail.
+  m5-report:
+    name: M5.4 reports (REPORT-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M5.4 report smoke → RAYNU-V-M5-REPORT-OK
+        run: ./tools/m5-report-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)
