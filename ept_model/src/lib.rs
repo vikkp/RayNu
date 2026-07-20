@@ -1,4 +1,4 @@
-//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6–M4.7).
+//! Verus-verified ghost model for ADR-004 EPT exclusive ownership (M3.17–M3.18 / M4.6–M4.8).
 //!
 //! Host-only crate (`package.metadata.verus.verify = true`). Not linked into
 //! the UEFI binary. Under the frozen Verus pin, exclusivity lemmas for 4K
@@ -6,6 +6,8 @@
 //! refinement. M4.6 extends `MapUnmapStep` with an explicit `guest` field;
 //! M4.7 claims ADR-006 L3 for N-guest 4K map/unmap exclusivity
 //! (`theorem_n_guest_4k_map_unmap_exclusive` / `lemma_two_guests_map_distinct_frames_exclusive`).
+//! M4.8 adds 2M/1G leaf sizes and span predicates to the ghost *spec*
+//! (`GhostPageSize` / `large_map_enabled`); large-page L3 discharge remains M5.
 //!
 //! Markers:
 //! - M3.16 link: `RAYNU-V-M3-L3-LINK-OK`
@@ -13,6 +15,7 @@
 //! - M3.18 refine: `RAYNU-V-M3-L3-REFINE-OK` (via tools/verus-refine-smoke.sh)
 //! - M4.6 N-guest spec: `RAYNU-V-M4-NGUEST-SPEC-OK` (via tools/verus-nguest-spec-smoke.sh)
 //! - M4.7 N-guest L3: `RAYNU-V-M4-NGUEST-VERIFY-OK` (via tools/verus-nguest-verify-smoke.sh)
+//! - M4.8 large-page spec: `RAYNU-V-M4-LPAGE-OK` (via tools/verus-lpage-spec-smoke.sh)
 
 use vstd::prelude::*;
 
@@ -679,6 +682,119 @@ pub proof fn theorem_concrete_single_guest_4k_refine(
     }
 }
 
+// ---------------------------------------------------------------------------
+// M4.8 — large-page (2M/1G) ghost *spec* (ADR-004; may stay L2)
+//
+// Leaf sizes and span predicates live in the model so exclusivity posts can
+// talk about contiguous 4K-frame ranges. MapUnmapStep remains 4K-only;
+// large-page L3 discharge is M5 (`GAP: Large-page L3 discharge`).
+// ---------------------------------------------------------------------------
+
+/// 2 MiB page size (matches `EptPageSize::TwoMib` leaves).
+pub const PAGE_2M: u64 = 0x20_0000;
+
+/// 1 GiB page size (matches `EptPageSize::OneGib` leaves).
+pub const PAGE_1G: u64 = 0x4000_0000;
+
+/// Ghost EPT leaf size (4K / 2M / 1G).
+pub enum GhostPageSize {
+    FourK,
+    TwoM,
+    OneG,
+}
+
+pub open spec fn page_size_bytes(ps: GhostPageSize) -> u64 {
+    match ps {
+        GhostPageSize::FourK => PAGE_4K,
+        GhostPageSize::TwoM => PAGE_2M,
+        GhostPageSize::OneG => PAGE_1G,
+    }
+}
+
+/// Number of 4K frames covered by one leaf (`FrameId` = HPA / 4096).
+pub open spec fn frames_covered(ps: GhostPageSize) -> u64 {
+    match ps {
+        GhostPageSize::FourK => 1,
+        GhostPageSize::TwoM => 512,
+        GhostPageSize::OneG => 262144,
+    }
+}
+
+pub open spec fn page_aligned(ps: GhostPageSize, addr: u64) -> bool {
+    addr % page_size_bytes(ps) == 0
+}
+
+/// Base `FrameId` is aligned for a large leaf (HPA = base × 4096).
+pub open spec fn frame_base_aligned(ps: GhostPageSize, base: FrameId) -> bool {
+    match ps {
+        GhostPageSize::FourK => true,
+        GhostPageSize::TwoM => base % 512 == 0,
+        GhostPageSize::OneG => base % 262144 == 0,
+    }
+}
+
+pub open spec fn frame_in_large_span(base: FrameId, ps: GhostPageSize, f: FrameId) -> bool {
+    base <= f && f < base + frames_covered(ps)
+}
+
+/// Every 4K frame in the large-page span is free.
+pub open spec fn large_span_free(m: GhostEptMap, base: FrameId, ps: GhostPageSize) -> bool {
+    forall|f: FrameId|
+        #![auto]
+        frame_in_large_span(base, ps, f) ==> !m.owned.dom().contains(f)
+}
+
+/// Enabled predicate for a large-page map (spec only; not folded into `MapUnmapStep`).
+pub open spec fn large_map_enabled(
+    m: GhostEptMap,
+    guest: GuestId,
+    gpa: Gpa,
+    base: FrameId,
+    ps: GhostPageSize,
+) -> bool {
+    &&& guest != 0
+    &&& page_aligned(ps, gpa)
+    &&& frame_base_aligned(ps, base)
+    &&& large_span_free(m, base, ps)
+    &&& !m.by_gpa.dom().contains((guest, gpa))
+}
+
+/// Postcondition sketch: every 4K frame in the span is owned by `guest`.
+pub open spec fn large_map_post_owned(
+    m: GhostEptMap,
+    guest: GuestId,
+    base: FrameId,
+    ps: GhostPageSize,
+) -> bool {
+    forall|f: FrameId|
+        #![auto]
+        frame_in_large_span(base, ps, f) ==> m.owned.dom().contains(f) && m.owned[f] == guest
+}
+
+/// Trivial size facts for 2M / 1G leaves (spec scaffolding; exclusivity L3 → M5).
+pub proof fn lemma_2m_covers_512_frames()
+    ensures
+        page_size_bytes(GhostPageSize::TwoM) == PAGE_2M,
+        frames_covered(GhostPageSize::TwoM) == 512,
+        PAGE_2M == 512 * PAGE_4K,
+{
+}
+
+pub proof fn lemma_1g_covers_262144_frames()
+    ensures
+        page_size_bytes(GhostPageSize::OneG) == PAGE_1G,
+        frames_covered(GhostPageSize::OneG) == 262144,
+        PAGE_1G == 262144 * PAGE_4K,
+{
+}
+
+pub proof fn lemma_4k_is_unit_large_page()
+    ensures
+        frames_covered(GhostPageSize::FourK) == 1,
+        page_size_bytes(GhostPageSize::FourK) == PAGE_4K,
+{
+}
+
 } // verus!
 
 /// Exec-visible markers for host tests / smoke scripts.
@@ -689,3 +805,5 @@ pub const M3_L3_REFINE_OK_MARKER: &str = "RAYNU-V-M3-L3-REFINE-OK";
 pub const M4_NGUEST_SPEC_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-SPEC-OK";
 /// M4.7: ADR-006 L3 for N-guest 4K map/unmap exclusivity (no `admit`).
 pub const M4_NGUEST_VERIFY_OK_MARKER: &str = "RAYNU-V-M4-NGUEST-VERIFY-OK";
+/// M4.8: large-page (2M/1G) ghost *spec* (L3 discharge → M5).
+pub const M4_LPAGE_OK_MARKER: &str = "RAYNU-V-M4-LPAGE-OK";

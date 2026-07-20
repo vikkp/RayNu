@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M4.7 closed** — N-guest L3 verify → `RAYNU-V-M4-NGUEST-VERIFY-OK`. Active: **M4.8** (large-page ghost spec) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**M0 → M4.8 closed** — large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`. Active: **M4.9** (N-guest refine) — [docs/m4_plan.md](docs/m4_plan.md). Lived: [docs/progress.md](docs/progress.md).
 
 ## Repository Layout
 

@@ -1,7 +1,7 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.7 closed on Latitude (M4 exit criterion met for N-guest L3); next is **M4.8** (large-page spec).  
-**Prior:** M4.7 closed on Latitude (`RAYNU-V-M4-NGUEST-VERIFY-OK`).  
+**Status:** **open** — M4.8 closed on host; next is **M4.9** (N-guest refine).  
+**Prior:** M4.8 closed on host (`RAYNU-V-M4-LPAGE-OK`).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -204,20 +204,24 @@ May start once **M4.0** (preferably **M4.2**) is green. Must complete before **M
 
 ### M4.8 — Large-page (2M/1G) in ghost spec — `RAYNU-V-M4-LPAGE-OK`
 
-**Status: open** ← next (host-first)
+**Status: closed** (host `./tools/verus-lpage-spec-smoke.sh` → `RAYNU-V-M4-LPAGE-OK`)
 
 **Goal:** Large pages in the **ghost spec** (ADR-004: may stay L2). Proof attempt deferred to **M5**.
 
-**Acceptance sketch:**
+**Shipped / wiring:**
 
-1. Spec + Kani/runtime hooks as appropriate; marker `RAYNU-V-M4-LPAGE-OK`.
-2. Document GAP for L3 large-page discharge → M5.
+1. `GhostPageSize` / `PAGE_2M` / `PAGE_1G` / `frames_covered` / `large_map_enabled` / `large_map_post_owned` in `ept_model`.
+2. Closed `TODO(M4.8)` in `ept_spec.rs`; `GAP(CLOSED M4.8)` in `ept_proof.rs`; open `GAP: Large-page L3 discharge` → M5.
+3. Host gate `memory/m4_lpage_gate.rs` (span exclusivity + 2 MiB range overlap) + CI `verus-lpage-spec`.
+4. Size lemmas (`lemma_2m_covers_512_frames`, `lemma_1g_covers_262144_frames`) discharged; exclusivity across large map/unmap remains M5.
 
-**Likely files:** `ept_model/`, `memory/ept_spec.rs`, `memory/ept_proof.rs`.
+**Acceptance (met):** Host smoke + gate → `RAYNU-V-M4-LPAGE-OK` (`29 verified, 0 errors`). Does **not** claim large-page L3 (M5).
+
+**Files:** `ept_model/src/lib.rs`, `memory/ept_spec.rs`, `memory/ept_proof.rs`, `memory/m4_lpage_gate.rs`, `tools/verus-lpage-spec-smoke.sh`, `.github/workflows/ci.yml`.
 
 ### M4.9 — N-guest ghost↔exec refine — `RAYNU-V-M4-REFINE-OK`
 
-**Status: open** (host-first)
+**Status: open** ← next (host-first)
 
 **Goal:** Refine multi-guest exec registry / allocator coupling under `abs` / `refines` (extend M3.18 pattern).
 
@@ -276,4 +280,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.7 closed** on Latitude (`RAYNU-V-M4-NGUEST-VERIFY-OK`). N-guest L3 exit criterion met. Next: **M4.8** large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`.
+**M4.8 closed** on host (`RAYNU-V-M4-LPAGE-OK`). Next: **M4.9** N-guest ghost↔exec refine → `RAYNU-V-M4-REFINE-OK`.

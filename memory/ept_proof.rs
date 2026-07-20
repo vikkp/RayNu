@@ -30,7 +30,8 @@
 //! GAP(CLOSED M3.18): Ghost model refined against concrete ownership view of `EptMap`
 //! GAP(CLOSED M4.6): N concurrent guests in ghost model (spec OK; marker RAYNU-V-M4-NGUEST-SPEC-OK)
 //! GAP(CLOSED M4.7): N-guest L3 discharge / ADR-006 claim (marker RAYNU-V-M4-NGUEST-VERIFY-OK)
-//! GAP: Large pages (2M/1G) in ghost model and proof (M4.8 / M5)
+//! GAP(CLOSED M4.8): Large pages (2M/1G) in ghost model (spec OK; marker RAYNU-V-M4-LPAGE-OK)
+//! GAP: Large-page L3 discharge (M5)
 //! GAP: EPT violation handler preserves exclusivity
 //! GAP: Live migration page transfer (M6)
 //! GAP: Hardware EPT PTE correspondence (`ept_hw` identity builder)
@@ -149,6 +150,11 @@
 //! // ---- lemma: two distinct guests map distinct frames (M4.7 ≥2-guest post) ----
 //! proof fn lemma_two_guests_map_distinct_frames_exclusive(...)
 //! { /* discharged in ept_model (M4.7) */ }
+//!
+//! // ---- M4.8: large-page ghost *spec* (L3 → M5) ----
+//! // GhostPageSize::{FourK,TwoM,OneG}, frames_covered, large_map_enabled,
+//! // large_map_post_owned, lemma_2m_covers_512_frames / lemma_1g_covers_262144_frames
+//! // live in ept_model. Exclusivity preservation across large map/unmap is M5.
 //! ```
 //!
 //! # Predicate glossary

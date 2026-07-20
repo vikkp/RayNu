@@ -58,6 +58,17 @@
 //!   `theorem_n_guest_4k_map_unmap_exclusive` in `ept_model` → `RAYNU-V-M4-NGUEST-SPEC-OK`.
 //! TODO(M4.7 CLOSED): ADR-006 L3 for N-guest 4K map/unmap — no `admit` →
 //!   `RAYNU-V-M4-NGUEST-VERIFY-OK` (`lemma_two_guests_map_distinct_frames_exclusive`).
-//! TODO(M4.8): large pages (2M/1G) in ghost model.
+//! TODO(M4.8 CLOSED): large pages (2M/1G) in ghost *spec* — `GhostPageSize` /
+//!   `large_map_enabled` / `frames_covered` in `ept_model` → `RAYNU-V-M4-LPAGE-OK`.
+//!   Large-page L3 discharge remains M5.
+//!
+//! # Large-page map (M4.8 — L2 spec)
+//!
+//! A 2M/1G leaf at aligned `(guest, gpa)` with base `FrameId` `base` covers
+//! frames `[base, base + frames_covered(ps))`. Enabled when the span is free
+//! (`large_span_free`) and GPA/base are leaf-aligned. On Ok, every frame in the
+//! span is exclusively owned by `guest` (`large_map_post_owned`). Live `EptMap`
+//! remains per-4K; HW large leaves are built by `ept_hw` (M3.20). L3 for these
+//! posts is M5.
 
 #![allow(dead_code)]

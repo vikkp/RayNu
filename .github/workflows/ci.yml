@@ -204,6 +204,21 @@ jobs:
       - name: Verus N-guest-verify smoke → RAYNU-V-M4-NGUEST-VERIFY-OK
         run: ./tools/verus-nguest-verify-smoke.sh
 
+  # M4.8: large-page (2M/1G) ghost *spec* (L3 discharge → M5). Hard-fail.
+  verus-lpage-spec:
+    name: verus large-page-spec (M4.8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Install unzip (Verus release zip)
+        run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip
+      - name: Verus large-page-spec smoke → RAYNU-V-M4-LPAGE-OK
+        run: ./tools/verus-lpage-spec-smoke.sh
+
   # M3.21: hard-fail Kani on M2.6 harnesses (lib-only; pinned in kani-version.toml).
   kani:
     name: kani (M3.21 hard-fail)

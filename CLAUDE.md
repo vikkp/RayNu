@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M4.7 closed** (N-guest L3 verify → `RAYNU-V-M4-NGUEST-VERIFY-OK`). Active: **M4.8** (large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
+**Through M4.8 closed** (large-page ghost spec → `RAYNU-V-M4-LPAGE-OK`). Active: **M4.9** (N-guest refine → `RAYNU-V-M4-REFINE-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
 
 ### Risk Hotspots
 

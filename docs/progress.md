@@ -48,8 +48,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M4.5 | `RAYNU-V-M4-SMP-OK` | Dual-vCPU BSP+AP shared EPT; host AP wake (Latitude) |
 | M4.6 | `RAYNU-V-M4-NGUEST-SPEC-OK` | N-guest exclusivity in ghost model (host) |
 | M4.7 | `RAYNU-V-M4-NGUEST-VERIFY-OK` | True L3 N-guest verify; ADR-006 claim (CI + Latitude; M4 exit) |
+| M4.8 | `RAYNU-V-M4-LPAGE-OK` | Large-page (2M/1G) ghost *spec* (host; L3 → M5) |
 
-## Verification checkpoint (as of M4.7)
+## Verification checkpoint (as of M4.8)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -75,9 +76,10 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
 | `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
 | `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
-| Verus proofs (`ept_model`) | **L3** (scoped) | Exclusivity (M3.17) + refine (M3.18) + N-guest L3 (M4.7); no `admit`; large-page → M4.8/M5 |
+| Verus proofs (`ept_model`) | **L3** (scoped) + L2 large-page | 4K exclusivity/refine/N-guest L3; large-page *spec* (M4.8); large-page L3 → M5 |
 | `memory/m4_nguest_spec_gate` | L0 | Host artifact gate for N-guest ghost exclusivity (M4.6) |
 | `memory/m4_nguest_verify_gate` | L0 | Host artifact gate for N-guest ADR-006 L3 (M4.7) |
+| `memory/m4_lpage_gate` | L0 | Host artifact gate for large-page ghost *spec* (M4.8) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | Kani in CI | Hard-fail (M3.21) | Pin `0.67.0`; `./tools/kani-smoke.sh` → `RAYNU-V-M3-KANI-OK` |
 
@@ -88,6 +90,5 @@ Prior track: [m3_post_shell_plan.md](m3_post_shell_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| **M4.8** ← next | `RAYNU-V-M4-LPAGE-OK` | Large-page in ghost spec (proof → M5) |
-| M4.9 | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
+| **M4.9** ← next | `RAYNU-V-M4-REFINE-OK` | N-guest ghost↔exec refine |
 | M5 | — | Operationally viable (see CLAUDE.md) |

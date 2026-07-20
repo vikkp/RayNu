@@ -3,7 +3,7 @@
 //! Pillar: [V]
 //! Proven Core: **inside** (ADR-002, ADR-004)
 //! VERIFICATION: L2 live EptMap (M2.6); ghost L3 + refine (M3.17–M3.18) in `ept_model`;
-//! N-guest L3 exclusivity (M4.6–M4.7); N-guest refine is M4.9
+//! N-guest L3 (M4.6–M4.7); large-page ghost *spec* (M4.8); N-guest refine is M4.9
 
 pub mod boot_alloc;
 pub mod ept;
@@ -17,6 +17,7 @@ pub mod l3_link_gate;
 pub mod l3_refine_gate;
 pub mod l3_verify_gate;
 pub mod m4_2vm_gate;
+pub mod m4_lpage_gate;
 pub mod m4_nguest_spec_gate;
 pub mod m4_nguest_verify_gate;
 pub mod verus_gate;
@@ -28,6 +29,7 @@ pub use ept::{
     M4_GUEST2_ID, M4_GUEST3_ID, M4_NVM_OK_MARKER, M4_SHELL_G1_MARKER,
 };
 pub use m4_2vm_gate::run_m4_2vm_gate;
+pub use m4_lpage_gate::{run_m4_lpage_gate, M4_LPAGE_OK_MARKER};
 pub use m4_nguest_spec_gate::{run_m4_nguest_spec_gate, M4_NGUEST_SPEC_OK_MARKER};
 pub use m4_nguest_verify_gate::{run_m4_nguest_verify_gate, M4_NGUEST_VERIFY_OK_MARKER};
 pub use ept_hw::{

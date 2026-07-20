@@ -54,7 +54,8 @@ pub fn ept_spec_closes_n_guest_todo() -> bool {
     let spec = include_str!("ept_spec.rs");
     let proof = include_str!("ept_proof.rs");
     spec.contains("TODO(M4.6 CLOSED): N guests in ghost model")
-        && spec.contains("TODO(M4.8): large pages")
+        && (spec.contains("TODO(M4.8): large pages")
+            || spec.contains("TODO(M4.8 CLOSED): large pages"))
         && !spec.contains("TODO(M4): N guests + large pages")
         && proof.contains("GAP(CLOSED M4.6): N concurrent guests")
         && (proof.contains("GAP: N-guest L3 discharge")

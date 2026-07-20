@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.7 closed: multi-guest + virtio I/O + SMP + N-guest L3 exclusivity."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M4.8 closed: multi-guest + virtio I/O + SMP + N-guest L3 + large-page ghost spec."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.7 closed — multi-guest, virtio I/O, SMP, N-guest L3. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M4.8 closed — multi-guest, virtio I/O, SMP, N-guest L3, large-page spec. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,22 +60,22 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M4.7 closed.</h2>
+          <h2 class="section__title">M0 → M4.8 closed.</h2>
           <p class="section__lede">
-            Multi-guest under EPT, virtio I/O and SMP probes, then true L3
-            N-guest exclusivity in the Verus ghost model — latched by
-            <code>RAYNU-V-M4-NGUEST-VERIFY-OK</code> on host.
-            Next: large-page ghost spec (M4.8).
+            Multi-guest under EPT, virtio I/O and SMP, N-guest L3 exclusivity,
+            then 2M/1G leaf sizes in the Verus ghost *spec* — latched by
+            <code>RAYNU-V-M4-LPAGE-OK</code> on host.
+            Next: N-guest ghost↔exec refine (M4.9).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-NGUEST-SPEC-OK
-RAYNU-V-M4-NGUEST-VERIFY-OK
-==> Verus N-guest L3-verify smoke PASSED (M4.7)</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M4-NGUEST-VERIFY-OK
+RAYNU-V-M4-LPAGE-OK
+==> Verus large-page-spec smoke PASSED (M4.8)</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M4.7: how we got here</h2>
+          <h2 class="section__title">M1.0 → M4.8: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -257,6 +257,13 @@ RAYNU-V-M4-NGUEST-VERIFY-OK
                     <code>RAYNU-V-M4-NGUEST-VERIFY-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M4.8</span>
+                  <span class="journey__text"
+                    >Large-page (2M/1G) ghost spec →
+                    <code>RAYNU-V-M4-LPAGE-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -364,7 +371,7 @@ RAYNU-V-M4-NGUEST-VERIFY-OK
           <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit
 ./tools/qemu-boot-test.sh       # M0 → M4.5
-./tools/verus-nguest-verify-smoke.sh  # M4.7 → RAYNU-V-M4-NGUEST-VERIFY-OK
+./tools/verus-lpage-spec-smoke.sh   # M4.8 → RAYNU-V-M4-LPAGE-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -377,8 +384,8 @@ RAYNU-V-M4-NGUEST-VERIFY-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            Track C through M4.7 is closed (N-guest L3); next is
-            <strong>M4.8</strong> (large-page ghost spec).
+            Track C through M4.8 is closed; next is
+            <strong>M4.9</strong> (N-guest ghost↔exec refine).
           </p>
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
