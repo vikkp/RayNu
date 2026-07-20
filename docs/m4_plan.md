@@ -1,6 +1,6 @@
 # M4 Plan — Usable VM Platform
 
-**Status:** **open** — M4.1 closed on Latitude; **M4.2 in progress**.  
+**Status:** **open** — M4.2 closed on Latitude; next platform gate is **M4.3** (virtio-blk).  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M4 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m3_post_shell_plan.md](m3_post_shell_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md)
 
@@ -94,7 +94,7 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.2 — Scale gate: 4+ concurrent shells — `RAYNU-V-M4-NVM-OK`
 
-**Status: in progress** (branch `cursor/m4-2-nvm-a623`)
+**Status: closed** (Latitude `Boot gate PASSED (M0 → M4.2)`)
 
 **Goal:** **4+** concurrent guests to shell under EPT — roadmap “4+ VMs” gate. MV: G0 real Linux SHELL + G1–G3 SHELL-CPUID guests (distinct EPT ownership), credit-scheduled.
 
@@ -105,7 +105,7 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 3. Markers `SLICE-G0`…`G3` → `SCHED-OK` (G0+G1) → `RAYNU-V-M4-NVM-OK` (all four).
 4. Host gate `sched/m4_nvm_gate.rs`; qemu pass line `M0 → M4.2`.
 
-**Acceptance:** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.2)` with 2VM + SCHED + NVM markers.
+**Acceptance (met):** Latitude `./tools/qemu-boot-test.sh` → `Boot gate PASSED (M0 → M4.2)` with 2VM + SCHED + NVM markers.
 
 **Files:** `memory/ept.rs`, `vmx/launch.rs`, `src/main.rs`, `sched/m4_nvm_gate.rs`, `tools/qemu-boot-test.sh`.
 
@@ -115,7 +115,7 @@ Each = branch `cursor/m4-N-…-a623`, marker `RAYNU-V-M4-*-OK`, Latitude and/or 
 
 ### M4.3 — Virtio-blk (guest disk) — `RAYNU-V-M4-BLK-OK`
 
-**Status: open**
+**Status: open** ← next
 
 **Goal:** Guest root or data disk via Virtio-blk (or documented equivalent); guest can read/write without host COM1 crutches.
 
@@ -263,4 +263,4 @@ Optional / slip-ok with docs: `RAYNU-V-M4-SMP-OK`, `RAYNU-V-M4-LPAGE-OK`, `RAYNU
 
 ## First action
 
-**M4.2** is open on `cursor/m4-2-nvm-a623` — close on Latitude when `RAYNU-V-M4-NVM-OK` latches.
+**M4.2 closed** on Latitude (`RAYNU-V-M4-NVM-OK`). Multi-guest spine is real — Track B (**M4.3** virtio-blk) and Track C proof may proceed. Next: **M4.3** on branch `cursor/m4-3-blk-a623`.

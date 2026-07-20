@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M4.1 closed** (sched → `RAYNU-V-M4-SCHED-OK`). Active: **M4.2** (4+ VMs → `RAYNU-V-M4-NVM-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
+**Through M4.2 closed** (4+ VMs → `RAYNU-V-M4-NVM-OK`). Active: **M4.3** (virtio-blk → `RAYNU-V-M4-BLK-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m4_plan.md](docs/m4_plan.md) (prior: [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md)).
 
 ### Risk Hotspots
 
