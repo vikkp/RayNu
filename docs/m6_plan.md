@@ -1,6 +1,6 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.5 closed on Latitude; next **M6.6** HA.  
+**Status:** **open** — M6.6 wired (host); Latitude smoke pending close. Next after close: **M6.7** fault.  
 **Prior:** M6.5 closed on Latitude (`RAYNU-V-M6-PDF-OK`); M6.4–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
@@ -197,7 +197,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.6 — HA / security harden — `RAYNU-V-M6-HA-OK`
 
-**Status: open** (host-first; iron optional)
+**Status: wired** (host gate; Latitude `./tools/m6-ha-smoke.sh` pending close)
 
 **Goal:** Production hardening bar from CLAUDE.md M6 row: HA posture and security hardening that operators can exercise (restart/failover story, privilege boundaries, safe defaults). Scope must stay concrete enough for a smoke/gate — not a vague “secure everything.”
 
@@ -207,7 +207,13 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Security harden checklist encoded as gate checks (e.g. auth required, audit on privileged ops, no debug stubs in release path).
 3. Marker `RAYNU-V-M6-HA-OK`.
 
-**Likely files:** `mgmt/`, `audit/`, runbooks under `docs/`, gate + smoke.
+**Delivered (host-first):**
+
+1. `HaPair` primary↔standby mock; `failover_to_standby` / reverse; survivors restart via `VmTable::start`.
+2. `dispatch_ha_rest` (`GET /ha`, `POST /ha/failover`) behind `BRINGUP_AUTH_TOKEN`.
+3. Audit `HaFailoverStarted` / `HaFailoverCompleted`; `prop_security_harden_checklist`.
+4. Host gate `mgmt/m6_ha_gate.rs` + `tools/m6-ha-smoke.sh` + CI `m6-ha` + `docs/runbooks/ha.md`.
+5. `GAP(CLOSED M6.6): HA / security harden`.
 
 ---
 
@@ -308,4 +314,5 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.5 closed** on Latitude (`RAYNU-V-M6-PDF-OK`). Next: **M6.6** (`RAYNU-V-M6-HA-OK`) — HA / security harden.
+**M6.6 wired** (host gate). Close on Latitude via `./tools/m6-ha-smoke.sh` →
+`RAYNU-V-M6-HA-OK`, then **M6.7** (`RAYNU-V-M6-FAULT-OK`).
