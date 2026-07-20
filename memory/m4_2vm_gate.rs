@@ -13,6 +13,7 @@ pub fn private_slab_ept_present() -> bool {
     s.contains("fn build_single_2m_identity")
         && s.contains("fn clear_2m_identity_leaf")
         && s.contains("fn write_guest_shell_cpuid_page")
+        && s.contains("fn write_guest_identity_2m_tables")
         && s.contains("frames_required_single_2m")
 }
 
@@ -31,9 +32,11 @@ pub fn second_guest_launch_present() -> bool {
     let main = include_str!("../src/main.rs");
     launch.contains("set_second_guest")
         && launch.contains("try_launch_second_guest")
+        && launch.contains("guest_cr3_phys")
         && launch.contains(M4_2VM_OK_MARKER)
         && main.contains("set_second_guest")
         && main.contains("build_single_2m_identity")
+        && main.contains("write_guest_identity_2m_tables")
 }
 
 /// True when the QEMU boot gate requires M4.0.

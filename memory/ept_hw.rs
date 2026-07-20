@@ -401,6 +401,44 @@ pub unsafe fn write_guest_shell_cpuid_page(page_phys: u64) {
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
 }
 
+/// Offsets within the M4.0 G1 2 MiB slab (code/stack/IDT/page tables).
+pub const G1_SLAB_OFF_CODE: u64 = 0;
+pub const G1_SLAB_OFF_STACK: u64 = 0x1000;
+pub const G1_SLAB_OFF_IDT: u64 = 0x2000;
+pub const G1_SLAB_OFF_PML4: u64 = 0x3000;
+pub const G1_SLAB_OFF_PDPT: u64 = 0x4000;
+pub const G1_SLAB_OFF_PD: u64 = 0x5000;
+
+/// Build long-mode guest page tables in the G1 slab: one 2 MiB identity map
+/// at `slab_base` (VA == GPA). Returns guest CR3 (PML4 HPA/GPA).
+///
+/// Required because G1's EPT only maps this slab — sharing the host CR3 would
+/// EPT-fault on page-table walks into low memory.
+///
+/// SAFETY: `slab_base` is a writable identity-mapped 2 MiB region; offsets
+/// [`G1_SLAB_OFF_PML4`].. are free for tables.
+pub unsafe fn write_guest_identity_2m_tables(slab_base: u64) -> u64 {
+    debug_assert_eq!(slab_base & (TWO_MIB - 1), 0);
+    let pml4 = slab_base + G1_SLAB_OFF_PML4;
+    let pdpt = slab_base + G1_SLAB_OFF_PDPT;
+    let pd = slab_base + G1_SLAB_OFF_PD;
+    core::ptr::write_bytes(pml4 as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pdpt as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pd as *mut u8, 0, 4096);
+
+    // Present | Writable (supervisor). NX clear on the 2M leaf so code fetches.
+    let present_rw: u64 = 0b011;
+    let leaf_2m: u64 = present_rw | (1 << 7) | (slab_base & !0x1f_ffff);
+
+    let pml4_i = ((slab_base >> 39) & 0x1ff) as usize;
+    let pdpt_i = ((slab_base >> 30) & 0x1ff) as usize;
+    let pd_i = ((slab_base >> 21) & 0x1ff) as usize;
+    core::ptr::write_volatile((pml4 as *mut u64).add(pml4_i), pdpt | present_rw);
+    core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i), pd | present_rw);
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i), leaf_2m);
+    pml4
+}
+
 /// Legacy `[0, 4 GiB)` identity (kept for host tests / rollback).
 ///
 /// SAFETY: see [`build_identity_gib`].

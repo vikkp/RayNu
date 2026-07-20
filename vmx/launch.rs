@@ -184,6 +184,9 @@ pub struct LaunchFrames {
     pub guest_code_phys: u64,
     /// Guest IDT page (one interrupt gate for the inject vector).
     pub guest_idt_phys: u64,
+    /// Guest CR3 override (`None` = share host CR3 — G0 bring-up).
+    /// G1 must supply slab-local tables (private EPT cannot walk host PTs).
+    pub guest_cr3_phys: Option<u64>,
     /// Optional MSR bitmap (only if primary controls force USE_MSR_BITMAPS).
     pub msr_bitmap_phys: Option<u64>,
     pub io_bitmap_a_phys: Option<u64>,
@@ -520,7 +523,9 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     let cr0 = cpu::read_cr0();
-    let cr3 = cpu::read_cr3();
+    let cr3 = frames
+        .guest_cr3_phys
+        .unwrap_or_else(|| cpu::read_cr3());
     let cr4 = cpu::read_cr4();
     let efer = cpu::rdmsr(IA32_EFER);
     let pat = cpu::rdmsr(IA32_PAT);
@@ -1008,6 +1013,8 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
     if !(lapic_virt::APIC_GPA..lapic_virt::APIC_GPA + 0x1000).contains(&gpa) {
         serial::write_str("boot: ERROR — EPT violation GPA=0x");
         write_hex_u64(gpa);
+        serial::write_str(" guest_id=");
+        write_hex_u64(ACTIVE_GUEST_ID);
         serial::write_byte(b'\n');
         dump_linux_guest_state();
         finish_boot(false);

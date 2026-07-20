@@ -419,18 +419,24 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             return;
         }
     };
-    let g1_code = g1_base;
-    let g1_stack = g1_base + 0x1000;
-    let g1_idt = g1_base + 0x2000;
+    let g1_code = g1_base + memory::ept_hw::G1_SLAB_OFF_CODE;
+    let g1_stack = g1_base + memory::ept_hw::G1_SLAB_OFF_STACK;
+    let g1_idt = g1_base + memory::ept_hw::G1_SLAB_OFF_IDT;
     // SAFETY: pages inside G1 slab; host identity still maps them for setup.
-    unsafe {
+    let g1_cr3 = unsafe {
         memory::ept_hw::write_guest_shell_cpuid_page(g1_code);
         if !arch::cpu::clear_nx_identity(g1_code) {
             boot::serial::write_line("boot: ERROR — could not clear NX on G1 code");
             let _ = life.disable();
             return;
         }
-    }
+        // Slab-local guest page tables (VA==GPA for the 2MiB). Private EPT
+        // cannot walk the host CR3 into low memory.
+        memory::ept_hw::write_guest_identity_2m_tables(g1_base)
+    };
+    boot::serial::write_str("boot: M4.0 G1 guest CR3=0x");
+    write_hex(g1_cr3);
+    boot::serial::write_byte(b'\n');
     audit::integrity::record_event(audit::AuditEvent::EptMapped {
         guest_id: memory::M4_GUEST1_ID,
         gpa: g1_code,
@@ -469,11 +475,12 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp: g1_eptp,
         guest_code_phys: g1_code,
         guest_idt_phys: g1_idt,
+        guest_cr3_phys: Some(g1_cr3),
         msr_bitmap_phys: g1_msr,
         io_bitmap_a_phys: g1_io_a,
         io_bitmap_b_phys: g1_io_b,
     });
-    boot::serial::write_line("boot: M4.0 G1 prepared (private EPT + SHELL CPUID page)");
+    boot::serial::write_line("boot: M4.0 G1 prepared (private EPT + slab CR3 + SHELL CPUID)");
 
     let Some(vmcs) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for VMCS");
@@ -508,6 +515,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp,
         guest_code_phys: guest_code,
         guest_idt_phys: guest_idt,
+        guest_cr3_phys: None,
         msr_bitmap_phys: msr_bitmap,
         io_bitmap_a_phys: io_a,
         io_bitmap_b_phys: io_b,
