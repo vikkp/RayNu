@@ -23,6 +23,8 @@ pub struct VSwitch {
     fdb_port: [u16; FDB_CAP],
     fdb_len: usize,
     ports: u16,
+    /// M6.7: when true, unicast delivery is dropped (network partition mock).
+    partitioned: bool,
 }
 
 impl VSwitch {
@@ -33,7 +35,17 @@ impl VSwitch {
             fdb_port: [u16::MAX; FDB_CAP],
             fdb_len: 0,
             ports,
+            partitioned: false,
         }
+    }
+
+    /// Arm / clear the M6.7 network-partition latch.
+    pub fn set_partitioned(&mut self, on: bool) {
+        self.partitioned = on;
+    }
+
+    pub fn is_partitioned(&self) -> bool {
+        self.partitioned
     }
 
     pub fn port_count(&self) -> u16 {
@@ -94,6 +106,11 @@ impl VSwitch {
         dst.copy_from_slice(&frame[0..6]);
         src.copy_from_slice(&frame[6..12]);
         self.learn(src, src_port);
+
+        // M6.7: partition drops delivery (still learns; attach checks still apply).
+        if self.partitioned {
+            return Ok(None);
+        }
 
         // Broadcast / multicast → flood (return None; caller may skip for MV).
         if dst[0] & 1 != 0 {

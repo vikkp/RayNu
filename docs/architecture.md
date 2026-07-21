@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
-**Next M6.7:** Fault injection → `RAYNU-V-M6-FAULT-OK` — [m6_plan.md](m6_plan.md) / [progress.md](progress.md). M6.6 closed on Latitude (`RAYNU-V-M6-HA-OK`).
+**Next M6.8:** 72-hr soak → `RAYNU-V-M6-SOAK-OK` — [m6_plan.md](m6_plan.md) / [progress.md](progress.md). M6.7 closed on Latitude (`RAYNU-V-M6-FAULT-OK`).

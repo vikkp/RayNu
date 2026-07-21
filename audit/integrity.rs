@@ -61,6 +61,12 @@ pub enum AuditEvent {
     HaFailoverStarted { from_role: u8, to_role: u8 },
     /// Mock HA failover completed with transferred guest count (M6.6).
     HaFailoverCompleted { guest_count: u32 },
+    /// Fault injected (M6.7); kind: 0=KillVcpu,1=CorruptPage,2=DropIrq,3=NetPartition.
+    FaultInjected { kind: u8, detail: u64 },
+    /// Fault recovered (M6.7).
+    FaultRecovered { kind: u8, detail: u64 },
+    /// Fault denied / fail-closed path taken (M6.7).
+    FaultFailClosed { kind: u8, detail: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -222,6 +228,9 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::AuthDenied { .. } => 17,
         AuditEvent::HaFailoverStarted { .. } => 18,
         AuditEvent::HaFailoverCompleted { .. } => 19,
+        AuditEvent::FaultInjected { .. } => 20,
+        AuditEvent::FaultRecovered { .. } => 21,
+        AuditEvent::FaultFailClosed { .. } => 22,
     }
 }
 

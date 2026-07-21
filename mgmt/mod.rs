@@ -9,6 +9,7 @@
 //! M5.2: embedded Web UI SPA (`webui`, PE `.aswebui`) drives list/start/stop.
 //! M6.4: REST auth with bring-up mock token (`m6_auth_gate`).
 //! M6.6: mock HA primary↔standby failover + harden checklist (`ha`, `m6_ha_gate`).
+//! M6.7: fault injection suite (`fault`, `m6_fault_gate`).
 //! Bring-up in `src/main.rs` remains the live VMLAUNCH path; this module is the
 //! management-plane state machine those ops drive.
 
@@ -232,11 +233,13 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 }
 
 pub mod api;
+pub mod fault;
 pub mod ha;
 pub mod m5_api_gate;
 pub mod m5_life_gate;
 pub mod m5_webui_gate;
 pub mod m6_auth_gate;
+pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod webui;
 
@@ -244,6 +247,10 @@ pub use api::{
     dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_auth_deny_allow,
     prop_cli_rest_roundtrip, ApiReply, CliCommand, RestMethod, RestRequest, RestResponse,
     AUTH_GAP_NOTE, BRINGUP_AUTH_TOKEN, M6_AUTH_OK_MARKER,
+};
+pub use fault::{
+    prop_corrupt_page_fail_closed, prop_drop_irq_fail_closed, prop_fault_suite,
+    prop_kill_vcpu_recover, prop_net_partition_recover, FAULT_GAP_NOTE, M6_FAULT_OK_MARKER,
 };
 pub use ha::{
     dispatch_ha_rest, prop_ha_failover_restart, prop_security_harden_checklist, HaPair, HaRole,
@@ -253,6 +260,7 @@ pub use m5_api_gate::run_m5_api_gate;
 pub use m5_life_gate::run_m5_life_gate;
 pub use m5_webui_gate::run_m5_webui_gate;
 pub use m6_auth_gate::{run_m6_auth_gate, M6_AUTH_GATE_MARKER};
+pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use webui::{
     dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction,

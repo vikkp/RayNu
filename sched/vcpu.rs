@@ -57,6 +57,20 @@ impl Vcpu {
         debug_assert_eq!(self.state, VcpuState::Running);
         self.state = VcpuState::Halted;
     }
+
+    /// Kill / tear down a live vCPU (M6.7 fault injection).
+    ///
+    /// INVARIANTS: Pre Runnable|Running|Halted; Post TornDown.
+    /// Created or already TornDown → Err (fail-closed).
+    pub fn tear_down(&mut self) -> Result<(), ()> {
+        match self.state {
+            VcpuState::Runnable | VcpuState::Running | VcpuState::Halted => {
+                self.state = VcpuState::TornDown;
+                Ok(())
+            }
+            VcpuState::Created | VcpuState::TornDown => Err(()),
+        }
+    }
 }
 
 #[cfg(test)]
