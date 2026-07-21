@@ -1,19 +1,19 @@
 ---
 hda_version: 1
-last_updated: 2026-07-20
-last_commit: PENDING
-last_commit_short: PENDING
-updated_by: bootstrap
+last_updated: 2026-07-21
+last_commit: 8f091fdc415db479dd71973fc0c561c8ae53a176
+last_commit_short: 8f091fd
+updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO + production bar (M6.9)"
-months_to_everest: 4.5
+months_to_everest: 4.0
 months_to_everest_prev: 4.5
-velocity_commits_30d: 0
-velocity_gates_30d: 0
-overall_pct: 28
+velocity_commits_30d: 323
+velocity_gates_30d: 10
+overall_pct: 39
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
-everest_eta_month: "2026-12"
+everest_eta_month: "2026-11"
 ---
 
 # Honest Distance Assessment (HDA)
@@ -31,20 +31,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plans: [`m6_plan.md`](
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **28%** | — (baseline) |
-| **Months to Mount Everest** | **4.5** | — (baseline) |
-| **ETA month** | **2026-12** | — |
+| **Overall product readiness** | **39%** | +11 (E6 + P0-9) |
+| **Months to Mount Everest** | **4.0** | −0.5 (M6.9 / E6 closed) |
+| **ETA month** | **2026-11** | pulled from 2026-12 |
 | **Confidence** | medium | iron + ISO path unproven |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
 | **Ship EFI artifact** | ~85% | build/size exist; release kit thin |
 | **Real R640 boot** | ~25% | Latitude/QEMU ≠ R640 |
 | **vSphere-like UI (network)** | ~12% | demo SPA; no TCP/HTTP stack |
 | **Deploy Linux ISO** | ~8% | bzImage/initrd only; no ISO/CD-ROM |
-| **Production bar (M6.8–M6.9)** | ~70% | M6.8 soak closed; M6.9 open |
+| **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ████████████░░░░░░░░  4.5 mo   (baseline 4.5)
-Overall %          ██████░░░░░░░░░░░░░░  28%
+Months to Everest  ████████░░░░░░░░░░░░  4.0 mo   (was 4.5)
+Overall %          ████████░░░░░░░░░░░░  39%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -129,25 +129,25 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 
 | Month | Calendar | Planned focus | Exit criteria | Status |
 |-------|----------|---------------|---------------|--------|
-| M+0 | 2026-07 | HDA bootstrap; M6.9 prep; EFI release kit sketch | HDA live; next gate clear | **IN PROGRESS** |
+| M+0 | 2026-07 | HDA live; **M6 closed** (EXT); EFI release kit sketch | Numbered M6 bar met; next = Everest P0 | **DONE (M6)** / E1 kit open |
 | M+1 | 2026-08 | **R640 first light** + EFI ship kit | E1 mostly; E2 serial/VMX on R640 | PLANNED |
 | M+2 | 2026-09 | Datastore + HTTPS mgmt plane | E3 browser reaches UI | PLANNED |
 | M+3 | 2026-10 | ISO/CD-ROM or extract path + virtio disk install | E5 MVP one distro | PLANNED |
-| M+4 | 2026-11 | UI wizard polish + console/log; harden | E4 MVP | PLANNED |
-| M+5 | 2026-12 | M6.9 external + soak on R640; Everest declaration | **E1–E6 all green** | **ETA (baseline)** |
+| M+4 | 2026-11 | UI wizard polish + console/log; R640 soak; Everest | E4 MVP + **E1–E6** | **ETA** |
+| M+5 | 2026-12 | Buffer / slip | — | BUFFER |
 
 ### Timeline burn-down
 
 ```
-2026-07 ████░░░░  HDA + core freeze
+2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████░░░░  R640 boot
 2026-09 ████░░░░  Network UI
 2026-10 ████░░░░  ISO deploy MVP
-2026-11 ████░░░░  vSphere-like MVP
-2026-12 ████░░░░  Everest (E1–E6)   ← months_to_everest ≈ 4.5 from baseline
+2026-11 ████░░░░  Everest (E1–E6)   ← months_to_everest ≈ 4.0
+2026-12 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** If E2 closes in August and HTTPS lands early September, set `months_to_everest` down and move Everest row earlier (e.g. 2026-11). Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** If E2 closes in August and HTTPS lands early September, set `months_to_everest` down and move Everest row earlier. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -165,7 +165,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-6 | ISO register + CD-ROM or kernel-extract boot | D | 1.0 | P0-5 | `devices/`, `guest/` |
 | P0-7 | Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.75 | P0-5, P0-6 | `mgmt/`, `assets/webui.html` |
 | P0-8 | Install-to-disk + reboot-to-disk path | D | 0.5 | P0-6, P0-7 | `guest/`, `devices/virtio_blk` |
-| P0-9 | M6.9 external audit + spec review | E6 | 0.5 | proofs green | `docs/`, `ept_model/` |
+| P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2+E6 | 0.5 | P0-2 | `tools/`, `mgmt/soak` |
 
 ---
@@ -177,7 +177,8 @@ Ordered for critical path (parallelize B with D design):
 - ADR-004 exclusivity proofs through violation + migrate transfer (M6.0–M6.3 area)
 - Audit ring + SOX/ISO/PDF; lifecycle CLI/REST shapes; VMware inventory import
 - Single-binary discipline, gate markers, frozen Verus/Kani pins
-- M6.8 soak gate closed (per `progress.md`); **next numbered gate: M6.9**
+- **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
+- **Next product path:** Everest P0 (EFI ship kit → R640 → network UI → ISO)
 
 ---
 
@@ -226,11 +227,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | _bootstrap_ |
-| Summary | Initial HDA from distance assessment (2026-07-20) |
-| Everest impact | Baseline only — no product % burn-down yet |
-| Gates touched | none (docs only) |
-| Months Δ | 4.5 → 4.5 |
+| Commit | `8f091fd` (M6.9 merge) + this docs sync |
+| Summary | M6.9 / E6 closed on Latitude; README + HDA sync after #108 |
+| Everest impact | E6 DONE; P0-9 DONE; months 4.5→4.0; overall 28%→39%; ETA 2026-12→2026-11 |
+| Gates touched | `RAYNU-V-M6-EXT-OK` (Latitude); numbered M6 closed |
+| Months Δ | 4.5 → 4.0 |
 
 ---
 
@@ -252,6 +253,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | 8f091fd | 4.0 | 39 | M6.9 EXT + E6 DONE on Latitude (`80 verified, 0 errors`); P0-9 closed; ETA→2026-11 |
 | 2026-07-20 | bootstrap | 4.5 | 28 | Initial HDA; Everest = EFI+R640+UI+ISO+M6.9 |
 
 ---
@@ -260,8 +262,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO → prod bar
-Now:           Core hypervisor strong; product loop incomplete
-Months left:   4.5  (ETA ~ 2026-12)
+Now:           M6 numbered plan closed; product loop still incomplete
+Months left:   4.0  (ETA ~ 2026-11)
 Next move:     E1 release kit + E2 R640 boot  ||  design P0-4/P0-5/P0-6
 Do not claim:  "vSphere alternative" or "ISO deploy" until E3–E5 green
 ```
