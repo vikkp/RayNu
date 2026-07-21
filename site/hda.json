@@ -22,7 +22,7 @@
   "source": "docs/hda.md",
   "summits": {
     "core": 78,
-    "efi": 85,
+    "efi": 90,
     "iso": 8,
     "prod": 100,
     "r640": 25,

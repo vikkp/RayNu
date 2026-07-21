@@ -44,11 +44,18 @@ jobs:
         run: ./tools/build.sh
       - name: size budget (ADR-003)
         run: ./tools/check-size.sh
+      - name: package EFI release kit (M7.0)
+        run: SKIP_BUILD=1 ./tools/package-release.sh
       - name: upload efi artifact
         uses: actions/upload-artifact@v4
         with:
           name: r640-hypervisor.efi
           path: target/x86_64-unknown-uefi/release/r640-hypervisor.efi
+      - name: upload release kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: raynu-v-release-kit
+          path: dist/
 
   # Boot gate: M0 → M3.8 Linux early / proto fallback (KVM nested when available).
   qemu-boot:
@@ -450,6 +457,19 @@ jobs:
           components: rust-src
       - name: M6.9 external audit smoke → RAYNU-V-M6-EXT-OK
         run: ./tools/m6-ext-smoke.sh
+
+  # M7.0: EFI release kit (scripts + runbook + host gate). Hard-fail.
+  m7-ship:
+    name: M7.0 EFI release kit (SHIP-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.0 ship smoke → RAYNU-V-M7-SHIP-OK
+        run: ./tools/m7-ship-smoke.sh
 
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:

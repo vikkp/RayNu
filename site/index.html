@@ -60,21 +60,21 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6 closed.</h2>
+          <h2 class="section__title">M0 → M6 closed. M7.0 wired.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT through M5, plus EPT proof track, REST
-            auth, PDF, HA, fault injection, 72-hr soak, and external audit —
-            <code>RAYNU-V-M6-EXT-OK</code> on host
-            (<code>80 verified, 0 errors</code>. Production-ready bar met — see
-            <code>docs/m6_plan.md</code>.
+            Production-ready bar met on Latitude
+            (<code>RAYNU-V-M6-EXT-OK</code>. Mount Everest opens with the EFI
+            release kit —
+            <code>RAYNU-V-M7-SHIP-OK</code> wired on host (versioned
+            <code>.efi</code> + SHA256 + USB/iDRAC runbook). Latitude smoke
+            pending close — see <code>docs/m7_plan.md</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-SOAK-OK
-RAYNU-V-M6-EXT-OK
-==> M6.8 soak smoke PASSED
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-EXT-OK
+RAYNU-V-M7-SHIP-OK
 ==> M6.9 external audit smoke PASSED
-verification results:: 80 verified, 0 errors</code></pre>
+==> M7.0 EFI release kit smoke PASSED</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Next: <strong>M7 — Mount Everest</strong> (iDRAC + network UI + ISO) —
+            Next after M7.0 close: <strong>M7.1 network HTTP</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -433,6 +433,19 @@ verification results:: 80 verified, 0 errors</code></pre>
                 </li>
               </ol>
             </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M7 · Mount Everest</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M7.0</span>
+                  <span class="journey__text"
+                    >EFI release kit (SHA256 + USB/iDRAC) →
+                    <code>RAYNU-V-M7-SHIP-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
           </div>
         </div>
       </section>
@@ -552,6 +565,8 @@ verification results:: 80 verified, 0 errors</code></pre>
 ./tools/m6-fault-smoke.sh      # M6.7 → RAYNU-V-M6-FAULT-OK
 ./tools/m6-soak-smoke.sh       # M6.8 → RAYNU-V-M6-SOAK-OK
 ./tools/m6-ext-smoke.sh        # M6.9 → RAYNU-V-M6-EXT-OK
+./tools/package-release.sh     # versioned EFI + SHA256 tarball
+./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>

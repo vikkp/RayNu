@@ -129,7 +129,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + USB/iDRAC runbook (**next**) |
+| M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + USB/iDRAC runbook (**wired**; Latitude pending) |
 | M7.1 | `RAYNU-V-M7-HTTP-OK` | Network TLS/HTTP serves SPA + REST |
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk |

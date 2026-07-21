@@ -334,7 +334,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Current progress (lived, not aspirational)
 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
-**Next: M7 — Mount Everest** (ADR-009). Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
+**Through M7.0 wired** (ship kit → `RAYNU-V-M7-SHIP-OK`; Latitude pending). Next after close: **M7.1 HTTP**. Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 

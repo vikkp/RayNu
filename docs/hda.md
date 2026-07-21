@@ -15,7 +15,7 @@ baseline_date: 2026-07-20
 baseline_months: 4.5
 everest_eta_month: "2026-11"
 summit_core_pct: 78
-summit_efi_pct: 85
+summit_efi_pct: 90
 summit_r640_pct: 25
 summit_ui_pct: 12
 summit_iso_pct: 8
@@ -42,7 +42,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **ETA month** | **2026-11** | — |
 | **Confidence** | medium | iron + ISO path unproven; R640 ~1 month |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
-| **Ship EFI artifact** | ~85% | build/size exist; release kit thin |
+| **Ship EFI artifact** | ~90% | M7.0 kit wired; Latitude close pending |
 | **Real R640 boot** | ~25% | Latitude/QEMU ≠ R640 |
 | **vSphere-like UI (network)** | ~12% | demo SPA; no TCP/HTTP stack |
 | **Deploy Linux ISO** | ~8% | bzImage/initrd only; no ISO/CD-ROM |
@@ -85,9 +85,9 @@ All must be true (no hand-waving):
 | Size budget | DONE | `tools/check-size.sh` (15/20 MB) |
 | PE assets kernel/initrd/webui | DONE | M3.22 / M5.2 |
 | CI build | DONE | `.github/workflows/ci.yml` |
-| Release tarball + SHA256 | MISSING | no release kit |
+| Release tarball + SHA256 | WIRED | `tools/package-release.sh` → `dist/` (M7.0; Latitude pending) |
 | Secure Boot signing | MISSING | roadmap; not closed |
-| One-page USB/iDRAC runbook | PARTIAL | docs fragments |
+| One-page USB/iDRAC runbook | WIRED | `docs/runbooks/usb_idrac.md` (M7.0) |
 
 ### Summit B — Load on real R640
 **Status: MEDIUM · ~25% · ~0.5–1.5 months residual (iron-bound)**
@@ -234,10 +234,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `200b0ec` (M7 governance merge #111) |
-| Summary | M7 Mount Everest on main; next build = M7.0 ship kit; M8 = cluster sketch |
-| Everest impact | Governance merged — months/scoreboard unchanged (4.0 / 39%) |
-| Gates touched | none yet (plan open; first code gate M7.0) |
+| Commit | M7.0 EFI release kit (wired) |
+| Summary | `package-release.sh` + ship gate + USB/iDRAC runbook; Latitude pending |
+| Everest impact | Summit A ~85%→90%; months unchanged until Latitude close |
+| Gates touched | `RAYNU-V-M7-SHIP-OK` wired (not closed) |
 | Months Δ | 4.0 → 4.0 |
 
 ---
@@ -260,6 +260,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | m7-0-ship | 4.0 | 39 | M7.0 release kit wired (SHA256+tarball+runbook); Latitude pending; efi~90% |
 | 2026-07-21 | m7-gov | 4.0 | 39 | ADR-009 + M7 plan accepted; next = M7.0 ship kit; M8 = vMotion/DRS/hot-add |
 | 2026-07-21 | site-hda | 4.0 | 39 | Public `site/hda.html` + `sync-hda-site.sh` (numbers unchanged) |
 | 2026-07-21 | 8f091fd | 4.0 | 39 | M6.9 EXT + E6 DONE on Latitude (`80 verified, 0 errors`); P0-9 closed; ETA→2026-11 |
@@ -273,7 +274,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           M7 open (ADR-009); M6 bar closed on Latitude
 Months left:   4.0  (ETA ~ 2026-11)
-Next move:     M7.0 ship kit → M7.1 HTTP → M7.2/3 datastore+ISO  (R640 ~1 mo)
+Next move:     Close M7.0 on Latitude → M7.1 HTTP → datastore+ISO  (R640 ~1 mo)
 Do not claim:  M7 closed without real R640; no vMotion/DRS until M8
 ```
 
