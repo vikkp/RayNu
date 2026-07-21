@@ -60,20 +60,20 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.0 closed.</h2>
+          <h2 class="section__title">M0 → M7.1 closed.</h2>
           <p class="section__lede">
-            Production-ready bar met
-            (<code>RAYNU-V-M6-EXT-OK</code>. Mount Everest ship kit closed —
-            <code>RAYNU-V-M7-SHIP-OK</code> on Latitude (versioned
-            <code>.efi</code> + SHA256 + USB/iDRAC runbook). Next:
-            network HTTPS/HTTP — see <code>docs/m7_plan.md</code>.
+            Ship kit + network HTTP mgmt closed on Latitude —
+            <code>RAYNU-V-M7-SHIP-OK</code>,
+            <code>RAYNU-V-M7-HTTP-OK</code> (codec + host TCP; plaintext lab
+            HTTP; UEFI NIC listen still stubbed). Next: datastore —
+            see <code>docs/m7_plan.md</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-EXT-OK
-RAYNU-V-M7-SHIP-OK
-==> M7.0 EFI release kit smoke PASSED
-==> packaged raynu-v-0.1.0</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-SHIP-OK
+RAYNU-V-M7-HTTP-OK
+==> M7.1 network HTTP mgmt smoke PASSED
+host_tcp_serves_spa_and_authed_rest ... ok</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Next: <strong>M7.1 network HTTP</strong> —
+            Next: <strong>M7.2 datastore</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -443,6 +443,13 @@ RAYNU-V-M7-SHIP-OK
                     <code>RAYNU-V-M7-SHIP-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M7.1</span>
+                  <span class="journey__text"
+                    >Network HTTP mgmt (SPA + Bearer REST) →
+                    <code>RAYNU-V-M7-HTTP-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -566,6 +573,7 @@ RAYNU-V-M7-SHIP-OK
 ./tools/m6-ext-smoke.sh        # M6.9 → RAYNU-V-M6-EXT-OK
 ./tools/package-release.sh     # versioned EFI + SHA256 tarball
 ./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
+./tools/m7-http-smoke.sh       # M7.1 → RAYNU-V-M7-HTTP-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>

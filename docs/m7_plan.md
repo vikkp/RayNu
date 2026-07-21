@@ -1,7 +1,7 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.0 closed on Latitude; next **M7.1 HTTP**.  
-**Prior:** M7.0 closed on Latitude (`RAYNU-V-M7-SHIP-OK`); M6 closed.  
+**Status:** **open** — M7.1 closed on Latitude; next **M7.2 datastore**.  
+**Prior:** M7.1 closed on Latitude (`RAYNU-V-M7-HTTP-OK`); M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
@@ -78,7 +78,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.1 — Network TLS/HTTP mgmt plane — `RAYNU-V-M7-HTTP-OK`
 
-**Status: open**
+**Status: closed** (Latitude `./tools/m7-http-smoke.sh` → `RAYNU-V-M7-HTTP-OK`)
 
 **Goal:** Browser on operator LAN reaches SPA + REST (not in-process dispatch only).
 
@@ -90,7 +90,16 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Host gate + smoke → `RAYNU-V-M7-HTTP-OK`.
 5. `GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt`.
 
-**Acceptance:** Documented browser-reachable path. Prefer TLS; HTTP allowed for lab MVP with ADR note.
+**Shipped (host):**
+
+1. `mgmt/http.rs` — HTTP/1.1 codec (SPA `GET /` + REST + `Authorization: Bearer`).
+2. `mgmt/http_listen.rs` — UEFI listen stub (`UnsupportedOnFirmware`) + host `TcpListener` proof.
+3. Lab **plaintext HTTP** (TLS deferred — ADR-003/009); SPA sends Bearer token.
+4. Runbook [`docs/runbooks/mgmt_http.md`](runbooks/mgmt_http.md) + QEMU `hostfwd` sketch.
+5. Gate + `tools/m7-http-smoke.sh` + CI `m7-http`.
+6. `GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt`.
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M7-HTTP-OK` (host TCP SPA + Bearer REST). UEFI NIC listen remains stubbed; TLS deferred.
 
 ---
 
@@ -195,5 +204,5 @@ Do not pull M8 into M7 gate lists.
 
 ## First action
 
-**M7.0 closed** on Latitude (`RAYNU-V-M7-SHIP-OK`).  
-**Next: M7.1** — network TLS/HTTP mgmt plane under ADR-003 / ADR-009.
+**M7.1 closed** on Latitude (`RAYNU-V-M7-HTTP-OK`).  
+**Next: M7.2** — datastore / image library under ADR-009.
