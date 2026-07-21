@@ -103,7 +103,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/m6_auth_gate` | L0 | Host artifact gate for REST auth (M6.4) |
 | `audit/m6_pdf_gate` | L0 | Host artifact gate for PDF reports (M6.5) |
 | `mgmt/ha` / `m6_ha_gate` | L0 | Mock HA failover + harden checklist; HA-OK (M6.6) |
-| `mgmt/fault` / `m6_fault_gate` | L0 | Fault injection suite (M6.7 wired) |
+| `mgmt/fault` / `m6_fault_gate` | L0 | Fault injection suite; FAULT-OK (M6.7) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -113,7 +113,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6.7 wired** (Latitude pending). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6.7 closed** on Latitude. Next: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
@@ -123,6 +123,6 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (closed) |
 | M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports (closed) |
 | M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden (closed) |
-| **M6.7** ← wired | `RAYNU-V-M6-FAULT-OK` | Fault injection suite (Latitude pending) |
-| M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak |
+| M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite (closed) |
+| **M6.8** ← next | `RAYNU-V-M6-SOAK-OK` | 72-hr soak |
 | M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + spec review |

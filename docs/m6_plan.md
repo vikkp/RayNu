@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.7 wired (host); Latitude smoke pending close. Next after close: **M6.8** soak.  
-**Prior:** M6.6 closed on Latitude (`RAYNU-V-M6-HA-OK`); M6.5–M6.0 closed; M5 closed.  
+**Status:** **open** — M6.7 closed on Latitude; next **M6.8** soak.  
+**Prior:** M6.7 closed on Latitude (`RAYNU-V-M6-FAULT-OK`); M6.6–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -223,7 +223,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.7 — Fault injection — `RAYNU-V-M6-FAULT-OK`
 
-**Status: wired** (host gate; Latitude `./tools/m6-fault-smoke.sh` pending close)
+**Status: closed** (Latitude `./tools/m6-fault-smoke.sh` → `RAYNU-V-M6-FAULT-OK`)
 
 **Goal:** CLAUDE.md pre-production: fault injection (kill vCPUs, corrupt pages, drop IRQs, network partition) with expected recovery / fail-closed behavior and audit trail.
 
@@ -239,6 +239,8 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Audit `FaultInjected` / `FaultFailClosed` / `FaultRecovered`.
 3. Host gate `mgmt/m6_fault_gate.rs` + `tools/m6-fault-smoke.sh` + CI `m6-fault` + `docs/runbooks/fault.md`.
 4. `GAP(CLOSED M6.7): Fault injection`.
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-FAULT-OK`.
 
 ### M6.8 — 72-hr soak — `RAYNU-V-M6-SOAK-OK`
 
@@ -321,5 +323,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.7 wired** (host gate). Close on Latitude via `./tools/m6-fault-smoke.sh` →
-`RAYNU-V-M6-FAULT-OK`, then **M6.8** (`RAYNU-V-M6-SOAK-OK`).
+**M6.7 closed** on Latitude (`RAYNU-V-M6-FAULT-OK`). Next: **M6.8** (`RAYNU-V-M6-SOAK-OK`) — 72-hr soak.
