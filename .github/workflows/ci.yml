@@ -523,6 +523,20 @@ jobs:
       - name: M7.4 UI smoke → RAYNU-V-M7-UI-OK
         run: ./tools/m7-ui-smoke.sh
 
+  # M7.5: R640 boot scaffold (runbook + evidence). Hard-fail on scaffold only.
+  # Does NOT claim RAYNU-V-R640-BOOT-OK (iron-only).
+  m7-r640:
+    name: M7.5 R640 scaffold (SCAFFOLD-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.5 R640 scaffold smoke → RAYNU-V-M7-R640-SCAFFOLD-OK
+        run: ./tools/m7-r640-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)

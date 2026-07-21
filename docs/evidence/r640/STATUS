@@ -1,0 +1,3 @@
+STATUS=open
+# Flip to STATUS=closed only with a filled dated evidence file on real PowerEdge R640.
+# See TEMPLATE.md and docs/runbooks/r640_boot.md.

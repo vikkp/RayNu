@@ -299,6 +299,7 @@ pub mod http_listen;
 pub mod m7_http_gate;
 pub mod m7_ship_gate;
 pub mod m7_iso_gate;
+pub mod m7_r640_gate;
 pub mod m7_store_gate;
 pub mod m7_ui_gate;
 pub mod ship;
@@ -345,6 +346,9 @@ pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};
 pub use m7_ui_gate::{run_m7_ui_gate, M7_UI_OK_MARKER, UI_GAP_NOTE};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
+pub use m7_r640_gate::{
+    run_m7_r640_scaffold_gate, M7_R640_OK_MARKER, M7_R640_SCAFFOLD_MARKER, R640_GAP_NOTE,
+};
 pub use ship::{
     prop_release_kit_package, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
 };

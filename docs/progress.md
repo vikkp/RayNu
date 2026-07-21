@@ -75,6 +75,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library + ESP catalog host path (CI + Latitude; UEFI persist stub) |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO extract-boot plan + virtio install size (CI + Latitude host smoke; El Torito/CD-ROM stub) |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM fields + media SPA (CI + Latitude host smoke; console/TLS/NIC residual) |
+| M7.5 | `RAYNU-V-M7-R640-SCAFFOLD-OK` | R640 runbook + evidence scaffold (CI); iron `RAYNU-V-R640-BOOT-OK` **open** |
 
 ## Verification checkpoint (as of M7.4 closed)
 
@@ -125,6 +126,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/datastore` / `m7_store_gate` | L0 | Image library + ESP catalog host path; STORE-OK (M7.2); UEFI persist stub |
 | `mgmt/iso` / `m7_iso_gate` | L0 | ISO extract-boot + virtio install plan; ISO-OK (M7.3 host smoke); CD-ROM stub |
 | `mgmt/m7_ui_gate` / `webui` | L0 | Create-VM SPA fields + media; UI-OK (M7.4 host smoke); console residual |
+| `mgmt/m7_r640_gate` | L0 | R640 boot scaffold (runbook + evidence); SCAFFOLD-OK; iron BOOT-OK open |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -134,11 +136,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual). **Next: M7.5 R640**.  
+**M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual).  
+**M7.5 scaffolded** (`RAYNU-V-M7-R640-SCAFFOLD-OK` — runbook + evidence template; **iron `RAYNU-V-R640-BOOT-OK` still open**).  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**next**; hard gate for M7 closed) |
+| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**next hard gate**; scaffold only on host) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
