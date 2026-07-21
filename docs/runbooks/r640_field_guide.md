@@ -5,11 +5,25 @@ racked and you want first light of `r640-hypervisor.efi`.
 **Gate:** `RAYNU-V-R640-BOOT-OK` (real iron only — a laptop smoke does **not**
 count).  
 **Related docs:** [`r640_iron_week.md`](r640_iron_week.md) (short checklist) ·
+[`media_maker.md`](media_maker.md) (boot `.img` / `.iso` helper) ·
 [`usb_idrac.md`](usb_idrac.md) · [`r640_boot.md`](r640_boot.md) ·
 [`docs/evidence/r640/`](../evidence/r640/)
 
 Print this page. Check boxes as you go. Write IPs / passwords / SHA256 in the
 blanks — do not invent serial markers if the box did not print them.
+
+### Plan at a glance (updated)
+
+| Step | What you do | Tool |
+|------|-------------|------|
+| 1 | Get R640 alive (power, iDRAC, virtual console) | Hands + browser |
+| 2 | Build + checksum the EFI kit on a **laptop** | `./tools/package-release.sh` |
+| 3 | Pack `\EFI\BOOT\BOOTX64.EFI` into boot media | **`./tools/make-boot-media.sh`** (not hand-copy) |
+| 4 | Attach media | **Prefer iDRAC Virtual Media** map of the `.img`; USB optional |
+| 5 | Reboot, capture COM1, fill evidence, close in git | Field guide §§4–6 |
+
+You do **not** need to manually format a FAT stick unless the media maker cannot
+run on your laptop (fallback only).
 
 ---
 
@@ -22,8 +36,19 @@ blanks — do not invent serial markers if the box did not print them.
 | Network cable to **iDRAC** port | Dedicated Mgmt / iDRAC port on the rear |
 | Operator laptop on the same mgmt network | Browser + ability to save a text log |
 | iDRAC username / password | Default is often on the pull-tab; change if still factory |
-| USB stick (optional path) | ≥ 1 GiB, can be reformatted FAT32 |
+| Laptop packages for media maker | `dosfstools` + `mtools` (`xorriso` optional for ISO) |
+| USB stick (optional — only if not using iDRAC vMedia) | ≥ 64 MiB free; will be erased by `make-boot-usb.sh` |
 | RayNu-V git checkout on a **build** machine | Not required on the R640 itself |
+
+**Install media-maker deps once (laptop):**
+
+```bash
+# macOS
+brew install dosfstools mtools xorriso
+
+# Ubuntu/Debian
+sudo apt install dosfstools mtools xorriso
+```
 
 **Rule:** Open the iDRAC **virtual console before** you reboot into RayNu-V, or
 you will miss early COM1 markers.
@@ -121,7 +146,8 @@ without a physical monitor on the rack.
 ## 2. Build and verify the EFI kit (on a laptop / build machine)
 
 Do this on a normal development machine with the RayNu-V repo — **not** on the
-R640.
+R640. This step only produces the **release kit**. Packing it onto boot media is
+**section 3** (`make-boot-media`).
 
 ### a. Build the release kit
 
@@ -138,43 +164,46 @@ If the EFI is already built:
 SKIP_BUILD=1 ./tools/package-release.sh
 ```
 
-Interactive alternative: `./tools/media-maker.sh` (option 2 builds a kit).
+Or run the interactive wrapper (can build the kit, then pack media):
+
+```bash
+./tools/media-maker.sh
+```
 
 ### b. Verify checksums (mandatory)
 
 ```bash
-cd dist/raynu-v-*    # use the versioned directory that was just created
+cd dist/raynu-v-*    # the versioned kit dir — not the *-boot-media dir
 sha256sum -c r640-hypervisor.efi.sha256
 sha256sum -c SHA256SUMS
 ```
 
-Both commands must report **OK**. If not, stop — do not copy a bad binary to
-USB or vMedia. (`make-boot-media.sh` also re-checks the EFI sidecar when present.)
+Both commands must report **OK**. If not, stop. Do not run `make-boot-media`
+on a bad kit. (`make-boot-media.sh` also re-checks the EFI sidecar when present.)
 
-### c. Write down what you will put on media
+### c. Write down kit identity (for evidence later)
 
 - [ ] Kit version (`VERSION` file): _______________  
 - [ ] `r640-hypervisor.efi` SHA256: _______________  
 - [ ] Path to kit on this laptop: _______________
 
-You will paste the SHA256 into the evidence template later.
-
 ---
 
-## 3. Prepare boot media (media maker — preferred)
+## 3. Prepare boot media with the media maker (default plan)
 
-**Prefer the helper** instead of hand-formatting a stick. See
-[`media_maker.md`](media_maker.md).
+**Default plan:** do **not** hand-format a USB stick. Use the media maker to
+build a FAT image that already contains `\EFI\BOOT\BOOTX64.EFI`, then attach
+that image through **iDRAC Virtual Media** (preferred on a racked server).
 
-Goal: firmware finds `\EFI\BOOT\BOOTX64.EFI`.
+Full tool docs: [`media_maker.md`](media_maker.md).
 
-### a. Make iDRAC / USB images on the laptop
+### a. Make the boot image on the laptop
 
 ```bash
 # From repo root (uses newest dist/raynu-v-* kit, or pass --kit)
-./tools/make-boot-media.sh
+./tools/make-boot-media.sh --kit dist/raynu-v-<ver>
 
-# Interactive:
+# Or interactive (kit + media in one flow):
 ./tools/media-maker.sh
 ```
 
@@ -188,25 +217,30 @@ dist/raynu-v-<ver>-boot-media/
   *.sha256
 ```
 
-Needs `dosfstools` + `mtools` (`xorriso` optional). On Ubuntu:
-`sudo apt install dosfstools mtools xorriso`. On macOS: `brew install dosfstools mtools xorriso`.
+- [ ] Boot `.img` built (script finished clean / printed boot-media marker)  
+- [ ] Boot-image SHA256 (`*-uefi-boot.img.sha256`): _______________  
+- [ ] Path to `*-boot-media/` on this laptop: _______________
 
-- [ ] Boot `.img` (and optional `.iso`) built  
-- [ ] Image SHA256 recorded: _______________
+### b. Attach media — Option A (preferred): iDRAC Virtual Media
 
-### b. Option A — iDRAC Virtual Media (preferred on a racked R640)
+No USB stick required at the rack.
 
-1. iDRAC → **Virtual Console** → **Virtual Media**.
-2. Map `*-uefi-boot.img` as a **virtual USB** stick (best), or `*-uefi-boot.iso`
-   as a virtual CD.
-3. Set **next boot** to that virtual device.
-4. - [ ] Virtual media mapped
+1. Keep the iDRAC **virtual console** from §1c open.
+2. iDRAC → **Virtual Console** → **Virtual Media**.
+3. Map `*-uefi-boot.img` as a **virtual USB** stick (best match for
+   `\EFI\BOOT\BOOTX64.EFI`).
+4. If your iDRAC will not map `.img`, map `*-uefi-boot.iso` as a **virtual CD**.
+5. Set **next boot** to that virtual USB/CD (iDRAC one-time boot, or F11).
+6. - [ ] Virtual media mapped  
+   - [ ] Method: vMedia USB `.img` / vMedia CD `.iso` (circle one)
 
-### c. Option B — Physical USB stick
+### c. Attach media — Option B: physical USB (optional)
 
-1. Build the `.img` as in **3a**.
+Use when you want a stick in the chassis, or vMedia is unavailable.
+
+1. Build the `.img` as in **3a** (same file).
 2. List disks carefully (`diskutil list` on macOS, `lsblk` on Linux).
-3. Write the image (destructive):
+3. Write the image (**erases the stick**):
 
    ```bash
    ./tools/make-boot-usb.sh \
@@ -214,23 +248,25 @@ Needs `dosfstools` + `mtools` (`xorriso` optional). On Ubuntu:
      --disk /dev/diskN
    ```
 
+   Re-type the disk path when prompted. Wrong disk = data loss.
 4. Plug the stick into the R640; note front/rear for evidence.
-5. - [ ] USB prepared and inserted
+5. - [ ] USB written and inserted  
+   - [ ] Port used: _______________
 
 ### d. Manual FAT copy (fallback only)
 
-Only if the helper cannot run on this laptop:
+Only if `make-boot-media.sh` cannot run (missing packages / broken laptop tooling):
 
 1. Format the stick as **FAT32**.
 2. Create `EFI/BOOT` and copy `r640-hypervisor.efi` → `\EFI\BOOT\BOOTX64.EFI`.
-3. See also [`usb_idrac.md`](usb_idrac.md).
+3. See [`usb_idrac.md`](usb_idrac.md).
 
-### e. Choose “next boot” source (do this before reboot)
+- [ ] Using fallback manual copy (note why): _______________
 
-- **vMedia:** iDRAC next-boot override to virtual USB/CD, **or** F11 once.
-- **USB:** F11 Boot Manager → select the USB device once.
+### e. Confirm next-boot choice before reboot
 
-- [ ] Next-boot method decided: vMedia USB / vMedia CD / physical USB (circle)
+- [ ] Next boot = virtual USB / virtual CD / physical USB (circle)  
+- [ ] Serial console still open (§1c)
 
 ---
 
@@ -241,8 +277,8 @@ Only if the helper cannot run on this laptop:
 1. Confirm section **1c** console is still open.
 2. Reboot the host (iDRAC **Power** → reboot/reset, or graceful reset from the
    console).
-3. At the firmware boot menu (F11 if needed), select the USB / virtual media
-   entry you prepared.
+3. At the firmware boot menu (F11 if needed), select the **virtual USB / CD**
+   or physical USB entry from section 3 (the media-maker image).
 4. Watch COM1 / serial text in the virtual console.
 
 ### b. What “success” looks like on the wire
@@ -286,9 +322,11 @@ Empty templates do **not** close the gate.
 
 2. Open the new file and fill **every** table field:
    - Date (UTC), operator, service tag / hostname
-   - Boot method: USB or iDRAC vMedia
-   - EFI path on media
+   - Boot method: **iDRAC vMedia `.img`** / vMedia `.iso` / physical USB
+     (from media maker — note which)
+   - EFI path on media: `\EFI\BOOT\BOOTX64.EFI` (from `make-boot-media`)
    - `r640-hypervisor.efi` SHA256 (from section 2)
+   - Boot-image SHA256 (`*-uefi-boot.img.sha256`) if used
    - Release kit version, iDRAC firmware, BIOS/UEFI mode
    - Serial channel used (iDRAC virtual COM1, etc.)
 
@@ -334,11 +372,14 @@ Only after the evidence PR is honest and complete.
 ## Quick reference — order of action
 
 1. Get box alive → power → iDRAC network → virtual console open  
-2. Build + checksum the EFI on a laptop  
-3. `./tools/make-boot-media.sh` → map `.img` in iDRAC (or `make-boot-usb.sh`)  
-4. Reboot; capture COM1; save log; unmount media  
+2. `./tools/package-release.sh` (+ checksum) on a laptop  
+3. `./tools/make-boot-media.sh` → map `*-uefi-boot.img` in iDRAC Virtual Media  
+   (or `./tools/make-boot-usb.sh` for a physical stick)  
+4. Reboot; capture COM1; save log; **unmap** vMedia  
 5. Fill dated evidence from `TEMPLATE.md`  
 6. Close in git only with real iron proof  
+
+One-liner mental model: **kit → make-boot-media → iDRAC map → serial → evidence**.
 
 ---
 
@@ -348,10 +389,13 @@ Only after the evidence PR is honest and complete.
 |---------|-----|
 | iDRAC page won’t load | Cable on Mgmt port? VLAN? Wait 2 min after AC; ping IP |
 | Virtual console blank | Allow pop-ups / HTML5; try another browser; check iDRAC license features |
-| No `RAYNU-V-M0-BOOT-OK` | Wrong boot device? File not named `BOOTX64.EFI`? SHA mismatch? Console opened too late? |
+| `make-boot-media` missing `mkfs.vfat` / `mcopy` | Install deps (§ Before you start); see [`media_maker.md`](media_maker.md) |
+| No `*-uefi-boot.img` | Did `package-release` create `dist/raynu-v-*`? Pass `--kit` explicitly |
+| iDRAC won’t map `.img` | Try mapping `*-uefi-boot.iso` as CD, or use `make-boot-usb.sh` |
+| No `RAYNU-V-M0-BOOT-OK` | Wrong boot device? Console opened too late? Remake media; re-verify SHA |
 | M0 only, no VMX | Confirm VT-x enabled in BIOS; note residual in evidence |
 | Sticky boot to USB/vMedia | Unmap virtual media; remove USB; clear one-time boot override |
 
 ---
 
-*RayNu-V · M7.5 field guide · printable companion to `docs/runbooks/r640_iron_week.md`*
+*RayNu-V · M7.5 field guide · printable companion to `docs/runbooks/r640_iron_week.md` · media via `docs/runbooks/media_maker.md`*
