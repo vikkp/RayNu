@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6 closed: multi-guest platform, EPT proof track, ops harden, soak, and external audit."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. M0→M6 closed on Latitude + QEMU nested KVM (EPT proof track, ops, soak, external audit). Dell PowerEdge R640 is the ship target — real iron validation is a separate gate."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6 closed — EPT proof track, ops, soak, and external audit. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6 closed on Latitude + QEMU nested KVM. PowerEdge R640 is the ship target — iron validation is a separate gate."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -41,7 +41,8 @@
         </h1>
         <p class="lede reveal reveal--delay-2">
           A commercially targeted, single-binary Type-1 hypervisor designed for
-          formal verification from day one — Dell PowerEdge first.
+          formal verification from day one — built toward Dell PowerEdge; gates
+          today run on Latitude + QEMU nested KVM.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -60,19 +61,22 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.2 closed · M7.3 wired.</h2>
+          <h2 class="section__title">M0 → M7.3 closed on Latitude.</h2>
           <p class="section__lede">
-            Datastore closed on Latitude. ISO deploy path wired —
-            <code>RAYNU-V-M7-ISO-OK</code> (kernel-extract boot + virtio-blk
-            install target; El Torito/CD-ROM stubbed). Latitude close
-            pending — see <code>docs/m7_plan.md</code>.
+            Software gates close on <strong>Dell Latitude + QEMU nested
+            KVM</strong> — not yet on PowerEdge R640. ISO deploy path closed on
+            Latitude —
+            <code>RAYNU-V-M7-ISO-OK</code> (kernel-extract bind + virtio-blk
+            install plan; <strong>El Torito/CD-ROM still stubbed</strong>; host
+            package smoke ~0s, not a QEMU installer run). See
+            <code>docs/m7_plan.md</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-STORE-OK
-RAYNU-V-M7-ISO-OK
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-ISO-OK
 ==> M7.3 ISO deploy smoke PASSED
 register_bind_install_roundtrip ... ok</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Close <strong>M7.3</strong> on Latitude, then
+            Real R640 boot remains open
+            (<code>RAYNU-V-R640-BOOT-OK</code> / HDA E2). Next:
             <strong>M7.4 UI</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
@@ -85,9 +89,9 @@ register_bind_install_roundtrip ... ok</code></pre>
           <h2 class="section__title">M1.0 → M6: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
-            COM1 markers on nested KVM for boot behavior, or host
-            <code>cargo test</code> for verification artifacts — not that the
-            product is finished.
+            COM1 markers on nested KVM for boot behavior, or host proof
+            artifacts (<code>cargo test</code> / Verus / Kani smokes) — not that
+            the product is finished, and not that PowerEdge R640 is validated.
           </p>
 
           <div class="journey">
@@ -358,7 +362,12 @@ register_bind_install_roundtrip ... ok</code></pre>
             </div>
 
             <div class="journey__era" data-reveal>
-              <h3 class="journey__era-title">M6 · Production ready</h3>
+              <h3 class="journey__era-title">
+                M6 · Ops + soak + audit (Latitude/QEMU)
+              </h3>
+              <p class="journey__era-note">
+                Closed on Latitude/QEMU; not a claim of R640 field validation.
+              </p>
               <ol class="journey__list">
                 <li>
                   <span class="journey__gate">M6.0</span>
@@ -435,6 +444,10 @@ register_bind_install_roundtrip ... ok</code></pre>
 
             <div class="journey__era" data-reveal>
               <h3 class="journey__era-title">M7 · Mount Everest</h3>
+              <p class="journey__era-note">
+                Software path on Latitude/QEMU; real R640 boot
+                (<code>RAYNU-V-R640-BOOT-OK</code>) is the hard gate for M7 closed.
+              </p>
               <ol class="journey__list">
                 <li>
                   <span class="journey__gate">M7.0</span>
@@ -475,8 +488,9 @@ register_bind_install_roundtrip ... ok</code></pre>
           <h2 class="section__title">Four pillars. Every line serves one.</h2>
           <p class="section__lede">
             Proof work is the trust product a buyer can take to an auditor;
-            iDRAC is how that story lands on iron you operate; the audit trail
-            turns hypervisor events into compliance evidence — not a slide deck.
+            iDRAC is how that story is meant to land on iron you operate; the
+            audit trail turns hypervisor events into compliance evidence — not a
+            slide deck.
           </p>
           <ol class="pillars">
             <li class="pillars__item" data-reveal>
@@ -506,8 +520,8 @@ register_bind_install_roundtrip ... ok</code></pre>
               <div class="pillars__body">
                 <span class="pillars__name">Dell iDRAC-Native</span>
                 <span class="pillars__why"
-                  >Deploy and attest on PowerEdge you own, via Redfish — not a
-                  mystery appliance.</span
+                  >Target: deploy and attest on PowerEdge you own, via Redfish —
+                  not a mystery appliance. R640 first-light is still ahead.</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -564,11 +578,15 @@ register_bind_install_roundtrip ... ok</code></pre>
         <div class="section__inner">
           <h2 class="section__title">One binary. One server family.</h2>
           <p class="section__lede">
-            No host OS. No packages. No config sprawl. Optimized first for Dell
-            PowerEdge R640 / R650 / R660 — hardware we can own and test on.
-            We ship for the iron we verify on.
+            No host OS. No packages. No config sprawl. Optimized for Dell
+            PowerEdge R640 / R650 / R660.
+            <strong>Today’s closed gates are on Latitude + QEMU nested
+            KVM.</strong>
+            We ship the EFI kit for PowerEdge; first-light on real R640 is
+            M7.5 — see <a href="hda.html">HDA</a>.
           </p>
-          <pre class="ship-code" data-reveal><code>cargo build --release --target x86_64-unknown-uefi --features uefi-bin
+          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU nested KVM · R640 = future hard gate
+cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
 ./tools/qemu-boot-test.sh       # M0 → M4.5
 ./tools/m5-idrac-smoke.sh       # M5.6 → RAYNU-V-M5-IDRAC-OK
@@ -602,9 +620,12 @@ register_bind_install_roundtrip ... ok</code></pre>
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6 is closed — production-ready under
+            M0→M6 is closed on <strong>Latitude + QEMU nested KVM</strong> — the
+            <strong>lab production bar</strong> under
             <code>docs/m6_plan.md</code> (EPT proof track + ops + soak +
-            external audit).
+            external audit). PowerEdge R640 validation is still ahead (Mount
+            Everest / HDA).
+          </p>
 
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

@@ -308,6 +308,13 @@ code {
   color: var(--teal);
 }
 
+.journey__era-note {
+  margin: -0.35rem 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--steel);
+}
+
 .journey__list {
   list-style: none;
   margin: 0;
