@@ -44,4 +44,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
 **M6 closed** on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met.  
-**Through M7.1 closed** (`RAYNU-V-M7-HTTP-OK`). Next: **M7.2 datastore** — [m7_plan.md](m7_plan.md) · [ADR-009](adr/ADR-009.md) · [hda.md](hda.md) · [progress.md](progress.md).
+**Through M7.2 closed** (`RAYNU-V-M7-STORE-OK`). Next: **M7.3 ISO** — [m7_plan.md](m7_plan.md) · [ADR-009](adr/ADR-009.md) · [hda.md](hda.md) · [progress.md](progress.md).

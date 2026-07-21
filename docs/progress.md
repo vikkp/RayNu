@@ -72,8 +72,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + R09 review; `80 verified, 0 errors` (CI + Latitude) |
 | M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + SHA256 + USB/iDRAC runbook (CI + Latitude) |
 | M7.1 | `RAYNU-V-M7-HTTP-OK` | Network HTTP codec + host TCP SPA/REST (CI + Latitude; UEFI listen stub) |
+| M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library + ESP catalog host path (CI + Latitude; UEFI persist stub) |
 
-## Verification checkpoint (as of M7.1 closed)
+## Verification checkpoint (as of M7.2 closed)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -119,6 +120,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/ext` / `m6_ext_gate` | L0 | External audit + spec review; EXT-OK (M6.9) |
 | `mgmt/ship` / `m7_ship_gate` | L0 | EFI release kit + SHA256 tarball; SHIP-OK (M7.0) |
 | `mgmt/http` / `http_listen` / `m7_http_gate` | L0 | HTTP/1.1 codec + host TCP; HTTP-OK (M7.1); UEFI listen stub |
+| `mgmt/datastore` / `m7_store_gate` | L0 | Image library + ESP catalog host path; STORE-OK (M7.2); UEFI persist stub |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -128,13 +130,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M7.1 closed** on Latitude (`RAYNU-V-M7-HTTP-OK`). **Next: M7.2 datastore**.  
+**M7.2 closed** on Latitude (`RAYNU-V-M7-STORE-OK`). **Next: M7.3 ISO**.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library (**next**) |
-| M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk |
+| M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk (**next**) |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM + media attach + basic console/log |
 | M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**hard gate for M7 closed**) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |

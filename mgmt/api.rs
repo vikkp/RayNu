@@ -57,6 +57,12 @@ pub enum ApiReply {
     Ok,
     Listed { count: usize },
     Record { guest_id: u64, state: VmLifecycle },
+    /// M7.2 image library record (`/images/{id}`).
+    Image {
+        id: u64,
+        kind_tag: u8,
+        size_bytes: u64,
+    },
 }
 
 /// HTTP method subset used by the REST control plane.
