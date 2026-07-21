@@ -5,8 +5,8 @@
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/hda.md",
   "everest_eta_month": "2026-11",
   "hda_version": 1,
-  "last_commit": "e2129e05a6311b81e860a3cd729d052fe967ff21",
-  "last_commit_short": "e2129e0",
+  "last_commit": "1b3aa81decf682abe2b1da9140c830c1af6e36f9",
+  "last_commit_short": "1b3aa81",
   "last_updated": "2026-07-21",
   "months_to_everest": 2.75,
   "months_to_everest_prev": 3.25,
@@ -23,12 +23,12 @@
   "summits": {
     "core": 78,
     "efi": 95,
-    "iso": 22,
+    "iso": 35,
     "prod": 100,
     "r640": 25,
     "ui": 40
   },
   "updated_by": "cursor",
-  "velocity_commits_30d": 324,
+  "velocity_commits_30d": 325,
   "velocity_gates_30d": 13
 }

@@ -497,6 +497,19 @@ jobs:
       - name: M7.2 store smoke → RAYNU-V-M7-STORE-OK
         run: ./tools/m7-store-smoke.sh
 
+  # M7.3: ISO deploy (extract-boot + virtio install disk). Hard-fail.
+  m7-iso:
+    name: M7.3 ISO deploy (ISO-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.3 ISO smoke → RAYNU-V-M7-ISO-OK
+        run: ./tools/m7-iso-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)

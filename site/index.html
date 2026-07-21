@@ -60,18 +60,20 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.2 closed.</h2>
+          <h2 class="section__title">M0 → M7.2 closed · M7.3 wired.</h2>
           <p class="section__lede">
-            Ship kit + network HTTP + datastore closed on Latitude —
-            <code>RAYNU-V-M7-STORE-OK</code> (register/list/delete +
-            ESP-shaped host catalog; UEFI persist still stubbed). Next: ISO
-            deploy — see <code>docs/m7_plan.md</code>.
+            Datastore closed on Latitude. ISO deploy path wired —
+            <code>RAYNU-V-M7-ISO-OK</code> (kernel-extract boot + virtio-blk
+            install target; El Torito/CD-ROM stubbed). Latitude close
+            pending — see <code>docs/m7_plan.md</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-STORE-OK
-==> M7.2 datastore smoke PASSED
-host_catalog_persist_roundtrip ... ok</code></pre>
+RAYNU-V-M7-ISO-OK
+==> M7.3 ISO deploy smoke PASSED
+register_bind_install_roundtrip ... ok</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Next: <strong>M7.3 ISO</strong> —
+            Close <strong>M7.3</strong> on Latitude, then
+            <strong>M7.4 UI</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -455,6 +457,13 @@ host_catalog_persist_roundtrip ... ok</code></pre>
                     <code>RAYNU-V-M7-STORE-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M7.3</span>
+                  <span class="journey__text"
+                    >ISO extract-boot deploy (wired) →
+                    <code>RAYNU-V-M7-ISO-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -580,6 +589,7 @@ host_catalog_persist_roundtrip ... ok</code></pre>
 ./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
 ./tools/m7-http-smoke.sh       # M7.1 → RAYNU-V-M7-HTTP-OK
 ./tools/m7-store-smoke.sh      # M7.2 → RAYNU-V-M7-STORE-OK
+./tools/m7-iso-smoke.sh        # M7.3 → RAYNU-V-M7-ISO-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>

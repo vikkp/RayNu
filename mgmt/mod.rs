@@ -236,6 +236,7 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 
 pub mod api;
 pub mod datastore;
+pub mod iso;
 pub mod ext;
 pub mod fault;
 pub mod ha;
@@ -251,6 +252,7 @@ pub mod http;
 pub mod http_listen;
 pub mod m7_http_gate;
 pub mod m7_ship_gate;
+pub mod m7_iso_gate;
 pub mod m7_store_gate;
 pub mod ship;
 pub mod soak;
@@ -285,11 +287,15 @@ pub use datastore::{
     dispatch_store_rest, prop_datastore_package, ImageKind, ImageTable, M7_STORE_OK_MARKER,
     STORE_GAP_NOTE,
 };
+pub use iso::{
+    dispatch_iso_rest, prop_iso_deploy_package, IsoDeployPlan, M7_ISO_OK_MARKER, ISO_GAP_NOTE,
+};
 pub use http::{
     prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
 };
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
+pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};
 pub use ship::{
     prop_release_kit_package, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
