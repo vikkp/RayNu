@@ -122,16 +122,23 @@
   <p class="status" id="status" role="status"></p>
 </main>
 <script>
-/* RayNu-V M5.2 Web UI — drives M5.1 REST: GET /vms, POST /vms/{id}/start|stop */
+/* RayNu-V M5.2/M7.1 Web UI — REST over HTTP with Bearer bring-up token */
 (function () {
   const listEl = document.getElementById("vm-list");
   const statusEl = document.getElementById("status");
   const API = "/vms";
+  const AUTH = "Bearer raynu-v-bringup";
 
   function setStatus(msg) { statusEl.textContent = msg || ""; }
 
   async function api(method, path) {
-    const res = await fetch(path, { method: method, headers: { "Accept": "application/json" } });
+    const res = await fetch(path, {
+      method: method,
+      headers: {
+        "Accept": "application/json",
+        "Authorization": AUTH
+      }
+    });
     return res;
   }
 

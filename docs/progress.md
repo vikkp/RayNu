@@ -126,12 +126,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M7.0 closed** on Latitude (`RAYNU-V-M7-SHIP-OK`). **Next: M7.1 HTTP**.  
+**M7.0 closed** on Latitude. **M7.1 wired** (`RAYNU-V-M7-HTTP-OK`; Latitude pending).  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network TLS/HTTP serves SPA + REST (**next**) |
+| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network HTTP serves SPA + REST (**wired**; Latitude pending) |
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM + media attach + basic console/log |

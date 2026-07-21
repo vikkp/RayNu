@@ -17,7 +17,7 @@ everest_eta_month: "2026-11"
 summit_core_pct: 78
 summit_efi_pct: 95
 summit_r640_pct: 25
-summit_ui_pct: 12
+summit_ui_pct: 28
 summit_iso_pct: 8
 summit_prod_pct: 100
 ---
@@ -44,7 +44,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
 | **Ship EFI artifact** | ~95% | M7.0 closed; Secure Boot still open |
 | **Real R640 boot** | ~25% | Latitude/QEMU ≠ R640 |
-| **vSphere-like UI (network)** | ~12% | demo SPA; no TCP/HTTP stack |
+| **vSphere-like UI (network)** | ~28% | M7.1 HTTP codec + host TCP wired; UEFI NIC stub |
 | **Deploy Linux ISO** | ~8% | bzImage/initrd only; no ISO/CD-ROM |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -101,13 +101,16 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: FAR · ~12% · ~1.5–3 months residual**
+**Status: FAR · ~28% · ~1.0–2.5 months residual**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
 | Embedded SPA list/start/stop | DONE | `assets/webui.html`, M5.2 |
 | In-process REST shapes + auth token | DONE | `mgmt/api.rs` M5.1/M6.4 |
-| **TCP/TLS HTTP server in HV** | MISSING | explicit: no TCP/HTTP crate |
+| HTTP/1.1 codec + Bearer wire | WIRED | `mgmt/http.rs` (M7.1; Latitude pending) |
+| Host TCP proof (loopback) | WIRED | `mgmt/http_listen.rs` cfg(test) |
+| **UEFI NIC HTTP listen** | STUB | `UnsupportedOnFirmware` until Tcp4/SNP |
+| TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
 | Datastore / image library UI | MISSING | — |
 | Create-VM wizard | MISSING | demo create id only |
 | Guest console | MISSING | — |
@@ -166,7 +169,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-1 | **M7.0** Release kit: tag, SHA256, size gate, USB/iDRAC runbook | A | **DONE** | — | `tools/package-release.sh`, runbook |
 | P0-2 | **M7.5** R640 boot gate (real iron; ~1 month) | B | 0.75 | P0-1 helpful | `boot/`, runbooks |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
-| P0-4 | **M7.1** Minimal TLS HTTP server (serve SPA + REST) | C | 1.0 | size budget | `mgmt/`, maybe `net/` |
+| P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | 0.75 | size budget | `mgmt/http` wired; UEFI listen + TLS residual |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.75 | P0-4 | new `datastore/` or `mgmt/` |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 1.0 | P0-5 | `devices/`, `guest/` |
 | P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.75 | P0-5, P0-6 | `mgmt/`, `assets/webui.html` |
@@ -185,7 +188,7 @@ Ordered for critical path (parallelize B with D design):
 - Audit ring + SOX/ISO/PDF; lifecycle CLI/REST shapes; VMware inventory import
 - Single-binary discipline, gate markers, frozen Verus/Kani pins
 - **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
-- **M7.0 closed** on Latitude (`RAYNU-V-M7-SHIP-OK`) — **next gate: M7.1 HTTP**; then datastore/ISO; R640 ~1 mo
+- **M7.0 closed**; **M7.1 HTTP wired** (`RAYNU-V-M7-HTTP-OK`) — close on Latitude; then M7.2 datastore/ISO; R640 ~1 mo
 
 ---
 
@@ -234,11 +237,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | M7.0 close after Latitude SHIP green |
-| Summary | Confirm `RAYNU-V-M7-SHIP-OK` + packaged `raynu-v-0.1.0` on Latitude |
-| Everest impact | P0-1 DONE; months 4.0→3.75; overall 39%→42%; efi~95% |
-| Gates touched | `RAYNU-V-M7-SHIP-OK` (Latitude) |
-| Months Δ | 4.0 → 3.75 |
+| Commit | M7.1 network HTTP (wired) |
+| Summary | HTTP/1.1 codec + host TCP + Bearer SPA; UEFI listen stub; Latitude pending |
+| Everest impact | Summit C ~12%→28%; months unchanged until Latitude close |
+| Gates touched | `RAYNU-V-M7-HTTP-OK` wired (not closed) |
+| Months Δ | 3.75 → 3.75 |
 
 ---
 
@@ -260,6 +263,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | m7-1-http | 3.75 | 42 | M7.1 HTTP wired (codec+host TCP+Bearer); UEFI listen stub; Latitude pending |
 | 2026-07-21 | m7-0-close | 3.75 | 42 | M7.0 SHIP closed on Latitude (`raynu-v-0.1.0`); P0-1 DONE; next M7.1 |
 | 2026-07-21 | m7-0-ship | 4.0 | 39 | M7.0 release kit wired (SHA256+tarball+runbook); Latitude pending; efi~90% |
 | 2026-07-21 | m7-gov | 4.0 | 39 | ADR-009 + M7 plan accepted; next = M7.0 ship kit; M8 = vMotion/DRS/hot-add |
@@ -275,7 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           M7.0 ship kit closed; next = network HTTP
 Months left:   3.75  (ETA ~ 2026-11)
-Next move:     M7.1 HTTP → datastore+ISO  (R640 ~1 mo)
+Next move:     Close M7.1 on Latitude → M7.2 datastore+ISO  (R640 ~1 mo)
 Do not claim:  M7 closed without real R640; no vMotion/DRS until M8
 ```
 

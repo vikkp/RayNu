@@ -4,9 +4,10 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 //!
-//! No TCP stack and no HTTP crate — request/response shapes are host-testable
-//! dispatch over the M5.0 lifecycle table. M6.4 closes REST auth with a
-//! bring-up mock token (`RAYNU-V-M6-AUTH-OK`).
+//! Request/response shapes are host-testable dispatch over the M5.0 lifecycle
+//! table. M6.4 closes REST auth with a bring-up mock token (`RAYNU-V-M6-AUTH-OK`).
+//! M7.1 adds a minimal HTTP/1.1 wire codec + host TCP proof (`mgmt/http.rs`) —
+//! still no HTTP crate; firmware NIC listen is stubbed until UEFI Tcp4/SNP.
 
 use crate::audit_log;
 use crate::audit::AuditEvent;

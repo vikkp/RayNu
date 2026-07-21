@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met).  
-**Next:** **M7.1 HTTP** (M7.0 ship kit closed — `RAYNU-V-M7-SHIP-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
+**Next:** **M7.1 HTTP** wired (`RAYNU-V-M7-HTTP-OK`; Latitude pending). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).
@@ -90,6 +90,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/m6-ext-smoke.sh            # external audit + spec review → RAYNU-V-M6-EXT-OK
 ./tools/package-release.sh         # versioned EFI + SHA256 + tarball under dist/
 ./tools/m7-ship-smoke.sh           # EFI release kit → RAYNU-V-M7-SHIP-OK
+./tools/m7-http-smoke.sh           # network HTTP mgmt → RAYNU-V-M7-HTTP-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

@@ -246,6 +246,9 @@ pub mod m6_ext_gate;
 pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod m6_soak_gate;
+pub mod http;
+pub mod http_listen;
+pub mod m7_http_gate;
 pub mod m7_ship_gate;
 pub mod ship;
 pub mod soak;
@@ -276,6 +279,10 @@ pub use m6_ext_gate::{run_m6_ext_gate, M6_EXT_GATE_MARKER};
 pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
+pub use http::{
+    prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
+};
+pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use ship::{
     prop_release_kit_package, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
