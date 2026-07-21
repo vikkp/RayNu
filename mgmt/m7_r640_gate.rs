@@ -32,6 +32,7 @@ pub fn ship_kit_names_r640_efi() -> bool {
 pub fn r640_scripts_present() -> bool {
     let smoke = include_str!("../tools/m7-r640-smoke.sh");
     let runbook = include_str!("../docs/runbooks/r640_boot.md");
+    let iron_week = include_str!("../docs/runbooks/r640_iron_week.md");
     let evidence = include_str!("../docs/evidence/r640/TEMPLATE.md");
     let status = include_str!("../docs/evidence/r640/STATUS");
     smoke.contains(M7_R640_SCAFFOLD_MARKER)
@@ -44,6 +45,10 @@ pub fn r640_scripts_present() -> bool {
         && runbook.contains("USB")
         && runbook.contains("Latitude / QEMU")
         && runbook.contains("docs/evidence/r640")
+        && runbook.contains("r640_iron_week.md")
+        && iron_week.contains("Rack basics")
+        && iron_week.contains("evidence template")
+        && iron_week.contains(M7_R640_OK_MARKER)
         && evidence.contains("SHA256")
         && evidence.contains("Serial excerpt")
         && evidence.contains(M7_R640_OK_MARKER)

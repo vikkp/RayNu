@@ -21,6 +21,10 @@ if [[ ! -f "$ROOT/docs/runbooks/r640_boot.md" ]]; then
   echo "error: missing docs/runbooks/r640_boot.md" >&2
   exit 1
 fi
+if [[ ! -f "$ROOT/docs/runbooks/r640_iron_week.md" ]]; then
+  echo "error: missing docs/runbooks/r640_iron_week.md" >&2
+  exit 1
+fi
 if [[ ! -f "$ROOT/docs/evidence/r640/TEMPLATE.md" ]]; then
   echo "error: missing docs/evidence/r640/TEMPLATE.md" >&2
   exit 1
