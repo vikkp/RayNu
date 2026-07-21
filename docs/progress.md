@@ -70,8 +70,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite (CI + Latitude) |
 | M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak thresholds (CI + Latitude) |
 | M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + R09 review; `80 verified, 0 errors` (CI + Latitude) |
+| M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + SHA256 + USB/iDRAC runbook (CI + Latitude) |
 
-## Verification checkpoint (as of M6 closed)
+## Verification checkpoint (as of M7.0 closed)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -115,6 +116,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/fault` / `m6_fault_gate` | L0 | Fault injection suite; FAULT-OK (M6.7) |
 | `mgmt/soak` / `m6_soak_gate` | L0 | 72-hr soak thresholds; SOAK-OK (M6.8) |
 | `mgmt/ext` / `m6_ext_gate` | L0 | External audit + spec review; EXT-OK (M6.9) |
+| `mgmt/ship` / `m7_ship_gate` | L0 | EFI release kit + SHA256 tarball; SHIP-OK (M7.0) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -124,13 +126,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6 closed** on Latitude (M6.0–M6.9). **Next: M7 — Mount Everest** (ADR-009).  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md) · [m5_plan.md](m5_plan.md)
+**M7.0 closed** on Latitude (`RAYNU-V-M7-SHIP-OK`). **Next: M7.1 HTTP**.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + USB/iDRAC runbook (**wired**; Latitude pending) |
-| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network TLS/HTTP serves SPA + REST |
+| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network TLS/HTTP serves SPA + REST (**next**) |
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM + media attach + basic console/log |

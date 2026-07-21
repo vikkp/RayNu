@@ -1,7 +1,7 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.0 wired (host); Latitude smoke pending close. Next after close: **M7.1 HTTP**.  
-**Prior:** M6 closed on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`).  
+**Status:** **open** — M7.0 closed on Latitude; next **M7.1 HTTP**.  
+**Prior:** M7.0 closed on Latitude (`RAYNU-V-M7-SHIP-OK`); M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
@@ -53,7 +53,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.0 — EFI release kit — `RAYNU-V-M7-SHIP-OK`
 
-**Status: wired** (host gate; Latitude `./tools/m7-ship-smoke.sh` pending close)
+**Status: closed** (Latitude `./tools/m7-ship-smoke.sh` → `RAYNU-V-M7-SHIP-OK`)
 
 **Goal:** Ops-trustable ship artifact — not just `cargo build`.
 
@@ -72,7 +72,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 3. Runbook [`docs/runbooks/usb_idrac.md`](runbooks/usb_idrac.md).
 4. `GAP(CLOSED M7.0): EFI release kit`.
 
-**Acceptance:** Latitude smoke + marker. Does **not** require R640.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M7-SHIP-OK` (packaged `dist/raynu-v-0.1.0/`).
 
 ---
 
@@ -195,5 +195,5 @@ Do not pull M8 into M7 gate lists.
 
 ## First action
 
-**M7.0 wired** (host gate). Close on Latitude via `./tools/m7-ship-smoke.sh` →
-`RAYNU-V-M7-SHIP-OK`, then start **M7.1** TLS/HTTP under ADR-003.
+**M7.0 closed** on Latitude (`RAYNU-V-M7-SHIP-OK`).  
+**Next: M7.1** — network TLS/HTTP mgmt plane under ADR-003 / ADR-009.
