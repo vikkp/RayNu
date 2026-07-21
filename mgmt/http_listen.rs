@@ -7,6 +7,7 @@
 //! Host/`cfg(test)` path: real `std::net::TcpListener` proving browser-shaped
 //! reachability against the in-binary HTTP codec.
 
+use super::datastore::ImageTable;
 use super::http::{handle_http_request, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT};
 use super::VmTable;
 
@@ -57,8 +58,9 @@ pub fn serve_one_connection_host(port: u16) -> Result<u16, MgmtListenError> {
     let n = stream.read(&mut buf).unwrap_or(0);
     let raw = core::str::from_utf8(&buf[..n]).unwrap_or("");
     let mut table = VmTable::new();
+    let mut images = ImageTable::new();
     let mut out = [0u8; 16384];
-    let wn = handle_http_request(&mut table, raw, &mut out).unwrap_or(0);
+    let wn = handle_http_request(&mut table, &mut images, raw, &mut out).unwrap_or(0);
     let _ = stream.write_all(&out[..wn]);
     let _ = stream.flush();
     Ok(bound)

@@ -4,6 +4,7 @@ use super::{
     M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT,
 };
 use crate::mgmt::api::{RestMethod, BRINGUP_AUTH_TOKEN};
+use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::VmTable;
 
 #[test]
@@ -34,8 +35,10 @@ fn rejects_bad_method() {
 #[test]
 fn serves_spa_and_rest() {
     let mut table = VmTable::new();
+    let mut images = ImageTable::new();
     let mut out = [0u8; 16384];
-    let n = handle_http_request(&mut table, "GET / HTTP/1.1\r\n\r\n", &mut out).unwrap();
+    let n = handle_http_request(&mut table, &mut images, "GET / HTTP/1.1\r\n\r\n", &mut out)
+        .unwrap();
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 200"));
     assert!(s.contains("text/html"));
@@ -43,6 +46,7 @@ fn serves_spa_and_rest() {
 
     let n = handle_http_request(
         &mut table,
+        &mut images,
         "GET /vms HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         &mut out,
     )
@@ -50,9 +54,21 @@ fn serves_spa_and_rest() {
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 200"));
 
-    let n = handle_http_request(&mut table, "GET /vms HTTP/1.1\r\n\r\n", &mut out).unwrap();
+    let n = handle_http_request(&mut table, &mut images, "GET /vms HTTP/1.1\r\n\r\n", &mut out)
+        .unwrap();
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 401"));
+
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        "POST /images/4/iso HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 201"), "{s}");
+    assert!(images.get(4).is_some());
 }
 
 #[test]

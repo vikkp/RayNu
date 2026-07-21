@@ -12,6 +12,7 @@
 use super::api::{
     auth_allows, dispatch_rest, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
+use super::datastore::{dispatch_store_rest, ImageTable};
 use super::webui::{load_webui, webui_raw_bytes};
 use super::VmTable;
 
@@ -120,6 +121,7 @@ fn reply_body(reply: Option<ApiReply>) -> &'static str {
         Some(ApiReply::Ok) => "{\"ok\":true}",
         Some(ApiReply::Listed { .. }) => "{\"ok\":true,\"listed\":true}",
         Some(ApiReply::Record { .. }) => "{\"ok\":true,\"record\":true}",
+        Some(ApiReply::Image { .. }) => "{\"ok\":true,\"image\":true}",
         None => "",
     }
 }
@@ -209,9 +211,14 @@ impl HeaderBuf {
     }
 }
 
-/// Handle one HTTP exchange against `VmTable` (SPA or REST).
+/// Handle one HTTP exchange against `VmTable` + image library (SPA or REST).
 /// Writes the response into `out`; returns `Some(n)` bytes written.
-pub fn handle_http_request(table: &mut VmTable, raw: &str, out: &mut [u8]) -> Option<usize> {
+pub fn handle_http_request(
+    table: &mut VmTable,
+    images: &mut ImageTable,
+    raw: &str,
+    out: &mut [u8],
+) -> Option<usize> {
     let _ = (HTTP_GAP_NOTE, M7_HTTP_OK_MARKER, HTTP_LAB_NOTE);
     let parsed = match parse_http_request(raw) {
         Ok(p) => p,
@@ -229,7 +236,11 @@ pub fn handle_http_request(table: &mut VmTable, raw: &str, out: &mut [u8]) -> Op
         path: parsed.path,
         auth_token: parsed.auth_token,
     };
-    let resp: RestResponse = dispatch_rest(table, req);
+    let resp: RestResponse = if parsed.path == "/images" || parsed.path.starts_with("/images/") {
+        dispatch_store_rest(images, req)
+    } else {
+        dispatch_rest(table, req)
+    };
     let body = reply_body(resp.reply);
     let ctype = if body.is_empty() {
         "text/plain; charset=utf-8"
@@ -259,8 +270,9 @@ pub fn prop_http_mgmt_package() -> bool {
         return false;
     }
     let mut table = VmTable::new();
+    let mut images = ImageTable::new();
     let mut out = [0u8; 8192];
-    let n = handle_http_request(&mut table, raw, &mut out).unwrap_or(0);
+    let n = handle_http_request(&mut table, &mut images, raw, &mut out).unwrap_or(0);
     if n == 0 {
         return false;
     }
