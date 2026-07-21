@@ -244,11 +244,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | M7.5 R640 scaffold (runbook + evidence + gate) |
-| Summary | `RAYNU-V-M7-R640-SCAFFOLD-OK`; iron `RAYNU-V-R640-BOOT-OK` **not** claimed |
-| Everest impact | months unchanged 2.25; r640~25→30; overall 52% hold |
-| Gates touched | `RAYNU-V-M7-R640-SCAFFOLD-OK` (host scaffold only) |
-| Months Δ | 2.25 → 2.25 (no iron) |
+| Commit | M7.5 HDA iron-week to-do on site/hda.html |
+| Summary | Publish R640 rack checklist (basics + runbook + evidence how-to) |
+| Everest impact | months unchanged 2.25; docs/site only |
+| Gates touched | none (scaffold already landed) |
+| Months Δ | 2.25 → 2.25 |
 
 ---
 
@@ -270,6 +270,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | m7-5-iron-todo | 2.25 | 52 | HDA page R640 iron-week to-do (rack + runbook + evidence) |
 | 2026-07-21 | m7-5-scaffold | 2.25 | 52 | M7.5 R640 scaffold (SCAFFOLD-OK); iron BOOT-OK open; r640~30% |
 | 2026-07-21 | m7-4-close | 2.25 | 52 | M7.4 UI host smoke closed on Latitude; console residual; next M7.5 R640 |
 | 2026-07-21 | m7-3-close | 2.5 | 50 | M7.3 ISO host smoke closed on Latitude; El Torito residual; next M7.4 |
@@ -295,6 +296,45 @@ Months left:   2.25  (ETA ~ 2026-11)
 Next move:     Real R640 first light + evidence package
 Do not claim:  M7 closed / RAYNU-V-R640-BOOT-OK without real iron
 ```
+
+Public checklist (same content, printable to-do): [`site/hda.html#iron-week`](../site/hda.html#iron-week).
+
+---
+
+## R640 iron week — to-do list
+
+When a PowerEdge R640 is racked and on iDRAC, work this list. Scaffold smoke
+(`RAYNU-V-M7-R640-SCAFFOLD-OK`) is **not** first light.
+
+### 1. Rack basics
+- [ ] Mount, power, iDRAC on mgmt network (IP, credentials, service tag)
+- [ ] UEFI boot mode; VT-x (and VT-d if needed)
+- [ ] Open iDRAC virtual console (COM1) **before** reboot
+- [ ] Choose USB or iDRAC virtual media
+
+### 2. Build and verify the EFI kit
+- [ ] `./tools/build.sh` → `./tools/check-size.sh` → `./tools/package-release.sh`
+- [ ] `sha256sum -c r640-hypervisor.efi.sha256` inside `dist/raynu-v-*`
+- [ ] Keep the SHA256 for the evidence template
+
+### 3. Use the runbooks
+- Ship placement: [`docs/runbooks/usb_idrac.md`](runbooks/usb_idrac.md)
+- First light capture: [`docs/runbooks/r640_boot.md`](runbooks/r640_boot.md)
+- [ ] Place `r640-hypervisor.efi` as `\EFI\BOOT\BOOTX64.EFI`
+- [ ] Serial console open; one-time boot to media
+- [ ] Capture COM1; require at least `RAYNU-V-M0-BOOT-OK`, then VMX / EPT / shell as far as iron reaches
+- [ ] Unmount vMedia after the attempt
+
+### 4. Fill the evidence template
+- Copy [`docs/evidence/r640/TEMPLATE.md`](evidence/r640/TEMPLATE.md) → dated file under `docs/evidence/r640/`
+- [ ] Fill every field (date, operator, tag, method, SHA256, kit version, …)
+- [ ] Paste real R640 serial excerpt (not Latitude/QEMU)
+- [ ] Leave [`STATUS`](evidence/r640/STATUS) as `STATUS=open` until the close PR
+
+### 5. Close M7.5 in git (iron only)
+- [ ] PR: dated evidence + `STATUS=closed` with pointer
+- [ ] `GAP(CLOSED M7.5): Real R640 boot` + progress / HDA E2 / site
+- [ ] Claim `RAYNU-V-R640-BOOT-OK` only then — never from `./tools/m7-r640-smoke.sh`
 
 ---
 

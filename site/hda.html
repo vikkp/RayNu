@@ -29,6 +29,8 @@
           <a href="index.html">RayNu-V</a>
           <span aria-hidden="true">·</span>
           <span>Honest Distance Assessment</span>
+          <span aria-hidden="true">·</span>
+          <a href="#iron-week">R640 iron week</a>
         </p>
         <p class="brand reveal">RayNu-V</p>
         <h1 class="hda-mast__title reveal reveal--delay-1">
@@ -119,7 +121,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Real R640 boot</span>
               <span class="hda-summits__pct" data-summit="r640">25%</span>
-              <span class="hda-summits__note">Latitude/QEMU ≠ PowerEdge R640</span>
+              <span class="hda-summits__note">Scaffold done; iron BOOT-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
@@ -140,22 +142,220 @@
         </div>
       </section>
 
+      <section class="section section--hda-todo" id="iron-week">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>M7.5 · when the R640 is on the rack</p>
+          <h2 class="section__title">R640 iron week — to-do list</h2>
+          <p class="section__lede">
+            Software through M7.4 is closed on Latitude. This list is what you
+            do when a real PowerEdge R640 is racked, powered, and reachable on
+            iDRAC. Host scaffold smoke
+            (<code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>) is not first light —
+            only serial from this box closes
+            <code>RAYNU-V-R640-BOOT-OK</code>.
+          </p>
+
+          <ol class="hda-todo" data-reveal>
+            <li class="hda-todo__phase">
+              <h3 class="hda-todo__title">1. Rack basics</h3>
+              <ol class="hda-todo__items">
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Mount the R640, connect power, and bring iDRAC up on the
+                  management network (note IP, credentials, service tag).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Confirm UEFI boot mode in BIOS; enable virtualization
+                  (VT-x / VT-d as required for your path).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  From a laptop, open the iDRAC web UI and start a
+                  <strong>virtual console</strong> session (COM1 / serial view
+                  ready before any reboot).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Decide boot media: physical <strong>USB</strong> or
+                  <strong>iDRAC virtual media</strong> (both documented).
+                </li>
+              </ol>
+            </li>
+
+            <li class="hda-todo__phase">
+              <h3 class="hda-todo__title">2. Build and verify the EFI kit</h3>
+              <ol class="hda-todo__items">
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  On a build machine (not the R640):
+                  <code>./tools/build.sh</code> →
+                  <code>./tools/check-size.sh</code> →
+                  <code>./tools/package-release.sh</code>
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Verify checksums before you touch media:
+                  <code>sha256sum -c r640-hypervisor.efi.sha256</code>
+                  (inside <code>dist/raynu-v-*</code>).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Keep the printed SHA256 — you will paste it into the evidence
+                  template later.
+                </li>
+              </ol>
+            </li>
+
+            <li class="hda-todo__phase">
+              <h3 class="hda-todo__title">
+                3. Use the runbooks (ship kit → first boot)
+              </h3>
+              <p class="hda-todo__note">
+                Start with
+                <a
+                  href="https://github.com/vikkp/RayNu/blob/main/docs/runbooks/usb_idrac.md"
+                  >docs/runbooks/usb_idrac.md</a
+                >
+                (how to place the binary on USB / vMedia), then follow
+                <a
+                  href="https://github.com/vikkp/RayNu/blob/main/docs/runbooks/r640_boot.md"
+                  >docs/runbooks/r640_boot.md</a
+                >
+                (what “first light” means and what to capture).
+              </p>
+              <ol class="hda-todo__items">
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Copy <code>r640-hypervisor.efi</code> to media as
+                  <code>\EFI\BOOT\BOOTX64.EFI</code> (USB FAT32 ESP, or iDRAC
+                  Virtual Media map).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Open iDRAC virtual console <strong>before</strong> reboot;
+                  prepare to save or copy the serial log.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  One-time boot to USB / virtual media (F11 / iDRAC next-boot).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  On COM1, look for at least
+                  <code>RAYNU-V-M0-BOOT-OK</code>, then VMX markers
+                  (<code>RAYNU-V-M1-VMXON-OK</code> /
+                  <code>RAYNU-V-M1-VMEXIT-OK</code> when VT-x works), then as
+                  much EPT / Linux shell path as iron reaches.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Save the full serial log to a file. If you stop short of
+                  shell, write the residual down — do not invent markers.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Unmount virtual media after the attempt so later boots are
+                  not sticky.
+                </li>
+              </ol>
+            </li>
+
+            <li class="hda-todo__phase">
+              <h3 class="hda-todo__title">4. Fill the evidence template</h3>
+              <p class="hda-todo__note">
+                Empty templates do not close M7.5. Copy
+                <a
+                  href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/TEMPLATE.md"
+                  >docs/evidence/r640/TEMPLATE.md</a
+                >
+                to a dated file under
+                <code>docs/evidence/r640/</code> (example:
+                <code>2026-08-15-r640-first-light.md</code>). Read
+                <a
+                  href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/README.md"
+                  >docs/evidence/r640/README.md</a
+                >
+                first.
+              </p>
+              <ol class="hda-todo__items">
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Fill every table field: date, operator, service tag, USB vs
+                  vMedia, EFI path, SHA256, kit version, iDRAC/BIOS notes,
+                  serial channel.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Check off required serial markers and paste a real COM1
+                  excerpt (not Latitude/QEMU logs).
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Leave
+                  <a
+                    href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/STATUS"
+                    >docs/evidence/r640/STATUS</a
+                  >
+                  as <code>STATUS=open</code> until the close PR — the scaffold
+                  smoke requires that until iron is proven.
+                </li>
+              </ol>
+            </li>
+
+            <li class="hda-todo__phase">
+              <h3 class="hda-todo__title">5. Close M7.5 in git (only after iron)</h3>
+              <ol class="hda-todo__items">
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Open a PR that adds the filled dated evidence file and points
+                  <code>STATUS</code> to <code>STATUS=closed</code> with that
+                  path.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Flip the GAP to
+                  <code>GAP(CLOSED M7.5): Real R640 boot</code> and update
+                  <code>docs/progress.md</code> / HDA E2 / site.
+                </li>
+                <li>
+                  <span class="hda-todo__box" aria-hidden="true"></span>
+                  Only then claim
+                  <code>RAYNU-V-R640-BOOT-OK</code>. Never print that marker
+                  from <code>./tools/m7-r640-smoke.sh</code> on a laptop —
+                  that script only prints
+                  <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>.
+                </li>
+              </ol>
+            </li>
+          </ol>
+
+          <p class="hda-todo__honesty" data-reveal>
+            Latitude + QEMU nested KVM already proved the software path. The
+            R640 is the judge for Mount Everest E2. If first light fails,
+            keep evidence honest (what you saw, what residual remains) and fix
+            forward — do not close the gate from a host smoke.
+          </p>
+        </div>
+      </section>
+
       <section class="section section--hda-bottom" id="bottom-line">
         <div class="section__inner">
           <h2 class="section__title">Bottom line</h2>
           <p class="section__lede">
-            Close on producing and booting an EFI binary on UEFI iron. Far from a
-            vSphere-like product that deploys arbitrary Linux ISOs. Numbered M6 is
-            closed; <strong>M7 — Mount Everest</strong> is the open product loop
-            (ADR-009). Next gate: EFI release kit.
+            M0→M7.4 software gates are closed on Latitude. M7.5 is
+            <strong>scaffolded</strong> (runbook + evidence) and
+            <strong>open on iron</strong>. Next: rack the R640 and work the
+            <a href="#iron-week">iron week to-do list</a> until
+            <code>RAYNU-V-R640-BOOT-OK</code>.
           </p>
           <div class="cta" data-reveal>
+            <a class="cta__primary" href="#iron-week">R640 iron week to-do</a>
             <a
-              class="cta__primary"
+              class="cta__secondary"
               href="https://github.com/vikkp/RayNu/blob/main/docs/hda.md"
               >Full living assessment</a
             >
-            <a class="cta__secondary" href="index.html">Back to RayNu-V</a>
           </div>
           <p class="hda-sync-note" data-reveal>
             Numbers load from <code>site/hda.json</code>, regenerated from

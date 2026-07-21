@@ -3,6 +3,7 @@
 **Iron marker:** `RAYNU-V-R640-BOOT-OK` (real R640 only)  
 **Scaffold smoke:** `./tools/m7-r640-smoke.sh` → `RAYNU-V-M7-R640-SCAFFOLD-OK`  
 **Evidence:** [`docs/evidence/r640/`](../evidence/r640/)  
+**Operator checklist (HDA):** [`site/hda.html#iron-week`](../../site/hda.html#iron-week)  
 **Prior ship kit:** [`usb_idrac.md`](usb_idrac.md) · `./tools/package-release.sh`
 
 ## Story
