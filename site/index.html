@@ -451,6 +451,13 @@ host_catalog_persist_roundtrip ... ok</code></pre>
                     <code>RAYNU-V-M7-HTTP-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M7.2</span>
+                  <span class="journey__text"
+                    >Datastore / image library (wired) →
+                    <code>RAYNU-V-M7-STORE-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -575,6 +582,7 @@ host_catalog_persist_roundtrip ... ok</code></pre>
 ./tools/package-release.sh     # versioned EFI + SHA256 tarball
 ./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
 ./tools/m7-http-smoke.sh       # M7.1 → RAYNU-V-M7-HTTP-OK
+./tools/m7-store-smoke.sh      # M7.2 → RAYNU-V-M7-STORE-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
