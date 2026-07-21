@@ -20,7 +20,10 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**M0 → M5.5 closed** — VMware import → `RAYNU-V-M5-MIGRATE-OK`. Active: **M5.7** (large-page L3) — [docs/m5_plan.md](docs/m5_plan.md). Lived: [docs/progress.md](docs/progress.md).
+**Gates:** M0 → M6.8 closed on Latitude/QEMU — next **M6.9** external audit. Lived: [docs/progress.md](docs/progress.md).
+
+**Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy → prod bar.  
+Honest distance + month timeline (auto-updated in Cursor): **[docs/hda.md](docs/hda.md)** · prompt card: [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md).
 
 ## Repository Layout
 
@@ -36,7 +39,7 @@ mgmt/      Management plane
 migrate/   VMware migration (ADR-007)
 idrac/     iDRAC Redfish (ADR-005)
 arch/      x86 / R640 helpers
-docs/      Architecture notes + ADRs
+docs/      Architecture notes + ADRs + HDA
 tools/     Build, QEMU, size-check scripts
 src/       UEFI entry + crate root
 ```
@@ -111,12 +114,15 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | Doc | Purpose |
 |-----|---------|
 | [CLAUDE.md](CLAUDE.md) | Governing rules for all code and reviews |
+| [docs/hda.md](docs/hda.md) | **Honest Distance Assessment** — months to Mount Everest |
+| [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md) | Copy-paste prompts so Cursor refreshes HDA on commit |
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
 | [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
 | [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 + post-L3 (M3.11–M3.22) |
 | [docs/m4_plan.md](docs/m4_plan.md) | M4 usable VM platform (platform spine → N-guest L3) |
 | [docs/m5_plan.md](docs/m5_plan.md) | M5 operationally viable (mgmt → audit → Dell → proof) |
+| [docs/m6_plan.md](docs/m6_plan.md) | M6 production-ready track |
 | [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |
