@@ -10,6 +10,7 @@
 //! M6.4: REST auth with bring-up mock token (`m6_auth_gate`).
 //! M6.6: mock HA primary↔standby failover + harden checklist (`ha`, `m6_ha_gate`).
 //! M6.7: fault injection suite (`fault`, `m6_fault_gate`).
+//! M6.8: 72-hr soak thresholds (`soak`, `m6_soak_gate`).
 //! Bring-up in `src/main.rs` remains the live VMLAUNCH path; this module is the
 //! management-plane state machine those ops drive.
 
@@ -241,6 +242,8 @@ pub mod m5_webui_gate;
 pub mod m6_auth_gate;
 pub mod m6_fault_gate;
 pub mod m6_ha_gate;
+pub mod m6_soak_gate;
+pub mod soak;
 pub mod webui;
 
 pub use api::{
@@ -262,6 +265,11 @@ pub use m5_webui_gate::run_m5_webui_gate;
 pub use m6_auth_gate::{run_m6_auth_gate, M6_AUTH_GATE_MARKER};
 pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
+pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
+pub use soak::{
+    prop_soak_72h_thresholds, run_soak_simulation, thresholds_met, SoakMetrics, SOAK_GAP_NOTE,
+    SOAK_TARGET_HOURS, M6_SOAK_OK_MARKER,
+};
 pub use webui::{
     dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction,
 };

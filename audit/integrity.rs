@@ -67,6 +67,12 @@ pub enum AuditEvent {
     FaultRecovered { kind: u8, detail: u64 },
     /// Fault denied / fail-closed path taken (M6.7).
     FaultFailClosed { kind: u8, detail: u64 },
+    /// Soak run started (M6.8); detail = target hours.
+    SoakStarted { target_hours: u32 },
+    /// Soak run completed within thresholds (M6.8); detail = hours completed.
+    SoakCompleted { hours: u32 },
+    /// Soak run failed thresholds (M6.8); detail = hours completed at fail.
+    SoakFailed { hours: u32 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -231,6 +237,9 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::FaultInjected { .. } => 20,
         AuditEvent::FaultRecovered { .. } => 21,
         AuditEvent::FaultFailClosed { .. } => 22,
+        AuditEvent::SoakStarted { .. } => 23,
+        AuditEvent::SoakCompleted { .. } => 24,
+        AuditEvent::SoakFailed { .. } => 25,
     }
 }
 
