@@ -267,8 +267,203 @@ fn with_boot_ring<R>(f: impl FnOnce(&mut AuditRing) -> R) -> R {
 }
 
 /// Record an event into the boot ring (spinlock; overflow returns without panic).
+///
+/// On UEFI firmware, also mirrors a one-line summary to COM1 so iDRAC Virtual
+/// Console / SOL capture sees audit activity (see `docs/runbooks/idrac_logging.md`).
 pub fn record_event(event: AuditEvent) {
     let _ = with_boot_ring(|ring| ring.append(event).map(|_| ()));
+    #[cfg(target_os = "uefi")]
+    mirror_audit_to_com1(event);
+}
+
+/// COM1 mirror for iDRAC capture. Skips high-churn frame events.
+#[cfg(target_os = "uefi")]
+fn mirror_audit_to_com1(event: AuditEvent) {
+    use crate::boot::serial;
+
+    match event {
+        AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => return,
+        _ => {}
+    }
+
+    // Fixed labels only — no heap; details as decimal via tiny helper.
+    match event {
+        AuditEvent::BootStarted { milestone } => {
+            serial::write_str("RAYNU-V-AUDIT: BootStarted milestone=");
+            write_u32(milestone_tag(milestone));
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmxEnabled { vcpu_id } => {
+            serial::write_str("RAYNU-V-AUDIT: VmxEnabled vcpu_id=");
+            write_u32(vcpu_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmcsCreated { vcpu_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: VmcsCreated vcpu_id=");
+            write_u32(vcpu_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::EptMapped { guest_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: EptMapped guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::EptUnmapped { guest_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: EptUnmapped guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::MsrBlocked { vcpu_id, msr_index } => {
+            serial::write_str("RAYNU-V-AUDIT: MsrBlocked vcpu_id=");
+            write_u32(vcpu_id);
+            serial::write_str(" msr=0x");
+            write_u32_hex(msr_index);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmCreated { guest_id } => {
+            serial::write_str("RAYNU-V-AUDIT: VmCreated guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmStarted { guest_id } => {
+            serial::write_str("RAYNU-V-AUDIT: VmStarted guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmStopped { guest_id } => {
+            serial::write_str("RAYNU-V-AUDIT: VmStopped guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::VmDestroyed { guest_id } => {
+            serial::write_str("RAYNU-V-AUDIT: VmDestroyed guest_id=");
+            write_u64(guest_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::MigrateStarted { batch_id, count } => {
+            serial::write_str("RAYNU-V-AUDIT: MigrateStarted batch=");
+            write_u64(batch_id);
+            serial::write_str(" count=");
+            write_u32(count);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::MigrateCompleted { batch_id, count } => {
+            serial::write_str("RAYNU-V-AUDIT: MigrateCompleted batch=");
+            write_u64(batch_id);
+            serial::write_str(" count=");
+            write_u32(count);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::MigrateFailed { batch_id, count } => {
+            serial::write_str("RAYNU-V-AUDIT: MigrateFailed batch=");
+            write_u64(batch_id);
+            serial::write_str(" count=");
+            write_u32(count);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::AuthAllowed { method_tag } => {
+            serial::write_str("RAYNU-V-AUDIT: AuthAllowed method_tag=");
+            write_u32(method_tag as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::AuthDenied { method_tag } => {
+            serial::write_str("RAYNU-V-AUDIT: AuthDenied method_tag=");
+            write_u32(method_tag as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::HaFailoverStarted { from_role, to_role } => {
+            serial::write_str("RAYNU-V-AUDIT: HaFailoverStarted from=");
+            write_u32(from_role as u32);
+            serial::write_str(" to=");
+            write_u32(to_role as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::HaFailoverCompleted { guest_count } => {
+            serial::write_str("RAYNU-V-AUDIT: HaFailoverCompleted guests=");
+            write_u32(guest_count);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::FaultInjected { kind, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: FaultInjected kind=");
+            write_u32(kind as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::FaultRecovered { kind, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: FaultRecovered kind=");
+            write_u32(kind as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::FaultFailClosed { kind, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: FaultFailClosed kind=");
+            write_u32(kind as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::SoakStarted { target_hours } => {
+            serial::write_str("RAYNU-V-AUDIT: SoakStarted hours=");
+            write_u32(target_hours);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::SoakCompleted { hours } => {
+            serial::write_str("RAYNU-V-AUDIT: SoakCompleted hours=");
+            write_u32(hours);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::SoakFailed { hours } => {
+            serial::write_str("RAYNU-V-AUDIT: SoakFailed hours=");
+            write_u32(hours);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn milestone_tag(m: Milestone) -> u32 {
+    match m {
+        Milestone::M0 => 0,
+        Milestone::M1 => 1,
+        Milestone::M2 => 2,
+        Milestone::M3 => 3,
+        Milestone::M4 => 4,
+        Milestone::M5 => 5,
+        Milestone::M55 => 55,
+        Milestone::M6 => 6,
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_u32(n: u32) {
+    write_u64(n as u64);
+}
+
+#[cfg(target_os = "uefi")]
+fn write_u64(mut n: u64) {
+    use crate::boot::serial;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 0;
+    while n > 0 {
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+        i += 1;
+    }
+    while i > 0 {
+        i -= 1;
+        serial::write_byte(buf[i]);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_u32_hex(n: u32) {
+    use crate::boot::serial;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for shift in (0..8).rev() {
+        let nib = ((n >> (shift * 4)) & 0xf) as usize;
+        serial::write_byte(HEX[nib]);
+    }
 }
 
 /// Verify the live boot ring hash chain (tamper-evident path for host/firmware).

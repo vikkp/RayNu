@@ -548,6 +548,15 @@ jobs:
       - name: Boot-media smoke → RAYNU-V-M7-BOOT-MEDIA-OK
         run: ./tools/make-boot-media-smoke.sh
 
+  # iDRAC/COM1 capture helper + audit→serial wiring check.
+  idrac-serial-capture:
+    name: iDRAC serial capture (SERIAL-CAPTURE-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serial capture smoke → RAYNU-V-M7-SERIAL-CAPTURE-OK
+        run: ./tools/capture-idrac-serial-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)
