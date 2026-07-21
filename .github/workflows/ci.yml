@@ -404,6 +404,19 @@ jobs:
       - name: M6.6 HA smoke → RAYNU-V-M6-HA-OK
         run: ./tools/m6-ha-smoke.sh
 
+  # M6.7: fault injection suite. Hard-fail.
+  m6-fault:
+    name: M6.7 fault injection (FAULT-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M6.7 fault smoke → RAYNU-V-M6-FAULT-OK
+        run: ./tools/m6-fault-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)
