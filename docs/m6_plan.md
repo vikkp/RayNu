@@ -340,5 +340,5 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 ## First action
 
 **M6.9 closed** on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`).
-**M6 closed** — production-ready under CLAUDE.md M6 row. Further work is
-maintenance / optional slip-ok items unless a new milestone is opened.
+**M6 closed** — production-ready under CLAUDE.md M6 row.  
+**Next numbered track:** [m7_plan.md](m7_plan.md) (Mount Everest / ADR-009).

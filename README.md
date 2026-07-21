@@ -20,10 +20,11 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met). Lived: [docs/progress.md](docs/progress.md). Everest: [docs/hda.md](docs/hda.md).
+**Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met).  
+**Next:** **M7 — Mount Everest** (ADR-009): iDRAC boot on real R640 + network UI + Linux ISO install. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
 
-**Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy → prod bar.  
-Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · prompt card: [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md).
+**Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
+Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).
 
 ## Repository Layout
 
@@ -124,7 +125,9 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [docs/m3_post_shell_plan.md](docs/m3_post_shell_plan.md) | Post-shell + true L3 + post-L3 (M3.11–M3.22) |
 | [docs/m4_plan.md](docs/m4_plan.md) | M4 usable VM platform (platform spine → N-guest L3) |
 | [docs/m5_plan.md](docs/m5_plan.md) | M5 operationally viable (mgmt → audit → Dell → proof) |
-| [docs/m6_plan.md](docs/m6_plan.md) | M6 production-ready track |
+| [docs/m6_plan.md](docs/m6_plan.md) | M6 production-ready track (closed) |
+| [docs/m7_plan.md](docs/m7_plan.md) | M7 Mount Everest — shippable single-host |
+| [docs/adr/ADR-009.md](docs/adr/ADR-009.md) | Mount Everest product loop decision |
 | [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
 | [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–008) |

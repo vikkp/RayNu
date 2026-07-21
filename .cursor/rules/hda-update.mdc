@@ -11,10 +11,10 @@ You are working in **RayNu-V** (`vikkp/RayNu`). Governance: root `CLAUDE.md`. Li
 
 ## Mount Everest (product loop)
 
-Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** → production bar (M6.9 external).
+Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** (milestone **M7 / ADR-009**). M6 production bar is already closed on Latitude.
 
 Living tracker (source of truth): **`docs/hda.md`** (YAML frontmatter + scoreboard + month timeline).  
-Public site page: **`site/hda.html`** (reads **`site/hda.json`**).
+Plan: **`docs/m7_plan.md`**. Public site page: **`site/hda.html`** (reads **`site/hda.json`**).
 
 ## When you MUST update HDA (+ site sync)
 

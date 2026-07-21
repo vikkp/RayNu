@@ -124,9 +124,16 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6 closed** on Latitude (M6.0–M6.9). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6 closed** on Latitude (M6.0–M6.9). **Next: M7 — Mount Everest** (ADR-009).  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md) · [m5_plan.md](m5_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M6.1–M6.9 | (see Closed gates) | Production-ready bar met |
-| Optional | Dell Tier‑2 / R640 CI / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) |
+| M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + USB/iDRAC runbook (**next**) |
+| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network TLS/HTTP serves SPA + REST |
+| M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library |
+| M7.3 | `RAYNU-V-M7-ISO-OK` | ISO register + CD-ROM or extract-boot + virtio disk |
+| M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM + media attach + basic console/log |
+| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**hard gate for M7 closed**) |
+| M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
+| Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

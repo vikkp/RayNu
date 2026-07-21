@@ -51,7 +51,7 @@ migrate/        — VMware migration engine (vCenter, VMDK, OVF)
 idrac/          — iDRAC Redfish client, hardware health integration
 arch/           — x86 / R640-specific helpers
 docs/           — Architecture decisions, subsystem notes
-docs/adr/       — Architecture Decision Records (ADR-001 through ADR-008+)
+docs/adr/       — Architecture Decision Records (ADR-001 through ADR-009+)
 tools/          — Build, debug, test, and verification scripts
 ```
 
@@ -281,6 +281,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 006   | Verification Maturity Model            | L0→L1→L2→L3; ship at L1/L2 if tooling blocks L3               |
 | 007   | VMware Migration as Dedicated Workstream | Own milestone (M5.5); outside Proven Core                     |
 | 008   | Proof Maintenance & Toolchain Pinning  | Pin versions; nightly regression; ~1 week/quarter maintenance  |
+| 009   | Mount Everest Product Loop (M7)        | Single-host ship: iDRAC boot + network UI + ISO; R640 hard gate; M8 = cluster |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
@@ -325,16 +326,23 @@ cargo verus --verify                                    # Formal proofs (Proven 
 | M5   | Operationally Viable            | 52–67  | Full mgmt plane, audit engine, SOX/ISO reports         |
 | M5.5 | VMware Migration Workstream     | 60–70  | 10+ VMs migrated from vCenter in one command           |
 | M6   | Production Ready                | 68–100 | HA, security hardened, 72-hr soak, external audit      |
+| M7   | Mount Everest (single-host ship)| 101–   | iDRAC boot on real R640 + network UI + Linux ISO install |
+| M8   | Cluster / elasticity (sketch)   | after M7 | vMotion-like, DRS-like placement, hot-add (not M7 blockers) |
+
+**M0 note (lived):** Boot gates through M6 closed on **Latitude + QEMU**. The original “boots on R640” claim is the hard **M7.5** iron gate (`RAYNU-V-R640-BOOT-OK`) — see ADR-009.
 
 ### Current progress (lived, not aspirational)
 
-**M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
+**Next: M7 — Mount Everest** (ADR-009). Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 
 - **M2 is the #1 risk.** EPT + interrupt virtualization is where hypervisors stall. Plan 14–18 weeks.
 - **M3 is the #2 risk.** Real kernels expose every emulation gap. Plan 11–14 weeks.
 - **EPT proof is the #1 verification risk.** Spec in M2, partial proof in M4, full proof in M6.
+- **M7 iron risk:** Latitude/QEMU ≠ R640. Do not close M7 without real PowerEdge evidence.
+- **M7 product risk:** in-process REST ≠ network UI; bzImage/initrd ≠ arbitrary ISO install.
 
 ---
 
@@ -394,14 +402,23 @@ cargo verus --verify                                    # Formal proofs (Proven 
 - Audit trail validation: all expected events present and correctly sequenced
 - Binary size check: within 15 MB target
 
-### Pre-Production (M6)
+### Pre-Production (M6) — closed on Latitude/QEMU
 
 - 72-hour soak test (memory leaks, scheduler fairness, exit rate stability)
 - Fault injection (kill vCPUs, corrupt pages, drop IRQs, network partition)
 - External security audit (auditor runs `verus --verify`)
 - External spec review (independent: "are we proving the right things?")
 - Proof maintenance dry run (upgrade Verus, re-verify, measure breakage)
-- R640 hardware CI (real iron, not just QEMU)
+- R640 hardware CI (real iron, not just QEMU) — **deferred into M7 iron track** (ADR-009)
+
+### Mount Everest (M7) — shippable single-host
+
+- EFI release kit (checksums, size gate, USB/iDRAC vMedia runbook)
+- Real R640 boot via iDRAC virtual media / USB (`RAYNU-V-R640-BOOT-OK`)
+- Network-reachable TLS/HTTP Web UI + REST
+- Datastore + Linux ISO install path (CD-ROM or extract-boot MVP)
+- Create-VM / media attach in the Web UI
+- Cluster features (vMotion-like, DRS-like, hot-add) → **M8**, not M7
 
 ---
 

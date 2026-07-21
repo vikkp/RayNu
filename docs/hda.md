@@ -4,9 +4,9 @@ last_updated: 2026-07-21
 last_commit: 8f091fdc415db479dd71973fc0c561c8ae53a176
 last_commit_short: 8f091fd
 updated_by: cursor
-mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO + production bar (M6.9)"
+mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 4.0
-months_to_everest_prev: 4.5
+months_to_everest_prev: 4.0
 velocity_commits_30d: 323
 velocity_gates_30d: 10
 overall_pct: 39
@@ -26,10 +26,10 @@ summit_prod_pct: 100
 
 > **Living document.** Updated on every meaningful commit by Cursor (see `.cursor/rules/hda-update.mdc`).  
 > **North star product loop (“Mount Everest”):**  
-> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** → production bar (soak + external review).
+> Ship the EFI → boot on a **real PowerEdge R640** → **network-reachable** vSphere-like UI → **deploy a Linux ISO** (M7 / ADR-009). Production bar (M6.8–M6.9) is already closed on Latitude.
 
 Pillars: **[V]** verified core · **[Z]** single binary · **[D]** iDRAC-native · **[A]** audit-first.  
-Authoritative gates: [`docs/progress.md`](progress.md) · plans: [`m6_plan.md`](m6_plan.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
+Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m7_plan.md) · ADR: [`adr/ADR-009.md`](adr/ADR-009.md) · constitution: [`CLAUDE.md`](../CLAUDE.md).
 
 ---
 
@@ -37,10 +37,10 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plans: [`m6_plan.md`](
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **39%** | +11 (E6 + P0-9) |
-| **Months to Mount Everest** | **4.0** | −0.5 (M6.9 / E6 closed) |
-| **ETA month** | **2026-11** | pulled from 2026-12 |
-| **Confidence** | medium | iron + ISO path unproven |
+| **Overall product readiness** | **39%** | — (M7 governance; no product burn-down yet) |
+| **Months to Mount Everest** | **4.0** | — (M7 opened; scores unchanged) |
+| **ETA month** | **2026-11** | — |
+| **Confidence** | medium | iron + ISO path unproven; R640 ~1 month |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
 | **Ship EFI artifact** | ~85% | build/size exist; release kit thin |
 | **Real R640 boot** | ~25% | Latitude/QEMU ≠ R640 |
@@ -70,7 +70,7 @@ All must be true (no hand-waving):
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots installer (or documented extract path) → installs to virtio-blk → reboot to disk | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
 
-**Out of Everest scope (track separately):** full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL.
+**Out of Everest / M7 scope (→ M8 or later):** vMotion-like live migrate, DRS-like placement, hot-add, full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL.
 
 ---
 
@@ -135,12 +135,12 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 
 | Month | Calendar | Planned focus | Exit criteria | Status |
 |-------|----------|---------------|---------------|--------|
-| M+0 | 2026-07 | HDA live; **M6 closed** (EXT); EFI release kit sketch | Numbered M6 bar met; next = Everest P0 | **DONE (M6)** / E1 kit open |
-| M+1 | 2026-08 | **R640 first light** + EFI ship kit | E1 mostly; E2 serial/VMX on R640 | PLANNED |
-| M+2 | 2026-09 | Datastore + HTTPS mgmt plane | E3 browser reaches UI | PLANNED |
-| M+3 | 2026-10 | ISO/CD-ROM or extract path + virtio disk install | E5 MVP one distro | PLANNED |
-| M+4 | 2026-11 | UI wizard polish + console/log; R640 soak; Everest | E4 MVP + **E1–E6** | **ETA** |
-| M+5 | 2026-12 | Buffer / slip | — | BUFFER |
+| M+0 | 2026-07 | **M7 open** (ADR-009); **M7.0 ship kit** + HTTP design | M7.0 green; M7.1 sketched | **IN PROGRESS** |
+| M+1 | 2026-08 | Ship kit done; HTTP + datastore; **R640 first light** (~1 mo) | M7.0–M7.2; M7.5 if iron ready | PLANNED |
+| M+2 | 2026-09 | HTTPS mgmt + ISO path on QEMU | M7.1–M7.3 | PLANNED |
+| M+3 | 2026-10 | Create-VM UI + install-to-disk MVP | M7.3–M7.4 | PLANNED |
+| M+4 | 2026-11 | R640 validation complete; M7 closed | **M7.0–M7.5 all green** | **ETA** |
+| M+5 | 2026-12 | Buffer / M8 sketch start | — | BUFFER |
 
 ### Timeline burn-down
 
@@ -163,16 +163,17 @@ Ordered for critical path (parallelize B with D design):
 
 | ID | Workstream | Summit | Est. residual (mo) | Depends on | Repo touchpoints |
 |----|------------|--------|-------------------|------------|------------------|
-| P0-1 | Release kit: tag, SHA256, size gate in release CI | A | 0.25 | — | `tools/`, `.github/` |
-| P0-2 | R640 boot gate + runbook (USB/iDRAC vMedia) | B | 0.75 | P0-1 helpful | `boot/`, `docs/runbooks/` |
-| P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` |
-| P0-4 | Minimal TLS HTTP server (serve SPA + REST) | C | 1.0 | size budget | `mgmt/`, maybe `net/` |
-| P0-5 | Datastore on ESP/NVMe (images + ISOs) | C+D | 0.75 | P0-4 | new `datastore/` or `mgmt/` |
-| P0-6 | ISO register + CD-ROM or kernel-extract boot | D | 1.0 | P0-5 | `devices/`, `guest/` |
-| P0-7 | Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.75 | P0-5, P0-6 | `mgmt/`, `assets/webui.html` |
+| P0-1 | **M7.0** Release kit: tag, SHA256, size gate, USB/iDRAC runbook | A | 0.25 | — | `tools/`, `.github/`, `docs/runbooks/` |
+| P0-2 | **M7.5** R640 boot gate (real iron; ~1 month) | B | 0.75 | P0-1 helpful | `boot/`, runbooks |
+| P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
+| P0-4 | **M7.1** Minimal TLS HTTP server (serve SPA + REST) | C | 1.0 | size budget | `mgmt/`, maybe `net/` |
+| P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.75 | P0-4 | new `datastore/` or `mgmt/` |
+| P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 1.0 | P0-5 | `devices/`, `guest/` |
+| P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.75 | P0-5, P0-6 | `mgmt/`, `assets/webui.html` |
 | P0-8 | Install-to-disk + reboot-to-disk path | D | 0.5 | P0-6, P0-7 | `guest/`, `devices/virtio_blk` |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
-| P0-10 | R640 soak / hardware confidence | E2+E6 | 0.5 | P0-2 | `tools/`, `mgmt/soak` |
+| P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
+| P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
 
 ---
 
@@ -184,7 +185,7 @@ Ordered for critical path (parallelize B with D design):
 - Audit ring + SOX/ISO/PDF; lifecycle CLI/REST shapes; VMware inventory import
 - Single-binary discipline, gate markers, frozen Verus/Kani pins
 - **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
-- **Next product path:** Everest P0 (EFI ship kit → R640 → network UI → ISO)
+- **M7 open** (ADR-009 / `m7_plan.md`) — **next gate: M7.0 ship kit**; pre-iron order Ship → HTTP → datastore/ISO
 
 ---
 
@@ -233,10 +234,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | site HDA page + sync pipeline |
-| Summary | Public `site/hda.html` tracker; `site/hda.json` from frontmatter; CI `--check` |
-| Everest impact | Visibility only — months/scoreboard unchanged (keep current HDA) |
-| Gates touched | none (docs/site surface) |
+| Commit | M7 governance (ADR-009 + m7_plan + CLAUDE) |
+| Summary | M7 Mount Everest accepted; next build = M7.0 ship kit; M8 = cluster sketch |
+| Everest impact | Governance only — months/scoreboard unchanged (4.0 / 39%) |
+| Gates touched | none yet (plan open) |
 | Months Δ | 4.0 → 4.0 |
 
 ---
@@ -259,6 +260,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | m7-gov | 4.0 | 39 | ADR-009 + M7 plan accepted; next = M7.0 ship kit; M8 = vMotion/DRS/hot-add |
 | 2026-07-21 | site-hda | 4.0 | 39 | Public `site/hda.html` + `sync-hda-site.sh` (numbers unchanged) |
 | 2026-07-21 | 8f091fd | 4.0 | 39 | M6.9 EXT + E6 DONE on Latitude (`80 verified, 0 errors`); P0-9 closed; ETA→2026-11 |
 | 2026-07-20 | bootstrap | 4.5 | 28 | Initial HDA; Everest = EFI+R640+UI+ISO+M6.9 |
@@ -268,11 +270,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 ## Operator quick view
 
 ```
-Mount Everest:  Ship EFI → R640 → UI → Linux ISO → prod bar
-Now:           M6 numbered plan closed; product loop still incomplete
+Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
+Now:           M7 open (ADR-009); M6 bar closed on Latitude
 Months left:   4.0  (ETA ~ 2026-11)
-Next move:     E1 release kit + E2 R640 boot  ||  design P0-4/P0-5/P0-6
-Do not claim:  "vSphere alternative" or "ISO deploy" until E3–E5 green
+Next move:     M7.0 ship kit → M7.1 HTTP → M7.2/3 datastore+ISO  (R640 ~1 mo)
+Do not claim:  M7 closed without real R640; no vMotion/DRS until M8
 ```
 
 ---
