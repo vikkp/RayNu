@@ -144,19 +144,27 @@ pub fn dispatch_webui_action(table: &mut VmTable, action: WebUiAction) -> RestRe
     }
 }
 
-/// SPA HTML documents the M5.1 routes it calls.
+/// SPA HTML documents the M5.1 / M7.4 routes it calls.
 pub fn webui_html_wires_api() -> bool {
     let Ok(s) = core::str::from_utf8(webui_raw_bytes()) else {
         return false;
     };
     s.contains("data-raynu-webui")
+        && s.contains("data-raynu-m7-ui")
         && s.contains("RayNu-V")
         && s.contains("/vms")
+        && s.contains("/spec/")
+        && s.contains("/images")
+        && s.contains("/iso/")
         && s.contains("/start")
         && s.contains("/stop")
         && s.contains("listVms")
-        && s.contains("startVm")
-        && s.contains("stopVm")
+        && s.contains("createVm")
+        && s.contains("listImages")
+        && s.contains("f-cpu")
+        && s.contains("f-ram")
+        && s.contains("f-disk")
+        && s.contains("f-iso")
 }
 
 /// Host-testable: lazy load + list/start/stop against one guest.

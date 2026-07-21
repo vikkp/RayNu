@@ -510,6 +510,19 @@ jobs:
       - name: M7.3 ISO smoke → RAYNU-V-M7-ISO-OK
         run: ./tools/m7-iso-smoke.sh
 
+  # M7.4: Ops Web UI create-VM + media. Hard-fail.
+  m7-ui:
+    name: M7.4 Ops UI (UI-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.4 UI smoke → RAYNU-V-M7-UI-OK
+        run: ./tools/m7-ui-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)

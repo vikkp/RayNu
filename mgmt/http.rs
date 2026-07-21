@@ -121,7 +121,22 @@ fn reply_body(reply: Option<ApiReply>) -> &'static str {
     match reply {
         Some(ApiReply::Ok) => "{\"ok\":true}",
         Some(ApiReply::Listed { .. }) => "{\"ok\":true,\"listed\":true}",
-        Some(ApiReply::Record { .. }) => "{\"ok\":true,\"record\":true}",
+        Some(ApiReply::Record {
+            state: crate::mgmt::VmLifecycle::Defined,
+            ..
+        }) => "{\"ok\":true,\"record\":true,\"state\":\"defined\"}",
+        Some(ApiReply::Record {
+            state: crate::mgmt::VmLifecycle::Running,
+            ..
+        }) => "{\"ok\":true,\"record\":true,\"state\":\"running\"}",
+        Some(ApiReply::Record {
+            state: crate::mgmt::VmLifecycle::Stopped,
+            ..
+        }) => "{\"ok\":true,\"record\":true,\"state\":\"stopped\"}",
+        Some(ApiReply::Record {
+            state: crate::mgmt::VmLifecycle::Destroyed,
+            ..
+        }) => "{\"ok\":true,\"record\":true,\"state\":\"destroyed\"}",
         Some(ApiReply::Image { .. }) => "{\"ok\":true,\"image\":true}",
         None => "",
     }
