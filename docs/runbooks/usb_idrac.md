@@ -65,6 +65,19 @@ sha256sum -c SHA256SUMS
 Always verify `r640-hypervisor.efi.sha256` (or the tarball `.sha256`) before
 copying to USB / mapping as virtual media. Do not deploy an unverified binary.
 
+## Boot media maker (preferred)
+
+Instead of hand-copying to FAT, build a ready image:
+
+```bash
+./tools/package-release.sh
+./tools/make-boot-media.sh
+# → dist/raynu-v-<ver>-boot-media/*-uefi-boot.img (.iso if xorriso present)
+```
+
+Map the `.img` as iDRAC Virtual Media **USB**, or write it with
+`./tools/make-boot-usb.sh`. Full runbook: [`media_maker.md`](media_maker.md).
+
 ## Limits
 
 - This runbook ships the **binary**. Real R640 bring-up quirks (ACPI/APIC/timer)
