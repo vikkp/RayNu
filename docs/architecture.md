@@ -43,4 +43,4 @@ When pillars conflict: safety ([V] architecture) > correctness ([A] audit trail)
 ## Next Milestone Gate
 
 **M5.5 closed:** VMware inventory import → `RAYNU-V-M5-MIGRATE-OK`.  
-**Next after M6.9:** M6 closed (production-ready bar) — [m6_plan.md](m6_plan.md) / [progress.md](progress.md). M6.9 wired (`RAYNU-V-M6-EXT-OK`; Latitude pending).
+**M6 closed** on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met — [m6_plan.md](m6_plan.md) / [progress.md](progress.md).

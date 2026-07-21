@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.9 wired (host); Latitude smoke pending close. Next after close: **M6 closed**.  
-**Prior:** M6.8 closed on Latitude (`RAYNU-V-M6-SOAK-OK`); M6.7–M6.0 closed; M5 closed.  
+**Status:** **closed** — M6.9 closed on Latitude; **M6 production-ready bar met**.  
+**Prior:** M6.9 closed on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`); M6.8–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -266,7 +266,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.9 — External audit + spec review — `RAYNU-V-M6-EXT-OK`
 
-**Status: wired** (host gate; Latitude `./tools/m6-ext-smoke.sh` pending close)
+**Status: closed** (Latitude `./tools/m6-ext-smoke.sh` → `RAYNU-V-M6-EXT-OK`)
 
 **Goal:** External security audit (auditor runs `verus --verify` under ADR-008 pin) **and** external spec review (“are we proving the right things?” — R09). Includes proof-maintenance dry run (upgrade Verus, re-verify, measure breakage) as a documented sub-check.
 
@@ -283,7 +283,10 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 3. Host gate `mgmt/m6_ext_gate.rs` + `tools/m6-ext-smoke.sh` (pin install + `cargo verus verify -p ept_model`) + CI `m6-ext`.
 4. `GAP(CLOSED M6.9): External audit + spec review`.
 
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-EXT-OK` (`80 verified, 0 errors` on `ept_model`).
+
 ---
+
 
 ### Optional / slip-ok (document if deferred)
 
@@ -336,5 +339,6 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.9 wired** (host gate). Close on Latitude via `./tools/m6-ext-smoke.sh` →
-`RAYNU-V-M6-EXT-OK`, then **M6 closed** under CLAUDE.md production-ready row.
+**M6.9 closed** on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`).
+**M6 closed** — production-ready under CLAUDE.md M6 row. Further work is
+maintenance / optional slip-ok items unless a new milestone is opened.

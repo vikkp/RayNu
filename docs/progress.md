@@ -61,8 +61,17 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M5.8 | `RAYNU-V-M5-NUMA-OK` | NUMA ghost *spec* (SRAT/SLIT); `51 verified, 0 errors` (CI + Latitude) |
 | M5.9 | `RAYNU-V-M5-ALLOC-REFINE-OK` | Allocator↔EPT refine + identity abs; `61 verified, 0 errors` (CI + Latitude) |
 | M6.0 | `RAYNU-V-M6-EPTVIO-OK` | EPT-violation exclusivity; `65 verified, 0 errors` (CI + Latitude) |
+| M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode; `72 verified, 0 errors` (CI + Latitude) |
+| M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3; `77 verified, 0 errors` (CI + Latitude) |
+| M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Migrate page transfer; `80 verified, 0 errors` (CI + Latitude) |
+| M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (CI + Latitude) |
+| M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports (CI + Latitude) |
+| M6.6 | `RAYNU-V-M6-HA-OK` | HA failover + harden (CI + Latitude) |
+| M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite (CI + Latitude) |
+| M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak thresholds (CI + Latitude) |
+| M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + R09 review; `80 verified, 0 errors` (CI + Latitude) |
 
-## Verification checkpoint (as of M6.0)
+## Verification checkpoint (as of M6 closed)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -88,7 +97,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `devices/m4_blk_gate` | L0 | Host artifact gate for virtio-blk path |
 | `devices/m4_net_gate` | L0 | Host artifact gate for virtio-net + vSwitch path |
 | `sched/m4_smp_gate` | L0 | Host artifact gate for dual-vCPU SMP probe |
-| Verus proofs (`ept_model`) | **L3** (scoped) | 4K + N-guest + large-page + NUMA *spec* + alloc↔EPT + EPT-violation (M6.0) |
+| Verus proofs (`ept_model`) | **L3** (scoped) | Through migrate-xfer (M6.3); `80 verified, 0 errors` at M6.9 auditor path |
 | `memory/m4_nguest_spec_gate` | L0 | Host artifact gate for N-guest ghost exclusivity (M4.6) |
 | `memory/m4_nguest_verify_gate` | L0 | Host artifact gate for N-guest ADR-006 L3 (M4.7) |
 | `memory/m4_lpage_gate` | L0 | Host artifact gate for large-page ghost *spec* (M4.8) |
@@ -105,7 +114,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/ha` / `m6_ha_gate` | L0 | Mock HA failover + harden checklist; HA-OK (M6.6) |
 | `mgmt/fault` / `m6_fault_gate` | L0 | Fault injection suite; FAULT-OK (M6.7) |
 | `mgmt/soak` / `m6_soak_gate` | L0 | 72-hr soak thresholds; SOAK-OK (M6.8) |
-| `mgmt/ext` / `m6_ext_gate` | L0 | External audit + spec review (M6.9 wired) |
+| `mgmt/ext` / `m6_ext_gate` | L0 | External audit + spec review; EXT-OK (M6.9) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -115,16 +124,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M6.9 wired** (Latitude pending). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
+**M6 closed** on Latitude (M6.0–M6.9). Plan: [m6_plan.md](m6_plan.md) · prior: [m5_plan.md](m5_plan.md) · [m4_plan.md](m4_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M6.1 | `RAYNU-V-M6-HWPTE-OK` | HW PTE bit-decode correspondence (closed) |
-| M6.2 | `RAYNU-V-M6-NUMA-L3-OK` | NUMA affinity L3 (closed) |
-| M6.3 | `RAYNU-V-M6-MIGRATE-XFER-OK` | Live migration page transfer (closed) |
-| M6.4 | `RAYNU-V-M6-AUTH-OK` | REST auth (closed) |
-| M6.5 | `RAYNU-V-M6-PDF-OK` | PDF audit reports (closed) |
-| M6.6 | `RAYNU-V-M6-HA-OK` | HA / security harden (closed) |
-| M6.7 | `RAYNU-V-M6-FAULT-OK` | Fault injection suite (closed) |
-| M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak (closed) |
-| **M6.9** ← wired | `RAYNU-V-M6-EXT-OK` | External audit + spec review (Latitude pending) |
+| M6.1–M6.9 | (see Closed gates) | Production-ready bar met |
+| Optional | Dell Tier‑2 / R640 CI / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) |

@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.8 closed: multi-guest through M5 plus EPT proof track, ops, and soak; M6.9 external audit wired (Latitude pending)."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6 closed: multi-guest platform, EPT proof track, ops harden, soak, and external audit."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.8 closed — EPT proof track, ops, soak; M6.9 external audit wired. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6 closed — EPT proof track, ops, soak, and external audit. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,25 +60,25 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.8 closed.</h2>
+          <h2 class="section__title">M0 → M6 closed.</h2>
           <p class="section__lede">
-            Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
-            NUMA-L3, migrate page transfer, REST auth, PDF, HA harden, fault
-            injection, and 72-hr soak —
-            <code>RAYNU-V-M6-SOAK-OK</code> on host. M6.9 external audit is
-            wired <code>RAYNU-V-M6-EXT-OK</code> (Latitude pending) — see
+            Multi-guest platform under EPT through M5, plus EPT proof track, REST
+            auth, PDF, HA, fault injection, 72-hr soak, and external audit —
+            <code>RAYNU-V-M6-EXT-OK</code> on host
+            (<code>80 verified, 0 errors</code>. Production-ready bar met — see
             <code>docs/m6_plan.md</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-SOAK-OK
 RAYNU-V-M6-EXT-OK
 ==> M6.8 soak smoke PASSED
-==> M6.9 external audit smoke PASSED  # Latitude pending</code></pre>
+==> M6.9 external audit smoke PASSED
+verification results:: 80 verified, 0 errors</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.8: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -416,7 +416,7 @@ RAYNU-V-M6-EXT-OK
                 <li>
                   <span class="journey__gate">M6.9</span>
                   <span class="journey__text"
-                    >External audit + spec review (wired; Latitude pending) →
+                    >External audit + spec review →
                     <code>RAYNU-V-M6-EXT-OK</code></span
                   >
                 </li>
@@ -553,10 +553,9 @@ RAYNU-V-M6-EXT-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.8 is closed (Track A + REST auth + PDF + HA + fault + soak);
-            M6.9 external audit is wired (Latitude pending — see
-            <code>docs/m6_plan.md</code>); after close, <strong>M6</strong> is
-            production-ready.
+            M0→M6 is closed — production-ready under
+            <code>docs/m6_plan.md</code> (EPT proof track + ops + soak +
+            external audit).
 
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

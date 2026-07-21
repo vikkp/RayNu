@@ -328,7 +328,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 
 ### Current progress (lived, not aspirational)
 
-**Through M6.9 wired** (external → `RAYNU-V-M6-EXT-OK`; Latitude pending). Next after close: **M6 closed**. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
+**M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m6_plan.md](docs/m6_plan.md).
 
 ### Risk Hotspots
 
