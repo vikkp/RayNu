@@ -60,20 +60,20 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.0 closed. M7.1 wired.</h2>
+          <h2 class="section__title">M0 → M7.1 closed.</h2>
           <p class="section__lede">
-            Ship kit closed
-            <code>RAYNU-V-M7-SHIP-OK</code>. Network HTTP mgmt plane wired —
-            <code>RAYNU-V-M7-HTTP-OK</code> (in-binary codec + host TCP proof;
-            plaintext lab HTTP; UEFI NIC listen stubbed). Latitude smoke
-            pending — see <code>docs/m7_plan.md</code>.
+            Ship kit + network HTTP mgmt closed on Latitude —
+            <code>RAYNU-V-M7-SHIP-OK</code>,
+            <code>RAYNU-V-M7-HTTP-OK</code> (codec + host TCP; plaintext lab
+            HTTP; UEFI NIC listen still stubbed). Next: datastore —
+            see <code>docs/m7_plan.md</code>.
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-SHIP-OK
 RAYNU-V-M7-HTTP-OK
-==> M7.0 EFI release kit smoke PASSED
-==> M7.1 network HTTP mgmt smoke PASSED</code></pre>
+==> M7.1 network HTTP mgmt smoke PASSED
+host_tcp_serves_spa_and_authed_rest ... ok</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Next after M7.1 close: <strong>M7.2 datastore</strong> —
+            Next: <strong>M7.2 datastore</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>

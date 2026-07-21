@@ -1,7 +1,7 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.1 wired (host); Latitude smoke pending close. Next after close: **M7.2 datastore**.  
-**Prior:** M7.0 closed on Latitude (`RAYNU-V-M7-SHIP-OK`); M6 closed.  
+**Status:** **open** — M7.1 closed on Latitude; next **M7.2 datastore**.  
+**Prior:** M7.1 closed on Latitude (`RAYNU-V-M7-HTTP-OK`); M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
@@ -78,7 +78,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.1 — Network TLS/HTTP mgmt plane — `RAYNU-V-M7-HTTP-OK`
 
-**Status: wired** (host gate; Latitude `./tools/m7-http-smoke.sh` pending close)
+**Status: closed** (Latitude `./tools/m7-http-smoke.sh` → `RAYNU-V-M7-HTTP-OK`)
 
 **Goal:** Browser on operator LAN reaches SPA + REST (not in-process dispatch only).
 
@@ -99,7 +99,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 5. Gate + `tools/m7-http-smoke.sh` + CI `m7-http`.
 6. `GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt`.
 
-**Acceptance:** Latitude smoke + marker. Prefer TLS later; HTTP lab MVP accepted with ADR note.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M7-HTTP-OK` (host TCP SPA + Bearer REST). UEFI NIC listen remains stubbed; TLS deferred.
 
 ---
 
@@ -204,5 +204,5 @@ Do not pull M8 into M7 gate lists.
 
 ## First action
 
-**M7.1 wired** (host gate). Close on Latitude via `./tools/m7-http-smoke.sh` →
-`RAYNU-V-M7-HTTP-OK`, then start **M7.2** datastore.
+**M7.1 closed** on Latitude (`RAYNU-V-M7-HTTP-OK`).  
+**Next: M7.2** — datastore / image library under ADR-009.
