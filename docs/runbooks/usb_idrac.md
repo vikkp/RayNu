@@ -9,7 +9,8 @@
 M7.0 produces an **ops-trustable EFI release kit**: versioned `r640-hypervisor.efi`,
 SHA256 sidecars, size gate (ADR-003), and this one-page deploy path for USB or
 iDRAC virtual media. Closing the kit does **not** require a real R640 boot —
-that is **M7.5** (`RAYNU-V-R640-BOOT-OK`).
+that is **M7.5** (`RAYNU-V-R640-BOOT-OK`). See
+[`r640_boot.md`](r640_boot.md) + [`docs/evidence/r640/`](../evidence/r640/).
 
 ## Build the kit
 
@@ -67,6 +68,6 @@ copying to USB / mapping as virtual media. Do not deploy an unverified binary.
 ## Limits
 
 - This runbook ships the **binary**. Real R640 bring-up quirks (ACPI/APIC/timer)
-  are tracked under **M7.5**.  
+  are tracked under **M7.5** ([`r640_boot.md`](r640_boot.md)).  
 - Network Web UI and ISO install are **M7.1–M7.4**.  
 - Secure Boot signing is not required for M7.0 (optional follow-on).
