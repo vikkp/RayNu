@@ -20,7 +20,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 
 ## Status
 
-**Gates:** M0 → M6.8 closed on Latitude/QEMU — next **M6.9** external audit. Lived: [docs/progress.md](docs/progress.md).
+**Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met). Lived: [docs/progress.md](docs/progress.md). Everest: [docs/hda.md](docs/hda.md).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy → prod bar.  
 Honest distance + month timeline (auto-updated in Cursor): **[docs/hda.md](docs/hda.md)** · prompt card: [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md).
