@@ -1,0 +1,93 @@
+---
+description: Honest Distance Assessment (HDA) — update docs/hda.md on every commit toward Mount Everest
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# HDA auto-update rule (RayNu-V)
+
+You are working in **RayNu-V** (`vikkp/RayNu`). Governance: root `CLAUDE.md`. Lived gates: `docs/progress.md`.
+
+## Mount Everest (product loop)
+
+Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** → production bar (M6.9 external).
+
+Living tracker: **`docs/hda.md`** (YAML frontmatter + scoreboard + month timeline).
+
+## When you MUST update `docs/hda.md`
+
+Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
+
+1. You are asked to **commit**, **push**, or **merge** to `main` / a gate branch.
+2. You close or open a gate marker (`RAYNU-V-*-OK`) or edit `docs/progress.md`.
+3. You touch Everest-path code: `mgmt/`, `assets/webui.html`, `guest/`, `devices/`, `idrac/`, `boot/`, `net/`, `migrate/`, datastore/ISO/HTTP/TLS, release/size tooling, R640 runbooks.
+4. User says: "update HDA", "distance assessment", "months to Everest".
+
+**Skip** only for pure typo/comment-only commits with zero Everest relevance — still preferred to bump `last_commit` if you already have the file open.
+
+## Procedure (every HDA update)
+
+1. **Read** current `docs/hda.md` (frontmatter + scoreboard + changelog).
+2. **Read** `docs/progress.md` (closed gates + next gate).
+3. **Inspect** `git log -20 --oneline`, `git diff` / changed files this session.
+4. **Re-evaluate** Everest criteria E1–E6 and P0 backlog rows (DONE / IN PROGRESS / MISSING).
+5. **Apply velocity model** in `docs/hda.md` → new `overall_pct`, `months_to_everest`, `everest_eta_month`.
+   - Set `months_to_everest_prev` to the old months value **before** changing.
+   - Only **decrease** months when citing concrete DONE evidence (gate, path, test).
+   - **Increase** months if blocked >14d or scope grew.
+6. **Rewrite** these sections so they stay consistent:
+   - YAML frontmatter (`last_updated`, `last_commit`, `last_commit_short`, `updated_by`, months, pct, eta, velocity_* if known)
+   - Scoreboard table + ASCII bars
+   - Four-summit tables (status lines)
+   - Rolling month timeline (Status column + burn-down)
+   - This-commit delta
+   - Blockers (add/resolve)
+   - HDA changelog (new top row)
+7. **Keep** structure/headings stable (Cursor + humans parse them). Do not delete Mount Everest definition.
+8. **Commit message** should mention HDA when scores move, e.g.  
+   `docs(hda): months 4.5→4.0 after R640 serial bring-up`
+
+## Honesty constraints (non-negotiable)
+
+- **Latitude / QEMU ≠ R640.** Never mark E2 (R640 boot) DONE without real PowerEdge R640 evidence.
+- **In-process REST ≠ network UI.** Never mark E3 DONE without a browser-reachable HTTPS (or HTTP) listener path.
+- **bzImage/initrd ≠ ISO deploy.** Never mark E5 DONE without ISO/CD-ROM or documented ISO→boot extract + install-to-disk.
+- **Demo SPA ≠ vSphere-like.** E4 needs datastore + create-VM + media attach + more than list/start/stop.
+- Prefer under-claiming. Inflated % is a project failure mode.
+- Follow Proven Core boundary: ISO/UI/HTTP stay **outside** Proven Core unless a new ADR says otherwise.
+
+## Frontmatter schema (keep keys stable)
+
+```yaml
+hda_version: 1
+last_updated: YYYY-MM-DD
+last_commit: full sha or PENDING
+last_commit_short: 7-char or PENDING
+updated_by: cursor | human | ci
+mount_everest_target: string
+months_to_everest: float
+months_to_everest_prev: float
+velocity_commits_30d: int
+velocity_gates_30d: int
+overall_pct: int
+confidence: low | medium | high
+baseline_date: YYYY-MM-DD
+baseline_months: float
+everest_eta_month: YYYY-MM
+```
+
+## Commit integration (Cursor)
+
+When user asks to commit:
+
+1. Stage code changes.
+2. Refresh `docs/hda.md` as above.
+3. Stage `docs/hda.md`.
+4. Commit once (preferred) or code commit + immediate `docs(hda):` commit.
+5. In the PR/summary, one line: `HDA: months_to_everest X→Y · overall A%→B% · ETA YYYY-MM`.
+
+## Optional one-shot user phrases
+
+- `hda` / `update hda` / `everest` → only run HDA procedure.
+- `hda tight` → only frontmatter + scoreboard + changelog (skip long prose if unchanged).
