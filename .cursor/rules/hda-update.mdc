@@ -1,5 +1,5 @@
 ---
-description: Honest Distance Assessment (HDA) — update docs/hda.md on every commit toward Mount Everest
+description: Honest Distance Assessment (HDA) — update docs/hda.md + site tracker on every commit toward Mount Everest
 globs:
   - "**/*"
 alwaysApply: true
@@ -13,9 +13,10 @@ You are working in **RayNu-V** (`vikkp/RayNu`). Governance: root `CLAUDE.md`. Li
 
 Ship EFI → boot on **real Dell PowerEdge R640** → **network** vSphere-like UI → **deploy Linux ISO** → production bar (M6.9 external).
 
-Living tracker: **`docs/hda.md`** (YAML frontmatter + scoreboard + month timeline).
+Living tracker (source of truth): **`docs/hda.md`** (YAML frontmatter + scoreboard + month timeline).  
+Public site page: **`site/hda.html`** (reads **`site/hda.json`**).
 
-## When you MUST update `docs/hda.md`
+## When you MUST update HDA (+ site sync)
 
 Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
 
@@ -37,16 +38,24 @@ Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
    - Only **decrease** months when citing concrete DONE evidence (gate, path, test).
    - **Increase** months if blocked >14d or scope grew.
 6. **Rewrite** these sections so they stay consistent:
-   - YAML frontmatter (`last_updated`, `last_commit`, `last_commit_short`, `updated_by`, months, pct, eta, velocity_* if known)
+   - YAML frontmatter (`last_updated`, `last_commit`, `last_commit_short`, `updated_by`, months, pct, eta, velocity_*, `summit_*_pct`)
    - Scoreboard table + ASCII bars
    - Four-summit tables (status lines)
    - Rolling month timeline (Status column + burn-down)
    - This-commit delta
    - Blockers (add/resolve)
    - HDA changelog (new top row)
-7. **Keep** structure/headings stable (Cursor + humans parse them). Do not delete Mount Everest definition.
-8. **Commit message** should mention HDA when scores move, e.g.  
-   `docs(hda): months 4.5→4.0 after R640 serial bring-up`
+7. **Sync the public site tracker (required for freshness):**
+   ```bash
+   ./tools/sync-hda-site.sh
+   ./tools/sync-hda-site.sh --check
+   ```
+   This regenerates `site/hda.json` from frontmatter. Stage **both** `docs/hda.md` and `site/hda.json`.
+   If summit copy on `site/hda.html` is wrong (notes/labels), fix HTML in the same commit.
+8. **Keep** structure/headings stable (Cursor + humans parse them). Do not delete Mount Everest definition.
+9. **Commit message** should mention HDA when scores move, e.g.  
+   `docs(hda): months 4.5→4.0 after R640 serial bring-up`  
+   Footer line: `HDA: months X→Y · overall A%→B% · ETA YYYY-MM`
 
 ## Honesty constraints (non-negotiable)
 
@@ -75,6 +84,12 @@ confidence: low | medium | high
 baseline_date: YYYY-MM-DD
 baseline_months: float
 everest_eta_month: YYYY-MM
+summit_core_pct: int
+summit_efi_pct: int
+summit_r640_pct: int
+summit_ui_pct: int
+summit_iso_pct: int
+summit_prod_pct: int
 ```
 
 ## Commit integration (Cursor)
@@ -83,11 +98,14 @@ When user asks to commit:
 
 1. Stage code changes.
 2. Refresh `docs/hda.md` as above.
-3. Stage `docs/hda.md`.
-4. Commit once (preferred) or code commit + immediate `docs(hda):` commit.
-5. In the PR/summary, one line: `HDA: months_to_everest X→Y · overall A%→B% · ETA YYYY-MM`.
+3. Run `./tools/sync-hda-site.sh` (and `--check`).
+4. Stage `docs/hda.md` + `site/hda.json` (+ `site/hda.html` if copy changed).
+5. Commit once (preferred) or code commit + immediate `docs(hda):` commit.
+6. In the PR/summary, one line: `HDA: months_to_everest X→Y · overall A%→B% · ETA YYYY-MM`.
+
+CI enforces freshness: `./tools/sync-hda-site.sh --check` must pass.
 
 ## Optional one-shot user phrases
 
-- `hda` / `update hda` / `everest` → only run HDA procedure.
-- `hda tight` → only frontmatter + scoreboard + changelog (skip long prose if unchanged).
+- `hda` / `update hda` / `everest` → only run HDA procedure + site sync.
+- `hda tight` → only frontmatter + scoreboard + changelog + `./tools/sync-hda-site.sh`.

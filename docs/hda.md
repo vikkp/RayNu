@@ -14,6 +14,12 @@ confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
 everest_eta_month: "2026-11"
+summit_core_pct: 78
+summit_efi_pct: 85
+summit_r640_pct: 25
+summit_ui_pct: 12
+summit_iso_pct: 8
+summit_prod_pct: 100
 ---
 
 # Honest Distance Assessment (HDA)
@@ -227,11 +233,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | `8f091fd` (M6.9 merge) + this docs sync |
-| Summary | M6.9 / E6 closed on Latitude; README + HDA sync after #108 |
-| Everest impact | E6 DONE; P0-9 DONE; months 4.5→4.0; overall 28%→39%; ETA 2026-12→2026-11 |
-| Gates touched | `RAYNU-V-M6-EXT-OK` (Latitude); numbered M6 closed |
-| Months Δ | 4.5 → 4.0 |
+| Commit | site HDA page + sync pipeline |
+| Summary | Public `site/hda.html` tracker; `site/hda.json` from frontmatter; CI `--check` |
+| Everest impact | Visibility only — months/scoreboard unchanged (keep current HDA) |
+| Gates touched | none (docs/site surface) |
+| Months Δ | 4.0 → 4.0 |
 
 ---
 
@@ -253,6 +259,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-07-21 | site-hda | 4.0 | 39 | Public `site/hda.html` + `sync-hda-site.sh` (numbers unchanged) |
 | 2026-07-21 | 8f091fd | 4.0 | 39 | M6.9 EXT + E6 DONE on Latitude (`80 verified, 0 errors`); P0-9 closed; ETA→2026-11 |
 | 2026-07-20 | bootstrap | 4.5 | 28 | Initial HDA; Everest = EFI+R640+UI+ISO+M6.9 |
 
@@ -273,7 +280,8 @@ Do not claim:  "vSphere alternative" or "ISO deploy" until E3–E5 green
 ## Maintenance
 
 - **Owner:** whoever merges to `main` (Cursor agent updates HDA in the same change or immediate follow-up).  
+- **Public site:** [`site/hda.html`](../site/hda.html) ← synced via [`./tools/sync-hda-site.sh`](../tools/sync-hda-site.sh) → [`site/hda.json`](../site/hda.json).  
 - **Rule file:** [`.cursor/rules/hda-update.mdc`](../.cursor/rules/hda-update.mdc)  
 - **Prompt card:** [`docs/hda-cursor-prompt.md`](hda-cursor-prompt.md)  
-- **Do not** edit scoreboard numbers without updating frontmatter + changelog.  
+- **Do not** edit scoreboard numbers without updating frontmatter + changelog **and** re-running `./tools/sync-hda-site.sh`.  
 - **Do not** mark E2 DONE without real R640 evidence in `progress.md` or runbook artifact.
