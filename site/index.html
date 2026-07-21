@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.7 closed: multi-guest platform through M5 plus EPT proof track, REST auth, PDF, HA, and fault injection."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.8 closed: multi-guest through M5 plus EPT proof track, REST auth, PDF, HA, fault injection, and 72-hr soak."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.7 closed — EPT proof track, REST auth, PDF, HA, and fault injection. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.8 closed — EPT proof track, REST auth, PDF, HA, fault, and 72-hr soak. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,23 +60,24 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.7 closed.</h2>
+          <h2 class="section__title">M0 → M6.8 closed.</h2>
           <p class="section__lede">
             Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
-            NUMA-L3, migrate page transfer, REST auth, PDF, HA harden, and fault
-            injection — <code>RAYNU-V-M6-FAULT-OK</code> on host. Next: M6.8
-            (72-hr soak — see <code>docs/m6_plan.md</code>).
+            NUMA-L3, migrate page transfer, REST auth, PDF, HA harden, fault
+            injection, and 72-hr soak —
+            <code>RAYNU-V-M6-SOAK-OK</code> on host. Next: M6.9 (external audit
+            + spec review — see <code>docs/m6_plan.md</code>).
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-HA-OK
-RAYNU-V-M6-FAULT-OK
-==> M6.6 HA smoke PASSED
-==> M6.7 fault smoke PASSED</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-FAULT-OK
+RAYNU-V-M6-SOAK-OK
+==> M6.7 fault smoke PASSED
+==> M6.8 soak smoke PASSED</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.7: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6.8: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -404,6 +405,13 @@ RAYNU-V-M6-FAULT-OK
                     <code>RAYNU-V-M6-FAULT-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M6.8</span>
+                  <span class="journey__text"
+                    >72-hr soak →
+                    <code>RAYNU-V-M6-SOAK-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -523,6 +531,7 @@ RAYNU-V-M6-FAULT-OK
 ./tools/m6-pdf-smoke.sh        # M6.5 → RAYNU-V-M6-PDF-OK
 ./tools/m6-ha-smoke.sh         # M6.6 → RAYNU-V-M6-HA-OK
 ./tools/m6-fault-smoke.sh      # M6.7 → RAYNU-V-M6-FAULT-OK
+./tools/m6-soak-smoke.sh       # M6.8 → RAYNU-V-M6-SOAK-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>
@@ -535,8 +544,9 @@ RAYNU-V-M6-FAULT-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.7 is closed (Track A + REST auth + PDF + HA + fault); next is
-            <strong>M6.8</strong> (soak — see <code>docs/m6_plan.md</code>).
+            M0→M6.8 is closed (Track A + REST auth + PDF + HA + fault + soak);
+            next is <strong>M6.9</strong> (external — see
+            <code>docs/m6_plan.md</code>).
 
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"

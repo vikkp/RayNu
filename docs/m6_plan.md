@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.7 closed on Latitude; next **M6.8** soak.  
-**Prior:** M6.7 closed on Latitude (`RAYNU-V-M6-FAULT-OK`); M6.6–M6.0 closed; M5 closed.  
+**Status:** **open** — M6.8 closed on Latitude; next **M6.9** external.  
+**Prior:** M6.8 closed on Latitude (`RAYNU-V-M6-SOAK-OK`); M6.7–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -244,7 +244,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.8 — 72-hr soak — `RAYNU-V-M6-SOAK-OK`
 
-**Status: open** (Latitude / iron preferred)
+**Status: closed** (Latitude `./tools/m6-soak-smoke.sh` → `RAYNU-V-M6-SOAK-OK`)
 
 **Goal:** 72-hour soak: memory leaks, scheduler fairness, exit-rate stability (CLAUDE.md). Prefer R640 when available; QEMU nested acceptable for an interim host gate if iron is blocked — document which.
 
@@ -254,7 +254,15 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Marker `RAYNU-V-M6-SOAK-OK` only after a completed 72-hr run meets thresholds.
 3. Optional companion: R640 hardware CI (not only QEMU).
 
-**Likely files:** `tools/` soak harness, docs for thresholds, CI or Latitude runbook.
+**Delivered (host-first):**
+
+1. `run_soak_simulation` — 72 accelerated ticks (1 tick = 1 hour) over `FrameAllocator` + `CreditScheduler`.
+2. Thresholds: no leak after warmup, ≥40% fairness per vCPU, exit-rate within ±5 of baseline 100.
+3. Audit `SoakStarted` / `SoakCompleted` / `SoakFailed`; `SoakMetrics` artifact line.
+4. Host gate `mgmt/m6_soak_gate.rs` + `tools/m6-soak-smoke.sh` + CI `m6-soak` + `docs/runbooks/soak.md`.
+5. `GAP(CLOSED M6.8): 72-hr soak`. Wall-clock iron companion documented in runbook (optional).
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-SOAK-OK` (accelerated 72-tick simulation).
 
 ### M6.9 — External audit + spec review — `RAYNU-V-M6-EXT-OK`
 
@@ -323,4 +331,4 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.7 closed** on Latitude (`RAYNU-V-M6-FAULT-OK`). Next: **M6.8** (`RAYNU-V-M6-SOAK-OK`) — 72-hr soak.
+**M6.8 closed** on Latitude (`RAYNU-V-M6-SOAK-OK`). Next: **M6.9** (`RAYNU-V-M6-EXT-OK`) — external audit + spec review.

@@ -82,6 +82,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/m6-pdf-smoke.sh            # PDF reports → RAYNU-V-M6-PDF-OK
 ./tools/m6-ha-smoke.sh             # HA failover + harden → RAYNU-V-M6-HA-OK
 ./tools/m6-fault-smoke.sh          # fault injection → RAYNU-V-M6-FAULT-OK
+./tools/m6-soak-smoke.sh           # 72-hr soak thresholds → RAYNU-V-M6-SOAK-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

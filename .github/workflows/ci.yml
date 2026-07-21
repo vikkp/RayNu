@@ -417,6 +417,19 @@ jobs:
       - name: M6.7 fault smoke → RAYNU-V-M6-FAULT-OK
         run: ./tools/m6-fault-smoke.sh
 
+  # M6.8: 72-hr soak thresholds (accelerated simulation). Hard-fail.
+  m6-soak:
+    name: M6.8 soak (SOAK-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M6.8 soak smoke → RAYNU-V-M6-SOAK-OK
+        run: ./tools/m6-soak-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)
