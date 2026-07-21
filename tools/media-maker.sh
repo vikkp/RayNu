@@ -40,10 +40,12 @@ if [[ -z "$KIT" || ! -f "$KIT/r640-hypervisor.efi" ]]; then
 fi
 
 echo "==> using kit: $KIT"
+echo "==> make-boot-media will verify sha256 automatically"
 ./tools/make-boot-media.sh --kit "$KIT"
 
 echo
 echo "Next:"
+echo "  • Copy hashes from dist/*-boot-media/EVIDENCE.txt into iron evidence"
 echo "  • iDRAC: map the .img (USB) or .iso (CD) in Virtual Media — preferred"
 echo "  • Physical USB: ./tools/make-boot-usb.sh --img <path-to-.img> --disk /dev/diskN"
 echo "  • Field guide: docs/runbooks/r640_field_guide.md"
