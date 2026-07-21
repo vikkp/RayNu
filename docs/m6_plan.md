@@ -320,7 +320,8 @@ RAYNU-V-M6-EXT-OK
 
 **Optional / slip-ok with docs:** Dell Tier‑2, dedicated R640 CI job, bitmap L3 polish.
 
-**M6 closed ⇒ product is production-ready under CLAUDE.md M6 row** (HA, hardened, soaked, externally reviewed). Further releases are maintenance / feature tracks outside this numbered plan unless a new milestone is opened.
+**M6 closed ⇒ product is production-ready under CLAUDE.md M6 row** (HA, hardened, soaked, externally reviewed).  
+Further productization is **M7 — Mount Everest** ([m7_plan.md](m7_plan.md) / [ADR-009](adr/ADR-009.md)).
 
 ---
 

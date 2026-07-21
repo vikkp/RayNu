@@ -234,10 +234,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | M7 governance (ADR-009 + m7_plan + CLAUDE) |
-| Summary | M7 Mount Everest accepted; next build = M7.0 ship kit; M8 = cluster sketch |
-| Everest impact | Governance only — months/scoreboard unchanged (4.0 / 39%) |
-| Gates touched | none yet (plan open) |
+| Commit | `200b0ec` (M7 governance merge #111) |
+| Summary | M7 Mount Everest on main; next build = M7.0 ship kit; M8 = cluster sketch |
+| Everest impact | Governance merged — months/scoreboard unchanged (4.0 / 39%) |
+| Gates touched | none yet (plan open; first code gate M7.0) |
 | Months Δ | 4.0 → 4.0 |
 
 ---
