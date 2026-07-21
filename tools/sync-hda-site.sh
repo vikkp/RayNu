@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync docs/hda.md YAML frontmatter → site/hda.json (public Mount Everest tracker).
+# Sync docs/hda.md YAML frontmatter -> site/hda.json (public Mount Everest tracker).
 # Usage:
 #   ./tools/sync-hda-site.sh           # write site/hda.json
 #   ./tools/sync-hda-site.sh --check   # exit 1 if site/hda.json is stale
@@ -19,13 +19,17 @@ if [[ ! -f "$SRC" ]]; then
   exit 1
 fi
 
-python3 - "$SRC" "$OUT" "$CHECK" <<'PY'
-import json, re, sys
+export HDA_SRC="$SRC"
+export HDA_OUT="$OUT"
+export HDA_CHECK="$CHECK"
+
+python3 <<'ENDPYTHON'
+import json, os, re, sys
 from pathlib import Path
 
-src_path = Path(sys.argv[1])
-out_path = Path(sys.argv[2])
-check = sys.argv[3] == "1"
+src_path = Path(os.environ["HDA_SRC"])
+out_path = Path(os.environ["HDA_OUT"])
+check = os.environ["HDA_CHECK"] == "1"
 text = src_path.read_text(encoding="utf-8")
 
 if not text.startswith("---"):
@@ -89,7 +93,7 @@ payload = {
         "boot real R640",
         "network vSphere-like UI",
         "deploy Linux ISO",
-        "prod bar (M6.9)",
+        "M7 single-host ship",
     ],
     "months_to_everest": data["months_to_everest"],
     "months_to_everest_prev": data["months_to_everest_prev"],
@@ -122,13 +126,13 @@ if check:
         print("error: site/hda.json is stale vs docs/hda.md frontmatter", file=sys.stderr)
         print("run: ./tools/sync-hda-site.sh", file=sys.stderr)
         sys.exit(1)
-    print("HDA site sync OK — site/hda.json matches docs/hda.md")
+    print("HDA site sync OK - site/hda.json matches docs/hda.md")
     sys.exit(0)
 
 out_path.write_text(encoded, encoding="utf-8")
 print(f"wrote {out_path}")
-print(
-    f"HDA: months_to_everest {payload['months_to_everest']} · "
-    f"overall {payload['overall_pct']}% · ETA {payload['everest_eta_month']}"
-)
-PY
+m = payload["months_to_everest"]
+o = payload["overall_pct"]
+e = payload["everest_eta_month"]
+print(f"HDA: months_to_everest {m} / overall {o}% / ETA {e}")
+ENDPYTHON
