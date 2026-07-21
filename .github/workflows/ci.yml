@@ -537,6 +537,17 @@ jobs:
       - name: M7.5 R640 scaffold smoke → RAYNU-V-M7-R640-SCAFFOLD-OK
         run: ./tools/m7-r640-smoke.sh
 
+  # Boot media maker (FAT img for iDRAC/USB). Hard-fail on layout smoke.
+  boot-media:
+    name: Boot media maker (BOOT-MEDIA-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dosfstools + mtools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dosfstools mtools
+      - name: Boot-media smoke → RAYNU-V-M7-BOOT-MEDIA-OK
+        run: ./tools/make-boot-media-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)

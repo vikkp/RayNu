@@ -138,6 +138,8 @@ If the EFI is already built:
 SKIP_BUILD=1 ./tools/package-release.sh
 ```
 
+Interactive alternative: `./tools/media-maker.sh` (option 2 builds a kit).
+
 ### b. Verify checksums (mandatory)
 
 ```bash
@@ -147,7 +149,7 @@ sha256sum -c SHA256SUMS
 ```
 
 Both commands must report **OK**. If not, stop — do not copy a bad binary to
-USB or vMedia.
+USB or vMedia. (`make-boot-media.sh` also re-checks the EFI sidecar when present.)
 
 ### c. Write down what you will put on media
 
@@ -159,46 +161,76 @@ You will paste the SHA256 into the evidence template later.
 
 ---
 
-## 3. Prepare boot media (USB **or** iDRAC virtual media)
+## 3. Prepare boot media (media maker — preferred)
 
-Pick **one** path. Goal: firmware finds `\EFI\BOOT\BOOTX64.EFI`.
+**Prefer the helper** instead of hand-formatting a stick. See
+[`media_maker.md`](media_maker.md).
 
-### a. Option A — USB stick
+Goal: firmware finds `\EFI\BOOT\BOOTX64.EFI`.
 
-1. Format the stick as **FAT32** with an EFI System Partition layout your OS
-   tools support (macOS Disk Utility / `diskutil`, Windows Rufus/diskmgmt, or
-   Linux `mkfs.vfat` on a suitable partition).
-2. Create folders: `EFI` → `BOOT`.
-3. Copy the verified binary:
+### a. Make iDRAC / USB images on the laptop
 
-   ```text
-   r640-hypervisor.efi  →  \EFI\BOOT\BOOTX64.EFI
+```bash
+# From repo root (uses newest dist/raynu-v-* kit, or pass --kit)
+./tools/make-boot-media.sh
+
+# Interactive:
+./tools/media-maker.sh
+```
+
+You get:
+
+```text
+dist/raynu-v-<ver>-boot-media/
+  raynu-v-<ver>-uefi-boot.img    ← map as iDRAC Virtual Media *USB* (preferred)
+  raynu-v-<ver>-uefi-boot.iso    ← map as iDRAC Virtual Media *CD* (if xorriso)
+  MEDIA.txt
+  *.sha256
+```
+
+Needs `dosfstools` + `mtools` (`xorriso` optional). On Ubuntu:
+`sudo apt install dosfstools mtools xorriso`. On macOS: `brew install dosfstools mtools xorriso`.
+
+- [ ] Boot `.img` (and optional `.iso`) built  
+- [ ] Image SHA256 recorded: _______________
+
+### b. Option A — iDRAC Virtual Media (preferred on a racked R640)
+
+1. iDRAC → **Virtual Console** → **Virtual Media**.
+2. Map `*-uefi-boot.img` as a **virtual USB** stick (best), or `*-uefi-boot.iso`
+   as a virtual CD.
+3. Set **next boot** to that virtual device.
+4. - [ ] Virtual media mapped
+
+### c. Option B — Physical USB stick
+
+1. Build the `.img` as in **3a**.
+2. List disks carefully (`diskutil list` on macOS, `lsblk` on Linux).
+3. Write the image (destructive):
+
+   ```bash
+   ./tools/make-boot-usb.sh \
+     --img dist/raynu-v-<ver>-boot-media/raynu-v-<ver>-uefi-boot.img \
+     --disk /dev/diskN
    ```
 
-   (Renaming to `BOOTX64.EFI` is what most UEFI firmware auto-boots.)
-4. Safely eject the stick.
-5. Plug it into a USB port on the **R640** (front or rear — note which for
-   evidence).
-6. - [ ] USB prepared and inserted
+4. Plug the stick into the R640; note front/rear for evidence.
+5. - [ ] USB prepared and inserted
 
-### b. Option B — iDRAC virtual media
+### d. Manual FAT copy (fallback only)
 
-1. On the laptop, keep the release directory handy (or make a small FAT image /
-   folder that contains `\EFI\BOOT\BOOTX64.EFI` as above).
-2. In iDRAC: **Virtual Console** → **Virtual Media** (Connect Virtual Drives /
-   Map CD/DVD/USB — labels vary by iDRAC version).
-3. Map the folder or image that contains `BOOTX64.EFI`.
-4. Confirm the mapping shows as connected.
-5. - [ ] Virtual media mapped
+Only if the helper cannot run on this laptop:
 
-### c. Choose “next boot” source (do this before reboot)
+1. Format the stick as **FAT32**.
+2. Create `EFI/BOOT` and copy `r640-hypervisor.efi` → `\EFI\BOOT\BOOTX64.EFI`.
+3. See also [`usb_idrac.md`](usb_idrac.md).
 
-- **USB:** On the next reboot, use **F11** Boot Manager (or iDRAC “Next boot”
-  override) and select the USB device once.
-- **vMedia:** In iDRAC, set **Next boot** to virtual CD/USB / removable device
-  as offered, **or** pick it from F11 once.
+### e. Choose “next boot” source (do this before reboot)
 
-- [ ] Next-boot method decided: USB / vMedia (circle one)
+- **vMedia:** iDRAC next-boot override to virtual USB/CD, **or** F11 once.
+- **USB:** F11 Boot Manager → select the USB device once.
+
+- [ ] Next-boot method decided: vMedia USB / vMedia CD / physical USB (circle)
 
 ---
 
@@ -303,7 +335,7 @@ Only after the evidence PR is honest and complete.
 
 1. Get box alive → power → iDRAC network → virtual console open  
 2. Build + checksum the EFI on a laptop  
-3. Put `BOOTX64.EFI` on USB or iDRAC vMedia; set next boot  
+3. `./tools/make-boot-media.sh` → map `.img` in iDRAC (or `make-boot-usb.sh`)  
 4. Reboot; capture COM1; save log; unmount media  
 5. Fill dated evidence from `TEMPLATE.md`  
 6. Close in git only with real iron proof  
