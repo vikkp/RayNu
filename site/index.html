@@ -61,22 +61,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.2 closed on Latitude.</h2>
+          <h2 class="section__title">M0 → M7.3 closed on Latitude.</h2>
           <p class="section__lede">
             Software gates close on <strong>Dell Latitude + QEMU nested
-            KVM</strong> — not yet on PowerEdge R640. Ship kit + network HTTP +
-            datastore closed on Latitude —
-            <code>RAYNU-V-M7-STORE-OK</code> (register/list/delete + ESP-shaped
-            host catalog; UEFI persist still stubbed). Next: ISO deploy — see
+            KVM</strong> — not yet on PowerEdge R640. ISO deploy path closed on
+            Latitude —
+            <code>RAYNU-V-M7-ISO-OK</code> (kernel-extract bind + virtio-blk
+            install plan; <strong>El Torito/CD-ROM still stubbed</strong>; host
+            package smoke ~0s, not a QEMU installer run). See
             <code>docs/m7_plan.md</code>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-STORE-OK
-==> M7.2 datastore smoke PASSED
-host_catalog_persist_roundtrip ... ok</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-ISO-OK
+==> M7.3 ISO deploy smoke PASSED
+register_bind_install_roundtrip ... ok</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Real R640 boot remains open
             (<code>RAYNU-V-R640-BOOT-OK</code> / HDA E2). Next:
-            <strong>M7.3 ISO</strong> —
+            <strong>M7.4 UI</strong> —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -469,6 +470,13 @@ host_catalog_persist_roundtrip ... ok</code></pre>
                     <code>RAYNU-V-M7-STORE-OK</code></span
                   >
                 </li>
+                <li>
+                  <span class="journey__gate">M7.3</span>
+                  <span class="journey__text"
+                    >ISO extract-boot deploy (lab host smoke) →
+                    <code>RAYNU-V-M7-ISO-OK</code></span
+                  >
+                </li>
               </ol>
             </div>
           </div>
@@ -599,6 +607,7 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
 ./tools/m7-http-smoke.sh       # M7.1 → RAYNU-V-M7-HTTP-OK
 ./tools/m7-store-smoke.sh      # M7.2 → RAYNU-V-M7-STORE-OK
+./tools/m7-iso-smoke.sh        # M7.3 → RAYNU-V-M7-ISO-OK
 ./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
         </div>
       </section>

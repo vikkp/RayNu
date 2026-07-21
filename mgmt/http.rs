@@ -13,6 +13,7 @@ use super::api::{
     auth_allows, dispatch_rest, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{dispatch_store_rest, ImageTable};
+use super::iso::{dispatch_iso_rest, IsoDeployPlan};
 use super::webui::{load_webui, webui_raw_bytes};
 use super::VmTable;
 
@@ -211,11 +212,12 @@ impl HeaderBuf {
     }
 }
 
-/// Handle one HTTP exchange against `VmTable` + image library (SPA or REST).
+/// Handle one HTTP exchange against `VmTable` + image library + ISO plan (SPA or REST).
 /// Writes the response into `out`; returns `Some(n)` bytes written.
 pub fn handle_http_request(
     table: &mut VmTable,
     images: &mut ImageTable,
+    iso_plan: &mut IsoDeployPlan,
     raw: &str,
     out: &mut [u8],
 ) -> Option<usize> {
@@ -238,6 +240,8 @@ pub fn handle_http_request(
     };
     let resp: RestResponse = if parsed.path == "/images" || parsed.path.starts_with("/images/") {
         dispatch_store_rest(images, req)
+    } else if parsed.path == "/iso/deploy" || parsed.path.starts_with("/iso/") {
+        dispatch_iso_rest(images, iso_plan, req)
     } else {
         dispatch_rest(table, req)
     };
@@ -271,8 +275,9 @@ pub fn prop_http_mgmt_package() -> bool {
     }
     let mut table = VmTable::new();
     let mut images = ImageTable::new();
+    let mut iso_plan = IsoDeployPlan::empty();
     let mut out = [0u8; 8192];
-    let n = handle_http_request(&mut table, &mut images, raw, &mut out).unwrap_or(0);
+    let n = handle_http_request(&mut table, &mut images, &mut iso_plan, raw, &mut out).unwrap_or(0);
     if n == 0 {
         return false;
     }

@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met).  
-**Next:** **M7.3 ISO** (M7.2 datastore closed — `RAYNU-V-M7-STORE-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
+**Next:** **M7.4 UI** (M7.3 ISO closed on Latitude host smoke — `RAYNU-V-M7-ISO-OK`; El Torito residual). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).
