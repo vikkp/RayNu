@@ -12,7 +12,7 @@
 use crate::audit_log;
 use crate::audit::AuditEvent;
 
-use super::{LifecycleError, VmLifecycle, VmTable, MGMT_GUEST_CAP};
+use super::{LifecycleError, VmLifecycle, VmSpec, VmTable, MGMT_GUEST_CAP};
 
 /// Host / CI marker when the M5.1 API gate passes.
 pub const M5_API_OK_MARKER: &str = "RAYNU-V-M5-API-OK";
@@ -56,7 +56,14 @@ pub enum ApiParseError {
 pub enum ApiReply {
     Ok,
     Listed { count: usize },
-    Record { guest_id: u64, state: VmLifecycle },
+    Record {
+        guest_id: u64,
+        state: VmLifecycle,
+        cpu: u8,
+        ram_mib: u32,
+        disk_mib: u32,
+        iso_id: u64,
+    },
     /// M7.2 image library record (`/images/{id}`).
     Image {
         id: u64,
@@ -195,7 +202,8 @@ pub fn parse_rest_method(s: &str) -> Result<RestMethod, ApiParseError> {
 /// Routes:
 /// - `GET  /vms`              → list
 /// - `GET  /vms/{id}`         → get one
-/// - `POST /vms/{id}`         → create
+/// - `POST /vms/{id}`         → create (default spec)
+/// - `POST /vms/{id}/spec/{cpu}/{ram_mib}/{disk_mib}/{iso_id}` → create with fields (M7.4)
 /// - `POST /vms/{id}/start`   → start
 /// - `POST /vms/{id}/stop`    → stop
 /// - `DELETE /vms/{id}`       → destroy
@@ -227,6 +235,10 @@ pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse 
                 reply: Some(ApiReply::Record {
                     guest_id: r.guest_id,
                     state: r.state,
+                    cpu: r.cpu,
+                    ram_mib: r.ram_mib,
+                    disk_mib: r.disk_mib,
+                    iso_id: r.iso_id,
                 }),
             },
             None => RestResponse {
@@ -237,6 +249,24 @@ pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse 
         Ok(RestOp::Create { guest_id }) => {
             rest_lifecycle(table, CliCommand::Create { guest_id }, 201)
         }
+        Ok(RestOp::CreateSpec { guest_id, spec }) => match table.create_with_spec(guest_id, spec) {
+            Ok(()) => RestResponse {
+                status: 201,
+                reply: Some(ApiReply::Ok),
+            },
+            Err(LifecycleError::NotFound) => RestResponse {
+                status: 404,
+                reply: None,
+            },
+            Err(LifecycleError::BadState) | Err(LifecycleError::InvalidGuest) => RestResponse {
+                status: 409,
+                reply: None,
+            },
+            Err(LifecycleError::Full) => RestResponse {
+                status: 507,
+                reply: None,
+            },
+        },
         Ok(RestOp::Start { guest_id }) => {
             rest_lifecycle(table, CliCommand::Start { guest_id }, 200)
         }
@@ -259,6 +289,7 @@ enum RestOp {
     List,
     Get { guest_id: u64 },
     Create { guest_id: u64 },
+    CreateSpec { guest_id: u64, spec: VmSpec },
     Start { guest_id: u64 },
     Stop { guest_id: u64 },
     Destroy { guest_id: u64 },
@@ -293,21 +324,68 @@ fn route_rest(method: RestMethod, path: &str) -> Result<RestOp, ApiParseError> {
             _ => Err(ApiParseError::BadPath),
         };
     }
-    // /vms/{id} or /vms/{id}/start|stop
+    // /vms/{id} or /vms/{id}/start|stop or /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}
     let rest = path.strip_prefix("/vms/").ok_or(ApiParseError::BadPath)?;
     let mut segs = rest.split('/');
     let id_s = segs.next().ok_or(ApiParseError::BadPath)?;
     let guest_id = parse_u64(id_s).ok_or(ApiParseError::BadGuestId)?;
     let action = segs.next();
-    if segs.next().is_some() {
-        return Err(ApiParseError::BadPath);
-    }
     match (method, action) {
-        (RestMethod::Get, None) => Ok(RestOp::Get { guest_id }),
-        (RestMethod::Post, None) => Ok(RestOp::Create { guest_id }),
-        (RestMethod::Post, Some("start")) => Ok(RestOp::Start { guest_id }),
-        (RestMethod::Post, Some("stop")) => Ok(RestOp::Stop { guest_id }),
-        (RestMethod::Delete, None) => Ok(RestOp::Destroy { guest_id }),
+        (RestMethod::Get, None) => {
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::Get { guest_id })
+        }
+        (RestMethod::Post, None) => {
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::Create { guest_id })
+        }
+        (RestMethod::Post, Some("start")) => {
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::Start { guest_id })
+        }
+        (RestMethod::Post, Some("stop")) => {
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::Stop { guest_id })
+        }
+        (RestMethod::Post, Some("spec")) => {
+            let cpu = parse_u64(segs.next().ok_or(ApiParseError::BadPath)?)
+                .ok_or(ApiParseError::BadPath)?;
+            let ram = parse_u64(segs.next().ok_or(ApiParseError::BadPath)?)
+                .ok_or(ApiParseError::BadPath)?;
+            let disk = parse_u64(segs.next().ok_or(ApiParseError::BadPath)?)
+                .ok_or(ApiParseError::BadPath)?;
+            let iso = parse_u64(segs.next().ok_or(ApiParseError::BadPath)?)
+                .ok_or(ApiParseError::BadPath)?;
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            if cpu > 64 || ram > u64::from(u32::MAX) || disk > u64::from(u32::MAX) {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::CreateSpec {
+                guest_id,
+                spec: VmSpec {
+                    cpu: cpu as u8,
+                    ram_mib: ram as u32,
+                    disk_mib: disk as u32,
+                    iso_id: iso,
+                },
+            })
+        }
+        (RestMethod::Delete, None) => {
+            if segs.next().is_some() {
+                return Err(ApiParseError::BadPath);
+            }
+            Ok(RestOp::Destroy { guest_id })
+        }
         _ => Err(ApiParseError::BadPath),
     }
 }
@@ -359,6 +437,10 @@ pub fn prop_cli_rest_roundtrip() -> bool {
             != Some(ApiReply::Record {
                 guest_id: 7,
                 state: VmLifecycle::Stopped,
+                cpu: 1,
+                ram_mib: 512,
+                disk_mib: 1024,
+                iso_id: 0,
             })
     {
         return false;

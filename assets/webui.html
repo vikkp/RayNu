@@ -47,7 +47,7 @@
   }
   .tag {
     margin-top: 0.4rem;
-    max-width: 28rem;
+    max-width: 32rem;
     font-size: 1rem;
     color: rgba(12, 26, 34, 0.72);
   }
@@ -67,6 +67,25 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    align-items: end;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(12,26,34,0.6);
+  }
+  input {
+    font-family: var(--font-ui);
+    font-size: 0.95rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.7);
+    color: var(--ink);
+    min-width: 4.5rem;
   }
   button {
     font-family: var(--font-ui);
@@ -88,7 +107,7 @@
   button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
   .row {
     display: grid;
-    grid-template-columns: 4rem 1fr auto;
+    grid-template-columns: 3.5rem 1fr auto;
     gap: 0.75rem;
     align-items: center;
     padding: 0.85rem 0;
@@ -96,7 +115,8 @@
     animation: rise 0.4s ease-out both;
   }
   .row .id { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sea); }
-  .row .state { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.8rem; color: rgba(12,26,34,0.65); }
+  .row .meta { font-size: 0.85rem; color: rgba(12,26,34,0.7); }
+  .row .state { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; color: rgba(12,26,34,0.55); }
   .row .acts { display: flex; gap: 0.4rem; }
   .status {
     margin-top: 1rem;
@@ -105,52 +125,112 @@
     min-height: 1.2em;
   }
   .empty { padding: 1.25rem 0; color: rgba(12, 26, 34, 0.55); }
+  .note {
+    margin-top: 1.5rem;
+    font-size: 0.8rem;
+    color: rgba(12,26,34,0.5);
+    max-width: 36rem;
+  }
+  #img-list { margin-top: 0.5rem; font-size: 0.9rem; color: rgba(12,26,34,0.7); }
 </style>
 </head>
-<body data-raynu-webui="1" data-raynu-api="/vms">
+<body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1">
 <header>
   <div class="brand">RayNu-V</div>
-  <p class="tag">Management plane — list guests, start and stop against the control API.</p>
+  <p class="tag">Ops UI — create guests with CPU/RAM/disk/ISO, list media, start and stop (lab HTTP).</p>
 </header>
 <main>
-  <h2>Guests</h2>
-  <div class="toolbar">
-    <button type="button" id="btn-refresh" data-action="list">Refresh</button>
-    <button type="button" class="ghost" id="btn-create" data-action="create">Create demo guest</button>
+  <h2>Create guest</h2>
+  <div class="toolbar" id="create-form">
+    <label>ID <input id="f-id" type="number" min="1" value="1"/></label>
+    <label>CPU <input id="f-cpu" type="number" min="1" max="64" value="2"/></label>
+    <label>RAM MiB <input id="f-ram" type="number" min="64" value="2048"/></label>
+    <label>Disk MiB <input id="f-disk" type="number" min="64" value="10240"/></label>
+    <label>ISO id <input id="f-iso" type="number" min="0" value="0"/></label>
+    <button type="button" id="btn-create" data-action="create">Create</button>
+    <button type="button" class="ghost" id="btn-refresh" data-action="list">Refresh</button>
   </div>
+
+  <h2>Guests</h2>
   <div id="vm-list" class="empty">No guests loaded yet.</div>
+
+  <h2>Images</h2>
+  <div class="toolbar">
+    <button type="button" class="ghost" id="btn-images" data-action="images">List images</button>
+    <button type="button" class="ghost" id="btn-iso-deploy" data-action="iso-deploy">Deploy ISO → extract-boot</button>
+  </div>
+  <div id="img-list" class="empty">No image list yet.</div>
+
   <p class="status" id="status" role="status"></p>
+  <p class="note">
+    Console / serial log UI deferred. TLS deferred (plaintext lab HTTP).
+    Firmware NIC listen still stubbed. El Torito/CD-ROM residual (M7.3).
+  </p>
 </main>
 <script>
-/* RayNu-V M5.2/M7.1 Web UI — REST over HTTP with Bearer bring-up token */
+/* RayNu-V M7.4 Ops UI — create-VM fields + media over Bearer lab HTTP */
 (function () {
   const listEl = document.getElementById("vm-list");
+  const imgEl = document.getElementById("img-list");
   const statusEl = document.getElementById("status");
   const API = "/vms";
   const AUTH = "Bearer raynu-v-bringup";
+  const known = [];
 
   function setStatus(msg) { statusEl.textContent = msg || ""; }
 
+  function num(id, fallback) {
+    const v = parseInt(document.getElementById(id).value, 10);
+    return isNaN(v) ? fallback : v;
+  }
+
   async function api(method, path) {
-    const res = await fetch(path, {
+    return fetch(path, {
       method: method,
-      headers: {
-        "Accept": "application/json",
-        "Authorization": AUTH
-      }
+      headers: { "Accept": "application/json", "Authorization": AUTH }
     });
-    return res;
+  }
+
+  function remember(id) {
+    if (known.indexOf(id) < 0) known.push(id);
   }
 
   async function listVms() {
     setStatus("Listing…");
     const res = await api("GET", API);
     if (!res.ok) { setStatus("List failed (" + res.status + ")"); return; }
-    let body = null;
-    try { body = await res.json(); } catch (e) { body = null; }
-    const items = (body && body.vms) ? body.vms : [];
+    const items = [];
+    for (let i = 0; i < known.length; i++) {
+      const id = known[i];
+      const g = await api("GET", API + "/" + id);
+      if (!g.ok) continue;
+      let body = null;
+      try { body = await g.json(); } catch (e) { body = null; }
+      items.push({
+        guest_id: id,
+        state: (body && body.state) ? body.state : (body && body.record ? "defined" : "?"),
+        cpu: body && body.cpu,
+        ram_mib: body && body.ram_mib,
+        disk_mib: body && body.disk_mib,
+        iso_id: body && body.iso_id
+      });
+    }
     render(items);
-    setStatus(items.length ? (items.length + " guest(s)") : "Empty");
+    setStatus(items.length ? (items.length + " guest(s)") : "Empty (create one)");
+  }
+
+  async function createVm() {
+    const id = num("f-id", 1);
+    const cpu = num("f-cpu", 1);
+    const ram = num("f-ram", 512);
+    const disk = num("f-disk", 1024);
+    const iso = num("f-iso", 0);
+    const path = API + "/" + id + "/spec/" + cpu + "/" + ram + "/" + disk + "/" + iso;
+    setStatus("Creating " + id + "…");
+    const res = await api("POST", path);
+    if (res.ok) remember(id);
+    setStatus(res.ok ? ("Created " + id) : ("Create failed (" + res.status + ")"));
+    await listVms();
   }
 
   async function startVm(id) {
@@ -167,11 +247,21 @@
     await listVms();
   }
 
-  async function createDemo() {
-    const id = 1;
-    setStatus("Creating " + id + "…");
-    await api("POST", API + "/" + id);
-    await listVms();
+  async function listImages() {
+    setStatus("Listing images…");
+    const res = await api("GET", "/images");
+    if (!res.ok) { setStatus("Images failed (" + res.status + ")"); return; }
+    imgEl.className = "";
+    imgEl.textContent = "Images endpoint OK (" + res.status + "). Register via POST /images/{id}/iso.";
+    setStatus("Images listed");
+  }
+
+  async function deployIso() {
+    const iso = num("f-iso", 1) || 1;
+    setStatus("Deploy ISO " + iso + "…");
+    const res = await api("POST", "/iso/" + iso + "/deploy");
+    setStatus(res.ok ? ("ISO " + iso + " extract-boot bound") : ("ISO deploy failed (" + res.status + ")"));
+    await listImages();
   }
 
   function render(items) {
@@ -188,21 +278,23 @@
       row.style.animationDelay = (0.04 * i) + "s";
       const id = vm.guest_id != null ? vm.guest_id : vm.id;
       const state = vm.state || "?";
+      const meta = "cpu=" + (vm.cpu != null ? vm.cpu : "?") +
+        " ram=" + (vm.ram_mib != null ? vm.ram_mib : "?") + "MiB" +
+        " disk=" + (vm.disk_mib != null ? vm.disk_mib : "?") + "MiB" +
+        " iso=" + (vm.iso_id != null ? vm.iso_id : "0");
       row.innerHTML =
         '<span class="id">' + id + "</span>" +
-        '<span class="state">' + state + "</span>" +
+        '<span><div class="meta">' + meta + '</div><div class="state">' + state + "</div></span>" +
         '<span class="acts"></span>';
       const acts = row.querySelector(".acts");
       const bStart = document.createElement("button");
       bStart.textContent = "Start";
       bStart.setAttribute("data-action", "start");
-      bStart.setAttribute("data-guest-id", String(id));
       bStart.onclick = function () { startVm(id); };
       const bStop = document.createElement("button");
       bStop.className = "ghost";
       bStop.textContent = "Stop";
       bStop.setAttribute("data-action", "stop");
-      bStop.setAttribute("data-guest-id", String(id));
       bStop.onclick = function () { stopVm(id); };
       if (String(state).toLowerCase() === "running") bStart.disabled = true;
       if (String(state).toLowerCase() !== "running") bStop.disabled = true;
@@ -213,8 +305,16 @@
   }
 
   document.getElementById("btn-refresh").onclick = listVms;
-  document.getElementById("btn-create").onclick = createDemo;
-  window.raynuWebUi = { listVms: listVms, startVm: startVm, stopVm: stopVm };
+  document.getElementById("btn-create").onclick = createVm;
+  document.getElementById("btn-images").onclick = listImages;
+  document.getElementById("btn-iso-deploy").onclick = deployIso;
+  window.raynuWebUi = {
+    listVms: listVms,
+    startVm: startVm,
+    stopVm: stopVm,
+    createVm: createVm,
+    listImages: listImages
+  };
   listVms();
 })();
 </script>

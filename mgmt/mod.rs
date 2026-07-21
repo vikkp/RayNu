@@ -58,6 +58,44 @@ pub enum LifecycleError {
 pub struct VmRecord {
     pub guest_id: u64,
     pub state: VmLifecycle,
+    /// vCPU count (M7.4 create-VM fields).
+    pub cpu: u8,
+    /// RAM in MiB.
+    pub ram_mib: u32,
+    /// Install / disk size in MiB.
+    pub disk_mib: u32,
+    /// Attached ISO image id (0 = none); from M7.2 library.
+    pub iso_id: u64,
+}
+
+/// Create-VM resource / media specification (M7.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VmSpec {
+    pub cpu: u8,
+    pub ram_mib: u32,
+    pub disk_mib: u32,
+    pub iso_id: u64,
+}
+
+impl VmSpec {
+    pub const fn defaults() -> Self {
+        Self {
+            cpu: 1,
+            ram_mib: 512,
+            disk_mib: 1024,
+            iso_id: 0,
+        }
+    }
+
+    pub fn validate(self) -> Result<(), LifecycleError> {
+        if self.cpu == 0 || self.cpu > 64 {
+            return Err(LifecycleError::InvalidGuest);
+        }
+        if self.ram_mib == 0 || self.disk_mib == 0 {
+            return Err(LifecycleError::InvalidGuest);
+        }
+        Ok(())
+    }
 }
 
 /// Fixed-capacity guest lifecycle table.
@@ -100,31 +138,39 @@ impl VmTable {
         None
     }
 
-    /// Create a guest in `Defined` state. Emits `VmCreated`.
+    /// Create a guest in `Defined` state with default resources. Emits `VmCreated`.
     pub fn create(&mut self, guest_id: u64) -> Result<(), LifecycleError> {
+        self.create_with_spec(guest_id, VmSpec::defaults())
+    }
+
+    /// Create a guest with CPU/RAM/disk/ISO fields (M7.4).
+    pub fn create_with_spec(&mut self, guest_id: u64, spec: VmSpec) -> Result<(), LifecycleError> {
         if guest_id == 0 {
             return Err(LifecycleError::InvalidGuest);
         }
+        spec.validate()?;
         if self.get(guest_id).is_some() {
             return Err(LifecycleError::BadState);
         }
+        let rec = VmRecord {
+            guest_id,
+            state: VmLifecycle::Defined,
+            cpu: spec.cpu,
+            ram_mib: spec.ram_mib,
+            disk_mib: spec.disk_mib,
+            iso_id: spec.iso_id,
+        };
         // Reuse a Destroyed slot if present; else take a free slot.
         for slot in self.slots.iter_mut() {
             match slot {
                 None => {
-                    *slot = Some(VmRecord {
-                        guest_id,
-                        state: VmLifecycle::Defined,
-                    });
+                    *slot = Some(rec);
                     self.len += 1;
                     audit_log!(AuditEvent::VmCreated { guest_id });
                     return Ok(());
                 }
                 Some(r) if r.state == VmLifecycle::Destroyed => {
-                    *r = VmRecord {
-                        guest_id,
-                        state: VmLifecycle::Defined,
-                    };
+                    *r = rec;
                     self.len += 1;
                     audit_log!(AuditEvent::VmCreated { guest_id });
                     return Ok(());
@@ -254,6 +300,7 @@ pub mod m7_http_gate;
 pub mod m7_ship_gate;
 pub mod m7_iso_gate;
 pub mod m7_store_gate;
+pub mod m7_ui_gate;
 pub mod ship;
 pub mod soak;
 pub mod webui;
@@ -295,8 +342,9 @@ pub use http::{
 };
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
-pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};
+pub use m7_ui_gate::{run_m7_ui_gate, M7_UI_OK_MARKER, UI_GAP_NOTE};
+pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use ship::{
     prop_release_kit_package, M7_SHIP_OK_MARKER, SHIP_GAP_NOTE,
 };
