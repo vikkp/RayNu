@@ -132,12 +132,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 ## Next (numbered)
 
-**M7.3 closed** on Latitude (`RAYNU-V-M7-ISO-OK` — host package smoke; El Torito residual). **Next: M7.4 UI**.  
+**M7.3 closed** on Latitude. **M7.4 wired** (`RAYNU-V-M7-UI-OK`; Latitude pending).  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM + media attach + basic console/log (**next**) |
+| M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM fields + media UI (**wired**; Latitude pending; console residual) |
 | M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**hard gate for M7 closed**) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

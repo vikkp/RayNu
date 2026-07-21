@@ -1,7 +1,7 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.3 closed on Latitude (host package smoke); next **M7.4 UI**.  
-**Prior:** M7.3 closed on Latitude (`RAYNU-V-M7-ISO-OK`); M7.2 closed; M7.1 closed; M7.0 closed; M6 closed.  
+**Status:** **open** — M7.4 wired (host); Latitude smoke pending close. Next after close: **M7.5 R640**.  
+**Prior:** M7.3 closed on Latitude (`RAYNU-V-M7-ISO-OK` host smoke); M7.2–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
@@ -141,17 +141,19 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.4 — Ops Web UI MVP — `RAYNU-V-M7-UI-OK`
 
-**Status: open**
+**Status: wired** (host gate; Latitude `./tools/m7-ui-smoke.sh` pending close)
 
 **Goal:** vSphere-*like* enough for single-host install — not full parity.
 
 **Deliverables:**
 
-1. Create-VM (CPU/RAM/disk/NIC/ISO) over network UI.
-2. Attach media; start/stop; basic console/serial log.
+1. Create-VM (CPU/RAM/disk/ISO) over network UI — SPA form + `POST /vms/{id}/spec/...`.
+2. Attach media via images/ISO deploy buttons; start/stop; **console deferred**.
 3. Surfaces datastore + ISO from M7.2/M7.3.
 4. Host gate + smoke → `RAYNU-V-M7-UI-OK`.
 5. `GAP(CLOSED M7.4): Network create-VM + ISO UI`.
+
+**Acceptance:** Latitude host smoke + marker. Residuals: console UI, TLS, firmware NIC, El Torito.
 
 ---
 
@@ -206,6 +208,5 @@ Do not pull M8 into M7 gate lists.
 
 ## First action
 
-**M7.3 closed** on Latitude (`RAYNU-V-M7-ISO-OK` — host package smoke).  
-**Next: M7.4** — Ops Web UI MVP under ADR-009.  
-**Honesty:** El Torito/CD-ROM residual; R640 still open.
+**M7.4 wired** (host gate). Close on Latitude via `./tools/m7-ui-smoke.sh` →
+`RAYNU-V-M7-UI-OK`, then **M7.5 R640** (hard gate). Console/TLS/NIC residual.

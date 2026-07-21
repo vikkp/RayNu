@@ -334,7 +334,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Current progress (lived, not aspirational)
 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
-**Through M7.3 closed** (ISO → `RAYNU-V-M7-ISO-OK` host smoke; El Torito residual). Next: **M7.4 UI**. Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
+**Through M7.4 wired** (UI → `RAYNU-V-M7-UI-OK`; Latitude pending). Next after close: **M7.5 R640**. Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 
