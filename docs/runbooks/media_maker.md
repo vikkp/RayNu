@@ -34,8 +34,14 @@ helper is a local script (optionally wrapped later in a tiny native UI).
 
 ```bash
 ./tools/package-release.sh          # or use an existing dist/raynu-v-* kit
-./tools/make-boot-media.sh          # or: ./tools/media-maker.sh
+./tools/make-boot-media.sh          # verifies sha256 automatically, then packs media
+# or: ./tools/media-maker.sh
 ```
+
+Checksums are **not** a separate manual step: `make-boot-media` runs
+`sha256sum -c` on the kit’s `r640-hypervisor.efi.sha256` and `SHA256SUMS`, and
+aborts on mismatch. It also writes `EVIDENCE.txt` with hashes to paste into
+`docs/evidence/r640/`.
 
 Outputs (example for version `0.1.0`):
 
@@ -46,8 +52,8 @@ dist/raynu-v-0.1.0-boot-media/
   raynu-v-0.1.0-uefi-boot.iso          # if xorriso installed
   raynu-v-0.1.0-uefi-boot.iso.sha256
   MEDIA.txt
+  EVIDENCE.txt                         # paste-block for iron evidence
 ```
-
 ### iDRAC Virtual Media (preferred)
 
 1. Open iDRAC → **Virtual Console** → **Virtual Media**.
@@ -68,6 +74,17 @@ dist/raynu-v-0.1.0-boot-media/
 
 You must re-type the disk path to confirm. `YES=1` skips the prompt (CI /
 automation only).
+
+## Checksums (automatic)
+
+| When | What happens |
+|------|----------------|
+| Normal kit path | `make-boot-media` verifies EFI sidecar + `SHA256SUMS`; fails closed on mismatch |
+| Evidence | Writes `EVIDENCE.txt` (`efi_sha256=…`, `img_sha256=…`) for the field guide |
+| Escape hatch | `ALLOW_UNVERIFIED=1` only for raw `--efi` without sidecars (not for iron close) |
+
+You should **not** need to run `sha256sum -c` yourself unless you are debugging
+a kit outside the media maker.
 
 ## What the FAT image contains
 

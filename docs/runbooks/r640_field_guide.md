@@ -17,8 +17,8 @@ blanks — do not invent serial markers if the box did not print them.
 | Step | What you do | Tool |
 |------|-------------|------|
 | 1 | Get R640 alive (power, iDRAC, virtual console) | Hands + browser |
-| 2 | Build + checksum the EFI kit on a **laptop** | `./tools/package-release.sh` |
-| 3 | Pack `\EFI\BOOT\BOOTX64.EFI` into boot media | **`./tools/make-boot-media.sh`** (not hand-copy) |
+| 2 | Build the EFI kit on a **laptop** | `./tools/package-release.sh` |
+| 3 | Pack + **auto-verify checksums** → boot media | **`./tools/make-boot-media.sh`** |
 | 4 | Attach media | **Prefer iDRAC Virtual Media** map of the `.img`; USB optional |
 | 5 | Reboot, capture COM1, fill evidence, close in git | Field guide §§4–6 |
 
@@ -170,18 +170,27 @@ Or run the interactive wrapper (can build the kit, then pack media):
 ./tools/media-maker.sh
 ```
 
-### b. Verify checksums (mandatory)
+### b. Checksums — automatic in the media maker
+
+You do **not** need to run `sha256sum` by hand for the normal path.
+`./tools/make-boot-media.sh` (and `./tools/media-maker.sh`) will:
+
+1. Run `sha256sum -c` on the kit’s `r640-hypervisor.efi.sha256` **and** `SHA256SUMS`
+2. **Refuse to build media** if anything mismatches
+3. Write `dist/raynu-v-<ver>-boot-media/EVIDENCE.txt` with the hashes to paste
+   into the iron evidence template
+
+Optional (inspect kit only, without packing media):
 
 ```bash
-cd dist/raynu-v-*    # the versioned kit dir — not the *-boot-media dir
+cd dist/raynu-v-*
 sha256sum -c r640-hypervisor.efi.sha256
 sha256sum -c SHA256SUMS
 ```
 
-Both commands must report **OK**. If not, stop. Do not run `make-boot-media`
-on a bad kit. (`make-boot-media.sh` also re-checks the EFI sidecar when present.)
+### c. Write down kit identity (or copy from EVIDENCE.txt later)
 
-### c. Write down kit identity (for evidence later)
+After section 3, prefer copying from `EVIDENCE.txt`. If you want them now:
 
 - [ ] Kit version (`VERSION` file): _______________  
 - [ ] `r640-hypervisor.efi` SHA256: _______________  
@@ -192,8 +201,9 @@ on a bad kit. (`make-boot-media.sh` also re-checks the EFI sidecar when present.
 ## 3. Prepare boot media with the media maker (default plan)
 
 **Default plan:** do **not** hand-format a USB stick. Use the media maker to
-build a FAT image that already contains `\EFI\BOOT\BOOTX64.EFI`, then attach
-that image through **iDRAC Virtual Media** (preferred on a racked server).
+**verify checksums**, build a FAT image that already contains
+`\EFI\BOOT\BOOTX64.EFI`, then attach that image through **iDRAC Virtual Media**
+(preferred on a racked server).
 
 Full tool docs: [`media_maker.md`](media_maker.md).
 
@@ -207,19 +217,23 @@ Full tool docs: [`media_maker.md`](media_maker.md).
 ./tools/media-maker.sh
 ```
 
-You get:
+Watch for `==> kit checksums OK` — if you see a checksum error, stop and rebuild
+the kit. You get:
 
 ```text
 dist/raynu-v-<ver>-boot-media/
   raynu-v-<ver>-uefi-boot.img    ← map as iDRAC Virtual Media *USB* (preferred)
   raynu-v-<ver>-uefi-boot.iso    ← map as iDRAC Virtual Media *CD* (if xorriso)
   MEDIA.txt
+  EVIDENCE.txt                   ← paste hashes into evidence template
   *.sha256
 ```
 
-- [ ] Boot `.img` built (script finished clean / printed boot-media marker)  
-- [ ] Boot-image SHA256 (`*-uefi-boot.img.sha256`): _______________  
-- [ ] Path to `*-boot-media/` on this laptop: _______________
+- [ ] Boot `.img` built; saw `kit checksums OK`  
+- [ ] Copied hashes from `EVIDENCE.txt` (or recorded below)  
+- [ ] `efi_sha256`: _______________  
+- [ ] `img_sha256`: _______________  
+- [ ] Path to `*-boot-media/`: _______________
 
 ### b. Attach media — Option A (preferred): iDRAC Virtual Media
 
@@ -325,8 +339,8 @@ Empty templates do **not** close the gate.
    - Boot method: **iDRAC vMedia `.img`** / vMedia `.iso` / physical USB
      (from media maker — note which)
    - EFI path on media: `\EFI\BOOT\BOOTX64.EFI` (from `make-boot-media`)
-   - `r640-hypervisor.efi` SHA256 (from section 2)
-   - Boot-image SHA256 (`*-uefi-boot.img.sha256`) if used
+   - `r640-hypervisor.efi` SHA256 (from `EVIDENCE.txt` / media maker)  
+   - Boot-image SHA256 (`img_sha256` in `EVIDENCE.txt`) if used
    - Release kit version, iDRAC firmware, BIOS/UEFI mode
    - Serial channel used (iDRAC virtual COM1, etc.)
 
@@ -372,14 +386,14 @@ Only after the evidence PR is honest and complete.
 ## Quick reference — order of action
 
 1. Get box alive → power → iDRAC network → virtual console open  
-2. `./tools/package-release.sh` (+ checksum) on a laptop  
-3. `./tools/make-boot-media.sh` → map `*-uefi-boot.img` in iDRAC Virtual Media  
+2. `./tools/package-release.sh` on a laptop  
+3. `./tools/make-boot-media.sh` (auto checksum verify) → map `*-uefi-boot.img` in iDRAC  
    (or `./tools/make-boot-usb.sh` for a physical stick)  
 4. Reboot; capture COM1; save log; **unmap** vMedia  
 5. Fill dated evidence from `TEMPLATE.md`  
 6. Close in git only with real iron proof  
 
-One-liner mental model: **kit → make-boot-media → iDRAC map → serial → evidence**.
+One-liner mental model: **kit → make-boot-media (verifies SHA) → iDRAC map → serial → evidence**.
 
 ---
 

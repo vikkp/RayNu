@@ -24,8 +24,16 @@ if ! grep -q 'Virtual Media' "$ROOT/docs/runbooks/media_maker.md"; then
   echo "error: media_maker runbook must cover iDRAC Virtual Media" >&2
   exit 1
 fi
-if ! grep -q 'make-boot-media.sh' "$ROOT/docs/runbooks/r640_field_guide.md"; then
-  echo "error: field guide must point operators at make-boot-media.sh" >&2
+if ! grep -q 'kit checksums OK\|verify kit checksums' "$ROOT/tools/make-boot-media.sh"; then
+  echo "error: make-boot-media must auto-verify kit checksums" >&2
+  exit 1
+fi
+if ! grep -q 'EVIDENCE.txt' "$ROOT/tools/make-boot-media.sh"; then
+  echo "error: make-boot-media must write EVIDENCE.txt" >&2
+  exit 1
+fi
+if ! grep -q 'automatic' "$ROOT/docs/runbooks/r640_field_guide.md"; then
+  echo "error: field guide must say checksums are automatic" >&2
   exit 1
 fi
 
@@ -51,6 +59,9 @@ dd if=/dev/urandom of="$KIT/r640-hypervisor.efi" bs=4096 count=8 status=none
   cd "$KIT"
   sha256sum r640-hypervisor.efi | tee r640-hypervisor.efi.sha256
   printf 'version=0.0.0-test\n' >VERSION
+  printf 'fixture kit\n' >MANIFEST.txt
+  sha256sum r640-hypervisor.efi r640-hypervisor.efi.sha256 VERSION MANIFEST.txt \
+    | tee SHA256SUMS
 )
 
 OUT="$WORKDIR/out"
@@ -78,6 +89,28 @@ if ! grep -q 'layout=EFI/BOOT/BOOTX64.EFI' "$OUT/MEDIA.txt"; then
   echo "error: MEDIA.txt missing layout line" >&2
   exit 1
 fi
+if [[ ! -f "$OUT/EVIDENCE.txt" ]]; then
+  echo "error: missing EVIDENCE.txt (auto checksum paste-block)" >&2
+  exit 1
+fi
+if ! grep -q '^efi_sha256=' "$OUT/EVIDENCE.txt"; then
+  echo "error: EVIDENCE.txt missing efi_sha256" >&2
+  exit 1
+fi
+if ! grep -q 'kit checksums OK' <<<"$(IMG_ONLY=1 ./tools/make-boot-media.sh --kit "$KIT" --out "$OUT/again" 2>&1)"; then
+  echo "error: expected automatic kit checksum verification" >&2
+  exit 1
+fi
+
+# Tamper detection: bad SHA must fail
+BAD="$WORKDIR/badkit"
+cp -a "$KIT" "$BAD"
+echo deadbeef >"$BAD/r640-hypervisor.efi"
+if IMG_ONLY=1 ./tools/make-boot-media.sh --kit "$BAD" --out "$OUT/bad" 2>/dev/null; then
+  echo "error: make-boot-media should fail on checksum mismatch" >&2
+  exit 1
+fi
+echo "==> tamper rejected (checksum fail OK)"
 
 echo "$MARKER"
 echo "==> M7 boot-media smoke PASSED"

@@ -13,6 +13,10 @@
 #   ./tools/make-boot-media.sh --efi path/to/r640-hypervisor.efi
 #   ./tools/make-boot-media.sh --kit dist/raynu-v-0.1.0
 #   IMG_ONLY=1 ./tools/make-boot-media.sh
+#   ALLOW_UNVERIFIED=1 ./tools/make-boot-media.sh --efi ./raw.efi   # skip kit check
+#
+# Always verifies kit sha256 (EFI sidecar + SHA256SUMS) when using a release kit.
+# Writes EVIDENCE.txt with hashes to paste into docs/evidence/r640/.
 #
 # Requires: dosfstools (mkfs.vfat), mtools (mmd/mcopy). xorriso optional for ISO.
 set -euo pipefail
@@ -57,6 +61,8 @@ need_cmd mmd "mtools"
 need_cmd mcopy "mtools"
 need_cmd truncate "coreutils"
 
+ALLOW_UNVERIFIED="${ALLOW_UNVERIFIED:-0}"
+
 # Resolve EFI + kit metadata
 if [[ -n "$KIT" ]]; then
   if [[ ! -d "$KIT" ]]; then
@@ -86,18 +92,41 @@ if [[ -z "$KIT" && -f "$(dirname "$EFI")/r640-hypervisor.efi.sha256" ]]; then
   KIT="$(dirname "$EFI")"
 fi
 
-# Verify checksum when sidecar exists
-if [[ -n "$KIT" && -f "$KIT/r640-hypervisor.efi.sha256" ]]; then
-  echo "==> verify EFI checksum"
+verify_kit_checksums() {
+  local kit="$1"
+  echo "==> verify kit checksums (automatic — no manual sha256sum needed)"
+  if [[ ! -f "$kit/r640-hypervisor.efi.sha256" ]]; then
+    echo "error: missing $kit/r640-hypervisor.efi.sha256" >&2
+    echo "       rebuild with ./tools/package-release.sh" >&2
+    exit 1
+  fi
   (
-    cd "$KIT"
+    cd "$kit"
     sha256sum -c r640-hypervisor.efi.sha256
+    if [[ -f SHA256SUMS ]]; then
+      sha256sum -c SHA256SUMS
+    else
+      echo "error: missing $kit/SHA256SUMS — rebuild with ./tools/package-release.sh" >&2
+      exit 1
+    fi
   )
+  echo "==> kit checksums OK"
+}
+
+# Verify checksums: required for a release kit; optional only with ALLOW_UNVERIFIED=1
+if [[ -n "$KIT" ]]; then
+  verify_kit_checksums "$KIT"
 elif [[ -f "${EFI}.sha256" ]]; then
   echo "==> verify EFI checksum (sidecar next to EFI)"
   sha256sum -c "${EFI}.sha256"
 else
-  echo "==> warn: no .sha256 sidecar — computing hash only (not verifying a known-good kit)"
+  if [[ "$ALLOW_UNVERIFIED" == "1" ]]; then
+    echo "==> warn: ALLOW_UNVERIFIED=1 — no .sha256 sidecar; computing hash only"
+  else
+    echo "error: no checksum sidecar for $EFI" >&2
+    echo "       use a release kit (./tools/package-release.sh) or set ALLOW_UNVERIFIED=1" >&2
+    exit 1
+  fi
 fi
 
 EFI_SHA="$(sha256sum "$EFI" | awk '{print $1}')"
@@ -158,6 +187,9 @@ fi
   sha256sum "$(basename "$IMG")" MEDIA.txt | tee "$(basename "$IMG").sha256"
 )
 
+IMG_SHA="$(awk '/uefi-boot\.img$/ {print $1; exit}' "$OUT_DIR/$(basename "$IMG").sha256")"
+ISO_SHA=""
+
 echo "==> FAT layout check"
 mdir -i "$IMG" ::/EFI/BOOT
 
@@ -194,21 +226,45 @@ if [[ "$IMG_ONLY" != "1" ]]; then
       cd "$OUT_DIR"
       sha256sum "$(basename "$ISO")" | tee "$(basename "$ISO").sha256"
     )
+    ISO_SHA="$(awk '{print $1; exit}' "$OUT_DIR/$(basename "$ISO").sha256")"
   else
     echo "==> warn: xorriso not installed — skipped ISO (IMG is enough for iDRAC USB map)"
     echo "    install: apt install xorriso   /   brew install xorriso"
+    ISO=""
   fi
+else
+  ISO=""
 fi
 
 rm -rf "$STAGE"
 
+# Operator paste-block for evidence template (checksums already verified above)
+{
+  echo "RayNu-V boot-media evidence (auto-verified)"
+  echo "version=${VERSION}"
+  echo "efi_sha256=${EFI_SHA}"
+  echo "img_sha256=${IMG_SHA}"
+  if [[ -n "$ISO_SHA" ]]; then
+    echo "iso_sha256=${ISO_SHA}"
+  fi
+  echo "img=$(basename "$IMG")"
+  if [[ -n "$ISO" && -f "$ISO" ]]; then
+    echo "iso=$(basename "$ISO")"
+  fi
+  echo "layout=EFI/BOOT/BOOTX64.EFI"
+  echo "verified=kit sha256sum -c OK (EFI sidecar + SHA256SUMS when present)"
+  echo "built_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} | tee "$OUT_DIR/EVIDENCE.txt"
+
 cat <<EOF
 
-==> boot media ready
+==> boot media ready (checksums verified by make-boot-media)
   dir:  $OUT_DIR
   img:  $IMG
-  img_sha256: $EFI_SHA (EFI payload); see $(basename "$IMG").sha256 for image hash
+  efi_sha256: ${EFI_SHA}
+  img_sha256: ${IMG_SHA}
   iso:  ${ISO:-"(skipped)"}
+  evidence paste: $OUT_DIR/EVIDENCE.txt
 
 iDRAC Virtual Media (preferred):
   1. Open Virtual Console → Virtual Media
