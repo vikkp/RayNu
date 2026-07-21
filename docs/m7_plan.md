@@ -1,7 +1,7 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.3 wired (host); Latitude smoke pending close. Next after close: **M7.4 UI**.  
-**Prior:** M7.2 closed on Latitude (`RAYNU-V-M7-STORE-OK`); M7.1 closed; M7.0 closed; M6 closed.  
+**Status:** **open** — M7.3 closed on Latitude (host package smoke); next **M7.4 UI**.  
+**Prior:** M7.3 closed on Latitude (`RAYNU-V-M7-ISO-OK`); M7.2 closed; M7.1 closed; M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
@@ -123,7 +123,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.3 — ISO deploy path — `RAYNU-V-M7-ISO-OK`
 
-**Status: wired** (host gate; Latitude `./tools/m7-iso-smoke.sh` pending close)
+**Status: closed** (Latitude `./tools/m7-iso-smoke.sh` → `RAYNU-V-M7-ISO-OK`)
 
 **Goal:** Operator registers a distro ISO → VM can boot installer (CD-ROM **or** documented kernel-extract) with virtio-blk install target.
 
@@ -132,10 +132,10 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 1. ISO register into datastore — `register_iso` / REST deploy.
 2. Documented **kernel-extract** MVP (`mgmt/iso.rs`); CD-ROM stub honest.
 3. Empty virtio-blk install target size in deploy plan (M4.3 surface).
-4. Host/QEMU smoke → `RAYNU-V-M7-ISO-OK`.
+4. Host package smoke → `RAYNU-V-M7-ISO-OK` (fast unit tests; not a QEMU installer run).
 5. `GAP(CLOSED M7.3): Linux ISO deploy path`.
 
-**Acceptance:** Latitude smoke + marker. El Torito/CD-ROM may remain stubbed (honest residual).
+**Acceptance (met on Latitude host smoke):** marker + gate. **Residual:** El Torito/CD-ROM attach still stubbed; no full distro installer path on QEMU/iron yet.
 
 ---
 
@@ -206,5 +206,6 @@ Do not pull M8 into M7 gate lists.
 
 ## First action
 
-**M7.3 wired** (host gate). Close on Latitude via `./tools/m7-iso-smoke.sh` →
-`RAYNU-V-M7-ISO-OK`, then start **M7.4** Ops Web UI MVP.
+**M7.3 closed** on Latitude (`RAYNU-V-M7-ISO-OK` — host package smoke).  
+**Next: M7.4** — Ops Web UI MVP under ADR-009.  
+**Honesty:** El Torito/CD-ROM residual; R640 still open.

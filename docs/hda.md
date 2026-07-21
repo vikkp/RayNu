@@ -5,11 +5,11 @@ last_commit: 1b3aa81decf682abe2b1da9140c830c1af6e36f9
 last_commit_short: 1b3aa81
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 2.75
-months_to_everest_prev: 3.25
+months_to_everest: 2.5
+months_to_everest_prev: 2.75
 velocity_commits_30d: 325
-velocity_gates_30d: 13
-overall_pct: 48
+velocity_gates_30d: 14
+overall_pct: 50
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -18,7 +18,7 @@ summit_core_pct: 78
 summit_efi_pct: 95
 summit_r640_pct: 25
 summit_ui_pct: 40
-summit_iso_pct: 35
+summit_iso_pct: 38
 summit_prod_pct: 100
 ---
 
