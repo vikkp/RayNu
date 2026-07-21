@@ -57,6 +57,10 @@ pub enum AuditEvent {
     AuthAllowed { method_tag: u8 },
     /// REST control-plane auth denied (M6.4).
     AuthDenied { method_tag: u8 },
+    /// Mock HA failover started (M6.6); role tags: 0=Primary, 1=Standby.
+    HaFailoverStarted { from_role: u8, to_role: u8 },
+    /// Mock HA failover completed with transferred guest count (M6.6).
+    HaFailoverCompleted { guest_count: u32 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -216,6 +220,8 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::MigrateFailed { .. } => 15,
         AuditEvent::AuthAllowed { .. } => 16,
         AuditEvent::AuthDenied { .. } => 17,
+        AuditEvent::HaFailoverStarted { .. } => 18,
+        AuditEvent::HaFailoverCompleted { .. } => 19,
     }
 }
 
