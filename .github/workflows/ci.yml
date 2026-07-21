@@ -10,6 +10,14 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  hda-site-sync:
+    name: HDA site sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: site/hda.json matches docs/hda.md
+        run: ./tools/sync-hda-site.sh --check
+
   test-host:
     name: host tests
     runs-on: ubuntu-latest

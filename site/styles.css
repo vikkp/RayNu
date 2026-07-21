@@ -488,6 +488,253 @@ code {
   font-size: inherit;
 }
 
+/* —— HDA / Mount Everest tracker page —— */
+
+.page-hda .hda-mast {
+  position: relative;
+  padding: clamp(2.5rem, 8vh, 4.5rem) 0 clamp(2rem, 5vh, 3rem);
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, rgba(26, 58, 74, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(15, 110, 106, 0.1) 0%, transparent 70%);
+  border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+  overflow: hidden;
+}
+
+.page-hda .hda-mast::before {
+  content: "";
+  position: absolute;
+  inset: auto -10% -40% 40%;
+  height: 70%;
+  background: radial-gradient(
+    closest-side,
+    rgba(184, 107, 52, 0.18),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.hda-mast__inner {
+  position: relative;
+  width: min(100% - 2.5rem, var(--max));
+  margin: 0 auto;
+}
+
+.hda-mast__nav {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hda-mast__nav a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.hda-mast__nav a:hover {
+  color: var(--steel);
+}
+
+.hda-mast__title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(2.1rem, 1.4rem + 2.8vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  max-width: 18ch;
+}
+
+.hda-mast__lede {
+  margin: 0 0 1.25rem;
+  max-width: 38rem;
+  color: var(--ink-soft);
+  font-size: clamp(1.05rem, 0.95rem + 0.35vw, 1.2rem);
+}
+
+.hda-path {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(0.78rem, 0.7rem + 0.35vw, 0.92rem);
+  line-height: 1.55;
+  color: var(--steel);
+  max-width: 48rem;
+}
+
+.section--hda-tracker {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 58, 74, 0.06) 0%,
+    transparent 100%
+  );
+}
+
+.hda-tracker {
+  display: grid;
+  gap: 1.75rem;
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 720px) {
+  .hda-tracker {
+    grid-template-columns: 1.1fr 1fr;
+    align-items: end;
+  }
+}
+
+.hda-tracker__label {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hda-tracker__months {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(4.5rem, 3rem + 6vw, 7rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--steel);
+}
+
+.hda-tracker__delta {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--copper);
+}
+
+.hda-tracker__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.25rem;
+}
+
+.hda-tracker__meta dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hda-tracker__meta dd {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+
+.hda-bars {
+  margin-top: 2rem;
+  display: grid;
+  gap: 1.1rem;
+}
+
+.hda-bar__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.hda-bar__track {
+  height: 0.55rem;
+  background: rgba(16, 24, 32, 0.1);
+  overflow: hidden;
+}
+
+.hda-bar__fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), var(--steel));
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hda-summits {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  border-top: 1px solid rgba(16, 24, 32, 0.12);
+}
+
+.hda-summits li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1.25rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+}
+
+@media (min-width: 720px) {
+  .hda-summits li {
+    grid-template-columns: 14rem 4.5rem 1fr;
+    align-items: baseline;
+  }
+}
+
+.hda-summits__name {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.hda-summits__pct {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--teal);
+  font-size: 1.05rem;
+}
+
+.hda-summits__note {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
+@media (min-width: 720px) {
+  .hda-summits__note {
+    grid-column: auto;
+  }
+}
+
+.hda-aside {
+  margin: 2rem 0 0;
+  font-size: 1rem;
+  color: var(--ink-soft);
+}
+
+.hda-aside strong {
+  color: var(--steel);
+}
+
+.section--hda-bottom .cta {
+  margin-top: 1.5rem;
+}
+
+.hda-sync-note {
+  margin: 1.75rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
 .footer {
   padding: 2.5rem 0 3rem;
   border-top: 1px solid rgba(16, 24, 32, 0.12);

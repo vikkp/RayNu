@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: HDA tracker fresh
+        run: ./tools/sync-hda-site.sh --check
       - name: Add .nojekyll
         run: touch site/.nojekyll
       - name: Publish site/ to gh-pages

@@ -23,7 +23,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met). Lived: [docs/progress.md](docs/progress.md). Everest: [docs/hda.md](docs/hda.md).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy → prod bar.  
-Honest distance + month timeline (auto-updated in Cursor): **[docs/hda.md](docs/hda.md)** · prompt card: [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md).
+Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · prompt card: [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md).
 
 ## Repository Layout
 
@@ -100,7 +100,7 @@ Requires `qemu-system-x86_64`, OVMF (`qemu-system-x86` + `ovmf`), and **KVM** (`
 
 GitHub Pages: [https://vikkp.github.io/RayNu/](https://vikkp.github.io/RayNu/)
 
-Source lives in [`site/`](site/). On each push to `main`, CI publishes it to the `gh-pages` branch.
+Source lives in [`site/`](site/). Public Mount Everest tracker: [`site/hda.html`](site/hda.html) (numbers from [`site/hda.json`](site/hda.json), synced from [`docs/hda.md`](docs/hda.md) via `./tools/sync-hda-site.sh`). On each push to `main`, CI publishes `site/` to the `gh-pages` branch.
 
 **Enable once (required):** repo **Settings → Pages → Build and deployment**
 
@@ -115,8 +115,9 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | Doc | Purpose |
 |-----|---------|
 | [CLAUDE.md](CLAUDE.md) | Governing rules for all code and reviews |
-| [docs/hda.md](docs/hda.md) | **Honest Distance Assessment** — months to Mount Everest |
-| [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md) | Copy-paste prompts so Cursor refreshes HDA on commit |
+| [docs/hda.md](docs/hda.md) | **Honest Distance Assessment** — months to Mount Everest (source of truth) |
+| [site/hda.html](site/hda.html) | Public HDA tracker page (synced via `./tools/sync-hda-site.sh`) |
+| [docs/hda-cursor-prompt.md](docs/hda-cursor-prompt.md) | Copy-paste prompts so Cursor refreshes HDA + site on commit |
 | [docs/architecture.md](docs/architecture.md) | Subsystem overview + Proven Core map |
 | [docs/progress.md](docs/progress.md) | Closed gates + verification checkpoint |
 | [docs/m3_plan.md](docs/m3_plan.md) | M3 Linux subgates (through first real shell) |
