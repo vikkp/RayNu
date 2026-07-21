@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.5 closed: multi-guest platform through M5 plus EPT proof track, REST auth, and PDF; M6.6 HA wired (Latitude pending)."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Dell PowerEdge first. M0→M6.6 closed: multi-guest platform through M5 plus EPT proof track, REST auth, PDF, and HA harden."
     />
     <meta property="og:title" content="RayNu-V" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.5 closed — EPT proof track, REST auth, PDF; M6.6 HA wired. Dell PowerEdge first."
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6.6 closed — EPT proof track, REST auth, PDF, and HA harden. Dell PowerEdge first."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -60,24 +60,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M6.5 closed.</h2>
+          <h2 class="section__title">M0 → M6.6 closed.</h2>
           <p class="section__lede">
             Multi-guest platform under EPT through M5, plus EPT-violation, HW PTE,
-            NUMA-L3, migrate page transfer, REST auth, and PDF audit reports —
-            <code>RAYNU-V-M6-PDF-OK</code> on host. M6.6 HA / harden is wired
-            <code>RAYNU-V-M6-HA-OK</code> (Latitude pending) — see
-            <code>docs/m6_plan.md</code>.
+            NUMA-L3, migrate page transfer, REST auth, PDF audit reports, and HA
+            harden — <code>RAYNU-V-M6-HA-OK</code> on host. Next: M6.7 (fault
+            injection — see <code>docs/m6_plan.md</code>).
           </p>
           <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M6-PDF-OK
 RAYNU-V-M6-HA-OK
 ==> M6.5 PDF smoke PASSED
-==> M6.6 HA smoke PASSED  # Latitude pending</code></pre>
+==> M6.6 HA smoke PASSED</code></pre>
         </div>
       </section>
 
       <section class="section section--journey" id="journey">
         <div class="section__inner">
-          <h2 class="section__title">M1.0 → M6.5: how we got here</h2>
+          <h2 class="section__title">M1.0 → M6.6: how we got here</h2>
           <p class="section__lede">
             A closed gate proves one acceptance property under automation —
             COM1 markers on nested KVM for boot behavior, or host
@@ -394,7 +393,7 @@ RAYNU-V-M6-HA-OK
                 <li>
                   <span class="journey__gate">M6.6</span>
                   <span class="journey__text"
-                    >HA failover + harden (wired; Latitude pending) →
+                    >HA failover + harden →
                     <code>RAYNU-V-M6-HA-OK</code></span
                   >
                 </li>
@@ -528,9 +527,8 @@ RAYNU-V-M6-HA-OK
             PowerEdge — early interest, pilots, or partnership conversations —
             are welcome to reach out at
             <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
-            M0→M6.5 is closed (Track A through migrate-xfer + REST auth + PDF);
-            M6.6 HA is wired (Latitude pending — see <code>docs/m6_plan.md</code>);
-            next after close is <strong>M6.7</strong> (fault injection).
+            M0→M6.6 is closed (Track A + REST auth + PDF + HA); next is
+            <strong>M6.7</strong> (fault — see <code>docs/m6_plan.md</code>).
 
           <div class="cta">
             <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
