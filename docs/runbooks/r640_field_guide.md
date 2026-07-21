@@ -6,6 +6,7 @@ racked and you want first light of `r640-hypervisor.efi`.
 count).  
 **Related docs:** [`r640_iron_week.md`](r640_iron_week.md) (short checklist) ·
 [`media_maker.md`](media_maker.md) (boot `.img` / `.iso` helper) ·
+[`idrac_logging.md`](idrac_logging.md) (COM1 capture + audit mirror) ·
 [`usb_idrac.md`](usb_idrac.md) · [`r640_boot.md`](r640_boot.md) ·
 [`docs/evidence/r640/`](../evidence/r640/)
 
@@ -130,15 +131,20 @@ without a physical monitor on the rack.
    - Find the **serial / text** view if your iDRAC version separates it — RayNu-V
      prints markers on **COM1** (iDRAC virtual serial), which is what we need for
      the gate.
-4. Prepare to **capture text**:
-   - Prefer copy/paste from the serial pane into a file on the laptop, or
-   - Enable any “serial log” / download feature your iDRAC offers, or
-   - Have a notepad ready to paste continuously during boot.
+4. Prepare to **capture text** (do this before reboot):
+
+   ```bash
+   ./tools/capture-idrac-serial.sh tee \
+     --out docs/evidence/r640/$(date -u +%Y-%m-%d)-r640-serial.txt
+   ```
+
+   Paste or pipe the Virtual Console **serial** pane into that session (or use
+   `sol` mode with `ipmitool` — see [`idrac_logging.md`](idrac_logging.md)).
 5. **Do not reboot yet** for RayNu-V until media is ready (sections 2–3). Leave
    this console window open.
 
 - [ ] Virtual console open and usable  
-- [ ] Plan for saving the serial log ready  
+- [ ] `capture-idrac-serial.sh tee` (or `sol`) running / ready  
 - [ ] Console opened **before** the RayNu-V reboot
 
 ---
@@ -311,13 +317,25 @@ write the residual honestly. Do **not** type markers that did not appear.
 
 ### c. Save the log and clean up media
 
-1. Paste / save the full serial session to a file on the laptop, e.g.
-   `r640-serial-YYYY-MM-DD.txt`.
-2. - [ ] Serial log saved path: _______________
-3. **Unmount** iDRAC virtual media (if used) so the next reboot does not stick
+1. Finish the `capture-idrac-serial.sh` session (Ctrl-D on `tee`) so the file
+   has an end marker. Prefer that file over ad-hoc paste.
+2. Confirm the transcript includes `RAYNU-V-M0-BOOT-OK` and any
+   `RAYNU-V-AUDIT:…` lines (UEFI mirrors audit events to COM1).
+3. - [ ] Serial log saved path: _______________
+4. Optional: pull BMC SEL/LC after the attempt:
+
+   ```bash
+   IDRAC_PASS='…' ./tools/capture-idrac-serial.sh redfish \
+     --host <idrac-ip> --user root \
+     --out-dir docs/evidence/r640/$(date -u +%Y-%m-%d)-idrac-logs
+   ```
+
+5. **Unmount** iDRAC virtual media (if used) so the next reboot does not stick
    on the installer stick/image.
-4. Remove the USB stick if you are done with this attempt (or leave it only if
+6. Remove the USB stick if you are done with this attempt (or leave it only if
    you intend another deliberate boot).
+
+Logging model: [`idrac_logging.md`](idrac_logging.md).
 
 ---
 
