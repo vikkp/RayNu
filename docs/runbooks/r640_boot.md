@@ -4,6 +4,7 @@
 **Scaffold smoke:** `./tools/m7-r640-smoke.sh` → `RAYNU-V-M7-R640-SCAFFOLD-OK`  
 **Evidence:** [`docs/evidence/r640/`](../evidence/r640/)  
 **Operator checklist:** [`r640_iron_week.md`](r640_iron_week.md)  
+**Printable field guide:** [`r640_field_guide.md`](r640_field_guide.md)  
 **Prior ship kit:** [`usb_idrac.md`](usb_idrac.md) · `./tools/package-release.sh`
 
 ## Story

@@ -3,6 +3,7 @@
 **Iron marker:** `RAYNU-V-R640-BOOT-OK` (real PowerEdge R640 only)  
 **Scaffold smoke:** `./tools/m7-r640-smoke.sh` → `RAYNU-V-M7-R640-SCAFFOLD-OK`  
 **First-light runbook:** [`r640_boot.md`](r640_boot.md)  
+**Printable field guide:** [`r640_field_guide.md`](r640_field_guide.md)  
 **Ship / media placement:** [`usb_idrac.md`](usb_idrac.md)  
 **Evidence:** [`docs/evidence/r640/`](../evidence/r640/)
 

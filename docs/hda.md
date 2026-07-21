@@ -297,8 +297,8 @@ Next move:     Real R640 first light + evidence package
 Do not claim:  M7 closed / RAYNU-V-R640-BOOT-OK without real iron
 ```
 
-Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md)
-(rack basics → EFI kit → runbooks → evidence → iron-only close).
+Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·
+printable field guide: [`docs/runbooks/r640_field_guide.md`](runbooks/r640_field_guide.md).
 
 ---
 
