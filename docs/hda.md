@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-07-21
-last_commit: 1b3aa81decf682abe2b1da9140c830c1af6e36f9
-last_commit_short: 1b3aa81
+last_commit: 2507863dc13481a1a3ad0de3a261868c483efae3
+last_commit_short: 2507863
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 2.5
-months_to_everest_prev: 2.75
-velocity_commits_30d: 325
-velocity_gates_30d: 14
-overall_pct: 50
+months_to_everest: 2.25
+months_to_everest_prev: 2.5
+velocity_commits_30d: 326
+velocity_gates_30d: 15
+overall_pct: 52
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,7 +17,7 @@ everest_eta_month: "2026-11"
 summit_core_pct: 78
 summit_efi_pct: 95
 summit_r640_pct: 25
-summit_ui_pct: 40
+summit_ui_pct: 55
 summit_iso_pct: 38
 summit_prod_pct: 100
 ---
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **48%** | +3 (M7.2 datastore closed on Latitude) |
-| **Months to Mount Everest** | **2.75** | −0.5 (image library host path closed) |
+| **Overall product readiness** | **52%** | +2 (M7.4 UI host smoke on Latitude; console residual) |
+| **Months to Mount Everest** | **2.25** | −0.25 (create-VM SPA host path only — modest) |
 | **ETA month** | **2026-11** | — |
-| **Confidence** | medium | iron + ISO path unproven; R640 ~1 month |
+| **Confidence** | medium | iron unproven; R640 hard gate next |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
 | **Ship EFI artifact** | ~95% | M7.0 closed; Secure Boot still open |
 | **Real R640 boot** | ~25% | Latitude/QEMU ≠ R640 |
-| **vSphere-like UI (network)** | ~40% | M7.1 closed (host TCP); UEFI NIC + TLS residual |
-| **Deploy Linux ISO** | ~35% | M7.3 extract-boot path wired; El Torito/CD-ROM residual |
+| **vSphere-like UI (network)** | ~55% | M7.4 create-VM SPA host smoke; console/TLS/NIC residual |
+| **Deploy Linux ISO** | ~38% | M7.3 host extract-boot smoke; El Torito/CD-ROM stub |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ██████░░░░░░░░░░░░░░  2.75 mo  (was 3.25)
-Overall %          ██████████░░░░░░░░░░  48%
+Months to Everest  ████░░░░░░░░░░░░░░░░  2.25 mo  (was 2.5)
+Overall %          ██████████░░░░░░░░░░  52%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -101,7 +101,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: MEDIUM · ~40% · ~1.0–2.0 months residual**
+**Status: MEDIUM · ~55% · ~0.75–1.5 months residual**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -109,16 +109,16 @@ All must be true (no hand-waving):
 | In-process REST shapes + auth token | DONE | `mgmt/api.rs` M5.1/M6.4 |
 | HTTP/1.1 codec + Bearer wire | DONE | `mgmt/http.rs` (M7.1 Latitude) |
 | Host TCP proof (loopback) | DONE | `mgmt/http_listen.rs` (M7.1 Latitude) |
+| Create-VM fields (CPU/RAM/disk/ISO) | DONE (host) | M7.4 SPA + `POST /vms/{id}/spec/...` Latitude smoke |
+| Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` |
 | **UEFI NIC HTTP listen** | STUB | `UnsupportedOnFirmware` until Tcp4/SNP |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
-| Datastore / image library UI | MISSING | — |
-| Create-VM wizard | MISSING | demo create id only |
-| Guest console | MISSING | — |
+| Guest console / serial log UI | MISSING | residual |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 
 ### Summit D — Deploy Linux ISO
-**Status: MEDIUM · ~35% · ~0.75–1.5 months residual**
+**Status: MEDIUM · ~38% · ~0.75–1.5 months residual**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -126,9 +126,9 @@ All must be true (no hand-waving):
 | Image library (register/list/delete) | DONE | `mgmt/datastore.rs` (M7.2 Latitude) |
 | Host ESP-shaped catalog | DONE | `EFI/RAYNU/images/catalog.txt` (host `std::fs`) |
 | UEFI catalog persist | STUB | `UnsupportedOnFirmware` until SFS/NVMe write |
-| ISO register + extract-boot bind | WIRED | `mgmt/iso.rs` (M7.3; Latitude pending) |
-| Virtio-blk install target surface | WIRED | capacity + empty disk plan (M4.3/M7.3) |
-| ISO parse / El Torito / EFI boot img | MISSING | residual (CD-ROM deferred) |
+| ISO register + extract-boot bind | DONE (host) | `mgmt/iso.rs` Latitude package smoke (~0s) |
+| Virtio-blk install target surface | DONE (plan) | capacity + empty disk size in deploy plan |
+| ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install disk workflow | PARTIAL | size planned; reboot-to-disk → later |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy`; blob upload residual |
@@ -143,7 +143,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 
 | Month | Calendar | Planned focus | Exit criteria | Status |
 |-------|----------|---------------|---------------|--------|
-| M+0 | 2026-07 | **M7.0–M7.2 closed**; M7.3 ISO wired | M7.3 Latitude close | **DONE (M7.2)** / M7.3 wired |
+| M+0 | 2026-07 | **M7.0–M7.4 closed** (lab host); **M7.5 R640 next** | M7.4 Latitude host smoke | **DONE (M7.4 host)** / M7.5 open |
 | M+1 | 2026-08 | Ship kit done; HTTP + datastore; **R640 first light** (~1 mo) | M7.0–M7.2; M7.5 if iron ready | PLANNED |
 | M+2 | 2026-09 | HTTPS mgmt + ISO path on QEMU | M7.1–M7.3 | PLANNED |
 | M+3 | 2026-10 | Create-VM UI + install-to-disk MVP | M7.3–M7.4 | PLANNED |
@@ -177,7 +177,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | 0.25 | size budget | **DONE host path**; UEFI listen + TLS residual |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
-| P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.75 | P0-5, P0-6 | `mgmt/`, `assets/webui.html` |
+| P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
+| P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.25 | P0-5, P0-6 | **DONE host SPA smoke**; console/TLS/NIC residual |
 | P0-8 | Install-to-disk + reboot-to-disk path | D | 0.5 | P0-6, P0-7 | `guest/`, `devices/virtio_blk` |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
@@ -193,7 +194,7 @@ Ordered for critical path (parallelize B with D design):
 - Audit ring + SOX/ISO/PDF; lifecycle CLI/REST shapes; VMware inventory import
 - Single-binary discipline, gate markers, frozen Verus/Kani pins
 - **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
-- **M7.0–M7.2 closed** on Latitude — **M7.3 ISO wired** (`RAYNU-V-M7-ISO-OK`); close on Latitude; then UI; R640 ~1 mo
+- **M7.0–M7.4 closed** on Latitude (M7.3–M7.4 = **host package smoke**; residuals named) — **next: M7.5 R640** (hard gate)
 
 ---
 
@@ -242,11 +243,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | M7.3 ISO deploy wired (+ HDA tip @ M7.2 merge) |
-| Summary | Extract-boot bind + virtio install disk + REST `/iso`; Latitude pending |
-| Everest impact | iso~22%→35%; months unchanged until Latitude close |
-| Gates touched | `RAYNU-V-M7-ISO-OK` wired (not closed) |
-| Months Δ | 2.75 → 2.75 |
+| Commit | M7.4 close after Latitude UI host smoke |
+| Summary | Confirm `RAYNU-V-M7-UI-OK` (~0s host tests); console/TLS/NIC residual |
+| Everest impact | months 2.5→2.25 (modest); overall 50%→52%; ui~55% |
+| Gates touched | `RAYNU-V-M7-UI-OK` (Latitude host) |
+| Months Δ | 2.5 → 2.25 |
 
 ---
 
@@ -257,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | No real R640 validation yet | HIGH | Schedule iron week; USB + iDRAC vMedia |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | M7.3 extract-boot MVP; CD-ROM stub residual |
-| H4 | UI is demo-grade | MED | Grow SPA only after HTTPS + datastore |
+| H4 | Console / TLS / firmware NIC still open | MED | Named residuals; R640 is next hard gate |
 | H5 | Latitude success hides server firmware gaps | MED | Explicit R640 gate; don’t claim E2 early |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -268,7 +269,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-07-21 | m7-3-iso | 2.75 | 48 | M7.3 ISO extract-boot wired; tip last_commit→M7.2 merge; Latitude pending |
+| 2026-07-21 | m7-4-close | 2.25 | 52 | M7.4 UI host smoke closed on Latitude; console residual; next M7.5 R640 |
+| 2026-07-21 | m7-3-close | 2.5 | 50 | M7.3 ISO host smoke closed on Latitude; El Torito residual; next M7.4 |
 | 2026-07-21 | m7-2-close | 2.75 | 48 | M7.2 STORE closed on Latitude; next M7.3 ISO; UEFI persist residual |
 | 2026-07-21 | m7-2-store | 3.25 | 45 | M7.2 datastore wired (catalog+REST); tip last_commit→M7.1 merge; Latitude pending |
 | 2026-07-21 | m7-1-close | 3.25 | 45 | M7.1 HTTP closed on Latitude; next M7.2 datastore; UEFI listen residual |
@@ -286,9 +288,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           M7.3 ISO wired (extract-boot); Latitude close pending
-Months left:   2.75  (ETA ~ 2026-11)
-Next move:     Close M7.3 on Latitude → M7.4 UI  (R640 ~1 mo)
+Now:           M7.4 UI host smoke closed; next = R640 (hard gate)
+Months left:   2.25  (ETA ~ 2026-11)
+Next move:     M7.5 real R640 boot  (console/TLS/NIC residual on lab path)
 Do not claim:  M7 closed without real R640; no vMotion/DRS until M8
 ```
 
