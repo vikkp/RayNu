@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`; production-ready bar met).  
-**Next:** **M7 — Mount Everest** (ADR-009): iDRAC boot on real R640 + network UI + Linux ISO install. Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
+**Next:** **M7.1 HTTP** (M7.0 ship kit closed — `RAYNU-V-M7-SHIP-OK`). Lived: [docs/progress.md](docs/progress.md). Plan: [docs/m7_plan.md](docs/m7_plan.md).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).
@@ -88,6 +88,8 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/m6-fault-smoke.sh          # fault injection → RAYNU-V-M6-FAULT-OK
 ./tools/m6-soak-smoke.sh           # 72-hr soak thresholds → RAYNU-V-M6-SOAK-OK
 ./tools/m6-ext-smoke.sh            # external audit + spec review → RAYNU-V-M6-EXT-OK
+./tools/package-release.sh         # versioned EFI + SHA256 + tarball under dist/
+./tools/m7-ship-smoke.sh           # EFI release kit → RAYNU-V-M7-SHIP-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh
