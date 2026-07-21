@@ -430,6 +430,19 @@ jobs:
       - name: M6.8 soak smoke → RAYNU-V-M6-SOAK-OK
         run: ./tools/m6-soak-smoke.sh
 
+  # M6.9: external audit + spec review (pin + ept_model verify). Hard-fail.
+  m6-ext:
+    name: M6.9 external audit (EXT-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M6.9 external audit smoke → RAYNU-V-M6-EXT-OK
+        run: ./tools/m6-ext-smoke.sh
+
   # M5.2: embedded Web UI. Hard-fail.
   m5-webui:
     name: M5.2 Web UI (WEBUI-OK)

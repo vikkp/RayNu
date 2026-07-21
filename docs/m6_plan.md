@@ -1,7 +1,7 @@
 # M6 Plan — Production Ready
 
-**Status:** **open** — M6.8 closed on Latitude; next **M6.9** external.  
-**Prior:** M6.8 closed on Latitude (`RAYNU-V-M6-SOAK-OK`); M6.7–M6.0 closed; M5 closed.  
+**Status:** **closed** — M6.9 closed on Latitude; **M6 production-ready bar met**.  
+**Prior:** M6.9 closed on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`); M6.8–M6.0 closed; M5 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M6 row) · lived gates: [progress.md](progress.md)  
 **Prior track:** [m5_plan.md](m5_plan.md) · EPT theorem: [adr/ADR-004.md](adr/ADR-004.md) · toolchain: [adr/ADR-008.md](adr/ADR-008.md) · migrate: [adr/ADR-007.md](adr/ADR-007.md)
 
@@ -266,7 +266,7 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 
 ### M6.9 — External audit + spec review — `RAYNU-V-M6-EXT-OK`
 
-**Status: open** (process + toolchain)
+**Status: closed** (Latitude `./tools/m6-ext-smoke.sh` → `RAYNU-V-M6-EXT-OK`)
 
 **Goal:** External security audit (auditor runs `verus --verify` under ADR-008 pin) **and** external spec review (“are we proving the right things?” — R09). Includes proof-maintenance dry run (upgrade Verus, re-verify, measure breakage) as a documented sub-check.
 
@@ -276,9 +276,17 @@ Do **not** claim a gate closed in docs/site until Latitude (or the documented ho
 2. Spec-review note filed under `docs/` (or ADR amendment).
 3. Marker `RAYNU-V-M6-EXT-OK`.
 
-**Likely files:** `verus-version.toml`, `docs/` review note, runbook; may not be a pure CI smoke.
+**Delivered (host-first):**
+
+1. R09 note `docs/reviews/m6_spec_review.md`; findings `docs/findings/m6_external.md` (0 open CRITICAL/HIGH).
+2. Proof-maintenance dry-run `docs/reviews/m6_proof_maintenance.md`; runbook `docs/runbooks/external_audit.md`.
+3. Host gate `mgmt/m6_ext_gate.rs` + `tools/m6-ext-smoke.sh` (pin install + `cargo verus verify -p ept_model`) + CI `m6-ext`.
+4. `GAP(CLOSED M6.9): External audit + spec review`.
+
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M6-EXT-OK` (`80 verified, 0 errors` on `ept_model`).
 
 ---
+
 
 ### Optional / slip-ok (document if deferred)
 
@@ -331,4 +339,6 @@ M6 closed when: EPTVIO + HWPTE + MIGRATE-XFER + AUTH + HA + FAULT + SOAK + EXT g
 
 ## First action
 
-**M6.8 closed** on Latitude (`RAYNU-V-M6-SOAK-OK`). Next: **M6.9** (`RAYNU-V-M6-EXT-OK`) — external audit + spec review.
+**M6.9 closed** on Latitude (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`).
+**M6 closed** — production-ready under CLAUDE.md M6 row. Further work is
+maintenance / optional slip-ok items unless a new milestone is opened.
