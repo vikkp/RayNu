@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-07-21
-last_commit: 7aeea2223c532c1c545bd5af0d42b23d6cc6d476
-last_commit_short: 7aeea22
+last_commit: 4dd546d40262b77d2b80afa076be34bb5deec888
+last_commit_short: 4dd546d
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 2.25
