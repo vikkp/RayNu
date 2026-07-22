@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "raynuv",
+  "name": "raynu-v",
   "compatibility_date": "2026-07-19",
   "observability": {
     "enabled": true
