@@ -74,10 +74,26 @@
         max-width: 22ch;
       }
       .paper-mast__subtitle {
-        margin: 0 0 1rem;
+        margin: 0 0 0.65rem;
         font-family: var(--font-display);
         font-size: 1.15rem;
         color: var(--ink-soft);
+      }
+      .paper-author {
+        margin: 0 0 1rem;
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        color: var(--ink);
+      }
+      .paper-author a {
+        color: var(--teal);
+        text-decoration: none;
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+      }
+      .paper-author a:hover {
+        color: var(--steel);
+        text-decoration: underline;
       }
       .paper-meta {
         margin: 0;
@@ -230,10 +246,16 @@
           <span aria-hidden="true">·</span>
           <span>Living Verification Paper</span>
         </p>
-        <span class="paper-badge">Living Draft · v0.1-skeleton</span>
+        <span class="paper-badge">Living Draft · v0.1.1</span>
         <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
         <p class="paper-mast__subtitle">
           Optimized for Dell PowerEdge R640 / R650 / R660
+        </p>
+        <p class="paper-author">
+          Vikash Pandey ·
+          <a href="https://orcid.org/0009-0001-2160-6357" rel="noopener"
+            >ORCID 0009-0001-2160-6357</a
+          >
         </p>
         <p class="paper-meta">
           Last updated: 2026-07-21 · ADR-010 ·
