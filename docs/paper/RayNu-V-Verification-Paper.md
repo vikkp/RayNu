@@ -1,6 +1,10 @@
 # RayNu-V: A Formally Verified Bare-Metal Hypervisor
 ### Optimized for Dell PowerEdge R640 / R650 / R660
 
+**Author:** Vikash Pandey  
+**ORCID:** [https://orcid.org/0009-0001-2160-6357](https://orcid.org/0009-0001-2160-6357)  
+**Affiliation:** RayNu Technologies  
+
 **Living Draft** — Version `v0.1-skeleton`  
 **Last updated:** 2026-07-21  
 **Corresponding hypervisor commit:** *TBD*  
@@ -230,6 +234,7 @@ No claim advances without such a block.
 | Version          | Date       | Hypervisor commit | Notes                          |
 |------------------|------------|-------------------|--------------------------------|
 | v0.1-skeleton    | 2026-07-21 | —                 | Initial skeleton (this file)   |
+| v0.1.1           | 2026-07-21 | —                 | Added author ORCID             |
 
 ---
 
