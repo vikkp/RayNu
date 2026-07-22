@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
+    <meta
+      name="description"
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. M0→M6 closed on Latitude + QEMU nested KVM (EPT proof track, ops, soak, external audit). Dell PowerEdge R640 is the ship target — real iron validation is a separate gate."
+    />
+    <meta property="og:title" content="RayNu-V" />
+    <meta
+      property="og:description"
+      content="Single-binary Type-1 hypervisor designed for proof. M0→M6 closed on Latitude + QEMU nested KVM. PowerEdge R640 is the ship target — iron validation is a separate gate."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__media" aria-hidden="true">
+        <img
+          class="hero__image"
+          src="assets/hero.jpg"
+          alt=""
+          width="2400"
+          height="1347"
+        />
+      </div>
+      <div class="hero__veil" aria-hidden="true"></div>
+      <div class="hero__content">
+        <p class="brand reveal">RayNu-V</p>
+        <h1 class="headline reveal reveal--delay-1">
+          Memory isolation isn’t tested. It’s proved.
+        </h1>
+        <p class="lede reveal reveal--delay-2">
+          A commercially targeted, single-binary Type-1 hypervisor designed for
+          formal verification from day one — built toward Dell PowerEdge; gates
+          today run on Latitude + QEMU nested KVM.
+        </p>
+        <div class="cta reveal reveal--delay-3">
+          <a class="cta__primary" href="https://github.com/vikkp/RayNu"
+            >View on GitHub</a
+          >
+          <a
+            class="cta__secondary"
+            href="https://github.com/vikkp/RayNu/blob/main/docs/architecture.md"
+            >Read the architecture</a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section--status" id="status">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
+          <h2 class="section__title">M0 → M7.4 closed on Latitude.</h2>
+          <p class="section__lede">
+            Software gates close on <strong>Dell Latitude + QEMU nested
+            KVM</strong> — not yet on PowerEdge R640. Ops UI closed on Latitude —
+            <code>RAYNU-V-M7-UI-OK</code> (create-VM CPU/RAM/disk/ISO + media
+            buttons; <strong>console/TLS/firmware NIC still residual</strong>;
+            host package smoke ~0s). See <code>docs/m7_plan.md</code>.
+          </p>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-UI-OK
+==> M7.4 Ops UI smoke PASSED</code></pre>
+          <p class="section__lede section__lede--follow" data-reveal>
+            Real R640 boot remains open
+            (<code>RAYNU-V-R640-BOOT-OK</code> / HDA E2). M7.5
+            <strong>scaffold</strong> is in-tree
+            (<code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>) — Latitude cannot close
+            iron. Next: first light on PowerEdge —
+            <a href="hda.html">Distance to Mount Everest</a>
+            · <code>docs/m7_plan.md</code> · ADR-009.
+          </p>
+        </div>
+      </section>
+
+      <section class="section section--journey" id="journey">
+        <div class="section__inner">
+          <h2 class="section__title">M1.0 → M6: how we got here</h2>
+          <p class="section__lede">
+            A closed gate proves one acceptance property under automation —
+            COM1 markers on nested KVM for boot behavior, or host proof
+            artifacts (<code>cargo test</code> / Verus / Kani smokes) — not that
+            the product is finished, and not that PowerEdge R640 is validated.
+          </p>
+
+          <div class="journey">
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M1 · Root mode</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M1.0</span>
+                  <span class="journey__text"
+                    >ExitBootServices — own the machine after firmware</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M1.1</span>
+                  <span class="journey__text">Real VMXON / VMXOFF</span>
+                </li>
+                <li>
+                  <span class="journey__gate">M1.2</span>
+                  <span class="journey__text">VMLAUNCH → guest HLT → VMEXIT</span>
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M2 · Guest under EPT</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M2.0–M2.1</span>
+                  <span class="journey__text"
+                    >Identity EPT; guest store, loop, HLT</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M2.2–M2.3</span>
+                  <span class="journey__text"
+                    >Exclusive EPT ownership + Proven Core allocator</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M2.4–M2.6</span>
+                  <span class="journey__text"
+                    >IRQ + timer; Verus specs written + bounded Kani</span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M3 · Unmodified Linux</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M3.0–M3.7</span>
+                  <span class="journey__text"
+                    >I/O through bzImage — synthetic shell, then real kernel</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.8–M3.9</span>
+                  <span class="journey__text"
+                    >Real earlyprintk; MSR firewall + GTIMER2</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.10</span>
+                  <span class="journey__text"
+                    >Real <code>/init</code> →
+                    <code>RAYNU-V-M3-SHELL-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">Post-shell</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M3.11–M3.12</span>
+                  <span class="journey__text"
+                    >Guest APIC timer + faithful IRR/ISR inject</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.13–M3.14</span>
+                  <span class="journey__text"
+                    >Precise EPT; Verus L3 attempt (lemmas drafted)</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.15–M3.16</span>
+                  <span class="journey__text"
+                    >Frozen Verus pin + linkable
+                    <code>ept_model</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.17–M3.18</span>
+                  <span class="journey__text"
+                    >True L3 verify + ghost↔exec refine</span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.19–M3.20</span>
+                  <span class="journey__text"
+                    >NOIRQ policy + tight EPT
+                    <code>[0,512MiB)</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M3.21–M3.22</span>
+                  <span class="journey__text"
+                    >Hard-fail Kani + PE
+                    <code>.askern</code>/<code>.asinit</code> embed</span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M4 · Multi-VM platform</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M4.0</span>
+                  <span class="journey__text"
+                    >Dual VMCS + distinct EPT →
+                    <code>RAYNU-V-M4-2VM-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.1</span>
+                  <span class="journey__text"
+                    >Credit scheduler G0↔G1 →
+                    <code>RAYNU-V-M4-SCHED-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.2</span>
+                  <span class="journey__text"
+                    >G0 + G1–G3 (≥4) →
+                    <code>RAYNU-V-M4-NVM-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.3</span>
+                  <span class="journey__text"
+                    >Virtio-mmio blk probe →
+                    <code>RAYNU-V-M4-BLK-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.4</span>
+                  <span class="journey__text"
+                    >Virtio-net dual-port vSwitch →
+                    <code>RAYNU-V-M4-NET-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.5</span>
+                  <span class="journey__text"
+                    >Dual-vCPU BSP+AP shared EPT →
+                    <code>RAYNU-V-M4-SMP-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.6</span>
+                  <span class="journey__text"
+                    >N-guest ghost exclusivity →
+                    <code>RAYNU-V-M4-NGUEST-SPEC-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.7</span>
+                  <span class="journey__text"
+                    >N-guest L3 verify (ADR-006) →
+                    <code>RAYNU-V-M4-NGUEST-VERIFY-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.8</span>
+                  <span class="journey__text"
+                    >Large-page (2M/1G) ghost spec →
+                    <code>RAYNU-V-M4-LPAGE-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M4.9</span>
+                  <span class="journey__text"
+                    >N-guest ghost↔exec refine →
+                    <code>RAYNU-V-M4-REFINE-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M5 · Operationally viable</h3>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M5.0</span>
+                  <span class="journey__text"
+                    >VM lifecycle create/start/stop/destroy →
+                    <code>RAYNU-V-M5-LIFE-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.1</span>
+                  <span class="journey__text"
+                    >CLI + REST control plane →
+                    <code>RAYNU-V-M5-API-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.2</span>
+                  <span class="journey__text"
+                    >Embedded Web UI SPA (PE <code>.aswebui</code>) →
+                    <code>RAYNU-V-M5-WEBUI-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.3</span>
+                  <span class="journey__text"
+                    >Audit ring + hash chain (tamper-evident) →
+                    <code>RAYNU-V-M5-AUDIT-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.4</span>
+                  <span class="journey__text"
+                    >SOX / ISO-style reports from ring snapshot →
+                    <code>RAYNU-V-M5-REPORT-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.5</span>
+                  <span class="journey__text"
+                    >One-command OVF/VMDK inventory import (≥10) →
+                    <code>RAYNU-V-M5-MIGRATE-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.6</span>
+                  <span class="journey__text"
+                    >Dell Tier‑1 mock Redfish + SMBIOS/ACPI topology →
+                    <code>RAYNU-V-M5-IDRAC-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.7</span>
+                  <span class="journey__text"
+                    >Large-page (2M/1G) L3 verify — no admit →
+                    <code>RAYNU-V-M5-LPAGE-VERIFY-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.8</span>
+                  <span class="journey__text"
+                    >NUMA ghost spec (SRAT/SLIT) →
+                    <code>RAYNU-V-M5-NUMA-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M5.9</span>
+                  <span class="journey__text"
+                    >Allocator↔EPT refine + identity abs →
+                    <code>RAYNU-V-M5-ALLOC-REFINE-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">
+                M6 · Ops + soak + audit (Latitude/QEMU)
+              </h3>
+              <p class="journey__era-note">
+                Closed on Latitude/QEMU; not a claim of R640 field validation.
+              </p>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M6.0</span>
+                  <span class="journey__text"
+                    >EPT-violation exclusivity →
+                    <code>RAYNU-V-M6-EPTVIO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.1</span>
+                  <span class="journey__text"
+                    >HW PTE bit-decode →
+                    <code>RAYNU-V-M6-HWPTE-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.2</span>
+                  <span class="journey__text"
+                    >NUMA affinity L3 →
+                    <code>RAYNU-V-M6-NUMA-L3-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.3</span>
+                  <span class="journey__text"
+                    >Migrate page transfer →
+                    <code>RAYNU-V-M6-MIGRATE-XFER-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.4</span>
+                  <span class="journey__text"
+                    >REST auth →
+                    <code>RAYNU-V-M6-AUTH-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.5</span>
+                  <span class="journey__text"
+                    >PDF audit reports →
+                    <code>RAYNU-V-M6-PDF-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.6</span>
+                  <span class="journey__text"
+                    >HA failover + harden →
+                    <code>RAYNU-V-M6-HA-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.7</span>
+                  <span class="journey__text"
+                    >Fault injection →
+                    <code>RAYNU-V-M6-FAULT-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.8</span>
+                  <span class="journey__text"
+                    >72-hr soak →
+                    <code>RAYNU-V-M6-SOAK-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M6.9</span>
+                  <span class="journey__text"
+                    >External audit + spec review →
+                    <code>RAYNU-V-M6-EXT-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+
+            <div class="journey__era" data-reveal>
+              <h3 class="journey__era-title">M7 · Mount Everest</h3>
+              <p class="journey__era-note">
+                Software path on Latitude/QEMU; real R640 boot
+                (<code>RAYNU-V-R640-BOOT-OK</code>) is the hard gate for M7 closed.
+              </p>
+              <ol class="journey__list">
+                <li>
+                  <span class="journey__gate">M7.0</span>
+                  <span class="journey__text"
+                    >EFI release kit (SHA256 + USB/iDRAC) →
+                    <code>RAYNU-V-M7-SHIP-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.1</span>
+                  <span class="journey__text"
+                    >Network HTTP mgmt (SPA + Bearer REST) →
+                    <code>RAYNU-V-M7-HTTP-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.2</span>
+                  <span class="journey__text"
+                    >Datastore / image library →
+                    <code>RAYNU-V-M7-STORE-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.3</span>
+                  <span class="journey__text"
+                    >ISO extract-boot deploy (lab host smoke) →
+                    <code>RAYNU-V-M7-ISO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.4</span>
+                  <span class="journey__text"
+                    >Ops UI create-VM + media (lab host smoke) →
+                    <code>RAYNU-V-M7-UI-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.5</span>
+                  <span class="journey__text"
+                    >Real R640 boot (scaffold only; iron open) →
+                    <code>RAYNU-V-R640-BOOT-OK</code></span
+                  >
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--pillars" id="pillars">
+        <div class="section__inner">
+          <h2 class="section__title">Four pillars. Every line serves one.</h2>
+          <p class="section__lede">
+            Proof work is the trust product a buyer can take to an auditor;
+            iDRAC is how that story is meant to land on iron you operate; the
+            audit trail turns hypervisor events into compliance evidence — not a
+            slide deck.
+          </p>
+          <ol class="pillars">
+            <li class="pillars__item" data-reveal>
+              <span class="pillars__tag">[V]</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Formally Verified Core</span>
+                <span class="pillars__why"
+                  >Isolation claims you can machine-check, not re-test every
+                  release.</span
+                >
+              </div>
+              <span class="pillars__note">North star</span>
+            </li>
+            <li class="pillars__item" data-reveal>
+              <span class="pillars__tag">[Z]</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Zero-Config Single Binary</span>
+                <span class="pillars__why"
+                  >One EFI artifact — smaller surface, clearer attestation
+                  target.</span
+                >
+              </div>
+              <span class="pillars__note">Near-term</span>
+            </li>
+            <li class="pillars__item" data-reveal>
+              <span class="pillars__tag">[D]</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Dell iDRAC-Native</span>
+                <span class="pillars__why"
+                  >Target: deploy and attest on PowerEdge you own, via Redfish —
+                  not a mystery appliance. R640 first-light is still ahead.</span
+                >
+              </div>
+              <span class="pillars__note">Near-term</span>
+            </li>
+            <li class="pillars__item" data-reveal>
+              <span class="pillars__tag">[A]</span>
+              <div class="pillars__body">
+                <span class="pillars__name">Audit-First / FinOps</span>
+                <span class="pillars__why"
+                  >Sequenced events for SOX/ISO evidence and capacity truth —
+                  not after-the-fact forensics.</span
+                >
+              </div>
+              <span class="pillars__note">Medium-term</span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section--proof" id="proof">
+        <div class="section__inner section__inner--split">
+          <div>
+            <h2 class="section__title">The invariant we prove</h2>
+            <p class="section__lede">
+              For every valid EPT mapping from guest-physical to host-physical,
+              that frame is exclusively owned by one guest — and belongs to
+              neither the hypervisor nor any other guest.
+            </p>
+            <p class="section__lede section__lede--follow" data-reveal>
+              <strong>L2</strong> means Verus ghost specs and pre/post
+              conditions are written (with runtime asserts + bounded Kani).
+              <strong>L3</strong> means
+              <code>cargo verus --verify</code> machine-checks those specs.
+              <strong>M3.17</strong> discharged scoped exclusivity;
+              <strong>M3.18</strong> refined ghost↔exec
+              <code>ConcreteEptMap</code> —
+              <code>22 verified, 0 errors</code>, no <code>admit</code>.
+            </p>
+          </div>
+          <blockquote class="theorem" data-reveal>
+            <p>
+              Proven Core only. Scoped
+              <code>cargo verus --verify</code> on the frozen pin is green for
+              4K single-guest exclusivity and concrete refine
+              (<code>RAYNU-V-M3-L3-VERIFY-OK</code> /
+              <code>RAYNU-V-M3-L3-REFINE-OK</code>).
+            </p>
+            <cite>ADR-002 · ADR-004 · ADR-006 · ADR-008</cite>
+          </blockquote>
+        </div>
+      </section>
+
+      <section class="section section--ship" id="ship">
+        <div class="section__inner">
+          <h2 class="section__title">One binary. One server family.</h2>
+          <p class="section__lede">
+            No host OS. No packages. No config sprawl. Optimized for Dell
+            PowerEdge R640 / R650 / R660.
+            <strong>Today’s closed gates are on Latitude + QEMU nested
+            KVM.</strong>
+            We ship the EFI kit for PowerEdge; first-light on real R640 is
+            M7.5 — see <a href="hda.html">HDA</a>.
+          </p>
+          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU nested KVM · R640 = future hard gate
+cargo build --release --target x86_64-unknown-uefi --features uefi-bin
+./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
+./tools/qemu-boot-test.sh       # M0 → M4.5
+./tools/m5-idrac-smoke.sh       # M5.6 → RAYNU-V-M5-IDRAC-OK
+./tools/verus-lpage-verify-smoke.sh # M5.7 → RAYNU-V-M5-LPAGE-VERIFY-OK
+./tools/verus-numa-smoke.sh     # M5.8 → RAYNU-V-M5-NUMA-OK
+./tools/verus-alloc-refine-smoke.sh # M5.9 → RAYNU-V-M5-ALLOC-REFINE-OK
+./tools/verus-eptvio-smoke.sh   # M6.0 → RAYNU-V-M6-EPTVIO-OK
+./tools/verus-hwpte-smoke.sh    # M6.1 → RAYNU-V-M6-HWPTE-OK
+./tools/verus-numa-l3-smoke.sh  # M6.2 → RAYNU-V-M6-NUMA-L3-OK
+./tools/verus-migrate-xfer-smoke.sh # M6.3 → RAYNU-V-M6-MIGRATE-XFER-OK
+./tools/m6-auth-smoke.sh       # M6.4 → RAYNU-V-M6-AUTH-OK
+./tools/m6-pdf-smoke.sh        # M6.5 → RAYNU-V-M6-PDF-OK
+./tools/m6-ha-smoke.sh         # M6.6 → RAYNU-V-M6-HA-OK
+./tools/m6-fault-smoke.sh      # M6.7 → RAYNU-V-M6-FAULT-OK
+./tools/m6-soak-smoke.sh       # M6.8 → RAYNU-V-M6-SOAK-OK
+./tools/m6-ext-smoke.sh        # M6.9 → RAYNU-V-M6-EXT-OK
+./tools/package-release.sh     # versioned EFI + SHA256 tarball
+./tools/m7-ship-smoke.sh       # M7.0 → RAYNU-V-M7-SHIP-OK
+./tools/m7-http-smoke.sh       # M7.1 → RAYNU-V-M7-HTTP-OK
+./tools/m7-store-smoke.sh      # M7.2 → RAYNU-V-M7-STORE-OK
+./tools/m7-iso-smoke.sh        # M7.3 → RAYNU-V-M7-ISO-OK
+./tools/m7-ui-smoke.sh         # M7.4 → RAYNU-V-M7-UI-OK
+./tools/m7-r640-smoke.sh       # M7.5 scaffold → RAYNU-V-M7-R640-SCAFFOLD-OK
+./tools/kani-smoke.sh           # hard-fail Kani → RAYNU-V-M3-KANI-OK</code></pre>
+        </div>
+      </section>
+
+      <section class="section section--close" id="start">
+        <div class="section__inner">
+          <h2 class="section__title">Talk to us.</h2>
+          <p class="section__lede">
+            Investors and MSPs evaluating formally verified isolation on Dell
+            PowerEdge — early interest, pilots, or partnership conversations —
+            are welcome to reach out at
+            <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>.
+            M0→M6 is closed on <strong>Latitude + QEMU nested KVM</strong> — the
+            <strong>lab production bar</strong> under
+            <code>docs/m6_plan.md</code> (EPT proof track + ops + soak +
+            external audit). PowerEdge R640 validation is still ahead (Mount
+            Everest / HDA).
+          </p>
+
+          <div class="cta">
+            <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
+              >Email namaskaar@raynuv.com</a
+            >
+            <a class="cta__secondary" href="https://github.com/vikkp/RayNu"
+              >Open the repository</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Designed for formal verification from day one
+      </p>
+      <p class="footer__meta">
+        <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/architecture.md"
+          >Docs</a
+        >
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>

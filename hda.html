@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Honest Distance Assessment · Mount Everest</title>
+    <meta
+      name="description"
+      content="Honest Distance Assessment for RayNu-V: months to Mount Everest (M7) — Ship EFI → real R640 → network vSphere-like UI → deploy Linux ISO."
+    />
+    <meta property="og:title" content="RayNu-V · Distance to Mount Everest" />
+    <meta
+      property="og:description"
+      content="Living tracker: months to Ship EFI → R640 → network UI → Linux ISO → prod bar."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="page-hda">
+    <header class="hda-mast">
+      <div class="hda-mast__inner">
+        <p class="hda-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Honest Distance Assessment</span>
+        </p>
+        <p class="brand reveal">RayNu-V</p>
+        <h1 class="hda-mast__title reveal reveal--delay-1">
+          Distance to Mount Everest
+        </h1>
+        <p class="hda-mast__lede reveal reveal--delay-2">
+          Living tracker from today’s codebase to a shippable operator product
+          loop — not a claim that the product is finished.
+        </p>
+        <p
+          class="hda-path reveal reveal--delay-3"
+          id="hda-path"
+          aria-label="Mount Everest path"
+        >
+          Ship EFI → boot real R640 → network vSphere-like UI → deploy Linux ISO
+          → M7 single-host ship
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section--hda-tracker" id="tracker">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>
+            Tracker · synced from <code>docs/hda.md</code>
+          </p>
+          <div class="hda-tracker" data-reveal>
+            <div class="hda-tracker__hero">
+              <p class="hda-tracker__label">Months to Mount Everest</p>
+              <p class="hda-tracker__months" id="hda-months">4.0</p>
+              <p class="hda-tracker__delta" id="hda-delta">was 4.5</p>
+            </div>
+            <dl class="hda-tracker__meta">
+              <div>
+                <dt>Overall readiness</dt>
+                <dd id="hda-overall">39%</dd>
+              </div>
+              <div>
+                <dt>ETA month</dt>
+                <dd id="hda-eta">2026-11</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd id="hda-confidence">medium</dd>
+              </div>
+              <div>
+                <dt>Updated</dt>
+                <dd id="hda-updated">2026-07-21</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="hda-bars" data-reveal>
+            <div class="hda-bar">
+              <div class="hda-bar__head">
+                <span>Months to Everest</span>
+                <span id="hda-bar-months-label">4.0 mo</span>
+              </div>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" id="hda-bar-months" style="width: 33%"></span>
+              </div>
+            </div>
+            <div class="hda-bar">
+              <div class="hda-bar__head">
+                <span>Overall product readiness</span>
+                <span id="hda-bar-overall-label">39%</span>
+              </div>
+              <div class="hda-bar__track" aria-hidden="true">
+                <span class="hda-bar__fill" id="hda-bar-overall" style="width: 39%"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--hda-summits" id="summits">
+        <div class="section__inner">
+          <h2 class="section__title">Four summits on the path</h2>
+          <p class="section__lede">
+            Core hypervisor work is advanced. The residual distance is product
+            surface, real R640 iron, and ISO/datastore — not “can it virtualize.”
+          </p>
+          <ol class="hda-summits" id="hda-summits">
+            <li data-reveal>
+              <span class="hda-summits__name">Ship EFI</span>
+              <span class="hda-summits__pct" data-summit="efi">85%</span>
+              <span class="hda-summits__note">Buildable; release kit + signing thin</span>
+            </li>
+            <li data-reveal>
+              <span class="hda-summits__name">Real R640 boot</span>
+              <span class="hda-summits__pct" data-summit="r640">25%</span>
+              <span class="hda-summits__note">Scaffold done; iron BOOT-OK open</span>
+            </li>
+            <li data-reveal>
+              <span class="hda-summits__name">Network vSphere-like UI</span>
+              <span class="hda-summits__pct" data-summit="ui">12%</span>
+              <span class="hda-summits__note">Demo SPA; no TCP/HTTP stack yet</span>
+            </li>
+            <li data-reveal>
+              <span class="hda-summits__name">Deploy Linux ISO</span>
+              <span class="hda-summits__pct" data-summit="iso">8%</span>
+              <span class="hda-summits__note">bzImage/initrd only; ISO path unbuilt</span>
+            </li>
+          </ol>
+          <p class="hda-aside" data-reveal>
+            Production bar (M6.8 soak + M6.9 external):
+            <strong id="hda-prod">100%</strong> on Latitude —
+            <code>RAYNU-V-M6-EXT-OK</code>. Hypervisor core ~<span id="hda-core">78</span>%.
+          </p>
+        </div>
+      </section>
+
+      <section class="section section--hda-bottom" id="bottom-line">
+        <div class="section__inner">
+          <h2 class="section__title">Bottom line</h2>
+          <p class="section__lede">
+            M0→M7.4 software gates are closed on Latitude. M7.5 is
+            <strong>scaffolded</strong> (runbook + evidence) and
+            <strong>open on iron</strong>. Next hard gate:
+            <code>RAYNU-V-R640-BOOT-OK</code> on a real PowerEdge R640.
+          </p>
+          <div class="cta" data-reveal>
+            <a
+              class="cta__primary"
+              href="https://github.com/vikkp/RayNu/blob/main/docs/hda.md"
+              >Full living assessment</a
+            >
+            <a class="cta__secondary" href="index.html">Back to RayNu-V</a>
+          </div>
+          <p class="hda-sync-note" data-reveal>
+            Numbers load from <code>site/hda.json</code>, regenerated from
+            <code>docs/hda.md</code> by <code>./tools/sync-hda-site.sh</code> on
+            every HDA update. Last commit:
+            <code id="hda-commit">8f091fd</code>.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Distance to Mount Everest
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/hda.md">docs/hda.md</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+    <script src="hda.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V — Living Verification Paper</title>
+    <meta
+      name="description"
+      content="Living verification paper for RayNu-V: progressive formal proof of the Proven Core and the EPT Isolation Theorem. Evidence only from real runs."
+    />
+    <meta property="og:title" content="RayNu-V · Living Verification Paper" />
+    <meta
+      property="og:description"
+      content="Memory isolation isn’t tested. It’s proved — progressively, with evidence."
+    />
+    <meta property="og:type" content="article" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* Paper-page extensions — keep minimal, reuse site tokens */
+      .page-paper .paper-mast {
+        padding: clamp(2.5rem, 8vh, 4.5rem) 0 clamp(1.75rem, 4vh, 2.5rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          linear-gradient(135deg, rgba(26, 58, 74, 0.1) 0%, transparent 55%),
+          linear-gradient(180deg, rgba(15, 110, 106, 0.08) 0%, transparent 70%);
+      }
+      .paper-mast__inner {
+        width: min(100% - 2.5rem, 48rem);
+        margin: 0 auto;
+      }
+      .paper-mast__nav {
+        margin: 0 0 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .paper-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .paper-mast__nav a:hover {
+        color: var(--steel);
+      }
+      .paper-badge {
+        display: inline-block;
+        margin: 0 0 0.85rem;
+        padding: 0.35rem 0.7rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--copper);
+        background: rgba(184, 107, 52, 0.12);
+        border: 1px solid rgba(184, 107, 52, 0.28);
+      }
+      .paper-mast__title {
+        margin: 0 0 0.5rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(1.85rem, 1.2rem + 2.2vw, 2.75rem);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        max-width: 22ch;
+      }
+      .paper-mast__subtitle {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        color: var(--ink-soft);
+      }
+      .paper-author {
+        margin: 0 0 1rem;
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        color: var(--ink);
+      }
+      .paper-author a {
+        color: var(--teal);
+        text-decoration: none;
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+      }
+      .paper-author a:hover {
+        color: var(--steel);
+        text-decoration: underline;
+      }
+      .paper-meta {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .paper-meta a {
+        color: var(--teal);
+      }
+
+      .paper-body {
+        width: min(100% - 2.5rem, 48rem);
+        margin: 0 auto;
+        padding: calc(var(--space) * 1.8) 0 calc(var(--space) * 2.5);
+      }
+      .paper-body h2 {
+        margin: 2.75rem 0 0.85rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.35rem, 1.1rem + 1vw, 1.7rem);
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        color: var(--ink);
+      }
+      .paper-body h2:first-child {
+        margin-top: 0;
+      }
+      .paper-body h3 {
+        margin: 1.75rem 0 0.6rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.15rem;
+        letter-spacing: -0.01em;
+      }
+      .paper-body p,
+      .paper-body li {
+        color: var(--ink-soft);
+        max-width: 62ch;
+      }
+      .paper-body p {
+        margin: 0 0 1rem;
+      }
+      .paper-body ul,
+      .paper-body ol {
+        margin: 0 0 1.25rem;
+        padding-left: 1.25rem;
+      }
+      .paper-body li {
+        margin-bottom: 0.35rem;
+      }
+      .paper-body blockquote {
+        margin: 1.5rem 0;
+        padding: 1rem 1.25rem;
+        border-left: 3px solid var(--teal);
+        background: rgba(15, 110, 106, 0.06);
+        color: var(--ink);
+        font-size: 1.05rem;
+      }
+      .paper-body blockquote p {
+        margin: 0;
+        color: var(--ink);
+      }
+      .paper-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.25rem 0 1.75rem;
+        font-size: 0.92rem;
+      }
+      .paper-body th,
+      .paper-body td {
+        text-align: left;
+        padding: 0.55rem 0.65rem;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.12);
+        vertical-align: top;
+      }
+      .paper-body th {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .paper-toc {
+        margin: 0 0 2.5rem;
+        padding: 1.15rem 1.25rem;
+        background: rgba(26, 58, 74, 0.05);
+        border: 1px solid rgba(16, 24, 32, 0.1);
+      }
+      .paper-toc__title {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--teal);
+      }
+      .paper-toc ol {
+        margin: 0;
+        padding-left: 1.2rem;
+        columns: 1;
+      }
+      @media (min-width: 640px) {
+        .paper-toc ol {
+          columns: 2;
+        }
+      }
+      .paper-toc a {
+        color: var(--ink-soft);
+        text-decoration: none;
+        font-size: 0.95rem;
+      }
+      .paper-toc a:hover {
+        color: var(--teal);
+      }
+      .paper-note {
+        margin: 1.5rem 0;
+        padding: 0.9rem 1.1rem;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: var(--steel);
+        background: rgba(184, 107, 52, 0.08);
+        border-left: 3px solid var(--copper);
+      }
+      .paper-evidence {
+        margin: 1rem 0 1.5rem;
+        padding: 0.85rem 1rem;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.55;
+        color: var(--muted);
+        background: rgba(16, 24, 32, 0.04);
+        border: 1px dashed rgba(16, 24, 32, 0.18);
+      }
+      .paper-footer-links {
+        margin-top: 2.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(16, 24, 32, 0.12);
+      }
+    </style>
+  </head>
+  <body class="page-paper">
+    <header class="paper-mast">
+      <div class="paper-mast__inner">
+        <p class="paper-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Living Verification Paper</span>
+        </p>
+        <span class="paper-badge">Living Draft · v0.1.1</span>
+        <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
+        <p class="paper-mast__subtitle">
+          Optimized for Dell PowerEdge R640 / R650 / R660
+        </p>
+        <p class="paper-author">
+          Vikash Pandey ·
+          <a href="https://orcid.org/0009-0001-2160-6357" rel="noopener"
+            >ORCID 0009-0001-2160-6357</a
+          >
+        </p>
+        <p class="paper-meta">
+          Last updated: 2026-07-21 · ADR-010 ·
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md"
+            >Source on GitHub</a
+          >
+          · Toolchain: Verus + Kani (pinned, ADR-008)
+        </p>
+      </div>
+    </header>
+
+    <main class="paper-body">
+      <div class="paper-note">
+        This page is a living audit artifact. Sections are filled only with
+        evidence from real runs, Verus/Kani outputs, and milestone gates.
+        Maturity claims never exceed the actual state of the Proven Core.
+        When L3 coverage and external review are sufficient, a frozen snapshot
+        becomes the conference / arXiv submission.
+      </div>
+
+      <nav class="paper-toc" aria-label="Table of contents">
+        <p class="paper-toc__title">Contents</p>
+        <ol>
+          <li><a href="#abstract">Abstract</a></li>
+          <li><a href="#intro">1. Introduction</a></li>
+          <li><a href="#threat">2. Background & Threat Model</a></li>
+          <li><a href="#arch">3. System Architecture</a></li>
+          <li><a href="#approach">4. Formal Verification Approach</a></li>
+          <li><a href="#ept">5. EPT Isolation Theorem</a></li>
+          <li><a href="#milestones">6. Progressive Evaluation</a></li>
+          <li><a href="#related">7. Related Work</a></li>
+          <li><a href="#limitations">8. Limitations & Open Proofs</a></li>
+          <li><a href="#conclusion">9. Conclusion</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="abstract">Abstract</h2>
+      <p>
+        <em>[To be written at M3/M4 checkpoint. Placeholder only.]</em>
+      </p>
+      <p>
+        RayNu-V is a clean-slate Type-1 bare-metal hypervisor written in Rust and
+        optimized for Dell PowerEdge servers. Its security-critical path (VMX,
+        EPT, physical frame allocator, and related control planes) is designed
+        for formal verification with Verus and Kani. This paper reports the
+        progressive verification of the Proven Core, culminating in a
+        machine-checked proof of the EPT Isolation Theorem: every valid
+        guest-physical to host-physical mapping is exclusively owned by a single
+        guest and belongs to neither the hypervisor nor any other guest.
+      </p>
+      <p>
+        <strong>Keywords:</strong> formal verification, Type-1 hypervisor, EPT,
+        Verus, Kani, bare-metal, Dell PowerEdge
+      </p>
+
+      <h2 id="intro">1. Introduction</h2>
+      <p>
+        <em>[Static until early content is ready.]</em>
+      </p>
+      <p>
+        Motivation, problem statement, the four pillars ([V], [Z], [D], [A]), and
+        the decision to treat formal verification as an architectural north star
+        rather than a post-hoc exercise.
+      </p>
+      <div class="paper-evidence">
+        Evidence block template (fill only with real data):<br />
+        <strong>Evidence (YYYY-MM-DD, commit <hash>, run <id>)</strong><br />
+        – Maturity: Lx<br />
+        – Artifact: serial log / Verus transcript / audit-ring hash / gate checklist<br />
+        – Observation: one factual sentence
+      </div>
+
+      <h2 id="threat">2. Background and Threat Model</h2>
+      <ul>
+        <li>Existing Type-1 hypervisors and their verification status (or lack thereof).</li>
+        <li>Why memory isolation is the headline property.</li>
+        <li>Threat model: malicious or compromised guest, buggy device emulation outside the Proven Core, operator error.</li>
+        <li>Assumptions that the proofs rely on (and that are therefore out of scope).</li>
+      </ul>
+
+      <h2 id="arch">3. System Architecture</h2>
+      <h3>3.1 Proven Core Boundary (ADR-002)</h3>
+      <p>
+        Only the following modules receive Verus specifications and progressive
+        proofs. Everything else is verified by Rust’s type system, testing, and
+        code review only.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Est. LOC</th>
+            <th>Criticality Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>VMX lifecycle</td><td>~800</td><td>Incorrect VMXON/VMXOFF leaves CPU in undefined state</td></tr>
+          <tr><td>VMCS management</td><td>~1,500</td><td>Host-state corruption = guest owns the host</td></tr>
+          <tr><td>EPT engine</td><td>~2,000</td><td>The memory isolation mechanism</td></tr>
+          <tr><td>Physical frame allocator</td><td>~1,500</td><td>Double-alloc / use-after-free = silent corruption</td></tr>
+          <tr><td>vCPU state management</td><td>~1,000</td><td>Incomplete save/restore leaks host state</td></tr>
+          <tr><td>Interrupt injection</td><td>~800</td><td>Wrong injection can escalate guest privilege</td></tr>
+          <tr><td>Hypercall interface</td><td>~500</td><td>Only intentional guest→host channel</td></tr>
+          <tr><td>MSR / CPUID / CR firewalls</td><td>~1,200</td><td>Unfiltered MSR writes can subvert host security</td></tr>
+          <tr><td>Audit log integrity</td><td>~600</td><td>Tampered audit log collapses the [A] pillar</td></tr>
+          <tr><td>IPI confinement</td><td>~500</td><td>Unconfined IPIs enable cross-VM interference</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Hard limit:</strong> 15,000 LOC including ~1,600 LOC of proof scaffolding.</p>
+
+      <h3>3.2 Single-Binary Strategy (ADR-003)</h3>
+      <p>
+        One <code>.efi</code> binary. All assets (kernel, initrd, Web UI, schemas)
+        embedded and zstd-compressed. Target size 15 MB, hard limit 20 MB.
+        Non-critical assets are lazy-decompressed.
+      </p>
+
+      <h3>3.3 Hardware Focus</h3>
+      <p>
+        Dell PowerEdge R640 / R650 / R660. Tier-1 iDRAC/Redfish integration is in
+        scope; Tier-2 (PERC deep health, predictive failure) is best-effort and
+        requires partnership.
+      </p>
+
+      <h2 id="approach">4. Formal Verification Approach</h2>
+      <h3>4.1 Toolchain (ADR-001, ADR-008)</h3>
+      <ul>
+        <li><strong>Verus</strong> — primary tool for functional correctness (SMT).</li>
+        <li><strong>Kani</strong> — bounded model checking of every <code>unsafe</code> block.</li>
+        <li>Fallback chain: Verus → Kani → runtime assertions + fuzzing. The architecture is always designed for Level 3 even when tooling is not yet ready.</li>
+      </ul>
+
+      <h3>4.2 Verification Maturity Model (ADR-006)</h3>
+      <table>
+        <thead>
+          <tr><th>Level</th><th>Name</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>L0</td><td>Documented</td><td>Invariants written as comments</td></tr>
+          <tr><td>L1</td><td>Runtime-enforced</td><td><code>assert!</code> / <code>debug_assert!</code> + Kani on unsafe</td></tr>
+          <tr><td>L2</td><td>Spec-written</td><td>Verus <code>.spec.rs</code> with ghost state and contracts</td></tr>
+          <tr><td>L3</td><td>Proof-complete</td><td><code>cargo verus --verify</code> succeeds</td></tr>
+        </tbody>
+      </table>
+      <p>Runtime assertions are retained even at L3 (defense-in-depth).</p>
+
+      <h3>4.3 File Convention for Proven Core Modules</h3>
+      <pre class="ship-code" style="margin-top:0.75rem"><code>module/
+├── module.rs           # executable code
+├── module_spec.rs      # Verus specifications
+├── module_proof.rs     # Verus proofs (gaps marked TODO)
+└── module_test.rs      # Kani + unit + fuzz</code></pre>
+
+      <h2 id="ept">5. The EPT Isolation Theorem (ADR-004)</h2>
+      <blockquote>
+        <p>
+          For every valid EPT mapping from a guest-physical address to a
+          host-physical frame, that frame is exclusively owned by the mapping
+          guest and belongs to neither the hypervisor nor any other guest.
+        </p>
+      </blockquote>
+      <p>
+        “Exclusively owned” = exactly one guest holds a mapping to that frame at
+        any moment. “Belongs to neither” = the frame is absent from the
+        hypervisor’s page tables and from every other guest’s EPT.
+      </p>
+      <p>
+        The theorem must hold across map, unmap, EPT-violation handling, and
+        (later) live-migration page transfer.
+      </p>
+
+      <h3>5.1 Proof Progression (living)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Milestone</th>
+            <th>Target</th>
+            <th>Actual Maturity</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>M2</td><td>Spec written + runtime asserts + Kani</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+          <tr><td>M3</td><td>4K-page, single-guest proof attempt</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+          <tr><td>M4</td><td>Extended to N guests (4K)</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+          <tr><td>M5</td><td>Large-page support attempted</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+          <tr><td>M6</td><td>Full proof incl. live migration + external review</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="milestones">6. Progressive Evaluation — Milestone Log</h2>
+      <p><em>This section is filled only with contemporaneous evidence from real runs.</em></p>
+
+      <h3>6.1 Milestone 0 — “It Boots”</h3>
+      <p>
+        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Target gate:</strong> Boots on R640 (or QEMU+OVMF), serial console works, Verus CI pipeline green.
+      </p>
+      <div class="paper-evidence">Evidence blocks will appear here.</div>
+
+      <h3>6.2 Milestone 1 — “VMX Works”</h3>
+      <p>
+        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Target gate:</strong> VMLAUNCH / VMEXIT cycle, VMCS host/guest state configured, first L3 proofs on VMCS legality.
+      </p>
+      <div class="paper-evidence">Evidence blocks will appear here.</div>
+
+      <h3>6.3 Milestone 2 — “Guest Executes Real Code”</h3>
+      <p>
+        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Target gate:</strong> EPT spec (L2), physical allocator at L3, guest code runs under EPT.
+      </p>
+      <div class="paper-evidence">Evidence blocks will appear here. (Highest-risk technical milestone — EPT + interrupt virtualization.)</div>
+
+      <h3>6.4 Milestone 3 — “Linux Boots”</h3>
+      <p>
+        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Target gate:</strong> Unmodified Linux 6.x reaches a shell. Verification checkpoint report published.
+      </p>
+      <div class="paper-evidence">Evidence blocks will appear here.</div>
+
+      <h3>6.5 Milestone 4 — “Usable VM Platform”</h3>
+      <p>
+        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Target gate:</strong> ≥4 Linux VMs with SMP, storage, networking. EPT Isolation Theorem at L3 for 4K pages across N guests.
+      </p>
+      <div class="paper-evidence">Evidence blocks will appear here.</div>
+
+      <h3>6.6 Milestone 5 / 5.5 / 6</h3>
+      <p><em>(Sections reserved; content added only when the corresponding gates are passed.)</em></p>
+
+      <h2 id="related">7. Related Work</h2>
+      <p><em>[To be filled later with precise citations.]</em></p>
+      <p>
+        Existing formally verified or heavily verified hypervisors / kernels
+        (seL4, CertiKOS, Komodo, Firecracker verification efforts, etc.).
+        Differences in scope, threat model, and hardware target.
+      </p>
+
+      <h2 id="limitations">8. Limitations and Open Proofs</h2>
+      <ul>
+        <li>Large-page EPT and NUMA-aware allocation may remain at L2 for the initial public release.</li>
+        <li>Live-migration path is a late L3 target (M6).</li>
+        <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
+        <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
+      </ul>
+      <p>
+        Any L2-only modules at the time of a public snapshot will be listed here
+        with an explicit statement of the residual risk and the runtime-enforcement
+        measures that remain in place.
+      </p>
+
+      <h2 id="conclusion">9. Conclusion</h2>
+      <p><em>[Written only when the work has reached a stable, externally reviewable state.]</em></p>
+
+      <div class="paper-footer-links">
+        <div class="cta">
+          <a
+            class="cta__primary"
+            href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md"
+            >Edit source on GitHub</a
+          >
+          <a class="cta__secondary" href="index.html">Back to RayNu-V</a>
+        </div>
+        <p class="hda-sync-note" style="margin-top:1.5rem">
+          Governing decision: <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-010.md">ADR-010</a>.
+          In-repo source of truth: <code>docs/paper/RayNu-V-Verification-Paper.md</code>.
+          This page is a static render for RaynuV.com.
+        </p>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Living Verification Paper
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md">Source</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>
