@@ -73,6 +73,9 @@ pub enum AuditEvent {
     SoakCompleted { hours: u32 },
     /// Soak run failed thresholds (M6.8); detail = hours completed at fail.
     SoakFailed { hours: u32 },
+    /// Evidence / verbose mode activated via ESP flag file (ADR-011).
+    /// `source`: 1 = volume root `paperverbose.txt`, 2 = `\\EFI\\RayNu\\paperverbose.txt`.
+    EvidenceModeActivated { source: u8 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -240,6 +243,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::SoakStarted { .. } => 23,
         AuditEvent::SoakCompleted { .. } => 24,
         AuditEvent::SoakFailed { .. } => 25,
+        AuditEvent::EvidenceModeActivated { .. } => 26,
     }
 }
 
@@ -411,6 +415,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::SoakFailed { hours } => {
             serial::write_str("RAYNU-V-AUDIT: SoakFailed hours=");
             write_u32(hours);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::EvidenceModeActivated { source } => {
+            serial::write_str("RAYNU-V-AUDIT: EvidenceModeActivated source=");
+            write_u32(source as u32);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
