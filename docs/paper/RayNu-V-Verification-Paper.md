@@ -5,8 +5,8 @@
 **ORCID:** [https://orcid.org/0009-0001-2160-6357](https://orcid.org/0009-0001-2160-6357)  
 **Affiliation:** RayNu Technologies  
 
-**Living Draft** — Version `v0.1-skeleton`  
-**Last updated:** 2026-07-21  
+**Living Draft** — Version `v0.1.2`  
+**Last updated:** 2026-07-24  
 **Corresponding hypervisor commit:** *TBD*  
 **Proof toolchain:** Verus (pinned) + Kani (pinned) — see ADR-008  
 **Governing ADR:** ADR-010
@@ -225,6 +225,9 @@ Every claim in Sections 5–6 must be accompanied by an evidence block of the fo
 
 No claim advances without such a block.
 
+**Generation of runtime evidence (ADR-011):**  
+Place an empty file named `paperverbose.txt` (or `/EFI/RayNu/paperverbose.txt`) on the EFI System Partition / USB / iDRAC virtual media used to boot the single `.efi` binary. The hypervisor detects the flag at early boot, raises audit verbosity, runs deterministic self-tests appropriate to the current milestone, and emits a structured Evidence Bundle on the serial console (and optionally a small dump file). Formal Verus/Kani transcripts remain offline host-side artifacts and are attached separately. Maturity claims produced by the EFI never exceed L1 (runtime-enforced).
+
 ## Appendix B — Proven Core LOC Budget Snapshot
 
 *(Updated only when the boundary or the measured LOC changes. Requires ADR if the boundary itself changes.)*
@@ -235,6 +238,7 @@ No claim advances without such a block.
 |------------------|------------|-------------------|--------------------------------|
 | v0.1-skeleton    | 2026-07-21 | —                 | Initial skeleton (this file)   |
 | v0.1.1           | 2026-07-21 | —                 | Added author ORCID             |
+| v0.1.2           | 2026-07-24 | —                 | Documented ADR-011 evidence mode flag |
 
 ---
 
