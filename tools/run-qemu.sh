@@ -3,6 +3,7 @@
 # Prefers KVM when /dev/kvm is usable (required for M1.1 VMXON).
 # SERIAL_CHARDEV defaults to stdio; CI sets file:/path/to/log.
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
+# ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -12,6 +13,7 @@ PROFILE="${PROFILE:-release}"
 EFI="target/${TARGET}/${PROFILE}/r640-hypervisor.efi"
 SERIAL_CHARDEV="${SERIAL_CHARDEV:-stdio}"
 QEMU_ACCEL="${QEMU_ACCEL:-auto}"
+EVIDENCE_MODE="${EVIDENCE_MODE:-0}"
 
 if [[ ! -f "$EFI" ]]; then
   echo "==> EFI missing; building first"
@@ -69,6 +71,15 @@ INITRD_SRC="${INITRD_SRC:-$ROOT/assets/initrd}"
 if [[ -f "$INITRD_SRC" ]]; then
   cp "$INITRD_SRC" "$ESP/EFI/BOOT/INITRD"
   echo "==> ESP INITRD: $ESP/EFI/BOOT/INITRD ($(wc -c <"$ESP/EFI/BOOT/INITRD") bytes)"
+fi
+
+# ADR-011: stage paperverbose.txt so the EFI activates evidence mode.
+# Default path stays clean when EVIDENCE_MODE is unset/0.
+rm -f "$ESP/paperverbose.txt" "$ESP/EFI/RayNu/paperverbose.txt" 2>/dev/null || true
+if [[ "$EVIDENCE_MODE" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/paperverbose.txt"
+  echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
 fi
 
 FW_ARGS=()
