@@ -106,6 +106,37 @@ jobs:
             target/m0-qemu-stderr.log
           if-no-files-found: ignore
 
+  # ADR-011: paperverbose.txt on ESP → evidence mode serial markers.
+  # Independent of nested VT-x; TCG is enough (flag probe is pre-EBS).
+  evidence-mode:
+    name: Evidence mode smoke (ADR-011)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
+      - name: Evidence-mode QEMU smoke
+        run: |
+          chmod +x ./tools/evidence-mode-smoke.sh ./tools/run-qemu.sh ./tools/build.sh
+          QEMU_ACCEL=tcg ./tools/evidence-mode-smoke.sh
+      - name: Upload evidence serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-serial-log
+          path: |
+            target/evidence-serial.log
+            target/evidence-qemu-stdout.log
+            target/evidence-qemu-stderr.log
+          if-no-files-found: ignore
+
   # M3.15: frozen Verus pin smoke (ADR-008). Hard-pass install + cargo verus.
   # Installs ONLY the exact tag/commit/sha256 in verus-version.toml — never "latest".
   # True L3 proof discharge remains M3.17 (crate does not opt into verify yet).
