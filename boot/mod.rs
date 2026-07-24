@@ -6,6 +6,7 @@
 
 pub mod assets_gate;
 pub mod esp_assets;
+pub mod evidence_mode;
 pub mod handoff;
 pub mod mem;
 pub mod pe_assets;
