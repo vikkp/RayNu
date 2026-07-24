@@ -3,8 +3,9 @@
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002)
 //!
-//! ExitBootServices tears down file protocols — read `\EFI\BOOT\BZIMAGE`
-//! and `\EFI\BOOT\INITRD` into static buffers before handoff.
+//! ExitBootServices tears down file protocols — read `\\EFI\\BOOT\\BZIMAGE`
+//! and `\\EFI\\BOOT\\INITRD` into static buffers before handoff.
+//! Also probes the ADR-011 evidence-mode flag file (same volume, same window).
 
 /// Max bzImage staged from ESP (tinyconfig ~1–2 MiB).
 pub const BZIMAGE_CAP: usize = 2 * 1024 * 1024;
@@ -76,14 +77,21 @@ pub fn clear_staged() {
     }
 }
 
-/// Probe the loaded image's ESP for `\EFI\BOOT\BZIMAGE` (+ INITRD) (UEFI only).
+/// Probe the loaded image's ESP for assets + ADR-011 evidence flag (UEFI only).
 ///
 /// Must run **before** [`crate::boot::handoff::leave_firmware`].
+/// Order: evidence-mode flag first, then BZIMAGE / INITRD staging.
 #[cfg(target_os = "uefi")]
 pub fn probe_bzimage() {
     use uefi::boot;
     use uefi::fs::FileSystem;
     use uefi::CString16;
+
+    // ADR-011: paperverbose.txt on this volume activates evidence mode.
+    crate::boot::evidence_mode::probe();
+    if crate::boot::evidence_mode::is_active() {
+        crate::boot::evidence_mode::emit_bundle_header("M0-pre-EBS");
+    }
 
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {
@@ -103,4 +111,7 @@ pub fn probe_bzimage() {
 }
 
 #[cfg(not(target_os = "uefi"))]
-pub fn probe_bzimage() {}
+pub fn probe_bzimage() {
+    // Host tests: evidence probe is a no-op unless force_active_for_test is used.
+    crate::boot::evidence_mode::probe();
+}
