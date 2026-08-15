@@ -158,6 +158,8 @@ pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
 pub const SECONDARY_ENABLE_RDTSCP: u32 = 1 << 3;
 /// Secondary proc-based: allow INVPCID in guest (else #UD — Linux PCID TLB shootdown).
 pub const SECONDARY_ENABLE_INVPCID: u32 = 1 << 12;
+/// Secondary proc-based: allow XSAVES/XRSTORS (else #UD — compacted XSAVE on iron).
+pub const SECONDARY_ENABLE_XSAVES: u32 = 1 << 20;
 
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
@@ -226,6 +228,7 @@ mod fields_test {
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
         assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
         assert_eq!(SECONDARY_ENABLE_INVPCID, 1 << 12);
+        assert_eq!(SECONDARY_ENABLE_XSAVES, 1 << 20);
         assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
         assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }

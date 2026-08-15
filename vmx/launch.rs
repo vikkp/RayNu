@@ -681,8 +681,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
 
     // RDTSCP: without secondary bit 3, guest `rdtscp` #UD (Linux tsc clocksource).
     // INVPCID: without secondary bit 12, guest `invpcid` #UD (Linux PCID; iron panic).
+    // XSAVES: without secondary bit 20, guest `xsaves`/`xrstors` #UD (compacted XSAVE
+    // on Xeon; iron: TASK stack guard recursion when irq/FPU path hit userspace).
     let secondary = adjust_vmx_controls(
-        SECONDARY_ENABLE_EPT | SECONDARY_ENABLE_RDTSCP | SECONDARY_ENABLE_INVPCID,
+        SECONDARY_ENABLE_EPT
+            | SECONDARY_ENABLE_RDTSCP
+            | SECONDARY_ENABLE_INVPCID
+            | SECONDARY_ENABLE_XSAVES,
         IA32_VMX_PROCBASED_CTLS2,
     );
     if secondary & SECONDARY_ENABLE_EPT == 0 {
@@ -694,6 +699,9 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     }
     if secondary & SECONDARY_ENABLE_INVPCID == 0 {
         serial::write_line("boot: WARN — enable-INVPCID not allowed; Linux may #UD on invpcid");
+    }
+    if secondary & SECONDARY_ENABLE_XSAVES == 0 {
+        serial::write_line("boot: WARN — enable-XSAVES not allowed; Linux may #UD on xsaves");
     }
 
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
