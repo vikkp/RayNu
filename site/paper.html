@@ -246,7 +246,7 @@
           <span aria-hidden="true">·</span>
           <span>Living Verification Paper</span>
         </p>
-        <span class="paper-badge">Living Draft · v0.2.0-r640-boot</span>
+        <span class="paper-badge">Living Draft · v0.2.1-r640-boot-confirm</span>
         <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
         <p class="paper-mast__subtitle">
           Optimized for Dell PowerEdge R640 / R650 / R660
@@ -275,7 +275,8 @@
         When L3 coverage and external review are sufficient, a frozen snapshot
         becomes the conference / arXiv submission.
         Iron COM2 archives for §6 live under
-        <code>docs/evidence/r640/logs/</code> (xsavesfix closing run + keepconfix residual).
+        <code>docs/evidence/r640/logs/</code>
+        (xsavesfix close + confirming rebuild + keepconfix residual).
       </div>
 
       <nav class="paper-toc" aria-label="Table of contents">
@@ -461,6 +462,8 @@
         Maturity: L1 (runtime / gate) · Artifact: serial log ·
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
         Observation: iDRAC Virtual Floppy printed <code>RAYNU-V-M0-BOOT-OK</code> on COM2; EFI SHA256 <code>c3a688d0…ba28d611</code>.
+        Confirming rebuild archive:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt">confirm-rebuild-com2.txt</a>.
       </div>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, kit keepconfix, run r640-keepconfix-com2)</strong><br />
@@ -525,7 +528,9 @@
       <div class="paper-evidence">
         <strong>Iron close (M7.5 / HDA E2):</strong> <code>RAYNU-V-R640-BOOT-OK</code> —
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md">first-light evidence</a>
-        · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/README.md">logs/README</a>.
+        · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/README.md">logs/README</a>
+        · confirming retest
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt">confirm-rebuild-com2.txt</a>.
       </div>
 
       <h3>6.6 Milestone 5 / 5.5 / 6</h3>
@@ -586,6 +591,8 @@
         <a href="index.html">Home</a>
         ·
         <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="stories.html">Stories</a>
         ·
         <a href="https://github.com/vikkp/RayNu">GitHub</a>
         ·

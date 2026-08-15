@@ -5,9 +5,9 @@
 **ORCID:** [https://orcid.org/0009-0001-2160-6357](https://orcid.org/0009-0001-2160-6357)  
 **Affiliation:** RayNu Technologies  
 
-**Living Draft** — Version `v0.2.0-r640-boot`  
+**Living Draft** — Version `v0.2.1-r640-boot-confirm`  
 **Last updated:** 2026-08-15  
-**Corresponding hypervisor commit:** `d7cc603` (kit `v0.1.0-xsavesfix`; evidence close on later docs commits)  
+**Corresponding hypervisor commit:** `d7cc603` (kit `v0.1.0-xsavesfix`; evidence close + confirming retest on later docs commits)  
 **Proof toolchain:** Verus (pinned) + Kani (pinned) — see ADR-008  
 **Governing ADR:** ADR-010  
 **Iron evidence:** [`docs/evidence/r640/logs/`](../evidence/r640/logs/) · claim [`STATUS=closed`](../evidence/r640/STATUS)
@@ -158,6 +158,7 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 - Artifact type: serial log
 - Link: [`docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt`](../evidence/r640/logs/2026-08-15-xsavesfix-com2.txt)
 - Observation: iDRAC Virtual Floppy boot printed `RAYNU-V-M0-BOOT-OK` on COM2 (COM1+COM2 mirror); EFI SHA256 `c3a688d0…ba28d611`.
+- Confirming retest (same EFI SHA): [`docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt).
 
 **Evidence (2026-08-15, kit `v0.1.0-keepconfix`, run `r640-keepconfix-com2`)**
 - Maturity level claimed: L1 (runtime residual)
@@ -216,7 +217,9 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 - Observation: After G0 Linux SHELL: `RAYNU-V-M4-SHELL-G1`, `RAYNU-V-M4-2VM-OK`, `RAYNU-V-M4-SCHED-OK`, `RAYNU-V-M4-NVM-OK`, `RAYNU-V-M4-BLK-OK`, `RAYNU-V-M4-NET-OK`, `RAYNU-V-M4-SMP-OK`, then `VMXOFF ok`.
 
 **Iron close claim (M7.5 / HDA E2):** `RAYNU-V-R640-BOOT-OK` — see
-[`docs/evidence/r640/2026-08-15-r640-first-light.md`](../evidence/r640/2026-08-15-r640-first-light.md).
+[`docs/evidence/r640/2026-08-15-r640-first-light.md`](../evidence/r640/2026-08-15-r640-first-light.md)
+and confirming COM2 archive
+[`logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt).
 
 ### 6.6 Milestone 5 / 5.5 / 6
 
@@ -279,6 +282,7 @@ Place an empty file named `paperverbose.txt` (or `/EFI/RayNu/paperverbose.txt`) 
 
 | Version          | Date       | Hypervisor commit | Notes                          |
 |------------------|------------|-------------------|--------------------------------|
+| v0.2.1-r640-boot-confirm | 2026-08-15 | same EFI SHA | Confirming COM2 rebuild archive + Stories/site publish |
 | v0.2.0-r640-boot | 2026-08-15 | `d7cc603` (xsavesfix) | Iron COM2 archives + §6 M0–M4 evidence; `RAYNU-V-R640-BOOT-OK` |
 | v0.1.2           | 2026-07-24 | —                 | Documented ADR-011 evidence mode flag |
 | v0.1.1           | 2026-07-21 | —                 | Added author ORCID             |
