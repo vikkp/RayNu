@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+efi_has() {
+  python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if sys.argv[2].encode() in d else 1)' "$1" "$2"
+}
+
 IMG="${1:-}"
 if [[ -z "$IMG" ]]; then
   IMG="$(ls -1t dist/*/raynu-v-*-uefi-boot.img dist/*-uefi-boot.img 2>/dev/null | head -1 || true)"
@@ -23,6 +27,7 @@ fi
 need_cmd() { command -v "$1" >/dev/null || { echo "error: need $1" >&2; exit 1; }; }
 need_cmd mcopy
 need_cmd shasum
+need_cmd python3
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -40,18 +45,17 @@ echo "built EFI:  $BUILT_SHA"
 echo "img BOOTX64:$IMG_SHA"
 [[ -n "$DIST_SHA" ]] && echo "dist EFI:   $DIST_SHA"
 
-if ! strings "$TMP/BOOTX64.EFI" | grep -q 'E2 marker build=r640-boot-ok-marker'; then
-  echo "FAIL: img EFI missing build stamp 'E2 marker build=r640-boot-ok-marker'" >&2
-  echo "      You are still packing an old binary into the floppy." >&2
+if ! efi_has "$TMP/BOOTX64.EFI" 'E2 marker build=r640-boot-ok-marker'; then
+  echo "FAIL: img EFI missing build stamp bytes" >&2
   exit 1
 fi
-if ! strings "$TMP/BOOTX64.EFI" | grep -q 'RAYNU-V-R640-BOOT-OK'; then
-  echo "FAIL: img EFI missing RAYNU-V-R640-BOOT-OK string" >&2
+if ! efi_has "$TMP/BOOTX64.EFI" 'RAYNU-V-R640-BOOT-OK'; then
+  echo "FAIL: img EFI missing RAYNU-V-R640-BOOT-OK" >&2
   exit 1
 fi
 if [[ "$BUILT_SHA" != "$IMG_SHA" ]]; then
   echo "FAIL: img BOOTX64.EFI SHA != freshly built EFI" >&2
-  echo "      Remap iDRAC after regenerating: ./tools/make-boot-media.sh" >&2
+  echo "      Remap iDRAC after: ./tools/make-boot-media.sh --kit dist/raynu-v-0.1.0" >&2
   exit 1
 fi
 echo "OK: floppy embeds marker-build EFI (SHA match + stamp present)"
