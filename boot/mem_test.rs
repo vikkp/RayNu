@@ -39,8 +39,8 @@ fn pick_requires_min_pages() {
 fn pick_prefer_clips_to_precise_window() {
     // Simulate R640: tiny low hole + huge high DRAM (would win legacy pick).
     let regions = [
-        (0x100000u64, 0x1000u64),                 // 16 MiB at 1 MiB
-        (0x140110000u64, 16_000_000u64),          // ~61 GiB high
+        (0x100000u64, 0x1000u64),        // 16 MiB at 1 MiB
+        (0x140110000u64, 16_000_000u64), // ~61 GiB high
     ];
     let prefer = 512 * 1024 * 1024;
     let (start, pages) =
@@ -51,4 +51,20 @@ fn pick_prefer_clips_to_precise_window() {
     // Legacy (prefer_end=0) still picks the huge high span.
     let (hi_start, _) = pick_conventional_region(&regions, 16).unwrap();
     assert_eq!(hi_start, 0x140110000);
+}
+
+#[test]
+fn pick_prefer_guest_ram_leaves_bar_window() {
+    // Conventional covers [16MiB, 512MiB) like the R640 clipped pool case.
+    let start = 16 * 1024 * 1024u64;
+    let end = 512 * 1024 * 1024u64;
+    let pages = (end - start) / PAGE_SIZE;
+    let regions = [(start, pages)];
+    let guest_ram = 256 * 1024 * 1024u64;
+    let (p0, p_pages) =
+        pick_conventional_region_prefer(&regions, 256, guest_ram).expect("guest-ram pool");
+    assert_eq!(p0, start);
+    assert!(p0 + p_pages * PAGE_SIZE <= guest_ram);
+    // BAR/shell window [256MiB, 512MiB) must remain outside the pool.
+    assert!(p0 + p_pages * PAGE_SIZE <= 256 * 1024 * 1024);
 }
