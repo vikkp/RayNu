@@ -3115,12 +3115,15 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
-        // Re-arm COM1+COM2 before the gate marker — SOL can mark COM2 dead on
-        // THR timeout mid-run; without this the last lines silently go COM1-only.
-        serial::init();
+        // Do not call serial::init() here — reprogramming UART mid-SOL can
+        // drop the next line(s). Only revive COM*_LIVE after possible THR timeout.
+        serial::revive_ports();
 
-        // E2 / M7.5: always emit on any successful finish_boot. Do this *before*
-        // mode banners so a truncated SOL capture still shows the gate marker.
+        // E2 / M7.5 gate marker — print immediately and repeatedly so a SOL
+        // capture cannot miss it between VMXOFF and the mode banner.
+        // Build stamp: if you do not see this line, the floppy is not this EFI.
+        serial::write_line("boot: E2 marker build=r640-boot-ok-marker");
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
         serial::write_line(M7_R640_BOOT_OK_MARKER);
 
         // SAFETY: boot single-threaded; flags set before / during guest path.
@@ -3149,10 +3152,10 @@ fn finish_boot(ok: bool) -> ! {
         } else {
             serial::write_line("boot: M3.10 complete — proto path OK");
         }
-        // Repeat marker after banners (belt-and-suspenders for SOL scrollback).
+        serial::revive_ports();
         serial::write_line(M7_R640_BOOT_OK_MARKER);
-        // Brief settle so iDRAC SOL drains the last THR before we spin forever.
-        for _ in 0..2_000_000 {
+        // Settle so iDRAC SOL drains THR before we spin forever.
+        for _ in 0..5_000_000 {
             core::hint::spin_loop();
         }
         serial::qemu_exit_success();
