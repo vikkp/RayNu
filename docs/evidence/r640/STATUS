@@ -1,3 +1,7 @@
 STATUS=open
-# Flip to STATUS=closed only with a filled dated evidence file on real PowerEdge R640.
+# Iron bring-up in progress (2026-08-15):
+#   docs/evidence/r640/2026-08-15-r640-first-light.md
+# Observed on real R640: M0, EBS, VMXON, LOAD, BZIMAGE (COM2).
+# Residual: VMLAUNCH/guest path — barfix kit under operator retest.
+# Do NOT claim RAYNU-V-R640-BOOT-OK until COM2 shows VMEXIT/shell (or honest residual).
 # See TEMPLATE.md and docs/runbooks/r640_boot.md.
