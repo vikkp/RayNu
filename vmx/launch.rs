@@ -680,8 +680,9 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     }
 
     // RDTSCP: without secondary bit 3, guest `rdtscp` #UD (Linux tsc clocksource).
+    // INVPCID: without secondary bit 12, guest `invpcid` #UD (Linux PCID; iron panic).
     let secondary = adjust_vmx_controls(
-        SECONDARY_ENABLE_EPT | SECONDARY_ENABLE_RDTSCP,
+        SECONDARY_ENABLE_EPT | SECONDARY_ENABLE_RDTSCP | SECONDARY_ENABLE_INVPCID,
         IA32_VMX_PROCBASED_CTLS2,
     );
     if secondary & SECONDARY_ENABLE_EPT == 0 {
@@ -690,6 +691,9 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     }
     if secondary & SECONDARY_ENABLE_RDTSCP == 0 {
         serial::write_line("boot: WARN — enable-RDTSCP not allowed; Linux may #UD on rdtscp");
+    }
+    if secondary & SECONDARY_ENABLE_INVPCID == 0 {
+        serial::write_line("boot: WARN — enable-INVPCID not allowed; Linux may #UD on invpcid");
     }
 
     let msr_bitmap = if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
