@@ -17,8 +17,8 @@ pub use pe_assets::M3_ASSETS_OK_MARKER;
 
 /// Perform minimal post-UEFI early init (M0).
 ///
-/// Initializes COM1 so diagnostic output reaches QEMU `-serial stdio` and
-/// iDRAC virtual console.
+/// Initializes COM1 + COM2 so diagnostic output reaches QEMU `-serial stdio`
+/// and Dell iDRAC SOL (`console com2`).
 ///
 /// On host unit-test builds this is a no-op (no port I/O in userspace).
 pub fn early_init() {

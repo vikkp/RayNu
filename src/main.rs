@@ -46,7 +46,9 @@ fn main() -> Status {
     boot::early_init();
     boot::serial::print_m0_banner(BOOT_BANNER);
 
+    // ConOut / BIOS serial-redirect (what HTML5 + many SOL sessions show pre-EBS).
     println!("{BOOT_BANNER}");
+    println!("serial: COM1+COM2 mirror — iDRAC SOL: ssh idrac then 'console com2'");
     println!("{}", boot::serial::M0_BOOT_OK_MARKER);
 
     arch::log_cpu_vendor_stub();
@@ -55,25 +57,28 @@ fn main() -> Status {
         milestone: audit::Milestone::M0,
     });
 
-    boot::serial::write_line("boot: M0 complete — entering M1.0 firmware handoff");
+    boot_note("boot: M0 complete — entering M1.0 firmware handoff");
 
     // M3.22: prefer PE-embedded assets (ADR-003); ESP is split-mode fallback.
     // Probe ESP before EBS so fallback remains available if PE is empty.
+    boot_note("boot: probing PE/ESP assets (pre-EBS)");
     boot::esp_assets::probe_bzimage();
     if boot::pe_assets::embedded_present() {
-        boot::serial::write_line("boot: PE assets embedded (.askern/.asinit) — prefer PE");
+        boot_note("boot: PE assets embedded (.askern/.asinit) — prefer PE");
         boot::serial::write_line(boot::M3_ASSETS_OK_MARKER);
+        println!("{}", boot::M3_ASSETS_OK_MARKER);
     } else if boot::esp_assets::bzimage_bytes().is_some() {
-        boot::serial::write_line("boot: ESP BZIMAGE staged (PE embed missing)");
+        boot_note("boot: ESP BZIMAGE staged (PE embed missing)");
         if boot::esp_assets::initrd_bytes().is_none() {
             if let Some(initrd) = boot::pe_assets::initrd_bytes() {
                 let _ = boot::esp_assets::stage_initrd(initrd);
             }
         }
     } else {
-        boot::serial::write_line("boot: no PE/ESP bzImage — will use embedded minimal");
+        boot_note("boot: no PE/ESP bzImage — will use embedded minimal");
     }
 
+    boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
     let handoff = unsafe { boot::handoff::leave_firmware() };
     let mut bump = handoff.frames;
@@ -969,6 +974,12 @@ fn pick_shell_slab_hpa(alloc: &memory::FrameAllocator, used: &[u64]) -> Option<u
         hpa = hpa.saturating_add(two_m);
     }
     None
+}
+
+/// Pre-EBS breadcrumb: COM1+COM2 and ConOut (BIOS serial redirect / HTML5).
+fn boot_note(s: &str) {
+    boot::serial::write_line(s);
+    println!("{s}");
 }
 
 fn write_dec(mut n: u64) {
