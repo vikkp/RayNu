@@ -112,7 +112,7 @@ All must be true (no hand-waving):
 | Host TCP proof (loopback) | DONE | `mgmt/http_listen.rs` (M7.1 Latitude) |
 | Create-VM fields (CPU/RAM/disk/ISO) | DONE (host) | M7.4 SPA + `POST /vms/{id}/spec/...` Latitude smoke |
 | Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` |
-| **UEFI NIC HTTP listen** | STUB | `UnsupportedOnFirmware` until Tcp4/SNP |
+| **UEFI NIC HTTP listen** | STUB → **ADR-012 / M7.6** | `UnsupportedOnFirmware` until Tcp4; marker `RAYNU-V-M7-UEFI-HTTP-OK` |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
 | Guest console / serial log UI | MISSING | residual |
 | Networking/storage ops UI | MISSING | probes only |

@@ -2,7 +2,7 @@
 
 **Status:** **open** — M7.4 closed on Latitude; **M7.5 scaffolded** (iron boot still open).  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
-**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
+**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
 **Mount Everest (product loop):**  
@@ -25,13 +25,14 @@ M6 closed the production-ready *bar* (proof + ops harden + soak + external audit
 
 ```
 Track Ship:   M7.0 release kit + USB/iDRAC runbook
-Track Net:    M7.1 TLS/HTTP serves SPA + REST on host NIC
+Track Net:    M7.1 TLS/HTTP codec + host TCP (closed); **M7.6 UEFI NIC listen (ADR-012)**
 Track Store:  M7.2 datastore (images + ISOs)
 Track ISO:    M7.3 ISO register + CD-ROM or extract-boot + virtio disk
 Track UI:     M7.4 create-VM + media attach + basic console/log
 Track Iron:   M7.5 real R640 boot (hard gate for M7 closed)
 
 → M7 closed when SHIP + HTTP + STORE + ISO + UI + R640-BOOT green
+   (+ M7.6 UEFI listen required for honest E3 / network UI on iron)
          ║
          ╚══ M8 sketch: vMotion-like · DRS-like · hot-add
 ```
@@ -99,7 +100,31 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 5. Gate + `tools/m7-http-smoke.sh` + CI `m7-http`.
 6. `GAP(CLOSED M7.1): Network HTTPS/HTTP mgmt`.
 
-**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M7-HTTP-OK` (host TCP SPA + Bearer REST). UEFI NIC listen remains stubbed; TLS deferred.
+**Acceptance (met):** Latitude smoke + gate → `RAYNU-V-M7-HTTP-OK` (host TCP SPA + Bearer REST). UEFI NIC listen residual → **[ADR-012](adr/ADR-012.md) / M7.6**.
+
+---
+
+### M7.6 — UEFI NIC HTTP listen — `RAYNU-V-M7-UEFI-HTTP-OK`
+
+**Status: open** (next Everest-path build focus after M7.5 / E2)
+
+**ADR:** [ADR-012](adr/ADR-012.md)  
+**Scaffold (host/CI):** `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` (optional while wiring)  
+**OK marker:** `RAYNU-V-M7-UEFI-HTTP-OK`  
+**Parent Everest criterion:** E3 (network UI) — HDA DONE only with real R640 browser/curl evidence
+
+**Goal:** Laptop on the management LAN reaches the already-shipped SPA/REST while
+`r640-hypervisor.efi` runs on R640 (in-binary UEFI Tcp4; plaintext HTTP; TLS deferred).
+
+**Deliverables:**
+
+1. Replace `listen_mgmt_http_uefi` → `UnsupportedOnFirmware` with Tcp4 bind (SNP residual only if Tcp4 absent).
+2. Serial prints bound `a.b.c.d:8443` (or `MGMT_HTTP_DEFAULT_PORT`).
+3. Reuse `handle_http_request` codec; no second HTTP stack; no helper binary ([Z]).
+4. Size gate green (ADR-003).
+5. `GAP(CLOSED M7.6): UEFI NIC HTTP listen`.
+
+**Acceptance:** Lab/QEMU net may print OK for implementation; **HDA E3** requires iron evidence per ADR-012.
 
 ---
 
