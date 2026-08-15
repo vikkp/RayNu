@@ -648,13 +648,13 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         IA32_VMX_ENTRY_CTLS
     };
 
-    // Ext-IRQ (M2.5) + I/O (M3.0) + CPUID (M3.1) exiting.
+    // Ext-IRQ (M2.5) + I/O (M3.0). CPUID always exits (no primary control).
     // Prefer I/O bitmaps (COM1 only): unconditional I/O makes every Linux
     // `io_delay` (port 0x80) a VMEXIT and stalls mid mem-init.
+    // Do not set bit 21 (Use TPR shadow) — it needs a Virtual-APIC page.
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
-            | CPU_BASED_CPUID_EXITING
             | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
             | CPU_BASED_USE_MSR_BITMAPS
@@ -665,9 +665,8 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
         serial::write_line("boot: ERROR — secondary controls not allowed (need EPT)");
         return Err(LaunchError::EptUnsupported);
     }
-    if primary & CPU_BASED_CPUID_EXITING == 0 {
-        serial::write_line("boot: ERROR — CPUID exiting not allowed by PROCBASED_CTLS");
-        return Err(LaunchError::CpuidExitingUnsupported);
+    if primary & CPU_BASED_USE_TPR_SHADOW != 0 {
+        serial::write_line("boot: WARN — Use TPR shadow forced on by TRUE ctls");
     }
     let exit_wanted = VM_EXIT_HOST_ADDR_SPACE_SIZE
         | VM_EXIT_ACK_INTERRUPT_ON_EXIT
@@ -972,24 +971,30 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
 /// HOST_RIP trampoline — save guest GPRs before Rust clobbers them.
 ///
 /// Guest GPRs are not in the VMCS; they live in host registers across VMEXIT.
+///
+/// Must use RIP-relative stores: `mov [{sym}], reg` lowers to 32-bit absolute
+/// (`[disp32]` / SIB `0x25`) which zero-extends to `0x00000000_4xxxxxxx` while
+/// the UEFI image lives at `0x140000000`. On iron that made I/O/CPUID handlers
+/// read empty statics (leaf=0 / AL=0) while M2 HLT checks (memory verify) still
+/// passed.
 #[unsafe(naked)]
 pub unsafe extern "C" fn vmexit_landing() -> ! {
     core::arch::naked_asm!(
-        "mov [{slot_rax}], rax",
-        "mov [{slot_rbx}], rbx",
-        "mov [{slot_rcx}], rcx",
-        "mov [{slot_rdx}], rdx",
-        "mov [{slot_rsi}], rsi",
-        "mov [{slot_rdi}], rdi",
-        "mov [{slot_rbp}], rbp",
-        "mov [{slot_r8}], r8",
-        "mov [{slot_r9}], r9",
-        "mov [{slot_r10}], r10",
-        "mov [{slot_r11}], r11",
-        "mov [{slot_r12}], r12",
-        "mov [{slot_r13}], r13",
-        "mov [{slot_r14}], r14",
-        "mov [{slot_r15}], r15",
+        "mov [rip + {slot_rax}], rax",
+        "mov [rip + {slot_rbx}], rbx",
+        "mov [rip + {slot_rcx}], rcx",
+        "mov [rip + {slot_rdx}], rdx",
+        "mov [rip + {slot_rsi}], rsi",
+        "mov [rip + {slot_rdi}], rdi",
+        "mov [rip + {slot_rbp}], rbp",
+        "mov [rip + {slot_r8}], r8",
+        "mov [rip + {slot_r9}], r9",
+        "mov [rip + {slot_r10}], r10",
+        "mov [rip + {slot_r11}], r11",
+        "mov [rip + {slot_r12}], r12",
+        "mov [rip + {slot_r13}], r13",
+        "mov [rip + {slot_r14}], r14",
+        "mov [rip + {slot_r15}], r15",
         "jmp {cont}",
         slot_rax = sym SAVED_GUEST_RAX,
         slot_rbx = sym SAVED_GUEST_RBX,
@@ -1014,21 +1019,21 @@ pub unsafe extern "C" fn vmexit_landing() -> ! {
 #[unsafe(naked)]
 unsafe extern "C" fn vmresume_with_gprs() -> ! {
     core::arch::naked_asm!(
-        "mov rax, [{slot_rax}]",
-        "mov rbx, [{slot_rbx}]",
-        "mov rcx, [{slot_rcx}]",
-        "mov rdx, [{slot_rdx}]",
-        "mov rsi, [{slot_rsi}]",
-        "mov rdi, [{slot_rdi}]",
-        "mov rbp, [{slot_rbp}]",
-        "mov r8, [{slot_r8}]",
-        "mov r9, [{slot_r9}]",
-        "mov r10, [{slot_r10}]",
-        "mov r11, [{slot_r11}]",
-        "mov r12, [{slot_r12}]",
-        "mov r13, [{slot_r13}]",
-        "mov r14, [{slot_r14}]",
-        "mov r15, [{slot_r15}]",
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
         "vmresume",
         "jmp {fail}",
         slot_rax = sym SAVED_GUEST_RAX,
@@ -3180,7 +3185,7 @@ mod launch_test {
         assert_eq!(EXIT_REASON_XSETBV, 55);
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
-        assert_eq!(CPU_BASED_CPUID_EXITING, 1 << 21);
+        assert_eq!(CPU_BASED_USE_TPR_SHADOW, 1 << 21);
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
     }
 }

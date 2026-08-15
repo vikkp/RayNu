@@ -143,8 +143,9 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 /// Interrupt-window exiting (inject when guest IF becomes 1).
 pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
-/// CPUID exiting (M3.1).
-pub const CPU_BASED_CPUID_EXITING: u32 = 1 << 21;
+/// Use TPR shadow (primary bit 21). Not CPUID — CPUID always exits in VMX.
+/// Kept named for the bit position only; do not set unless Virtual-APIC is armed.
+pub const CPU_BASED_USE_TPR_SHADOW: u32 = 1 << 21;
 /// Unconditional I/O exiting (ignored if USE_IO_BITMAPS is 1).
 pub const CPU_BASED_UNCONDITIONAL_IO: u32 = 1 << 24;
 pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;

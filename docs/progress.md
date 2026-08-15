@@ -138,7 +138,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual).  
 **M7.5 partial on iron:** real R640 COM2 shows `M0` → `EBS` → `VMXON` → `LOAD` → `BZIMAGE` (2026-08-15).  
-**`RAYNU-V-R640-BOOT-OK` still open** — VMEXIT silence after HLT; retest `releases/v0.1.0-hostcr3fix/`.  
+**`RAYNU-V-R640-BOOT-OK` still open** — I/O+CPUID after TIMER-OK; retest `releases/v0.1.0-gprsfix/`.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-15-r640-first-light.md](evidence/r640/2026-08-15-r640-first-light.md)
 
 | Gate | Marker | Goal |
