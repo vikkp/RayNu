@@ -1,11 +1,14 @@
 //! M7.1 mgmt HTTP listen surface (outside Proven Core).
 //!
 //! Pillar: [Z]
-//! Proven Core: **outside** (ADR-009)
+//! Proven Core: **outside** (ADR-009 / ADR-012)
 //!
-//! Firmware path: stub until UEFI SNP/Tcp4 (or equivalent) is available.
-//! Host/`cfg(test)` path: real `std::net::TcpListener` proving browser-shaped
-//! reachability against the in-binary HTTP codec.
+//! Firmware path: stub until UEFI Tcp4 (ADR-012 / M7.6). SNP is a documented
+//! residual only if Tcp4 is absent. Host/`cfg(test)` path: real
+//! `std::net::TcpListener` proving browser-shaped reachability against the
+//! in-binary HTTP codec.
+//!
+//! Marker (when listen works): `RAYNU-V-M7-UEFI-HTTP-OK` — see ADR-012.
 
 use super::datastore::ImageTable;
 use super::http::{handle_http_request, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT};

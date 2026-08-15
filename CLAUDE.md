@@ -282,6 +282,9 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 007   | VMware Migration as Dedicated Workstream | Own milestone (M5.5); outside Proven Core                     |
 | 008   | Proof Maintenance & Toolchain Pinning  | Pin versions; nightly regression; ~1 week/quarter maintenance  |
 | 009   | Mount Everest Product Loop (M7)        | Single-host ship: iDRAC boot + network UI + ISO; R640 hard gate; M8 = cluster |
+| 010   | Living Verification Paper              | Progressive public audit artifact; evidence-only sections (ADR-010)          |
+| 011   | Evidence Mode ESP Flag                 | `paperverbose.txt` triggers L1 evidence bundle on serial                     |
+| 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4 HTTP for SPA/REST; M7.6; plaintext first; TLS deferred        |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 

@@ -138,10 +138,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual).  
 **M7.5 scaffolded** (`RAYNU-V-M7-R640-SCAFFOLD-OK` — runbook + evidence template; **iron `RAYNU-V-R640-BOOT-OK` still open**).  
+**M7.6 open** — UEFI NIC HTTP listen ([ADR-012](adr/ADR-012.md)); next Everest-path build after E2.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · prior: [m6_plan.md](m6_plan.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**next hard gate**; scaffold only on host) |
+| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 boot (**iron hard gate**; scaffold only on host) |
+| M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | In-binary UEFI Tcp4 HTTP listen (ADR-012); unblocks E3 on iron |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
