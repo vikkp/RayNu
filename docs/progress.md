@@ -75,9 +75,9 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library + ESP catalog host path (CI + Latitude; UEFI persist stub) |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO extract-boot plan + virtio install size (CI + Latitude host smoke; El Torito/CD-ROM stub) |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM fields + media SPA (CI + Latitude host smoke; console/TLS/NIC residual) |
-| M7.5 | `RAYNU-V-M7-R640-SCAFFOLD-OK` | R640 scaffold + **iron** M0→VMXON→BZIMAGE (2026-08-15 COM2); `RAYNU-V-R640-BOOT-OK` **open** |
+| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 COM2: M0→SHELL→M4 BLK/NET/SMP (`v0.1.0-xsavesfix`, 2026-08-15); scaffold `RAYNU-V-M7-R640-SCAFFOLD-OK` |
 
-## Verification checkpoint (as of M7.4 closed)
+## Verification checkpoint (as of M7.5 iron closed)
 
 | Module | Maturity | Notes |
 |--------|----------|-------|
@@ -126,7 +126,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/datastore` / `m7_store_gate` | L0 | Image library + ESP catalog host path; STORE-OK (M7.2); UEFI persist stub |
 | `mgmt/iso` / `m7_iso_gate` | L0 | ISO extract-boot + virtio install plan; ISO-OK (M7.3 host smoke); CD-ROM stub |
 | `mgmt/m7_ui_gate` / `webui` | L0 | Create-VM SPA fields + media; UI-OK (M7.4 host smoke); console residual |
-| `mgmt/m7_r640_gate` | L0 | R640 scaffold + iron bring-up evidence (M0→VMXON→BZIMAGE); BOOT-OK open |
+| `mgmt/m7_r640_gate` | L0 | R640 scaffold + **iron closed** (`GAP(CLOSED M7.5)`; evidence `STATUS=closed`) |
 | Verus toolchain | Frozen pin | Exact tag+commit+sha256 in `verus-version.toml`; CI never uses `latest` |
 | `audit/integrity` | L0→L1-ish | Append-only ring + hash chain + tamper detect; AUDIT-OK (M5.3) |
 | `audit/report` | L0 | SOX/ISO JSON/CSV/PDF from ring snapshot; REPORT-OK (M5.4); PDF-OK (M6.5) |
@@ -137,12 +137,11 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 ## Next (numbered)
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual).  
-**M7.5 partial on iron:** real R640 COM2 shows `M0` → `EBS` → `VMXON` → `LOAD` → `BZIMAGE` (2026-08-15).  
-**`RAYNU-V-R640-BOOT-OK` still open** — Run /init then stack guard (XSAVES); retest `releases/v0.1.0-xsavesfix/`.  
+**M7.5 closed on iron:** `RAYNU-V-R640-BOOT-OK` — real R640 COM2 through SHELL + M4 (`v0.1.0-xsavesfix`, 2026-08-15).  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-15-r640-first-light.md](evidence/r640/2026-08-15-r640-first-light.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 guest path past VMLAUNCH on COM2 (**next hard gate**) |
+| Everest residual | E3–E5 | Network UI (UEFI listen/TLS) + vSphere MVP polish + Linux ISO install-to-disk |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

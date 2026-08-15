@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`). M7.0–M7.4 closed on Latitude (host smokes).  
-**Iron:** Real R640 COM2 shows **M0 → … → Run /init** (2026-08-15). **`RAYNU-V-R640-BOOT-OK` still open** (init stack guard / XSAVES; `releases/v0.1.0-xsavesfix/`). Evidence: [docs/evidence/r640/2026-08-15-r640-first-light.md](docs/evidence/r640/2026-08-15-r640-first-light.md).
+**Iron:** Real R640 COM2 closed **`RAYNU-V-R640-BOOT-OK`** (2026-08-15) — M0→SHELL→M4 BLK/NET/SMP via `releases/v0.1.0-xsavesfix/`. Evidence: [docs/evidence/r640/2026-08-15-r640-first-light.md](docs/evidence/r640/2026-08-15-r640-first-light.md). Mount Everest residual: network UI + Linux ISO deploy.
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).

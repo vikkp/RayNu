@@ -1,7 +1,7 @@
-STATUS=open
-# Iron bring-up in progress (2026-08-15):
+STATUS=closed
+# Iron M7.5 closed (2026-08-15) — real PowerEdge R640 COM2:
 #   docs/evidence/r640/2026-08-15-r640-first-light.md
-# Observed on real R640: Run /init (keepconfix) then TASK stack guard panic.
-# Residual: Enable XSAVES + naked /init SHELL CPUID — xsavesfix under retest.
-# Do NOT claim RAYNU-V-R640-BOOT-OK until COM2 shows SHELL (or honest residual).
-# See TEMPLATE.md and docs/runbooks/r640_boot.md.
+# Kit: releases/v0.1.0-xsavesfix/ (SHA256 in evidence file)
+# Markers: M0→…→SHELL-OK→NOIRQ→M4 SHELL/2VM/SCHED/NVM/BLK/NET/SMP
+# Claim: RAYNU-V-R640-BOOT-OK
+# Host/CI smoke still prints only RAYNU-V-M7-R640-SCAFFOLD-OK (never iron marker).
