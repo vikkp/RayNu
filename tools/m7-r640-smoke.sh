@@ -57,6 +57,14 @@ if ! grep -q "$IRON" "$ROOT/docs/evidence/r640/2026-08-15-r640-first-light.md"; 
   echo "error: first-light evidence must claim $IRON" >&2
   exit 1
 fi
+if ! grep -q 'RAYNU-V-M4-SMP-OK' "$ROOT/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt"; then
+  echo "error: xsavesfix COM2 archive must include M4-SMP-OK" >&2
+  exit 1
+fi
+if ! grep -q 'stack guard' "$ROOT/docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt"; then
+  echo "error: keepconfix COM2 archive must include stack guard residual" >&2
+  exit 1
+fi
 if ! grep -q 'r640-hypervisor.efi' "$ROOT/tools/package-release.sh"; then
   echo "error: package-release must still name r640-hypervisor.efi" >&2
   exit 1

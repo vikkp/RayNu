@@ -62,6 +62,11 @@ pub fn r640_scripts_present() -> bool {
         && first_light.contains("RAYNU-V-M3-SHELL-OK")
         && first_light.contains("RAYNU-V-M4-SMP-OK")
         && first_light.contains(M7_R640_OK_MARKER)
+        && include_str!("../docs/evidence/r640/logs/README.md").contains("xsavesfix-com2")
+        && include_str!("../docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt")
+            .contains("RAYNU-V-M4-SMP-OK")
+        && include_str!("../docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt")
+            .contains("stack guard")
 }
 
 /// True when CLOSED GAP and host-limit honesty hold.
