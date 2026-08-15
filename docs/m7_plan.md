@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.4 closed on Latitude; **M7.5 scaffolded** (iron boot still open).  
+**Status:** **open** — M7.5 closed on iron (`RAYNU-V-R640-BOOT-OK`); **M7.6** (ADR-012 UEFI HTTP) next for E3.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -184,21 +184,21 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.5 — Real R640 boot — `RAYNU-V-R640-BOOT-OK`
 
-**Status: open** (scaffold on host; iron-bound — Latitude/QEMU cannot close)
+**Status: closed** (iron — 2026-08-15 COM2; scaffold remains host/CI)
 
 **Scaffold marker (host/CI):** `RAYNU-V-M7-R640-SCAFFOLD-OK` via `./tools/m7-r640-smoke.sh`  
-**Iron marker:** `RAYNU-V-R640-BOOT-OK` — real PowerEdge R640 only
+**Iron marker:** `RAYNU-V-R640-BOOT-OK` — claimed in [`docs/evidence/r640/`](evidence/r640/) (`STATUS=closed`)
 
 **Goal:** First light on real PowerEdge R640 via USB or iDRAC vMedia.
 
 **Deliverables:**
 
-1. Boot `r640-hypervisor.efi` on R640; COM1/iDRAC serial works.
-2. VMX + EPT + Linux shell path observed on iron (or documented residual with follow-up).
-3. Runbook evidence + marker `RAYNU-V-R640-BOOT-OK`.
-4. `GAP(CLOSED M7.5): Real R640 boot` — **only after iron evidence**.
+1. Boot `r640-hypervisor.efi` on R640; COM1/iDRAC serial works. **Done.**
+2. VMX + EPT + Linux shell path observed on iron. **Done** (`SHELL-OK` + M4 chain).
+3. Runbook evidence + marker `RAYNU-V-R640-BOOT-OK`. **Done.**
+4. `GAP(CLOSED M7.5): Real R640 boot` — **Done.**
 
-**Scaffolded now:** [`docs/runbooks/r640_boot.md`](runbooks/r640_boot.md) · [`docs/evidence/r640/`](evidence/r640/) · `mgmt/m7_r640_gate` · CI `m7-r640`.
+**Evidence:** [`docs/evidence/r640/2026-08-15-r640-first-light.md`](evidence/r640/2026-08-15-r640-first-light.md) · kit `releases/v0.1.0-xsavesfix/`
 
 **Acceptance:** **Real R640 only.** Host scaffold smoke must not print the iron marker.
 
@@ -239,5 +239,5 @@ Do not pull M8 into M7 gate lists.
 ## First action
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
-**M7.5 scaffolded** (`RAYNU-V-M7-R640-SCAFFOLD-OK`); **iron open** until real R640.  
-**Honesty:** console/TLS/firmware NIC residual; El Torito residual; `RAYNU-V-R640-BOOT-OK` not claimed.
+**M7.5 closed on iron** (`RAYNU-V-R640-BOOT-OK` — 2026-08-15 COM2; evidence `STATUS=closed`).  
+**Honesty:** Mount Everest still open on E3–E5 (network UI / ISO); console/TLS/firmware NIC + El Torito residuals remain.

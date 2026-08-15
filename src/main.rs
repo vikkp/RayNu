@@ -46,7 +46,9 @@ fn main() -> Status {
     boot::early_init();
     boot::serial::print_m0_banner(BOOT_BANNER);
 
+    // ConOut / BIOS serial-redirect (what HTML5 + many SOL sessions show pre-EBS).
     println!("{BOOT_BANNER}");
+    println!("serial: COM1+COM2 mirror — iDRAC SOL: ssh idrac then 'console com2'");
     println!("{}", boot::serial::M0_BOOT_OK_MARKER);
 
     arch::log_cpu_vendor_stub();
@@ -55,25 +57,28 @@ fn main() -> Status {
         milestone: audit::Milestone::M0,
     });
 
-    boot::serial::write_line("boot: M0 complete — entering M1.0 firmware handoff");
+    boot_note("boot: M0 complete — entering M1.0 firmware handoff");
 
     // M3.22: prefer PE-embedded assets (ADR-003); ESP is split-mode fallback.
     // Probe ESP before EBS so fallback remains available if PE is empty.
+    boot_note("boot: probing PE/ESP assets (pre-EBS)");
     boot::esp_assets::probe_bzimage();
     if boot::pe_assets::embedded_present() {
-        boot::serial::write_line("boot: PE assets embedded (.askern/.asinit) — prefer PE");
+        boot_note("boot: PE assets embedded (.askern/.asinit) — prefer PE");
         boot::serial::write_line(boot::M3_ASSETS_OK_MARKER);
+        println!("{}", boot::M3_ASSETS_OK_MARKER);
     } else if boot::esp_assets::bzimage_bytes().is_some() {
-        boot::serial::write_line("boot: ESP BZIMAGE staged (PE embed missing)");
+        boot_note("boot: ESP BZIMAGE staged (PE embed missing)");
         if boot::esp_assets::initrd_bytes().is_none() {
             if let Some(initrd) = boot::pe_assets::initrd_bytes() {
                 let _ = boot::esp_assets::stage_initrd(initrd);
             }
         }
     } else {
-        boot::serial::write_line("boot: no PE/ESP bzImage — will use embedded minimal");
+        boot_note("boot: no PE/ESP bzImage — will use embedded minimal");
     }
 
+    boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
     let handoff = unsafe { boot::handoff::leave_firmware() };
     let mut bump = handoff.frames;
@@ -212,6 +217,34 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         return;
     }
     boot::serial::write_line("boot: precise EPT [0,512MiB); APIC MMIO unmapped");
+
+    // Guest must not share host CR3 on large-RAM iron (UEFI PTs often live
+    // above PRECISE_BYTES → immediate EPT violation walking CR3).
+    let Some(g_pt_pml4) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for guest PML4");
+        let _ = life.disable();
+        return;
+    };
+    let Some(g_pt_pdpt) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for guest PDPT");
+        let _ = life.disable();
+        return;
+    };
+    let Some(g_pt_pd) = alloc_phys(alloc) else {
+        boot::serial::write_line("boot: ERROR — no frame for guest PD");
+        let _ = life.disable();
+        return;
+    };
+    // SAFETY: exclusive allocator frames, identity-mapped in HV pool.
+    let guest_cr3 = unsafe {
+        memory::ept_hw::write_guest_identity_precise_tables(g_pt_pml4, g_pt_pdpt, g_pt_pd)
+    };
+    boot::serial::write_str("boot: guest CR3 (precise identity)=0x");
+    write_hex(guest_cr3);
+    boot::serial::write_str(" host CR3=0x");
+    // SAFETY: reading CR3 is always valid on this CPU.
+    write_hex(unsafe { arch::cpu::read_cr3() });
+    boot::serial::write_byte(b'\n');
 
     let Some(guest_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for guest code");
@@ -530,7 +563,8 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         let g_code = g_base + memory::ept_hw::G1_SLAB_OFF_CODE;
         let g_stack = g_base + memory::ept_hw::G1_SLAB_OFF_STACK;
         let g_idt = g_base + memory::ept_hw::G1_SLAB_OFF_IDT;
-        // SAFETY: pages inside shell slab; host identity still maps them for setup.
+        // SAFETY: pages inside shell slab; private guest CR3 maps only this 2 MiB.
+        let shell_cr3 = unsafe { memory::ept_hw::write_guest_identity_2m_tables(g_base) };
         unsafe {
             memory::ept_hw::write_guest_shell_cpuid_page(g_code);
             if !arch::cpu::clear_nx_identity(g_code) {
@@ -578,7 +612,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 eptp: guest_eptp,
                 guest_code_phys: g_code,
                 guest_idt_phys: g_idt,
-                guest_cr3_phys: None,
+                guest_cr3_phys: Some(shell_cr3),
                 msr_bitmap_phys: g_msr,
                 io_bitmap_a_phys: g_io_a,
                 io_bitmap_b_phys: g_io_b,
@@ -595,7 +629,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                     eptp: guest_eptp,
                     guest_code_phys: g_code,
                     guest_idt_phys: g_idt,
-                    guest_cr3_phys: None,
+                    guest_cr3_phys: Some(shell_cr3),
                     msr_bitmap_phys: g_msr,
                     io_bitmap_a_phys: g_io_a,
                     io_bitmap_b_phys: g_io_b,
@@ -666,7 +700,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp,
         guest_code_phys: blk_code,
         guest_idt_phys: blk_idt,
-        guest_cr3_phys: None,
+        guest_cr3_phys: Some(guest_cr3),
         msr_bitmap_phys: blk_msr,
         io_bitmap_a_phys: blk_io_a,
         io_bitmap_b_phys: blk_io_b,
@@ -731,7 +765,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp,
         guest_code_phys: net_code,
         guest_idt_phys: net_idt,
-        guest_cr3_phys: None,
+        guest_cr3_phys: Some(guest_cr3),
         msr_bitmap_phys: net_msr,
         io_bitmap_a_phys: net_io_a,
         io_bitmap_b_phys: net_io_b,
@@ -849,7 +883,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             eptp,
             guest_code_phys: bsp_code,
             guest_idt_phys: bsp_idt,
-            guest_cr3_phys: None,
+            guest_cr3_phys: Some(guest_cr3),
             msr_bitmap_phys: bsp_msr,
             io_bitmap_a_phys: bsp_io_a,
             io_bitmap_b_phys: bsp_io_b,
@@ -863,7 +897,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
             eptp,
             guest_code_phys: ap_code,
             guest_idt_phys: ap_idt,
-            guest_cr3_phys: None,
+            guest_cr3_phys: Some(guest_cr3),
             msr_bitmap_phys: ap_msr,
             io_bitmap_a_phys: ap_io_a,
             io_bitmap_b_phys: ap_io_b,
@@ -905,7 +939,7 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         eptp,
         guest_code_phys: guest_code,
         guest_idt_phys: guest_idt,
-        guest_cr3_phys: None,
+        guest_cr3_phys: Some(guest_cr3),
         msr_bitmap_phys: msr_bitmap,
         io_bitmap_a_phys: io_a,
         io_bitmap_b_phys: io_b,
@@ -969,6 +1003,12 @@ fn pick_shell_slab_hpa(alloc: &memory::FrameAllocator, used: &[u64]) -> Option<u
         hpa = hpa.saturating_add(two_m);
     }
     None
+}
+
+/// Pre-EBS breadcrumb: COM1+COM2 and ConOut (BIOS serial redirect / HTML5).
+fn boot_note(s: &str) {
+    boot::serial::write_line(s);
+    println!("{s}");
 }
 
 fn write_dec(mut n: u64) {

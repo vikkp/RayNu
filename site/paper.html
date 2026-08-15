@@ -246,7 +246,7 @@
           <span aria-hidden="true">·</span>
           <span>Living Verification Paper</span>
         </p>
-        <span class="paper-badge">Living Draft · v0.1.1</span>
+        <span class="paper-badge">Living Draft · v0.2.0-r640-boot</span>
         <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
         <p class="paper-mast__subtitle">
           Optimized for Dell PowerEdge R640 / R650 / R660
@@ -258,7 +258,7 @@
           >
         </p>
         <p class="paper-meta">
-          Last updated: 2026-07-21 · ADR-010 ·
+          Last updated: 2026-08-15 · ADR-010 · iron COM2 evidence ·
           <a href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md"
             >Source on GitHub</a
           >
@@ -274,6 +274,8 @@
         Maturity claims never exceed the actual state of the Proven Core.
         When L3 coverage and external review are sufficient, a frozen snapshot
         becomes the conference / arXiv submission.
+        Iron COM2 archives for §6 live under
+        <code>docs/evidence/r640/logs/</code> (xsavesfix closing run + keepconfix residual).
       </div>
 
       <nav class="paper-toc" aria-label="Table of contents">
@@ -438,11 +440,11 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>M2</td><td>Spec written + runtime asserts + Kani</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
-          <tr><td>M3</td><td>4K-page, single-guest proof attempt</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
-          <tr><td>M4</td><td>Extended to N guests (4K)</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
-          <tr><td>M5</td><td>Large-page support attempted</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
-          <tr><td>M6</td><td>Full proof incl. live migration + external review</td><td><em>TBD</em></td><td><em>TBD</em></td></tr>
+          <tr><td>M2</td><td>Spec written + runtime asserts + Kani</td><td>L1–L2 (Latitude)</td><td>Gate markers + Kani CI</td></tr>
+          <tr><td>M3</td><td>4K-page, single-guest proof attempt</td><td>L2 + scoped L3; iron SHELL</td><td>M3.17–M3.21; COM2 logs</td></tr>
+          <tr><td>M4</td><td>Extended to N guests (4K)</td><td>L3 N-guest (Latitude); iron probes</td><td>M4.6–M4.9; <code>M4-SMP-OK</code></td></tr>
+          <tr><td>M5</td><td>Large-page support attempted</td><td>L3 large-page + NUMA (Latitude)</td><td>M5.7–M5.9 / M6.2</td></tr>
+          <tr><td>M6</td><td>Full proof incl. live migration + external review</td><td>L3 migrate-xfer + EXT</td><td><code>80 verified, 0 errors</code></td></tr>
         </tbody>
       </table>
 
@@ -451,41 +453,87 @@
 
       <h3>6.1 Milestone 0 — “It Boots”</h3>
       <p>
-        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
+        <strong>Status:</strong> Closed on Latitude/QEMU; <strong>closed on real PowerEdge R640</strong> (2026-08-15).<br />
         <strong>Target gate:</strong> Boots on R640 (or QEMU+OVMF), serial console works, Verus CI pipeline green.
       </p>
-      <div class="paper-evidence">Evidence blocks will appear here.</div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, commit d7cc603, run r640-xsavesfix-com2)</strong><br />
+        Maturity: L1 (runtime / gate) · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
+        Observation: iDRAC Virtual Floppy printed <code>RAYNU-V-M0-BOOT-OK</code> on COM2; EFI SHA256 <code>c3a688d0…ba28d611</code>.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, kit keepconfix, run r640-keepconfix-com2)</strong><br />
+        Maturity: L1 (residual) · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt">keepconfix-com2.txt</a><br />
+        Observation: Same M0 path green before XSAVES residual; archived for reproducibility.
+      </div>
 
       <h3>6.2 Milestone 1 — “VMX Works”</h3>
       <p>
-        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
-        <strong>Target gate:</strong> VMLAUNCH / VMEXIT cycle, VMCS host/guest state configured, first L3 proofs on VMCS legality.
+        <strong>Status:</strong> Closed on Latitude; <strong>reproduced on R640 iron</strong>.<br />
+        <strong>Target gate:</strong> VMLAUNCH / VMEXIT cycle, VMCS host/guest state configured.
       </p>
-      <div class="paper-evidence">Evidence blocks will appear here.</div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
+        Maturity: L1 · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
+        Observation: <code>RAYNU-V-M1-VMXON-OK</code>, <code>RAYNU-V-M1-VMEXIT-OK</code>; <code>secondary=0x0010100a</code> (EPT|RDTSCP|INVPCID|XSAVES).
+      </div>
 
       <h3>6.3 Milestone 2 — “Guest Executes Real Code”</h3>
       <p>
-        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
-        <strong>Target gate:</strong> EPT spec (L2), physical allocator at L3, guest code runs under EPT.
+        <strong>Status:</strong> Closed on Latitude; <strong>reproduced on R640 iron</strong>.<br />
+        <strong>Target gate:</strong> Guest code runs under EPT; timer/IRQ inject path.
       </p>
-      <div class="paper-evidence">Evidence blocks will appear here. (Highest-risk technical milestone — EPT + interrupt virtualization.)</div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
+        Maturity: L1 · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
+        Observation: <code>RAYNU-V-M2-EPT-OK</code> … <code>RAYNU-V-M2-TIMER-OK</code> with precise EPT and distinct <code>HOST_CR3</code>.
+      </div>
 
       <h3>6.4 Milestone 3 — “Linux Boots”</h3>
       <p>
-        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
-        <strong>Target gate:</strong> Unmodified Linux 6.x reaches a shell. Verification checkpoint report published.
+        <strong>Status:</strong> Closed on Latitude; <strong>closed on R640 iron</strong> (<code>RAYNU-V-M3-SHELL-OK</code>).<br />
+        <strong>Target gate:</strong> Unmodified Linux 6.x reaches a shell (init SHELL hypercall).
       </p>
-      <div class="paper-evidence">Evidence blocks will appear here.</div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
+        Maturity: L1 · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
+        Observation: Linux 6.12.40 → <code>RAYNU-V-M3-SHELL-OK</code> / <code>RAYNU-V-M3-NOIRQ-OK</code>.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, keepconfix residual)</strong><br />
+        Maturity: L1 (negative) · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt">keepconfix-com2.txt</a><br />
+        Observation: Without Enable XSAVES, <code>Run /init</code> hit TASK stack guard / panic; fixed by <code>v0.1.0-xsavesfix</code>.
+      </div>
 
       <h3>6.5 Milestone 4 — “Usable VM Platform”</h3>
       <p>
-        <strong>Status:</strong> <em>Not yet started on this living page</em><br />
-        <strong>Target gate:</strong> ≥4 Linux VMs with SMP, storage, networking. EPT Isolation Theorem at L3 for 4K pages across N guests.
+        <strong>Status:</strong> Closed on Latitude (M4.0–M4.9); <strong>M4.0–M4.5 probe chain on R640 iron</strong>.<br />
+        <strong>Target gate:</strong> ≥4 concurrent guests under credit scheduler; virtio-blk/net + SMP probes.
       </p>
-      <div class="paper-evidence">Evidence blocks will appear here.</div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
+        Maturity: L1 · Artifact: serial log ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
+        Observation: <code>M4-SHELL-G1</code> / <code>2VM-OK</code> / <code>SCHED-OK</code> / <code>NVM-OK</code> / <code>BLK-OK</code> / <code>NET-OK</code> / <code>SMP-OK</code> → <code>VMXOFF ok</code>.
+      </div>
+      <div class="paper-evidence">
+        <strong>Iron close (M7.5 / HDA E2):</strong> <code>RAYNU-V-R640-BOOT-OK</code> —
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md">first-light evidence</a>
+        · <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/README.md">logs/README</a>.
+      </div>
 
       <h3>6.6 Milestone 5 / 5.5 / 6</h3>
-      <p><em>(Sections reserved; content added only when the corresponding gates are passed.)</em></p>
+      <p>
+        <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
+        <code>80 verified, 0 errors</code>). Iron reproduction of network UI / ISO / soak
+        is <strong>not</strong> claimed — see HDA E3–E5.
+      </p>
 
       <h2 id="related">7. Related Work</h2>
       <p><em>[To be filled later with precise citations.]</em></p>
@@ -497,10 +545,11 @@
 
       <h2 id="limitations">8. Limitations and Open Proofs</h2>
       <ul>
-        <li>Large-page EPT and NUMA-aware allocation may remain at L2 for the initial public release.</li>
-        <li>Live-migration path is a late L3 target (M6).</li>
+        <li>Large-page / NUMA: Latitude closed L3 gates (M5.7 / M6.2); iron path not re-proven beyond M4.5 probes.</li>
+        <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
+        <li><strong>Mount Everest residual:</strong> network UI (E3–E4), Linux ISO install-to-disk (E5), live Redfish, R640 soak.</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here

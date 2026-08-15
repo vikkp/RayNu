@@ -636,6 +636,44 @@ pub unsafe fn write_guest_identity_2m_tables(slab_base: u64) -> u64 {
     pml4
 }
 
+/// Frames needed for [`write_guest_identity_precise_tables`] (PML4+PDPT+PD).
+pub const GUEST_PRECISE_PT_FRAMES: usize = 3;
+
+/// Build long-mode guest page tables identity-mapping `[0, PRECISE_BYTES)` with
+/// 2 MiB leaves. Returns guest CR3 (PML4 phys / GPA under identity EPT).
+///
+/// R640 iron: after ExitBootServices, host CR3 often points at page tables
+/// above 512 MiB. Sharing that CR3 with the guest causes an immediate EPT
+/// violation walking the PT root. This builder keeps guest paging inside the
+/// precise EPT window (same reason as [`write_guest_identity_2m_tables`] for G1).
+///
+/// SAFETY: the three frames are writable, exclusively owned, and identity-mapped
+/// in the host (HV pool / UEFI map).
+pub unsafe fn write_guest_identity_precise_tables(
+    pml4_phys: u64,
+    pdpt_phys: u64,
+    pd_phys: u64,
+) -> u64 {
+    core::ptr::write_bytes(pml4_phys as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pdpt_phys as *mut u8, 0, 4096);
+    core::ptr::write_bytes(pd_phys as *mut u8, 0, 4096);
+
+    let present_rw: u64 = 0b011; // P|W, NX clear
+    let leaves = (PRECISE_BYTES / TWO_MIB) as usize;
+    debug_assert!(leaves <= 512);
+    debug_assert_eq!(PRECISE_BYTES % TWO_MIB, 0);
+
+    // PML4[0] → PDPT, PDPT[0] → PD covering first 1 GiB; fill 2 MiB leaves.
+    core::ptr::write_volatile(pml4_phys as *mut u64, pdpt_phys | present_rw);
+    core::ptr::write_volatile(pdpt_phys as *mut u64, pd_phys | present_rw);
+    for i in 0..leaves {
+        let hpa = (i as u64) * TWO_MIB;
+        let leaf = present_rw | (1 << 7) | hpa;
+        core::ptr::write_volatile((pd_phys as *mut u64).add(i), leaf);
+    }
+    pml4_phys
+}
+
 /// Legacy `[0, 4 GiB)` identity (kept for host tests / rollback).
 ///
 /// SAFETY: see [`build_identity_gib`].
@@ -1012,6 +1050,7 @@ mod ept_hw_test {
         assert_eq!(frames_required_gib(EptPageSize::TwoMib, 4), 6);
         assert_eq!(frames_required_precise(), 3); // 512 MiB @ 2M → one PD
         assert_eq!(frames_required_2m_bytes(PRECISE_BYTES), 3);
+        assert_eq!(GUEST_PRECISE_PT_FRAMES, 3);
         assert_eq!(PRECISE_BYTES, 512 * 1024 * 1024);
         assert!(PRECISE_BYTES < (1 << 30), "M3.20 window must be < 1 GiB");
         assert!(PRECISE_BYTES > crate::guest::linux_boot::GUEST_RAM_BYTES);
@@ -1019,6 +1058,36 @@ mod ept_hw_test {
         assert_eq!(PRECISE_BYTES % TWO_MIB, 0);
         assert_eq!(M3_EPT2_OK_MARKER, "RAYNU-V-M3-EPT2-OK");
         assert_eq!(M3_EPT3_OK_MARKER, "RAYNU-V-M3-EPT3-OK");
+    }
+
+    #[test]
+    fn guest_precise_identity_tables_cover_window() {
+        let mut pml4 = [0u8; 4096];
+        let mut pdpt = [0u8; 4096];
+        let mut pd = [0u8; 4096];
+        let pml4_p = pml4.as_mut_ptr() as u64;
+        let pdpt_p = pdpt.as_mut_ptr() as u64;
+        let pd_p = pd.as_mut_ptr() as u64;
+        let cr3 = unsafe { write_guest_identity_precise_tables(pml4_p, pdpt_p, pd_p) };
+        assert_eq!(cr3, pml4_p);
+        let present_rw = 0b011u64;
+        assert_eq!(
+            unsafe { core::ptr::read_volatile(pml4_p as *const u64) },
+            pdpt_p | present_rw
+        );
+        assert_eq!(
+            unsafe { core::ptr::read_volatile(pdpt_p as *const u64) },
+            pd_p | present_rw
+        );
+        let leaves = (PRECISE_BYTES / TWO_MIB) as usize;
+        let first = unsafe { core::ptr::read_volatile(pd_p as *const u64) };
+        let last = unsafe { core::ptr::read_volatile((pd_p as *const u64).add(leaves - 1)) };
+        assert_eq!(first & present_rw, present_rw);
+        assert_ne!(first & (1 << 7), 0);
+        assert_eq!(first & !0x1f_ffff, 0);
+        assert_eq!(last & !0x1f_ffff, PRECISE_BYTES - TWO_MIB);
+        let past = unsafe { core::ptr::read_volatile((pd_p as *const u64).add(leaves)) };
+        assert_eq!(past, 0);
     }
 
     #[test]

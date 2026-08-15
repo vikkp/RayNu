@@ -60,23 +60,26 @@
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.4 closed on Latitude.</h2>
+          <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
+          <h2 class="section__title">R640 iron: BOOT-OK closed.</h2>
           <p class="section__lede">
-            Software gates close on <strong>Dell Latitude + QEMU nested
-            KVM</strong> — not yet on PowerEdge R640. Ops UI closed on Latitude —
-            <code>RAYNU-V-M7-UI-OK</code> (create-VM CPU/RAM/disk/ISO + media
-            buttons; <strong>console/TLS/firmware NIC still residual</strong>;
-            host package smoke ~0s). See <code>docs/m7_plan.md</code>.
+            Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) printed
+            <code>RAYNU-V-M3-SHELL-OK</code> through
+            <code>RAYNU-V-M4-SMP-OK</code> on 2026-08-15
+            (<code>releases/v0.1.0-xsavesfix/</code>). Latitude/QEMU still holds
+            M0→M7.4 software gates.
+            <code>RAYNU-V-R640-BOOT-OK</code> (HDA E2) is
+            <strong>closed</strong>. Mount Everest residual: network UI + Linux
+            ISO deploy.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-UI-OK
-==> M7.4 Ops UI smoke PASSED</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-SHELL-OK
+RAYNU-V-M4-SMP-OK
+RAYNU-V-R640-BOOT-OK
+==> M7.5 real R640 boot PASSED</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Real R640 boot remains open
-            (<code>RAYNU-V-R640-BOOT-OK</code> / HDA E2). M7.5
-            <strong>scaffold</strong> is in-tree
-            (<code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>) — Latitude cannot close
-            iron. Next: first light on PowerEdge —
+            Evidence:
+            <code>docs/evidence/r640/2026-08-15-r640-first-light.md</code>.
+            Next:
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -445,7 +448,8 @@
               <h3 class="journey__era-title">M7 · Mount Everest</h3>
               <p class="journey__era-note">
                 Software path on Latitude/QEMU; real R640 boot
-                (<code>RAYNU-V-R640-BOOT-OK</code>) is the hard gate for M7 closed.
+                (<code>RAYNU-V-R640-BOOT-OK</code>) closed 2026-08-15. Residual:
+                network UI + Linux ISO for full Mount Everest.
               </p>
               <ol class="journey__list">
                 <li>
@@ -486,7 +490,7 @@
                 <li>
                   <span class="journey__gate">M7.5</span>
                   <span class="journey__text"
-                    >Real R640 boot (scaffold only; iron open) →
+                    >Real R640 iron closed (SHELL+M4, 2026-08-15) →
                     <code>RAYNU-V-R640-BOOT-OK</code></span
                   >
                 </li>
@@ -534,7 +538,8 @@
                 <span class="pillars__name">Dell iDRAC-Native</span>
                 <span class="pillars__why"
                   >Target: deploy and attest on PowerEdge you own, via Redfish —
-                  not a mystery appliance. R640 first-light is still ahead.</span
+                  not a mystery appliance. R640 iron closed
+                  <code>RAYNU-V-R640-BOOT-OK</code> (E2) on 2026-08-15.</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -594,11 +599,13 @@
             No host OS. No packages. No config sprawl. Optimized for Dell
             PowerEdge R640 / R650 / R660.
             <strong>Today’s closed gates are on Latitude + QEMU nested
-            KVM.</strong>
-            We ship the EFI kit for PowerEdge; first-light on real R640 is
-            M7.5 — see <a href="hda.html">HDA</a>.
+            KVM</strong>
+            plus real R640 iron
+            (<code>RAYNU-V-R640-BOOT-OK</code>, 2026-08-15). Mount Everest
+            residual: network UI + Linux ISO. See
+            <a href="hda.html">HDA</a>.
           </p>
-          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU nested KVM · R640 = future hard gate
+          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU · R640 iron: RAYNU-V-R640-BOOT-OK (E2 closed)
 cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
 ./tools/qemu-boot-test.sh       # M0 → M4.5
@@ -638,8 +645,10 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             M0→M6 is closed on <strong>Latitude + QEMU nested KVM</strong> — the
             <strong>lab production bar</strong> under
             <code>docs/m6_plan.md</code> (EPT proof track + ops + soak +
-            external audit). PowerEdge R640 validation is still ahead (Mount
-            Everest / HDA).
+            external audit). PowerEdge R640 iron closed
+            <code>RAYNU-V-R640-BOOT-OK</code> (2026-08-15); Mount Everest
+            residual is network UI + Linux ISO (HDA E3–E5). See the
+            <a href="paper.html">living verification paper</a>.
           </p>
 
           <div class="cta">

@@ -7,13 +7,13 @@ running on a PowerEdge R640 with iDRAC watching.
 
 | Channel | What it captures | Tool / path |
 |---------|------------------|-------------|
-| **A. HV → COM1** | Everything RayNu-V prints: gate markers + mirrored audit lines | Firmware COM1 (`boot/serial.rs`); visible in iDRAC Virtual Console / SOL |
+| **A. HV → COM1+COM2** | Everything RayNu-V prints: gate markers + mirrored audit lines | Firmware UART mirror (`boot/serial.rs`: **0x3F8 + 0x2F8**); iDRAC SOL is **COM2** (`ssh` → `console com2`) |
 | **B. Laptop capture** | Saves channel A to a file for evidence | `./tools/capture-idrac-serial.sh` |
 | **C. BMC Redfish logs** | iDRAC SEL / Lifecycle Controller entries (power, sensors, firmware) | `./tools/capture-idrac-serial.sh redfish …` |
 
 RayNu-V **cannot** turn iDRAC into a full session recorder by itself. The
-hypervisor writes to **COM1**; **you** (or SOL) must be attached to save it.
-iDRAC’s own SEL is separate — pull it with Redfish when credentials work.
+hypervisor writes to **COM1+COM2**; **you** (or SOL on COM2) must be attached
+to save it. iDRAC’s own SEL is separate — pull it with Redfish when credentials work.
 
 ## Operator recipe (R640 first light)
 
@@ -25,13 +25,23 @@ iDRAC’s own SEL is separate — pull it with Redfish when credentials work.
      --out docs/evidence/r640/$(date -u +%Y-%m-%d)-r640-serial.txt
    ```
 
-   Or, if SOL is enabled on the BMC:
+   Or, if SOL is enabled on the BMC (Dell: **COM2**, not COM1):
+
+   ```bash
+   ssh <user>@<idrac-ip>
+   # at iDRAC prompt:
+   console com2
+   ```
 
    ```bash
    IDRAC_PASS='…' ./tools/capture-idrac-serial.sh sol \
      --host <idrac-ip> --user root \
      --out docs/evidence/r640/$(date -u +%Y-%m-%d)-r640-serial-sol.txt
    ```
+
+   **Why M0-only freezes happen:** HTML5 / BIOS serial redirect often show
+   **ConOut**, which dies at ExitBootServices. Post-M0 markers are port I/O on
+   COM1+COM2 — use `console com2` (or rebuild ≥ COM2-mirror EFI).
 
 2. Boot RayNu-V (media maker + Virtual Media / USB — field guide §§2–4).
 
