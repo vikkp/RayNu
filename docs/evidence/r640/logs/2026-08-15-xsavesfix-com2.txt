@@ -5,7 +5,7 @@
 # Kit: releases/v0.1.0-xsavesfix/
 # EFI SHA256: c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611
 # EFI commit (kit build): d7cc6030bd67b0b33809a293a2f4a76098ef0c41
-# Outcome: RAYNU-V-M3-SHELL-OK … RAYNU-V-M4-SMP-OK → RAYNU-V-R640-BOOT-OK
+# Outcome: RAYNU-V-M3-SHELL-OK … RAYNU-V-M4-SMP-OK → VMXOFF (R640-BOOT-OK string not yet firmware-emitted in this kit)
 #
 # Captured verbatim from operator paste (SOL may substitute ? for —).
 

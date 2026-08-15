@@ -311,9 +311,14 @@ boot: VMXOFF ok</pre>
 
         <h3>What we claim — and what we don’t</h3>
         <p>
-          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code>: real R640
-          COM2 through Linux SHELL and the M4 probe chain, with archived serials
-          under <code>docs/evidence/r640/logs/</code>. We do
+          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code> on substance:
+          real R640 COM2 through Linux SHELL and the M4 probe chain, with archived
+          serials under <code>docs/evidence/r640/logs/</code>. Honesty check: those
+          2026-08-15 archives end at <code>VMXOFF</code> / M4.5 complete and do
+          <strong>not</strong> contain the literal string
+          <code>RAYNU-V-R640-BOOT-OK</code> — that name lived in the evidence
+          package until firmware <code>finish_boot</code> started printing it after
+          SHELL. Rebuild to see the marker on COM2. We do
           <strong>not</strong> claim Mount Everest closed — network UI (E3),
           ISO install-to-disk (E5), and soak remain. Host CI still prints only
           <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>.

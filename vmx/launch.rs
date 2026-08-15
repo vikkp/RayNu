@@ -74,6 +74,12 @@ use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
+/// M7.5 / HDA E2 runtime marker — printed by firmware after a successful
+/// Linux SHELL bring-up (and any armed M4 probes). Closing the *gate* in
+/// `docs/evidence/r640/` still requires real PowerEdge serial; host smoke
+/// never prints this string.
+pub const M7_R640_BOOT_OK_MARKER: &str = "RAYNU-V-R640-BOOT-OK";
+
 /// Exit-phase state machine (M2.4 / M2.5 / M3.3–M3.6):
 /// 0 = first HLT → software inject
 /// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
@@ -3135,6 +3141,11 @@ fn finish_boot(ok: bool) -> ! {
         } else {
             serial::write_line("boot: M3.10 complete — proto path OK");
         }
+        // E2 / M7.5: emit the iron gate marker on the successful guest path.
+        // Prior kits stopped at VMXOFF without this line (docs-only claim).
+        if serial_pio::guest_shell_ok() {
+            serial::write_line(M7_R640_BOOT_OK_MARKER);
+        }
         serial::qemu_exit_success();
     } else {
         serial::write_line("boot: boot gate failed");
@@ -3189,6 +3200,7 @@ mod launch_test {
         assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
         assert_eq!(M3_SHELL_OK_MARKER, "RAYNU-V-M3-SHELL-OK");
         assert_eq!(M3_LOOP_OK_MARKER, "RAYNU-V-M3-LOOP-OK");
+        assert_eq!(M7_R640_BOOT_OK_MARKER, "RAYNU-V-R640-BOOT-OK");
         assert_eq!(LOOP_HLT_TARGET, 4);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);

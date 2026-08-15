@@ -159,6 +159,7 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 - Link: [`docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt`](../evidence/r640/logs/2026-08-15-xsavesfix-com2.txt)
 - Observation: iDRAC Virtual Floppy boot printed `RAYNU-V-M0-BOOT-OK` on COM2 (COM1+COM2 mirror); EFI SHA256 `c3a688d0…ba28d611`.
 - Confirming retest (same EFI SHA): [`docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt).
+- Honesty: those archives end at `VMXOFF` / M4.5 and do not contain the literal string `RAYNU-V-R640-BOOT-OK` (docs claim name until `finish_boot` began emitting it after SHELL).
 
 **Evidence (2026-08-15, kit `v0.1.0-keepconfix`, run `r640-keepconfix-com2`)**
 - Maturity level claimed: L1 (runtime residual)

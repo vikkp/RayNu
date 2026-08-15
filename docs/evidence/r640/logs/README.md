@@ -36,6 +36,9 @@ c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611  r640-hyperviso
 - Logs are **runtime / gate** evidence (ADR-010 maturity ≤ L1 for EFI-emitted
   claims). They do **not** upgrade Verus L3 coverage by themselves.
 - Host `./tools/m7-r640-smoke.sh` never prints `RAYNU-V-R640-BOOT-OK`.
+- Archived 2026-08-15 COM2 logs prove M0→SHELL→M4→VMXOFF but do **not** contain
+  the string `RAYNU-V-R640-BOOT-OK` (it was docs-claim-only until firmware
+  `finish_boot` began emitting it after SHELL).
 - Intermediate kit residuals (com2 → eptfix → … → keepconfix) are summarized in
   the first-light narrative; full closing + keepconfix + confirming serials are
   archived here.
