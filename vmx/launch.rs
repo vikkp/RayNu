@@ -722,9 +722,11 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     };
 
     let cr0 = cpu::read_cr0();
-    let cr3 = frames
-        .guest_cr3_phys
-        .unwrap_or_else(|| cpu::read_cr3());
+    // Guest may use a precise-window CR3 (iron); host must keep the real UEFI
+    // CR3. Using the guest CR3 for HOST_CR3 caused silent death on VMEXIT when
+    // the EFI image / IDT lived outside [0,512MiB).
+    let host_cr3 = cpu::read_cr3();
+    let guest_cr3 = frames.guest_cr3_phys.unwrap_or(host_cr3);
     let cr4 = cpu::read_cr4();
     let efer = cpu::rdmsr(IA32_EFER);
     let pat = cpu::rdmsr(IA32_PAT);
@@ -910,7 +912,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(GUEST_TR_ACCESS_RIGHTS, tr_ar)?;
 
     vw(GUEST_CR0, cr0)?;
-    vw(GUEST_CR3, cr3)?;
+    vw(GUEST_CR3, guest_cr3)?;
     vw(GUEST_CR4, cr4)?;
     vw(GUEST_DR7, dr7)?;
 
@@ -943,7 +945,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     vw(HOST_TR_SELECTOR, (tr & 0xF8) as u64)?;
 
     vw(HOST_CR0, cr0)?;
-    vw(HOST_CR3, cr3)?;
+    vw(HOST_CR3, host_cr3)?;
     vw(HOST_CR4, cr4)?;
     vw(HOST_FS_BASE, fs_base)?;
     vw(HOST_GS_BASE, gs_base)?;
