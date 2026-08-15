@@ -74,6 +74,10 @@ fn main() -> Status {
         boot::serial::write_line("boot: no PE/ESP bzImage — will use embedded minimal");
     }
 
+    // M7.6 / ADR-012: PRE-EBS Tcp4 mgmt HTTP window (soft-fail → guest path).
+    // Tcp4/SNP die at ExitBootServices — concurrent post-EBS listen is a residual.
+    let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
+
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
     let handoff = unsafe { boot::handoff::leave_firmware() };
     let mut bump = handoff.frames;

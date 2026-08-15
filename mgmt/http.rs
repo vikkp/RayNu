@@ -5,8 +5,8 @@
 //! VERIFICATION: N/A
 //!
 //! Parses plaintext HTTP/1.1 into the existing REST shapes and serves the
-//! embedded SPA. TLS is deferred (lab HTTP MVP — ADR-009). Firmware NIC/TCP
-//! listen is stubbed until UEFI SNP/Tcp4 lands; host `cfg(test)` proves a
+//! embedded SPA. TLS is deferred (lab HTTP MVP — ADR-009). Firmware NIC listen
+//! is PRE-EBS Tcp4 (`http_listen` / ADR-012 / M7.6); host `cfg(test)` proves a
 //! real TCP listener + browser-shaped exchange.
 
 use super::api::{
@@ -291,7 +291,8 @@ pub fn prop_http_mgmt_package() -> bool {
     let mut table = VmTable::new();
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
-    let mut out = [0u8; 8192];
+    // SPA HTML can exceed 8 KiB; keep in sync with host/UEFI serve buffers.
+    let mut out = [0u8; 16384];
     let n = handle_http_request(&mut table, &mut images, &mut iso_plan, raw, &mut out).unwrap_or(0);
     if n == 0 {
         return false;

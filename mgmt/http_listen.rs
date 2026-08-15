@@ -1,46 +1,126 @@
-//! M7.1 mgmt HTTP listen surface (outside Proven Core).
+//! M7.1 / M7.6 mgmt HTTP listen surface (outside Proven Core).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-009 / ADR-012)
 //!
-//! Firmware path: stub until UEFI Tcp4 (ADR-012 / M7.6). SNP is a documented
-//! residual only if Tcp4 is absent. Host/`cfg(test)` path: real
-//! `std::net::TcpListener` proving browser-shaped reachability against the
-//! in-binary HTTP codec.
+//! - Host/`cfg(test)`: real `std::net::TcpListener` proving SPA + Bearer REST.
+//! - Firmware (`uefi-bin`): PRE-EBS UEFI Tcp4 passive listen (ADR-012). Soft-fails
+//!   when the firmware network stack is absent so the guest path still runs.
 //!
-//! Marker (when listen works): `RAYNU-V-M7-UEFI-HTTP-OK` — see ADR-012.
+//! Markers:
+//! - `RAYNU-V-M7-HTTP-OK` — M7.1 host codec gate (unchanged)
+//! - `RAYNU-V-M7-UEFI-HTTP-OK` — firmware Tcp4 served ≥1 HTTP exchange (M7.6)
+//! - `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — host/CI scaffold for M7.6 wiring
 
 use super::datastore::ImageTable;
 use super::http::{handle_http_request, HTTP_LAB_NOTE, M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT};
 use super::iso::IsoDeployPlan;
 use super::VmTable;
 
-/// Why firmware cannot yet bind a NIC listener.
+/// Iron / firmware marker when PRE-EBS Tcp4 listen serves SPA or REST.
+pub const M7_UEFI_HTTP_OK_MARKER: &str = "RAYNU-V-M7-UEFI-HTTP-OK";
+
+/// Host/CI scaffold marker (never claims iron E3 alone).
+pub const M7_UEFI_HTTP_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK";
+
+/// Closed when firmware listen path is wired (scaffold); OK marker is runtime.
+pub const UEFI_HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.6): UEFI NIC HTTP listen";
+
+/// How long to wait for an inbound connection before continuing to EBS (ms).
+pub const PRE_EBS_LISTEN_TIMEOUT_MS: u64 = 15_000;
+
+/// Max HTTP exchanges to serve in the PRE-EBS window.
+pub const PRE_EBS_MAX_EXCHANGES: u32 = 8;
+
+/// Why firmware cannot bind / serve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MgmtListenError {
-    /// UEFI Tcp4/SNP (or equivalent) not wired yet — use host lab / QEMU user-net.
+    /// Host build / no UEFI network attempt.
     UnsupportedOnFirmware,
+    /// Tcp4 service binding not present (common on minimal OVMF).
+    NoTcp4Stack,
     BindFailed,
     AcceptFailed,
+    ServeFailed,
 }
 
-/// Documented firmware entry: bind mgmt HTTP on the host NIC.
+/// Documented firmware entry: bind mgmt HTTP on the host NIC (PRE-EBS).
 ///
-/// M7.1: returns [`MgmtListenError::UnsupportedOnFirmware`]. The HTTP codec in
-/// `http.rs` is still linked into the binary; host tests prove the exchange.
-pub fn listen_mgmt_http_uefi(_port: u16) -> Result<(), MgmtListenError> {
+/// On success prints [`M7_UEFI_HTTP_OK_MARKER`] after at least one HTTP exchange.
+pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
     let _ = (M7_HTTP_OK_MARKER, HTTP_LAB_NOTE, MGMT_HTTP_DEFAULT_PORT);
-    Err(MgmtListenError::UnsupportedOnFirmware)
+    let _ = (
+        M7_UEFI_HTTP_OK_MARKER,
+        M7_UEFI_HTTP_SCAFFOLD_MARKER,
+        UEFI_HTTP_GAP_NOTE,
+    );
+
+    #[cfg(feature = "uefi-bin")]
+    {
+        return uefi_tcp4_listen(port);
+    }
+
+    #[cfg(not(feature = "uefi-bin"))]
+    {
+        let _ = port;
+        Err(MgmtListenError::UnsupportedOnFirmware)
+    }
 }
 
-/// True when the listen API + lab note + codec marker are present.
+/// Soft-fail wrapper for `src/main.rs`: never blocks guest bring-up.
+///
+/// Returns `true` when [`M7_UEFI_HTTP_OK_MARKER`] was printed.
+pub fn run_pre_ebs_mgmt_listen() -> bool {
+    match listen_mgmt_http_uefi(MGMT_HTTP_DEFAULT_PORT) {
+        Ok(()) => true,
+        Err(e) => {
+            #[cfg(feature = "uefi-bin")]
+            {
+                use crate::boot::serial;
+                match e {
+                    MgmtListenError::NoTcp4Stack => {
+                        serial::write_line(
+                            "boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)",
+                        );
+                    }
+                    MgmtListenError::UnsupportedOnFirmware => {
+                        serial::write_line("boot: WARN — mgmt HTTP unsupported on this path");
+                    }
+                    MgmtListenError::BindFailed => {
+                        serial::write_line("boot: WARN — mgmt HTTP bind failed");
+                    }
+                    MgmtListenError::AcceptFailed => {
+                        serial::write_line(
+                            "boot: WARN — mgmt HTTP accept timeout (continuing to EBS)",
+                        );
+                    }
+                    MgmtListenError::ServeFailed => {
+                        serial::write_line("boot: WARN — mgmt HTTP serve failed");
+                    }
+                }
+            }
+            #[cfg(not(feature = "uefi-bin"))]
+            {
+                let _ = e;
+            }
+            false
+        }
+    }
+}
+
+/// True when listen API + markers + host TcpListener proof exist.
 pub fn prop_listen_surface() -> bool {
     let s = include_str!("http_listen.rs");
     s.contains("fn listen_mgmt_http_uefi(")
+        && s.contains("fn run_pre_ebs_mgmt_listen(")
         && s.contains("UnsupportedOnFirmware")
+        && s.contains("NoTcp4Stack")
+        && s.contains("serve_one_connection_host")
         && s.contains("TcpListener")
-        && listen_mgmt_http_uefi(MGMT_HTTP_DEFAULT_PORT)
-            == Err(MgmtListenError::UnsupportedOnFirmware)
+        && s.contains(M7_UEFI_HTTP_OK_MARKER)
+        && s.contains(M7_UEFI_HTTP_SCAFFOLD_MARKER)
+        && s.contains(UEFI_HTTP_GAP_NOTE)
+        && UEFI_HTTP_GAP_NOTE.contains("CLOSED M7.6")
 }
 
 /// Host-only: serve one HTTP exchange on `127.0.0.1:port` (or ephemeral if 0).
@@ -70,6 +150,249 @@ pub fn serve_one_connection_host(port: u16) -> Result<u16, MgmtListenError> {
     let _ = stream.write_all(&out[..wn]);
     let _ = stream.flush();
     Ok(bound)
+}
+
+#[cfg(feature = "uefi-bin")]
+fn uefi_tcp4_listen(port: u16) -> Result<(), MgmtListenError> {
+    use crate::boot::serial;
+    use crate::mgmt::tcp4_uefi::{
+        create_tcp4_child, Ipv4Address, Tcp4AccessPoint, Tcp4CompletionToken, Tcp4ConfigData,
+        Tcp4FragmentData, Tcp4IoToken, Tcp4ListenToken, Tcp4Packet, Tcp4Protocol, Tcp4ReceiveData,
+        Tcp4TransmitData,
+    };
+    use core::ptr;
+    use uefi::boot::{self, EventType, Tpl};
+    use uefi::{Handle, Status};
+
+    let (listen_child, mut listen_tcp, mut sb) =
+        create_tcp4_child().map_err(|_| MgmtListenError::NoTcp4Stack)?;
+
+    let config = Tcp4ConfigData {
+        type_of_service: 0,
+        time_to_live: 64,
+        access_point: Tcp4AccessPoint {
+            use_default_address: true,
+            station_address: Ipv4Address([0, 0, 0, 0]),
+            subnet_mask: Ipv4Address([0, 0, 0, 0]),
+            station_port: port,
+            remote_address: Ipv4Address([0, 0, 0, 0]),
+            remote_port: 0,
+            active_flag: false,
+        },
+        control_option: ptr::null(),
+    };
+
+    unsafe {
+        listen_tcp
+            .configure(&config)
+            .map_err(|_| MgmtListenError::BindFailed)?;
+    }
+
+    serial::write_str("boot: mgmt HTTP listening on 0.0.0.0:");
+    write_port_dec(port);
+    serial::write_line(" (PRE-EBS Tcp4 window)");
+
+    let mut served: u32 = 0;
+    let mut ticks_left = PRE_EBS_LISTEN_TIMEOUT_MS;
+
+    while served < PRE_EBS_MAX_EXCHANGES && ticks_left > 0 {
+        let Ok(event) =
+            (unsafe { boot::create_event(EventType::NOTIFY_WAIT, Tpl::CALLBACK, None, None) })
+        else {
+            break;
+        };
+
+        let mut token = Tcp4ListenToken {
+            completion_token: Tcp4CompletionToken {
+                event: event.as_ptr().cast(),
+                status: Status::NOT_READY,
+            },
+            new_child_handle: ptr::null_mut(),
+        };
+
+        if unsafe { listen_tcp.accept(&mut token) }.is_err() {
+            let _ = boot::close_event(event);
+            let _ = unsafe { listen_tcp.poll() };
+            let _ = boot::stall(1_000);
+            ticks_left = ticks_left.saturating_sub(1);
+            continue;
+        }
+
+        let mut accepted = false;
+        while ticks_left > 0 {
+            let _ = unsafe { listen_tcp.poll() };
+            if boot::check_event(unsafe { event.unsafe_clone() }).ok() == Some(true) {
+                accepted = true;
+                break;
+            }
+            let _ = boot::stall(1_000);
+            ticks_left = ticks_left.saturating_sub(1);
+        }
+        let _ = boot::close_event(event);
+
+        if !accepted || token.new_child_handle.is_null() {
+            let _ = unsafe { listen_tcp.cancel_all() };
+            continue;
+        }
+
+        let Some(conn_handle) = (unsafe { Handle::from_ptr(token.new_child_handle) }) else {
+            continue;
+        };
+
+        if let Ok(mut conn) = boot::open_protocol_exclusive::<Tcp4Protocol>(conn_handle) {
+            if serve_one_tcp4_exchange(&mut conn, &mut ticks_left).is_ok() {
+                served += 1;
+            }
+            let _ = unsafe { conn.cancel_all() };
+            drop(conn);
+        }
+        let _ = unsafe { sb.destroy_child_handle(conn_handle) };
+    }
+
+    let _ = unsafe { listen_tcp.cancel_all() };
+    drop(listen_tcp);
+    let _ = unsafe { sb.destroy_child_handle(listen_child) };
+    drop(sb);
+
+    if served == 0 {
+        return Err(MgmtListenError::AcceptFailed);
+    }
+
+    serial::write_line(M7_UEFI_HTTP_OK_MARKER);
+    Ok(())
+}
+
+#[cfg(feature = "uefi-bin")]
+fn serve_one_tcp4_exchange(
+    conn: &mut uefi::boot::ScopedProtocol<crate::mgmt::tcp4_uefi::Tcp4Protocol>,
+    ticks_left: &mut u64,
+) -> Result<(), MgmtListenError> {
+    use crate::mgmt::tcp4_uefi::{
+        Tcp4CompletionToken, Tcp4FragmentData, Tcp4IoToken, Tcp4Packet, Tcp4ReceiveData,
+        Tcp4TransmitData,
+    };
+    use uefi::boot::{self, EventType, Tpl};
+    use uefi::Status;
+
+    let mut rx_buf = [0u8; 8192];
+    let mut rx_data = Tcp4ReceiveData {
+        urgent_flag: false,
+        data_length: rx_buf.len() as u32,
+        fragment_count: 1,
+        fragment_table: [Tcp4FragmentData {
+            fragment_length: rx_buf.len() as u32,
+            fragment_buffer: rx_buf.as_mut_ptr().cast(),
+        }],
+    };
+
+    let rx_event = unsafe {
+        boot::create_event(EventType::NOTIFY_WAIT, Tpl::CALLBACK, None, None)
+            .map_err(|_| MgmtListenError::ServeFailed)?
+    };
+
+    let mut rx_token = Tcp4IoToken {
+        completion_token: Tcp4CompletionToken {
+            event: rx_event.as_ptr().cast(),
+            status: Status::NOT_READY,
+        },
+        packet: Tcp4Packet {
+            rx_data: &mut rx_data,
+        },
+    };
+
+    unsafe {
+        conn.receive(&mut rx_token)
+            .map_err(|_| MgmtListenError::ServeFailed)?;
+    }
+
+    let mut got_rx = false;
+    while *ticks_left > 0 {
+        let _ = unsafe { conn.poll() };
+        if boot::check_event(unsafe { rx_event.unsafe_clone() }).ok() == Some(true) {
+            got_rx = true;
+            break;
+        }
+        let _ = boot::stall(1_000);
+        *ticks_left = ticks_left.saturating_sub(1);
+    }
+    let _ = boot::close_event(rx_event);
+    if !got_rx || rx_data.data_length == 0 {
+        return Err(MgmtListenError::ServeFailed);
+    }
+
+    let n = (rx_data.data_length as usize).min(rx_buf.len());
+    let raw = core::str::from_utf8(&rx_buf[..n]).unwrap_or("");
+
+    let mut table = VmTable::new();
+    let mut images = ImageTable::new();
+    let mut iso_plan = IsoDeployPlan::empty();
+    let mut out = [0u8; 16384];
+    let wn =
+        handle_http_request(&mut table, &mut images, &mut iso_plan, raw, &mut out).unwrap_or(0);
+    if wn == 0 {
+        return Err(MgmtListenError::ServeFailed);
+    }
+
+    let mut tx_data = Tcp4TransmitData {
+        push: true,
+        urgent: false,
+        data_length: wn as u32,
+        fragment_count: 1,
+        fragment_table: [Tcp4FragmentData {
+            fragment_length: wn as u32,
+            fragment_buffer: out.as_mut_ptr().cast(),
+        }],
+    };
+
+    let tx_event = unsafe {
+        boot::create_event(EventType::NOTIFY_WAIT, Tpl::CALLBACK, None, None)
+            .map_err(|_| MgmtListenError::ServeFailed)?
+    };
+
+    let mut tx_token = Tcp4IoToken {
+        completion_token: Tcp4CompletionToken {
+            event: tx_event.as_ptr().cast(),
+            status: Status::NOT_READY,
+        },
+        packet: Tcp4Packet {
+            tx_data: &mut tx_data,
+        },
+    };
+
+    unsafe {
+        conn.transmit(&mut tx_token)
+            .map_err(|_| MgmtListenError::ServeFailed)?;
+    }
+
+    while *ticks_left > 0 {
+        let _ = unsafe { conn.poll() };
+        if boot::check_event(unsafe { tx_event.unsafe_clone() }).ok() == Some(true) {
+            break;
+        }
+        let _ = boot::stall(1_000);
+        *ticks_left = ticks_left.saturating_sub(1);
+    }
+    let _ = boot::close_event(tx_event);
+    Ok(())
+}
+
+#[cfg(feature = "uefi-bin")]
+fn write_port_dec(mut n: u16) {
+    use crate::boot::serial;
+    let mut buf = [0u8; 5];
+    let mut i = 5;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
+    }
 }
 
 #[cfg(test)]

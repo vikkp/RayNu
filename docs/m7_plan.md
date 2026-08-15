@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.4 closed on Latitude; **M7.5 scaffolded** (iron boot still open).  
+**Status:** **open** — M7.4 closed on Latitude; **M7.5/M7.6 scaffolded** (iron boot + iron HTTP-OK still open).  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -106,10 +106,10 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.6 — UEFI NIC HTTP listen — `RAYNU-V-M7-UEFI-HTTP-OK`
 
-**Status: open** (next Everest-path build focus after M7.5 / E2)
+**Status: scaffolded** (host `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK`; **iron `RAYNU-V-M7-UEFI-HTTP-OK` open**)
 
 **ADR:** [ADR-012](adr/ADR-012.md)  
-**Scaffold (host/CI):** `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` (optional while wiring)  
+**Scaffold (host/CI):** `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK`  
 **OK marker:** `RAYNU-V-M7-UEFI-HTTP-OK`  
 **Parent Everest criterion:** E3 (network UI) — HDA DONE only with real R640 browser/curl evidence
 
@@ -118,8 +118,8 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 **Deliverables:**
 
-1. Replace `listen_mgmt_http_uefi` → `UnsupportedOnFirmware` with Tcp4 bind (SNP residual only if Tcp4 absent).
-2. Serial prints bound `a.b.c.d:8443` (or `MGMT_HTTP_DEFAULT_PORT`).
+1. Replace `listen_mgmt_http_uefi` → `UnsupportedOnFirmware` with Tcp4 bind (SNP residual only if Tcp4 absent). **(scaffold: PRE-EBS Tcp4 + soft-fail)**
+2. Serial prints bound port (or `MGMT_HTTP_DEFAULT_PORT`).
 3. Reuse `handle_http_request` codec; no second HTTP stack; no helper binary ([Z]).
 4. Size gate green (ADR-003).
 5. `GAP(CLOSED M7.6): UEFI NIC HTTP listen`.

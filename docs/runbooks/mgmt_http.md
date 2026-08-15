@@ -1,19 +1,27 @@
-# Runbook — Network HTTP mgmt plane (M7.1)
+# Runbook — Network HTTP mgmt plane (M7.1 + M7.6)
 
-**Marker:** `RAYNU-V-M7-HTTP-OK`  
-**Smoke:** `./tools/m7-http-smoke.sh`
+**Markers:**
+- M7.1 host: `RAYNU-V-M7-HTTP-OK` — `./tools/m7-http-smoke.sh`
+- M7.6 scaffold: `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — `./tools/m7-uefi-http-smoke.sh`
+- M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS Tcp4 served ≥1 HTTP exchange (ADR-012)
 
 ## Story
 
 M7.1 makes the control plane **network-reachable**: an in-binary HTTP/1.1 codec
 serves the embedded SPA (`GET /`) and REST (`/vms…`) with
-`Authorization: Bearer` (M6.4 bring-up token).
+`Authorization: Bearer` (M6.4 bring-up token). Host/`cfg(test)` proves a real
+`TcpListener` exchange.
+
+**ADR-012 / M7.6** binds that codec to a **UEFI NIC** via Tcp4 **before**
+`ExitBootServices` (Boot Services protocols are invalid after EBS). Soft-fail
+continues into the guest path when Tcp4 is absent (common on minimal OVMF).
 
 | Mode | What runs | Where |
 |------|-----------|--------|
-| **Host / CI gate** | `std` `TcpListener` one-shot serve via same codec | `cargo test` / `m7-http-smoke.sh` |
-| **Firmware** | Codec linked; `listen_mgmt_http_uefi` stub | Returns `UnsupportedOnFirmware` until UEFI Tcp4/SNP |
-| **Lab** | Plaintext HTTP (TLS deferred — ADR-003 size) | Documented below |
+| **Host / CI (M7.1)** | `std` `TcpListener` one-shot | `m7-http-smoke.sh` |
+| **Host / CI (M7.6)** | Scaffold gate (wiring only) | `m7-uefi-http-smoke.sh` |
+| **Firmware** | PRE-EBS Tcp4 listen window (~15s) | Soft-fail → EBS + guests |
+| **Lab** | Plaintext HTTP (TLS deferred — ADR-003/009/012) | QEMU `hostfwd` below |
 
 ## Auth
 
@@ -21,45 +29,57 @@ serves the embedded SPA (`GET /`) and REST (`/vms…`) with
 Authorization: Bearer raynu-v-bringup
 ```
 
-- SPA (`GET /`) — no auth (page load).  
+- SPA (`GET /`) — no auth (page load).
 - REST — M6.4 token required; missing/wrong → `401`.
+
+Lab uses **plaintext HTTP** (TLS deferred — ADR-003/009/012).
 
 ## Host proof (CI)
 
 ```bash
 ./tools/m7-http-smoke.sh
+./tools/m7-uefi-http-smoke.sh
 ```
 
-Exercises SPA `200 text/html` and authed `GET /vms` over loopback TCP.
+Exercises SPA `200 text/html` and authed `GET /vms` over loopback TCP (M7.1),
+plus M7.6 scaffold wiring (never prints the iron firmware marker from host smoke).
 
 ## QEMU user-net forward (lab)
 
-When the firmware listen path lands (or a host helper is used), forward the mgmt
-port into the guest/HV:
+Tcp4 must be present in the OVMF build (NetworkPkg). Forward the mgmt port:
 
 ```bash
-# Example shape — adjust once UEFI Tcp4 bind is wired:
-qemu-system-x86_64 ... \
+./tools/run-qemu.sh \
   -netdev user,id=n0,hostfwd=tcp::8443-:8443 \
   -device e1000,netdev=n0
 ```
 
-Then from the operator laptop:
+During the PRE-EBS window, from the operator laptop:
 
 ```bash
 curl -sS http://127.0.0.1:8443/ | head
 curl -sS -H 'Authorization: Bearer raynu-v-bringup' http://127.0.0.1:8443/vms
 ```
 
+Expect serial: `boot: mgmt HTTP listening on 0.0.0.0:8443 (PRE-EBS Tcp4 window)`
+then `RAYNU-V-M7-UEFI-HTTP-OK`. If Tcp4 is missing: `WARN — Tcp4 stack absent`
+and boot continues (honest residual).
+
 Default lab port: **8443** (`MGMT_HTTP_DEFAULT_PORT`).
+
+## PRE-EBS constraint (ADR-012)
+
+UEFI Tcp4/SNP/DHCP are Boot Services protocols. After `leave_firmware()` /
+ExitBootServices they are gone. Concurrent guest + mgmt listen requires a
+post-EBS NIC driver (follow-on). M7.6 MVP = PRE-EBS window + soft-fail.
 
 ## TLS
 
-**Deferred.** M7.1 closes on **plaintext HTTP** lab MVP with an explicit ADR-009 /
-ADR-003 note. Prefer TLS before any untrusted LAN exposure.
+**Deferred.** Prefer TLS before any untrusted LAN exposure (ADR-003/009/012).
+M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- UEFI NIC listen is **not** claimed done — stub is honest.  
-- Datastore / ISO / create-VM UI polish are **M7.2–M7.4**.  
+- HDA **E3 DONE** still needs real R640 browser/curl evidence (ADR-012).
+- Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure.
