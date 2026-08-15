@@ -74,6 +74,12 @@ use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
 
+/// M7.5 / HDA E2 runtime marker — printed by firmware after a successful
+/// Linux SHELL bring-up (and any armed M4 probes). Closing the *gate* in
+/// `docs/evidence/r640/` still requires real PowerEdge serial; host smoke
+/// never prints this string.
+pub const M7_R640_BOOT_OK_MARKER: &str = "RAYNU-V-R640-BOOT-OK";
+
 /// Exit-phase state machine (M2.4 / M2.5 / M3.3–M3.6):
 /// 0 = first HLT → software inject
 /// 1 = ISR HLT → IRQ-OK, arm LAPIC, wait (HLT exiting off)
@@ -3109,6 +3115,17 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
+        // Do not call serial::init() here — reprogramming UART mid-SOL can
+        // drop the next line(s). Only revive COM*_LIVE after possible THR timeout.
+        serial::revive_ports();
+
+        // E2 / M7.5 gate marker — print immediately and repeatedly so a SOL
+        // capture cannot miss it between VMXOFF and the mode banner.
+        // Build stamp: if you do not see this line, the floppy is not this EFI.
+        serial::write_line("boot: E2 marker build=r640-boot-ok-marker");
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
+
         // SAFETY: boot single-threaded; flags set before / during guest path.
         if unsafe { SMP_PROBE_MODE } {
             serial::write_line("boot: M4.5 complete — SMP dual-vCPU path OK");
@@ -3134,6 +3151,12 @@ fn finish_boot(ok: bool) -> ! {
             }
         } else {
             serial::write_line("boot: M3.10 complete — proto path OK");
+        }
+        serial::revive_ports();
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
+        // Settle so iDRAC SOL drains THR before we spin forever.
+        for _ in 0..5_000_000 {
+            core::hint::spin_loop();
         }
         serial::qemu_exit_success();
     } else {
@@ -3189,6 +3212,7 @@ mod launch_test {
         assert_eq!(M3_GTIMER_OK_MARKER, "RAYNU-V-M3-GTIMER-OK");
         assert_eq!(M3_SHELL_OK_MARKER, "RAYNU-V-M3-SHELL-OK");
         assert_eq!(M3_LOOP_OK_MARKER, "RAYNU-V-M3-LOOP-OK");
+        assert_eq!(M7_R640_BOOT_OK_MARKER, "RAYNU-V-R640-BOOT-OK");
         assert_eq!(LOOP_HLT_TARGET, 4);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(EXIT_REASON_EXTERNAL_INTERRUPT, 1);

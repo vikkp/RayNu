@@ -264,6 +264,35 @@ code {
   margin-top: 1.75rem;
 }
 
+.milestone-shot {
+  margin: 1.75rem 0 0;
+  max-width: 42rem;
+}
+
+.milestone-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 0;
+}
+
+.milestone-shot figcaption {
+  margin-top: 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.milestone-shot figcaption a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.milestone-shot figcaption a:hover {
+  color: var(--steel);
+}
+
 .section--journey {
   padding-top: calc(var(--space) * 1.4);
   background:

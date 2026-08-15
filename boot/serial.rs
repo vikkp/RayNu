@@ -99,6 +99,19 @@ pub fn write_line(s: &str) {
     write_byte(b'\n');
 }
 
+/// Revive diagnostic UART liveness without reprogramming baud/FIFO.
+///
+/// After a THR timeout, [`write_raw_port`] clears COM2_LIVE and later bytes
+/// silently skip COM2 (iDRAC SOL). Full [`init`] can glitch SOL mid-session;
+/// this only re-enables writes to already-programmed ports.
+pub fn revive_ports() {
+    // SAFETY: single-threaded boot / post-EBS HV.
+    unsafe {
+        COM1_LIVE = true;
+        COM2_LIVE = true;
+    }
+}
+
 /// Print the M0 identity banner and gate marker (COM1+COM2).
 pub fn print_m0_banner(banner: &str) {
     write_line(banner);

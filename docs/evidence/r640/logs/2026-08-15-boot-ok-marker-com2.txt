@@ -1,13 +1,12 @@
-# RayNu-V R640 COM2 serial — v0.1.0-xsavesfix (closing run)
-# Host: Dell PowerEdge R640 (iDRAC-D0324Y2)
-# Channel: SSH iDRAC → console com2 (COM1+COM2 mirror)
-# Date (UTC): 2026-08-15
-# Kit: releases/v0.1.0-xsavesfix/
-# EFI SHA256: c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611
-# EFI commit (kit build): d7cc6030bd67b0b33809a293a2f4a76098ef0c41
-# Outcome: RAYNU-V-M3-SHELL-OK … RAYNU-V-M4-SMP-OK → VMXOFF (R640-BOOT-OK string not yet firmware-emitted in this kit)
-#
-# Captured verbatim from operator paste (SOL may substitute ? for —).
+# RayNu-V R640 COM2 archive — literal RAYNU-V-R640-BOOT-OK on iron
+# Date: 2026-08-15 (operator paste; iDRAC SOL console com2)
+# Host: Dell PowerEdge R640 · Intel Xeon Silver 4110 @ 2.10GHz
+# Boot: Virtual Floppy · build stamp: r640-boot-ok-marker
+# Channel: COM1+COM2 mirror (iDRAC SOL = console com2)
+# Role: First iron COM2 capture containing the literal string RAYNU-V-R640-BOOT-OK
+#        after finish_boot marker print (M0→SHELL→M4→VMXOFF→marker).
+# Notes: secondary=0x0010100a (XSAVES). Linux 6.12.40 earlyprintk path visible.
+#        Marker printed three times (finish_boot stamp path + settle).
 
 Booting from Virtual Floppy Drive
 RayNu-V r640-hypervisor — formally verified bare-metal hypervisor
@@ -150,7 +149,7 @@ Built 1 zonelists, mobility grouping on.  Total pages: 65438
 mem auto-init: stack:all(zero), heap alloc:off, heap free:off
 SLUB: HWalign=64, Order=0-1, MinObjects=0, CPUs=1, Nodes=1
 NR_IRQS: 4352, nr_irqs: 24, preallocated irqs: 16
-boot: VMEXIT phase=00000004 reason=0x00000001 qual=0x0000000000000000 rip=0xffffffff8115c570
+boot: VMEXIT phase=00000004 reason=0x00000001 qual=0x0000000000000000 rip=0xffffffff81013ce9
 RAYNU-V-M3-GTIMER2-OK
 boot: MSR firewall exercised
 boot: waiting for real init SHELL marker
@@ -203,12 +202,12 @@ clocksource: Switched to clocksource tsc-early
 platform rtc_cmos: registered platform RTC device (no PNP device found)
 workingset: timestamp_bits=62 max_order=16 bucket_order=0
 Unpacking initramfs...
-FreeRAYNU-V-M3-GTIMER3-OK
-ing initrd memory: 4K
+FreeiRAYNU-V-M3-GTIMER3-OK
+ng initrd memory: 4K
 RAYNU-V-M3-APIC-OK
 i8042: No controller found
 microcode: Current revision: 0x0200005e
-sched_clock: Marking stable (212999755, 31063459)->(443981331, -199918117)
+sched_clock: Marking stable (217010446, 27070649)->(443998505, -199917410)
 Freeing unused kernel image (initmem) memory: 536K
 Write protecting the kernel read-only data: 6144k
 Freeing unused kernel image (rodata/data gap) memory: 1708K
@@ -305,4 +304,8 @@ boot: VMLAUNCH → SMP AP ready-flag store
 RAYNU-V-M4-SMP-OK
 boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT
 boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+RAYNU-V-R640-BOOT-OK
 boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK

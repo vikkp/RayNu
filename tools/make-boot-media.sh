@@ -130,6 +130,8 @@ else
 fi
 
 EFI_SHA="$(sha256sum "$EFI" | awk '{print $1}')"
+echo "==> packing EFI: $EFI"
+echo "==> efi_sha256=${EFI_SHA}"
 VERSION="unknown"
 if [[ -n "$KIT" && -f "$KIT/VERSION" ]]; then
   VERSION="$(sed -n 's/^version=//p' "$KIT/VERSION" | head -1)"

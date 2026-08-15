@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. M0→M6 closed on Latitude + QEMU nested KVM (EPT proof track, ops, soak, external audit). Dell PowerEdge R640 is the ship target — real iron validation is a separate gate."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 printed RAYNU-V-R640-BOOT-OK on COM2 (2026-08-15)."
     />
-    <meta property="og:title" content="RayNu-V" />
+    <meta property="og:title" content="RayNu-V — RAYNU-V-R640-BOOT-OK" />
     <meta
       property="og:description"
-      content="Single-binary Type-1 hypervisor designed for proof. M0→M6 closed on Latitude + QEMU nested KVM. PowerEdge R640 is the ship target — iron validation is a separate gate."
+      content="Real PowerEdge R640 COM2 printed RAYNU-V-R640-BOOT-OK. Single-binary Type-1 hypervisor designed for proof."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,8 +29,8 @@
           class="hero__image"
           src="assets/hero.jpg"
           alt=""
-          width="2400"
-          height="1347"
+          width="1536"
+          height="1024"
         />
       </div>
       <div class="hero__veil" aria-hidden="true"></div>
@@ -40,9 +40,8 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          A commercially targeted, single-binary Type-1 hypervisor designed for
-          formal verification from day one — built toward Dell PowerEdge; gates
-          today run on Latitude + QEMU nested KVM.
+          Single-binary Type-1 hypervisor — and on 2026-08-15, real PowerEdge
+          R640 COM2 printed <code>RAYNU-V-R640-BOOT-OK</code>.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -61,27 +60,41 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
-          <h2 class="section__title">R640 iron: BOOT-OK closed.</h2>
+          <h2 class="section__title">R640 iron: BOOT-OK on COM2.</h2>
           <p class="section__lede">
-            Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) printed
-            <code>RAYNU-V-M3-SHELL-OK</code> through
-            <code>RAYNU-V-M4-SMP-OK</code> on 2026-08-15
-            (<code>releases/v0.1.0-xsavesfix/</code>). Latitude/QEMU still holds
-            M0→M7.4 software gates.
-            <code>RAYNU-V-R640-BOOT-OK</code> (HDA E2) is
-            <strong>closed</strong>. Mount Everest residual: network UI + Linux
-            ISO deploy.
+            Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) ran
+            M0→Linux SHELL→full M4→VMXOFF, then printed the literal claim
+            string — <code>RAYNU-V-R640-BOOT-OK</code> — on 2026-08-15
+            (<code>boot: E2 marker build=r640-boot-ok-marker</code>). HDA E2 /
+            M7.5 is <strong>closed</strong>. Mount Everest residual: network UI
+            + Linux ISO deploy.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M3-SHELL-OK
-RAYNU-V-M4-SMP-OK
+          <figure class="milestone-shot" data-reveal>
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="COM2 closing lines: VMXOFF then RAYNU-V-R640-BOOT-OK"
+              width="1600"
+              height="900"
+              loading="lazy"
+            />
+            <figcaption>
+              Closing COM2 excerpt —
+              <a
+                href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+                >full archive</a
+              >
+            </figcaption>
+          </figure>
+          <pre class="ship-code milestone-log" data-reveal><code>boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
 RAYNU-V-R640-BOOT-OK
-==> M7.5 real R640 boot PASSED</code></pre>
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
             Evidence:
-            <code>docs/evidence/r640/2026-08-15-r640-first-light.md</code>.
-            Next:
-            <a href="hda.html">Distance to Mount Everest</a>
-            · <code>docs/m7_plan.md</code> · ADR-009.
+            <code>docs/evidence/r640/2026-08-15-r640-first-light.md</code>
+            · <a href="stories.html">Stories</a>
+            · <a href="hda.html">Distance to Mount Everest</a>.
           </p>
         </div>
       </section>

@@ -6,12 +6,12 @@
     <title>Stories of RayNu — First light on PowerEdge R640</title>
     <meta
       name="description"
-      content="Field stories from RayNu-V: the day we booted a real Dell PowerEdge R640, chased COM2 serial through EPT residuals, and closed RAYNU-V-R640-BOOT-OK."
+      content="Field stories from RayNu-V: first light on PowerEdge R640, and the night COM2 printed the literal string RAYNU-V-R640-BOOT-OK."
     />
-    <meta property="og:title" content="Stories of RayNu" />
+    <meta property="og:title" content="Stories of RayNu — R640 BOOT-OK" />
     <meta
       property="og:description"
-      content="2026-08-15: first light on real R640 iron — COM2 through Linux SHELL and M4; RAYNU-V-R640-BOOT-OK closed."
+      content="2026-08-15: real R640 COM2 printed RAYNU-V-R640-BOOT-OK after SHELL and M4."
     />
     <meta property="og:type" content="article" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -149,6 +149,15 @@
         color: var(--ink-soft);
         border-top: 1px solid rgba(16, 24, 32, 0.1);
       }
+      .story-shot {
+        margin: 1.25rem 0;
+      }
+      .story-shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .story:nth-child(4) { animation-delay: 0.2s; }
       .stories-index {
         margin: 0 0 2.5rem;
         padding-bottom: 1.5rem;
@@ -196,6 +205,11 @@
         <p>
           <a href="#r640-2026-08-15"
             >2026-08-15 — First light on PowerEdge R640</a
+          >
+        </p>
+        <p>
+          <a href="#r640-boot-ok-marker"
+            >2026-08-15 — Literal RAYNU-V-R640-BOOT-OK on COM2</a
           >
         </p>
       </div>
@@ -311,9 +325,11 @@ boot: VMXOFF ok</pre>
 
         <h3>What we claim — and what we don’t</h3>
         <p>
-          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code>: real R640
-          COM2 through Linux SHELL and the M4 probe chain, with archived serials
-          under <code>docs/evidence/r640/logs/</code>. We do
+          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code> on substance
+          from the xsavesfix / confirming rebuild archives: real R640 COM2 through
+          Linux SHELL and the M4 probe chain. Later the same day, the marker-fix
+          rebuild also printed the <strong>literal</strong> string on COM2 — see
+          <a href="#r640-boot-ok-marker">the next story</a>. We do
           <strong>not</strong> claim Mount Everest closed — network UI (E3),
           ISO install-to-disk (E5), and soak remain. Host CI still prints only
           <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>.
@@ -332,6 +348,54 @@ boot: VMXOFF ok</pre>
             href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md"
             >first-light</a
           >
+        </p>
+      </article>
+
+      <article class="story" id="r640-boot-ok-marker">
+        <p class="story__date">2026-08-15 · evening · Dell PowerEdge R640 · iDRAC9</p>
+        <h2 class="story__title">The marker finally said its own name</h2>
+
+        <p>
+          Closing iron on substance is one thing. Watching COM2 print the claim
+          string you named the gate after — that is another. After
+          <code>finish_boot</code> started emitting
+          <code>RAYNU-V-R640-BOOT-OK</code> (and we stopped shipping a stale
+          floppy), the Virtual Floppy run ended like this:
+        </p>
+
+        <figure class="story-shot">
+          <img
+            src="assets/r640-boot-ok-com2.png"
+            alt="COM2 closing excerpt with RAYNU-V-R640-BOOT-OK"
+            width="1600"
+            height="900"
+            loading="lazy"
+          />
+        </figure>
+
+        <pre>boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+RAYNU-V-R640-BOOT-OK
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          Same path as the afternoon close — M0 through Linux SHELL, four
+          guests under the credit scheduler, virtio-blk/net, SMP BSP+AP, then
+          VMXOFF — plus the stamp <code>r640-boot-ok-marker</code> and the
+          literal E2 string, three times. That paste is archived as
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+            >2026-08-15-boot-ok-marker-com2.txt</a
+          >.
+        </p>
+
+        <p class="story__aside">
+          Build stamp: <code>r640-boot-ok-marker</code>
+          · Screenshot:
+          <a href="assets/r640-boot-ok-com2.png">r640-boot-ok-com2.png</a>
+          · Home hero updated with the same milestone atmosphere
         </p>
       </article>
     </main>

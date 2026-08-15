@@ -4,10 +4,12 @@
 //! Proven Core: **outside** (ADR-009)
 //!
 //! Proves runbook + evidence package + ship-kit cross-refs exist.
-//! Does **not** print `RAYNU-V-R640-BOOT-OK` — that marker is iron-only
-//! (claimed in `docs/evidence/r640/` after real PowerEdge serial).
+//! Does **not** print `RAYNU-V-R640-BOOT-OK` from host/CI — that marker is
+//! emitted by firmware after a successful Linux SHELL bring-up
+//! (`vmx/launch.rs` `finish_boot`), and the *gate* is closed only with real
+//! PowerEdge evidence under `docs/evidence/r640/`.
 
-/// Iron marker — real PowerEdge R640 evidence only (never printed by host smoke).
+/// Iron marker string — firmware prints it after SHELL; host smoke never does.
 pub const M7_R640_OK_MARKER: &str = "RAYNU-V-R640-BOOT-OK";
 
 /// Host / CI marker when the M7.5 **scaffold** (not iron boot) passes.
@@ -67,6 +69,8 @@ pub fn r640_scripts_present() -> bool {
             .contains("RAYNU-V-M4-SMP-OK")
         && include_str!("../docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt")
             .contains("stack guard")
+        && include_str!("../vmx/launch.rs").contains("M7_R640_BOOT_OK_MARKER")
+        && include_str!("../vmx/launch.rs").contains("RAYNU-V-R640-BOOT-OK")
 }
 
 /// True when CLOSED GAP and host-limit honesty hold.
