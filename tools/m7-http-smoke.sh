@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M7.1 host/CI smoke: network HTTP mgmt plane → RAYNU-V-M7-HTTP-OK.
 # Proves in-binary HTTP codec + host TCP listener (SPA + Bearer REST).
-# Firmware NIC listen remains stubbed (see docs/runbooks/mgmt_http.md).
+# Firmware NIC listen: see M7.6 / docs/runbooks/mgmt_http.md (ADR-012).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

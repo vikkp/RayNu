@@ -71,11 +71,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M6.8 | `RAYNU-V-M6-SOAK-OK` | 72-hr soak thresholds (CI + Latitude) |
 | M6.9 | `RAYNU-V-M6-EXT-OK` | External audit + R09 review; `80 verified, 0 errors` (CI + Latitude) |
 | M7.0 | `RAYNU-V-M7-SHIP-OK` | EFI release kit + SHA256 + USB/iDRAC runbook (CI + Latitude) |
-| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network HTTP codec + host TCP SPA/REST (CI + Latitude; UEFI listen stub) |
+| M7.1 | `RAYNU-V-M7-HTTP-OK` | Network HTTP codec + host TCP SPA/REST (CI + Latitude) |
 | M7.2 | `RAYNU-V-M7-STORE-OK` | Datastore / image library + ESP catalog host path (CI + Latitude; UEFI persist stub) |
 | M7.3 | `RAYNU-V-M7-ISO-OK` | ISO extract-boot plan + virtio install size (CI + Latitude host smoke; El Torito/CD-ROM stub) |
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM fields + media SPA (CI + Latitude host smoke; console/TLS/NIC residual) |
 | M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 COM2: M0→SHELL→M4 BLK/NET/SMP (`v0.1.0-xsavesfix`, 2026-08-15); scaffold `RAYNU-V-M7-R640-SCAFFOLD-OK` |
+| M7.6 | `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` | PRE-EBS Tcp4 wiring + soft-fail (CI scaffold); iron `RAYNU-V-M7-UEFI-HTTP-OK` **open** |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -122,7 +123,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/soak` / `m6_soak_gate` | L0 | 72-hr soak thresholds; SOAK-OK (M6.8) |
 | `mgmt/ext` / `m6_ext_gate` | L0 | External audit + spec review; EXT-OK (M6.9) |
 | `mgmt/ship` / `m7_ship_gate` | L0 | EFI release kit + SHA256 tarball; SHIP-OK (M7.0) |
-| `mgmt/http` / `http_listen` / `m7_http_gate` | L0 | HTTP/1.1 codec + host TCP; HTTP-OK (M7.1); UEFI listen stub |
+| `mgmt/http` / `http_listen` / `m7_http_gate` | L0 | HTTP/1.1 codec + host TCP; HTTP-OK (M7.1) |
+| `mgmt/tcp4_uefi` / `m7_uefi_http_gate` | L0 | PRE-EBS Tcp4 listen + soft-fail; SCAFFOLD-OK (M7.6); iron HTTP-OK open |
 | `mgmt/datastore` / `m7_store_gate` | L0 | Image library + ESP catalog host path; STORE-OK (M7.2); UEFI persist stub |
 | `mgmt/iso` / `m7_iso_gate` | L0 | ISO extract-boot + virtio install plan; ISO-OK (M7.3 host smoke); CD-ROM stub |
 | `mgmt/m7_ui_gate` / `webui` | L0 | Create-VM SPA fields + media; UI-OK (M7.4 host smoke); console residual |
@@ -138,12 +140,12 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS/NIC residual).  
 **M7.5 closed on iron:** `RAYNU-V-R640-BOOT-OK` — real R640 COM2 through SHELL + M4 (`v0.1.0-xsavesfix`, 2026-08-15).  
-**M7.6 open** — UEFI NIC HTTP listen ([ADR-012](adr/ADR-012.md)); next Everest-path build after E2.  
+**M7.6 scaffolded** (`RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — PRE-EBS Tcp4 wiring per [ADR-012](adr/ADR-012.md); **iron `RAYNU-V-M7-UEFI-HTTP-OK` still open**).  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-15-r640-first-light.md](evidence/r640/2026-08-15-r640-first-light.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | In-binary UEFI Tcp4 HTTP listen (ADR-012); unblocks E3 on iron |
+| M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | Firmware Tcp4 served ≥1 HTTP exchange (ADR-012); HDA E3 needs iron evidence |
 | Everest residual | E3–E5 | Network UI (UEFI listen/TLS) + vSphere MVP polish + Linux ISO install-to-disk |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

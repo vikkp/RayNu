@@ -26,7 +26,7 @@ pub fn http_surface_present() -> bool {
         && HTTP_GAP_NOTE.contains("CLOSED M7.1")
 }
 
-/// True when listen stub + host TcpListener proof exist.
+/// True when listen surface + host TcpListener proof exist (stub or Tcp4 path).
 pub fn http_listen_present() -> bool {
     let s = include_str!("http_listen.rs");
     s.contains("fn listen_mgmt_http_uefi(")

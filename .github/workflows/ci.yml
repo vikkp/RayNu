@@ -568,6 +568,20 @@ jobs:
       - name: M7.5 R640 scaffold smoke → RAYNU-V-M7-R640-SCAFFOLD-OK
         run: ./tools/m7-r640-smoke.sh
 
+  # M7.6: UEFI HTTP listen scaffold (ADR-012 PRE-EBS Tcp4 wiring). Hard-fail on scaffold.
+  # Does NOT claim RAYNU-V-M7-UEFI-HTTP-OK (firmware/iron only).
+  m7-uefi-http:
+    name: M7.6 UEFI HTTP scaffold (SCAFFOLD-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.6 UEFI HTTP scaffold smoke → RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK
+        run: ./tools/m7-uefi-http-smoke.sh
+
   # Boot media maker (FAT img for iDRAC/USB). Hard-fail on layout smoke.
   boot-media:
     name: Boot media maker (BOOT-MEDIA-OK)

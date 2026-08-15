@@ -15,6 +15,7 @@ fn chain_verifies_after_append() {
 
 #[test]
 fn audit_log_macro_records() {
+    boot_ring_reset_for_test();
     let before = boot_ring_len_for_test();
     record_event(AuditEvent::BootStarted {
         milestone: Milestone::M0,

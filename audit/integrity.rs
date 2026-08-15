@@ -486,6 +486,13 @@ pub fn boot_ring_len_for_test() -> usize {
     with_boot_ring(|ring| ring.len())
 }
 
+/// Test-only: reset the shared boot ring so length-delta asserts stay reliable
+/// across a full `cargo test --lib` suite (fixed [`AUDIT_RING_CAP`]).
+#[cfg(test)]
+pub fn boot_ring_reset_for_test() {
+    with_boot_ring(|ring| *ring = AuditRing::new());
+}
+
 /// Test-only alias kept for existing callers.
 #[cfg(test)]
 pub fn boot_ring_verify_for_test() -> bool {

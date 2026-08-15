@@ -22,6 +22,7 @@ fn migrate_ten_plus_one_command() {
 
 #[test]
 fn migrate_emits_audit_events() {
+    crate::audit::integrity::boot_ring_reset_for_test();
     let before = crate::audit::integrity::boot_ring_len_for_test();
     let mut table = VmTable::new();
     // Use guest ids 20..31 to avoid colliding with other parallel tests' creates.
