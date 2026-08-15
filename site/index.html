@@ -60,23 +60,24 @@
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Milestones · July 2026</p>
-          <h2 class="section__title">M0 → M7.4 closed on Latitude.</h2>
+          <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
+          <h2 class="section__title">R640 first light — M0 on iron.</h2>
           <p class="section__lede">
-            Software gates close on <strong>Dell Latitude + QEMU nested
-            KVM</strong> — not yet on PowerEdge R640. Ops UI closed on Latitude —
-            <code>RAYNU-V-M7-UI-OK</code> (create-VM CPU/RAM/disk/ISO + media
-            buttons; <strong>console/TLS/firmware NIC still residual</strong>;
-            host package smoke ~0s). See <code>docs/m7_plan.md</code>.
+            Real PowerEdge R640 booted
+            <code>r640-hypervisor.efi</code> via iDRAC Virtual Media and printed
+            <code>RAYNU-V-M0-BOOT-OK</code> (2026-08-15). M0→M7.4 software gates
+            remain closed on <strong>Latitude + QEMU</strong>. Post-M0 path needs
+            <strong>COM1 / Serial Over LAN</strong> — Virtual Console ConOut
+            freezes after ExitBootServices; SOL transcript not captured this
+            attempt. <code>RAYNU-V-R640-BOOT-OK</code> (HDA E2) stays
+            <strong>open</strong>.
           </p>
-          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M7-UI-OK
-==> M7.4 Ops UI smoke PASSED</code></pre>
+          <pre class="ship-code milestone-log" data-reveal><code>RAYNU-V-M0-BOOT-OK
+==> R640 first light (ConOut) — E2 / BOOT-OK still open</code></pre>
           <p class="section__lede section__lede--follow" data-reveal>
-            Real R640 boot remains open
-            (<code>RAYNU-V-R640-BOOT-OK</code> / HDA E2). M7.5
-            <strong>scaffold</strong> is in-tree
-            (<code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>) — Latitude cannot close
-            iron. Next: first light on PowerEdge —
+            Evidence:
+            <code>docs/evidence/r640/2026-08-15-r640-first-light.md</code>.
+            Next: capture SOL past M0 → VMX markers → close E2 —
             <a href="hda.html">Distance to Mount Everest</a>
             · <code>docs/m7_plan.md</code> · ADR-009.
           </p>
@@ -486,7 +487,8 @@
                 <li>
                   <span class="journey__gate">M7.5</span>
                   <span class="journey__text"
-                    >Real R640 boot (scaffold only; iron open) →
+                    >Real R640 M0 first light (2026-08-15); BOOT-OK open
+                    (SOL residual) →
                     <code>RAYNU-V-R640-BOOT-OK</code></span
                   >
                 </li>
@@ -534,7 +536,8 @@
                 <span class="pillars__name">Dell iDRAC-Native</span>
                 <span class="pillars__why"
                   >Target: deploy and attest on PowerEdge you own, via Redfish —
-                  not a mystery appliance. R640 first-light is still ahead.</span
+                  not a mystery appliance. R640 printed M0 first light; SOL/E2
+                  still open.</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -595,10 +598,12 @@
             PowerEdge R640 / R650 / R660.
             <strong>Today’s closed gates are on Latitude + QEMU nested
             KVM.</strong>
-            We ship the EFI kit for PowerEdge; first-light on real R640 is
-            M7.5 — see <a href="hda.html">HDA</a>.
+            We ship the EFI kit for PowerEdge; real R640 printed
+            <code>RAYNU-V-M0-BOOT-OK</code> (2026-08-15) —
+            <code>RAYNU-V-R640-BOOT-OK</code> still open (SOL residual). See
+            <a href="hda.html">HDA</a>.
           </p>
-          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU nested KVM · R640 = future hard gate
+          <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU nested KVM · R640 = iron (M0 first light; E2 open)
 cargo build --release --target x86_64-unknown-uefi --features uefi-bin
 ./tools/check-pe-assets.sh      # .askern / .asinit / .aswebui
 ./tools/qemu-boot-test.sh       # M0 → M4.5

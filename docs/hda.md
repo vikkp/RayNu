@@ -1,22 +1,22 @@
 ---
 hda_version: 1
-last_updated: 2026-07-21
-last_commit: 5ecf7f7baa59a284a03dc5469f7f8fdf61f372c3
-last_commit_short: 5ecf7f7
+last_updated: 2026-08-15
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 2.25
-months_to_everest_prev: 2.5
+months_to_everest: 2.0
+months_to_everest_prev: 2.25
 velocity_commits_30d: 326
 velocity_gates_30d: 15
-overall_pct: 52
+overall_pct: 55
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
 everest_eta_month: "2026-11"
 summit_core_pct: 78
 summit_efi_pct: 95
-summit_r640_pct: 30
+summit_r640_pct: 48
 summit_ui_pct: 55
 summit_iso_pct: 38
 summit_prod_pct: 100
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **52%** | +2 (M7.4 UI host smoke on Latitude; console residual) |
-| **Months to Mount Everest** | **2.25** | −0.25 (create-VM SPA host path only — modest) |
+| **Overall product readiness** | **55%** | +3 (real R640 M0 first light; post-M0 SOL residual) |
+| **Months to Mount Everest** | **2.0** | −0.25 (iron M0; E2 still open) |
 | **ETA month** | **2026-11** | — |
-| **Confidence** | medium | iron unproven; R640 hard gate next |
+| **Confidence** | medium | M0 on iron proven; COM1 past M0 not captured |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~78% | strong |
 | **Ship EFI artifact** | ~95% | M7.0 closed; Secure Boot still open |
-| **Real R640 boot** | ~30% | Scaffold runbook+evidence; Latitude/QEMU ≠ R640 |
+| **Real R640 boot** | ~48% | M0 on iron (iDRAC vMedia); VMX+ path / SOL residual |
 | **vSphere-like UI (network)** | ~55% | M7.4 create-VM SPA host smoke; console/TLS/NIC residual |
 | **Deploy Linux ISO** | ~38% | M7.3 host extract-boot smoke; El Torito/CD-ROM stub |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ████░░░░░░░░░░░░░░░░  2.25 mo  (was 2.5)
-Overall %          ██████████░░░░░░░░░░  52%
+Months to Everest  ████░░░░░░░░░░░░░░░░  2.0 mo  (was 2.25)
+Overall %          ███████████░░░░░░░░░  55%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -90,13 +90,14 @@ All must be true (no hand-waving):
 | One-page USB/iDRAC runbook | DONE | `docs/runbooks/usb_idrac.md` (M7.0) |
 
 ### Summit B — Load on real R640
-**Status: MEDIUM · ~30% · ~0.5–1.5 months residual (iron-bound)**
+**Status: MEDIUM · ~48% · ~0.5–1.25 months residual (iron-bound)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
 | UEFI+VMX+EPT+Linux shell | DONE on Latitude/QEMU | `progress.md` M0–M3 |
 | R640 boot **scaffold** (runbook + evidence) | DONE (host) | `docs/runbooks/r640_boot.md`; `RAYNU-V-M7-R640-SCAFFOLD-OK` |
-| Real **R640** boot gate | MISSING | Latitude ≠ R640; `RAYNU-V-R640-BOOT-OK` open |
+| Real R640 **M0 first light** | PARTIAL | `RAYNU-V-M0-BOOT-OK` on iDRAC Virtual Floppy (2026-08-15) |
+| Real **R640** boot gate (E2) | OPEN | `RAYNU-V-R640-BOOT-OK` **not** claimed; post-M0 COM1/SOL missing |
 | Live iDRAC Redfish | MISSING | `GAP: live Redfish BMC → polish` |
 | R640 topology from real SRAT/SMBIOS | MOCK | `idrac/` mock text |
 | Hardware CI on R640 | MISSING | optional in M6 plan |
@@ -145,7 +146,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | Month | Calendar | Planned focus | Exit criteria | Status |
 |-------|----------|---------------|---------------|--------|
 | M+0 | 2026-07 | **M7.0–M7.4 closed** (lab host); **M7.5 R640 next** | M7.4 Latitude host smoke | **DONE (M7.4 host)** / M7.5 open |
-| M+1 | 2026-08 | Ship kit done; HTTP + datastore; **R640 first light** (~1 mo) | M7.0–M7.2; M7.5 if iron ready | PLANNED |
+| M+1 | 2026-08 | **R640 M0 first light** (ConOut); SOL/post-M0 residual | M0 on iron evidence filed; E2 still open | **PARTIAL** |
 | M+2 | 2026-09 | HTTPS mgmt + ISO path on QEMU | M7.1–M7.3 | PLANNED |
 | M+3 | 2026-10 | Create-VM UI + install-to-disk MVP | M7.3–M7.4 | PLANNED |
 | M+4 | 2026-11 | R640 validation complete; M7 closed | **M7.0–M7.5 all green** | **ETA** |
@@ -173,7 +174,7 @@ Ordered for critical path (parallelize B with D design):
 | ID | Workstream | Summit | Est. residual (mo) | Depends on | Repo touchpoints |
 |----|------------|--------|-------------------|------------|------------------|
 | P0-1 | **M7.0** Release kit: tag, SHA256, size gate, USB/iDRAC runbook | A | **DONE** | — | `tools/package-release.sh`, runbook |
-| P0-2 | **M7.5** R640 boot gate (real iron; ~1 month) | B | 0.75 | P0-1 helpful | **scaffold DONE**; iron open — `r640_boot.md` |
+| P0-2 | **M7.5** R640 boot gate (real iron; ~1 month) | B | 0.5 | P0-1 helpful | **M0 on iron**; SOL/COM1 past M0 → close E2 — `r640_boot.md` |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | 0.25 | size budget | **DONE host path**; UEFI listen + TLS residual |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
@@ -195,7 +196,8 @@ Ordered for critical path (parallelize B with D design):
 - Audit ring + SOX/ISO/PDF; lifecycle CLI/REST shapes; VMware inventory import
 - Single-binary discipline, gate markers, frozen Verus/Kani pins
 - **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
-- **M7.0–M7.4 closed** on Latitude (M7.3–M7.4 = **host package smoke**; residuals named) — **M7.5 scaffolded**; iron hard gate open
+- **M7.0–M7.4 closed** on Latitude (M7.3–M7.4 = **host package smoke**; residuals named)
+- **M7.5:** scaffold DONE; **real R640 M0 first light** (2026-08-15); `RAYNU-V-R640-BOOT-OK` still open (SOL/post-M0 residual)
 
 ---
 
@@ -244,11 +246,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | M7.5 iron-week checklist as repo doc only |
-| Summary | Remove site to-do; keep `docs/runbooks/r640_iron_week.md` |
-| Everest impact | months unchanged 2.25; docs only |
-| Gates touched | none |
-| Months Δ | 2.25 → 2.25 |
+| Commit | R640 M0 first-light evidence + HDA/site |
+| Summary | Real iron `RAYNU-V-M0-BOOT-OK` via iDRAC vMedia; post-M0 SOL residual named; E2 still open |
+| Everest impact | months 2.25→2.0; overall 52→55; r640 30→48 |
+| Gates touched | M7.5 partial (M0 only; BOOT-OK not closed) |
+| Months Δ | 2.25 → 2.0 |
 
 ---
 
@@ -256,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
-| H1 | No real R640 validation yet | HIGH | Schedule iron week; USB + iDRAC vMedia |
+| H1 | Post-M0 COM1/SOL not captured on R640 | HIGH | SSH `console com2` / `ipmitool sol activate`; BIOS Serial Communication |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | M7.3 extract-boot MVP; CD-ROM stub residual |
 | H4 | Console / TLS / firmware NIC still open | MED | Named residuals; R640 is next hard gate |
@@ -270,6 +272,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-15 | r640-m0-first-light | 2.0 | 55 | Real R640 M0 (`RAYNU-V-M0-BOOT-OK`) via iDRAC Virtual Floppy; SOL/post-M0 residual; E2 open; r640~48% |
 | 2026-07-21 | m7-5-iron-todo | 2.25 | 52 | R640 iron-week checklist → `docs/runbooks/r640_iron_week.md` (not on site) |
 | 2026-07-21 | m7-5-scaffold | 2.25 | 52 | M7.5 R640 scaffold (SCAFFOLD-OK); iron BOOT-OK open; r640~30% |
 | 2026-07-21 | m7-4-close | 2.25 | 52 | M7.4 UI host smoke closed on Latitude; console residual; next M7.5 R640 |
@@ -291,10 +294,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           M7.5 scaffolded (SCAFFOLD-OK); iron BOOT-OK open
-Months left:   2.25  (ETA ~ 2026-11)
-Next move:     Real R640 first light + evidence package
-Do not claim:  M7 closed / RAYNU-V-R640-BOOT-OK without real iron
+Now:           R640 M0 first light (2026-08-15); BOOT-OK / E2 still open
+Months left:   2.0  (ETA ~ 2026-11)
+Next move:     Capture COM1/SOL past M0 → VMX markers → close E2
+Do not claim:  RAYNU-V-R640-BOOT-OK until COM1 shows path beyond M0
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·
