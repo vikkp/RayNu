@@ -84,11 +84,15 @@ pub const DEFAULT_CMDLINE: &[u8] =
 /// - `noapic` — IOAPIC still stubbed; local APIC is virtual (M3.11). Kept in M3.19.
 /// - No `console=ttyS0` — M3.19 drops IRQ4 COM1 TX inject; earlyprintk is enough
 ///   until `/init` SHELL CPUID (8250 IRQ TX would stall without IRQ4).
+/// - `earlyprintk=…,keep` — do not unregister earlyser when tty0/8250 registers
+///   (iron went blind after "bootconsole disabled", then stalled before `/init`).
+/// - `8250.nr_uarts=0` — prevent SERIAL_8250_CONSOLE from claiming COM1 and
+///   blocking on TX IRQ under `noapic` (tinyconfig enables 8250 console).
 /// - `nogbpages` — precise EPT is 512 MiB / 2 MiB leaves; GB direct-map #UD/EPT risk
 /// - `lpj=` / `idle=poll` — skip PIT calibrate; keep TSC for clocksource
 /// - `tsc=reliable clocksource=tsc` — nested virt often fails PIT/HPET calibrate
 /// - 256 MiB window — enough for tinyconfig; 1 GiB mem-init is too slow nested
-pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200 rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc nogbpages memmap=640K@0 memmap=255M@1M\0";
+pub const REAL_LINUX_CMDLINE: &[u8] = b"earlyprintk=serial,ttyS0,115200,keep rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc nogbpages 8250.nr_uarts=0 memmap=640K@0 memmap=255M@1M\0";
 
 /// Max initrd pages for [`load_bzimage_guest`] (~256 KiB).
 pub const INITRD_MAX_PAGES: usize = 64;
