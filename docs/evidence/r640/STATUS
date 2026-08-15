@@ -1,7 +1,7 @@
 STATUS=open
 # Iron bring-up in progress (2026-08-15):
 #   docs/evidence/r640/2026-08-15-r640-first-light.md
-# Observed on real R640: M0…APIC-OK (invpcidfix). No SHELL; earlyser disabled.
-# Residual: keep earlyprintk + disable 8250 uarts — keepconfix kit under retest.
+# Observed on real R640: Run /init (keepconfix) then TASK stack guard panic.
+# Residual: Enable XSAVES + naked /init SHELL CPUID — xsavesfix under retest.
 # Do NOT claim RAYNU-V-R640-BOOT-OK until COM2 shows SHELL (or honest residual).
 # See TEMPLATE.md and docs/runbooks/r640_boot.md.
