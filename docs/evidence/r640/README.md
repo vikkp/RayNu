@@ -4,7 +4,8 @@
 first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640-first-light.md).
 
 **COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +
-SHA256SUMS for keepconfix residual and xsavesfix closing run.
+SHA256SUMS (keepconfix residual, xsavesfix close, confirming rebuild, and
+literal `RAYNU-V-R640-BOOT-OK` marker capture + screenshot).
 
 **Template:** [`TEMPLATE.md`](TEMPLATE.md) — copy to a dated file for future
 campaigns / soak.

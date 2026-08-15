@@ -161,6 +161,13 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 - Confirming retest (same EFI SHA): [`docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt).
 - Honesty: those archives end at `VMXOFF` / M4.5 and do not contain the literal string `RAYNU-V-R640-BOOT-OK` (docs claim name until `finish_boot` began emitting it after SHELL).
 
+**Evidence (2026-08-15, build `r640-boot-ok-marker`, run `r640-boot-ok-marker-com2`)**
+- Maturity level claimed: L1 (runtime / gate)
+- Artifact type: serial log + closing screenshot
+- Link: [`docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt`](../evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt)
+  · [`…-boot-ok-marker-com2.png`](../evidence/r640/logs/2026-08-15-boot-ok-marker-com2.png)
+- Observation: After full M0→SHELL→M4→`VMXOFF`, COM2 printed `boot: E2 marker build=r640-boot-ok-marker` and the literal string `RAYNU-V-R640-BOOT-OK` (repeated).
+
 **Evidence (2026-08-15, kit `v0.1.0-keepconfix`, run `r640-keepconfix-com2`)**
 - Maturity level claimed: L1 (runtime residual)
 - Artifact type: serial log
@@ -217,10 +224,12 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 - Link: [`docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt`](../evidence/r640/logs/2026-08-15-xsavesfix-com2.txt)
 - Observation: After G0 Linux SHELL: `RAYNU-V-M4-SHELL-G1`, `RAYNU-V-M4-2VM-OK`, `RAYNU-V-M4-SCHED-OK`, `RAYNU-V-M4-NVM-OK`, `RAYNU-V-M4-BLK-OK`, `RAYNU-V-M4-NET-OK`, `RAYNU-V-M4-SMP-OK`, then `VMXOFF ok`.
 
-**Iron close claim (M7.5 / HDA E2):** `RAYNU-V-R640-BOOT-OK` — see
+**Iron close claim (M7.5 / HDA E2):** `RAYNU-V-R640-BOOT-OK` — substance on
 [`docs/evidence/r640/2026-08-15-r640-first-light.md`](../evidence/r640/2026-08-15-r640-first-light.md)
 and confirming COM2 archive
-[`logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt).
+[`logs/2026-08-15-confirm-rebuild-com2.txt`](../evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt);
+literal marker string on
+[`logs/2026-08-15-boot-ok-marker-com2.txt`](../evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt).
 
 ### 6.6 Milestone 5 / 5.5 / 6
 
@@ -283,6 +292,7 @@ Place an empty file named `paperverbose.txt` (or `/EFI/RayNu/paperverbose.txt`) 
 
 | Version          | Date       | Hypervisor commit | Notes                          |
 |------------------|------------|-------------------|--------------------------------|
+| v0.2.2-r640-boot-marker | 2026-08-15 | `r640-boot-ok-marker` | Literal `RAYNU-V-R640-BOOT-OK` on COM2 + screenshot; site hero |
 | v0.2.1-r640-boot-confirm | 2026-08-15 | same EFI SHA | Confirming COM2 rebuild archive + Stories/site publish |
 | v0.2.0-r640-boot | 2026-08-15 | `d7cc603` (xsavesfix) | Iron COM2 archives + §6 M0–M4 evidence; `RAYNU-V-R640-BOOT-OK` |
 | v0.1.2           | 2026-07-24 | —                 | Documented ADR-011 evidence mode flag |
