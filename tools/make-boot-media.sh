@@ -71,12 +71,13 @@ if [[ -n "$KIT" ]]; then
   fi
   EFI="${EFI:-$KIT/r640-hypervisor.efi}"
 elif [[ -z "$EFI" ]]; then
-  if [[ -f dist/raynu-v-*/r640-hypervisor.efi ]]; then
+  # Prefer a freshly built target over stale dist/ kits (dist often lags main).
+  if [[ -f target/x86_64-unknown-uefi/release/r640-hypervisor.efi ]]; then
+    EFI="target/x86_64-unknown-uefi/release/r640-hypervisor.efi"
+  elif [[ -f dist/raynu-v-*/r640-hypervisor.efi ]]; then
     # shellcheck disable=SC2012
     EFI="$(ls -1d dist/raynu-v-*/r640-hypervisor.efi 2>/dev/null | sort | tail -1)"
     KIT="$(dirname "$EFI")"
-  elif [[ -f target/x86_64-unknown-uefi/release/r640-hypervisor.efi ]]; then
-    EFI="target/x86_64-unknown-uefi/release/r640-hypervisor.efi"
   else
     echo "error: no EFI found — run ./tools/package-release.sh or pass --efi / --kit" >&2
     exit 1
@@ -86,6 +87,20 @@ fi
 if [[ ! -f "$EFI" ]]; then
   echo "error: EFI not found: $EFI" >&2
   exit 1
+fi
+
+# Guard: if this tree has M7.6 source, refuse to pack a pre-M7.6 EFI by accident.
+if grep -Fq 'run_pre_ebs_mgmt_listen' "$ROOT/src/main.rs" 2>/dev/null; then
+  if ! python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if b"RAYNU-V-M7-UEFI-HTTP-OK" in d else 1)' "$EFI"; then
+    echo "error: EFI is missing RAYNU-V-M7-UEFI-HTTP-OK but source has M7.6" >&2
+    echo "       packing $EFI would boot a stale binary (classic dist/ kit trap)." >&2
+    echo "       Fix: ./tools/rebuild-uefi-http-boot-media.sh" >&2
+    echo "       Or:  rm -rf target/x86_64-unknown-uefi/release && ./tools/build.sh && SKIP_BUILD=1 ./tools/package-release.sh" >&2
+    if [[ "${ALLOW_STALE_EFI:-0}" != "1" ]]; then
+      exit 1
+    fi
+    echo "WARN: ALLOW_STALE_EFI=1 — packing anyway" >&2
+  fi
 fi
 
 if [[ -z "$KIT" && -f "$(dirname "$EFI")/r640-hypervisor.efi.sha256" ]]; then
