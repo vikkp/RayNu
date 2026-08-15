@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+efi_has() {
+  # Byte search — macOS strings|grep is unreliable on PE/COFF blobs.
+  python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if sys.argv[2].encode() in d else 1)' "$1" "$2"
+}
+
 echo "==> fetch + checkout marker branch"
 git fetch origin
 git checkout cursor/r640-boot-ok-marker-a623
@@ -17,21 +22,25 @@ if ! grep -Fq "$STAMP" vmx/launch.rs; then
 fi
 echo "==> source stamp OK in vmx/launch.rs"
 
-echo "==> clean + rebuild EFI"
-cargo clean -p r640-hypervisor
+echo "==> clean UEFI release artifacts + rebuild"
+rm -rf target/x86_64-unknown-uefi/release
 ./tools/build.sh
 EFI=target/x86_64-unknown-uefi/release/r640-hypervisor.efi
 EFI_SHA="$(shasum -a 256 "$EFI" | awk '{print $1}')"
 echo "==> built efi_sha256=${EFI_SHA}"
+echo "==> built mtime=$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$EFI" 2>/dev/null || stat -c '%y' "$EFI")"
 
-if ! strings "$EFI" | grep -Fq 'E2 marker build=r640-boot-ok-marker'; then
-  echo "error: built EFI missing stamp string — wrong tree or stale artifact" >&2
-  strings "$EFI" | grep -F 'R640-BOOT' || true
+if ! efi_has "$EFI" 'E2 marker build=r640-boot-ok-marker'; then
+  echo "error: built EFI missing stamp bytes" >&2
   exit 1
 fi
-echo "==> built EFI contains stamp"
+if ! efi_has "$EFI" 'RAYNU-V-R640-BOOT-OK'; then
+  echo "error: built EFI missing RAYNU-V-R640-BOOT-OK" >&2
+  exit 1
+fi
+echo "==> built EFI contains stamp + R640-BOOT-OK"
 
-./tools/package-release.sh
+SKIP_BUILD=1 ./tools/package-release.sh
 ./tools/make-boot-media.sh --kit dist/raynu-v-0.1.0
 ./tools/verify-boot-img-marker.sh
 
