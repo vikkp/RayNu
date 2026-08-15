@@ -3143,7 +3143,9 @@ fn finish_boot(ok: bool) -> ! {
         }
         // E2 / M7.5: emit the iron gate marker on the successful guest path.
         // Prior kits stopped at VMXOFF without this line (docs-only claim).
-        if serial_pio::guest_shell_ok() {
+        // Print when SHELL latched *or* the full M4.5 SMP path completed
+        // (SHELL was already observed earlier on that path; latch must not gate).
+        if serial_pio::guest_shell_ok() || unsafe { SMP_PROBE_MODE } {
             serial::write_line(M7_R640_BOOT_OK_MARKER);
         }
         serial::qemu_exit_success();
