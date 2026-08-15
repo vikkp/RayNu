@@ -14,3 +14,8 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# Ship EFI kits via git pull (operator laptop path).
+!/releases/
+!/releases/**
+!/releases/**/*.efi

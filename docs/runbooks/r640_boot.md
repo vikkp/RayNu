@@ -14,8 +14,10 @@ on a **real Dell PowerEdge R640** via USB or iDRAC virtual media, capture COM1 /
 iDRAC serial, and observe VMX + EPT + Linux shell path (or document residual).
 
 **Latitude / QEMU cannot close this gate.** Host scaffold smoke only proves the
-runbook and evidence template exist — it does **not** print
-`RAYNU-V-R640-BOOT-OK`.
+runbook and evidence package exist — it does **not** print
+`RAYNU-V-R640-BOOT-OK`. Firmware prints that marker after a successful Linux
+SHELL bring-up (`finish_boot`); closing E2 still requires real R640 COM2
+evidence under [`docs/evidence/r640/`](../evidence/r640/).
 
 ## Prerequisites
 
