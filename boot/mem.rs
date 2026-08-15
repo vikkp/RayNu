@@ -88,12 +88,30 @@ impl FrameBump {
 ///
 /// Prefers spans at or above 1 MiB with at least `min_pages` pages.
 /// Returns `(phys_start, page_count)` or `None`.
+///
+/// When `prefer_end` is non-zero, **prefer** a pool clipped into
+/// `[1 MiB, prefer_end)` (identity EPT window on iron / QEMU). Only if no
+/// clipped candidate fits do we fall back to the largest region above 1 MiB
+/// (which breaks identity EPT on large-RAM R640 — caller should log that).
 pub fn pick_conventional_region(
     regions: &[(u64, u64)],
     min_pages: u64,
 ) -> Option<(u64, u64)> {
+    pick_conventional_region_prefer(regions, min_pages, 0)
+}
+
+/// Like [`pick_conventional_region`], but prefer pools below `prefer_end`.
+///
+/// `prefer_end == 0` disables the preference (legacy: largest above 1 MiB).
+pub fn pick_conventional_region_prefer(
+    regions: &[(u64, u64)],
+    min_pages: u64,
+    prefer_end: u64,
+) -> Option<(u64, u64)> {
     const ONE_MIB: u64 = 1024 * 1024;
-    let mut best: Option<(u64, u64)> = None;
+    let mut best_pref: Option<(u64, u64)> = None;
+    let mut best_any: Option<(u64, u64)> = None;
+
     for &(start, pages) in regions {
         let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
         let usable_start = core::cmp::max(start, ONE_MIB);
@@ -101,18 +119,34 @@ pub fn pick_conventional_region(
             continue;
         }
         let usable_pages = (end - usable_start) / PAGE_SIZE;
-        if usable_pages < min_pages {
-            continue;
-        }
-        match best {
-            None => best = Some((usable_start, usable_pages)),
-            Some((_, best_pages)) if usable_pages > best_pages => {
-                best = Some((usable_start, usable_pages));
+        if usable_pages >= min_pages {
+            match best_any {
+                None => best_any = Some((usable_start, usable_pages)),
+                Some((_, best_pages)) if usable_pages > best_pages => {
+                    best_any = Some((usable_start, usable_pages));
+                }
+                _ => {}
             }
-            _ => {}
+        }
+
+        if prefer_end > ONE_MIB {
+            let clip_end = core::cmp::min(end, prefer_end);
+            if usable_start < clip_end {
+                let clip_pages = (clip_end - usable_start) / PAGE_SIZE;
+                if clip_pages >= min_pages {
+                    match best_pref {
+                        None => best_pref = Some((usable_start, clip_pages)),
+                        Some((_, best_pages)) if clip_pages > best_pages => {
+                            best_pref = Some((usable_start, clip_pages));
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
     }
-    best
+
+    best_pref.or(best_any)
 }
 
 #[cfg(test)]

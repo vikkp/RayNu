@@ -72,10 +72,36 @@ pub unsafe fn leave_firmware() -> Handoff {
     write_u64(conventional_pages_1m);
     serial::write_byte(b'\n');
 
-    let (pool_start, pool_pages) =
-        mem::pick_conventional_region(&regions[..region_count], 16).unwrap_or((0, 0));
+    // Identity EPT only maps [0, PRECISE_BYTES). On large-RAM R640 the largest
+    // conventional span sits at multi-GiB HPAs — picking it places guest_code /
+    // kernel outside the EPT window and faults on first VMLAUNCH (GPA walk).
+    // Prefer ≥1 MiB inside the precise window; soften to 16 pages; then uncapped.
+    const MIN_PREF_PAGES: u64 = 256; // 1 MiB
+    const MIN_POOL_PAGES: u64 = 16;
+    let prefer_end = crate::memory::PRECISE_BYTES;
+    let (pool_start, pool_pages, in_window) = if let Some(p) =
+        mem::pick_conventional_region_prefer(&regions[..region_count], MIN_PREF_PAGES, prefer_end)
+    {
+        (p.0, p.1, true)
+    } else if let Some(p) =
+        mem::pick_conventional_region_prefer(&regions[..region_count], MIN_POOL_PAGES, prefer_end)
+    {
+        (p.0, p.1, true)
+    } else if let Some(p) = mem::pick_conventional_region(&regions[..region_count], MIN_POOL_PAGES)
+    {
+        (p.0, p.1, false)
+    } else {
+        (0, 0, false)
+    };
 
     let frames = if pool_pages > 0 {
+        if in_window {
+            serial::write_line("boot: frame pool clipped to precise EPT [1MiB,512MiB)");
+        } else {
+            serial::write_line(
+                "boot: WARNING — frame pool outside precise EPT window; expect EPT faults",
+            );
+        }
         serial::write_str("boot: frame pool phys=0x");
         write_u64_hex(pool_start);
         serial::write_str(" pages=");
