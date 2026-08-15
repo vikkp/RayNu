@@ -163,7 +163,7 @@ themselves, raise Verus maturity beyond what Latitude/CI already closed.
 
 **Evidence (2026-08-15, build `r640-boot-ok-marker`, run `r640-boot-ok-marker-com2`)**
 - Maturity level claimed: L1 (runtime / gate)
-- Artifact type: serial log + closing screenshot
+- Artifact type: serial log + operator Terminal.app SOL screenshot
 - Link: [`docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt`](../evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt)
   · [`…-boot-ok-marker-com2.png`](../evidence/r640/logs/2026-08-15-boot-ok-marker-com2.png)
 - Observation: After full M0→SHELL→M4→`VMXOFF`, COM2 printed `boot: E2 marker build=r640-boot-ok-marker` and the literal string `RAYNU-V-R640-BOOT-OK` (repeated).
