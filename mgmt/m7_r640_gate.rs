@@ -3,8 +3,9 @@
 //! Pillar: [D] [Z]
 //! Proven Core: **outside** (ADR-009)
 //!
-//! Proves runbook + evidence template + ship-kit cross-refs exist.
-//! Does **not** claim `RAYNU-V-R640-BOOT-OK` — that marker is iron-only.
+//! Proves runbook + evidence package + ship-kit cross-refs exist.
+//! Does **not** print `RAYNU-V-R640-BOOT-OK` — that marker is iron-only
+//! (claimed in `docs/evidence/r640/` after real PowerEdge serial).
 
 /// Iron marker — real PowerEdge R640 evidence only (never printed by host smoke).
 pub const M7_R640_OK_MARKER: &str = "RAYNU-V-R640-BOOT-OK";
@@ -12,10 +13,10 @@ pub const M7_R640_OK_MARKER: &str = "RAYNU-V-R640-BOOT-OK";
 /// Host / CI marker when the M7.5 **scaffold** (not iron boot) passes.
 pub const M7_R640_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-R640-SCAFFOLD-OK";
 
-/// Open GAP until real iron evidence lands.
-pub const R640_GAP_NOTE: &str = "GAP: Real R640 boot (M7.5 — iron only)";
+/// Closed after real R640 COM2 evidence (2026-08-15).
+pub const R640_GAP_NOTE: &str = "GAP(CLOSED M7.5): Real R640 boot";
 
-/// Honesty: Latitude/QEMU cannot close E2.
+/// Honesty: Latitude/QEMU cannot invent iron evidence.
 pub const R640_HOST_LIMIT_NOTE: &str =
     "Latitude/QEMU host smoke cannot close RAYNU-V-R640-BOOT-OK; real PowerEdge R640 required";
 
@@ -28,13 +29,14 @@ pub fn ship_kit_names_r640_efi() -> bool {
         && usb.contains("RAYNU-V-R640-BOOT-OK")
 }
 
-/// True when M7.5 runbook + evidence template exist with required phrases.
+/// True when M7.5 runbook + closed evidence package exist with required phrases.
 pub fn r640_scripts_present() -> bool {
     let smoke = include_str!("../tools/m7-r640-smoke.sh");
     let runbook = include_str!("../docs/runbooks/r640_boot.md");
     let iron_week = include_str!("../docs/runbooks/r640_iron_week.md");
     let evidence = include_str!("../docs/evidence/r640/TEMPLATE.md");
     let status = include_str!("../docs/evidence/r640/STATUS");
+    let first_light = include_str!("../docs/evidence/r640/2026-08-15-r640-first-light.md");
     smoke.contains(M7_R640_SCAFFOLD_MARKER)
         && smoke.contains("m7_5_r640_scaffold_passes")
         && smoke.contains(M7_R640_OK_MARKER)
@@ -55,19 +57,28 @@ pub fn r640_scripts_present() -> bool {
         && evidence.contains("SHA256")
         && evidence.contains("Serial excerpt")
         && evidence.contains(M7_R640_OK_MARKER)
-        && status.contains("STATUS=open")
+        && status.contains("STATUS=closed")
+        && status.contains(M7_R640_OK_MARKER)
+        && first_light.contains("RAYNU-V-M3-SHELL-OK")
+        && first_light.contains("RAYNU-V-M4-SMP-OK")
+        && first_light.contains(M7_R640_OK_MARKER)
+        && include_str!("../docs/evidence/r640/logs/README.md").contains("xsavesfix-com2")
+        && include_str!("../docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt")
+            .contains("RAYNU-V-M4-SMP-OK")
+        && include_str!("../docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt")
+            .contains("stack guard")
 }
 
-/// True when honesty constants and open GAP hold.
+/// True when CLOSED GAP and host-limit honesty hold.
 pub fn r640_honesty_holds() -> bool {
-    R640_GAP_NOTE.contains("iron only")
-        && !R640_GAP_NOTE.contains("CLOSED")
+    R640_GAP_NOTE.contains("GAP(CLOSED M7.5)")
+        && R640_GAP_NOTE.contains("Real R640 boot")
         && R640_HOST_LIMIT_NOTE.contains("cannot close")
         && M7_R640_OK_MARKER == "RAYNU-V-R640-BOOT-OK"
         && M7_R640_SCAFFOLD_MARKER == "RAYNU-V-M7-R640-SCAFFOLD-OK"
 }
 
-/// Full M7.5 scaffold package prop (not iron close).
+/// Full M7.5 scaffold package prop (evidence closed; host still no iron print).
 pub fn prop_r640_scaffold_package() -> bool {
     let _ = (R640_GAP_NOTE, R640_HOST_LIMIT_NOTE);
     ship_kit_names_r640_efi() && r640_scripts_present() && r640_honesty_holds()

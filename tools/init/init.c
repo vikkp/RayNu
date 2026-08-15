@@ -2,10 +2,9 @@
  * Minimal static init for RayNu-V M3.10.
  *
  * Primary signal: CPUID leaf 0x524E550A / subleaf 0x5348454C — the HV latches
- * SHELL on that exit. Do this BEFORE any tty write: ttyS0 TX is IRQ-driven and
- * stalls after the first byte under noapic (blocks the rest of /init).
- *
- * Optional: also try /dev/kmsg and tty writes for a human-visible line.
+ * SHELL on that exit. Do this BEFORE any stack use or tty write:
+ *   - gcc frame prologue pushes before CPUID (needs a valid user stack)
+ *   - ttyS0 TX is IRQ-driven and stalls after the first byte under noapic
  *
  * Built with: gcc -static -nostdlib -o init init.c
  */
@@ -52,15 +51,18 @@ static long syscall4(long n, long a, long b, long c, long d) {
     return ret;
 }
 
-static void signal_shell_cpuid(void) {
-    unsigned int eax = SHELL_CPUID_LEAF;
-    unsigned int ebx = 0;
-    unsigned int ecx = SHELL_CPUID_SUBLEAF;
-    unsigned int edx = 0;
-    __asm__ volatile("cpuid"
-                     : "+a"(eax), "+b"(ebx), "+c"(ecx), "+d"(edx)
-                     :
-                     : "memory");
+/* No C prologue — never touch the user stack before the HV sees SHELL. */
+static void signal_shell_cpuid_times(int n) {
+    for (int i = 0; i < n; i++) {
+        unsigned int eax = SHELL_CPUID_LEAF;
+        unsigned int ebx = 0;
+        unsigned int ecx = SHELL_CPUID_SUBLEAF;
+        unsigned int edx = 0;
+        __asm__ volatile("cpuid"
+                         : "+a"(eax), "+b"(ebx), "+c"(ecx), "+d"(edx)
+                         :
+                         : "memory");
+    }
 }
 
 static void write_fd(long fd) {
@@ -89,10 +91,31 @@ static void ensure_node(const char *path, long dev) {
     (void)syscall4(SYS_mknodat, AT_FDCWD, (long)path, S_IFCHR | 0666, dev);
 }
 
-void _start(void) {
-    /* Hypercall first — never block behind UART TX. */
-    for (int i = 0; i < 8; i++)
-        signal_shell_cpuid();
+/*
+ * Naked entry: fire SHELL CPUID before any push/frame. Then fall into C for
+ * optional kmsg/tty noise and pause loop (more SHELL CPUID).
+ */
+__attribute__((naked, noreturn)) void _start(void) {
+    __asm__ volatile(
+        /* 16× SHELL CPUID — no stack, no callee-saved pushes. */
+        "mov $16, %%r9\n"
+        "1:\n"
+        "mov $0x524E550A, %%eax\n"
+        "xor %%ebx, %%ebx\n"
+        "mov $0x5348454C, %%ecx\n"
+        "xor %%edx, %%edx\n"
+        "cpuid\n"
+        "dec %%r9\n"
+        "jne 1b\n"
+        "jmp raynu_after_shell\n"
+        :
+        :
+        : "memory");
+}
+
+void raynu_after_shell(void) {
+    /* Extra latches in case the naked loop raced an irq injection. */
+    signal_shell_cpuid_times(8);
 
     ensure_node(path_kmsg, KMSG_DEV);
     ensure_node(path_ttys0, TTYS0_DEV);
@@ -102,10 +125,10 @@ void _start(void) {
         write_fd(2);
         write_path(path_console);
         write_path(path_ttys0);
-        signal_shell_cpuid();
+        signal_shell_cpuid_times(1);
     }
     for (;;) {
-        signal_shell_cpuid();
+        signal_shell_cpuid_times(1);
         (void)syscall3(SYS_pause, 0, 0, 0);
     }
     (void)syscall3(SYS_exit, 0, 0, 0);

@@ -143,8 +143,9 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 /// Interrupt-window exiting (inject when guest IF becomes 1).
 pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
-/// CPUID exiting (M3.1).
-pub const CPU_BASED_CPUID_EXITING: u32 = 1 << 21;
+/// Use TPR shadow (primary bit 21). Not CPUID — CPUID always exits in VMX.
+/// Kept named for the bit position only; do not set unless Virtual-APIC is armed.
+pub const CPU_BASED_USE_TPR_SHADOW: u32 = 1 << 21;
 /// Unconditional I/O exiting (ignored if USE_IO_BITMAPS is 1).
 pub const CPU_BASED_UNCONDITIONAL_IO: u32 = 1 << 24;
 pub const CPU_BASED_USE_IO_BITMAPS: u32 = 1 << 25;
@@ -155,6 +156,10 @@ pub const CPU_BASED_ACTIVATE_SECONDARY: u32 = 1 << 31;
 pub const SECONDARY_ENABLE_EPT: u32 = 1 << 1;
 /// Secondary proc-based: allow RDTSCP in guest (else #UD — Linux clocksource).
 pub const SECONDARY_ENABLE_RDTSCP: u32 = 1 << 3;
+/// Secondary proc-based: allow INVPCID in guest (else #UD — Linux PCID TLB shootdown).
+pub const SECONDARY_ENABLE_INVPCID: u32 = 1 << 12;
+/// Secondary proc-based: allow XSAVES/XRSTORS (else #UD — compacted XSAVE on iron).
+pub const SECONDARY_ENABLE_XSAVES: u32 = 1 << 20;
 
 // ── VM-exit / VM-entry control bits ─────────────────────────────────
 pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
@@ -222,6 +227,8 @@ mod fields_test {
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
         assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
+        assert_eq!(SECONDARY_ENABLE_INVPCID, 1 << 12);
+        assert_eq!(SECONDARY_ENABLE_XSAVES, 1 << 20);
         assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
         assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }

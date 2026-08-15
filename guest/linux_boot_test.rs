@@ -144,6 +144,9 @@ fn real_linux_cmdline_has_memmap_backup() {
     assert!(s.contains("clocksource=tsc"));
     assert!(s.contains("tsc=reliable"));
     assert!(s.contains("idle=poll"));
+    assert!(s.contains("nogbpages"));
+    assert!(s.contains("8250.nr_uarts=0"));
+    assert!(s.contains("earlyprintk=serial,ttyS0,115200,keep"));
     assert!(!s.contains("notsc"));
     // M3.19: no console=ttyS0 (needs IRQ4 TX); earlyprintk is enough for SHELL.
     assert!(s.contains("earlyprintk=serial,ttyS0"));

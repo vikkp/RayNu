@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stories of RayNu — First light on PowerEdge R640</title>
+    <meta
+      name="description"
+      content="Field stories from RayNu-V: the day we booted a real Dell PowerEdge R640, chased COM2 serial through EPT residuals, and closed RAYNU-V-R640-BOOT-OK."
+    />
+    <meta property="og:title" content="Stories of RayNu" />
+    <meta
+      property="og:description"
+      content="2026-08-15: first light on real R640 iron — COM2 through Linux SHELL and M4; RAYNU-V-R640-BOOT-OK closed."
+    />
+    <meta property="og:type" content="article" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .page-stories .stories-mast {
+        padding: clamp(2.5rem, 8vh, 4.5rem) 0 clamp(1.75rem, 4vh, 2.5rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          radial-gradient(90% 70% at 0% 0%, rgba(15, 110, 106, 0.12) 0%, transparent 55%),
+          radial-gradient(70% 50% at 100% 10%, rgba(184, 107, 52, 0.1) 0%, transparent 50%),
+          linear-gradient(180deg, rgba(26, 58, 74, 0.06) 0%, transparent 70%);
+        animation: stories-wash 0.8s ease-out both;
+      }
+      @keyframes stories-wash {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .stories-mast__inner {
+        width: min(100% - 2.5rem, 42rem);
+        margin: 0 auto;
+      }
+      .stories-mast__nav {
+        margin: 0 0 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .stories-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .stories-mast__nav a:hover {
+        color: var(--steel);
+      }
+      .stories-kicker {
+        margin: 0 0 0.75rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      .stories-mast__title {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(2.2rem, 1.4rem + 3vw, 3.4rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--steel);
+      }
+      .stories-mast__lede {
+        margin: 0;
+        max-width: 36rem;
+        font-size: 1.1rem;
+        color: var(--ink-soft);
+      }
+      .stories-body {
+        width: min(100% - 2.5rem, 42rem);
+        margin: 0 auto;
+        padding: clamp(2rem, 5vh, 3.5rem) 0 4rem;
+      }
+      .story {
+        margin: 0 0 clamp(2.5rem, 6vh, 4rem);
+        animation: stories-rise 0.65s ease-out both;
+      }
+      .story:nth-child(2) { animation-delay: 0.08s; }
+      .story:nth-child(3) { animation-delay: 0.14s; }
+      @keyframes stories-rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .story__date {
+        margin: 0 0 0.35rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .story__title {
+        margin: 0 0 0.85rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.45rem, 1.1rem + 1.2vw, 1.85rem);
+        line-height: 1.2;
+        color: var(--steel);
+      }
+      .story p {
+        margin: 0 0 1rem;
+        color: var(--ink-soft);
+      }
+      .story p:last-child {
+        margin-bottom: 0;
+      }
+      .story h3 {
+        margin: 1.75rem 0 0.55rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--steel);
+      }
+      .story pre {
+        margin: 1rem 0;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: var(--steel);
+        background: rgba(16, 24, 32, 0.04);
+        border-left: 3px solid var(--teal);
+      }
+      .story ul {
+        margin: 0 0 1rem;
+        padding-left: 1.2rem;
+        color: var(--ink-soft);
+      }
+      .story li {
+        margin: 0.35rem 0;
+      }
+      .story__aside {
+        margin: 1.25rem 0 0;
+        padding: 0.85rem 1rem;
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+        border-top: 1px solid rgba(16, 24, 32, 0.1);
+      }
+      .stories-index {
+        margin: 0 0 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+      }
+      .stories-index__label {
+        margin: 0 0 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .stories-index a {
+        font-family: var(--font-display);
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .stories-index a:hover {
+        color: var(--steel);
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body class="page-stories">
+    <header class="stories-mast">
+      <div class="stories-mast__inner">
+        <p class="stories-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Stories</span>
+        </p>
+        <p class="stories-kicker">Field journal</p>
+        <h1 class="stories-mast__title">Stories of RayNu</h1>
+        <p class="stories-mast__lede">
+          What actually happened on iron — not a roadmap slide. Each story is
+          dated, marker-backed, and honest about residuals.
+        </p>
+      </div>
+    </header>
+
+    <main class="stories-body">
+      <div class="stories-index">
+        <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#r640-2026-08-15"
+            >2026-08-15 — First light on PowerEdge R640</a
+          >
+        </p>
+      </div>
+
+      <article class="story" id="r640-2026-08-15">
+        <p class="story__date">2026-08-15 · Dell PowerEdge R640 · iDRAC9</p>
+        <h2 class="story__title">First light on PowerEdge R640</h2>
+
+        <p>
+          For months RayNu-V closed gates on a Latitude laptop under QEMU nested
+          KVM. Mount Everest’s hard gate is different: boot
+          <code>r640-hypervisor.efi</code> on a <strong>real</strong> R640 and
+          read the markers on serial. Today we closed that gate —
+          loudly, messily, and with the logs still warm.
+        </p>
+
+        <h3>Morning: an EFI you can pull</h3>
+        <p>
+          We built the release kit on the cloud agent, then put
+          <code>r640-hypervisor.efi</code> under <code>releases/</code> so a
+          normal <code>git pull</code> on the Mac dropped the binary — no Rust
+          toolchain required on the operator laptop. Media maker packed a FAT
+          image with <code>\EFI\BOOT\BOOTX64.EFI</code>. iDRAC Virtual Media
+          mapped the <code>.img</code> as a virtual floppy. One-shot boot.
+          Virtual console open.
+        </p>
+        <pre>Booting from Virtual Floppy Drive
+RayNu-V r640-hypervisor …
+RAYNU-V-M0-BOOT-OK</pre>
+        <p>
+          That was first light. The screen then sat on M0 with a blinking cursor.
+          ConOut had done its job; ExitBootServices was about to take it away.
+        </p>
+
+        <h3>The console that wasn’t COM2</h3>
+        <p>
+          HTML5 Virtual Console and BIOS serial redirect show
+          <strong>ConOut</strong>. Post-M0 RayNu-V prints with port I/O. We had
+          only written <strong>COM1 (0x3F8)</strong>. Dell iDRAC SOL is
+          <code>ssh …</code> then <code>console com2</code> — <strong>COM2
+          (0x2F8)</strong>. Same freeze on “serial,” different wire.
+        </p>
+        <p>
+          Kit <code>v0.1.0-com2</code> mirrored every host diagnostic byte to
+          both UARTs and added ConOut breadcrumbs through ExitBootServices.
+          Suddenly the story continued:
+        </p>
+        <pre>boot: M0 complete — entering M1.0 firmware handoff
+boot: PE assets embedded (.askern/.asinit) — prefer PE
+RAYNU-V-M3-ASSETS-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+RAYNU-V-M1-EBS-OK
+RAYNU-V-M1-VMXON-OK
+RAYNU-V-M3-LOAD-OK
+RAYNU-V-M3-BZIMAGE-OK</pre>
+
+        <h3>Three EPT lessons in one afternoon</h3>
+        <p>
+          Large-RAM iron does not forgive assumptions that QEMU’s
+          <code>-m 512M</code> hid.
+        </p>
+        <ul>
+          <li>
+            <strong>Pool at 5 GiB.</strong> The bump allocator picked the largest
+            conventional span. Guest code lived near <code>0x1402fd000</code>;
+            identity EPT only maps <code>[0, 512 MiB)</code>. Fix: clip the pool
+            into the precise window (<code>v0.1.0-eptfix</code>).
+          </li>
+          <li>
+            <strong>No virtio BAR hole.</strong> Clipping to 512 MiB filled the
+            whole window; <code>pick_shell_slab_hpa</code> found no unowned 2 MiB
+            leaf above guest RAM. Fix: cap the pool at 256 MiB so
+            <code>[256 MiB, 512 MiB)</code> stays free (<code>v0.1.0-barfix</code>).
+          </li>
+          <li>
+            <strong>Host CR3 outside EPT.</strong> VMLAUNCH ran; guest shared
+            host CR3 at <code>0x47e01000</code> (~1150 MiB). First page-table walk
+            EPT-faulted. Fix: build a guest CR3 that identity-maps the precise
+            window (<code>v0.1.0-cr3fix</code>).
+          </li>
+        </ul>
+        <pre>boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free
+boot: M4.3 virtio-blk BAR=0x10000000
+boot: VMLAUNCH → guest store+loop+HLT + IRQ inject (EPT)
+boot: ERROR — EPT violation GPA=0x47e01000
+boot: guest rip=0x1007000  cr3=0x47e01000</pre>
+        <p>
+          That was mid-afternoon edge: BAR window correct, guest RIP in-window,
+          CR3 still the UEFI table high in DRAM. The rest of the day was the
+          ladder — host CR3, RIP-relative GPRs, INVPCID, keep earlyprintk, then
+          Enable XSAVES — until <code>/init</code> stopped eating its own stack.
+        </p>
+
+        <h3>Evening: SHELL, M4, claim</h3>
+        <p>
+          Kit <code>v0.1.0-xsavesfix</code> printed
+          <code>secondary=0x0010100a</code> (XSAVES bit set). After
+          <code>Run /init as init process</code>:
+        </p>
+        <pre>RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M4-SHELL-G1
+RAYNU-V-M4-2VM-OK
+…
+RAYNU-V-M4-SMP-OK
+boot: VMXOFF ok</pre>
+        <p>
+          A confirming rebuild later the same day — same EFI SHA
+          <code>c3a688d0…ba28d611</code>, Virtual Floppy again — reproduced the
+          full chain on COM2. That is the close for
+          <code>RAYNU-V-R640-BOOT-OK</code> (HDA E2 / M7.5).
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code>: real R640
+          COM2 through Linux SHELL and the M4 probe chain, with archived serials
+          under <code>docs/evidence/r640/logs/</code>. We do
+          <strong>not</strong> claim Mount Everest closed — network UI (E3),
+          ISO install-to-disk (E5), and soak remain. Host CI still prints only
+          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>.
+        </p>
+
+        <p class="story__aside">
+          Kits:
+          <code>releases/v0.1.0-com2</code> …
+          <code>xsavesfix</code>
+          · Logs:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/">COM2 archives</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+          · Paper: <a href="paper.html">§6</a>
+          · Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md"
+            >first-light</a
+          >
+        </p>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Stories from the field
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>

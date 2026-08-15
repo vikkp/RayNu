@@ -1,0 +1,8 @@
+name=raynu-v
+version=0.1.0
+git=04f2b3c
+efi=r640-hypervisor.efi
+target=x86_64-unknown-uefi
+profile=release
+marker=RAYNU-V-M7-SHIP-OK
+built_utc=2026-08-15T13:13:33Z

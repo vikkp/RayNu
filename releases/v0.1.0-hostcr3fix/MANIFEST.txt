@@ -1,0 +1,10 @@
+RayNu-V EFI release kit
+Version: 0.1.0 (git 8c939b4)
+Marker: RAYNU-V-M7-SHIP-OK
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+Deploy: see docs/runbooks/usb_idrac.md

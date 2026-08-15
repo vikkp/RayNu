@@ -1,12 +1,17 @@
 # R640 iron evidence
 
-**Status file:** [`STATUS`](STATUS) — must stay `STATUS=open` until a real PowerEdge
-R640 boot is documented.
+**Status file:** [`STATUS`](STATUS) — `STATUS=closed` after real PowerEdge R640
+first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640-first-light.md).
 
-**Template:** [`TEMPLATE.md`](TEMPLATE.md) — copy to a dated file when capturing
-first light.
+**COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +
+SHA256SUMS for keepconfix residual and xsavesfix closing run.
 
-**Runbook:** [`docs/runbooks/r640_boot.md`](../../runbooks/r640_boot.md)
+**Template:** [`TEMPLATE.md`](TEMPLATE.md) — copy to a dated file for future
+campaigns / soak.
 
-Do not flip `STATUS` to closed from Latitude/QEMU. Host scaffold smoke
-(`./tools/m7-r640-smoke.sh`) only proves this directory and the runbook exist.
+**Runbook:** [`docs/runbooks/r640_boot.md`](../../runbooks/r640_boot.md)  
+**Living paper:** [`docs/paper/RayNu-V-Verification-Paper.md`](../../paper/RayNu-V-Verification-Paper.md) · site [`paper.html`](../../../site/paper.html)
+
+Host scaffold smoke (`./tools/m7-r640-smoke.sh`) proves this directory and the
+runbook exist; it does **not** print `RAYNU-V-R640-BOOT-OK`. That iron marker
+is claimed only via filled evidence + `STATUS=closed`.

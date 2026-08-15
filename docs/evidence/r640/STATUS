@@ -1,3 +1,10 @@
-STATUS=open
-# Flip to STATUS=closed only with a filled dated evidence file on real PowerEdge R640.
-# See TEMPLATE.md and docs/runbooks/r640_boot.md.
+STATUS=closed
+# Iron M7.5 closed (2026-08-15) — real PowerEdge R640 COM2:
+#   docs/evidence/r640/2026-08-15-r640-first-light.md
+# Kit: releases/v0.1.0-xsavesfix/ (SHA256 in evidence file)
+# Confirming retest log: docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt
+#   (same EFI SHA c3a688d0…ba28d611; Virtual Floppy rebuild → SHELL→M4→VMXOFF)
+# Markers: M0→…→SHELL-OK→NOIRQ→M4 SHELL/2VM/SCHED/NVM/BLK/NET/SMP
+# Claim: RAYNU-V-R640-BOOT-OK
+# Host/CI smoke still prints only RAYNU-V-M7-R640-SCAFFOLD-OK (never iron marker).
+# Paper artifacts: logs/README.md + SHA256SUMS + first-light + living paper §6
