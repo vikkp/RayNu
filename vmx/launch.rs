@@ -3115,6 +3115,14 @@ fn finish_boot(ok: bool) -> ! {
     }
 
     if ok {
+        // Re-arm COM1+COM2 before the gate marker — SOL can mark COM2 dead on
+        // THR timeout mid-run; without this the last lines silently go COM1-only.
+        serial::init();
+
+        // E2 / M7.5: always emit on any successful finish_boot. Do this *before*
+        // mode banners so a truncated SOL capture still shows the gate marker.
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
+
         // SAFETY: boot single-threaded; flags set before / during guest path.
         if unsafe { SMP_PROBE_MODE } {
             serial::write_line("boot: M4.5 complete — SMP dual-vCPU path OK");
@@ -3141,12 +3149,11 @@ fn finish_boot(ok: bool) -> ! {
         } else {
             serial::write_line("boot: M3.10 complete — proto path OK");
         }
-        // E2 / M7.5: emit the iron gate marker on the successful guest path.
-        // Prior kits stopped at VMXOFF without this line (docs-only claim).
-        // Print when SHELL latched *or* the full M4.5 SMP path completed
-        // (SHELL was already observed earlier on that path; latch must not gate).
-        if serial_pio::guest_shell_ok() || unsafe { SMP_PROBE_MODE } {
-            serial::write_line(M7_R640_BOOT_OK_MARKER);
+        // Repeat marker after banners (belt-and-suspenders for SOL scrollback).
+        serial::write_line(M7_R640_BOOT_OK_MARKER);
+        // Brief settle so iDRAC SOL drains the last THR before we spin forever.
+        for _ in 0..2_000_000 {
+            core::hint::spin_loop();
         }
         serial::qemu_exit_success();
     } else {
