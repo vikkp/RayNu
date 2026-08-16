@@ -23,7 +23,7 @@ fn markers_stable() {
         M7_ISO_BOOTED_FROM_DISK_MARKER,
         "RAYNU-V-M7-ISO-BOOTED-FROM-DISK"
     );
-    assert!(ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7"));
+    assert!(ISO_INSTALL_GAP_NOTE.contains("CLOSED M7.7"));
     assert!(ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close"));
 }
 

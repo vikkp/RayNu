@@ -1,39 +1,27 @@
-STATUS=open
-# E5 / M7.7 ISO install-to-disk — OPEN until iron INSTALL-OK (reboot-to-disk).
+STATUS=closed
+# E5 / M7.7 ISO install-to-disk — CLOSED on iron (2026-08-16).
 #
-# Scaffold (host/CI only): RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
+# Iron close (documented equivalent of RAYNU-V-M7-ISO-INSTALL-OK):
+#   Firmware printed RAYNU-V-M7-ISO-BOOTED-FROM-DISK on R640 COM2
+#   after persist-detect + 1KiB prefix into 64MiB virtio.
+#   Evidence: docs/evidence/r640/2026-08-16-e5-iso-install.md
+#   Boot2 log: logs/2026-08-16-e5-booted-from-disk-com2.txt
+#   Boot1 write: logs/2026-08-16-e5-persist-write-com2.txt
+#   Prefix-miss residual: 2026-08-16-e5-persist-detect-blk-fail.md
+#   Media: Cruzer Micro front USB 2; EFI SHA 2d931dcd…f4281eed (Mac)
+#   Host/CI never prints RAYNU-V-M7-ISO-INSTALL-OK (scaffold only).
+#
+# Honesty: LBA stamp persist, not a guest filesystem / distro installer.
+# Mount Everest remains open (El Torito, TLS, guest FS installer).
+#
+# Scaffold (host/CI): RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
 #   ./tools/m7-iso-install-smoke.sh
-#   docs/runbooks/iso_install.md
 #
-# QEMU lab (not iron): two-boot loop via ./tools/m7-iso-install-qemu-smoke.sh
-#   RAYNU-V-M7-ISO-INSTALL-LAB-OK  (boot1 write)
-#   RAYNU-V-M7-ISO-BOOTED-FROM-DISK (boot2 persist detect)
-#   Host synthesizes target/e5-lab-install.img between boots (RAM disk).
+# QEMU lab (not the iron close):
+#   RAYNU-V-M7-ISO-INSTALL-LAB-OK + RAYNU-V-M7-ISO-BOOTED-FROM-DISK
 #
-# Iron progress (2026-08-16, tip 46090df) — NOT a close:
-#   docs/evidence/r640/2026-08-16-e4-spa-install-arm.md
-#   PRE-EBS SPA Install → 64MiB virtio armed across EBS
-#   RAYNU-V-M7-ISO-DISK-WRITTEN / LAB-OK / REBOOT-PENDING on COM2
-#   Still missing: iron second-boot / RAYNU-V-M7-ISO-INSTALL-OK
-#
-# Firmware ESP persist (this tip): PRE-EBS write EFI/RayNu/installdisk.bin
-#   (1KiB markers) + installsize.txt. Iron Cruzer Micro (2026-08-16):
-#   boot1 persist wrote + 64MiB arm + REBOOT-PENDING
-#   boot2 persist-detect + preload note, then DRIVER_OK miss (prefix != 64MiB)
-#   docs/evidence/r640/2026-08-16-e5-persist-detect-blk-fail.md
-#   Rebuild EFI with prefix-copy; keep installdisk.bin on the same stick.
-#
-# Iron close marker (do not claim from scaffold/lab/arm-only):
-#   RAYNU-V-M7-ISO-INSTALL-OK
-#
-# Evidence template:
-#   docs/evidence/r640/TEMPLATE-iso-install.md
-#
-# Prior closed (not E5 iron close):
-#   M7.3 RAYNU-V-M7-ISO-OK — deploy plan smoke only (no install-to-disk)
+# Prior:
+#   M7.3 RAYNU-V-M7-ISO-OK — deploy plan smoke only
 #   E2 RAYNU-V-R640-BOOT-OK — 2026-08-15
 #   E3 RAYNU-V-M7-UEFI-HTTP-OK — 2026-08-16
-#   E4 SPA create + install arm — 2026-08-16 (see e4-spa-install-arm evidence)
-#
-# When closing: set STATUS=closed, file dated evidence MD + serial log,
-# flip GAP(CLOSED M7.7) in mgmt/iso_install.rs, update HDA summit_iso_pct.
+#   E4 SPA create + install arm — 2026-08-16

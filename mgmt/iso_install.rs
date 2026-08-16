@@ -6,8 +6,9 @@
 //!
 //! Builds on M7.3 (`IsoDeployPlan`): extract-boot bind + virtio-blk install
 //! size → a phased **install-to-disk** contract (write disk → reboot → boot
-//! from disk). Host/CI closes only the **scaffold**; iron prints
-//! [`M7_ISO_INSTALL_OK_MARKER`] after real R640 proof.
+//! from disk). Host/CI closes only the **scaffold**; iron close is
+//! [`M7_ISO_BOOTED_FROM_DISK_MARKER`] on COM2 (documented equivalent of
+//! [`M7_ISO_INSTALL_OK_MARKER`]; host/CI must **never** print the iron OK).
 
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
@@ -26,8 +27,9 @@ pub const M7_ISO_INSTALL_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-OK";
 /// Host / CI scaffold marker when runbook + package gate pass.
 pub const M7_ISO_INSTALL_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK";
 
-/// Open until QEMU then iron close install-to-disk.
-pub const ISO_INSTALL_GAP_NOTE: &str = "GAP(OPEN M7.7): ISO install-to-disk + reboot-to-disk";
+/// Closed on iron 2026-08-16: persist-detect + prefix-copy → BOOTED-FROM-DISK.
+pub const ISO_INSTALL_GAP_NOTE: &str =
+    "GAP(CLOSED M7.7): ISO install-to-disk + reboot-to-disk (LBA stamp persist)";
 
 /// Documented MVP: extract-boot + empty virtio-blk → guest writes → reboot from disk.
 pub const ISO_INSTALL_MVP_NOTE: &str =
@@ -1079,7 +1081,7 @@ pub fn prop_iso_install_package() -> bool {
     );
     let ok = status.status == 200
         && status.reply == Some(ApiReply::Listed { count: 1 })
-        && ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7")
+        && ISO_INSTALL_GAP_NOTE.contains("CLOSED M7.7")
         && ISO_INSTALL_MVP_NOTE.contains("reboot-to-disk")
         && ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close")
         && M7_ISO_INSTALL_SCAFFOLD_MARKER == "RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK"

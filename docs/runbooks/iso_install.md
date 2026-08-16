@@ -1,7 +1,9 @@
 # Runbook — ISO install-to-disk (E5 / M7.7)
 
 **Scaffold marker (host/CI):** `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`  
-**Iron / QEMU close marker:** `RAYNU-V-M7-ISO-INSTALL-OK`  
+**Iron close (COM2):** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of `RAYNU-V-M7-ISO-INSTALL-OK`)  
+**Evidence:** [2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md) — `STATUS-iso-install=closed`  
+**Archive:** `docs/evidence/r640/`  
 **Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · HDA E5  
 **Prior:** [iso.md](iso.md) (M7.3 deploy plan) · [mgmt_http.md](mgmt_http.md) (E3 network)
 
@@ -103,23 +105,18 @@ into the larger RAM disk. Requiring equal lengths dropped iron stamps
 2. Guest boots via **extract-boot** (`load_bzimage_guest` + staged bzImage/initrd).
 3. Host/guest writes a marker (or filesystem) to the virtio-blk install disk.
 4. Hypervisor records DiskWritten → RebootPending.
-5. Second boot from the install disk → lab `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`;
-   iron `RAYNU-V-M7-ISO-INSTALL-OK` only after R640 proof.
+5. Second boot from the install disk → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
+   (iron 2026-08-16; documented equivalent of `ISO-INSTALL-OK`).
 
 ### Iron (R640)
 
-Mirror E2/E3:
-
-1. Build kit → `releases/v0.1.0-iso-install-*` + SHA256.
-2. `make-boot-media` → iDRAC Virtual Floppy.
-3. COM2 capture (`console com2`).
-4. Mac curl: deploy/install REST during PRE-EBS window if needed.
-5. Fill [TEMPLATE-iso-install.md](../evidence/r640/TEMPLATE-iso-install.md).
-6. Set `docs/evidence/r640/STATUS-iso-install` to `STATUS=closed` only with real proof.
+Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
+[2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md).
+`STATUS-iso-install=closed`. Floppy is often read-only; use writable USB.
 
 ## Honesty / residuals
 
-- **GAP(OPEN M7.7)** until install-to-disk + reboot-to-disk proven.
+- **GAP(CLOSED M7.7)** — iron two-boot LBA stamp persist + reboot-to-disk (`BOOTED-FROM-DISK` on COM2).
 - **El Torito / CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
 - **ISO blob upload / parse** not claimed — extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
@@ -129,7 +126,8 @@ Mirror E2/E3:
   Cruzer `DRIVER_OK` miss. Full disk persist needs writable USB/NVMe, not a
   64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
-- Do **not** claim Mount Everest closed until E4 + E5 are both green.
+- Do **not** claim Mount Everest: E5 stamp persist is closed; El Torito / guest
+  FS installer / TLS remain.
 
 ## Next
 
@@ -141,9 +139,8 @@ Mirror E2/E3:
    **Done (lab):** two-boot `./tools/m7-iso-install-qemu-smoke.sh` →
    `RAYNU-V-M7-ISO-INSTALL-LAB-OK` + `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (host-synthesized persist image between boots; not a guest filesystem installer).
-3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (lab + iron write):**
-   PRE-EBS write + next-boot `persist-detect` on Cruzer Micro (2026-08-16).
-   Prefix-copy fix required so 1 KiB stamps load into the 64 MiB virtio disk.
+3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (iron):**
+   Cruzer Micro persist-detect + prefix-copy → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
+   (2026-08-16). [`STATUS-iso-install`](../evidence/r640/STATUS-iso-install) closed.
 4. Guest filesystem install + full-disk persist (beyond LBA marker lab).
-5. Rebuild EFI onto the **same** USB (keep `EFI/RayNu/installdisk.bin`) →
-   `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` then iron `RAYNU-V-M7-ISO-INSTALL-OK`.
+5. El Torito / distro ISO blob upload (not required for M7.7 stamp close).

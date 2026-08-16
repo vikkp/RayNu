@@ -74,9 +74,10 @@ Fix: copy `min(image, disk)` at offset 0 and zero the rest. Serial:
 ## Honesty / residuals
 
 - Persist **write** and **detect** on writable USB are proven.
-- Reboot-to-disk **verify** is not, until the prefix-copy EFI is on the same stick
-  (keep `installdisk.bin`; replace `EFI/BOOT/BOOTX64.EFI` only).
-- Lab stamps ≠ guest filesystem installer. `STATUS-iso-install` stays **open**.
+- Reboot-to-disk **verify** failed on this EFI (prefix not copied). Subsequent
+  prefix-copy EFI on the same stick closed:
+  [`2026-08-16-e5-iso-install.md`](2026-08-16-e5-iso-install.md).
+- Lab stamps ≠ guest filesystem installer.
 - Do not print iron `ISO-INSTALL-OK` from host/CI.
 
 ## HDA / Everest

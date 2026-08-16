@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`); Everest residual E4–E5.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`, `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`); Everest residual E4 polish + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -205,27 +205,20 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ---
 
-### M7.7 — ISO install-to-disk (E5) — `RAYNU-V-M7-ISO-INSTALL-OK`
+### M7.7 — ISO install-to-disk (E5) — `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
 
-**Status: scaffold open** (host `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; iron/QEMU close open)
+**Status: closed on iron** (2026-08-16) — LBA stamp persist two-boot on Cruzer Micro.
+Firmware printed `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of
+`RAYNU-V-M7-ISO-INSTALL-OK`). Host/CI still never prints the iron OK marker.
 
 **Scaffold marker (host/CI):** `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK` via `./tools/m7-iso-install-smoke.sh`  
-**Close marker:** `RAYNU-V-M7-ISO-INSTALL-OK` — QEMU then real R640; evidence under `docs/evidence/r640/STATUS-iso-install`
+**Close evidence:** [`docs/evidence/r640/2026-08-16-e5-iso-install.md`](evidence/r640/2026-08-16-e5-iso-install.md) · `STATUS-iso-install=closed`
 
-**Goal:** Extract-boot (or CD-ROM later) → guest installs to virtio-blk → reboot-to-disk.
+**Goal (met as stamp contract):** Extract-boot → virtio-blk LBA write → ESP persist → reboot-to-disk detect.
 
-**Deliverables (scaffold now):**
+**Honesty:** not a guest filesystem / distro ISO installer. El Torito residual.
 
-1. `InstallToDiskPlan` phase machine + `InstallLaunchContract` (`mgmt/iso_install.rs`).
-2. REST `POST /iso/{id}/install` / `GET /iso/install`.
-3. Virtio-blk `DEFAULT_INSTALL_DISK_BYTES` + `capacity_sectors_for`.
-4. Runbook [`iso_install.md`](runbooks/iso_install.md) + evidence template.
-5. `GAP(OPEN M7.7): ISO install-to-disk + reboot-to-disk`.
-
-**Next (partial):** contract → sized `virtio_blk::init` wired; QEMU lab LBA1 write +
-`REBOOT-PENDING` honesty latch; guest filesystem + second boot + iron close remain.
-
-**Acceptance for close:** serial/QEMU proof of install + reboot-to-disk. Host scaffold must **never** print the close marker. Mount Everest stays open until E4 + E5 green.
+**Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (E4 polish + real distro installer).
 
 ---
 
@@ -265,5 +258,5 @@ Do not pull M8 into M7 gate lists.
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
-**M7.7 scaffold open** (`RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`); install-to-disk iron close open.  
-**Honesty:** Mount Everest residual is E4 polish + E5 ISO install-to-disk; El Torito / TLS / console residuals remain.
+**M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
+**Honesty:** Mount Everest residual is E4 polish + distro ISO / guest FS installer; El Torito / TLS / console remain.

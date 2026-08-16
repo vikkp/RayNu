@@ -131,7 +131,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
               <span class="hda-summits__pct" data-summit="iso">65%</span>
-              <span class="hda-summits__note">iron persist-detect; prefix-copy → BOOTED-FROM-DISK</span>
+              <span class="hda-summits__note">iron BOOTED-FROM-DISK (stamps); El Torito residual</span>
             </li>
           </ol>
           <p class="hda-aside" data-reveal>
@@ -149,10 +149,9 @@
             M0→M7.7 gates — including real R640
             <code>RAYNU-V-R640-BOOT-OK</code> (E2) and
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP, 2026-08-16). M7.7
-            persist write+detect landed on Cruzer Micro; remaining is prefix-copy
-            of 1 KiB stamps into the 64 MiB virtio disk, then
-            <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> / iron
-            <code>RAYNU-V-M7-ISO-INSTALL-OK</code>.
+            Cruzer Micro two-boot closed stamp persist
+            (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). Mount Everest residual
+            is E4 polish and a real distro installer (El Torito / guest FS).
           </p>
           <div class="cta" data-reveal>
             <a

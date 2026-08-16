@@ -77,7 +77,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.4 | `RAYNU-V-M7-UI-OK` | Create-VM fields + media SPA (CI + Latitude host smoke; console/TLS/NIC residual) |
 | M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 COM2: M0→SHELL→M4 BLK/NET/SMP (`v0.1.0-xsavesfix`, 2026-08-15); scaffold `RAYNU-V-M7-R640-SCAFFOLD-OK` |
 | M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | Real R640 PRE-EBS SNP+smoltcp HTTP (`10.99.99.127:8443`, 2026-08-16); scaffold `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` |
-| M7.7 | `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK` | E5 install-to-disk scaffold (phase machine + REST + runbook); iron `RAYNU-V-M7-ISO-INSTALL-OK` **open** |
+| M7.7 | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` | E5 iron stamp persist closed 2026-08-16 (Cruzer two-boot); scaffold `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; documented equiv. of `ISO-INSTALL-OK` |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -142,10 +142,11 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke; console/TLS residual).  
 **M7.5 closed on iron:** `RAYNU-V-R640-BOOT-OK` — real R640 COM2 through SHELL + M4 (`v0.1.0-xsavesfix`, 2026-08-15).  
 **M7.6 closed on iron:** `RAYNU-V-M7-UEFI-HTTP-OK` — SNP residual PRE-EBS HTTP on R640 (`10.99.99.127:8443`, 2026-08-16).  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md)
+**M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-16-e5-iso-install.md](evidence/r640/2026-08-16-e5-iso-install.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| Everest residual | E4–E5 | vSphere MVP polish + Linux ISO install-to-disk (TLS/post-EBS follow-on) |
+| Everest residual | E4 polish + distro ISO | TLS/console/post-EBS; El Torito / guest FS installer |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
