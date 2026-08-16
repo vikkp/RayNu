@@ -20,9 +20,11 @@ paper (§6) and for claiming `RAYNU-V-R640-BOOT-OK`.
 | `2026-08-16-uefi-http-ok-com2-retest.txt` | M7.6 clarifying retest | listen → `AuthAllowed` → `UEFI-HTTP-OK` → `R640-BOOT-OK` |
 | `2026-08-16-uefi-http-ok-curl.txt` | M7.6 client proof | Mac `GET /` → HTTP 200 SPA (`Content-Length: 10757`) |
 | `2026-08-16-uefi-http-ok-curl-retest.txt` | M7.6 clarifying retest | `GET /` → 200 SPA + `GET /vms` Bearer → `{"ok":true,"listed":true}` |
+| `2026-08-16-e4-spa-install-arm-com2.txt` | E4 tip `46090df` | SPA create-VM + 64 MiB install arm → `DISK-WRITTEN`/`LAB-OK`/`REBOOT-PENDING` |
 
-Checksums: [`SHA256SUMS`](SHA256SUMS). Narrative:
-[`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md).
+Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
+[`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·
+[`../2026-08-16-e4-spa-install-arm.md`](../2026-08-16-e4-spa-install-arm.md).
 
 ## Reproduce on iron
 
