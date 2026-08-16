@@ -12,7 +12,7 @@ STATUS=closed
 #   Host/CI never prints RAYNU-V-M7-ISO-INSTALL-OK (scaffold only).
 #
 # Honesty: LBA stamp persist, not a guest filesystem / distro installer.
-# Mount Everest remains open (El Torito, TLS, guest FS installer).
+# Mount Everest remains open (post-EBS mgmt HTTP first; then E4 polish + distro).
 #
 # Scaffold (host/CI): RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
 #   ./tools/m7-iso-install-smoke.sh

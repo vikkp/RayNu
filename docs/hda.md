@@ -40,12 +40,12 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **88%** | +4 (iron E5 stamp persist `BOOTED-FROM-DISK`) |
 | **Months to Mount Everest** | **0.5** | −0.25 (M7.7 iron close; distro installer residual) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | medium | E2+E3+E5 stamps on COM2; E4 polish + El Torito remain |
+| **Confidence** | medium | E2+E3+E5 stamps on COM2; next = post-EBS SNP HTTP |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~88% | E4 SPA create-VM on iron PRE-EBS; TLS residual |
-| **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / El Torito residual |
+| **vSphere-like UI (network)** | ~88% | E4 SPA create-VM on iron PRE-EBS; post-EBS listen residual |
+| **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -105,7 +105,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~78% · ~0.5–1.0 months residual (TLS / console / E4 polish)**
+**Status: NEAR · ~88% · ~0.5 months residual (post-EBS listen, then TLS/console)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -118,14 +118,15 @@ All must be true (no hand-waving):
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
-| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
+| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual — **after** post-EBS listen |
 | Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up; iron used lab bring-up |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
+| **Post-EBS durable HTTP** | MISSING | PRE-EBS SNP window only; next engineering (do not chase Tcp4) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~82% · ~0.25–0.5 months residual (distro installer / El Torito)**
+**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after post-EBS HTTP)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -139,7 +140,7 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | MISSING | residual |
+| ISO parse / El Torito / EFI boot img | MISSING | later — not next after E5 stamps |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
@@ -255,11 +256,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | Close M7.7 / E5 stamp persist after iron BOOTED-FROM-DISK |
-| Summary | Cruzer two-boot: persist-detect + prefix_into=67108864; `STATUS-iso-install=closed` |
-| Everest impact | months 0.75→0.5; overall 84→88; iso 68→82 |
-| Gates touched | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` claimed; host never prints `ISO-INSTALL-OK` |
-| Months Δ | 0.75 → 0.5 |
+| Commit | Public site/HDA: E5 stamps closed; next = post-EBS SNP HTTP |
+| Summary | Cruzer story + residual copy; CI fixture/test race; `STATUS-iso-install=closed` held |
+| Everest impact | none (copy + CI); months 0.5 / overall 88 / iso 82 held |
+| Gates touched | none new; `BOOTED-FROM-DISK` already claimed |
+| Months Δ | 0.5 held |
 
 ---
 
@@ -269,9 +270,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
-| H3 | No full El Torito/CD-ROM | MED | M7.3 extract-boot MVP; CD-ROM stub residual |
-| H4 | Console / TLS / post-EBS listen still open | MED | E3 MVP closed (PRE-EBS HTTP); TLS + persistent listen follow-on |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual TLS/El Torito/guest FS |
+| H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
+| H4 | Post-EBS listen still open | MED | **Next:** SNP+smoltcp after EBS; PRE-EBS fallback; do not chase Tcp4 |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual post-EBS UI + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -281,6 +282,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e5-site-residual | 0.5 | 88 | Public residual: post-EBS SNP HTTP next; Cruzer story; E5 stamps held |
 | 2026-08-16 | e5-iron-booted | 0.5 | 88 | Iron `BOOTED-FROM-DISK`; M7.7 stamp persist closed; iso~82% |
 | 2026-08-16 | e5-persist-prefix | 0.75 | 84 | Iron persist-detect; prefix-copy so 1KiB stamps load into 64MiB disk |
 | 2026-08-16 | e5-persist-esp | 0.75 | 83 | PRE-EBS ESP installdisk.bin persist; iso~65%; iron INSTALL-OK open |
@@ -317,10 +319,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E5 stamps CLOSED — BOOT-OK + UEFI-HTTP-OK + BOOTED-FROM-DISK
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     E4 polish (TLS/console) or El Torito / guest FS installer
+Next move:     post-EBS durable mgmt HTTP (SNP+smoltcp); PRE-EBS stays fallback
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit; SNP OK)
 Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
-Do not claim:  Mount Everest (distro installer + E4 polish remain)
+Do not claim:  Mount Everest (post-EBS UI + E4 polish + distro installer remain)
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

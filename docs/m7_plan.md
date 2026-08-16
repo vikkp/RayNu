@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`, `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`); Everest residual E4 polish + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`, `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`); Everest residual: post-EBS mgmt HTTP, then E4 polish + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -125,7 +125,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Size gate green (ADR-003).
 5. `GAP(CLOSED M7.6): UEFI NIC HTTP listen`.
 
-**Acceptance:** **Met on iron** — `RAYNU-V-M7-UEFI-HTTP-OK` on R640 COM2 (SNP residual; see evidence). HDA E3 MVP closed; TLS/post-EBS follow-on.
+**Acceptance:** **Met on iron** — `RAYNU-V-M7-UEFI-HTTP-OK` on R640 COM2 (SNP residual; see evidence). HDA E3 MVP closed; post-EBS listen is the next HTTP residual (do not chase Tcp4).
 
 ---
 
@@ -218,7 +218,7 @@ Firmware printed `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of
 
 **Honesty:** not a guest filesystem / distro ISO installer. El Torito residual.
 
-**Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (E4 polish + real distro installer).
+**Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (post-EBS HTTP + E4 polish + real distro installer).
 
 ---
 
@@ -259,4 +259,4 @@ Do not pull M8 into M7 gate lists.
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
-**Honesty:** Mount Everest residual is E4 polish + distro ISO / guest FS installer; El Torito / TLS / console remain.
+**Honesty:** Mount Everest residual is durable post-EBS mgmt HTTP (SNP+smoltcp), then remaining E4 polish + a real distro installer. Do not chase firmware Tcp4. El Torito / TLS / guest console wait until post-EBS listen works.

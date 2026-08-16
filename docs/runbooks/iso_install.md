@@ -126,8 +126,8 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   Cruzer `DRIVER_OK` miss. Full disk persist needs writable USB/NVMe, not a
   64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
-- Do **not** claim Mount Everest: E5 stamp persist is closed; El Torito / guest
-  FS installer / TLS remain.
+- Do **not** claim Mount Everest: E5 stamp persist is closed; next is
+  post-EBS mgmt HTTP, then E4 polish + a real distro installer.
 
 ## Next
 
@@ -142,5 +142,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (iron):**
    Cruzer Micro persist-detect + prefix-copy → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (2026-08-16). [`STATUS-iso-install`](../evidence/r640/STATUS-iso-install) closed.
-4. Guest filesystem install + full-disk persist (beyond LBA marker lab).
-5. El Torito / distro ISO blob upload (not required for M7.7 stamp close).
+4. Guest filesystem install + full-disk persist (beyond LBA marker lab) — **after** post-EBS HTTP.
+5. El Torito / distro ISO blob upload (not required for M7.7 stamp close; not next).

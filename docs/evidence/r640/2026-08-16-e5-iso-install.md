@@ -10,7 +10,7 @@ E2 still green (`RAYNU-V-R640-BOOT-OK`).
 `BOOTED-FROM-DISK` on detect; host/CI never prints the iron OK marker).
 
 **Not claimed:** Mount Everest; guest filesystem installer; El Torito / distro ISO
-blob; firmware Tcp4 listen.
+blob; firmware Tcp4 listen; post-EBS durable mgmt HTTP (next residual).
 
 ## Closing tip
 
@@ -65,8 +65,8 @@ RAYNU-V-R640-BOOT-OK
 - Persist is **LBA0+LBA1 stamps** (1 KiB), not a guest root filesystem and not a
   distro installer. Live 64 MiB virtio is still RAM; durability is the ESP file.
 - SPA window timed out on boot 2 (correct — do not re-Install).
-- El Torito / ISO blob upload / guest console / TLS / post-EBS listen remain.
-- Mount Everest stays **open** (E4 polish + real distro installer residual).
+- El Torito / ISO blob upload / guest console / TLS remain **after** post-EBS listen.
+- Mount Everest stays **open** (post-EBS mgmt HTTP first; then E4 polish + real distro installer).
 
 ## Close
 

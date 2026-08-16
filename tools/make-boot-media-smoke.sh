@@ -54,7 +54,9 @@ trap cleanup EXIT
 KIT="$WORKDIR/kit"
 mkdir -p "$KIT"
 # Tiny fake PE-ish payload is enough to prove FAT layout; not a bootable HV.
+# Embed the M7.6 marker so a fixture kit is never confused with a stale HV EFI.
 dd if=/dev/urandom of="$KIT/r640-hypervisor.efi" bs=4096 count=8 status=none
+printf 'RAYNU-V-M7-UEFI-HTTP-OK' | dd of="$KIT/r640-hypervisor.efi" conv=notrunc status=none
 (
   cd "$KIT"
   sha256sum r640-hypervisor.efi | tee r640-hypervisor.efi.sha256

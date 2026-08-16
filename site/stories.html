@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stories of RayNu — First light on PowerEdge R640</title>
+    <title>Stories of RayNu — R640 BOOT-OK, HTTP-OK, stamp persist</title>
     <meta
       name="description"
-      content="Field stories from RayNu-V: R640 BOOT-OK on COM2, then UEFI-HTTP-OK — SPA + Bearer REST on the operator LAN."
+      content="Field stories from RayNu-V: R640 BOOT-OK, UEFI-HTTP-OK, then Cruzer two-boot LBA stamp persist (BOOTED-FROM-DISK)."
     />
-    <meta property="og:title" content="Stories of RayNu — R640 BOOT-OK + HTTP-OK" />
+    <meta property="og:title" content="Stories of RayNu — iron stamps, not a distro yet" />
     <meta
       property="og:description"
-      content="2026-08-15/16: real R640 closed BOOT-OK and UEFI-HTTP-OK (SNP listen → Mac curl)."
+      content="2026-08-15/16: BOOT-OK, UEFI-HTTP-OK, then Cruzer two-boot RAYNU-V-M7-ISO-BOOTED-FROM-DISK (LBA stamps, not a guest filesystem)."
     />
     <meta property="og:type" content="article" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -158,6 +158,7 @@
         height: auto;
       }
       .story:nth-child(4) { animation-delay: 0.2s; }
+      .story:nth-child(5) { animation-delay: 0.26s; }
       .stories-index {
         margin: 0 0 2.5rem;
         padding-bottom: 1.5rem;
@@ -215,6 +216,11 @@
         <p>
           <a href="#r640-2026-08-16-http"
             >2026-08-16 — UEFI-HTTP-OK on the operator LAN</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-16-cruzer"
+            >2026-08-16 — Two boots on a Cruzer, stamps not a filesystem</a
           >
         </p>
       </div>
@@ -336,10 +342,14 @@ boot: VMXOFF ok</pre>
           rebuild also printed the <strong>literal</strong> string on COM2 — see
           <a href="#r640-boot-ok-marker">the next story</a>. The day after,
           E3 MVP closed as <code>RAYNU-V-M7-UEFI-HTTP-OK</code> — see
-          <a href="#r640-2026-08-16-http">the HTTP story</a>. We still do
-          <strong>not</strong> claim Mount Everest closed — E5 ISO
-          install-to-disk + iron reboot-to-disk remain. Host CI still prints only
-          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron path.
+          <a href="#r640-2026-08-16-http">the HTTP story</a>.
+          We still do
+          <strong>not</strong> claim Mount Everest closed. E5 stamp persist
+          closed later the same weekend — see
+          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>. Residual is
+          durable post-EBS management HTTP, then remaining E4 polish and a real
+          distro installer. Host CI still prints only
+          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron boot path.
         </p>
 
         <p class="story__aside">
@@ -428,7 +438,9 @@ RAYNU-V-R640-BOOT-OK</pre>
           <code>raynu-v-bringup</code> on <code>/vms</code> returned
           <code>{"ok":true,"listed":true}</code>. That is HDA <strong>E3</strong>
           MVP — not TLS, not post-EBS listen, not a full console — but the
-          network UI gate on real iron.
+          network UI gate on real iron. Stamp persist on a writable stick
+          closed the same day — see
+          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>.
         </p>
 
         <p class="story__aside">
@@ -438,6 +450,64 @@ RAYNU-V-R640-BOOT-OK</pre>
             href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-uefi-http-ok.md"
             >2026-08-16-uefi-http-ok.md</a
           >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-16-cruzer">
+        <p class="story__date">2026-08-16 · Dell PowerEdge R640 · front USB 2 · Cruzer Micro</p>
+        <h2 class="story__title">Two boots on a Cruzer — stamps, not a filesystem</h2>
+
+        <p>
+          Virtual Floppy is often read-only. The E5 contract needed a stick the
+          hypervisor could write. Same R640, front USB 2, SanDisk Cruzer Micro:
+          boot 1 from the SPA Install arm, reboot, boot 2 from the same stick.
+        </p>
+
+        <p>
+          Boot 1 printed the persist write, sized the live virtio disk, and
+          latched reboot-pending:
+        </p>
+        <pre>boot: persist wrote installdisk.bin bytes=1024
+boot: E5 install disk bytes=67108864
+RAYNU-V-M7-ISO-DISK-WRITTEN
+RAYNU-V-M7-ISO-REBOOT-PENDING</pre>
+
+        <p>
+          An earlier boot 2 failed a prefix mismatch: 1 KiB ESP stamps into a
+          64 MiB virtio image looked like zeros at DRIVER_OK. The prefix-copy
+          EFI (SHA <code>2d931dcd…f4281eed</code>) loaded the stamps into the
+          front of the larger disk. Boot 2 then printed:
+        </p>
+        <pre>boot: E5 persist-detect armed (installdisk.bin)
+boot: E5 persist preload bytes=1024 prefix_into=67108864
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-BOOTED-FROM-DISK
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          That string is the iron close for HDA <strong>E5 stamp persist</strong>
+          (documented equivalent of <code>ISO-INSTALL-OK</code>; host/CI never
+          print that iron marker). It is still the <strong>LBA stamp
+          contract</strong>: 1 KiB of LBA0+LBA1 patterns on the ESP, not a guest
+          root filesystem and not a distro installer. Live 64 MiB virtio is RAM;
+          durability is the Cruzer file. Mount Everest stays open.
+        </p>
+
+        <p>
+          Next engineering is durable <strong>post-EBS management HTTP</strong>
+          on the SNP + smoltcp residual (firmware Tcp4 is a platform limit on
+          this boot method). Remaining E4 polish and a real distro installer
+          follow that listen — not El Torito first.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-e5-iso-install.md"
+            >2026-08-16-e5-iso-install.md</a
+          >
+          · Status: <code>STATUS-iso-install=closed</code>
           · Tracker: <a href="hda.html">Mount Everest</a>
         </p>
       </article>

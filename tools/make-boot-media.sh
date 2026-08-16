@@ -90,7 +90,12 @@ if [[ ! -f "$EFI" ]]; then
 fi
 
 # Guard: if this tree has M7.6 source, refuse to pack a pre-M7.6 EFI by accident.
-if grep -Fq 'run_pre_ebs_mgmt_listen' "$ROOT/src/main.rs" 2>/dev/null; then
+# CI fixture kits (VERSION=0.0.0-test) are random bytes, not HV binaries — skip.
+is_fixture_kit=0
+if [[ -n "$KIT" && -f "$KIT/VERSION" ]] && grep -q '0.0.0-test' "$KIT/VERSION"; then
+  is_fixture_kit=1
+fi
+if [[ "$is_fixture_kit" != "1" ]] && grep -Fq 'run_pre_ebs_mgmt_listen' "$ROOT/src/main.rs" 2>/dev/null; then
   if ! python3 -c 'import sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if b"RAYNU-V-M7-UEFI-HTTP-OK" in d else 1)' "$EFI"; then
     echo "error: EFI is missing RAYNU-V-M7-UEFI-HTTP-OK but source has M7.6" >&2
     echo "       packing $EFI would boot a stale binary (classic dist/ kit trap)." >&2

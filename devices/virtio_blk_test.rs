@@ -61,7 +61,9 @@ fn reboot_detect_accepts_persist_prefix_on_larger_disk() {
     assert!(mmio_access(0x1000_0000 + OFF_STATUS, true, STATUS_DRIVER_OK).is_some());
     assert!(blk_ok());
     assert!(booted_from_disk());
-    assert!(!install_disk_written());
+    // Do not assert `!install_disk_written()`: that flag is process-global and
+    // `install_sized_disk_writes_lba1_marker` may set it under `--test-threads>1`.
+    // Detection (`booted_from_disk`) is the contract under test.
     set_reboot_detect(false);
 }
 

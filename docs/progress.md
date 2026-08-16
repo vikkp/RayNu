@@ -147,6 +147,6 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| Everest residual | E4 polish + distro ISO | TLS/console/post-EBS; El Torito / guest FS installer |
+| Everest residual | post-EBS HTTP + E4 + distro | SNP listen after EBS first; TLS/console later; distro installer later |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
