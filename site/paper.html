@@ -549,8 +549,9 @@
       <h3>6.6 Milestone 5 / 5.5 / 6</h3>
       <p>
         <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
-        <code>80 verified, 0 errors</code>). Iron reproduction of network UI / ISO / soak
-        is <strong>not</strong> claimed — see HDA E3–E5.
+        <code>80 verified, 0 errors</code>). Iron network HTTP MVP (E3 /
+        <code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-16; ISO install-to-disk
+        / soak / TLS remain — see HDA E4–E5.
       </p>
 
       <h2 id="related">7. Related Work</h2>
@@ -567,7 +568,7 @@
         <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> network UI (E3–E4), Linux ISO install-to-disk (E5), live Redfish, R640 soak.</li>
+        <li><strong>Mount Everest residual:</strong> vSphere MVP polish (E4), Linux ISO install-to-disk (E5), TLS/post-EBS listen, live Redfish, R640 soak. E2+E3 closed on iron 2026-08-15/16.</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here

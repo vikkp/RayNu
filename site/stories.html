@@ -6,12 +6,12 @@
     <title>Stories of RayNu — First light on PowerEdge R640</title>
     <meta
       name="description"
-      content="Field stories from RayNu-V: first light on PowerEdge R640, and the night COM2 printed the literal string RAYNU-V-R640-BOOT-OK."
+      content="Field stories from RayNu-V: R640 BOOT-OK on COM2, then UEFI-HTTP-OK — SPA + Bearer REST on the operator LAN."
     />
-    <meta property="og:title" content="Stories of RayNu — R640 BOOT-OK" />
+    <meta property="og:title" content="Stories of RayNu — R640 BOOT-OK + HTTP-OK" />
     <meta
       property="og:description"
-      content="2026-08-15: real R640 COM2 printed RAYNU-V-R640-BOOT-OK after SHELL and M4."
+      content="2026-08-15/16: real R640 closed BOOT-OK and UEFI-HTTP-OK (SNP listen → Mac curl)."
     />
     <meta property="og:type" content="article" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -212,6 +212,11 @@
             >2026-08-15 — Literal RAYNU-V-R640-BOOT-OK on COM2</a
           >
         </p>
+        <p>
+          <a href="#r640-2026-08-16-http"
+            >2026-08-16 — UEFI-HTTP-OK on the operator LAN</a
+          >
+        </p>
       </div>
 
       <article class="story" id="r640-2026-08-15">
@@ -329,10 +334,12 @@ boot: VMXOFF ok</pre>
           from the xsavesfix / confirming rebuild archives: real R640 COM2 through
           Linux SHELL and the M4 probe chain. Later the same day, the marker-fix
           rebuild also printed the <strong>literal</strong> string on COM2 — see
-          <a href="#r640-boot-ok-marker">the next story</a>. We do
-          <strong>not</strong> claim Mount Everest closed — network UI (E3),
-          ISO install-to-disk (E5), and soak remain. Host CI still prints only
-          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code>.
+          <a href="#r640-boot-ok-marker">the next story</a>. The day after,
+          E3 MVP closed as <code>RAYNU-V-M7-UEFI-HTTP-OK</code> — see
+          <a href="#r640-2026-08-16-http">the HTTP story</a>. We still do
+          <strong>not</strong> claim Mount Everest closed — E4 polish, E5 ISO
+          install-to-disk, and soak remain. Host CI still prints only
+          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron path.
         </p>
 
         <p class="story__aside">
@@ -389,6 +396,49 @@ RAYNU-V-R640-BOOT-OK</pre>
             href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
             >2026-08-15-boot-ok-marker-com2.txt</a
           >.
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-16-http">
+        <p class="story__date">2026-08-16 · Dell PowerEdge R640 · iDRAC9 · host NIC</p>
+        <h2 class="story__title">The floppy had no Tcp4 — so we used SNP</h2>
+
+        <p>
+          E2 proved the hypervisor boots on iron. E3 asks a different question:
+          can an operator on the LAN reach the management SPA without a host OS?
+          Virtual Floppy firmware on this R640 had <strong>no</strong> Tcp4 /
+          Ip4 / Dhcp4. PRE-EBS probes returned all zeros until
+          <code>ConnectController</code> brought SNP up (<code>snp=12</code>).
+        </p>
+
+        <p>
+          From there the residual path was SNP + smoltcp DHCP, then a PRE-EBS
+          listen on the leased address. COM2 printed the lease, the bind, and
+          the close marker:
+        </p>
+        <pre>boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+RAYNU-V-M7-UEFI-HTTP-OK
+…
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          From the Mac on the same LAN:
+          <code>GET /</code> returned the SPA (HTTP 200), and Bearer
+          <code>raynu-v-bringup</code> on <code>/vms</code> returned
+          <code>{"ok":true,"listed":true}</code>. That is HDA <strong>E3</strong>
+          MVP — not TLS, not post-EBS listen, not a full console — but the
+          network UI gate on real iron.
+        </p>
+
+        <p class="story__aside">
+          Kit: <code>releases/v0.1.0-m76-snp-http/</code>
+          · Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-uefi-http-ok.md"
+            >2026-08-16-uefi-http-ok.md</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
         </p>
       </article>
     </main>
