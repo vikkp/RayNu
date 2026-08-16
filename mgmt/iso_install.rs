@@ -98,16 +98,32 @@ pub const M7_ISO_DISK_WRITTEN_MARKER: &str = "RAYNU-V-M7-ISO-DISK-WRITTEN";
 
 /// QEMU lab package close (sized disk + BLK-OK + disk written). Not iron E5.
 pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
+
+/// Lab honesty: install disk written; reboot-to-disk requested but not executed.
+pub const M7_ISO_REBOOT_PENDING_MARKER: &str = "RAYNU-V-M7-ISO-REBOOT-PENDING";
+
 /// Armed across ExitBootServices: set by PRE-EBS `POST /iso/{id}/install` or lab ESP flag.
 static mut ARMED_INSTALL: Option<InstallLaunchContract> = None;
 static mut LAB_ARMED: bool = false;
 static mut DISK_WRITTEN_NOTED: bool = false;
+static mut REBOOT_PENDING_NOTED: bool = false;
+static mut BOOT_INSTALL_PLAN: InstallToDiskPlan = InstallToDiskPlan::empty();
 
 /// Stash launch contract so post-EBS `virtio_blk::init` can size the install disk.
 pub fn arm_install_launch_contract(contract: InstallLaunchContract) {
     // SAFETY: single-threaded boot / mgmt path.
     unsafe {
         ARMED_INSTALL = Some(contract);
+        BOOT_INSTALL_PLAN = InstallToDiskPlan {
+            deploy: IsoDeployPlan {
+                iso_id: contract.iso_id,
+                extract_bound: contract.extract_bound,
+                install_disk_bytes: contract.install_disk_bytes,
+            },
+            phase: InstallPhase::ContractReady,
+        };
+        DISK_WRITTEN_NOTED = false;
+        REBOOT_PENDING_NOTED = false;
     }
 }
 
@@ -130,6 +146,8 @@ pub fn clear_armed_install_contract() {
         ARMED_INSTALL = None;
         LAB_ARMED = false;
         DISK_WRITTEN_NOTED = false;
+        REBOOT_PENDING_NOTED = false;
+        BOOT_INSTALL_PLAN = InstallToDiskPlan::empty();
     }
 }
 
@@ -163,8 +181,52 @@ pub fn note_install_disk_written() -> bool {
             return false;
         }
         DISK_WRITTEN_NOTED = true;
+        let _ = mark_disk_written(&mut BOOT_INSTALL_PLAN);
     }
     true
+}
+
+/// After disk written: advance phase to RebootPending and latch serial emit.
+///
+/// Honest lab step — does **not** reboot or second-boot from disk.
+pub fn note_reboot_pending_lab() -> bool {
+    // SAFETY: single-threaded boot.
+    unsafe {
+        if REBOOT_PENDING_NOTED {
+            return false;
+        }
+        if BOOT_INSTALL_PLAN.phase != InstallPhase::DiskWritten {
+            // Accept direct advance if write was noted via virtio latch without
+            // going through note_install_disk_written (launch path).
+            if BOOT_INSTALL_PLAN.phase == InstallPhase::ContractReady {
+                let _ = mark_disk_written(&mut BOOT_INSTALL_PLAN);
+            }
+        }
+        if mark_reboot_pending(&mut BOOT_INSTALL_PLAN).is_err() {
+            return false;
+        }
+        REBOOT_PENDING_NOTED = true;
+        true
+    }
+}
+
+/// Take-once COM1 emit for reboot-pending lab latch.
+pub fn take_reboot_pending_latch() -> bool {
+    // SAFETY: single-threaded boot.
+    unsafe {
+        if REBOOT_PENDING_NOTED {
+            REBOOT_PENDING_NOTED = false;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// Peek boot install phase (tests / diagnostics).
+pub fn boot_install_phase() -> InstallPhase {
+    // SAFETY: single-threaded boot.
+    unsafe { BOOT_INSTALL_PLAN.phase }
 }
 
 /// Take-once: install disk write was noted this boot.
@@ -250,6 +312,18 @@ pub fn prop_iso_install_lab_package() -> bool {
     if !note_install_disk_written() {
         return false;
     }
+    if boot_install_phase() != InstallPhase::DiskWritten {
+        return false;
+    }
+    if !note_reboot_pending_lab() {
+        return false;
+    }
+    if boot_install_phase() != InstallPhase::RebootPending {
+        return false;
+    }
+    if !take_reboot_pending_latch() {
+        return false;
+    }
     if !take_install_disk_written_latch() {
         return false;
     }
@@ -259,15 +333,19 @@ pub fn prop_iso_install_lab_package() -> bool {
         && smoke.contains("ISO_INSTALL_LAB")
         && smoke.contains("isoinstall.txt")
         && smoke.contains(M7_ISO_DISK_WRITTEN_MARKER)
+        && smoke.contains(M7_ISO_REBOOT_PENDING_MARKER)
         && smoke.contains("never print iron marker")
         && runbook.contains("isoinstall.txt")
         && runbook.contains("1MiB")
+        && runbook.contains("REBOOT-PENDING")
         && LAB_INSTALL_DISK_BYTES == 1024 * 1024
         && M7_ISO_DISK_WRITTEN_MARKER == crate::devices::virtio_blk::M7_ISO_DISK_WRITTEN_MARKER
         && M7_ISO_INSTALL_LAB_OK_MARKER == crate::devices::virtio_blk::M7_ISO_INSTALL_LAB_OK_MARKER
+        && M7_ISO_REBOOT_PENDING_MARKER == crate::devices::virtio_blk::M7_ISO_REBOOT_PENDING_MARKER
         && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
         && include_str!("../tools/run-qemu.sh").contains("ISO_INSTALL_LAB")
-        && include_str!("../vmx/launch.rs").contains("M7_ISO_DISK_WRITTEN_MARKER");
+        && include_str!("../vmx/launch.rs").contains("M7_ISO_REBOOT_PENDING_MARKER")
+        && include_str!("../vmx/launch.rs").contains("note_reboot_pending_lab");
     clear_armed_install_contract();
     ok
 }

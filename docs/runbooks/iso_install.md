@@ -60,7 +60,11 @@ boot: E5 install-sized virtio-blk armed (PRE-EBS contract)
 RAYNU-V-M4-BLK-OK
 RAYNU-V-M7-ISO-DISK-WRITTEN
 RAYNU-V-M7-ISO-INSTALL-LAB-OK
+RAYNU-V-M7-ISO-REBOOT-PENDING
 ```
+
+`REBOOT-PENDING` means the phase machine advanced to “would reboot from disk” —
+it does **not** execute a second boot (disk backing is still RAM; no persistence yet).
 
 ```bash
 ./tools/m7-iso-install-qemu-smoke.sh
@@ -105,5 +109,6 @@ Mirror E2/E3:
 2. ~~QEMU smoke: PRE-EBS curl install → confirm install-sized disk serial + `M4-BLK-OK`.~~
    **Done (lab):** ESP `isoinstall.txt` / `ISO_INSTALL_LAB=1` → 1 MiB disk +
    `RAYNU-V-M7-ISO-INSTALL-LAB-OK` via `./tools/m7-iso-install-qemu-smoke.sh`.
-3. Guest filesystem install + reboot-from-disk path (lab is host LBA1 marker only).
+3. Guest filesystem install + reboot-from-disk path (lab is host LBA1 marker +
+   `REBOOT-PENDING` honesty latch; no second boot yet).
 4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.

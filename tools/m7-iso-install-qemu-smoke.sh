@@ -12,6 +12,7 @@ cd "$ROOT"
 LAB_ARM="${MARKER_E5_LAB_ARM:-boot: E5 lab isoinstall.txt armed (1MiB)}"
 LAB_OK="${MARKER_M7_ISO_INSTALL_LAB_OK:-RAYNU-V-M7-ISO-INSTALL-LAB-OK}"
 DISK_WRITTEN="${MARKER_M7_ISO_DISK_WRITTEN:-RAYNU-V-M7-ISO-DISK-WRITTEN}"
+REBOOT_PENDING="${MARKER_M7_ISO_REBOOT_PENDING:-RAYNU-V-M7-ISO-REBOOT-PENDING}"
 BLK_OK="${MARKER_M4_BLK:-RAYNU-V-M4-BLK-OK}"
 IRON="${MARKER_M7_ISO_INSTALL_OK:-RAYNU-V-M7-ISO-INSTALL-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
@@ -71,7 +72,7 @@ fi
 echo "==> lab arm OK: $LAB_ARM"
 
 if grep -qF "RAYNU-V-M1-VMXON-OK" "$SERIAL_LOG"; then
-  for m in "bytes=1048576" "boot: E5 install-sized virtio-blk armed" "$BLK_OK" "$DISK_WRITTEN" "$LAB_OK"; do
+  for m in "bytes=1048576" "boot: E5 install-sized virtio-blk armed" "$BLK_OK" "$DISK_WRITTEN" "$LAB_OK" "$REBOOT_PENDING"; do
     if ! grep -qF "$m" "$SERIAL_LOG"; then
       echo "error: missing VMX lab marker: $m" >&2
       tail -n 120 "$SERIAL_LOG" >&2 || true

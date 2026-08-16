@@ -137,7 +137,7 @@ All must be true (no hand-waving):
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | `isoinstall.txt` → `ISO-INSTALL-LAB-OK` when nested VT-x; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Persistent install + reboot-to-disk | MISSING | QEMU then iron |
+| Persistent install + reboot-to-disk | PARTIAL | Lab: LBA1 write + `REBOOT-PENDING`; no second boot / disk persist |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-distro matrix | MISSING | — |
 

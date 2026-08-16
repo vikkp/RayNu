@@ -25,6 +25,7 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn arm_install_launch_contract(")
         && s.contains("fn arm_lab_install_contract(")
         && s.contains("fn disk_bytes_for_virtio_launch(")
+        && s.contains("fn note_reboot_pending_lab(")
         && s.contains("fn probe_iso_install_lab_flag(")
         && s.contains("fn mark_disk_written(")
         && s.contains("fn mark_reboot_pending(")

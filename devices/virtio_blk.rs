@@ -17,6 +17,9 @@ pub const M7_ISO_DISK_WRITTEN_MARKER: &str = "RAYNU-V-M7-ISO-DISK-WRITTEN";
 /// E5 QEMU lab: sized disk + BLK-OK + disk written (not iron Everest close).
 pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
 
+/// E5 lab: disk written; reboot-to-disk requested (not executed).
+pub const M7_ISO_REBOOT_PENDING_MARKER: &str = "RAYNU-V-M7-ISO-REBOOT-PENDING";
+
 /// Default empty install-disk size for E5 / M7.3–M7.7 plans (64 MiB).
 /// Must stay aligned with `mgmt::iso::DEFAULT_INSTALL_DISK_BYTES`.
 pub const DEFAULT_INSTALL_DISK_BYTES: usize = 64 * 1024 * 1024;

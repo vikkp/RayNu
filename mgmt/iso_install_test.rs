@@ -15,6 +15,10 @@ fn markers_stable() {
         M7_ISO_INSTALL_LAB_OK_MARKER,
         "RAYNU-V-M7-ISO-INSTALL-LAB-OK"
     );
+    assert_eq!(
+        M7_ISO_REBOOT_PENDING_MARKER,
+        "RAYNU-V-M7-ISO-REBOOT-PENDING"
+    );
     assert!(ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7"));
     assert!(ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close"));
 }

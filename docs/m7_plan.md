@@ -222,8 +222,8 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Runbook [`iso_install.md`](runbooks/iso_install.md) + evidence template.
 5. `GAP(OPEN M7.7): ISO install-to-disk + reboot-to-disk`.
 
-**Next (partial):** contract → `virtio_blk::init` sized disk is wired (`disk_bytes_for_virtio_launch`);
-guest write + reboot-to-disk + QEMU/iron close remain.
+**Next (partial):** contract → sized `virtio_blk::init` wired; QEMU lab LBA1 write +
+`REBOOT-PENDING` honesty latch; guest filesystem + second boot + iron close remain.
 
 **Acceptance for close:** serial/QEMU proof of install + reboot-to-disk. Host scaffold must **never** print the close marker. Mount Everest stays open until E4 + E5 green.
 
