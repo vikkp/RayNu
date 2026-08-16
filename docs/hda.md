@@ -141,7 +141,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Persistent install + reboot-to-disk | PARTIAL | QEMU lab LBA markers + two-boot; iron + guest FS still open |
+| Persistent install + reboot-to-disk | PARTIAL | Iron: 64MiB arm + REBOOT-PENDING; QEMU BootedFromDisk; INSTALL-OK open |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-distro matrix | MISSING | — |
 
@@ -311,7 +311,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
 Months left:   0.75  (ETA ~ 2026-09)
-Next move:     Prove E4 on R640 PRE-EBS (SPA create/log/auth) → then E5 iron
+Next move:     E5 iron reboot-to-disk → RAYNU-V-M7-ISO-INSTALL-OK
 Do not claim:  Mount Everest until E4–E5 green
 ```
 
