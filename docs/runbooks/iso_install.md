@@ -47,16 +47,34 @@ The smoke script must **never print** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Documented MVP (El Torito / CD-ROM **deferred**):
 
-1. `POST /iso/{id}/deploy` then `POST /iso/{id}/install` (or install alone).
+### QEMU lab (no curl) — ESP flag
+
+Stage an empty `isoinstall.txt` on the ESP (or set `ISO_INSTALL_LAB=1` for
+`run-qemu.sh`). Pre-EBS probe arms a **1 MiB** install disk (safe under QEMU
+`-m 512M`). After VMX + virtio probe:
+
+```text
+boot: E5 lab isoinstall.txt armed (1MiB)
+boot: M4.3 virtio-blk … bytes=1048576
+boot: E5 install-sized virtio-blk armed (PRE-EBS contract)
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-DISK-WRITTEN
+RAYNU-V-M7-ISO-INSTALL-LAB-OK
+```
+
+```bash
+./tools/m7-iso-install-qemu-smoke.sh
+```
+
+Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
+
+### Full product path
+
+1. `POST /iso/{id}/deploy` then `POST /iso/{id}/install` (or install alone / ESP lab).
 2. Guest boots via **extract-boot** (`load_bzimage_guest` + staged bzImage/initrd).
-3. Guest (or tiny installer) writes a filesystem / marker to the virtio-blk install disk.
+3. Host/guest writes a marker (or filesystem) to the virtio-blk install disk.
 4. Hypervisor records DiskWritten → RebootPending.
 5. Second boot from the install disk → `RAYNU-V-M7-ISO-INSTALL-OK` on serial.
-
-### QEMU first
-
-Close a QEMU proof before claiming iron. Suggested marker in evidence:
-`RAYNU-V-M7-ISO-INSTALL-OK` with platform = QEMU nested KVM, then re-prove on R640.
 
 ### Iron (R640)
 
@@ -84,6 +102,8 @@ Mirror E2/E3:
    **Done (scaffold wire):** PRE-EBS `POST /iso/{id}/install` arms a static contract;
    post-EBS `virtio_blk::init` uses `disk_bytes_for_virtio_launch()` (64 MiB when armed,
    else 4 KiB M4.3 probe). Serial: `boot: E5 install-sized virtio-blk armed`.
-2. QEMU smoke: PRE-EBS curl install → confirm install-sized disk serial + `M4-BLK-OK`.
-3. Guest write proof + reboot-from-disk path.
+2. ~~QEMU smoke: PRE-EBS curl install → confirm install-sized disk serial + `M4-BLK-OK`.~~
+   **Done (lab):** ESP `isoinstall.txt` / `ISO_INSTALL_LAB=1` → 1 MiB disk +
+   `RAYNU-V-M7-ISO-INSTALL-LAB-OK` via `./tools/m7-iso-install-qemu-smoke.sh`.
+3. Guest filesystem install + reboot-from-disk path (lab is host LBA1 marker only).
 4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.

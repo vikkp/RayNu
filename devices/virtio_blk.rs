@@ -11,6 +11,12 @@
 /// COM1 / gate marker when virtio-blk write+readback succeeds.
 pub const M4_BLK_OK_MARKER: &str = "RAYNU-V-M4-BLK-OK";
 
+/// E5: install-sized disk LBA1 write proof (host DRIVER_OK path).
+pub const M7_ISO_DISK_WRITTEN_MARKER: &str = "RAYNU-V-M7-ISO-DISK-WRITTEN";
+
+/// E5 QEMU lab: sized disk + BLK-OK + disk written (not iron Everest close).
+pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
+
 /// Default empty install-disk size for E5 / M7.3–M7.7 plans (64 MiB).
 /// Must stay aligned with `mgmt::iso::DEFAULT_INSTALL_DISK_BYTES`.
 pub const DEFAULT_INSTALL_DISK_BYTES: usize = 64 * 1024 * 1024;
@@ -39,6 +45,8 @@ pub const OFF_CONFIG: u64 = 0x100; // capacity u64 LE (low dword at +0)
 
 /// Probe pattern written to LBA 0 on DRIVER_OK.
 pub(crate) const DISK_PATTERN: u32 = 0xB10C_0B01;
+/// Install-disk marker written to LBA 1 when disk is larger than one page (E5 lab).
+pub(crate) const INSTALL_DISK_PATTERN: u32 = 0xE5D1_5C00;
 const SECTOR_BYTES: usize = 512;
 
 static mut BAR_GPA: u64 = 0;
@@ -48,6 +56,8 @@ static mut STATUS: u32 = 0;
 static mut CAPACITY_SECTORS: u64 = 0;
 static mut BLK_OK: bool = false;
 static mut BLK_MARKED: bool = false;
+static mut INSTALL_WRITTEN: bool = false;
+static mut INSTALL_MARKED: bool = false;
 
 /// True after a successful write+readback latch.
 pub fn blk_ok() -> bool {
@@ -61,6 +71,23 @@ pub fn take_blk_ok_latch() -> bool {
     unsafe {
         if BLK_OK && !BLK_MARKED {
             BLK_MARKED = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// True after install-sized disk wrote the LBA1 marker.
+pub fn install_disk_written() -> bool {
+    unsafe { INSTALL_WRITTEN }
+}
+
+/// Take-once COM1 emit helper for E5 install disk write proof.
+pub fn take_install_disk_written_latch() -> bool {
+    unsafe {
+        if INSTALL_WRITTEN && !INSTALL_MARKED {
+            INSTALL_MARKED = true;
             true
         } else {
             false
@@ -92,6 +119,8 @@ pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
     STATUS = 0;
     BLK_OK = false;
     BLK_MARKED = false;
+    INSTALL_WRITTEN = false;
+    INSTALL_MARKED = false;
     core::ptr::write_bytes(disk_phys as *mut u8, 0, disk_bytes);
 }
 
@@ -162,6 +191,27 @@ unsafe fn run_write_readback() {
     }
     if ok {
         BLK_OK = true;
+        // E5: when install-sized (>4KiB), also stamp LBA1 as write proof.
+        if DISK_BYTES >= SECTOR_BYTES * 2 {
+            let lba1 = (DISK_BASE as *mut u32).add(SECTOR_BYTES / 4);
+            core::ptr::write_volatile(lba1, INSTALL_DISK_PATTERN);
+            for i in 1..(SECTOR_BYTES / 4) {
+                core::ptr::write_volatile(lba1.add(i), INSTALL_DISK_PATTERN ^ (i as u32));
+            }
+            let mut iok = core::ptr::read_volatile(lba1) == INSTALL_DISK_PATTERN;
+            if iok {
+                for i in 1..(SECTOR_BYTES / 4) {
+                    if core::ptr::read_volatile(lba1.add(i)) != (INSTALL_DISK_PATTERN ^ (i as u32))
+                    {
+                        iok = false;
+                        break;
+                    }
+                }
+            }
+            if iok {
+                INSTALL_WRITTEN = true;
+            }
+        }
     }
 }
 

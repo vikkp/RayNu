@@ -13,6 +13,20 @@ fn markers_and_magic_stable() {
 }
 
 #[test]
+fn install_sized_disk_writes_lba1_marker() {
+    let mut disk = vec![0u8; 4096];
+    // SAFETY: heap buffer as fake disk HPA.
+    unsafe {
+        init(0x1000_0000, disk.as_mut_ptr() as u64, disk.len());
+    }
+    assert!(mmio_access(0x1000_0000 + OFF_STATUS, true, STATUS_DRIVER_OK).is_some());
+    assert!(blk_ok());
+    assert!(install_disk_written());
+    let lba1 = &disk[512..516];
+    assert_eq!(u32::from_le_bytes(lba1.try_into().unwrap()), INSTALL_DISK_PATTERN);
+}
+
+#[test]
 fn mmio_magic_and_status_handshake() {
     let mut disk = [0u8; 512];
     // SAFETY: stack buffer as fake disk HPA for unit test.

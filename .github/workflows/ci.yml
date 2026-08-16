@@ -555,6 +555,41 @@ jobs:
       - name: M7.7 ISO install scaffold → RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
         run: ./tools/m7-iso-install-smoke.sh
 
+  # M7.7 E5 QEMU lab (isoinstall.txt → 1MiB disk). Soft-pass without nested VT-x.
+  m7-iso-install-qemu:
+    name: M7.7 ISO install QEMU lab
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf
+      - name: M7.7 ISO install QEMU lab smoke
+        run: |
+          if grep -qw vmx /proc/cpuinfo && [[ -r /dev/kvm && -w /dev/kvm ]]; then
+            REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/m7-iso-install-qemu-smoke.sh
+          elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
+            REQUIRE_VMX=0 QEMU_ACCEL=kvm ./tools/m7-iso-install-qemu-smoke.sh
+          else
+            REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/m7-iso-install-qemu-smoke.sh
+          fi
+      - name: Upload E5 ISO install serial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-iso-install-serial
+          path: |
+            target/e5-iso-install-serial.log
+            target/e5-iso-install-qemu-stdout.log
+            target/e5-iso-install-qemu-stderr.log
+          if-no-files-found: ignore
+
   # M7.4: Ops Web UI create-VM + media. Hard-fail.
   m7-ui:
     name: M7.4 Ops UI (UI-OK)

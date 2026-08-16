@@ -4,6 +4,7 @@
 # SERIAL_CHARDEV defaults to stdio; CI sets file:/path/to/log.
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 # ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
+# E5 ISO install lab: ISO_INSTALL_LAB=1 stages isoinstall.txt (1MiB virtio disk).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -80,6 +81,15 @@ if [[ "$EVIDENCE_MODE" == "1" ]]; then
   mkdir -p "$ESP/EFI/RayNu"
   : >"$ESP/EFI/RayNu/paperverbose.txt"
   echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
+fi
+
+# E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).
+ISO_INSTALL_LAB="${ISO_INSTALL_LAB:-0}"
+rm -f "$ESP/isoinstall.txt" "$ESP/EFI/RayNu/isoinstall.txt" 2>/dev/null || true
+if [[ "$ISO_INSTALL_LAB" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/isoinstall.txt"
+  echo "==> E5 ISO install lab: staged $ESP/EFI/RayNu/isoinstall.txt (1MiB disk)"
 fi
 
 FW_ARGS=()

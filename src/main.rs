@@ -80,6 +80,8 @@ fn main() -> Status {
 
     // M7.6 / ADR-012: PRE-EBS Tcp4 mgmt HTTP window (soft-fail → guest path).
     // Tcp4/SNP die at ExitBootServices — concurrent post-EBS listen is a residual.
+    // E5 lab: ESP isoinstall.txt arms 1MiB install disk without curl.
+    r640_hypervisor::mgmt::probe_iso_install_lab_flag();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");

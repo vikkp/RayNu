@@ -86,8 +86,22 @@ pub struct InstallLaunchContract {
 /// Probe-sized virtio-blk backing when no install contract is armed (M4.3).
 pub const PROBE_DISK_BYTES: usize = 4096;
 
-/// Armed across ExitBootServices: set by PRE-EBS `POST /iso/{id}/install`.
+/// QEMU / lab install disk (1 MiB) — keeps contiguous alloc cheap under `-m 512M`.
+/// Iron / REST default remains [`DEFAULT_INSTALL_DISK_BYTES`] (64 MiB).
+pub const LAB_INSTALL_DISK_BYTES: u64 = 1024 * 1024;
+
+/// Serial / CI marker when lab ESP flag armed a 1 MiB install disk.
+pub const M7_ISO_INSTALL_LAB_ARM_NOTE: &str = "boot: E5 lab isoinstall.txt armed (1MiB)";
+
+/// Host writeback proved install-sized disk (LBA1 marker) — not reboot-to-disk.
+pub const M7_ISO_DISK_WRITTEN_MARKER: &str = "RAYNU-V-M7-ISO-DISK-WRITTEN";
+
+/// QEMU lab package close (sized disk + BLK-OK + disk written). Not iron E5.
+pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
+/// Armed across ExitBootServices: set by PRE-EBS `POST /iso/{id}/install` or lab ESP flag.
 static mut ARMED_INSTALL: Option<InstallLaunchContract> = None;
+static mut LAB_ARMED: bool = false;
+static mut DISK_WRITTEN_NOTED: bool = false;
 
 /// Stash launch contract so post-EBS `virtio_blk::init` can size the install disk.
 pub fn arm_install_launch_contract(contract: InstallLaunchContract) {
@@ -114,6 +128,55 @@ pub fn clear_armed_install_contract() {
     // SAFETY: single-threaded boot / mgmt path.
     unsafe {
         ARMED_INSTALL = None;
+        LAB_ARMED = false;
+        DISK_WRITTEN_NOTED = false;
+    }
+}
+
+/// Arm a QEMU-friendly 1 MiB install contract (ESP `isoinstall.txt` lab path).
+pub fn arm_lab_install_contract() {
+    arm_install_launch_contract(InstallLaunchContract {
+        iso_id: 1,
+        extract_bound: true,
+        install_disk_bytes: LAB_INSTALL_DISK_BYTES,
+    });
+    // SAFETY: single-threaded boot.
+    unsafe {
+        LAB_ARMED = true;
+    }
+}
+
+/// True when the lab ESP path armed this boot.
+pub fn lab_install_armed() -> bool {
+    // SAFETY: single-threaded boot.
+    unsafe { LAB_ARMED }
+}
+
+/// Record install-disk write proof (host LBA1 marker after DRIVER_OK).
+pub fn note_install_disk_written() -> bool {
+    if !install_disk_armed_for_launch() {
+        return false;
+    }
+    // SAFETY: single-threaded boot.
+    unsafe {
+        if DISK_WRITTEN_NOTED {
+            return false;
+        }
+        DISK_WRITTEN_NOTED = true;
+    }
+    true
+}
+
+/// Take-once: install disk write was noted this boot.
+pub fn take_install_disk_written_latch() -> bool {
+    // SAFETY: single-threaded boot.
+    unsafe {
+        if DISK_WRITTEN_NOTED {
+            DISK_WRITTEN_NOTED = false;
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -134,6 +197,79 @@ pub fn disk_bytes_for_virtio_launch() -> usize {
 /// True when launch will use an install-sized disk (not the 4 KiB probe).
 pub fn install_disk_armed_for_launch() -> bool {
     disk_bytes_for_virtio_launch() > PROBE_DISK_BYTES
+}
+
+/// Probe ESP for `isoinstall.txt` (lab arm without PRE-EBS curl).
+///
+/// Paths: `\\EFI\\RayNu\\isoinstall.txt` then `\\isoinstall.txt`.
+/// Must run **before** ExitBootServices.
+#[cfg(target_os = "uefi")]
+pub fn probe_iso_install_lab_flag() {
+    use crate::boot::serial;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    let present = flag_present(&mut fs, "\\EFI\\RayNu\\isoinstall.txt")
+        || flag_present(&mut fs, "\\isoinstall.txt");
+    if present {
+        arm_lab_install_contract();
+        serial::write_line(M7_ISO_INSTALL_LAB_ARM_NOTE);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn flag_present(fs: &mut uefi::fs::FileSystem, path: &str) -> bool {
+    use uefi::CString16;
+    let Ok(p) = CString16::try_from(path) else {
+        return false;
+    };
+    fs.read(p.as_ref()).is_ok()
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_iso_install_lab_flag() {}
+
+/// Host package: lab arm sizes launch disk to 1 MiB; iron default still 64 MiB via REST.
+pub fn prop_iso_install_lab_package() -> bool {
+    clear_armed_install_contract();
+    if disk_bytes_for_virtio_launch() != PROBE_DISK_BYTES {
+        return false;
+    }
+    arm_lab_install_contract();
+    if !lab_install_armed() {
+        return false;
+    }
+    if disk_bytes_for_virtio_launch() != LAB_INSTALL_DISK_BYTES as usize {
+        return false;
+    }
+    if !note_install_disk_written() {
+        return false;
+    }
+    if !take_install_disk_written_latch() {
+        return false;
+    }
+    let smoke = include_str!("../tools/m7-iso-install-qemu-smoke.sh");
+    let runbook = include_str!("../docs/runbooks/iso_install.md");
+    let ok = smoke.contains(M7_ISO_INSTALL_LAB_OK_MARKER)
+        && smoke.contains("ISO_INSTALL_LAB")
+        && smoke.contains("isoinstall.txt")
+        && smoke.contains(M7_ISO_DISK_WRITTEN_MARKER)
+        && smoke.contains("never print iron marker")
+        && runbook.contains("isoinstall.txt")
+        && runbook.contains("1MiB")
+        && LAB_INSTALL_DISK_BYTES == 1024 * 1024
+        && M7_ISO_DISK_WRITTEN_MARKER == crate::devices::virtio_blk::M7_ISO_DISK_WRITTEN_MARKER
+        && M7_ISO_INSTALL_LAB_OK_MARKER == crate::devices::virtio_blk::M7_ISO_INSTALL_LAB_OK_MARKER
+        && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
+        && include_str!("../tools/run-qemu.sh").contains("ISO_INSTALL_LAB")
+        && include_str!("../vmx/launch.rs").contains("M7_ISO_DISK_WRITTEN_MARKER");
+    clear_armed_install_contract();
+    ok
 }
 
 /// Build launch contract from a ready M7.3 deploy plan.
