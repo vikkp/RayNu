@@ -5,9 +5,13 @@ STATUS=closed
 # Iron M7.6 / ADR-012 closed (2026-08-16) — SNP residual HTTP on R640:
 #   docs/evidence/r640/2026-08-16-uefi-http-ok.md
 #   logs/2026-08-16-uefi-http-ok-com2.txt
+#   logs/2026-08-16-uefi-http-ok-curl.txt
+#   Kit: releases/v0.1.0-m76-snp-http/ (git b59927e rebuild)
+#   EFI SHA256 5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262
 #   Observed: listening on 10.99.99.127:8443 then RAYNU-V-M7-UEFI-HTTP-OK
 #   Path: ConnectController → SNP → smoltcp DHCP/TCP (Tcp4 absent on floppy)
 #   Same boot still printed RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF
+#   Note: iron floppy was pre-8c4352d (no CURL NOW); later tip has 45s window+ICMP
 #
 # Substance close E2 (SHELL→M4→VMXOFF): releases/v0.1.0-xsavesfix/
 #   EFI SHA256 c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611

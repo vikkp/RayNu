@@ -1,0 +1,11 @@
+RayNu-V EFI release kit
+Version: 0.1.0-m76-snp-http (git b59927e)
+Marker: RAYNU-V-M7-UEFI-HTTP-OK
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Evidence: docs/evidence/r640/2026-08-16-uefi-http-ok.md
