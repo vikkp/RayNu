@@ -260,3 +260,5 @@ Do not pull M8 into M7 gate lists.
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
 **Honesty:** Mount Everest residual is durable post-EBS mgmt HTTP (SNP+smoltcp), then remaining E4 polish + a real distro installer. Do not chase firmware Tcp4. El Torito / TLS / guest console wait until post-EBS listen works.
+
+**Next (this tree):** park SNP across EBS → probe after `leave_firmware` → idle listen after VMXOFF (`RAYNU-V-M7-POST-EBS-HTTP-OK` on iron when an exchange lands).

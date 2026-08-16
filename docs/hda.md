@@ -256,10 +256,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | Public site/HDA: E5 stamps closed; next = post-EBS SNP HTTP |
-| Summary | Cruzer story + residual copy; CI fixture/test race; `STATUS-iso-install=closed` held |
-| Everest impact | none (copy + CI); months 0.5 / overall 88 / iso 82 held |
-| Gates touched | none new; `BOOTED-FROM-DISK` already claimed |
+| Commit | Wire post-EBS SNP HTTP (park + probe + idle); scaffold only |
+| Summary | Leak SNP session across EBS; TSC poll after VMXOFF; PRE-EBS fallback held |
+| Everest impact | none yet (iron POST-EBS-HTTP-OK open); months 0.5 / overall 88 held |
+| Gates touched | `RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK` host; iron marker not claimed |
 | Months Δ | 0.5 held |
 
 ---
@@ -282,6 +282,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | post-ebs-http-wire | 0.5 | 88 | Park SNP across EBS; scaffold POST-EBS-HTTP; iron listen open |
 | 2026-08-16 | e5-site-residual | 0.5 | 88 | Public residual: post-EBS SNP HTTP next; Cruzer story; E5 stamps held |
 | 2026-08-16 | e5-iron-booted | 0.5 | 88 | Iron `BOOTED-FROM-DISK`; M7.7 stamp persist closed; iso~82% |
 | 2026-08-16 | e5-persist-prefix | 0.75 | 84 | Iron persist-detect; prefix-copy so 1KiB stamps load into 64MiB disk |

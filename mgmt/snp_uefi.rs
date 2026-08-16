@@ -1,7 +1,10 @@
 //! EFI Simple Network Protocol helpers for M7.6 SNP residual (ADR-012).
 //!
 //! Pillar: [Z] · Proven Core: **outside**
-//! Boot Services only — must not be used after ExitBootServices.
+//!
+//! Open/Start/Initialize use Boot Services. After ExitBootServices the
+//! protocol pointer may still drive UNDI/MMIO Transmit/Receive — that is the
+//! post-EBS residual (soft-fail if it does not). Never `locate_handle` after EBS.
 
 #![cfg(feature = "uefi-bin")]
 

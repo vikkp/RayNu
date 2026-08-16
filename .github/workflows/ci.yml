@@ -637,6 +637,19 @@ jobs:
       - name: M7.6 UEFI HTTP scaffold smoke → RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK
         run: ./tools/m7-uefi-http-smoke.sh
 
+  # Post-EBS SNP HTTP listen scaffold. Does NOT claim RAYNU-V-M7-POST-EBS-HTTP-OK.
+  m7-post-ebs-http:
+    name: Post-EBS HTTP scaffold (SCAFFOLD-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: Post-EBS HTTP scaffold smoke → RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK
+        run: ./tools/m7-post-ebs-http-smoke.sh
+
   # Boot media maker (FAT img for iDRAC/USB). Hard-fail on layout smoke.
   boot-media:
     name: Boot media maker (BOOT-MEDIA-OK)

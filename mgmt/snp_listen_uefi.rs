@@ -104,7 +104,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     write_u32_dec(SNP_POST_BIND_LISTEN_MS as u32);
     serial::write_byte(b'\n');
     serial::write_line(
-        "boot: HINT — Mac must be on lease subnet; curl during window only (pre-EBS)",
+        "boot: HINT — Mac must be on lease subnet; curl PRE-EBS window, then again after BOOT-OK (post-EBS SNP)",
     );
     crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
@@ -225,12 +225,215 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         millis += 1;
     }
 
+    // Keep the TCP socket listening so a parked session can accept after EBS.
+    {
+        let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+        if !sock.is_open() || (!sock.is_active() && !sock.is_listening()) {
+            let _ = sock.listen(port);
+        }
+    }
+
+    park_snp_http(ParkedSnpHttp {
+        device,
+        iface,
+        sockets,
+        tcp_handle,
+        ip,
+        port,
+        millis,
+    });
+
     if served == 0 {
         return Err(MgmtListenError::AcceptFailed);
     }
 
     serial::write_line(M7_UEFI_HTTP_OK_MARKER);
     Ok(())
+}
+
+struct ParkedSnpHttp {
+    device: SnpDevice,
+    iface: Interface,
+    sockets: SocketSet<'static>,
+    tcp_handle: smoltcp::iface::SocketHandle,
+    ip: Ipv4Address,
+    port: u16,
+    millis: i64,
+}
+
+static mut PARKED_HTTP: Option<&'static mut ParkedSnpHttp> = None;
+
+fn park_snp_http(session: ParkedSnpHttp) {
+    let leaked: &'static mut ParkedSnpHttp = alloc::boxed::Box::leak(alloc::boxed::Box::new(session));
+    // SAFETY: single-threaded boot; leaked so Drop never CloseProtocol after EBS.
+    unsafe {
+        PARKED_HTTP = Some(leaked);
+    }
+    serial::write_line("boot: SNP parked for post-EBS (protocol not closed)");
+}
+
+fn parked_http() -> Option<&'static mut ParkedSnpHttp> {
+    unsafe { PARKED_HTTP.as_deref_mut() }
+}
+
+/// ~1 ms spin without Boot Services (`stall` is invalid after EBS).
+/// R640 Gold 6130 ~2.1 GHz; extra spin is harmless.
+fn tsc_delay_ms(ms: u32) {
+    let ticks = (ms as u64).saturating_mul(2_100_000);
+    let start = crate::arch::cpu::rdtsc();
+    while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
+        core::hint::spin_loop();
+    }
+}
+
+/// One SNP receive after ExitBootServices. Soft-fail if nothing was parked.
+pub fn uefi_snp_post_ebs_probe() {
+    let Some(s) = parked_http() else {
+        serial::write_line("boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)");
+        return;
+    };
+    let ts = Instant::from_millis(s.millis);
+    let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
+    serial::write_str("boot: post-EBS SNP probe ok lease=");
+    write_ipv4(s.ip);
+    serial::write_byte(b':');
+    write_u16_dec(s.port);
+    serial::write_byte(b'\n');
+}
+
+/// Durable SNP+smoltcp HTTP after VMXOFF (iron idle). Does not allocate.
+///
+/// Prints [`M7_POST_EBS_HTTP_OK_MARKER`] after the first post-EBS exchange.
+/// Soft-returns if SNP was not parked.
+pub fn uefi_snp_post_ebs_idle() {
+    use crate::mgmt::http_listen::M7_POST_EBS_HTTP_OK_MARKER;
+
+    let Some(s) = parked_http() else {
+        return;
+    };
+
+    serial::write_str("boot: mgmt HTTP listening on ");
+    write_ipv4(s.ip);
+    serial::write_byte(b':');
+    write_u16_dec(s.port);
+    serial::write_line(" (POST-EBS SNP idle)");
+    serial::write_str("boot: CURL NOW (post-EBS) → http://");
+    write_ipv4(s.ip);
+    serial::write_byte(b':');
+    write_u16_dec(s.port);
+    serial::write_line("/");
+
+    {
+        let sock = s.sockets.get_mut::<tcp::Socket>(s.tcp_handle);
+        if !sock.is_open() || (!sock.is_active() && !sock.is_listening()) {
+            let _ = sock.listen(s.port);
+        }
+    }
+
+    let mut served: u32 = 0;
+    let mut announced_accept = false;
+    let mut rx_acc = [0u8; 8192];
+    let mut rx_len: usize = 0;
+    let mut last_remind = s.millis;
+    let mut printed_ok = false;
+
+    loop {
+        s.millis = s.millis.saturating_add(1);
+        let ts = Instant::from_millis(s.millis);
+        let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
+
+        let mut do_close = false;
+        let mut did_exchange = false;
+
+        {
+            let sock = s.sockets.get_mut::<tcp::Socket>(s.tcp_handle);
+            if !sock.is_open() {
+                rx_len = 0;
+                announced_accept = false;
+                let _ = sock.listen(s.port);
+            } else if !sock.is_active() && !sock.is_listening() {
+                let _ = sock.listen(s.port);
+            }
+
+            if sock.is_active() && !announced_accept {
+                serial::write_line("boot: SNP TCP accept — client connected (post-EBS)");
+                announced_accept = true;
+                rx_len = 0;
+            }
+
+            if sock.can_recv() {
+                let mut chunk = [0u8; 2048];
+                if let Ok(n) = sock.recv_slice(&mut chunk) {
+                    if n > 0 {
+                        let copy = n.min(rx_acc.len().saturating_sub(rx_len));
+                        rx_acc[rx_len..rx_len + copy].copy_from_slice(&chunk[..copy]);
+                        rx_len += copy;
+                    }
+                }
+            }
+
+            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+
+            if headers_done && sock.can_send() {
+                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
+                let mut out = [0u8; 16384];
+                let wn = unsafe {
+                    crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+                        handle_http_request(
+                            &mut m.vms,
+                            &mut m.images,
+                            &mut m.iso_plan,
+                            &mut m.iso_install,
+                            raw,
+                            &mut out,
+                        )
+                    })
+                }
+                .unwrap_or(0);
+                if wn > 0 {
+                    let _ = sock.send_slice(&out[..wn]);
+                    did_exchange = true;
+                    do_close = true;
+                }
+            }
+        }
+
+        if did_exchange {
+            served = served.saturating_add(1);
+            serial::write_line("boot: SNP HTTP exchange ok (post-EBS)");
+            if !printed_ok {
+                serial::write_line(M7_POST_EBS_HTTP_OK_MARKER);
+                printed_ok = true;
+            }
+            for _ in 0..50 {
+                s.millis = s.millis.saturating_add(1);
+                let ts = Instant::from_millis(s.millis);
+                let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
+                tsc_delay_ms(1);
+            }
+        }
+
+        if do_close {
+            s.sockets.get_mut::<tcp::Socket>(s.tcp_handle).close();
+            rx_len = 0;
+            announced_accept = false;
+        }
+
+        if s.millis.wrapping_sub(last_remind) >= 15_000 {
+            last_remind = s.millis;
+            serial::write_str("boot: post-EBS waiting curl http://");
+            write_ipv4(s.ip);
+            serial::write_byte(b':');
+            write_u16_dec(s.port);
+            serial::write_str("/  served=");
+            write_u32_dec(served);
+            serial::write_byte(b'\n');
+        }
+
+        let ts2 = Instant::from_millis(s.millis);
+        let _ = s.iface.poll(ts2, &mut s.device, &mut s.sockets);
+        tsc_delay_ms(1);
+    }
 }
 
 fn mac_seed(mac: [u8; 6]) -> u64 {

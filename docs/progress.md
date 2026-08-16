@@ -147,6 +147,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| Everest residual | post-EBS HTTP + E4 + distro | SNP listen after EBS first; TLS/console later; distro installer later |
+| Post-EBS HTTP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | SNP+smoltcp SPA/REST after EBS (scaffold host; iron open) |
+| Everest residual | E4 polish + distro | TLS/console later; distro installer later (after post-EBS listen) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
