@@ -25,6 +25,50 @@ const THR_WAIT_SPINS: u32 = 200_000;
 static mut COM1_LIVE: bool = true;
 static mut COM2_LIVE: bool = true;
 
+/// E4: host serial log ring for SPA / `GET /logs/serial` (not a guest console).
+pub const SERIAL_LOG_CAP: usize = 4096;
+static mut LOG_BUF: [u8; SERIAL_LOG_CAP] = [0; SERIAL_LOG_CAP];
+static mut LOG_HEAD: usize = 0;
+static mut LOG_LEN: usize = 0;
+
+fn log_push(byte: u8) {
+    // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
+    unsafe {
+        let idx = (LOG_HEAD + LOG_LEN) % SERIAL_LOG_CAP;
+        if LOG_LEN < SERIAL_LOG_CAP {
+            LOG_BUF[idx] = byte;
+            LOG_LEN += 1;
+        } else {
+            LOG_BUF[LOG_HEAD] = byte;
+            LOG_HEAD = (LOG_HEAD + 1) % SERIAL_LOG_CAP;
+        }
+    }
+}
+
+/// Copy the current serial log ring into `out` (oldest → newest). Returns bytes written.
+pub fn serial_log_snapshot(out: &mut [u8]) -> usize {
+    unsafe {
+        let n = LOG_LEN.min(out.len());
+        for i in 0..n {
+            out[i] = LOG_BUF[(LOG_HEAD + i) % SERIAL_LOG_CAP];
+        }
+        n
+    }
+}
+
+/// Bytes currently retained in the serial log ring.
+pub fn serial_log_len() -> usize {
+    unsafe { LOG_LEN }
+}
+
+/// Clear the serial log ring (tests / new listen window).
+pub fn serial_log_clear() {
+    unsafe {
+        LOG_HEAD = 0;
+        LOG_LEN = 0;
+    }
+}
+
 /// Initialize COM1 + COM2 to 115200 8N1.
 ///
 /// # Safety
@@ -59,15 +103,24 @@ pub fn write_byte(byte: u8) {
     // Translate `\n` → `\r\n` for typical serial terminals.
     if byte == b'\n' {
         write_raw(b'\r');
+        log_push(b'\r');
     }
     write_raw(byte);
+    log_push(byte);
 }
 
 fn write_raw(byte: u8) {
-    // SAFETY: single-threaded boot / post-EBS HV; flags only cleared here.
-    unsafe {
-        write_raw_port(COM1, byte, &mut COM1_LIVE);
-        write_raw_port(COM2, byte, &mut COM2_LIVE);
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: single-threaded boot / post-EBS HV; flags only cleared here.
+        unsafe {
+            write_raw_port(COM1, byte, &mut COM1_LIVE);
+            write_raw_port(COM2, byte, &mut COM2_LIVE);
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = byte; // host/unit-test: no port I/O; log ring still records
     }
 }
 
@@ -179,5 +232,18 @@ mod serial_test {
         let s = include_str!("serial.rs");
         assert!(s.contains("console com2"));
         assert!(s.contains("COM2"));
+    }
+
+    #[test]
+    fn serial_log_ring_retains_writes() {
+        serial_log_clear();
+        write_str("E4-LOG");
+        write_byte(b'\n');
+        let mut buf = [0u8; 32];
+        let n = serial_log_snapshot(&mut buf);
+        assert!(n >= 6);
+        assert_eq!(&buf[..6], b"E4-LOG");
+        serial_log_clear();
+        assert_eq!(serial_log_len(), 0);
     }
 }

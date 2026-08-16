@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: 2495105ba7dd1560e4815a4b40d0b0f36f4b76ad
-last_commit_short: 2495105
+last_commit: 494cf25835df99cc6f43b9fca353e67a650598eb
+last_commit_short: 494cf25
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
 months_to_everest_prev: 0.75
 velocity_commits_30d: 345
 velocity_gates_30d: 18
-overall_pct: 80
+overall_pct: 81
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,7 +17,7 @@ everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 78
+summit_ui_pct: 82
 summit_iso_pct: 55
 summit_prod_pct: 100
 ---
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **80%** | +1 (E5 QEMU two-boot lab) |
+| **Overall product readiness** | **81%** | +1 (E4 SPA/log/auth polish) |
 | **Months to Mount Everest** | **0.75** | held (lab ≠ iron E5) |
 | **ETA month** | **2026-09** | held |
 | **Confidence** | medium | E2+E3 COM2 green; E5 iron still open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~78% | M7.6 iron HTTP OK; TLS/console/post-EBS residual |
+| **vSphere-like UI (network)** | ~82% | E4 polish: durable PRE-EBS + serial log + ESP auth; TLS residual |
 | **Deploy Linux ISO** | ~55% | QEMU lab BootedFromDisk; iron install-to-disk open |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
 Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.75 mo  (was 1.25)
-Overall %          ███████████████░░░░░  79%
+Overall %          ████████████████░░░░  81%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -114,10 +114,12 @@ All must be true (no hand-waving):
 | HTTP/1.1 codec + Bearer wire | DONE | `mgmt/http.rs` (M7.1 Latitude) |
 | Host TCP proof (loopback) | DONE | `mgmt/http_listen.rs` (M7.1 Latitude) |
 | Create-VM fields (CPU/RAM/disk/ISO) | DONE (host) | M7.4 SPA + `POST /vms/{id}/spec/...` Latitude smoke |
-| Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` |
+| Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` + install |
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
+| PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
-| Guest console / serial log UI | MISSING | residual |
+| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
+| Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up when present |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 
@@ -278,6 +280,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e4-iron-mvp | 0.75 | 81 | E4: durable PRE-EBS mgmt + /logs/serial + ESP auth.token; ui~82% |
 | 2026-08-16 | e5-booted-from-disk | 0.75 | 80 | QEMU lab two-boot → BOOTED-FROM-DISK; iso~55%; iron E5 still open |
 | 2026-08-16 | e5-iso-scaffold | 0.75 | 79 | M7.7 ISO install-to-disk scaffold; iso~45%; E5 iron still open |
 | 2026-08-16 | uefi-http-ok | 0.75 | 78 | E3 MVP CLOSED: `RAYNU-V-M7-UEFI-HTTP-OK` on R640 SNP residual; ui~78% |
@@ -306,7 +309,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
 Months left:   0.75  (ETA ~ 2026-09)
-Next move:     E5 iron install-to-disk + E4 vSphere polish; TLS/post-EBS optional
+Next move:     Prove E4 on R640 PRE-EBS (SPA create/log/auth) → then E5 iron
 Do not claim:  Mount Everest until E4–E5 green
 ```
 

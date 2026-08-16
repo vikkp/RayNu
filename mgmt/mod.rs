@@ -284,6 +284,7 @@ pub mod api;
 pub mod datastore;
 pub mod iso;
 pub mod iso_install;
+pub mod pre_ebs_mgmt;
 pub mod ext;
 pub mod fault;
 pub mod ha;
@@ -318,10 +319,11 @@ pub mod soak;
 pub mod webui;
 
 pub use api::{
-    dispatch_cli, dispatch_rest, parse_cli, parse_rest_method, prop_auth_deny_allow,
-    prop_cli_rest_roundtrip, ApiReply, CliCommand, RestMethod, RestRequest, RestResponse,
-    AUTH_GAP_NOTE, BRINGUP_AUTH_TOKEN, M6_AUTH_OK_MARKER,
+    clear_operator_token, dispatch_cli, dispatch_rest, parse_cli, parse_rest_method,
+    prop_auth_deny_allow, prop_cli_rest_roundtrip, set_operator_token, ApiReply, CliCommand,
+    RestMethod, RestRequest, RestResponse, AUTH_GAP_NOTE, BRINGUP_AUTH_TOKEN, M6_AUTH_OK_MARKER,
 };
+pub use pre_ebs_mgmt::{prop_pre_ebs_mgmt_durable, reset_pre_ebs_mgmt};
 pub use ext::{
     prop_external_audit_package, prop_findings_no_open_critical, prop_spec_review_filed,
     EXT_GAP_NOTE, M6_EXT_OK_MARKER,

@@ -36,8 +36,8 @@ pub const PRE_EBS_LISTEN_TIMEOUT_MS: u64 = 15_000;
 /// read SOL IP and curl from a laptop — DHCP already consumed wall-clock.
 pub const SNP_POST_BIND_LISTEN_MS: u64 = 45_000;
 
-/// Max HTTP exchanges to serve in the PRE-EBS window.
-pub const PRE_EBS_MAX_EXCHANGES: u32 = 8;
+/// Max HTTP exchanges to serve in the PRE-EBS window (SPA multi-fetch).
+pub const PRE_EBS_MAX_EXCHANGES: u32 = 24;
 
 /// Why firmware cannot bind / serve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +92,7 @@ pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
 pub fn run_pre_ebs_mgmt_listen() -> bool {
     #[cfg(feature = "uefi-bin")]
     {
+        crate::mgmt::api::probe_operator_auth_token();
         crate::mgmt::net_probe_uefi::probe_and_print();
     }
 
@@ -231,6 +232,7 @@ fn uefi_tcp4_listen(port: u16) -> Result<(), MgmtListenError> {
     serial::write_str("boot: mgmt HTTP listening on 0.0.0.0:");
     write_port_dec(port);
     serial::write_line(" (PRE-EBS Tcp4 window)");
+    crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
     let mut served: u32 = 0;
     let mut ticks_left = PRE_EBS_LISTEN_TIMEOUT_MS;
@@ -363,19 +365,19 @@ fn serve_one_tcp4_exchange(
     let n = (rx_data.data_length as usize).min(rx_buf.len());
     let raw = core::str::from_utf8(&rx_buf[..n]).unwrap_or("");
 
-    let mut table = VmTable::new();
-    let mut images = ImageTable::new();
-    let mut iso_plan = IsoDeployPlan::empty();
-    let mut iso_install = InstallToDiskPlan::empty();
     let mut out = [0u8; 16384];
-    let wn = handle_http_request(
-        &mut table,
-        &mut images,
-        &mut iso_plan,
-        &mut iso_install,
-        raw,
-        &mut out,
-    )
+    let wn = unsafe {
+        crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+            handle_http_request(
+                &mut m.vms,
+                &mut m.images,
+                &mut m.iso_plan,
+                &mut m.iso_install,
+                raw,
+                &mut out,
+            )
+        })
+    }
     .unwrap_or(0);
     if wn == 0 {
         return Err(MgmtListenError::ServeFailed);

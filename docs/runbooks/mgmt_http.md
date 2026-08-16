@@ -30,7 +30,17 @@ Authorization: Bearer raynu-v-bringup
 ```
 
 - SPA (`GET /`) — no auth (page load).
-- REST — M6.4 token required; missing/wrong → `401`.
+- REST — Bearer required; missing/wrong → `401`.
+- **E4 operator token:** if ESP `EFI/RayNu/auth.token` is present at PRE-EBS,
+  that secret is required and the bring-up token is **rejected**.
+- Without `auth.token`, lab bring-up token remains valid (host CI / QEMU).
+
+Also available during PRE-EBS:
+
+| Path | Notes |
+|------|--------|
+| `GET /logs/serial` | Host UART log ring (Bearer); SPA “Host serial log” panel |
+| Durable tables | Shared `pre_ebs_mgmt` across exchanges (create survives Refresh) |
 
 Lab uses **plaintext HTTP** (TLS deferred — ADR-003/009/012).
 

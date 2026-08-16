@@ -53,6 +53,7 @@ pub fn run_m6_auth_gate() -> bool {
         && auth_scripts_present()
         && prop_auth_deny_allow()
         && AUTH_TOKEN_SOURCE_NOTE.contains("BRINGUP_AUTH_TOKEN")
+        && AUTH_TOKEN_SOURCE_NOTE.contains("auth.token")
         && BRINGUP_AUTH_TOKEN == "raynu-v-bringup"
 }
 

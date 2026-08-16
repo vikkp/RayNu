@@ -6,15 +6,11 @@
 #![cfg(feature = "uefi-bin")]
 
 use crate::boot::serial;
-use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::http::handle_http_request;
 use crate::mgmt::http_listen::{
     MgmtListenError, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS, M7_UEFI_HTTP_OK_MARKER,
 };
-use crate::mgmt::iso::IsoDeployPlan;
-use crate::mgmt::iso_install::InstallToDiskPlan;
 use crate::mgmt::snp_uefi::{open_first_snp, SnpDevice};
-use crate::mgmt::VmTable;
 use smoltcp::iface::{Config, Interface, SocketSet};
 use smoltcp::socket::{dhcpv4, tcp};
 use smoltcp::time::Instant;
@@ -110,6 +106,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     serial::write_line(
         "boot: HINT — Mac must be on lease subnet; curl during window only (pre-EBS)",
     );
+    crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
     let tcp_rx = tcp::SocketBuffer::new(alloc::vec![0u8; 8192]);
     let tcp_tx = tcp::SocketBuffer::new(alloc::vec![0u8; 16384]);
@@ -168,19 +165,19 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
 
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let mut table = VmTable::new();
-                let mut images = ImageTable::new();
-                let mut iso_plan = IsoDeployPlan::empty();
-                let mut iso_install = InstallToDiskPlan::empty();
                 let mut out = [0u8; 16384];
-                let wn = handle_http_request(
-                    &mut table,
-                    &mut images,
-                    &mut iso_plan,
-                    &mut iso_install,
-                    raw,
-                    &mut out,
-                )
+                let wn = unsafe {
+                    crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+                        handle_http_request(
+                            &mut m.vms,
+                            &mut m.images,
+                            &mut m.iso_plan,
+                            &mut m.iso_install,
+                            raw,
+                            &mut out,
+                        )
+                    })
+                }
                 .unwrap_or(0);
                 if wn > 0 {
                     let _ = sock.send_slice(&out[..wn]);

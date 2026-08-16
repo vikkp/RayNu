@@ -118,7 +118,145 @@ fn status_text(code: u16) -> &'static str {
     }
 }
 
+fn state_str(state: crate::mgmt::VmLifecycle) -> &'static str {
+    match state {
+        crate::mgmt::VmLifecycle::Defined => "defined",
+        crate::mgmt::VmLifecycle::Running => "running",
+        crate::mgmt::VmLifecycle::Stopped => "stopped",
+        crate::mgmt::VmLifecycle::Destroyed => "destroyed",
+    }
+}
+
+/// Format JSON reply into `buf`; returns the UTF-8 slice written.
+fn format_reply_json<'a>(reply: Option<ApiReply>, buf: &'a mut [u8]) -> &'a [u8] {
+    let s: &str = match reply {
+        Some(ApiReply::Ok) => "{\"ok\":true}",
+        Some(ApiReply::Listed { count }) => {
+            // Fixed template with count digits.
+            let mut tmp = [0u8; 48];
+            let prefix = b"{\"ok\":true,\"listed\":true,\"count\":";
+            let mut i = 0;
+            tmp[i..i + prefix.len()].copy_from_slice(prefix);
+            i += prefix.len();
+            i += write_usize_digits(&mut tmp[i..], count);
+            tmp[i] = b'}';
+            i += 1;
+            let n = i.min(buf.len());
+            buf[..n].copy_from_slice(&tmp[..n]);
+            return &buf[..n];
+        }
+        Some(ApiReply::Record {
+            guest_id,
+            state,
+            cpu,
+            ram_mib,
+            disk_mib,
+            iso_id,
+        }) => {
+            let st = state_str(state);
+            // {"ok":true,"record":true,"guest_id":N,"state":"...","cpu":N,"ram_mib":N,"disk_mib":N,"iso_id":N,"nics":1}
+            let mut tmp = [0u8; 192];
+            let mut i = 0;
+            macro_rules! push {
+                ($bytes:expr) => {{
+                    let b = $bytes;
+                    let n = b.len().min(tmp.len().saturating_sub(i));
+                    tmp[i..i + n].copy_from_slice(&b[..n]);
+                    i += n;
+                }};
+            }
+            push!(b"{\"ok\":true,\"record\":true,\"guest_id\":");
+            i += write_u64_digits(&mut tmp[i..], guest_id);
+            push!(b",\"state\":\"");
+            push!(st.as_bytes());
+            push!(b"\",\"cpu\":");
+            i += write_usize_digits(&mut tmp[i..], cpu as usize);
+            push!(b",\"ram_mib\":");
+            i += write_u64_digits(&mut tmp[i..], ram_mib as u64);
+            push!(b",\"disk_mib\":");
+            i += write_u64_digits(&mut tmp[i..], disk_mib as u64);
+            push!(b",\"iso_id\":");
+            i += write_u64_digits(&mut tmp[i..], iso_id);
+            push!(b",\"nics\":1}");
+            let n = i.min(buf.len());
+            buf[..n].copy_from_slice(&tmp[..n]);
+            return &buf[..n];
+        }
+        Some(ApiReply::Image {
+            id,
+            kind_tag,
+            size_bytes,
+        }) => {
+            let mut tmp = [0u8; 96];
+            let mut i = 0;
+            let p1 = b"{\"ok\":true,\"image\":true,\"id\":";
+            tmp[i..i + p1.len()].copy_from_slice(p1);
+            i += p1.len();
+            i += write_u64_digits(&mut tmp[i..], id);
+            let p2 = b",\"kind\":";
+            tmp[i..i + p2.len()].copy_from_slice(p2);
+            i += p2.len();
+            i += write_usize_digits(&mut tmp[i..], kind_tag as usize);
+            let p3 = b",\"size_bytes\":";
+            tmp[i..i + p3.len()].copy_from_slice(p3);
+            i += p3.len();
+            i += write_u64_digits(&mut tmp[i..], size_bytes);
+            tmp[i] = b'}';
+            i += 1;
+            let n = i.min(buf.len());
+            buf[..n].copy_from_slice(&tmp[..n]);
+            return &buf[..n];
+        }
+        None => "",
+    };
+    let b = s.as_bytes();
+    let n = b.len().min(buf.len());
+    buf[..n].copy_from_slice(&b[..n]);
+    &buf[..n]
+}
+
+fn write_usize_digits(out: &mut [u8], mut v: usize) -> usize {
+    if out.is_empty() {
+        return 0;
+    }
+    if v == 0 {
+        out[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut i = 20;
+    while v > 0 && i > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    let n = (20 - i).min(out.len());
+    out[..n].copy_from_slice(&tmp[i..i + n]);
+    n
+}
+
+fn write_u64_digits(out: &mut [u8], mut v: u64) -> usize {
+    if out.is_empty() {
+        return 0;
+    }
+    if v == 0 {
+        out[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut i = 20;
+    while v > 0 && i > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    let n = (20 - i).min(out.len());
+    out[..n].copy_from_slice(&tmp[i..i + n]);
+    n
+}
+
 fn reply_body(reply: Option<ApiReply>) -> &'static str {
+    // Legacy static paths for Ok / empty — dynamic Record/Listed use format_reply_json.
     match reply {
         Some(ApiReply::Ok) => "{\"ok\":true}",
         Some(ApiReply::Listed { .. }) => "{\"ok\":true,\"listed\":true}",
@@ -250,6 +388,18 @@ pub fn handle_http_request(
         let body = webui_raw_bytes();
         return format_http_response(200, "text/html; charset=utf-8", body, out);
     }
+    // E4: host serial log tail (Bearer). Not a guest console.
+    if parsed.path == "/logs/serial" {
+        if !matches!(parsed.method, RestMethod::Get) {
+            return format_http_response(400, "text/plain; charset=utf-8", b"bad request", out);
+        }
+        if !auth_allows(parsed.auth_token) {
+            return format_http_response(401, "text/plain; charset=utf-8", b"unauthorized", out);
+        }
+        let mut log = [0u8; crate::boot::serial::SERIAL_LOG_CAP];
+        let n = crate::boot::serial::serial_log_snapshot(&mut log);
+        return format_http_response(200, "text/plain; charset=utf-8", &log[..n], out);
+    }
     let req = RestRequest {
         method: parsed.method,
         path: parsed.path,
@@ -266,13 +416,19 @@ pub fn handle_http_request(
     } else {
         dispatch_rest(table, req)
     };
-    let body = reply_body(resp.reply);
+    let mut json_buf = [0u8; 256];
+    let body = match resp.reply {
+        Some(ApiReply::Record { .. })
+        | Some(ApiReply::Listed { .. })
+        | Some(ApiReply::Image { .. }) => format_reply_json(resp.reply, &mut json_buf),
+        other => reply_body(other).as_bytes(),
+    };
     let ctype = if body.is_empty() {
         "text/plain; charset=utf-8"
     } else {
         "application/json"
     };
-    format_http_response(resp.status, ctype, body.as_bytes(), out)
+    format_http_response(resp.status, ctype, body, out)
 }
 
 /// True when HTTP package props hold (codec + auth wire + SPA + gap).

@@ -1,10 +1,10 @@
-//! M7.4 Ops Web UI MVP (outside Proven Core).
+//! M7.4 / E4 Ops Web UI MVP (outside Proven Core).
 //!
 //! Pillar: [Z] [A]
 //! Proven Core: **outside** (ADR-009)
 //!
-//! Create-VM fields (CPU/RAM/disk/ISO) + media list/deploy wiring in the
-//! embedded SPA. Console/TLS/firmware NIC remain residual.
+//! Create-VM fields (CPU/RAM/disk/ISO) + media list/deploy + host serial log
+//! in the embedded SPA. TLS / El Torito remain residual.
 
 use super::api::{dispatch_rest, prop_cli_rest_roundtrip, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 use super::webui::{prop_webui_list_start_stop, webui_html_wires_api, webui_present};
@@ -16,9 +16,9 @@ pub const M7_UI_OK_MARKER: &str = "RAYNU-V-M7-UI-OK";
 /// Network create-VM + ISO UI GAP closed in M7.4.
 pub const UI_GAP_NOTE: &str = "GAP(CLOSED M7.4): Network create-VM + ISO UI";
 
-/// Honest residual note (console / TLS / firmware NIC).
+/// Honest residual note (TLS / El Torito; console = host serial log MVP).
 pub const UI_RESIDUAL_NOTE: &str =
-    "residual: console/serial UI, TLS, firmware NIC listen (lab HTTP + host smoke)";
+    "residual: TLS, El Torito/CD-ROM; host serial log MVP (not guest console)";
 
 /// True when create-with-spec REST path works.
 pub fn prop_create_vm_spec() -> bool {
@@ -36,23 +36,24 @@ pub fn prop_create_vm_spec() -> bool {
         return false;
     }
     match t.get(4) {
-        Some(r) => {
-            r.cpu == 2 && r.ram_mib == 2048 && r.disk_mib == 10240 && r.iso_id == 1
-        }
+        Some(r) => r.cpu == 2 && r.ram_mib == 2048 && r.disk_mib == 10240 && r.iso_id == 1,
         None => false,
     }
 }
 
-/// True when SPA + create-spec + media phrases are present.
+/// True when SPA + create-spec + media + serial log phrases are present.
 pub fn ui_surface_present() -> bool {
     let s = include_str!("../assets/webui.html");
     s.contains("data-raynu-m7-ui")
+        && s.contains("data-raynu-e4")
         && s.contains("/spec/")
         && s.contains("/images")
         && s.contains("/iso/")
+        && s.contains("/logs/serial")
         && s.contains("createVm")
         && s.contains("listImages")
-        && s.contains("Console / serial log UI deferred")
+        && s.contains("refreshLogs")
+        && s.contains("Host serial log")
         && webui_present()
         && webui_html_wires_api()
 }
@@ -66,11 +67,11 @@ pub fn ui_scripts_present() -> bool {
         && smoke.contains("prop_create_vm_spec")
         && runbook.contains("RAYNU-V-M7-UI-OK")
         && runbook.contains("/spec/")
-        && runbook.contains("Console")
+        && runbook.contains("/logs/serial")
         && runbook.contains("TLS")
 }
 
-/// Full M7.4 package prop.
+/// Full M7.4 / E4 package prop.
 pub fn prop_ops_ui_package() -> bool {
     let _ = (UI_GAP_NOTE, UI_RESIDUAL_NOTE, M7_UI_OK_MARKER);
     ui_surface_present()
@@ -79,7 +80,9 @@ pub fn prop_ops_ui_package() -> bool {
         && prop_cli_rest_roundtrip()
         && UI_GAP_NOTE.contains("CLOSED M7.4")
         && M7_UI_OK_MARKER == "RAYNU-V-M7-UI-OK"
-        && UI_RESIDUAL_NOTE.contains("console")
+        && UI_RESIDUAL_NOTE.contains("serial log")
+        && include_str!("http.rs").contains("/logs/serial")
+        && include_str!("pre_ebs_mgmt.rs").contains("fn reset_pre_ebs_mgmt(")
 }
 
 /// Full M7.4 artifact + package gate.

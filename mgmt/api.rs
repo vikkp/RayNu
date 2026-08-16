@@ -23,12 +23,97 @@ pub const M6_AUTH_OK_MARKER: &str = "RAYNU-V-M6-AUTH-OK";
 /// Closed auth GAP (was open stub through M5.1; closed in M6.4).
 pub const AUTH_GAP_NOTE: &str = "GAP(CLOSED M6.4): REST auth stubbed → M6";
 
-/// Bring-up mock REST token (documented; replace for production).
+/// Bring-up mock REST token (documented; lab fallback when no ESP operator token).
 pub const BRINGUP_AUTH_TOKEN: &str = "raynu-v-bringup";
 
 /// Token source note for operators / CI.
 pub const AUTH_TOKEN_SOURCE_NOTE: &str =
-    "bring-up mock: BRINGUP_AUTH_TOKEN (M6.4; replace for production)";
+    "bring-up mock OR ESP EFI/RayNu/auth.token (E4 operator); BRINGUP_AUTH_TOKEN lab fallback";
+
+/// Max UTF-8 bytes for an ESP / operator token.
+pub const OPERATOR_TOKEN_CAP: usize = 64;
+
+static mut OPERATOR_TOKEN: [u8; OPERATOR_TOKEN_CAP] = [0; OPERATOR_TOKEN_CAP];
+static mut OPERATOR_TOKEN_LEN: usize = 0;
+
+/// True when an operator token was armed (ESP or host test).
+pub fn operator_token_armed() -> bool {
+    unsafe { OPERATOR_TOKEN_LEN > 0 }
+}
+
+/// Clear operator token (tests / lab reset) — bring-up token allowed again.
+pub fn clear_operator_token() {
+    unsafe {
+        OPERATOR_TOKEN = [0; OPERATOR_TOKEN_CAP];
+        OPERATOR_TOKEN_LEN = 0;
+    }
+}
+
+/// Arm an operator token (ESP `auth.token` contents). Empty / oversized → Err.
+pub fn set_operator_token(bytes: &[u8]) -> Result<(), ()> {
+    let t = core::str::from_utf8(bytes).map_err(|_| ())?;
+    let t = t.trim();
+    if t.is_empty() || t.len() > OPERATOR_TOKEN_CAP {
+        return Err(());
+    }
+    if !t.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err(());
+    }
+    unsafe {
+        OPERATOR_TOKEN[..t.len()].copy_from_slice(t.as_bytes());
+        OPERATOR_TOKEN_LEN = t.len();
+    }
+    Ok(())
+}
+
+fn operator_token_str() -> Option<&'static str> {
+    unsafe {
+        let len = OPERATOR_TOKEN_LEN;
+        if len == 0 || len > OPERATOR_TOKEN_CAP {
+            None
+        } else {
+            core::str::from_utf8(&OPERATOR_TOKEN[..len]).ok()
+        }
+    }
+}
+
+/// Probe ESP for `auth.token` (E4 operator secret). PRE-EBS only.
+///
+/// Paths: `\\EFI\\RayNu\\auth.token` then `\\auth.token`.
+#[cfg(target_os = "uefi")]
+pub fn probe_operator_auth_token() {
+    use crate::boot::serial;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        serial::write_line("boot: E4 auth: bring-up token (lab; no ESP FS)");
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    let loaded = load_token(&mut fs, "\\EFI\\RayNu\\auth.token")
+        .or_else(|_| load_token(&mut fs, "\\auth.token"));
+    match loaded {
+        Ok(()) => serial::write_line("boot: E4 auth: ESP auth.token armed (bring-up disabled)"),
+        Err(()) => serial::write_line("boot: E4 auth: bring-up token (lab; no auth.token)"),
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn load_token(fs: &mut uefi::fs::FileSystem, path: &str) -> Result<(), ()> {
+    use uefi::CString16;
+    let Ok(p) = CString16::try_from(path) else {
+        return Err(());
+    };
+    let Ok(data) = fs.read(p.as_ref()) else {
+        return Err(());
+    };
+    set_operator_token(&data)
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_operator_auth_token() {}
 
 /// CLI verb over the management plane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +170,7 @@ pub enum RestMethod {
 pub struct RestRequest<'a> {
     pub method: RestMethod,
     pub path: &'a str,
-    /// Required for M6.4: must equal [`BRINGUP_AUTH_TOKEN`] (bring-up mock).
+    /// Required for REST: Bearer token (bring-up mock or ESP operator token).
     pub auth_token: Option<&'a str>,
 }
 
@@ -105,13 +190,20 @@ fn rest_method_tag(m: RestMethod) -> u8 {
     }
 }
 
-/// M6.4: allow only the documented bring-up mock token.
+/// M6.4 / E4: allow bring-up mock **unless** an operator token is armed, then
+/// only the operator token (honest step beyond the toy for iron).
 #[inline]
 pub fn auth_allows(token: Option<&str>) -> bool {
     let _ = AUTH_GAP_NOTE;
     let _ = AUTH_TOKEN_SOURCE_NOTE;
     let _ = M6_AUTH_OK_MARKER;
-    matches!(token, Some(t) if t == BRINGUP_AUTH_TOKEN)
+    let Some(t) = token else {
+        return false;
+    };
+    if let Some(op) = operator_token_str() {
+        return t == op;
+    }
+    t == BRINGUP_AUTH_TOKEN
 }
 
 /// Parse a single CLI line: `create|start|stop|destroy <id>` or `list`.
@@ -468,8 +560,10 @@ pub fn prop_cli_rest_roundtrip() -> bool {
     }
 }
 
-/// M6.4: missing/wrong token → 401 and no mutation; good token → create OK.
+/// M6.4 / E4: missing/wrong token → 401; bring-up OK when no operator token;
+/// operator token overrides bring-up when armed.
 pub fn prop_auth_deny_allow() -> bool {
+    clear_operator_token();
     let mut t = VmTable::new();
 
     let denied_none = dispatch_rest(
@@ -508,11 +602,25 @@ pub fn prop_auth_deny_allow() -> bool {
         return false;
     }
 
+    if set_operator_token(b"iron-e4-secret").is_err() {
+        return false;
+    }
+    if auth_allows(Some(BRINGUP_AUTH_TOKEN)) {
+        clear_operator_token();
+        return false;
+    }
+    if !auth_allows(Some("iron-e4-secret")) {
+        clear_operator_token();
+        return false;
+    }
+    clear_operator_token();
+
     !auth_allows(None)
         && !auth_allows(Some("anything"))
         && auth_allows(Some(BRINGUP_AUTH_TOKEN))
         && AUTH_GAP_NOTE.contains("CLOSED M6.4")
         && AUTH_TOKEN_SOURCE_NOTE.contains("BRINGUP_AUTH_TOKEN")
+        && AUTH_TOKEN_SOURCE_NOTE.contains("auth.token")
         && M6_AUTH_OK_MARKER == "RAYNU-V-M6-AUTH-OK"
 }
 
