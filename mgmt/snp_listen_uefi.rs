@@ -42,6 +42,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
 
     serial::write_line("boot: SNP DHCP discover…");
     let mut leased: Option<Ipv4Cidr> = None;
+    let mut leased_router: Option<Ipv4Address> = None;
     let dhcp_deadline = DHCP_BUDGET_MS as i64;
 
     while millis < dhcp_deadline {
@@ -51,6 +52,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         match sockets.get_mut::<dhcpv4::Socket>(dhcp_handle).poll() {
             Some(dhcpv4::Event::Configured(cfg)) => {
                 leased = Some(cfg.address);
+                leased_router = cfg.router;
                 iface.update_ip_addrs(|addrs| {
                     addrs.clear();
                     let _ = addrs.push(IpCidr::Ipv4(cfg.address));
@@ -79,6 +81,17 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     };
 
     let ip = cidr.address();
+    serial::write_str("boot: SNP lease ");
+    write_ipv4(ip);
+    serial::write_byte(b'/');
+    write_u16_dec(cidr.prefix_len() as u16);
+    if let Some(r) = leased_router {
+        serial::write_str(" router=");
+        write_ipv4(r);
+    } else {
+        serial::write_str(" router=none");
+    }
+    serial::write_byte(b'\n');
     serial::write_str("boot: mgmt HTTP listening on ");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -89,11 +102,12 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     serial::write_byte(b':');
     write_u16_dec(port);
     serial::write_line("/");
+    serial::write_line("boot: PING NOW (same LAN as HOST NIC, not iDRAC) before curl");
     serial::write_str("boot: SNP listen window_ms=");
     write_u32_dec(SNP_POST_BIND_LISTEN_MS as u32);
     serial::write_byte(b'\n');
     serial::write_line(
-        "boot: HINT — curl HOST_NIC (≠ iDRAC): GET / and Bearer /vms before window ends",
+        "boot: HINT — Mac must be on lease subnet; curl during window only (pre-EBS)",
     );
 
     let tcp_rx = tcp::SocketBuffer::new(alloc::vec![0u8; 8192]);

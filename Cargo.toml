@@ -40,6 +40,7 @@ smoltcp = { version = "0.13", optional = true, default-features = false, feature
     "socket-udp",
     "socket-tcp",
     "socket-dhcpv4",
+    "auto-icmp-echo-reply",
 ] }
 
 [profile.release]
