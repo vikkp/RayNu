@@ -134,6 +134,7 @@ All must be true (no hand-waving):
 | Install-to-disk scaffold (M7.7) | DONE (host) | `mgmt/iso_install.rs` + `iso_install.md`; `STATUS-iso-install=open` |
 | Virtio-blk install target surface | DONE (plan) | `DEFAULT_INSTALL_DISK_BYTES` + capacity helper |
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest write/reboot open |
+| QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | `isoinstall.txt` → `ISO-INSTALL-LAB-OK` when nested VT-x; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install + reboot-to-disk | MISSING | QEMU then iron |
