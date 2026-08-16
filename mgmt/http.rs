@@ -14,6 +14,7 @@ use super::api::{
 };
 use super::datastore::{dispatch_store_rest, ImageTable};
 use super::iso::{dispatch_iso_rest, IsoDeployPlan};
+use super::iso_install::{dispatch_iso_install_rest, InstallToDiskPlan};
 use super::webui::{load_webui, webui_raw_bytes};
 use super::VmTable;
 
@@ -227,12 +228,13 @@ impl HeaderBuf {
     }
 }
 
-/// Handle one HTTP exchange against `VmTable` + image library + ISO plan (SPA or REST).
+/// Handle one HTTP exchange against `VmTable` + image library + ISO plans (SPA or REST).
 /// Writes the response into `out`; returns `Some(n)` bytes written.
 pub fn handle_http_request(
     table: &mut VmTable,
     images: &mut ImageTable,
     iso_plan: &mut IsoDeployPlan,
+    iso_install: &mut InstallToDiskPlan,
     raw: &str,
     out: &mut [u8],
 ) -> Option<usize> {
@@ -255,6 +257,10 @@ pub fn handle_http_request(
     };
     let resp: RestResponse = if parsed.path == "/images" || parsed.path.starts_with("/images/") {
         dispatch_store_rest(images, req)
+    } else if parsed.path == "/iso/install"
+        || (parsed.path.starts_with("/iso/") && parsed.path.ends_with("/install"))
+    {
+        dispatch_iso_install_rest(images, iso_install, req)
     } else if parsed.path == "/iso/deploy" || parsed.path.starts_with("/iso/") {
         dispatch_iso_rest(images, iso_plan, req)
     } else {
@@ -291,9 +297,18 @@ pub fn prop_http_mgmt_package() -> bool {
     let mut table = VmTable::new();
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
+    let mut iso_install = InstallToDiskPlan::empty();
     // SPA HTML can exceed 8 KiB; keep in sync with host/UEFI serve buffers.
     let mut out = [0u8; 16384];
-    let n = handle_http_request(&mut table, &mut images, &mut iso_plan, raw, &mut out).unwrap_or(0);
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        raw,
+        &mut out,
+    )
+    .unwrap_or(0);
     if n == 0 {
         return false;
     }

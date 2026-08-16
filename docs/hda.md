@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: 56db7d0f78e7f5cae478f07e87c44f5680b3ceac
-last_commit_short: 56db7d0
+last_commit: pending-e5-scaffold
+last_commit_short: pending
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
-months_to_everest_prev: 1.25
-velocity_commits_30d: 340
-velocity_gates_30d: 17
-overall_pct: 78
+months_to_everest_prev: 0.75
+velocity_commits_30d: 345
+velocity_gates_30d: 18
+overall_pct: 79
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 78
-summit_iso_pct: 38
+summit_iso_pct: 45
 summit_prod_pct: 100
 ---
 
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **78%** | +6 (E3 / `RAYNU-V-M7-UEFI-HTTP-OK` closed on iron) |
-| **Months to Mount Everest** | **0.75** | −0.5 (M7.6 iron; residual = E4 polish + ISO) |
+| **Overall product readiness** | **79%** | +1 (M7.7 ISO install-to-disk scaffold) |
+| **Months to Mount Everest** | **0.75** | held (scaffold ≠ E5 close) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | medium | E2+E3 COM2 green; TLS/post-EBS/ISO still open |
+| **Confidence** | medium | E2+E3 COM2 green; E5 install/reboot still open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~78% | M7.6 iron HTTP OK; TLS/console/post-EBS residual |
-| **Deploy Linux ISO** | ~38% | M7.3 host extract-boot smoke; El Torito/CD-ROM stub |
+| **Deploy Linux ISO** | ~45% | M7.7 scaffold + M7.3 plan; install-to-disk open |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
 Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.75 mo  (was 1.25)
-Overall %          ███████████████░░░░░  78%
+Overall %          ███████████████░░░░░  79%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -122,7 +122,7 @@ All must be true (no hand-waving):
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 
 ### Summit D — Deploy Linux ISO
-**Status: MEDIUM · ~38% · ~0.75–1.5 months residual**
+**Status: MEDIUM · ~45% · ~0.5–1.25 months residual**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -131,11 +131,13 @@ All must be true (no hand-waving):
 | Host ESP-shaped catalog | DONE | `EFI/RAYNU/images/catalog.txt` (host `std::fs`) |
 | UEFI catalog persist | STUB | `UnsupportedOnFirmware` until SFS/NVMe write |
 | ISO register + extract-boot bind | DONE (host) | `mgmt/iso.rs` Latitude package smoke (~0s) |
-| Virtio-blk install target surface | DONE (plan) | capacity + empty disk size in deploy plan |
+| Install-to-disk scaffold (M7.7) | DONE (host) | `mgmt/iso_install.rs` + `iso_install.md`; `STATUS-iso-install=open` |
+| Virtio-blk install target surface | DONE (plan) | `DEFAULT_INSTALL_DISK_BYTES` + capacity helper |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Persistent install disk workflow | PARTIAL | size planned; reboot-to-disk → later |
-| Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy`; blob upload residual |
+| Wire contract → guest launch | MISSING | next E5 step |
+| Persistent install + reboot-to-disk | MISSING | QEMU then iron |
+| Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-distro matrix | MISSING | — |
 
 ---
@@ -264,7 +266,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | M7.3 extract-boot MVP; CD-ROM stub residual |
 | H4 | Console / TLS / post-EBS listen still open | MED | E3 MVP closed (PRE-EBS HTTP); TLS + persistent listen follow-on |
-| H5 | Latitude ≠ full product loop | MED | E2+E3 closed on iron; still need ISO install-to-disk (E5) |
+| H5 | Latitude ≠ full product loop | MED | E2+E3 closed on iron; E5 install-to-disk scaffold open (M7.7) |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -274,6 +276,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e5-iso-scaffold | 0.75 | 79 | M7.7 ISO install-to-disk scaffold; iso~45%; E5 iron still open |
 | 2026-08-16 | uefi-http-ok | 0.75 | 78 | E3 MVP CLOSED: `RAYNU-V-M7-UEFI-HTTP-OK` on R640 SNP residual; ui~78% |
 | 2026-08-15 | r640-boot-ok | 1.25 | 72 | E2 CLOSED: SHELL+M4 on COM2 (`xsavesfix`); r640~98%; ETA→2026-09 |
 | 2026-08-15 | r640-iron-bringup | 1.75 | 60 | Real R640 COM2: M0→VMXON→LOAD→BZIMAGE; COM2/EPT/BAR kits; E2 open; r640~68% |

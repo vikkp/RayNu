@@ -283,6 +283,7 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 pub mod api;
 pub mod datastore;
 pub mod iso;
+pub mod iso_install;
 pub mod ext;
 pub mod fault;
 pub mod ha;
@@ -308,6 +309,7 @@ pub mod m7_http_gate;
 pub mod m7_uefi_http_gate;
 pub mod m7_ship_gate;
 pub mod m7_iso_gate;
+pub mod m7_iso_install_gate;
 pub mod m7_r640_gate;
 pub mod m7_store_gate;
 pub mod m7_ui_gate;
@@ -347,6 +349,10 @@ pub use datastore::{
 pub use iso::{
     dispatch_iso_rest, prop_iso_deploy_package, IsoDeployPlan, M7_ISO_OK_MARKER, ISO_GAP_NOTE,
 };
+pub use iso_install::{
+    dispatch_iso_install_rest, prop_iso_install_package, InstallToDiskPlan,
+    M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER, ISO_INSTALL_GAP_NOTE,
+};
 pub use http::{
     prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
 };
@@ -362,6 +368,9 @@ pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};
 pub use m7_ui_gate::{run_m7_ui_gate, M7_UI_OK_MARKER, UI_GAP_NOTE};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
+pub use m7_iso_install_gate::{
+    run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
+};
 pub use m7_r640_gate::{
     run_m7_r640_scaffold_gate, M7_R640_OK_MARKER, M7_R640_SCAFFOLD_MARKER, R640_GAP_NOTE,
 };

@@ -205,6 +205,29 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ---
 
+### M7.7 — ISO install-to-disk (E5) — `RAYNU-V-M7-ISO-INSTALL-OK`
+
+**Status: scaffold open** (host `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; iron/QEMU close open)
+
+**Scaffold marker (host/CI):** `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK` via `./tools/m7-iso-install-smoke.sh`  
+**Close marker:** `RAYNU-V-M7-ISO-INSTALL-OK` — QEMU then real R640; evidence under `docs/evidence/r640/STATUS-iso-install`
+
+**Goal:** Extract-boot (or CD-ROM later) → guest installs to virtio-blk → reboot-to-disk.
+
+**Deliverables (scaffold now):**
+
+1. `InstallToDiskPlan` phase machine + `InstallLaunchContract` (`mgmt/iso_install.rs`).
+2. REST `POST /iso/{id}/install` / `GET /iso/install`.
+3. Virtio-blk `DEFAULT_INSTALL_DISK_BYTES` + `capacity_sectors_for`.
+4. Runbook [`iso_install.md`](runbooks/iso_install.md) + evidence template.
+5. `GAP(OPEN M7.7): ISO install-to-disk + reboot-to-disk`.
+
+**Next (not yet claimed):** wire contract → `vmx`/`guest` launch; QEMU disk write + reboot; iron kit + COM2 close.
+
+**Acceptance for close:** serial/QEMU proof of install + reboot-to-disk. Host scaffold must **never** print the close marker. Mount Everest stays open until E4 + E5 green.
+
+---
+
 ## Milestone acceptance
 
 **Critical for M7 closed:**
@@ -240,5 +263,6 @@ Do not pull M8 into M7 gate lists.
 ## First action
 
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
-**M7.5 closed on iron** (`RAYNU-V-R640-BOOT-OK` — 2026-08-15 COM2; evidence `STATUS=closed`).  
-**Honesty:** Mount Everest still open on E3–E5 (network UI / ISO); console/TLS/firmware NIC + El Torito residuals remain.
+**M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
+**M7.7 scaffold open** (`RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`); install-to-disk iron close open.  
+**Honesty:** Mount Everest residual is E4 polish + E5 ISO install-to-disk; El Torito / TLS / console residuals remain.

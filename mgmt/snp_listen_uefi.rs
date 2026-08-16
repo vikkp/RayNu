@@ -12,6 +12,7 @@ use crate::mgmt::http_listen::{
     MgmtListenError, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS, M7_UEFI_HTTP_OK_MARKER,
 };
 use crate::mgmt::iso::IsoDeployPlan;
+use crate::mgmt::iso_install::InstallToDiskPlan;
 use crate::mgmt::snp_uefi::{open_first_snp, SnpDevice};
 use crate::mgmt::VmTable;
 use smoltcp::iface::{Config, Interface, SocketSet};
@@ -170,11 +171,13 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
                 let mut table = VmTable::new();
                 let mut images = ImageTable::new();
                 let mut iso_plan = IsoDeployPlan::empty();
+                let mut iso_install = InstallToDiskPlan::empty();
                 let mut out = [0u8; 16384];
                 let wn = handle_http_request(
                     &mut table,
                     &mut images,
                     &mut iso_plan,
+                    &mut iso_install,
                     raw,
                     &mut out,
                 )

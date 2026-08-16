@@ -5,6 +5,11 @@ fn markers_and_magic_stable() {
     assert_eq!(M4_BLK_OK_MARKER, "RAYNU-V-M4-BLK-OK");
     assert_eq!(VIRTIO_MMIO_MAGIC, 0x7472_6976);
     assert_eq!(VIRTIO_ID_BLOCK, 2);
+    assert_eq!(DEFAULT_INSTALL_DISK_BYTES, 64 * 1024 * 1024);
+    assert_eq!(
+        capacity_sectors_for(DEFAULT_INSTALL_DISK_BYTES),
+        (DEFAULT_INSTALL_DISK_BYTES / 512) as u64
+    );
 }
 
 #[test]

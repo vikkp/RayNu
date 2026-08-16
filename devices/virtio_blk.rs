@@ -11,6 +11,10 @@
 /// COM1 / gate marker when virtio-blk write+readback succeeds.
 pub const M4_BLK_OK_MARKER: &str = "RAYNU-V-M4-BLK-OK";
 
+/// Default empty install-disk size for E5 / M7.3–M7.7 plans (64 MiB).
+/// Must stay aligned with `mgmt::iso::DEFAULT_INSTALL_DISK_BYTES`.
+pub const DEFAULT_INSTALL_DISK_BYTES: usize = 64 * 1024 * 1024;
+
 /// Virtio-mmio magic ("virt").
 pub const VIRTIO_MMIO_MAGIC: u32 = 0x7472_6976;
 /// Virtio-mmio version 2.
@@ -64,10 +68,19 @@ pub fn take_blk_ok_latch() -> bool {
     }
 }
 
+/// Capacity in 512-byte sectors for a given disk size.
+pub fn capacity_sectors_for(disk_bytes: usize) -> u64 {
+    debug_assert_eq!(disk_bytes % SECTOR_BYTES, 0);
+    (disk_bytes / SECTOR_BYTES) as u64
+}
+
 /// Install MMIO BAR + host-owned disk backing.
 ///
 /// `bar_gpa` must be EPT-unmapped (hole). `disk_phys` is identity-mapped host
 /// RAM owned by the HV allocator — not claimed for any guest.
+///
+/// For E5 install-to-disk, pass [`DEFAULT_INSTALL_DISK_BYTES`] (or larger
+/// multiple of 512) once the frame pool can back it.
 ///
 /// SAFETY: `disk_phys` writable for `disk_bytes` (multiple of 512).
 pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
@@ -75,7 +88,7 @@ pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
     BAR_GPA = bar_gpa;
     DISK_BASE = disk_phys;
     DISK_BYTES = disk_bytes;
-    CAPACITY_SECTORS = (disk_bytes / SECTOR_BYTES) as u64;
+    CAPACITY_SECTORS = capacity_sectors_for(disk_bytes);
     STATUS = 0;
     BLK_OK = false;
     BLK_MARKED = false;

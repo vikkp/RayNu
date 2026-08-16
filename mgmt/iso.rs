@@ -119,13 +119,15 @@ pub fn extract_boot_surface_present() -> bool {
         && pe.contains("fn initrd_bytes")
 }
 
-/// True when virtio-blk empty-disk install target surface exists (M4.3+).
+/// True when virtio-blk empty-disk install target surface exists (M4.3+ / E5).
 pub fn install_disk_surface_present() -> bool {
     let blk = include_str!("../devices/virtio_blk.rs");
     blk.contains("unsafe fn init(")
         && blk.contains("CAPACITY_SECTORS")
         && blk.contains("M4_BLK_OK_MARKER")
         && blk.contains("DISK_BYTES")
+        && blk.contains("fn capacity_sectors_for(")
+        && blk.contains("DEFAULT_INSTALL_DISK_BYTES")
 }
 
 enum IsoOp {

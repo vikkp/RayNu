@@ -6,6 +6,7 @@ use super::{
 use crate::mgmt::api::{RestMethod, BRINGUP_AUTH_TOKEN};
 use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::iso::IsoDeployPlan;
+use crate::mgmt::iso_install::InstallToDiskPlan;
 use crate::mgmt::VmTable;
 
 #[test]
@@ -38,11 +39,13 @@ fn serves_spa_and_rest() {
     let mut table = VmTable::new();
     let mut images = ImageTable::new();
     let mut iso_plan = IsoDeployPlan::empty();
+    let mut iso_install = InstallToDiskPlan::empty();
     let mut out = [0u8; 16384];
     let n = handle_http_request(
         &mut table,
         &mut images,
         &mut iso_plan,
+        &mut iso_install,
         "GET / HTTP/1.1\r\n\r\n",
         &mut out,
     )
@@ -56,6 +59,7 @@ fn serves_spa_and_rest() {
         &mut table,
         &mut images,
         &mut iso_plan,
+        &mut iso_install,
         "GET /vms HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         &mut out,
     )
@@ -67,6 +71,7 @@ fn serves_spa_and_rest() {
         &mut table,
         &mut images,
         &mut iso_plan,
+        &mut iso_install,
         "GET /vms HTTP/1.1\r\n\r\n",
         &mut out,
     )
@@ -78,6 +83,7 @@ fn serves_spa_and_rest() {
         &mut table,
         &mut images,
         &mut iso_plan,
+        &mut iso_install,
         "POST /images/4/iso HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         &mut out,
     )
@@ -90,6 +96,7 @@ fn serves_spa_and_rest() {
         &mut table,
         &mut images,
         &mut iso_plan,
+        &mut iso_install,
         "POST /iso/4/deploy HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         &mut out,
     )
@@ -97,6 +104,19 @@ fn serves_spa_and_rest() {
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 201"), "{s}");
     assert!(iso_plan.is_ready());
+
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        "POST /iso/4/install HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 201"), "{s}");
+    assert!(iso_install.is_contract_ready());
 }
 
 #[test]

@@ -541,6 +541,20 @@ jobs:
       - name: M7.3 ISO smoke → RAYNU-V-M7-ISO-OK
         run: ./tools/m7-iso-smoke.sh
 
+  # M7.7: ISO install-to-disk scaffold (E5). Hard-fail on scaffold only.
+  # Does NOT claim RAYNU-V-M7-ISO-INSTALL-OK (QEMU/iron).
+  m7-iso-install:
+    name: M7.7 ISO install scaffold (SCAFFOLD-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.7 ISO install scaffold → RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
+        run: ./tools/m7-iso-install-smoke.sh
+
   # M7.4: Ops Web UI create-VM + media. Hard-fail.
   m7-ui:
     name: M7.4 Ops UI (UI-OK)
