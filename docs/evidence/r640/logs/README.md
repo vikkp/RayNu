@@ -18,6 +18,7 @@ paper (§6) and for claiming `RAYNU-V-R640-BOOT-OK`.
 | `2026-08-16-uefi-http-snp-listen-accept-timeout-com2.txt` | M7.6 SNP residual | DHCP+listen `10.99.99.127:8443`; accept timeout before curl |
 | `2026-08-16-uefi-http-ok-com2.txt` | **M7.6 iron close** | `RAYNU-V-M7-UEFI-HTTP-OK` after listen on `10.99.99.127:8443` |
 | `2026-08-16-uefi-http-ok-curl.txt` | M7.6 client proof | Mac `GET /` → HTTP 200 SPA (`Content-Length: 10757`) |
+| `2026-08-16-uefi-http-ok-curl-retest.txt` | M7.6 clarifying retest | `GET /` → 200 SPA + `GET /vms` Bearer → `{"ok":true,"listed":true}` |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narrative:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md).

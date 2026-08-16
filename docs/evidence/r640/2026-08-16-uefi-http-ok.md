@@ -51,7 +51,9 @@ RAYNU-V-M7-UEFI-HTTP-OK
 
 ## Operator curl (Mac)
 
-[`logs/2026-08-16-uefi-http-ok-curl.txt`](logs/2026-08-16-uefi-http-ok-curl.txt):
+First close: [`logs/2026-08-16-uefi-http-ok-curl.txt`](logs/2026-08-16-uefi-http-ok-curl.txt) — `GET /` → 200 SPA.
+
+Clarifying retest (same floppy digests): [`logs/2026-08-16-uefi-http-ok-curl-retest.txt`](logs/2026-08-16-uefi-http-ok-curl-retest.txt):
 
 ```text
 * Connected to 10.99.99.127 (10.99.99.127) port 8443
@@ -59,10 +61,17 @@ RAYNU-V-M7-UEFI-HTTP-OK
 < HTTP/1.1 200 OK
 < Content-Type: text/html; charset=utf-8
 < Content-Length: 10757
+
+> GET /vms HTTP/1.1
+> Authorization: Bearer raynu-v-bringup
+< HTTP/1.1 200 OK
+< Content-Type: application/json
+< Content-Length: 25
+{"ok":true,"listed":true}
 ```
 
 SPA body includes `<title>RayNu-V</title>` and `data-raynu-webui="1"`.  
-`/vms` curl in the same paste used a typo (`::8443`) and never reached the server.
+Bearer `/vms` returns codec JSON — ADR-012 dual acceptance met.
 ## HDA / Everest
 
 - **M7.6** iron OK: **closed**

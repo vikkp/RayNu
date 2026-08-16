@@ -1,0 +1,49 @@
+# 2026-08-16 clarifying retest — Mac curl SPA + Bearer /vms
+#
+# Same iron floppy as M7.6 close (OPERATOR-SHA256SUMS):
+#   efi be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5
+#   img 86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484
+# Host: 10.99.99.127:8443 during PRE-EBS SNP window.
+# Client: curl/8.7.1 on Mac.
+#
+# Proves ADR-012 acceptance: GET / → SPA bytes; GET /vms + Bearer → codec JSON.
+
+## GET /
+
+*   Trying 10.99.99.127:8443...
+* Connected to 10.99.99.127 (10.99.99.127) port 8443
+> GET / HTTP/1.1
+> Host: 10.99.99.127:8443
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 10757
+< Connection: close
+<
+<!DOCTYPE html>
+...
+<title>RayNu-V</title>
+...
+<body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1">
+...
+* Closing connection
+
+## GET /vms (Bearer)
+
+*   Trying 10.99.99.127:8443...
+* Connected to 10.99.99.127 (10.99.99.127) port 8443
+> GET /vms HTTP/1.1
+> Host: 10.99.99.127:8443
+> User-Agent: curl/8.7.1
+> Accept: */*
+> Authorization: Bearer raynu-v-bringup
+>
+< HTTP/1.1 200 OK
+< Content-Type: application/json
+< Content-Length: 25
+< Connection: close
+<
+{"ok":true,"listed":true}
+* Closing connection
