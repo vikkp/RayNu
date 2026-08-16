@@ -4,8 +4,9 @@
 //! Proven Core: **outside** (ADR-009 / ADR-012)
 //!
 //! - Host/`cfg(test)`: real `std::net::TcpListener` proving SPA + Bearer REST.
-//! - Firmware (`uefi-bin`): PRE-EBS UEFI Tcp4 passive listen (ADR-012). Soft-fails
-//!   when the firmware network stack is absent so the guest path still runs.
+//! - Firmware (`uefi-bin`): PRE-EBS UEFI Tcp4 passive listen (ADR-012), with
+//!   SNP + smoltcp residual when Tcp4 is absent. Soft-fails so the guest path
+//!   still runs.
 //!
 //! Markers:
 //! - `RAYNU-V-M7-HTTP-OK` — M7.1 host codec gate (unchanged)
@@ -37,8 +38,12 @@ pub const PRE_EBS_MAX_EXCHANGES: u32 = 8;
 pub enum MgmtListenError {
     /// Host build / no UEFI network attempt.
     UnsupportedOnFirmware,
-    /// Tcp4 service binding not present (common on minimal OVMF).
+    /// Tcp4 service binding not present (common on minimal OVMF / R640 floppy).
     NoTcp4Stack,
+    /// SNP NIC open/start failed (SNP residual path).
+    NoSnpNic,
+    /// DHCP over SNP failed within PRE-EBS budget.
+    DhcpFailed,
     BindFailed,
     AcceptFailed,
     ServeFailed,
@@ -57,7 +62,15 @@ pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
 
     #[cfg(feature = "uefi-bin")]
     {
-        return uefi_tcp4_listen(port);
+        return match uefi_tcp4_listen(port) {
+            Ok(()) => Ok(()),
+            Err(MgmtListenError::NoTcp4Stack) => {
+                use crate::boot::serial;
+                serial::write_line("boot: falling back to SNP residual (ADR-012)");
+                crate::mgmt::snp_listen_uefi::uefi_snp_listen(port)
+            }
+            Err(e) => Err(e),
+        };
     }
 
     #[cfg(not(feature = "uefi-bin"))]
@@ -87,7 +100,14 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
                         serial::write_line(
                             "boot: WARN — Tcp4 stack absent after connect; mgmt HTTP residual (ADR-012)",
                         );
-                        // Detailed residual HINT already printed by net_probe_uefi.
+                    }
+                    MgmtListenError::NoSnpNic => {
+                        serial::write_line("boot: WARN — SNP NIC open failed");
+                    }
+                    MgmtListenError::DhcpFailed => {
+                        serial::write_line(
+                            "boot: WARN — SNP DHCP failed; mgmt HTTP residual (ADR-012)",
+                        );
                     }
                     MgmtListenError::UnsupportedOnFirmware => {
                         serial::write_line("boot: WARN — mgmt HTTP unsupported on this path");

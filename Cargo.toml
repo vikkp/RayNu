@@ -27,10 +27,20 @@ required-features = ["uefi-bin"]
 # Host `cargo test` uses default features (no UEFI).
 # Firmware build: --features uefi-bin --target x86_64-unknown-uefi
 default = []
-uefi-bin = ["dep:uefi"]
+uefi-bin = ["dep:uefi", "dep:smoltcp"]
 
 [dependencies]
 uefi = { version = "0.33", optional = true, features = ["panic_handler", "logger", "alloc", "global_allocator"] }
+# ADR-012 SNP residual: minimal TCP/IP when firmware Tcp4 is absent (size-audited).
+smoltcp = { version = "0.13", optional = true, default-features = false, features = [
+    "alloc",
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-udp",
+    "socket-tcp",
+    "socket-dhcpv4",
+] }
 
 [profile.release]
 lto = true

@@ -299,6 +299,10 @@ pub mod http_listen;
 #[cfg(feature = "uefi-bin")]
 pub mod net_probe_uefi;
 #[cfg(feature = "uefi-bin")]
+pub mod snp_uefi;
+#[cfg(feature = "uefi-bin")]
+pub mod snp_listen_uefi;
+#[cfg(feature = "uefi-bin")]
 pub mod tcp4_uefi;
 pub mod m7_http_gate;
 pub mod m7_uefi_http_gate;

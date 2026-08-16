@@ -1,0 +1,15 @@
+# 2026-08-16 R640 COM2 — ConnectController brings SNP up (Tcp4 still absent)
+#
+# Observed after cursor/m7-6-connect-net (main ≥ 644ba56):
+#   probe:  snp=0 … tcp4=0 pci=313
+#   after-pci: snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+# Implication: UNDI/SNP start via ConnectController; firmware Network Stack
+# (MNP/Ip4/Dhcp4/Tcp4) still not present → ADR-012 SNP residual next.
+# E2 still closed: RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF.
+
+boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net connect — starting PCI/UNDI drivers
+boot: uefi-net connect pci_ok=4 device_path_ok=32
+boot: uefi-net after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: WARN — Tcp4 stack absent after connect; mgmt HTTP residual (ADR-012)
+RAYNU-V-R640-BOOT-OK

@@ -13,21 +13,25 @@ use super::http_listen::{
 /// Host / CI marker when the M7.6 scaffold package passes.
 pub const M7_UEFI_HTTP_GATE_MARKER: &str = M7_UEFI_HTTP_SCAFFOLD_MARKER;
 
-/// True when ADR-012 markers + PRE-EBS entry + Tcp4 module exist.
+/// True when ADR-012 markers + PRE-EBS entry + Tcp4/SNP residual modules exist.
 pub fn uefi_http_surface_present() -> bool {
     let listen = include_str!("http_listen.rs");
     let main = include_str!("../src/main.rs");
     let tcp4 = include_str!("tcp4_uefi.rs");
+    let snp = include_str!("snp_listen_uefi.rs");
     listen.contains("fn run_pre_ebs_mgmt_listen(")
         && listen.contains("fn listen_mgmt_http_uefi(")
         && listen.contains(M7_UEFI_HTTP_OK_MARKER)
         && listen.contains(M7_UEFI_HTTP_SCAFFOLD_MARKER)
         && listen.contains(UEFI_HTTP_GAP_NOTE)
         && UEFI_HTTP_GAP_NOTE.contains("CLOSED M7.6")
+        && listen.contains("falling back to SNP residual")
         && main.contains("run_pre_ebs_mgmt_listen")
         && tcp4.contains("Tcp4Protocol")
         && tcp4.contains("create_tcp4_child")
         && tcp4.contains("65530bc7")
+        && snp.contains("uefi_snp_listen")
+        && snp.contains("PRE-EBS SNP window")
 }
 
 /// True when runbook + smoke name M7.6 markers and PRE-EBS constraint.

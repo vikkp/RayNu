@@ -145,7 +145,23 @@ pub fn probe_and_print() {
     let mid = snapshot();
     print_counts("after-pci", &mid);
 
-    if mid.tcp4 > 0 || mid.snp > 0 {
+    if mid.tcp4 > 0 {
+        return;
+    }
+
+    if mid.snp > 0 {
+        // Start drivers hanging off SNP (MNP/Ip4/Tcp4 if firmware has them).
+        serial::write_line("boot: uefi-net connect — SNP child drivers");
+        let snp_ok = connect_handles_by_protocol(&SNP_GUID);
+        serial::write_str("boot: uefi-net connect snp_ok=");
+        write_u32(snp_ok);
+        serial::write_byte(b'\n');
+        let after_snp = snapshot();
+        print_counts("after-snp", &after_snp);
+        if after_snp.tcp4 > 0 {
+            return;
+        }
+        serial::write_line("boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)");
         return;
     }
 

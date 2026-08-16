@@ -6,6 +6,9 @@
 #![cfg_attr(not(test), no_std)]
 #![allow(dead_code)]
 
+#[cfg(feature = "uefi-bin")]
+extern crate alloc;
+
 // Kani injects its lib under cfg(kani); no_std crates must import it explicitly.
 #[cfg(kani)]
 extern crate kani;

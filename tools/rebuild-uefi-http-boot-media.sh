@@ -39,6 +39,8 @@ for needle in \
   'RAYNU-V-M7-UEFI-HTTP-OK' \
   'mgmt HTTP listening' \
   'PRE-EBS Tcp4 window' \
+  'falling back to SNP residual' \
+  'PRE-EBS SNP window' \
   'RAYNU-V-R640-BOOT-OK'
 do
   if ! efi_has "$EFI" "$needle"; then
@@ -46,7 +48,7 @@ do
     exit 1
   fi
 done
-echo "==> built EFI contains M7.6 + R640-BOOT-OK markers"
+echo "==> built EFI contains M7.6 Tcp4+SNP residual + R640-BOOT-OK markers"
 
 # Refresh dist/ so make-boot-media --kit cannot pack the old xsavesfix EFI.
 SKIP_BUILD=1 ./tools/package-release.sh
@@ -61,9 +63,15 @@ echo "Expect on COM2 before ExitBootServices:"
 echo "  boot: uefi-net probe snp=… mnp=… ip4=… dhcp4=… tcp4=… pci=…"
 echo "  boot: uefi-net connect — starting PCI/UNDI drivers   # if tcp4 was 0"
 echo "  boot: uefi-net after-pci …                           # re-probe"
-echo "  boot: uefi-net after-all …                           # if still snp=0"
-echo "  boot: mgmt HTTP listening on 0.0.0.0:8443 (PRE-EBS Tcp4 window)  # if tcp4>0"
-echo "  — or —"
-echo "  boot: WARN — Tcp4 stack absent …                              # if tcp4=0"
+echo "  boot: uefi-net after-snp …                           # if snp>0 still no tcp4"
+echo "  boot: falling back to SNP residual (ADR-012)         # if tcp4=0"
+echo "  boot: SNP DHCP discover…"
+echo "  boot: mgmt HTTP listening on a.b.c.d:8443 (PRE-EBS SNP window)"
+echo "  — or Tcp4 path —"
+echo "  boot: mgmt HTTP listening on 0.0.0.0:8443 (PRE-EBS Tcp4 window)"
 echo "After a successful curl exchange:"
 echo "  RAYNU-V-M7-UEFI-HTTP-OK"
+echo "Soft-fail still ends with RAYNU-V-R640-BOOT-OK (E2)."
+echo "Curl from laptop (HOST NIC IP ≠ iDRAC IP):"
+echo "  curl -sS http://HOST_NIC_IP:8443/"
+echo "  curl -sS -H 'Authorization: Bearer raynu-v-bringup' http://HOST_NIC_IP:8443/vms"
