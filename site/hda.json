@@ -18,12 +18,12 @@
     "M7 single-host ship"
   ],
   "mount_everest_target": "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)",
-  "overall_pct": 83,
+  "overall_pct": 84,
   "source": "docs/hda.md",
   "summits": {
     "core": 88,
     "efi": 95,
-    "iso": 65,
+    "iso": 68,
     "prod": 100,
     "r640": 98,
     "ui": 88

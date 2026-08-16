@@ -15,7 +15,8 @@ use super::api::{
 use super::datastore::{ImageKind, ImageTable};
 use super::iso::{
     bind_extract_boot, configure_install_disk, extract_boot_surface_present,
-    install_disk_surface_present, register_iso, IsoDeployPlan, IsoError, DEFAULT_INSTALL_DISK_BYTES,
+    install_disk_surface_present, register_iso, IsoDeployPlan, IsoError,
+    DEFAULT_INSTALL_DISK_BYTES,
 };
 
 /// Iron marker — firmware/COM2 after install-to-disk + reboot-to-disk on R640.
@@ -464,6 +465,9 @@ fn stage_from_esp(fs: &mut uefi::fs::FileSystem, path: &str) -> Result<(), ()> {
 pub fn probe_iso_reboot_lab_flag() {}
 
 /// How many bytes to write to ESP (LBA0+LBA1 only — never the live 1 MiB/64 MiB disk).
+///
+/// [`crate::devices::virtio_blk::init_with_image`] copies this prefix into the
+/// larger RAM disk on the next boot (length need not match `disk_bytes`).
 pub fn persist_image_len_for_contract(_disk_bytes: u64) -> usize {
     INSTALL_MARKER_PERSIST_BYTES
 }
@@ -712,6 +716,8 @@ pub fn prop_iso_reboot_lab_package() -> bool {
         && include_str!("../tools/synth-e5-lab-install-img.sh").contains("INSTALL_DISK_PATTERN")
         && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
         && include_str!("../src/main.rs").contains("probe_iso_persist_reboot")
+        && include_str!("../src/main.rs").contains("prefix_into=")
+        && include_str!("../devices/virtio_blk.rs").contains("min(img.len(), disk_bytes)")
         && include_str!("../vmx/launch.rs").contains("M7_ISO_BOOTED_FROM_DISK_MARKER")
         && include_str!("../vmx/launch.rs").contains("note_booted_from_disk_lab")
         && smoke.contains("installdisk.bin")

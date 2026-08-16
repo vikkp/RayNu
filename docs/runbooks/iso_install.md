@@ -92,6 +92,10 @@ RAYNU-V-M7-ISO-BOOTED-FROM-DISK
 
 `BOOTED-FROM-DISK` closes the **QEMU lab** two-boot loop only — not iron E5.
 Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
+The persist file is a **1 KiB prefix**; `virtio_blk::init_with_image` copies it
+into the larger RAM disk. Requiring equal lengths dropped iron stamps
+(COM2 2026-08-16: persist-detect + `bytes=67108864` then
+`HLT without DRIVER_OK readback`).
 
 ### Full product path
 
@@ -120,8 +124,10 @@ Mirror E2/E3:
 - **ISO blob upload / parse** not claimed — extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
   filesystem. Host synth remains fallback if the ESP write did not land.
-- **Iron 64 MiB** persist is **marker sectors only** (1 KiB). Full disk persist
-  needs writable USB/NVMe, not a 64 MiB file in the EFI.
+- **Iron 64 MiB** persist is **marker sectors only** (1 KiB). `init_with_image`
+  copies that prefix into the live RAM disk; equal-length copy was the 2026-08-16
+  Cruzer `DRIVER_OK` miss. Full disk persist needs writable USB/NVMe, not a
+  64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
 - Do **not** claim Mount Everest closed until E4 + E5 are both green.
 
@@ -135,7 +141,9 @@ Mirror E2/E3:
    **Done (lab):** two-boot `./tools/m7-iso-install-qemu-smoke.sh` →
    `RAYNU-V-M7-ISO-INSTALL-LAB-OK` + `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (host-synthesized persist image between boots; not a guest filesystem installer).
-3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (lab):**
-   PRE-EBS write + next-boot `persist-detect`; iron Floppy may be read-only.
+3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (lab + iron write):**
+   PRE-EBS write + next-boot `persist-detect` on Cruzer Micro (2026-08-16).
+   Prefix-copy fix required so 1 KiB stamps load into the 64 MiB virtio disk.
 4. Guest filesystem install + full-disk persist (beyond LBA marker lab).
-5. Iron kit + writable ESP + second boot → `RAYNU-V-M7-ISO-INSTALL-OK`.
+5. Rebuild EFI onto the **same** USB (keep `EFI/RayNu/installdisk.bin`) →
+   `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` then iron `RAYNU-V-M7-ISO-INSTALL-OK`.
