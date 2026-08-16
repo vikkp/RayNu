@@ -1,0 +1,11 @@
+RayNu-V EFI release kit
+Version: 0.1.0-e4-spa-arm (git 7b9a17b)
+Marker: E4 SPA + install-arm checkpoint (pre networking deep-dive)
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Evidence: docs/evidence/r640/2026-08-16-e4-spa-install-arm.md
