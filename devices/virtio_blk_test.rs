@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn markers_and_magic_stable() {
+    let _g = virtio_host_test_lock();
     assert_eq!(M4_BLK_OK_MARKER, "RAYNU-V-M4-BLK-OK");
     assert_eq!(VIRTIO_MMIO_MAGIC, 0x7472_6976);
     assert_eq!(VIRTIO_ID_BLOCK, 2);
@@ -14,6 +15,7 @@ fn markers_and_magic_stable() {
 
 #[test]
 fn install_sized_disk_writes_lba1_marker() {
+    let _g = virtio_host_test_lock();
     let mut disk = vec![0u8; 4096];
     // SAFETY: heap buffer as fake disk HPA.
     unsafe {
@@ -33,6 +35,7 @@ fn install_sized_disk_writes_lba1_marker() {
 /// Also covers equal-length persist images (lab 1 KiB disk).
 #[test]
 fn reboot_detect_accepts_persist_prefix_on_larger_disk() {
+    let _g = virtio_host_test_lock();
     let persist = 1024usize;
     let disk_len = 8192usize;
     let mut stamps = vec![0u8; persist];
@@ -61,14 +64,16 @@ fn reboot_detect_accepts_persist_prefix_on_larger_disk() {
     assert!(mmio_access(0x1000_0000 + OFF_STATUS, true, STATUS_DRIVER_OK).is_some());
     assert!(blk_ok());
     assert!(booted_from_disk());
-    // Do not assert `!install_disk_written()`: that flag is process-global and
-    // `install_sized_disk_writes_lba1_marker` may set it under `--test-threads>1`.
-    // Detection (`booted_from_disk`) is the contract under test.
+    assert!(
+        !install_disk_written(),
+        "prefix copy must not set the install-disk-written flag"
+    );
     set_reboot_detect(false);
 }
 
 #[test]
 fn mmio_magic_and_status_handshake() {
+    let _g = virtio_host_test_lock();
     let mut disk = [0u8; 512];
     // SAFETY: stack buffer as fake disk HPA for unit test.
     unsafe {

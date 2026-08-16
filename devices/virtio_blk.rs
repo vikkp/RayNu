@@ -302,6 +302,12 @@ unsafe fn run_write_readback() {
     }
 }
 
+#[cfg(test)]
+pub(crate) fn virtio_host_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Host-only selftest (no guest): write+readback via [`run_write_readback`].
 #[cfg(test)]
 pub unsafe fn host_selftest(disk_phys: u64, disk_bytes: usize) -> bool {

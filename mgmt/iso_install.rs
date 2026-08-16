@@ -165,6 +165,14 @@ pub fn take_armed_install_contract() -> Option<InstallLaunchContract> {
     unsafe { ARMED_INSTALL.take() }
 }
 
+/// Host-test mutex: boot statics (`ARMED_INSTALL`, `BOOT_INSTALL_PLAN`) are
+/// single-threaded on iron; `cargo test` default threads otherwise race.
+#[cfg(test)]
+pub(crate) fn iso_install_host_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Clear armed contract (tests / cancel).
 pub fn clear_armed_install_contract() {
     // SAFETY: single-threaded boot / mgmt path.

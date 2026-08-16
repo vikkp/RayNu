@@ -29,6 +29,7 @@ fn markers_stable() {
 
 #[test]
 fn install_phase_machine_roundtrip() {
+    let _g = iso_install_host_test_lock();
     clear_armed_install_contract();
     let mut store = ImageTable::new();
     let mut install = InstallToDiskPlan::empty();
@@ -51,11 +52,13 @@ fn install_phase_machine_roundtrip() {
 
 #[test]
 fn iso_install_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_install_package());
 }
 
 #[test]
 fn armed_contract_sizes_launch_disk() {
+    let _g = iso_install_host_test_lock();
     clear_armed_install_contract();
     assert!(!install_disk_armed_for_launch());
     arm_install_launch_contract(InstallLaunchContract {
@@ -73,12 +76,14 @@ fn armed_contract_sizes_launch_disk() {
 
 #[test]
 fn iso_install_lab_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_install_lab_package());
     println!("RAYNU-V-M7-ISO-INSTALL-LAB-OK");
 }
 
 #[test]
 fn iso_reboot_lab_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_reboot_lab_package());
     println!("RAYNU-V-M7-ISO-BOOTED-FROM-DISK");
 }

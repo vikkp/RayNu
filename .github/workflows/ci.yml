@@ -28,7 +28,9 @@ jobs:
           toolchain: nightly
           components: rust-src, rustfmt, clippy
       - name: cargo test (host, no UEFI)
-        run: cargo test --no-default-features
+        # Boot-time modules use process-global statics (virtio, EPT, iso_install).
+        # Parallel lib tests race those flags; iron is single-threaded.
+        run: cargo test --no-default-features -- --test-threads=1
 
   build-uefi:
     name: UEFI release build
