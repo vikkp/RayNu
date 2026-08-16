@@ -88,8 +88,8 @@ fn main() -> Status {
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
-    // SNP session is leaked/parked (ManuallyDrop-equivalent Box::leak) so CloseProtocol
-    // is not run; post-EBS probe uses that pointer (soft-fail if UNDI died).
+    // SNP parked across EBS; do not poll the NIC here (iron hung on immediate
+    // post-EBS SNP receive). Guest path continues; idle listen is after VMXOFF.
     let handoff = unsafe { boot::handoff::leave_firmware() };
     let mut bump = handoff.frames;
 

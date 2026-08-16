@@ -286,19 +286,20 @@ fn tsc_delay_ms(ms: u32) {
     }
 }
 
-/// One SNP receive after ExitBootServices. Soft-fail if nothing was parked.
+/// After EBS: **do not** call SNP. Iron 2026-08-16 hung here — first
+/// `iface.poll` after ExitBootServices never returned (`smoke frame` last line).
+/// Guest path must continue. Parked lease is printed only; listen waits until
+/// VMXOFF (`uefi_snp_post_ebs_idle`).
 pub fn uefi_snp_post_ebs_probe() {
     let Some(s) = parked_http() else {
         serial::write_line("boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)");
         return;
     };
-    let ts = Instant::from_millis(s.millis);
-    let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
-    serial::write_str("boot: post-EBS SNP probe ok lease=");
+    serial::write_str("boot: post-EBS SNP parked lease=");
     write_ipv4(s.ip);
     serial::write_byte(b':');
     write_u16_dec(s.port);
-    serial::write_byte(b'\n');
+    serial::write_line(" (not polling SNP yet — iron hung on immediate post-EBS poll)");
 }
 
 /// Durable SNP+smoltcp HTTP after VMXOFF (iron idle). Does not allocate.

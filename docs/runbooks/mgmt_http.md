@@ -89,8 +89,8 @@ and resumes listen after EBS on the same UNDI/MMIO path.
 | Phase | What | Soft-fail |
 |-------|------|-----------|
 | PRE-EBS | Existing 45s SNP window (`RAYNU-V-M7-UEFI-HTTP-OK`) | timeout → continue to EBS |
-| Immediately after EBS | One SNP poll (`post-EBS SNP probe ok`) | no parked NIC → skip |
-| After VMXOFF / BOOT-OK | Durable SNP idle (`RAYNU-V-M7-POST-EBS-HTTP-OK` on first exchange) | SNP dead → skip |
+| Immediately after EBS | Serial-only: parked lease printed; **no SNP poll** (iron hung on immediate poll 2026-08-16) | no parked NIC → skip |
+| After VMXOFF / BOOT-OK | Durable SNP idle (`RAYNU-V-M7-POST-EBS-HTTP-OK` on first exchange) | SNP dead/hang → COM2 stops after idle banner |
 
 **Do not chase** firmware Tcp4 on this boot method (Virtual Floppy / Cruzer UNDI).
 SNP + smoltcp is the residual (do not chase Tcp4). Size stays inside ADR-003 (`./tools/check-size.sh`).

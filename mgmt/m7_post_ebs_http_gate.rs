@@ -29,7 +29,7 @@ pub fn post_ebs_http_surface_present() -> bool {
         && main.contains("run_post_ebs_mgmt_listen")
         && main.contains("leave_firmware")
         && snp.contains("park_snp_http")
-        && snp.contains("uefi_snp_post_ebs_probe")
+        && snp.contains("not polling SNP yet")
         && snp.contains("uefi_snp_post_ebs_idle")
         && snp.contains("POST-EBS SNP idle")
         && snp.contains("tsc_delay_ms")
