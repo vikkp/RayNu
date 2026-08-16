@@ -1,0 +1,40 @@
+# RayNu-V R640 COM2 — M7.6 soft-fail: Tcp4 stack absent (ADR-012 residual)
+# Date: 2026-08-16 (operator paste; iDRAC SOL console com2)
+# Host: Dell PowerEdge R640 · Intel Xeon Silver 4110
+# Role: Confirms M7.6 binary on iron (soft-fail path) but no Tcp4ServiceBinding.
+#       Retest after UEFI Network Stack BIOS enable — still soft-fails the same way.
+# Observed: boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)
+#           then full M0→SHELL→M4→RAYNU-V-R640-BOOT-OK (E2 still green).
+# Not claimed: RAYNU-V-M7-UEFI-HTTP-OK / Everest E3.
+
+Booting from Virtual Floppy Drive
+RayNu-V r640-hypervisor — formally verified bare-metal hypervisor
+pillars: [V] verified · [Z] single-binary · [D] iDRAC · [A] audit
+serial: COM1+COM2 mirror (iDRAC SOL = console com2)
+RAYNU-V-M0-BOOT-OK
+RAYNU-V-AUDIT: BootStarted milestone=0
+boot: M0 complete — entering M1.0 firmware handoff
+boot: probing PE/ESP assets (pre-EBS)
+boot: PE assets embedded (.askern/.asinit) — prefer PE
+RAYNU-V-M3-ASSETS-OK
+boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)
+boot: calling ExitBootServices — ConOut/video ends after this line
+boot: ExitBootServices — taking memory map ownership
+RAYNU-V-M1-EBS-OK
+RAYNU-V-M1-VMXON-OK
+RAYNU-V-M3-LOAD-OK
+RAYNU-V-M3-BZIMAGE-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M4-SHELL-G1
+RAYNU-V-M4-2VM-OK
+RAYNU-V-M4-SCHED-OK
+RAYNU-V-M4-NVM-OK
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M4-NET-OK
+RAYNU-V-M4-SMP-OK
+boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK

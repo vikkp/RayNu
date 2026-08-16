@@ -12,7 +12,7 @@ paper (§6) and for claiming `RAYNU-V-R640-BOOT-OK`.
 | `2026-08-15-xsavesfix-com2.txt` | `releases/v0.1.0-xsavesfix/` | First closing run: `SHELL-OK` → `M4-SMP-OK` |
 | `2026-08-15-confirm-rebuild-com2.txt` | `dist/` rebuild (same EFI SHA as xsavesfix) | Confirming retest: SHELL→M4→`VMXOFF` |
 | `2026-08-15-boot-ok-marker-com2.txt` | `r640-boot-ok-marker` finish_boot print | **Literal** `RAYNU-V-R640-BOOT-OK` on COM2 after VMXOFF |
-| `2026-08-15-boot-ok-marker-com2.png` | Operator macOS Terminal.app (iDRAC SOL); IP redacted for public site | Site status + Stories + paper figure |
+| `2026-08-16-uefi-http-tcp4-absent-com2.txt` | M7.6 iron soft-fail | `Tcp4 stack absent` after M7.6 binary; E2 BOOT-OK still printed |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narrative:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md).
