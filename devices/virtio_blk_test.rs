@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn markers_and_magic_stable() {
+    let _g = virtio_host_test_lock();
     assert_eq!(M4_BLK_OK_MARKER, "RAYNU-V-M4-BLK-OK");
     assert_eq!(VIRTIO_MMIO_MAGIC, 0x7472_6976);
     assert_eq!(VIRTIO_ID_BLOCK, 2);
@@ -14,6 +15,7 @@ fn markers_and_magic_stable() {
 
 #[test]
 fn install_sized_disk_writes_lba1_marker() {
+    let _g = virtio_host_test_lock();
     let mut disk = vec![0u8; 4096];
     // SAFETY: heap buffer as fake disk HPA.
     unsafe {
@@ -23,37 +25,55 @@ fn install_sized_disk_writes_lba1_marker() {
     assert!(blk_ok());
     assert!(install_disk_written());
     let lba1 = &disk[512..516];
-    assert_eq!(u32::from_le_bytes(lba1.try_into().unwrap()), INSTALL_DISK_PATTERN);
+    assert_eq!(
+        u32::from_le_bytes(lba1.try_into().unwrap()),
+        INSTALL_DISK_PATTERN
+    );
 }
 
+/// Iron E5: ESP persist is 1 KiB; virtio disk is 64 MiB (use 8 KiB stand-in).
+/// Also covers equal-length persist images (lab 1 KiB disk).
 #[test]
-fn reboot_detect_verifies_persisted_markers() {
-    let mut disk = vec![0u8; 1024];
+fn reboot_detect_accepts_persist_prefix_on_larger_disk() {
+    let _g = virtio_host_test_lock();
+    let persist = 1024usize;
+    let disk_len = 8192usize;
+    let mut stamps = vec![0u8; persist];
     let sector = 512;
     for i in 0..(sector / 4) {
         let v = (DISK_PATTERN ^ (i as u32)).to_le_bytes();
-        disk[i * 4..i * 4 + 4].copy_from_slice(&v);
+        stamps[i * 4..i * 4 + 4].copy_from_slice(&v);
     }
     for i in 0..(sector / 4) {
         let v = (INSTALL_DISK_PATTERN ^ (i as u32)).to_le_bytes();
         let off = sector + i * 4;
-        disk[off..off + 4].copy_from_slice(&v);
+        stamps[off..off + 4].copy_from_slice(&v);
     }
-    let img = disk.clone();
-    // SAFETY: heap buffer as fake disk HPA.
+    let mut disk = vec![0u8; disk_len];
     unsafe {
-        init_with_image(0x1000_0000, disk.as_mut_ptr() as u64, disk.len(), Some(&img));
+        init_with_image(
+            0x1000_0000,
+            disk.as_mut_ptr() as u64,
+            disk.len(),
+            Some(&stamps),
+        );
         set_reboot_detect(true);
     }
+    assert_eq!(&disk[..persist], stamps.as_slice());
+    assert!(disk[persist..].iter().all(|&b| b == 0));
     assert!(mmio_access(0x1000_0000 + OFF_STATUS, true, STATUS_DRIVER_OK).is_some());
     assert!(blk_ok());
     assert!(booted_from_disk());
-    assert!(!install_disk_written());
+    assert!(
+        !install_disk_written(),
+        "prefix copy must not set the install-disk-written flag"
+    );
     set_reboot_detect(false);
 }
 
 #[test]
 fn mmio_magic_and_status_handshake() {
+    let _g = virtio_host_test_lock();
     let mut disk = [0u8; 512];
     // SAFETY: stack buffer as fake disk HPA for unit test.
     unsafe {
@@ -71,5 +91,8 @@ fn mmio_magic_and_status_handshake() {
     );
     assert!(mmio_access(0x1000_0000 + OFF_STATUS, true, STATUS_DRIVER_OK).is_some());
     assert!(blk_ok());
-    assert_eq!(u32::from_le_bytes(disk[0..4].try_into().unwrap()), DISK_PATTERN);
+    assert_eq!(
+        u32::from_le_bytes(disk[0..4].try_into().unwrap()),
+        DISK_PATTERN
+    );
 }

@@ -18,8 +18,8 @@ if ! grep -q 'fn prop_iso_install_package(' "$ROOT/mgmt/iso_install.rs"; then
   echo "error: missing prop_iso_install_package" >&2
   exit 1
 fi
-if ! grep -q 'GAP(OPEN M7.7): ISO install-to-disk' "$ROOT/mgmt/iso_install.rs"; then
-  echo "error: ISO install GAP must be OPEN M7.7 until iron/QEMU close" >&2
+if ! grep -q 'GAP(CLOSED M7.7): ISO install-to-disk' "$ROOT/mgmt/iso_install.rs"; then
+  echo "error: ISO install GAP must be CLOSED M7.7 after iron reboot-to-disk" >&2
   exit 1
 fi
 if ! grep -q 'reboot-to-disk' "$ROOT/mgmt/iso_install.rs"; then
@@ -38,8 +38,8 @@ if [[ ! -f "$ROOT/docs/evidence/r640/STATUS-iso-install" ]]; then
   echo "error: missing docs/evidence/r640/STATUS-iso-install" >&2
   exit 1
 fi
-if ! grep -q 'STATUS=open' "$ROOT/docs/evidence/r640/STATUS-iso-install"; then
-  echo "error: STATUS-iso-install must stay open until install proof" >&2
+if ! grep -q 'STATUS=closed' "$ROOT/docs/evidence/r640/STATUS-iso-install"; then
+  echo "error: STATUS-iso-install must be closed after iron BOOTED-FROM-DISK" >&2
   exit 1
 fi
 
@@ -50,6 +50,6 @@ echo "==> cargo test iso_install_package"
 cargo test --lib iso_install_package -- --nocapture
 
 echo "$SCAFFOLD"
-echo "==> M7.7 ISO install-to-disk scaffold smoke PASSED (iron ${IRON} only after QEMU/R640 proof)"
+echo "==> M7.7 ISO install-to-disk scaffold smoke PASSED (iron close is COM2 BOOTED-FROM-DISK; never print ${IRON})"
 # never print iron marker from host scaffold smoke
 true

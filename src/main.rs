@@ -83,6 +83,7 @@ fn main() -> Status {
     // E5 lab: ESP isoinstall.txt arms 1MiB install disk; isoreboot.txt = second boot.
     r640_hypervisor::mgmt::probe_iso_install_lab_flag();
     r640_hypervisor::mgmt::probe_iso_reboot_lab_flag();
+    r640_hypervisor::mgmt::probe_iso_persist_reboot();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
@@ -446,6 +447,15 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     };
     // SAFETY: disk_phys is a fresh allocator span; BAR GPA is EPT-unmapped.
     let preload = r640_hypervisor::mgmt::install_disk_preload_bytes();
+    if let Some(img) = preload {
+        boot::serial::write_str("boot: E5 persist preload bytes=");
+        write_dec(img.len() as u64);
+        if img.len() != disk_bytes {
+            boot::serial::write_str(" prefix_into=");
+            write_dec(disk_bytes as u64);
+        }
+        boot::serial::write_byte(b'\n');
+    }
     unsafe {
         devices::virtio_blk::init_with_image(bar_hpa, disk_phys, disk_bytes, preload);
     }

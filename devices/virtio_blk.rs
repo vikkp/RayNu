@@ -143,7 +143,12 @@ pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
 
 /// Like [`init`], but optionally preload a persisted install image (E5 reboot lab).
 ///
-/// SAFETY: `disk_phys` writable for `disk_bytes`; `image` if `Some` must be `disk_bytes`.
+/// Persist files are **prefix stamps** (LBA0+LBA1, typically 1 KiB) while the
+/// live virtio disk may be 1 MiB (lab) or 64 MiB (iron). Copy `min(image, disk)`
+/// at the start and zero the rest. Requiring `image.len() == disk_bytes` dropped
+/// iron `installdisk.bin` and made reboot-detect verify zeros → DRIVER_OK miss.
+///
+/// SAFETY: `disk_phys` writable for `disk_bytes`; `image` may be shorter.
 pub unsafe fn init_with_image(
     bar_gpa: u64,
     disk_phys: u64,
@@ -162,12 +167,11 @@ pub unsafe fn init_with_image(
     INSTALL_MARKED = false;
     BOOTED_FROM_DISK = false;
     BOOTED_MARKED = false;
-    match image {
-        Some(img) if img.len() == disk_bytes => {
-            core::ptr::copy_nonoverlapping(img.as_ptr(), disk_phys as *mut u8, disk_bytes);
-        }
-        _ => {
-            core::ptr::write_bytes(disk_phys as *mut u8, 0, disk_bytes);
+    core::ptr::write_bytes(disk_phys as *mut u8, 0, disk_bytes);
+    if let Some(img) = image {
+        if !img.is_empty() {
+            let n = core::cmp::min(img.len(), disk_bytes);
+            core::ptr::copy_nonoverlapping(img.as_ptr(), disk_phys as *mut u8, n);
         }
     }
 }
@@ -249,6 +253,10 @@ unsafe fn run_write_readback() {
         if ok {
             BLK_OK = true;
             BOOTED_FROM_DISK = true;
+        } else {
+            // Prefix not copied, or stamps do not match persist contract.
+            #[cfg(target_os = "uefi")]
+            crate::boot::serial::write_line("boot: WARN — E5 reboot-detect LBA verify failed");
         }
         return;
     }
@@ -292,6 +300,12 @@ unsafe fn run_write_readback() {
             }
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn virtio_host_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 /// Host-only selftest (no guest): write+readback via [`run_write_readback`].

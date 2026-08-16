@@ -1,7 +1,9 @@
 # Runbook — ISO install-to-disk (E5 / M7.7)
 
 **Scaffold marker (host/CI):** `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`  
-**Iron / QEMU close marker:** `RAYNU-V-M7-ISO-INSTALL-OK`  
+**Iron close (COM2):** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of `RAYNU-V-M7-ISO-INSTALL-OK`)  
+**Evidence:** [2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md) — `STATUS-iso-install=closed`  
+**Archive:** `docs/evidence/r640/`  
 **Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · HDA E5  
 **Prior:** [iso.md](iso.md) (M7.3 deploy plan) · [mgmt_http.md](mgmt_http.md) (E3 network)
 
@@ -64,9 +66,19 @@ RAYNU-V-M7-ISO-REBOOT-PENDING
 ```
 
 `REBOOT-PENDING` means boot1 advanced the phase machine (“would reboot from disk”).
-Virtio-blk backing is still RAM, so the smoke **synthesizes** `target/e5-lab-install.img`
-(host LBA0/LBA1 patterns) and runs boot2 with ESP `isoreboot.txt` + `installdisk.bin`
-(`ISO_REBOOT_LAB=1`). Expect:
+
+**E5 persist (PRE-EBS):** when the install contract is armed (`isoinstall.txt` or
+`POST /iso/{id}/install`), firmware writes ESP `EFI/RayNu/installdisk.bin`
+(**1 KiB** LBA0+LBA1 stamps) plus `installsize.txt` (full virtio size). Live
+virtio remains RAM. The next boot loads that file (`probe_iso_persist_reboot`)
+without `isoreboot.txt`. iDRAC Virtual Floppy is often **read-only** — then
+COM2 prints `WARN — E5 persist ESP write failed` and a writable USB ESP is
+required.
+
+QEMU `fat:rw` usually keeps the firmware file. Smoke prefers
+`ESP1/EFI/RayNu/installdisk.bin`; if missing, it **synthesizes**
+`target/e5-lab-install.img` and runs boot2 with `isoreboot.txt` +
+`installdisk.bin` (`ISO_REBOOT_LAB=1`). Expect:
 
 ```text
 boot: E5 lab isoreboot.txt armed (1MiB persist)
@@ -82,6 +94,10 @@ RAYNU-V-M7-ISO-BOOTED-FROM-DISK
 
 `BOOTED-FROM-DISK` closes the **QEMU lab** two-boot loop only — not iron E5.
 Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
+The persist file is a **1 KiB prefix**; `virtio_blk::init_with_image` copies it
+into the larger RAM disk. Requiring equal lengths dropped iron stamps
+(COM2 2026-08-16: persist-detect + `bytes=67108864` then
+`HLT without DRIVER_OK readback`).
 
 ### Full product path
 
@@ -89,29 +105,29 @@ Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
 2. Guest boots via **extract-boot** (`load_bzimage_guest` + staged bzImage/initrd).
 3. Host/guest writes a marker (or filesystem) to the virtio-blk install disk.
 4. Hypervisor records DiskWritten → RebootPending.
-5. Second boot from the install disk → lab `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`;
-   iron `RAYNU-V-M7-ISO-INSTALL-OK` only after R640 proof.
+5. Second boot from the install disk → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
+   (iron 2026-08-16; documented equivalent of `ISO-INSTALL-OK`).
 
 ### Iron (R640)
 
-Mirror E2/E3:
-
-1. Build kit → `releases/v0.1.0-iso-install-*` + SHA256.
-2. `make-boot-media` → iDRAC Virtual Floppy.
-3. COM2 capture (`console com2`).
-4. Mac curl: deploy/install REST during PRE-EBS window if needed.
-5. Fill [TEMPLATE-iso-install.md](../evidence/r640/TEMPLATE-iso-install.md).
-6. Set `docs/evidence/r640/STATUS-iso-install` to `STATUS=closed` only with real proof.
+Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
+[2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md).
+`STATUS-iso-install=closed`. Floppy is often read-only; use writable USB.
 
 ## Honesty / residuals
 
-- **GAP(OPEN M7.7)** until install-to-disk + reboot-to-disk proven.
+- **GAP(CLOSED M7.7)** — iron two-boot LBA stamp persist + reboot-to-disk (`BOOTED-FROM-DISK` on COM2).
 - **El Torito / CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
 - **ISO blob upload / parse** not claimed — extract-boot uses existing PE/ESP assets first.
-- **QEMU lab persist** uses a host-synthesized `e5-lab-install.img` (LBA markers), not a
-  guest-written filesystem surviving QEMU restart.
+- **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
+  filesystem. Host synth remains fallback if the ESP write did not land.
+- **Iron 64 MiB** persist is **marker sectors only** (1 KiB). `init_with_image`
+  copies that prefix into the live RAM disk; equal-length copy was the 2026-08-16
+  Cruzer `DRIVER_OK` miss. Full disk persist needs writable USB/NVMe, not a
+  64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
-- Do **not** claim Mount Everest closed until E4 + E5 are both green.
+- Do **not** claim Mount Everest: E5 stamp persist is closed; next is
+  post-EBS mgmt HTTP, then E4 polish + a real distro installer.
 
 ## Next
 
@@ -123,5 +139,8 @@ Mirror E2/E3:
    **Done (lab):** two-boot `./tools/m7-iso-install-qemu-smoke.sh` →
    `RAYNU-V-M7-ISO-INSTALL-LAB-OK` + `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (host-synthesized persist image between boots; not a guest filesystem installer).
-3. Guest filesystem install + real persistent virtio backing (beyond LBA marker lab).
-4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.
+3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (iron):**
+   Cruzer Micro persist-detect + prefix-copy → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
+   (2026-08-16). [`STATUS-iso-install`](../evidence/r640/STATUS-iso-install) closed.
+4. Guest filesystem install + full-disk persist (beyond LBA marker lab) — **after** post-EBS HTTP.
+5. El Torito / distro ISO blob upload (not required for M7.7 stamp close; not next).

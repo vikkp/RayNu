@@ -255,7 +255,7 @@ Existing formally verified or heavily verified hypervisors / kernels (seL4, Cert
 - Live-migration **page-transfer** L3 is closed on Latitude (M6.3); live vCenter product migrate remains polish.
 - Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.
 - Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.
-- **Mount Everest residual (not paper L3 claims):** network-reachable UI (E3–E4), Linux ISO install-to-disk (E5), live Redfish, R640 soak.
+- **Mount Everest residual (not paper L3 claims):** durable post-EBS management HTTP (SNP+smoltcp), remaining E4 polish (TLS/console), real distro installer later, live Redfish, R640 soak. E5 stamp persist closed on iron (`BOOTED-FROM-DISK`). LBA stamps ≠ guest rootfs. Firmware Tcp4 on this boot method is a platform limit.
 
 Any L2-only modules at the time of a public snapshot will be listed here with an explicit statement of the residual risk and the runtime-enforcement measures that remain in place.
 

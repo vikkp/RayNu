@@ -48,4 +48,4 @@ RAYNU-V-M7-ISO-OK
 M7.4 Ops Web UI MVP (`RAYNU-V-M7-UI-OK`) surfaces create-VM + media attach.
 
 E5 / M7.7 install-to-disk: see [iso_install.md](iso_install.md)
-(`RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; iron `RAYNU-V-M7-ISO-INSTALL-OK` open).
+(`RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; iron `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` closed 2026-08-16).

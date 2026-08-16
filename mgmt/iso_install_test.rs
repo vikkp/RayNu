@@ -23,12 +23,13 @@ fn markers_stable() {
         M7_ISO_BOOTED_FROM_DISK_MARKER,
         "RAYNU-V-M7-ISO-BOOTED-FROM-DISK"
     );
-    assert!(ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7"));
+    assert!(ISO_INSTALL_GAP_NOTE.contains("CLOSED M7.7"));
     assert!(ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close"));
 }
 
 #[test]
 fn install_phase_machine_roundtrip() {
+    let _g = iso_install_host_test_lock();
     clear_armed_install_contract();
     let mut store = ImageTable::new();
     let mut install = InstallToDiskPlan::empty();
@@ -51,11 +52,13 @@ fn install_phase_machine_roundtrip() {
 
 #[test]
 fn iso_install_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_install_package());
 }
 
 #[test]
 fn armed_contract_sizes_launch_disk() {
+    let _g = iso_install_host_test_lock();
     clear_armed_install_contract();
     assert!(!install_disk_armed_for_launch());
     arm_install_launch_contract(InstallLaunchContract {
@@ -73,12 +76,38 @@ fn armed_contract_sizes_launch_disk() {
 
 #[test]
 fn iso_install_lab_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_install_lab_package());
     println!("RAYNU-V-M7-ISO-INSTALL-LAB-OK");
 }
 
 #[test]
 fn iso_reboot_lab_package() {
+    let _g = iso_install_host_test_lock();
     assert!(prop_iso_reboot_lab_package());
     println!("RAYNU-V-M7-ISO-BOOTED-FROM-DISK");
+}
+
+#[test]
+fn persist_image_is_marker_only_for_iron_size() {
+    assert_eq!(
+        persist_image_len_for_contract(LAB_INSTALL_DISK_BYTES),
+        INSTALL_MARKER_PERSIST_BYTES
+    );
+    assert_eq!(
+        persist_image_len_for_contract(DEFAULT_INSTALL_DISK_BYTES),
+        INSTALL_MARKER_PERSIST_BYTES
+    );
+    let mut buf = [0u8; INSTALL_MARKER_PERSIST_BYTES];
+    assert!(fill_persist_image(&mut buf));
+    assert_eq!(
+        u32::from_le_bytes(buf[0..4].try_into().unwrap()),
+        crate::devices::virtio_blk::DISK_PATTERN
+    );
+    assert_eq!(
+        u32::from_le_bytes(buf[512..516].try_into().unwrap()),
+        crate::devices::virtio_blk::INSTALL_DISK_PATTERN
+    );
+    assert_eq!(parse_decimal_u64(b"67108864\n"), Some(67108864));
+    assert_eq!(parse_decimal_u64(b"1048576"), Some(1048576));
 }

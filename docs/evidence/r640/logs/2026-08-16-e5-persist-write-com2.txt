@@ -1,0 +1,35 @@
+Booting from Disk connected to front USB 2: Cruzer Micro
+RayNu-V r640-hypervisor — formally verified bare-metal hypervisor
+serial: COM1+COM2 mirror (iDRAC SOL = console com2)
+RAYNU-V-M0-BOOT-OK
+boot: E4 auth: bring-up token (lab; no auth.token)
+boot: uefi-net extra-after nii=4 pxe=8 http=4 ip4cfg=4 drv=75
+boot: HINT — PXE/HTTP/Ip4Config2 published, Tcp4ServiceBinding still 0 (vendor stack)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP lease 10.99.99.133/24 router=10.99.99.1
+boot: mgmt HTTP listening on 10.99.99.133:8443 (PRE-EBS SNP window)
+boot: CURL NOW → http://10.99.99.133:8443/
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+boot: SNP HTTP exchange ok
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: SNP HTTP exchange ok
+boot: E5 persist wrote installdisk.bin bytes=1024
+boot: SNP HTTP exchange ok
+RAYNU-V-M7-UEFI-HTTP-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+RAYNU-V-M1-EBS-OK
+RAYNU-V-M1-VMXON-OK
+boot: M4.3 virtio-blk BAR=0x10000000 disk=0x1bc3000 bytes=67108864
+boot: E5 install-sized virtio-blk armed (PRE-EBS contract)
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-DISK-WRITTEN
+RAYNU-V-M7-ISO-INSTALL-LAB-OK
+RAYNU-V-M7-ISO-REBOOT-PENDING
+RAYNU-V-M4-NET-OK
+RAYNU-V-M4-SMP-OK
+RAYNU-V-R640-BOOT-OK

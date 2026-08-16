@@ -354,7 +354,8 @@ pub use iso::{
 pub use iso_install::{
     dispatch_iso_install_rest, disk_bytes_for_virtio_launch, install_disk_armed_for_launch,
     install_disk_preload_bytes, lab_reboot_armed, probe_iso_install_lab_flag,
-    probe_iso_reboot_lab_flag, prop_iso_install_lab_package, prop_iso_install_package,
+    probe_iso_persist_reboot, probe_iso_reboot_lab_flag, prop_iso_install_lab_package,
+    prop_iso_install_package,
     prop_iso_reboot_lab_package, InstallToDiskPlan, M7_ISO_INSTALL_OK_MARKER,
     M7_ISO_INSTALL_SCAFFOLD_MARKER, ISO_INSTALL_GAP_NOTE,
 };

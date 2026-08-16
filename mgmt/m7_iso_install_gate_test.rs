@@ -6,6 +6,7 @@ use crate::mgmt::iso_install::prop_iso_install_package;
 
 #[test]
 fn m7_7_iso_install_scaffold_passes() {
+    let _g = crate::mgmt::iso_install::iso_install_host_test_lock();
     assert_eq!(
         M7_ISO_INSTALL_GATE_MARKER,
         "RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK"

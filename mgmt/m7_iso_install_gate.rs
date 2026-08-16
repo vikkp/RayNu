@@ -16,7 +16,7 @@ use super::iso_install::{
 /// Host / CI marker when the M7.7 scaffold package passes.
 pub const M7_ISO_INSTALL_GATE_MARKER: &str = M7_ISO_INSTALL_SCAFFOLD_MARKER;
 
-/// True when iso_install module exposes package + markers + open GAP.
+/// True when iso_install module exposes package + markers + closed GAP.
 pub fn iso_install_surface_present() -> bool {
     let s = include_str!("iso_install.rs");
     s.contains("fn prop_iso_install_package(")
@@ -28,6 +28,9 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn note_reboot_pending_lab(")
         && s.contains("fn probe_iso_install_lab_flag(")
         && s.contains("fn probe_iso_reboot_lab_flag(")
+        && s.contains("fn probe_iso_persist_reboot(")
+        && s.contains("fn persist_armed_install_to_esp(")
+        && s.contains("fn fill_persist_image(")
         && s.contains("fn prop_iso_reboot_lab_package(")
         && s.contains("fn mark_disk_written(")
         && s.contains("fn mark_reboot_pending(")
@@ -37,7 +40,7 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains(M7_ISO_INSTALL_SCAFFOLD_MARKER)
         && s.contains(ISO_INSTALL_GAP_NOTE)
         && s.contains(ISO_INSTALL_MVP_NOTE)
-        && ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7")
+        && ISO_INSTALL_GAP_NOTE.contains("CLOSED M7.7")
         && include_str!("../src/main.rs").contains("disk_bytes_for_virtio_launch")
         && include_str!("../src/main.rs").contains("E5 install-sized virtio-blk")
         && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
@@ -76,7 +79,7 @@ pub fn iso_install_scripts_present() -> bool {
         && evidence.contains("Serial excerpt")
         && evidence.contains(M7_ISO_INSTALL_OK_MARKER)
         && evidence.contains("reboot-to-disk")
-        && status.contains("STATUS=open")
+        && status.contains("STATUS=closed")
         && status.contains(M7_ISO_INSTALL_OK_MARKER)
         && status.contains("scaffold")
 }
