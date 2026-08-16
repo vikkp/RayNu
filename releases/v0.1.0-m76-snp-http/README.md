@@ -29,9 +29,17 @@ Does **not** contain `CURL NOW` / `SNP listen window_ms=` (those landed in `8c43
 ( cd releases/v0.1.0-m76-snp-http && shasum -a 256 -c r640-hypervisor.efi.sha256 )
 ```
 
-**Operator:** also hash the EFI you actually mapped as Virtual Floppy. If it
-differs from this kit (Mac vs CI toolchain), paste that SHA256 into evidence —
-do not overwrite this rebuild without noting both digests.
+### Iron operator digests (authoritative for the R640 close)
+
+Filed from Mac `dist/` used as Virtual Floppy (`OPERATOR-SHA256SUMS`):
+
+```text
+be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5  r640-hypervisor.efi
+86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484  raynu-v-0.1.0-uefi-boot.img
+```
+
+CI rebuild of `b59927e` on Linux is `5a865169…4262` — same source, different
+toolchain digest. Do not treat mismatch as a wrong iron boot.
 
 ## Remap
 

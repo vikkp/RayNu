@@ -6,8 +6,11 @@ STATUS=closed
 #   docs/evidence/r640/2026-08-16-uefi-http-ok.md
 #   logs/2026-08-16-uefi-http-ok-com2.txt
 #   logs/2026-08-16-uefi-http-ok-curl.txt
-#   Kit: releases/v0.1.0-m76-snp-http/ (git b59927e rebuild)
-#   EFI SHA256 5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262
+#   Kit: releases/v0.1.0-m76-snp-http/ (git b59927e)
+#   Iron EFI (Mac dist)  be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5
+#   Iron img (boot-media) 86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484
+#   CI rebuild EFI         5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262
+#   (Mac≠CI by toolchain; see OPERATOR-SHA256SUMS)
 #   Observed: listening on 10.99.99.127:8443 then RAYNU-V-M7-UEFI-HTTP-OK
 #   Path: ConnectController → SNP → smoltcp DHCP/TCP (Tcp4 absent on floppy)
 #   Same boot still printed RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF

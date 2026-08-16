@@ -1,0 +1,6 @@
+# Operator iron digests (Mac-built dist that closed M7.6 on R640)
+# Filed 2026-08-16 from operator paste — authoritative for the Virtual Floppy used.
+# CI rebuild at b59927e differs by toolchain (see r640-hypervisor.efi.sha256).
+
+be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5  dist/raynu-v-0.1.0/r640-hypervisor.efi
+86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484  dist/raynu-v-0.1.0-boot-media/raynu-v-0.1.0-uefi-boot.img

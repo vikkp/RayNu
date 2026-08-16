@@ -9,16 +9,20 @@
 |-------|-------|
 | Kit | [`releases/v0.1.0-m76-snp-http/`](../../releases/v0.1.0-m76-snp-http/) |
 | Git (feature) | `b59927e` — first SNP+smoltcp residual (no `CURL NOW` yet) |
-| Rebuild EFI SHA256 | `5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262` |
+| **Iron EFI (Mac dist, authoritative)** | `be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5` |
+| **Iron Virtual Floppy img** | `86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484` |
+| CI rebuild EFI (same git, Linux) | `5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262` |
 | COM2 fingerprint | listen line then OK; **no** `CURL NOW` / `window_ms` |
 
-Operator Mac-built floppy may differ by toolchain — compare:
+Operator paths hashed:
 
-```bash
-shasum -a 256 path/to/your/r640-hypervisor.efi
-# expect match to kit, or file both digests under evidence
+```text
+dist/raynu-v-0.1.0/r640-hypervisor.efi
+dist/raynu-v-0.1.0-boot-media/raynu-v-0.1.0-uefi-boot.img
 ```
 
+See [`releases/v0.1.0-m76-snp-http/OPERATOR-SHA256SUMS`](../../releases/v0.1.0-m76-snp-http/OPERATOR-SHA256SUMS).
+Mac vs CI digests differ by toolchain; runtime proof is COM2 + curl.
 ## What closed
 
 | Gate | Marker | Evidence |
