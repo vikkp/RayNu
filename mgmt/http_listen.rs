@@ -85,11 +85,9 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
                 match e {
                     MgmtListenError::NoTcp4Stack => {
                         serial::write_line(
-                            "boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)",
+                            "boot: WARN — Tcp4 stack absent after connect; mgmt HTTP residual (ADR-012)",
                         );
-                        serial::write_line(
-                            "boot: HINT — if uefi-net probe tcp4=0: SNP residual next (ADR-012)",
-                        );
+                        // Detailed residual HINT already printed by net_probe_uefi.
                     }
                     MgmtListenError::UnsupportedOnFirmware => {
                         serial::write_line("boot: WARN — mgmt HTTP unsupported on this path");
