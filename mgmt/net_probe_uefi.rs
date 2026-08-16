@@ -207,7 +207,10 @@ fn print_diagnosis(c: &NetCounts, e: &ExtraCounts) {
             return;
         }
         serial::write_line(
-            "boot: HINT — SNP present, Tcp4 still 0; extra NetworkPkg protocols seen — see extra census",
+            "boot: HINT — PXE/HTTP/Ip4Config2 published, Tcp4ServiceBinding still 0 (vendor stack)",
+        );
+        serial::write_line(
+            "boot: HINT — firmware Tcp4 listen impossible on this path; SNP residual next (ADR-012)",
         );
         return;
     }

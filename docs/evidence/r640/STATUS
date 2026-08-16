@@ -14,7 +14,9 @@ STATUS=closed
 #   Observed: listening on 10.99.99.127:8443 then RAYNU-V-M7-UEFI-HTTP-OK
 #   Path: ConnectController → SNP → smoltcp DHCP/TCP (Tcp4 absent on floppy)
 #   Root cause: docs/evidence/r640/2026-08-16-uefi-tcp4-absent-root-cause.md
-#     UNDI/SNP starts (snp=12); NetworkPkg SB never dispatched on Virtual Floppy BDS.
+#     Census COM2: logs/2026-08-16-uefi-tcp4-census-com2.txt
+#     after-all: snp=12 tcp4=0; extra-after pxe=8 http=4 ip4cfg=4 (no Tcp4 SB)
+#     Platform limitation: vendor PXE/HTTP without Tcp4ServiceBinding. SNP residual OK.
 #   Same boot still printed RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF
 #   Note: iron floppy was pre-8c4352d (no CURL NOW); later tip has 45s window+ICMP
 #

@@ -16,7 +16,9 @@ paper (§6) and for claiming `RAYNU-V-R640-BOOT-OK`.
 | `2026-08-16-uefi-http-net-probe-zero-com2.txt` | M7.6 probe | `snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0` — no UEFI net stack on floppy boot |
 | `2026-08-16-uefi-http-snp12-after-pci-com2.txt` | M7.6 ConnectController | `after-pci snp=12` — SNP up, Tcp4 still 0 → SNP residual |
 
-Tcp4-absent analysis (not a new COM2 paste):
+| `2026-08-16-uefi-tcp4-census-com2.txt` | Tcp4 extra census | `extra-after pxe=8 http=4 ip4cfg=4` still `tcp4=0`; SNP residual OK |
+
+Tcp4-absent analysis:
 [`../2026-08-16-uefi-tcp4-absent-root-cause.md`](../2026-08-16-uefi-tcp4-absent-root-cause.md).
 | `2026-08-16-uefi-http-snp-listen-accept-timeout-com2.txt` | M7.6 SNP residual | DHCP+listen `10.99.99.127:8443`; accept timeout before curl |
 | `2026-08-16-uefi-http-ok-com2.txt` | **M7.6 iron close** | `RAYNU-V-M7-UEFI-HTTP-OK` after listen on `10.99.99.127:8443` |

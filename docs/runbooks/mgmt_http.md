@@ -85,10 +85,11 @@ post-EBS NIC driver (follow-on). M7.6 MVP = PRE-EBS window + soft-fail.
 
 ## R640 Tcp4 absent (Virtual Floppy)
 
-Iron (BIOS 2.2.11, iDRAC Virtual Floppy): after `ConnectController`,
-`snp=12` but `mnp=ip4=dhcp4=tcp4=0`. Firmware Tcp4ServiceBinding never
-appears. SNP + smoltcp residual is the working path
-(`RAYNU-V-M7-UEFI-HTTP-OK`).
+Iron (BIOS 2.2.11, iDRAC Virtual Floppy): after PCI+SNP+all-handles,
+`snp=12` and `mnp=ip4=dhcp4=tcp4=0`, but `pxe=8 http=4 ip4cfg=4`.
+Firmware **Tcp4ServiceBinding** never appears (vendor PXE/HTTP closed
+stack). SNP + smoltcp residual is the working path
+(`RAYNU-V-M7-UEFI-HTTP-OK`). Platform limitation — see census COM2.
 
 **Working explanation:** Floppy BDS starts UNDI/SNP only. NetworkPkg
 (MnpDxe…Tcp4Dxe) is dispatched for **UEFI PXE / HTTP / iSCSI boot

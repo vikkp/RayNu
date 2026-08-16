@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: 37d7bf201045d250898b9ca05f4ca9c0efd5d922
-last_commit_short: 37d7bf2
+last_commit: 3cce1a4dcd71482472020e63b2e7f31833788980
+last_commit_short: 3cce1a4
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
@@ -281,6 +281,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | tcp4-census-iron | 0.75 | 82 | Iron: after-all pxe=8 http=4 ip4cfg=4 still tcp4=0; Floppy Tcp4 SB = platform limit |
 | 2026-08-16 | tcp4-root-cause | 0.75 | 82 | Floppy Tcp4 absent: UNDI/SNP only; extra census + all-handles; SNP residual held |
 | 2026-08-16 | e4-spa-arm-kit | 0.75 | 82 | Preserve kit `v0.1.0-e4-spa-arm` before networking deep-dive |
 | 2026-08-16 | e4-spa-iron | 0.75 | 82 | E4 SPA create + 64MiB install arm on R640; iso~62%; INSTALL-OK open |
@@ -314,7 +315,7 @@ Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
 Months left:   0.75  (ETA ~ 2026-09)
 Next move:     E5 iron reboot-to-disk → RAYNU-V-M7-ISO-INSTALL-OK
-Tcp4 residual: Virtual Floppy does not dispatch NetworkPkg (SNP residual OK)
+Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit; SNP OK)
 Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
 Do not claim:  Mount Everest until E4–E5 green
 ```

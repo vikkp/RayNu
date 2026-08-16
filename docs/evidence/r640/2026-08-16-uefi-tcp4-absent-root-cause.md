@@ -6,15 +6,30 @@
 
 **Hardware:** Dell PowerEdge R640 · BIOS 2.2.11 · iDRAC Virtual Floppy · SNP residual lease `10.99.99.127:8443`.
 
-## Verdict (current evidence)
+## Verdict (iron census 2026-08-16 — **platform limitation**)
 
-Firmware **UNDI/SNP starts** after `ConnectController` (`snp=12`). The **NetworkPkg IPv4 stack never appears**: `mnp=0 ip4=0 dhcp4=0 tcp4=0` after PCI + SNP connect. Enabling “UEFI Network Stack” in BIOS did **not** change that (see `logs/2026-08-16-uefi-http-tcp4-absent-com2.txt`).
+Virtual Floppy + extra Connect **does** start Dell’s PXE/HTTP/Ip4Config2
+layer. It **never** publishes `Tcp4ServiceBinding` (or MNP/Ip4/Dhcp4 SB).
+ADR-012 SNP residual remains the only listen path.
 
-`ConnectController` can only **Start** drivers that are already **dispatched** (Driver Binding installed). It cannot conjure `Tcp4Dxe` if Dell BDS did not load NetworkPkg on this boot path.
+Lived COM2 ([`logs/2026-08-16-uefi-tcp4-census-com2.txt`](logs/2026-08-16-uefi-tcp4-census-com2.txt)):
 
-**Working explanation:** Virtual Floppy boot uses a BDS path that starts NIC UNDI (SNP) but does **not** dispatch MnpDxe → Ip4Dxe → Dhcp4Dxe → Tcp4Dxe. Those DXEs are tied to **UEFI PXE / HTTP / iSCSI boot options**, not to “any boot that has a NIC.”
+| Stage | SNP | MNP/Ip4/Dhcp4/Tcp4 SB | Extra |
+|-------|-----|------------------------|-------|
+| probe | 0 | all 0 | `nii=4 pxe=0 http=0 ip4cfg=0 drv=75` |
+| after-pci | **12** | all 0 | — |
+| after-snp | 12 | all 0 | — |
+| after-all (`stack_ok=0 all_ok=8`) | 12 | **still all 0** | `nii=4 pxe=8 http=4 ip4cfg=4 drv=75` |
 
-Until a later iron census shows `mnp>0` / `pxe>0` / `http>0` / loaded `Tcp4Dxe`, treat **firmware Tcp4 as unavailable on Virtual Floppy** and keep ADR-012 SNP residual.
+So the earlier “NetworkPkg never dispatched” story is **too coarse**.
+All-handles (previously skipped once `snp>0`) started vendor PXE/HTTP
+DXEs. Those DXEs do **not** expose the EDK2 `Tcp4ServiceBinding` our
+listen uses. Typical vendor pattern: PXE Base Code / HTTP boot is a
+closed stack; third-party apps only see SNP + UNDI (NII=4).
+
+**Firmware Tcp4 listen cannot appear on this Floppy path** without
+loading our own `Tcp4Dxe` (or a BIOS/build that publishes Tcp4 SB).
+SNP residual still printed `RAYNU-V-M7-UEFI-HTTP-OK` on the same boot.
 
 ---
 
@@ -34,15 +49,15 @@ Entry: `src/main.rs` → `run_pre_ebs_mgmt_listen()` → `net_probe_uefi::probe_
 | PCI I/O | `4cf5b200-68b8-4ca5-9eec-b23e3f50029a` | UNDI parent | **313** |
 | Device Path | `09576e91-6d3f-11d2-8e39-00a0c969723b` | connect sweep | (not counted on COM2) |
 
-**New extra census** (this change; next iron boot):
+**Extra census** (lived after all-handles):
 
-| Protocol | GUID | Why |
-|----------|------|-----|
-| NII / UNDI 3.1 | `e18541cd-f755-4f73-928d-643c8a79b229` | Confirms UNDI identifier vs software SNP |
-| PXE Base Code | `03c4e603-ac28-11d3-9a2d-0090273fc14d` | PXE stack dispatched? |
-| HTTP Service Binding | `bdc8e6af-d9bc-4379-a72a-e0c4e75dae1c` | HTTP boot DXE? |
-| Ip4Config2 | `5b446ed1-e30b-4faa-871a-3654eca36080` | Ip4 config protocol without SB? |
-| Driver Binding | `18a031ab-b443-4d1a-a5c0-0c09261e9f71` | Any dispatched UEFI drivers |
+| Protocol | GUID | Why | Iron after-all |
+|----------|------|-----|----------------|
+| NII / UNDI 3.1 | `e18541cd-f755-4f73-928d-643c8a79b229` | UNDI identifier | **4** (already at probe) |
+| PXE Base Code | `03c4e603-ac28-11d3-9a2d-0090273fc14d` | PXE stack | 0 → **8** |
+| HTTP Service Binding | `bdc8e6af-d9bc-4379-a72a-e0c4e75dae1c` | HTTP boot DXE | 0 → **4** |
+| Ip4Config2 | `5b446ed1-e30b-4faa-871a-3654eca36080` | Ip4 config without Ip4 SB | 0 → **4** |
+| Driver Binding | `18a031ab-b443-4d1a-a5c0-0c09261e9f71` | Dispatched UEFI drivers | **75** (unchanged) |
 
 We do **not** use UEFI `EFI_HTTP_PROTOCOL` for the SPA — HTTP is the in-tree codec over TCP.
 
@@ -93,7 +108,10 @@ Listen path is unchanged: Tcp4 first, SNP residual on `NoTcp4Stack`.
 - `OpenProtocol(SNP, Exclusive)` — would `DisconnectController` MNP if it ever appeared (GRUB/edk2 lesson). We use `GetProtocol`.
 - Starting our own TCP while firmware Tcp4 is live on the same SNP — ADR-012: one stack per path.
 
-**Cannot be fixed by more ConnectController:** loading `Tcp4Dxe` from a firmware volume or from our FV. Connect does not `LoadImage`.
+**Cannot be fixed by more ConnectController for Tcp4 SB:** iron already
+ran PCI + SNP + SB (0 handles) + 256 all-handles. That produced PXE/HTTP
+/Ip4Config2 and still `tcp4=0`. Further Connect rounds will not install
+`Tcp4ServiceBinding`. Loading `Tcp4Dxe` would be `LoadImage`, not Connect.
 
 ---
 
@@ -114,8 +132,9 @@ Lived: operator enabled “UEFI Network Stack” and **still** got `Tcp4 stack a
 
 - BDS path is USB/floppy, not Network.
 - UNDI often still starts (PCI connect → `snp=12`).
-- PXE/HTTP DXEs typically stay **undispatched** until a network boot option runs.
-- Floppy is a short PRE-EBS window; we already cap all-handles at 256.
+- PXE/HTTP DXEs **can** Start from a bounded all-handles pass (`pxe=8 http=4`)
+  even on Floppy — they still do not publish Tcp4 SB.
+- Floppy is a short PRE-EBS window; we cap all-handles at 256.
 
 **BIOS 2.2.11** is old relative to current 14G (2.22.x). A BIOS update is a valid experiment; do not assume it alone enables Tcp4 on Floppy.
 
@@ -132,41 +151,50 @@ Lived: operator enabled “UEFI Network Stack” and **still** got `Tcp4 stack a
 | **C. `LoadImage` Tcp4Dxe from Dell FV** | Maybe | 0 | Need FV walk + DEPEX; Dell may not expose NetworkPkg files |
 | **D. Embed EDK2 NetworkPkg DXEs in our EFI/ESP** | Yes in principle | ~300–800 KiB uncompressed (Mnp+Arp+Ip4+Ip4Config2+Udp4+Dhcp4+Tcp4); still ≪ 15 MB ADR-003 | Driver/UNDI mismatch; two-stack policy; maintenance; must Start **before** SNP residual opens the NIC |
 
-**Recommendation:** do **not** embed NetworkPkg yet. Size is safe; complexity and “two stacks” are not. Prove first (next iron extra-census + BIOS experiments) that firmware DXEs are absent. If B or C produces `tcp4>0`, use firmware Tcp4 and leave smoltcp as residual. If they stay 0, document Virtual Floppy as a **platform limitation** and keep SNP residual.
+**Recommendation:** treat Floppy **Tcp4 SB absence as a platform
+limitation**. Do **not** embed NetworkPkg unless we later choose firmware
+HTTP (`http=4` SB) or our own Tcp4Dxe as a dedicated follow-on. Size is
+safe; two-stack policy and UNDI mismatch are not. SNP residual stays
+primary. Optional: experiment with `EFI_HTTP_PROTOCOL` via the 4 HTTP SB
+handles — that is a new path, not a Tcp4 fix.
 
 We do **not** `LoadImage`/`StartImage` any DXE today.
 
 ---
 
-## 5. Next iron experiments (ordered)
+## 5. Next experiments (optional — Tcp4 SB already ruled out)
 
-Do these on the **tip that prints `extra` / `after-all` / `stack_ok`**. SNP residual must still print `CURL NOW`.
+Experiment 1 is **done** (this census). Further ConnectController will not
+create Tcp4 SB.
 
-| # | Experiment | How | Success look like |
-|---|------------|-----|-------------------|
-| 1 | **Extra census on current Floppy path** | Remap tip media; SOL `console com2` | `extra nii=… pxe=… http=…`; `after-all` still `tcp4=0` **or** surprise `tcp4>0` |
-| 2 | **PXE Device 1 Enabled**, still boot Virtual Floppy | F2 → Network Settings → UEFI PXE → Device 1 Enabled; one-shot Floppy | If `pxe>0` or `mnp>0`: firmware stack **exists**, Floppy BDS was the gap |
-| 3 | **HTTP Device 1 Enabled**, Floppy boot | Same menu, HTTP Device | `http>0` / `tcp4>0` would mean HttpDxe pulled Tcp4 |
-| 4 | **USB ESP** (not iDRAC Floppy) | Same `.img` on FAT USB | Isolates vMedia vs any removable boot |
-| 5 | **BIOS 2.2.11 → current 14G** | iDRAC firmware update (maintenance window) | Repeat 1–3; note version on evidence |
-| 6 | **One-shot PXE boot** (optional) | F11 → PXE Device — **do not expect our EFI** | Only proves firmware can run PXE; not our listen |
-
-**Stop rule:** if experiment 1 shows `nii>0` (or `snp>0`) and `pxe=0 http=0 mnp=0 ip4=0 tcp4=0` after `after-all`, that is enough to file **platform limitation: Virtual Floppy does not dispatch NetworkPkg**. Experiments 2–5 are then optional confirmation, not blockers.
+| # | Experiment | Why still useful |
+|---|------------|------------------|
+| 2–3 | PXE/HTTP Device enabled, Floppy boot | Might raise `tcp4>0` if BIOS option pulls Tcp4Dxe; unlikely given `http=4` already |
+| 4 | USB ESP vs Floppy | Isolates vMedia |
+| 5 | BIOS 2.2.11 → current 14G | Only if we want vendor Tcp4 SB in a later BIOS |
+| 7 | **Firmware HTTP** via `http=4` SB | Alternate to Tcp4; do not break SNP residual |
+| 8 | Embed EDK2 Tcp4Dxe | Last resort; ADR-012 two-stack / size review |
 
 **Do not:** rewrite SNP residual; Exclusive-open SNP; claim Tcp4 from host/QEMU.
 
 ---
 
-## Lived COM2 fingerprints (prior)
+## Lived COM2 fingerprints
+
+Closing census: [`logs/2026-08-16-uefi-tcp4-census-com2.txt`](logs/2026-08-16-uefi-tcp4-census-com2.txt)
 
 ```text
-boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra nii=4 pxe=0 http=0 ip4cfg=0 drv=75
 boot: uefi-net after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net after-all snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra-after nii=4 pxe=8 http=4 ip4cfg=4 drv=75
+RAYNU-V-M7-UEFI-HTTP-OK
+RAYNU-V-R640-BOOT-OK
 ```
 
-Then SNP residual: `CURL NOW` → `AuthAllowed` / `VmCreated` → `RAYNU-V-M7-UEFI-HTTP-OK`.
-
-Archives: `logs/2026-08-16-uefi-http-net-probe-zero-com2.txt`, `…-tcp4-absent-com2.txt`, `…-snp12-after-pci-com2.txt`, `…-uefi-http-ok-com2.txt`.
+Prior ladder: `logs/2026-08-16-uefi-http-net-probe-zero-com2.txt`,
+`…-tcp4-absent-com2.txt`, `…-snp12-after-pci-com2.txt`,
+`…-uefi-http-ok-com2.txt`.
 
 ## Reproduce (diagnostics tip)
 

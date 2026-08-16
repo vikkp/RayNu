@@ -39,6 +39,7 @@ pub fn uefi_http_surface_present() -> bool {
         && probe.contains("NII_GUID")
         && probe.contains("extra-after")
         && probe.contains("NetworkPkg DXEs not dispatched")
+        && probe.contains("Tcp4ServiceBinding still 0")
 }
 
 /// True when runbook + smoke name M7.6 markers and PRE-EBS constraint.
