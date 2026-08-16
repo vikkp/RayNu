@@ -29,6 +29,20 @@ boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
 RAYNU-V-M7-UEFI-HTTP-OK
 ```
 
+## Operator curl (Mac)
+
+[`logs/2026-08-16-uefi-http-ok-curl.txt`](logs/2026-08-16-uefi-http-ok-curl.txt):
+
+```text
+* Connected to 10.99.99.127 (10.99.99.127) port 8443
+> GET / HTTP/1.1
+< HTTP/1.1 200 OK
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 10757
+```
+
+SPA body includes `<title>RayNu-V</title>` and `data-raynu-webui="1"`.  
+`/vms` curl in the same paste used a typo (`::8443`) and never reached the server.
 ## HDA / Everest
 
 - **M7.6** iron OK: **closed**
