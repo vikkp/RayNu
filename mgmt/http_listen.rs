@@ -71,6 +71,11 @@ pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
 ///
 /// Returns `true` when [`M7_UEFI_HTTP_OK_MARKER`] was printed.
 pub fn run_pre_ebs_mgmt_listen() -> bool {
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::mgmt::net_probe_uefi::probe_and_print();
+    }
+
     match listen_mgmt_http_uefi(MGMT_HTTP_DEFAULT_PORT) {
         Ok(()) => true,
         Err(e) => {
@@ -81,6 +86,9 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
                     MgmtListenError::NoTcp4Stack => {
                         serial::write_line(
                             "boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)",
+                        );
+                        serial::write_line(
+                            "boot: HINT — if uefi-net probe tcp4=0: SNP residual next (ADR-012)",
                         );
                     }
                     MgmtListenError::UnsupportedOnFirmware => {
