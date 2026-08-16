@@ -42,13 +42,21 @@ Virtual Floppy boot has **no** firmware Tcp4/Ip4/Dhcp4. Bring-up was:
 
 ## Serial excerpt
 
+First close: [`logs/2026-08-16-uefi-http-ok-com2.txt`](logs/2026-08-16-uefi-http-ok-com2.txt)
+
+Clarifying retest: [`logs/2026-08-16-uefi-http-ok-com2-retest.txt`](logs/2026-08-16-uefi-http-ok-com2-retest.txt)
+
 ```text
 boot: SNP residual MAC=b0:26:28:5c:5a:3a
 boot: SNP DHCP discover…
 boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
 RAYNU-V-M7-UEFI-HTTP-OK
+…
+RAYNU-V-R640-BOOT-OK
 ```
 
+`AuthAllowed` lines up with the Bearer `GET /vms` in the paired curl retest.
 ## Operator curl (Mac)
 
 First close: [`logs/2026-08-16-uefi-http-ok-curl.txt`](logs/2026-08-16-uefi-http-ok-curl.txt) — `GET /` → 200 SPA.

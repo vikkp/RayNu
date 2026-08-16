@@ -27,6 +27,7 @@ STATUS=closed
 #   logs/2026-08-16-uefi-http-snp12-after-pci-com2.txt         (snp=12)
 #   logs/2026-08-16-uefi-http-snp-listen-accept-timeout-com2.txt
 #   logs/2026-08-16-uefi-http-ok-com2.txt                      (CLOSE)
+#   logs/2026-08-16-uefi-http-ok-com2-retest.txt               (clarifying: AuthAllowed + OK)
 #   logs/2026-08-16-uefi-http-ok-curl.txt                      (Mac GET / → 200 SPA)
 #   logs/2026-08-16-uefi-http-ok-curl-retest.txt               (GET / + Bearer /vms)
 #

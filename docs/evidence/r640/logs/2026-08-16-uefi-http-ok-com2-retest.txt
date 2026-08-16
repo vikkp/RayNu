@@ -1,0 +1,22 @@
+# 2026-08-16 clarifying retest — R640 COM2 (same floppy as curl-retest)
+#
+# Same iron digests (OPERATOR-SHA256SUMS):
+#   efi be1645f458e83bc39be160d160c6b47ef36254a309f317dd6118722627a3b0d5
+#   img 86c432cf7f4a49239cb7b8066863abf83c075c7def70cdddda2b5a2331823484
+# Paired client log: logs/2026-08-16-uefi-http-ok-curl-retest.txt
+#   GET / → 200 SPA; GET /vms Bearer → {"ok":true,"listed":true}
+#
+# Serial shows AuthAllowed (Bearer /vms) then RAYNU-V-M7-UEFI-HTTP-OK,
+# then ExitBootServices → M4 → RAYNU-V-R640-BOOT-OK.
+
+boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP DHCP discover…
+boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+RAYNU-V-M7-UEFI-HTTP-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+…
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
