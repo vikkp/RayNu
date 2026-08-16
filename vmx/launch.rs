@@ -50,8 +50,8 @@ use crate::devices::serial_pio::{
     SHELL_CPUID_LEAF, SHELL_CPUID_SUBLEAF,
 };
 use crate::devices::virtio_blk::{
-    self, M4_BLK_OK_MARKER, M7_ISO_DISK_WRITTEN_MARKER, M7_ISO_INSTALL_LAB_OK_MARKER,
-    M7_ISO_REBOOT_PENDING_MARKER,
+    self, M4_BLK_OK_MARKER, M7_ISO_BOOTED_FROM_DISK_MARKER, M7_ISO_DISK_WRITTEN_MARKER,
+    M7_ISO_INSTALL_LAB_OK_MARKER, M7_ISO_REBOOT_PENDING_MARKER,
 };
 use crate::mgmt::iso_install;
 use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
@@ -1353,6 +1353,10 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         if virtio_blk::take_blk_ok_latch() {
             serial::write_line(M4_BLK_OK_MARKER);
         }
+        if virtio_blk::take_booted_from_disk_latch() {
+            serial::write_line(M7_ISO_BOOTED_FROM_DISK_MARKER);
+            let _ = iso_install::note_booted_from_disk_lab();
+        }
         if virtio_blk::take_install_disk_written_latch() {
             serial::write_line(M7_ISO_DISK_WRITTEN_MARKER);
             // Lab close: sized install disk + probe OK + LBA1 write (not reboot-to-disk).
@@ -1886,6 +1890,10 @@ unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
             if virtio_blk::blk_ok() {
                 if virtio_blk::take_blk_ok_latch() {
                     serial::write_line(M4_BLK_OK_MARKER);
+                }
+                if virtio_blk::take_booted_from_disk_latch() {
+                    serial::write_line(M7_ISO_BOOTED_FROM_DISK_MARKER);
+                    let _ = iso_install::note_booted_from_disk_lab();
                 }
                 if virtio_blk::take_install_disk_written_latch() {
                     serial::write_line(M7_ISO_DISK_WRITTEN_MARKER);

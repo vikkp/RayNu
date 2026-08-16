@@ -20,6 +20,9 @@ pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
 /// E5 lab: disk written; reboot-to-disk requested (not executed).
 pub const M7_ISO_REBOOT_PENDING_MARKER: &str = "RAYNU-V-M7-ISO-REBOOT-PENDING";
 
+/// E5 QEMU lab: second boot detected persisted LBA1 install marker.
+pub const M7_ISO_BOOTED_FROM_DISK_MARKER: &str = "RAYNU-V-M7-ISO-BOOTED-FROM-DISK";
+
 /// Default empty install-disk size for E5 / M7.3–M7.7 plans (64 MiB).
 /// Must stay aligned with `mgmt::iso::DEFAULT_INSTALL_DISK_BYTES`.
 pub const DEFAULT_INSTALL_DISK_BYTES: usize = 64 * 1024 * 1024;
@@ -47,9 +50,9 @@ pub const OFF_STATUS: u64 = 0x70;
 pub const OFF_CONFIG: u64 = 0x100; // capacity u64 LE (low dword at +0)
 
 /// Probe pattern written to LBA 0 on DRIVER_OK.
-pub(crate) const DISK_PATTERN: u32 = 0xB10C_0B01;
+pub const DISK_PATTERN: u32 = 0xB10C_0B01;
 /// Install-disk marker written to LBA 1 when disk is larger than one page (E5 lab).
-pub(crate) const INSTALL_DISK_PATTERN: u32 = 0xE5D1_5C00;
+pub const INSTALL_DISK_PATTERN: u32 = 0xE5D1_5C00;
 const SECTOR_BYTES: usize = 512;
 
 static mut BAR_GPA: u64 = 0;
@@ -61,6 +64,9 @@ static mut BLK_OK: bool = false;
 static mut BLK_MARKED: bool = false;
 static mut INSTALL_WRITTEN: bool = false;
 static mut INSTALL_MARKED: bool = false;
+static mut REBOOT_DETECT: bool = false;
+static mut BOOTED_FROM_DISK: bool = false;
+static mut BOOTED_MARKED: bool = false;
 
 /// True after a successful write+readback latch.
 pub fn blk_ok() -> bool {
@@ -98,22 +104,52 @@ pub fn take_install_disk_written_latch() -> bool {
     }
 }
 
+/// Enable second-boot detect mode (verify persisted LBA markers; do not re-stamp).
+pub fn set_reboot_detect(on: bool) {
+    unsafe {
+        REBOOT_DETECT = on;
+    }
+}
+
+/// True after reboot path verified persisted LBA1 install marker.
+pub fn booted_from_disk() -> bool {
+    unsafe { BOOTED_FROM_DISK }
+}
+
+/// Take-once COM1 emit for BootedFromDisk lab close.
+pub fn take_booted_from_disk_latch() -> bool {
+    unsafe {
+        if BOOTED_FROM_DISK && !BOOTED_MARKED {
+            BOOTED_MARKED = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// Capacity in 512-byte sectors for a given disk size.
 pub fn capacity_sectors_for(disk_bytes: usize) -> u64 {
     debug_assert_eq!(disk_bytes % SECTOR_BYTES, 0);
     (disk_bytes / SECTOR_BYTES) as u64
 }
 
-/// Install MMIO BAR + host-owned disk backing.
-///
-/// `bar_gpa` must be EPT-unmapped (hole). `disk_phys` is identity-mapped host
-/// RAM owned by the HV allocator — not claimed for any guest.
-///
-/// For E5 install-to-disk, pass [`DEFAULT_INSTALL_DISK_BYTES`] (or larger
-/// multiple of 512) once the frame pool can back it.
+/// Install MMIO BAR + host-owned disk backing (zeroed).
 ///
 /// SAFETY: `disk_phys` writable for `disk_bytes` (multiple of 512).
 pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
+    init_with_image(bar_gpa, disk_phys, disk_bytes, None);
+}
+
+/// Like [`init`], but optionally preload a persisted install image (E5 reboot lab).
+///
+/// SAFETY: `disk_phys` writable for `disk_bytes`; `image` if `Some` must be `disk_bytes`.
+pub unsafe fn init_with_image(
+    bar_gpa: u64,
+    disk_phys: u64,
+    disk_bytes: usize,
+    image: Option<&[u8]>,
+) {
     debug_assert_eq!(disk_bytes % SECTOR_BYTES, 0);
     BAR_GPA = bar_gpa;
     DISK_BASE = disk_phys;
@@ -124,7 +160,16 @@ pub unsafe fn init(bar_gpa: u64, disk_phys: u64, disk_bytes: usize) {
     BLK_MARKED = false;
     INSTALL_WRITTEN = false;
     INSTALL_MARKED = false;
-    core::ptr::write_bytes(disk_phys as *mut u8, 0, disk_bytes);
+    BOOTED_FROM_DISK = false;
+    BOOTED_MARKED = false;
+    match image {
+        Some(img) if img.len() == disk_bytes => {
+            core::ptr::copy_nonoverlapping(img.as_ptr(), disk_phys as *mut u8, disk_bytes);
+        }
+        _ => {
+            core::ptr::write_bytes(disk_phys as *mut u8, 0, disk_bytes);
+        }
+    }
 }
 
 pub fn bar_gpa() -> u64 {
@@ -177,6 +222,37 @@ unsafe fn run_write_readback() {
         return;
     }
     let p = DISK_BASE as *mut u32;
+
+    // E5 reboot lab: verify persisted LBA0/LBA1; do not re-stamp.
+    if REBOOT_DETECT && DISK_BYTES >= SECTOR_BYTES * 2 {
+        let mut ok = core::ptr::read_volatile(p) == DISK_PATTERN;
+        if ok {
+            for i in 1..(SECTOR_BYTES / 4) {
+                if core::ptr::read_volatile(p.add(i)) != (DISK_PATTERN ^ (i as u32)) {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        let lba1 = p.add(SECTOR_BYTES / 4);
+        if ok {
+            ok = core::ptr::read_volatile(lba1) == INSTALL_DISK_PATTERN;
+        }
+        if ok {
+            for i in 1..(SECTOR_BYTES / 4) {
+                if core::ptr::read_volatile(lba1.add(i)) != (INSTALL_DISK_PATTERN ^ (i as u32)) {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok {
+            BLK_OK = true;
+            BOOTED_FROM_DISK = true;
+        }
+        return;
+    }
+
     core::ptr::write_volatile(p, DISK_PATTERN);
     // Fill rest of sector with a recognizable trail.
     for i in 1..(SECTOR_BYTES / 4) {

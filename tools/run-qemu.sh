@@ -85,11 +85,25 @@ fi
 
 # E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).
 ISO_INSTALL_LAB="${ISO_INSTALL_LAB:-0}"
+ISO_REBOOT_LAB="${ISO_REBOOT_LAB:-0}"
 rm -f "$ESP/isoinstall.txt" "$ESP/EFI/RayNu/isoinstall.txt" 2>/dev/null || true
+rm -f "$ESP/isoreboot.txt" "$ESP/EFI/RayNu/isoreboot.txt" 2>/dev/null || true
+rm -f "$ESP/installdisk.bin" "$ESP/EFI/RayNu/installdisk.bin" 2>/dev/null || true
 if [[ "$ISO_INSTALL_LAB" == "1" ]]; then
   mkdir -p "$ESP/EFI/RayNu"
   : >"$ESP/EFI/RayNu/isoinstall.txt"
   echo "==> E5 ISO install lab: staged $ESP/EFI/RayNu/isoinstall.txt (1MiB disk)"
+fi
+if [[ "$ISO_REBOOT_LAB" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/isoreboot.txt"
+  INSTALL_DISK_IMG="${INSTALL_DISK_IMG:-$ROOT/target/e5-lab-install.img}"
+  if [[ ! -f "$INSTALL_DISK_IMG" ]]; then
+    echo "error: ISO_REBOOT_LAB=1 requires INSTALL_DISK_IMG ($INSTALL_DISK_IMG)" >&2
+    exit 1
+  fi
+  cp "$INSTALL_DISK_IMG" "$ESP/EFI/RayNu/installdisk.bin"
+  echo "==> E5 ISO reboot lab: staged isoreboot.txt + installdisk.bin ($(wc -c <"$INSTALL_DISK_IMG") bytes)"
 fi
 
 FW_ARGS=()

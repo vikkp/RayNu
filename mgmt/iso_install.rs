@@ -102,13 +102,24 @@ pub const M7_ISO_INSTALL_LAB_OK_MARKER: &str = "RAYNU-V-M7-ISO-INSTALL-LAB-OK";
 /// Lab honesty: install disk written; reboot-to-disk requested but not executed.
 pub const M7_ISO_REBOOT_PENDING_MARKER: &str = "RAYNU-V-M7-ISO-REBOOT-PENDING";
 
+/// QEMU lab: second boot detected persisted install marker (not iron).
+pub const M7_ISO_BOOTED_FROM_DISK_MARKER: &str = "RAYNU-V-M7-ISO-BOOTED-FROM-DISK";
+
+/// Serial note when isoreboot.txt arms persist detect.
+pub const M7_ISO_REBOOT_LAB_ARM_NOTE: &str = "boot: E5 lab isoreboot.txt armed (1MiB persist)";
+
+/// Max staged install disk from ESP (lab 1 MiB).
+pub const INSTALL_DISK_STAGE_CAP: usize = LAB_INSTALL_DISK_BYTES as usize;
+
 /// Armed across ExitBootServices: set by PRE-EBS `POST /iso/{id}/install` or lab ESP flag.
 static mut ARMED_INSTALL: Option<InstallLaunchContract> = None;
 static mut LAB_ARMED: bool = false;
+static mut REBOOT_LAB_ARMED: bool = false;
 static mut DISK_WRITTEN_NOTED: bool = false;
 static mut REBOOT_PENDING_NOTED: bool = false;
 static mut BOOT_INSTALL_PLAN: InstallToDiskPlan = InstallToDiskPlan::empty();
-
+static mut INSTALL_DISK_BUF: [u8; INSTALL_DISK_STAGE_CAP] = [0; INSTALL_DISK_STAGE_CAP];
+static mut INSTALL_DISK_LEN: usize = 0;
 /// Stash launch contract so post-EBS `virtio_blk::init` can size the install disk.
 pub fn arm_install_launch_contract(contract: InstallLaunchContract) {
     // SAFETY: single-threaded boot / mgmt path.
@@ -145,10 +156,13 @@ pub fn clear_armed_install_contract() {
     unsafe {
         ARMED_INSTALL = None;
         LAB_ARMED = false;
+        REBOOT_LAB_ARMED = false;
         DISK_WRITTEN_NOTED = false;
         REBOOT_PENDING_NOTED = false;
         BOOT_INSTALL_PLAN = InstallToDiskPlan::empty();
+        INSTALL_DISK_LEN = 0;
     }
+    crate::devices::virtio_blk::set_reboot_detect(false);
 }
 
 /// Arm a QEMU-friendly 1 MiB install contract (ESP `isoinstall.txt` lab path).
@@ -168,6 +182,62 @@ pub fn arm_lab_install_contract() {
 pub fn lab_install_armed() -> bool {
     // SAFETY: single-threaded boot.
     unsafe { LAB_ARMED }
+}
+
+/// True when reboot-detect lab (isoreboot.txt) armed this boot.
+pub fn lab_reboot_armed() -> bool {
+    unsafe { REBOOT_LAB_ARMED }
+}
+
+/// Staged install disk image bytes (from ESP `installdisk.bin`), if any.
+pub fn install_disk_preload_bytes() -> Option<&'static [u8]> {
+    unsafe {
+        let len = INSTALL_DISK_LEN;
+        if len == 0 || len > INSTALL_DISK_STAGE_CAP {
+            None
+        } else {
+            Some(&INSTALL_DISK_BUF[..len])
+        }
+    }
+}
+
+/// Stage raw install disk image into the static buffer (tests / ESP probe).
+pub fn stage_install_disk_image(bytes: &[u8]) -> Result<(), ()> {
+    if bytes.is_empty() || bytes.len() > INSTALL_DISK_STAGE_CAP {
+        return Err(());
+    }
+    unsafe {
+        INSTALL_DISK_BUF[..bytes.len()].copy_from_slice(bytes);
+        INSTALL_DISK_LEN = bytes.len();
+    }
+    Ok(())
+}
+
+/// Arm reboot-detect lab: 1 MiB contract + virtio reboot detect mode.
+pub fn arm_lab_reboot_contract() {
+    arm_lab_install_contract();
+    unsafe {
+        REBOOT_LAB_ARMED = true;
+        LAB_ARMED = false; // reboot path, not write path
+    }
+    crate::devices::virtio_blk::set_reboot_detect(true);
+    // Phase: pretend we already wrote and are rebooting.
+    unsafe {
+        BOOT_INSTALL_PLAN.phase = InstallPhase::RebootPending;
+    }
+}
+
+/// Record BootedFromDisk on the boot plan (lab close).
+pub fn note_booted_from_disk_lab() -> bool {
+    unsafe {
+        if BOOT_INSTALL_PLAN.phase != InstallPhase::RebootPending {
+            return false;
+        }
+        if mark_booted_from_disk(&mut BOOT_INSTALL_PLAN).is_err() {
+            return false;
+        }
+        true
+    }
 }
 
 /// Record install-disk write proof (host LBA1 marker after DRIVER_OK).
@@ -296,7 +366,159 @@ fn flag_present(fs: &mut uefi::fs::FileSystem, path: &str) -> bool {
 #[cfg(not(target_os = "uefi"))]
 pub fn probe_iso_install_lab_flag() {}
 
-/// Host package: lab arm sizes launch disk to 1 MiB; iron default still 64 MiB via REST.
+/// Probe ESP for `isoreboot.txt` + stage `installdisk.bin` (second-boot lab).
+#[cfg(target_os = "uefi")]
+pub fn probe_iso_reboot_lab_flag() {
+    use crate::boot::serial;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    let flag = flag_present(&mut fs, "\\EFI\\RayNu\\isoreboot.txt")
+        || flag_present(&mut fs, "\\isoreboot.txt");
+    if !flag {
+        return;
+    }
+    // Prefer namespaced install image.
+    let staged = stage_from_esp(&mut fs, "\\EFI\\RayNu\\installdisk.bin")
+        .or_else(|_| stage_from_esp(&mut fs, "\\installdisk.bin"));
+    if staged.is_err() {
+        serial::write_line("boot: E5 isoreboot.txt present but installdisk.bin missing");
+        return;
+    }
+    arm_lab_reboot_contract();
+    serial::write_line(M7_ISO_REBOOT_LAB_ARM_NOTE);
+}
+
+#[cfg(target_os = "uefi")]
+fn stage_from_esp(fs: &mut uefi::fs::FileSystem, path: &str) -> Result<(), ()> {
+    use uefi::CString16;
+    let Ok(p) = CString16::try_from(path) else {
+        return Err(());
+    };
+    let Ok(data) = fs.read(p.as_ref()) else {
+        return Err(());
+    };
+    stage_install_disk_image(&data)
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_iso_reboot_lab_flag() {}
+
+/// Fill a 1 MiB buffer with host-stamped LBA0/LBA1 lab patterns (for persist image).
+pub fn synthesize_lab_install_image(buf: &mut [u8]) -> bool {
+    use crate::devices::virtio_blk::{DISK_PATTERN, INSTALL_DISK_PATTERN};
+    if buf.len() != LAB_INSTALL_DISK_BYTES as usize {
+        return false;
+    }
+    buf.fill(0);
+    let sector = 512;
+    for i in 0..(sector / 4) {
+        let v = (DISK_PATTERN ^ (i as u32)).to_le_bytes();
+        let off = i * 4;
+        buf[off..off + 4].copy_from_slice(&v);
+    }
+    // Fix first word (xor 0).
+    buf[0..4].copy_from_slice(&DISK_PATTERN.to_le_bytes());
+    for i in 0..(sector / 4) {
+        let v = (INSTALL_DISK_PATTERN ^ (i as u32)).to_le_bytes();
+        let off = sector + i * 4;
+        buf[off..off + 4].copy_from_slice(&v);
+    }
+    buf[sector..sector + 4].copy_from_slice(&INSTALL_DISK_PATTERN.to_le_bytes());
+    true
+}
+
+/// Host package: reboot lab preload + detect + BootedFromDisk phase.
+pub fn prop_iso_reboot_lab_package() -> bool {
+    clear_armed_install_contract();
+
+    #[cfg(test)]
+    {
+        let mut img = alloc_lab_img();
+        if !synthesize_lab_install_image(&mut img) {
+            return false;
+        }
+        if stage_install_disk_image(&img).is_err() {
+            return false;
+        }
+        if install_disk_preload_bytes().map(|b| b.len()) != Some(img.len()) {
+            return false;
+        }
+        arm_lab_reboot_contract();
+        if !lab_reboot_armed() || !install_disk_armed_for_launch() {
+            return false;
+        }
+        if boot_install_phase() != InstallPhase::RebootPending {
+            return false;
+        }
+        let mut disk = img.clone();
+        // SAFETY: heap buffer as fake disk HPA for host package prop.
+        unsafe {
+            crate::devices::virtio_blk::init_with_image(
+                0x1000_0000,
+                disk.as_mut_ptr() as u64,
+                disk.len(),
+                Some(img.as_slice()),
+            );
+            crate::devices::virtio_blk::set_reboot_detect(true);
+            let _ = crate::devices::virtio_blk::mmio_access(
+                0x1000_0000 + crate::devices::virtio_blk::OFF_STATUS,
+                true,
+                crate::devices::virtio_blk::STATUS_DRIVER_OK,
+            );
+        }
+        if !crate::devices::virtio_blk::booted_from_disk() {
+            return false;
+        }
+        if !note_booted_from_disk_lab() {
+            return false;
+        }
+        if boot_install_phase() != InstallPhase::BootedFromDisk {
+            return false;
+        }
+    }
+
+    #[cfg(not(test))]
+    {
+        arm_lab_reboot_contract();
+        if !lab_reboot_armed() || boot_install_phase() != InstallPhase::RebootPending {
+            clear_armed_install_contract();
+            return false;
+        }
+    }
+
+    let smoke = include_str!("../tools/m7-iso-install-qemu-smoke.sh");
+    let runbook = include_str!("../docs/runbooks/iso_install.md");
+    let ok = smoke.contains(M7_ISO_BOOTED_FROM_DISK_MARKER)
+        && smoke.contains("ISO_REBOOT_LAB")
+        && smoke.contains("isoreboot.txt")
+        && smoke.contains("installdisk.bin")
+        && smoke.contains("e5-lab-install.img")
+        && smoke.contains("never print iron marker")
+        && runbook.contains("isoreboot.txt")
+        && runbook.contains("BOOTED-FROM-DISK")
+        && M7_ISO_BOOTED_FROM_DISK_MARKER
+            == crate::devices::virtio_blk::M7_ISO_BOOTED_FROM_DISK_MARKER
+        && include_str!("../tools/run-qemu.sh").contains("ISO_REBOOT_LAB")
+        && include_str!("../tools/synth-e5-lab-install-img.sh").contains("INSTALL_DISK_PATTERN")
+        && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
+        && include_str!("../vmx/launch.rs").contains("M7_ISO_BOOTED_FROM_DISK_MARKER")
+        && include_str!("../vmx/launch.rs").contains("note_booted_from_disk_lab");
+    clear_armed_install_contract();
+    ok
+}
+
+#[cfg(test)]
+fn alloc_lab_img() -> Vec<u8> {
+    vec![0u8; LAB_INSTALL_DISK_BYTES as usize]
+}
+
+/// Host package: ESP lab arm + DiskWritten → RebootPending (boot1).
 pub fn prop_iso_install_lab_package() -> bool {
     clear_armed_install_contract();
     if disk_bytes_for_virtio_launch() != PROBE_DISK_BYTES {
@@ -334,6 +556,7 @@ pub fn prop_iso_install_lab_package() -> bool {
         && smoke.contains("isoinstall.txt")
         && smoke.contains(M7_ISO_DISK_WRITTEN_MARKER)
         && smoke.contains(M7_ISO_REBOOT_PENDING_MARKER)
+        && smoke.contains(M7_ISO_BOOTED_FROM_DISK_MARKER)
         && smoke.contains("never print iron marker")
         && runbook.contains("isoinstall.txt")
         && runbook.contains("1MiB")

@@ -9,8 +9,8 @@
 
 use super::iso_install::{
     install_launch_surfaces_present, prop_iso_install_lab_package, prop_iso_install_package,
-    ISO_INSTALL_GAP_NOTE, ISO_INSTALL_HOST_LIMIT_NOTE, ISO_INSTALL_MVP_NOTE,
-    M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER,
+    prop_iso_reboot_lab_package, ISO_INSTALL_GAP_NOTE, ISO_INSTALL_HOST_LIMIT_NOTE,
+    ISO_INSTALL_MVP_NOTE, M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER,
 };
 
 /// Host / CI marker when the M7.7 scaffold package passes.
@@ -27,6 +27,8 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn disk_bytes_for_virtio_launch(")
         && s.contains("fn note_reboot_pending_lab(")
         && s.contains("fn probe_iso_install_lab_flag(")
+        && s.contains("fn probe_iso_reboot_lab_flag(")
+        && s.contains("fn prop_iso_reboot_lab_package(")
         && s.contains("fn mark_disk_written(")
         && s.contains("fn mark_reboot_pending(")
         && s.contains("fn mark_booted_from_disk(")
@@ -39,7 +41,9 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../src/main.rs").contains("disk_bytes_for_virtio_launch")
         && include_str!("../src/main.rs").contains("E5 install-sized virtio-blk")
         && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
+        && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
         && prop_iso_install_lab_package()
+        && prop_iso_reboot_lab_package()
 }
 
 /// True when honesty + launch surfaces hold.

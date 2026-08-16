@@ -19,6 +19,10 @@ fn markers_stable() {
         M7_ISO_REBOOT_PENDING_MARKER,
         "RAYNU-V-M7-ISO-REBOOT-PENDING"
     );
+    assert_eq!(
+        M7_ISO_BOOTED_FROM_DISK_MARKER,
+        "RAYNU-V-M7-ISO-BOOTED-FROM-DISK"
+    );
     assert!(ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7"));
     assert!(ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close"));
 }
@@ -71,4 +75,10 @@ fn armed_contract_sizes_launch_disk() {
 fn iso_install_lab_package() {
     assert!(prop_iso_install_lab_package());
     println!("RAYNU-V-M7-ISO-INSTALL-LAB-OK");
+}
+
+#[test]
+fn iso_reboot_lab_package() {
+    assert!(prop_iso_reboot_lab_package());
+    println!("RAYNU-V-M7-ISO-BOOTED-FROM-DISK");
 }

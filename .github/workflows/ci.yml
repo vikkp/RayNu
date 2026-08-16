@@ -586,8 +586,12 @@ jobs:
           name: e5-iso-install-serial
           path: |
             target/e5-iso-install-serial.log
+            target/e5-iso-reboot-serial.log
             target/e5-iso-install-qemu-stdout.log
             target/e5-iso-install-qemu-stderr.log
+            target/e5-iso-reboot-qemu-stdout.log
+            target/e5-iso-reboot-qemu-stderr.log
+            target/e5-lab-install.img
           if-no-files-found: ignore
 
   # M7.4: Ops Web UI create-VM + media. Hard-fail.

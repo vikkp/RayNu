@@ -80,8 +80,9 @@ fn main() -> Status {
 
     // M7.6 / ADR-012: PRE-EBS Tcp4 mgmt HTTP window (soft-fail → guest path).
     // Tcp4/SNP die at ExitBootServices — concurrent post-EBS listen is a residual.
-    // E5 lab: ESP isoinstall.txt arms 1MiB install disk without curl.
+    // E5 lab: ESP isoinstall.txt arms 1MiB install disk; isoreboot.txt = second boot.
     r640_hypervisor::mgmt::probe_iso_install_lab_flag();
+    r640_hypervisor::mgmt::probe_iso_reboot_lab_flag();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
@@ -444,8 +445,9 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         return;
     };
     // SAFETY: disk_phys is a fresh allocator span; BAR GPA is EPT-unmapped.
+    let preload = r640_hypervisor::mgmt::install_disk_preload_bytes();
     unsafe {
-        devices::virtio_blk::init(bar_hpa, disk_phys, disk_bytes);
+        devices::virtio_blk::init_with_image(bar_hpa, disk_phys, disk_bytes, preload);
     }
     boot::serial::write_str("boot: M4.3 virtio-blk BAR=0x");
     write_hex(bar_hpa);
@@ -454,7 +456,9 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
     boot::serial::write_str(" bytes=");
     write_dec(disk_bytes as u64);
     boot::serial::write_byte(b'\n');
-    if r640_hypervisor::mgmt::install_disk_armed_for_launch() {
+    if r640_hypervisor::mgmt::lab_reboot_armed() {
+        boot::serial::write_line("boot: E5 install disk preload (reboot detect)");
+    } else if r640_hypervisor::mgmt::install_disk_armed_for_launch() {
         boot::serial::write_line("boot: E5 install-sized virtio-blk armed (PRE-EBS contract)");
     }
 

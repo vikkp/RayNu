@@ -63,13 +63,24 @@ RAYNU-V-M7-ISO-INSTALL-LAB-OK
 RAYNU-V-M7-ISO-REBOOT-PENDING
 ```
 
-`REBOOT-PENDING` means the phase machine advanced to “would reboot from disk” —
-it does **not** execute a second boot (disk backing is still RAM; no persistence yet).
+`REBOOT-PENDING` means boot1 advanced the phase machine (“would reboot from disk”).
+Virtio-blk backing is still RAM, so the smoke **synthesizes** `target/e5-lab-install.img`
+(host LBA0/LBA1 patterns) and runs boot2 with ESP `isoreboot.txt` + `installdisk.bin`
+(`ISO_REBOOT_LAB=1`). Expect:
+
+```text
+boot: E5 lab isoreboot.txt armed (1MiB persist)
+boot: M4.3 virtio-blk … bytes=1048576
+boot: E5 install disk preload (reboot detect)
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-BOOTED-FROM-DISK
+```
 
 ```bash
 ./tools/m7-iso-install-qemu-smoke.sh
 ```
 
+`BOOTED-FROM-DISK` closes the **QEMU lab** two-boot loop only — not iron E5.
 Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
 
 ### Full product path
@@ -78,7 +89,8 @@ Iron / REST still use the **64 MiB** default via `POST /iso/{id}/install`.
 2. Guest boots via **extract-boot** (`load_bzimage_guest` + staged bzImage/initrd).
 3. Host/guest writes a marker (or filesystem) to the virtio-blk install disk.
 4. Hypervisor records DiskWritten → RebootPending.
-5. Second boot from the install disk → `RAYNU-V-M7-ISO-INSTALL-OK` on serial.
+5. Second boot from the install disk → lab `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`;
+   iron `RAYNU-V-M7-ISO-INSTALL-OK` only after R640 proof.
 
 ### Iron (R640)
 
@@ -96,7 +108,8 @@ Mirror E2/E3:
 - **GAP(OPEN M7.7)** until install-to-disk + reboot-to-disk proven.
 - **El Torito / CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
 - **ISO blob upload / parse** not claimed — extract-boot uses existing PE/ESP assets first.
-- **Wire into `vmx/launch.rs`** is the next engineering step after this scaffold.
+- **QEMU lab persist** uses a host-synthesized `e5-lab-install.img` (LBA markers), not a
+  guest-written filesystem surviving QEMU restart.
 - Outside Proven Core (ADR-009); size still ADR-003.
 - Do **not** claim Mount Everest closed until E4 + E5 are both green.
 
@@ -106,9 +119,9 @@ Mirror E2/E3:
    **Done (scaffold wire):** PRE-EBS `POST /iso/{id}/install` arms a static contract;
    post-EBS `virtio_blk::init` uses `disk_bytes_for_virtio_launch()` (64 MiB when armed,
    else 4 KiB M4.3 probe). Serial: `boot: E5 install-sized virtio-blk armed`.
-2. ~~QEMU smoke: PRE-EBS curl install → confirm install-sized disk serial + `M4-BLK-OK`.~~
-   **Done (lab):** ESP `isoinstall.txt` / `ISO_INSTALL_LAB=1` → 1 MiB disk +
-   `RAYNU-V-M7-ISO-INSTALL-LAB-OK` via `./tools/m7-iso-install-qemu-smoke.sh`.
-3. Guest filesystem install + reboot-from-disk path (lab is host LBA1 marker +
-   `REBOOT-PENDING` honesty latch; no second boot yet).
+2. ~~QEMU smoke: ESP lab install write + reboot detect.~~
+   **Done (lab):** two-boot `./tools/m7-iso-install-qemu-smoke.sh` →
+   `RAYNU-V-M7-ISO-INSTALL-LAB-OK` + `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
+   (host-synthesized persist image between boots; not a guest filesystem installer).
+3. Guest filesystem install + real persistent virtio backing (beyond LBA marker lab).
 4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.
