@@ -1,15 +1,15 @@
 ---
 hda_version: 1
-last_updated: 2026-08-15
-last_commit: 3a5835b788ae9af050052397db4d6f8333690a58
-last_commit_short: 3a5835b
+last_updated: 2026-08-16
+last_commit: PLACEHOLDER
+last_commit_short: PLACEHOLDER
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 1.25
-months_to_everest_prev: 1.75
+months_to_everest: 0.75
+months_to_everest_prev: 1.25
 velocity_commits_30d: 340
-velocity_gates_30d: 16
-overall_pct: 72
+velocity_gates_30d: 17
+overall_pct: 78
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,7 +17,7 @@ everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 55
+summit_ui_pct: 78
 summit_iso_pct: 38
 summit_prod_pct: 100
 ---
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **72%** | +12 (E2 / `RAYNU-V-R640-BOOT-OK` closed on iron) |
-| **Months to Mount Everest** | **1.25** | −0.5 (iron M7.5 closed; residual = network UI + ISO) |
-| **ETA month** | **2026-09** | pulled from 2026-10 |
-| **Confidence** | medium | COM2 SHELL+M4 green; UEFI NIC/TLS/ISO still open |
+| **Overall product readiness** | **78%** | +6 (E3 / `RAYNU-V-M7-UEFI-HTTP-OK` closed on iron) |
+| **Months to Mount Everest** | **0.75** | −0.5 (M7.6 iron; residual = E4 polish + ISO) |
+| **ETA month** | **2026-09** | held |
+| **Confidence** | medium | E2+E3 COM2 green; TLS/post-EBS/ISO still open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~55% | M7.4 create-VM SPA host smoke; console/TLS/NIC residual |
+| **vSphere-like UI (network)** | ~78% | M7.6 iron HTTP OK; TLS/console/post-EBS residual |
 | **Deploy Linux ISO** | ~38% | M7.3 host extract-boot smoke; El Torito/CD-ROM stub |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ██░░░░░░░░░░░░░░░░░░  1.25 mo  (was 1.75)
-Overall %          ██████████████░░░░░░  72%
+Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.75 mo  (was 1.25)
+Overall %          ███████████████░░░░░  78%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -65,7 +65,7 @@ All must be true (no hand-waving):
 |---|-----------|-----------|--------|
 | E1 | **Ship EFI** | Versioned `r640-hypervisor.efi` + checksums; `tools/check-size.sh` green; USB/iDRAC media runbook | [Z] |
 | E2 | **R640 boot** | Marker `RAYNU-V-R640-BOOT-OK` (or equiv.) on **real PowerEdge R640**; serial via iDRAC; VMX+EPT+Linux shell | [D][Z] |
-| E3 | **Network UI** | Browser on operator LAN reaches HTTPS UI; list/create/start/stop; not host-only dispatch | [Z][A] |
+| E3 | **Network UI** | Browser/curl on operator LAN reaches SPA/REST (HTTP MVP; TLS deferred); not host-only | [Z][A] |
 | E4 | **vSphere-like MVP** | Datastore/images, create-VM (CPU/RAM/disk/NIC), attach ISO or boot media, basic console/log, auth beyond bring-up toy | [Z][A] |
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots installer (or documented extract path) → installs to virtio-blk → reboot to disk | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
@@ -105,7 +105,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: MEDIUM · ~55% · ~0.75–1.5 months residual**
+**Status: NEAR · ~78% · ~0.5–1.0 months residual (TLS / console / E4 polish)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -115,7 +115,7 @@ All must be true (no hand-waving):
 | Host TCP proof (loopback) | DONE | `mgmt/http_listen.rs` (M7.1 Latitude) |
 | Create-VM fields (CPU/RAM/disk/ISO) | DONE (host) | M7.4 SPA + `POST /vms/{id}/spec/...` Latitude smoke |
 | Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` |
-| **UEFI NIC HTTP listen** | SCAFFOLD (M7.6) · iron OK open | PRE-EBS Tcp4 + soft-fail; `RAYNU-V-M7-UEFI-HTTP-OK` needs R640 evidence |
+| **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
 | Guest console / serial log UI | MISSING | residual |
 | Networking/storage ops UI | MISSING | probes only |
@@ -263,8 +263,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | M7.3 extract-boot MVP; CD-ROM stub residual |
-| H4 | Console / TLS / firmware NIC still open | HIGH | Next Everest critical path (E3–E4) |
-| H5 | Latitude ≠ full product loop | MED | E2 closed on iron; still need UEFI NIC + ISO on target |
+| H4 | Console / TLS / post-EBS listen still open | MED | E3 MVP closed (PRE-EBS HTTP); TLS + persistent listen follow-on |
+| H5 | Latitude ≠ full product loop | MED | E2+E3 closed on iron; still need ISO install-to-disk (E5) |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -274,6 +274,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | uefi-http-ok | 0.75 | 78 | E3 MVP CLOSED: `RAYNU-V-M7-UEFI-HTTP-OK` on R640 SNP residual; ui~78% |
 | 2026-08-15 | r640-boot-ok | 1.25 | 72 | E2 CLOSED: SHELL+M4 on COM2 (`xsavesfix`); r640~98%; ETA→2026-09 |
 | 2026-08-15 | r640-iron-bringup | 1.75 | 60 | Real R640 COM2: M0→VMXON→LOAD→BZIMAGE; COM2/EPT/BAR kits; E2 open; r640~68% |
 | 2026-07-21 | m7-5-iron-todo | 2.25 | 52 | R640 iron-week checklist → `docs/runbooks/r640_iron_week.md` (not on site) |
@@ -297,10 +298,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2 CLOSED — RAYNU-V-R640-BOOT-OK (2026-08-15 COM2)
-Months left:   1.25  (ETA ~ 2026-09)
-Next move:     UEFI NIC / TLS network UI (E3) + ISO install-to-disk (E5)
-Do not claim:  Mount Everest until E3–E5 green (network UI + ISO)
+Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
+Months left:   0.75  (ETA ~ 2026-09)
+Next move:     ISO install-to-disk (E5) + vSphere MVP polish (E4); TLS/post-EBS optional
+Do not claim:  Mount Everest until E4–E5 green
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

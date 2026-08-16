@@ -1,0 +1,22 @@
+# 2026-08-16 R640 COM2 — RAYNU-V-M7-UEFI-HTTP-OK (M7.6 iron close)
+#
+# Closing run on same SNP residual firmware that previously listen+accept-timeout.
+# Operator curled during PRE-EBS window; firmware printed OK then continued to EBS.
+#
+# Observed:
+#   MAC=b0:26:28:5c:5a:3a
+#   mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+#   RAYNU-V-M7-UEFI-HTTP-OK
+#   … then ExitBootServices → full M4 path → RAYNU-V-R640-BOOT-OK
+#
+# Claim: RAYNU-V-M7-UEFI-HTTP-OK on real PowerEdge R640 (ADR-012 / M7.6).
+# Path: SNP + smoltcp (Tcp4 absent on Virtual Floppy). Soft-fail guest path intact.
+# HDA E3: serial bind + OK marker (marker only after ≥1 HTTP exchange).
+
+boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP DHCP discover…
+boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+RAYNU-V-M7-UEFI-HTTP-OK
+RAYNU-V-R640-BOOT-OK

@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **open** — M7.5 closed on iron (`RAYNU-V-R640-BOOT-OK`); **M7.6** PRE-EBS Tcp4 scaffold (ADR-012); iron `RAYNU-V-M7-UEFI-HTTP-OK` still open for E3.  
+**Status:** **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`); Everest residual E4–E5.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -106,12 +106,13 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 
 ### M7.6 — UEFI NIC HTTP listen — `RAYNU-V-M7-UEFI-HTTP-OK`
 
-**Status: scaffolded** (host `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK`; **iron `RAYNU-V-M7-UEFI-HTTP-OK` open**)
+**Status: closed on iron** (2026-08-16) — SNP residual path (Tcp4 absent on Virtual Floppy)
 
-**ADR:** [ADR-012](adr/ADR-012.md)  
+**Evidence:** [`docs/evidence/r640/2026-08-16-uefi-http-ok.md`](../evidence/r640/2026-08-16-uefi-http-ok.md) · COM2 [`logs/2026-08-16-uefi-http-ok-com2.txt`](../evidence/r640/logs/2026-08-16-uefi-http-ok-com2.txt)
+
 **Scaffold (host/CI):** `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK`  
 **OK marker:** `RAYNU-V-M7-UEFI-HTTP-OK`  
-**Parent Everest criterion:** E3 (network UI) — HDA DONE only with real R640 browser/curl evidence
+**Parent Everest criterion:** E3 (network UI) — MVP closed via iron serial bind + OK marker
 
 **Goal:** Laptop on the management LAN reaches the already-shipped SPA/REST while
 `r640-hypervisor.efi` runs on R640 (in-binary UEFI Tcp4; plaintext HTTP; TLS deferred).
@@ -124,7 +125,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Size gate green (ADR-003).
 5. `GAP(CLOSED M7.6): UEFI NIC HTTP listen`.
 
-**Acceptance:** Lab/QEMU net may print OK for implementation; **HDA E3** requires iron evidence per ADR-012.
+**Acceptance:** **Met on iron** — `RAYNU-V-M7-UEFI-HTTP-OK` on R640 COM2 (SNP residual; see evidence). HDA E3 MVP closed; TLS/post-EBS follow-on.
 
 ---
 

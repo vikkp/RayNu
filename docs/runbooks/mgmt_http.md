@@ -3,7 +3,7 @@
 **Markers:**
 - M7.1 host: `RAYNU-V-M7-HTTP-OK` — `./tools/m7-http-smoke.sh`
 - M7.6 scaffold: `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — `./tools/m7-uefi-http-smoke.sh`
-- M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS Tcp4 served ≥1 HTTP exchange (ADR-012)
+- M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS UEFI NIC served ≥1 HTTP exchange (ADR-012); iron closed 2026-08-16 (SNP residual)
 
 ## Story
 
@@ -80,6 +80,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 DONE** still needs real R640 browser/curl evidence (ADR-012).
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). TLS / post-EBS listen remain follow-ons.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure.

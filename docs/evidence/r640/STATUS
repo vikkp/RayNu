@@ -2,34 +2,24 @@ STATUS=closed
 # Iron M7.5 / HDA E2 closed (2026-08-15) — real PowerEdge R640 COM2:
 #   docs/evidence/r640/2026-08-15-r640-first-light.md
 #
-# Substance close (SHELL→M4→VMXOFF): releases/v0.1.0-xsavesfix/
+# Iron M7.6 / ADR-012 closed (2026-08-16) — SNP residual HTTP on R640:
+#   docs/evidence/r640/2026-08-16-uefi-http-ok.md
+#   logs/2026-08-16-uefi-http-ok-com2.txt
+#   Observed: listening on 10.99.99.127:8443 then RAYNU-V-M7-UEFI-HTTP-OK
+#   Path: ConnectController → SNP → smoltcp DHCP/TCP (Tcp4 absent on floppy)
+#   Same boot still printed RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF
+#
+# Substance close E2 (SHELL→M4→VMXOFF): releases/v0.1.0-xsavesfix/
 #   EFI SHA256 c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611
-#   logs/2026-08-15-xsavesfix-com2.txt + logs/2026-08-15-confirm-rebuild-com2.txt
 #
-# Literal marker on COM2 (finish_boot print): build stamp r640-boot-ok-marker
-#   logs/2026-08-15-boot-ok-marker-com2.txt
-#   logs/2026-08-15-boot-ok-marker-com2.png  (closing excerpt screenshot)
-#   Observed: boot: E2 marker build=r640-boot-ok-marker
-#             RAYNU-V-R640-BOOT-OK (×3) after VMXOFF / M4.5
-#   secondary=0x0010100a (XSAVES)
+# Literal E2 marker: logs/2026-08-15-boot-ok-marker-com2.txt
 #
-# M7.6 residual (2026-08-16 probe): ALL UEFI net protocols zero on floppy boot
-#   logs/2026-08-16-uefi-http-net-probe-zero-com2.txt
-#   Observed: boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0
-#
-# M7.6 residual (2026-08-16): PRE-EBS Tcp4 soft-fail on iron
-#   logs/2026-08-16-uefi-http-tcp4-absent-com2.txt
-#   Observed: boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)
-#
-# M7.6 progress (2026-08-16): ConnectController → SNP up
-#   logs/2026-08-16-uefi-http-snp12-after-pci-com2.txt
-#   Observed: after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
-#
-# M7.6 progress (2026-08-16): SNP DHCP + listen (accept timeout)
+# M7.6 ladder (archived residuals → close):
+#   logs/2026-08-16-uefi-http-net-probe-zero-com2.txt          (all-zero probe)
+#   logs/2026-08-16-uefi-http-tcp4-absent-com2.txt             (Tcp4 soft-fail)
+#   logs/2026-08-16-uefi-http-snp12-after-pci-com2.txt         (snp=12)
 #   logs/2026-08-16-uefi-http-snp-listen-accept-timeout-com2.txt
-#   Observed: listening on 10.99.99.127:8443; WARN accept timeout
-#   Next: longer post-bind window; curl http://10.99.99.127:8443/ during window
-#   Not claimed: RAYNU-V-M7-UEFI-HTTP-OK / Everest E3
+#   logs/2026-08-16-uefi-http-ok-com2.txt                      (CLOSE)
 #
-# Claim: RAYNU-V-R640-BOOT-OK — substance + literal serial string on iron.
-# Host/CI smoke still prints only RAYNU-V-M7-R640-SCAFFOLD-OK (never iron marker).
+# Claims: RAYNU-V-R640-BOOT-OK · RAYNU-V-M7-UEFI-HTTP-OK
+# Host/CI smoke never prints iron markers (scaffold only).
