@@ -1,0 +1,38 @@
+# 2026-08-16 operator Mac curl — companion to RAYNU-V-M7-UEFI-HTTP-OK
+#
+# During PRE-EBS SNP listen on 10.99.99.127:8443 (same boot as
+# logs/2026-08-16-uefi-http-ok-com2.txt). Client: curl/8.7.1 on Mac.
+#
+# GET / → HTTP/1.1 200 OK, Content-Type text/html, Content-Length 10757
+#          (embedded RayNu-V Ops UI SPA — title "RayNu-V", data-raynu-webui=1)
+#
+# Second command mistyped (double colon) — did not exercise /vms:
+#   curl ... http://10.99.99.127::8443/vms   → URL rejected
+# Correct form:
+#   curl -v -H "Authorization: Bearer raynu-v-bringup" http://10.99.99.127:8443/vms
+
+*   Trying 10.99.99.127:8443...
+* Connected to 10.99.99.127 (10.99.99.127) port 8443
+> GET / HTTP/1.1
+> Host: 10.99.99.127:8443
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 10757
+< Connection: close
+<
+<!DOCTYPE html>
+<html lang="en">
+<head>
+...
+<title>RayNu-V</title>
+...
+<body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1">
+...
+* Closing connection
+
+# /vms attempt (typo — not a failed auth/server):
+* URL rejected: Port number was not a decimal number between 0 and 65535
+curl: (3) URL rejected: Port number was not a decimal number between 0 and 65535
