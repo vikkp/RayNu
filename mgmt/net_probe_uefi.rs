@@ -4,9 +4,14 @@
 //!
 //! R640 Virtual Floppy boots often show `snp=0 … tcp4=0` because UNDI/SNP
 //! drivers are present in firmware but not yet **started**. This module:
-//! 1. Probes handle counts (SNP/MNP/Ip4/Dhcp4/Tcp4)
-//! 2. `ConnectController` on PCI I/O (+ optional all-handles pass)
+//! 1. Probes handle counts (SNP/MNP/Ip4/Dhcp4/Tcp4 + extra NetworkPkg census)
+//! 2. `ConnectController` on PCI I/O, Device Path, SNP, then stack SB + all-handles
 //! 3. Re-probes so COM2 shows before/after
+//!
+//! Does **not** change the SNP + smoltcp listen residual. Tcp4 listen still
+//! prefers firmware `Tcp4ServiceBinding` when this probe makes it appear.
+//!
+//! Root-cause note: [`docs/evidence/r640/2026-08-16-uefi-tcp4-absent-root-cause.md`]
 
 #![cfg(feature = "uefi-bin")]
 
@@ -27,6 +32,16 @@ const TCP4_SB_GUID: Guid = uefi::guid!("00720665-67eb-4a99-baf7-d3c33a1c7ce9");
 const PCI_IO_GUID: Guid = uefi::guid!("4cf5b200-68b8-4ca5-9eec-b23e3f50029a");
 /// EFI_DEVICE_PATH_PROTOCOL_GUID
 const DEVICE_PATH_GUID: Guid = uefi::guid!("09576e91-6d3f-11d2-8e39-00a0c969723b");
+/// EFI_NETWORK_INTERFACE_IDENTIFIER_PROTOCOL_GUID (UNDI 3.1 / NII)
+const NII_GUID: Guid = uefi::guid!("e18541cd-f755-4f73-928d-643c8a79b229");
+/// EFI_PXE_BASE_CODE_PROTOCOL_GUID
+const PXE_BC_GUID: Guid = uefi::guid!("03c4e603-ac28-11d3-9a2d-0090273fc14d");
+/// EFI_HTTP_SERVICE_BINDING_PROTOCOL_GUID
+const HTTP_SB_GUID: Guid = uefi::guid!("bdc8e6af-d9bc-4379-a72a-e0c4e75dae1c");
+/// EFI_IP4_CONFIG2_PROTOCOL_GUID
+const IP4_CONFIG2_GUID: Guid = uefi::guid!("5b446ed1-e30b-4faa-871a-3654eca36080");
+/// EFI_DRIVER_BINDING_PROTOCOL_GUID — any dispatched UEFI driver
+const DRIVER_BINDING_GUID: Guid = uefi::guid!("18a031ab-b443-4d1a-a5c0-0c09261e9f71");
 
 #[derive(Clone, Copy, Default)]
 struct NetCounts {
@@ -36,6 +51,15 @@ struct NetCounts {
     dhcp4: u32,
     tcp4: u32,
     pci: u32,
+}
+
+#[derive(Clone, Copy, Default)]
+struct ExtraCounts {
+    nii: u32,
+    pxe: u32,
+    http: u32,
+    ip4cfg: u32,
+    drv: u32,
 }
 
 fn count_protocol(guid: &Guid) -> u32 {
@@ -53,6 +77,16 @@ fn snapshot() -> NetCounts {
         dhcp4: count_protocol(&DHCP4_SB_GUID),
         tcp4: count_protocol(&TCP4_SB_GUID),
         pci: count_protocol(&PCI_IO_GUID),
+    }
+}
+
+fn snapshot_extra() -> ExtraCounts {
+    ExtraCounts {
+        nii: count_protocol(&NII_GUID),
+        pxe: count_protocol(&PXE_BC_GUID),
+        http: count_protocol(&HTTP_SB_GUID),
+        ip4cfg: count_protocol(&IP4_CONFIG2_GUID),
+        drv: count_protocol(&DRIVER_BINDING_GUID),
     }
 }
 
@@ -94,17 +128,45 @@ fn print_counts(tag: &str, c: &NetCounts) {
     serial::write_byte(b'\n');
 }
 
+fn print_extra(tag: &str, e: &ExtraCounts) {
+    use crate::boot::serial;
+    serial::write_str("boot: uefi-net ");
+    serial::write_str(tag);
+    serial::write_str(" nii=");
+    write_u32(e.nii);
+    serial::write_str(" pxe=");
+    write_u32(e.pxe);
+    serial::write_str(" http=");
+    write_u32(e.http);
+    serial::write_str(" ip4cfg=");
+    write_u32(e.ip4cfg);
+    serial::write_str(" drv=");
+    write_u32(e.drv);
+    serial::write_byte(b'\n');
+}
+
 fn connect_handles_by_protocol(guid: &Guid) -> u32 {
     let Ok(handles) = boot::locate_handle_buffer(SearchType::ByProtocol(guid)) else {
         return 0;
     };
     let mut n = 0u32;
     for h in handles.iter() {
-        // recursive=true: start child drivers (UNDI → SNP → Ip4 → Tcp4)
+        // recursive=true: start child drivers (UNDI → SNP → MNP → Ip4 → Tcp4)
         if boot::connect_controller(*h, None, None, true).is_ok() {
             n = n.saturating_add(1);
         }
     }
+    n
+}
+
+/// Connect any already-present NetworkPkg service-binding handles.
+/// No-op when counts are 0 (R640 Virtual Floppy lived case).
+fn connect_network_stack_bindings() -> u32 {
+    let mut n = 0u32;
+    n = n.saturating_add(connect_handles_by_protocol(&MNP_SB_GUID));
+    n = n.saturating_add(connect_handles_by_protocol(&IP4_SB_GUID));
+    n = n.saturating_add(connect_handles_by_protocol(&DHCP4_SB_GUID));
+    n = n.saturating_add(connect_handles_by_protocol(&TCP4_SB_GUID));
     n
 }
 
@@ -122,12 +184,44 @@ fn connect_all_handles_shallow() -> u32 {
     n
 }
 
-/// Probe → connect PCI/device-path → re-probe. Call before Tcp4 listen.
+fn print_diagnosis(c: &NetCounts, e: &ExtraCounts) {
+    use crate::boot::serial;
+    if c.tcp4 > 0 {
+        serial::write_line("boot: HINT — Tcp4ServiceBinding present; firmware Tcp4 path next");
+        return;
+    }
+    if c.snp == 0 && c.pci == 0 {
+        serial::write_line(
+            "boot: HINT — no UEFI net/PCI protocols; post-EBS PCI NIC residual (not SNP)",
+        );
+        return;
+    }
+    if c.snp > 0 && c.mnp == 0 && c.ip4 == 0 && c.dhcp4 == 0 && c.tcp4 == 0 {
+        if e.pxe == 0 && e.http == 0 && e.ip4cfg == 0 {
+            serial::write_line(
+                "boot: HINT — UNDI/SNP up, NetworkPkg DXEs not dispatched (no MNP/Ip4/Tcp4/PXE/HTTP SB)",
+            );
+            serial::write_line(
+                "boot: HINT — Virtual Floppy BDS did not start firmware Tcp4; SNP residual next (ADR-012)",
+            );
+            return;
+        }
+        serial::write_line(
+            "boot: HINT — SNP present, Tcp4 still 0; extra NetworkPkg protocols seen — see extra census",
+        );
+        return;
+    }
+    serial::write_line("boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)");
+}
+
+/// Probe → connect PCI/device-path/SNP/stack/all-handles → re-probe.
+/// Call before Tcp4 listen. Does not open SNP exclusively (listen path does GetProtocol).
 pub fn probe_and_print() {
     use crate::boot::serial;
 
     let before = snapshot();
     print_counts("probe", &before);
+    print_extra("extra", &snapshot_extra());
 
     if before.tcp4 > 0 {
         return;
@@ -161,25 +255,22 @@ pub fn probe_and_print() {
         if after_snp.tcp4 > 0 {
             return;
         }
-        serial::write_line("boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)");
-        return;
     }
 
-    // Last resort: connect a bounded set of all handles (slow but honest).
-    serial::write_line("boot: uefi-net connect — all-handles pass (bounded)");
+    // Even when SNP is already up: try SB handles (usually 0) then all-handles.
+    // Prior tip skipped all-handles once snp>0 — that hid whether a late DXE exists.
+    serial::write_line("boot: uefi-net connect — NetworkPkg SB + all-handles (bounded)");
+    let stack_ok = connect_network_stack_bindings();
     let all_ok = connect_all_handles_shallow();
-    serial::write_str("boot: uefi-net connect all_ok=");
+    serial::write_str("boot: uefi-net connect stack_ok=");
+    write_u32(stack_ok);
+    serial::write_str(" all_ok=");
     write_u32(all_ok);
     serial::write_byte(b'\n');
 
     let after = snapshot();
     print_counts("after-all", &after);
-
-    if after.snp == 0 && after.tcp4 == 0 && after.pci == 0 {
-        serial::write_line(
-            "boot: HINT — no UEFI net/PCI protocols; post-EBS PCI NIC residual (not SNP)",
-        );
-    } else if after.snp > 0 && after.tcp4 == 0 {
-        serial::write_line("boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)");
-    }
+    let extra = snapshot_extra();
+    print_extra("extra-after", &extra);
+    print_diagnosis(&after, &extra);
 }
