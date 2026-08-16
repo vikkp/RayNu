@@ -64,9 +64,19 @@ RAYNU-V-M7-ISO-REBOOT-PENDING
 ```
 
 `REBOOT-PENDING` means boot1 advanced the phase machine (“would reboot from disk”).
-Virtio-blk backing is still RAM, so the smoke **synthesizes** `target/e5-lab-install.img`
-(host LBA0/LBA1 patterns) and runs boot2 with ESP `isoreboot.txt` + `installdisk.bin`
-(`ISO_REBOOT_LAB=1`). Expect:
+
+**E5 persist (PRE-EBS):** when the install contract is armed (`isoinstall.txt` or
+`POST /iso/{id}/install`), firmware writes ESP `EFI/RayNu/installdisk.bin`
+(**1 KiB** LBA0+LBA1 stamps) plus `installsize.txt` (full virtio size). Live
+virtio remains RAM. The next boot loads that file (`probe_iso_persist_reboot`)
+without `isoreboot.txt`. iDRAC Virtual Floppy is often **read-only** — then
+COM2 prints `WARN — E5 persist ESP write failed` and a writable USB ESP is
+required.
+
+QEMU `fat:rw` usually keeps the firmware file. Smoke prefers
+`ESP1/EFI/RayNu/installdisk.bin`; if missing, it **synthesizes**
+`target/e5-lab-install.img` and runs boot2 with `isoreboot.txt` +
+`installdisk.bin` (`ISO_REBOOT_LAB=1`). Expect:
 
 ```text
 boot: E5 lab isoreboot.txt armed (1MiB persist)
@@ -108,8 +118,10 @@ Mirror E2/E3:
 - **GAP(OPEN M7.7)** until install-to-disk + reboot-to-disk proven.
 - **El Torito / CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
 - **ISO blob upload / parse** not claimed — extract-boot uses existing PE/ESP assets first.
-- **QEMU lab persist** uses a host-synthesized `e5-lab-install.img` (LBA markers), not a
-  guest-written filesystem surviving QEMU restart.
+- **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
+  filesystem. Host synth remains fallback if the ESP write did not land.
+- **Iron 64 MiB** persist is **marker sectors only** (1 KiB). Full disk persist
+  needs writable USB/NVMe, not a 64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
 - Do **not** claim Mount Everest closed until E4 + E5 are both green.
 
@@ -123,5 +135,7 @@ Mirror E2/E3:
    **Done (lab):** two-boot `./tools/m7-iso-install-qemu-smoke.sh` →
    `RAYNU-V-M7-ISO-INSTALL-LAB-OK` + `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (host-synthesized persist image between boots; not a guest filesystem installer).
-3. Guest filesystem install + real persistent virtio backing (beyond LBA marker lab).
-4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.
+3. ~~Firmware ESP persist of LBA stamps (`installdisk.bin`).~~ **Done (lab):**
+   PRE-EBS write + next-boot `persist-detect`; iron Floppy may be read-only.
+4. Guest filesystem install + full-disk persist (beyond LBA marker lab).
+5. Iron kit + writable ESP + second boot → `RAYNU-V-M7-ISO-INSTALL-OK`.

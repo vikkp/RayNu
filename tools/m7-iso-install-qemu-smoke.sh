@@ -100,9 +100,15 @@ else
   echo "==> boot1 VMXON skipped — arm proved; sized-disk path needs nested VT-x"
 fi
 
-# --- synthesize persisted install image (host; RAM disk does not survive) ---
-echo "==> synthesize lab install image → $IMG"
-"$ROOT/tools/synth-e5-lab-install-img.sh" "$IMG"
+# --- persist image: prefer firmware ESP write; host synth is fallback ---
+PERSIST_BIN="$ESP1/EFI/RayNu/installdisk.bin"
+if [[ -f "$PERSIST_BIN" ]]; then
+  echo "==> E5 persist: firmware wrote $PERSIST_BIN ($(wc -c <"$PERSIST_BIN") bytes)"
+  cp "$PERSIST_BIN" "$IMG"
+else
+  echo "==> E5 persist: no firmware installdisk.bin — host synth fallback → $IMG"
+  "$ROOT/tools/synth-e5-lab-install-img.sh" "$IMG"
+fi
 
 # --- boot2: reboot-from-disk detect ---
 echo "==> QEMU boot2-reboot (timeout ${TIMEOUT_SECS}s, REQUIRE_VMX=${REQUIRE_VMX})"

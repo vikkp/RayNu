@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: 3cce1a4dcd71482472020e63b2e7f31833788980
-last_commit_short: 3cce1a4
+last_commit: 27f056ec86d3c127db2b25a6e6a27e2964676793
+last_commit_short: 27f056e
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
 months_to_everest_prev: 0.75
 velocity_commits_30d: 345
 velocity_gates_30d: 18
-overall_pct: 82
+overall_pct: 83
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 88
-summit_iso_pct: 62
+summit_iso_pct: 65
 summit_prod_pct: 100
 ---
 
@@ -37,7 +37,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **82%** | +1 (E4 SPA create + install arm on iron) |
+| **Overall product readiness** | **83%** | +1 (ESP persist of install-disk stamps) |
 | **Months to Mount Everest** | **0.75** | held (iron E5 INSTALL-OK still open) |
 | **ETA month** | **2026-09** | held |
 | **Confidence** | medium | E2+E3+E4 SPA on COM2; E5 iron reboot residual |
@@ -45,7 +45,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~88% | E4 SPA create-VM on iron PRE-EBS; TLS residual |
-| **Deploy Linux ISO** | ~62% | Iron 64MiB arm + REBOOT-PENDING; INSTALL-OK open |
+| **Deploy Linux ISO** | ~65% | ESP persist + QEMU two-boot; iron INSTALL-OK open |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -141,7 +141,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Persistent install + reboot-to-disk | PARTIAL | Iron: 64MiB arm + REBOOT-PENDING; QEMU BootedFromDisk; INSTALL-OK open |
+| Persistent install + reboot-to-disk | PARTIAL | PRE-EBS ESP `installdisk.bin`; QEMU prefers firmware file; iron Floppy often RO |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-distro matrix | MISSING | — |
 
@@ -281,6 +281,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e5-persist-esp | 0.75 | 83 | PRE-EBS ESP installdisk.bin persist; iso~65%; iron INSTALL-OK open |
 | 2026-08-16 | tcp4-census-iron | 0.75 | 82 | Iron: after-all pxe=8 http=4 ip4cfg=4 still tcp4=0; Floppy Tcp4 SB = platform limit |
 | 2026-08-16 | tcp4-root-cause | 0.75 | 82 | Floppy Tcp4 absent: UNDI/SNP only; extra census + all-handles; SNP residual held |
 | 2026-08-16 | e4-spa-arm-kit | 0.75 | 82 | Preserve kit `v0.1.0-e4-spa-arm` before networking deep-dive |
@@ -314,7 +315,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
 Months left:   0.75  (ETA ~ 2026-09)
-Next move:     E5 iron reboot-to-disk → RAYNU-V-M7-ISO-INSTALL-OK
+Next move:     writable ESP + iron second boot → RAYNU-V-M7-ISO-INSTALL-OK
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit; SNP OK)
 Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
 Do not claim:  Mount Everest until E4–E5 green

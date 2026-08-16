@@ -83,6 +83,7 @@ fn main() -> Status {
     // E5 lab: ESP isoinstall.txt arms 1MiB install disk; isoreboot.txt = second boot.
     r640_hypervisor::mgmt::probe_iso_install_lab_flag();
     r640_hypervisor::mgmt::probe_iso_reboot_lab_flag();
+    r640_hypervisor::mgmt::probe_iso_persist_reboot();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");

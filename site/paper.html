@@ -551,7 +551,7 @@
         <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
         <code>80 verified, 0 errors</code>). Iron network HTTP MVP (E3 /
         <code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-16; ISO install-to-disk
-        / soak / TLS remain — see HDA E4–E5.
+        reboot (E5) / soak / TLS remain — see HDA.
       </p>
 
       <h2 id="related">7. Related Work</h2>
@@ -568,7 +568,7 @@
         <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> vSphere MVP polish (E4), Linux ISO install-to-disk (E5), TLS/post-EBS listen, live Redfish, R640 soak. E2+E3 closed on iron 2026-08-15/16.</li>
+        <li><strong>Mount Everest residual:</strong> Linux ISO install-to-disk + iron reboot-to-disk (E5), TLS/post-EBS listen, live Redfish, R640 soak. E2+E3 closed on iron; E4 SPA exercised. Firmware Tcp4 on Virtual Floppy is a platform limit (SNP residual).</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here

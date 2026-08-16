@@ -82,3 +82,27 @@ fn iso_reboot_lab_package() {
     assert!(prop_iso_reboot_lab_package());
     println!("RAYNU-V-M7-ISO-BOOTED-FROM-DISK");
 }
+
+#[test]
+fn persist_image_is_marker_only_for_iron_size() {
+    assert_eq!(
+        persist_image_len_for_contract(LAB_INSTALL_DISK_BYTES),
+        INSTALL_MARKER_PERSIST_BYTES
+    );
+    assert_eq!(
+        persist_image_len_for_contract(DEFAULT_INSTALL_DISK_BYTES),
+        INSTALL_MARKER_PERSIST_BYTES
+    );
+    let mut buf = [0u8; INSTALL_MARKER_PERSIST_BYTES];
+    assert!(fill_persist_image(&mut buf));
+    assert_eq!(
+        u32::from_le_bytes(buf[0..4].try_into().unwrap()),
+        crate::devices::virtio_blk::DISK_PATTERN
+    );
+    assert_eq!(
+        u32::from_le_bytes(buf[512..516].try_into().unwrap()),
+        crate::devices::virtio_blk::INSTALL_DISK_PATTERN
+    );
+    assert_eq!(parse_decimal_u64(b"67108864\n"), Some(67108864));
+    assert_eq!(parse_decimal_u64(b"1048576"), Some(1048576));
+}

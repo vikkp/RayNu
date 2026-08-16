@@ -108,6 +108,18 @@ pub const M7_ISO_BOOTED_FROM_DISK_MARKER: &str = "RAYNU-V-M7-ISO-BOOTED-FROM-DIS
 /// Serial note when isoreboot.txt arms persist detect.
 pub const M7_ISO_REBOOT_LAB_ARM_NOTE: &str = "boot: E5 lab isoreboot.txt armed (1MiB persist)";
 
+/// PRE-EBS ESP persist of LBA stamps so the next boot can preload without host synth.
+pub const M7_ISO_PERSIST_WRITE_NOTE: &str = "boot: E5 persist wrote installdisk.bin";
+
+/// ESP write failed (common on read-only iDRAC Virtual Floppy).
+pub const M7_ISO_PERSIST_FAIL_NOTE: &str = "boot: WARN — E5 persist ESP write failed";
+
+/// Second boot: `installdisk.bin` present, no `isoinstall.txt` → persist-detect.
+pub const M7_ISO_PERSIST_DETECT_NOTE: &str = "boot: E5 persist-detect armed (installdisk.bin)";
+
+/// LBA0+LBA1 only — iron 64 MiB disk must not be copied into the EFI or floppy.
+pub const INSTALL_MARKER_PERSIST_BYTES: usize = 1024;
+
 /// Max staged install disk from ESP (lab 1 MiB).
 pub const INSTALL_DISK_STAGE_CAP: usize = LAB_INSTALL_DISK_BYTES as usize;
 
@@ -176,6 +188,7 @@ pub fn arm_lab_install_contract() {
     unsafe {
         LAB_ARMED = true;
     }
+    persist_armed_install_to_esp();
 }
 
 /// True when the lab ESP path armed this boot.
@@ -213,18 +226,26 @@ pub fn stage_install_disk_image(bytes: &[u8]) -> Result<(), ()> {
     Ok(())
 }
 
-/// Arm reboot-detect lab: 1 MiB contract + virtio reboot detect mode.
-pub fn arm_lab_reboot_contract() {
-    arm_lab_install_contract();
+/// Arm reboot-detect: install-sized contract + virtio reboot detect mode.
+pub fn arm_reboot_contract(disk_bytes: u64) {
+    arm_install_launch_contract(InstallLaunchContract {
+        iso_id: 1,
+        extract_bound: true,
+        install_disk_bytes: disk_bytes,
+    });
     unsafe {
         REBOOT_LAB_ARMED = true;
         LAB_ARMED = false; // reboot path, not write path
     }
     crate::devices::virtio_blk::set_reboot_detect(true);
-    // Phase: pretend we already wrote and are rebooting.
     unsafe {
         BOOT_INSTALL_PLAN.phase = InstallPhase::RebootPending;
     }
+}
+
+/// Arm reboot-detect lab: 1 MiB contract + virtio reboot detect mode.
+pub fn arm_lab_reboot_contract() {
+    arm_reboot_contract(LAB_INSTALL_DISK_BYTES);
 }
 
 /// Record BootedFromDisk on the boot plan (lab close).
@@ -354,6 +375,39 @@ pub fn probe_iso_install_lab_flag() {
     }
 }
 
+/// Second boot without `isoreboot.txt`: `installdisk.bin` and no write-flag.
+#[cfg(target_os = "uefi")]
+pub fn probe_iso_persist_reboot() {
+    use crate::boot::serial;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+
+    if peek_armed_install_contract().is_some() {
+        return;
+    }
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    if flag_present(&mut fs, "\\EFI\\RayNu\\isoinstall.txt")
+        || flag_present(&mut fs, "\\isoinstall.txt")
+    {
+        return;
+    }
+    let staged = stage_from_esp(&mut fs, "\\EFI\\RayNu\\installdisk.bin")
+        .or_else(|_| stage_from_esp(&mut fs, "\\installdisk.bin"));
+    if staged.is_err() {
+        return;
+    }
+    let disk_bytes = persist_size_from_esp(&mut fs).unwrap_or_else(infer_persist_disk_bytes);
+    arm_reboot_contract(disk_bytes);
+    serial::write_line(M7_ISO_PERSIST_DETECT_NOTE);
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_iso_persist_reboot() {}
+
 #[cfg(target_os = "uefi")]
 fn flag_present(fs: &mut uefi::fs::FileSystem, path: &str) -> bool {
     use uefi::CString16;
@@ -409,10 +463,15 @@ fn stage_from_esp(fs: &mut uefi::fs::FileSystem, path: &str) -> Result<(), ()> {
 #[cfg(not(target_os = "uefi"))]
 pub fn probe_iso_reboot_lab_flag() {}
 
-/// Fill a 1 MiB buffer with host-stamped LBA0/LBA1 lab patterns (for persist image).
-pub fn synthesize_lab_install_image(buf: &mut [u8]) -> bool {
+/// How many bytes to write to ESP (LBA0+LBA1 only — never the live 1 MiB/64 MiB disk).
+pub fn persist_image_len_for_contract(_disk_bytes: u64) -> usize {
+    INSTALL_MARKER_PERSIST_BYTES
+}
+
+/// Stamp LBA0 (`DISK_PATTERN`) + LBA1 (`INSTALL_DISK_PATTERN`) into `buf`.
+pub fn fill_persist_image(buf: &mut [u8]) -> bool {
     use crate::devices::virtio_blk::{DISK_PATTERN, INSTALL_DISK_PATTERN};
-    if buf.len() != LAB_INSTALL_DISK_BYTES as usize {
+    if buf.len() < INSTALL_MARKER_PERSIST_BYTES {
         return false;
     }
     buf.fill(0);
@@ -422,7 +481,6 @@ pub fn synthesize_lab_install_image(buf: &mut [u8]) -> bool {
         let off = i * 4;
         buf[off..off + 4].copy_from_slice(&v);
     }
-    // Fix first word (xor 0).
     buf[0..4].copy_from_slice(&DISK_PATTERN.to_le_bytes());
     for i in 0..(sector / 4) {
         let v = (INSTALL_DISK_PATTERN ^ (i as u32)).to_le_bytes();
@@ -431,6 +489,152 @@ pub fn synthesize_lab_install_image(buf: &mut [u8]) -> bool {
     }
     buf[sector..sector + 4].copy_from_slice(&INSTALL_DISK_PATTERN.to_le_bytes());
     true
+}
+
+/// Fill a 1 MiB buffer with host-stamped LBA0/LBA1 lab patterns (for persist image).
+pub fn synthesize_lab_install_image(buf: &mut [u8]) -> bool {
+    if buf.len() != LAB_INSTALL_DISK_BYTES as usize {
+        return false;
+    }
+    fill_persist_image(buf)
+}
+
+fn infer_persist_disk_bytes() -> u64 {
+    // Marker-only files are 1 KiB for both lab and iron. Prefer installsize.txt.
+    // Default 1 MiB so QEMU `-m 512M` never allocates a surprise 64 MiB disk.
+    LAB_INSTALL_DISK_BYTES
+}
+
+/// Write LBA stamps to ESP `installdisk.bin` (+ `installsize.txt`) while Boot Services live.
+pub fn persist_armed_install_to_esp() {
+    let Some(c) = peek_armed_install_contract() else {
+        return;
+    };
+    let len = persist_image_len_for_contract(c.install_disk_bytes);
+    if len == 0 || len > INSTALL_DISK_STAGE_CAP {
+        return;
+    }
+    unsafe {
+        if !fill_persist_image(&mut INSTALL_DISK_BUF[..len]) {
+            return;
+        }
+    }
+    #[cfg(target_os = "uefi")]
+    {
+        write_esp_persist_files(c.install_disk_bytes, unsafe { &INSTALL_DISK_BUF[..len] });
+        unsafe {
+            INSTALL_DISK_LEN = 0;
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = len;
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_esp_persist_files(disk_bytes: u64, image: &[u8]) {
+    use crate::boot::serial;
+    use uefi::boot;
+    use uefi::fs::FileSystem;
+    use uefi::CString16;
+
+    let image_handle = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image_handle) else {
+        serial::write_line(M7_ISO_PERSIST_FAIL_NOTE);
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    let Ok(dir) = CString16::try_from("\\EFI\\RayNu") else {
+        serial::write_line(M7_ISO_PERSIST_FAIL_NOTE);
+        return;
+    };
+    let _ = fs.create_dir_all(dir.as_ref());
+    let Ok(bin) = CString16::try_from("\\EFI\\RayNu\\installdisk.bin") else {
+        serial::write_line(M7_ISO_PERSIST_FAIL_NOTE);
+        return;
+    };
+    if fs.write(bin.as_ref(), image).is_err() {
+        let Ok(alt) = CString16::try_from("\\installdisk.bin") else {
+            serial::write_line(M7_ISO_PERSIST_FAIL_NOTE);
+            return;
+        };
+        if fs.write(alt.as_ref(), image).is_err() {
+            serial::write_line(M7_ISO_PERSIST_FAIL_NOTE);
+            return;
+        }
+    }
+    if let Ok(sz) = CString16::try_from("\\EFI\\RayNu\\installsize.txt") {
+        let mut ascii = [0u8; 24];
+        let n = write_u64_ascii(disk_bytes, &mut ascii);
+        let _ = fs.write(sz.as_ref(), &ascii[..n]);
+    }
+    serial::write_str(M7_ISO_PERSIST_WRITE_NOTE);
+    serial::write_str(" bytes=");
+    write_serial_u64(image.len() as u64);
+    serial::write_byte(b'\n');
+}
+
+fn write_u64_ascii(mut n: u64, out: &mut [u8]) -> usize {
+    if out.is_empty() {
+        return 0;
+    }
+    if n == 0 {
+        out[0] = b'0';
+        return 1;
+    }
+    let mut tmp = [0u8; 20];
+    let mut i = 20;
+    while n > 0 && i > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    let len = 20 - i;
+    let copy = core::cmp::min(len, out.len());
+    out[..copy].copy_from_slice(&tmp[i..i + copy]);
+    copy
+}
+
+#[cfg(target_os = "uefi")]
+fn write_serial_u64(n: u64) {
+    use crate::boot::serial;
+    let mut ascii = [0u8; 24];
+    let len = write_u64_ascii(n, &mut ascii);
+    for &b in &ascii[..len] {
+        serial::write_byte(b);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn persist_size_from_esp(fs: &mut uefi::fs::FileSystem) -> Option<u64> {
+    use uefi::CString16;
+    let p = CString16::try_from("\\EFI\\RayNu\\installsize.txt").ok()?;
+    let data = fs.read(p.as_ref()).ok()?;
+    parse_decimal_u64(&data)
+}
+
+pub(crate) fn parse_decimal_u64(raw: &[u8]) -> Option<u64> {
+    let mut n: u64 = 0;
+    let mut seen = false;
+    for &b in raw {
+        if b == b'\n' || b == b'\r' || b == b' ' {
+            if seen {
+                break;
+            }
+            continue;
+        }
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        seen = true;
+        n = n.saturating_mul(10).saturating_add((b - b'0') as u64);
+    }
+    if seen {
+        Some(n)
+    } else {
+        None
+    }
 }
 
 /// Host package: reboot lab preload + detect + BootedFromDisk phase.
@@ -507,8 +711,11 @@ pub fn prop_iso_reboot_lab_package() -> bool {
         && include_str!("../tools/run-qemu.sh").contains("ISO_REBOOT_LAB")
         && include_str!("../tools/synth-e5-lab-install-img.sh").contains("INSTALL_DISK_PATTERN")
         && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
+        && include_str!("../src/main.rs").contains("probe_iso_persist_reboot")
         && include_str!("../vmx/launch.rs").contains("M7_ISO_BOOTED_FROM_DISK_MARKER")
-        && include_str!("../vmx/launch.rs").contains("note_booted_from_disk_lab");
+        && include_str!("../vmx/launch.rs").contains("note_booted_from_disk_lab")
+        && smoke.contains("installdisk.bin")
+        && runbook.contains("installdisk.bin");
     clear_armed_install_contract();
     ok
 }
@@ -566,7 +773,10 @@ pub fn prop_iso_install_lab_package() -> bool {
         && M7_ISO_INSTALL_LAB_OK_MARKER == crate::devices::virtio_blk::M7_ISO_INSTALL_LAB_OK_MARKER
         && M7_ISO_REBOOT_PENDING_MARKER == crate::devices::virtio_blk::M7_ISO_REBOOT_PENDING_MARKER
         && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
+        && include_str!("../src/main.rs").contains("probe_iso_persist_reboot")
         && include_str!("../tools/run-qemu.sh").contains("ISO_INSTALL_LAB")
+        && smoke.contains("E5 persist")
+        && runbook.contains("E5 persist")
         && include_str!("../vmx/launch.rs").contains("M7_ISO_REBOOT_PENDING_MARKER")
         && include_str!("../vmx/launch.rs").contains("note_reboot_pending_lab");
     clear_armed_install_contract();
@@ -605,6 +815,7 @@ pub fn begin_install_to_disk(
     let contract = launch_contract(&install.deploy)?;
     install.phase = InstallPhase::ContractReady;
     arm_install_launch_contract(contract);
+    persist_armed_install_to_esp();
     Ok(contract)
 }
 

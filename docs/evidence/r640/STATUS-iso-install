@@ -16,6 +16,11 @@ STATUS=open
 #   RAYNU-V-M7-ISO-DISK-WRITTEN / LAB-OK / REBOOT-PENDING on COM2
 #   Still missing: iron second-boot / RAYNU-V-M7-ISO-INSTALL-OK
 #
+# Firmware ESP persist (this tip): PRE-EBS write EFI/RayNu/installdisk.bin
+#   (1MiB lab or 1KiB iron markers) + installsize.txt. Next boot auto
+#   persist-detect if the file survived. iDRAC Virtual Floppy is often
+#   read-only — expect WARN and use writable USB ESP for iron reboot.
+#
 # Iron close marker (do not claim from scaffold/lab/arm-only):
 #   RAYNU-V-M7-ISO-INSTALL-OK
 #
