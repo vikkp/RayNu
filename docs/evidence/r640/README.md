@@ -5,6 +5,7 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 
 **M7.6 HTTP:** [`2026-08-16-uefi-http-ok.md`](2026-08-16-uefi-http-ok.md)  
 **E4 SPA + install arm:** [`2026-08-16-e4-spa-install-arm.md`](2026-08-16-e4-spa-install-arm.md)  
+**Preserve kit:** [`releases/v0.1.0-e4-spa-arm/`](../../../releases/v0.1.0-e4-spa-arm/) — checkpoint before networking deep-dive  
 **E5 ISO install:** [`STATUS-iso-install`](STATUS-iso-install) — still **open**
 
 **COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +

@@ -21,6 +21,7 @@ STATUS=closed
 #   logs/2026-08-16-e4-spa-install-arm-com2.txt
 #   Firefox SPA on 10.99.99.127:8443 → VmCreated + UEFI-HTTP-OK
 #   POST install armed 64MiB virtio across EBS → DISK-WRITTEN/LAB-OK/REBOOT-PENDING
+#   Preserve kit: releases/v0.1.0-e4-spa-arm/ (tip 7b9a17b; EFI SHA c9c213e0…)
 #   Not claimed: RAYNU-V-M7-ISO-INSTALL-OK (STATUS-iso-install still open)
 #
 # Substance close E2 (SHELL→M4→VMXOFF): releases/v0.1.0-xsavesfix/

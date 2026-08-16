@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: f924e50d8109de1895994c0d6ded074c57ddf80c
-last_commit_short: f924e50
+last_commit: e4780cafa089980275929c764dff01fd13b9cbae
+last_commit_short: e4780ca
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
@@ -281,6 +281,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e4-spa-arm-kit | 0.75 | 82 | Preserve kit `v0.1.0-e4-spa-arm` before networking deep-dive |
 | 2026-08-16 | e4-spa-iron | 0.75 | 82 | E4 SPA create + 64MiB install arm on R640; iso~62%; INSTALL-OK open |
 | 2026-08-16 | e4-iron-mvp | 0.75 | 81 | E4: durable PRE-EBS mgmt + /logs/serial + ESP auth.token; ui~82% |
 | 2026-08-16 | e5-booted-from-disk | 0.75 | 80 | QEMU lab two-boot → BOOTED-FROM-DISK; iso~55%; iron E5 still open |
@@ -312,6 +313,7 @@ Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3 CLOSED — BOOT-OK + UEFI-HTTP-OK (2026-08-16 COM2)
 Months left:   0.75  (ETA ~ 2026-09)
 Next move:     E5 iron reboot-to-disk → RAYNU-V-M7-ISO-INSTALL-OK
+Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
 Do not claim:  Mount Everest until E4–E5 green
 ```
 
