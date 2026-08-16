@@ -19,6 +19,7 @@ pub fn uefi_http_surface_present() -> bool {
     let main = include_str!("../src/main.rs");
     let tcp4 = include_str!("tcp4_uefi.rs");
     let snp = include_str!("snp_listen_uefi.rs");
+    let probe = include_str!("net_probe_uefi.rs");
     listen.contains("fn run_pre_ebs_mgmt_listen(")
         && listen.contains("fn listen_mgmt_http_uefi(")
         && listen.contains(M7_UEFI_HTTP_OK_MARKER)
@@ -34,6 +35,11 @@ pub fn uefi_http_surface_present() -> bool {
         && snp.contains("PRE-EBS SNP window")
         && snp.contains("CURL NOW")
         && listen.contains("SNP_POST_BIND_LISTEN_MS")
+        && probe.contains("connect_network_stack_bindings")
+        && probe.contains("NII_GUID")
+        && probe.contains("extra-after")
+        && probe.contains("NetworkPkg DXEs not dispatched")
+        && probe.contains("Tcp4ServiceBinding still 0")
 }
 
 /// True when runbook + smoke name M7.6 markers and PRE-EBS constraint.
@@ -48,6 +54,8 @@ pub fn uefi_http_scripts_present() -> bool {
         && runbook.contains("PRE-EBS")
         && runbook.contains(M7_UEFI_HTTP_OK_MARKER)
         && runbook.contains("hostfwd")
+        && runbook.contains("R640 Tcp4 absent")
+        && runbook.contains("2026-08-16-uefi-tcp4-absent-root-cause.md")
 }
 
 /// Full M7.6 scaffold package prop.

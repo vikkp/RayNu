@@ -1,0 +1,27 @@
+# COM2 excerpt — Tcp4 extra census (2026-08-16)
+# Real Dell PowerEdge R640 · BIOS 2.2.11 · iDRAC SOL console com2
+# Tip: cursor/uefi-tcp4-root-cause-a623 @ 326a862
+# Mac EFI SHA256 daa9c7561939ecb80b64514473bd9c71c7d6ed4ec80eefb86f53e8e41341c3ce
+# Path: Virtual Floppy · SNP residual still served HTTP
+# Not claimed: firmware Tcp4 listen / ISO-INSTALL-OK / Mount Everest
+
+boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra nii=4 pxe=0 http=0 ip4cfg=0 drv=75
+boot: uefi-net connect — starting PCI/UNDI drivers
+boot: uefi-net connect pci_ok=4 device_path_ok=32
+boot: uefi-net after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net connect — SNP child drivers
+boot: uefi-net connect snp_ok=4
+boot: uefi-net after-snp snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net connect — NetworkPkg SB + all-handles (bounded)
+boot: uefi-net connect stack_ok=0 all_ok=8
+boot: uefi-net after-all snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra-after nii=4 pxe=8 http=4 ip4cfg=4 drv=75
+boot: HINT — SNP present, Tcp4 still 0; extra NetworkPkg protocols seen — see extra census
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP lease 10.99.99.127/24 router=10.99.99.1
+boot: CURL NOW → http://10.99.99.127:8443/
+RAYNU-V-M7-UEFI-HTTP-OK
+…
+RAYNU-V-R640-BOOT-OK

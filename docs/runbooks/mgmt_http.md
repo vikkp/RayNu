@@ -83,6 +83,29 @@ UEFI Tcp4/SNP/DHCP are Boot Services protocols. After `leave_firmware()` /
 ExitBootServices they are gone. Concurrent guest + mgmt listen requires a
 post-EBS NIC driver (follow-on). M7.6 MVP = PRE-EBS window + soft-fail.
 
+## R640 Tcp4 absent (Virtual Floppy)
+
+Iron (BIOS 2.2.11, iDRAC Virtual Floppy): after PCI+SNP+all-handles,
+`snp=12` and `mnp=ip4=dhcp4=tcp4=0`, but `pxe=8 http=4 ip4cfg=4`.
+Firmware **Tcp4ServiceBinding** never appears (vendor PXE/HTTP closed
+stack). SNP + smoltcp residual is the working path
+(`RAYNU-V-M7-UEFI-HTTP-OK`). Platform limitation — see census COM2.
+
+**Working explanation:** Floppy BDS starts UNDI/SNP only. NetworkPkg
+(MnpDxe…Tcp4Dxe) is dispatched for **UEFI PXE / HTTP / iSCSI boot
+options**, not for Floppy. Enabling “UEFI Network Stack” in BIOS did not
+produce Tcp4 on Floppy. Investigation:
+[`docs/evidence/r640/2026-08-16-uefi-tcp4-absent-root-cause.md`](../evidence/r640/2026-08-16-uefi-tcp4-absent-root-cause.md).
+
+COM2 diagnostics (tip): `uefi-net extra`, `after-snp`, `stack_ok`,
+`after-all`, `extra-after`. If those stay `tcp4=0` and `pxe=http=0`,
+treat firmware Tcp4 as a **platform limitation** on this boot path.
+
+Optional BIOS experiments (do not block SNP residual): F2 → Network
+Settings → enable **PXE Device 1** and/or **HTTP Device 1**, still boot
+Virtual Floppy; compare `extra` census. USB ESP vs Floppy isolates
+vMedia. BIOS 2.2.11 → current 14G is a separate window.
+
 ## TLS
 
 **Deferred.** Prefer TLS before any untrusted LAN exposure (ADR-003/009/012).
