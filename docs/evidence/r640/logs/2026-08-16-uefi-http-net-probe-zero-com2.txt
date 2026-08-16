@@ -1,0 +1,21 @@
+# RayNu-V R640 COM2 — M7.6 uefi-net probe: all protocol counts zero
+# Date: 2026-08-16 (operator paste; iDRAC SOL console com2)
+# Host: Dell PowerEdge R640
+# Role: After Tcp4 soft-fail residual, probe build printed:
+#   boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0
+# Meaning: no UEFI Network Stack protocols started on Virtual Floppy boot
+#          (not merely Tcp4 missing — SNP/MNP/Ip4/Dhcp4 also absent).
+# Follow-on: ConnectController bring-up attempt; if still zero → post-EBS PCI NIC.
+# E2 still green: RAYNU-V-R640-BOOT-OK
+# Not claimed: RAYNU-V-M7-UEFI-HTTP-OK / Everest E3
+
+boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0
+boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)
+boot: HINT — if uefi-net probe tcp4=0: SNP residual next (ADR-012)
+boot: calling ExitBootServices — ConOut/video ends after this line
+RAYNU-V-M1-EBS-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M4-SMP-OK
+boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK

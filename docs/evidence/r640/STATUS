@@ -13,6 +13,11 @@ STATUS=closed
 #             RAYNU-V-R640-BOOT-OK (×3) after VMXOFF / M4.5
 #   secondary=0x0010100a (XSAVES)
 #
+# M7.6 residual (2026-08-16 probe): ALL UEFI net protocols zero on floppy boot
+#   logs/2026-08-16-uefi-http-net-probe-zero-com2.txt
+#   Observed: boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0
+#   Implication: SNP residual alone cannot attach; need ConnectController or post-EBS PCI
+#
 # M7.6 residual (2026-08-16): PRE-EBS Tcp4 soft-fail on iron
 #   logs/2026-08-16-uefi-http-tcp4-absent-com2.txt
 #   Observed: boot: WARN — Tcp4 stack absent; mgmt HTTP residual (ADR-012)
