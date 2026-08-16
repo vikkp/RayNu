@@ -3,6 +3,22 @@
 **Claim:** `RAYNU-V-M7-UEFI-HTTP-OK` on real Dell PowerEdge R640.  
 **Also still true:** `RAYNU-V-R640-BOOT-OK` (E2) on the same boot.
 
+## Closing kit
+
+| Field | Value |
+|-------|-------|
+| Kit | [`releases/v0.1.0-m76-snp-http/`](../../releases/v0.1.0-m76-snp-http/) |
+| Git (feature) | `b59927e` — first SNP+smoltcp residual (no `CURL NOW` yet) |
+| Rebuild EFI SHA256 | `5a8651698b6766dc8f46daa7c5db1da034a8e3b2e7e7db13dedd1f67686e4262` |
+| COM2 fingerprint | listen line then OK; **no** `CURL NOW` / `window_ms` |
+
+Operator Mac-built floppy may differ by toolchain — compare:
+
+```bash
+shasum -a 256 path/to/your/r640-hypervisor.efi
+# expect match to kit, or file both digests under evidence
+```
+
 ## What closed
 
 | Gate | Marker | Evidence |
