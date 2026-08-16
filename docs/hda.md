@@ -133,9 +133,8 @@ All must be true (no hand-waving):
 | ISO register + extract-boot bind | DONE (host) | `mgmt/iso.rs` Latitude package smoke (~0s) |
 | Install-to-disk scaffold (M7.7) | DONE (host) | `mgmt/iso_install.rs` + `iso_install.md`; `STATUS-iso-install=open` |
 | Virtio-blk install target surface | DONE (plan) | `DEFAULT_INSTALL_DISK_BYTES` + capacity helper |
+| Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest write/reboot open |
 | ISO parse / El Torito / EFI boot img | MISSING | residual |
-| CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Wire contract → guest launch | MISSING | next E5 step |
 | Persistent install + reboot-to-disk | MISSING | QEMU then iron |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-distro matrix | MISSING | — |

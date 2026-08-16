@@ -350,8 +350,9 @@ pub use iso::{
     dispatch_iso_rest, prop_iso_deploy_package, IsoDeployPlan, M7_ISO_OK_MARKER, ISO_GAP_NOTE,
 };
 pub use iso_install::{
-    dispatch_iso_install_rest, prop_iso_install_package, InstallToDiskPlan,
-    M7_ISO_INSTALL_OK_MARKER, M7_ISO_INSTALL_SCAFFOLD_MARKER, ISO_INSTALL_GAP_NOTE,
+    dispatch_iso_install_rest, disk_bytes_for_virtio_launch, install_disk_armed_for_launch,
+    prop_iso_install_package, InstallToDiskPlan, M7_ISO_INSTALL_OK_MARKER,
+    M7_ISO_INSTALL_SCAFFOLD_MARKER, ISO_INSTALL_GAP_NOTE,
 };
 pub use http::{
     prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,

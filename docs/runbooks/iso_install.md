@@ -80,6 +80,10 @@ Mirror E2/E3:
 
 ## Next
 
-1. Wire `InstallLaunchContract` → guest launch (extract-boot + install-sized virtio-blk).
-2. QEMU smoke: disk write + reboot-from-disk.
-3. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.
+1. ~~Wire `InstallLaunchContract` → guest launch (extract-boot + install-sized virtio-blk).~~
+   **Done (scaffold wire):** PRE-EBS `POST /iso/{id}/install` arms a static contract;
+   post-EBS `virtio_blk::init` uses `disk_bytes_for_virtio_launch()` (64 MiB when armed,
+   else 4 KiB M4.3 probe). Serial: `boot: E5 install-sized virtio-blk armed`.
+2. QEMU smoke: PRE-EBS curl install → confirm install-sized disk serial + `M4-BLK-OK`.
+3. Guest write proof + reboot-from-disk path.
+4. Iron kit + evidence close → `RAYNU-V-M7-ISO-INSTALL-OK`.

@@ -426,20 +426,35 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         let _ = life.disable();
         return;
     }
-    let Some(disk_phys) = alloc_phys(alloc) else {
-        boot::serial::write_line("boot: ERROR — no frame for virtio-blk disk");
+    let disk_bytes = r640_hypervisor::mgmt::disk_bytes_for_virtio_launch();
+    let disk_pages = ((disk_bytes + 4095) / 4096) as u64;
+    let disk_phys = if disk_pages <= 1 {
+        alloc_phys(alloc)
+    } else {
+        alloc.allocate_contiguous(disk_pages).map(|f| {
+            audit::integrity::record_event(audit::AuditEvent::FrameAllocated { frame: f.0 });
+            f.to_phys()
+        })
+    };
+    let Some(disk_phys) = disk_phys else {
+        boot::serial::write_line("boot: ERROR — no frames for virtio-blk disk");
         let _ = life.disable();
         return;
     };
-    // SAFETY: disk_phys is a fresh allocator frame; BAR GPA is EPT-unmapped.
+    // SAFETY: disk_phys is a fresh allocator span; BAR GPA is EPT-unmapped.
     unsafe {
-        devices::virtio_blk::init(bar_hpa, disk_phys, 4096);
+        devices::virtio_blk::init(bar_hpa, disk_phys, disk_bytes);
     }
     boot::serial::write_str("boot: M4.3 virtio-blk BAR=0x");
     write_hex(bar_hpa);
     boot::serial::write_str(" disk=0x");
     write_hex(disk_phys);
+    boot::serial::write_str(" bytes=");
+    write_dec(disk_bytes as u64);
     boot::serial::write_byte(b'\n');
+    if r640_hypervisor::mgmt::install_disk_armed_for_launch() {
+        boot::serial::write_line("boot: E5 install-sized virtio-blk armed (PRE-EBS contract)");
+    }
 
     // M4.4: virtio-net dual BARs in one 2 MiB EPT hole; packet bufs host-owned.
     let net_bar_hpa = match pick_shell_slab_hpa(alloc, &used[..used_n]) {

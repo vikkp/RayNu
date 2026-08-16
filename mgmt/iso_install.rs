@@ -83,6 +83,59 @@ pub struct InstallLaunchContract {
     pub install_disk_bytes: u64,
 }
 
+/// Probe-sized virtio-blk backing when no install contract is armed (M4.3).
+pub const PROBE_DISK_BYTES: usize = 4096;
+
+/// Armed across ExitBootServices: set by PRE-EBS `POST /iso/{id}/install`.
+static mut ARMED_INSTALL: Option<InstallLaunchContract> = None;
+
+/// Stash launch contract so post-EBS `virtio_blk::init` can size the install disk.
+pub fn arm_install_launch_contract(contract: InstallLaunchContract) {
+    // SAFETY: single-threaded boot / mgmt path.
+    unsafe {
+        ARMED_INSTALL = Some(contract);
+    }
+}
+
+/// Peek armed contract without clearing (host tests / diagnostics).
+pub fn peek_armed_install_contract() -> Option<InstallLaunchContract> {
+    // SAFETY: single-threaded boot / mgmt path.
+    unsafe { ARMED_INSTALL }
+}
+
+/// Take armed contract (clear after read). Prefer [`disk_bytes_for_virtio_launch`] at init.
+pub fn take_armed_install_contract() -> Option<InstallLaunchContract> {
+    // SAFETY: single-threaded boot / mgmt path.
+    unsafe { ARMED_INSTALL.take() }
+}
+
+/// Clear armed contract (tests / cancel).
+pub fn clear_armed_install_contract() {
+    // SAFETY: single-threaded boot / mgmt path.
+    unsafe {
+        ARMED_INSTALL = None;
+    }
+}
+
+/// Disk bytes for live `virtio_blk::init`: armed install size or M4.3 probe (4 KiB).
+pub fn disk_bytes_for_virtio_launch() -> usize {
+    match peek_armed_install_contract() {
+        Some(c)
+            if c.extract_bound
+                && c.install_disk_bytes >= PROBE_DISK_BYTES as u64
+                && c.install_disk_bytes % 512 == 0 =>
+        {
+            c.install_disk_bytes as usize
+        }
+        _ => PROBE_DISK_BYTES,
+    }
+}
+
+/// True when launch will use an install-sized disk (not the 4 KiB probe).
+pub fn install_disk_armed_for_launch() -> bool {
+    disk_bytes_for_virtio_launch() > PROBE_DISK_BYTES
+}
+
 /// Build launch contract from a ready M7.3 deploy plan.
 pub fn launch_contract(deploy: &IsoDeployPlan) -> Result<InstallLaunchContract, IsoError> {
     if !deploy.is_ready() {
@@ -114,6 +167,7 @@ pub fn begin_install_to_disk(
     }
     let contract = launch_contract(&install.deploy)?;
     install.phase = InstallPhase::ContractReady;
+    arm_install_launch_contract(contract);
     Ok(contract)
 }
 
@@ -277,10 +331,14 @@ pub fn dispatch_iso_install_rest(
 /// Host-testable install-to-disk **scaffold** package (not iron close).
 pub fn prop_iso_install_package() -> bool {
     let _ = BRINGUP_AUTH_TOKEN;
+    clear_armed_install_contract();
     if !install_launch_surfaces_present() {
         return false;
     }
     if !install_disk_capacity_ok(DEFAULT_INSTALL_DISK_BYTES) {
+        return false;
+    }
+    if disk_bytes_for_virtio_launch() != PROBE_DISK_BYTES {
         return false;
     }
 
@@ -302,6 +360,22 @@ pub fn prop_iso_install_package() -> bool {
     if install.phase != InstallPhase::ContractReady {
         return false;
     }
+    if peek_armed_install_contract() != Some(contract) {
+        return false;
+    }
+    if disk_bytes_for_virtio_launch() != DEFAULT_INSTALL_DISK_BYTES as usize {
+        return false;
+    }
+    if !install_disk_armed_for_launch() {
+        return false;
+    }
+    // Live path must name the wire helper (include_str gate in scaffold).
+    if !include_str!("../src/main.rs").contains("disk_bytes_for_virtio_launch") {
+        return false;
+    }
+    if !include_str!("../src/main.rs").contains("allocate_contiguous") {
+        return false;
+    }
     if mark_disk_written(&mut install).is_err() {
         return false;
     }
@@ -321,6 +395,7 @@ pub fn prop_iso_install_package() -> bool {
         return false;
     }
 
+    clear_armed_install_contract();
     let tok = Some(BRINGUP_AUTH_TOKEN);
     let mut store2 = ImageTable::new();
     let mut install2 = InstallToDiskPlan::empty();
@@ -336,6 +411,9 @@ pub fn prop_iso_install_package() -> bool {
     if began.status != 201 || !install2.is_contract_ready() {
         return false;
     }
+    if disk_bytes_for_virtio_launch() != DEFAULT_INSTALL_DISK_BYTES as usize {
+        return false;
+    }
     let status = dispatch_iso_install_rest(
         &mut store2,
         &mut install2,
@@ -345,13 +423,15 @@ pub fn prop_iso_install_package() -> bool {
             auth_token: tok,
         },
     );
-    status.status == 200
+    let ok = status.status == 200
         && status.reply == Some(ApiReply::Listed { count: 1 })
         && ISO_INSTALL_GAP_NOTE.contains("OPEN M7.7")
         && ISO_INSTALL_MVP_NOTE.contains("reboot-to-disk")
         && ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close")
         && M7_ISO_INSTALL_SCAFFOLD_MARKER == "RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK"
-        && M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK";
+    clear_armed_install_contract();
+    ok
 }
 
 #[cfg(test)]
