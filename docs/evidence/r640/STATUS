@@ -24,7 +24,11 @@ STATUS=closed
 # M7.6 progress (2026-08-16): ConnectController → SNP up
 #   logs/2026-08-16-uefi-http-snp12-after-pci-com2.txt
 #   Observed: after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
-#   Next: SNP + smoltcp residual (DHCP + TCP:8443) — Tcp4 still absent on iron
+#
+# M7.6 progress (2026-08-16): SNP DHCP + listen (accept timeout)
+#   logs/2026-08-16-uefi-http-snp-listen-accept-timeout-com2.txt
+#   Observed: listening on 10.99.99.127:8443; WARN accept timeout
+#   Next: longer post-bind window; curl http://10.99.99.127:8443/ during window
 #   Not claimed: RAYNU-V-M7-UEFI-HTTP-OK / Everest E3
 #
 # Claim: RAYNU-V-R640-BOOT-OK — substance + literal serial string on iron.

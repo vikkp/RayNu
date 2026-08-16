@@ -28,7 +28,12 @@ pub const M7_UEFI_HTTP_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK
 pub const UEFI_HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.6): UEFI NIC HTTP listen";
 
 /// How long to wait for an inbound connection before continuing to EBS (ms).
+/// Shared Tcp4 budget (absolute). SNP residual uses a separate post-bind window.
 pub const PRE_EBS_LISTEN_TIMEOUT_MS: u64 = 15_000;
+
+/// SNP residual: listen window **after** DHCP bind (ms). Operator needs time to
+/// read SOL IP and curl from a laptop — DHCP already consumed wall-clock.
+pub const SNP_POST_BIND_LISTEN_MS: u64 = 45_000;
 
 /// Max HTTP exchanges to serve in the PRE-EBS window.
 pub const PRE_EBS_MAX_EXCHANGES: u32 = 8;

@@ -9,7 +9,7 @@ use crate::boot::serial;
 use crate::mgmt::datastore::ImageTable;
 use crate::mgmt::http::handle_http_request;
 use crate::mgmt::http_listen::{
-    MgmtListenError, PRE_EBS_LISTEN_TIMEOUT_MS, PRE_EBS_MAX_EXCHANGES, M7_UEFI_HTTP_OK_MARKER,
+    MgmtListenError, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS, M7_UEFI_HTTP_OK_MARKER,
 };
 use crate::mgmt::iso::IsoDeployPlan;
 use crate::mgmt::snp_uefi::{open_first_snp, SnpDevice};
@@ -42,9 +42,9 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
 
     serial::write_line("boot: SNP DHCP discover…");
     let mut leased: Option<Ipv4Cidr> = None;
-    let dhcp_deadline = DHCP_BUDGET_MS.min(PRE_EBS_LISTEN_TIMEOUT_MS);
+    let dhcp_deadline = DHCP_BUDGET_MS as i64;
 
-    while millis < dhcp_deadline as i64 {
+    while millis < dhcp_deadline {
         let ts = Instant::from_millis(millis);
         iface.poll(ts, &mut device, &mut sockets);
 
@@ -71,7 +71,6 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         millis += 1;
     }
 
-    // Drop DHCP socket before adding TCP (single SocketSet, keep it simple).
     let _ = sockets.remove(dhcp_handle);
 
     let Some(cidr) = leased else {
@@ -85,11 +84,21 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     serial::write_byte(b':');
     write_u16_dec(port);
     serial::write_line(" (PRE-EBS SNP window)");
+    serial::write_str("boot: CURL NOW → http://");
+    write_ipv4(ip);
+    serial::write_byte(b':');
+    write_u16_dec(port);
+    serial::write_line("/");
+    serial::write_str("boot: SNP listen window_ms=");
+    write_u32_dec(SNP_POST_BIND_LISTEN_MS as u32);
+    serial::write_byte(b'\n');
+    serial::write_line(
+        "boot: HINT — curl HOST_NIC (≠ iDRAC): GET / and Bearer /vms before window ends",
+    );
 
     let tcp_rx = tcp::SocketBuffer::new(alloc::vec![0u8; 8192]);
     let tcp_tx = tcp::SocketBuffer::new(alloc::vec![0u8; 16384]);
-    let tcp_socket = tcp::Socket::new(tcp_rx, tcp_tx);
-    let tcp_handle = sockets.add(tcp_socket);
+    let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
 
     {
         let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
@@ -97,41 +106,106 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     }
 
     let mut served: u32 = 0;
-    let listen_deadline = PRE_EBS_LISTEN_TIMEOUT_MS as i64;
+    let mut announced_accept = false;
+    let mut rx_acc = [0u8; 8192];
+    let mut rx_len: usize = 0;
+    // Fresh post-bind budget — do not share remaining DHCP wall-clock.
+    let listen_start = millis;
+    let listen_deadline = listen_start + SNP_POST_BIND_LISTEN_MS as i64;
+    let mut last_remind = listen_start;
 
     while served < PRE_EBS_MAX_EXCHANGES && millis < listen_deadline {
         let ts = Instant::from_millis(millis);
         iface.poll(ts, &mut device, &mut sockets);
 
-        let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
-        if !sock.is_active() && !sock.is_listening() {
-            let _ = sock.listen(port);
-        }
+        let mut do_close = false;
+        let mut did_exchange = false;
 
-        if sock.can_recv() {
-            let mut rx_buf = [0u8; 8192];
-            let n = sock.recv_slice(&mut rx_buf).unwrap_or(0);
-            if n > 0 {
-                let raw = core::str::from_utf8(&rx_buf[..n]).unwrap_or("");
+        {
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                rx_len = 0;
+                announced_accept = false;
+                let _ = sock.listen(port);
+            } else if !sock.is_active() && !sock.is_listening() {
+                let _ = sock.listen(port);
+            }
+
+            if sock.is_active() && !announced_accept {
+                serial::write_line("boot: SNP TCP accept — client connected");
+                announced_accept = true;
+                rx_len = 0;
+            }
+
+            if sock.can_recv() {
+                let mut chunk = [0u8; 2048];
+                if let Ok(n) = sock.recv_slice(&mut chunk) {
+                    if n > 0 {
+                        let copy = n.min(rx_acc.len().saturating_sub(rx_len));
+                        rx_acc[rx_len..rx_len + copy].copy_from_slice(&chunk[..copy]);
+                        rx_len += copy;
+                    }
+                }
+            }
+
+            let headers_done = rx_len >= 4
+                && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+
+            if headers_done && sock.can_send() {
+                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
                 let mut table = VmTable::new();
                 let mut images = ImageTable::new();
                 let mut iso_plan = IsoDeployPlan::empty();
                 let mut out = [0u8; 16384];
-                let wn = handle_http_request(&mut table, &mut images, &mut iso_plan, raw, &mut out)
-                    .unwrap_or(0);
-                if wn > 0 && sock.can_send() {
+                let wn = handle_http_request(
+                    &mut table,
+                    &mut images,
+                    &mut iso_plan,
+                    raw,
+                    &mut out,
+                )
+                .unwrap_or(0);
+                if wn > 0 {
                     let _ = sock.send_slice(&out[..wn]);
-                    served = served.saturating_add(1);
-                    // Close after response so curl completes cleanly.
-                    sock.close();
+                    did_exchange = true;
+                    do_close = true;
                 }
             }
         }
 
-        // Re-listen after close for additional exchanges.
-        if !sock.is_open() {
-            let _ = sock.listen(port);
+        if did_exchange {
+            served = served.saturating_add(1);
+            serial::write_line("boot: SNP HTTP exchange ok");
+            // Flush TX before close.
+            for _ in 0..50 {
+                millis += 1;
+                let ts = Instant::from_millis(millis);
+                iface.poll(ts, &mut device, &mut sockets);
+                let _ = uefi::boot::stall(1_000);
+            }
         }
+
+        if do_close {
+            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            rx_len = 0;
+            announced_accept = false;
+        }
+
+        if millis - last_remind >= 5_000 {
+            last_remind = millis;
+            let left = (listen_deadline - millis).max(0) as u32;
+            serial::write_str("boot: waiting curl http://");
+            write_ipv4(ip);
+            serial::write_byte(b':');
+            write_u16_dec(port);
+            serial::write_str("/  remaining_ms=");
+            write_u32_dec(left);
+            serial::write_byte(b'\n');
+        }
+
+        // Second poll flushes TX from socket handling.
+        let ts2 = Instant::from_millis(millis);
+        iface.poll(ts2, &mut device, &mut sockets);
 
         let _ = uefi::boot::stall(1_000);
         millis += 1;
@@ -181,6 +255,23 @@ fn write_ipv4(ip: Ipv4Address) {
 fn write_u16_dec(mut n: u16) {
     let mut buf = [0u8; 5];
     let mut i = 5;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
+    }
+}
+
+fn write_u32_dec(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = 10;
     if n == 0 {
         serial::write_byte(b'0');
         return;

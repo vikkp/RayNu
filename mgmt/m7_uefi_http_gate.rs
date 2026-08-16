@@ -32,6 +32,8 @@ pub fn uefi_http_surface_present() -> bool {
         && tcp4.contains("65530bc7")
         && snp.contains("uefi_snp_listen")
         && snp.contains("PRE-EBS SNP window")
+        && snp.contains("CURL NOW")
+        && listen.contains("SNP_POST_BIND_LISTEN_MS")
 }
 
 /// True when runbook + smoke name M7.6 markers and PRE-EBS constraint.

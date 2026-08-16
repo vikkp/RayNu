@@ -1,0 +1,20 @@
+# 2026-08-16 R640 COM2 — SNP residual DHCP + listen (accept timeout)
+#
+# Progress: ConnectController → SNP → DHCP lease → TCP listen on real LOM IP.
+# Observed (main ≥ b59927e SNP residual):
+#   MAC=b0:26:28:5c:5a:3a
+#   mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+#   WARN — mgmt HTTP accept timeout (continuing to EBS)
+# Implication: L2/L3 + DHCP + bind OK; no HTTP exchange in post-DHCP window
+# (operator curl race and/or short shared 15s budget). Next: longer post-bind
+# window + CURL NOW reminders.
+# E2 still closed: RAYNU-V-R640-BOOT-OK
+# Not claimed: RAYNU-V-M7-UEFI-HTTP-OK / Everest E3
+
+boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP DHCP discover…
+boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+boot: WARN — mgmt HTTP accept timeout (continuing to EBS)
+RAYNU-V-R640-BOOT-OK
