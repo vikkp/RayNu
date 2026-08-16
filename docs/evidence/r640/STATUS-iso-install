@@ -1,5 +1,5 @@
 STATUS=open
-# E5 / M7.7 ISO install-to-disk — OPEN until iron proof on R640.
+# E5 / M7.7 ISO install-to-disk — OPEN until iron INSTALL-OK (reboot-to-disk).
 #
 # Scaffold (host/CI only): RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK
 #   ./tools/m7-iso-install-smoke.sh
@@ -10,16 +10,23 @@ STATUS=open
 #   RAYNU-V-M7-ISO-BOOTED-FROM-DISK (boot2 persist detect)
 #   Host synthesizes target/e5-lab-install.img between boots (RAM disk).
 #
-# Iron close marker (do not claim from scaffold/lab):
+# Iron progress (2026-08-16, tip 46090df) — NOT a close:
+#   docs/evidence/r640/2026-08-16-e4-spa-install-arm.md
+#   PRE-EBS SPA Install → 64MiB virtio armed across EBS
+#   RAYNU-V-M7-ISO-DISK-WRITTEN / LAB-OK / REBOOT-PENDING on COM2
+#   Still missing: iron second-boot / RAYNU-V-M7-ISO-INSTALL-OK
+#
+# Iron close marker (do not claim from scaffold/lab/arm-only):
 #   RAYNU-V-M7-ISO-INSTALL-OK
 #
 # Evidence template:
 #   docs/evidence/r640/TEMPLATE-iso-install.md
 #
-# Prior closed (not E5 iron):
+# Prior closed (not E5 iron close):
 #   M7.3 RAYNU-V-M7-ISO-OK — deploy plan smoke only (no install-to-disk)
 #   E2 RAYNU-V-R640-BOOT-OK — 2026-08-15
 #   E3 RAYNU-V-M7-UEFI-HTTP-OK — 2026-08-16
+#   E4 SPA create + install arm — 2026-08-16 (see e4-spa-install-arm evidence)
 #
 # When closing: set STATUS=closed, file dated evidence MD + serial log,
 # flip GAP(CLOSED M7.7) in mgmt/iso_install.rs, update HDA summit_iso_pct.

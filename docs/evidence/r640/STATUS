@@ -16,6 +16,13 @@ STATUS=closed
 #   Same boot still printed RAYNU-V-R640-BOOT-OK after M4.5 / VMXOFF
 #   Note: iron floppy was pre-8c4352d (no CURL NOW); later tip has 45s window+ICMP
 #
+# E4 SPA create-VM + install arm on iron (2026-08-16) — tip 46090df:
+#   docs/evidence/r640/2026-08-16-e4-spa-install-arm.md
+#   logs/2026-08-16-e4-spa-install-arm-com2.txt
+#   Firefox SPA on 10.99.99.127:8443 → VmCreated + UEFI-HTTP-OK
+#   POST install armed 64MiB virtio across EBS → DISK-WRITTEN/LAB-OK/REBOOT-PENDING
+#   Not claimed: RAYNU-V-M7-ISO-INSTALL-OK (STATUS-iso-install still open)
+#
 # Substance close E2 (SHELL→M4→VMXOFF): releases/v0.1.0-xsavesfix/
 #   EFI SHA256 c3a688d0f5bb7c45395d3c1f7566272074f6d118276eaedc073b2f29ba28d611
 #

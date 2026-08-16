@@ -1,0 +1,79 @@
+# COM2 excerpt — E4 SPA create-VM + install arm (2026-08-16)
+# Real Dell PowerEdge R640 · iDRAC SOL console com2
+# Tip: main @ 46090df (feat(e4): durable PRE-EBS mgmt + serial log + ESP auth)
+# Operator: Firefox SPA http://10.99.99.127:8443 during PRE-EBS SNP window
+# Auth: bring-up token (lab; no auth.token on media)
+
+boot: E4 auth: bring-up token (lab; no auth.token)
+boot: HINT — SNP present, Tcp4 still 0; SNP residual next (ADR-012)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP DHCP discover…
+boot: SNP lease 10.99.99.127/24 router=10.99.99.1
+boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+boot: CURL NOW → http://10.99.99.127:8443/
+boot: PING NOW (same LAN as HOST NIC, not iDRAC) before curl
+boot: SNP listen window_ms=45000
+boot: HINT — Mac must be on lease subnet; curl during window only (pre-EBS)
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=40000
+boot: SNP TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=35000
+boot: SNP TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=30000
+boot: SNP TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=2
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=25000
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=20000
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=15000
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=10000
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.127:8443/  remaining_ms=5000
+boot: SNP TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+RAYNU-V-M7-UEFI-HTTP-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+…
+boot: M4.3 virtio-blk BAR=0x10000000 disk=0x1bc3000 bytes=67108864
+boot: E5 install-sized virtio-blk armed (PRE-EBS contract)
+…
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-DISK-WRITTEN
+RAYNU-V-M7-ISO-INSTALL-LAB-OK
+RAYNU-V-M7-ISO-REBOOT-PENDING
+…
+RAYNU-V-R640-BOOT-OK

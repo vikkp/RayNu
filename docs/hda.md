@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-08-16
-last_commit: 494cf25835df99cc6f43b9fca353e67a650598eb
-last_commit_short: 494cf25
+last_commit: f924e50d8109de1895994c0d6ded074c57ddf80c
+last_commit_short: f924e50
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.75
 months_to_everest_prev: 0.75
 velocity_commits_30d: 345
 velocity_gates_30d: 18
-overall_pct: 81
+overall_pct: 82
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,8 +17,8 @@ everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 82
-summit_iso_pct: 55
+summit_ui_pct: 88
+summit_iso_pct: 62
 summit_prod_pct: 100
 ---
 
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **81%** | +1 (E4 SPA/log/auth polish) |
-| **Months to Mount Everest** | **0.75** | held (lab ≠ iron E5) |
+| **Overall product readiness** | **82%** | +1 (E4 SPA create + install arm on iron) |
+| **Months to Mount Everest** | **0.75** | held (iron E5 INSTALL-OK still open) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | medium | E2+E3 COM2 green; E5 iron still open |
+| **Confidence** | medium | E2+E3+E4 SPA on COM2; E5 iron reboot residual |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~82% | E4 polish: durable PRE-EBS + serial log + ESP auth; TLS residual |
-| **Deploy Linux ISO** | ~55% | QEMU lab BootedFromDisk; iron install-to-disk open |
+| **vSphere-like UI (network)** | ~88% | E4 SPA create-VM on iron PRE-EBS; TLS residual |
+| **Deploy Linux ISO** | ~62% | Iron 64MiB arm + REBOOT-PENDING; INSTALL-OK open |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
 Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.75 mo  (was 1.25)
-Overall %          ████████████████░░░░  81%
+Overall %          ████████████████░░░░  82%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -119,9 +119,10 @@ All must be true (no hand-waving):
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
 | Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
-| Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up when present |
+| Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up; iron used lab bring-up |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
+| E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 
 ### Summit D — Deploy Linux ISO
 **Status: MEDIUM · ~55% · ~0.5–1.0 months residual**
@@ -280,6 +281,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-16 | e4-spa-iron | 0.75 | 82 | E4 SPA create + 64MiB install arm on R640; iso~62%; INSTALL-OK open |
 | 2026-08-16 | e4-iron-mvp | 0.75 | 81 | E4: durable PRE-EBS mgmt + /logs/serial + ESP auth.token; ui~82% |
 | 2026-08-16 | e5-booted-from-disk | 0.75 | 80 | QEMU lab two-boot → BOOTED-FROM-DISK; iso~55%; iron E5 still open |
 | 2026-08-16 | e5-iso-scaffold | 0.75 | 79 | M7.7 ISO install-to-disk scaffold; iso~45%; E5 iron still open |

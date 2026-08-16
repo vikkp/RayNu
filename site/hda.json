@@ -5,8 +5,8 @@
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/hda.md",
   "everest_eta_month": "2026-09",
   "hda_version": 1,
-  "last_commit": "494cf25835df99cc6f43b9fca353e67a650598eb",
-  "last_commit_short": "494cf25",
+  "last_commit": "f924e50d8109de1895994c0d6ded074c57ddf80c",
+  "last_commit_short": "f924e50",
   "last_updated": "2026-08-16",
   "months_to_everest": 0.75,
   "months_to_everest_prev": 0.75,
@@ -18,15 +18,15 @@
     "M7 single-host ship"
   ],
   "mount_everest_target": "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)",
-  "overall_pct": 81,
+  "overall_pct": 82,
   "source": "docs/hda.md",
   "summits": {
     "core": 88,
     "efi": 95,
-    "iso": 55,
+    "iso": 62,
     "prod": 100,
     "r640": 98,
-    "ui": 82
+    "ui": 88
   },
   "updated_by": "cursor",
   "velocity_commits_30d": 345,
