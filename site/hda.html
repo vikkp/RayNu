@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; Phase 0 `14e4:165f`; E3b Phase D open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; Phase D BCM5720 in-tree; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -153,8 +153,10 @@
             (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). E3 is bring-up
             only. <strong>E3b</strong> (ADR-013 <strong>Accepted</strong>) is lifetime HTTP on a
             host-owned NIC — firmware SNP hung, then RSOD after EBS; WARN-only
-            idle later closed with <strong>no RSOD</strong>. Then
-            remaining E4 polish and a real distro installer (not El Torito first).
+            idle later closed with <strong>no RSOD</strong>. Phase D BCM5720
+            driver is in-tree; iron <code>HOST-NIC-HTTP-OK</code> waits on an
+            exchange after <code>BOOT-OK</code>. Then remaining E4 polish and a
+            real distro installer (not El Torito first).
           </p>
           <div class="cta" data-reveal>
             <a

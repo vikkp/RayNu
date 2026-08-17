@@ -36,6 +36,10 @@ if [[ ! -f "$ROOT/mgmt/pci_census.rs" ]]; then
   echo "error: missing mgmt/pci_census.rs (ADR-013 Phase 0)" >&2
   exit 1
 fi
+if [[ ! -f "$ROOT/mgmt/bcm5720_mmio.rs" ]]; then
+  echo "error: missing mgmt/bcm5720_mmio.rs (ADR-013 Phase D BCM5720)" >&2
+  exit 1
+fi
 if [[ ! -f "$ROOT/mgmt/mgmt_arena.rs" ]]; then
   echo "error: missing mgmt/mgmt_arena.rs (ADR-013 Phase E)" >&2
   exit 1

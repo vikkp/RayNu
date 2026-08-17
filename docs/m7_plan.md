@@ -264,9 +264,11 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** Phase D native `smoltcp::phy::Device` for **`14e4:165f`** (BCM5720, prefer
-`01:00.0`). Same HTTP codec. Do not start X710. Preserve kit
+**Next:** flash the Phase D EFI (this branch / after merge) to Cruzer. After
+`RAYNU-V-R640-BOOT-OK`, curl the **same** PRE-EBS SNP lease
+(`http://<lease>:8443/`) on the host LAN. Expect BCM5720 serial
+(`HOST-NIC BCM5720 … rings armed`) then idle listen. `RAYNU-V-M7-HOST-NIC-HTTP-OK`
+only after that exchange. Preserve kit
 `releases/v0.1.0-adr013-baseline`. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed.
-Iron E3b marker remains `RAYNU-V-M7-HOST-NIC-HTTP-OK`. Phase C QEMU:
-`RAYNU-V-M7-HOST-NIC-QEMU-OK`. Evidence:
+Phase C QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

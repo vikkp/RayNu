@@ -89,6 +89,14 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         serial::write_str(" router=none");
     }
     serial::write_byte(b'\n');
+    crate::mgmt::mgmt_lease::store(crate::mgmt::mgmt_lease::ParkedMgmtLease {
+        ip: ip.octets(),
+        prefix: cidr.prefix_len(),
+        router: leased_router.map(|r| r.octets()).unwrap_or([0; 4]),
+        has_router: leased_router.is_some(),
+        mac,
+        port,
+    });
     serial::write_str("boot: mgmt HTTP listening on ");
     write_ipv4(ip);
     serial::write_byte(b':');

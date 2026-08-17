@@ -1,26 +1,24 @@
-//! smoltcp `Device` for the QEMU e1000 (ADR-013 Phase C / D).
+//! smoltcp `Device` for BCM5720 `14e4:165f` (ADR-013 Phase D).
 //!
-//! Pillar: [Z]
+//! Pillar: [Z] [D]
 //! Proven Core: **outside**
 //!
-//! Thin safe wrapper: all MMIO/DMA is in [`crate::mgmt::e1000_mmio`].
-//! Phase D reuses this same `smoltcp::phy::Device` surface on BCM5720
-//! (`mgmt/bcm5720.rs`). Do not fork a second PHY trait or HTTP codec.
+//! Thin safe wrapper. All MMIO/DMA is in [`crate::mgmt::bcm5720_mmio`].
+//! Same PHY trait as QEMU e1000 — do not fork HTTP.
 
 #![cfg(feature = "uefi-bin")]
 
-use crate::mgmt::e1000_mmio::{self, FRAME_MAX};
+use crate::mgmt::bcm5720_mmio::{self, FRAME_MAX};
 use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use smoltcp::time::Instant;
 
-/// smoltcp PHY wrapping the host-owned e1000.
-pub struct E1000Device {
+pub struct Bcm5720Device {
     mac: [u8; 6],
 }
 
-impl E1000Device {
-    pub fn init() -> Result<Self, e1000_mmio::E1000Error> {
-        let mac = e1000_mmio::init_e1000()?;
+impl Bcm5720Device {
+    pub fn init() -> Result<Self, bcm5720_mmio::Bcm5720Error> {
+        let mac = bcm5720_mmio::init_bcm5720()?;
         Ok(Self { mac })
     }
 
@@ -29,31 +27,31 @@ impl E1000Device {
     }
 }
 
-pub struct E1000RxToken {
+pub struct Bcm5720RxToken {
     buf: [u8; FRAME_MAX],
     len: usize,
 }
 
-pub struct E1000TxToken;
+pub struct Bcm5720TxToken;
 
-impl Device for E1000Device {
+impl Device for Bcm5720Device {
     type RxToken<'a>
-        = E1000RxToken
+        = Bcm5720RxToken
     where
         Self: 'a;
     type TxToken<'a>
-        = E1000TxToken
+        = Bcm5720TxToken
     where
         Self: 'a;
 
     fn receive(&mut self, _timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         let mut buf = [0u8; FRAME_MAX];
-        let len = e1000_mmio::receive_frame(&mut buf)?;
-        Some((E1000RxToken { buf, len }, E1000TxToken))
+        let len = bcm5720_mmio::receive_frame(&mut buf)?;
+        Some((Bcm5720RxToken { buf, len }, Bcm5720TxToken))
     }
 
     fn transmit(&mut self, _timestamp: Instant) -> Option<Self::TxToken<'_>> {
-        Some(E1000TxToken)
+        Some(Bcm5720TxToken)
     }
 
     fn capabilities(&self) -> DeviceCapabilities {
@@ -65,7 +63,7 @@ impl Device for E1000Device {
     }
 }
 
-impl RxToken for E1000RxToken {
+impl RxToken for Bcm5720RxToken {
     fn consume<R, F>(self, f: F) -> R
     where
         F: FnOnce(&[u8]) -> R,
@@ -74,7 +72,7 @@ impl RxToken for E1000RxToken {
     }
 }
 
-impl TxToken for E1000TxToken {
+impl TxToken for Bcm5720TxToken {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
@@ -82,7 +80,7 @@ impl TxToken for E1000TxToken {
         let mut scratch = [0u8; FRAME_MAX];
         let len = len.min(scratch.len());
         let result = f(&mut scratch[..len]);
-        let _ = e1000_mmio::transmit_frame(&scratch[..len]);
+        let _ = bcm5720_mmio::transmit_frame(&scratch[..len]);
         result
     }
 }

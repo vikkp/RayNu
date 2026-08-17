@@ -13,7 +13,7 @@ use super::host_nic::{
 };
 use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::mgmt_arena::prop_arena_reset_rewinds;
-use super::pci_census::{census_nic_has_lab_driver, pci_id_is_iron_census};
+use super::pci_census::{census_nic_has_iron_driver, census_nic_has_lab_driver, pci_id_is_iron_census};
 
 /// Host / CI marker when the M7.8 scaffold package passes.
 pub const M7_HOST_NIC_GATE_MARKER: &str = M7_HOST_NIC_SCAFFOLD_MARKER;
@@ -21,6 +21,7 @@ pub const M7_HOST_NIC_GATE_MARKER: &str = M7_HOST_NIC_SCAFFOLD_MARKER;
 pub fn host_nic_surface_present() -> bool {
     let mmio = include_str!("e1000_mmio.rs");
     let phy = include_str!("e1000.rs");
+    let bcm = include_str!("bcm5720_mmio.rs");
     let listen = include_str!("host_nic_listen.rs");
     let http = include_str!("http_listen.rs");
     let census = include_str!("pci_census.rs");
@@ -41,12 +42,20 @@ pub fn host_nic_surface_present() -> bool {
         && census.contains("IOMMU ACPI DMAR=")
         && census.contains("fn iron_marker_allowed(")
         && census.contains("fn pci_id_is_iron_census(")
+        && census.contains("fn census_nic_has_iron_driver(")
         && census.contains("14e4:165f")
+        && bcm.contains("fn parse_mocked_rx_bd_bytes(")
+        && bcm.contains("fn bcm5720_present(")
+        && bcm.contains("// SAFETY:")
+        && bcm.contains("KANI-TARGET")
+        && bcm.contains("01:00.0")
         && arena.contains("enum MgmtFatal")
         && arena.contains("fn inject_mgmt_fatals(")
         && listen.contains("fn run_post_ebs_host_nic_listen(")
         && listen.contains("fn run_post_boot_ok_native_idle(")
-        && listen.contains("post-EBS e1000")
+        && listen.contains("fn listen_bcm5720(")
+        && listen.contains("Bcm5720Device")
+        && listen.contains("post-EBS ")
         && listen.contains("M7_HOST_NIC_QEMU_MARKER")
         && listen.contains("MgmtFatal")
         && listen.contains("MgmtArena")
@@ -66,6 +75,8 @@ pub fn host_nic_surface_present() -> bool {
         && !census_nic_has_lab_driver(0x14e4, 0x165f)
         && pci_id_is_iron_census(0x14e4, 0x165f)
         && !pci_id_is_iron_census(E1000_VENDOR, E1000_DEVICE)
+        && census_nic_has_iron_driver(0x14e4, 0x165f)
+        && !census_nic_has_iron_driver(E1000_VENDOR, E1000_DEVICE)
 }
 
 /// Native listen must not print the iron Phase D marker.
@@ -85,6 +96,7 @@ pub fn host_nic_scripts_present() -> bool {
         && smoke.contains("never print iron")
         && smoke.contains("pci_census.rs")
         && smoke.contains("mgmt_arena.rs")
+        && smoke.contains("bcm5720_mmio.rs")
         && qemu.contains(M7_HOST_NIC_QEMU_MARKER)
         && qemu.contains("hostnic.txt")
         && qemu.contains("e1000")
@@ -92,10 +104,12 @@ pub fn host_nic_scripts_present() -> bool {
         && qemu.contains("vid:did=8086:100e")
         && qemu.contains("PCI census")
         && miri.contains("parse_mocked_rx_desc")
+        && miri.contains("parse_mocked_rx_bd")
         && miri.contains("skip")
         && runbook.contains("ADR-013")
         && runbook.contains("Phase C")
         && runbook.contains("Phase 0")
+        && runbook.contains("Phase D")
         && runbook.contains("Phase E")
         && runbook.contains(M7_HOST_NIC_QEMU_MARKER)
         && runbook.contains(M7_HOST_NIC_SCAFFOLD_MARKER)
