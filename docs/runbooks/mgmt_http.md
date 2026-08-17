@@ -94,8 +94,9 @@ firmware SNP after EBS.
 | After VMXOFF / BOOT-OK | WARN only — **firmware SNP dead** (2026-08-17 curl timeout + RSOD RIP=`0x17`); no SNP poll | PRE-EBS remains mgmt |
 
 **Do not chase** firmware Tcp4 on this boot method (Virtual Floppy / Cruzer UNDI).
-**Do not chase** firmware SNP after EBS. Durable post-EBS HTTP needs a host-owned
-NIC (MMIO/DMA). Size stays inside ADR-003 (`./tools/check-size.sh`).
+**Do not chase** firmware SNP after EBS (do not chase either protocol after EBS).
+Durable post-EBS HTTP needs a host-owned NIC (MMIO/DMA). Size stays inside
+ADR-003 (`./tools/check-size.sh`).
 
 If the NIC is unusable after EBS, serial prints a WARN and the guest path
 continues. PRE-EBS remains the fallback operator window.
