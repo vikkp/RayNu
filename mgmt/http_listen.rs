@@ -22,8 +22,14 @@ use super::VmTable;
 /// Iron / firmware marker when PRE-EBS Tcp4 listen serves SPA or REST.
 pub const M7_UEFI_HTTP_OK_MARKER: &str = "RAYNU-V-M7-UEFI-HTTP-OK";
 
+/// Firmware marker when SNP+smoltcp serves ≥1 HTTP exchange **after** EBS.
+pub const M7_POST_EBS_HTTP_OK_MARKER: &str = "RAYNU-V-M7-POST-EBS-HTTP-OK";
+
 /// Host/CI scaffold marker (never claims iron E3 alone).
 pub const M7_UEFI_HTTP_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK";
+
+/// Host/CI scaffold for post-EBS SNP listen wiring (never claims iron).
+pub const M7_POST_EBS_HTTP_SCAFFOLD_MARKER: &str = "RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK";
 
 /// Closed when firmware listen path is wired (scaffold); OK marker is runtime.
 pub const UEFI_HTTP_GAP_NOTE: &str = "GAP(CLOSED M7.6): UEFI NIC HTTP listen";
@@ -63,6 +69,8 @@ pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
     let _ = (
         M7_UEFI_HTTP_OK_MARKER,
         M7_UEFI_HTTP_SCAFFOLD_MARKER,
+        M7_POST_EBS_HTTP_OK_MARKER,
+        M7_POST_EBS_HTTP_SCAFFOLD_MARKER,
         UEFI_HTTP_GAP_NOTE,
     );
 
@@ -141,6 +149,22 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
     }
 }
 
+/// After ExitBootServices: probe parked SNP (soft-fail). PRE-EBS remains fallback.
+pub fn run_post_ebs_mgmt_listen() {
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::mgmt::snp_listen_uefi::uefi_snp_post_ebs_probe();
+    }
+}
+
+/// After VMXOFF: serial WARN only. Firmware SNP is dead after EBS (do not poll).
+pub fn run_post_ebs_http_idle() {
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::mgmt::snp_listen_uefi::uefi_snp_post_ebs_idle();
+    }
+}
+
 /// True when listen API + markers + host TcpListener proof exist.
 pub fn prop_listen_surface() -> bool {
     let s = include_str!("http_listen.rs");
@@ -153,6 +177,10 @@ pub fn prop_listen_surface() -> bool {
         && s.contains(M7_UEFI_HTTP_OK_MARKER)
         && s.contains(M7_UEFI_HTTP_SCAFFOLD_MARKER)
         && s.contains(UEFI_HTTP_GAP_NOTE)
+        && s.contains("fn run_post_ebs_mgmt_listen(")
+        && s.contains("fn run_post_ebs_http_idle(")
+        && s.contains(M7_POST_EBS_HTTP_OK_MARKER)
+        && s.contains(M7_POST_EBS_HTTP_SCAFFOLD_MARKER)
         && UEFI_HTTP_GAP_NOTE.contains("CLOSED M7.6")
 }
 

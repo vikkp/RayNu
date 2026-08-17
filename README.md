@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`). M7.0–M7.4 closed on Latitude (host smokes).  
-**Iron:** Real R640 COM2 closed **`RAYNU-V-R640-BOOT-OK`** (2026-08-15) and **`RAYNU-V-M7-UEFI-HTTP-OK`** / **`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`** (2026-08-16). Mount Everest residual: durable post-EBS mgmt HTTP (SNP+smoltcp), then E4 polish + real distro installer.
+**Iron:** Real R640 COM2 closed **`RAYNU-V-R640-BOOT-OK`** (2026-08-15) and **`RAYNU-V-M7-UEFI-HTTP-OK`** / **`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`** (2026-08-16). WARN-only post-EBS SNP idle closed 2026-08-17 (**no RSOD**). Mount Everest residual: **E3b** host-owned NIC ([ADR-013](docs/adr/ADR-013.md) Accepted), then E4 polish + real distro installer. Preserve: [`releases/v0.1.0-adr013-baseline/`](releases/v0.1.0-adr013-baseline/).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).
@@ -131,10 +131,11 @@ Then open https://vikkp.github.io/RayNu/ (may take a minute).
 | [docs/m6_plan.md](docs/m6_plan.md) | M6 production-ready track (closed) |
 | [docs/m7_plan.md](docs/m7_plan.md) | M7 Mount Everest — shippable single-host |
 | [docs/adr/ADR-009.md](docs/adr/ADR-009.md) | Mount Everest product loop decision |
-| [docs/adr/ADR-012.md](docs/adr/ADR-012.md) | UEFI NIC HTTP listen for E3 (M7.6) |
+| [docs/adr/ADR-012.md](docs/adr/ADR-012.md) | UEFI NIC HTTP listen for E3 (M7.6, PRE-EBS) |
+| [docs/adr/ADR-013.md](docs/adr/ADR-013.md) | Management network architecture (E3b, Accepted) |
 | [verus-version.toml](verus-version.toml) | Frozen Verus tag + commit + sha256 (ADR-008) |
 | [docs/risk_register.md](docs/risk_register.md) | Full risk register (R01–R14) |
-| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–012) |
+| [docs/adr/](docs/adr/) | Architecture Decision Records (ADR-001–013) |
 
 ## What This Is Not
 

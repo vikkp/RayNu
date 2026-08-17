@@ -308,6 +308,7 @@ pub mod snp_listen_uefi;
 pub mod tcp4_uefi;
 pub mod m7_http_gate;
 pub mod m7_uefi_http_gate;
+pub mod m7_post_ebs_http_gate;
 pub mod m7_ship_gate;
 pub mod m7_iso_gate;
 pub mod m7_iso_install_gate;
@@ -363,12 +364,16 @@ pub use http::{
     prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
 };
 pub use http_listen::{
-    run_pre_ebs_mgmt_listen, M7_UEFI_HTTP_OK_MARKER, M7_UEFI_HTTP_SCAFFOLD_MARKER,
-    UEFI_HTTP_GAP_NOTE,
+    run_post_ebs_http_idle, run_post_ebs_mgmt_listen, run_pre_ebs_mgmt_listen,
+    M7_POST_EBS_HTTP_OK_MARKER, M7_POST_EBS_HTTP_SCAFFOLD_MARKER, M7_UEFI_HTTP_OK_MARKER,
+    M7_UEFI_HTTP_SCAFFOLD_MARKER, UEFI_HTTP_GAP_NOTE,
 };
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_uefi_http_gate::{
     run_m7_uefi_http_scaffold_gate, M7_UEFI_HTTP_GATE_MARKER,
+};
+pub use m7_post_ebs_http_gate::{
+    run_m7_post_ebs_http_scaffold_gate, M7_POST_EBS_HTTP_GATE_MARKER,
 };
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};

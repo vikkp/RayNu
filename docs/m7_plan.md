@@ -1,8 +1,8 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`, `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`); Everest residual: post-EBS mgmt HTTP, then E4 polish + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron**; **E3b open** ([ADR-013](adr/ADR-013.md) **Accepted**). Residual: host-owned NIC after EBS, then E4 polish + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
-**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
+**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
 **Mount Everest (product loop):**  
@@ -125,7 +125,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Size gate green (ADR-003).
 5. `GAP(CLOSED M7.6): UEFI NIC HTTP listen`.
 
-**Acceptance:** **Met on iron** — `RAYNU-V-M7-UEFI-HTTP-OK` on R640 COM2 (SNP residual; see evidence). HDA E3 MVP closed; post-EBS listen is the next HTTP residual (do not chase Tcp4).
+**Acceptance:** **Met on iron** — `RAYNU-V-M7-UEFI-HTTP-OK` on R640 COM2 (SNP residual PRE-EBS; see evidence). HDA E3 MVP closed; firmware SNP is dead after EBS (do not chase Tcp4 or post-EBS SNP).
 
 ---
 
@@ -259,4 +259,11 @@ Do not pull M8 into M7 gate lists.
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
-**Honesty:** Mount Everest residual is durable post-EBS mgmt HTTP (SNP+smoltcp), then remaining E4 polish + a real distro installer. Do not chase firmware Tcp4. El Torito / TLS / guest console wait until post-EBS listen works.
+**Honesty:** E3 (PRE-EBS) is closed. **E3b** (lifetime HTTP) is [ADR-013](adr/ADR-013.md)
+(**Accepted**): host-owned NIC + smoltcp, dedicated mgmt arena. Firmware SNP and
+Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
+RSOD**). Then remaining E4 polish + a real distro installer.
+
+**Next:** preserve kit `releases/v0.1.0-adr013-baseline`. Phase C (QEMU e1000)
+is a follow-on PR — not this baseline. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays
+unclaimed. Iron marker for E3b will be `RAYNU-V-M7-HOST-NIC-HTTP-OK`.

@@ -4,6 +4,8 @@
 - M7.1 host: `RAYNU-V-M7-HTTP-OK` — `./tools/m7-http-smoke.sh`
 - M7.6 scaffold: `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — `./tools/m7-uefi-http-smoke.sh`
 - M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS UEFI NIC served ≥1 HTTP exchange (ADR-012); iron closed 2026-08-16 (SNP residual)
+- Post-EBS scaffold: `RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK` — `./tools/m7-post-ebs-http-smoke.sh`
+- Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 
 ## Story
 
@@ -79,9 +81,33 @@ Default lab port: **8443** (`MGMT_HTTP_DEFAULT_PORT`).
 
 ## PRE-EBS constraint (ADR-012)
 
-UEFI Tcp4/SNP/DHCP are Boot Services protocols. After `leave_firmware()` /
-ExitBootServices they are gone. Concurrent guest + mgmt listen requires a
-post-EBS NIC driver (follow-on). M7.6 MVP = PRE-EBS window + soft-fail.
+UEFI Tcp4/SNP/DHCP **open** paths are Boot Services. After `leave_firmware()` /
+ExitBootServices, `locate_handle` / `stall` / CloseProtocol are invalid.
+RayNu-V **parks** the SNP + smoltcp session (leaked protocol, no CloseProtocol)
+so the PRE-EBS lease can be printed after EBS. **Do not** Transmit/Receive on
+firmware SNP after EBS.
+
+| Phase | What | Soft-fail |
+|-------|------|-----------|
+| PRE-EBS | Existing 45s SNP window (`RAYNU-V-M7-UEFI-HTTP-OK`) | timeout → continue to EBS |
+| Immediately after EBS | Serial-only: parked lease printed; **no SNP poll** (iron hung on immediate poll 2026-08-16) | no parked NIC → skip |
+| After VMXOFF / BOOT-OK | WARN only — **firmware SNP dead** (2026-08-17 curl timeout + RSOD RIP=`0x17`); no SNP poll | PRE-EBS remains mgmt |
+
+**Do not chase** firmware Tcp4 on this boot method (Virtual Floppy / Cruzer UNDI).
+**Do not chase** firmware SNP after EBS (do not chase either protocol after EBS).
+Durable post-EBS HTTP is **[ADR-013](../adr/ADR-013.md)** (host-owned NIC). Size stays inside
+ADR-003 (`./tools/check-size.sh`).
+
+If the NIC is unusable after EBS, serial prints a WARN and the guest path
+continues. PRE-EBS remains the fallback operator window.
+
+Evidence: [`docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md`](../evidence/r640/2026-08-17-post-ebs-snp-dead.md).
+
+## Cruzer `auth.token`
+
+PRE-EBS `probe_operator_auth_token` reads `EFI/RayNu/auth.token` (same folder
+as `installdisk.bin` on the Cruzer). If present, that secret replaces the
+hard-coded bring-up token. Without the file, lab `raynu-v-bringup` stays valid.
 
 ## R640 Tcp4 absent (Virtual Floppy)
 
@@ -113,6 +139,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). TLS / post-EBS listen remain follow-ons.
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) **Accepted**. WARN-only idle closed on iron 2026-08-17 (no RSOD). `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
-- Replace bring-up token before production exposure.
+- Replace bring-up token before production exposure (ESP `EFI/RayNu/auth.token` on Cruzer).

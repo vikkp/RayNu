@@ -1,0 +1,21 @@
+# R640 COM2 tail — WARN-only post-EBS SNP idle, no RSOD
+# 2026-08-17 · Cruzer Micro · front USB 2 · BIOS 2.2.11
+# Operator paste (Vignesh parallel run). Lease 10.99.99.133:8443.
+# Full boot also printed PRE-EBS UEFI-HTTP-OK / E5 stamps on this path;
+# this fragment is the close: M4.5 → VMXOFF → R640-BOOT-OK → WARN, then halt.
+# Not claimed: RAYNU-V-M7-POST-EBS-HTTP-OK.
+
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x0000000005c02000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → SMP AP ready-flag store
+RAYNU-V-M4-SMP-OK
+boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT
+boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+RAYNU-V-R640-BOOT-OK
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.133:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)

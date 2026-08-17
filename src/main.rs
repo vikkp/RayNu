@@ -88,8 +88,12 @@ fn main() -> Status {
 
     boot_note("boot: calling ExitBootServices — ConOut/video ends after this line");
     // SAFETY: no live protocol refs beyond helpers (disabled inside exit path).
+    // SNP parked across EBS; do not poll the NIC here (iron hung on immediate
+    // post-EBS SNP receive). Guest path continues; after VMXOFF idle is WARN-only.
     let handoff = unsafe { boot::handoff::leave_firmware() };
     let mut bump = handoff.frames;
+
+    let _ = r640_hypervisor::mgmt::run_post_ebs_mgmt_listen();
 
     boot::serial::write_str("boot: handoff pool remaining_pages=");
     write_dec(bump.remaining_pages());

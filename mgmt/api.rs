@@ -28,7 +28,7 @@ pub const BRINGUP_AUTH_TOKEN: &str = "raynu-v-bringup";
 
 /// Token source note for operators / CI.
 pub const AUTH_TOKEN_SOURCE_NOTE: &str =
-    "bring-up mock OR ESP EFI/RayNu/auth.token (E4 operator); BRINGUP_AUTH_TOKEN lab fallback";
+    "bring-up mock OR ESP EFI/RayNu/auth.token (Cruzer; E4 operator); BRINGUP_AUTH_TOKEN lab fallback";
 
 /// Max UTF-8 bytes for an ESP / operator token.
 pub const OPERATOR_TOKEN_CAP: usize = 64;
@@ -79,7 +79,8 @@ fn operator_token_str() -> Option<&'static str> {
 
 /// Probe ESP for `auth.token` (E4 operator secret). PRE-EBS only.
 ///
-/// Paths: `\\EFI\\RayNu\\auth.token` then `\\auth.token`.
+/// Paths: `\\EFI\\RayNu\\auth.token` (Cruzer, next to `installdisk.bin`)
+/// then `\\auth.token`.
 #[cfg(target_os = "uefi")]
 pub fn probe_operator_auth_token() {
     use crate::boot::serial;

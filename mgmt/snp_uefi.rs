@@ -1,7 +1,11 @@
 //! EFI Simple Network Protocol helpers for M7.6 SNP residual (ADR-012).
 //!
 //! Pillar: [Z] · Proven Core: **outside**
-//! Boot Services only — must not be used after ExitBootServices.
+//!
+//! Open/Start/Initialize use Boot Services. After ExitBootServices, **do not**
+//! call Transmit/Receive on this protocol (iron hung, then RSOD — 2026-08-17).
+//! Parked pointer is for lease print only. Durable post-EBS HTTP needs a
+//! host-owned NIC. Never `locate_handle` after EBS.
 
 #![cfg(feature = "uefi-bin")]
 

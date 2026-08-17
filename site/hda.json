@@ -3,12 +3,12 @@
   "baseline_months": 4.5,
   "confidence": "medium",
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/hda.md",
-  "everest_eta_month": "2026-09",
+  "everest_eta_month": "2026-10",
   "hda_version": 1,
-  "last_commit": "27f056ec86d3c127db2b25a6e6a27e2964676793",
-  "last_commit_short": "27f056e",
-  "last_updated": "2026-08-16",
-  "months_to_everest": 0.5,
+  "last_commit": "dd45579ad46fd0082ee5f88299855c703d0baa52",
+  "last_commit_short": "dd45579",
+  "last_updated": "2026-08-17",
+  "months_to_everest": 1.5,
   "months_to_everest_prev": 0.75,
   "mount_everest_path": [
     "Ship EFI",
@@ -26,7 +26,7 @@
     "iso": 82,
     "prod": 100,
     "r640": 98,
-    "ui": 88
+    "ui": 85
   },
   "updated_by": "cursor",
   "velocity_commits_30d": 345,

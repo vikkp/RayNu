@@ -104,7 +104,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     write_u32_dec(SNP_POST_BIND_LISTEN_MS as u32);
     serial::write_byte(b'\n');
     serial::write_line(
-        "boot: HINT — Mac must be on lease subnet; curl during window only (pre-EBS)",
+        "boot: HINT — Mac must be on lease subnet; curl only during PRE-EBS window (firmware SNP is dead after EBS)",
     );
     crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
@@ -225,12 +225,104 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         millis += 1;
     }
 
+    // Keep the TCP socket listening so a parked session can accept after EBS.
+    {
+        let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+        if !sock.is_open() || (!sock.is_active() && !sock.is_listening()) {
+            let _ = sock.listen(port);
+        }
+    }
+
+    park_snp_http(ParkedSnpHttp {
+        device,
+        iface,
+        sockets,
+        tcp_handle,
+        ip,
+        port,
+        millis,
+    });
+
     if served == 0 {
         return Err(MgmtListenError::AcceptFailed);
     }
 
     serial::write_line(M7_UEFI_HTTP_OK_MARKER);
     Ok(())
+}
+
+/// Leaked so Drop never CloseProtocol after EBS. Fields other than `ip`/`port`
+/// are unread on purpose: firmware SNP must not be polled after EBS, but the
+/// session must stay leaked (iron hang + RSOD when polled).
+#[allow(dead_code)]
+struct ParkedSnpHttp {
+    device: SnpDevice,
+    iface: Interface,
+    sockets: SocketSet<'static>,
+    tcp_handle: smoltcp::iface::SocketHandle,
+    ip: Ipv4Address,
+    port: u16,
+    millis: i64,
+}
+
+static mut PARKED_HTTP: Option<&'static mut ParkedSnpHttp> = None;
+
+fn park_snp_http(session: ParkedSnpHttp) {
+    let leaked: &'static mut ParkedSnpHttp = alloc::boxed::Box::leak(alloc::boxed::Box::new(session));
+    // SAFETY: single-threaded boot; leaked so Drop never CloseProtocol after EBS.
+    unsafe {
+        PARKED_HTTP = Some(leaked);
+    }
+    serial::write_line("boot: SNP parked for post-EBS (protocol not closed)");
+}
+
+fn parked_http() -> Option<&'static mut ParkedSnpHttp> {
+    unsafe { PARKED_HTTP.as_deref_mut() }
+}
+
+/// ~1 ms spin without Boot Services (`stall` is invalid after EBS).
+/// R640 Gold 6130 ~2.1 GHz; extra spin is harmless.
+///
+/// Kept for a future **host-owned** NIC poll loop. Do **not** use this to
+/// retry firmware SNP after EBS (iron hung, then RSOD — 2026-08-17).
+#[allow(dead_code)]
+fn tsc_delay_ms(ms: u32) {
+    let ticks = (ms as u64).saturating_mul(2_100_000);
+    let start = crate::arch::cpu::rdtsc();
+    while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
+        core::hint::spin_loop();
+    }
+}
+
+/// After EBS: **do not** call SNP. Iron 2026-08-16 hung here — first
+/// `iface.poll` after ExitBootServices never returned (`smoke frame` last line).
+/// Guest path must continue. Parked lease is printed only. After VMXOFF the
+/// idle path is WARN-only (`uefi_snp_post_ebs_idle`) — firmware SNP is dead.
+pub fn uefi_snp_post_ebs_probe() {
+    let Some(s) = parked_http() else {
+        serial::write_line("boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)");
+        return;
+    };
+    serial::write_str("boot: post-EBS SNP parked lease=");
+    write_ipv4(s.ip);
+    serial::write_byte(b':');
+    write_u16_dec(s.port);
+    serial::write_line(" (not polling SNP yet — iron hung on immediate post-EBS poll)");
+}
+
+/// After VMXOFF: **do not** poll firmware SNP. Iron 2026-08-17: idle banner
+/// printed, Mac curl to the parked lease timed out, then Dell UEFI RSOD
+/// (invalid opcode, RIP=`0x17`). Immediate post-EBS poll already hung.
+/// PRE-EBS remains the mgmt UI. See `docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md`.
+pub fn uefi_snp_post_ebs_idle() {
+    let Some(s) = parked_http() else {
+        return;
+    };
+    serial::write_str("boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=");
+    write_ipv4(s.ip);
+    serial::write_byte(b':');
+    write_u16_dec(s.port);
+    serial::write_line(" (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)");
 }
 
 fn mac_seed(mac: [u8; 6]) -> u64 {
