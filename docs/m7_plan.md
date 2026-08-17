@@ -1,8 +1,8 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`, `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`); Everest residual: host-owned post-EBS NIC (firmware SNP dead after EBS), then E4 polish + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron**; **E3b open** (ADR-013 Proposed). Residual: host-owned NIC after EBS, then E4 polish + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
-**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
+**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
 **Mount Everest (product loop):**  
@@ -259,12 +259,11 @@ Do not pull M8 into M7 gate lists.
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
-**Honesty:** Mount Everest residual is durable post-EBS mgmt HTTP via a
-**host-owned NIC** (firmware SNP and Tcp4 are both dead ends after EBS on this
-boot method), then remaining E4 polish + a real distro installer. Do not chase
-firmware Tcp4 or post-EBS SNP. El Torito / TLS / guest console wait until
-post-EBS listen works.
+**Honesty:** E3 (PRE-EBS) is closed. **E3b** (lifetime HTTP) is [ADR-013](adr/ADR-013.md)
+(Proposed): host-owned NIC + smoltcp, dedicated mgmt arena. Firmware SNP and
+Tcp4 are dead ends after EBS. Then remaining E4 polish + a real distro
+installer. Do not chase firmware Tcp4 or post-EBS SNP.
 
-**Next (this tree):** never poll firmware SNP after EBS (WARN-only after
-`BOOT-OK`). `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed. Native MMIO/DMA NIC
-is a later workstream.
+**Next (this tree):** ADR-013 Proposed — no native driver until Accepted.
+PR #157 WARN-only idle. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed.
+Iron marker for E3b will be `RAYNU-V-M7-HOST-NIC-HTTP-OK`.

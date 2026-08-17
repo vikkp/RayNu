@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stories of RayNu — R640 BOOT-OK, HTTP-OK, stamp persist</title>
+    <title>Stories of RayNu — R640 BOOT-OK, HTTP-OK, then SNP died after EBS</title>
     <meta
       name="description"
-      content="Field stories from RayNu-V: R640 BOOT-OK, UEFI-HTTP-OK, then Cruzer two-boot LBA stamp persist (BOOTED-FROM-DISK)."
+      content="Field stories from RayNu-V: R640 BOOT-OK, UEFI-HTTP-OK, Cruzer stamps — and 2026-08-17 when firmware SNP after EBS hung, then RSOD’d."
     />
-    <meta property="og:title" content="Stories of RayNu — iron stamps, not a distro yet" />
+    <meta property="og:title" content="Stories of RayNu — iron stamps, then reality after EBS" />
     <meta
       property="og:description"
-      content="2026-08-15/16: BOOT-OK, UEFI-HTTP-OK, then Cruzer two-boot RAYNU-V-M7-ISO-BOOTED-FROM-DISK (LBA stamps, not a guest filesystem)."
+      content="2026-08-17: parked SNP after BOOT-OK timed out and Dell UEFI RSOD (RIP=0x17). PRE-EBS remains the mgmt window. ADR-013 Proposed."
     />
     <meta property="og:type" content="article" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -158,7 +158,7 @@
         height: auto;
       }
       .story:nth-child(4) { animation-delay: 0.2s; }
-      .story:nth-child(5) { animation-delay: 0.26s; }
+      .story:nth-child(6) { animation-delay: 0.32s; }
       .stories-index {
         margin: 0 0 2.5rem;
         padding-bottom: 1.5rem;
@@ -204,6 +204,11 @@
       <div class="stories-index">
         <p class="stories-index__label">In this volume</p>
         <p>
+          <a href="#r640-2026-08-17-snp-dead"
+            >2026-08-17 — Firmware SNP after EBS: hang, timeout, RSOD</a
+          >
+        </p>
+        <p>
           <a href="#r640-2026-08-15"
             >2026-08-15 — First light on PowerEdge R640</a
           >
@@ -224,6 +229,85 @@
           >
         </p>
       </div>
+
+      <article class="story" id="r640-2026-08-17-snp-dead">
+        <p class="story__date">2026-08-17 · Dell PowerEdge R640 · Cruzer Micro · BIOS 2.2.11</p>
+        <h2 class="story__title">Reality after ExitBootServices</h2>
+
+        <p>
+          The day after Cruzer stamps closed, we tried to make the management
+          SPA live for the whole boot — not just the 45-second PRE-EBS window.
+          The idea was tidy: park SNP + smoltcp across
+          <code>ExitBootServices</code> (no CloseProtocol), skip the poll that
+          already hung, then listen after <code>BOOT-OK</code>. Firmware would
+          keep owning the NIC. We would keep owning HTTP.
+        </p>
+
+        <p>
+          Iron did not care about the diagram.
+        </p>
+
+        <h3>First EFI: the hang</h3>
+        <p>
+          Poll SNP immediately after EBS and COM2 stops at
+          <code>boot: smoke frame phys=0x1000000</code>. The first
+          <code>iface.poll</code> never returns. Guests never start. That
+          binary (SHA <code>924af894…</code>) is retired. Do not flash it
+          again.
+        </p>
+
+        <h3>Second EFI: the timeout, then the red screen</h3>
+        <p>
+          Skip the immediate poll. Guest path comes back — SHELL, M4,
+          <code>BOOTED-FROM-DISK</code>, <code>RAYNU-V-R640-BOOT-OK</code>.
+          Then the idle banner asks the Mac to curl the same lease that
+          worked an hour earlier in the PRE-EBS window
+          (<code>10.99.99.133:8443</code>, MAC <code>b0:26:28:5c:5a:3a</code>):
+        </p>
+        <pre>boot: mgmt HTTP listening on 10.99.99.133:8443 (POST-EBS SNP idle)
+boot: CURL NOW (post-EBS) → http://10.99.99.133:8443/</pre>
+        <p>
+          Same laptop, same LAN, same token:
+        </p>
+        <pre>curl: (28) Connection timed out after 5002 milliseconds</pre>
+        <p>
+          Then Dell’s red screen: invalid opcode (06), Software UEFI0004 on
+          the BSP, <strong>RIP = <code>0x17</code></strong> — a jump into
+          garbage. That is not a clean hang. That is firmware taking a
+          pointer we had no right to keep using.
+        </p>
+
+        <h3>What we still claim — and the ADR that follows</h3>
+        <p>
+          PRE-EBS <code>RAYNU-V-M7-UEFI-HTTP-OK</code> is still true. E2 and
+          E5 stamps are still true. We do <strong>not</strong> claim
+          <code>RAYNU-V-M7-POST-EBS-HTTP-OK</code>. We do not chase Tcp4 or
+          SNP after EBS. The idle path is now WARN-only so the next Cruzer
+          EFI should finish <code>BOOT-OK</code> without polling the dead
+          protocol.
+        </p>
+        <p>
+          Lifetime management HTTP needs a <strong>host-owned NIC</strong>
+          (MMIO/DMA) and a dedicated mgmt heap — not another SNP trick.
+          That architecture is <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          (Proposed). HDA names it <strong>E3b</strong>. Mount Everest does
+          not close on a 45-second window.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md"
+            >2026-08-17-post-ebs-snp-dead.md</a
+          >
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
 
       <article class="story" id="r640-2026-08-15">
         <p class="story__date">2026-08-15 · Dell PowerEdge R640 · iDRAC9</p>
@@ -346,9 +430,13 @@ boot: VMXOFF ok</pre>
           We still do
           <strong>not</strong> claim Mount Everest closed. E5 stamp persist
           closed later the same weekend — see
-          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>. Residual is
-          durable post-EBS management HTTP, then remaining E4 polish and a real
-          distro installer. Host CI still prints only
+          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>.
+          The next morning, firmware SNP after EBS hit a hang and a red
+          screen — see
+          <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
+          Residual is HDA <strong>E3b</strong> (host-owned NIC, ADR-013),
+          then remaining E4 polish and a real distro installer. Host CI still
+          prints only
           <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron boot path.
         </p>
 
@@ -437,9 +525,11 @@ RAYNU-V-R640-BOOT-OK</pre>
           <code>GET /</code> returned the SPA (HTTP 200), and Bearer
           <code>raynu-v-bringup</code> on <code>/vms</code> returned
           <code>{"ok":true,"listed":true}</code>. That is HDA <strong>E3</strong>
-          MVP — not TLS, not post-EBS listen, not a full console — but the
-          network UI gate on real iron. Stamp persist on a writable stick
-          closed the same day — see
+          MVP — bring-up UI, not TLS, not lifetime listen, not a full console.
+          The day after, we learned SNP does not survive EBS — see
+          <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
+          Stamp persist on a writable stick closed the same day as HTTP —
+          see
           <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>.
         </p>
 
@@ -495,11 +585,11 @@ RAYNU-V-R640-BOOT-OK</pre>
         </p>
 
         <p>
-          Next engineering is a <strong>host-owned post-EBS NIC</strong>
-          (MMIO/DMA). Firmware SNP hung immediately after EBS, timed out after
-          <code>BOOT-OK</code>, then Dell UEFI RSOD (RIP=<code>0x17</code>).
-          Do not chase SNP or Tcp4 after EBS. PRE-EBS remains the management
-          UI. Remaining E4 polish and a real distro installer follow that
+          Next engineering is HDA <strong>E3b</strong> — a host-owned NIC
+          after EBS (ADR-013 Proposed). The SNP attempt is a story now, not a
+          plan: hang, curl timeout, then RSOD. See
+          <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
+          Remaining E4 polish and a real distro installer follow that
           listen — not El Torito first.
         </p>
 

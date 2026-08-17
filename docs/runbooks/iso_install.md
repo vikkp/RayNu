@@ -127,7 +127,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   64 MiB file in the EFI.
 - Outside Proven Core (ADR-009); size still ADR-003.
 - Do **not** claim Mount Everest: E5 stamp persist is closed; next is
-  a host-owned post-EBS NIC (firmware SNP dead after EBS), then E4 polish + a real distro installer.
+  **E3b** ([ADR-013](../adr/ADR-013.md) Proposed) then E4 polish + a real distro installer.
 
 ## Next
 

@@ -51,7 +51,7 @@ migrate/        — VMware migration engine (vCenter, VMDK, OVF)
 idrac/          — iDRAC Redfish client, hardware health integration
 arch/           — x86 / R640-specific helpers
 docs/           — Architecture decisions, subsystem notes
-docs/adr/       — Architecture Decision Records (ADR-001 through ADR-009+)
+docs/adr/       — Architecture Decision Records (ADR-001 through ADR-013+)
 tools/          — Build, debug, test, and verification scripts
 ```
 
@@ -284,7 +284,8 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 009   | Mount Everest Product Loop (M7)        | Single-host ship: iDRAC boot + network UI + ISO; R640 hard gate; M8 = cluster |
 | 010   | Living Verification Paper              | Progressive public audit artifact; evidence-only sections (ADR-010)          |
 | 011   | Evidence Mode ESP Flag                 | `paperverbose.txt` triggers L1 evidence bundle on serial                     |
-| 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4 HTTP for SPA/REST; M7.6; plaintext first; TLS deferred        |
+| 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4/SNP HTTP PRE-EBS; M7.6; post-EBS SNP rejected 2026-08-17 |
+| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); SNP bring-up only; Proposed |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 

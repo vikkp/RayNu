@@ -95,7 +95,7 @@ firmware SNP after EBS.
 
 **Do not chase** firmware Tcp4 on this boot method (Virtual Floppy / Cruzer UNDI).
 **Do not chase** firmware SNP after EBS (do not chase either protocol after EBS).
-Durable post-EBS HTTP needs a host-owned NIC (MMIO/DMA). Size stays inside
+Durable post-EBS HTTP is **[ADR-013](../adr/ADR-013.md)** (host-owned NIC). Size stays inside
 ADR-003 (`./tools/check-size.sh`).
 
 If the NIC is unusable after EBS, serial prints a WARN and the guest path
@@ -139,6 +139,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). TLS remains deferred. Post-EBS listen is **not** firmware SNP: iron hung on immediate poll, timed out after BOOT-OK, then RSOD. `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Next is a host-owned NIC, not more SNP protocol calls.
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) Proposed. Post-EBS firmware SNP hung, timed out, then RSOD. `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure (ESP `EFI/RayNu/auth.token` on Cruzer).

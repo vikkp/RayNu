@@ -3,13 +3,13 @@
   "baseline_months": 4.5,
   "confidence": "medium",
   "docs_url": "https://github.com/vikkp/RayNu/blob/main/docs/hda.md",
-  "everest_eta_month": "2026-09",
+  "everest_eta_month": "2026-10",
   "hda_version": 1,
-  "last_commit": "d353d96764a9fe7836f2c49dd9a1e90ff06e4b00",
-  "last_commit_short": "d353d96",
+  "last_commit": "PENDING",
+  "last_commit_short": "PENDING",
   "last_updated": "2026-08-17",
-  "months_to_everest": 0.75,
-  "months_to_everest_prev": 0.5,
+  "months_to_everest": 1.5,
+  "months_to_everest_prev": 0.75,
   "mount_everest_path": [
     "Ship EFI",
     "boot real R640",
@@ -26,7 +26,7 @@
     "iso": 82,
     "prod": 100,
     "r640": 98,
-    "ui": 88
+    "ui": 85
   },
   "updated_by": "cursor",
   "velocity_commits_30d": 345,

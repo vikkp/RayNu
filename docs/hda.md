@@ -1,23 +1,23 @@
 ---
 hda_version: 1
 last_updated: 2026-08-17
-last_commit: d353d96764a9fe7836f2c49dd9a1e90ff06e4b00
-last_commit_short: d353d96
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 0.75
-months_to_everest_prev: 0.5
+months_to_everest: 1.5
+months_to_everest_prev: 0.75
 velocity_commits_30d: 345
 velocity_gates_30d: 19
 overall_pct: 88
 confidence: medium
 baseline_date: 2026-07-20
 baseline_months: 4.5
-everest_eta_month: "2026-09"
+everest_eta_month: "2026-10"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 88
+summit_ui_pct: 85
 summit_iso_pct: 82
 summit_prod_pct: 100
 ---
@@ -37,19 +37,19 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; post-EBS SNP path failed) |
-| **Months to Mount Everest** | **0.75** | +0.25 (firmware SNP dead after EBS; host-owned NIC) |
-| **ETA month** | **2026-09** | held |
-| **Confidence** | medium | E2+E3+E5 stamps on COM2; next = host-owned post-EBS NIC |
+| **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
+| **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
+| **ETA month** | **2026-10** | slipped from 2026-09 |
+| **Confidence** | medium | E2+E3+E5 on COM2; E3b = host-owned NIC (Proposed ADR-013) |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~88% | E4 SPA create-VM on iron PRE-EBS; firmware SNP unusable after EBS |
+| **vSphere-like UI (network)** | ~85% | E3 PRE-EBS closed; E3b durable HTTP missing (firmware SNP dead) |
 | **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.75 mo  (was 0.5)
+Months to Everest  ██░░░░░░░░░░░░░░░░░░  1.5 mo  (was 0.75)
 Overall %          █████████████████░░░  88%
 ```
 
@@ -65,7 +65,8 @@ All must be true (no hand-waving):
 |---|-----------|-----------|--------|
 | E1 | **Ship EFI** | Versioned `r640-hypervisor.efi` + checksums; `tools/check-size.sh` green; USB/iDRAC media runbook | [Z] |
 | E2 | **R640 boot** | Marker `RAYNU-V-R640-BOOT-OK` (or equiv.) on **real PowerEdge R640**; serial via iDRAC; VMX+EPT+Linux shell | [D][Z] |
-| E3 | **Network UI** | Browser/curl on operator LAN reaches SPA/REST (HTTP MVP; TLS deferred); not host-only | [Z][A] |
+| E3 | **Network UI (bring-up)** | Browser/curl on operator LAN reaches SPA/REST during PRE-EBS window (HTTP MVP; TLS deferred); not host-only | [Z][A] |
+| E3b | **Durable mgmt** | Same SPA/REST reachable **after** ExitBootServices / `BOOT-OK` on a host-owned NIC (ADR-013); firmware SNP/Tcp4 do not count | [Z][A] |
 | E4 | **vSphere-like MVP** | Datastore/images, create-VM (CPU/RAM/disk/NIC), attach ISO or boot media, basic console/log, auth beyond bring-up toy | [Z][A] |
 | E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots installer (or documented extract path) → installs to virtio-blk → reboot to disk | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
@@ -105,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~88% · ~0.75 months residual (host-owned post-EBS NIC, then TLS/console)**
+**Status: NEAR · ~85% · ~1.5 months residual (E3b host-owned NIC per ADR-013, then TLS/console)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -123,10 +124,10 @@ All must be true (no hand-waving):
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
-| **Post-EBS durable HTTP** | MISSING | Firmware SNP dead after EBS (hang + timeout + RSOD); PRE-EBS is mgmt; host-owned NIC next |
+| **Post-EBS durable HTTP (E3b)** | MISSING | ADR-013 Proposed; firmware SNP dead after EBS; PRE-EBS is E3 bring-up only |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after host-owned post-EBS HTTP)**
+**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after E3b)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -157,8 +158,8 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 |-------|----------|---------------|---------------|--------|
 | M+0 | 2026-07 | **M7.0–M7.4 closed** (lab host); **M7.5 R640 next** | M7.4 Latitude host smoke | **DONE (M7.4 host)** |
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
-| M+2 | 2026-09 | HTTPS/UEFI NIC + ISO install path | E3–E5 residuals | **ETA / IN PROGRESS** |
-| M+3 | 2026-10 | Create-VM polish + install-to-disk MVP | M7 product loop | PLANNED |
+| M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **IN PROGRESS** |
+| M+3 | 2026-10 | E3b iron HTTP + E4 polish | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **ETA** |
 | M+4 | 2026-11 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 | M+5 | 2026-12 | Buffer / M8 sketch start | — | BUFFER |
 
@@ -167,13 +168,13 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2 CLOSED)
-2026-09 ████░░░░  Network UI + ISO residual   ← months_to_everest ≈ 0.75
-2026-10 ████░░░░  Everest polish / E3–E5
+2026-09 ████░░░░  E3b lab NIC (ADR-013)       ← months_to_everest ≈ 1.5
+2026-10 ████░░░░  E3b iron HTTP / Everest polish
 2026-11 ░░░░░░░░  buffer
 2026-12 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; shrink months when UEFI NIC/TLS or ISO install-to-disk land. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16. Shrink months when **E3b** (ADR-013 native HTTP after `BOOT-OK`) lands. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -186,7 +187,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-1 | **M7.0** Release kit: tag, SHA256, size gate, USB/iDRAC runbook | A | **DONE** | — | `tools/package-release.sh`, runbook |
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
-| P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | 0.25 | size budget | **DONE host + iron SNP residual PRE-EBS**; firmware Tcp4 absent; **firmware SNP dead after EBS** (2026-08-17); host-owned NIC residual |
+| P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Proposed ADR-013; QEMU e1000 then census R640 NIC; `HOST-NIC-HTTP-OK` |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -256,11 +258,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | Stop post-EBS firmware SNP poll (WARN-only idle) |
-| Summary | Iron: hang, curl timeout, RSOD RIP=0x17; PRE-EBS remains mgmt UI |
-| Everest impact | months 0.5→0.75 (host-owned NIC); overall 88 held; iron POST-EBS-HTTP-OK not claimed |
-| Gates touched | scaffold held; idle must not `iface.poll` |
-| Months Δ | 0.5 → 0.75 |
+| Commit | ADR-013 Proposed + HDA E3b + 2026-08-17 story |
+| Summary | Lifetime HTTP = host-owned NIC; SNP after EBS rejected; E3 keep as bring-up |
+| Everest impact | months 0.75→1.5; ETA 2026-09→2026-10; overall 88 held; ui~85 |
+| Gates touched | E3b opened (MISSING); `HOST-NIC-HTTP-OK` not claimed |
+| Months Δ | 0.75 → 1.5 |
 
 ---
 
@@ -271,8 +273,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | PRE-EBS is mgmt; do not poll SNP/Tcp4 after EBS; host-owned MMIO/DMA NIC next |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual host-owned NIC + E4 polish + distro |
+| H4 | Firmware SNP unusable after EBS | HIGH | PRE-EBS is E3 bring-up; **E3b** = ADR-013 host-owned NIC; do not poll SNP/Tcp4 after EBS |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -282,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-17 | adr-013-e3b | 1.5 | 88 | ADR-013 Proposed; E3b durable mgmt; months 0.75→1.5; ETA→2026-10 |
 | 2026-08-17 | post-ebs-snp-dead | 0.75 | 88 | Firmware SNP hang + curl timeout + RSOD; WARN-only idle; host-owned NIC next |
 | 2026-08-16 | post-ebs-http-wire | 0.5 | 88 | Park SNP across EBS; scaffold POST-EBS-HTTP; iron listen open |
 | 2026-08-16 | e5-site-residual | 0.5 | 88 | Public residual: post-EBS SNP HTTP next; Cruzer story; E5 stamps held |
@@ -319,13 +322,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED — BOOT-OK + UEFI-HTTP-OK + BOOTED-FROM-DISK
-Months left:   0.75  (ETA ~ 2026-09)
-Next move:     host-owned post-EBS NIC (MMIO/DMA); PRE-EBS SNP stays mgmt UI
+Now:           E2+E3+E5 stamps CLOSED; E3b durable mgmt OPEN (ADR-013 Proposed)
+Months left:   1.5  (ETA ~ 2026-10)
+Next move:     accept ADR-013 → QEMU e1000 post-EBS (Phase C); no SNP after EBS
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead (hang + timeout + RSOD 2026-08-17) — do not poll
 Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
-Do not claim:  Mount Everest (post-EBS UI + E4 polish + distro installer remain)
+Do not claim:  Mount Everest (E3b + E4 polish + distro installer remain)
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·
