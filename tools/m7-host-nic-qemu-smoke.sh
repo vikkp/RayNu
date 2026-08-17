@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ADR-013 Phase C QEMU lab: post-EBS GET / on host-owned e1000.
+# ADR-013 Phase C/0 QEMU lab: PRE-EBS PCI census + post-EBS GET / on e1000.
 #
 # Lab marker RAYNU-V-M7-HOST-NIC-QEMU-OK only.
 # Never print iron RAYNU-V-M7-HOST-NIC-HTTP-OK.
@@ -13,6 +13,8 @@ QEMU_OK="${MARKER_M7_HOST_NIC_QEMU:-RAYNU-V-M7-HOST-NIC-QEMU-OK}"
 IRON="${MARKER_M7_HOST_NIC_HTTP:-RAYNU-V-M7-HOST-NIC-HTTP-OK}"
 LAB_ARM="${MARKER_HOST_NIC_LAB_ARM:-boot: ADR-013 Phase C lab hostnic.txt armed (QEMU e1000)}"
 LISTEN="${MARKER_HOST_NIC_LISTEN:-boot: HOST-NIC listening on 10.0.2.15:8443 (post-EBS e1000)}"
+CENSUS="${MARKER_PCI_CENSUS:-boot: PCI census}"
+VIDDID="${MARKER_CENSUS_E1000:-vid:did=8086:100e}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-120}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/host-nic-qemu-serial.log}"
 ESP="${ESP:-$ROOT/target/host-nic-qemu-esp}"
@@ -96,6 +98,16 @@ done
 
 if ! grep -qF "$LAB_ARM" "$SERIAL_LOG"; then
   echo "error: missing lab arm: $LAB_ARM" >&2
+  tail -n 80 "$SERIAL_LOG" >&2 || true
+  exit 1
+fi
+if ! grep -qF "$CENSUS" "$SERIAL_LOG"; then
+  echo "error: missing PCI census: $CENSUS" >&2
+  tail -n 80 "$SERIAL_LOG" >&2 || true
+  exit 1
+fi
+if ! grep -qF "$VIDDID" "$SERIAL_LOG"; then
+  echo "error: missing census $VIDDID" >&2
   tail -n 80 "$SERIAL_LOG" >&2 || true
   exit 1
 fi

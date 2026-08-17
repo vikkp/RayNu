@@ -76,6 +76,9 @@ pub enum AuditEvent {
     /// Evidence / verbose mode activated via ESP flag file (ADR-011).
     /// `source`: 1 = volume root `paperverbose.txt`, 2 = `\\EFI\\RayNu\\paperverbose.txt`.
     EvidenceModeActivated { source: u8 },
+    /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E).
+    /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced.
+    MgmtRestarted { generation: u32, kind: u8 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -244,6 +247,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::SoakCompleted { .. } => 24,
         AuditEvent::SoakFailed { .. } => 25,
         AuditEvent::EvidenceModeActivated { .. } => 26,
+        AuditEvent::MgmtRestarted { .. } => 27,
     }
 }
 
@@ -420,6 +424,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::EvidenceModeActivated { source } => {
             serial::write_str("RAYNU-V-AUDIT: EvidenceModeActivated source=");
             write_u32(source as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::MgmtRestarted { generation, kind } => {
+            serial::write_str("RAYNU-V-AUDIT: MgmtRestarted gen=");
+            write_u32(generation);
+            serial::write_str(" kind=");
+            write_u32(kind as u32);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

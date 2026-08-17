@@ -1,6 +1,6 @@
 use super::{
-    pci_id_is_qemu_e1000, rx_desc_packet_len, tx_desc_done, E1000_DEVICE, E1000_VENDOR, FRAME_MAX,
-    RX_DESC_DD, RX_DESC_EOP, TX_DESC_DD,
+    parse_mocked_rx_desc_bytes, pci_id_is_qemu_e1000, rx_desc_packet_len, tx_desc_done,
+    E1000_DEVICE, E1000_VENDOR, FRAME_MAX, RX_DESC_DD, RX_DESC_EOP, TX_DESC_DD,
 };
 
 #[test]
@@ -53,6 +53,46 @@ fn fuzz_rx_desc_parse_never_panics() {
     }
 }
 
+#[test]
+fn parse_mocked_rx_desc_bytes_good_frame() {
+    let mut raw = [0u8; 16];
+    raw[8] = 64;
+    raw[12] = RX_DESC_DD | RX_DESC_EOP;
+    assert_eq!(parse_mocked_rx_desc_bytes(&raw), Some(64));
+    raw[13] = 1;
+    assert_eq!(parse_mocked_rx_desc_bytes(&raw), None);
+}
+
+/// Packed-descriptor fuzz: never panics (host + Miri).
+#[test]
+fn fuzz_parse_mocked_rx_desc_bytes_never_panics() {
+    for status in 0u8..=255 {
+        for errors in [0u8, 1, 0xff] {
+            for length in [0u16, 64, 1514, 65535] {
+                let mut raw = [0u8; 16];
+                let lb = length.to_le_bytes();
+                raw[8] = lb[0];
+                raw[9] = lb[1];
+                raw[12] = status;
+                raw[13] = errors;
+                let n = parse_mocked_rx_desc_bytes(&raw);
+                if let Some(got) = n {
+                    assert!(got > 0 && got <= FRAME_MAX);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(miri)]
+#[test]
+fn miri_parse_mocked_rx_desc_bytes() {
+    let mut raw = [0u8; 16];
+    raw[8] = 128;
+    raw[12] = RX_DESC_DD | RX_DESC_EOP;
+    assert_eq!(parse_mocked_rx_desc_bytes(&raw), Some(128));
+}
+
 /// Bounded Kani check: good frames stay in (0, FRAME_MAX].
 #[cfg(kani)]
 #[kani::proof]
@@ -65,5 +105,14 @@ fn kani_rx_desc_packet_len_bounds() {
         assert_ne!(status & RX_DESC_DD, 0);
         assert_ne!(status & RX_DESC_EOP, 0);
         assert_eq!(errors, 0);
+    }
+}
+
+#[cfg(kani)]
+#[kani::proof]
+fn kani_parse_mocked_rx_desc_bytes_bounds() {
+    let raw: [u8; 16] = kani::any();
+    if let Some(n) = parse_mocked_rx_desc_bytes(&raw) {
+        assert!(n > 0 && n <= FRAME_MAX);
     }
 }

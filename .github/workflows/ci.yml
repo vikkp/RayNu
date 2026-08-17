@@ -650,7 +650,7 @@ jobs:
       - name: Post-EBS HTTP scaffold smoke → RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK
         run: ./tools/m7-post-ebs-http-smoke.sh
 
-  # M7.8: host-owned NIC scaffold (ADR-013 Phase C). Does NOT claim
+  # M7.8: host-owned NIC scaffold (ADR-013 Phase 0/C/D/E). Does NOT claim
   # RAYNU-V-M7-HOST-NIC-HTTP-OK (iron Phase D) or RAYNU-V-M7-HOST-NIC-QEMU-OK.
   m7-host-nic:
     name: M7.8 HOST-NIC scaffold (SCAFFOLD-OK)

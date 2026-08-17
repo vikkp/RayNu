@@ -32,6 +32,18 @@ if grep -q 'CURL NOW (post-EBS)' "$ROOT/mgmt/host_nic_listen.rs"; then
   echo "error: native listen must not print CURL NOW (post-EBS)" >&2
   exit 1
 fi
+if [[ ! -f "$ROOT/mgmt/pci_census.rs" ]]; then
+  echo "error: missing mgmt/pci_census.rs (ADR-013 Phase 0)" >&2
+  exit 1
+fi
+if [[ ! -f "$ROOT/mgmt/mgmt_arena.rs" ]]; then
+  echo "error: missing mgmt/mgmt_arena.rs (ADR-013 Phase E)" >&2
+  exit 1
+fi
+if grep -qF 'RAYNU-V-M7-HOST-NIC-HTTP-OK' "$ROOT/mgmt/host_nic_listen.rs"; then
+  echo "error: host_nic_listen.rs must not contain iron HTTP-OK string" >&2
+  exit 1
+fi
 
 echo "==> cargo test m7_8_host_nic_scaffold_passes"
 cargo test --lib m7_8_host_nic_scaffold_passes -- --nocapture

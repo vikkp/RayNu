@@ -1,9 +1,12 @@
-//! smoltcp `Device` for the QEMU e1000 (ADR-013 Phase C).
+//! smoltcp `Device` for the QEMU e1000 (ADR-013 Phase C / D).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside**
 //!
 //! Thin safe wrapper: all MMIO/DMA is in [`crate::mgmt::e1000_mmio`].
+//! Phase D reuses this same `smoltcp::phy::Device` surface. Do not fork a
+//! second PHY trait or a second HTTP codec. A non-`8086:100e` census NIC
+//! waits on a dedicated driver — do not guess Broadcom / X710 / i40e.
 
 #![cfg(feature = "uefi-bin")]
 
