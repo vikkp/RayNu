@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-17
-last_commit: 199569006f93eb77bf34bb2c9f598ca829661794
-last_commit_short: 1995690
+last_commit: f7f8194fd9f2ecefc78f2a2535a95dff59bf2bf3
+last_commit_short: f7f8194
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING (pin after evidence commit) |
+| Commit | f7f8194 |
 | Summary | ADR-013 Phase 0 **closed on iron** — R640 COM2 census `14e4:165f` BCM5720 |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (Phase D driver) |
 | Gates touched | Phase 0 closed; `HOST-NIC-HTTP-OK` not claimed |
