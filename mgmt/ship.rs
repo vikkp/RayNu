@@ -35,6 +35,9 @@ pub fn prop_package_script_complete() -> bool {
         && s.contains("SKIP_BUILD")
         && s.contains("RAYNU-V-M7-SHIP-OK")
         && s.contains(".tar.gz")
+        && s.contains("-windows.zip")
+        && s.contains("r640-hypervisor.efi.bin")
+        && s.contains("WINDOWS.txt")
 }
 
 /// True when size budget tooling remains on the release path (ADR-003).
@@ -57,6 +60,9 @@ pub fn prop_usb_idrac_runbook() -> bool {
         && s.contains("r640-hypervisor.efi")
         && s.contains("package-release.sh")
         && s.contains("sha256")
+        && s.contains("Windows")
+        && s.contains(".efi.bin")
+        && s.contains("Defender")
 }
 
 /// Full M7.0 host-testable release kit package.

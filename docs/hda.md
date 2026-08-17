@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-17
-last_commit: 0949f52a318998131b4ad34819f4e9835478f19b
-last_commit_short: 0949f52
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,10 +258,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | Pin HDA after Phase C QEMU GET / (`0949f52`) |
-| Summary | QEMU e1000 post-EBS SPA `GET /` closed lab; iron HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (Phase D) |
-| Gates touched | `HOST-NIC-QEMU-OK` (lab); `HOST-NIC-HTTP-OK` not claimed |
+| Commit | PENDING (pin after feat commit) |
+| Summary | Windows-safe EFI zip (`.efi.bin`); Defender false-positive runbook |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; ops-only |
+| Gates touched | M7.0 ship kit zip; no iron markers |
 | Months Δ | 1.5 held |
 
 ---
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-17 | efi-win-av | 1.5 | 88 | Windows zip `.efi.bin` (no naked .efi); Defender false-positive runbook |
 | 2026-08-17 | m7-8-host-nic-c | 1.5 | 88 | Phase C QEMU GET / closed (`HOST-NIC-QEMU-OK`); iron HTTP-OK open |
 | 2026-08-17 | adr013-baseline | 1.5 | 88 | ADR-013 Accepted; iron WARN-only no RSOD; kit `v0.1.0-adr013-baseline` |
 | 2026-08-17 | adr-013-e3b | 1.5 | 88 | ADR-013 Proposed; E3b durable mgmt; months 0.75→1.5; ETA→2026-10 |

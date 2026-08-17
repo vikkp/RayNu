@@ -27,11 +27,16 @@ Output (example for `Cargo.toml` version `0.1.0`):
 dist/raynu-v-0.1.0/
   r640-hypervisor.efi
   r640-hypervisor.efi.sha256
+  r640-hypervisor.efi.bin
+  r640-hypervisor.efi.bin.sha256
+  WINDOWS.txt
   VERSION
   SHA256SUMS
   MANIFEST.txt
 dist/raynu-v-0.1.0.tar.gz
 dist/raynu-v-0.1.0.tar.gz.sha256
+dist/raynu-v-0.1.0-windows.zip
+dist/raynu-v-0.1.0-windows.zip.sha256
 ```
 
 Verify:
@@ -62,8 +67,30 @@ sha256sum -c SHA256SUMS
 
 ## Checksums on the operator laptop
 
-Always verify `r640-hypervisor.efi.sha256` (or the tarball `.sha256`) before
+Always verify `r640-hypervisor.efi.sha256` (or the tarball / Windows zip `.sha256`) before
 copying to USB / mapping as virtual media. Do not deploy an unverified binary.
+
+## Windows Defender / SmartScreen (naked `.efi`)
+
+A browser or Teams download of `r640-hypervisor.efi` on **Windows** is often
+quarantined immediately (“virus detected”). That is a **false positive** on an
+unsigned UEFI PE (Mark of the Web + unknown publisher). It is not a reason to
+turn off Defender, and we do not obfuscate the binary.
+
+**Do this instead:**
+
+1. On the **Mac / Linux** build laptop, pack the kit (`./tools/package-release.sh`).
+2. Send Vignesh **`dist/raynu-v-*-windows.zip` only** — never a naked `.efi`.
+3. On Windows: extract the zip, `certutil -hashfile r640-hypervisor.efi.bin SHA256`,
+   match `r640-hypervisor.efi.bin.sha256`.
+4. Copy onto Cruzer as `EFI\BOOT\BOOTX64.EFI` (rename on the stick). Leave
+   `EFI\RayNu\installdisk.bin` alone.
+
+Better still: do not land the PE on Windows at all — `git pull` on the Mac and
+copy `BOOTX64.EFI` to Cruzer, or map `*-uefi-boot.img` in iDRAC Virtual Media.
+
+Authenticode / Secure Boot signing is an optional later follow-on (not required
+for M7.0).
 
 ## Boot media maker (preferred)
 

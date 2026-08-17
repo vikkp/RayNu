@@ -37,6 +37,9 @@ pub fn ship_scripts_present() -> bool {
         && smoke.contains("package-release.sh")
         && runbook.contains("RAYNU-V-M7-SHIP-OK")
         && runbook.contains("iDRAC")
+        && runbook.contains("Defender")
+        && pkg.contains("-windows.zip")
+        && pkg.contains("r640-hypervisor.efi.bin")
 }
 
 /// True when build.sh remains the single-binary entry and size check exists.

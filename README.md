@@ -88,7 +88,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/m6-fault-smoke.sh          # fault injection → RAYNU-V-M6-FAULT-OK
 ./tools/m6-soak-smoke.sh           # 72-hr soak thresholds → RAYNU-V-M6-SOAK-OK
 ./tools/m6-ext-smoke.sh            # external audit + spec review → RAYNU-V-M6-EXT-OK
-./tools/package-release.sh         # versioned EFI + SHA256 + tarball under dist/
+./tools/package-release.sh         # versioned EFI + SHA256 + tarball + Windows zip under dist/
 ./tools/m7-ship-smoke.sh           # EFI release kit → RAYNU-V-M7-SHIP-OK
 ./tools/m7-http-smoke.sh           # network HTTP mgmt → RAYNU-V-M7-HTTP-OK
 ./tools/m7-host-nic-smoke.sh       # ADR-013 Phase C scaffold → RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK
