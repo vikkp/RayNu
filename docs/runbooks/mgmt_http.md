@@ -6,9 +6,9 @@
 - M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS UEFI NIC served ≥1 HTTP exchange (ADR-012); iron closed 2026-08-16 (SNP residual)
 - Post-EBS scaffold: `RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK` — `./tools/m7-post-ebs-http-smoke.sh`
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
-- M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase C wiring)
-- M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh`
-- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D only**. Do not claim from host or QEMU.
+- M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
+- M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D only**, after `BOOT-OK` on a **non-QEMU** census NIC. Do not claim from host or QEMU.
 
 ## Story
 
@@ -139,6 +139,44 @@ curl -sS http://127.0.0.1:18443/ | head
 Do **not** print `RAYNU-V-M7-HOST-NIC-HTTP-OK` from this path (iron Phase D).
 Firmware SNP stays WARN-only after EBS. Bounded poll: `HOST_NIC_POLL_BUDGET`
 (32) per listen tick so the credit scheduler is not starved.
+
+### Phase 0 — PCI census (PRE-EBS)
+
+Before SNP/Tcp4 (and before the e1000 skip), firmware prints Ethernet-class
+PCI functions:
+
+```
+boot: PCI census nics=1
+boot: PCI 00:03.0 vid:did=8086:100e bar0=0x… msix=none
+boot: IOMMU ACPI DMAR=yes|no
+```
+
+On R640 this list is how we pick **one** `vid:did`. Iron 2026-08-17 (Cruzer):
+
+```
+boot: PCI census nics=2
+boot: PCI 01:00.00 vid:did=14e4:165f bar0=0x92930000 msix=17
+boot: PCI 01:00.01 vid:did=14e4:165f bar0=0x92900000 msix=17
+boot: IOMMU ACPI DMAR=no
+```
+
+**Chosen:** `14e4:165f` (BCM5720) at `01:00.0`. Func 1 is the second port.
+Evidence: [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
+
+### Phase D — same `Device` trait; idle after BOOT-OK
+
+QEMU e1000 already implements `smoltcp::phy::Device`. After `BOOT-OK` the
+idle path calls `run_post_boot_ok_native_idle`. On iron 2026-08-17 that
+printed `no native Device for census vid:did=14e4:165f` and did **not**
+claim HTTP-OK. Next: a poll-mode `Device` for **that id only** (prefer
+`01:00.0`). Parse path: `parse_mocked_rx_desc_bytes` (host fuzz + optional
+`./tools/host-nic-miri-smoke.sh`; Miri skip is OK).
+
+### Phase E — mgmt arena
+
+Listen TCP/HTTP scratch comes from a 64 KiB `MgmtArena`, not
+`FrameAllocator`. On `MgmtFatal`: arena `reset`, `AuditEvent::MgmtRestarted`,
+retry. Host observable: `induced_fatals_do_not_touch_frame_allocator`.
 
 Preserve kit for iron rollback: `releases/v0.1.0-adr013-baseline`.
 

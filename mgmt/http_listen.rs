@@ -98,6 +98,8 @@ pub fn listen_mgmt_http_uefi(port: u16) -> Result<(), MgmtListenError> {
 ///
 /// Returns `true` when [`M7_UEFI_HTTP_OK_MARKER`] was printed.
 pub fn run_pre_ebs_mgmt_listen() -> bool {
+    crate::mgmt::pci_census::run_pre_ebs_pci_census();
+
     #[cfg(feature = "uefi-bin")]
     {
         crate::mgmt::api::probe_operator_auth_token();
@@ -169,11 +171,12 @@ pub fn run_post_ebs_mgmt_listen() {
     }
 }
 
-/// After VMXOFF: serial WARN only. Firmware SNP is dead after EBS (do not poll).
+/// After VMXOFF: serial WARN only for firmware SNP. Native NIC may idle-listen.
 pub fn run_post_ebs_http_idle() {
     #[cfg(feature = "uefi-bin")]
     {
         crate::mgmt::snp_listen_uefi::uefi_snp_post_ebs_idle();
+        crate::mgmt::host_nic_listen::run_post_boot_ok_native_idle();
     }
 }
 

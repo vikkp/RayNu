@@ -311,6 +311,8 @@ pub mod m7_uefi_http_gate;
 pub mod e1000_mmio;
 #[cfg(feature = "uefi-bin")]
 pub mod e1000;
+pub mod pci_census;
+pub mod mgmt_arena;
 pub mod host_nic;
 pub mod host_nic_poll;
 #[cfg(feature = "uefi-bin")]
@@ -387,6 +389,13 @@ pub use m7_host_nic_gate::{run_m7_host_nic_scaffold_gate, M7_HOST_NIC_GATE_MARKE
 pub use host_nic::{
     probe_host_nic_lab_flag, M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER,
     M7_HOST_NIC_SCAFFOLD_MARKER,
+};
+pub use pci_census::{
+    census_pick, iron_marker_allowed, run_pre_ebs_pci_census, CENSUS_NOTE,
+};
+pub use mgmt_arena::{
+    inject_mgmt_fatals, prop_arena_reset_rewinds, MgmtArena, MgmtFatal, MGMT_ARENA_BYTES,
+    MGMT_FATAL_INJECT_N,
 };
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};

@@ -108,6 +108,14 @@ pub fn tx_desc_done(status: u8) -> bool {
     status & TX_DESC_DD != 0
 }
 
+/// Parse a mocked 16-byte RX descriptor (little-endian layout). Host/Miri/fuzz.
+pub fn parse_mocked_rx_desc_bytes(raw: &[u8; 16]) -> Option<usize> {
+    let length = u16::from_le_bytes([raw[8], raw[9]]);
+    let status = raw[12];
+    let errors = raw[13];
+    rx_desc_packet_len(status, errors, length)
+}
+
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
 struct RxDesc {
@@ -503,7 +511,7 @@ unsafe fn tx_reap(n: &mut NicState, dma: &mut DmaArena) {
 }
 
 #[cfg(feature = "uefi-bin")]
-fn pci_read32(bus: u8, dev: u8, func: u8, offset: u8) -> u32 {
+pub(crate) fn pci_read32(bus: u8, dev: u8, func: u8, offset: u8) -> u32 {
     let addr = 0x8000_0000u32
         | (u32::from(bus) << 16)
         | (u32::from(dev) << 11)

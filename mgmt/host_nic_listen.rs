@@ -1,10 +1,13 @@
-//! Post-EBS HTTP listen on the host-owned e1000 (ADR-013 Phase C).
+//! Post-EBS / post-BOOT-OK HTTP listen on the host-owned e1000 (ADR-013).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside**
 //!
 //! Firmware SNP is never polled. Static QEMU user-net addressing (no DHCP).
-//! Socket buffers are `.bss` — UEFI Boot Services alloc is invalid after EBS.
+//! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
+//! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
+//!
+//! Iron HTTP-OK is printed from `pci_census`, never here.
 
 #![cfg(feature = "uefi-bin")]
 
@@ -17,50 +20,122 @@ use crate::mgmt::host_nic::{
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
 use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
+use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
+use crate::mgmt::pci_census;
 use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
 use smoltcp::socket::tcp;
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
-/// JUSTIFICATION: post-EBS has no Boot Services heap; one listen session.
-static mut SOCKET_STORE: [SocketStorage<'static>; 1] = [SocketStorage::EMPTY; 1];
-static mut TCP_RX: [u8; 8192] = [0; 8192];
-static mut TCP_TX: [u8; 16384] = [0; 16384];
+/// JUSTIFICATION: dedicated mgmt heap, distinct from the Proven Core allocator
+/// (ADR-013 Phase E). `.bss` so it survives ExitBootServices.
+static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
+
+const TCP_RX_N: usize = 8192;
+const TCP_TX_N: usize = 16384;
+const RX_ACC_N: usize = 8192;
+const HTTP_OUT_N: usize = 16384;
+const SCRATCH_N: usize = TCP_RX_N + TCP_TX_N + RX_ACC_N + HTTP_OUT_N;
+
+#[derive(Clone, Copy)]
+enum ListenWhen {
+    /// After ExitBootServices, before VMX. Lab may `qemu_exit` after GET /.
+    AfterEbs,
+    /// After `RAYNU-V-R640-BOOT-OK`. QEMU never reaches this (`qemu_exit` first).
+    AfterBootOk,
+}
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
 pub fn run_post_ebs_host_nic_listen() {
+    run_listen(ListenWhen::AfterEbs);
+}
+
+/// After VMXOFF / BOOT-OK: native idle listen. Never prints CURL NOW.
+///
+/// QEMU `8086:100e` may print [`M7_HOST_NIC_QEMU_MARKER`] again.
+/// Iron HTTP-OK (see `pci_census::print_host_nic_exchange_ok_marker`) is only
+/// emitted when the census NIC is not e1000 **and** an exchange happened.
+/// No in-tree driver exists for a non-lab `vid:did` yet.
+pub fn run_post_boot_ok_native_idle() {
+    run_listen(ListenWhen::AfterBootOk);
+}
+
+fn run_listen(when: ListenWhen) {
     if !crate::mgmt::e1000_mmio::qemu_e1000_present() {
+        if matches!(when, ListenWhen::AfterBootOk) {
+            if let Some((v, d)) = pci_census::census_pick() {
+                serial::write_str(
+                    "boot: HOST-NIC idle: no native Device for census vid:did=",
+                );
+                write_hex_u16(v);
+                serial::write_byte(b':');
+                write_hex_u16(d);
+                serial::write_line(" (Phase D waits on this id; do not guess LOM)");
+            }
+        }
         return;
     }
-    match listen_e1000(MGMT_HTTP_DEFAULT_PORT) {
-        Ok(()) => {}
-        Err(e) => {
-            serial::write_str("boot: WARN — HOST-NIC listen failed (");
-            serial::write_str(err_name(e));
-            serial::write_line("); guest path continues");
+
+    // SAFETY: BSP-only; arena is not the NIC DMA region (`e1000_mmio`).
+    // KANI-TARGET: host tests cover MgmtArena reset, not this listen loop.
+    let arena = unsafe { &mut *core::ptr::addr_of_mut!(MGMT_ARENA) };
+    for attempt in 0u32..3 {
+        arena.reset();
+        match listen_e1000(MGMT_HTTP_DEFAULT_PORT, when, arena) {
+            Ok(()) => return,
+            Err(e) => {
+                let kind = fatal_kind(e);
+                crate::audit_log!(crate::audit::AuditEvent::MgmtRestarted {
+                    generation: arena.generation(),
+                    kind,
+                });
+                serial::write_str("boot: WARN — HOST-NIC MgmtFatal (");
+                serial::write_str(fatal_name(e));
+                serial::write_str(") attempt=");
+                write_u16_dec(attempt as u16);
+                serial::write_line("; arena reset, retry");
+                arena.reset();
+            }
         }
     }
+    serial::write_line("boot: WARN — HOST-NIC listen gave up after MgmtFatal retries");
 }
 
-#[derive(Clone, Copy)]
-enum HostNicErr {
-    Init,
-    Bind,
-}
-
-fn err_name(e: HostNicErr) -> &'static str {
+fn fatal_name(e: MgmtFatal) -> &'static str {
     match e {
-        HostNicErr::Init => "e1000 init",
-        HostNicErr::Bind => "tcp bind",
+        MgmtFatal::Device => "device",
+        MgmtFatal::Bind => "tcp bind",
+        MgmtFatal::ArenaExhausted => "arena exhausted",
+        MgmtFatal::Induced => "induced",
     }
 }
 
-fn listen_e1000(port: u16) -> Result<(), HostNicErr> {
-    let mut device = E1000Device::init().map_err(|_| HostNicErr::Init)?;
+fn fatal_kind(e: MgmtFatal) -> u8 {
+    match e {
+        MgmtFatal::Device => 0,
+        MgmtFatal::Bind => 1,
+        MgmtFatal::ArenaExhausted => 2,
+        MgmtFatal::Induced => 3,
+    }
+}
+
+fn listen_e1000(
+    port: u16,
+    when: ListenWhen,
+    arena: &mut MgmtArena,
+) -> Result<(), MgmtFatal> {
+    let mut device = E1000Device::init().map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
     serial::write_str("boot: HOST-NIC e1000 MAC=");
     write_mac(mac);
     serial::write_byte(b'\n');
+
+    let scratch = arena
+        .alloc_bytes(SCRATCH_N, 16)
+        .map_err(|_| MgmtFatal::ArenaExhausted)?;
+    let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
+    let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
+    let (rx_acc, out) = rest.split_at_mut(RX_ACC_N);
 
     let mut config = Config::new(EthernetAddress(mac).into());
     config.random_seed = mac_seed(mac);
@@ -85,34 +160,48 @@ fn listen_e1000(port: u16) -> Result<(), HostNicErr> {
     });
     let _ = iface.routes_mut().add_default_ipv4_route(gw);
 
-    serial::write_str("boot: HOST-NIC listening on ");
-    write_ipv4(ip);
-    serial::write_byte(b':');
-    write_u16_dec(port);
-    serial::write_line(" (post-EBS e1000)");
+    match when {
+        ListenWhen::AfterEbs => {
+            serial::write_str("boot: HOST-NIC listening on ");
+            write_ipv4(ip);
+            serial::write_byte(b':');
+            write_u16_dec(port);
+            serial::write_line(" (post-EBS e1000)");
+        }
+        ListenWhen::AfterBootOk => {
+            serial::write_str("boot: HOST-NIC idle listening on ");
+            write_ipv4(ip);
+            serial::write_byte(b':');
+            write_u16_dec(port);
+            serial::write_line(" (after BOOT-OK)");
+        }
+    }
 
     crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
-    // SAFETY: BSP-only post-EBS listen; these statics are not the NIC DMA arena
-    // (that `unsafe` lives in `e1000_mmio`). No Boot Services heap after EBS.
-    // KANI-TARGET: SocketSet construction is not MMIO; host tests cover poll budget.
-    let sockets_storage = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORE) };
+    let mut sockets_storage = [SocketStorage::EMPTY; 1];
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
-    let tcp_rx = tcp::SocketBuffer::new(unsafe { &mut *core::ptr::addr_of_mut!(TCP_RX) }.as_mut_slice());
-    let tcp_tx = tcp::SocketBuffer::new(unsafe { &mut *core::ptr::addr_of_mut!(TCP_TX) }.as_mut_slice());
+    let tcp_rx = tcp::SocketBuffer::new(tcp_rx_mem);
+    let tcp_tx = tcp::SocketBuffer::new(tcp_tx_mem);
     let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
     sockets
         .get_mut::<tcp::Socket>(tcp_handle)
         .listen(port)
-        .map_err(|_| HostNicErr::Bind)?;
+        .map_err(|_| MgmtFatal::Bind)?;
 
     let mut served: u32 = 0;
     let mut announced = false;
-    let mut rx_acc = [0u8; 8192];
     let mut rx_len: usize = 0;
-    let deadline = HOST_NIC_LISTEN_MS as i64;
+    let deadline = match when {
+        ListenWhen::AfterEbs => HOST_NIC_LISTEN_MS as i64,
+        ListenWhen::AfterBootOk => i64::MAX / 4,
+    };
+    let max_ex = match when {
+        ListenWhen::AfterEbs => HOST_NIC_MAX_EXCHANGES,
+        ListenWhen::AfterBootOk => u32::MAX,
+    };
 
-    while served < HOST_NIC_MAX_EXCHANGES && millis < deadline {
+    while served < max_ex && millis < deadline {
         let ts = Instant::from_millis(millis);
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
             matches!(
@@ -151,7 +240,6 @@ fn listen_e1000(port: u16) -> Result<(), HostNicErr> {
                 rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let mut out = [0u8; 16384];
                 let wn = unsafe {
                     // SAFETY: BSP-only HTTP codec; tables are the leaked PRE-EBS
                     // session (reset at listen start). Not NIC MMIO.
@@ -163,7 +251,7 @@ fn listen_e1000(port: u16) -> Result<(), HostNicErr> {
                             &mut m.iso_plan,
                             &mut m.iso_install,
                             raw,
-                            &mut out,
+                            out,
                         )
                     })
                 }
@@ -185,9 +273,16 @@ fn listen_e1000(port: u16) -> Result<(), HostNicErr> {
                 iface.poll(ts, &mut device, &mut sockets);
                 tsc_spin_ms(1);
             }
-            serial::write_line(M7_HOST_NIC_QEMU_MARKER);
-            if host_nic_lab_armed() {
-                serial::qemu_exit_success();
+            match when {
+                ListenWhen::AfterEbs => {
+                    serial::write_line(M7_HOST_NIC_QEMU_MARKER);
+                    if host_nic_lab_armed() {
+                        serial::qemu_exit_success();
+                    }
+                }
+                ListenWhen::AfterBootOk => {
+                    pci_census::print_host_nic_exchange_ok_marker();
+                }
             }
         }
         if do_close {
@@ -237,6 +332,11 @@ fn write_hex_byte(b: u8) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     serial::write_byte(HEX[(b >> 4) as usize]);
     serial::write_byte(HEX[(b & 0xf) as usize]);
+}
+
+fn write_hex_u16(n: u16) {
+    write_hex_byte((n >> 8) as u8);
+    write_hex_byte(n as u8);
 }
 
 fn write_ipv4(ip: Ipv4Address) {
