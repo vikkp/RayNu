@@ -63,6 +63,19 @@ if [[ -f "$EFI" ]]; then
     echo "error: missing release tarball" >&2
     exit 1
   fi
+  if [[ ! -f "$ROOT/dist/${STAMP}-windows.zip" ]]; then
+    echo "error: missing Windows zip (no naked .efi)" >&2
+    exit 1
+  fi
+  python3 - "$ROOT/dist/${STAMP}-windows.zip" <<'PY'
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+names = z.namelist()
+if any(n.lower().endswith(".efi") for n in names):
+    sys.exit("Windows zip must not contain a .efi member: " + ", ".join(names))
+if "r640-hypervisor.efi.bin" not in names:
+    sys.exit("Windows zip missing r640-hypervisor.efi.bin")
+PY
   echo "==> packaged $STAMP"
 else
   echo "==> no EFI at $EFI — host artifact gate only (CI m7-ship)"
