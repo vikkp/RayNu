@@ -311,6 +311,10 @@ pub mod m7_uefi_http_gate;
 pub mod e1000_mmio;
 #[cfg(feature = "uefi-bin")]
 pub mod e1000;
+pub mod bcm5720_mmio;
+#[cfg(feature = "uefi-bin")]
+pub mod bcm5720;
+pub mod mgmt_lease;
 pub mod pci_census;
 pub mod mgmt_arena;
 pub mod host_nic;

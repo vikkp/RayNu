@@ -1,7 +1,7 @@
 use super::{
-    acpi_sig_is_dmar, census_nic_has_lab_driver, find_msix_entries, iron_marker_allowed,
-    is_network_class, is_rsdp_signature, msix_table_entries, pci_id_is_iron_census, pick_lab_or_none,
-    PciNicRecord, PCI_CLASS_NETWORK,
+    acpi_sig_is_dmar, census_nic_has_iron_driver, census_nic_has_lab_driver, find_msix_entries,
+    iron_marker_allowed, is_network_class, is_rsdp_signature, msix_table_entries,
+    pci_id_is_iron_census, pick_lab_or_none, PciNicRecord, PCI_CLASS_NETWORK,
 };
 use crate::mgmt::e1000_mmio::{E1000_DEVICE, E1000_VENDOR};
 
@@ -61,6 +61,8 @@ fn pick_lab_only_qemu_e1000() {
     assert_eq!(p.device, E1000_DEVICE);
     assert!(census_nic_has_lab_driver(E1000_VENDOR, E1000_DEVICE));
     assert!(!census_nic_has_lab_driver(0x14e4, 0x165f));
+    assert!(census_nic_has_iron_driver(0x14e4, 0x165f));
+    assert!(!census_nic_has_iron_driver(E1000_VENDOR, E1000_DEVICE));
     assert!(pci_id_is_iron_census(0x14e4, 0x165f));
     assert!(!pci_id_is_iron_census(0x14e4, 0x1657));
     assert!(!iron_marker_allowed(E1000_VENDOR, E1000_DEVICE));

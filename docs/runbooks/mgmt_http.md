@@ -166,11 +166,26 @@ Evidence: [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/20
 ### Phase D — same `Device` trait; idle after BOOT-OK
 
 QEMU e1000 already implements `smoltcp::phy::Device`. After `BOOT-OK` the
-idle path calls `run_post_boot_ok_native_idle`. On iron 2026-08-17 that
-printed `no native Device for census vid:did=14e4:165f` and did **not**
-claim HTTP-OK. Next: a poll-mode `Device` for **that id only** (prefer
-`01:00.0`). Parse path: `parse_mocked_rx_desc_bytes` (host fuzz + optional
-`./tools/host-nic-miri-smoke.sh`; Miri skip is OK).
+idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
+**BCM5720 `14e4:165f` @ `01:00.0`** (poll-mode, MSI-X off) and reuses the
+PRE-EBS SNP lease. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+native HTTP exchange on that id — never from QEMU/host.
+
+**Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
+ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
+`auth.token` if present) alone. After `RAYNU-V-R640-BOOT-OK`, curl the
+**same** SNP lease on the host LAN (not iDRAC):
+
+```
+curl -sS "http://<lease>:8443/"
+```
+
+Expect COM2 `HOST-NIC BCM5720 … rings armed` then
+`HOST-NIC idle listening on <lease>:8443`. The iron HTTP-OK marker is
+only after that exchange. Do not claim it from this runbook.
+
+Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`
+(host fuzz + optional `./tools/host-nic-miri-smoke.sh`; Miri skip is OK).
 
 ### Phase E — mgmt arena
 

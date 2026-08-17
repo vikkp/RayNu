@@ -18,6 +18,7 @@ if ! rustup component list --installed 2>/dev/null | grep -q '^miri'; then
   exit 0
 fi
 
-echo "==> cargo miri test parse_mocked_rx_desc (host parse path)"
+echo "==> cargo miri test parse_mocked_rx_desc / parse_mocked_rx_bd (host parse path)"
 cargo miri test --lib parse_mocked_rx_desc -- --nocapture
-echo "ok: miri parse_mocked_rx_desc"
+cargo miri test --lib parse_mocked_rx_bd -- --nocapture
+echo "ok: miri parse_mocked_rx_desc + parse_mocked_rx_bd"

@@ -3,8 +3,8 @@
 //! Pillar: [Z] [D]
 //! Proven Core: **outside**
 //!
-//! Evidence-only serial. Does **not** guess Broadcom vs Intel LOM. Phase D
-//! may bind a driver only to a printed `vid:did` (lab: QEMU `8086:100e`).
+//! Evidence-only serial. Phase D binds **only** the printed iron pick
+//! (`14e4:165f` BCM5720, prefer `01:00.0`). Lab: QEMU `8086:100e`.
 
 use crate::mgmt::e1000_mmio::pci_id_is_qemu_e1000;
 
@@ -62,9 +62,14 @@ pub fn pci_id_is_iron_census(vendor: u16, device: u16) -> bool {
     vendor == IRON_CENSUS_VENDOR && device == IRON_CENSUS_DEVICE
 }
 
-/// Phase D: the only `smoltcp::phy::Device` in-tree is QEMU e1000. Iron waits.
+/// Phase C lab `Device` is QEMU e1000 only. Iron BCM5720 is a separate driver.
 pub fn census_nic_has_lab_driver(vendor: u16, device: u16) -> bool {
     pci_id_is_qemu_e1000(vendor, device)
+}
+
+/// Phase D iron `Device` is BCM5720 `14e4:165f` only (prefer `01:00.0`).
+pub fn census_nic_has_iron_driver(vendor: u16, device: u16) -> bool {
+    pci_id_is_iron_census(vendor, device)
 }
 
 /// Walk a mocked capability list (host tests / Kani). `read_dword(offset)`.
@@ -189,10 +194,26 @@ pub fn run_pre_ebs_pci_census() {
         serial::write_line(" (QEMU e1000 lab)");
         store_pick(pick.vendor, pick.device);
     } else if n > 0 {
-        serial::write_line(
-            "boot: HOST-NIC census: no lab e1000; do not guess LOM (Phase D waits on this list)",
-        );
-        store_pick(nics[0].vendor, nics[0].device);
+        let iron = nics
+            .iter()
+            .copied()
+            .find(|x| pci_id_is_iron_census(x.vendor, x.device) && x.func == 0)
+            .or_else(|| {
+                nics.iter()
+                    .copied()
+                    .find(|x| pci_id_is_iron_census(x.vendor, x.device))
+            });
+        if let Some(pick) = iron {
+            serial::write_line(
+                "boot: HOST-NIC census pick vid:did=14e4:165f (BCM5720; Phase D after BOOT-OK)",
+            );
+            store_pick(pick.vendor, pick.device);
+        } else {
+            serial::write_line(
+                "boot: HOST-NIC census: no lab e1000; do not guess LOM (Phase D waits on this list)",
+            );
+            store_pick(nics[0].vendor, nics[0].device);
+        }
     } else {
         serial::write_line("boot: HOST-NIC census: no Ethernet-class PCI functions");
     }

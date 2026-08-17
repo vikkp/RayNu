@@ -1,9 +1,10 @@
-//! Post-EBS / post-BOOT-OK HTTP listen on the host-owned e1000 (ADR-013).
+//! Post-EBS / post-BOOT-OK HTTP listen on the host-owned NIC (ADR-013).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside**
 //!
-//! Firmware SNP is never polled. Static QEMU user-net addressing (no DHCP).
+//! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
+//! Iron BCM5720 (`14e4:165f` @ `01:00.0`) reuses the PRE-EBS SNP lease.
 //! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
 //! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
 //!
@@ -12,6 +13,7 @@
 #![cfg(feature = "uefi-bin")]
 
 use crate::boot::serial;
+use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
     host_nic_lab_armed, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
@@ -21,8 +23,10 @@ use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
 use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
+use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
 use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
+use smoltcp::phy::Device;
 use smoltcp::socket::tcp;
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
@@ -50,44 +54,63 @@ pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
 }
 
-/// After VMXOFF / BOOT-OK: native idle listen. Never prints CURL NOW.
+/// After VMXOFF / BOOT-OK: native idle listen. Never prints the SNP-era
+/// post-EBS curl prompt (firmware SNP is dead).
 ///
 /// QEMU `8086:100e` may print [`M7_HOST_NIC_QEMU_MARKER`] again.
 /// Iron HTTP-OK (see `pci_census::print_host_nic_exchange_ok_marker`) is only
-/// emitted when the census NIC is not e1000 **and** an exchange happened.
-/// No in-tree driver exists for a non-lab `vid:did` yet.
+/// emitted when the census NIC is BCM5720 **and** an exchange happened.
 pub fn run_post_boot_ok_native_idle() {
     run_listen(ListenWhen::AfterBootOk);
 }
 
 fn run_listen(when: ListenWhen) {
-    if !crate::mgmt::e1000_mmio::qemu_e1000_present() {
-        if matches!(when, ListenWhen::AfterBootOk) {
-            if let Some((v, d)) = pci_census::census_pick() {
-                serial::write_str(
-                    "boot: HOST-NIC idle: no native Device for census vid:did=",
-                );
-                write_hex_u16(v);
-                serial::write_byte(b':');
-                write_hex_u16(d);
-                serial::write_line(" (Phase D waits on this id; do not guess LOM)");
-            }
-        }
+    if crate::mgmt::e1000_mmio::qemu_e1000_present() {
+        listen_with_retries(when, NicKind::E1000);
         return;
     }
+    if matches!(when, ListenWhen::AfterBootOk)
+        && crate::mgmt::bcm5720_mmio::bcm5720_present()
+    {
+        listen_with_retries(when, NicKind::Bcm5720);
+        return;
+    }
+    if matches!(when, ListenWhen::AfterBootOk) {
+        if let Some((v, d)) = pci_census::census_pick() {
+            serial::write_str(
+                "boot: HOST-NIC idle: no native Device for census vid:did=",
+            );
+            write_hex_u16(v);
+            serial::write_byte(b':');
+            write_hex_u16(d);
+            serial::write_line(" (Phase D waits on this id; do not guess LOM)");
+        }
+    }
+}
 
-    // SAFETY: BSP-only; arena is not the NIC DMA region (`e1000_mmio`).
+#[derive(Clone, Copy)]
+enum NicKind {
+    E1000,
+    Bcm5720,
+}
+
+fn listen_with_retries(when: ListenWhen, kind: NicKind) {
+    // SAFETY: BSP-only; arena is not the NIC DMA region.
     // KANI-TARGET: host tests cover MgmtArena reset, not this listen loop.
     let arena = unsafe { &mut *core::ptr::addr_of_mut!(MGMT_ARENA) };
     for attempt in 0u32..3 {
         arena.reset();
-        match listen_e1000(MGMT_HTTP_DEFAULT_PORT, when, arena) {
+        let result = match kind {
+            NicKind::E1000 => listen_e1000(MGMT_HTTP_DEFAULT_PORT, when, arena),
+            NicKind::Bcm5720 => listen_bcm5720(MGMT_HTTP_DEFAULT_PORT, when, arena),
+        };
+        match result {
             Ok(()) => return,
             Err(e) => {
-                let kind = fatal_kind(e);
+                let kind_u8 = fatal_kind(e);
                 crate::audit_log!(crate::audit::AuditEvent::MgmtRestarted {
                     generation: arena.generation(),
-                    kind,
+                    kind: kind_u8,
                 });
                 serial::write_str("boot: WARN — HOST-NIC MgmtFatal (");
                 serial::write_str(fatal_name(e));
@@ -119,6 +142,46 @@ fn fatal_kind(e: MgmtFatal) -> u8 {
     }
 }
 
+fn listen_bcm5720(
+    port: u16,
+    when: ListenWhen,
+    arena: &mut MgmtArena,
+) -> Result<(), MgmtFatal> {
+    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
+        serial::write_line(
+            "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (cannot bind; skip MMIO)",
+        );
+        return Err(MgmtFatal::Bind);
+    };
+    let mut device = Bcm5720Device::init().map_err(|_| MgmtFatal::Device)?;
+    let mac = device.mac();
+    let ip = Ipv4Address::new(lease.ip[0], lease.ip[1], lease.ip[2], lease.ip[3]);
+    let gw = if lease.has_router {
+        Some(Ipv4Address::new(
+            lease.router[0],
+            lease.router[1],
+            lease.router[2],
+            lease.router[3],
+        ))
+    } else {
+        None
+    };
+    serial::write_str("boot: HOST-NIC BCM5720 Device MAC=");
+    write_mac(mac);
+    serial::write_byte(b'\n');
+    listen_loop(
+        &mut device,
+        mac,
+        ip,
+        gw,
+        lease.prefix,
+        port,
+        when,
+        arena,
+        "BCM5720",
+    )
+}
+
 fn listen_e1000(
     port: u16,
     when: ListenWhen,
@@ -129,19 +192,6 @@ fn listen_e1000(
     serial::write_str("boot: HOST-NIC e1000 MAC=");
     write_mac(mac);
     serial::write_byte(b'\n');
-
-    let scratch = arena
-        .alloc_bytes(SCRATCH_N, 16)
-        .map_err(|_| MgmtFatal::ArenaExhausted)?;
-    let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
-    let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
-    let (rx_acc, out) = rest.split_at_mut(RX_ACC_N);
-
-    let mut config = Config::new(EthernetAddress(mac).into());
-    config.random_seed = mac_seed(mac);
-
-    let mut millis: i64 = 0;
-    let mut iface = Interface::new(config, &mut device, Instant::from_millis(millis));
     let ip = Ipv4Address::new(
         QEMU_USERNET_IPV4[0],
         QEMU_USERNET_IPV4[1],
@@ -154,11 +204,49 @@ fn listen_e1000(
         QEMU_USERNET_GW[2],
         QEMU_USERNET_GW[3],
     );
+    listen_loop(
+        &mut device,
+        mac,
+        ip,
+        Some(gw),
+        QEMU_USERNET_PREFIX,
+        port,
+        when,
+        arena,
+        "e1000",
+    )
+}
+
+fn listen_loop<D: Device>(
+    device: &mut D,
+    mac: [u8; 6],
+    ip: Ipv4Address,
+    gw: Option<Ipv4Address>,
+    prefix: u8,
+    port: u16,
+    when: ListenWhen,
+    arena: &mut MgmtArena,
+    nic_tag: &str,
+) -> Result<(), MgmtFatal> {
+    let scratch = arena
+        .alloc_bytes(SCRATCH_N, 16)
+        .map_err(|_| MgmtFatal::ArenaExhausted)?;
+    let (tcp_rx_mem, rest) = scratch.split_at_mut(TCP_RX_N);
+    let (tcp_tx_mem, rest) = rest.split_at_mut(TCP_TX_N);
+    let (rx_acc, out) = rest.split_at_mut(RX_ACC_N);
+
+    let mut config = Config::new(EthernetAddress(mac).into());
+    config.random_seed = mac_seed(mac);
+
+    let mut millis: i64 = 0;
+    let mut iface = Interface::new(config, device, Instant::from_millis(millis));
     iface.update_ip_addrs(|addrs| {
         addrs.clear();
-        let _ = addrs.push(IpCidr::new(IpAddress::Ipv4(ip), QEMU_USERNET_PREFIX));
+        let _ = addrs.push(IpCidr::new(IpAddress::Ipv4(ip), prefix));
     });
-    let _ = iface.routes_mut().add_default_ipv4_route(gw);
+    if let Some(gw) = gw {
+        let _ = iface.routes_mut().add_default_ipv4_route(gw);
+    }
 
     match when {
         ListenWhen::AfterEbs => {
@@ -166,14 +254,25 @@ fn listen_e1000(
             write_ipv4(ip);
             serial::write_byte(b':');
             write_u16_dec(port);
-            serial::write_line(" (post-EBS e1000)");
+            serial::write_str(" (post-EBS ");
+            serial::write_str(nic_tag);
+            serial::write_line(")");
         }
         ListenWhen::AfterBootOk => {
             serial::write_str("boot: HOST-NIC idle listening on ");
             write_ipv4(ip);
             serial::write_byte(b':');
             write_u16_dec(port);
-            serial::write_line(" (after BOOT-OK)");
+            serial::write_str(" (after BOOT-OK ");
+            serial::write_str(nic_tag);
+            serial::write_line(")");
+            if nic_tag == "BCM5720" {
+                serial::write_str("boot: CURL NOW → http://");
+                write_ipv4(ip);
+                serial::write_byte(b':');
+                write_u16_dec(port);
+                serial::write_line("/  (native BCM5720; SNP is dead)");
+            }
         }
     }
 
@@ -205,7 +304,7 @@ fn listen_e1000(
         let ts = Instant::from_millis(millis);
         let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
             matches!(
-                iface.poll(ts, &mut device, &mut sockets),
+                iface.poll(ts, device, &mut sockets),
                 smoltcp::iface::PollResult::SocketStateChanged
             )
         });
@@ -270,7 +369,7 @@ fn listen_e1000(
             for _ in 0..80 {
                 millis += 1;
                 let ts = Instant::from_millis(millis);
-                iface.poll(ts, &mut device, &mut sockets);
+                iface.poll(ts, device, &mut sockets);
                 tsc_spin_ms(1);
             }
             match when {
@@ -297,7 +396,7 @@ fn listen_e1000(
 
     if served == 0 {
         serial::write_line(
-            "boot: WARN — HOST-NIC accept timeout (continuing; PRE-EBS SNP was skipped)",
+            "boot: WARN — HOST-NIC accept timeout (continuing; native listen did not serve)",
         );
     }
     Ok(())

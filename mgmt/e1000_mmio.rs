@@ -1,4 +1,7 @@
-//! QEMU e1000 (82540EM) MMIO/DMA — **the only NIC `unsafe` module** (ADR-013 C).
+//! QEMU e1000 (82540EM) MMIO/DMA — lab NIC `unsafe` module (ADR-013 C).
+//!
+//! Iron BCM5720 MMIO lives in [`crate::mgmt::bcm5720_mmio`] (one module per
+//! chip; ADR-013 unsafe containment).
 //!
 //! Pillar: [Z]
 //! Proven Core: **outside** (ADR-002 / ADR-013)
@@ -526,7 +529,7 @@ pub(crate) fn pci_read32(bus: u8, dev: u8, func: u8, offset: u8) -> u32 {
 }
 
 #[cfg(feature = "uefi-bin")]
-fn pci_write32(bus: u8, dev: u8, func: u8, offset: u8, value: u32) {
+pub(crate) fn pci_write32(bus: u8, dev: u8, func: u8, offset: u8, value: u32) {
     let addr = 0x8000_0000u32
         | (u32::from(bus) << 16)
         | (u32::from(dev) << 11)
