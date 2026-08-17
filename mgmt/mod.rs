@@ -308,6 +308,14 @@ pub mod snp_listen_uefi;
 pub mod tcp4_uefi;
 pub mod m7_http_gate;
 pub mod m7_uefi_http_gate;
+pub mod e1000_mmio;
+#[cfg(feature = "uefi-bin")]
+pub mod e1000;
+pub mod host_nic;
+pub mod host_nic_poll;
+#[cfg(feature = "uefi-bin")]
+pub mod host_nic_listen;
+pub mod m7_host_nic_gate;
 pub mod m7_post_ebs_http_gate;
 pub mod m7_ship_gate;
 pub mod m7_iso_gate;
@@ -374,6 +382,11 @@ pub use m7_uefi_http_gate::{
 };
 pub use m7_post_ebs_http_gate::{
     run_m7_post_ebs_http_scaffold_gate, M7_POST_EBS_HTTP_GATE_MARKER,
+};
+pub use m7_host_nic_gate::{run_m7_host_nic_scaffold_gate, M7_HOST_NIC_GATE_MARKER};
+pub use host_nic::{
+    probe_host_nic_lab_flag, M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER,
+    M7_HOST_NIC_SCAFFOLD_MARKER,
 };
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};

@@ -91,6 +91,7 @@ cargo test --no-default-features   # includes RAYNU-V-M2-L2-OK + RAYNU-V-M3-L3-O
 ./tools/package-release.sh         # versioned EFI + SHA256 + tarball under dist/
 ./tools/m7-ship-smoke.sh           # EFI release kit → RAYNU-V-M7-SHIP-OK
 ./tools/m7-http-smoke.sh           # network HTTP mgmt → RAYNU-V-M7-HTTP-OK
+./tools/m7-host-nic-smoke.sh       # ADR-013 Phase C scaffold → RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK
 
 # Interactive: COM1 on stdio (uses KVM when /dev/kvm exists)
 ./tools/run-qemu.sh

@@ -86,9 +86,11 @@ fi
 # E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).
 ISO_INSTALL_LAB="${ISO_INSTALL_LAB:-0}"
 ISO_REBOOT_LAB="${ISO_REBOOT_LAB:-0}"
+HOST_NIC_LAB="${HOST_NIC_LAB:-0}"
 rm -f "$ESP/isoinstall.txt" "$ESP/EFI/RayNu/isoinstall.txt" 2>/dev/null || true
 rm -f "$ESP/isoreboot.txt" "$ESP/EFI/RayNu/isoreboot.txt" 2>/dev/null || true
 rm -f "$ESP/installdisk.bin" "$ESP/EFI/RayNu/installdisk.bin" 2>/dev/null || true
+rm -f "$ESP/hostnic.txt" "$ESP/EFI/RayNu/hostnic.txt" 2>/dev/null || true
 if [[ "$ISO_INSTALL_LAB" == "1" ]]; then
   mkdir -p "$ESP/EFI/RayNu"
   : >"$ESP/EFI/RayNu/isoinstall.txt"
@@ -104,6 +106,19 @@ if [[ "$ISO_REBOOT_LAB" == "1" ]]; then
   fi
   cp "$INSTALL_DISK_IMG" "$ESP/EFI/RayNu/installdisk.bin"
   echo "==> E5 ISO reboot lab: staged isoreboot.txt + installdisk.bin ($(wc -c <"$INSTALL_DISK_IMG") bytes)"
+fi
+
+# ADR-013 Phase C: QEMU e1000 + user-net hostfwd; ESP flag exits after GET /.
+HOST_NIC_ARGS=()
+if [[ "$HOST_NIC_LAB" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/hostnic.txt"
+  HOST_NIC_FWD="${HOST_NIC_FWD:-18443}"
+  echo "==> ADR-013 Phase C lab: staged $ESP/EFI/RayNu/hostnic.txt (e1000 hostfwd :${HOST_NIC_FWD} -> :8443)"
+  HOST_NIC_ARGS+=(
+    -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:${HOST_NIC_FWD}-:8443"
+    -device e1000,netdev=n0
+  )
 fi
 
 FW_ARGS=()
@@ -161,4 +176,5 @@ exec qemu-system-x86_64 \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${FW_ARGS[@]}" \
   -drive format=raw,file=fat:rw:"$ESP" \
+  "${HOST_NIC_ARGS[@]}" \
   "$@"
