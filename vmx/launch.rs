@@ -3190,7 +3190,7 @@ fn finish_boot(ok: bool) -> ! {
             core::hint::spin_loop();
         }
         serial::qemu_exit_success();
-        // QEMU exits above; iron continues. Durable SNP HTTP if a session was parked.
+        // QEMU exits above; iron continues. Do not poll firmware SNP (hang + RSOD).
         crate::mgmt::run_post_ebs_http_idle();
     } else {
         serial::write_line("boot: boot gate failed");

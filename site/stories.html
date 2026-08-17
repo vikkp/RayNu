@@ -495,10 +495,12 @@ RAYNU-V-R640-BOOT-OK</pre>
         </p>
 
         <p>
-          Next engineering is durable <strong>post-EBS management HTTP</strong>
-          on the SNP + smoltcp residual (firmware Tcp4 is a platform limit on
-          this boot method). Remaining E4 polish and a real distro installer
-          follow that listen — not El Torito first.
+          Next engineering is a <strong>host-owned post-EBS NIC</strong>
+          (MMIO/DMA). Firmware SNP hung immediately after EBS, timed out after
+          <code>BOOT-OK</code>, then Dell UEFI RSOD (RIP=<code>0x17</code>).
+          Do not chase SNP or Tcp4 after EBS. PRE-EBS remains the management
+          UI. Remaining E4 polish and a real distro installer follow that
+          listen — not El Torito first.
         </p>
 
         <p class="story__aside">

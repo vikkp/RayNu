@@ -157,7 +157,7 @@ pub fn run_post_ebs_mgmt_listen() {
     }
 }
 
-/// Iron idle after VMXOFF: durable SNP HTTP. No-op if SNP was not parked.
+/// After VMXOFF: serial WARN only. Firmware SNP is dead after EBS (do not poll).
 pub fn run_post_ebs_http_idle() {
     #[cfg(feature = "uefi-bin")]
     {

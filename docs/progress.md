@@ -147,7 +147,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| Post-EBS HTTP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | SNP+smoltcp SPA/REST after EBS (scaffold host; iron open) |
-| Everest residual | E4 polish + distro | TLS/console later; distro installer later (after post-EBS listen) |
+| Post-EBS HTTP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Not claimed.** Firmware SNP dead after EBS (hang + curl timeout + RSOD). Host-owned NIC next; PRE-EBS is mgmt |
+| Everest residual | E4 polish + distro | TLS/console later; distro installer later (after durable post-EBS listen) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

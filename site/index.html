@@ -72,8 +72,8 @@
             2026-08-16). E4 SPA create is exercised on iron. E5 stamp persist
             closed on Cruzer Micro
             (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> — LBA stamps, not a
-            guest rootfs). Mount Everest residual: durable post-EBS management
-            HTTP (SNP + smoltcp), then remaining E4 polish and a real distro
+            guest rootfs). Mount Everest residual: host-owned post-EBS NIC
+            (firmware SNP dead after EBS), then remaining E4 polish and a real distro
             installer.
           </p>
           <figure class="milestone-shot" data-reveal>
@@ -472,8 +472,8 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                 (<code>RAYNU-V-R640-BOOT-OK</code>) and UEFI HTTP
                 (<code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-15/16.
                 E5 stamp persist closed on Cruzer
-                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). Residual:
-                post-EBS mgmt HTTP, then E4 polish + distro installer.
+                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>).                 Residual:
+                host-owned post-EBS NIC (firmware SNP dead after EBS), then E4 polish + distro installer.
               </p>
               <ol class="journey__list">
                 <li>
@@ -627,7 +627,7 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             plus real R640 iron: <code>RAYNU-V-R640-BOOT-OK</code> (E2),
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP), and
             <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (E5 stamps). Mount
-            Everest residual: post-EBS mgmt HTTP, then E4 polish + distro
+            Everest residual: host-owned post-EBS NIC, then E4 polish + distro
             installer. See
             <a href="hda.html">HDA</a>.
           </p>
@@ -675,7 +675,8 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             <code>RAYNU-V-R640-BOOT-OK</code> and
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (2026-08-15/16) and Cruzer
             stamp persist <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>; Mount
-            Everest residual is post-EBS management HTTP, then E4 polish and a
+            Everest residual is a host-owned post-EBS NIC (firmware SNP dead
+            after EBS), then E4 polish and a
             real distro installer. See the
             <a href="paper.html">living verification paper</a>.
           </p>

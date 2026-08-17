@@ -5,7 +5,7 @@
 - M7.6 scaffold: `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` — `./tools/m7-uefi-http-smoke.sh`
 - M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS UEFI NIC served ≥1 HTTP exchange (ADR-012); iron closed 2026-08-16 (SNP residual)
 - Post-EBS scaffold: `RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK` — `./tools/m7-post-ebs-http-smoke.sh`
-- Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — SNP served ≥1 HTTP exchange after EBS (iron open)
+- Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 
 ## Story
 
@@ -84,19 +84,23 @@ Default lab port: **8443** (`MGMT_HTTP_DEFAULT_PORT`).
 UEFI Tcp4/SNP/DHCP **open** paths are Boot Services. After `leave_firmware()` /
 ExitBootServices, `locate_handle` / `stall` / CloseProtocol are invalid.
 RayNu-V **parks** the SNP + smoltcp session (leaked protocol, no CloseProtocol)
-and resumes listen after EBS on the same UNDI/MMIO path.
+so the PRE-EBS lease can be printed after EBS. **Do not** Transmit/Receive on
+firmware SNP after EBS.
 
 | Phase | What | Soft-fail |
 |-------|------|-----------|
 | PRE-EBS | Existing 45s SNP window (`RAYNU-V-M7-UEFI-HTTP-OK`) | timeout → continue to EBS |
 | Immediately after EBS | Serial-only: parked lease printed; **no SNP poll** (iron hung on immediate poll 2026-08-16) | no parked NIC → skip |
-| After VMXOFF / BOOT-OK | Durable SNP idle (`RAYNU-V-M7-POST-EBS-HTTP-OK` on first exchange) | SNP dead/hang → COM2 stops after idle banner |
+| After VMXOFF / BOOT-OK | WARN only — **firmware SNP dead** (2026-08-17 curl timeout + RSOD RIP=`0x17`); no SNP poll | PRE-EBS remains mgmt |
 
 **Do not chase** firmware Tcp4 on this boot method (Virtual Floppy / Cruzer UNDI).
-SNP + smoltcp is the residual (do not chase Tcp4). Size stays inside ADR-003 (`./tools/check-size.sh`).
+**Do not chase** firmware SNP after EBS. Durable post-EBS HTTP needs a host-owned
+NIC (MMIO/DMA). Size stays inside ADR-003 (`./tools/check-size.sh`).
 
 If the NIC is unusable after EBS, serial prints a WARN and the guest path
 continues. PRE-EBS remains the fallback operator window.
+
+Evidence: [`docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md`](../evidence/r640/2026-08-17-post-ebs-snp-dead.md).
 
 ## Cruzer `auth.token`
 
@@ -134,6 +138,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). TLS remains deferred. Post-EBS listen is **wired** (scaffold); iron `RAYNU-V-M7-POST-EBS-HTTP-OK` still open until COM2 shows an exchange after BOOT-OK.
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). TLS remains deferred. Post-EBS listen is **not** firmware SNP: iron hung on immediate poll, timed out after BOOT-OK, then RSOD. `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Next is a host-owned NIC, not more SNP protocol calls.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure (ESP `EFI/RayNu/auth.token` on Cruzer).

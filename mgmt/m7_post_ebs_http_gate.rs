@@ -33,9 +33,25 @@ pub fn post_ebs_http_surface_present() -> bool {
         && snp.contains("uefi_snp_post_ebs_idle")
         && snp.contains("POST-EBS SNP idle")
         && snp.contains("tsc_delay_ms")
+        && snp.contains("firmware SNP dead after EBS")
         && snp.contains("PRE-EBS SNP window")
         && launch.contains("run_post_ebs_http_idle")
         && !snp.contains("Tcp4Protocol")
+        && idle_skips_firmware_snp_poll(snp)
+}
+
+/// Idle after VMXOFF must print WARN and return — never `iface.poll` (iron hang + RSOD).
+fn idle_skips_firmware_snp_poll(snp: &str) -> bool {
+    let Some(start) = snp.find("pub fn uefi_snp_post_ebs_idle()") else {
+        return false;
+    };
+    let rest = &snp[start..];
+    let end = rest[1..].find("\nfn ").map(|i| i + 1).unwrap_or(rest.len());
+    let idle = &rest[..end];
+    idle.contains("POST-EBS SNP idle")
+        && idle.contains("firmware SNP dead after EBS")
+        && !idle.contains("iface.poll")
+        && !idle.contains("CURL NOW (post-EBS)")
 }
 
 /// True when runbook + smoke name post-EBS markers and SNP residual.
@@ -50,6 +66,7 @@ pub fn post_ebs_http_scripts_present() -> bool {
         && runbook.contains("SNP")
         && runbook.contains(M7_POST_EBS_HTTP_OK_MARKER)
         && runbook.contains("do not chase")
+        && runbook.contains("firmware SNP dead")
 }
 
 pub fn prop_post_ebs_http_scaffold_package() -> bool {

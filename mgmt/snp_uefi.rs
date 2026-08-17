@@ -2,9 +2,10 @@
 //!
 //! Pillar: [Z] · Proven Core: **outside**
 //!
-//! Open/Start/Initialize use Boot Services. After ExitBootServices the
-//! protocol pointer may still drive UNDI/MMIO Transmit/Receive — that is the
-//! post-EBS residual (soft-fail if it does not). Never `locate_handle` after EBS.
+//! Open/Start/Initialize use Boot Services. After ExitBootServices, **do not**
+//! call Transmit/Receive on this protocol (iron hung, then RSOD — 2026-08-17).
+//! Parked pointer is for lease print only. Durable post-EBS HTTP needs a
+//! host-owned NIC. Never `locate_handle` after EBS.
 
 #![cfg(feature = "uefi-bin")]
 

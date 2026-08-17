@@ -9,7 +9,8 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **E5 persist write + detect (BLK fail):** [`2026-08-16-e5-persist-detect-blk-fail.md`](2026-08-16-e5-persist-detect-blk-fail.md)  
 **E5 iron reboot-to-disk (close):** [`2026-08-16-e5-iso-install.md`](2026-08-16-e5-iso-install.md)  
 **Preserve kit:** [`releases/v0.1.0-e4-spa-arm/`](../../../releases/v0.1.0-e4-spa-arm/) — checkpoint before networking deep-dive  
-**E5 ISO install:** [`STATUS-iso-install`](STATUS-iso-install) — **closed** (stamp persist; not distro installer)
+**E5 ISO install:** [`STATUS-iso-install`](STATUS-iso-install) — **closed** (stamp persist; not distro installer)  
+**Post-EBS SNP dead:** [`2026-08-17-post-ebs-snp-dead.md`](2026-08-17-post-ebs-snp-dead.md) — firmware SNP hang + curl timeout + RSOD; do not claim `POST-EBS-HTTP-OK`
 
 **COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +
 SHA256SUMS (keepconfix residual, xsavesfix close, confirming rebuild, and

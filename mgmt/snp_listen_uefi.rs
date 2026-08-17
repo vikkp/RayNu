@@ -104,7 +104,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     write_u32_dec(SNP_POST_BIND_LISTEN_MS as u32);
     serial::write_byte(b'\n');
     serial::write_line(
-        "boot: HINT — Mac must be on lease subnet; curl PRE-EBS window, then again after BOOT-OK (post-EBS SNP)",
+        "boot: HINT — Mac must be on lease subnet; curl only during PRE-EBS window (firmware SNP is dead after EBS)",
     );
     crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
 
@@ -251,6 +251,10 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
     Ok(())
 }
 
+/// Leaked so Drop never CloseProtocol after EBS. Fields other than `ip`/`port`
+/// are unread on purpose: firmware SNP must not be polled after EBS, but the
+/// session must stay leaked (iron hang + RSOD when polled).
+#[allow(dead_code)]
 struct ParkedSnpHttp {
     device: SnpDevice,
     iface: Interface,
@@ -278,6 +282,10 @@ fn parked_http() -> Option<&'static mut ParkedSnpHttp> {
 
 /// ~1 ms spin without Boot Services (`stall` is invalid after EBS).
 /// R640 Gold 6130 ~2.1 GHz; extra spin is harmless.
+///
+/// Kept for a future **host-owned** NIC poll loop. Do **not** use this to
+/// retry firmware SNP after EBS (iron hung, then RSOD — 2026-08-17).
+#[allow(dead_code)]
 fn tsc_delay_ms(ms: u32) {
     let ticks = (ms as u64).saturating_mul(2_100_000);
     let start = crate::arch::cpu::rdtsc();
@@ -288,8 +296,8 @@ fn tsc_delay_ms(ms: u32) {
 
 /// After EBS: **do not** call SNP. Iron 2026-08-16 hung here — first
 /// `iface.poll` after ExitBootServices never returned (`smoke frame` last line).
-/// Guest path must continue. Parked lease is printed only; listen waits until
-/// VMXOFF (`uefi_snp_post_ebs_idle`).
+/// Guest path must continue. Parked lease is printed only. After VMXOFF the
+/// idle path is WARN-only (`uefi_snp_post_ebs_idle`) — firmware SNP is dead.
 pub fn uefi_snp_post_ebs_probe() {
     let Some(s) = parked_http() else {
         serial::write_line("boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)");
@@ -302,139 +310,19 @@ pub fn uefi_snp_post_ebs_probe() {
     serial::write_line(" (not polling SNP yet — iron hung on immediate post-EBS poll)");
 }
 
-/// Durable SNP+smoltcp HTTP after VMXOFF (iron idle). Does not allocate.
-///
-/// Prints [`M7_POST_EBS_HTTP_OK_MARKER`] after the first post-EBS exchange.
-/// Soft-returns if SNP was not parked.
+/// After VMXOFF: **do not** poll firmware SNP. Iron 2026-08-17: idle banner
+/// printed, Mac curl to the parked lease timed out, then Dell UEFI RSOD
+/// (invalid opcode, RIP=`0x17`). Immediate post-EBS poll already hung.
+/// PRE-EBS remains the mgmt UI. See `docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md`.
 pub fn uefi_snp_post_ebs_idle() {
-    use crate::mgmt::http_listen::M7_POST_EBS_HTTP_OK_MARKER;
-
     let Some(s) = parked_http() else {
         return;
     };
-
-    serial::write_str("boot: mgmt HTTP listening on ");
+    serial::write_str("boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=");
     write_ipv4(s.ip);
     serial::write_byte(b':');
     write_u16_dec(s.port);
-    serial::write_line(" (POST-EBS SNP idle)");
-    serial::write_str("boot: CURL NOW (post-EBS) → http://");
-    write_ipv4(s.ip);
-    serial::write_byte(b':');
-    write_u16_dec(s.port);
-    serial::write_line("/");
-
-    {
-        let sock = s.sockets.get_mut::<tcp::Socket>(s.tcp_handle);
-        if !sock.is_open() || (!sock.is_active() && !sock.is_listening()) {
-            let _ = sock.listen(s.port);
-        }
-    }
-
-    let mut served: u32 = 0;
-    let mut announced_accept = false;
-    let mut rx_acc = [0u8; 8192];
-    let mut rx_len: usize = 0;
-    let mut last_remind = s.millis;
-    let mut printed_ok = false;
-
-    loop {
-        s.millis = s.millis.saturating_add(1);
-        let ts = Instant::from_millis(s.millis);
-        let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
-
-        let mut do_close = false;
-        let mut did_exchange = false;
-
-        {
-            let sock = s.sockets.get_mut::<tcp::Socket>(s.tcp_handle);
-            if !sock.is_open() {
-                rx_len = 0;
-                announced_accept = false;
-                let _ = sock.listen(s.port);
-            } else if !sock.is_active() && !sock.is_listening() {
-                let _ = sock.listen(s.port);
-            }
-
-            if sock.is_active() && !announced_accept {
-                serial::write_line("boot: SNP TCP accept — client connected (post-EBS)");
-                announced_accept = true;
-                rx_len = 0;
-            }
-
-            if sock.can_recv() {
-                let mut chunk = [0u8; 2048];
-                if let Ok(n) = sock.recv_slice(&mut chunk) {
-                    if n > 0 {
-                        let copy = n.min(rx_acc.len().saturating_sub(rx_len));
-                        rx_acc[rx_len..rx_len + copy].copy_from_slice(&chunk[..copy]);
-                        rx_len += copy;
-                    }
-                }
-            }
-
-            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
-
-            if headers_done && sock.can_send() {
-                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
-                let mut out = [0u8; 16384];
-                let wn = unsafe {
-                    crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
-                        handle_http_request(
-                            &mut m.vms,
-                            &mut m.images,
-                            &mut m.iso_plan,
-                            &mut m.iso_install,
-                            raw,
-                            &mut out,
-                        )
-                    })
-                }
-                .unwrap_or(0);
-                if wn > 0 {
-                    let _ = sock.send_slice(&out[..wn]);
-                    did_exchange = true;
-                    do_close = true;
-                }
-            }
-        }
-
-        if did_exchange {
-            served = served.saturating_add(1);
-            serial::write_line("boot: SNP HTTP exchange ok (post-EBS)");
-            if !printed_ok {
-                serial::write_line(M7_POST_EBS_HTTP_OK_MARKER);
-                printed_ok = true;
-            }
-            for _ in 0..50 {
-                s.millis = s.millis.saturating_add(1);
-                let ts = Instant::from_millis(s.millis);
-                let _ = s.iface.poll(ts, &mut s.device, &mut s.sockets);
-                tsc_delay_ms(1);
-            }
-        }
-
-        if do_close {
-            s.sockets.get_mut::<tcp::Socket>(s.tcp_handle).close();
-            rx_len = 0;
-            announced_accept = false;
-        }
-
-        if s.millis.wrapping_sub(last_remind) >= 15_000 {
-            last_remind = s.millis;
-            serial::write_str("boot: post-EBS waiting curl http://");
-            write_ipv4(s.ip);
-            serial::write_byte(b':');
-            write_u16_dec(s.port);
-            serial::write_str("/  served=");
-            write_u32_dec(served);
-            serial::write_byte(b'\n');
-        }
-
-        let ts2 = Instant::from_millis(s.millis);
-        let _ = s.iface.poll(ts2, &mut s.device, &mut s.sockets);
-        tsc_delay_ms(1);
-    }
+    serial::write_line(" (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)");
 }
 
 fn mac_seed(mac: [u8; 6]) -> u64 {

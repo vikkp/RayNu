@@ -36,5 +36,5 @@ echo "==> cargo test m7_post_ebs_http_scaffold_passes"
 cargo test --lib m7_post_ebs_http_scaffold_passes -- --nocapture
 
 echo "$SCAFFOLD"
-echo "==> post-EBS HTTP scaffold smoke PASSED (firmware ${IRON} only from post-EBS SNP serve)"
+echo "==> post-EBS HTTP scaffold smoke PASSED (firmware ${IRON} never claimed from host; SNP after EBS is dead on iron)"
 echo "never print iron marker from host smoke"
