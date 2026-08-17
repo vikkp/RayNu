@@ -28,13 +28,14 @@ Tcp4-absent analysis:
 | `2026-08-16-e4-spa-install-arm-com2.txt` | E4 tip `46090df` | SPA create-VM + 64 MiB install arm → `DISK-WRITTEN`/`LAB-OK`/`REBOOT-PENDING` |
 | `2026-08-16-e5-persist-write-com2.txt` | Cruzer Micro boot1 | SPA Install → `persist wrote installdisk.bin bytes=1024` + 64 MiB arm |
 | `2026-08-16-e5-persist-detect-blk-fail-com2.txt` | Cruzer Micro boot2 | `persist-detect` + preload, then `HLT without DRIVER_OK` |
-| `2026-08-16-e5-booted-from-disk-com2.txt` | Cruzer prefix-copy EFI | **E5 close:** `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK` |
+| `2026-08-17-snp-warn-no-rsod-com2.txt` | `releases/v0.1.0-adr013-baseline/` | WARN-only idle after `BOOT-OK`; **no RSOD**; Phase A closed |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·
 [`../2026-08-16-e4-spa-install-arm.md`](../2026-08-16-e4-spa-install-arm.md) ·
 [`../2026-08-16-e5-persist-detect-blk-fail.md`](../2026-08-16-e5-persist-detect-blk-fail.md) ·
-[`../2026-08-16-e5-iso-install.md`](../2026-08-16-e5-iso-install.md).
+[`../2026-08-16-e5-iso-install.md`](../2026-08-16-e5-iso-install.md) ·
+[`../2026-08-17-post-ebs-snp-dead.md`](../2026-08-17-post-ebs-snp-dead.md).
 
 ## Reproduce on iron
 

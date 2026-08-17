@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron**; **E3b open** (ADR-013 Proposed). Residual: host-owned NIC after EBS, then E4 polish + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron**; **E3b open** ([ADR-013](adr/ADR-013.md) **Accepted**). Residual: host-owned NIC after EBS, then E4 polish + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -260,10 +260,10 @@ Do not pull M8 into M7 gate lists.
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
 **Honesty:** E3 (PRE-EBS) is closed. **E3b** (lifetime HTTP) is [ADR-013](adr/ADR-013.md)
-(Proposed): host-owned NIC + smoltcp, dedicated mgmt arena. Firmware SNP and
-Tcp4 are dead ends after EBS. Then remaining E4 polish + a real distro
-installer. Do not chase firmware Tcp4 or post-EBS SNP.
+(**Accepted**): host-owned NIC + smoltcp, dedicated mgmt arena. Firmware SNP and
+Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
+RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next (this tree):** ADR-013 Proposed — no native driver until Accepted.
-PR #157 WARN-only idle. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed.
-Iron marker for E3b will be `RAYNU-V-M7-HOST-NIC-HTTP-OK`.
+**Next:** preserve kit `releases/v0.1.0-adr013-baseline`. Phase C (QEMU e1000)
+is a follow-on PR — not this baseline. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays
+unclaimed. Iron marker for E3b will be `RAYNU-V-M7-HOST-NIC-HTTP-OK`.

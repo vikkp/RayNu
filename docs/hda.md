@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-17
-last_commit: 438bebee4be2e004c599159f68d7274e3c01bbcf
-last_commit_short: 438bebe
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -40,7 +40,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
 | **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
 | **ETA month** | **2026-10** | slipped from 2026-09 |
-| **Confidence** | medium | E2+E3+E5 on COM2; E3b = host-owned NIC (Proposed ADR-013) |
+| **Confidence** | medium | E2+E3+E5 on COM2; E3b = ADR-013 Accepted; Phase C next |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
@@ -124,7 +124,7 @@ All must be true (no hand-waving):
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
-| **Post-EBS durable HTTP (E3b)** | MISSING | ADR-013 Proposed; firmware SNP dead after EBS; PRE-EBS is E3 bring-up only |
+| **Post-EBS durable HTTP (E3b)** | MISSING | ADR-013 **Accepted**; Phase A WARN-only closed on iron (no RSOD); Phase C not started |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after E3b)**
@@ -188,7 +188,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
-| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Proposed ADR-013; QEMU e1000 then census R640 NIC; `HOST-NIC-HTTP-OK` |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | **Accepted**; Phase A closed on iron; Phase C QEMU e1000 not started |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -258,11 +258,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | ADR-013 Proposed + HDA E3b + 2026-08-17 story |
-| Summary | Lifetime HTTP = host-owned NIC; SNP after EBS rejected; E3 keep as bring-up |
-| Everest impact | months 0.75→1.5; ETA 2026-09→2026-10; overall 88 held; ui~85 |
-| Gates touched | E3b opened (MISSING); `HOST-NIC-HTTP-OK` not claimed |
-| Months Δ | 0.75 → 1.5 |
+| Commit | Accept ADR-013 + preserve kit `v0.1.0-adr013-baseline` |
+| Summary | Iron WARN-only close (no RSOD); Phase A closed; Phase C not started |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open |
+| Gates touched | ADR-013 Accepted; `HOST-NIC-HTTP-OK` not claimed |
+| Months Δ | 1.5 held |
 
 ---
 
@@ -273,7 +273,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | PRE-EBS is E3 bring-up; **E3b** = ADR-013 host-owned NIC; do not poll SNP/Tcp4 after EBS |
+| H4 | Firmware SNP unusable after EBS | HIGH | **Phase A closed** (WARN-only, no RSOD); E3b = ADR-013 Accepted; Phase C next |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-17 | adr013-baseline | 1.5 | 88 | ADR-013 Accepted; iron WARN-only no RSOD; kit `v0.1.0-adr013-baseline` |
 | 2026-08-17 | adr-013-e3b | 1.5 | 88 | ADR-013 Proposed; E3b durable mgmt; months 0.75→1.5; ETA→2026-10 |
 | 2026-08-17 | post-ebs-snp-dead | 0.75 | 88 | Firmware SNP hang + curl timeout + RSOD; WARN-only idle; host-owned NIC next |
 | 2026-08-16 | post-ebs-http-wire | 0.5 | 88 | Park SNP across EBS; scaffold POST-EBS-HTTP; iron listen open |
@@ -322,12 +323,12 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED; E3b durable mgmt OPEN (ADR-013 Proposed)
+Now:           E2+E3+E5 stamps CLOSED; E3b OPEN (ADR-013 Accepted)
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     accept ADR-013 → QEMU e1000 post-EBS (Phase C); no SNP after EBS
+Next move:     Phase C QEMU e1000 post-EBS (after this baseline); no SNP after EBS
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
-SNP after EBS: dead (hang + timeout + RSOD 2026-08-17) — do not poll
-Preserve:      releases/v0.1.0-e4-spa-arm (pre networking deep-dive)
+SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
+Preserve:      releases/v0.1.0-adr013-baseline
 Do not claim:  Mount Everest (E3b + E4 polish + distro installer remain)
 ```
 

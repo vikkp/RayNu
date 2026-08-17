@@ -72,3 +72,17 @@ not `SimpleNetwork` protocol calls.
 
 This tree: after `BOOT-OK`, print WARN and return. Never `iface.poll` on
 firmware SNP. Never print a fake `CURL NOW (post-EBS)`.
+
+## Retest — WARN-only, no RSOD (2026-08-17)
+
+Vignesh flashed the skip-poll / WARN-only EFI (Cruzer, same lease). COM2
+reached M4.5 → VMXOFF → `RAYNU-V-R640-BOOT-OK` (×3) then:
+
+```text
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.133:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)
+```
+
+**No red screen.** Guests and E2 stayed green. That closes ADR-013 Phase A
+on iron. Preserve kit: `releases/v0.1.0-adr013-baseline/`.
+
+Log: [`logs/2026-08-17-snp-warn-no-rsod-com2.txt`](logs/2026-08-17-snp-warn-no-rsod-com2.txt).

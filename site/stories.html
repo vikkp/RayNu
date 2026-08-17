@@ -11,7 +11,7 @@
     <meta property="og:title" content="Stories of RayNu — iron stamps, then reality after EBS" />
     <meta
       property="og:description"
-      content="2026-08-17: parked SNP after BOOT-OK timed out and Dell UEFI RSOD (RIP=0x17). PRE-EBS remains the mgmt window. ADR-013 Proposed."
+      content="2026-08-17: SNP after EBS hung then RSOD’d; WARN-only EFI later closed BOOT-OK with no red screen. ADR-013 Accepted."
     />
     <meta property="og:type" content="article" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -282,18 +282,25 @@ boot: CURL NOW (post-EBS) → http://10.99.99.133:8443/</pre>
           PRE-EBS <code>RAYNU-V-M7-UEFI-HTTP-OK</code> is still true. E2 and
           E5 stamps are still true. We do <strong>not</strong> claim
           <code>RAYNU-V-M7-POST-EBS-HTTP-OK</code>. We do not chase Tcp4 or
-          SNP after EBS. The idle path is now WARN-only so the next Cruzer
-          EFI should finish <code>BOOT-OK</code> without polling the dead
-          protocol.
+          SNP after EBS.
         </p>
         <p>
-          Lifetime management HTTP needs a <strong>host-owned NIC</strong>
-          (MMIO/DMA) and a dedicated mgmt heap — not another SNP trick.
-          That architecture is <a
+          The same evening Vignesh flashed the WARN-only EFI. COM2 ran through
+          M4.5, printed <code>RAYNU-V-R640-BOOT-OK</code> three times, then:
+        </p>
+        <pre>boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.133:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)</pre>
+        <p>
+          <strong>No red screen.</strong> That is the close for ADR-013 Phase A
+          on iron. Lifetime management HTTP needs a <strong>host-owned
+          NIC</strong> (MMIO/DMA) and a dedicated mgmt heap. That architecture
+          is
+          <a
             href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
             >ADR-013</a>
-          (Proposed). HDA names it <strong>E3b</strong>. Mount Everest does
-          not close on a 45-second window.
+          (<strong>Accepted</strong>). HDA names it <strong>E3b</strong>.
+          Preserve kit:
+          <code>releases/v0.1.0-adr013-baseline</code>.
+          Mount Everest does not close on a 45-second window.
         </p>
 
         <p class="story__aside">
@@ -586,7 +593,7 @@ RAYNU-V-R640-BOOT-OK</pre>
 
         <p>
           Next engineering is HDA <strong>E3b</strong> — a host-owned NIC
-          after EBS (ADR-013 Proposed). The SNP attempt is a story now, not a
+          after EBS (ADR-013 Accepted). The SNP attempt is a story now, not a
           plan: hang, curl timeout, then RSOD. See
           <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
           Remaining E4 polish and a real distro installer follow that
