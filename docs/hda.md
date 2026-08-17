@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-17
-last_commit: f7f8194fd9f2ecefc78f2a2535a95dff59bf2bf3
-last_commit_short: f7f8194
+last_commit: b72f3265cacd8ade89a06eb55e7910cd56dd226e
+last_commit_short: b72f326
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | b72f326 |
 | Summary | ADR-013 Phase D **BCM5720 Device in-tree** (`14e4:165f` @ `01:00.0`); HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (iron exchange) |
 | Gates touched | Phase D driver; `HOST-NIC-HTTP-OK` not claimed |
