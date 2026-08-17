@@ -21,7 +21,7 @@ Every change must advance at least one pillar. See [CLAUDE.md](CLAUDE.md) for th
 ## Status
 
 **Gates:** M0 → M6 closed on Latitude/QEMU (`RAYNU-V-M6-EXT-OK`). M7.0–M7.4 closed on Latitude (host smokes).  
-**Iron:** Real R640 COM2 closed **`RAYNU-V-R640-BOOT-OK`** (2026-08-15) and **`RAYNU-V-M7-UEFI-HTTP-OK`** / **`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`** (2026-08-16). WARN-only post-EBS SNP idle closed 2026-08-17 (**no RSOD**). Mount Everest residual: **E3b** host-owned NIC ([ADR-013](docs/adr/ADR-013.md) Accepted), then E4 polish + real distro installer. Preserve: [`releases/v0.1.0-adr013-baseline/`](releases/v0.1.0-adr013-baseline/).
+**Iron:** Real R640 COM2 closed **`RAYNU-V-R640-BOOT-OK`** (2026-08-15) and **`RAYNU-V-M7-UEFI-HTTP-OK`** / **`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`** (2026-08-16). WARN-only post-EBS SNP idle closed 2026-08-17 (**no RSOD**). ADR-013 Phase 0 census closed 2026-08-17: **`14e4:165f`** BCM5720 @ `01:00.0` — **`RAYNU-V-M7-HOST-NIC-HTTP-OK` not claimed**. Mount Everest residual: **E3b** Phase D driver for that id ([ADR-013](docs/adr/ADR-013.md)), then E4 polish + real distro installer. Preserve: [`releases/v0.1.0-adr013-baseline/`](releases/v0.1.0-adr013-baseline/).
 
 **Mount Everest (product loop):** Ship EFI → real R640 → network UI → Linux ISO deploy.  
 Honest distance + month timeline: **[docs/hda.md](docs/hda.md)** · public tracker: **[site/hda.html](site/hda.html)** (sync: `./tools/sync-hda-site.sh`) · ADR: [docs/adr/ADR-009.md](docs/adr/ADR-009.md).

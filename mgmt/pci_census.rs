@@ -52,6 +52,16 @@ pub fn pick_lab_or_none(nics: &[PciNicRecord]) -> Option<PciNicRecord> {
         .find(|n| pci_id_is_qemu_e1000(n.vendor, n.device))
 }
 
+/// R640 Cruzer COM2 2026-08-17 — BCM5720 dual-port LOM (Phase 0 pick).
+/// Phase D may bind **this** `vid:did` only (prefer `01:00.0`). Not a lab driver.
+pub const IRON_CENSUS_VENDOR: u16 = 0x14e4;
+pub const IRON_CENSUS_DEVICE: u16 = 0x165f;
+
+/// True when PCI id matches the iron census pick (`14e4:165f`).
+pub fn pci_id_is_iron_census(vendor: u16, device: u16) -> bool {
+    vendor == IRON_CENSUS_VENDOR && device == IRON_CENSUS_DEVICE
+}
+
 /// Phase D: the only `smoltcp::phy::Device` in-tree is QEMU e1000. Iron waits.
 pub fn census_nic_has_lab_driver(vendor: u16, device: u16) -> bool {
     pci_id_is_qemu_e1000(vendor, device)
@@ -215,9 +225,9 @@ pub fn census_pick() -> Option<(u16, u16)> {
     }
 }
 
-/// Iron `HOST-NIC-HTTP-OK` only for a non-QEMU census NIC after BOOT-OK.
+/// Iron `HOST-NIC-HTTP-OK` only for the Phase 0 census pick (`14e4:165f`).
 pub fn iron_marker_allowed(vendor: u16, device: u16) -> bool {
-    !pci_id_is_qemu_e1000(vendor, device) && vendor != 0
+    pci_id_is_iron_census(vendor, device)
 }
 
 /// After a native HTTP exchange: QEMU-OK for `8086:100e`, iron HTTP-OK otherwise.

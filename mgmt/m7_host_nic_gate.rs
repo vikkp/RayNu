@@ -13,7 +13,7 @@ use super::host_nic::{
 };
 use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::mgmt_arena::prop_arena_reset_rewinds;
-use super::pci_census::census_nic_has_lab_driver;
+use super::pci_census::{census_nic_has_lab_driver, pci_id_is_iron_census};
 
 /// Host / CI marker when the M7.8 scaffold package passes.
 pub const M7_HOST_NIC_GATE_MARKER: &str = M7_HOST_NIC_SCAFFOLD_MARKER;
@@ -40,6 +40,8 @@ pub fn host_nic_surface_present() -> bool {
         && census.contains("vid:did=")
         && census.contains("IOMMU ACPI DMAR=")
         && census.contains("fn iron_marker_allowed(")
+        && census.contains("fn pci_id_is_iron_census(")
+        && census.contains("14e4:165f")
         && arena.contains("enum MgmtFatal")
         && arena.contains("fn inject_mgmt_fatals(")
         && listen.contains("fn run_post_ebs_host_nic_listen(")
@@ -62,6 +64,8 @@ pub fn host_nic_surface_present() -> bool {
         && pci_id_is_qemu_e1000(E1000_VENDOR, E1000_DEVICE)
         && census_nic_has_lab_driver(E1000_VENDOR, E1000_DEVICE)
         && !census_nic_has_lab_driver(0x14e4, 0x165f)
+        && pci_id_is_iron_census(0x14e4, 0x165f)
+        && !pci_id_is_iron_census(E1000_VENDOR, E1000_DEVICE)
 }
 
 /// Native listen must not print the iron Phase D marker.
@@ -96,6 +100,7 @@ pub fn host_nic_scripts_present() -> bool {
         && runbook.contains(M7_HOST_NIC_QEMU_MARKER)
         && runbook.contains(M7_HOST_NIC_SCAFFOLD_MARKER)
         && runbook.contains("8086:100e")
+        && runbook.contains("14e4:165f")
 }
 
 pub fn prop_host_nic_scaffold_package() -> bool {

@@ -264,9 +264,9 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the census EFI to R640, pick **one** printed `vid:did`, then write
-that driver (same `smoltcp::phy::Device`). Preserve kit
-`releases/v0.1.0-adr013-baseline` stays the iron rollback. `RAYNU-V-M7-POST-EBS-HTTP-OK`
-stays unclaimed. Iron marker for E3b remains `RAYNU-V-M7-HOST-NIC-HTTP-OK` (Phase D).
-Phase C QEMU lab: `RAYNU-V-M7-HOST-NIC-QEMU-OK`. Phase 0 print + Phase E arena are
-in-tree; they do **not** close E3b.
+**Next:** Phase D native `smoltcp::phy::Device` for **`14e4:165f`** (BCM5720, prefer
+`01:00.0`). Same HTTP codec. Do not start X710. Preserve kit
+`releases/v0.1.0-adr013-baseline`. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed.
+Iron E3b marker remains `RAYNU-V-M7-HOST-NIC-HTTP-OK`. Phase C QEMU:
+`RAYNU-V-M7-HOST-NIC-QEMU-OK`. Evidence:
+[`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

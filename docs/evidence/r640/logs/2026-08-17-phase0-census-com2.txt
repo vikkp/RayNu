@@ -1,0 +1,354 @@
+Booting from Disk connected to front USB 2: Cruzer Micro
+RayNu-V r640-hypervisor — formally verified bare-metal hypervisor
+pillars: [V] verified · [Z] single-binary · [D] iDRAC · [A] audit
+serial: COM1+COM2 mirror (iDRAC SOL = console com2)
+RAYNU-V-M0-BOOT-OK
+RayNu-V r640-hypervisor ? formally verified bare-metal hypervisor
+serial: COM1+COM2 mirror ? iDRAC SOL: ssh idrac then 'console com2'
+RAYNU-V-M0-BOOT-OK
+RAYNU-V-AUDIT: BootStarted milestone=0
+boot: M0 complete — entering M1.0 firmware handoff
+boot: M0 complete ? entering M1.0 firmware handoff
+boot: probing PE/ESP assets (pre-EBS)
+boot: probing PE/ESP assets (pre-EBS)
+boot: PE assets embedded (.askern/.asinit) — prefer PE
+boot: PE assets embedded (.askern/.asinit) ? prefer PE
+RAYNU-V-M3-ASSETS-OK
+RAYNU-V-M3-ASSETS-OK
+boot: E5 persist-detect armed (installdisk.bin)
+boot: PCI census nics=2
+boot: PCI 01:00.00 vid:did=14e4:165f bar0=0x92930000 msix=17
+boot: PCI 01:00.01 vid:did=14e4:165f bar0=0x92900000 msix=17
+boot: IOMMU ACPI DMAR=no
+boot: HOST-NIC census: no lab e1000; do not guess LOM (Phase D waits on this list)
+boot: E4 auth: bring-up token (lab; no auth.token)
+boot: uefi-net probe snp=0 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra nii=4 pxe=0 http=0 ip4cfg=0 drv=75
+boot: uefi-net connect — starting PCI/UNDI drivers
+boot: uefi-net connect pci_ok=4 device_path_ok=32
+boot: uefi-net after-pci snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net connect — SNP child drivers
+boot: uefi-net connect snp_ok=4
+boot: uefi-net after-snp snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net connect — NetworkPkg SB + all-handles (bounded)
+boot: uefi-net connect stack_ok=0 all_ok=8
+boot: uefi-net after-all snp=12 mnp=0 ip4=0 dhcp4=0 tcp4=0 pci=313
+boot: uefi-net extra-after nii=4 pxe=8 http=4 ip4cfg=4 drv=75
+boot: HINT — PXE/HTTP/Ip4Config2 published, Tcp4ServiceBinding still 0 (vendor stack)
+boot: HINT — firmware Tcp4 listen impossible on this path; SNP residual next (ADR-012)
+boot: falling back to SNP residual (ADR-012)
+boot: SNP residual MAC=b0:26:28:5c:5a:3a
+boot: SNP DHCP discover…
+boot: SNP lease 10.99.99.121/24 router=10.99.99.1
+boot: mgmt HTTP listening on 10.99.99.121:8443 (PRE-EBS SNP window)
+boot: CURL NOW → http://10.99.99.121:8443/
+boot: PING NOW (same LAN as HOST NIC, not iDRAC) before curl
+boot: SNP listen window_ms=45000
+boot: HINT — Mac must be on lease subnet; curl only during PRE-EBS window (firmware SNP is dead after EBS)
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=40000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=35000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=30000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=25000
+boot: SNP TCP accept — client connected
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: SNP TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+boot: SNP HTTP exchange ok
+boot: SNP TCP accept — client connected
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=20000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=15000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=10000
+boot: waiting curl http://10.99.99.121:8443/  remaining_ms=5000
+boot: SNP parked for post-EBS (protocol not closed)
+RAYNU-V-M7-UEFI-HTTP-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+boot: calling ExitBootServices ? ConOut/video ends after this line
+boot: ExitBootServices — taking memory map ownership
+boot: ExitBootServices returned; scanning conventional memory
+boot: conventional regions=9 pages_above_1MiB=16572801
+boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free
+boot: frame pool phys=0x1000000 pages=61440
+RAYNU-V-M1-EBS-OK
+boot: smoke frame phys=0x1000000
+boot: post-EBS SNP parked lease=10.99.99.121:8443 (not polling SNP yet — iron hung on immediate post-EBS poll)
+boot: handoff pool remaining_pages=61439
+boot: FrameAllocator capacity_pages=61437 base=0x1003000
+boot: allocator selftest ok
+boot: M1.0 complete — entering M1.1/M2 VMX+EPT
+boot: VMXON region phys=0x1003000
+RAYNU-V-M1-VMXON-OK
+RAYNU-V-AUDIT: VmxEnabled vcpu_id=0
+boot: M1.1 complete — entering M2 EPT + guest
+boot: EPT page_size=2M
+boot: precise EPT [0,512MiB); APIC MMIO unmapped
+boot: guest CR3 (precise identity)=0x1007000 host CR3=0x47e01000
+RAYNU-V-AUDIT: EptUnmapped guest_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=1
+boot: ADR-004 ownership selftest ok
+boot: load kernel=0x1200000 entry=0x1200200 initrd=0x1bc0000 boot_params=0x1bc2000 cmdline=0x1bc1000 magic=0x53726448
+RAYNU-V-M3-LOAD-OK
+RAYNU-V-M3-BZIMAGE-OK
+boot: real Linux bzImage detected
+boot: e820_entries=3
+boot: real initrd bytes=0x389
+boot: E5 persist preload bytes=1024 prefix_into=67108864
+boot: M4.3 virtio-blk BAR=0x10000000 disk=0x1bc3000 bytes=67108864
+boot: E5 install disk preload (reboot detect)
+boot: M4.4 virtio-net BAR0=0x10200000 BAR1=0x10201000
+RAYNU-V-M3-EPT2-OK
+RAYNU-V-M3-EPT3-OK
+boot: M4.2 shell slab slot=1 HPA=0x10400000
+boot: M4.2 shell slab slot=2 HPA=0x10600000
+boot: M4.2 shell slab slot=3 HPA=0x10800000
+RAYNU-V-AUDIT: EptMapped guest_id=2
+RAYNU-V-AUDIT: EptMapped guest_id=3
+RAYNU-V-AUDIT: EptMapped guest_id=4
+boot: M4.2 G1–G3 prepared (precise EPT + host CR3 + SHELL CPUID in slabs)
+boot: M4.3 virtio-blk probe guest prepared (G0 EPTP + host CR3)
+boot: M4.4 virtio-net probe guest prepared (G0 EPTP + host CR3)
+boot: M4.5 SMP BSP+AP probe prepared (shared EPT + host AP wake)
+boot: VMCS phys=0x5c0c000 EPTP=0x100401e
+boot: host TSS sel=0x00000048 base=0x0000000005c0e000 gdtr=0x0000000005c0f000
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x000000000100a000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → guest store+loop+HLT + IRQ inject (EPT)
+RAYNU-V-M3-IO
+RAYNU-V-M3-IO-OK
+RAYNU-V-M3-CPUID-OK
+boot: VMEXIT phase=00000000 reason=0x0000000c qual=0x0000000000000000 rip=0x000000000100a0a7
+RAYNU-V-M1-VMEXIT-OK
+RAYNU-V-M2-EPT-OK
+RAYNU-V-M2-GUEST-OK
+RAYNU-V-M2-OWN-OK
+RAYNU-V-M2-ALLOC-OK
+boot: software inject vector 0x00000021 + VMRESUME
+boot: VMEXIT phase=00000001 reason=0x0000000c qual=0x0000000000000000 rip=0x000000000100a114
+RAYNU-V-M2-IRQ-OK
+boot: LAPIC one-shot armed; waiting in guest HLT
+boot: VMEXIT phase=00000002 reason=0x00000001 qual=0x0000000000000000 rip=0x000000000100a115
+boot: external IRQ vector=0x00000021
+boot: APIC EOI ok
+boot: timer re-inject vector 0x00000021 + VMRESUME
+boot: VMEXIT phase=00000003 reason=0x0000000c qual=0x0000000000000000 rip=0x000000000100a114
+RAYNU-V-M2-TIMER-OK
+boot: entering 64-bit Linux rip=0x0000000001200200 rsi=0x0000000001bc2000
+boot: Linux exception bitmap armed
+boot: Linux CR4.VMXE host-owned
+Linux version 6
+RAYNU-V-M3-LINUX-EARLY-OK
+boot: Linux GTIMER2 armed; waiting for host LAPIC
+.12.40 (ubuntu@cursor) (gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #2 Sun Jul 19 02:27:55 UTC 2026
+Command line: earlyprintk=serial,ttyS0,115200,keep rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc nogbpages 8250.nr_uarts=0 memmap=640K@0 memmap=255M@1M
+BIOS-provided physical RAM map:
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x00000000000fffff] reserved
+BIOS-e820: [mem 0x0000000000100000-0x000000000fffffff] usable
+printk: legacy console [earlyser0] enabled
+process: using polling idle threads
+NX (Execute Disable) protection: active
+APIC: Static calls initialized
+user-defined physical RAM map:
+user: [mem 0x0000000000000000-0x000000000009fbff] usable
+user: [mem 0x000000000009fc00-0x00000000000fffff] reserved
+user: [mem 0x0000000000100000-0x000000000fffffff] usable
+tsc: Detected 2100.000 MHz processor
+last_pfn = 0x10000 max_arch_pfn = 0x400000000
+x86/PAT: PAT support disabled because CONFIG_X86_PAT is disabled in the kernel.
+x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WC  UC- UC  
+RAMDISK: [mem 0x01bc0000-0x01bc0fff]
+Zone ranges:
+  DMA32    [mem 0x0000000000001000-0x000000000fffffff]
+  Normal   empty
+Movable zone start for each node
+Early memory node ranges
+  node   0: [mem 0x0000000000001000-0x000000000009efff]
+  node   0: [mem 0x0000000000100000-0x000000000fffffff]
+Initmem setup node 0 [mem 0x0000000000001000-0x000000000fffffff]
+On node 0, zone DMA32: 1 pages in unavailable ranges
+On node 0, zone DMA32: 97 pages in unavailable ranges
+CPU topo: Max. logical packages:   1
+CPU topo: Max. logical dies:       1
+CPU topo: Max. dies per package:   1
+CPU topo: Max. threads per core:   1
+CPU topo: Num. cores per package:     1
+CPU topo: Num. threads per package:   1
+CPU topo: Allowing 1 present CPUs plus 0 hotplug CPUs
+[mem 0x10000000-0xffffffff] available for PCI devices
+clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+Kernel command line: earlyprintk=serial,ttyS0,115200,keep rdinit=/init acpi=off noapic nokaslr maxcpus=1 lpj=4194304 no_timer_check idle=poll tsc=reliable clocksource=tsc nogbpages 8250.nr_uarts=0 memmap=640K@0 memmap=255M@1M
+Unknown kernel command line parameters "nokaslr acpi=off maxcpus=1", will be passed to user space.
+random: crng init done
+Dentry cache hash table entries: 32768 (order: 6, 262144 bytes, linear)
+Inode-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+Built 1 zonelists, mobility grouping on.  Total pages: 65438
+mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+SLUB: HWalign=64, Order=0-1, MinObjects=0, CPUs=1, Nodes=1
+NR_IRQS: 4352, nr_irqs: 24, preallocated irqs: 16
+boot: VMEXIT phase=00000004 reason=0x00000001 qual=0x0000000000000000 rip=0xffffffff8115c54f
+RAYNU-V-M3-GTIMER2-OK
+boot: MSR firewall exercised
+boot: waiting for real init SHELL marker
+Console: colour dummy device 80x25
+printk: legacy console [tty0] enabled
+APIC: ACPI MADT or MP tables are not detected
+APIC: Switch to virtual wire mode setup with no configuration
+Not enabling interrupt remapping due to skipped IO-APIC setup
+clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x1e4530a99b6, max_idle_ns: 440795257976 ns
+Calibrating delay loop (skipped) preset value.. 2097.15 BogoMIPS (lpj=4194304)
+Last level iTLB entries: 4KB 64, 2MB 8, 4MB 8
+Last level dTLB entries: 4KB 64, 2MB 32, 4MB 32, 1GB 4
+CPU: Intel(R) Xeon(R) Silver 4110 CPU @ 2.10GHz (family: 0x6, model: 0x55, stepping: 0x4)
+Spectre V2 : User space: Vulnerable
+Speculative Store Bypass: Vulnerable
+GDS: Vulnerable: No microcode
+x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+x86/fpu: Supporting XSAVE feature 0x008: 'MPX bounds registers'
+x86/fpu: Supporting XSAVE feature 0x010: 'MPX CSR'
+x86/fpu: Supporting XSAVE feature 0x020: 'AVX-512 opmask'
+x86/fpu: Supporting XSAVE feature 0x040: 'AVX-512 Hi256'
+x86/fpu: Supporting XSAVE feature 0x080: 'AVX-512 ZMM_Hi256'
+x86/fpu: Supporting XSAVE feature 0x200: 'Protection Keys User registers'
+x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+x86/fpu: xstate_offset[3]:  832, xstate_sizes[3]:   64
+x86/fpu: xstate_offset[4]:  896, xstate_sizes[4]:   64
+x86/fpu: xstate_offset[5]:  960, xstate_sizes[5]:   64
+x86/fpu: xstate_offset[6]: 1024, xstate_sizes[6]:  512
+x86/fpu: xstate_offset[7]: 1536, xstate_sizes[7]: 1024
+x86/fpu: xstate_offset[9]: 2560, xstate_sizes[9]:    8
+x86/fpu: Enabled xstate features 0x2ff, context size is 2568 bytes, using 'compacted' format.
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+Mountpoint-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+Performance Events: PEBS fmt3+, Skylake events, 32-deep LBR, full-width counters, Intel PMU driver.
+... version:                4
+... bit width:              48
+... generic registers:      4
+... value mask:             0000ffffffffffff
+... max period:             00007fffffffffff
+... fixed-purpose events:   3
+... event mask:             000000070000000f
+signal: max sigframe size: 3232
+Memory: 247604K/261752K available (4096K kernel code, 774K rwdata, 340K rodata, 536K init, 732K bss, 13416K reserved, 0K cma-reserved)
+devtmpfs: initialized
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+clocksource: Switched to clocksource tsc-early
+platform rtc_cmos: registered platform RTC device (no PNP device found)
+workingset: timestamp_bits=62 max_order=16 bucket_order=0
+Unpacking initramfs...
+FreeRAYNU-V-M3-GTIMER3-OK
+ing initrd memory: 4K
+RAYNU-V-M3-APIC-OK
+i8042: No controller found
+microcode: Current revision: 0x0200005e
+sched_clock: Marking stable (213017268, 31068380)->(444017524, -199931876)
+Freeing unused kernel image (initmem) memory: 536K
+Write protecting the kernel read-only data: 6144k
+Freeing unused kernel image (rodata/data gap) memory: 1708K
+Run /init as init process
+
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-NOIRQ-OK
+boot: M4.2 — launching shell guest slot=00000001 id=0x0000000000000002
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x0000000005bc501e guest_code=0x0000000010400000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → shell SHELL CPUID
+boot: shell VMEXIT guest=0000000000000002 reason=0x00000001 rip=0x0000000010400000
+boot: shell VMEXIT guest=0000000000000002 reason=0x0000000a rip=0x000000001040000a
+
+RAYNU-V-M4-SHELL-G1
+RAYNU-V-M4-2VM-OK
+boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)
+boot: M4.2 — launching shell guest slot=00000002 id=0x0000000000000003
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x0000000005bcf01e guest_code=0x0000000010600000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → shell SHELL CPUID
+boot: shell VMEXIT guest=0000000000000003 reason=0x0000000a rip=0x000000001060000a
+boot: shell guest SHELL latched slot=00000002
+boot: M4.2 — launching shell guest slot=00000003 id=0x0000000000000004
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x0000000005bd901e guest_code=0x0000000010800000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → shell SHELL CPUID
+boot: shell VMEXIT guest=0000000000000004 reason=0x0000000a rip=0x000000001080000a
+boot: shell guest SHELL latched slot=00000003
+boot: M4.2 — credit scheduler armed slots=0..00000003
+boot: sched switch → slot=00000000
+
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M4-SLICE-G0
+boot: sched switch → slot=00000001
+RAYNU-V-M4-SLICE-G1
+RAYNU-V-M4-SCHED-OK
+boot: M4.1 complete — credit scheduler time-sliced G0 + G1
+boot: sched switch → slot=00000002
+RAYNU-V-M4-SLICE-G2
+boot: sched switch → slot=00000000
+boot: sched switch → slot=00000001
+boot: sched switch → slot=00000002
+boot: sched switch → slot=00000003
+RAYNU-V-M4-SLICE-G3
+RAYNU-V-M4-NVM-OK
+boot: M4.2 complete — ≥4 concurrent guests under credit scheduler
+boot: M4.3 — launching virtio-blk probe guest
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x0000000005be3000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → virtio-blk status probe
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-BOOTED-FROM-DISK
+boot: M4.3 complete — virtio-blk MMIO handshake + write/readback
+boot: M4.4 — launching virtio-net probe guest
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x0000000005bed000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → virtio-net dual-port probe
+RAYNU-V-M4-NET-OK
+boot: M4.4 complete — virtio-net dual-port vSwitch exchange
+boot: M4.5 — launching SMP BSP (shared EPT; AP wake = host VMLAUNCH)
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x0000000005bf8000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → SMP BSP ready-flag store
+boot: M4.5 BSP ready — waking AP
+boot: M4.5 — AP wake via host VMLAUNCH (documented INIT-SIPI equiv)
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000000100401e guest_code=0x0000000005c02000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → SMP AP ready-flag store
+RAYNU-V-M4-SMP-OK
+boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT
+boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+RAYNU-V-R640-BOOT-OK
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.121:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)
+boot: HOST-NIC idle: no native Device for census vid:did=14e4:165f (Phase D waits on this id; do not guess LOM)

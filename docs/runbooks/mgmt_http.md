@@ -151,15 +151,25 @@ boot: PCI 00:03.0 vid:did=8086:100e bar0=0x… msix=none
 boot: IOMMU ACPI DMAR=yes|no
 ```
 
-On R640 this list is how we pick **one** `vid:did`. Do not name Broadcom /
-X710 in a driver until that line exists on COM2.
+On R640 this list is how we pick **one** `vid:did`. Iron 2026-08-17 (Cruzer):
+
+```
+boot: PCI census nics=2
+boot: PCI 01:00.00 vid:did=14e4:165f bar0=0x92930000 msix=17
+boot: PCI 01:00.01 vid:did=14e4:165f bar0=0x92900000 msix=17
+boot: IOMMU ACPI DMAR=no
+```
+
+**Chosen:** `14e4:165f` (BCM5720) at `01:00.0`. Func 1 is the second port.
+Evidence: [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
 
 ### Phase D — same `Device` trait; idle after BOOT-OK
 
 QEMU e1000 already implements `smoltcp::phy::Device`. After `BOOT-OK` the
-idle path calls `run_post_boot_ok_native_idle`. On iron without an e1000 it
-prints `no native Device for census vid:did=…` and does **not** claim
-HTTP-OK. Parse path: `parse_mocked_rx_desc_bytes` (host fuzz + optional
+idle path calls `run_post_boot_ok_native_idle`. On iron 2026-08-17 that
+printed `no native Device for census vid:did=14e4:165f` and did **not**
+claim HTTP-OK. Next: a poll-mode `Device` for **that id only** (prefer
+`01:00.0`). Parse path: `parse_mocked_rx_desc_bytes` (host fuzz + optional
 `./tools/host-nic-miri-smoke.sh`; Miri skip is OK).
 
 ### Phase E — mgmt arena
