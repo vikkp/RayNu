@@ -650,6 +650,49 @@ jobs:
       - name: Post-EBS HTTP scaffold smoke → RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK
         run: ./tools/m7-post-ebs-http-smoke.sh
 
+  # M7.8: host-owned NIC scaffold (ADR-013 Phase C). Does NOT claim
+  # RAYNU-V-M7-HOST-NIC-HTTP-OK (iron Phase D) or RAYNU-V-M7-HOST-NIC-QEMU-OK.
+  m7-host-nic:
+    name: M7.8 HOST-NIC scaffold (SCAFFOLD-OK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-06-01
+          components: rust-src
+      - name: M7.8 HOST-NIC scaffold → RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK
+        run: ./tools/m7-host-nic-smoke.sh
+
+  # M7.8 Phase C QEMU GET / after EBS on e1000. Lab marker only.
+  # Does NOT claim RAYNU-V-M7-HOST-NIC-HTTP-OK. TCG is enough (pre-VMX).
+  m7-host-nic-qemu:
+    name: M7.8 HOST-NIC QEMU GET /
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf curl
+      - name: M7.8 HOST-NIC QEMU GET / smoke
+        run: QEMU_ACCEL=tcg ./tools/m7-host-nic-qemu-smoke.sh
+      - name: Upload HOST-NIC QEMU serial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-nic-qemu-serial
+          path: |
+            target/host-nic-qemu-serial.log
+            target/host-nic-qemu-stdout.log
+            target/host-nic-qemu-stderr.log
+          if-no-files-found: ignore
+
   # Boot media maker (FAT img for iDRAC/USB). Hard-fail on layout smoke.
   boot-media:
     name: Boot media maker (BOOT-MEDIA-OK)

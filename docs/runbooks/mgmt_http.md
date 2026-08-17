@@ -1,4 +1,4 @@
-# Runbook — Network HTTP mgmt plane (M7.1 + M7.6)
+# Runbook — Network HTTP mgmt plane (M7.1 + M7.6 + M7.8)
 
 **Markers:**
 - M7.1 host: `RAYNU-V-M7-HTTP-OK` — `./tools/m7-http-smoke.sh`
@@ -6,6 +6,9 @@
 - M7.6 firmware: `RAYNU-V-M7-UEFI-HTTP-OK` — PRE-EBS UEFI NIC served ≥1 HTTP exchange (ADR-012); iron closed 2026-08-16 (SNP residual)
 - Post-EBS scaffold: `RAYNU-V-M7-POST-EBS-HTTP-SCAFFOLD-OK` — `./tools/m7-post-ebs-http-smoke.sh`
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
+- M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase C wiring)
+- M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh`
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D only**. Do not claim from host or QEMU.
 
 ## Story
 
@@ -22,6 +25,8 @@ continues into the guest path when Tcp4 is absent (common on minimal OVMF).
 |------|-----------|--------|
 | **Host / CI (M7.1)** | `std` `TcpListener` one-shot | `m7-http-smoke.sh` |
 | **Host / CI (M7.6)** | Scaffold gate (wiring only) | `m7-uefi-http-smoke.sh` |
+| **Host / CI (M7.8)** | Bounded poll + e1000 wiring | `m7-host-nic-smoke.sh` |
+| **QEMU (M7.8 Phase C)** | Post-EBS `GET /` on `e1000` | `m7-host-nic-qemu-smoke.sh` |
 | **Firmware** | PRE-EBS Tcp4 listen window (~15s) | Soft-fail → EBS + guests |
 | **Lab** | Plaintext HTTP (TLS deferred — ADR-003/009/012) | QEMU `hostfwd` below |
 
@@ -51,6 +56,7 @@ Lab uses **plaintext HTTP** (TLS deferred — ADR-003/009/012).
 ```bash
 ./tools/m7-http-smoke.sh
 ./tools/m7-uefi-http-smoke.sh
+./tools/m7-host-nic-smoke.sh
 ```
 
 Exercises SPA `200 text/html` and authed `GET /vms` over loopback TCP (M7.1),
@@ -103,6 +109,39 @@ continues. PRE-EBS remains the fallback operator window.
 
 Evidence: [`docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md`](../evidence/r640/2026-08-17-post-ebs-snp-dead.md).
 
+## ADR-013 Phase C — QEMU e1000 after EBS (M7.8)
+
+Lifetime HTTP is a **host-owned NIC** + smoltcp ([ADR-013](../adr/ADR-013.md)). Phase C
+is the lab driver: QEMU `-device e1000` (PCI `8086:100e` only). All NIC `unsafe`
+(PCI config, MMIO, DMA rings) lives in `mgmt/e1000_mmio.rs`.
+
+```bash
+HOST_NIC_LAB=1 ./tools/run-qemu.sh
+# or:
+./tools/m7-host-nic-qemu-smoke.sh
+```
+
+`HOST_NIC_LAB=1` stages `EFI/RayNu/hostnic.txt`, adds user-net `hostfwd` to `:8443`
+(host port **18443**), and exits after the first post-EBS `GET /`. Serial:
+
+```
+boot: QEMU e1000 8086:100e — skip PRE-EBS SNP/Tcp4 (ADR-013 Phase C)
+boot: HOST-NIC listening on 10.0.2.15:8443 (post-EBS e1000)
+RAYNU-V-M7-HOST-NIC-QEMU-OK
+```
+
+From the host:
+
+```bash
+curl -sS http://127.0.0.1:18443/ | head
+```
+
+Do **not** print `RAYNU-V-M7-HOST-NIC-HTTP-OK` from this path (iron Phase D).
+Firmware SNP stays WARN-only after EBS. Bounded poll: `HOST_NIC_POLL_BUDGET`
+(32) per listen tick so the credit scheduler is not starved.
+
+Preserve kit for iron rollback: `releases/v0.1.0-adr013-baseline`.
+
 ## Cruzer `auth.token`
 
 PRE-EBS `probe_operator_auth_token` reads `EFI/RayNu/auth.token` (same folder
@@ -139,6 +178,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) **Accepted**. WARN-only idle closed on iron 2026-08-17 (no RSOD). `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) **Accepted**. Phase C (QEMU e1000 post-EBS `GET /`) is M7.8. WARN-only idle closed on iron 2026-08-17 (no RSOD). `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure (ESP `EFI/RayNu/auth.token` on Cruzer).

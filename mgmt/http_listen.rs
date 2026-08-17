@@ -104,6 +104,17 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
         crate::mgmt::net_probe_uefi::probe_and_print();
     }
 
+    #[cfg(feature = "uefi-bin")]
+    {
+        if crate::mgmt::host_nic::should_skip_pre_ebs_firmware_listen() {
+            use crate::boot::serial;
+            serial::write_line(
+                "boot: QEMU e1000 8086:100e — skip PRE-EBS SNP/Tcp4 (ADR-013 Phase C)",
+            );
+            return false;
+        }
+    }
+
     match listen_mgmt_http_uefi(MGMT_HTTP_DEFAULT_PORT) {
         Ok(()) => true,
         Err(e) => {
@@ -149,11 +160,12 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
     }
 }
 
-/// After ExitBootServices: probe parked SNP (soft-fail). PRE-EBS remains fallback.
+/// After ExitBootServices: SNP probe is serial-only; native e1000 listen is Phase C.
 pub fn run_post_ebs_mgmt_listen() {
     #[cfg(feature = "uefi-bin")]
     {
         crate::mgmt::snp_listen_uefi::uefi_snp_post_ebs_probe();
+        crate::mgmt::host_nic_listen::run_post_ebs_host_nic_listen();
     }
 }
 
