@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V for CIOs — Keep the iron. Prove the isolation.</title>
+    <meta
+      name="description"
+      content="RayNu-V lets CIOs extend the life of existing Dell PowerEdge R640/R650/R660 fleets with formally verified isolation — without the Broadcom licensing trap or weaker security guarantees."
+    />
+    <meta property="og:title" content="RayNu-V · For CIOs & Directors" />
+    <meta
+      property="og:description"
+      content="Extend productive life of your Dell PowerEdge fleet. Formally verified isolation. No host OS. No forced refresh just to stay current."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* CIOSpeak — same tokens, tighter enterprise rhythm */
+      .page-cio {
+        background:
+          radial-gradient(1100px 520px at 8% -8%, #c8d8e0 0%, transparent 55%),
+          radial-gradient(800px 480px at 100% 12%, #d4dee6 0%, transparent 48%),
+          linear-gradient(180deg, #eef2f4 0%, #e2e9ee 100%);
+      }
+
+      .cio-mast {
+        padding: clamp(3rem, 9vh, 5.5rem) 0 clamp(2.25rem, 5vh, 3.25rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          linear-gradient(135deg, rgba(26, 58, 74, 0.14) 0%, transparent 52%),
+          linear-gradient(180deg, rgba(15, 110, 106, 0.1) 0%, transparent 68%);
+      }
+
+      .cio-mast__inner {
+        width: min(100% - 2.5rem, 44rem);
+        margin: 0 auto;
+      }
+
+      .cio-mast__nav {
+        margin: 0 0 1.35rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .cio-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+
+      .cio-mast__nav a:hover {
+        color: var(--steel);
+      }
+
+      .cio-kicker {
+        margin: 0 0 0.85rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+
+      .cio-mast__title {
+        margin: 0 0 1rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(2.15rem, 1.35rem + 2.8vw, 3.35rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--steel);
+        max-width: 16ch;
+      }
+
+      .cio-mast__lede {
+        margin: 0 0 1.75rem;
+        max-width: 38rem;
+        font-size: clamp(1.12rem, 1rem + 0.4vw, 1.28rem);
+        line-height: 1.45;
+        color: var(--ink-soft);
+      }
+
+      .cio-body {
+        width: min(100% - 2.5rem, 44rem);
+        margin: 0 auto;
+        padding: clamp(2.25rem, 5vh, 3.5rem) 0 4rem;
+      }
+
+      .cio-section {
+        margin: 0 0 clamp(2.75rem, 6vh, 4rem);
+      }
+
+      .cio-section h2 {
+        margin: 0 0 0.85rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.45rem, 1.15rem + 1.1vw, 1.9rem);
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        color: var(--steel);
+      }
+
+      .cio-section p {
+        margin: 0 0 1.05rem;
+        color: var(--ink-soft);
+        max-width: 54ch;
+      }
+
+      .cio-section p:last-child {
+        margin-bottom: 0;
+      }
+
+      .cio-section strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .cio-callout {
+        margin: 1.5rem 0;
+        padding: 1.15rem 1.25rem;
+        background: rgba(26, 58, 74, 0.07);
+        border-left: 3px solid var(--teal);
+      }
+
+      .cio-callout p {
+        margin: 0;
+        color: var(--ink);
+        font-size: 1.08rem;
+        line-height: 1.45;
+        max-width: none;
+      }
+
+      .cio-grid {
+        margin: 1.5rem 0 0;
+        display: grid;
+        gap: 1rem;
+      }
+
+      @media (min-width: 640px) {
+        .cio-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 1.15rem 1.5rem;
+        }
+      }
+
+      .cio-card {
+        padding: 1.15rem 1.2rem;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(16, 24, 32, 0.1);
+      }
+
+      .cio-card__label {
+        margin: 0 0 0.4rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--teal);
+      }
+
+      .cio-card__title {
+        margin: 0 0 0.45rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.12rem;
+        color: var(--ink);
+      }
+
+      .cio-card p {
+        margin: 0;
+        font-size: 0.98rem;
+        color: var(--ink-soft);
+        max-width: none;
+      }
+
+      .cio-list {
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+        border-top: 1px solid rgba(16, 24, 32, 0.12);
+      }
+
+      .cio-list li {
+        padding: 0.95rem 0;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        color: var(--ink-soft);
+      }
+
+      .cio-list li strong {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--ink);
+      }
+
+      .cio-cta-block {
+        margin-top: 2.5rem;
+        padding: 1.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--steel) 0%, #0f2a36 60%, #0a3d3a 100%);
+        color: var(--hero-ink);
+      }
+
+      .cio-cta-block h2 {
+        margin: 0 0 0.75rem;
+        color: var(--hero-ink);
+      }
+
+      .cio-cta-block p {
+        margin: 0 0 1.35rem;
+        color: rgba(243, 246, 248, 0.85);
+        max-width: 42ch;
+      }
+
+      .cio-cta-block .cta__primary {
+        background: var(--copper);
+      }
+
+      .cio-cta-block .cta__secondary {
+        color: var(--hero-ink);
+        border-bottom-color: rgba(243, 246, 248, 0.4);
+      }
+
+      .cio-cta-block .cta__secondary:hover {
+        color: #fff;
+        border-color: #fff;
+      }
+
+      .cio-fine {
+        margin: 1.75rem 0 0;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .cio-fine a {
+        color: var(--teal);
+      }
+    </style>
+  </head>
+  <body class="page-cio">
+    <header class="cio-mast">
+      <div class="cio-mast__inner">
+        <p class="cio-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>CIO View</span>
+        </p>
+        <p class="cio-kicker">For CIOs · Senior Directors · Infrastructure Owners</p>
+        <h1 class="cio-mast__title">Keep the iron. Prove the isolation.</h1>
+        <p class="cio-mast__lede">
+          RayNu-V is a clean-slate Type-1 hypervisor built so you can continue
+          running the Dell PowerEdge servers you already own — with isolation
+          claims that can be machine-checked, not just re-tested every release.
+        </p>
+        <div class="cta">
+          <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
+            >Talk to the team</a
+          >
+          <a class="cta__secondary" href="index.html">Engineering view</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="cio-body">
+      <section class="cio-section">
+        <h2>The pressure most CIOs are under right now</h2>
+        <p>
+          Broadcom’s changes to the VMware estate forced a wave of re-evaluation.
+          License economics shifted. Support and upgrade paths tightened.
+          Many organizations are being pushed toward hardware refresh cycles
+          they did not plan — not because the servers failed, but because staying
+          “current and patchable” on the incumbent stack became expensive or
+          constrained.
+        </p>
+        <p>
+          At the same time, the alternatives on the table often trade one
+          problem for another: softer isolation guarantees, larger attack
+          surfaces, host-OS sprawl, or operational models that your teams do not
+          yet trust under audit.
+        </p>
+        <div class="cio-callout">
+          <p>
+            The rational question is no longer only “which hypervisor.” It is:
+            <strong>how do we keep productive Dell iron working for years longer
+            without accepting weaker security or walking deeper into a licensing
+            treadmill?</strong>
+          </p>
+        </div>
+      </section>
+
+      <section class="cio-section">
+        <h2>What RayNu-V changes</h2>
+        <p>
+          RayNu-V is a single-binary Type-1 bare-metal hypervisor written in
+          Rust and optimized for Dell PowerEdge R640, R650, and R660. There is
+          no host operating system, no package sprawl, and no configuration
+          surface that grows with every release.
+        </p>
+        <div class="cio-grid">
+          <div class="cio-card">
+            <p class="cio-card__label">Infrastructure life</p>
+            <p class="cio-card__title">Extend what you already own</p>
+            <p>
+              Keep existing PowerEdge fleets productive instead of writing them
+              off early to chase a vendor’s support calendar.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Security posture</p>
+            <p class="cio-card__title">Isolation you can prove</p>
+            <p>
+              The security-critical path is designed for formal verification.
+              Isolation is a machine-checked property, not a testing claim.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Operational model</p>
+            <p class="cio-card__title">Small surface, clear target</p>
+            <p>
+              One EFI artifact. Deploy and operate on iron you already manage
+              through iDRAC — not a mystery appliance stack.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Audit & compliance</p>
+            <p class="cio-card__title">Evidence, not slides</p>
+            <p>
+              A living verification paper and immutable audit trail turn
+              hypervisor events into something a security team or auditor can
+              examine.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="cio-section">
+        <h2>Why formal verification matters to the CIO</h2>
+        <p>
+          Most hypervisors ask you to trust testing, process, and historical
+          track record. That is necessary — and incomplete. RayNu-V treats the
+          isolation boundary as something that must be <em>proved</em>.
+        </p>
+        <p>
+          The core claim is simple and strong:
+        </p>
+        <div class="cio-callout">
+          <p>
+            For every valid guest-to-host memory mapping, that physical frame is
+            owned by exactly one guest — and belongs to neither the hypervisor
+            nor any other guest.
+          </p>
+        </div>
+        <p>
+          That property is pursued with Verus and Kani on a deliberately small
+          Proven Core. Maturity is published honestly in a living verification
+          paper. Claims never run ahead of evidence. For regulated, sovereign,
+          or high-assurance environments, this is the difference between
+          “we tested a lot” and “here is the machine-checked argument.”
+        </p>
+      </section>
+
+      <section class="cio-section">
+        <h2>What this means in practical terms</h2>
+        <ul class="cio-list">
+          <li>
+            <strong>You are not forced into a premature refresh</strong>
+            Productive R640-class servers can remain in service while you
+            evaluate a path that does not lock you into the next licensing cycle.
+          </li>
+          <li>
+            <strong>Security posture improves instead of softening</strong>
+            Moving off a mature incumbent does not have to mean accepting a
+            weaker isolation story. Formal methods are the wedge.
+          </li>
+          <li>
+            <strong>Operational familiarity without the lock-in</strong>
+            Teams that understand vSphere-style operational loops get a clear,
+            single-binary control surface on Dell iron they already know how to
+            manage via iDRAC.
+          </li>
+          <li>
+            <strong>Evidence that survives scrutiny</strong>
+            Design partners and early evaluators can inspect the living paper,
+            the audit trail, and the iron evidence — not a deck that ages out of
+            date the week after the meeting.
+          </li>
+        </ul>
+      </section>
+
+      <section class="cio-section">
+        <h2>Honest status</h2>
+        <p>
+          RayNu-V is early and evidence-first. Lab gates through M6 are closed
+          on Latitude + QEMU. Real PowerEdge R640 has closed boot and UEFI-HTTP
+          bring-up markers. The living verification paper tracks what is actually
+          proved versus what remains open. We do not claim a finished product.
+          We claim a clear architecture, a verified-core north star, and
+          measurable progress on the iron you care about.
+        </p>
+        <p>
+          That honesty is deliberate. CIOs who have lived through over-promised
+          migrations prefer a path they can inspect over a narrative they have to
+          take on faith.
+        </p>
+      </section>
+
+      <section class="cio-cta-block">
+        <h2>Next step</h2>
+        <p>
+          If you own or influence a Dell PowerEdge estate and want a serious
+          conversation about extending its productive life with stronger
+          isolation guarantees, reach out. Design-partner and early evaluation
+          conversations are open.
+        </p>
+        <div class="cta">
+          <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
+            >Email namaskaar@raynuv.com</a
+          >
+          <a class="cta__secondary" href="paper.html">Read the verification paper</a>
+        </div>
+      </section>
+
+      <p class="cio-fine">
+        Technical journey, iron evidence, and living tracker live on the
+        <a href="index.html">main site</a>.
+        Architecture and ADRs are on
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>.
+      </p>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · CIO View
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Engineering view</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>
