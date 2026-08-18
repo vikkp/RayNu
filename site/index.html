@@ -54,13 +54,26 @@
   <body>
     <header class="hero">
       <div class="hero__media" aria-hidden="true">
-        <img
-          class="hero__image"
-          src="assets/hero.jpg"
-          alt=""
-          width="2400"
-          height="1347"
-        />
+        <picture>
+          <source
+            type="image/webp"
+            srcset="
+              assets/hero-800.webp   800w,
+              assets/hero-1200.webp 1200w,
+              assets/hero-1600.webp 1600w,
+              assets/hero-2400.webp 2400w
+            "
+            sizes="100vw"
+          />
+          <img
+            class="hero__image"
+            src="assets/hero.jpg"
+            alt=""
+            width="2400"
+            height="1347"
+            fetchpriority="high"
+          />
+        </picture>
       </div>
       <div class="hero__veil" aria-hidden="true"></div>
       <div class="hero__content">
@@ -106,13 +119,23 @@
             installer.
           </p>
           <figure class="milestone-shot" data-reveal>
-            <img
-              src="assets/r640-boot-ok-com2.png"
-              alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
-              width="1600"
-              height="900"
-              loading="lazy"
-            />
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/r640-boot-ok-com2-800.webp   800w,
+                  assets/r640-boot-ok-com2-1556.webp 1556w
+                "
+                sizes="(max-width: 700px) 100vw, 42rem"
+              />
+              <img
+                src="assets/r640-boot-ok-com2.png"
+                alt="macOS Terminal: iDRAC SOL session ending in RAYNU-V-R640-BOOT-OK"
+                width="1556"
+                height="926"
+                loading="lazy"
+              />
+            </picture>
             <figcaption>
               Operator Terminal.app · iDRAC SOL (<code>console com2</code>) —
               <a
