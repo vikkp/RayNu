@@ -17,8 +17,8 @@ pub struct Bcm5720Device {
 }
 
 impl Bcm5720Device {
-    pub fn init() -> Result<Self, bcm5720_mmio::Bcm5720Error> {
-        let mac = bcm5720_mmio::init_bcm5720()?;
+    pub fn init(prefer_mac: [u8; 6]) -> Result<Self, bcm5720_mmio::Bcm5720Error> {
+        let mac = bcm5720_mmio::init_bcm5720(prefer_mac)?;
         Ok(Self { mac })
     }
 

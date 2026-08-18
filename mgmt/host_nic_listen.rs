@@ -4,7 +4,8 @@
 //! Proven Core: **outside**
 //!
 //! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
-//! Iron BCM5720 (`14e4:165f` @ `01:00.0`) reuses the PRE-EBS SNP lease.
+//! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease and binds the
+//! function whose MAC matches that lease (R640: `01:00.1` / SNP port).
 //! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
 //! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
 //!
@@ -69,17 +70,13 @@ fn run_listen(when: ListenWhen) {
         listen_with_retries(when, NicKind::E1000);
         return;
     }
-    if matches!(when, ListenWhen::AfterBootOk)
-        && crate::mgmt::bcm5720_mmio::bcm5720_present()
-    {
+    if matches!(when, ListenWhen::AfterBootOk) && crate::mgmt::bcm5720_mmio::bcm5720_present() {
         listen_with_retries(when, NicKind::Bcm5720);
         return;
     }
     if matches!(when, ListenWhen::AfterBootOk) {
         if let Some((v, d)) = pci_census::census_pick() {
-            serial::write_str(
-                "boot: HOST-NIC idle: no native Device for census vid:did=",
-            );
+            serial::write_str("boot: HOST-NIC idle: no native Device for census vid:did=");
             write_hex_u16(v);
             serial::write_byte(b':');
             write_hex_u16(d);
@@ -142,18 +139,14 @@ fn fatal_kind(e: MgmtFatal) -> u8 {
     }
 }
 
-fn listen_bcm5720(
-    port: u16,
-    when: ListenWhen,
-    arena: &mut MgmtArena,
-) -> Result<(), MgmtFatal> {
+fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
     let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
         serial::write_line(
             "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (cannot bind; skip MMIO)",
         );
         return Err(MgmtFatal::Bind);
     };
-    let mut device = Bcm5720Device::init().map_err(|_| MgmtFatal::Device)?;
+    let mut device = Bcm5720Device::init(lease.mac).map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
     let ip = Ipv4Address::new(lease.ip[0], lease.ip[1], lease.ip[2], lease.ip[3]);
     let gw = if lease.has_router {
@@ -182,11 +175,7 @@ fn listen_bcm5720(
     )
 }
 
-fn listen_e1000(
-    port: u16,
-    when: ListenWhen,
-    arena: &mut MgmtArena,
-) -> Result<(), MgmtFatal> {
+fn listen_e1000(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
     let mut device = E1000Device::init().map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
     serial::write_str("boot: HOST-NIC e1000 MAC=");
@@ -335,8 +324,7 @@ fn listen_loop<D: Device>(
                     }
                 }
             }
-            let headers_done =
-                rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
                 let wn = unsafe {

@@ -4,8 +4,9 @@
 //! Proven Core: **outside** (ADR-002 / ADR-013)
 //!
 //! All BAR0 MMIO, mailbox, SRAM window, and RX/TX ring DMA for the R640
-//! census NIC live here. Bind **one** function: `01:00.0` (`func == 0`).
-//! Do not bind `01:00.1`. Do not start X710/i40e.
+//! census NIC live here. Bind **one** function: exact MAC match to the
+//! parked SNP lease (R640: SNP is `01:00.1` / `:5a:3a`, not func 0).
+//! If no MAC match: prefer `func == 1`, then `func == 0`. Do not start X710/i40e.
 //!
 //! Register map: Broadcom Tigon3 / Linux `tg3` / iPXE `tg3.h`. Poll-mode;
 //! MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs only.
@@ -131,6 +132,83 @@ const TG3_HW_STATUS_SIZE: usize = 0x50;
 /// True when PCI id is the Phase 0 iron pick (BCM5720).
 pub fn pci_id_is_bcm5720(vendor: u16, device: u16) -> bool {
     pci_id_is_iron_census(vendor, device)
+}
+
+/// Why [`pick_bcm5720_pci`] chose a BDF (host-testable; no MMIO).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bcm5720PickReason {
+    /// BAR0 MAC equals the parked SNP lease MAC.
+    MacMatch,
+    /// No MAC match; dual-port fallback prefers function 1 (R640 SNP port).
+    PreferFunc1,
+    /// No MAC match and no function 1; use function 0.
+    PreferFunc0,
+    /// No MAC match and neither function 0 nor 1; first candidate.
+    FirstCand,
+}
+
+impl Bcm5720PickReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MacMatch => "matched SNP lease",
+            Self::PreferFunc1 => "fallback=func1 (no MAC match)",
+            Self::PreferFunc0 => "fallback=func0 (no MAC match)",
+            Self::FirstCand => "fallback=first (no MAC match)",
+        }
+    }
+}
+
+/// Chosen BCM5720 PCI function (host-testable picker).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bcm5720PciPick {
+    pub bus: u8,
+    pub dev: u8,
+    pub func: u8,
+    pub reason: Bcm5720PickReason,
+}
+
+/// Among `14e4:165f` candidates `(bus, dev, func, mac)`, bind SNP's port.
+///
+/// INVARIANTS:
+/// - Exact MAC match wins (the PRE-EBS SNP lease station address)
+/// - Else prefer `func == 1`, then `func == 0`, then the first candidate
+/// - Empty list → `None`
+/// - Never panics
+pub fn pick_bcm5720_pci(cands: &[(u8, u8, u8, [u8; 6])], want: [u8; 6]) -> Option<Bcm5720PciPick> {
+    if cands.is_empty() {
+        return None;
+    }
+    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.3 == want) {
+        return Some(Bcm5720PciPick {
+            bus,
+            dev,
+            func,
+            reason: Bcm5720PickReason::MacMatch,
+        });
+    }
+    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.2 == 1) {
+        return Some(Bcm5720PciPick {
+            bus,
+            dev,
+            func,
+            reason: Bcm5720PickReason::PreferFunc1,
+        });
+    }
+    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.2 == 0) {
+        return Some(Bcm5720PciPick {
+            bus,
+            dev,
+            func,
+            reason: Bcm5720PickReason::PreferFunc0,
+        });
+    }
+    let (bus, dev, func, _) = cands[0];
+    Some(Bcm5720PciPick {
+        bus,
+        dev,
+        func,
+        reason: Bcm5720PickReason::FirstCand,
+    })
 }
 
 /// Parse a mocked 32-byte Tigon3 RX return BD. Host/Miri/fuzz — no MMIO.
@@ -292,10 +370,10 @@ fn with_nic<R>(f: impl FnOnce(&mut NicState, &mut DmaArena) -> R) -> Option<R> {
     out
 }
 
-/// True when PCI scan finds `14e4:165f` function 0.
+/// True when PCI scan finds `14e4:165f` (any function).
 #[cfg(feature = "uefi-bin")]
 pub fn bcm5720_present() -> bool {
-    find_bcm5720().is_some()
+    any_bcm5720_bar().is_some()
 }
 
 #[cfg(not(feature = "uefi-bin"))]
@@ -303,10 +381,11 @@ pub fn bcm5720_present() -> bool {
     false
 }
 
-/// Reset + ring init. Identity-mapped BAR (UEFI page tables). Prefers `func=0`.
+/// Reset + ring init. Identity-mapped BAR (UEFI page tables).
+/// Picks the function whose BAR0 MAC matches `prefer_mac` (parked SNP lease).
 #[cfg(feature = "uefi-bin")]
-pub fn init_bcm5720() -> Result<[u8; 6], Bcm5720Error> {
-    let (bus, dev, func, bar) = find_bcm5720().ok_or(Bcm5720Error::NotFound)?;
+pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
+    let (bus, dev, func, bar) = find_bcm5720(prefer_mac).ok_or(Bcm5720Error::NotFound)?;
     enable_bus_master(bus, dev, func);
     if bar == 0 {
         return Err(Bcm5720Error::NoBar);
@@ -340,7 +419,7 @@ pub fn init_bcm5720() -> Result<[u8; 6], Bcm5720Error> {
 }
 
 #[cfg(not(feature = "uefi-bin"))]
-pub fn init_bcm5720() -> Result<[u8; 6], Bcm5720Error> {
+pub fn init_bcm5720(_prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     Err(Bcm5720Error::NotFound)
 }
 
@@ -376,8 +455,7 @@ pub enum Bcm5720Error {
 }
 
 #[cfg(feature = "uefi-bin")]
-fn find_bcm5720() -> Option<(u8, u8, u8, u64)> {
-    let mut fallback = None;
+fn any_bcm5720_bar() -> Option<(u8, u8, u8, u64)> {
     for bus in 0u8..=15 {
         for dev in 0u8..32 {
             for func in 0u8..8 {
@@ -390,13 +468,10 @@ fn find_bcm5720() -> Option<(u8, u8, u8, u64)> {
                 }
                 let vendor = id as u16;
                 let device = (id >> 16) as u16;
-                if pci_id_is_bcm5720(vendor, device) && func == 0 {
+                if pci_id_is_bcm5720(vendor, device) {
                     let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
-                    if bus == 1 && dev == 0 {
+                    if bar != 0 {
                         return Some((bus, dev, func, bar));
-                    }
-                    if fallback.is_none() {
-                        fallback = Some((bus, dev, func, bar));
                     }
                 }
                 if func == 0 {
@@ -408,7 +483,101 @@ fn find_bcm5720() -> Option<(u8, u8, u8, u64)> {
             }
         }
     }
-    fallback
+    None
+}
+
+/// Scan func 0 **and** 1 (and other multifunction slots). Peek MAC before reset.
+#[cfg(feature = "uefi-bin")]
+fn find_bcm5720(prefer_mac: [u8; 6]) -> Option<(u8, u8, u8, u64)> {
+    const MAX: usize = 4;
+    let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); MAX];
+    let mut bars = [0u64; MAX];
+    let mut n = 0usize;
+    for bus in 0u8..=15 {
+        for dev in 0u8..32 {
+            for func in 0u8..8 {
+                let id = pci_read32(bus, dev, func, 0);
+                if id == 0xFFFF_FFFF {
+                    if func == 0 {
+                        break;
+                    }
+                    continue;
+                }
+                let vendor = id as u16;
+                let device = (id >> 16) as u16;
+                if pci_id_is_bcm5720(vendor, device) && n < MAX {
+                    let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
+                    if bar != 0 {
+                        enable_mem(bus, dev, func);
+                        // SAFETY: firmware BAR0; peek MAC_ADDR only — no CORECLK_RESET.
+                        // KANI-TARGET: pick_bcm5720_pci (host), not this MMIO peek.
+                        let mac = unsafe { peek_mac(bar, bus, dev, func) };
+                        serial_step("boot: HOST-NIC BCM5720 cand pci=");
+                        write_hex_u8(bus);
+                        crate::boot::serial::write_byte(b':');
+                        write_hex_u8(dev);
+                        crate::boot::serial::write_byte(b'.');
+                        write_hex_u8(func);
+                        crate::boot::serial::write_str(" MAC=");
+                        write_mac(mac);
+                        crate::boot::serial::write_byte(b'\n');
+                        cands[n] = (bus, dev, func, mac);
+                        bars[n] = bar;
+                        n += 1;
+                    }
+                }
+                if func == 0 {
+                    let ht = (pci_read32(bus, dev, func, 0x0C) >> 16) as u8;
+                    if ht & 0x80 == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    let pick = pick_bcm5720_pci(&cands[..n], prefer_mac)?;
+    let mut bar = 0u64;
+    let mut mac = [0u8; 6];
+    for i in 0..n {
+        if cands[i].0 == pick.bus && cands[i].1 == pick.dev && cands[i].2 == pick.func {
+            bar = bars[i];
+            mac = cands[i].3;
+            break;
+        }
+    }
+    serial_step("boot: HOST-NIC BCM5720 pick pci=");
+    write_hex_u8(pick.bus);
+    crate::boot::serial::write_byte(b':');
+    write_hex_u8(pick.dev);
+    crate::boot::serial::write_byte(b'.');
+    write_hex_u8(pick.func);
+    crate::boot::serial::write_str(" MAC=");
+    write_mac(mac);
+    crate::boot::serial::write_byte(b' ');
+    serial_step(pick.reason.as_str());
+    crate::boot::serial::write_byte(b'\n');
+    Some((pick.bus, pick.dev, pick.func, bar))
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn peek_mac(mmio: u64, bus: u8, dev: u8, func: u8) -> [u8; 6] {
+    pci_write32(
+        bus,
+        dev,
+        func,
+        TG3PCI_MISC_HOST_CTRL as u8,
+        misc_host_ctrl(),
+    );
+    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
+    read_mac(mmio)
+}
+
+#[cfg(feature = "uefi-bin")]
+fn enable_mem(bus: u8, dev: u8, func: u8) {
+    let cmd = pci_read32(bus, dev, func, 0x04) as u16;
+    let next = cmd | PCI_CMD_MEM;
+    let rest = pci_read32(bus, dev, func, 0x04) & 0xFFFF_0000;
+    pci_write32(bus, dev, func, 0x04, rest | u32::from(next));
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -427,7 +596,13 @@ unsafe fn hw_init(
     func: u8,
     dma: &mut DmaArena,
 ) -> Result<[u8; 6], Bcm5720Error> {
-    pci_write32(bus, dev, func, TG3PCI_MISC_HOST_CTRL as u8, misc_host_ctrl());
+    pci_write32(
+        bus,
+        dev,
+        func,
+        TG3PCI_MISC_HOST_CTRL as u8,
+        misc_host_ctrl(),
+    );
     mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
 
     let rev = (mmio_read(mmio, TG3PCI_MISC_HOST_CTRL) & MISC_HOST_CTRL_CHIPREV) >> 16;
@@ -487,7 +662,11 @@ unsafe fn hw_init(
     program_rings(mmio, bus, dev, func, dma);
     enable_mac(mmio, mac_before)?;
 
-    mailbox_write(mmio, MAILBOX_RCV_STD_PROD_IDX, (RING as u32).saturating_sub(1));
+    mailbox_write(
+        mmio,
+        MAILBOX_RCV_STD_PROD_IDX,
+        (RING as u32).saturating_sub(1),
+    );
     mailbox_write(mmio, MAILBOX_RCVRET_CON_IDX_0, 0);
     mailbox_write(mmio, MAILBOX_SNDHOST_PROD_IDX_0, 0);
 
@@ -501,7 +680,13 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
     mmio_write(mmio, GRC_MISC_CFG, GRC_MISC_CFG_CORECLK_RESET);
     let _ = pci_read32(bus, dev, func, 0x04);
     tsc_spin_ms(150);
-    pci_write32(bus, dev, func, TG3PCI_MISC_HOST_CTRL as u8, misc_host_ctrl());
+    pci_write32(
+        bus,
+        dev,
+        func,
+        TG3PCI_MISC_HOST_CTRL as u8,
+        misc_host_ctrl(),
+    );
     enable_bus_master(bus, dev, func);
     tsc_spin_ms(20);
     let id = pci_read32(bus, dev, func, 0);
@@ -513,7 +698,13 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
 
 #[cfg(feature = "uefi-bin")]
 fn wait_fw_magic(bus: u8, dev: u8, func: u8) -> bool {
-    sram_write(bus, dev, func, NIC_SRAM_FIRMWARE_MBOX, NIC_SRAM_FIRMWARE_MBOX_MAGIC1);
+    sram_write(
+        bus,
+        dev,
+        func,
+        NIC_SRAM_FIRMWARE_MBOX,
+        NIC_SRAM_FIRMWARE_MBOX_MAGIC1,
+    );
     for _ in 0..200 {
         let v = sram_read(bus, dev, func, NIC_SRAM_FIRMWARE_MBOX);
         if v == !NIC_SRAM_FIRMWARE_MBOX_MAGIC1 {
@@ -578,15 +769,39 @@ unsafe fn program_rings(mmio: u64, bus: u8, dev: u8, func: u8, dma: &mut DmaAren
         RCVDBDI_STD_BD + TG3_BDINFO_MAXLEN_FLAGS,
         (RING as u32) << BDINFO_FLAGS_MAXLEN_SHIFT,
     );
-    mmio_write(mmio, RCVDBDI_STD_BD + TG3_BDINFO_NIC_ADDR, NIC_SRAM_RX_BUFFER_DESC);
+    mmio_write(
+        mmio,
+        RCVDBDI_STD_BD + TG3_BDINFO_NIC_ADDR,
+        NIC_SRAM_RX_BUFFER_DESC,
+    );
 
     for off in (NIC_SRAM_SEND_RCB..NIC_SRAM_RCV_RET_RCB).step_by(TG3_BDINFO_SIZE as usize) {
-        sram_write(bus, dev, func, off + TG3_BDINFO_MAXLEN_FLAGS, BDINFO_FLAGS_DISABLED);
+        sram_write(
+            bus,
+            dev,
+            func,
+            off + TG3_BDINFO_MAXLEN_FLAGS,
+            BDINFO_FLAGS_DISABLED,
+        );
     }
     for off in (NIC_SRAM_RCV_RET_RCB..NIC_SRAM_STATS_BLK).step_by(TG3_BDINFO_SIZE as usize) {
-        sram_write(bus, dev, func, off + TG3_BDINFO_MAXLEN_FLAGS, BDINFO_FLAGS_DISABLED);
+        sram_write(
+            bus,
+            dev,
+            func,
+            off + TG3_BDINFO_MAXLEN_FLAGS,
+            BDINFO_FLAGS_DISABLED,
+        );
     }
-    set_bdinfo(bus, dev, func, NIC_SRAM_SEND_RCB, tx, RING as u32, NIC_SRAM_TX_BUFFER_DESC);
+    set_bdinfo(
+        bus,
+        dev,
+        func,
+        NIC_SRAM_SEND_RCB,
+        tx,
+        RING as u32,
+        NIC_SRAM_TX_BUFFER_DESC,
+    );
     set_bdinfo(bus, dev, func, NIC_SRAM_RCV_RET_RCB, rcb, RING as u32, 0);
 
     enable_block(mmio, RCVLPC_MODE);
@@ -608,7 +823,13 @@ fn set_bdinfo(bus: u8, dev: u8, func: u8, base: u32, mapping: u64, maxlen: u32, 
         base + TG3_BDINFO_HOST_ADDR,
         (mapping >> 32) as u32,
     );
-    sram_write(bus, dev, func, base + TG3_BDINFO_HOST_ADDR + 4, mapping as u32);
+    sram_write(
+        bus,
+        dev,
+        func,
+        base + TG3_BDINFO_HOST_ADDR + 4,
+        mapping as u32,
+    );
     sram_write(
         bus,
         dev,
@@ -707,7 +928,10 @@ unsafe fn tx_one(n: &mut NicState, dma: &mut DmaArena, frame: &[u8]) -> bool {
     let i = n.tx_prod as usize % RING;
     core::ptr::copy_nonoverlapping(frame.as_ptr(), dma.tx_buf[i].as_mut_ptr(), len);
     let addr = dma.tx_buf[i].as_ptr() as u64;
-    core::ptr::write_volatile(core::ptr::addr_of_mut!(dma.tx[i].addr_hi), (addr >> 32) as u32);
+    core::ptr::write_volatile(
+        core::ptr::addr_of_mut!(dma.tx[i].addr_hi),
+        (addr >> 32) as u32,
+    );
     core::ptr::write_volatile(core::ptr::addr_of_mut!(dma.tx[i].addr_lo), addr as u32);
     core::ptr::write_volatile(core::ptr::addr_of_mut!(dma.tx[i].vlan_tag), 0);
     core::sync::atomic::fence(Ordering::SeqCst);

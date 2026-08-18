@@ -1,7 +1,58 @@
 use super::{
-    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, rx_bd_packet_len, BCM5720_DEVICE, BCM5720_VENDOR,
-    FRAME_MAX,
+    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, pick_bcm5720_pci, rx_bd_packet_len,
+    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
+
+/// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
+const MAC_FUNC0: [u8; 6] = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x38];
+const MAC_FUNC1: [u8; 6] = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x3a];
+
+fn r640_cands() -> [(u8, u8, u8, [u8; 6]); 2] {
+    [(1, 0, 0, MAC_FUNC0), (1, 0, 1, MAC_FUNC1)]
+}
+
+#[test]
+fn pick_snp_lease_mac_binds_func1() {
+    let p = pick_bcm5720_pci(&r640_cands(), MAC_FUNC1).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 1));
+    assert_eq!(p.reason, Bcm5720PickReason::MacMatch);
+}
+
+#[test]
+fn pick_func0_mac_binds_func0() {
+    let p = pick_bcm5720_pci(&r640_cands(), MAC_FUNC0).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 0));
+    assert_eq!(p.reason, Bcm5720PickReason::MacMatch);
+}
+
+#[test]
+fn pick_no_match_prefers_func1() {
+    let want = [0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff];
+    let p = pick_bcm5720_pci(&r640_cands(), want).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 1));
+    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc1);
+}
+
+#[test]
+fn pick_only_func0_falls_back_func0() {
+    let cands = [(1, 0, 0, MAC_FUNC0)];
+    let p = pick_bcm5720_pci(&cands, MAC_FUNC1).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 0));
+    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc0);
+}
+
+#[test]
+fn pick_empty_is_none() {
+    assert!(pick_bcm5720_pci(&[], MAC_FUNC1).is_none());
+}
+
+#[test]
+fn pick_neither_func0_nor_1_uses_first() {
+    let cands = [(2, 0, 2, MAC_FUNC0)];
+    let p = pick_bcm5720_pci(&cands, MAC_FUNC1).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (2, 0, 2));
+    assert_eq!(p.reason, Bcm5720PickReason::FirstCand);
+}
 
 #[test]
 fn iron_pci_id_is_14e4_165f_only() {

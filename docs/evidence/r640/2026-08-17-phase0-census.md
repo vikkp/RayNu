@@ -39,6 +39,15 @@ Full log: [`logs/2026-08-17-phase0-census-com2.txt`](logs/2026-08-17-phase0-cens
 
 - Lab e1000 (`8086:100e`) is **not** on this box. QEMU `HOST-NIC-QEMU-OK` does not count.
 - Firmware Tcp4 still absent; PRE-EBS SNP still works. That is E3, not E3b.
-- Phase D is now unblocked **only** for `14e4:165f` (prefer `01:00.0`). Same `smoltcp::phy::Device` surface as e1000. Do not start X710/i40e.
+- Phase D is now unblocked **only** for `14e4:165f`. Same `smoltcp::phy::Device`
+  surface as e1000. Do not start X710/i40e.
+
+### 2026-08-18 addendum — SNP is `01:00.1`
+
+Phase D's first iron bind used **`01:00.0` / `b0:26:28:5c:5a:38`**. A clean
+power-cycle still parked SNP lease `10.99.99.134`; Vignesh (`10.99.99.137`)
+got **destination host unreachable** (no ARP). Firmware SNP is the other
+function: **`01:00.1` / `b0:26:28:5c:5a:3a`**. Bind that MAC. Do **not**
+claim `HOST-NIC-HTTP-OK` from this note.
 
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

@@ -13,7 +13,9 @@ use super::host_nic::{
 };
 use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::mgmt_arena::prop_arena_reset_rewinds;
-use super::pci_census::{census_nic_has_iron_driver, census_nic_has_lab_driver, pci_id_is_iron_census};
+use super::pci_census::{
+    census_nic_has_iron_driver, census_nic_has_lab_driver, pci_id_is_iron_census,
+};
 
 /// Host / CI marker when the M7.8 scaffold package passes.
 pub const M7_HOST_NIC_GATE_MARKER: &str = M7_HOST_NIC_SCAFFOLD_MARKER;
@@ -45,16 +47,18 @@ pub fn host_nic_surface_present() -> bool {
         && census.contains("fn census_nic_has_iron_driver(")
         && census.contains("14e4:165f")
         && bcm.contains("fn parse_mocked_rx_bd_bytes(")
+        && bcm.contains("fn pick_bcm5720_pci(")
         && bcm.contains("fn bcm5720_present(")
         && bcm.contains("// SAFETY:")
         && bcm.contains("KANI-TARGET")
-        && bcm.contains("01:00.0")
+        && bcm.contains("matched SNP lease")
         && arena.contains("enum MgmtFatal")
         && arena.contains("fn inject_mgmt_fatals(")
         && listen.contains("fn run_post_ebs_host_nic_listen(")
         && listen.contains("fn run_post_boot_ok_native_idle(")
         && listen.contains("fn listen_bcm5720(")
         && listen.contains("Bcm5720Device")
+        && listen.contains("lease.mac")
         && listen.contains("post-EBS ")
         && listen.contains("M7_HOST_NIC_QEMU_MARKER")
         && listen.contains("MgmtFatal")
