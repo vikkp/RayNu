@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-18
-last_commit: efb4564d6a88ed7788bc2a6961e85e41adfebb48
-last_commit_short: efb4564
+last_commit: 196c5d829881e0fef927cd53d0ef7346fe755fbf
+last_commit_short: 196c5d8
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 196c5d8 |
 | Summary | ADR-013 Phase D **tg3 bring-up** (`14e4:165f`; SNP-MAC picker kept); HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (iron exchange) |
 | Gates touched | Phase D Linux `tg3` (not `bnxt`) init; `HOST-NIC-HTTP-OK` not claimed |
