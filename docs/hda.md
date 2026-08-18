@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-18
-last_commit: 196c5d829881e0fef927cd53d0ef7346fe755fbf
-last_commit_short: 196c5d8
+last_commit: 4728188a
+last_commit_short: 4728188
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 4728188 |
 | Summary | Phase D **station = parked SNP MAC** (iron peek `:39` vs lease `:3a`); HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (curl timeout on `:39`) |
 | Gates touched | `station_mac`; `HOST-NIC-HTTP-OK` not claimed |
