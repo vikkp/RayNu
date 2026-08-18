@@ -128,3 +128,21 @@ fn kani_rx_bd_packet_len_bounds() {
         assert!(n > 0 && n <= FRAME_MAX);
     }
 }
+
+#[test]
+fn bringup_follows_linux_tg3_not_bnxt() {
+    let src = include_str!("bcm5720_mmio.rs");
+    assert!(src.contains("Linux `tg3`"));
+    assert!(src.contains("**not** `bnxt`"));
+    assert!(src.contains("GRC_MISC_CFG_PRESERVE_PCIE"));
+    assert!(src.contains("RDMAC_MODE"));
+    assert!(src.contains("WDMAC_MODE"));
+    assert!(src.contains("5717_PLUS"));
+    assert!(src.contains("do not program RCVDBDI_STD_BD+NIC_ADDR"));
+    assert!(src.contains("RCVDBDI_MODE_INV_RING_SZ"));
+    assert!(src.contains("RCVBDI_STD_THRESH"));
+    assert!(src.contains("DEFAULT_MB_MACRX_LOW_WATER_57765"));
+    assert!(src.contains("phy_addr = u32::from(func) + 1"));
+    assert!(src.contains("tg3_write_sig_pre_reset"));
+    assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
+}

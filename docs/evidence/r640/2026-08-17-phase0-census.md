@@ -50,4 +50,12 @@ got **destination host unreachable** (no ARP). Firmware SNP is the other
 function: **`01:00.1` / `b0:26:28:5c:5a:3a`**. Bind that MAC. Do **not**
 claim `HOST-NIC-HTTP-OK` from this note.
 
+### 2026-08-18 addendum — Linux `tg3`, not `bnxt`
+
+BCM5720 (1G) is mainline **`tg3`**
+(`drivers/net/ethernet/broadcom/tg3.c`). **`bnxt`** is BCM57416 10G.
+Picker (SNP MAC / func 1) stays. Bring-up now matches `tg3` + PG ch. 7
+(magic-before-reset, preserve PCIe bit 29, DMA engines, 5717+ RCB rules).
+Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

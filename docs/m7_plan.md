@@ -264,12 +264,12 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the SNP-MAC picker EFI (this branch / after merge) to Cruzer.
+**Next:** flash the SNP-MAC + `tg3` bring-up EFI (this branch / after merge) to Cruzer.
 Power-cycle. After `RAYNU-V-R640-BOOT-OK`, expect
 `HOST-NIC BCM5720 pick pci=01:00.01 … matched SNP lease` (not func 0 /
 `:5a:38`). Curl the **same** PRE-EBS SNP lease (`http://<lease>:8443/`)
 from Vignesh `10.99.99.137` on the host LAN. `RAYNU-V-M7-HOST-NIC-HTTP-OK`
-only after that exchange. Preserve kit
+only after that exchange. BCM5720 is Linux **`tg3`**, not `bnxt`. Preserve kit
 `releases/v0.1.0-adr013-baseline`. `RAYNU-V-M7-POST-EBS-HTTP-OK` stays unclaimed.
 Phase C QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

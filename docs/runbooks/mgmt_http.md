@@ -173,7 +173,8 @@ QEMU e1000 already implements `smoltcp::phy::Device`. After `BOOT-OK` the
 idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 **BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
-PRE-EBS SNP lease. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
+**not** `bnxt` (that is BCM57416 10G). `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer

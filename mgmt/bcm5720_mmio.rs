@@ -8,8 +8,11 @@
 //! parked SNP lease (R640: SNP is `01:00.1` / `:5a:3a`, not func 0).
 //! If no MAC match: prefer `func == 1`, then `func == 0`. Do not start X710/i40e.
 //!
-//! Register map: Broadcom Tigon3 / Linux `tg3` / iPXE `tg3.h`. Poll-mode;
-//! MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs only.
+//! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
+//! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
+//! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
+//! BCM57416 10G. Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse
+//! mocked RX BDs only.
 
 use crate::mgmt::pci_census::{pci_id_is_iron_census, IRON_CENSUS_DEVICE, IRON_CENSUS_VENDOR};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -53,50 +56,90 @@ const MAILBOX_SNDHOST_PROD_IDX_0: u32 = 0x300;
 
 const MAC_MODE: u32 = 0x400;
 const MAC_STATUS: u32 = 0x404;
+const MAC_EVENT: u32 = 0x408;
+const MAC_LED_CTRL: u32 = 0x40C;
 const MAC_ADDR_0_HIGH: u32 = 0x410;
 const MAC_ADDR_0_LOW: u32 = 0x414;
 const MAC_RX_MTU_SIZE: u32 = 0x43C;
+const MAC_MI_COM: u32 = 0x44C;
+const MAC_MI_STAT: u32 = 0x450;
+const MAC_MI_MODE: u32 = 0x454;
 const MAC_TX_MODE: u32 = 0x45C;
+const MAC_TX_LENGTHS: u32 = 0x464;
 const MAC_RX_MODE: u32 = 0x468;
+const MAC_HASH_REG_0: u32 = 0x470;
+const MAC_RCV_RULE_CFG: u32 = 0x500;
+const MAC_LOW_WMARK_MAX_RX_FRAME: u32 = 0x504;
 const MAC_MODE_PORT_MODE_GMII: u32 = 0x08;
 const MAC_MODE_RXSTAT_ENABLE: u32 = 0x800;
 const MAC_MODE_TXSTAT_ENABLE: u32 = 0x4000;
 const MAC_MODE_TDE_ENABLE: u32 = 0x20_0000;
 const MAC_MODE_RDE_ENABLE: u32 = 0x40_0000;
 const MAC_MODE_FHDE_ENABLE: u32 = 0x80_0000;
+const MAC_EVENT_LNKSTATE_CHANGED: u32 = 0x1000;
+const LED_CTRL_MODE_PHY_1: u32 = 0x800;
 const TX_MODE_ENABLE: u32 = 0x02;
+const TX_MODE_JMB_FRM_LEN: u32 = 0x40_0000;
+const TX_MODE_CNT_DN_MODE: u32 = 0x80_0000;
 const RX_MODE_ENABLE: u32 = 0x02;
+const MI_COM_CMD_WRITE: u32 = 0x0400_0000;
+const MI_COM_CMD_READ: u32 = 0x0800_0000;
+const MI_COM_START: u32 = 0x2000_0000;
+const MI_COM_BUSY: u32 = 0x2000_0000;
+const MI_COM_PHY_ADDR_SHIFT: u32 = 21;
+const MI_COM_REG_ADDR_SHIFT: u32 = 16;
+const MAC_MI_MODE_BASE: u32 = 0x000C_0000;
+const MAC_MI_MODE_500KHZ_CONST: u32 = 0x8000;
+const MAC_MI_STAT_LNKSTAT_ATTN_ENAB: u32 = 0x01;
+const TX_LENGTHS_DEFAULT: u32 = 0x2620;
+const TX_LENGTHS_JMB_FRM_LEN_MSK: u32 = 0x00FF_0000;
+const TX_LENGTHS_CNT_DWN_VAL_MSK: u32 = 0xFF00_0000;
+const RCV_RULE_CFG_DEFAULT_CLASS: u32 = 0x08;
+const RCVLPC_CONFIG_DEFAULT: u32 = 0x181;
 
-const RCVLPC_MODE: u32 = 0x2000;
-const RCVDBDI_MODE: u32 = 0x2400;
-const RCVDBDI_STD_BD: u32 = 0x2450;
-const RCVCC_MODE: u32 = 0x3000;
-const RCVLSC_MODE: u32 = 0x3400;
+const MII_BMCR: u32 = 0;
+const MII_ADVERTISE: u32 = 4;
+const MII_CTRL1000: u32 = 9;
+const BMCR_ANRESTART: u16 = 0x0200;
+const BMCR_ANENABLE: u16 = 0x1000;
+const ADVERTISE_COPPER: u16 = 0x0DE1;
+const ADVERTISE_1000: u16 = 0x0300;
+
+const SNDDATAC_MODE: u32 = 0x1000;
 const SNDDATAI_MODE: u32 = 0x0C00;
 const SNDBDS_MODE: u32 = 0x1400;
 const SNDBDI_MODE: u32 = 0x1800;
+const SNDBDC_MODE: u32 = 0x1C00;
+const RCVLPC_MODE: u32 = 0x2000;
+const RCVLPC_CONFIG: u32 = 0x2010;
+const RCVDBDI_MODE: u32 = 0x2400;
+const RCVDBDI_STD_BD: u32 = 0x2450;
+const RCVDCC_MODE: u32 = 0x2800;
+const RCVBDI_MODE: u32 = 0x2C00;
+const RCVBDI_STD_THRESH: u32 = 0x2C18;
+const RCVCC_MODE: u32 = 0x3000;
+const RCVLSC_MODE: u32 = 0x3400;
 const HOSTCC_MODE: u32 = 0x3C00;
-const HOSTCC_STATUS_BLK_HOST_ADDR: u32 = 0x3C38;
 const HOSTCC_RXCOL_TICKS: u32 = 0x3C08;
 const HOSTCC_TXCOL_TICKS: u32 = 0x3C0C;
 const HOSTCC_RXMAX_FRAMES: u32 = 0x3C10;
 const HOSTCC_TXMAX_FRAMES: u32 = 0x3C14;
+const HOSTCC_STAT_COAL_TICKS: u32 = 0x3C28;
+const HOSTCC_STATUS_BLK_HOST_ADDR: u32 = 0x3C38;
 const BUFMGR_MODE: u32 = 0x4400;
-const BUFMGR_MB_POOL_ADDR: u32 = 0x4408;
-const BUFMGR_MB_POOL_SIZE: u32 = 0x440C;
 const BUFMGR_MB_RDMA_LOW_WATER: u32 = 0x4410;
 const BUFMGR_MB_MACRX_LOW_WATER: u32 = 0x4414;
 const BUFMGR_MB_HIGH_WATER: u32 = 0x4418;
-const BUFMGR_DMA_DESC_POOL_ADDR: u32 = 0x442C;
-const BUFMGR_DMA_DESC_POOL_SIZE: u32 = 0x4430;
 const BUFMGR_DMA_LOW_WATER: u32 = 0x4434;
 const BUFMGR_DMA_HIGH_WATER: u32 = 0x4438;
+const RDMAC_MODE: u32 = 0x4800;
+const WDMAC_MODE: u32 = 0x4C00;
 const MEMARB_MODE: u32 = 0x4000;
 const FTQ_RESET: u32 = 0x5C00;
 const GRC_MODE: u32 = 0x6800;
 const GRC_MISC_CFG: u32 = 0x6804;
+const GRC_FASTBOOT_PC: u32 = 0x6894;
 
-const MODE_RESET: u32 = 0x01;
 const MODE_ENABLE: u32 = 0x02;
 const GRC_MODE_WSWAP_NONFRM_DATA: u32 = 0x04;
 const GRC_MODE_WSWAP_DATA: u32 = 0x20;
@@ -108,6 +151,43 @@ const GRC_MODE_NO_TX_PHDR_CSUM: u32 = 0x10_0000;
 const GRC_MODE_NO_RX_PHDR_CSUM: u32 = 0x80_0000;
 const GRC_MISC_CFG_CORECLK_RESET: u32 = 0x01;
 const GRC_MISC_CFG_PRESCALAR_SHIFT: u32 = 1;
+/// Linux `tg3_chip_reset`: PCIe chips write bit 29 so CORECLK_RESET does not
+/// drop the shared PCIe core (GRC bit 0 resets the device core only).
+const GRC_MISC_CFG_PRESERVE_PCIE: u32 = 1 << 29;
+const DEFAULT_MB_RDMA_LOW_WATER_5705: u32 = 0;
+const DEFAULT_MB_MACRX_LOW_WATER_57765: u32 = 0x2A;
+const DEFAULT_MB_HIGH_WATER_57765: u32 = 0xA0;
+const DEFAULT_DMA_LOW_WATER: u32 = 0x05;
+const DEFAULT_DMA_HIGH_WATER: u32 = 0x0A;
+const TG3_RX_STD_DMA_SZ: u32 = 1536;
+const RCVDBDI_MODE_INV_RING_SZ: u32 = 0x10;
+const RDMAC_MODE_ENABLE: u32 = 0x02;
+const RDMAC_MODE_TGTABORT_ENAB: u32 = 0x04;
+const RDMAC_MODE_MSTABORT_ENAB: u32 = 0x08;
+const RDMAC_MODE_PARITYERR_ENAB: u32 = 0x10;
+const RDMAC_MODE_ADDROFLOW_ENAB: u32 = 0x20;
+const RDMAC_MODE_FIFOOFLOW_ENAB: u32 = 0x40;
+const RDMAC_MODE_FIFOURUN_ENAB: u32 = 0x80;
+const RDMAC_MODE_FIFOOREAD_ENAB: u32 = 0x100;
+const RDMAC_MODE_LNGREAD_ENAB: u32 = 0x200;
+const RDMAC_MODE_FIFO_LONG_BURST: u32 = 0x0003_0000;
+const WDMAC_MODE_ENABLE: u32 = 0x02;
+const WDMAC_MODE_TGTABORT_ENAB: u32 = 0x04;
+const WDMAC_MODE_MSTABORT_ENAB: u32 = 0x08;
+const WDMAC_MODE_PARITYERR_ENAB: u32 = 0x10;
+const WDMAC_MODE_ADDROFLOW_ENAB: u32 = 0x20;
+const WDMAC_MODE_FIFOOFLOW_ENAB: u32 = 0x40;
+const WDMAC_MODE_FIFOURUN_ENAB: u32 = 0x80;
+const WDMAC_MODE_FIFOOREAD_ENAB: u32 = 0x100;
+const WDMAC_MODE_LNGREAD_ENAB: u32 = 0x200;
+const WDMAC_MODE_STATUS_TAG_FIX: u32 = 0x2000_0000;
+const SNDDATAC_MODE_ENABLE: u32 = 0x02;
+const SNDBDC_MODE_ENABLE: u32 = 0x02;
+const SNDBDC_MODE_ATTN_ENABLE: u32 = 0x04;
+const RCVDCC_MODE_ENABLE: u32 = 0x02;
+const RCVDCC_MODE_ATTN_ENABLE: u32 = 0x04;
+const RCVBDI_MODE_ENABLE: u32 = 0x02;
+const RCVBDI_MODE_RCB_ATTN_ENAB: u32 = 0x04;
 
 const NIC_SRAM_SEND_RCB: u32 = 0x100;
 const NIC_SRAM_RCV_RET_RCB: u32 = 0x200;
@@ -115,11 +195,10 @@ const NIC_SRAM_STATS_BLK: u32 = 0x300;
 const NIC_SRAM_FIRMWARE_MBOX: u32 = 0xB50;
 const NIC_SRAM_FIRMWARE_MBOX_MAGIC1: u32 = 0x4B65_7654;
 const NIC_SRAM_TX_BUFFER_DESC: u32 = 0x4000;
+/// Firmware-owned on 5717_PLUS / BCM5720. Linux `tg3` writes this to
+/// `RCVDBDI_STD_BD+NIC_ADDR` only when `!5717_PLUS`. Do not program 0x245C.
+#[allow(dead_code)]
 const NIC_SRAM_RX_BUFFER_DESC: u32 = 0x6000;
-const NIC_SRAM_MBUF_POOL_BASE: u32 = 0x8000;
-const NIC_SRAM_MBUF_POOL_SIZE96: u32 = 0x1_8000;
-const NIC_SRAM_DMA_DESC_POOL_BASE: u32 = 0x2000;
-const NIC_SRAM_DMA_DESC_POOL_SIZE: u32 = 0x2000;
 
 const TG3_BDINFO_HOST_ADDR: u32 = 0x00;
 const TG3_BDINFO_MAXLEN_FLAGS: u32 = 0x08;
@@ -639,17 +718,28 @@ unsafe fn hw_init(
         | GRC_MODE_NO_TX_PHDR_CSUM
         | GRC_MODE_NO_RX_PHDR_CSUM;
     mmio_write(mmio, GRC_MODE, grc);
-    mmio_write(mmio, GRC_MISC_CFG, 65 << GRC_MISC_CFG_PRESCALAR_SHIFT);
+    // Prescalar only (bits 7:0). Preserve GRC_MISC_CFG_PRESERVE_PCIE.
+    let mut misc = mmio_read(mmio, GRC_MISC_CFG);
+    misc &= !0xFF;
+    misc |= 65 << GRC_MISC_CFG_PRESCALAR_SHIFT;
+    mmio_write(mmio, GRC_MISC_CFG, misc);
 
-    mmio_write(mmio, BUFMGR_MB_POOL_ADDR, NIC_SRAM_MBUF_POOL_BASE);
-    mmio_write(mmio, BUFMGR_MB_POOL_SIZE, NIC_SRAM_MBUF_POOL_SIZE96);
-    mmio_write(mmio, BUFMGR_DMA_DESC_POOL_ADDR, NIC_SRAM_DMA_DESC_POOL_BASE);
-    mmio_write(mmio, BUFMGR_DMA_DESC_POOL_SIZE, NIC_SRAM_DMA_DESC_POOL_SIZE);
-    mmio_write(mmio, BUFMGR_MB_RDMA_LOW_WATER, 0x50);
-    mmio_write(mmio, BUFMGR_MB_MACRX_LOW_WATER, 0x20);
-    mmio_write(mmio, BUFMGR_MB_HIGH_WATER, 0x60);
-    mmio_write(mmio, BUFMGR_DMA_LOW_WATER, 0x05);
-    mmio_write(mmio, BUFMGR_DMA_HIGH_WATER, 0x0A);
+    // 5750_PLUS / BCM5720: firmware owns the mbuf pool. Linux tg3 does
+    // nothing at 0x4408/0x440C/0x442C/0x4430. Watermarks are 57765_PLUS
+    // (PG Table 38): MACRX 0x2A, high 0xA0 — not the 5700 0x20/0x60 defaults.
+    mmio_write(
+        mmio,
+        BUFMGR_MB_RDMA_LOW_WATER,
+        DEFAULT_MB_RDMA_LOW_WATER_5705,
+    );
+    mmio_write(
+        mmio,
+        BUFMGR_MB_MACRX_LOW_WATER,
+        DEFAULT_MB_MACRX_LOW_WATER_57765,
+    );
+    mmio_write(mmio, BUFMGR_MB_HIGH_WATER, DEFAULT_MB_HIGH_WATER_57765);
+    mmio_write(mmio, BUFMGR_DMA_LOW_WATER, DEFAULT_DMA_LOW_WATER);
+    mmio_write(mmio, BUFMGR_DMA_HIGH_WATER, DEFAULT_DMA_HIGH_WATER);
     mmio_write(mmio, BUFMGR_MODE, MODE_ENABLE);
     if !wait_bits(mmio, BUFMGR_MODE, MODE_ENABLE, 200) {
         serial_step("boot: WARN — HOST-NIC BCM5720 bufmgr timeout (continuing)\n");
@@ -661,6 +751,10 @@ unsafe fn hw_init(
     init_rings(dma);
     program_rings(mmio, bus, dev, func, dma);
     enable_mac(mmio, mac_before)?;
+    enable_dma_engines(mmio);
+    enable_hostcc(mmio);
+    enable_completion_blocks(mmio);
+    restart_phy_an(mmio, func);
 
     mailbox_write(
         mmio,
@@ -674,12 +768,26 @@ unsafe fn hw_init(
     Ok(mac_before)
 }
 
+/// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
+/// MAGIC1 goes to SRAM 0xB50 **before** CORECLK_RESET. Bit 29 keeps PCIe.
 #[cfg(feature = "uefi-bin")]
 unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm5720Error> {
     serial_step("boot: HOST-NIC BCM5720 reset…\n");
-    mmio_write(mmio, GRC_MISC_CFG, GRC_MISC_CFG_CORECLK_RESET);
+    mmio_write(mmio, GRC_FASTBOOT_PC, 0);
+    sram_write(
+        bus,
+        dev,
+        func,
+        NIC_SRAM_FIRMWARE_MBOX,
+        NIC_SRAM_FIRMWARE_MBOX_MAGIC1,
+    );
+    mmio_write(
+        mmio,
+        GRC_MISC_CFG,
+        GRC_MISC_CFG_CORECLK_RESET | GRC_MISC_CFG_PRESERVE_PCIE,
+    );
     let _ = pci_read32(bus, dev, func, 0x04);
-    tsc_spin_ms(150);
+    tsc_spin_ms(20);
     pci_write32(
         bus,
         dev,
@@ -687,6 +795,7 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
         TG3PCI_MISC_HOST_CTRL as u8,
         misc_host_ctrl(),
     );
+    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
     enable_bus_master(bus, dev, func);
     tsc_spin_ms(20);
     let id = pci_read32(bus, dev, func, 0);
@@ -696,15 +805,10 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
     Ok(())
 }
 
+/// Linux `tg3_poll_fw`: wait for `~MAGIC1`. Timeout is **not** fatal
+/// (some boards have no running firmware); we WARN and continue.
 #[cfg(feature = "uefi-bin")]
 fn wait_fw_magic(bus: u8, dev: u8, func: u8) -> bool {
-    sram_write(
-        bus,
-        dev,
-        func,
-        NIC_SRAM_FIRMWARE_MBOX,
-        NIC_SRAM_FIRMWARE_MBOX_MAGIC1,
-    );
     for _ in 0..200 {
         let v = sram_read(bus, dev, func, NIC_SRAM_FIRMWARE_MBOX);
         if v == !NIC_SRAM_FIRMWARE_MBOX_MAGIC1 {
@@ -758,22 +862,18 @@ unsafe fn program_rings(mmio: u64, bus: u8, dev: u8, func: u8, dma: &mut DmaAren
     let st = core::ptr::addr_of!(dma.status) as u64;
 
     mmio_write64(mmio, HOSTCC_STATUS_BLK_HOST_ADDR, st);
-    mmio_write(mmio, HOSTCC_RXCOL_TICKS, 0x48);
-    mmio_write(mmio, HOSTCC_TXCOL_TICKS, 0x48);
-    mmio_write(mmio, HOSTCC_RXMAX_FRAMES, 0x01);
-    mmio_write(mmio, HOSTCC_TXMAX_FRAMES, 0x01);
 
+    // 57765_PLUS STD BD: (ring_size << 16) | (1536 << 2). Linux tg3.
     mmio_write64(mmio, RCVDBDI_STD_BD + TG3_BDINFO_HOST_ADDR, std);
     mmio_write(
         mmio,
         RCVDBDI_STD_BD + TG3_BDINFO_MAXLEN_FLAGS,
-        (RING as u32) << BDINFO_FLAGS_MAXLEN_SHIFT,
+        (RING as u32) << BDINFO_FLAGS_MAXLEN_SHIFT | (TG3_RX_STD_DMA_SZ << 2),
     );
-    mmio_write(
-        mmio,
-        RCVDBDI_STD_BD + TG3_BDINFO_NIC_ADDR,
-        NIC_SRAM_RX_BUFFER_DESC,
-    );
+    // 5717_PLUS: do not program RCVDBDI_STD_BD+NIC_ADDR (0x245C).
+
+    // RING=32 → thresh = max(RING/8, 1) = 4. Must stay < RING-1.
+    mmio_write(mmio, RCVBDI_STD_THRESH, 4);
 
     for off in (NIC_SRAM_SEND_RCB..NIC_SRAM_RCV_RET_RCB).step_by(TG3_BDINFO_SIZE as usize) {
         sram_write(
@@ -803,15 +903,6 @@ unsafe fn program_rings(mmio: u64, bus: u8, dev: u8, func: u8, dma: &mut DmaAren
         NIC_SRAM_TX_BUFFER_DESC,
     );
     set_bdinfo(bus, dev, func, NIC_SRAM_RCV_RET_RCB, rcb, RING as u32, 0);
-
-    enable_block(mmio, RCVLPC_MODE);
-    enable_block(mmio, RCVDBDI_MODE);
-    enable_block(mmio, RCVCC_MODE);
-    enable_block(mmio, RCVLSC_MODE);
-    enable_block(mmio, SNDDATAI_MODE);
-    enable_block(mmio, SNDBDI_MODE);
-    enable_block(mmio, SNDBDS_MODE);
-    enable_block(mmio, HOSTCC_MODE);
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -840,11 +931,82 @@ fn set_bdinfo(bus: u8, dev: u8, func: u8, base: u32, mapping: u64, maxlen: u32, 
     sram_write(bus, dev, func, base + TG3_BDINFO_NIC_ADDR, nic_addr);
 }
 
+/// Linux `tg3_reset_hw`: disable HOSTCC, wait, program ticks, then ENABLE.
+/// Do **not** RESET after programming ticks (that wipes them).
 #[cfg(feature = "uefi-bin")]
-unsafe fn enable_block(mmio: u64, reg: u32) {
-    mmio_write(mmio, reg, MODE_RESET);
+unsafe fn enable_hostcc(mmio: u64) {
+    mmio_write(mmio, HOSTCC_MODE, 0);
     tsc_spin_ms(1);
-    mmio_write(mmio, reg, MODE_ENABLE);
+    for _ in 0..200 {
+        if mmio_read(mmio, HOSTCC_MODE) & MODE_ENABLE == 0 {
+            break;
+        }
+        tsc_spin_ms(1);
+    }
+    mmio_write(mmio, HOSTCC_RXCOL_TICKS, 0x48);
+    mmio_write(mmio, HOSTCC_TXCOL_TICKS, 0x14);
+    mmio_write(mmio, HOSTCC_RXMAX_FRAMES, 1);
+    mmio_write(mmio, HOSTCC_TXMAX_FRAMES, 1);
+    mmio_write(mmio, HOSTCC_STAT_COAL_TICKS, 0);
+    mmio_write(mmio, HOSTCC_MODE, MODE_ENABLE);
+}
+
+/// Linux `tg3`: WDMAC + RDMAC with abort bits. 5720 also STATUS_TAG_FIX
+/// and PCIe FIFO_LONG_BURST. Without these, frames never DMA.
+#[cfg(feature = "uefi-bin")]
+unsafe fn enable_dma_engines(mmio: u64) {
+    let wdmac = WDMAC_MODE_ENABLE
+        | WDMAC_MODE_TGTABORT_ENAB
+        | WDMAC_MODE_MSTABORT_ENAB
+        | WDMAC_MODE_PARITYERR_ENAB
+        | WDMAC_MODE_ADDROFLOW_ENAB
+        | WDMAC_MODE_FIFOOFLOW_ENAB
+        | WDMAC_MODE_FIFOURUN_ENAB
+        | WDMAC_MODE_FIFOOREAD_ENAB
+        | WDMAC_MODE_LNGREAD_ENAB
+        | WDMAC_MODE_STATUS_TAG_FIX;
+    mmio_write(mmio, WDMAC_MODE, wdmac);
+    tsc_spin_ms(1);
+    let rdmac = RDMAC_MODE_ENABLE
+        | RDMAC_MODE_TGTABORT_ENAB
+        | RDMAC_MODE_MSTABORT_ENAB
+        | RDMAC_MODE_PARITYERR_ENAB
+        | RDMAC_MODE_ADDROFLOW_ENAB
+        | RDMAC_MODE_FIFOOFLOW_ENAB
+        | RDMAC_MODE_FIFOURUN_ENAB
+        | RDMAC_MODE_FIFOOREAD_ENAB
+        | RDMAC_MODE_LNGREAD_ENAB
+        | RDMAC_MODE_FIFO_LONG_BURST;
+    mmio_write(mmio, RDMAC_MODE, rdmac);
+    tsc_spin_ms(1);
+}
+
+/// Completions + producer engines. `RCVDBDI` is not `RCVBDI` (0x2400 vs 0x2C00).
+#[cfg(feature = "uefi-bin")]
+unsafe fn enable_completion_blocks(mmio: u64) {
+    mmio_write(
+        mmio,
+        RCVDCC_MODE,
+        RCVDCC_MODE_ENABLE | RCVDCC_MODE_ATTN_ENABLE,
+    );
+    mmio_write(mmio, SNDDATAC_MODE, SNDDATAC_MODE_ENABLE);
+    mmio_write(
+        mmio,
+        SNDBDC_MODE,
+        SNDBDC_MODE_ENABLE | SNDBDC_MODE_ATTN_ENABLE,
+    );
+    mmio_write(
+        mmio,
+        RCVBDI_MODE,
+        RCVBDI_MODE_ENABLE | RCVBDI_MODE_RCB_ATTN_ENAB,
+    );
+    mmio_write(mmio, RCVDBDI_MODE, MODE_ENABLE | RCVDBDI_MODE_INV_RING_SZ);
+    mmio_write(mmio, SNDDATAI_MODE, MODE_ENABLE);
+    mmio_write(mmio, SNDBDI_MODE, MODE_ENABLE);
+    mmio_write(mmio, SNDBDS_MODE, MODE_ENABLE);
+    mmio_write(mmio, RCVCC_MODE, MODE_ENABLE);
+    mmio_write(mmio, RCVLPC_MODE, MODE_ENABLE);
+    mmio_write(mmio, RCVLSC_MODE, MODE_ENABLE);
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -862,6 +1024,17 @@ unsafe fn enable_mac(mmio: u64, mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
         mmio_write(mmio, MAC_ADDR_0_LOW + i * 8, addr_low);
     }
     mmio_write(mmio, MAC_RX_MTU_SIZE, 1536);
+    let mut tx_len = TX_LENGTHS_DEFAULT;
+    tx_len |=
+        mmio_read(mmio, MAC_TX_LENGTHS) & (TX_LENGTHS_JMB_FRM_LEN_MSK | TX_LENGTHS_CNT_DWN_VAL_MSK);
+    mmio_write(mmio, MAC_TX_LENGTHS, tx_len);
+    mmio_write(mmio, MAC_RCV_RULE_CFG, RCV_RULE_CFG_DEFAULT_CLASS);
+    mmio_write(mmio, RCVLPC_CONFIG, RCVLPC_CONFIG_DEFAULT);
+    for i in 0..4u32 {
+        mmio_write(mmio, MAC_HASH_REG_0 + i * 4, 0xFFFF_FFFF);
+    }
+    mmio_write(mmio, MAC_LOW_WMARK_MAX_RX_FRAME, 1);
+    mmio_write(mmio, MAC_LED_CTRL, LED_CTRL_MODE_PHY_1);
     let mac_mode = MAC_MODE_PORT_MODE_GMII
         | MAC_MODE_RXSTAT_ENABLE
         | MAC_MODE_TXSTAT_ENABLE
@@ -870,12 +1043,81 @@ unsafe fn enable_mac(mmio: u64, mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
         | MAC_MODE_FHDE_ENABLE;
     mmio_write(mmio, MAC_MODE, mac_mode);
     mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE);
-    mmio_write(mmio, MAC_TX_MODE, TX_MODE_ENABLE);
+    let mut tx_mode = TX_MODE_ENABLE;
+    tx_mode |= mmio_read(mmio, MAC_TX_MODE) & (TX_MODE_JMB_FRM_LEN | TX_MODE_CNT_DN_MODE);
+    mmio_write(mmio, MAC_TX_MODE, tx_mode);
+    mmio_write(mmio, MAC_MI_STAT, MAC_MI_STAT_LNKSTAT_ATTN_ENAB);
+    mmio_write(mmio, MAC_EVENT, MAC_EVENT_LNKSTATE_CHANGED);
     let _ = mmio_read(mmio, MAC_STATUS);
     serial_step("boot: HOST-NIC BCM5720 MAC=");
     write_mac(mac);
     crate::boot::serial::write_byte(b'\n');
     Ok(mac)
+}
+
+/// Best-effort PHY AN restart. `phy_addr = pci_fn + 1` (func 1 → PHY 2).
+/// MDIO timeout is not fatal.
+#[cfg(feature = "uefi-bin")]
+unsafe fn restart_phy_an(mmio: u64, func: u8) {
+    let phy_addr = u32::from(func) + 1; // pci_fn + 1 (func 1 → PHY 2)
+    mmio_write(
+        mmio,
+        MAC_MI_MODE,
+        MAC_MI_MODE_BASE | MAC_MI_MODE_500KHZ_CONST,
+    );
+    tsc_spin_ms(1);
+    let ok = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
+        && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
+        && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+    serial_step("boot: HOST-NIC BCM5720 phy_addr=");
+    write_hex_u8(phy_addr as u8);
+    serial_step(if ok {
+        " phy=yes\n"
+    } else {
+        " phy=timeout (continuing)\n"
+    });
+    let _ = phy_read(mmio, phy_addr, MII_BMCR);
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_wait(mmio: u64) -> bool {
+    for _ in 0..500 {
+        if mmio_read(mmio, MAC_MI_COM) & MI_COM_BUSY == 0 {
+            return true;
+        }
+        tsc_spin_us(10);
+    }
+    false
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_write(mmio: u64, phy: u32, reg: u32, val: u16) -> bool {
+    mmio_write(
+        mmio,
+        MAC_MI_COM,
+        MI_COM_START
+            | MI_COM_CMD_WRITE
+            | (phy << MI_COM_PHY_ADDR_SHIFT)
+            | (reg << MI_COM_REG_ADDR_SHIFT)
+            | u32::from(val),
+    );
+    phy_wait(mmio)
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_read(mmio: u64, phy: u32, reg: u32) -> Option<u16> {
+    mmio_write(
+        mmio,
+        MAC_MI_COM,
+        MI_COM_START
+            | MI_COM_CMD_READ
+            | (phy << MI_COM_PHY_ADDR_SHIFT)
+            | (reg << MI_COM_REG_ADDR_SHIFT),
+    );
+    if !phy_wait(mmio) {
+        return None;
+    }
+    Some((mmio_read(mmio, MAC_MI_COM) & 0xFFFF) as u16)
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -1006,12 +1248,17 @@ unsafe fn wait_eq(mmio: u64, reg: u32, want: u32, tries: u32) -> bool {
 }
 
 #[cfg(feature = "uefi-bin")]
-fn tsc_spin_ms(ms: u32) {
-    let ticks = (ms as u64).saturating_mul(2_100_000);
+fn tsc_spin_us(us: u32) {
+    let ticks = (us as u64).saturating_mul(2_100);
     let start = crate::arch::cpu::rdtsc();
     while crate::arch::cpu::rdtsc().wrapping_sub(start) < ticks {
         core::hint::spin_loop();
     }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn tsc_spin_ms(ms: u32) {
+    tsc_spin_us(ms.saturating_mul(1000));
 }
 
 #[cfg(feature = "uefi-bin")]
