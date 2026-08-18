@@ -900,6 +900,85 @@ figure[id] {
   border-radius: 1px;
 }
 
+/* —— Hero proof line —— */
+
+.hero__proof {
+  margin: 1.4rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: var(--hero-muted);
+}
+
+.hero__proof code {
+  color: var(--hero-ink);
+}
+
+/* —— Audience fork —— */
+
+.section--fork {
+  padding-top: 0;
+  padding-bottom: calc(var(--space) * 1.4);
+}
+
+.fork {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 760px) {
+  .fork {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+}
+
+.fork__card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1.35rem 1.4rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(16, 24, 32, 0.12);
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 180ms ease, transform 180ms ease,
+    background 180ms ease;
+}
+
+.fork__card:hover {
+  border-color: var(--teal);
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px);
+}
+
+.fork__kicker {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+.fork__title {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.fork__text {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.fork__cta {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--copper);
+}
+
 /* —— Motion —— */
 
 .reveal {
