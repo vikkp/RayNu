@@ -147,7 +147,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Phase 0 closed (`14e4:165f`). Phase D binds **SNP-lease MAC** (R640 `01:00.1`); bring-up is Linux **`tg3`** (not `bnxt`). Iron exchange **open**. SNP/Tcp4 do not count. |
+| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Phase 0 closed (`14e4:165f`). Phase D binds **SNP-lease MAC** (R640 `01:00.1`); station addr = parked SNP MAC (not BAR0 peek). Iron exchange **open**. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | Everest residual | E3b + E4 polish + distro | TLS/console later; distro installer later (after E3b) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |

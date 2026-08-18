@@ -164,7 +164,9 @@ boot: IOMMU ACPI DMAR=no
 DHCP used **`01:00.1` MAC `b0:26:28:5c:5a:3a`**. Binding **`01:00.0`**
 (`:5a:38`) left Vignesh's laptop with **no ARP** / ping unreachable /
 curl fail on the parked lease. Phase D now matches the parked SNP MAC
-(fallback: func 1, then func 0). Evidence:
+(fallback: func 1, then func 0). After bind, the **parked SNP MAC** is
+programmed as the station address (iron: BAR0 peek on `01:00.1` was `:39`
+while SNP leased `:3a`). Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
 
 ### Phase D — same `Device` trait; idle after BOOT-OK
@@ -186,8 +188,8 @@ ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
 curl -sS "http://<lease>:8443/"
 ```
 
-Expect COM2 `HOST-NIC BCM5720 pick pci=… matched SNP lease` then
-`rings armed` then `HOST-NIC idle listening on <lease>:8443`. The iron HTTP-OK marker is
+Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
+`station SNP-lease MAC=…` then `rings armed` then `HOST-NIC idle listening on <lease>:8443`. The iron HTTP-OK marker is
 only after that exchange. Do not claim it from this runbook.
 
 Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`

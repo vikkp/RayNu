@@ -1,5 +1,5 @@
 use super::{
-    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, pick_bcm5720_pci, rx_bd_packet_len,
+    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, pick_bcm5720_pci, rx_bd_packet_len, station_mac,
     Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
@@ -44,6 +44,29 @@ fn pick_only_func0_falls_back_func0() {
 #[test]
 fn pick_empty_is_none() {
     assert!(pick_bcm5720_pci(&[], MAC_FUNC1).is_none());
+}
+
+#[test]
+fn pick_r640_peek_39_vs_snp_3a_falls_back_func1() {
+    let peek_func1 = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
+    let snp = MAC_FUNC1;
+    let cands = [(1, 0, 0, MAC_FUNC0), (1, 0, 1, peek_func1)];
+    let p = pick_bcm5720_pci(&cands, snp).unwrap();
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 1));
+    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc1);
+    assert_eq!(station_mac(peek_func1, snp), snp);
+}
+
+#[test]
+fn station_mac_prefers_non_zero_lease() {
+    let peeked = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
+    assert_eq!(station_mac(peeked, MAC_FUNC1), MAC_FUNC1);
+}
+
+#[test]
+fn station_mac_falls_back_to_peek_when_lease_zero() {
+    let peeked = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
+    assert_eq!(station_mac(peeked, [0; 6]), peeked);
 }
 
 #[test]
@@ -144,5 +167,6 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("DEFAULT_MB_MACRX_LOW_WATER_57765"));
     assert!(src.contains("phy_addr = u32::from(func) + 1"));
     assert!(src.contains("tg3_write_sig_pre_reset"));
+    assert!(src.contains("fn station_mac("));
     assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
 }

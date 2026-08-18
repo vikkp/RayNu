@@ -290,6 +290,23 @@ pub fn pick_bcm5720_pci(cands: &[(u8, u8, u8, [u8; 6])], want: [u8; 6]) -> Optio
     })
 }
 
+/// Station address for smoltcp and `MAC_ADDR_*` after reset.
+///
+/// INVARIANTS:
+/// - Non-zero `lease` always wins (PRE-EBS SNP DHCP/ARP identity)
+/// - All-zero `lease` → `peeked` BAR0 MAC
+/// - Never panics
+///
+/// Iron 2026-08-18: SNP leased `:3a` on `01:00.1`; BAR0 peek was `:39`.
+/// Programming the peek left ARP on the wrong station → curl timeout.
+pub fn station_mac(peeked: [u8; 6], lease: [u8; 6]) -> [u8; 6] {
+    if lease.iter().any(|&b| b != 0) {
+        lease
+    } else {
+        peeked
+    }
+}
+
 /// Parse a mocked 32-byte Tigon3 RX return BD. Host/Miri/fuzz — no MMIO.
 ///
 /// INVARIANTS:
@@ -478,7 +495,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     let result = unsafe {
         let dma = &mut *core::ptr::addr_of_mut!(DMA);
         *dma = DmaArena::zeroed();
-        match hw_init(bar, bus, dev, func, dma) {
+        match hw_init(bar, bus, dev, func, dma, prefer_mac) {
             Ok(mac) => {
                 NIC = Some(NicState {
                     mmio: bar,
@@ -674,6 +691,7 @@ unsafe fn hw_init(
     dev: u8,
     func: u8,
     dma: &mut DmaArena,
+    prefer_mac: [u8; 6],
 ) -> Result<[u8; 6], Bcm5720Error> {
     pci_write32(
         bus,
@@ -698,6 +716,14 @@ unsafe fn hw_init(
     crate::boot::serial::write_byte(b'\n');
 
     let mac_before = read_mac(mmio);
+    let station = station_mac(mac_before, prefer_mac);
+    if station != mac_before {
+        serial_step("boot: HOST-NIC BCM5720 station SNP-lease MAC=");
+        write_mac(station);
+        serial_step(" (BAR0 peeked ");
+        write_mac(mac_before);
+        serial_step(")\n");
+    }
     chip_reset(mmio, bus, dev, func)?;
     mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
     mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
@@ -750,7 +776,7 @@ unsafe fn hw_init(
 
     init_rings(dma);
     program_rings(mmio, bus, dev, func, dma);
-    enable_mac(mmio, mac_before)?;
+    enable_mac(mmio, station)?;
     enable_dma_engines(mmio);
     enable_hostcc(mmio);
     enable_completion_blocks(mmio);
@@ -765,7 +791,7 @@ unsafe fn hw_init(
     mailbox_write(mmio, MAILBOX_SNDHOST_PROD_IDX_0, 0);
 
     serial_step("boot: HOST-NIC BCM5720 rings armed (poll-mode, MSI-X off)\n");
-    Ok(mac_before)
+    Ok(station)
 }
 
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).

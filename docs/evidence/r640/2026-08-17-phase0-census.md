@@ -58,4 +58,14 @@ Picker (SNP MAC / func 1) stays. Bring-up now matches `tg3` + PG ch. 7
 (magic-before-reset, preserve PCIe bit 29, DMA engines, 5717+ RCB rules).
 Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 
+### 2026-08-18 addendum — BAR0 peek `:39` vs SNP `:3a`
+
+Flashed tg3 bring-up EFI. Guest path green (`RAYNU-V-R640-BOOT-OK`).
+`fw-magic=yes`, `phy=yes`, rings armed. Pick was **`01:00.1`** (right jack)
+but BAR0 peek was **`:5a:39`** while PRE-EBS SNP leased **`:5a:3a`**
+(`10.99.99.126`). Fallback `no MAC match`. Native Device used `:39`;
+Vignesh curl to the parked lease timed out (ARP identity mismatch).
+
+Station address is now the **parked SNP MAC**, not the BAR0 peek.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

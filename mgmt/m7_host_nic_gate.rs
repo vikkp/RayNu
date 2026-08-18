@@ -48,6 +48,7 @@ pub fn host_nic_surface_present() -> bool {
         && census.contains("14e4:165f")
         && bcm.contains("fn parse_mocked_rx_bd_bytes(")
         && bcm.contains("fn pick_bcm5720_pci(")
+        && bcm.contains("fn station_mac(")
         && bcm.contains("fn bcm5720_present(")
         && bcm.contains("// SAFETY:")
         && bcm.contains("KANI-TARGET")
