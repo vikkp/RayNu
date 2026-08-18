@@ -26,3 +26,17 @@
 
   nodes.forEach((el) => observer.observe(el));
 })();
+
+(() => {
+  const nav = document.querySelector(".site-nav");
+  if (!nav || !document.body.classList.contains("page-home")) return;
+
+  const hero = document.querySelector(".hero");
+  const onScroll = () => {
+    const threshold = hero ? hero.offsetHeight - 120 : 480;
+    nav.classList.toggle("is-solid", window.scrollY > threshold);
+  };
+
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+})();
