@@ -163,8 +163,11 @@ boot: IOMMU ACPI DMAR=no
 **Chosen:** `14e4:165f` (BCM5720) dual-port LOM. Iron 2026-08-18: PRE-EBS SNP
 DHCP used **`01:00.1` MAC `b0:26:28:5c:5a:3a`**. Binding **`01:00.0`**
 (`:5a:38`) left Vignesh's laptop with **no ARP** / ping unreachable /
-curl fail on the parked lease. Phase D now matches the parked SNP MAC
-(fallback: func 1, then func 0). After bind, the **parked SNP MAC** is
+curl fail on the parked lease (that bind used station `:38`, not SNP `:3a`).
+Phase D programs the parked SNP MAC on whichever function actually has
+copper: peek each candidate `BMSR`, try func 0 (NCSI/LOM1) then func 1 until
+`LSTATUS`. Iron skip-reset EFI still saw `ape-ncsi=yes` and func 1
+`lpa=0000`. After bind, the **parked SNP MAC** is
 programmed as the station address (iron: BAR0 peek on `01:00.1` was `:39`
 while SNP leased `:3a`; station-MAC EFI programmed `:3a` and still saw
 ping **host unreachable** — PHY link / `MAC_MODE` next). Evidence:
@@ -199,14 +202,16 @@ curl -sS -m 5 "http://<lease>:8443/"
 Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
-Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-ncsi=yes|no ape-lock=yes|timeout|skip`
+Expect COM2 `HOST-NIC BCM5720 cand pci=… MAC=… bmsr=…` for each function, then
+`try pci=… fallback=func0 (NCSI/LOM1)` (or `link-up BMSR` / `matched SNP lease`)
+then (if peek ≠ lease) `station SNP-lease MAC=…` then
+`pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-ncsi=yes|no ape-lock=yes|timeout|skip`
 then either `inherit SNP PHY (skip CORECLK_RESET)` or
 `skip CORECLK_RESET (keep GPHY analog)` then `phy_reset=pre … eee=off …`
 then **no** `reset…` / `fw-magic=` / `an-restart=` then
 `link=up speed=… duplex=…`
-(or `link=timeout bmsr=… bmcr=… lpa=…`) then `rings armed` then
-`HOST-NIC idle listening on <lease>:8443`.
+(or `link=timeout` then `try next func` and the other PCI function)
+then `rings armed` then `HOST-NIC idle listening on <lease>:8443`.
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**

@@ -18,7 +18,11 @@
 //! `CORECLK_RESET` still `bmsr=7949` / `lpa=0000` with working MDIO
 //! (`ape-lock=yes id=0362:5f60`). **Skip `CORECLK_RESET`** — steal rings only;
 //! BMCR_RESET the GPHY while MAC clocks stay firmware-owned. Clear CPMU EEE
-//! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Wait `BMSR_LSTATUS` and set
+//! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Iron 2026-08-19 skip-reset
+//! EFI still `pre-reset bmsr=7949` / `lpa=0000` on func 1 with `ape-ncsi=yes`
+//! after PRE-EBS SNP DHCP on `:3a`. Peek each candidate `BMSR` and **try
+//! func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays the SNP
+//! lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -315,15 +319,17 @@ pub fn pci_id_is_bcm5720(vendor: u16, device: u16) -> bool {
     pci_id_is_iron_census(vendor, device)
 }
 
-/// Why [`pick_bcm5720_pci`] chose a BDF (host-testable; no MMIO).
+/// Why [`pick_bcm5720_pci`] / [`pick_bcm5720_try_order`] chose a BDF.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bcm5720PickReason {
     /// BAR0 MAC equals the parked SNP lease MAC.
     MacMatch,
-    /// No MAC match; dual-port fallback prefers function 1 (R640 SNP port).
-    PreferFunc1,
-    /// No MAC match and no function 1; use function 0.
+    /// Candidate `BMSR_LSTATUS` set at scan (cable on this function).
+    PreferLink,
+    /// No MAC match / no live link; try function 0 first (Dell NCSI/LOM1).
     PreferFunc0,
+    /// Retry (or sole remaining) function 1.
+    PreferFunc1,
     /// No MAC match and neither function 0 nor 1; first candidate.
     FirstCand,
 }
@@ -332,8 +338,9 @@ impl Bcm5720PickReason {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::MacMatch => "matched SNP lease",
-            Self::PreferFunc1 => "fallback=func1 (no MAC match)",
-            Self::PreferFunc0 => "fallback=func0 (no MAC match)",
+            Self::PreferLink => "link-up BMSR",
+            Self::PreferFunc0 => "fallback=func0 (NCSI/LOM1)",
+            Self::PreferFunc1 => "fallback=func1 (retry)",
             Self::FirstCand => "fallback=first (no MAC match)",
         }
     }
@@ -348,48 +355,128 @@ pub struct Bcm5720PciPick {
     pub reason: Bcm5720PickReason,
 }
 
-/// Among `14e4:165f` candidates `(bus, dev, func, mac)`, bind SNP's port.
-///
-/// INVARIANTS:
-/// - Exact MAC match wins (the PRE-EBS SNP lease station address)
-/// - Else prefer `func == 1`, then `func == 0`, then the first candidate
-/// - Empty list → `None`
-/// - Never panics
-pub fn pick_bcm5720_pci(cands: &[(u8, u8, u8, [u8; 6])], want: [u8; 6]) -> Option<Bcm5720PciPick> {
-    if cands.is_empty() {
-        return None;
+pub const BCM5720_MAX_CAND: usize = 4;
+
+fn pick_push(
+    out: &mut [Bcm5720PciPick; BCM5720_MAX_CAND],
+    n: &mut usize,
+    bus: u8,
+    dev: u8,
+    func: u8,
+    reason: Bcm5720PickReason,
+) {
+    if *n >= BCM5720_MAX_CAND {
+        return;
     }
-    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.3 == want) {
-        return Some(Bcm5720PciPick {
-            bus,
-            dev,
-            func,
-            reason: Bcm5720PickReason::MacMatch,
-        });
+    for p in out.iter().take(*n) {
+        if p.bus == bus && p.dev == dev && p.func == func {
+            return;
+        }
     }
-    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.2 == 1) {
-        return Some(Bcm5720PciPick {
-            bus,
-            dev,
-            func,
-            reason: Bcm5720PickReason::PreferFunc1,
-        });
-    }
-    if let Some(&(bus, dev, func, _)) = cands.iter().find(|c| c.2 == 0) {
-        return Some(Bcm5720PciPick {
-            bus,
-            dev,
-            func,
-            reason: Bcm5720PickReason::PreferFunc0,
-        });
-    }
-    let (bus, dev, func, _) = cands[0];
-    Some(Bcm5720PciPick {
+    out[*n] = Bcm5720PciPick {
         bus,
         dev,
         func,
+        reason,
+    };
+    *n += 1;
+}
+
+/// Bind order for dual-port BCM5720 (host-testable; no MMIO).
+///
+/// INVARIANTS:
+/// - Exact MAC match first
+/// - Then any candidate with `link_up`
+/// - Then func 0 (NCSI/LOM1), then func 1, then leftovers
+/// - Empty list → n=0
+/// - Never panics
+pub fn pick_bcm5720_try_order(
+    cands: &[(u8, u8, u8, [u8; 6])],
+    link_up: &[bool],
+    want: [u8; 6],
+) -> ([Bcm5720PciPick; BCM5720_MAX_CAND], usize) {
+    let mut out = [Bcm5720PciPick {
+        bus: 0,
+        dev: 0,
+        func: 0,
         reason: Bcm5720PickReason::FirstCand,
-    })
+    }; BCM5720_MAX_CAND];
+    let mut n = 0usize;
+    for &(bus, dev, func, mac) in cands {
+        if mac == want {
+            pick_push(
+                &mut out,
+                &mut n,
+                bus,
+                dev,
+                func,
+                Bcm5720PickReason::MacMatch,
+            );
+        }
+    }
+    for (i, &(bus, dev, func, _)) in cands.iter().enumerate() {
+        if i < link_up.len() && link_up[i] {
+            pick_push(
+                &mut out,
+                &mut n,
+                bus,
+                dev,
+                func,
+                Bcm5720PickReason::PreferLink,
+            );
+        }
+    }
+    for &(bus, dev, func, _) in cands {
+        if func == 0 {
+            pick_push(
+                &mut out,
+                &mut n,
+                bus,
+                dev,
+                func,
+                Bcm5720PickReason::PreferFunc0,
+            );
+        }
+    }
+    for &(bus, dev, func, _) in cands {
+        if func == 1 {
+            pick_push(
+                &mut out,
+                &mut n,
+                bus,
+                dev,
+                func,
+                Bcm5720PickReason::PreferFunc1,
+            );
+        }
+    }
+    for &(bus, dev, func, _) in cands {
+        pick_push(
+            &mut out,
+            &mut n,
+            bus,
+            dev,
+            func,
+            Bcm5720PickReason::FirstCand,
+        );
+    }
+    (out, n)
+}
+
+/// First bind attempt from [`pick_bcm5720_try_order`] (no live-link hints).
+///
+/// INVARIANTS:
+/// - Exact MAC match wins
+/// - Else func 0, then func 1, then the first candidate
+/// - Empty list → `None`
+/// - Never panics
+pub fn pick_bcm5720_pci(cands: &[(u8, u8, u8, [u8; 6])], want: [u8; 6]) -> Option<Bcm5720PciPick> {
+    let (ord, n) = pick_bcm5720_try_order(cands, &[], want);
+    if n == 0 {
+        None
+    } else {
+        Some(ord[0])
+    }
 }
 
 /// Station address for smoltcp and `MAC_ADDR_*` after reset.
@@ -809,13 +896,24 @@ pub fn bcm5720_present() -> bool {
 }
 
 /// Reset + ring init. Identity-mapped BAR (UEFI page tables).
-/// Picks the function whose BAR0 MAC matches `prefer_mac` (parked SNP lease).
+/// Tries each BCM5720 function until copper `LSTATUS` (func 0 / NCSI first).
 #[cfg(feature = "uefi-bin")]
 pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
-    let (bus, dev, func, bar) = find_bcm5720(prefer_mac).ok_or(Bcm5720Error::NotFound)?;
-    enable_bus_master(bus, dev, func);
-    if bar == 0 {
-        return Err(Bcm5720Error::NoBar);
+    const MAX: usize = BCM5720_MAX_CAND;
+    let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); MAX];
+    let mut bars = [0u64; MAX];
+    let mut bmsr = [0u16; MAX];
+    let n = scan_bcm5720(&mut cands, &mut bars, &mut bmsr);
+    if n == 0 {
+        return Err(Bcm5720Error::NotFound);
+    }
+    let mut link = [false; MAX];
+    for i in 0..n {
+        link[i] = bmsr_link_up(bmsr[i]);
+    }
+    let (order, ntry) = pick_bcm5720_try_order(&cands[..n], &link[..n], prefer_mac);
+    if ntry == 0 {
+        return Err(Bcm5720Error::NotFound);
     }
     if NIC_LOCK.swap(true, Ordering::Acquire) {
         return Err(Bcm5720Error::Busy);
@@ -825,20 +923,89 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     // KANI-TARGET: mocked RX BD parse only — not this MMIO path.
     let result = unsafe {
         let dma = &mut *core::ptr::addr_of_mut!(DMA);
-        *dma = DmaArena::zeroed();
-        match hw_init(bar, bus, dev, func, dma, prefer_mac) {
-            Ok(mac) => {
-                NIC = Some(NicState {
-                    mmio: bar,
-                    mac,
-                    rx_rcb_ptr: 0,
-                    rx_std_prod: (RING as u16).saturating_sub(1),
-                    tx_prod: 0,
-                    tx_cons: 0,
-                });
-                Ok(mac)
+        let mut last_ok: Option<([u8; 6], u64)> = None;
+        let mut last_err = Bcm5720Error::NotFound;
+        let mut prev_bar: Option<u64> = None;
+        for k in 0..ntry {
+            let pick = order[k];
+            let mut bar = 0u64;
+            for i in 0..n {
+                if cands[i].0 == pick.bus && cands[i].1 == pick.dev && cands[i].2 == pick.func {
+                    bar = bars[i];
+                    break;
+                }
             }
-            Err(e) => Err(e),
+            if bar == 0 {
+                last_err = Bcm5720Error::NoBar;
+                continue;
+            }
+            if let Some(prev) = prev_bar {
+                halt_mac_dma(prev);
+            }
+            serial_step("boot: HOST-NIC BCM5720 try pci=");
+            write_hex_u8(pick.bus);
+            crate::boot::serial::write_byte(b':');
+            write_hex_u8(pick.dev);
+            crate::boot::serial::write_byte(b'.');
+            write_hex_u8(pick.func);
+            crate::boot::serial::write_str(" MAC=");
+            write_mac({
+                let mut m = [0u8; 6];
+                for i in 0..n {
+                    if cands[i].0 == pick.bus && cands[i].1 == pick.dev && cands[i].2 == pick.func {
+                        m = cands[i].3;
+                        break;
+                    }
+                }
+                m
+            });
+            crate::boot::serial::write_byte(b' ');
+            serial_step(pick.reason.as_str());
+            crate::boot::serial::write_byte(b'\n');
+            enable_bus_master(pick.bus, pick.dev, pick.func);
+            *dma = DmaArena::zeroed();
+            match hw_init(bar, pick.bus, pick.dev, pick.func, dma, prefer_mac) {
+                Ok((mac, up)) => {
+                    if up {
+                        NIC = Some(NicState {
+                            mmio: bar,
+                            mac,
+                            rx_rcb_ptr: 0,
+                            rx_std_prod: (RING as u16).saturating_sub(1),
+                            tx_prod: 0,
+                            tx_cons: 0,
+                        });
+                        last_ok = Some((mac, bar));
+                        break;
+                    }
+                    prev_bar = Some(bar);
+                    last_ok = Some((mac, bar));
+                }
+                Err(e) => {
+                    last_err = e;
+                    prev_bar = Some(bar);
+                    if k + 1 < ntry {
+                        serial_step("boot: HOST-NIC BCM5720 try next func\n");
+                    }
+                    continue;
+                }
+            }
+            if k + 1 < ntry {
+                serial_step("boot: HOST-NIC BCM5720 try next func\n");
+            }
+        }
+        if let Some((mac, bar)) = last_ok {
+            NIC = Some(NicState {
+                mmio: bar,
+                mac,
+                rx_rcb_ptr: 0,
+                rx_std_prod: (RING as u16).saturating_sub(1),
+                tx_prod: 0,
+                tx_cons: 0,
+            });
+            Ok(mac)
+        } else {
+            Err(last_err)
         }
     };
     NIC_LOCK.store(false, Ordering::Release);
@@ -913,12 +1080,13 @@ fn any_bcm5720_bar() -> Option<(u8, u8, u8, u64)> {
     None
 }
 
-/// Scan func 0 **and** 1 (and other multifunction slots). Peek MAC before reset.
+/// Scan func 0 **and** 1. Peek MAC + `BMSR` (no `CORECLK_RESET`).
 #[cfg(feature = "uefi-bin")]
-fn find_bcm5720(prefer_mac: [u8; 6]) -> Option<(u8, u8, u8, u64)> {
-    const MAX: usize = 4;
-    let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); MAX];
-    let mut bars = [0u64; MAX];
+fn scan_bcm5720(
+    cands: &mut [(u8, u8, u8, [u8; 6]); BCM5720_MAX_CAND],
+    bars: &mut [u64; BCM5720_MAX_CAND],
+    bmsr: &mut [u16; BCM5720_MAX_CAND],
+) -> usize {
     let mut n = 0usize;
     for bus in 0u8..=15 {
         for dev in 0u8..32 {
@@ -932,13 +1100,14 @@ fn find_bcm5720(prefer_mac: [u8; 6]) -> Option<(u8, u8, u8, u64)> {
                 }
                 let vendor = id as u16;
                 let device = (id >> 16) as u16;
-                if pci_id_is_bcm5720(vendor, device) && n < MAX {
+                if pci_id_is_bcm5720(vendor, device) && n < BCM5720_MAX_CAND {
                     let bar = (pci_read32(bus, dev, func, 0x10) as u64) & !0xF;
                     if bar != 0 {
                         enable_mem(bus, dev, func);
-                        // SAFETY: firmware BAR0; peek MAC_ADDR only — no CORECLK_RESET.
-                        // KANI-TARGET: pick_bcm5720_pci (host), not this MMIO peek.
+                        // SAFETY: firmware BAR0; peek MAC_ADDR + BMSR only — no CORECLK_RESET.
+                        // KANI-TARGET: pick_bcm5720_try_order (host), not this MMIO peek.
                         let mac = unsafe { peek_mac(bar, bus, dev, func) };
+                        let phy = unsafe { peek_phy_bmsr(bar, func) };
                         serial_step("boot: HOST-NIC BCM5720 cand pci=");
                         write_hex_u8(bus);
                         crate::boot::serial::write_byte(b':');
@@ -947,9 +1116,12 @@ fn find_bcm5720(prefer_mac: [u8; 6]) -> Option<(u8, u8, u8, u64)> {
                         write_hex_u8(func);
                         crate::boot::serial::write_str(" MAC=");
                         write_mac(mac);
+                        serial_step(" bmsr=");
+                        write_hex_u16(phy);
                         crate::boot::serial::write_byte(b'\n');
                         cands[n] = (bus, dev, func, mac);
                         bars[n] = bar;
+                        bmsr[n] = phy;
                         n += 1;
                     }
                 }
@@ -962,28 +1134,7 @@ fn find_bcm5720(prefer_mac: [u8; 6]) -> Option<(u8, u8, u8, u64)> {
             }
         }
     }
-    let pick = pick_bcm5720_pci(&cands[..n], prefer_mac)?;
-    let mut bar = 0u64;
-    let mut mac = [0u8; 6];
-    for i in 0..n {
-        if cands[i].0 == pick.bus && cands[i].1 == pick.dev && cands[i].2 == pick.func {
-            bar = bars[i];
-            mac = cands[i].3;
-            break;
-        }
-    }
-    serial_step("boot: HOST-NIC BCM5720 pick pci=");
-    write_hex_u8(pick.bus);
-    crate::boot::serial::write_byte(b':');
-    write_hex_u8(pick.dev);
-    crate::boot::serial::write_byte(b'.');
-    write_hex_u8(pick.func);
-    crate::boot::serial::write_str(" MAC=");
-    write_mac(mac);
-    crate::boot::serial::write_byte(b' ');
-    serial_step(pick.reason.as_str());
-    crate::boot::serial::write_byte(b'\n');
-    Some((pick.bus, pick.dev, pick.func, bar))
+    n
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -1023,7 +1174,7 @@ unsafe fn hw_init(
     func: u8,
     dma: &mut DmaArena,
     prefer_mac: [u8; 6],
-) -> Result<[u8; 6], Bcm5720Error> {
+) -> Result<([u8; 6], bool), Bcm5720Error> {
     pci_write32(
         bus,
         dev,
@@ -1157,7 +1308,7 @@ unsafe fn hw_init(
     if !inherit && !skip_coreclk_reset() {
         restart_copper_an(mmio, func);
     }
-    wait_phy_link_and_adjust_mac(mmio, func);
+    let up = wait_phy_link_and_adjust_mac(mmio, func);
 
     mailbox_write(
         mmio,
@@ -1168,7 +1319,7 @@ unsafe fn hw_init(
     mailbox_write(mmio, MAILBOX_SNDHOST_PROD_IDX_0, 0);
 
     serial_step("boot: HOST-NIC BCM5720 rings armed (poll-mode, MSI-X off)\n");
-    Ok(station)
+    Ok((station, up))
 }
 
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
@@ -1653,7 +1804,7 @@ unsafe fn phy_enable_automdix_wirespeed(mmio: u64, phy: u32) -> bool {
 /// Linux `tg3_setup_phy` / `tg3_adjust_link`: `BMSR_LSTATUS` is latched low
 /// (read twice). Then `MAC_MODE` MII vs GMII from speed. Soft-fail.
 #[cfg(feature = "uefi-bin")]
-unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) {
+unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) -> bool {
     let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
     let phy_addr = phy_addr_5717_plus(func, sg_dig);
     let mut last_bmsr: u16 = 0;
@@ -1715,6 +1866,7 @@ unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) {
         write_hex_u32(mmio_read(mmio, TG3_CPMU_CTRL));
         serial_step("\n");
     }
+    up
 }
 
 #[cfg(feature = "uefi-bin")]

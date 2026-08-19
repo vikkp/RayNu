@@ -2,8 +2,9 @@ use super::{
     ape_fw_ready, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled, ape_per_lock_grant,
     ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up, cpmu_is_link_speed_mode,
     decode_phy_link, inherit_snp_phy, mac_mode_from_link, parse_mocked_rx_bd_bytes,
-    pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len,
-    skip_coreclk_reset, station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci,
+    pick_bcm5720_try_order, rx_bd_packet_len, skip_coreclk_reset, station_mac, Bcm5720PickReason,
+    BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -29,11 +30,17 @@ fn pick_func0_mac_binds_func0() {
 }
 
 #[test]
-fn pick_no_match_prefers_func1() {
+fn pick_no_match_prefers_func0_ncsi_first() {
     let want = [0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff];
     let p = pick_bcm5720_pci(&r640_cands(), want).unwrap();
-    assert_eq!((p.bus, p.dev, p.func), (1, 0, 1));
-    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc1);
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 0));
+    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc0);
+    let (ord, n) = pick_bcm5720_try_order(&r640_cands(), &[], want);
+    assert_eq!(n, 2);
+    assert_eq!(ord[0].func, 0);
+    assert_eq!(ord[0].reason, Bcm5720PickReason::PreferFunc0);
+    assert_eq!(ord[1].func, 1);
+    assert_eq!(ord[1].reason, Bcm5720PickReason::PreferFunc1);
 }
 
 #[test]
@@ -50,14 +57,32 @@ fn pick_empty_is_none() {
 }
 
 #[test]
-fn pick_r640_peek_39_vs_snp_3a_falls_back_func1() {
+fn pick_r640_peek_39_vs_snp_3a_tries_func0_then_func1() {
     let peek_func1 = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
     let snp = MAC_FUNC1;
     let cands = [(1, 0, 0, MAC_FUNC0), (1, 0, 1, peek_func1)];
     let p = pick_bcm5720_pci(&cands, snp).unwrap();
-    assert_eq!((p.bus, p.dev, p.func), (1, 0, 1));
-    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc1);
+    assert_eq!((p.bus, p.dev, p.func), (1, 0, 0));
+    assert_eq!(p.reason, Bcm5720PickReason::PreferFunc0);
+    let (ord, n) = pick_bcm5720_try_order(&cands, &[], snp);
+    assert_eq!(n, 2);
+    assert_eq!(ord[0].func, 0);
+    assert_eq!(ord[1].func, 1);
     assert_eq!(station_mac(peek_func1, snp), snp);
+}
+
+#[test]
+fn pick_link_up_func1_beats_ncsi_func0() {
+    let peek_func1 = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
+    let snp = MAC_FUNC1;
+    let cands = [(1, 0, 0, MAC_FUNC0), (1, 0, 1, peek_func1)];
+    let link = [false, true];
+    let (ord, n) = pick_bcm5720_try_order(&cands, &link, snp);
+    assert_eq!(n, 2);
+    assert_eq!(ord[0].func, 1);
+    assert_eq!(ord[0].reason, Bcm5720PickReason::PreferLink);
+    assert_eq!(ord[1].func, 0);
+    assert_eq!(ord[1].reason, Bcm5720PickReason::PreferFunc0);
 }
 
 #[test]
@@ -189,6 +214,10 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("skip CORECLK_RESET"));
     assert!(src.contains("MII_TG3_MISC_SHDW_APD_ENABLE"));
     assert!(src.contains("fn inherit_snp_phy("));
+    assert!(src.contains("fn pick_bcm5720_try_order("));
+    assert!(src.contains("fallback=func0 (NCSI/LOM1)"));
+    assert!(src.contains("try next func"));
+    assert!(src.contains("bmsr="));
     assert!(src.contains("fn skip_coreclk_reset("));
     assert!(src.contains("fn ape_ncsi_enabled("));
     assert!(src.contains("phy_reset=pre"));

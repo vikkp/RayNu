@@ -198,4 +198,30 @@ clear, clear CPMU EEE LPI, print APE `NCSI`. Do **not** claim
 `HOST-NIC-HTTP-OK` from this note.
 Reject PHY-before-chip-reset EFI `1213952`.
 
+### 2026-08-19 addendum — skip-`CORECLK_RESET` still `lpa=0000`; `ape-ncsi=yes`
+
+Skip-chip-reset EFI (`1212416` bytes, SHA
+`867651668efcfb5ba13b5f2a431a0b4c711cc5517ca4590b39177abc5f49b9e7`, CI run
+`32283740560`) skipped `CORECLK_RESET` as designed. COM2:
+
+```
+SNP residual MAC=b0:26:28:5c:5a:3a
+SNP lease 10.99.99.116/24
+cand pci=01:00.00 MAC=b0:26:28:5c:5a:38
+cand pci=01:00.01 MAC=b0:26:28:5c:5a:39
+pick pci=01:00.01 … fallback=func1 (no MAC match)
+pre-reset bmsr=7949 ape=yes ape-bar=0x92910000 ape-fw=ready ape-evt=sent ape-ncsi=yes ape-lock=yes
+skip CORECLK_RESET (keep GPHY analog)
+phy_reset=pre yes … eee=off phy=yes id=0362:5f60
+link=timeout bmsr=7949 bmcr=1000 lpa=0000
+```
+
+No `reset…` / `fw-magic` / `an-restart`. PRE-EBS SNP still got DHCP on `:3a`
+(`media_present`). Func 1 was already down at bind (`pre-reset bmsr=7949`).
+`ape-ncsi=yes` — APE NCSI is on; SNP `:3a` is the management MAC (not either
+BAR0 peek). Next EFI peeks each candidate `BMSR` and tries **func 0
+(NCSI/LOM1) then func 1** until `LSTATUS`; station stays the SNP lease MAC.
+Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+Reject skip-reset EFI `1212416`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

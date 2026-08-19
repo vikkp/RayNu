@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: 295da74c062785e7ca435da6050314f163f500b6
-last_commit_short: 295da74
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -40,7 +40,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
 | **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
 | **ETA month** | **2026-10** | slipped from 2026-09 |
-| **Confidence** | medium | E2+E3+E5 on COM2; PHY-before-reset EFI `1213952` still `bmsr=7949`; skip CORECLK_RESET next; HTTP-OK open |
+| **Confidence** | medium | E2+E3+E5 on COM2; skip-reset EFI `1212416` `ape-ncsi=yes` still `bmsr=7949` on func 1; try both funcs; HTTP-OK open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
@@ -124,7 +124,7 @@ All must be true (no hand-waving):
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
-| **Post-EBS durable HTTP (E3b)** | MISSING | PHY-before-reset EFI `1213952`: `phy_reset=pre` then `CORECLK_RESET` still `bmsr=7949` / `lpa=0000`. Skip chip reset. HTTP-OK not claimed |
+| **Post-EBS durable HTTP (E3b)** | MISSING | Skip-reset EFI `1212416`: `ape-ncsi=yes` still `pre-reset bmsr=7949` / `lpa=0000` on func 1. Try both funcs. HTTP-OK not claimed |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after E3b)**
@@ -188,7 +188,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
-| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | PHY-before-reset EFI `1213952` still `bmsr=7949`; skip CORECLK_RESET; HTTP-OK **open** |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Skip-reset EFI `ape-ncsi=yes` still `bmsr=7949` on func 1; try both funcs; HTTP-OK **open** |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -259,9 +259,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | PENDING |
-| Summary | PHY-before-reset EFI `1213952` still `lpa=0000`. Skip `CORECLK_RESET`; keep GPHY analog. HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (skip chip reset) |
-| Gates touched | `skip_coreclk_reset`; `HOST-NIC-HTTP-OK` not claimed |
+| Summary | Skip-reset EFI `1212416` `ape-ncsi=yes` still `lpa=0000` on func 1. Try func 0 then func 1. HTTP-OK not claimed |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (NCSI/dual-func) |
+| Gates touched | `pick_bcm5720_try_order`; `HOST-NIC-HTTP-OK` not claimed |
 | Months Δ | 1.5 held |
 
 ---
@@ -273,7 +273,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | PHY-before-reset EFI `1213952` still `bmsr=7949` / `lpa=0000`. Skip CORECLK_RESET; E3b = HTTP after `BOOT-OK` |
+| H4 | Firmware SNP unusable after EBS | HIGH | Skip-reset EFI `1212416` `ape-ncsi=yes` still `bmsr=7949` on func 1. Try both funcs; E3b = HTTP after `BOOT-OK` |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-19 | m7-8-bcm-try-both | 1.5 | 88 | Skip-reset EFI `1212416` `ape-ncsi=yes` still `lpa=0000` on func 1; try both funcs; HTTP-OK not claimed |
 | 2026-08-19 | 295da74 | 1.5 | 88 | PHY-before-reset EFI `1213952` still `lpa=0000`; skip CORECLK_RESET; HTTP-OK not claimed |
 | 2026-08-19 | d82621a | 1.5 | 88 | APE-lock EFI `ape-lock=yes` still `bmsr=7949`; PHY reset before CORECLK_RESET; HTTP-OK not claimed |
 | 2026-08-19 | 1fefa45 | 1.5 | 88 | Inherit EFI `pre-reset bmsr=7949 ape=yes`; APE BAR2 lock; HTTP-OK not claimed |
@@ -336,9 +337,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; Phase D skip CORECLK_RESET; E3b OPEN
+Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; Phase D try both BCM5720 funcs; E3b OPEN
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     flash skip-CORECLK_RESET EFI via raynuvsrv1; expect COM2 keep GPHY analog (no reset…)
+Next move:     flash try-both EFI via raynuvsrv1; expect COM2 try func0 (NCSI/LOM1) then func1
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
 Preserve:      releases/v0.1.0-adr013-baseline
