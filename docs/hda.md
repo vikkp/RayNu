@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: 4728188a
-last_commit_short: 4728188
+last_commit: c8dd5f9f291f7b685d78069841cbcad4b500ef7b
+last_commit_short: c8dd5f9
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING (this feat) |
+| Commit | c8dd5f9 |
 | Summary | Phase D wait `BMSR_LSTATUS` + `tg3_adjust_link` MII/GMII + `RX_MODE_PROMISC`; station `:3a` confirmed; HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (no ARP after `:3a`) |
 | Gates touched | `decode_phy_link` / `mac_mode_from_link`; `HOST-NIC-HTTP-OK` not claimed |
