@@ -204,13 +204,13 @@ word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 **immediately after** `RAYNU-V-M1-EBS-OK`:
 `HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)` then
-`cand pci=… MAC=… bmsr=…` for each function, then `try pci=…` (func 0
-NCSI/LOM1 first unless `bmsr` already has `LSTATUS`). After `BOOT-OK`:
+`cand pci=… MAC=… bmsr=…`, then `phy_reset=pre skip (ape-ncsi)` when
+`ape-ncsi=yes` (not `phy_reset=pre yes`). After `BOOT-OK`:
 `reuse (armed post-EBS)` then `HOST-NIC idle listening on <lease>:8443`.
-Do **not** re-run `phy_reset=pre` at BOOT-OK if reuse printed.
+Do **not** re-run `phy_reset=pre yes` at BOOT-OK if reuse printed.
 
-If post-EBS `cand bmsr=` already `7949` on both, analog died at EBS (not
-the guest path). Curl only after `link=up`.
+Post-EBS `cand bmsr=7949` on both already closed the guest-path delay.
+Curl only after `link=up`.
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**

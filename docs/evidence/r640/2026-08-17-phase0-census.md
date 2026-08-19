@@ -248,4 +248,28 @@ down at BOOT-OK. Next EFI brings BCM5720 up **immediately after EBS**
 `HOST-NIC-HTTP-OK` from this note.
 Reject dual-func EFI unless SHA is a later build.
 
+### 2026-08-19 addendum — post-EBS `cand bmsr=7949` (guest path closed)
+
+Post-EBS bring-up EFI (`1214464` bytes, SHA
+`4a2d4f0a927f0d95cfc518fdadab6855df29450011edc95449b9559dbbdc767c`, CI run
+`32287320437`) bound immediately after EBS. PRE-EBS SNP DHCP on `:3a`
+(`10.99.99.116`). COM2 **before VMX**:
+
+```
+post-EBS bring-up (keep analog before guest path)
+cand pci=01:00.00 MAC=…:38 bmsr=7949
+cand pci=01:00.01 MAC=…:39 bmsr=7949
+try pci=01:00.00 … phy_reset=pre yes … ape-ncsi=yes
+link=timeout bmsr=7949 lpa=0000
+try next func
+try pci=01:00.01 … phy_reset=pre yes
+link=timeout bmsr=7949 lpa=0000
+reuse (armed post-EBS)
+```
+
+Guest-path delay is **closed**. Analog is already down at EBS. Next EFI
+skips `BMCR_RESET` when `ape-ncsi=yes` (`phy_reset=pre skip (ape-ncsi)`).
+Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+Reject post-EBS bring-up EFI `4a2d4f0a`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

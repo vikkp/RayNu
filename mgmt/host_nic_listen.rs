@@ -92,8 +92,8 @@ fn run_listen(when: ListenWhen) {
 }
 
 /// Steal BCM5720 analog immediately after EBS. Do **not** HTTP-listen here
-/// (guest path first). Iron 2026-08-19: both funcs `bmsr=7949` at BOOT-OK
-/// after PRE-EBS SNP HTTP on `:3a`.
+/// (guest path first). Iron 2026-08-19: both funcs `cand bmsr=7949`
+/// immediately after EBS; skip `BMCR_RESET` when `ape-ncsi=yes`.
 fn bringup_bcm5720_post_ebs() {
     let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
         serial::write_line(

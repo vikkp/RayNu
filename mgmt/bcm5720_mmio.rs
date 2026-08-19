@@ -21,11 +21,12 @@
 //! BMCR_RESET the GPHY while MAC clocks stay firmware-owned. Clear CPMU EEE
 //! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Iron 2026-08-19 skip-reset
 //! EFI still `pre-reset bmsr=7949` / `lpa=0000` on func 1 with `ape-ncsi=yes`
-//! after PRE-EBS SNP HTTP on `:3a`. Both funcs `bmsr=7949` at BOOT-OK —
-//! analog died during the guest path. **Bring up immediately after EBS**
-//! and reuse at BOOT-OK. Peek each candidate `BMSR` and **try
-//! func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays the SNP
-//! lease MAC. Wait `BMSR_LSTATUS` and set
+//! after PRE-EBS SNP HTTP on `:3a`. Post-EBS bring-up EFI still
+//! `cand bmsr=7949` on **both** funcs **immediately after EBS** (before
+//! VMX) with `phy_reset=pre yes`. Analog died at EBS, not the guest path.
+//! **Skip `BMCR_RESET` when `ape-ncsi=yes`.** Peek each candidate `BMSR`
+//! and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays
+//! the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -527,13 +528,28 @@ pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
 }
 
 /// Iron 2026-08-19: `phy_reset=pre` then `CORECLK_RESET` still `lpa=0000`.
-/// Skip chip reset; steal rings; BMCR_RESET only when `LSTATUS` is clear.
+/// Skip chip reset; steal rings; BMCR_RESET only when `LSTATUS` is clear
+/// **and** APE NCSI is off. Iron post-EBS: `cand bmsr=7949` already, then
+/// `phy_reset=pre yes` with `ape-ncsi=yes`.
 ///
 /// INVARIANTS:
 /// - Always true on this iron path
 /// - Never panics
 pub fn skip_coreclk_reset() -> bool {
     true
+}
+
+/// Skip `tg3_bmcr_reset` when APE NCSI owns the management PHY.
+///
+/// Iron 2026-08-19 post-EBS bring-up: `cand bmsr=7949` on both funcs
+/// immediately after EBS, then `phy_reset=pre yes` still `lpa=0000` with
+/// `ape-ncsi=yes`. PRE-EBS SNP copper used MAC `:3a`.
+///
+/// INVARIANTS:
+/// - True iff `ape_ncsi`
+/// - Never panics
+pub fn skip_bmcr_reset(ape_ncsi: bool) -> bool {
+    ape_ncsi
 }
 
 /// Linux `APE_FW_FEATURE_NCSI` (`tg3.h` bit 1).
@@ -1651,7 +1667,12 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     let eee = mmio_read(mmio, TG3_CPMU_EEE_MODE) & !TG3_CPMU_EEEMD_LPI_ENABLE;
     mmio_write(mmio, TG3_CPMU_EEE_MODE, eee);
 
-    let rst = phy_bmcr_reset(mmio, phy_addr);
+    let skip_rst = skip_bmcr_reset(ape_ncsi_now());
+    let rst = if skip_rst {
+        true
+    } else {
+        phy_bmcr_reset(mmio, phy_addr)
+    };
     let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
     let apd = phy_disable_apd(mmio, phy_addr);
     let mdix = phy_enable_automdix_wirespeed(mmio, phy_addr);
@@ -1659,8 +1680,15 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
         && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
         && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
 
+    // COM2: phy_reset=pre skip (ape-ncsi) — do not BMCR_RESET APE NCSI analog.
     serial_step("boot: HOST-NIC BCM5720 phy_reset=pre");
-    serial_step(if rst { " yes" } else { " timeout" });
+    if skip_rst {
+        serial_step(" skip (ape-ncsi)");
+    } else if rst {
+        serial_step(" yes");
+    } else {
+        serial_step(" timeout");
+    }
     serial_step(" pwrctl=");
     serial_step(if pwr { "clr" } else { "timeout" });
     serial_step(" apd=");
