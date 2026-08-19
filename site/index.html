@@ -40,6 +40,24 @@
       content="https://raynuv.com/assets/hero.jpg"
     />
     <link rel="canonical" href="https://raynuv.com/" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "RayNu-V",
+        "applicationCategory": "SystemsApplication",
+        "operatingSystem": "UEFI bare-metal; Dell PowerEdge R640/R650/R660",
+        "description": "Single-binary Type-1 hypervisor designed for formal verification from day one. Boots on real PowerEdge R640, serves a network Web UI, and machine-checks EPT memory isolation with Verus and Kani.",
+        "url": "https://raynuv.com/",
+        "codeRepository": "https://github.com/vikkp/RayNu",
+        "license": "https://github.com/vikkp/RayNu/blob/main/LICENSE",
+        "author": {
+          "@type": "Person",
+          "name": "Vikash Pandey",
+          "identifier": "https://orcid.org/0009-0001-2160-6357"
+        }
+      }
+    </script>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -51,7 +69,19 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="page-home">
+    <nav class="site-nav" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="#status">Status</a>
+        <a href="#journey">Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="hero">
       <div class="hero__media" aria-hidden="true">
         <picture>
@@ -82,9 +112,9 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          Single-binary Type-1 hypervisor — on real PowerEdge R640: COM2 printed
-          <code>RAYNU-V-R640-BOOT-OK</code>, then the operator LAN reached
-          <code>RAYNU-V-M7-UEFI-HTTP-OK</code>.
+          A single-binary Type-1 hypervisor for Dell PowerEdge. It boots on
+          real R640 iron, serves its own Web UI over the network, and is built
+          so memory isolation can be machine-proved — not just re-tested.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -96,6 +126,11 @@
             >Read the architecture</a
           >
         </div>
+        <p class="hero__proof reveal reveal--delay-3">
+          On real R640 iron, 2026-08-15/16:
+          <code>RAYNU-V-R640-BOOT-OK</code> ·
+          <code>RAYNU-V-M7-UEFI-HTTP-OK</code>
+        </p>
       </div>
     </header>
 
@@ -160,6 +195,31 @@ RAYNU-V-R640-BOOT-OK</code></pre>
         </div>
       </section>
 
+      <section class="section section--fork" id="start-here">
+        <div class="section__inner">
+          <div class="fork">
+            <a class="fork__card" href="ciospeak.html" data-reveal>
+              <span class="fork__kicker">For infrastructure leaders</span>
+              <span class="fork__title">Your PowerEdge fleet has years left.</span>
+              <span class="fork__text"
+                >License economics, isolation assurance, and what a reversible
+                design partnership looks like — the executive view.</span
+              >
+              <span class="fork__cta">CIO View →</span>
+            </a>
+            <a class="fork__card" href="#journey" data-reveal>
+              <span class="fork__kicker">For engineers</span>
+              <span class="fork__title">Every claim has a marker.</span>
+              <span class="fork__text"
+                >51 closed gates, Verus proof transcripts, and serial logs from
+                real iron — the evidence, end to end.</span
+              >
+              <span class="fork__cta">The journey ↓</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section class="section section--journey" id="journey">
         <div class="section__inner">
           <h2 class="section__title">M1.0 → M6: how we got here</h2>
@@ -169,6 +229,21 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             artifacts (<code>cargo test</code> / Verus / Kani smokes) — not that
             the product is finished, and not that PowerEdge R640 is validated.
           </p>
+
+          <dl class="statband" data-reveal>
+            <div class="statband__item">
+              <dt>Gates closed · M1.0 → M7.5</dt>
+              <dd>51</dd>
+            </div>
+            <div class="statband__item">
+              <dt>Verus proofs · M6.9 external audit</dt>
+              <dd>80 <span class="statband__unit">verified · 0 errors</span></dd>
+            </div>
+            <div class="statband__item">
+              <dt>Iron markers · real PowerEdge R640</dt>
+              <dd>3</dd>
+            </div>
+          </dl>
 
           <div class="journey">
             <div class="journey__era" data-reveal>
