@@ -74,6 +74,7 @@
       <a class="site-nav__brand" href="index.html">RayNu-V</a>
       <div class="site-nav__links">
         <a href="#status">Status</a>
+        <a href="#console" data-hide-sm>Console</a>
         <a href="#journey">Journey</a>
         <a href="stories.html">Stories</a>
         <a href="hda.html">Everest</a>
@@ -741,6 +742,45 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             </p>
             <cite>ADR-002 · ADR-004 · ADR-006 · ADR-008</cite>
           </blockquote>
+        </div>
+      </section>
+
+      <section class="section section--console" id="console">
+        <div class="section__inner">
+          <p class="milestone-kicker" data-reveal>The product · management UI</p>
+          <h2 class="section__title">The console ships inside the binary.</h2>
+          <p class="section__lede">
+            The management SPA is embedded in the <code>.efi</code> as a
+            compressed PE asset (<code>.aswebui</code>) and served from the host
+            NIC — VM list, create-VM, ISO attach, and the audit tail. Shown
+            here with the bundled demo state; on R640 iron it answers in the
+            PRE-EBS window (E3), with lifetime host-NIC ownership tracked as
+            <strong>E3b</strong> (ADR-013).
+          </p>
+          <figure class="milestone-shot milestone-shot--wide" data-reveal>
+            <picture>
+              <source
+                type="image/webp"
+                srcset="
+                  assets/spa-800.webp   800w,
+                  assets/spa-1600.webp 1600w,
+                  assets/spa-2220.webp 2220w
+                "
+                sizes="(max-width: 700px) 100vw, 56rem"
+              />
+              <img
+                src="assets/spa.png"
+                alt="RayNu-V management Web UI: two shell-ready VMs in the list, Create Virtual Machine form, and the audit log tail"
+                width="2220"
+                height="1262"
+                loading="lazy"
+              />
+            </picture>
+            <figcaption>
+              Management SPA · demo-state bundle · served from the host NIC
+              (PRE-EBS window on iron)
+            </figcaption>
+          </figure>
         </div>
       </section>
 
