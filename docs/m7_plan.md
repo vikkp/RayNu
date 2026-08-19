@@ -264,13 +264,13 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the inherit-PHY EFI (this branch). PHY-reset EFI still
-`link=timeout bmsr=7949` / `lpa=0000` / `id=0362:5f60` after CORECLK_RESET.
-Peek BMSR **before** reset: if `LSTATUS` is set, inherit SNP copper (skip
-`CORECLK_RESET` + `tg3_phy_reset`); else Linux `tg3_phy_toggle_apd(false)`.
-Expect COM2 `pre-reset bmsr=` then `inherit SNP PHY` or `apd=off`. Curl
+**Next:** flash the APE-lock EFI (this branch). Inherit EFI `1211392`
+(`69ed2972…89d7819`) did **not** inherit: `pre-reset bmsr=7949 ape=yes`
+then `link=timeout`. Mac ping of the lease after `BOOT-OK` was **100%
+loss** (honest no-link). Linux `tg3_ape_lock` on BAR2 + driver START
+around MDIO. Expect COM2 `ape-bar=` `ape-fw=ready|no` `ape-lock=yes`
+then `link=up` or still timeout. Reject `1211392`. Curl
 `http://<lease>:8443/` (port **8443**, not 8445; do not type the word LEASE).
-Ping with `ttl=63` after BOOT-OK is **not** native E3b while `bmsr=7949`.
 `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve kit
 `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

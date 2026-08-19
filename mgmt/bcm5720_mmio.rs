@@ -3,7 +3,8 @@
 //! Pillar: [Z] [D]
 //! Proven Core: **outside** (ADR-002 / ADR-013)
 //!
-//! All BAR0 MMIO, mailbox, SRAM window, and RX/TX ring DMA for the R640
+//! All BAR0 MMIO, APE BAR2 (Linux `pci_ioremap_bar(..., BAR_2)`), mailbox,
+//! SRAM window, and RX/TX ring DMA for the R640
 //! census NIC live here. Bind **one** function: exact MAC match to the
 //! parked SNP lease (R640: SNP is `01:00.1` / `:5a:3a`, not func 0).
 //! If no MAC match: prefer `func == 1`, then `func == 0`. Do not start X710/i40e.
@@ -15,13 +16,18 @@
 //! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
 //! BMCR_RESET a live PHY). If the PHY is already down, Linux
 //! `tg3_phy_reset` + `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0,
-//! Auto-MDIX, disable APD, then AN). Wait `BMSR_LSTATUS` and set `MAC_MODE`
-//! MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
+//! Auto-MDIX, disable APD, then AN) **with** Linux `tg3_ape_lock` around
+//! MDIO when SRAM `APE_ENABLE` is set (iron 2026-08-19: inherit did not
+//! fire — `pre-reset bmsr=7949 ape=yes`). Wait `BMSR_LSTATUS` and set
+//! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
 
 use crate::mgmt::pci_census::{pci_id_is_iron_census, IRON_CENSUS_DEVICE, IRON_CENSUS_VENDOR};
 use core::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(feature = "uefi-bin")]
+use core::sync::atomic::{AtomicU32, AtomicU64};
 
 #[cfg(feature = "uefi-bin")]
 use crate::mgmt::e1000_mmio::{pci_read32, pci_write32};
@@ -231,6 +237,45 @@ const NIC_SRAM_STATS_BLK: u32 = 0x300;
 const NIC_SRAM_FIRMWARE_MBOX: u32 = 0xB50;
 const NIC_SRAM_DATA_CFG: u32 = 0xB58;
 const NIC_SRAM_DATA_CFG_APE_ENABLE: u32 = 0x20_0000;
+/// Linux `pci_ioremap_bar(pdev, BAR_2)` — APE, not BAR0. Config offset 0x18.
+const PCI_BAR2_OFF: u8 = 0x18;
+const TG3_APE_EVENT: u32 = 0x000C;
+const APE_EVENT_1: u32 = 0x0000_0001;
+/// Linux `tg3.h`: APE shared memory (same BAR as PER_LOCK on 5717+).
+const TG3_APE_SEG_SIG: u32 = 0x4000;
+const APE_SEG_SIG_MAGIC: u32 = 0x4150_4521;
+const TG3_APE_FW_STATUS: u32 = 0x400C;
+const APE_FW_STATUS_READY: u32 = 0x0000_0100;
+const TG3_APE_PER_LOCK_REQ: u32 = 0x8400;
+const TG3_APE_PER_LOCK_GRANT: u32 = 0x8420;
+const APE_LOCK_REQ_DRIVER: u32 = 0x0000_1000;
+const APE_LOCK_GRANT_DRIVER: u32 = 0x0000_1000;
+const TG3_APE_LOCK_PHY0: u32 = 0;
+const TG3_APE_LOCK_GRC: u32 = 1;
+const TG3_APE_LOCK_PHY1: u32 = 2;
+const TG3_APE_LOCK_PHY2: u32 = 3;
+const TG3_APE_LOCK_MEM: u32 = 4;
+const TG3_APE_LOCK_PHY3: u32 = 5;
+const TG3_APE_LOCK_GPIO: u32 = 7;
+const TG3_APE_HOST_SEG_SIG: u32 = 0x4200;
+const APE_HOST_SEG_SIG_MAGIC: u32 = 0x484F_5354;
+const TG3_APE_HOST_SEG_LEN: u32 = 0x4204;
+const APE_HOST_SEG_LEN_MAGIC: u32 = 0x20;
+const TG3_APE_HOST_INIT_COUNT: u32 = 0x4208;
+const TG3_APE_HOST_DRIVER_ID: u32 = 0x420C;
+const APE_HOST_DRIVER_ID_LINUX: u32 = 0xF000_0000;
+const TG3_APE_HOST_BEHAVIOR: u32 = 0x4210;
+const APE_HOST_BEHAV_NO_PHYLOCK: u32 = 0x0000_0001;
+const TG3_APE_HOST_HEARTBEAT_INT_MS: u32 = 0x4214;
+const APE_HOST_HEARTBEAT_INT_DISABLE: u32 = 0;
+const TG3_APE_HOST_HEARTBEAT_COUNT: u32 = 0x4218;
+const TG3_APE_HOST_DRVR_STATE: u32 = 0x421C;
+const TG3_APE_HOST_DRVR_STATE_START: u32 = 0x0000_0001;
+const TG3_APE_EVENT_STATUS: u32 = 0x4300;
+const APE_EVENT_STATUS_DRIVER_EVNT: u32 = 0x0000_0010;
+const APE_EVENT_STATUS_STATE_CHNGE: u32 = 0x0000_0500;
+const APE_EVENT_STATUS_STATE_START: u32 = 0x0001_0000;
+const APE_EVENT_STATUS_EVENT_PENDING: u32 = 0x8000_0000;
 const MII_TG3_MISC_SHDW: u32 = 0x1C;
 const MII_TG3_MISC_SHDW_WREN: u16 = 0x8000;
 const MII_TG3_MISC_SHDW_APD_WKTM_84MS: u16 = 0x0001;
@@ -383,6 +428,105 @@ pub fn bmsr_an_complete(bmsr: u16) -> bool {
 /// - Never panics
 pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
+}
+
+/// Linux `tp->phy_ape_lock` for `ENABLE_APE`: func0→PHY0, func1→PHY1, …
+///
+/// Iron 2026-08-19: `ape=yes` on `01:00.1` → lock PHY1 (`2`).
+///
+/// INVARIANTS:
+/// - Func 0/1/2/3 → 0/2/3/5
+/// - Other func → PHY3
+/// - Never panics
+pub fn ape_phy_lock_num(func: u8) -> u32 {
+    match func {
+        0 => TG3_APE_LOCK_PHY0,
+        1 => TG3_APE_LOCK_PHY1,
+        2 => TG3_APE_LOCK_PHY2,
+        _ => TG3_APE_LOCK_PHY3,
+    }
+}
+
+/// Linux `TG3_APE_PER_LOCK_REQ + 4 * locknum` (5717+).
+pub fn ape_per_lock_req(locknum: u32) -> u32 {
+    TG3_APE_PER_LOCK_REQ + 4 * locknum
+}
+
+/// Linux `TG3_APE_PER_LOCK_GRANT + 4 * locknum` (5717+).
+pub fn ape_per_lock_grant(locknum: u32) -> u32 {
+    TG3_APE_PER_LOCK_GRANT + 4 * locknum
+}
+
+/// Request/grant bit for an APE mutex.
+///
+/// INVARIANTS:
+/// - PHY locks (0,2,3,5) → `APE_LOCK_REQ_DRIVER` (`0x1000`)
+/// - Else func 0 → `0x1000`, else `1 << pci_fn`
+/// - Never panics
+pub fn ape_lock_req_bit(locknum: u32, pci_fn: u8) -> u32 {
+    match locknum {
+        TG3_APE_LOCK_PHY0 | TG3_APE_LOCK_PHY1 | TG3_APE_LOCK_PHY2 | TG3_APE_LOCK_PHY3 => {
+            APE_LOCK_REQ_DRIVER
+        }
+        _ => {
+            if pci_fn == 0 {
+                APE_LOCK_REQ_DRIVER
+            } else {
+                1u32 << pci_fn
+            }
+        }
+    }
+}
+
+/// Linux `tg3_ape_lock_init` grant bit (PHY locks = DRIVER; GRC/MEM/GPIO = fn bit).
+pub fn ape_lock_init_grant_bit(locknum: u32, pci_fn: u8) -> u32 {
+    match locknum {
+        TG3_APE_LOCK_PHY0 | TG3_APE_LOCK_PHY1 | TG3_APE_LOCK_PHY2 | TG3_APE_LOCK_PHY3 => {
+            APE_LOCK_GRANT_DRIVER
+        }
+        TG3_APE_LOCK_GRC | TG3_APE_LOCK_MEM | TG3_APE_LOCK_GPIO => {
+            if pci_fn == 0 {
+                APE_LOCK_GRANT_DRIVER
+            } else {
+                1u32 << pci_fn
+            }
+        }
+        _ => {
+            if pci_fn == 0 {
+                APE_LOCK_GRANT_DRIVER
+            } else {
+                1u32 << pci_fn
+            }
+        }
+    }
+}
+
+/// Linux `tg3_ape_send_event` guards: `APE_SEG_SIG_MAGIC` + `APE_FW_STATUS_READY`.
+///
+/// INVARIANTS:
+/// - True iff magic `0x41504521` and ready bit `0x100`
+/// - Never panics
+pub fn ape_fw_ready(seg_sig: u32, fw_status: u32) -> bool {
+    seg_sig == APE_SEG_SIG_MAGIC && fw_status & APE_FW_STATUS_READY != 0
+}
+
+/// Decode a PCI memory BAR from config dwords (host-testable).
+///
+/// INVARIANTS:
+/// - I/O BAR (bit 0) → 0
+/// - 32-bit mem → `lo & !0xF`
+/// - 64-bit mem (bits 2:1 = 10b) → `(hi << 32) | (lo & !0xF)`
+/// - Never panics
+pub fn pci_mem_bar_addr(lo: u32, hi: u32) -> u64 {
+    if lo & 1 != 0 {
+        return 0;
+    }
+    let low = u64::from(lo) & !0xF;
+    if lo & 0x6 == 0x4 {
+        (u64::from(hi) << 32) | low
+    } else {
+        low
+    }
 }
 
 /// 5717_PLUS MDIO address: `pci_fn + 1`, plus 7 if `SG_DIG_IS_SERDES`.
@@ -582,6 +726,17 @@ struct NicState {
 static NIC_LOCK: AtomicBool = AtomicBool::new(false);
 static mut DMA: DmaArena = DmaArena::zeroed();
 static mut NIC: Option<NicState> = None;
+/// APE BAR2 + lock id for the one bound mgmt function. Written once in
+/// `hw_init`; MDIO leaves read them. Justification: phy_read/write cannot
+/// take `&mut NicState` without threading it through every helper.
+#[cfg(feature = "uefi-bin")]
+static APE_MMIO: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "uefi-bin")]
+static APE_LOCKNUM: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "uefi-bin")]
+static APE_PCI_FN: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "uefi-bin")]
+static APE_EVT_SENT: AtomicBool = AtomicBool::new(false);
 
 fn misc_host_ctrl() -> u32 {
     MISC_HOST_CTRL_CLEAR_INT
@@ -866,14 +1021,34 @@ unsafe fn hw_init(
         serial_step(")\n");
     }
 
+    bind_ape(bus, dev, func);
     let pre_bmsr = peek_phy_bmsr(mmio, func);
     let nic_cfg = sram_read(bus, dev, func, NIC_SRAM_DATA_CFG);
     serial_step("boot: HOST-NIC BCM5720 pre-reset bmsr=");
     write_hex_u16(pre_bmsr);
     serial_step(if nic_cfg & NIC_SRAM_DATA_CFG_APE_ENABLE != 0 {
-        " ape=yes\n"
+        " ape=yes"
     } else {
-        " ape=no\n"
+        " ape=no"
+    });
+    serial_step(" ape-bar=0x");
+    write_hex_u32(APE_MMIO.load(Ordering::Relaxed) as u32);
+    serial_step(" ape-fw=");
+    serial_step(if ape_fw_ready_now() { "ready" } else { "no" });
+    serial_step(" ape-evt=");
+    serial_step(if APE_EVT_SENT.load(Ordering::Relaxed) {
+        "sent"
+    } else {
+        "skip"
+    });
+    serial_step(" ape-lock=");
+    serial_step(if APE_MMIO.load(Ordering::Relaxed) == 0 {
+        "skip\n"
+    } else if ape_lock_now() {
+        ape_unlock_now();
+        "yes\n"
+    } else {
+        "timeout\n"
     });
 
     let inherit = inherit_snp_phy(pre_bmsr);
@@ -1489,6 +1664,7 @@ unsafe fn phy_wait(mmio: u64) -> bool {
 
 #[cfg(feature = "uefi-bin")]
 unsafe fn phy_write(mmio: u64, phy: u32, reg: u32, val: u16) -> bool {
+    ape_lock_now();
     mmio_write(
         mmio,
         MAC_MI_COM,
@@ -1498,11 +1674,14 @@ unsafe fn phy_write(mmio: u64, phy: u32, reg: u32, val: u16) -> bool {
             | (reg << MI_COM_REG_ADDR_SHIFT)
             | u32::from(val),
     );
-    phy_wait(mmio)
+    let ok = phy_wait(mmio);
+    ape_unlock_now();
+    ok
 }
 
 #[cfg(feature = "uefi-bin")]
 unsafe fn phy_read(mmio: u64, phy: u32, reg: u32) -> Option<u16> {
+    ape_lock_now();
     mmio_write(
         mmio,
         MAC_MI_COM,
@@ -1511,10 +1690,171 @@ unsafe fn phy_read(mmio: u64, phy: u32, reg: u32) -> Option<u16> {
             | (phy << MI_COM_PHY_ADDR_SHIFT)
             | (reg << MI_COM_REG_ADDR_SHIFT),
     );
-    if !phy_wait(mmio) {
-        return None;
+    let out = if !phy_wait(mmio) {
+        None
+    } else {
+        Some((mmio_read(mmio, MAC_MI_COM) & 0xFFFF) as u16)
+    };
+    ape_unlock_now();
+    out
+}
+
+/// Linux `pci_ioremap_bar(pdev, BAR_2)` then `tg3_ape_lock_init` + driver START.
+#[cfg(feature = "uefi-bin")]
+fn bind_ape(bus: u8, dev: u8, func: u8) {
+    APE_EVT_SENT.store(false, Ordering::Relaxed);
+    let nic_cfg = sram_read(bus, dev, func, NIC_SRAM_DATA_CFG);
+    if nic_cfg & NIC_SRAM_DATA_CFG_APE_ENABLE == 0 {
+        APE_MMIO.store(0, Ordering::Relaxed);
+        return;
     }
-    Some((mmio_read(mmio, MAC_MI_COM) & 0xFFFF) as u16)
+    let lo = pci_read32(bus, dev, func, PCI_BAR2_OFF);
+    let hi = pci_read32(bus, dev, func, PCI_BAR2_OFF + 4);
+    let bar = pci_mem_bar_addr(lo, hi);
+    if bar == 0 || lo == 0xFFFF_FFFF {
+        APE_MMIO.store(0, Ordering::Relaxed);
+        return;
+    }
+    enable_mem(bus, dev, func);
+    APE_MMIO.store(bar, Ordering::Relaxed);
+    APE_LOCKNUM.store(ape_phy_lock_num(func), Ordering::Relaxed);
+    APE_PCI_FN.store(u32::from(func), Ordering::Relaxed);
+    // SAFETY: firmware BAR2 APE window; identity-mapped like BAR0.
+    // KANI-TARGET: ape_phy_lock_num / ape_lock_req_bit / pci_mem_bar_addr (host).
+    unsafe {
+        ape_lock_init();
+        ape_host_driver_start();
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_write(off: u32, val: u32) {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return;
+    }
+    mmio_write(base, off, val);
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_read(off: u32) -> u32 {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return 0;
+    }
+    mmio_read(base, off)
+}
+
+/// Linux `tg3_ape_lock_init`: drop stale grants on PHY0..=GPIO.
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_lock_init() {
+    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
+    for locknum in TG3_APE_LOCK_PHY0..=TG3_APE_LOCK_GPIO {
+        let bit = ape_lock_init_grant_bit(locknum, fn_);
+        ape_write(ape_per_lock_grant(locknum), bit);
+    }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_fw_ready_now() -> bool {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return false;
+    }
+    // SAFETY: APE_MMIO is BAR2 from bind_ape.
+    // KANI-TARGET: ape_fw_ready (host).
+    unsafe { ape_fw_ready(ape_read(TG3_APE_SEG_SIG), ape_read(TG3_APE_FW_STATUS)) }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_lock_now() -> bool {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return true;
+    }
+    let locknum = APE_LOCKNUM.load(Ordering::Relaxed);
+    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
+    let bit = ape_lock_req_bit(locknum, fn_);
+    let req = ape_per_lock_req(locknum);
+    let gnt = ape_per_lock_grant(locknum);
+    // SAFETY: APE_MMIO is BAR2 from bind_ape.
+    // KANI-TARGET: ape_lock_req_bit (host).
+    unsafe {
+        ape_write(req, bit);
+        for _ in 0..100 {
+            if ape_read(gnt) == bit {
+                return true;
+            }
+            tsc_spin_us(10);
+        }
+        ape_write(gnt, bit);
+    }
+    false
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_unlock_now() {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return;
+    }
+    let locknum = APE_LOCKNUM.load(Ordering::Relaxed);
+    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
+    let bit = ape_lock_req_bit(locknum, fn_);
+    unsafe {
+        ape_write(ape_per_lock_grant(locknum), bit);
+    }
+}
+
+/// Linux `tg3_ape_driver_state_change(RESET_KIND_INIT)` (no heartbeat timer).
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_host_driver_start() {
+    ape_write(TG3_APE_HOST_HEARTBEAT_COUNT, 1);
+    ape_write(TG3_APE_HOST_SEG_SIG, APE_HOST_SEG_SIG_MAGIC);
+    ape_write(TG3_APE_HOST_SEG_LEN, APE_HOST_SEG_LEN_MAGIC);
+    let n = ape_read(TG3_APE_HOST_INIT_COUNT).wrapping_add(1);
+    ape_write(TG3_APE_HOST_INIT_COUNT, n);
+    ape_write(TG3_APE_HOST_DRIVER_ID, APE_HOST_DRIVER_ID_LINUX);
+    ape_write(TG3_APE_HOST_BEHAVIOR, APE_HOST_BEHAV_NO_PHYLOCK);
+    ape_write(
+        TG3_APE_HOST_HEARTBEAT_INT_MS,
+        APE_HOST_HEARTBEAT_INT_DISABLE,
+    );
+    ape_write(TG3_APE_HOST_DRVR_STATE, TG3_APE_HOST_DRVR_STATE_START);
+    let ev =
+        APE_EVENT_STATUS_STATE_START | APE_EVENT_STATUS_DRIVER_EVNT | APE_EVENT_STATUS_STATE_CHNGE;
+    APE_EVT_SENT.store(ape_send_event(ev), Ordering::Relaxed);
+}
+
+/// Linux `tg3_ape_send_event`: skip if APE FW not ready; wait EVENT_PENDING clear.
+#[cfg(feature = "uefi-bin")]
+unsafe fn ape_send_event(event: u32) -> bool {
+    if !ape_fw_ready(ape_read(TG3_APE_SEG_SIG), ape_read(TG3_APE_FW_STATUS)) {
+        return false;
+    }
+    let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
+    let bit = ape_lock_req_bit(TG3_APE_LOCK_MEM, fn_);
+    let req = ape_per_lock_req(TG3_APE_LOCK_MEM);
+    let gnt = ape_per_lock_grant(TG3_APE_LOCK_MEM);
+    let mut locked = false;
+    for _ in 0..2000 {
+        ape_write(req, bit);
+        if ape_read(gnt) == bit {
+            if ape_read(TG3_APE_EVENT_STATUS) & APE_EVENT_STATUS_EVENT_PENDING == 0 {
+                locked = true;
+                break;
+            }
+            ape_write(gnt, bit);
+        }
+        tsc_spin_us(10);
+    }
+    if !locked {
+        return false;
+    }
+    ape_write(TG3_APE_EVENT_STATUS, event | APE_EVENT_STATUS_EVENT_PENDING);
+    ape_write(gnt, bit);
+    ape_write(TG3_APE_EVENT, APE_EVENT_1);
+    true
 }
 
 #[cfg(feature = "uefi-bin")]

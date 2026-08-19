@@ -180,7 +180,8 @@ PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
 **not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** `CORECLK_RESET`.
 If `LSTATUS` is set, inherit SNP copper (skip chip reset and `tg3_phy_reset`).
 If the PHY is already down, Linux `tg3_phy_reset` / `tg3_setup_copper_phy`
-(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`) then wait
+(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`) **with**
+Linux `tg3_ape_lock` on BAR2 around MDIO, then wait
 `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
 `RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
@@ -198,8 +199,8 @@ Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no` then either
-`inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=yes … apd=off` then
+`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-lock=yes|timeout|skip`
+then either `inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=yes … apd=off` then
 `link=up speed=… duplex=…`
 (or `link=timeout bmsr=… bmcr=… lpa=…`) then `rings armed` then
 `HOST-NIC idle listening on <lease>:8443`.

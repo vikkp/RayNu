@@ -1,7 +1,9 @@
 use super::{
-    bmsr_an_complete, bmsr_link_up, decode_phy_link, inherit_snp_phy, mac_mode_from_link,
-    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, phy_addr_5717_plus, pick_bcm5720_pci,
-    rx_bd_packet_len, station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    ape_fw_ready, ape_lock_init_grant_bit, ape_lock_req_bit, ape_per_lock_grant, ape_per_lock_req,
+    ape_phy_lock_num, bmsr_an_complete, bmsr_link_up, decode_phy_link, inherit_snp_phy,
+    mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, pci_mem_bar_addr,
+    phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len, station_mac, Bcm5720PickReason,
+    BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -187,6 +189,15 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("skip CORECLK_RESET"));
     assert!(src.contains("MII_TG3_MISC_SHDW_APD_ENABLE"));
     assert!(src.contains("fn inherit_snp_phy("));
+    assert!(src.contains("fn ape_phy_lock_num("));
+    assert!(src.contains("fn ape_fw_ready("));
+    assert!(src.contains("fn pci_mem_bar_addr("));
+    assert!(src.contains("TG3_APE_PER_LOCK_REQ"));
+    assert!(src.contains("TG3_APE_SEG_SIG"));
+    assert!(src.contains("APE_HOST_BEHAV_NO_PHYLOCK"));
+    assert!(src.contains("ape-bar="));
+    assert!(src.contains("ape-fw="));
+    assert!(src.contains("pci_ioremap_bar"));
     assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
 }
 
@@ -195,6 +206,41 @@ fn inherit_snp_phy_follows_bmsr_lstatus() {
     assert!(!inherit_snp_phy(0x7949));
     assert!(inherit_snp_phy(0x0004));
     assert!(inherit_snp_phy(0x794d));
+}
+
+#[test]
+fn ape_phy_lock_num_matches_linux_func() {
+    assert_eq!(ape_phy_lock_num(0), 0);
+    assert_eq!(ape_phy_lock_num(1), 2);
+    assert_eq!(ape_phy_lock_num(2), 3);
+    assert_eq!(ape_phy_lock_num(3), 5);
+}
+
+#[test]
+fn ape_per_lock_regs_are_5717_plus() {
+    assert_eq!(ape_per_lock_req(2), 0x8408);
+    assert_eq!(ape_per_lock_grant(2), 0x8428);
+    assert_eq!(ape_lock_req_bit(2, 1), 0x1000);
+    assert_eq!(ape_lock_req_bit(4, 1), 1 << 1);
+    assert_eq!(ape_lock_req_bit(4, 0), 0x1000);
+    assert_eq!(ape_lock_init_grant_bit(0, 1), 0x1000);
+    assert_eq!(ape_lock_init_grant_bit(1, 1), 1 << 1);
+    assert_eq!(ape_lock_init_grant_bit(7, 1), 1 << 1);
+}
+
+#[test]
+fn ape_fw_ready_needs_magic_and_ready_bit() {
+    assert!(ape_fw_ready(0x4150_4521, 0x100));
+    assert!(!ape_fw_ready(0, 0x100));
+    assert!(!ape_fw_ready(0x4150_4521, 0));
+}
+
+#[test]
+fn pci_mem_bar_addr_32_and_64() {
+    assert_eq!(pci_mem_bar_addr(1, 0), 0);
+    assert_eq!(pci_mem_bar_addr(0x9290_0000, 0), 0x9290_0000);
+    assert_eq!(pci_mem_bar_addr(0x9290_0004, 0), 0x9290_0000);
+    assert_eq!(pci_mem_bar_addr(0x0000_0004, 0x0000_0001), 0x1_0000_0000);
 }
 
 #[test]

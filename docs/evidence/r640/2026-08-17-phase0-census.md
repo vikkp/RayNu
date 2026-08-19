@@ -126,4 +126,24 @@ Next: peek `BMSR` before reset; inherit SNP PHY when `LSTATUS` is set (skip
 `CORECLK_RESET` + `tg3_phy_reset`); else Linux `tg3_phy_toggle_apd(false)`.
 Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 
+### 2026-08-19 addendum — inherit EFI: PHY already down before reset
+
+Inherit-PHY EFI (`1211392` bytes, SHA
+`69ed29721269173b5c17850721ecb4f55de92c627cee735e4799bd32189d7819`) did **not**
+inherit. COM2:
+
+```
+pre-reset bmsr=7949 ape=yes
+reset…
+phy_reset=yes pwrctl=clr apd=off mdix=yes phy=yes id=0362:5f60
+link=timeout bmsr=7949 bmcr=1100 lpa=0000 s1000=0000
+```
+
+Copper was already down **before** `CORECLK_RESET` (`inherit_snp_phy` is false
+for `0x7949`). `ape=yes` means SRAM `NIC_SRAM_DATA_CFG_APE_ENABLE`. After
+`BOOT-OK`, Mac ping of `10.99.99.116` was **100% loss** (the earlier `ttl=63`
+replies were not native). Next: Linux `tg3_ape_lock` on BAR2 + driver START
+around MDIO (this branch). Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+Reject inherit EFI `1211392`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.
