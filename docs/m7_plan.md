@@ -264,10 +264,13 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the PHY-reset EFI (this branch). Iron `link=timeout bmsr=7949`
-means AN never completed after CORECLK_RESET (not a MAC miss). Expect COM2
-`phy_reset=yes pwrctl=clr mdix=yes` then `link=up` (or a richer `link=timeout`
-with `bmcr`/`lpa`). Curl `http://<lease>:8443/` from Vignesh `10.99.99.137`.
-`RAYNU-V-M7-HOST-NIC-HTTP-OK` only after that exchange. Preserve kit
+**Next:** flash the inherit-PHY EFI (this branch). PHY-reset EFI still
+`link=timeout bmsr=7949` / `lpa=0000` / `id=0362:5f60` after CORECLK_RESET.
+Peek BMSR **before** reset: if `LSTATUS` is set, inherit SNP copper (skip
+`CORECLK_RESET` + `tg3_phy_reset`); else Linux `tg3_phy_toggle_apd(false)`.
+Expect COM2 `pre-reset bmsr=` then `inherit SNP PHY` or `apd=off`. Curl
+`http://<lease>:8443/` (port **8443**, not 8445; do not type the word LEASE).
+Ping with `ttl=63` after BOOT-OK is **not** native E3b while `bmsr=7949`.
+`RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve kit
 `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

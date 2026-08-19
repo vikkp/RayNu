@@ -95,4 +95,35 @@ CORECLK_RESET does not bring the analog front-end up. Next: Linux
 `tg3_bmcr_reset`, AUXCTL PWRCTL=0 (clear isolate), Auto-MDIX, CPMU idle
 clear. Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 
+### 2026-08-19 addendum — PHY BMCR-reset still `bmsr=7949` / `lpa=0000`
+
+PHY-reset EFI (`1210880` bytes, SHA
+`fcabf7a92e332b64934fa7822f8166207beec4d0743e4df0e14e2de1765a9594`) still no
+native HTTP. COM2:
+
+```
+station SNP-lease MAC=b0:26:28:5c:5a:3a (BAR0 peeked b0:26:28:5c:5a:39)
+fw-magic=yes
+phy_addr=02 serdes=no sgdig=00000008
+phy_reset=yes pwrctl=clr mdix=yes phy=yes id=0362:5f60
+link=timeout bmsr=7949 bmcr=1100 lpa=0000 s1000=0000 mac_status=00400000 cpmu=00004000
+idle listening on 10.99.99.116:8443
+```
+
+`id=0362:5f60` is a Broadcom GPHY; PHY addr 2 is correct for func 1 copper.
+`bmcr=1100` is ANENABLE|FULLDPLX (ANRESTART already cleared). `lpa=0000` /
+`s1000=0000` means no link partner at all after `CORECLK_RESET`. PRE-EBS SNP
+SPA still worked on this jack.
+
+After `BOOT-OK`, Vignesh ping `10.99.99.116` got replies (`ttl=63`, 25–73 ms)
+then `curl -sS -m 5 http://10.99.99.116:8443/` timed out. `ttl=63` is one
+routed hop — not L2-local native BCM5720 while `bmsr=7949`. Treat that ping as
+not E3b. `curl http://10.99.99.LEASE:8443/` failed DNS because `LEASE` was
+typed literally; the URL is `http://<numeric-lease>:8443/`.
+
+`CORECLK_RESET` after SNP park is the leading suspect for killing copper.
+Next: peek `BMSR` before reset; inherit SNP PHY when `LSTATUS` is set (skip
+`CORECLK_RESET` + `tg3_phy_reset`); else Linux `tg3_phy_toggle_apd(false)`.
+Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

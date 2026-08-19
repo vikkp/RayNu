@@ -1,7 +1,7 @@
 use super::{
-    bmsr_an_complete, bmsr_link_up, decode_phy_link, mac_mode_from_link, parse_mocked_rx_bd_bytes,
-    pci_id_is_bcm5720, phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len, station_mac,
-    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    bmsr_an_complete, bmsr_link_up, decode_phy_link, inherit_snp_phy, mac_mode_from_link,
+    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, phy_addr_5717_plus, pick_bcm5720_pci,
+    rx_bd_packet_len, station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -181,7 +181,20 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("CPMU_CTRL_LINK_IDLE_MODE"));
     assert!(src.contains("fn phy_addr_5717_plus("));
     assert!(src.contains("tg3_bmcr_reset"));
+    assert!(src.contains("inherit SNP PHY"));
+    assert!(src.contains("pre-reset bmsr"));
+    assert!(src.contains("MII_TG3_MISC_SHDW"));
+    assert!(src.contains("skip CORECLK_RESET"));
+    assert!(src.contains("MII_TG3_MISC_SHDW_APD_ENABLE"));
+    assert!(src.contains("fn inherit_snp_phy("));
     assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
+}
+
+#[test]
+fn inherit_snp_phy_follows_bmsr_lstatus() {
+    assert!(!inherit_snp_phy(0x7949));
+    assert!(inherit_snp_phy(0x0004));
+    assert!(inherit_snp_phy(0x794d));
 }
 
 #[test]

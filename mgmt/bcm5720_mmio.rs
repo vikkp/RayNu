@@ -11,10 +11,12 @@
 //! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
 //! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
-//! BCM57416 10G. After `CORECLK_RESET`, Linux `tg3_phy_reset` +
-//! `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, then AN).
-//! Wait `BMSR_LSTATUS` (read twice) and set `MAC_MODE` MII vs GMII
-//! (`tg3_adjust_link`). `RX_MODE_PROMISC` is on so ARP is not CAM-dropped.
+//! BCM57416 10G. PRE-EBS SNP already has copper; peek `BMSR` **before**
+//! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
+//! BMCR_RESET a live PHY). If the PHY is already down, Linux
+//! `tg3_phy_reset` + `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0,
+//! Auto-MDIX, disable APD, then AN). Wait `BMSR_LSTATUS` and set `MAC_MODE`
+//! MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
 
@@ -227,6 +229,21 @@ const NIC_SRAM_SEND_RCB: u32 = 0x100;
 const NIC_SRAM_RCV_RET_RCB: u32 = 0x200;
 const NIC_SRAM_STATS_BLK: u32 = 0x300;
 const NIC_SRAM_FIRMWARE_MBOX: u32 = 0xB50;
+const NIC_SRAM_DATA_CFG: u32 = 0xB58;
+const NIC_SRAM_DATA_CFG_APE_ENABLE: u32 = 0x20_0000;
+const MII_TG3_MISC_SHDW: u32 = 0x1C;
+const MII_TG3_MISC_SHDW_WREN: u16 = 0x8000;
+const MII_TG3_MISC_SHDW_APD_WKTM_84MS: u16 = 0x0001;
+/// Linux `tg3_phy_toggle_apd(true)` only. Disable path must not set this.
+#[allow(dead_code)]
+const MII_TG3_MISC_SHDW_APD_ENABLE: u16 = 0x0100;
+const MII_TG3_MISC_SHDW_APD_SEL: u16 = 0x2800;
+const MII_TG3_MISC_SHDW_SCR5_C125OE: u16 = 0x0001;
+const MII_TG3_MISC_SHDW_SCR5_DLLAPD: u16 = 0x0002;
+const MII_TG3_MISC_SHDW_SCR5_SDTL: u16 = 0x0004;
+const MII_TG3_MISC_SHDW_SCR5_DLPTLM: u16 = 0x0008;
+const MII_TG3_MISC_SHDW_SCR5_LPED: u16 = 0x0010;
+const MII_TG3_MISC_SHDW_SCR5_SEL: u16 = 0x1400;
 const NIC_SRAM_FIRMWARE_MBOX_MAGIC1: u32 = 0x4B65_7654;
 const NIC_SRAM_TX_BUFFER_DESC: u32 = 0x4000;
 /// Firmware-owned on 5717_PLUS / BCM5720. Linux `tg3` writes this to
@@ -355,6 +372,17 @@ pub fn bmsr_link_up(bmsr: u16) -> bool {
 /// Iron 2026-08-19: `bmsr=7949` was link-down **and** AN incomplete.
 pub fn bmsr_an_complete(bmsr: u16) -> bool {
     bmsr & BMSR_ANEGCOMPLETE != 0
+}
+
+/// Inherit firmware SNP copper instead of `CORECLK_RESET` when `BMSR_LSTATUS` is set.
+///
+/// Iron 2026-08-19: PRE-EBS SNP had DHCP/HTTP; post-reset `bmsr=7949` / `lpa=0000`.
+///
+/// INVARIANTS:
+/// - True iff `bmsr_link_up`
+/// - Never panics
+pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
+    bmsr_link_up(pre_bmsr)
 }
 
 /// 5717_PLUS MDIO address: `pci_fn + 1`, plus 7 if `SG_DIG_IS_SERDES`.
@@ -837,16 +865,36 @@ unsafe fn hw_init(
         write_mac(mac_before);
         serial_step(")\n");
     }
-    chip_reset(mmio, bus, dev, func)?;
-    mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
-    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
 
-    let fw = wait_fw_magic(bus, dev, func);
-    serial_step(if fw {
-        "boot: HOST-NIC BCM5720 fw-magic=yes\n"
+    let pre_bmsr = peek_phy_bmsr(mmio, func);
+    let nic_cfg = sram_read(bus, dev, func, NIC_SRAM_DATA_CFG);
+    serial_step("boot: HOST-NIC BCM5720 pre-reset bmsr=");
+    write_hex_u16(pre_bmsr);
+    serial_step(if nic_cfg & NIC_SRAM_DATA_CFG_APE_ENABLE != 0 {
+        " ape=yes\n"
     } else {
-        "boot: HOST-NIC BCM5720 fw-magic=timeout (continuing)\n"
+        " ape=no\n"
     });
+
+    let inherit = inherit_snp_phy(pre_bmsr);
+    if inherit {
+        serial_step("boot: HOST-NIC BCM5720 inherit SNP PHY (skip CORECLK_RESET)\n");
+        halt_mac_dma(mmio);
+    } else {
+        chip_reset(mmio, bus, dev, func)?;
+        mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
+        mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
+        let fw = wait_fw_magic(bus, dev, func);
+        serial_step(if fw {
+            "boot: HOST-NIC BCM5720 fw-magic=yes\n"
+        } else {
+            "boot: HOST-NIC BCM5720 fw-magic=timeout (continuing)\n"
+        });
+    }
+    if inherit {
+        mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
+        mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
+    }
 
     let grc = GRC_MODE_WSWAP_NONFRM_DATA
         | GRC_MODE_WSWAP_DATA
@@ -893,7 +941,11 @@ unsafe fn hw_init(
     enable_dma_engines(mmio);
     enable_hostcc(mmio);
     enable_completion_blocks(mmio);
-    setup_copper_phy(mmio, func);
+    if inherit {
+        serial_step("boot: HOST-NIC BCM5720 inherit: skip tg3_phy_reset\n");
+    } else {
+        setup_copper_phy(mmio, func);
+    }
     wait_phy_link_and_adjust_mac(mmio, func);
 
     mailbox_write(
@@ -1227,6 +1279,7 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
 
     let rst = phy_bmcr_reset(mmio, phy_addr);
     let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
+    let apd = phy_disable_apd(mmio, phy_addr);
     let mdix = phy_enable_automdix_wirespeed(mmio, phy_addr);
     let an = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
         && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
@@ -1236,6 +1289,8 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     serial_step(if rst { "yes" } else { "timeout" });
     serial_step(" pwrctl=");
     serial_step(if pwr { "clr" } else { "timeout" });
+    serial_step(" apd=");
+    serial_step(if apd { "off" } else { "timeout" });
     serial_step(" mdix=");
     serial_step(if mdix { "yes" } else { "timeout" });
     serial_step(if an { " phy=yes" } else { " phy=timeout" });
@@ -1252,6 +1307,54 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
         _ => serial_step("----:----"),
     }
     serial_step("\n");
+}
+
+/// Linux `tg3_phy_toggle_apd(false)` — Auto Power Down keeps analog off
+/// so AN never completes (`bmsr=7949` / `lpa=0000`).
+///
+/// 5720 (not 5784): SCR5 still sets `DLLAPD`. APD shadow gets `APD_SEL|WKTM`
+/// **without** `MII_TG3_MISC_SHDW_APD_ENABLE`.
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_disable_apd(mmio: u64, phy: u32) -> bool {
+    let scr5 = MII_TG3_MISC_SHDW_SCR5_LPED
+        | MII_TG3_MISC_SHDW_SCR5_DLPTLM
+        | MII_TG3_MISC_SHDW_SCR5_SDTL
+        | MII_TG3_MISC_SHDW_SCR5_C125OE
+        | MII_TG3_MISC_SHDW_SCR5_DLLAPD;
+    phy_write(
+        mmio,
+        phy,
+        MII_TG3_MISC_SHDW,
+        MII_TG3_MISC_SHDW_SCR5_SEL | scr5 | MII_TG3_MISC_SHDW_WREN,
+    ) && phy_write(
+        mmio,
+        phy,
+        MII_TG3_MISC_SHDW,
+        MII_TG3_MISC_SHDW_APD_SEL | MII_TG3_MISC_SHDW_APD_WKTM_84MS | MII_TG3_MISC_SHDW_WREN,
+    )
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn peek_phy_bmsr(mmio: u64, func: u8) -> u16 {
+    mmio_write(
+        mmio,
+        MAC_MI_MODE,
+        MAC_MI_MODE_BASE | MAC_MI_MODE_500KHZ_CONST,
+    );
+    tsc_spin_ms(1);
+    let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
+    let phy_addr = phy_addr_5717_plus(func, sg_dig);
+    let _ = phy_read(mmio, phy_addr, MII_BMSR);
+    phy_read(mmio, phy_addr, MII_BMSR).unwrap_or(0)
+}
+
+/// Stop UNDI TX/RX/coalescing before we steal the rings (inherit path).
+#[cfg(feature = "uefi-bin")]
+unsafe fn halt_mac_dma(mmio: u64) {
+    mmio_write(mmio, MAC_RX_MODE, 0);
+    mmio_write(mmio, MAC_TX_MODE, 0);
+    mmio_write(mmio, HOSTCC_MODE, 0);
+    tsc_spin_ms(1);
 }
 
 /// Linux `tg3_bmcr_reset`: write BMCR_RESET, poll until the bit clears.

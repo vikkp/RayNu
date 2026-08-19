@@ -177,10 +177,12 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 **BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
 PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
-**not** `bnxt` (that is BCM57416 10G): after CORECLK_RESET, Linux
-`tg3_phy_reset` / `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0,
-Auto-MDIX) then wait `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII
-(`tg3_adjust_link`). `RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+**not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** `CORECLK_RESET`.
+If `LSTATUS` is set, inherit SNP copper (skip chip reset and `tg3_phy_reset`).
+If the PHY is already down, Linux `tg3_phy_reset` / `tg3_setup_copper_phy`
+(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`) then wait
+`BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
+`RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
@@ -189,16 +191,23 @@ ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
 **same** SNP lease on the host LAN (not iDRAC):
 
 ```
-curl -sS "http://<lease>:8443/"
+curl -sS -m 5 "http://<lease>:8443/"
 ```
 
+Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
+word `LEASE`. Port is **8443** (not 8445, not iDRAC).
+
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `phy_reset=yes pwrctl=clr mdix=yes` then
+`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no` then either
+`inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=yes … apd=off` then
 `link=up speed=… duplex=…`
-(or `link=timeout bmsr=… bmcr=…`) then `rings armed` then
-`HOST-NIC idle listening on <lease>:8443`. Curl port **8443** (not 8445).
-The iron HTTP-OK marker is
-only after that exchange. Do not claim it from this runbook.
+(or `link=timeout bmsr=… bmcr=… lpa=…`) then `rings armed` then
+`HOST-NIC idle listening on <lease>:8443`.
+
+PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
+replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**
+the native stack — curl timeout is expected until `link=up`. The iron HTTP-OK
+marker is only after that exchange. Do not claim it from this runbook.
 
 Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`
 (host fuzz + optional `./tools/host-nic-miri-smoke.sh`; Miri skip is OK).
