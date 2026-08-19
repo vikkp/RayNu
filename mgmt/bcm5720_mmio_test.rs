@@ -232,6 +232,8 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("ape-grc="));
     assert!(src.contains("fn pci_cfg_save_dword_count("));
     assert!(src.contains("fn skip_http_listen_without_lstatus("));
+    assert!(src.contains("fn peek_bcm5720_bmsr_pre_ebs("));
+    assert!(src.contains("pre-EBS cand"));
     assert!(src.contains("tg3_reset_hw"));
     assert!(src.contains("tg3_setup_phy(false)"));
     assert!(src.contains("skip CORECLK_RESET (keep GPHY analog)"));

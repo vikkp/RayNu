@@ -330,4 +330,43 @@ GRC lock around `CORECLK_RESET`; always `setup_copper_phy` before reset
 prints `link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
 Reject CORECLK-sans-BMCR EFI `1404f055`.
 
+### 2026-08-19 addendum — PCI restore + `phy_setup=post` still `cand bmsr=7949`
+
+PCI-restore EFI (`1216512` bytes, SHA
+`ec08c00f8771ee1250501c784b96998cdf8b6ac891fe6259adb6ad2c08007b02`, CI run
+`32294654288`, feature `b5ea069`) ran the intended path. Complete COM2:
+
+```
+SNP residual MAC=b0:26:28:5c:5a:3a
+SNP lease 10.99.99.116/24
+WARN — mgmt HTTP accept timeout
+post-EBS bring-up (keep analog before guest path)
+cand pci=01:00.00 MAC=…:38 bmsr=7949
+cand pci=01:00.01 MAC=…:39 bmsr=7949
+phy_addr=01 … phy_reset=pre skip (ape-ncsi) … id=0362:5f60
+reset…
+ape-grc=yes pci-restore=64
+fw-magic=yes
+phy_setup=post apd=off mdix=yes eee=off an-restart=yes pwrctl=clr
+link=timeout bmsr=7949 bmcr=1000 lpa=0000 s1000=0000 mac_status=00400000 cpmu=00004000
+try next func
+… phy_addr=02 … same timeout
+RAYNU-V-R640-BOOT-OK
+reuse (armed post-EBS)
+WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)
+```
+
+`ape-grc=yes` / `pci-restore=64` / `phy_setup=post` / skip-listen all
+worked. Analog was already down at the post-EBS census. PCI restore and
+full post-reset PHY setup are **closed**. Skip-listen is the correct
+negative (do **not** curl). PRE-EBS SNP HTTP timed out this boot (no
+Mac curl in the 45s window) — that is **not** E3b.
+
+Next EFI peeks host GPHY `BMSR` **during the PRE-EBS SNP window**
+(`pre-EBS cand`) after DHCP, before listen. If that peek is already
+`7949` while SNP has copper on `:3a`, the cable is not on the host
+GPHY (APE/NCSI datapath). If it has `LSTATUS`, EBS is what drops analog.
+Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject PCI-restore EFI `ec08c00f`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

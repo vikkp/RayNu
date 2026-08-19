@@ -264,13 +264,12 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash PCI-restore + `phy_setup=post` EFI (this branch). CORECLK
-without BMCR EFI `1404f055…f737865c` (size **1216000**) printed `reset…` /
-`fw-magic=yes` / `phy_reset=pre skip (ape-ncsi)` and still `cand bmsr=7949`
-then `link=timeout` on both funcs. PRE-EBS SNP HTTP on `:3a` is **not** E3b.
-Analog is down at EBS before chip reset. Next: 64-dword PCI save/restore +
-APE GRC lock around `CORECLK_RESET`, full post-reset PHY setup, skip listen
-without `LSTATUS`. Reject `1404f055`. Curl only after `link=up`.
+**Next:** flash PRE-EBS `BMSR` peek EFI (this branch). PCI-restore EFI
+`ec08c00f…08007b02` (size **1216512**) printed `ape-grc=yes pci-restore=64`
+/ `phy_setup=post` and still `cand bmsr=7949` then
+`skip listen (no LSTATUS; do not curl)`. Analog is down at EBS. Next: peek
+host GPHY `BMSR` while SNP copper is live (`pre-EBS cand`). Reject
+`ec08c00f` and `1404f055`. Do not curl unless `link=up`.
 `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve
 kit `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

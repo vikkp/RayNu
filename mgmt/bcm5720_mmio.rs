@@ -24,7 +24,11 @@
 //! on `:3a` is not E3b. **Follow Linux `tg3_chip_reset`:** save/restore 64
 //! PCI config dwords + APE GRC lock around `CORECLK_RESET`, then
 //! `tg3_setup_phy(false)` (APD + Auto-MDIX + AN, still no `BMCR_RESET` when
-//! NCSI). Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
+//! NCSI). Iron 2026-08-19 EFI `ec08c00f` (`pci-restore=64` / `phy_setup=post`
+//! / `ape-grc=yes`) still `cand bmsr=7949` then `skip listen (no LSTATUS)`.
+//! PCI restore is closed. Next: peek host GPHY `BMSR` **while PRE-EBS SNP
+//! copper is live** (`pre-EBS cand`) to see if the cable was ever on the
+//! host PHY. Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
 //! `BMSR` and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station
 //! stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
@@ -961,7 +965,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); MAX];
     let mut bars = [0u64; MAX];
     let mut bmsr = [0u16; MAX];
-    let n = scan_bcm5720(&mut cands, &mut bars, &mut bmsr);
+    let n = scan_bcm5720(&mut cands, &mut bars, &mut bmsr, "cand");
     if n == 0 {
         return Err(Bcm5720Error::NotFound);
     }
@@ -1133,12 +1137,27 @@ fn any_bcm5720_bar() -> Option<(u8, u8, u8, u64)> {
     None
 }
 
+/// Peek both BCM5720 funcs' `BMSR` while firmware SNP still has copper.
+/// MDIO read only — no APE START, no halt, no `CORECLK_RESET`.
+#[cfg(feature = "uefi-bin")]
+pub fn peek_bcm5720_bmsr_pre_ebs() {
+    serial_step("boot: HOST-NIC BCM5720 pre-EBS BMSR peek (SNP live; MDIO read only)\n");
+    let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); BCM5720_MAX_CAND];
+    let mut bars = [0u64; BCM5720_MAX_CAND];
+    let mut bmsr = [0u16; BCM5720_MAX_CAND];
+    let _ = scan_bcm5720(&mut cands, &mut bars, &mut bmsr, "pre-EBS cand");
+}
+
+#[cfg(not(feature = "uefi-bin"))]
+pub fn peek_bcm5720_bmsr_pre_ebs() {}
+
 /// Scan func 0 **and** 1. Peek MAC + `BMSR` (no `CORECLK_RESET`).
 #[cfg(feature = "uefi-bin")]
 fn scan_bcm5720(
     cands: &mut [(u8, u8, u8, [u8; 6]); BCM5720_MAX_CAND],
     bars: &mut [u64; BCM5720_MAX_CAND],
     bmsr: &mut [u16; BCM5720_MAX_CAND],
+    label: &'static str,
 ) -> usize {
     let mut n = 0usize;
     for bus in 0u8..=15 {
@@ -1161,7 +1180,9 @@ fn scan_bcm5720(
                         // KANI-TARGET: pick_bcm5720_try_order (host), not this MMIO peek.
                         let mac = unsafe { peek_mac(bar, bus, dev, func) };
                         let phy = unsafe { peek_phy_bmsr(bar, func) };
-                        serial_step("boot: HOST-NIC BCM5720 cand pci=");
+                        serial_step("boot: HOST-NIC BCM5720 ");
+                        serial_step(label);
+                        serial_step(" pci=");
                         write_hex_u8(bus);
                         crate::boot::serial::write_byte(b':');
                         write_hex_u8(dev);

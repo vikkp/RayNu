@@ -8,7 +8,7 @@
 use crate::boot::serial;
 use crate::mgmt::http::handle_http_request;
 use crate::mgmt::http_listen::{
-    MgmtListenError, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS, M7_UEFI_HTTP_OK_MARKER,
+    MgmtListenError, M7_UEFI_HTTP_OK_MARKER, PRE_EBS_MAX_EXCHANGES, SNP_POST_BIND_LISTEN_MS,
 };
 use crate::mgmt::snp_uefi::{open_first_snp, SnpDevice};
 use smoltcp::iface::{Config, Interface, SocketSet};
@@ -97,6 +97,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
         mac,
         port,
     });
+    crate::mgmt::bcm5720_mmio::peek_bcm5720_bmsr_pre_ebs();
     serial::write_str("boot: mgmt HTTP listening on ");
     write_ipv4(ip);
     serial::write_byte(b':');
@@ -168,8 +169,7 @@ pub fn uefi_snp_listen(port: u16) -> Result<(), MgmtListenError> {
                 }
             }
 
-            let headers_done = rx_len >= 4
-                && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
 
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
@@ -276,7 +276,8 @@ struct ParkedSnpHttp {
 static mut PARKED_HTTP: Option<&'static mut ParkedSnpHttp> = None;
 
 fn park_snp_http(session: ParkedSnpHttp) {
-    let leaked: &'static mut ParkedSnpHttp = alloc::boxed::Box::leak(alloc::boxed::Box::new(session));
+    let leaked: &'static mut ParkedSnpHttp =
+        alloc::boxed::Box::leak(alloc::boxed::Box::new(session));
     // SAFETY: single-threaded boot; leaked so Drop never CloseProtocol after EBS.
     unsafe {
         PARKED_HTTP = Some(leaked);
@@ -308,7 +309,9 @@ fn tsc_delay_ms(ms: u32) {
 /// idle path is WARN-only (`uefi_snp_post_ebs_idle`) — firmware SNP is dead.
 pub fn uefi_snp_post_ebs_probe() {
     let Some(s) = parked_http() else {
-        serial::write_line("boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)");
+        serial::write_line(
+            "boot: WARN — no parked SNP (PRE-EBS fallback only; post-EBS HTTP skipped)",
+        );
         return;
     };
     serial::write_str("boot: post-EBS SNP parked lease=");

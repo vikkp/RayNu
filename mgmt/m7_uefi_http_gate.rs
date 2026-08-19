@@ -34,6 +34,7 @@ pub fn uefi_http_surface_present() -> bool {
         && snp.contains("uefi_snp_listen")
         && snp.contains("PRE-EBS SNP window")
         && snp.contains("CURL NOW")
+        && snp.contains("peek_bcm5720_bmsr_pre_ebs")
         && listen.contains("SNP_POST_BIND_LISTEN_MS")
         && probe.contains("connect_network_stack_bindings")
         && probe.contains("NII_GUID")
