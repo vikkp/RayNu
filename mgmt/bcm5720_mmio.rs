@@ -17,14 +17,10 @@
 //! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
 //! BMCR_RESET a live PHY). Iron 2026-08-19: `phy_reset=pre` then
 //! `CORECLK_RESET` still `bmsr=7949` / `lpa=0000` with working MDIO
-//! (`ape-lock=yes id=0362:5f60`). **Skip `CORECLK_RESET`** — steal rings only;
-//! BMCR_RESET the GPHY while MAC clocks stay firmware-owned. Clear CPMU EEE
-//! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Iron 2026-08-19 skip-reset
-//! EFI still `pre-reset bmsr=7949` / `lpa=0000` on func 1 with `ape-ncsi=yes`
-//! after PRE-EBS SNP HTTP on `:3a`. Post-EBS bring-up EFI still
-//! `cand bmsr=7949` on **both** funcs **immediately after EBS** (before
-//! VMX) with `phy_reset=pre yes`. Analog died at EBS, not the guest path.
-//! **Skip `BMCR_RESET` when `ape-ncsi=yes`.** Peek each candidate `BMSR`
+//! (`ape-lock=yes id=0362:5f60`). Skip-`CORECLK_RESET` then skip-`BMCR_RESET`
+//! still `cand bmsr=7949` immediately after EBS with `ape-ncsi=yes`.
+//! **Follow Linux `tg3_chip_reset`:** `CORECLK_RESET` without `BMCR_RESET`
+//! when `ape-ncsi=yes`. Peek each candidate `BMSR`
 //! and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays
 //! the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
@@ -527,16 +523,16 @@ pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
 }
 
-/// Iron 2026-08-19: `phy_reset=pre` then `CORECLK_RESET` still `lpa=0000`.
-/// Skip chip reset; steal rings; BMCR_RESET only when `LSTATUS` is clear
-/// **and** APE NCSI is off. Iron post-EBS: `cand bmsr=7949` already, then
-/// `phy_reset=pre yes` with `ape-ncsi=yes`.
+/// Iron 2026-08-19: skip-`CORECLK_RESET` + skip-`BMCR_RESET` still
+/// `cand bmsr=7949` immediately after EBS. Linux `tg3` on this R640 does
+/// chip reset after EBS and gets copper — try `CORECLK_RESET` **without**
+/// `BMCR_RESET` when NCSI.
 ///
 /// INVARIANTS:
-/// - Always true on this iron path
+/// - Always false on this iron path
 /// - Never panics
 pub fn skip_coreclk_reset() -> bool {
-    true
+    false
 }
 
 /// Skip `tg3_bmcr_reset` when APE NCSI owns the management PHY.
@@ -1269,11 +1265,17 @@ unsafe fn hw_init(
     if inherit {
         serial_step("boot: HOST-NIC BCM5720 inherit SNP PHY (skip CORECLK_RESET)\n");
     } else if skip_coreclk_reset() {
-        // Iron: phy_reset=pre then CORECLK_RESET still lpa=0000. Keep GPHY analog.
+        // Retained: skip CORECLK_RESET (keep GPHY analog)
         serial_step("boot: HOST-NIC BCM5720 skip CORECLK_RESET (keep GPHY analog)\n");
         setup_copper_phy(mmio, func);
     } else {
-        setup_copper_phy(mmio, func);
+        // Linux `tg3_reset_hw`: optional phy reset, then CORECLK_RESET.
+        // Iron: skip BMCR_RESET when ape-ncsi; still chip-reset.
+        if skip_bmcr_reset(ape_ncsi_now()) {
+            serial_step("boot: HOST-NIC BCM5720 phy_reset=pre skip (ape-ncsi)\n");
+        } else {
+            setup_copper_phy(mmio, func);
+        }
         chip_reset(mmio, bus, dev, func)?;
         let fw = wait_fw_magic(bus, dev, func);
         serial_step(if fw {
@@ -1349,7 +1351,8 @@ unsafe fn hw_init(
 
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
 /// MAGIC1 goes to SRAM 0xB50 **before** CORECLK_RESET. Bit 29 keeps PCIe.
-/// Retained for the `!skip_coreclk_reset()` fallback (iron skips it).
+/// Iron: skip-reset EFIs still `cand bmsr=7949`; this path runs again without
+/// `BMCR_RESET` when `ape-ncsi=yes`.
 #[cfg(feature = "uefi-bin")]
 unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm5720Error> {
     serial_step("boot: HOST-NIC BCM5720 reset…\n");

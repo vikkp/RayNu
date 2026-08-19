@@ -272,4 +272,15 @@ skips `BMCR_RESET` when `ape-ncsi=yes` (`phy_reset=pre skip (ape-ncsi)`).
 Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 Reject post-EBS bring-up EFI `4a2d4f0a`.
 
+### 2026-08-19 addendum — skip-BMCR still `cand bmsr=7949`
+
+Skip-`BMCR_RESET` EFI (`1214464` bytes, SHA
+`b6fcf3bb0f6ab9330606b696a9e041295527388348c2a76fc47e6d94a38b81c5`, CI run
+`32290233834` — **size collides** with `4a2d4f0a`) printed
+`phy_reset=pre skip (ape-ncsi)` on both funcs. PRE-EBS SNP HTTP closed on
+`:3a`. COM2 before VMX still `cand bmsr=7949` then `link=timeout`. Analog is
+down at EBS before host PHY writes. Next EFI runs `CORECLK_RESET` without
+`BMCR_RESET` (Linux `tg3_chip_reset`). Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject skip-BMCR EFI `b6fcf3bb`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

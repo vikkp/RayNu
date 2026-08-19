@@ -264,12 +264,12 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the skip-`BMCR_RESET` EFI (this branch). Post-EBS bring-up
-EFI `4a2d4f0a…dc767c` (size **1214464**) printed `cand bmsr=7949` on **both**
-funcs **immediately after EBS**, then `phy_reset=pre yes` / `lpa=0000` with
-`ape-ncsi=yes`, then `reuse (armed post-EBS)` after `BOOT-OK`. Analog died
-at EBS, not the guest path. Skip `BMCR_RESET` when `ape-ncsi=yes`. Reject
-`4a2d4f0a`, `9fc6a3c2`, and `1212416`. Curl `http://<lease>:8443/` only after
-`link=up`. `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange.
-Preserve kit `releases/v0.1.0-adr013-baseline`. Evidence:
+**Next:** flash CORECLK_RESET without BMCR (this branch). Skip-`BMCR_RESET`
+EFI `b6fcf3bb…a38b81c5` (size **1214464**, collides with `4a2d4f0a`) printed
+`phy_reset=pre skip (ape-ncsi)` and still `cand bmsr=7949` immediately after
+EBS, then `reuse` after `BOOT-OK`. Analog is down at EBS before any host PHY
+write. Linux `tg3` on this R640 still chip-resets after EBS. Try
+`CORECLK_RESET` **without** `BMCR_RESET`. Reject `b6fcf3bb` and `4a2d4f0a`.
+Curl only after `link=up`. `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native
+HTTP exchange. Preserve kit `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

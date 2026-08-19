@@ -220,6 +220,7 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("try next func"));
     assert!(src.contains("bmsr="));
     assert!(src.contains("fn skip_coreclk_reset("));
+    assert!(src.contains("Follow Linux `tg3_chip_reset`"));
     assert!(src.contains("fn skip_bmcr_reset("));
     assert!(src.contains("phy_reset=pre skip (ape-ncsi)"));
     assert!(src.contains("fn ape_ncsi_enabled("));
@@ -253,8 +254,8 @@ fn inherit_snp_phy_follows_bmsr_lstatus() {
 }
 
 #[test]
-fn skip_coreclk_reset_is_true_on_r640_5720() {
-    assert!(skip_coreclk_reset());
+fn skip_coreclk_reset_is_false_after_ncsi_skip_bmcr() {
+    assert!(!skip_coreclk_reset());
 }
 
 #[test]
