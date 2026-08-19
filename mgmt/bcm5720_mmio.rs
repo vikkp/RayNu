@@ -11,9 +11,10 @@
 //! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
 //! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
-//! BCM57416 10G. After PHY AN, wait for `BMSR_LSTATUS` (read twice; latched
-//! low) and set `MAC_MODE` MII vs GMII from speed like Linux `tg3_adjust_link`.
-//! `RX_MODE_PROMISC` is on so ARP is not dropped if CAM still holds NVRAM MAC.
+//! BCM57416 10G. After `CORECLK_RESET`, Linux `tg3_phy_reset` +
+//! `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, then AN).
+//! Wait `BMSR_LSTATUS` (read twice) and set `MAC_MODE` MII vs GMII
+//! (`tg3_adjust_link`). `RX_MODE_PROMISC` is on so ARP is not CAM-dropped.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
 
@@ -106,15 +107,32 @@ const RCVLPC_CONFIG_DEFAULT: u32 = 0x181;
 
 const MII_BMCR: u32 = 0;
 const MII_BMSR: u32 = 1;
+const MII_PHYSID1: u32 = 2;
+const MII_PHYSID2: u32 = 3;
 const MII_ADVERTISE: u32 = 4;
 const MII_LPA: u32 = 5;
 const MII_CTRL1000: u32 = 9;
 const MII_STAT1000: u32 = 10;
+const BMCR_RESET: u16 = 0x8000;
 const BMCR_ANRESTART: u16 = 0x0200;
 const BMCR_ANENABLE: u16 = 0x1000;
 const BMSR_LSTATUS: u16 = 0x0004;
+const BMSR_ANEGCOMPLETE: u16 = 0x0020;
 const ADVERTISE_COPPER: u16 = 0x0DE1;
 const ADVERTISE_1000: u16 = 0x0300;
+const MII_TG3_AUX_CTRL: u32 = 0x18;
+const MII_TG3_AUXCTL_SHDWSEL_PWRCTL: u16 = 0x0002;
+const MII_TG3_AUXCTL_SHDWSEL_MISC: u16 = 0x0007;
+const MII_TG3_AUXCTL_MISC_WIRESPD_EN: u16 = 0x0010;
+const MII_TG3_AUXCTL_MISC_FORCE_AMDIX: u16 = 0x0200;
+const MII_TG3_AUXCTL_MISC_WREN: u16 = 0x8000;
+const MII_TG3_AUXCTL_MISC_RDSEL_SHIFT: u16 = 12;
+const TG3_CPMU_CTRL: u32 = 0x3600;
+const CPMU_CTRL_LINK_IDLE_MODE: u32 = 0x200;
+const CPMU_CTRL_LINK_AWARE_MODE: u32 = 0x400;
+const CPMU_CTRL_GPHY_10MB_RXONLY: u32 = 0x1_0000;
+const SG_DIG_STATUS: u32 = 0x5B4;
+const SG_DIG_IS_SERDES: u32 = 0x100;
 const LPA_1000FULL: u16 = 0x0800;
 const LPA_1000HALF: u16 = 0x0400;
 const LPA_100FULL: u16 = 0x0100;
@@ -330,6 +348,28 @@ pub fn station_mac(peeked: [u8; 6], lease: [u8; 6]) -> [u8; 6] {
 /// - Never panics
 pub fn bmsr_link_up(bmsr: u16) -> bool {
     bmsr & BMSR_LSTATUS != 0
+}
+
+/// IEEE 802.3 `BMSR_ANEGCOMPLETE` (MII reg 1 bit 5).
+///
+/// Iron 2026-08-19: `bmsr=7949` was link-down **and** AN incomplete.
+pub fn bmsr_an_complete(bmsr: u16) -> bool {
+    bmsr & BMSR_ANEGCOMPLETE != 0
+}
+
+/// 5717_PLUS MDIO address: `pci_fn + 1`, plus 7 if `SG_DIG_IS_SERDES`.
+/// Linux `tg3_mdio_init`.
+///
+/// INVARIANTS:
+/// - Copper (no serdes bit) → func+1 (R640 func 1 → PHY 2)
+/// - Serdes bit → func+8
+/// - Never panics
+pub fn phy_addr_5717_plus(func: u8, sg_dig_status: u32) -> u32 {
+    let mut phy_addr = u32::from(func) + 1; // pci_fn + 1 (func 1 → PHY 2)
+    if sg_dig_status & SG_DIG_IS_SERDES != 0 {
+        phy_addr += 7;
+    }
+    phy_addr
 }
 
 /// Decode copper partner ability (`MII_LPA` + `MII_STAT1000`).
@@ -853,7 +893,7 @@ unsafe fn hw_init(
     enable_dma_engines(mmio);
     enable_hostcc(mmio);
     enable_completion_blocks(mmio);
-    restart_phy_an(mmio, func);
+    setup_copper_phy(mmio, func);
     wait_phy_link_and_adjust_mac(mmio, func);
 
     mailbox_write(
@@ -1155,39 +1195,128 @@ unsafe fn enable_mac(mmio: u64, mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     Ok(mac)
 }
 
-/// Best-effort PHY AN restart. `phy_addr = pci_fn + 1` (func 1 → PHY 2).
+/// Linux `tg3_phy_reset` + `tg3_setup_copper_phy` (not a bare AN poke).
+/// Iron 2026-08-19: AN-only left `bmsr=7949` (LSTATUS=0, ANEGCOMPLETE=0).
 /// MDIO timeout is not fatal.
 #[cfg(feature = "uefi-bin")]
-unsafe fn restart_phy_an(mmio: u64, func: u8) {
-    let phy_addr = u32::from(func) + 1; // pci_fn + 1 (func 1 → PHY 2)
+unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     mmio_write(
         mmio,
         MAC_MI_MODE,
         MAC_MI_MODE_BASE | MAC_MI_MODE_500KHZ_CONST,
     );
     tsc_spin_ms(1);
-    let ok = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
-        && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
-        && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+
+    let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
+    let phy_addr = phy_addr_5717_plus(func, sg_dig);
     serial_step("boot: HOST-NIC BCM5720 phy_addr=");
     write_hex_u8(phy_addr as u8);
-    serial_step(if ok {
-        " phy=yes\n"
+    serial_step(if sg_dig & SG_DIG_IS_SERDES != 0 {
+        " serdes=yes"
     } else {
-        " phy=timeout (continuing)\n"
+        " serdes=no"
     });
-    let _ = phy_read(mmio, phy_addr, MII_BMCR);
+    serial_step(" sgdig=");
+    write_hex_u32(sg_dig);
+    serial_step("\n");
+
+    // Linux `tg3_reset_hw` / eeprom path: GPHY must not sit in CPMU idle.
+    let mut cpmu = mmio_read(mmio, TG3_CPMU_CTRL);
+    cpmu &= !(CPMU_CTRL_LINK_IDLE_MODE | CPMU_CTRL_LINK_AWARE_MODE | CPMU_CTRL_GPHY_10MB_RXONLY);
+    mmio_write(mmio, TG3_CPMU_CTRL, cpmu);
+
+    let rst = phy_bmcr_reset(mmio, phy_addr);
+    let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
+    let mdix = phy_enable_automdix_wirespeed(mmio, phy_addr);
+    let an = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
+        && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
+        && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+
+    serial_step("boot: HOST-NIC BCM5720 phy_reset=");
+    serial_step(if rst { "yes" } else { "timeout" });
+    serial_step(" pwrctl=");
+    serial_step(if pwr { "clr" } else { "timeout" });
+    serial_step(" mdix=");
+    serial_step(if mdix { "yes" } else { "timeout" });
+    serial_step(if an { " phy=yes" } else { " phy=timeout" });
+    serial_step(" id=");
+    match (
+        phy_read(mmio, phy_addr, MII_PHYSID1),
+        phy_read(mmio, phy_addr, MII_PHYSID2),
+    ) {
+        (Some(hi), Some(lo)) => {
+            write_hex_u16(hi);
+            serial_step(":");
+            write_hex_u16(lo);
+        }
+        _ => serial_step("----:----"),
+    }
+    serial_step("\n");
+}
+
+/// Linux `tg3_bmcr_reset`: write BMCR_RESET, poll until the bit clears.
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_bmcr_reset(mmio: u64, phy: u32) -> bool {
+    if !phy_write(mmio, phy, MII_BMCR, BMCR_RESET) {
+        return false;
+    }
+    for _ in 0..5000 {
+        if let Some(bmcr) = phy_read(mmio, phy, MII_BMCR) {
+            if bmcr & BMCR_RESET == 0 {
+                tsc_spin_us(40);
+                return true;
+            }
+        }
+        tsc_spin_us(10);
+    }
+    false
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_auxctl_write(mmio: u64, phy: u32, reg: u16, set: u16) -> bool {
+    let mut v = set | reg;
+    if reg == MII_TG3_AUXCTL_SHDWSEL_MISC {
+        v |= MII_TG3_AUXCTL_MISC_WREN;
+    }
+    phy_write(mmio, phy, MII_TG3_AUX_CTRL, v)
+}
+
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_auxctl_read(mmio: u64, phy: u32, reg: u16) -> Option<u16> {
+    if !phy_write(
+        mmio,
+        phy,
+        MII_TG3_AUX_CTRL,
+        (reg << MII_TG3_AUXCTL_MISC_RDSEL_SHIFT) | MII_TG3_AUXCTL_SHDWSEL_MISC,
+    ) {
+        return None;
+    }
+    phy_read(mmio, phy, MII_TG3_AUX_CTRL)
+}
+
+/// Linux `tg3_phy_toggle_automdix(true)` + `tg3_phy_set_wirespeed`.
+#[cfg(feature = "uefi-bin")]
+unsafe fn phy_enable_automdix_wirespeed(mmio: u64, phy: u32) -> bool {
+    let misc = phy_auxctl_read(mmio, phy, MII_TG3_AUXCTL_SHDWSEL_MISC).unwrap_or(0);
+    phy_auxctl_write(
+        mmio,
+        phy,
+        MII_TG3_AUXCTL_SHDWSEL_MISC,
+        misc | MII_TG3_AUXCTL_MISC_FORCE_AMDIX | MII_TG3_AUXCTL_MISC_WIRESPD_EN,
+    )
 }
 
 /// Linux `tg3_setup_phy` / `tg3_adjust_link`: `BMSR_LSTATUS` is latched low
 /// (read twice). Then `MAC_MODE` MII vs GMII from speed. Soft-fail.
 #[cfg(feature = "uefi-bin")]
 unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) {
-    let phy_addr = u32::from(func) + 1;
+    let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
+    let phy_addr = phy_addr_5717_plus(func, sg_dig);
     let mut last_bmsr: u16 = 0;
     let mut up = false;
-    // ~4s: 1000BASE-T AN after CORECLK_RESET commonly 1–3s.
-    for _ in 0..200 {
+    // ~8s: BMCR_RESET restarts 1000BASE-T AN (often 1–4s; 4s was not enough
+    // when the analog front-end was still isolated).
+    for _ in 0..400 {
         let _ = phy_read(mmio, phy_addr, MII_BMSR); // discard latch
         if let Some(bmsr) = phy_read(mmio, phy_addr, MII_BMSR) {
             last_bmsr = bmsr;
@@ -1221,8 +1350,25 @@ unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) {
         mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
         serial_step("boot: HOST-NIC BCM5720 link=timeout bmsr=");
         write_hex_u16(last_bmsr);
+        serial_step(" bmcr=");
+        match phy_read(mmio, phy_addr, MII_BMCR) {
+            Some(v) => write_hex_u16(v),
+            None => serial_step("----"),
+        }
+        serial_step(" lpa=");
+        match phy_read(mmio, phy_addr, MII_LPA) {
+            Some(v) => write_hex_u16(v),
+            None => serial_step("----"),
+        }
+        serial_step(" s1000=");
+        match phy_read(mmio, phy_addr, MII_STAT1000) {
+            Some(v) => write_hex_u16(v),
+            None => serial_step("----"),
+        }
         serial_step(" mac_status=");
         write_hex_u32(mac_status);
+        serial_step(" cpmu=");
+        write_hex_u32(mmio_read(mmio, TG3_CPMU_CTRL));
         serial_step("\n");
     }
 }

@@ -177,9 +177,10 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 **BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
 PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
-**not** `bnxt` (that is BCM57416 10G): after PHY AN, wait `BMSR_LSTATUS`
-(read twice) and set `MAC_MODE` MII vs GMII from speed (`tg3_adjust_link`);
-`RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+**not** `bnxt` (that is BCM57416 10G): after CORECLK_RESET, Linux
+`tg3_phy_reset` / `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0,
+Auto-MDIX) then wait `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII
+(`tg3_adjust_link`). `RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
@@ -192,8 +193,9 @@ curl -sS "http://<lease>:8443/"
 ```
 
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `phy=yes` then `link=up speed=… duplex=…`
-(or `link=timeout bmsr=…`) then `rings armed` then
+`station SNP-lease MAC=…` then `phy_reset=yes pwrctl=clr mdix=yes` then
+`link=up speed=… duplex=…`
+(or `link=timeout bmsr=… bmcr=…`) then `rings armed` then
 `HOST-NIC idle listening on <lease>:8443`. Curl port **8443** (not 8445).
 The iron HTTP-OK marker is
 only after that exchange. Do not claim it from this runbook.

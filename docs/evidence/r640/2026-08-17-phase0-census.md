@@ -81,4 +81,18 @@ Next: wait `BMSR_LSTATUS` (read twice), set `MAC_MODE` MII vs GMII from
 speed like Linux `tg3_adjust_link`, enable `RX_MODE_PROMISC`. Do **not**
 claim `HOST-NIC-HTTP-OK` from this note.
 
+### 2026-08-19 addendum — `link=timeout bmsr=7949`
+
+PHY-link-wait EFI (`1209856`) still no ARP. COM2:
+
+```
+link=timeout bmsr=7949 mac_status=00400000
+```
+
+`0x7949` is a live copper PHY: 10/100 capable, extended status, **LSTATUS=0**,
+**ANEGCOMPLETE=0**. Station `:3a` and `fw-magic=yes` stayed. AN poke after
+CORECLK_RESET does not bring the analog front-end up. Next: Linux
+`tg3_bmcr_reset`, AUXCTL PWRCTL=0 (clear isolate), Auto-MDIX, CPMU idle
+clear. Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

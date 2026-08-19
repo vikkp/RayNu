@@ -1,7 +1,7 @@
 use super::{
-    bmsr_link_up, decode_phy_link, mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_id_is_bcm5720,
-    pick_bcm5720_pci, rx_bd_packet_len, station_mac, Bcm5720PickReason, BCM5720_DEVICE,
-    BCM5720_VENDOR, FRAME_MAX,
+    bmsr_an_complete, bmsr_link_up, decode_phy_link, mac_mode_from_link, parse_mocked_rx_bd_bytes,
+    pci_id_is_bcm5720, phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len, station_mac,
+    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -175,7 +175,28 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("fn decode_phy_link("));
     assert!(src.contains("fn mac_mode_from_link("));
     assert!(src.contains("tg3_adjust_link"));
+    assert!(src.contains("BMCR_RESET"));
+    assert!(src.contains("MII_TG3_AUXCTL_SHDWSEL_PWRCTL"));
+    assert!(src.contains("MII_TG3_AUXCTL_MISC_FORCE_AMDIX"));
+    assert!(src.contains("CPMU_CTRL_LINK_IDLE_MODE"));
+    assert!(src.contains("fn phy_addr_5717_plus("));
+    assert!(src.contains("tg3_bmcr_reset"));
     assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
+}
+
+#[test]
+fn iron_bmsr_7949_is_link_down_an_incomplete() {
+    const IRON: u16 = 0x7949;
+    assert!(!bmsr_link_up(IRON));
+    assert!(!bmsr_an_complete(IRON));
+    assert!(bmsr_an_complete(0x0020));
+}
+
+#[test]
+fn phy_addr_5717_plus_copper_func1_is_2() {
+    assert_eq!(phy_addr_5717_plus(1, 0), 2);
+    assert_eq!(phy_addr_5717_plus(0, 0), 1);
+    assert_eq!(phy_addr_5717_plus(1, 0x100), 9);
 }
 
 #[test]
