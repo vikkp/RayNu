@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: c8dd5f9f291f7b685d78069841cbcad4b500ef7b
-last_commit_short: c8dd5f9
+last_commit: 5ba9fae030a875a20d8ac95f80f770f6c6841ca5
+last_commit_short: 5ba9fae
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING (this feat) |
+| Commit | 5ba9fae |
 | Summary | Iron `link=timeout bmsr=7949` (AN incomplete). Linux `tg3_bmcr_reset` + AUXCTL PWRCTL=0 + Auto-MDIX; HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (PHY no carrier after reset) |
 | Gates touched | `phy_addr_5717_plus` / `bmsr_an_complete`; `HOST-NIC-HTTP-OK` not claimed |
