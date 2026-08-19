@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: b3d3f1f4c0d8a8ec5df5fbf63ff0bb698fa74f87
+last_commit_short: b3d3f1f
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | b3d3f1f |
 | Summary | Ubuntu raynuvsrv1 sees Cruzer `LABEL=RAYNUV` on front USB 2; replace-only `flash-cruzer-esp.sh` (never `/dev/sdc`, never PERC) |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open; flash path no longer needs walking the stick |
 | Gates touched | M7.5 scaffold + Cruzer self-test; `HOST-NIC-HTTP-OK` not claimed |
