@@ -19,10 +19,14 @@
 //! `CORECLK_RESET` still `bmsr=7949` / `lpa=0000` with working MDIO
 //! (`ape-lock=yes id=0362:5f60`). Skip-`CORECLK_RESET` then skip-`BMCR_RESET`
 //! still `cand bmsr=7949` immediately after EBS with `ape-ncsi=yes`.
-//! **Follow Linux `tg3_chip_reset`:** `CORECLK_RESET` without `BMCR_RESET`
-//! when `ape-ncsi=yes`. Peek each candidate `BMSR`
-//! and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays
-//! the SNP lease MAC. Wait `BMSR_LSTATUS` and set
+//! Iron 2026-08-19 complete COM2 (`1404f055`): `CORECLK_RESET` without
+//! `BMCR_RESET` still `cand bmsr=7949` then `link=timeout`; PRE-EBS SNP HTTP
+//! on `:3a` is not E3b. **Follow Linux `tg3_chip_reset`:** save/restore 64
+//! PCI config dwords + APE GRC lock around `CORECLK_RESET`, then
+//! `tg3_setup_phy(false)` (APD + Auto-MDIX + AN, still no `BMCR_RESET` when
+//! NCSI). Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
+//! `BMSR` and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station
+//! stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -523,16 +527,34 @@ pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
 }
 
-/// Iron 2026-08-19: skip-`CORECLK_RESET` + skip-`BMCR_RESET` still
-/// `cand bmsr=7949` immediately after EBS. Linux `tg3` on this R640 does
-/// chip reset after EBS and gets copper — try `CORECLK_RESET` **without**
-/// `BMCR_RESET` when NCSI.
+/// Iron 2026-08-19 complete COM2 (`1404f055`): `CORECLK_RESET` without
+/// `BMCR_RESET` still `cand bmsr=7949` / `link=timeout`. Keep Linux
+/// `tg3_chip_reset` (this stays false) and restore PCI config around it.
 ///
 /// INVARIANTS:
 /// - Always false on this iron path
 /// - Never panics
 pub fn skip_coreclk_reset() -> bool {
     false
+}
+
+/// Linux `pci_save_state` width used around `tg3_chip_reset` (256 bytes).
+///
+/// INVARIANTS:
+/// - Always 64
+/// - Never panics
+pub fn pci_cfg_save_dword_count() -> usize {
+    64
+}
+
+/// AfterBootOk HTTP listen requires copper `LSTATUS`. Iron `1404f055` armed
+/// rings and blocked in the listen loop with `link=timeout` — curl hung.
+///
+/// INVARIANTS:
+/// - Always true on this iron path
+/// - Never panics
+pub fn skip_http_listen_without_lstatus() -> bool {
+    true
 }
 
 /// Skip `tg3_bmcr_reset` when APE NCSI owns the management PHY.
@@ -874,6 +896,10 @@ static APE_LOCKNUM: AtomicU32 = AtomicU32::new(0);
 static APE_PCI_FN: AtomicU32 = AtomicU32::new(0);
 #[cfg(feature = "uefi-bin")]
 static APE_EVT_SENT: AtomicBool = AtomicBool::new(false);
+/// Last `hw_init` `BMSR_LSTATUS`. AfterBootOk listen reads this so we do
+/// not block in smoltcp with a dead PHY (iron `1404f055` COM2).
+#[cfg(feature = "uefi-bin")]
+static PHY_LINK_UP: AtomicBool = AtomicBool::new(false);
 
 fn misc_host_ctrl() -> u32 {
     MISC_HOST_CTRL_CLEAR_INT
@@ -907,6 +933,17 @@ pub fn bcm5720_present() -> bool {
 
 #[cfg(not(feature = "uefi-bin"))]
 pub fn bcm5720_present() -> bool {
+    false
+}
+
+/// Last post-EBS bring-up saw copper `BMSR_LSTATUS`.
+#[cfg(feature = "uefi-bin")]
+pub fn bcm5720_phy_link_up() -> bool {
+    PHY_LINK_UP.load(Ordering::Relaxed)
+}
+
+#[cfg(not(feature = "uefi-bin"))]
+pub fn bcm5720_phy_link_up() -> bool {
     false
 }
 
@@ -945,6 +982,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     let result = unsafe {
         let dma = &mut *core::ptr::addr_of_mut!(DMA);
         let mut last_ok: Option<([u8; 6], u64)> = None;
+        let mut last_up = false;
         let mut last_err = Bcm5720Error::NotFound;
         let mut prev_bar: Option<u64> = None;
         for k in 0..ntry {
@@ -987,20 +1025,12 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             *dma = DmaArena::zeroed();
             match hw_init(bar, pick.bus, pick.dev, pick.func, dma, prefer_mac) {
                 Ok((mac, up)) => {
+                    last_ok = Some((mac, bar));
+                    last_up = up;
                     if up {
-                        NIC = Some(NicState {
-                            mmio: bar,
-                            mac,
-                            rx_rcb_ptr: 0,
-                            rx_std_prod: (RING as u16).saturating_sub(1),
-                            tx_prod: 0,
-                            tx_cons: 0,
-                        });
-                        last_ok = Some((mac, bar));
                         break;
                     }
                     prev_bar = Some(bar);
-                    last_ok = Some((mac, bar));
                 }
                 Err(e) => {
                     last_err = e;
@@ -1016,6 +1046,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             }
         }
         if let Some((mac, bar)) = last_ok {
+            PHY_LINK_UP.store(last_up, Ordering::Relaxed);
             NIC = Some(NicState {
                 mmio: bar,
                 mac,
@@ -1026,6 +1057,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             });
             Ok(mac)
         } else {
+            PHY_LINK_UP.store(false, Ordering::Relaxed);
             Err(last_err)
         }
     };
@@ -1270,12 +1302,9 @@ unsafe fn hw_init(
         setup_copper_phy(mmio, func);
     } else {
         // Linux `tg3_reset_hw`: optional phy reset, then CORECLK_RESET.
-        // Iron: skip BMCR_RESET when ape-ncsi; still chip-reset.
-        if skip_bmcr_reset(ape_ncsi_now()) {
-            serial_step("boot: HOST-NIC BCM5720 phy_reset=pre skip (ape-ncsi)\n");
-        } else {
-            setup_copper_phy(mmio, func);
-        }
+        // Iron: skip BMCR_RESET when ape-ncsi, but still run APD/MDIX/AN
+        // (`setup_copper_phy`). EFI `1404f055` skipped this entire call.
+        setup_copper_phy(mmio, func);
         chip_reset(mmio, bus, dev, func)?;
         let fw = wait_fw_magic(bus, dev, func);
         serial_step(if fw {
@@ -1351,11 +1380,23 @@ unsafe fn hw_init(
 
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
 /// MAGIC1 goes to SRAM 0xB50 **before** CORECLK_RESET. Bit 29 keeps PCIe.
-/// Iron: skip-reset EFIs still `cand bmsr=7949`; this path runs again without
-/// `BMCR_RESET` when `ape-ncsi=yes`.
+/// Iron `1404f055`: CORECLK without BMCR still `cand bmsr=7949`. This path
+/// adds Linux `pci_save_state` / `pci_restore_state` (64 dwords) and APE
+/// GRC lock around the reset pulse.
 #[cfg(feature = "uefi-bin")]
 unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm5720Error> {
     serial_step("boot: HOST-NIC BCM5720 reset…\n");
+    let n = pci_cfg_save_dword_count();
+    let mut cfg = [0u32; 64];
+    for i in 0..n {
+        cfg[i] = pci_read32(bus, dev, func, (i * 4) as u8);
+    }
+    let grc = ape_lock_num(TG3_APE_LOCK_GRC);
+    serial_step("boot: HOST-NIC BCM5720 ape-grc=");
+    serial_step(if grc { "yes" } else { "timeout" });
+    serial_step(" pci-restore=");
+    write_u16_dec(n as u16);
+    serial_step("\n");
     mmio_write(mmio, GRC_FASTBOOT_PC, 0);
     sram_write(
         bus,
@@ -1371,6 +1412,16 @@ unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm572
     );
     let _ = pci_read32(bus, dev, func, 0x04);
     tsc_spin_ms(20);
+    // Restore BARs/caps first, command last (Linux `pci_restore_state`).
+    for i in 0..n {
+        let off = (i * 4) as u8;
+        if off == 0 || off == 0x04 {
+            continue;
+        }
+        pci_write32(bus, dev, func, off, cfg[i]);
+    }
+    pci_write32(bus, dev, func, 0x04, cfg[1]);
+    ape_unlock_num(TG3_APE_LOCK_GRC);
     pci_write32(
         bus,
         dev,
@@ -1715,8 +1766,9 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     serial_step("\n");
 }
 
-/// Linux `tg3_setup_phy(false)` after `tg3_chip_reset`: PWRCTL + AN restart,
-/// no `BMCR_RESET` (that already ran before CORECLK_RESET).
+/// Linux `tg3_setup_phy(false)` after `tg3_chip_reset`: PWRCTL + APD off +
+/// Auto-MDIX + AN restart, no `BMCR_RESET` (that already ran before
+/// CORECLK_RESET, or was skipped for NCSI). Iron `1404f055` only restarted AN.
 #[cfg(feature = "uefi-bin")]
 unsafe fn restart_copper_an(mmio: u64, func: u8) {
     mmio_write(
@@ -1728,13 +1780,23 @@ unsafe fn restart_copper_an(mmio: u64, func: u8) {
     let mut cpmu = mmio_read(mmio, TG3_CPMU_CTRL);
     cpmu &= !(CPMU_CTRL_LINK_IDLE_MODE | CPMU_CTRL_LINK_AWARE_MODE | CPMU_CTRL_GPHY_10MB_RXONLY);
     mmio_write(mmio, TG3_CPMU_CTRL, cpmu);
+    let eee = mmio_read(mmio, TG3_CPMU_EEE_MODE) & !TG3_CPMU_EEEMD_LPI_ENABLE;
+    mmio_write(mmio, TG3_CPMU_EEE_MODE, eee);
     let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
     let phy_addr = phy_addr_5717_plus(func, sg_dig);
     let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
+    let apd = phy_disable_apd(mmio, phy_addr);
+    let mdix = phy_enable_automdix_wirespeed(mmio, phy_addr);
     let an = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
         && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
         && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
-    serial_step("boot: HOST-NIC BCM5720 an-restart=");
+    serial_step("boot: HOST-NIC BCM5720 phy_setup=post");
+    serial_step(" apd=");
+    serial_step(if apd { "off" } else { "timeout" });
+    serial_step(" mdix=");
+    serial_step(if mdix { "yes" } else { "timeout" });
+    serial_step(" eee=off");
+    serial_step(" an-restart=");
     serial_step(if an { "yes" } else { "timeout" });
     serial_step(" pwrctl=");
     serial_step(if pwr { "clr" } else { "timeout" });
@@ -2037,11 +2099,17 @@ fn ape_ncsi_now() -> bool {
 
 #[cfg(feature = "uefi-bin")]
 fn ape_lock_now() -> bool {
+    ape_lock_num(APE_LOCKNUM.load(Ordering::Relaxed))
+}
+
+/// Linux `tg3_ape_lock(locknum)` — PHY MDIO uses `APE_LOCKNUM`; chip reset
+/// uses `TG3_APE_LOCK_GRC`.
+#[cfg(feature = "uefi-bin")]
+fn ape_lock_num(locknum: u32) -> bool {
     let base = APE_MMIO.load(Ordering::Relaxed);
     if base == 0 {
         return true;
     }
-    let locknum = APE_LOCKNUM.load(Ordering::Relaxed);
     let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
     let bit = ape_lock_req_bit(locknum, fn_);
     let req = ape_per_lock_req(locknum);
@@ -2063,11 +2131,15 @@ fn ape_lock_now() -> bool {
 
 #[cfg(feature = "uefi-bin")]
 fn ape_unlock_now() {
+    ape_unlock_num(APE_LOCKNUM.load(Ordering::Relaxed));
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_unlock_num(locknum: u32) {
     let base = APE_MMIO.load(Ordering::Relaxed);
     if base == 0 {
         return;
     }
-    let locknum = APE_LOCKNUM.load(Ordering::Relaxed);
     let fn_ = APE_PCI_FN.load(Ordering::Relaxed) as u8;
     let bit = ape_lock_req_bit(locknum, fn_);
     unsafe {

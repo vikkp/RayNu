@@ -203,9 +203,11 @@ Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 **immediately after** `RAYNU-V-M1-EBS-OK`:
-`phy_reset=pre skip (ape-ncsi)` then `reset…` / `fw-magic=` (Linux
-`tg3_chip_reset`, no `BMCR_RESET`). After `BOOT-OK`:
-`reuse (armed post-EBS)`. Curl only after `link=up`.
+`phy_reset=pre skip (ape-ncsi)` then `reset…` / `ape-grc=` / `pci-restore=64`
+/ `fw-magic=` / `phy_setup=post`. After `BOOT-OK`: `reuse (armed post-EBS)`.
+Curl **only** after `link=up`. If COM2 prints
+`skip listen (no LSTATUS; do not curl)`, do not curl — analog is still down.
+Reject EFI SHA `1404f055` (CORECLK without BMCR; size **1216000**).
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**

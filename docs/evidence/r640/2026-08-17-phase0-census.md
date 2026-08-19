@@ -283,4 +283,51 @@ down at EBS before host PHY writes. Next EFI runs `CORECLK_RESET` without
 `BMCR_RESET` (Linux `tg3_chip_reset`). Do **not** claim `HOST-NIC-HTTP-OK`.
 Reject skip-BMCR EFI `b6fcf3bb`.
 
+### 2026-08-19 addendum — CORECLK without BMCR still `cand bmsr=7949`
+
+CORECLK-without-BMCR EFI (`1216000` bytes, SHA
+`1404f055f210d1c4d7c551a31041e669681d002cafe3b4614a09e7a0f737865c`, CI run
+`32291875771`, commit `27937a9` / feature `f0961f1`) ran the intended
+path. Complete COM2:
+
+```
+SNP residual MAC=b0:26:28:5c:5a:3a
+SNP lease 10.99.99.116/24
+RAYNU-V-M7-UEFI-HTTP-OK
+post-EBS bring-up (keep analog before guest path)
+cand pci=01:00.00 MAC=…:38 bmsr=7949
+cand pci=01:00.01 MAC=…:39 bmsr=7949
+try pci=01:00.00 … fallback=func0 (NCSI/LOM1)
+phy_reset=pre skip (ape-ncsi)
+reset…
+fw-magic=yes
+an-restart=yes pwrctl=clr
+link=timeout bmsr=7949 bmcr=1000 lpa=0000 s1000=0000 mac_status=00400000 cpmu=00004000
+try next func
+try pci=01:00.01 … phy_reset=pre skip (ape-ncsi) reset… fw-magic=yes
+link=timeout …
+RAYNU-V-R640-BOOT-OK
+reuse (armed post-EBS)
+idle listening on 10.99.99.116:8443
+CURL NOW → http://10.99.99.116:8443/  (native BCM5720; SNP is dead)
+```
+
+No `HOST-NIC TCP accept`, no `HOST-NIC HTTP exchange ok`, no
+`RAYNU-V-M7-HOST-NIC-HTTP-OK`. PRE-EBS SNP HTTP (three exchanges on `:3a`)
+is **not** E3b.
+
+`reset…` + `fw-magic=yes` closed **CORECLK_RESET without BMCR**. Analog
+was already down at the post-EBS census (`cand bmsr=7949`) **before**
+chip reset. That EFI skipped the rest of `setup_copper_phy` (no
+`phy_addr=` / `apd=` / `mdix=` / PHY id) and still ran `an-restart=`
+only after reset.
+
+Next EFI: Linux `pci_save_state` / `pci_restore_state` (64 dwords) + APE
+GRC lock around `CORECLK_RESET`; always `setup_copper_phy` before reset
+(BMCR still skipped when NCSI); full `tg3_setup_phy(false)` after reset
+(`phy_setup=post`); skip AfterBootOk listen when `LSTATUS` is clear
+(`skip listen (no LSTATUS; do not curl)`). Do **not** curl unless COM2
+prints `link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject CORECLK-sans-BMCR EFI `1404f055`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

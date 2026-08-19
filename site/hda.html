@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; skip-BMCR still cand 7949; CORECLK_RESET without BMCR; HTTP-OK open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; CORECLK-sans-BMCR still cand 7949; PCI restore + phy_setup=post; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -156,11 +156,11 @@
             idle later closed with <strong>no RSOD</strong>. Phase D binds the
             SNP-lease BCM5720 function (R640 <code>01:00.1</code>) with Linux
             <code>tg3</code> bring-up; station address is the parked SNP MAC
-            (BAR0 peek may differ). Post-EBS bring-up EFI both ports
-            <code>cand bmsr=7949</code> immediately after EBS, then
-            <code>phy_reset=pre skip (ape-ncsi)</code> still no copper. This EFI
-            runs Linux <code>tg3_chip_reset</code> without
-            <code>BMCR_RESET</code>. Iron
+            (BAR0 peek may differ). CORECLK-without-BMCR EFI
+            <code>1404f055</code> still
+            <code>cand bmsr=7949</code> then <code>link=timeout</code>. This EFI
+            restores 64 PCI config dwords around <code>CORECLK_RESET</code>
+            and runs <code>phy_setup=post</code>. Iron
             <code>HOST-NIC-HTTP-OK</code> waits on an exchange after
             <code>BOOT-OK</code>. Then remaining E4 polish and a
             real distro installer (not El Torito first).

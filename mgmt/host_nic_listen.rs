@@ -92,8 +92,9 @@ fn run_listen(when: ListenWhen) {
 }
 
 /// Steal BCM5720 analog immediately after EBS. Do **not** HTTP-listen here
-/// (guest path first). Iron 2026-08-19: both funcs `cand bmsr=7949`
-/// immediately after EBS; skip `BMCR_RESET` when `ape-ncsi=yes`.
+/// (guest path first). Iron 2026-08-19 complete COM2 (`1404f055`): both
+/// funcs `cand bmsr=7949` then `CORECLK_RESET` without BMCR still
+/// `link=timeout`. AfterBootOk listen is skipped without `LSTATUS`.
 fn bringup_bcm5720_post_ebs() {
     let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
         serial::write_line(
@@ -179,6 +180,12 @@ fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<
     };
     let mut device = Bcm5720Device::init(lease.mac).map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
+    if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
+        && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
+    {
+        serial::write_line("boot: WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)");
+        return Ok(());
+    }
     let ip = Ipv4Address::new(lease.ip[0], lease.ip[1], lease.ip[2], lease.ip[3]);
     let gw = if lease.has_router {
         Some(Ipv4Address::new(
