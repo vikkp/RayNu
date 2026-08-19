@@ -264,12 +264,13 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the PHY-before-chip-reset EFI (this branch). APE-lock EFI
-`1213440` (`5858c482…00a8f761`) took MDIO (`ape-fw=ready ape-lock=yes`
-`id=0362:5f60`) but still `link=timeout bmsr=7949` / `lpa=0000`. Linux
-`tg3_reset_hw`: `phy_reset=pre` **before** `CORECLK_RESET`, then
-`an-restart=` after MAC init (no second BMCR_RESET). Reject `1213440` and
-`1211392`. Curl `http://<lease>:8443/` only after `link=up`.
-`RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve kit
-`releases/v0.1.0-adr013-baseline`. Evidence:
+**Next:** flash the skip-`CORECLK_RESET` EFI (this branch). PHY-before-chip-reset
+EFI `1213952` (`df94a20a…a20c5bd8`) ran Linux `tg3_reset_hw` (`phy_reset=pre`
+then `reset…` then `an-restart=yes`) and still `link=timeout bmsr=7949` /
+`lpa=0000` with working MDIO. Keep GPHY analog: steal rings, BMCR_RESET only
+when `LSTATUS` is clear, no chip reset. COM2 must **not** print `reset…` /
+`fw-magic=` / `an-restart=`. Reject `1213952`, `1213440`, and `1211392`. Curl
+`http://<lease>:8443/` only after `link=up`. `RAYNU-V-M7-HOST-NIC-HTTP-OK` only
+after a native HTTP exchange. Preserve kit `releases/v0.1.0-adr013-baseline`.
+Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

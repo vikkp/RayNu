@@ -14,13 +14,11 @@
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
 //! BCM57416 10G. PRE-EBS SNP already has copper; peek `BMSR` **before**
 //! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
-//! BMCR_RESET a live PHY). If the PHY is already down, follow Linux
-//! `tg3_reset_hw`: `tg3_phy_reset` **before** `CORECLK_RESET` (clocks still
-//! firmware-owned), then after MAC init `tg3_setup_phy(false)` — advertise +
-//! AN restart, **no** second BMCR_RESET. Iron 2026-08-19 APE-lock EFI did
-//! BMCR_RESET *after* chip reset: `ape-lock=yes ape-fw=ready id=0362:5f60`
-//! but still `bmsr=7949` / `lpa=0000`. `cpmu=00004000` is
-//! `CPMU_CTRL_LINK_SPEED_MODE`, not idle. Wait `BMSR_LSTATUS` and set
+//! BMCR_RESET a live PHY). Iron 2026-08-19: `phy_reset=pre` then
+//! `CORECLK_RESET` still `bmsr=7949` / `lpa=0000` with working MDIO
+//! (`ape-lock=yes id=0362:5f60`). **Skip `CORECLK_RESET`** — steal rings only;
+//! BMCR_RESET the GPHY while MAC clocks stay firmware-owned. Clear CPMU EEE
+//! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -143,6 +141,8 @@ const CPMU_CTRL_LINK_AWARE_MODE: u32 = 0x400;
 /// Iron `cpmu=00004000` — not idle. Leave this bit; do not treat as APD.
 const CPMU_CTRL_LINK_SPEED_MODE: u32 = 0x4000;
 const CPMU_CTRL_GPHY_10MB_RXONLY: u32 = 0x1_0000;
+const TG3_CPMU_EEE_MODE: u32 = 0x36B0;
+const TG3_CPMU_EEEMD_LPI_ENABLE: u32 = 0x80;
 const SG_DIG_STATUS: u32 = 0x5B4;
 const SG_DIG_IS_SERDES: u32 = 0x100;
 const LPA_1000FULL: u16 = 0x0800;
@@ -250,6 +250,8 @@ const TG3_APE_SEG_SIG: u32 = 0x4000;
 const APE_SEG_SIG_MAGIC: u32 = 0x4150_4521;
 const TG3_APE_FW_STATUS: u32 = 0x400C;
 const APE_FW_STATUS_READY: u32 = 0x0000_0100;
+const TG3_APE_FW_FEATURES: u32 = 0x4010;
+const APE_FW_FEATURE_NCSI: u32 = 0x0000_0002;
 const TG3_APE_PER_LOCK_REQ: u32 = 0x8400;
 const TG3_APE_PER_LOCK_GRANT: u32 = 0x8420;
 const APE_LOCK_REQ_DRIVER: u32 = 0x0000_1000;
@@ -432,6 +434,25 @@ pub fn bmsr_an_complete(bmsr: u16) -> bool {
 /// - Never panics
 pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
+}
+
+/// Iron 2026-08-19: `phy_reset=pre` then `CORECLK_RESET` still `lpa=0000`.
+/// Skip chip reset; steal rings; BMCR_RESET only when `LSTATUS` is clear.
+///
+/// INVARIANTS:
+/// - Always true on this iron path
+/// - Never panics
+pub fn skip_coreclk_reset() -> bool {
+    true
+}
+
+/// Linux `APE_FW_FEATURE_NCSI` (`tg3.h` bit 1).
+///
+/// INVARIANTS:
+/// - True iff bit 1 set
+/// - Never panics
+pub fn ape_ncsi_enabled(fw_features: u32) -> bool {
+    fw_features & APE_FW_FEATURE_NCSI != 0
 }
 
 /// Iron `cpmu=00004000` is Linux `CPMU_CTRL_LINK_SPEED_MODE`, not idle/APD.
@@ -1055,6 +1076,8 @@ unsafe fn hw_init(
     } else {
         "skip"
     });
+    serial_step(" ape-ncsi=");
+    serial_step(if ape_ncsi_now() { "yes" } else { "no" });
     serial_step(" ape-lock=");
     serial_step(if APE_MMIO.load(Ordering::Relaxed) == 0 {
         "skip\n"
@@ -1066,17 +1089,16 @@ unsafe fn hw_init(
     });
 
     let inherit = inherit_snp_phy(pre_bmsr);
+    halt_mac_dma(mmio);
     if inherit {
         serial_step("boot: HOST-NIC BCM5720 inherit SNP PHY (skip CORECLK_RESET)\n");
-        halt_mac_dma(mmio);
+    } else if skip_coreclk_reset() {
+        // Iron: phy_reset=pre then CORECLK_RESET still lpa=0000. Keep GPHY analog.
+        serial_step("boot: HOST-NIC BCM5720 skip CORECLK_RESET (keep GPHY analog)\n");
+        setup_copper_phy(mmio, func);
     } else {
-        // Linux `tg3_reset_hw(reset_phy=true)`: analog reset while GRC clocks
-        // are still firmware-owned. BMCR_RESET after CORECLK_RESET left iron
-        // at `bmsr=7949` / `lpa=0000` with working MDIO (APE-lock EFI).
         setup_copper_phy(mmio, func);
         chip_reset(mmio, bus, dev, func)?;
-        mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
-        mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
         let fw = wait_fw_magic(bus, dev, func);
         serial_step(if fw {
             "boot: HOST-NIC BCM5720 fw-magic=yes\n"
@@ -1084,10 +1106,8 @@ unsafe fn hw_init(
             "boot: HOST-NIC BCM5720 fw-magic=timeout (continuing)\n"
         });
     }
-    if inherit {
-        mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
-        mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
-    }
+    mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
+    mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
 
     let grc = GRC_MODE_WSWAP_NONFRM_DATA
         | GRC_MODE_WSWAP_DATA
@@ -1134,10 +1154,7 @@ unsafe fn hw_init(
     enable_dma_engines(mmio);
     enable_hostcc(mmio);
     enable_completion_blocks(mmio);
-    if inherit {
-        serial_step("boot: HOST-NIC BCM5720 inherit: skip tg3_phy_reset\n");
-    } else {
-        // Linux `tg3_setup_phy(false)` after chip reset: no second analog reset.
+    if !inherit && !skip_coreclk_reset() {
         restart_copper_an(mmio, func);
     }
     wait_phy_link_and_adjust_mac(mmio, func);
@@ -1156,6 +1173,7 @@ unsafe fn hw_init(
 
 /// Linux `tg3_write_sig_pre_reset` then `tg3_chip_reset` (PG 7.1/7.2).
 /// MAGIC1 goes to SRAM 0xB50 **before** CORECLK_RESET. Bit 29 keeps PCIe.
+/// Retained for the `!skip_coreclk_reset()` fallback (iron skips it).
 #[cfg(feature = "uefi-bin")]
 unsafe fn chip_reset(mmio: u64, bus: u8, dev: u8, func: u8) -> Result<(), Bcm5720Error> {
     serial_step("boot: HOST-NIC BCM5720 reset…\n");
@@ -1470,6 +1488,8 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     let mut cpmu = mmio_read(mmio, TG3_CPMU_CTRL);
     cpmu &= !(CPMU_CTRL_LINK_IDLE_MODE | CPMU_CTRL_LINK_AWARE_MODE | CPMU_CTRL_GPHY_10MB_RXONLY);
     mmio_write(mmio, TG3_CPMU_CTRL, cpmu);
+    let eee = mmio_read(mmio, TG3_CPMU_EEE_MODE) & !TG3_CPMU_EEEMD_LPI_ENABLE;
+    mmio_write(mmio, TG3_CPMU_EEE_MODE, eee);
 
     let rst = phy_bmcr_reset(mmio, phy_addr);
     let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
@@ -1487,6 +1507,7 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
     serial_step(if apd { "off" } else { "timeout" });
     serial_step(" mdix=");
     serial_step(if mdix { "yes" } else { "timeout" });
+    serial_step(" eee=off");
     serial_step(if an { " phy=yes" } else { " phy=timeout" });
     serial_step(" id=");
     match (
@@ -1809,6 +1830,17 @@ fn ape_fw_ready_now() -> bool {
     // SAFETY: APE_MMIO is BAR2 from bind_ape.
     // KANI-TARGET: ape_fw_ready (host).
     unsafe { ape_fw_ready(ape_read(TG3_APE_SEG_SIG), ape_read(TG3_APE_FW_STATUS)) }
+}
+
+#[cfg(feature = "uefi-bin")]
+fn ape_ncsi_now() -> bool {
+    let base = APE_MMIO.load(Ordering::Relaxed);
+    if base == 0 {
+        return false;
+    }
+    // SAFETY: APE_MMIO is BAR2 from bind_ape.
+    // KANI-TARGET: ape_ncsi_enabled (host).
+    unsafe { ape_ncsi_enabled(ape_read(TG3_APE_FW_FEATURES)) }
 }
 
 #[cfg(feature = "uefi-bin")]

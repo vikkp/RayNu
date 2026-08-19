@@ -168,4 +168,34 @@ Linux `tg3_reset_hw` BMCR-resets the PHY **before** `CORECLK_RESET`, then
 that. Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 Reject APE-lock EFI `1213440`.
 
+### 2026-08-19 addendum — PHY-before-chip-reset still `lpa=0000`
+
+PHY-before-chip-reset EFI (`1213952` bytes, SHA
+`df94a20aad78f678b68c839efff0390246ac6b228b496b4df2a6a307a20c5bd8`, CI run
+`32278648924`) still no native HTTP. COM2:
+
+```
+pre-reset bmsr=7949 ape=yes ape-bar=0x92910000 ape-fw=ready ape-evt=sent ape-lock=yes
+phy_addr=02 serdes=no sgdig=00000008
+phy_reset=pre yes pwrctl=clr apd=off mdix=yes phy=yes id=0362:5f60
+reset…
+fw-magic=yes
+MAC=b0:26:28:5c:5a:3a
+an-restart=yes pwrctl=clr
+link=timeout bmsr=7949 bmcr=1000 lpa=0000 s1000=0000 mac_status=00400000 cpmu=00004000
+rings armed (poll-mode, MSI-X off)
+idle listening on 10.99.99.116:8443
+```
+
+APE lock and MDIO stayed proven (`ape-lock=yes` / `id=0362:5f60` / BMCR
+writes stick at `1000`). Linux `tg3_reset_hw` order ran (`phy_reset=pre`
+then `CORECLK_RESET` then `an-restart=`). Copper still never saw a link
+partner. Mac ping/curl of the lease after `BOOT-OK` still failed.
+
+`CORECLK_RESET` itself is the remaining analog-kill suspect. Next EFI
+**never chip-resets**: steal rings, BMCR_RESET only when `LSTATUS` is
+clear, clear CPMU EEE LPI, print APE `NCSI`. Do **not** claim
+`HOST-NIC-HTTP-OK` from this note.
+Reject PHY-before-chip-reset EFI `1213952`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

@@ -177,11 +177,12 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 **BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
 PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
-**not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** `CORECLK_RESET`.
+**not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** any analog work.
 If `LSTATUS` is set, inherit SNP copper (skip chip reset and `tg3_phy_reset`).
 If the PHY is already down, Linux `tg3_phy_reset` / `tg3_setup_copper_phy`
-(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`) **with**
-Linux `tg3_ape_lock` on BAR2 around MDIO, then wait
+(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`, CPMU EEE
+LPI off) **with** Linux `tg3_ape_lock` on BAR2 around MDIO — **without**
+`CORECLK_RESET` (iron `1213952` still `lpa=0000` after chip reset). Then wait
 `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
 `RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
@@ -199,9 +200,10 @@ Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-lock=yes|timeout|skip`
-then either `inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=pre …` then
-`reset…` then `an-restart=yes` then
+`station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-ncsi=yes|no ape-lock=yes|timeout|skip`
+then either `inherit SNP PHY (skip CORECLK_RESET)` or
+`skip CORECLK_RESET (keep GPHY analog)` then `phy_reset=pre … eee=off …`
+then **no** `reset…` / `fw-magic=` / `an-restart=` then
 `link=up speed=… duplex=…`
 (or `link=timeout bmsr=… bmcr=… lpa=…`) then `rings armed` then
 `HOST-NIC idle listening on <lease>:8443`.

@@ -1,9 +1,9 @@
 use super::{
-    ape_fw_ready, ape_lock_init_grant_bit, ape_lock_req_bit, ape_per_lock_grant, ape_per_lock_req,
-    ape_phy_lock_num, bmsr_an_complete, bmsr_link_up, cpmu_is_link_speed_mode, decode_phy_link,
-    inherit_snp_phy, mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_id_is_bcm5720,
-    pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len, station_mac,
-    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    ape_fw_ready, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled, ape_per_lock_grant,
+    ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up, cpmu_is_link_speed_mode,
+    decode_phy_link, inherit_snp_phy, mac_mode_from_link, parse_mocked_rx_bd_bytes,
+    pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci, rx_bd_packet_len,
+    skip_coreclk_reset, station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -189,10 +189,17 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("skip CORECLK_RESET"));
     assert!(src.contains("MII_TG3_MISC_SHDW_APD_ENABLE"));
     assert!(src.contains("fn inherit_snp_phy("));
+    assert!(src.contains("fn skip_coreclk_reset("));
+    assert!(src.contains("fn ape_ncsi_enabled("));
     assert!(src.contains("phy_reset=pre"));
     assert!(src.contains("an-restart="));
     assert!(src.contains("tg3_reset_hw"));
     assert!(src.contains("tg3_setup_phy(false)"));
+    assert!(src.contains("skip CORECLK_RESET (keep GPHY analog)"));
+    assert!(src.contains("ape-ncsi="));
+    assert!(src.contains("eee=off"));
+    assert!(src.contains("TG3_CPMU_EEE_MODE"));
+    assert!(src.contains("APE_FW_FEATURE_NCSI"));
     assert!(src.contains("CPMU_CTRL_LINK_SPEED_MODE"));
     assert!(src.contains("fn ape_phy_lock_num("));
     assert!(src.contains("fn ape_fw_ready("));
@@ -211,6 +218,20 @@ fn inherit_snp_phy_follows_bmsr_lstatus() {
     assert!(!inherit_snp_phy(0x7949));
     assert!(inherit_snp_phy(0x0004));
     assert!(inherit_snp_phy(0x794d));
+}
+
+#[test]
+fn skip_coreclk_reset_is_true_on_r640_5720() {
+    assert!(skip_coreclk_reset());
+}
+
+#[test]
+fn ape_ncsi_enabled_reads_tg3_ape_fw_features_bit1() {
+    const NCSI: u32 = 0x0000_0002;
+    assert!(!ape_ncsi_enabled(0));
+    assert!(ape_ncsi_enabled(NCSI));
+    assert!(ape_ncsi_enabled(NCSI | 0x1));
+    assert!(!ape_ncsi_enabled(0x1));
 }
 
 #[test]
