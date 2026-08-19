@@ -38,8 +38,8 @@ run on your laptop (fallback only).
 | Operator laptop on the same mgmt network | Browser + ability to save a text log |
 | iDRAC username / password | Default is often on the pull-tab; change if still factory |
 | Laptop packages for media maker | `dosfstools` + `mtools` (`xorriso` optional for ISO) |
-| USB stick (optional — only if not using iDRAC vMedia) | ≥ 64 MiB free; will be erased by `make-boot-usb.sh` |
-| RayNu-V git checkout on a **build** machine | Not required on the R640 itself |
+| USB stick (optional — only if not using iDRAC vMedia) | Lab Cruzer stays in front USB 2; replace-only from **raynuvsrv1** ([`r640_cruzer_flash.md`](r640_cruzer_flash.md)). `make-boot-usb.sh` **erases** a stick — do not run it on that Cruzer. |
+| RayNu-V git checkout on a **build** machine | Also clone on **raynuvsrv1** for `flash-cruzer-esp.sh` |
 
 **Install media-maker deps once (laptop):**
 

@@ -28,7 +28,9 @@ evidence under [`docs/evidence/r640/`](../evidence/r640/).
 ## Boot procedure
 
 Follow [`usb_idrac.md`](usb_idrac.md) to place `r640-hypervisor.efi` as
-`\EFI\BOOT\BOOTX64.EFI` on USB or iDRAC vMedia, then:
+`\EFI\BOOT\BOOTX64.EFI` on USB or iDRAC vMedia. Prefer in-place replace from
+Ubuntu **raynuvsrv1** when the Cruzer is already in front USB 2
+([`r640_cruzer_flash.md`](r640_cruzer_flash.md)). Then:
 
 1. Open iDRAC **virtual console** (serial/COM1) **before** reboot.  
 2. One-time boot to USB / virtual media.  

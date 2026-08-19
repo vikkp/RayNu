@@ -1,8 +1,8 @@
 ---
 hda_version: 1
-last_updated: 2026-08-17
-last_commit: b72f3265cacd8ade89a06eb55e7910cd56dd226e
-last_commit_short: b72f326
+last_updated: 2026-08-19
+last_commit: b3d3f1f4c0d8a8ec5df5fbf63ff0bb698fa74f87
+last_commit_short: b3d3f1f
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -40,7 +40,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
 | **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
 | **ETA month** | **2026-10** | slipped from 2026-09 |
-| **Confidence** | medium | E2+E3+E5 on COM2; Phase 0 **closed** (`14e4:165f`); Phase C QEMU GET / closed; Phase D **driver in-tree**; E3b iron HTTP-OK open |
+| **Confidence** | medium | E2+E3+E5 on COM2; Phase D in-tree; Cruzer in-place flash from raynuvsrv1; E3b iron HTTP-OK open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
@@ -258,10 +258,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | b72f326 |
-| Summary | ADR-013 Phase D **BCM5720 Device in-tree** (`14e4:165f` @ `01:00.0`); HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (iron exchange) |
-| Gates touched | Phase D driver; `HOST-NIC-HTTP-OK` not claimed |
+| Commit | b3d3f1f |
+| Summary | Ubuntu raynuvsrv1 sees Cruzer `LABEL=RAYNUV` on front USB 2; replace-only `flash-cruzer-esp.sh` (never `/dev/sdc`, never PERC) |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open; flash path no longer needs walking the stick |
+| Gates touched | M7.5 scaffold + Cruzer self-test; `HOST-NIC-HTTP-OK` not claimed |
 | Months Δ | 1.5 held |
 
 ---
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-19 | raynuvsrv1-cruzer-flash | 1.5 | 88 | In-place Cruzer flash from Ubuntu on PERC; HTTP-OK not claimed |
 | 2026-08-17 | m7-8-bcm5720 | 1.5 | 88 | Phase D BCM5720 Device in-tree (`14e4:165f`); HTTP-OK not claimed |
 | 2026-08-17 | adr013-0de-iron | 1.5 | 88 | Phase 0 **closed on iron**: `14e4:165f` BCM5720; HTTP-OK not claimed |
 | 2026-08-17 | adr013-0de | 1.5 | 88 | Phase 0 census print + Phase E arena; Phase D parse/idle wired; iron HTTP-OK open |
@@ -329,7 +330,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED (`14e4:165f`); Phase D in-tree; E3b OPEN
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     flash Phase D EFI; curl same SNP lease after BOOT-OK
+Next move:     on raynuvsrv1, flash-cruzer-esp.sh the inherit-PHY EFI; F11 boot Cruzer
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
 Preserve:      releases/v0.1.0-adr013-baseline
