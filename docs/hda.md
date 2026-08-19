@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 1fefa45aa168a64e945965d34e752c7daf324d79
+last_commit_short: 1fefa45
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 1fefa45 |
 | Summary | Inherit EFI: `pre-reset bmsr=7949 ape=yes` (no inherit). Linux APE BAR2 lock + driver START around MDIO. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (APE owns PHY after EBS) |
 | Gates touched | `ape_phy_lock_num`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | m7-8-bcm-ape-lock | 1.5 | 88 | Inherit EFI `pre-reset bmsr=7949 ape=yes`; APE BAR2 lock; HTTP-OK not claimed |
+| 2026-08-19 | 1fefa45 | 1.5 | 88 | Inherit EFI `pre-reset bmsr=7949 ape=yes`; APE BAR2 lock; HTTP-OK not claimed |
 | 2026-08-19 | m7-8-bcm-inherit-phy | 1.5 | 88 | PHY-reset EFI still `bmsr=7949`; inherit SNP PHY or APD-off; HTTP-OK not claimed |
 | 2026-08-19 | m7-8-bcm-phy-reset | 1.5 | 88 | Iron `bmsr=7949` no carrier; `tg3_bmcr_reset` + PWRCTL + Auto-MDIX; HTTP-OK not claimed |
 | 2026-08-19 | m7-8-bcm-link | 1.5 | 88 | PHY `BMSR_LSTATUS` wait + MII/GMII + PROMISC; station `:3a` confirmed; HTTP-OK not claimed |
