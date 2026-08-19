@@ -389,10 +389,28 @@ skip listen (no LSTATUS; do not curl)
 
 SNP `:3a` had a lease; both host GPHYs were already `7949` **before EBS**.
 BAR0 peeks stay `:38`/`:39`. “EBS killed analog” is **closed**. The cable
-SNP used is the APE/NCSI MAC, not host MDIO. Next EFI drops
-`APE_HOST_BEHAV_NO_PHYLOCK` (`ape-nophylock=no`) and runs `BMCR_RESET`
-even when `ape-ncsi=yes` (`phy_reset=pre yes`). Do **not** curl unless
-`link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
-Reject peek EFI `42b42c99` (and `ec08c00f`).
+SNP used is the APE/NCSI MAC, not host MDIO.
+
+**Do not take the PHY from APE.** iDRAC Shared LOM / NCSI rides that analog;
+`BMCR_RESET` + dropping `APE_HOST_BEHAV_NO_PHYLOCK` can knock iDRAC off
+the LOM. Linux `tg3` keeps `NO_PHYLOCK` for `APE_HAS_NCSI`. This branch
+keeps `ape-nophylock=yes` / `phy_reset=pre skip (ape-ncsi)` /
+`keep-ape-phy=yes`.
+
+**iDRAC-safe next paths (pick one, do not steal PHY):**
+
+1. **Dedicated iDRAC NIC** (R640 rear dedicated RJ45). Set iDRAC NIC
+   Selection = Dedicated (not Shared / Shared with Failover). SOL/SSH stay
+   on the iDRAC IP. Host LOM GPHY can then own a copper jack without
+   fighting APE. Prefer the unused LOM jack if it is on the mgmt LAN.
+2. **Linux-complete `tg3_open` with NO_PHYLOCK kept** — Ubuntu on this
+   same R640 gets copper this way. Fuller firmware/OTP/MAC path; no phylock
+   take.
+3. **APE-shared host datapath** — arm host rings, leave analog with APE,
+   no MDIO takeover. Unproven; larger.
+
+Do **not** curl unless `link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject peek EFI `42b42c99` (and `ec08c00f`). **Do not flash take-PHY**
+(`fb96cdb` / `ape-nophylock=no`).
 
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

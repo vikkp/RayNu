@@ -29,9 +29,10 @@
 //! PCI restore is closed. Iron 2026-08-19 EFI `42b42c99`: PRE-EBS SNP
 //! leased `:3a` while both host GPHYs were already `pre-EBS cand bmsr=7949`.
 //! Host MDIO never saw the cable (APE/NCSI MAC `:3a`, BAR0 peeks `:38`/`:39`).
-//! Take the PHY from APE: drop `APE_HOST_BEHAV_NO_PHYLOCK` and run
-//! `BMCR_RESET` even when `ape-ncsi=yes`. Do not HTTP-listen when `LSTATUS`
-//! is clear. Peek each candidate
+//! Do **not** take the PHY from APE (`APE_HOST_BEHAV_NO_PHYLOCK` stays set;
+//! skip `BMCR_RESET` when `ape-ncsi=yes`). iDRAC Shared LOM / NCSI uses that
+//! analog — stealing it can drop iDRAC. Linux `tg3` keeps NO_PHYLOCK for
+//! `APE_HAS_NCSI`. Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
 //! `BMSR` and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station
 //! stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
@@ -564,25 +565,35 @@ pub fn skip_http_listen_without_lstatus() -> bool {
     true
 }
 
-/// Skip `tg3_bmcr_reset`. Iron 2026-08-19 `42b42c99`: PRE-EBS SNP `:3a`
-/// copper with both host GPHYs `bmsr=7949`. APE holds analog; take it with
-/// `BMCR_RESET` even when `ape-ncsi=yes`.
+/// Never steal analog from APE/NCSI. iDRAC Shared LOM rides that PHY.
 ///
 /// INVARIANTS:
-/// - Always false on this iron path
+/// - Always true on this iron path
 /// - Never panics
-pub fn skip_bmcr_reset(_ape_ncsi: bool) -> bool {
-    false
+pub fn keep_ape_phy_for_idrac() -> bool {
+    true
 }
 
-/// Linux sets `APE_HOST_BEHAV_NO_PHYLOCK` for NCSI. Iron PRE-EBS peek
-/// closed host-GPHY copper; write 0 so APE releases the PHY lock to us.
+/// Skip `tg3_bmcr_reset` when APE NCSI owns analog. Linux `tg3` does not
+/// `BMCR_RESET` an NCSI PHY; iron `42b42c99` showed host GPHY `7949` while
+/// SNP `:3a` had copper. Taking it (NO_PHYLOCK=0 + BMCR) is rejected —
+/// iDRAC may lose the shared LOM.
 ///
 /// INVARIANTS:
-/// - Always false on this iron path
+/// - True iff keep-APE-PHY and `ape_ncsi`
+/// - Never panics
+pub fn skip_bmcr_reset(ape_ncsi: bool) -> bool {
+    keep_ape_phy_for_idrac() && ape_ncsi
+}
+
+/// Linux `tg3_ape_driver_state_change`: `APE_HOST_BEHAV_NO_PHYLOCK` when
+/// `APE_HAS_NCSI`. Keep it so APE/iDRAC retain the PHY lock.
+///
+/// INVARIANTS:
+/// - True iff `keep_ape_phy_for_idrac`
 /// - Never panics
 pub fn ape_host_nophylock() -> bool {
-    false
+    keep_ape_phy_for_idrac()
 }
 
 /// Linux `APE_FW_FEATURE_NCSI` (`tg3.h` bit 1).
@@ -1316,6 +1327,9 @@ unsafe fn hw_init(
     serial_step(if ape_ncsi_now() { "yes" } else { "no" });
     serial_step(" ape-nophylock=");
     serial_step(if ape_host_nophylock() { "yes" } else { "no" });
+    if keep_ape_phy_for_idrac() && ape_ncsi_now() {
+        serial_step(" keep-ape-phy=yes");
+    }
     serial_step(" ape-lock=");
     serial_step(if APE_MMIO.load(Ordering::Relaxed) == 0 {
         "skip\n"
@@ -1325,6 +1339,9 @@ unsafe fn hw_init(
     } else {
         "timeout\n"
     });
+    if keep_ape_phy_for_idrac() && ape_ncsi_now() {
+        serial_step("boot: HINT — keep APE PHY (iDRAC NCSI); will not take phylock\n");
+    }
 
     let inherit = inherit_snp_phy(pre_bmsr);
     halt_mac_dma(mmio);
