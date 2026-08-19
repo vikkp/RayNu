@@ -146,4 +146,26 @@ replies were not native). Next: Linux `tg3_ape_lock` on BAR2 + driver START
 around MDIO (this branch). Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 Reject inherit EFI `1211392`.
 
+### 2026-08-19 addendum — APE-lock EFI: MDIO works, analog still down
+
+APE-lock EFI (`1213440` bytes, SHA
+`5858c482f68445bdd8b402c2ad952005670b8a70cc49e8b26fb1a60800a8f761`) took the
+PHY mutex. COM2:
+
+```
+pre-reset bmsr=7949 ape=yes ape-bar=0x92910000 ape-fw=ready ape-evt=sent ape-lock=yes
+phy_reset=yes pwrctl=clr apd=off mdix=yes phy=yes id=0362:5f60
+link=timeout bmsr=7949 bmcr=1000 lpa=0000 s1000=0000 mac_status=00400000 cpmu=00004000
+```
+
+`ape-lock=yes` + a real PHY id means MDIO is no longer the blocker. `bmcr=1000`
+(ANENABLE, writes sticking) vs the inherit EFI `bmcr=1100`. Still
+`lpa=0000`. `cpmu=00004000` is Linux `CPMU_CTRL_LINK_SPEED_MODE`, not idle.
+Mac ping/curl of the lease after `BOOT-OK` still failed.
+
+Linux `tg3_reset_hw` BMCR-resets the PHY **before** `CORECLK_RESET`, then
+`tg3_setup_phy(false)` (AN restart, no second analog reset). Next EFI does
+that. Do **not** claim `HOST-NIC-HTTP-OK` from this note.
+Reject APE-lock EFI `1213440`.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

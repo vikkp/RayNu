@@ -200,7 +200,8 @@ word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
 `station SNP-lease MAC=…` then `pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-lock=yes|timeout|skip`
-then either `inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=yes … apd=off` then
+then either `inherit SNP PHY (skip CORECLK_RESET)` or `phy_reset=pre …` then
+`reset…` then `an-restart=yes` then
 `link=up speed=… duplex=…`
 (or `link=timeout bmsr=… bmcr=… lpa=…`) then `rings armed` then
 `HOST-NIC idle listening on <lease>:8443`.

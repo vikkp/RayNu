@@ -14,11 +14,13 @@
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
 //! BCM57416 10G. PRE-EBS SNP already has copper; peek `BMSR` **before**
 //! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
-//! BMCR_RESET a live PHY). If the PHY is already down, Linux
-//! `tg3_phy_reset` + `tg3_setup_copper_phy` (BMCR_RESET, AUXCTL PWRCTL=0,
-//! Auto-MDIX, disable APD, then AN) **with** Linux `tg3_ape_lock` around
-//! MDIO when SRAM `APE_ENABLE` is set (iron 2026-08-19: inherit did not
-//! fire — `pre-reset bmsr=7949 ape=yes`). Wait `BMSR_LSTATUS` and set
+//! BMCR_RESET a live PHY). If the PHY is already down, follow Linux
+//! `tg3_reset_hw`: `tg3_phy_reset` **before** `CORECLK_RESET` (clocks still
+//! firmware-owned), then after MAC init `tg3_setup_phy(false)` — advertise +
+//! AN restart, **no** second BMCR_RESET. Iron 2026-08-19 APE-lock EFI did
+//! BMCR_RESET *after* chip reset: `ape-lock=yes ape-fw=ready id=0362:5f60`
+//! but still `bmsr=7949` / `lpa=0000`. `cpmu=00004000` is
+//! `CPMU_CTRL_LINK_SPEED_MODE`, not idle. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -138,6 +140,8 @@ const MII_TG3_AUXCTL_MISC_RDSEL_SHIFT: u16 = 12;
 const TG3_CPMU_CTRL: u32 = 0x3600;
 const CPMU_CTRL_LINK_IDLE_MODE: u32 = 0x200;
 const CPMU_CTRL_LINK_AWARE_MODE: u32 = 0x400;
+/// Iron `cpmu=00004000` — not idle. Leave this bit; do not treat as APD.
+const CPMU_CTRL_LINK_SPEED_MODE: u32 = 0x4000;
 const CPMU_CTRL_GPHY_10MB_RXONLY: u32 = 0x1_0000;
 const SG_DIG_STATUS: u32 = 0x5B4;
 const SG_DIG_IS_SERDES: u32 = 0x100;
@@ -428,6 +432,16 @@ pub fn bmsr_an_complete(bmsr: u16) -> bool {
 /// - Never panics
 pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
+}
+
+/// Iron `cpmu=00004000` is Linux `CPMU_CTRL_LINK_SPEED_MODE`, not idle/APD.
+///
+/// INVARIANTS:
+/// - True iff speed-mode set and idle/aware clear
+/// - Never panics
+pub fn cpmu_is_link_speed_mode(cpmu: u32) -> bool {
+    cpmu & CPMU_CTRL_LINK_SPEED_MODE != 0
+        && cpmu & (CPMU_CTRL_LINK_IDLE_MODE | CPMU_CTRL_LINK_AWARE_MODE) == 0
 }
 
 /// Linux `tp->phy_ape_lock` for `ENABLE_APE`: func0→PHY0, func1→PHY1, …
@@ -1056,6 +1070,10 @@ unsafe fn hw_init(
         serial_step("boot: HOST-NIC BCM5720 inherit SNP PHY (skip CORECLK_RESET)\n");
         halt_mac_dma(mmio);
     } else {
+        // Linux `tg3_reset_hw(reset_phy=true)`: analog reset while GRC clocks
+        // are still firmware-owned. BMCR_RESET after CORECLK_RESET left iron
+        // at `bmsr=7949` / `lpa=0000` with working MDIO (APE-lock EFI).
+        setup_copper_phy(mmio, func);
         chip_reset(mmio, bus, dev, func)?;
         mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
         mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
@@ -1119,7 +1137,8 @@ unsafe fn hw_init(
     if inherit {
         serial_step("boot: HOST-NIC BCM5720 inherit: skip tg3_phy_reset\n");
     } else {
-        setup_copper_phy(mmio, func);
+        // Linux `tg3_setup_phy(false)` after chip reset: no second analog reset.
+        restart_copper_an(mmio, func);
     }
     wait_phy_link_and_adjust_mac(mmio, func);
 
@@ -1422,7 +1441,7 @@ unsafe fn enable_mac(mmio: u64, mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
     Ok(mac)
 }
 
-/// Linux `tg3_phy_reset` + `tg3_setup_copper_phy` (not a bare AN poke).
+/// Linux `tg3_phy_reset` (called from `tg3_reset_hw` **before** chip reset).
 /// Iron 2026-08-19: AN-only left `bmsr=7949` (LSTATUS=0, ANEGCOMPLETE=0).
 /// MDIO timeout is not fatal.
 #[cfg(feature = "uefi-bin")]
@@ -1460,8 +1479,8 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
         && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
         && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
 
-    serial_step("boot: HOST-NIC BCM5720 phy_reset=");
-    serial_step(if rst { "yes" } else { "timeout" });
+    serial_step("boot: HOST-NIC BCM5720 phy_reset=pre");
+    serial_step(if rst { " yes" } else { " timeout" });
     serial_step(" pwrctl=");
     serial_step(if pwr { "clr" } else { "timeout" });
     serial_step(" apd=");
@@ -1481,6 +1500,32 @@ unsafe fn setup_copper_phy(mmio: u64, func: u8) {
         }
         _ => serial_step("----:----"),
     }
+    serial_step("\n");
+}
+
+/// Linux `tg3_setup_phy(false)` after `tg3_chip_reset`: PWRCTL + AN restart,
+/// no `BMCR_RESET` (that already ran before CORECLK_RESET).
+#[cfg(feature = "uefi-bin")]
+unsafe fn restart_copper_an(mmio: u64, func: u8) {
+    mmio_write(
+        mmio,
+        MAC_MI_MODE,
+        MAC_MI_MODE_BASE | MAC_MI_MODE_500KHZ_CONST,
+    );
+    tsc_spin_ms(1);
+    let mut cpmu = mmio_read(mmio, TG3_CPMU_CTRL);
+    cpmu &= !(CPMU_CTRL_LINK_IDLE_MODE | CPMU_CTRL_LINK_AWARE_MODE | CPMU_CTRL_GPHY_10MB_RXONLY);
+    mmio_write(mmio, TG3_CPMU_CTRL, cpmu);
+    let sg_dig = mmio_read(mmio, SG_DIG_STATUS);
+    let phy_addr = phy_addr_5717_plus(func, sg_dig);
+    let pwr = phy_auxctl_write(mmio, phy_addr, MII_TG3_AUXCTL_SHDWSEL_PWRCTL, 0);
+    let an = phy_write(mmio, phy_addr, MII_ADVERTISE, ADVERTISE_COPPER)
+        && phy_write(mmio, phy_addr, MII_CTRL1000, ADVERTISE_1000)
+        && phy_write(mmio, phy_addr, MII_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+    serial_step("boot: HOST-NIC BCM5720 an-restart=");
+    serial_step(if an { "yes" } else { "timeout" });
+    serial_step(" pwrctl=");
+    serial_step(if pwr { "clr" } else { "timeout" });
     serial_step("\n");
 }
 

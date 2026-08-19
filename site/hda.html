@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; Phase D APE lock after inherit miss; HTTP-OK open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; APE-lock yes still no copper; PHY-before-chip-reset; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -156,10 +156,11 @@
             idle later closed with <strong>no RSOD</strong>. Phase D binds the
             SNP-lease BCM5720 function (R640 <code>01:00.1</code>) with Linux
             <code>tg3</code> bring-up; station address is the parked SNP MAC
-            (BAR0 peek may differ). Inherit EFI saw
-            <code>pre-reset bmsr=7949 ape=yes</code> (copper already down);
-            this EFI takes Linux <code>tg3_ape_lock</code> on BAR2 around MDIO.
-            Iron <code>HOST-NIC-HTTP-OK</code> waits on an
+            (BAR0 peek may differ). APE-lock EFI saw
+            <code>ape-fw=ready ape-lock=yes</code> and a real PHY id, still
+            <code>bmsr=7949</code>. This EFI BMCR-resets the PHY
+            <em>before</em> <code>CORECLK_RESET</code> (Linux
+            <code>tg3_reset_hw</code>). Iron <code>HOST-NIC-HTTP-OK</code> waits on an
             exchange after <code>BOOT-OK</code>. Then remaining E4 polish and a
             real distro installer (not El Torito first).
           </p>
