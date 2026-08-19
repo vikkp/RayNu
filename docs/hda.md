@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: cb1143106c46a82d406f151f3952a44df109b532
-last_commit_short: cb11431
+last_commit: b1ba0543cbf9d49f5caafd50ab8f9f17d8e2b1a1
+last_commit_short: b1ba054
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | b1ba054 |
 | Summary | E3b path locked: Dedicated iDRAC NIC + host LOM jack. LSTATUS-first picker. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (operator cabling) |
 | Gates touched | `e3b_path_idrac_dedicated`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | E3b path locked: Dedicated iDRAC + host LOM; LSTATUS-first picker; HTTP-OK not claimed |
+| 2026-08-19 | b1ba054 | 1.5 | 88 | E3b path locked: Dedicated iDRAC + host LOM; LSTATUS-first picker; HTTP-OK not claimed |
 | 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
 | 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
 | 2026-08-19 | b5ea069 | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
