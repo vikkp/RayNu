@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 84f7a74ea3537d686b5300146befb0dbcc595ca8
+last_commit_short: 84f7a74
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 84f7a74 |
 | Summary | Post-EBS `cand bmsr=7949` immediately after EBS. Skip `BMCR_RESET` when `ape-ncsi=yes`. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (APE NCSI PHY) |
 | Gates touched | `skip_bmcr_reset`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | Post-EBS `cand bmsr=7949` at EBS; skip `BMCR_RESET` when `ape-ncsi=yes`; HTTP-OK not claimed |
+| 2026-08-19 | 84f7a74 | 1.5 | 88 | Post-EBS `cand bmsr=7949` at EBS; skip `BMCR_RESET` when `ape-ncsi=yes`; HTTP-OK not claimed |
 | 2026-08-19 | 5291513 | 1.5 | 88 | Dual-func EFI both ports `bmsr=7949` at BOOT-OK; post-EBS BCM5720 bring-up + BOOT-OK reuse; HTTP-OK not claimed |
 | 2026-08-19 | 26c3158 | 1.5 | 88 | Skip-reset EFI `1212416` `ape-ncsi=yes` still `lpa=0000` on func 1; try both funcs; HTTP-OK not claimed |
 | 2026-08-19 | 295da74 | 1.5 | 88 | PHY-before-reset EFI `1213952` still `lpa=0000`; skip CORECLK_RESET; HTTP-OK not claimed |
