@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 5291513302129f8550138a34f7000d8508232463
+last_commit_short: 5291513
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 5291513 |
 | Summary | Dual-func EFI both ports `bmsr=7949` at BOOT-OK. Bind BCM5720 immediately after EBS; reuse at BOOT-OK. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (post-EBS analog) |
 | Gates touched | `bringup_bcm5720_post_ebs`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | Dual-func EFI both ports `bmsr=7949` at BOOT-OK; post-EBS BCM5720 bring-up + BOOT-OK reuse; HTTP-OK not claimed |
+| 2026-08-19 | 5291513 | 1.5 | 88 | Dual-func EFI both ports `bmsr=7949` at BOOT-OK; post-EBS BCM5720 bring-up + BOOT-OK reuse; HTTP-OK not claimed |
 | 2026-08-19 | 26c3158 | 1.5 | 88 | Skip-reset EFI `1212416` `ape-ncsi=yes` still `lpa=0000` on func 1; try both funcs; HTTP-OK not claimed |
 | 2026-08-19 | 295da74 | 1.5 | 88 | PHY-before-reset EFI `1213952` still `lpa=0000`; skip CORECLK_RESET; HTTP-OK not claimed |
 | 2026-08-19 | d82621a | 1.5 | 88 | APE-lock EFI `ape-lock=yes` still `bmsr=7949`; PHY reset before CORECLK_RESET; HTTP-OK not claimed |
