@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: f0961f1fb8ef2fd863c79d2aa8e94e021a6c196d
-last_commit_short: f0961f1
+last_commit: b5ea06915ab2aa87c154aa10cddfb2cfd876c218
+last_commit_short: b5ea069
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | f0961f1 |
+| Commit | b5ea069 |
 | Summary | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`. PCI restore + `phy_setup=post`. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (PCI restore around chip reset) |
 | Gates touched | `pci_cfg_save_dword_count`; skip listen without LSTATUS; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
+| 2026-08-19 | b5ea069 | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
 | 2026-08-19 | f0961f1 | 1.5 | 88 | Skip-BMCR EFI still `cand bmsr=7949`; CORECLK_RESET without BMCR; HTTP-OK not claimed |
 | 2026-08-19 | 84f7a74 | 1.5 | 88 | Post-EBS `cand bmsr=7949` at EBS; skip `BMCR_RESET` when `ape-ncsi=yes`; HTTP-OK not claimed |
 | 2026-08-19 | 5291513 | 1.5 | 88 | Dual-func EFI both ports `bmsr=7949` at BOOT-OK; post-EBS BCM5720 bring-up + BOOT-OK reuse; HTTP-OK not claimed |
