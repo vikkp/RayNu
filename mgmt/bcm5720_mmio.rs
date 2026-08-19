@@ -6,8 +6,9 @@
 //! All BAR0 MMIO, APE BAR2 (Linux `pci_ioremap_bar(..., BAR_2)`), mailbox,
 //! SRAM window, and RX/TX ring DMA for the R640
 //! census NIC live here. Bind **one** function: exact MAC match to the
-//! parked SNP lease (R640: SNP is `01:00.1` / `:5a:3a`, not func 0).
-//! If no MAC match: prefer `func == 1`, then `func == 0`. Do not start X710/i40e.
+//! parked SNP lease, else live `BMSR_LSTATUS`, else func 0 (NCSI/LOM1),
+//! then func 1. Do not start X710/i40e. Bring-up runs immediately after
+//! ExitBootServices (UNDI analog still warm); HTTP listen is after BOOT-OK.
 //!
 //! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
 //! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
@@ -20,7 +21,9 @@
 //! BMCR_RESET the GPHY while MAC clocks stay firmware-owned. Clear CPMU EEE
 //! LPI. Print APE `NCSI` from `APE_FW_FEATURES`. Iron 2026-08-19 skip-reset
 //! EFI still `pre-reset bmsr=7949` / `lpa=0000` on func 1 with `ape-ncsi=yes`
-//! after PRE-EBS SNP DHCP on `:3a`. Peek each candidate `BMSR` and **try
+//! after PRE-EBS SNP HTTP on `:3a`. Both funcs `bmsr=7949` at BOOT-OK —
+//! analog died during the guest path. **Bring up immediately after EBS**
+//! and reuse at BOOT-OK. Peek each candidate `BMSR` and **try
 //! func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station stays the SNP
 //! lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
@@ -897,8 +900,14 @@ pub fn bcm5720_present() -> bool {
 
 /// Reset + ring init. Identity-mapped BAR (UEFI page tables).
 /// Tries each BCM5720 function until copper `LSTATUS` (func 0 / NCSI first).
+/// Second call reuses a Device already armed immediately after EBS.
 #[cfg(feature = "uefi-bin")]
 pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
+    if let Some(mac) = with_nic(|n, _| n.mac) {
+        serial_step("boot: HOST-NIC BCM5720 reuse (armed post-EBS)\n");
+        let _ = prefer_mac;
+        return Ok(mac);
+    }
     const MAX: usize = BCM5720_MAX_CAND;
     let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); MAX];
     let mut bars = [0u64; MAX];

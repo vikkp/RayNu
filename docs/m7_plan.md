@@ -264,13 +264,13 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the dual-func try EFI (this branch). Skip-`CORECLK_RESET` EFI
-`1212416` (`86765166…5f49b9e7`) printed `ape-ncsi=yes` and
-`skip CORECLK_RESET (keep GPHY analog)` with **no** `reset…`, and still
-`pre-reset bmsr=7949` / `lpa=0000` on func 1. PRE-EBS SNP DHCP on `:3a` on
-the same boot. Peek both `BMSR`s; try func 0 (NCSI/LOM1) then func 1 until
-`link=up`. Station stays the SNP MAC. Reject `1212416`, `1213952`, `1213440`,
-`1211392`. Curl `http://<lease>:8443/` only after `link=up`.
-`RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve kit
+**Next:** flash the post-EBS BCM5720 bring-up EFI (this branch). Dual-func EFI
+`9fc6a3c2…c996e5` (size **1213952**, collides with PHY-before-reset) tried
+func 0 then func 1; both `bmsr=7949` / `lpa=0000` at BOOT-OK after PRE-EBS
+`RAYNU-V-M7-UEFI-HTTP-OK` on `:3a`. Analog dies during the guest path, not
+from picking the unused jack. Bind immediately after EBS; reuse after
+`BOOT-OK`. Reject `1212416` and the dual-func `9fc6a3c2` image. Curl
+`http://<lease>:8443/` only after `link=up`. `RAYNU-V-M7-HOST-NIC-HTTP-OK`
+only after a native HTTP exchange. Preserve kit
 `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

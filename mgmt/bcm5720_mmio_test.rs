@@ -214,6 +214,7 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("skip CORECLK_RESET"));
     assert!(src.contains("MII_TG3_MISC_SHDW_APD_ENABLE"));
     assert!(src.contains("fn inherit_snp_phy("));
+    assert!(src.contains("reuse (armed post-EBS)"));
     assert!(src.contains("fn pick_bcm5720_try_order("));
     assert!(src.contains("fallback=func0 (NCSI/LOM1)"));
     assert!(src.contains("try next func"));

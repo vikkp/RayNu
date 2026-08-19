@@ -224,4 +224,28 @@ BAR0 peek). Next EFI peeks each candidate `BMSR` and tries **func 0
 Do **not** claim `HOST-NIC-HTTP-OK` from this note.
 Reject skip-reset EFI `1212416`.
 
+### 2026-08-19 addendum — both funcs `bmsr=7949` at BOOT-OK
+
+Dual-func EFI (`1213952` bytes, SHA
+`9fc6a3c2f4e689232a385715aaa54f80c25d55d68eb22b755bd9680fcbc996e5`, CI run
+`32285501656` — **size collides** with PHY-before-reset `df94a20a…`) tried
+both ports. PRE-EBS SNP HTTP closed (`RAYNU-V-M7-UEFI-HTTP-OK`) on `:3a`.
+After the guest path, COM2:
+
+```
+cand pci=01:00.00 MAC=…:38 bmsr=7949
+cand pci=01:00.01 MAC=…:39 bmsr=7949
+try pci=01:00.00 … fallback=func0 (NCSI/LOM1) phy_addr=01 ape-bar=0x92940000
+link=timeout bmsr=7949 lpa=0000
+try next func
+try pci=01:00.01 … fallback=func1 (retry) phy_addr=02 ape-bar=0x92910000
+link=timeout bmsr=7949 lpa=0000
+```
+
+Wrong-port is **closed**. Copper was up for SNP, then both host PHYs were
+down at BOOT-OK. Next EFI brings BCM5720 up **immediately after EBS**
+(before VMX/Linux) and reuses that Device after BOOT-OK. Do **not** claim
+`HOST-NIC-HTTP-OK` from this note.
+Reject dual-func EFI unless SHA is a later build.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

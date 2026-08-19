@@ -1,4 +1,6 @@
-use super::{listen_mgmt_http_uefi, prop_listen_surface, serve_one_connection_host, MgmtListenError};
+use super::{
+    listen_mgmt_http_uefi, prop_listen_surface, serve_one_connection_host, MgmtListenError,
+};
 use crate::mgmt::http::{M7_HTTP_OK_MARKER, MGMT_HTTP_DEFAULT_PORT};
 use std::io::{Read, Write};
 use std::net::TcpStream;

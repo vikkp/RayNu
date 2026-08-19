@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; skip-reset still no copper on func1; try both funcs; HTTP-OK open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; dual-func both ports 7949 at BOOT-OK; post-EBS bring-up; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -156,12 +156,12 @@
             idle later closed with <strong>no RSOD</strong>. Phase D binds the
             SNP-lease BCM5720 function (R640 <code>01:00.1</code>) with Linux
             <code>tg3</code> bring-up; station address is the parked SNP MAC
-            (BAR0 peek may differ). Skip-reset EFI
-            <code>1212416</code> printed <code>ape-ncsi=yes</code> and still
-            <code>lpa=0000</code> on func 1 after PRE-EBS SNP DHCP on
-            <code>:3a</code>. This EFI peeks both <code>BMSR</code>s and tries
-            func 0 (NCSI/LOM1) then func 1. Iron <code>HOST-NIC-HTTP-OK</code> waits on an
-            exchange after <code>BOOT-OK</code>. Then remaining E4 polish and a
+            (BAR0 peek may differ). Dual-func EFI both ports
+            <code>bmsr=7949</code> at BOOT-OK after PRE-EBS SNP HTTP on
+            <code>:3a</code>. This EFI binds immediately after EBS (before
+            VMX/Linux) and reuses that Device after <code>BOOT-OK</code>. Iron
+            <code>HOST-NIC-HTTP-OK</code> waits on an exchange after
+            <code>BOOT-OK</code>. Then remaining E4 polish and a
             real distro installer (not El Torito first).
           </p>
           <div class="cta" data-reveal>

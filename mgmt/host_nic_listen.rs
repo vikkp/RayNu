@@ -5,8 +5,10 @@
 //!
 //! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
 //! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease and binds the
-//! function whose MAC matches that lease (R640: `01:00.1` / SNP port).
-//! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
+//! function whose MAC matches that lease when possible; otherwise try func 0
+//! (NCSI/LOM1) then func 1. Hardware bring-up runs **immediately after EBS**
+//! so UNDI analog is not left idle through the guest path; HTTP idle is after
+//! `BOOT-OK`. TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
 //! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
 //!
 //! Iron HTTP-OK is printed from `pci_census`, never here.
@@ -51,6 +53,7 @@ enum ListenWhen {
 }
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
+/// Iron BCM5720: steal the PHY **now** (before VMX/Linux) and listen after BOOT-OK.
 pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
 }
@@ -70,8 +73,11 @@ fn run_listen(when: ListenWhen) {
         listen_with_retries(when, NicKind::E1000);
         return;
     }
-    if matches!(when, ListenWhen::AfterBootOk) && crate::mgmt::bcm5720_mmio::bcm5720_present() {
-        listen_with_retries(when, NicKind::Bcm5720);
+    if crate::mgmt::bcm5720_mmio::bcm5720_present() {
+        match when {
+            ListenWhen::AfterEbs => bringup_bcm5720_post_ebs(),
+            ListenWhen::AfterBootOk => listen_with_retries(when, NicKind::Bcm5720),
+        }
         return;
     }
     if matches!(when, ListenWhen::AfterBootOk) {
@@ -81,6 +87,31 @@ fn run_listen(when: ListenWhen) {
             serial::write_byte(b':');
             write_hex_u16(d);
             serial::write_line(" (Phase D waits on this id; do not guess LOM)");
+        }
+    }
+}
+
+/// Steal BCM5720 analog immediately after EBS. Do **not** HTTP-listen here
+/// (guest path first). Iron 2026-08-19: both funcs `bmsr=7949` at BOOT-OK
+/// after PRE-EBS SNP HTTP on `:3a`.
+fn bringup_bcm5720_post_ebs() {
+    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
+        serial::write_line(
+            "boot: WARN — HOST-NIC BCM5720 post-EBS bring-up skipped (no parked SNP lease)",
+        );
+        return;
+    };
+    serial::write_line("boot: HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)");
+    match Bcm5720Device::init(lease.mac) {
+        Ok(dev) => {
+            serial::write_str("boot: HOST-NIC BCM5720 post-EBS Device MAC=");
+            write_mac(dev.mac());
+            serial::write_line(" (listen after BOOT-OK)");
+        }
+        Err(_) => {
+            serial::write_line(
+                "boot: WARN — HOST-NIC BCM5720 post-EBS bring-up failed (BOOT-OK will retry)",
+            );
         }
     }
 }

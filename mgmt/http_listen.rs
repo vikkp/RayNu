@@ -162,7 +162,8 @@ pub fn run_pre_ebs_mgmt_listen() -> bool {
     }
 }
 
-/// After ExitBootServices: SNP probe is serial-only; native e1000 listen is Phase C.
+/// After ExitBootServices: SNP probe is serial-only; QEMU e1000 may listen.
+/// Iron BCM5720 bring-up is also here (keep analog); HTTP idle is after BOOT-OK.
 pub fn run_post_ebs_mgmt_listen() {
     #[cfg(feature = "uefi-bin")]
     {

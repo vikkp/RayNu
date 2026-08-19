@@ -202,16 +202,15 @@ curl -sS -m 5 "http://<lease>:8443/"
 Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
-Expect COM2 `HOST-NIC BCM5720 cand pci=… MAC=… bmsr=…` for each function, then
-`try pci=… fallback=func0 (NCSI/LOM1)` (or `link-up BMSR` / `matched SNP lease`)
-then (if peek ≠ lease) `station SNP-lease MAC=…` then
-`pre-reset bmsr=… ape=yes|no ape-bar=… ape-fw=ready|no ape-evt=sent|skip ape-ncsi=yes|no ape-lock=yes|timeout|skip`
-then either `inherit SNP PHY (skip CORECLK_RESET)` or
-`skip CORECLK_RESET (keep GPHY analog)` then `phy_reset=pre … eee=off …`
-then **no** `reset…` / `fw-magic=` / `an-restart=` then
-`link=up speed=… duplex=…`
-(or `link=timeout` then `try next func` and the other PCI function)
-then `rings armed` then `HOST-NIC idle listening on <lease>:8443`.
+Expect COM2 **immediately after** `RAYNU-V-M1-EBS-OK`:
+`HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)` then
+`cand pci=… MAC=… bmsr=…` for each function, then `try pci=…` (func 0
+NCSI/LOM1 first unless `bmsr` already has `LSTATUS`). After `BOOT-OK`:
+`reuse (armed post-EBS)` then `HOST-NIC idle listening on <lease>:8443`.
+Do **not** re-run `phy_reset=pre` at BOOT-OK if reuse printed.
+
+If post-EBS `cand bmsr=` already `7949` on both, analog died at EBS (not
+the guest path). Curl only after `link=up`.
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**
