@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: fb96cdbbc11991c41df3af7fd23a4f6afc84b976
-last_commit_short: fb96cdb
+last_commit: cb1143106c46a82d406f151f3952a44df109b532
+last_commit_short: cb11431
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | cb11431 |
 | Summary | Do not take APE PHY (iDRAC NCSI). Keep `NO_PHYLOCK` + skip BMCR when NCSI. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (APE holds analog; iDRAC-safe) |
 | Gates touched | `keep_ape_phy_for_idrac`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | Do not take APE PHY (iDRAC NCSI); keep `NO_PHYLOCK`; HTTP-OK not claimed |
+| 2026-08-19 | cb11431 | 1.5 | 88 | Do not take APE PHY (iDRAC NCSI); keep `NO_PHYLOCK`; HTTP-OK not claimed |
 | 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
 | 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
 | 2026-08-19 | b5ea069 | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
