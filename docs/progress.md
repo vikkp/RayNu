@@ -147,7 +147,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Phase 0 closed (`14e4:165f`). PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen. PRE-EBS BMSR peek next. SNP/Tcp4 do not count. |
+| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Phase 0 closed (`14e4:165f`). PRE-EBS peek: SNP `:3a` copper, host GPHY `bmsr=7949`. Take PHY from APE. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | Everest residual | E3b + E4 polish + distro | TLS/console later; distro installer later (after E3b) |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |

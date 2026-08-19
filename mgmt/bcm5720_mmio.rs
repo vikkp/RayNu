@@ -26,9 +26,12 @@
 //! `tg3_setup_phy(false)` (APD + Auto-MDIX + AN, still no `BMCR_RESET` when
 //! NCSI). Iron 2026-08-19 EFI `ec08c00f` (`pci-restore=64` / `phy_setup=post`
 //! / `ape-grc=yes`) still `cand bmsr=7949` then `skip listen (no LSTATUS)`.
-//! PCI restore is closed. Next: peek host GPHY `BMSR` **while PRE-EBS SNP
-//! copper is live** (`pre-EBS cand`) to see if the cable was ever on the
-//! host PHY. Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
+//! PCI restore is closed. Iron 2026-08-19 EFI `42b42c99`: PRE-EBS SNP
+//! leased `:3a` while both host GPHYs were already `pre-EBS cand bmsr=7949`.
+//! Host MDIO never saw the cable (APE/NCSI MAC `:3a`, BAR0 peeks `:38`/`:39`).
+//! Take the PHY from APE: drop `APE_HOST_BEHAV_NO_PHYLOCK` and run
+//! `BMCR_RESET` even when `ape-ncsi=yes`. Do not HTTP-listen when `LSTATUS`
+//! is clear. Peek each candidate
 //! `BMSR` and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station
 //! stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
@@ -561,17 +564,25 @@ pub fn skip_http_listen_without_lstatus() -> bool {
     true
 }
 
-/// Skip `tg3_bmcr_reset` when APE NCSI owns the management PHY.
-///
-/// Iron 2026-08-19 post-EBS bring-up: `cand bmsr=7949` on both funcs
-/// immediately after EBS, then `phy_reset=pre yes` still `lpa=0000` with
-/// `ape-ncsi=yes`. PRE-EBS SNP copper used MAC `:3a`.
+/// Skip `tg3_bmcr_reset`. Iron 2026-08-19 `42b42c99`: PRE-EBS SNP `:3a`
+/// copper with both host GPHYs `bmsr=7949`. APE holds analog; take it with
+/// `BMCR_RESET` even when `ape-ncsi=yes`.
 ///
 /// INVARIANTS:
-/// - True iff `ape_ncsi`
+/// - Always false on this iron path
 /// - Never panics
-pub fn skip_bmcr_reset(ape_ncsi: bool) -> bool {
-    ape_ncsi
+pub fn skip_bmcr_reset(_ape_ncsi: bool) -> bool {
+    false
+}
+
+/// Linux sets `APE_HOST_BEHAV_NO_PHYLOCK` for NCSI. Iron PRE-EBS peek
+/// closed host-GPHY copper; write 0 so APE releases the PHY lock to us.
+///
+/// INVARIANTS:
+/// - Always false on this iron path
+/// - Never panics
+pub fn ape_host_nophylock() -> bool {
+    false
 }
 
 /// Linux `APE_FW_FEATURE_NCSI` (`tg3.h` bit 1).
@@ -1303,6 +1314,8 @@ unsafe fn hw_init(
     });
     serial_step(" ape-ncsi=");
     serial_step(if ape_ncsi_now() { "yes" } else { "no" });
+    serial_step(" ape-nophylock=");
+    serial_step(if ape_host_nophylock() { "yes" } else { "no" });
     serial_step(" ape-lock=");
     serial_step(if APE_MMIO.load(Ordering::Relaxed) == 0 {
         "skip\n"
@@ -2177,7 +2190,14 @@ unsafe fn ape_host_driver_start() {
     let n = ape_read(TG3_APE_HOST_INIT_COUNT).wrapping_add(1);
     ape_write(TG3_APE_HOST_INIT_COUNT, n);
     ape_write(TG3_APE_HOST_DRIVER_ID, APE_HOST_DRIVER_ID_LINUX);
-    ape_write(TG3_APE_HOST_BEHAVIOR, APE_HOST_BEHAV_NO_PHYLOCK);
+    ape_write(
+        TG3_APE_HOST_BEHAVIOR,
+        if ape_host_nophylock() {
+            APE_HOST_BEHAV_NO_PHYLOCK
+        } else {
+            0
+        },
+    );
     ape_write(
         TG3_APE_HOST_HEARTBEAT_INT_MS,
         APE_HOST_HEARTBEAT_INT_DISABLE,

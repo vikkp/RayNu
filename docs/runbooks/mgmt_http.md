@@ -202,11 +202,11 @@ curl -sS -m 5 "http://<lease>:8443/"
 Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
 word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
-Expect COM2 after SNP DHCP: `pre-EBS BMSR peek` / `pre-EBS cand` (host GPHY
-while SNP copper is live). After EBS: `phy_reset=pre skip` / `ape-grc=` /
-`pci-restore=64` / `phy_setup=post`. After `BOOT-OK`: `reuse`. Curl **only**
-after `link=up`. If COM2 prints `skip listen (no LSTATUS; do not curl)`, do
-not curl. Reject EFI SHA `ec08c00f` (PCI restore; size **1216512**).
+Expect COM2 after SNP DHCP: `pre-EBS cand` (already `7949` on iron). After
+EBS: `ape-nophylock=no` and `phy_reset=pre yes` (take PHY from APE). After
+`BOOT-OK`: `reuse`. Curl **only** after `link=up`. If COM2 prints
+`skip listen (no LSTATUS; do not curl)`, do not curl. Reject EFI SHA
+`42b42c99` (PRE-EBS peek; size **1216512**, collides with `ec08c00f`).
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**

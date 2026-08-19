@@ -66,6 +66,8 @@ pub fn host_nic_surface_present() -> bool {
         && bcm.contains("fn inherit_snp_phy(")
         && bcm.contains("fn skip_coreclk_reset(")
         && bcm.contains("fn skip_bmcr_reset(")
+        && bcm.contains("fn ape_host_nophylock(")
+        && bcm.contains("ape-nophylock=")
         && bcm.contains("fn ape_ncsi_enabled(")
         && bcm.contains("phy_reset=pre")
         && bcm.contains("phy_reset=pre skip (ape-ncsi)")

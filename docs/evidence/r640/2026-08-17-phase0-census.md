@@ -369,4 +369,30 @@ GPHY (APE/NCSI datapath). If it has `LSTATUS`, EBS is what drops analog.
 Do **not** claim `HOST-NIC-HTTP-OK`.
 Reject PCI-restore EFI `ec08c00f`.
 
+### 2026-08-19 addendum — PRE-EBS host GPHY already `bmsr=7949`
+
+PRE-EBS BMSR-peek EFI (`1216512` bytes, SHA
+`42b42c99199258fceecbdd94cbe30d4359ca88c4f9e92080a4732de0cc81bc71`,
+HEAD `15cf084` / feature `58d336b` — **size collides** with `ec08c00f`)
+peeked host GPHY **while SNP still had copper**. Complete COM2:
+
+```
+SNP residual MAC=b0:26:28:5c:5a:3a
+SNP lease 10.99.99.116/24
+pre-EBS BMSR peek (SNP live; MDIO read only)
+pre-EBS cand pci=01:00.00 MAC=…:38 bmsr=7949
+pre-EBS cand pci=01:00.01 MAC=…:39 bmsr=7949
+… guest path …
+RAYNU-V-R640-BOOT-OK
+skip listen (no LSTATUS; do not curl)
+```
+
+SNP `:3a` had a lease; both host GPHYs were already `7949` **before EBS**.
+BAR0 peeks stay `:38`/`:39`. “EBS killed analog” is **closed**. The cable
+SNP used is the APE/NCSI MAC, not host MDIO. Next EFI drops
+`APE_HOST_BEHAV_NO_PHYLOCK` (`ape-nophylock=no`) and runs `BMCR_RESET`
+even when `ape-ncsi=yes` (`phy_reset=pre yes`). Do **not** curl unless
+`link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject peek EFI `42b42c99` (and `ec08c00f`).
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

@@ -1,11 +1,11 @@
 use super::{
-    ape_fw_ready, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled, ape_per_lock_grant,
-    ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up, cpmu_is_link_speed_mode,
-    decode_phy_link, inherit_snp_phy, mac_mode_from_link, parse_mocked_rx_bd_bytes,
-    pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus,
-    pick_bcm5720_pci, pick_bcm5720_try_order, rx_bd_packet_len, skip_bmcr_reset,
-    skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac, Bcm5720PickReason,
-    BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    ape_fw_ready, ape_host_nophylock, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled,
+    ape_per_lock_grant, ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up,
+    cpmu_is_link_speed_mode, decode_phy_link, inherit_snp_phy, mac_mode_from_link,
+    parse_mocked_rx_bd_bytes, pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr,
+    phy_addr_5717_plus, pick_bcm5720_pci, pick_bcm5720_try_order, rx_bd_packet_len,
+    skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac,
+    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -223,6 +223,8 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("fn skip_coreclk_reset("));
     assert!(src.contains("Follow Linux `tg3_chip_reset`"));
     assert!(src.contains("fn skip_bmcr_reset("));
+    assert!(src.contains("fn ape_host_nophylock("));
+    assert!(src.contains("ape-nophylock="));
     assert!(src.contains("phy_reset=pre skip (ape-ncsi)"));
     assert!(src.contains("fn ape_ncsi_enabled("));
     assert!(src.contains("phy_reset=pre"));
@@ -267,9 +269,14 @@ fn skip_coreclk_reset_is_false_after_ncsi_skip_bmcr() {
 }
 
 #[test]
-fn skip_bmcr_reset_when_ape_ncsi() {
-    assert!(skip_bmcr_reset(true));
+fn skip_bmcr_reset_is_false_after_pre_ebs_gphy_down() {
+    assert!(!skip_bmcr_reset(true));
     assert!(!skip_bmcr_reset(false));
+}
+
+#[test]
+fn ape_host_nophylock_is_false_to_take_phy() {
+    assert!(!ape_host_nophylock());
 }
 
 #[test]

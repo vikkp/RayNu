@@ -264,12 +264,11 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash PRE-EBS `BMSR` peek EFI (this branch). PCI-restore EFI
-`ec08c00f…08007b02` (size **1216512**) printed `ape-grc=yes pci-restore=64`
-/ `phy_setup=post` and still `cand bmsr=7949` then
-`skip listen (no LSTATUS; do not curl)`. Analog is down at EBS. Next: peek
-host GPHY `BMSR` while SNP copper is live (`pre-EBS cand`). Reject
-`ec08c00f` and `1404f055`. Do not curl unless `link=up`.
+**Next:** flash take-PHY EFI (this branch). PRE-EBS peek EFI `42b42c99…cc81bc71`
+(size **1216512**, collides with `ec08c00f`) printed `pre-EBS cand bmsr=7949`
+on both funcs **while SNP `:3a` had a lease**. Host GPHY never saw the
+cable. Drop `NO_PHYLOCK` and run `BMCR_RESET` even when NCSI. Reject
+`42b42c99`, `ec08c00f`, `1404f055`. Do not curl unless `link=up`.
 `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a native HTTP exchange. Preserve
 kit `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).
