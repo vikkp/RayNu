@@ -5,8 +5,9 @@
 //!
 //! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
 //! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease and binds the
-//! function whose MAC matches that lease when possible; otherwise try func 0
-//! (NCSI/LOM1) then func 1. Hardware bring-up runs **immediately after EBS**
+//! function with live `BMSR_LSTATUS` first (Dedicated iDRAC + host LOM);
+//! otherwise MAC match to that lease; otherwise try func 0 (LOM1) then func 1.
+//! Hardware bring-up runs **immediately after EBS**
 //! so UNDI analog is not left idle through the guest path; HTTP idle is after
 //! `BOOT-OK`. TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
 //! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).

@@ -1,11 +1,12 @@
 use super::{
     ape_fw_ready, ape_host_nophylock, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled,
     ape_per_lock_grant, ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up,
-    cpmu_is_link_speed_mode, decode_phy_link, inherit_snp_phy, keep_ape_phy_for_idrac,
-    mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_cfg_save_dword_count, pci_id_is_bcm5720,
-    pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci, pick_bcm5720_try_order,
-    rx_bd_packet_len, skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus,
-    station_mac, Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, inherit_snp_phy,
+    keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_cfg_save_dword_count,
+    pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci,
+    pick_bcm5720_try_order, rx_bd_packet_len, skip_bmcr_reset, skip_coreclk_reset,
+    skip_http_listen_without_lstatus, station_mac, Bcm5720PickReason, BCM5720_DEVICE,
+    BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -84,6 +85,22 @@ fn pick_link_up_func1_beats_ncsi_func0() {
     assert_eq!(ord[0].reason, Bcm5720PickReason::PreferLink);
     assert_eq!(ord[1].func, 0);
     assert_eq!(ord[1].reason, Bcm5720PickReason::PreferFunc0);
+}
+
+#[test]
+fn pick_dedicated_lom_lstatus_beats_snp_ape_mac() {
+    let link = [true, false];
+    let (ord, n) = pick_bcm5720_try_order(&r640_cands(), &link, MAC_FUNC1);
+    assert_eq!(n, 2);
+    assert_eq!(ord[0].func, 0);
+    assert_eq!(ord[0].reason, Bcm5720PickReason::PreferLink);
+    assert_eq!(ord[1].func, 1);
+    assert_eq!(ord[1].reason, Bcm5720PickReason::MacMatch);
+}
+
+#[test]
+fn e3b_path_idrac_dedicated_is_locked() {
+    assert!(e3b_path_idrac_dedicated());
 }
 
 #[test]
@@ -225,6 +242,8 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("fn skip_bmcr_reset("));
     assert!(src.contains("fn ape_host_nophylock("));
     assert!(src.contains("fn keep_ape_phy_for_idrac("));
+    assert!(src.contains("fn e3b_path_idrac_dedicated("));
+    assert!(src.contains("Dedicated iDRAC NIC"));
     assert!(src.contains("keep-ape-phy=yes"));
     assert!(src.contains("keep APE PHY (iDRAC NCSI)"));
     assert!(src.contains("ape-nophylock="));

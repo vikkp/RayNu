@@ -397,19 +397,13 @@ the LOM. Linux `tg3` keeps `NO_PHYLOCK` for `APE_HAS_NCSI`. This branch
 keeps `ape-nophylock=yes` / `phy_reset=pre skip (ape-ncsi)` /
 `keep-ape-phy=yes`.
 
-**iDRAC-safe next paths (pick one, do not steal PHY):**
-
-1. **Dedicated iDRAC NIC** (R640 rear dedicated RJ45). Set iDRAC NIC
-   Selection = Dedicated (not Shared / Shared with Failover). SOL/SSH stay
-   on the iDRAC IP. Host LOM GPHY can then own a copper jack without
-   fighting APE. Prefer the unused LOM jack if it is on the mgmt LAN.
-2. **Linux-complete `tg3_open` with NO_PHYLOCK kept** — Ubuntu on this
-   same R640 gets copper this way. Fuller firmware/OTP/MAC path; no phylock
-   take.
-3. **APE-shared host datapath** — arm host rings, leave analog with APE,
-   no MDIO takeover. Unproven; larger.
-
-Do **not** curl unless `link=up`. Do **not** claim `HOST-NIC-HTTP-OK`.
+**iDRAC-safe path (locked 2026-08-19):** Dedicated iDRAC NIC + host LOM
+jack — [`r640_idrac_dedicated.md`](../../runbooks/r640_idrac_dedicated.md).
+Cable the dedicated iDRAC RJ45 **before** switching NIC Selection off Shared.
+Plug host mgmt into the unused LOM jack (`01:00.0` / `:38` on this iron).
+Picker prefers live `LSTATUS` over APE MAC `:3a`. Keep `ape-nophylock=yes`.
+Do **not** take the PHY. Do **not** curl unless `link=up`. Do **not** claim
+`HOST-NIC-HTTP-OK`.
 Reject peek EFI `42b42c99` (and `ec08c00f`). **Do not flash take-PHY**
 (`fb96cdb` / `ape-nophylock=no`).
 

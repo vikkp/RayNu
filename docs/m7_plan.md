@@ -264,15 +264,13 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** do **not** take the PHY from APE (iDRAC NCSI / Shared LOM).
-PRE-EBS peek EFI `42b42c99…cc81bc71` (size **1216512**, collides with
-`ec08c00f`) printed `pre-EBS cand bmsr=7949` on both funcs **while SNP
-`:3a` had a lease**. Host GPHY never saw the cable. Keep
-`APE_HOST_BEHAV_NO_PHYLOCK` and skip `BMCR_RESET` when NCSI
-(`keep-ape-phy=yes`). Reject `42b42c99`, `ec08c00f`, `1404f055`, and any
-take-PHY EFI (`ape-nophylock=no`). iDRAC-safe next: Dedicated iDRAC NIC
-+ host LOM jack, or Linux-complete `tg3_open` with NO_PHYLOCK kept.
-Do not curl unless `link=up`. `RAYNU-V-M7-HOST-NIC-HTTP-OK` only after a
-native HTTP exchange. Preserve kit `releases/v0.1.0-adr013-baseline`.
-Evidence:
+**Next:** E3b path is **Dedicated iDRAC NIC + host LOM jack**
+([`runbooks/r640_idrac_dedicated.md`](runbooks/r640_idrac_dedicated.md)).
+Do **not** take the PHY from APE. PRE-EBS peek EFI `42b42c99` showed host
+GPHY `7949` while SNP `:3a` had a lease. Keep `NO_PHYLOCK` / skip BMCR
+when NCSI. Picker prefers live `LSTATUS` (unused LOM jack) over APE MAC
+`:3a`. Reject `42b42c99`, `ec08c00f`, `1404f055`, and take-PHY
+(`ape-nophylock=no`). Cable dedicated iDRAC **before** switching NIC
+Selection. Curl only if `link=up`. Preserve
+`releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

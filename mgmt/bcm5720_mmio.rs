@@ -5,9 +5,9 @@
 //!
 //! All BAR0 MMIO, APE BAR2 (Linux `pci_ioremap_bar(..., BAR_2)`), mailbox,
 //! SRAM window, and RX/TX ring DMA for the R640
-//! census NIC live here. Bind **one** function: exact MAC match to the
-//! parked SNP lease, else live `BMSR_LSTATUS`, else func 0 (NCSI/LOM1),
-//! then func 1. Do not start X710/i40e. Bring-up runs immediately after
+//! census NIC live here. Bind **one** function: live `BMSR_LSTATUS` first
+//! (Dedicated iDRAC + host LOM jack), else exact MAC match to the parked SNP
+//! lease, else func 0 (LOM1), then func 1. Do not start X710/i40e. Bring-up runs immediately after
 //! ExitBootServices (UNDI analog still warm); HTTP listen is after BOOT-OK.
 //!
 //! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
@@ -32,9 +32,10 @@
 //! Do **not** take the PHY from APE (`APE_HOST_BEHAV_NO_PHYLOCK` stays set;
 //! skip `BMCR_RESET` when `ape-ncsi=yes`). iDRAC Shared LOM / NCSI uses that
 //! analog — stealing it can drop iDRAC. Linux `tg3` keeps NO_PHYLOCK for
-//! `APE_HAS_NCSI`. Do not HTTP-listen when `LSTATUS` is clear. Peek each candidate
-//! `BMSR` and **try func 0 (NCSI/LOM1) then func 1** until `LSTATUS`; station
-//! stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
+//! `APE_HAS_NCSI`. **E3b path (locked):** iDRAC NIC Selection = Dedicated;
+//! host mgmt Ethernet on a LOM jack (not the iDRAC dedicated RJ45). Prefer
+//! live `BMSR_LSTATUS` over the APE MAC `:3a`. Do not HTTP-listen when
+//! `LSTATUS` is clear. Station stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -397,9 +398,9 @@ fn pick_push(
 /// Bind order for dual-port BCM5720 (host-testable; no MMIO).
 ///
 /// INVARIANTS:
-/// - Exact MAC match first
-/// - Then any candidate with `link_up`
-/// - Then func 0 (NCSI/LOM1), then func 1, then leftovers
+/// - Any candidate with `link_up` first (Dedicated iDRAC + host LOM GPHY)
+/// - Then exact MAC match (parked SNP lease)
+/// - Then func 0 (LOM1), then func 1, then leftovers
 /// - Empty list → n=0
 /// - Never panics
 pub fn pick_bcm5720_try_order(
@@ -414,18 +415,6 @@ pub fn pick_bcm5720_try_order(
         reason: Bcm5720PickReason::FirstCand,
     }; BCM5720_MAX_CAND];
     let mut n = 0usize;
-    for &(bus, dev, func, mac) in cands {
-        if mac == want {
-            pick_push(
-                &mut out,
-                &mut n,
-                bus,
-                dev,
-                func,
-                Bcm5720PickReason::MacMatch,
-            );
-        }
-    }
     for (i, &(bus, dev, func, _)) in cands.iter().enumerate() {
         if i < link_up.len() && link_up[i] {
             pick_push(
@@ -435,6 +424,18 @@ pub fn pick_bcm5720_try_order(
                 dev,
                 func,
                 Bcm5720PickReason::PreferLink,
+            );
+        }
+    }
+    for &(bus, dev, func, mac) in cands {
+        if mac == want {
+            pick_push(
+                &mut out,
+                &mut n,
+                bus,
+                dev,
+                func,
+                Bcm5720PickReason::MacMatch,
             );
         }
     }
@@ -478,7 +479,7 @@ pub fn pick_bcm5720_try_order(
 /// First bind attempt from [`pick_bcm5720_try_order`] (no live-link hints).
 ///
 /// INVARIANTS:
-/// - Exact MAC match wins
+/// - Exact MAC match wins when no `link_up` hints
 /// - Else func 0, then func 1, then the first candidate
 /// - Empty list → `None`
 /// - Never panics
@@ -571,6 +572,15 @@ pub fn skip_http_listen_without_lstatus() -> bool {
 /// - Always true on this iron path
 /// - Never panics
 pub fn keep_ape_phy_for_idrac() -> bool {
+    true
+}
+
+/// E3b operator path: iDRAC Dedicated NIC; host mgmt on a LOM GPHY.
+///
+/// INVARIANTS:
+/// - Always true on this iron path
+/// - Never panics
+pub fn e3b_path_idrac_dedicated() -> bool {
     true
 }
 
@@ -1164,6 +1174,11 @@ fn any_bcm5720_bar() -> Option<(u8, u8, u8, u64)> {
 #[cfg(feature = "uefi-bin")]
 pub fn peek_bcm5720_bmsr_pre_ebs() {
     serial_step("boot: HOST-NIC BCM5720 pre-EBS BMSR peek (SNP live; MDIO read only)\n");
+    if e3b_path_idrac_dedicated() {
+        serial_step(
+            "boot: HINT — E3b: Dedicated iDRAC NIC; host mgmt on LOM jack (not iDRAC dedicated)\n",
+        );
+    }
     let mut cands = [(0u8, 0u8, 0u8, [0u8; 6]); BCM5720_MAX_CAND];
     let mut bars = [0u64; BCM5720_MAX_CAND];
     let mut bmsr = [0u16; BCM5720_MAX_CAND];
