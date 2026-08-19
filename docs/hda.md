@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: 5ba9fae030a875a20d8ac95f80f770f6c6841ca5
-last_commit_short: 5ba9fae
+last_commit: 9a559b99aaa09f63486aa9d8547a823e7eb9c4f2
+last_commit_short: 9a559b9
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 9a559b9 |
 | Summary | PHY-reset EFI still `bmsr=7949`/`lpa=0000`. Peek BMSR before `CORECLK_RESET`; inherit SNP PHY when `LSTATUS` set; else `tg3_phy_toggle_apd(false)`. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (copper analog after SNP park) |
 | Gates touched | `inherit_snp_phy`; `HOST-NIC-HTTP-OK` not claimed |
