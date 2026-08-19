@@ -1,6 +1,7 @@
 use super::{
-    parse_mocked_rx_bd_bytes, pci_id_is_bcm5720, pick_bcm5720_pci, rx_bd_packet_len, station_mac,
-    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, FRAME_MAX,
+    bmsr_link_up, decode_phy_link, mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_id_is_bcm5720,
+    pick_bcm5720_pci, rx_bd_packet_len, station_mac, Bcm5720PickReason, BCM5720_DEVICE,
+    BCM5720_VENDOR, FRAME_MAX,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -168,5 +169,42 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("phy_addr = u32::from(func) + 1"));
     assert!(src.contains("tg3_write_sig_pre_reset"));
     assert!(src.contains("fn station_mac("));
+    assert!(src.contains("BMSR_LSTATUS"));
+    assert!(src.contains("RX_MODE_PROMISC"));
+    assert!(src.contains("link=up"));
+    assert!(src.contains("fn decode_phy_link("));
+    assert!(src.contains("fn mac_mode_from_link("));
+    assert!(src.contains("tg3_adjust_link"));
     assert!(!src.contains("drivers/net/ethernet/broadcom/bnxt"));
+}
+
+#[test]
+fn bmsr_link_up_is_bit2() {
+    assert!(!bmsr_link_up(0));
+    assert!(bmsr_link_up(0x0004));
+    assert!(!bmsr_link_up(0x0002));
+}
+
+#[test]
+fn decode_phy_link_prefers_1000_full() {
+    assert_eq!(decode_phy_link(0x01E1, 0x0C00), (1000, true));
+    assert_eq!(decode_phy_link(0x01E1, 0x0400), (1000, false));
+    assert_eq!(decode_phy_link(0x0100, 0), (100, true));
+    assert_eq!(decode_phy_link(0x0080, 0), (100, false));
+    assert_eq!(decode_phy_link(0x0040, 0), (10, true));
+    assert_eq!(decode_phy_link(0, 0), (10, false));
+}
+
+#[test]
+fn mac_mode_from_link_gmii_vs_mii() {
+    const GMII: u32 = 0x08;
+    const MII: u32 = 0x04;
+    const HALF: u32 = 0x02;
+    let g = mac_mode_from_link(1000, true);
+    let m = mac_mode_from_link(100, true);
+    let h = mac_mode_from_link(100, false);
+    assert_eq!(g & 0x0c, GMII);
+    assert_eq!(m & 0x0c, MII);
+    assert_eq!(h & HALF, HALF);
+    assert_eq!(g & HALF, 0);
 }

@@ -166,7 +166,8 @@ DHCP used **`01:00.1` MAC `b0:26:28:5c:5a:3a`**. Binding **`01:00.0`**
 curl fail on the parked lease. Phase D now matches the parked SNP MAC
 (fallback: func 1, then func 0). After bind, the **parked SNP MAC** is
 programmed as the station address (iron: BAR0 peek on `01:00.1` was `:39`
-while SNP leased `:3a`). Evidence:
+while SNP leased `:3a`; station-MAC EFI programmed `:3a` and still saw
+ping **host unreachable** — PHY link / `MAC_MODE` next). Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
 
 ### Phase D — same `Device` trait; idle after BOOT-OK
@@ -176,7 +177,9 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 **BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
 PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
-**not** `bnxt` (that is BCM57416 10G). `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+**not** `bnxt` (that is BCM57416 10G): after PHY AN, wait `BMSR_LSTATUS`
+(read twice) and set `MAC_MODE` MII vs GMII from speed (`tg3_adjust_link`);
+`RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
@@ -189,7 +192,10 @@ curl -sS "http://<lease>:8443/"
 ```
 
 Expect COM2 `HOST-NIC BCM5720 pick pci=…` then (if peek ≠ lease)
-`station SNP-lease MAC=…` then `rings armed` then `HOST-NIC idle listening on <lease>:8443`. The iron HTTP-OK marker is
+`station SNP-lease MAC=…` then `phy=yes` then `link=up speed=… duplex=…`
+(or `link=timeout bmsr=…`) then `rings armed` then
+`HOST-NIC idle listening on <lease>:8443`. Curl port **8443** (not 8445).
+The iron HTTP-OK marker is
 only after that exchange. Do not claim it from this runbook.
 
 Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`

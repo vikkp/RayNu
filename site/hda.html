@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; Phase D station SNP MAC; HTTP-OK open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; Phase D PHY link wait; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -156,7 +156,8 @@
             idle later closed with <strong>no RSOD</strong>. Phase D binds the
             SNP-lease BCM5720 function (R640 <code>01:00.1</code>) with Linux
             <code>tg3</code> bring-up; station address is the parked SNP MAC
-            (BAR0 peek may differ). Iron
+            (BAR0 peek may differ). After that, wait copper
+            <code>BMSR_LSTATUS</code> and set MII vs GMII. Iron
             <code>HOST-NIC-HTTP-OK</code> waits on an
             exchange after <code>BOOT-OK</code>. Then remaining E4 polish and a
             real distro installer (not El Torito first).

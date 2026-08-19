@@ -68,4 +68,17 @@ Vignesh curl to the parked lease timed out (ARP identity mismatch).
 
 Station address is now the **parked SNP MAC**, not the BAR0 peek.
 
+### 2026-08-19 addendum — station `:3a` programmed; still no ARP
+
+Station-MAC EFI (`1208832` bytes) programmed **`:5a:3a`**. COM2:
+`station SNP-lease MAC=b0:26:28:5c:5a:3a (BAR0 peeked …:39)`, `fw-magic=yes`,
+`phy=yes`, `Device MAC=…:3a`, idle on `10.99.99.116:8443`. PRE-EBS SNP HTTP
+still worked. After `BOOT-OK`, Vignesh ping from `10.99.99.137` got
+**destination host unreachable** (no ARP). He also curled port **8445**
+(mgmt is **8443**). `phy=yes` is MDIO write success, not copper link.
+
+Next: wait `BMSR_LSTATUS` (read twice), set `MAC_MODE` MII vs GMII from
+speed like Linux `tg3_adjust_link`, enable `RX_MODE_PROMISC`. Do **not**
+claim `HOST-NIC-HTTP-OK` from this note.
+
 Preserve kit: `releases/v0.1.0-adr013-baseline`.

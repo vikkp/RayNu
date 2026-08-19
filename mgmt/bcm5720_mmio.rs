@@ -11,8 +11,11 @@
 //! Register map and bring-up: Broadcom Tigon3 / **Linux `tg3`**
 //! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
-//! BCM57416 10G. Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse
-//! mocked RX BDs only.
+//! BCM57416 10G. After PHY AN, wait for `BMSR_LSTATUS` (read twice; latched
+//! low) and set `MAC_MODE` MII vs GMII from speed like Linux `tg3_adjust_link`.
+//! `RX_MODE_PROMISC` is on so ARP is not dropped if CAM still holds NVRAM MAC.
+//! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
+//! only.
 
 use crate::mgmt::pci_census::{pci_id_is_iron_census, IRON_CENSUS_DEVICE, IRON_CENSUS_VENDOR};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -70,7 +73,10 @@ const MAC_RX_MODE: u32 = 0x468;
 const MAC_HASH_REG_0: u32 = 0x470;
 const MAC_RCV_RULE_CFG: u32 = 0x500;
 const MAC_LOW_WMARK_MAX_RX_FRAME: u32 = 0x504;
+const MAC_MODE_PORT_MODE_MASK: u32 = 0x0c;
+const MAC_MODE_PORT_MODE_MII: u32 = 0x04;
 const MAC_MODE_PORT_MODE_GMII: u32 = 0x08;
+const MAC_MODE_HALF_DUPLEX: u32 = 0x02;
 const MAC_MODE_RXSTAT_ENABLE: u32 = 0x800;
 const MAC_MODE_TXSTAT_ENABLE: u32 = 0x4000;
 const MAC_MODE_TDE_ENABLE: u32 = 0x20_0000;
@@ -82,6 +88,7 @@ const TX_MODE_ENABLE: u32 = 0x02;
 const TX_MODE_JMB_FRM_LEN: u32 = 0x40_0000;
 const TX_MODE_CNT_DN_MODE: u32 = 0x80_0000;
 const RX_MODE_ENABLE: u32 = 0x02;
+const RX_MODE_PROMISC: u32 = 0x100;
 const MI_COM_CMD_WRITE: u32 = 0x0400_0000;
 const MI_COM_CMD_READ: u32 = 0x0800_0000;
 const MI_COM_START: u32 = 0x2000_0000;
@@ -98,12 +105,21 @@ const RCV_RULE_CFG_DEFAULT_CLASS: u32 = 0x08;
 const RCVLPC_CONFIG_DEFAULT: u32 = 0x181;
 
 const MII_BMCR: u32 = 0;
+const MII_BMSR: u32 = 1;
 const MII_ADVERTISE: u32 = 4;
+const MII_LPA: u32 = 5;
 const MII_CTRL1000: u32 = 9;
+const MII_STAT1000: u32 = 10;
 const BMCR_ANRESTART: u16 = 0x0200;
 const BMCR_ANENABLE: u16 = 0x1000;
+const BMSR_LSTATUS: u16 = 0x0004;
 const ADVERTISE_COPPER: u16 = 0x0DE1;
 const ADVERTISE_1000: u16 = 0x0300;
+const LPA_1000FULL: u16 = 0x0800;
+const LPA_1000HALF: u16 = 0x0400;
+const LPA_100FULL: u16 = 0x0100;
+const LPA_100HALF: u16 = 0x0080;
+const LPA_10FULL: u16 = 0x0040;
 
 const SNDDATAC_MODE: u32 = 0x1000;
 const SNDDATAI_MODE: u32 = 0x0C00;
@@ -305,6 +321,63 @@ pub fn station_mac(peeked: [u8; 6], lease: [u8; 6]) -> [u8; 6] {
     } else {
         peeked
     }
+}
+
+/// IEEE 802.3 `BMSR_LSTATUS` (MII reg 1 bit 2). Latched low — callers read twice.
+///
+/// INVARIANTS:
+/// - Bit 2 set → copper link up
+/// - Never panics
+pub fn bmsr_link_up(bmsr: u16) -> bool {
+    bmsr & BMSR_LSTATUS != 0
+}
+
+/// Decode copper partner ability (`MII_LPA` + `MII_STAT1000`).
+/// Linux `tg3_adjust_link` uses phydev speed/duplex the same way.
+///
+/// INVARIANTS:
+/// - Preference: 1000/full > 1000/half > 100/full > 100/half > 10/full > 10/half
+/// - Never panics
+pub fn decode_phy_link(lpa: u16, stat1000: u16) -> (u16, bool) {
+    if stat1000 & LPA_1000FULL != 0 {
+        return (1000, true);
+    }
+    if stat1000 & LPA_1000HALF != 0 {
+        return (1000, false);
+    }
+    if lpa & LPA_100FULL != 0 {
+        return (100, true);
+    }
+    if lpa & LPA_100HALF != 0 {
+        return (100, false);
+    }
+    if lpa & LPA_10FULL != 0 {
+        return (10, true);
+    }
+    (10, false)
+}
+
+/// `MAC_MODE` after link: GMII at 1000, MII at 10/100; half-duplex bit.
+/// Includes TDE/RDE/FHDE + RX/TX stats (same as `enable_mac`).
+///
+/// INVARIANTS:
+/// - `speed_mbps >= 1000` → GMII (`0x08`), else MII (`0x04`)
+/// - Half duplex → `MAC_MODE_HALF_DUPLEX`
+/// - Never panics
+pub fn mac_mode_from_link(speed_mbps: u16, full_duplex: bool) -> u32 {
+    let port = (if speed_mbps >= 1000 {
+        MAC_MODE_PORT_MODE_GMII
+    } else {
+        MAC_MODE_PORT_MODE_MII
+    }) & MAC_MODE_PORT_MODE_MASK;
+    let hd = if full_duplex { 0 } else { MAC_MODE_HALF_DUPLEX };
+    MAC_MODE_RXSTAT_ENABLE
+        | MAC_MODE_TXSTAT_ENABLE
+        | MAC_MODE_TDE_ENABLE
+        | MAC_MODE_RDE_ENABLE
+        | MAC_MODE_FHDE_ENABLE
+        | port
+        | hd
 }
 
 /// Parse a mocked 32-byte Tigon3 RX return BD. Host/Miri/fuzz — no MMIO.
@@ -781,6 +854,7 @@ unsafe fn hw_init(
     enable_hostcc(mmio);
     enable_completion_blocks(mmio);
     restart_phy_an(mmio, func);
+    wait_phy_link_and_adjust_mac(mmio, func);
 
     mailbox_write(
         mmio,
@@ -1068,7 +1142,7 @@ unsafe fn enable_mac(mmio: u64, mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
         | MAC_MODE_RDE_ENABLE
         | MAC_MODE_FHDE_ENABLE;
     mmio_write(mmio, MAC_MODE, mac_mode);
-    mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE);
+    mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
     let mut tx_mode = TX_MODE_ENABLE;
     tx_mode |= mmio_read(mmio, MAC_TX_MODE) & (TX_MODE_JMB_FRM_LEN | TX_MODE_CNT_DN_MODE);
     mmio_write(mmio, MAC_TX_MODE, tx_mode);
@@ -1103,6 +1177,54 @@ unsafe fn restart_phy_an(mmio: u64, func: u8) {
         " phy=timeout (continuing)\n"
     });
     let _ = phy_read(mmio, phy_addr, MII_BMCR);
+}
+
+/// Linux `tg3_setup_phy` / `tg3_adjust_link`: `BMSR_LSTATUS` is latched low
+/// (read twice). Then `MAC_MODE` MII vs GMII from speed. Soft-fail.
+#[cfg(feature = "uefi-bin")]
+unsafe fn wait_phy_link_and_adjust_mac(mmio: u64, func: u8) {
+    let phy_addr = u32::from(func) + 1;
+    let mut last_bmsr: u16 = 0;
+    let mut up = false;
+    // ~4s: 1000BASE-T AN after CORECLK_RESET commonly 1–3s.
+    for _ in 0..200 {
+        let _ = phy_read(mmio, phy_addr, MII_BMSR); // discard latch
+        if let Some(bmsr) = phy_read(mmio, phy_addr, MII_BMSR) {
+            last_bmsr = bmsr;
+            if bmsr_link_up(bmsr) {
+                up = true;
+                break;
+            }
+        }
+        tsc_spin_ms(20);
+    }
+    let mac_status = mmio_read(mmio, MAC_STATUS);
+    if up {
+        let (speed, full) = match (
+            phy_read(mmio, phy_addr, MII_LPA),
+            phy_read(mmio, phy_addr, MII_STAT1000),
+        ) {
+            (Some(lpa), Some(stat1000)) => decode_phy_link(lpa, stat1000),
+            _ => (1000, true),
+        };
+        mmio_write(mmio, MAC_MODE, mac_mode_from_link(speed, full));
+        tsc_spin_us(40);
+        mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
+        serial_step("boot: HOST-NIC BCM5720 link=up speed=");
+        write_u16_dec(speed);
+        serial_step(if full {
+            " duplex=full\n"
+        } else {
+            " duplex=half\n"
+        });
+    } else {
+        mmio_write(mmio, MAC_RX_MODE, RX_MODE_ENABLE | RX_MODE_PROMISC);
+        serial_step("boot: HOST-NIC BCM5720 link=timeout bmsr=");
+        write_hex_u16(last_bmsr);
+        serial_step(" mac_status=");
+        write_hex_u32(mac_status);
+        serial_step("\n");
+    }
 }
 
 #[cfg(feature = "uefi-bin")]
@@ -1307,6 +1429,31 @@ fn write_hex_u8(b: u8) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     crate::boot::serial::write_byte(HEX[(b >> 4) as usize]);
     crate::boot::serial::write_byte(HEX[(b & 0xf) as usize]);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn write_hex_u16(n: u16) {
+    write_hex_u8((n >> 8) as u8);
+    write_hex_u8(n as u8);
+}
+
+#[cfg(feature = "uefi-bin")]
+fn write_u16_dec(n: u16) {
+    if n == 0 {
+        crate::boot::serial::write_byte(b'0');
+        return;
+    }
+    let mut buf = [0u8; 5];
+    let mut i = 5;
+    let mut v = n;
+    while v > 0 {
+        i -= 1;
+        buf[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    for b in &buf[i..] {
+        crate::boot::serial::write_byte(*b);
+    }
 }
 
 #[cfg(feature = "uefi-bin")]

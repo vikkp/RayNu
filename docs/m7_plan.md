@@ -264,10 +264,10 @@ Do not pull M8 into M7 gate lists.
 Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
 RSOD**). Then remaining E4 polish + a real distro installer.
 
-**Next:** flash the station-MAC EFI (this branch). After `BOOT-OK`, expect
-`pick pci=01:00.01` (may be `fallback=func1` if BAR0 peek ≠ SNP `:3a`) then
-`station SNP-lease MAC=…:3a`. Curl the **same** PRE-EBS SNP lease
-(`http://<lease>:8443/`) from Vignesh `10.99.99.137` on the host LAN.
-`RAYNU-V-M7-HOST-NIC-HTTP-OK` only after that exchange. Preserve kit
-`releases/v0.1.0-adr013-baseline`. Evidence:
+**Next:** flash the PHY-link-wait EFI (this branch). Station `:3a` is already
+programmed on iron (`fw-magic=yes`, `phy=yes`). After `BOOT-OK`, expect
+`link=up speed=… duplex=…` (or `link=timeout bmsr=…`). Curl the **same**
+PRE-EBS SNP lease (`http://<lease>:8443/` — port **8443**, not 8445) from
+Vignesh `10.99.99.137` on the host LAN. `RAYNU-V-M7-HOST-NIC-HTTP-OK` only
+after that exchange. Preserve kit `releases/v0.1.0-adr013-baseline`. Evidence:
 [`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).

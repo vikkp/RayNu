@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 last_commit: 4728188a
 last_commit_short: 4728188
 updated_by: cursor
@@ -40,7 +40,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
 | **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
 | **ETA month** | **2026-10** | slipped from 2026-09 |
-| **Confidence** | medium | E2+E3+E5 on COM2; Phase D **tg3 + station SNP MAC**; iron curl miss was `:39` vs `:3a`; HTTP-OK open |
+| **Confidence** | medium | E2+E3+E5 on COM2; Phase D **tg3 + station `:3a` programmed**; ping unreachable (no ARP); PHY link wait next; HTTP-OK open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
@@ -124,7 +124,7 @@ All must be true (no hand-waving):
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
-| **Post-EBS durable HTTP (E3b)** | MISSING | Phase D `01:00.1` + `tg3` (`fw-magic=yes`); station must be parked SNP `:3a` (BAR0 peek was `:39`); iron HTTP-OK waits on curl after `BOOT-OK` |
+| **Post-EBS durable HTTP (E3b)** | MISSING | Station `:3a` programmed on iron; ping host-unreachable = no ARP. Wait `BMSR_LSTATUS` + MII/GMII + PROMISC; HTTP-OK not claimed |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after E3b)**
@@ -188,7 +188,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
-| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Phase D **station = SNP MAC**; iron `:39` peek curl miss; HTTP-OK **open** |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Station `:3a` on iron; no ARP; PHY `BMSR_LSTATUS` + MII/GMII + PROMISC; HTTP-OK **open** |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -258,10 +258,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 4728188 |
-| Summary | Phase D **station = parked SNP MAC** (iron peek `:39` vs lease `:3a`); HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (curl timeout on `:39`) |
-| Gates touched | `station_mac`; `HOST-NIC-HTTP-OK` not claimed |
+| Commit | PENDING (this feat) |
+| Summary | Phase D wait `BMSR_LSTATUS` + `tg3_adjust_link` MII/GMII + `RX_MODE_PROMISC`; station `:3a` confirmed; HTTP-OK not claimed |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (no ARP after `:3a`) |
+| Gates touched | `decode_phy_link` / `mac_mode_from_link`; `HOST-NIC-HTTP-OK` not claimed |
 | Months Δ | 1.5 held |
 
 ---
@@ -273,7 +273,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | Phase D **tg3** up (`fw-magic=yes`); station = parked SNP MAC (`:3a` not BAR0 `:39`); E3b = HTTP after `BOOT-OK` |
+| H4 | Firmware SNP unusable after EBS | HIGH | Station `:3a` programmed; ping unreachable. Wait PHY link + MII/GMII + PROMISC; E3b = HTTP after `BOOT-OK` |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-19 | m7-8-bcm-link | 1.5 | 88 | PHY `BMSR_LSTATUS` wait + MII/GMII + PROMISC; station `:3a` confirmed; HTTP-OK not claimed |
 | 2026-08-18 | m7-8-station-mac | 1.5 | 88 | Station = parked SNP MAC (`:3a`); BAR0 peek `:39` curl miss; HTTP-OK not claimed |
 | 2026-08-18 | m7-8-bcm-tg3 | 1.5 | 88 | Phase D Linux `tg3` bring-up (not `bnxt`); SNP-MAC picker kept; HTTP-OK not claimed |
 | 2026-08-18 | m7-8-bcm-snp-mac | 1.5 | 88 | Phase D bind SNP-lease MAC (`01:00.1` / `:3a`); HTTP-OK not claimed |
@@ -330,9 +331,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; Phase D tg3 + station SNP MAC; E3b OPEN
+Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; Phase D station :3a + PHY link wait; E3b OPEN
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     flash station-MAC EFI; expect :3a programmed; curl SNP lease after BOOT-OK
+Next move:     flash link-wait EFI; expect COM2 link=up (or link=timeout); curl :8443 not 8445
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
 Preserve:      releases/v0.1.0-adr013-baseline
