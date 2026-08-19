@@ -53,6 +53,7 @@ pub fn host_nic_surface_present() -> bool {
         && bcm.contains("try next func")
         && bcm.contains("fn pick_bcm5720_pci(")
         && bcm.contains("fn station_mac(")
+        && bcm.contains("station live LOM MAC")
         && bcm.contains("BMSR_LSTATUS")
         && bcm.contains("RX_MODE_PROMISC")
         && bcm.contains("link=up")

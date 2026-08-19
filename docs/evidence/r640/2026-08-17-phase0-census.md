@@ -400,8 +400,9 @@ keeps `ape-nophylock=yes` / `phy_reset=pre skip (ape-ncsi)` /
 **iDRAC-safe path (locked 2026-08-19):** Dedicated iDRAC NIC + host LOM
 jack — [`r640_idrac_dedicated.md`](../../runbooks/r640_idrac_dedicated.md).
 Cable the dedicated iDRAC RJ45 **before** switching NIC Selection off Shared.
-Plug host mgmt into the unused LOM jack (`01:00.0` / `:38` on this iron).
-Picker prefers live `LSTATUS` over APE MAC `:3a`. Keep `ape-nophylock=yes`.
+Plug host mgmt into the unused LOM jack (`01:00.0` / `:38` = Ubuntu `eno3`).
+Picker prefers live `LSTATUS` over APE MAC `:3a`. Station is that live BAR0
+MAC, not SNP `:3a`. Keep `ape-nophylock=yes`.
 Do **not** take the PHY. Do **not** curl unless `link=up`. Do **not** claim
 `HOST-NIC-HTTP-OK`.
 Reject peek EFI `42b42c99` (and `ec08c00f`). **Do not flash take-PHY**

@@ -21,8 +21,18 @@ GPHYs were `bmsr=7949`. That analog is APE/NCSI. Taking it can drop iDRAC.
 | **LOM1 / LOM2** | Dual BCM5720 (`14e4:165f`, `01:00.0` / `01:00.1`) | Host mgmt LAN (Mac curl). Not the iDRAC dedicated jack. |
 
 Iron census: `01:00.0` / `:38` was the unused LOM jack; SNP/APE was `:3a`.
-Prefer plugging host mgmt into the **unused** LOM jack once iDRAC is Dedicated
-so host MDIO can see copper.
+Ubuntu on this R640 (2026-08-19, cable moved):
+
+| Linux | MAC | PCI | State |
+|-------|-----|-----|--------|
+| **eno3** | `b0:26:28:5c:5a:38` | `01:00.0` | **UP** `10.99.99.126/24` — host mgmt LOM |
+| eno4 | (other LOM, likely `:39`) | `01:00.1` | DOWN |
+| eno1np0 | `b0:26:28:5c:5a:3a` | APE/NCSI | DOWN (old SNP MAC) |
+| eno2np1 | | | DOWN |
+
+Plug host mgmt into **eno3** / `:38`. That is the jack RayNu-V should bind.
+Do **not** overlay APE `:3a` on it. `10.99.99.126` is **Ubuntu**; after F11
+RayNu-V, curl the lease COM2 prints (new DHCP), not `.126` unless COM2 says so.
 
 ---
 
@@ -61,7 +71,7 @@ Host BIOS (F2) iDRAC network page must match. Do not leave failover on LOM.
 ## 3. Host mgmt Ethernet on a LOM jack
 
 1. Plug the Mac/LAN cable (subnet `10.99.99.0/24` in the lab) into a **LOM**
-   RJ45 — prefer the jack that was unused (`01:00.0` / `:38`).
+   RJ45 — the jack Ubuntu names **eno3** (`b0:26:28:5c:5a:38` / `01:00.0`).
 2. Do **not** plug that cable into the iDRAC dedicated jack.
 3. Cruzer Micro stays in **front USB 2**. BIOS boot order: Ubuntu on PERC
    first; RayNu-V is one-time F11 Cruzer.

@@ -268,8 +268,8 @@ RSOD**). Then remaining E4 polish + a real distro installer.
 ([`runbooks/r640_idrac_dedicated.md`](runbooks/r640_idrac_dedicated.md)).
 Do **not** take the PHY from APE. PRE-EBS peek EFI `42b42c99` showed host
 GPHY `7949` while SNP `:3a` had a lease. Keep `NO_PHYLOCK` / skip BMCR
-when NCSI. Picker prefers live `LSTATUS` (unused LOM jack) over APE MAC
-`:3a`. Reject `42b42c99`, `ec08c00f`, `1404f055`, and take-PHY
+when NCSI. Picker prefers live `LSTATUS` over APE MAC `:3a`. Station on a
+live GPHY is the BAR0 MAC (Ubuntu `eno3` `:38`), not SNP `:3a`. Reject `42b42c99`, `ec08c00f`, `1404f055`, and take-PHY
 (`ape-nophylock=no`). Cable dedicated iDRAC **before** switching NIC
 Selection. Curl only if `link=up`. Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

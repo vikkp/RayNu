@@ -70,7 +70,7 @@ fn pick_r640_peek_39_vs_snp_3a_tries_func0_then_func1() {
     assert_eq!(n, 2);
     assert_eq!(ord[0].func, 0);
     assert_eq!(ord[1].func, 1);
-    assert_eq!(station_mac(peek_func1, snp), snp);
+    assert_eq!(station_mac(peek_func1, snp, false), snp);
 }
 
 #[test]
@@ -106,13 +106,21 @@ fn e3b_path_idrac_dedicated_is_locked() {
 #[test]
 fn station_mac_prefers_non_zero_lease() {
     let peeked = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
-    assert_eq!(station_mac(peeked, MAC_FUNC1), MAC_FUNC1);
+    assert_eq!(station_mac(peeked, MAC_FUNC1, false), MAC_FUNC1);
 }
 
 #[test]
 fn station_mac_falls_back_to_peek_when_lease_zero() {
     let peeked = [0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x39];
-    assert_eq!(station_mac(peeked, [0; 6]), peeked);
+    assert_eq!(station_mac(peeked, [0; 6], false), peeked);
+}
+
+#[test]
+fn station_mac_live_gphy_keeps_eno3_not_ape_snp() {
+    let peeked_eno3 = MAC_FUNC0;
+    let ape_snp = MAC_FUNC1;
+    assert_eq!(station_mac(peeked_eno3, ape_snp, true), peeked_eno3);
+    assert_eq!(station_mac(peeked_eno3, ape_snp, false), ape_snp);
 }
 
 #[test]
@@ -214,6 +222,8 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("phy_addr = u32::from(func) + 1"));
     assert!(src.contains("tg3_write_sig_pre_reset"));
     assert!(src.contains("fn station_mac("));
+    assert!(src.contains("station live LOM MAC"));
+    assert!(src.contains("not APE SNP"));
     assert!(src.contains("BMSR_LSTATUS"));
     assert!(src.contains("RX_MODE_PROMISC"));
     assert!(src.contains("link=up"));

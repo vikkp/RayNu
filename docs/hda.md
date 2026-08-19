@@ -258,10 +258,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | b1ba054 |
-| Summary | E3b path locked: Dedicated iDRAC NIC + host LOM jack. LSTATUS-first picker. HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (operator cabling) |
-| Gates touched | `e3b_path_idrac_dedicated`; `HOST-NIC-HTTP-OK` not claimed |
+| Commit | PENDING |
+| Summary | Ubuntu `eno3` `:38` is the live LOM. Station = live GPHY MAC, not APE `:3a`. HTTP-OK not claimed |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (F11 after Dedicated) |
+| Gates touched | `station_mac(..., live_gphy)`; `HOST-NIC-HTTP-OK` not claimed |
 | Months Δ | 1.5 held |
 
 ---
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | b1ba054 | 1.5 | 88 | E3b path locked: Dedicated iDRAC + host LOM; LSTATUS-first picker; HTTP-OK not claimed |
+| 2026-08-19 | PENDING | 1.5 | 88 | Ubuntu `eno3` `:38` live LOM; station = GPHY MAC not APE `:3a`; HTTP-OK not claimed |
 | 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
 | 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
 | 2026-08-19 | b5ea069 | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
@@ -346,7 +346,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; keep APE PHY; E3b = Dedicated iDRAC + host LOM
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     cable dedicated iDRAC first; NIC Selection=Dedicated; host mgmt on unused LOM jack; curl only if link=up
+Next move:     F11 Cruzer; expect station live LOM `:38` (eno3); curl COM2 lease only if link=up
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
 Preserve:      releases/v0.1.0-adr013-baseline

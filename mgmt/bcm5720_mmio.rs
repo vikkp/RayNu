@@ -34,8 +34,9 @@
 //! analog — stealing it can drop iDRAC. Linux `tg3` keeps NO_PHYLOCK for
 //! `APE_HAS_NCSI`. **E3b path (locked):** iDRAC NIC Selection = Dedicated;
 //! host mgmt Ethernet on a LOM jack (not the iDRAC dedicated RJ45). Prefer
-//! live `BMSR_LSTATUS` over the APE MAC `:3a`. Do not HTTP-listen when
-//! `LSTATUS` is clear. Station stays the SNP lease MAC. Wait `BMSR_LSTATUS` and set
+//! live `BMSR_LSTATUS` over the APE MAC `:3a`. Station is the live LOM BAR0
+//! MAC when that GPHY has copper (Ubuntu `eno3` `:38`); do not overlay SNP
+//! `:3a`. Do not HTTP-listen when `LSTATUS` is clear. Wait `BMSR_LSTATUS` and set
 //! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
@@ -495,14 +496,19 @@ pub fn pick_bcm5720_pci(cands: &[(u8, u8, u8, [u8; 6])], want: [u8; 6]) -> Optio
 /// Station address for smoltcp and `MAC_ADDR_*` after reset.
 ///
 /// INVARIANTS:
-/// - Non-zero `lease` always wins (PRE-EBS SNP DHCP/ARP identity)
-/// - All-zero `lease` → `peeked` BAR0 MAC
+/// - `live_gphy` → BAR0 `peeked` (Dedicated iDRAC + host LOM; Ubuntu `eno3` `:38`)
+/// - Else non-zero `lease` wins (legacy SNP-on-APE `:3a`)
+/// - All-zero `lease` and no live GPHY → `peeked`
 /// - Never panics
 ///
-/// Iron 2026-08-18: SNP leased `:3a` on `01:00.1`; BAR0 peek was `:39`.
-/// Programming the peek left ARP on the wrong station → curl timeout.
-pub fn station_mac(peeked: [u8; 6], lease: [u8; 6]) -> [u8; 6] {
-    if lease.iter().any(|&b| b != 0) {
+/// Iron 2026-08-19: cable moved to Ubuntu `eno3` = `b0:26:28:5c:5a:38`
+/// (`01:00.0`). Do not overlay parked SNP/APE `:3a` on that jack.
+/// Iron 2026-08-18: SNP leased `:3a` while BAR0 peeked `:39` — lease won
+/// only when the host GPHY had no `LSTATUS`.
+pub fn station_mac(peeked: [u8; 6], lease: [u8; 6], live_gphy: bool) -> [u8; 6] {
+    if live_gphy {
+        peeked
+    } else if lease.iter().any(|&b| b != 0) {
         lease
     } else {
         peeked
@@ -1309,8 +1315,20 @@ unsafe fn hw_init(
     crate::boot::serial::write_byte(b'\n');
 
     let mac_before = read_mac(mmio);
-    let station = station_mac(mac_before, prefer_mac);
-    if station != mac_before {
+    bind_ape(bus, dev, func);
+    let pre_bmsr = peek_phy_bmsr(mmio, func);
+    let live = bmsr_link_up(pre_bmsr);
+    let station = station_mac(mac_before, prefer_mac, live);
+    if live {
+        serial_step("boot: HOST-NIC BCM5720 station live LOM MAC=");
+        write_mac(station);
+        if prefer_mac != station && prefer_mac.iter().any(|&b| b != 0) {
+            serial_step(" (not APE SNP ");
+            write_mac(prefer_mac);
+            serial_step(")");
+        }
+        serial_step("\n");
+    } else if station != mac_before {
         serial_step("boot: HOST-NIC BCM5720 station SNP-lease MAC=");
         write_mac(station);
         serial_step(" (BAR0 peeked ");
@@ -1318,8 +1336,6 @@ unsafe fn hw_init(
         serial_step(")\n");
     }
 
-    bind_ape(bus, dev, func);
-    let pre_bmsr = peek_phy_bmsr(mmio, func);
     let nic_cfg = sram_read(bus, dev, func, NIC_SRAM_DATA_CFG);
     serial_step("boot: HOST-NIC BCM5720 pre-reset bmsr=");
     write_hex_u16(pre_bmsr);
