@@ -39,8 +39,9 @@ smoke is **not** first light — only serial from this box closes
 2. Capture first light per [`r640_boot.md`](r640_boot.md).
 
 - [ ] Copy `r640-hypervisor.efi` to media as `\EFI\BOOT\BOOTX64.EFI`
-      (prefer `./tools/make-boot-media.sh` → map `.img` in iDRAC; see
-      [`media_maker.md`](media_maker.md)).
+      (lab: `./tools/flash-cruzer-esp.sh` on **raynuvsrv1**, Cruzer stays in
+      front USB 2 — [`r640_cruzer_flash.md`](r640_cruzer_flash.md); else
+      `./tools/make-boot-media.sh` → iDRAC `.img`, [`media_maker.md`](media_maker.md)).
 - [ ] Open iDRAC virtual console **before** reboot; prepare to save the serial
       log.
 - [ ] One-time boot to USB / virtual media (F11 / iDRAC next-boot).

@@ -29,6 +29,18 @@ if [[ ! -f "$ROOT/docs/runbooks/r640_field_guide.md" ]]; then
   echo "error: missing docs/runbooks/r640_field_guide.md" >&2
   exit 1
 fi
+if [[ ! -f "$ROOT/docs/runbooks/r640_cruzer_flash.md" ]]; then
+  echo "error: missing docs/runbooks/r640_cruzer_flash.md" >&2
+  exit 1
+fi
+if [[ ! -f "$ROOT/tools/flash-cruzer-esp.sh" ]]; then
+  echo "error: missing tools/flash-cruzer-esp.sh" >&2
+  exit 1
+fi
+if [[ ! -f "$ROOT/docs/evidence/r640/2026-08-19-raynuvsrv1-cruzer.md" ]]; then
+  echo "error: missing raynuvsrv1 Cruzer census evidence" >&2
+  exit 1
+fi
 if [[ ! -f "$ROOT/docs/evidence/r640/TEMPLATE.md" ]]; then
   echo "error: missing docs/evidence/r640/TEMPLATE.md" >&2
   exit 1
@@ -72,6 +84,9 @@ fi
 
 echo "==> cargo test m7_5_r640_scaffold_passes (scaffold gate)"
 cargo test --lib m7_5_r640_scaffold_passes -- --nocapture
+
+echo "==> flash-cruzer-esp --self-test"
+"$ROOT/tools/flash-cruzer-esp.sh" --self-test
 
 # Honesty: this script must not emit the iron marker on stdout.
 echo "$SCAFFOLD"

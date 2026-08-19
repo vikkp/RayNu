@@ -44,6 +44,13 @@ sha256sum -c SHA256SUMS
 
 ## USB (FAT32 EFI System Partition)
 
+**Lab Cruzer already in front USB 2:** do **not** pull the stick. Flash
+replace-only from Ubuntu **raynuvsrv1** —
+[`r640_cruzer_flash.md`](r640_cruzer_flash.md) /
+`./tools/flash-cruzer-esp.sh`. Identify by `LABEL=RAYNUV`, never `/dev/sdc`.
+
+Fresh stick (destructive image) only:
+
 1. Format a USB stick as **FAT32** with an EFI System Partition layout.  
 2. Copy `r640-hypervisor.efi` to `\EFI\BOOT\BOOTX64.EFI`  
    (or `\EFI\BOOT\r640-hypervisor.efi` and select it in the boot manager).  

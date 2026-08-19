@@ -171,10 +171,12 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 PRE-EBS SNP lease. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
-**Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
-ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
-`auth.token` if present) alone. After `RAYNU-V-R640-BOOT-OK`, curl the
-**same** SNP lease on the host LAN (not iDRAC):
+**Iron flash (replace-only):** do **not** walk the Cruzer. On **raynuvsrv1**
+run [`r640_cruzer_flash.md`](r640_cruzer_flash.md) /
+`./tools/flash-cruzer-esp.sh` (label `RAYNUV`, never `/dev/sdc`). Copies only
+`EFI/BOOT/BOOTX64.EFI`. Leave `EFI/RayNu/installdisk.bin` (and `auth.token`
+if present) alone. After `RAYNU-V-R640-BOOT-OK`, curl the **same** SNP lease
+on the host LAN (not iDRAC):
 
 ```
 curl -sS "http://<lease>:8443/"
