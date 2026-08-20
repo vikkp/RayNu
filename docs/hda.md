@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: PENDING
-last_commit_short: PENDING
+last_commit: 02e52c1030ed223c2eeeb513f1bbc7e62ad0adbf
+last_commit_short: 02e52c1
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -259,7 +259,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 02e52c1 |
 | Summary | ADR-013 amended: Stage 1 not complete while listen is post-`VMXOFF`; Phase D stays closed |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
 | Gates touched | none (architecture honesty; P0-13 opened) |
@@ -286,7 +286,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-20 | PENDING | 0.5 | 93 | ADR-013 amended: Stage 1 residual = coexist + iron E + F; Phase D first-accept stays closed |
+| 2026-08-20 | 02e52c1 | 0.5 | 93 | ADR-013 amended: Stage 1 residual = coexist + iron E + F; Phase D first-accept stays closed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
 | 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
