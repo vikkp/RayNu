@@ -8,7 +8,7 @@
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
-- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. Do not claim from host or QEMU. **Phase F (in tree):** native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (guests stay alive). Post-`VMXOFF` idle is fallback only.
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. **Phase F closed on iron** the same day: native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (G0 scheduled; G1–G3 parked). Do not claim from host or QEMU.
 
 ## Story
 
@@ -217,6 +217,10 @@ Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
 `BOOT-OK` (G0 Linux still scheduled; G1–G3 SHELL stubs parked). SPA
 create/start is the mgmt table only — it does **not** VMLAUNCH a new
 guest. If coexist cannot arm, fallback is Phase D idle after `VMXOFF`.
+Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
+`resume G0 (VMX on; G1–G3 parked)`, repeated `HOST-NIC-HTTP-OK` /
+`AuthAllowed`, no `sched VMPTRLD failed`. Evidence:
+[`2026-08-20-phase-f-coexist-ok.md`](../evidence/r640/2026-08-20-phase-f-coexist-ok.md).
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
 on `:38` / `10.99.99.144:8443`. Evidence:
