@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: fc7ed7004fdfac9f9c2a4759e149eaebbb460f69
-last_commit_short: fc7ed70
+last_commit: 005f25d6ad3e9d22168ee9d89411a4beb93ae70b
+last_commit_short: 005f25d
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | 005f25d |
 | Summary | Ring wrap closed (`rx_ok` 0→70, wrap 24→0). `tx_prod=0`: Linux LE `GRC_MODE_BSWAP_DATA` + first-RX dump + `Checksum::Tx`. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (smoltcp/TX) |
 | Gates touched | `grc_mode_le_host`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-20 | PENDING | 1.5 | 88 | Ring wrap closed (`rx_ok` 0→70); `tx_prod=0`; GRC BSWAP_DATA + RX dump; HTTP-OK not claimed |
+| 2026-08-20 | 005f25d | 1.5 | 88 | Ring wrap closed (`rx_ok` 0→70); `tx_prod=0`; GRC BSWAP_DATA + RX dump; HTTP-OK not claimed |
 | 2026-08-20 | fc7ed70 | 1.5 | 88 | CORECLK DMA closed; RX wrap replay (`rx_ok` +65536); `ring_idx`; HTTP-OK not claimed |
 | 2026-08-19 | de52aaf | 1.5 | 88 | Live LOM `:38` `link=up`; skip-CORECLK `26573eb1` no native accept; CORECLK for DMA; HTTP-OK not claimed |
 | 2026-08-19 | be6bed5 | 1.5 | 88 | Ubuntu `eno3` `:38` live LOM; station = GPHY MAC not APE `:3a`; HTTP-OK not claimed |
