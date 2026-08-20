@@ -302,7 +302,7 @@ fn listen_loop<D: Device>(
                 write_u16_dec(port);
                 serial::write_line("/  (native BCM5720; SNP is dead)");
                 serial::write_line(
-                    "boot: HINT — first RX dumps dst/etype; expect to=bcast etype=0806 on ARP",
+                    "boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)",
                 );
                 print_bcm5720_poll_diag();
             }
@@ -325,6 +325,7 @@ fn listen_loop<D: Device>(
     let mut announced = false;
     let mut rx_len: usize = 0;
     let mut last_diag: i64 = 0;
+    let mut last_rx_drop: u32 = 0;
     let deadline = match when {
         ListenWhen::AfterEbs => HOST_NIC_LISTEN_MS as i64,
         ListenWhen::AfterBootOk => i64::MAX / 4,
@@ -425,9 +426,16 @@ fn listen_loop<D: Device>(
 
         millis += 1;
         tsc_spin_ms(1);
+        // E3b closed: do not spam `poll rx_prod=` every 5s. Sample drops only.
         if nic_tag == "BCM5720" && millis - last_diag >= 5000 {
             last_diag = millis;
-            print_bcm5720_poll_diag();
+            if let Some(d) = crate::mgmt::bcm5720_mmio::bcm5720_poll_diag() {
+                if d.rx_drop > last_rx_drop {
+                    serial::write_line("boot: WARN — HOST-NIC BCM5720 rx_drop rose");
+                    print_bcm5720_poll_diag();
+                }
+                last_rx_drop = d.rx_drop;
+            }
         }
     }
 

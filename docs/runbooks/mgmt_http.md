@@ -210,9 +210,9 @@ then `pre-EBS cand`. After EBS: `ape-nophylock=yes` / `keep-ape-phy=yes` /
 `inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)` / `fw-magic=` and
 `HINT — keep APE PHY (iDRAC NCSI); will not take phylock`.
 Do **not** flash an EFI that prints `ape-nophylock=no` or
-`inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`.
-COM2 prints `poll rx_prod=` every 5s. `rx_prod` is 0..31; `rx_ok` must **not**
-jump by ~65536 between polls (that was unmasked ring wrap / stale BD replay).
+`inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`. One
+`poll rx_prod=` snapshot at listen start, then COM2 stays quiet except TCP
+accept / HTTP-OK (and a WARN if `rx_drop` rises).
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
 on `:38` / `10.99.99.144:8443`. Evidence:

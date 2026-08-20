@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: a87acc6b9e883c0a33c2815d60e38d37c1c8699b
-last_commit_short: a87acc6
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -258,11 +258,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | a87acc6 |
-| Summary | E3b CLOSED: `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38` (`grc=bswap+wswap`). SPA + AuthAllowed. Guest path green |
-| Everest impact | months 1.5→0.5; ETA 2026-10→2026-09; overall 88→93; summit UI 85→94 |
-| Gates touched | `RAYNU-V-M7-HOST-NIC-HTTP-OK` (iron) |
-| Months Δ | 1.5→0.5 |
+| Commit | PENDING |
+| Summary | Quiet COM2 after E3b: one BCM5720 `poll rx_prod=` snapshot at listen start; 5s poll prints only if `rx_drop` rises |
+| Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
+| Gates touched | none (COM2 polish; HTTP-OK / TCP accept still print) |
+| Months Δ | 0.5→0.5 |
 
 ---
 
@@ -274,7 +274,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5 stamps closed; Everest residual E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | PENDING | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
 | 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
 | 2026-08-20 | 005f25d | 1.5 | 88 | Ring wrap closed (`rx_ok` 0→70); `tx_prod=0`; GRC BSWAP_DATA + RX dump; HTTP-OK not claimed |
 | 2026-08-20 | fc7ed70 | 1.5 | 88 | CORECLK DMA closed; RX wrap replay (`rx_ok` +65536); `ring_idx`; HTTP-OK not claimed |
