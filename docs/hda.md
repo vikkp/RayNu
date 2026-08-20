@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-19
-last_commit: be6bed5153e27cd39e4eaf2d05d98e20c99db264
-last_commit_short: be6bed5
+last_commit: de52aafe42b86e1fcf0a3bf78f3804efeda84553
+last_commit_short: de52aaf
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 1.5
@@ -258,7 +258,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | PENDING |
+| Commit | de52aaf |
 | Summary | Live LOM `:38` `link=up` closed wrong-port. Skip-CORECLK EFI `26573eb1` no native accept. Inherit analog + CORECLK for DMA. HTTP-OK not claimed |
 | Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (native DMA) |
 | Gates touched | `inherit SNP analog; CORECLK_RESET for DMA`; `HOST-NIC-HTTP-OK` not claimed |
@@ -284,7 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-19 | PENDING | 1.5 | 88 | Live LOM `:38` `link=up`; skip-CORECLK `26573eb1` no native accept; CORECLK for DMA; HTTP-OK not claimed |
+| 2026-08-19 | de52aaf | 1.5 | 88 | Live LOM `:38` `link=up`; skip-CORECLK `26573eb1` no native accept; CORECLK for DMA; HTTP-OK not claimed |
 | 2026-08-19 | be6bed5 | 1.5 | 88 | Ubuntu `eno3` `:38` live LOM; station = GPHY MAC not APE `:3a`; HTTP-OK not claimed |
 | 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
 | 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
