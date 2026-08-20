@@ -4,9 +4,10 @@ use super::{
     cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, inherit_skips_chip_reset,
     inherit_snp_phy, keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes,
     pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus,
-    pick_bcm5720_pci, pick_bcm5720_try_order, rx_bd_packet_len, skip_bmcr_reset,
-    skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac, Bcm5720PickReason,
-    BCM5720_DEVICE, BCM5720_VENDOR, ETH_FCS_LEN, FRAME_MAX, RX_LEN_MAX_HW,
+    pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_return_pending,
+    skip_bmcr_reset, skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac,
+    Bcm5720PickReason, BCM5720_DEVICE, BCM5720_VENDOR, ETH_FCS_LEN, FRAME_MAX, RING, RING_MASK,
+    RX_LEN_MAX_HW,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -244,6 +245,8 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("inherit SNP analog"));
     assert!(src.contains("CORECLK_RESET for DMA"));
     assert!(src.contains("fn inherit_skips_chip_reset("));
+    assert!(src.contains("fn ring_idx("));
+    assert!(src.contains("fn rx_return_pending("));
     assert!(src.contains("HOSTCC_MODE_NOW"));
     assert!(src.contains("ETH_FCS_LEN"));
     assert!(src.contains("pre-reset bmsr"));
@@ -308,6 +311,28 @@ fn inherit_snp_phy_follows_bmsr_lstatus() {
 #[test]
 fn inherit_skips_chip_reset_is_false() {
     assert!(!inherit_skips_chip_reset());
+}
+
+#[test]
+fn ring_idx_wraps_at_32() {
+    assert_eq!(RING, 32);
+    assert_eq!(RING_MASK, 31);
+    assert_eq!(ring_idx(0), 0);
+    assert_eq!(ring_idx(31), 31);
+    assert_eq!(ring_idx(32), 0);
+    assert_eq!(ring_idx(32 + 13), 13);
+}
+
+#[test]
+fn rx_return_pending_matches_iron_wrap() {
+    // Caught up.
+    assert!(!rx_return_pending(28, 28));
+    // Four more frames wrap hardware producer 28 → 0.
+    assert!(rx_return_pending(0, 28));
+    // Unmasked software 32 vs hardware 13 must not look "behind by 64K".
+    assert!(rx_return_pending(13, 32));
+    assert!(!rx_return_pending(13, 13));
+    assert!(!rx_return_pending(13, 13 + 32));
 }
 
 #[test]

@@ -44,6 +44,9 @@
 //! DMA steal is closed. Do not HTTP-listen when `LSTATUS` is clear. Wait
 //! `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
 //! `RX_MODE_PROMISC` is on. Linux `tg3_rx` length includes FCS (strip 4).
+//! RX/TX ring indices wrap at RING (Linux `rx_ret_ring_mask`). Iron COM2
+//! after CORECLK: `rx_prod` stayed 0..31 while unmasked `rx_ok` jumped ~65536
+//! per poll — stale BD replay, no TCP accept.
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
 
@@ -60,6 +63,8 @@ pub const BCM5720_VENDOR: u16 = IRON_CENSUS_VENDOR;
 pub const BCM5720_DEVICE: u16 = IRON_CENSUS_DEVICE;
 
 pub const RING: usize = 32;
+/// Linux `tg3` `rx_ret_ring_mask`. Hardware producer/consumer wrap at RING.
+pub const RING_MASK: u16 = (RING as u16) - 1;
 pub const PKT: usize = 2048;
 pub const FRAME_MAX: usize = 1514;
 /// Linux `ETH_FCS_LEN`. Tigon3 RX BD length includes the FCS.
@@ -846,6 +851,26 @@ pub fn rx_bd_packet_len(idx_len: u32, type_flags: u32, err_vlan: u32) -> Option<
     Some(n)
 }
 
+/// Wrap a Tigon3 ring index. RING is a power of two.
+///
+/// INVARIANTS:
+/// - Result is in `0..RING`
+/// - Never panics
+pub fn ring_idx(i: u16) -> u16 {
+    i & RING_MASK
+}
+
+/// True when the RX return producer is ahead of the software consumer.
+/// Both wrap at RING (iron COM2 `rx_prod` stayed 0..31; unmasked consumer
+/// ran to 65536 and replayed stale BDs).
+///
+/// INVARIANTS:
+/// - True iff `ring_idx(hw_prod) != ring_idx(sw_cons)`
+/// - Never panics
+pub fn rx_return_pending(hw_prod: u16, sw_cons: u16) -> bool {
+    ring_idx(hw_prod) != ring_idx(sw_cons)
+}
+
 /// Parse a mocked 32-byte RX BD (little-endian packed layout).
 pub fn parse_mocked_rx_bd_bytes(raw: &[u8; 32]) -> Option<usize> {
     let idx_len = u32::from_le_bytes([raw[8], raw[9], raw[10], raw[11]]);
@@ -980,6 +1005,7 @@ static RX_DROP: AtomicU32 = AtomicU32::new(0);
 pub struct Bcm5720PollDiag {
     pub rx_prod: u16,
     pub rx_cons: u16,
+    pub tx_prod: u16,
     pub tx_cons: u16,
     pub rx_ok: u32,
     pub rx_drop: u32,
@@ -1045,9 +1071,10 @@ pub fn bcm5720_poll_diag() -> Option<Bcm5720PollDiag> {
         let tx_cons =
             unsafe { core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].tx_consumer)) };
         Bcm5720PollDiag {
-            rx_prod,
-            rx_cons: n.rx_rcb_ptr,
-            tx_cons,
+            rx_prod: ring_idx(rx_prod),
+            rx_cons: ring_idx(n.rx_rcb_ptr),
+            tx_prod: ring_idx(n.tx_prod),
+            tx_cons: ring_idx(tx_cons),
             rx_ok: RX_OK.load(Ordering::Relaxed),
             rx_drop: RX_DROP.load(Ordering::Relaxed),
         }
@@ -2402,26 +2429,26 @@ unsafe fn read_mac(mmio: u64) -> [u8; 6] {
 unsafe fn rx_one(n: &mut NicState, dma: &mut DmaArena, out: &mut [u8]) -> Option<usize> {
     kick_hostcc(n.mmio);
     let hw_prod = core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].rx_producer));
-    if hw_prod == n.rx_rcb_ptr {
+    if !rx_return_pending(hw_prod, n.rx_rcb_ptr) {
         return None;
     }
-    let i = n.rx_rcb_ptr as usize % RING;
+    let i = ring_idx(n.rx_rcb_ptr) as usize;
     let idx_len = core::ptr::read_volatile(core::ptr::addr_of!(dma.rx_rcb[i].idx_len));
     let flags = core::ptr::read_volatile(core::ptr::addr_of!(dma.rx_rcb[i].type_flags));
     let err = core::ptr::read_volatile(core::ptr::addr_of!(dma.rx_rcb[i].err_vlan));
     let opaque = core::ptr::read_volatile(core::ptr::addr_of!(dma.rx_rcb[i].opaque));
-    n.rx_rcb_ptr = n.rx_rcb_ptr.wrapping_add(1);
+    n.rx_rcb_ptr = ring_idx(n.rx_rcb_ptr.wrapping_add(1));
     mailbox_write(n.mmio, MAILBOX_RCVRET_CON_IDX_0, u32::from(n.rx_rcb_ptr));
     let Some(ncopy) = rx_bd_packet_len(idx_len, flags, err) else {
         RX_DROP.fetch_add(1, Ordering::Relaxed);
-        n.rx_std_prod = (n.rx_std_prod + 1) % RING as u16;
+        n.rx_std_prod = ring_idx(n.rx_std_prod.wrapping_add(1));
         mailbox_write(n.mmio, MAILBOX_RCV_STD_PROD_IDX, u32::from(n.rx_std_prod));
         return None;
     };
-    let std = (opaque & 0xFFFF) as usize % RING;
+    let std = ring_idx((opaque & 0xFFFF) as u16) as usize;
     let ncopy = ncopy.min(out.len()).min(PKT);
     core::ptr::copy_nonoverlapping(dma.rx_buf[std].as_ptr(), out.as_mut_ptr(), ncopy);
-    n.rx_std_prod = (n.rx_std_prod + 1) % RING as u16;
+    n.rx_std_prod = ring_idx(n.rx_std_prod.wrapping_add(1));
     mailbox_write(n.mmio, MAILBOX_RCV_STD_PROD_IDX, u32::from(n.rx_std_prod));
     RX_OK.fetch_add(1, Ordering::Relaxed);
     Some(ncopy)
@@ -2429,17 +2456,17 @@ unsafe fn rx_one(n: &mut NicState, dma: &mut DmaArena, out: &mut [u8]) -> Option
 
 unsafe fn tx_one(n: &mut NicState, dma: &mut DmaArena, frame: &[u8]) -> bool {
     let hw_cons = core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].tx_consumer));
-    n.tx_cons = hw_cons;
-    let prod = n.tx_prod as usize % RING;
-    let cons = n.tx_cons as usize % RING;
-    if prod.wrapping_add(1) % RING == cons {
+    n.tx_cons = ring_idx(hw_cons);
+    let prod = ring_idx(n.tx_prod);
+    let cons = n.tx_cons;
+    if ring_idx(prod.wrapping_add(1)) == cons {
         return false;
     }
     let len = frame.len().min(PKT).min(FRAME_MAX);
     if len == 0 {
         return false;
     }
-    let i = n.tx_prod as usize % RING;
+    let i = prod as usize;
     core::ptr::copy_nonoverlapping(frame.as_ptr(), dma.tx_buf[i].as_mut_ptr(), len);
     let addr = dma.tx_buf[i].as_ptr() as u64;
     core::ptr::write_volatile(
@@ -2453,7 +2480,7 @@ unsafe fn tx_one(n: &mut NicState, dma: &mut DmaArena, frame: &[u8]) -> bool {
         core::ptr::addr_of_mut!(dma.tx[i].len_flags),
         (len as u32) << TXD_LEN_SHIFT | TXD_FLAG_END,
     );
-    n.tx_prod = n.tx_prod.wrapping_add(1);
+    n.tx_prod = ring_idx(prod.wrapping_add(1));
     mailbox_write(n.mmio, MAILBOX_SNDHOST_PROD_IDX_0, u32::from(n.tx_prod));
     true
 }
@@ -2591,6 +2618,7 @@ fn write_hex_u32(n: u32) {
 const _: () = assert!(core::mem::size_of::<HwStatus>() == TG3_HW_STATUS_SIZE);
 const _: () = assert!(core::mem::size_of::<RxBd>() == 32);
 const _: () = assert!(core::mem::size_of::<TxBd>() == 16);
+const _: () = assert!(RING != 0 && RING & (RING - 1) == 0);
 
 #[cfg(test)]
 #[path = "bcm5720_mmio_test.rs"]

@@ -447,3 +447,29 @@ rings. Linux `tg3_open` always `tg3_chip_reset`. Next EFI: inherit analog
 `poll rx_prod=`. Keep `ape-nophylock=yes`. Do **not** take the PHY.
 Do **not** claim `HOST-NIC-HTTP-OK`. Reject skip-CORECLK EFI `26573eb1`.
 
+### 2026-08-20 addendum — CORECLK DMA up; RX ring wrap replay
+
+CORECLK-for-DMA EFI (HEAD `d598701` / feature `de52aaf`, artifact
+`9388027630`) ran the intended path. Complete COM2:
+
+```
+inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)
+reset… ape-grc=yes pci-restore=64
+fw-magic=yes
+link=up speed=1000 duplex=full
+rings armed
+idle listening on 10.99.99.144:8443
+poll rx_prod=7 rx_cons=0 tx_cons=0 rx_ok=0 rx_drop=0
+poll rx_prod=28 rx_cons=28 tx_cons=0 rx_ok=28
+poll rx_prod=13 rx_cons=13 tx_cons=0 rx_ok=65549 rx_drop=0
+… rx_ok 131086, 196610, 262147, 327709 …
+```
+
+`rx_prod` stayed **0..31**. Unmasked software consumer compared 32 against 13
+and replayed stale return BDs (~65536 per 5s). `tx_cons=0`. No
+`HOST-NIC TCP accept`. CORECLK DMA is **closed**. Next EFI: Linux `tg3`
+`rx_ret_ring_mask` (`ring_idx` / `RING_MASK`). Keep `ape-nophylock=yes`.
+Do **not** take the PHY. Do **not** claim `HOST-NIC-HTTP-OK`.
+Reject skip-CORECLK `26573eb1`. Do not flash take-PHY.
+
+

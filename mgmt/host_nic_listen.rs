@@ -444,6 +444,8 @@ fn print_bcm5720_poll_diag() {
     write_u16_dec(d.rx_prod);
     serial::write_str(" rx_cons=");
     write_u16_dec(d.rx_cons);
+    serial::write_str(" tx_prod=");
+    write_u16_dec(d.tx_prod);
     serial::write_str(" tx_cons=");
     write_u16_dec(d.tx_cons);
     serial::write_str(" rx_ok=");
