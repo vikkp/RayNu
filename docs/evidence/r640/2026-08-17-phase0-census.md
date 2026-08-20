@@ -409,3 +409,41 @@ Reject peek EFI `42b42c99` (and `ec08c00f`). **Do not flash take-PHY**
 (`fb96cdb` / `ape-nophylock=no`).
 
 Preserve kit: `releases/v0.1.0-adr013-baseline`.
+
+### 2026-08-19 addendum — live LOM `:38` `link=up`; skip-CORECLK no native accept
+
+Live-LOM station EFI (`1217024` bytes, SHA
+`26573eb1e02973e2904e30f344269f324c7e78a7f342551e8357194a6e66f713`,
+HEAD `f68f61f` / feature `be6bed5`) bound **host GPHY `:38`**. Complete COM2:
+
+```
+SNP residual MAC=b0:26:28:5c:5a:38
+SNP lease 10.99.99.144/24
+pre-EBS cand pci=01:00.00 MAC=…:38 bmsr=796d
+pre-EBS cand pci=01:00.01 MAC=…:39 bmsr=7949
+SNP HTTP exchange ok
+RAYNU-V-M7-UEFI-HTTP-OK
+post-EBS bring-up (keep analog before guest path)
+cand pci=01:00.00 MAC=…:38 bmsr=796d
+try pci=01:00.00 … link-up BMSR
+station live LOM MAC=b0:26:28:5c:5a:38
+ape-nophylock=yes keep-ape-phy=yes
+inherit SNP PHY (skip CORECLK_RESET)
+link=up speed=1000 duplex=full
+rings armed (poll-mode, MSI-X off)
+RAYNU-V-R640-BOOT-OK
+reuse (armed post-EBS)
+idle listening on 10.99.99.144:8443
+CURL NOW → http://10.99.99.144:8443/  (native BCM5720; SNP is dead)
+```
+
+No `HOST-NIC TCP accept`, no `HOST-NIC HTTP exchange ok`, no
+`RAYNU-V-M7-HOST-NIC-HTTP-OK`. PRE-EBS SNP HTTP on `:38` is **not** E3b.
+
+Wrong-port is **closed** (`:38` / `bmsr=796d` / `link=up`). Skipping
+`CORECLK_RESET` because analog was live left UNDI RX/TX RISC on firmware
+rings. Linux `tg3_open` always `tg3_chip_reset`. Next EFI: inherit analog
+(skip BMCR / AN restart) **and** `CORECLK_RESET` for DMA; COM2
+`poll rx_prod=`. Keep `ape-nophylock=yes`. Do **not** take the PHY.
+Do **not** claim `HOST-NIC-HTTP-OK`. Reject skip-CORECLK EFI `26573eb1`.
+

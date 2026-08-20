@@ -14,8 +14,9 @@
 //! (`drivers/net/ethernet/broadcom/tg3.c`) and BCM571X/BCM5720 Programmer’s
 //! Guide ch. 7. BCM5720 (`14e4:165f`) is **not** `bnxt` — that driver is
 //! BCM57416 10G. PRE-EBS SNP already has copper; peek `BMSR` **before**
-//! `CORECLK_RESET` and inherit that link when `LSTATUS` is set (do not
-//! BMCR_RESET a live PHY). Iron 2026-08-19: `phy_reset=pre` then
+//! `CORECLK_RESET`. Inherit SNP analog when `LSTATUS` is set (do not
+//! `BMCR_RESET` a live PHY) but still `tg3_chip_reset` so DMA leaves UNDI.
+//! Iron 2026-08-19: `phy_reset=pre` then
 //! `CORECLK_RESET` still `bmsr=7949` / `lpa=0000` with working MDIO
 //! (`ape-lock=yes id=0362:5f60`). Skip-`CORECLK_RESET` then skip-`BMCR_RESET`
 //! still `cand bmsr=7949` immediately after EBS with `ape-ncsi=yes`.
@@ -36,16 +37,21 @@
 //! host mgmt Ethernet on a LOM jack (not the iDRAC dedicated RJ45). Prefer
 //! live `BMSR_LSTATUS` over the APE MAC `:3a`. Station is the live LOM BAR0
 //! MAC when that GPHY has copper (Ubuntu `eno3` `:38`); do not overlay SNP
-//! `:3a`. Do not HTTP-listen when `LSTATUS` is clear. Wait `BMSR_LSTATUS` and set
-//! `MAC_MODE` MII vs GMII (`tg3_adjust_link`). `RX_MODE_PROMISC` is on.
+//! `:3a`. Iron 2026-08-19 EFI `26573eb1`: SNP residual MAC `:38`, lease
+//! `10.99.99.144`, `pre-EBS cand …:38 bmsr=796d`, `inherit SNP PHY (skip
+//! CORECLK_RESET)`, `link=up speed=1000 duplex=full`, rings armed, AfterBootOk
+//! listen never printed `HOST-NIC TCP accept`. Wrong-port is closed. Skip-CORECLK
+//! DMA steal is closed. Do not HTTP-listen when `LSTATUS` is clear. Wait
+//! `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
+//! `RX_MODE_PROMISC` is on. Linux `tg3_rx` length includes FCS (strip 4).
 //! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
 //! only.
 
 use crate::mgmt::pci_census::{pci_id_is_iron_census, IRON_CENSUS_DEVICE, IRON_CENSUS_VENDOR};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 #[cfg(feature = "uefi-bin")]
-use core::sync::atomic::{AtomicU32, AtomicU64};
+use core::sync::atomic::AtomicU64;
 
 #[cfg(feature = "uefi-bin")]
 use crate::mgmt::e1000_mmio::{pci_read32, pci_write32};
@@ -56,6 +62,10 @@ pub const BCM5720_DEVICE: u16 = IRON_CENSUS_DEVICE;
 pub const RING: usize = 32;
 pub const PKT: usize = 2048;
 pub const FRAME_MAX: usize = 1514;
+/// Linux `ETH_FCS_LEN`. Tigon3 RX BD length includes the FCS.
+pub const ETH_FCS_LEN: usize = 4;
+/// Max Ethernet frame on the wire including FCS (`FRAME_MAX + ETH_FCS_LEN`).
+pub const RX_LEN_MAX_HW: usize = FRAME_MAX + ETH_FCS_LEN;
 
 const RXD_FLAG_END: u32 = 0x0004;
 const RXD_FLAG_ERROR: u32 = 0x0400;
@@ -184,6 +194,8 @@ const RCVBDI_STD_THRESH: u32 = 0x2C18;
 const RCVCC_MODE: u32 = 0x3000;
 const RCVLSC_MODE: u32 = 0x3400;
 const HOSTCC_MODE: u32 = 0x3C00;
+const HOSTCC_MODE_ATTN: u32 = 0x04;
+const HOSTCC_MODE_NOW: u32 = 0x08;
 const HOSTCC_RXCOL_TICKS: u32 = 0x3C08;
 const HOSTCC_TXCOL_TICKS: u32 = 0x3C0C;
 const HOSTCC_RXMAX_FRAMES: u32 = 0x3C10;
@@ -531,15 +543,27 @@ pub fn bmsr_an_complete(bmsr: u16) -> bool {
     bmsr & BMSR_ANEGCOMPLETE != 0
 }
 
-/// Inherit firmware SNP copper instead of `CORECLK_RESET` when `BMSR_LSTATUS` is set.
+/// Inherit firmware SNP analog (skip `BMCR_RESET` / AN restart) when `BMSR_LSTATUS`
+/// is set. Does **not** skip `CORECLK_RESET` — see [`inherit_skips_chip_reset`].
 ///
-/// Iron 2026-08-19: PRE-EBS SNP had DHCP/HTTP; post-reset `bmsr=7949` / `lpa=0000`.
+/// Iron 2026-08-19 EFI `26573eb1`: skip-CORECLK left UNDI DMA; `link=up` but
+/// no native TCP accept.
 ///
 /// INVARIANTS:
 /// - True iff `bmsr_link_up`
 /// - Never panics
 pub fn inherit_snp_phy(pre_bmsr: u16) -> bool {
     bmsr_link_up(pre_bmsr)
+}
+
+/// Skip `tg3_chip_reset` because SNP already has copper. Always **false**:
+/// Linux `tg3_open` chip-resets even on a live link so RX/TX RISC leave UNDI.
+///
+/// INVARIANTS:
+/// - Always false on this iron path
+/// - Never panics
+pub fn inherit_skips_chip_reset() -> bool {
+    false
 }
 
 /// Iron 2026-08-19 complete COM2 (`1404f055`): `CORECLK_RESET` without
@@ -794,9 +818,11 @@ pub fn mac_mode_from_link(speed_mbps: u16, full_duplex: bool) -> u32 {
 }
 
 /// Parse a mocked 32-byte Tigon3 RX return BD. Host/Miri/fuzz — no MMIO.
+/// Hardware length includes FCS (Linux `tg3_rx` subtracts `ETH_FCS_LEN`).
 ///
 /// INVARIANTS:
-/// - `None` unless END, no ERROR/ERR bits, and `0 < length <= FRAME_MAX`
+/// - `None` unless END, no ERROR/ERR bits, and `ETH_FCS_LEN < hw_len <= RX_LEN_MAX_HW`
+/// - Returned length is `hw_len - ETH_FCS_LEN` and `0 < n <= FRAME_MAX`
 /// - Never panics
 pub fn rx_bd_packet_len(idx_len: u32, type_flags: u32, err_vlan: u32) -> Option<usize> {
     let flags = type_flags & 0xFFFF;
@@ -809,7 +835,11 @@ pub fn rx_bd_packet_len(idx_len: u32, type_flags: u32, err_vlan: u32) -> Option<
     if err_vlan & RXD_ERR_MASK != 0 {
         return None;
     }
-    let n = (idx_len & 0xFFFF) as usize;
+    let hw = (idx_len & 0xFFFF) as usize;
+    if hw <= ETH_FCS_LEN || hw > RX_LEN_MAX_HW {
+        return None;
+    }
+    let n = hw - ETH_FCS_LEN;
     if n == 0 || n > FRAME_MAX {
         return None;
     }
@@ -942,6 +972,18 @@ static APE_EVT_SENT: AtomicBool = AtomicBool::new(false);
 /// not block in smoltcp with a dead PHY (iron `1404f055` COM2).
 #[cfg(feature = "uefi-bin")]
 static PHY_LINK_UP: AtomicBool = AtomicBool::new(false);
+static RX_OK: AtomicU32 = AtomicU32::new(0);
+static RX_DROP: AtomicU32 = AtomicU32::new(0);
+
+/// Poll-mode RX/TX snapshot for COM2 (AfterBootOk listen).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bcm5720PollDiag {
+    pub rx_prod: u16,
+    pub rx_cons: u16,
+    pub tx_cons: u16,
+    pub rx_ok: u32,
+    pub rx_drop: u32,
+}
 
 fn misc_host_ctrl() -> u32 {
     MISC_HOST_CTRL_CLEAR_INT
@@ -987,6 +1029,34 @@ pub fn bcm5720_phy_link_up() -> bool {
 #[cfg(not(feature = "uefi-bin"))]
 pub fn bcm5720_phy_link_up() -> bool {
     false
+}
+
+/// Kick HOSTCC and snapshot ring indices + parse counters (COM2 listen).
+#[cfg(feature = "uefi-bin")]
+pub fn bcm5720_poll_diag() -> Option<Bcm5720PollDiag> {
+    with_nic(|n, dma| {
+        // SAFETY: lock held; status block is DMA-coherent on x86.
+        // KANI-TARGET: not this MMIO path.
+        unsafe {
+            kick_hostcc(n.mmio);
+        }
+        let rx_prod =
+            unsafe { core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].rx_producer)) };
+        let tx_cons =
+            unsafe { core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].tx_consumer)) };
+        Bcm5720PollDiag {
+            rx_prod,
+            rx_cons: n.rx_rcb_ptr,
+            tx_cons,
+            rx_ok: RX_OK.load(Ordering::Relaxed),
+            rx_drop: RX_DROP.load(Ordering::Relaxed),
+        }
+    })
+}
+
+#[cfg(not(feature = "uefi-bin"))]
+pub fn bcm5720_poll_diag() -> Option<Bcm5720PollDiag> {
+    None
 }
 
 /// Reset + ring init. Identity-mapped BAR (UEFI page tables).
@@ -1089,6 +1159,8 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
         }
         if let Some((mac, bar)) = last_ok {
             PHY_LINK_UP.store(last_up, Ordering::Relaxed);
+            RX_OK.store(0, Ordering::Relaxed);
+            RX_DROP.store(0, Ordering::Relaxed);
             NIC = Some(NicState {
                 mmio: bar,
                 mac,
@@ -1377,7 +1449,18 @@ unsafe fn hw_init(
     let inherit = inherit_snp_phy(pre_bmsr);
     halt_mac_dma(mmio);
     if inherit {
-        serial_step("boot: HOST-NIC BCM5720 inherit SNP PHY (skip CORECLK_RESET)\n");
+        // Live GPHY: keep analog (no BMCR / no AN restart). Still chip-reset
+        // so RX/TX RISC and HOSTCC leave UNDI (Linux `tg3_open`).
+        serial_step(
+            "boot: HOST-NIC BCM5720 inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)\n",
+        );
+        chip_reset(mmio, bus, dev, func)?;
+        let fw = wait_fw_magic(bus, dev, func);
+        serial_step(if fw {
+            "boot: HOST-NIC BCM5720 fw-magic=yes\n"
+        } else {
+            "boot: HOST-NIC BCM5720 fw-magic=timeout (continuing)\n"
+        });
     } else if skip_coreclk_reset() {
         // Retained: skip CORECLK_RESET (keep GPHY analog)
         serial_step("boot: HOST-NIC BCM5720 skip CORECLK_RESET (keep GPHY analog)\n");
@@ -1455,6 +1538,7 @@ unsafe fn hw_init(
     );
     mailbox_write(mmio, MAILBOX_RCVRET_CON_IDX_0, 0);
     mailbox_write(mmio, MAILBOX_SNDHOST_PROD_IDX_0, 0);
+    kick_hostcc(mmio);
 
     serial_step("boot: HOST-NIC BCM5720 rings armed (poll-mode, MSI-X off)\n");
     Ok((station, up))
@@ -1664,7 +1748,21 @@ unsafe fn enable_hostcc(mmio: u64) {
     mmio_write(mmio, HOSTCC_RXMAX_FRAMES, 1);
     mmio_write(mmio, HOSTCC_TXMAX_FRAMES, 1);
     mmio_write(mmio, HOSTCC_STAT_COAL_TICKS, 0);
-    mmio_write(mmio, HOSTCC_MODE, MODE_ENABLE);
+    mmio_write(
+        mmio,
+        HOSTCC_MODE,
+        MODE_ENABLE | HOSTCC_MODE_ATTN | HOSTCC_MODE_NOW,
+    );
+}
+
+/// Force a status-block DMA (Linux `HOSTCC_MODE_NOW`) so poll-mode sees
+/// `rx_producer` without waiting on coal ticks.
+unsafe fn kick_hostcc(mmio: u64) {
+    mmio_write(
+        mmio,
+        HOSTCC_MODE,
+        MODE_ENABLE | HOSTCC_MODE_ATTN | HOSTCC_MODE_NOW,
+    );
 }
 
 /// Linux `tg3`: WDMAC + RDMAC with abort bits. 5720 also STATUS_TAG_FIX
@@ -2302,6 +2400,7 @@ unsafe fn read_mac(mmio: u64) -> [u8; 6] {
 }
 
 unsafe fn rx_one(n: &mut NicState, dma: &mut DmaArena, out: &mut [u8]) -> Option<usize> {
+    kick_hostcc(n.mmio);
     let hw_prod = core::ptr::read_volatile(core::ptr::addr_of!(dma.status.idx[0].rx_producer));
     if hw_prod == n.rx_rcb_ptr {
         return None;
@@ -2313,12 +2412,18 @@ unsafe fn rx_one(n: &mut NicState, dma: &mut DmaArena, out: &mut [u8]) -> Option
     let opaque = core::ptr::read_volatile(core::ptr::addr_of!(dma.rx_rcb[i].opaque));
     n.rx_rcb_ptr = n.rx_rcb_ptr.wrapping_add(1);
     mailbox_write(n.mmio, MAILBOX_RCVRET_CON_IDX_0, u32::from(n.rx_rcb_ptr));
-    let ncopy = rx_bd_packet_len(idx_len, flags, err)?;
+    let Some(ncopy) = rx_bd_packet_len(idx_len, flags, err) else {
+        RX_DROP.fetch_add(1, Ordering::Relaxed);
+        n.rx_std_prod = (n.rx_std_prod + 1) % RING as u16;
+        mailbox_write(n.mmio, MAILBOX_RCV_STD_PROD_IDX, u32::from(n.rx_std_prod));
+        return None;
+    };
     let std = (opaque & 0xFFFF) as usize % RING;
     let ncopy = ncopy.min(out.len()).min(PKT);
     core::ptr::copy_nonoverlapping(dma.rx_buf[std].as_ptr(), out.as_mut_ptr(), ncopy);
     n.rx_std_prod = (n.rx_std_prod + 1) % RING as u16;
     mailbox_write(n.mmio, MAILBOX_RCV_STD_PROD_IDX, u32::from(n.rx_std_prod));
+    RX_OK.fetch_add(1, Ordering::Relaxed);
     Some(ncopy)
 }
 

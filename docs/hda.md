@@ -258,10 +258,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | be6bed5 |
-| Summary | Ubuntu `eno3` `:38` is the live LOM. Station = live GPHY MAC, not APE `:3a`. HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (F11 after Dedicated) |
-| Gates touched | `station_mac(..., live_gphy)`; `HOST-NIC-HTTP-OK` not claimed |
+| Commit | PENDING |
+| Summary | Live LOM `:38` `link=up` closed wrong-port. Skip-CORECLK EFI `26573eb1` no native accept. Inherit analog + CORECLK for DMA. HTTP-OK not claimed |
+| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b open (native DMA) |
+| Gates touched | `inherit SNP analog; CORECLK_RESET for DMA`; `HOST-NIC-HTTP-OK` not claimed |
 | Months Δ | 1.5 held |
 
 ---
@@ -273,7 +273,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | Dedicated iDRAC + host LOM GPHY; keep APE PHY; E3b = HTTP after `BOOT-OK` |
+| H4 | Firmware SNP unusable after EBS | HIGH | Dedicated iDRAC + host LOM GPHY `:38` `link=up`; CORECLK for DMA; keep APE PHY; E3b = HTTP after `BOOT-OK` |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
@@ -284,6 +284,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-19 | PENDING | 1.5 | 88 | Live LOM `:38` `link=up`; skip-CORECLK `26573eb1` no native accept; CORECLK for DMA; HTTP-OK not claimed |
 | 2026-08-19 | be6bed5 | 1.5 | 88 | Ubuntu `eno3` `:38` live LOM; station = GPHY MAC not APE `:3a`; HTTP-OK not claimed |
 | 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
 | 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
@@ -344,9 +345,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; keep APE PHY; E3b = Dedicated iDRAC + host LOM
+Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED; keep APE PHY; E3b = Dedicated iDRAC + host LOM; `:38` `link=up`; CORECLK for DMA
 Months left:   1.5  (ETA ~ 2026-10)
-Next move:     F11 Cruzer; expect station live LOM `:38` (eno3); curl COM2 lease only if link=up
+Next move:     Flash CORECLK-for-DMA EFI; expect `inherit SNP analog; CORECLK_RESET for DMA`; curl COM2 lease only if `link=up`; watch `poll rx_prod=`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
 Preserve:      releases/v0.1.0-adr013-baseline

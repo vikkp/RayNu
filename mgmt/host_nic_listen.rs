@@ -54,7 +54,8 @@ enum ListenWhen {
 }
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
-/// Iron BCM5720: steal the PHY **now** (before VMX/Linux) and listen after BOOT-OK.
+/// Iron BCM5720: arm analog/DMA **now** (before VMX/Linux) and listen after BOOT-OK.
+/// Do not take the APE PHY (`ape-nophylock=yes`).
 pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
 }
@@ -300,6 +301,7 @@ fn listen_loop<D: Device>(
                 serial::write_byte(b':');
                 write_u16_dec(port);
                 serial::write_line("/  (native BCM5720; SNP is dead)");
+                print_bcm5720_poll_diag();
             }
         }
     }
@@ -319,6 +321,7 @@ fn listen_loop<D: Device>(
     let mut served: u32 = 0;
     let mut announced = false;
     let mut rx_len: usize = 0;
+    let mut last_diag: i64 = 0;
     let deadline = match when {
         ListenWhen::AfterEbs => HOST_NIC_LISTEN_MS as i64,
         ListenWhen::AfterBootOk => i64::MAX / 4,
@@ -419,6 +422,10 @@ fn listen_loop<D: Device>(
 
         millis += 1;
         tsc_spin_ms(1);
+        if nic_tag == "BCM5720" && millis - last_diag >= 5000 {
+            last_diag = millis;
+            print_bcm5720_poll_diag();
+        }
     }
 
     if served == 0 {
@@ -427,6 +434,40 @@ fn listen_loop<D: Device>(
         );
     }
     Ok(())
+}
+
+fn print_bcm5720_poll_diag() {
+    let Some(d) = crate::mgmt::bcm5720_mmio::bcm5720_poll_diag() else {
+        return;
+    };
+    serial::write_str("boot: HOST-NIC BCM5720 poll rx_prod=");
+    write_u16_dec(d.rx_prod);
+    serial::write_str(" rx_cons=");
+    write_u16_dec(d.rx_cons);
+    serial::write_str(" tx_cons=");
+    write_u16_dec(d.tx_cons);
+    serial::write_str(" rx_ok=");
+    write_u32_dec(d.rx_ok);
+    serial::write_str(" rx_drop=");
+    write_u32_dec(d.rx_drop);
+    serial::write_byte(b'\n');
+}
+
+fn write_u32_dec(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = 10;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
+    }
 }
 
 fn mac_seed(mac: [u8; 6]) -> u64 {

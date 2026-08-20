@@ -1,12 +1,12 @@
 use super::{
     ape_fw_ready, ape_host_nophylock, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled,
     ape_per_lock_grant, ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up,
-    cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, inherit_snp_phy,
-    keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes, pci_cfg_save_dword_count,
-    pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus, pick_bcm5720_pci,
-    pick_bcm5720_try_order, rx_bd_packet_len, skip_bmcr_reset, skip_coreclk_reset,
-    skip_http_listen_without_lstatus, station_mac, Bcm5720PickReason, BCM5720_DEVICE,
-    BCM5720_VENDOR, FRAME_MAX,
+    cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, inherit_skips_chip_reset,
+    inherit_snp_phy, keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes,
+    pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus,
+    pick_bcm5720_pci, pick_bcm5720_try_order, rx_bd_packet_len, skip_bmcr_reset,
+    skip_coreclk_reset, skip_http_listen_without_lstatus, station_mac, Bcm5720PickReason,
+    BCM5720_DEVICE, BCM5720_VENDOR, ETH_FCS_LEN, FRAME_MAX, RX_LEN_MAX_HW,
 };
 
 /// R640 dual-port BCM5720 from COM2: func 0 = unused jack, func 1 = SNP / LAN.
@@ -145,11 +145,16 @@ fn rx_bd_parse_requires_end_no_error() {
     assert_eq!(rx_bd_packet_len(64, 0x0004, 0x0001_0000), None);
     assert_eq!(rx_bd_packet_len(64, 0x0404, 0), None);
     assert_eq!(rx_bd_packet_len(0, 0x0004, 0), None);
+    assert_eq!(rx_bd_packet_len(ETH_FCS_LEN as u32, 0x0004, 0), None);
     assert_eq!(rx_bd_packet_len(9000, 0x0004, 0), None);
-    assert_eq!(rx_bd_packet_len(64, 0x0004, 0), Some(64));
+    assert_eq!(rx_bd_packet_len(64, 0x0004, 0), Some(64 - ETH_FCS_LEN));
+    assert_eq!(
+        rx_bd_packet_len(RX_LEN_MAX_HW as u32, 0x0004, 0),
+        Some(FRAME_MAX)
+    );
     assert_eq!(
         rx_bd_packet_len(FRAME_MAX as u32, 0x0004, 0),
-        Some(FRAME_MAX)
+        Some(FRAME_MAX - ETH_FCS_LEN)
     );
 }
 
@@ -158,7 +163,7 @@ fn parse_mocked_rx_bd_bytes_good_frame() {
     let mut raw = [0u8; 32];
     raw[8] = 64;
     raw[12] = 0x04;
-    assert_eq!(parse_mocked_rx_bd_bytes(&raw), Some(64));
+    assert_eq!(parse_mocked_rx_bd_bytes(&raw), Some(64 - ETH_FCS_LEN));
     raw[20] = 0;
     raw[21] = 0;
     raw[22] = 0;
@@ -170,7 +175,7 @@ fn parse_mocked_rx_bd_bytes_good_frame() {
 fn fuzz_parse_mocked_rx_bd_bytes_never_panics() {
     for flags in 0u8..=255 {
         for err_hi in [0u8, 1, 0xff] {
-            for length in [0u16, 64, 1514, 65535] {
+            for length in [0u16, 64, 1514, 1518, 65535] {
                 let mut raw = [0u8; 32];
                 let lb = length.to_le_bytes();
                 raw[8] = lb[0];
@@ -192,7 +197,7 @@ fn miri_parse_mocked_rx_bd_bytes() {
     let mut raw = [0u8; 32];
     raw[8] = 128;
     raw[12] = 0x04;
-    assert_eq!(parse_mocked_rx_bd_bytes(&raw), Some(128));
+    assert_eq!(parse_mocked_rx_bd_bytes(&raw), Some(128 - ETH_FCS_LEN));
 }
 
 #[cfg(kani)]
@@ -236,7 +241,11 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("CPMU_CTRL_LINK_IDLE_MODE"));
     assert!(src.contains("fn phy_addr_5717_plus("));
     assert!(src.contains("tg3_bmcr_reset"));
-    assert!(src.contains("inherit SNP PHY"));
+    assert!(src.contains("inherit SNP analog"));
+    assert!(src.contains("CORECLK_RESET for DMA"));
+    assert!(src.contains("fn inherit_skips_chip_reset("));
+    assert!(src.contains("HOSTCC_MODE_NOW"));
+    assert!(src.contains("ETH_FCS_LEN"));
     assert!(src.contains("pre-reset bmsr"));
     assert!(src.contains("MII_TG3_MISC_SHDW"));
     assert!(src.contains("skip CORECLK_RESET"));
@@ -293,6 +302,12 @@ fn inherit_snp_phy_follows_bmsr_lstatus() {
     assert!(!inherit_snp_phy(0x7949));
     assert!(inherit_snp_phy(0x0004));
     assert!(inherit_snp_phy(0x794d));
+    assert!(inherit_snp_phy(0x796d)); // iron COM2 live LOM :38
+}
+
+#[test]
+fn inherit_skips_chip_reset_is_false() {
+    assert!(!inherit_skips_chip_reset());
 }
 
 #[test]

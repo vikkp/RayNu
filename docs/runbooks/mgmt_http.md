@@ -181,7 +181,10 @@ idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
 (R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
 PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
 **not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** any analog work.
-If `LSTATUS` is set, inherit SNP copper (skip chip reset and `tg3_phy_reset`).
+If `LSTATUS` is set, inherit SNP analog (skip `BMCR_RESET` and AN restart) but
+still run Linux `tg3_chip_reset` (`CORECLK_RESET`) so RX/TX RISC leave UNDI.
+Iron 2026-08-19 EFI `26573eb1` skipped CORECLK: `link=up` on `:38` and no
+native TCP accept. Do **not** skip chip reset just because copper is up.
 If the PHY is already down, Linux `tg3_phy_reset` / `tg3_setup_copper_phy`
 (BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`, CPMU EEE
 LPI off) **with** Linux `tg3_ape_lock` on BAR2 around MDIO — **without**
@@ -204,11 +207,14 @@ word `LEASE`. Port is **8443** (not 8445, not iDRAC).
 
 Expect COM2 after SNP DHCP: `HINT — E3b: Dedicated iDRAC NIC; host mgmt on LOM jack (not iDRAC dedicated)`
 then `pre-EBS cand`. After EBS: `ape-nophylock=yes` / `keep-ape-phy=yes` /
-`phy_reset=pre skip (ape-ncsi)` and `HINT — keep APE PHY (iDRAC NCSI); will not take phylock`.
-Do **not** flash an EFI that prints `ape-nophylock=no`. After `BOOT-OK`: `reuse`.
-Curl **only** after `link=up`. If COM2 prints `skip listen (no LSTATUS; do not curl)`,
-do not curl. Reject EFI SHA `42b42c99` (PRE-EBS peek; size **1216512**,
-collides with `ec08c00f`).
+`inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)` / `fw-magic=` and
+`HINT — keep APE PHY (iDRAC NCSI); will not take phylock`.
+Do **not** flash an EFI that prints `ape-nophylock=no` or
+`inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`.
+COM2 prints `poll rx_prod=` every 5s. Curl **only** after `link=up`.
+If COM2 prints `skip listen (no LSTATUS; do not curl)`, do not curl.
+Reject EFI SHA `26573eb1` (skip-CORECLK; size **1217024** — `link=up` but no
+native accept). Also reject `42b42c99` / `ec08c00f` / `1404f055`.
 
 **E3b cabling (locked):** [`r640_idrac_dedicated.md`](r640_idrac_dedicated.md) —
 iDRAC NIC Selection = Dedicated; host mgmt on a LOM jack, not the iDRAC
