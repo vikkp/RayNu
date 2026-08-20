@@ -496,4 +496,26 @@ smoltcp `Checksum::Tx` on BCM5720 only (fill TX, do not require RX
 csum). Keep `ape-nophylock=yes`. Do **not** take the PHY. Do **not**
 claim `HOST-NIC-HTTP-OK`. Reject skip-CORECLK `26573eb1`.
 
+### 2026-08-20 addendum — E3b CLOSED (`HOST-NIC-HTTP-OK`)
+
+BSWAP EFI (`ca198e2` / `005f25d`, artifact `9389057864`) closed durable HTTP.
+COM2 after `BOOT-OK`:
+
+```
+grc=bswap+wswap (Linux LE tg3)
+link=up speed=1000 duplex=full
+idle listening on 10.99.99.144:8443
+rx to=other etype=0800 … dst=01:00:5e:00:00:fb
+HOST-NIC TCP accept — client connected
+HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+poll … tx_prod=16 tx_cons=16
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+```
+
+Operator SPA loaded after `BOOT-OK`. Guest path still green. Keep
+`ape-nophylock=yes`. Narrative:
+[`2026-08-20-e3b-host-nic-http-ok.md`](2026-08-20-e3b-host-nic-http-ok.md).
+Log: [`logs/2026-08-20-host-nic-http-ok-com2.txt`](logs/2026-08-20-host-nic-http-ok-com2.txt).
+
 

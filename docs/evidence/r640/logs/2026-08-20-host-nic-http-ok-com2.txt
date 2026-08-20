@@ -1,0 +1,58 @@
+# R640 COM2 — E3b close (2026-08-20)
+# Cruzer Micro front USB 2. EFI git ca198e2 (feature 005f25d).
+# Artifact r640-hypervisor.efi id=9389057864 (run 32318819378).
+# Native BCM5720 after BOOT-OK. PRE-EBS SNP listen timed out (curl after EBS).
+# Operator: SPA worked after BOOT-OK. Do not treat PRE-EBS SNP as E3b.
+
+boot: SNP residual MAC=b0:26:28:5c:5a:38
+boot: SNP lease 10.99.99.144/24 router=10.99.99.1
+boot: HINT — E3b: Dedicated iDRAC NIC; host mgmt on LOM jack (not iDRAC dedicated)
+boot: HOST-NIC BCM5720 pre-EBS cand pci=01:00.00 MAC=b0:26:28:5c:5a:38 bmsr=796d
+boot: HOST-NIC BCM5720 pre-EBS cand pci=01:00.01 MAC=b0:26:28:5c:5a:39 bmsr=7949
+boot: WARN — mgmt HTTP accept timeout (continuing to EBS)
+RAYNU-V-M1-EBS-OK
+boot: HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)
+boot: HOST-NIC BCM5720 try pci=01:00.00 MAC=b0:26:28:5c:5a:38 link-up BMSR
+boot: HOST-NIC BCM5720 station live LOM MAC=b0:26:28:5c:5a:38
+boot: HOST-NIC BCM5720 pre-reset bmsr=796d ape=yes ape-bar=0x92940000 ape-fw=ready ape-evt=sent ape-ncsi=yes ape-nophylock=yes keep-ape-phy=yes ape-lock=yes
+boot: HINT — keep APE PHY (iDRAC NCSI); will not take phylock
+boot: HOST-NIC BCM5720 inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)
+boot: HOST-NIC BCM5720 ape-grc=yes pci-restore=64
+boot: HOST-NIC BCM5720 fw-magic=yes
+boot: HOST-NIC BCM5720 grc=bswap+wswap (Linux LE tg3)
+boot: HOST-NIC BCM5720 MAC=b0:26:28:5c:5a:38
+boot: HOST-NIC BCM5720 link=up speed=1000 duplex=full
+boot: HOST-NIC BCM5720 rings armed (poll-mode, MSI-X off)
+RAYNU-V-M3-SHELL-OK
+RAYNU-V-M4-2VM-OK
+RAYNU-V-M4-SCHED-OK
+RAYNU-V-M4-NVM-OK
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-BOOTED-FROM-DISK
+RAYNU-V-M4-NET-OK
+RAYNU-V-M4-SMP-OK
+RAYNU-V-R640-BOOT-OK
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.144:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)
+boot: HOST-NIC BCM5720 reuse (armed post-EBS)
+boot: HOST-NIC BCM5720 Device MAC=b0:26:28:5c:5a:38
+boot: HOST-NIC idle listening on 10.99.99.144:8443 (after BOOT-OK BCM5720)
+boot: CURL NOW → http://10.99.99.144:8443/  (native BCM5720; SNP is dead)
+boot: HINT — first RX dumps dst/etype; expect to=bcast etype=0806 on ARP
+boot: HOST-NIC BCM5720 poll rx_prod=10 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=143 n=139 dst=01:00:5e:00:00:fb src=3c:8d:20:eb:e8:fa
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=163 n=159 dst=33:33:00:00:00:fb src=3c:8d:20:eb:e8:fa
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=230 n=226 dst=01:00:5e:00:00:fb src=54:ef:44:9e:3b:01
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=250 n=246 dst=33:33:00:00:00:fb src=54:ef:44:9e:3b:01
+boot: HOST-NIC BCM5720 poll rx_prod=21 rx_cons=21 tx_prod=0 tx_cons=0 rx_ok=21 rx_drop=0
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC BCM5720 poll rx_prod=7 rx_cons=7 tx_prod=16 tx_cons=16 rx_ok=71 rx_drop=0
+boot: HOST-NIC BCM5720 poll rx_prod=16 rx_cons=16 tx_prod=17 tx_cons=17 rx_ok=80 rx_drop=0
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK

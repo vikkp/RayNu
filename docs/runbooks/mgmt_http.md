@@ -8,7 +8,7 @@
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
-- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D only**, after `BOOT-OK` on a **non-QEMU** census NIC. Do not claim from host or QEMU.
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. Do not claim from host or QEMU.
 
 ## Story
 
@@ -213,14 +213,14 @@ Do **not** flash an EFI that prints `ape-nophylock=no` or
 `inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`.
 COM2 prints `poll rx_prod=` every 5s. `rx_prod` is 0..31; `rx_ok` must **not**
 jump by ~65536 between polls (that was unmasked ring wrap / stale BD replay).
-Ring-mask EFI closed that: `rx_ok` 0→70 with wrap 24→0, `rx_drop=0`, but
-`tx_prod=0` (smoltcp never TX). Next flash is Linux LE `GRC_MODE_BSWAP_DATA`
-(`grc=bswap+wswap`) plus first-frame `rx to=` / `etype=` dump. Curl after
-`CURL NOW` and watch for `to=bcast etype=0806` then `tx_prod>0`.
-Curl **only** after `link=up`. If COM2 prints `skip listen (no LSTATUS; do not curl)`,
-do not curl.
+E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
+`HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
+on `:38` / `10.99.99.144:8443`. Evidence:
+[`2026-08-20-e3b-host-nic-http-ok.md`](../evidence/r640/2026-08-20-e3b-host-nic-http-ok.md).
+Curl **only** after native `CURL NOW` and `link=up`. If COM2 prints
+`skip listen (no LSTATUS; do not curl)`, do not curl.
 Reject EFI SHA `26573eb1` (skip-CORECLK; size **1217024**). Also reject
-`42b42c99` / `ec08c00f` / `1404f055`.
+`42b42c99` / `ec08c00f` / `1404f055` / take-PHY.
 
 **E3b cabling (locked):** [`r640_idrac_dedicated.md`](r640_idrac_dedicated.md) —
 iDRAC NIC Selection = Dedicated; host mgmt on a LOM jack, not the iDRAC
@@ -228,8 +228,9 @@ dedicated RJ45. Cable dedicated iDRAC **before** switching off Shared.
 
 PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
 replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**
-the native stack — curl timeout is expected until `link=up`. The iron HTTP-OK
-marker is only after that exchange. Do not claim it from this runbook.
+the native stack — curl timeout is expected until `link=up`. Iron HTTP-OK
+closed 2026-08-20 after that exchange
+([`2026-08-20-e3b-host-nic-http-ok.md`](../evidence/r640/2026-08-20-e3b-host-nic-http-ok.md)).
 
 Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`
 (host fuzz + optional `./tools/host-nic-miri-smoke.sh`; Miri skip is OK).

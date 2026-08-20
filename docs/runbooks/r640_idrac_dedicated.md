@@ -2,8 +2,8 @@
 
 **Locked path:** iDRAC uses the **rear dedicated RJ45**. Host mgmt HTTP uses a
 **BCM5720 LOM jack**. Do **not** take the PHY from APE (iDRAC Shared LOM /
-NCSI). Do **not** claim `RAYNU-V-M7-HOST-NIC-HTTP-OK` until COM2 shows
-`link=up` and a post-`BOOT-OK` curl lands.
+NCSI). E3b **closed** 2026-08-20: COM2 `link=up` then post-`BOOT-OK` curl
+landed `RAYNU-V-M7-HOST-NIC-HTTP-OK` on `:38` / `10.99.99.144:8443`.
 
 Pillars: **[D]** iDRAC-native · **[Z]** single-binary. Outside Proven Core
 (ADR-013). Parent: [`mgmt_http.md`](mgmt_http.md).

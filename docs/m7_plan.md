@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist closed on iron**; **E3b open** ([ADR-013](adr/ADR-013.md) **Accepted**). Residual: host-owned NIC after EBS, then E4 polish + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b closed on iron**. Residual: E4 polish (TLS/console) + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -259,18 +259,12 @@ Do not pull M8 into M7 gate lists.
 **M7.4 closed** on Latitude (`RAYNU-V-M7-UI-OK` — host package smoke).  
 **M7.5 + M7.6 closed on iron** (`RAYNU-V-R640-BOOT-OK`, `RAYNU-V-M7-UEFI-HTTP-OK`).  
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
-**Honesty:** E3 (PRE-EBS) is closed. **E3b** (lifetime HTTP) is [ADR-013](adr/ADR-013.md)
-(**Accepted**): host-owned NIC + smoltcp, dedicated mgmt arena. Firmware SNP and
-Tcp4 are dead ends after EBS. Phase A closed on iron 2026-08-17 (WARN-only, **no
-RSOD**). Then remaining E4 polish + a real distro installer.
+**M7.8 / E3b closed on iron** (`RAYNU-V-M7-HOST-NIC-HTTP-OK`, 2026-08-20) — native BCM5720 after `BOOT-OK` on `:38` / `10.99.99.144:8443`.  
+**Honesty:** E3 (PRE-EBS) and **E3b** (lifetime HTTP on host-owned NIC) are closed. Firmware SNP and
+Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. Then remaining E4 polish + a real distro installer.
 
-**Next:** E3b path is **Dedicated iDRAC NIC + host LOM jack**
-([`runbooks/r640_idrac_dedicated.md`](runbooks/r640_idrac_dedicated.md)).
-Do **not** take the PHY from APE. PRE-EBS peek EFI `42b42c99` showed host
-GPHY `7949` while SNP `:3a` had a lease. Keep `NO_PHYLOCK` / skip BMCR
-when NCSI. Picker prefers live `LSTATUS` over APE MAC `:3a`. Station on a
-live GPHY is the BAR0 MAC (Ubuntu `eno3` `:38`), not SNP `:3a`. Reject `42b42c99`, `ec08c00f`, `1404f055`, and take-PHY
-(`ape-nophylock=no`). Cable dedicated iDRAC **before** switching NIC
-Selection. Curl only if `link=up`. Preserve
+**Next:** E4 polish (TLS/console) + distro installer.
+Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
+`26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:
-[`docs/evidence/r640/2026-08-17-phase0-census.md`](evidence/r640/2026-08-17-phase0-census.md).
+[`docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md`](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md).

@@ -30,6 +30,7 @@ Tcp4-absent analysis:
 | `2026-08-16-e5-persist-detect-blk-fail-com2.txt` | Cruzer Micro boot2 | `persist-detect` + preload, then `HLT without DRIVER_OK` |
 | `2026-08-17-snp-warn-no-rsod-com2.txt` | `releases/v0.1.0-adr013-baseline/` | WARN-only idle after `BOOT-OK`; **no RSOD**; Phase A closed |
 | `2026-08-17-phase0-census-com2.txt` | ADR-013 Phase 0 iron | `14e4:165f` BCM5720 dual-port; SNP is `01:00.1`; **no HTTP-OK** |
+| `2026-08-20-host-nic-http-ok-com2.txt` | **M7.8 / E3b iron close** | `grc=bswap+wswap`; listen `10.99.99.144:8443`; `HOST-NIC-HTTP-OK` |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·

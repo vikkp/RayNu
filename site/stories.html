@@ -441,8 +441,9 @@ boot: VMXOFF ok</pre>
           The next morning, firmware SNP after EBS hit a hang and a red
           screen — see
           <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
-          Residual is HDA <strong>E3b</strong> (host-owned NIC, ADR-013),
-          then remaining E4 polish and a real distro installer. Host CI still
+          Residual at the time was HDA <strong>E3b</strong> (host-owned NIC, ADR-013),
+          then remaining E4 polish and a real distro installer. E3b closed
+          2026-08-20 (<code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>). Host CI still
           prints only
           <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron boot path.
         </p>
@@ -592,12 +593,13 @@ RAYNU-V-R640-BOOT-OK</pre>
         </p>
 
         <p>
-          Next engineering is HDA <strong>E3b</strong> — a host-owned NIC
-          after EBS (ADR-013 Accepted). The SNP attempt is a story now, not a
+          E3b closed 2026-08-20 — <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>
+          after <code>BOOT-OK</code> on native BCM5720 (Dedicated iDRAC + host
+          LOM <code>:38</code>). The SNP attempt is a story now, not a
           plan: hang, curl timeout, then RSOD. See
           <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
-          Remaining E4 polish and a real distro installer follow that
-          listen — not El Torito first.
+          Remaining E4 polish and a real distro installer follow
+          (not El Torito first).
         </p>
 
         <p class="story__aside">

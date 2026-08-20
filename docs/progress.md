@@ -78,6 +78,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.5 | `RAYNU-V-R640-BOOT-OK` | Real PowerEdge R640 COM2: M0→SHELL→M4 BLK/NET/SMP (`v0.1.0-xsavesfix`, 2026-08-15); scaffold `RAYNU-V-M7-R640-SCAFFOLD-OK` |
 | M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | Real R640 PRE-EBS SNP+smoltcp HTTP (`10.99.99.127:8443`, 2026-08-16); scaffold `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` |
 | M7.7 | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` | E5 iron stamp persist closed 2026-08-16 (Cruzer two-boot); scaffold `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; documented equiv. of `ISO-INSTALL-OK` |
+| M7.8 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Real R640 post-`BOOT-OK` native BCM5720 HTTP (`10.99.99.144:8443`, 2026-08-20); SPA + `AuthAllowed`; keep APE PHY |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -126,6 +127,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | `mgmt/ship` / `m7_ship_gate` | L0 | EFI release kit + SHA256 tarball; SHIP-OK (M7.0) |
 | `mgmt/http` / `http_listen` / `m7_http_gate` | L0 | HTTP/1.1 codec + host TCP; HTTP-OK (M7.1) |
 | `mgmt/tcp4_uefi` / `snp_*` / `m7_uefi_http_gate` | L0 | PRE-EBS Tcp4 + SNP residual; iron `RAYNU-V-M7-UEFI-HTTP-OK` (M7.6) |
+| `mgmt/bcm5720*` / `host_nic_listen` / `m7_host_nic_gate` | L0 | Native BCM5720 Device; iron `RAYNU-V-M7-HOST-NIC-HTTP-OK` (M7.8 / E3b) |
 | `mgmt/datastore` / `m7_store_gate` | L0 | Image library + ESP catalog host path; STORE-OK (M7.2); UEFI persist stub |
 | `mgmt/iso` / `m7_iso_gate` | L0 | ISO extract-boot + virtio install plan; ISO-OK (M7.3 host smoke); CD-ROM stub |
 | `mgmt/m7_ui_gate` / `webui` | L0 | Create-VM SPA fields + media; UI-OK (M7.4 host smoke); console residual |
@@ -143,12 +145,13 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.5 closed on iron:** `RAYNU-V-R640-BOOT-OK` — real R640 COM2 through SHELL + M4 (`v0.1.0-xsavesfix`, 2026-08-15).  
 **M7.6 closed on iron:** `RAYNU-V-M7-UEFI-HTTP-OK` — SNP residual PRE-EBS HTTP on R640 (`10.99.99.127:8443`, 2026-08-16).  
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-16-e5-iso-install.md](evidence/r640/2026-08-16-e5-iso-install.md)
+**M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
-| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Dedicated iDRAC + host LOM `:38` `link=up`; ring wrap closed; GRC BSWAP_DATA next. Keep APE PHY. SNP/Tcp4 do not count. |
+| E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
-| Everest residual | E3b + E4 polish + distro | TLS/console later; distro installer later (after E3b) |
+| Everest residual | E4 polish + distro | TLS/console later; distro installer later |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
