@@ -260,7 +260,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 518249c |
+| Commit | 91f66e6 |
 | Summary | ADR-013 Phase F in-tree: native `bounded_poll` beside credit scheduler (VMX on). Iron HTTP-OK with guests live not claimed. |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
 | Gates touched | host `m7_8_host_nic_coexist_wired`; Phase F not closed on iron |
@@ -287,7 +287,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-20 | 518249c | 0.5 | 93 | Phase F in-tree: `bounded_poll` on scheduler quantum while VMX on; P0-13 IN PROGRESS; iron coexist HTTP-OK not claimed |
+| 2026-08-20 | 91f66e6 | 0.5 | 93 | Phase F in-tree: `bounded_poll` on scheduler quantum while VMX on; P0-13 IN PROGRESS; iron coexist HTTP-OK not claimed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
 | 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
