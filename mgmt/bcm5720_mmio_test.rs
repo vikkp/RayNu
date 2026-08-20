@@ -1,7 +1,8 @@
 use super::{
     ape_fw_ready, ape_host_nophylock, ape_lock_init_grant_bit, ape_lock_req_bit, ape_ncsi_enabled,
     ape_per_lock_grant, ape_per_lock_req, ape_phy_lock_num, bmsr_an_complete, bmsr_link_up,
-    cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, inherit_skips_chip_reset,
+    cpmu_is_link_speed_mode, decode_phy_link, e3b_path_idrac_dedicated, eth_dst_kind,
+    eth_header_view, grc_mode_is_linux_le, grc_mode_le_host, inherit_skips_chip_reset,
     inherit_snp_phy, keep_ape_phy_for_idrac, mac_mode_from_link, parse_mocked_rx_bd_bytes,
     pci_cfg_save_dword_count, pci_id_is_bcm5720, pci_mem_bar_addr, phy_addr_5717_plus,
     pick_bcm5720_pci, pick_bcm5720_try_order, ring_idx, rx_bd_packet_len, rx_return_pending,
@@ -249,6 +250,11 @@ fn bringup_follows_linux_tg3_not_bnxt() {
     assert!(src.contains("fn rx_return_pending("));
     assert!(src.contains("HOSTCC_MODE_NOW"));
     assert!(src.contains("ETH_FCS_LEN"));
+    assert!(src.contains("fn grc_mode_le_host("));
+    assert!(src.contains("GRC_MODE_BSWAP_DATA"));
+    assert!(src.contains("grc=bswap+wswap"));
+    assert!(src.contains("fn eth_header_view("));
+    assert!(src.contains("fn dump_first_rx("));
     assert!(src.contains("pre-reset bmsr"));
     assert!(src.contains("MII_TG3_MISC_SHDW"));
     assert!(src.contains("skip CORECLK_RESET"));
@@ -321,6 +327,49 @@ fn ring_idx_wraps_at_32() {
     assert_eq!(ring_idx(31), 31);
     assert_eq!(ring_idx(32), 0);
     assert_eq!(ring_idx(32 + 13), 13);
+}
+
+#[test]
+fn grc_mode_le_host_sets_linux_le_bswap() {
+    let m = grc_mode_le_host();
+    assert!(grc_mode_is_linux_le(m));
+    // WSWAP_DATA without BSWAP_DATA is the iron miss (frame ethertype scrambled).
+    assert!(!grc_mode_is_linux_le(m & !0x10));
+}
+
+#[test]
+fn eth_header_view_arp_broadcast() {
+    let mut f = [0u8; 42];
+    f[0..6].fill(0xff);
+    f[6..12].copy_from_slice(&MAC_FUNC0);
+    f[12] = 0x08;
+    f[13] = 0x06;
+    let (dst, src, etype) = eth_header_view(&f).unwrap();
+    assert_eq!(dst, [0xff; 6]);
+    assert_eq!(src, MAC_FUNC0);
+    assert_eq!(etype, 0x0806);
+    assert_eq!(eth_dst_kind(dst, MAC_FUNC0), "bcast");
+    assert_eq!(eth_dst_kind(MAC_FUNC0, MAC_FUNC0), "us");
+    assert_eq!(eth_dst_kind(MAC_FUNC1, MAC_FUNC0), "other");
+    assert!(eth_header_view(&f[..13]).is_none());
+}
+
+#[test]
+fn eth_header_view_wswap_only_scrambles_etype() {
+    // Native ARP broadcast, then 32-bit word swap (WSWAP_DATA without BSWAP).
+    let native = [
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xb0, 0x26, 0x28, 0x5c, 0x5a, 0x38, 0x08, 0x06, 0x00,
+        0x01,
+    ];
+    let mut swapped = [0u8; 16];
+    for i in 0..4 {
+        swapped[i * 4] = native[i * 4 + 2];
+        swapped[i * 4 + 1] = native[i * 4 + 3];
+        swapped[i * 4 + 2] = native[i * 4];
+        swapped[i * 4 + 3] = native[i * 4 + 1];
+    }
+    let (_, _, etype) = eth_header_view(&swapped).unwrap();
+    assert_ne!(etype, 0x0806);
 }
 
 #[test]

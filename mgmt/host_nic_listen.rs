@@ -301,6 +301,9 @@ fn listen_loop<D: Device>(
                 serial::write_byte(b':');
                 write_u16_dec(port);
                 serial::write_line("/  (native BCM5720; SNP is dead)");
+                serial::write_line(
+                    "boot: HINT — first RX dumps dst/etype; expect to=bcast etype=0806 on ARP",
+                );
                 print_bcm5720_poll_diag();
             }
         }

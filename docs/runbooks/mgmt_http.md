@@ -213,10 +213,14 @@ Do **not** flash an EFI that prints `ape-nophylock=no` or
 `inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`.
 COM2 prints `poll rx_prod=` every 5s. `rx_prod` is 0..31; `rx_ok` must **not**
 jump by ~65536 between polls (that was unmasked ring wrap / stale BD replay).
+Ring-mask EFI closed that: `rx_ok` 0→70 with wrap 24→0, `rx_drop=0`, but
+`tx_prod=0` (smoltcp never TX). Next flash is Linux LE `GRC_MODE_BSWAP_DATA`
+(`grc=bswap+wswap`) plus first-frame `rx to=` / `etype=` dump. Curl after
+`CURL NOW` and watch for `to=bcast etype=0806` then `tx_prod>0`.
 Curl **only** after `link=up`. If COM2 prints `skip listen (no LSTATUS; do not curl)`,
 do not curl.
 Reject EFI SHA `26573eb1` (skip-CORECLK; size **1217024**). Also reject
-`42b42c99` / `ec08c00f` / `1404f055`. Next flash is ring-mask (`ring_idx`).
+`42b42c99` / `ec08c00f` / `1404f055`.
 
 **E3b cabling (locked):** [`r640_idrac_dedicated.md`](r640_idrac_dedicated.md) —
 iDRAC NIC Selection = Dedicated; host mgmt on a LOM jack, not the iDRAC

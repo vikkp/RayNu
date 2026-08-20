@@ -24,6 +24,7 @@ pub fn host_nic_surface_present() -> bool {
     let mmio = include_str!("e1000_mmio.rs");
     let phy = include_str!("e1000.rs");
     let bcm = include_str!("bcm5720_mmio.rs");
+    let bcm_phy = include_str!("bcm5720.rs");
     let listen = include_str!("host_nic_listen.rs");
     let http = include_str!("http_listen.rs");
     let census = include_str!("pci_census.rs");
@@ -106,6 +107,14 @@ pub fn host_nic_surface_present() -> bool {
         && bcm.contains("fn ring_idx(")
         && bcm.contains("fn rx_return_pending(")
         && bcm.contains("RING_MASK")
+        && bcm.contains("fn grc_mode_le_host(")
+        && bcm.contains("GRC_MODE_BSWAP_DATA")
+        && bcm.contains("grc=bswap+wswap")
+        && bcm.contains("fn eth_header_view(")
+        && bcm.contains("fn dump_first_rx(")
+        && bcm.contains("HOST-NIC BCM5720 rx to=")
+        && bcm_phy.contains("Checksum::Tx")
+        && bcm_phy.contains("impl Device for Bcm5720Device")
         && bcm.contains("inherit SNP PHY")
         && bcm.contains("pre-reset bmsr")
         && bcm.contains("MII_TG3_MISC_SHDW")
@@ -147,6 +156,7 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("rx_prod=")
         && listen.contains("tx_prod=")
         && listen.contains("fn print_bcm5720_poll_diag(")
+        && listen.contains("first RX dumps dst/etype")
         && http.contains("run_post_ebs_host_nic_listen")
         && http.contains("run_pre_ebs_pci_census")
         && http.contains("run_post_boot_ok_native_idle")

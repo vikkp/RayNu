@@ -45,10 +45,13 @@
 //! `BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
 //! `RX_MODE_PROMISC` is on. Linux `tg3_rx` length includes FCS (strip 4).
 //! RX/TX ring indices wrap at RING (Linux `rx_ret_ring_mask`). Iron COM2
-//! after CORECLK: `rx_prod` stayed 0..31 while unmasked `rx_ok` jumped ~65536
-//! per poll — stale BD replay, no TCP accept.
-//! Poll-mode; MSI-X is not enabled (ADR-013). Host tests parse mocked RX BDs
-//! only.
+//! ring-mask EFI: `rx_ok` 0→70 with `rx_prod` wrapping 24→0, `rx_drop=0`,
+//! `tx_prod=0` the whole listen — BD parse is closed; smoltcp never TX.
+//! Linux LE `tg3` sets `GRC_MODE_BSWAP_DATA | GRC_MODE_WSWAP_DATA |
+//! GRC_MODE_WSWAP_NONFRM_DATA`. WSWAP-only dword-swaps frame bytes so
+//! ethertype at offset 12 is not 0x0806/0x0800 and ARP/IPv4 never parse.
+//! First RX frames dump dest/etype/len on COM2. Poll-mode; MSI-X is not
+//! enabled (ADR-013). Host tests parse mocked RX BDs only.
 
 use crate::mgmt::pci_census::{pci_id_is_iron_census, IRON_CENSUS_DEVICE, IRON_CENSUS_VENDOR};
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -222,7 +225,11 @@ const GRC_MISC_CFG: u32 = 0x6804;
 const GRC_FASTBOOT_PC: u32 = 0x6894;
 
 const MODE_ENABLE: u32 = 0x02;
+/// Linux `GRC_MODE_BSWAP_NONFRM_DATA` — BE hosts only (not set on x86).
+const GRC_MODE_BSWAP_NONFRM_DATA: u32 = 0x02;
 const GRC_MODE_WSWAP_NONFRM_DATA: u32 = 0x04;
+/// Linux `GRC_MODE_BSWAP_DATA`. LE `tg3` ORs this with `WSWAP_DATA`.
+const GRC_MODE_BSWAP_DATA: u32 = 0x10;
 const GRC_MODE_WSWAP_DATA: u32 = 0x20;
 const GRC_MODE_NOIRQ_ON_SENDS: u32 = 0x2000;
 const GRC_MODE_NOIRQ_ON_RCV: u32 = 0x4000;
@@ -799,6 +806,72 @@ pub fn decode_phy_link(lpa: u16, stat1000: u16) -> (u16, bool) {
     (10, false)
 }
 
+/// Linux little-endian `tp->grc_mode` plus our poll-mode IRQ/csum bits.
+///
+/// INVARIANTS:
+/// - Sets `BSWAP_DATA | WSWAP_DATA | WSWAP_NONFRM_DATA` (Linux LE `tg3`)
+/// - Does **not** set `BSWAP_NONFRM_DATA` (BE-only)
+/// - Never panics
+pub fn grc_mode_le_host() -> u32 {
+    GRC_MODE_WSWAP_NONFRM_DATA
+        | GRC_MODE_BSWAP_DATA
+        | GRC_MODE_WSWAP_DATA
+        | GRC_MODE_NOIRQ_ON_SENDS
+        | GRC_MODE_NOIRQ_ON_RCV
+        | GRC_MODE_HOST_STACKUP
+        | GRC_MODE_HOST_SENDBDS
+        | GRC_MODE_NO_TX_PHDR_CSUM
+        | GRC_MODE_NO_RX_PHDR_CSUM
+}
+
+/// True when `mode` has Linux LE frame DMA swap and not BE non-frame BSWAP.
+///
+/// INVARIANTS:
+/// - True iff BSWAP_DATA, WSWAP_DATA, WSWAP_NONFRM_DATA are set and
+///   BSWAP_NONFRM_DATA is clear
+/// - Never panics
+pub fn grc_mode_is_linux_le(mode: u32) -> bool {
+    mode & GRC_MODE_BSWAP_DATA != 0
+        && mode & GRC_MODE_WSWAP_DATA != 0
+        && mode & GRC_MODE_WSWAP_NONFRM_DATA != 0
+        && mode & GRC_MODE_BSWAP_NONFRM_DATA == 0
+}
+
+/// Ethernet dest/src/ethertype from a frame prefix (no VLAN).
+///
+/// INVARIANTS:
+/// - `None` if `frame.len() < 14`
+/// - Ethertype is big-endian at bytes 12..14
+/// - Never panics
+pub fn eth_header_view(frame: &[u8]) -> Option<([u8; 6], [u8; 6], u16)> {
+    if frame.len() < 14 {
+        return None;
+    }
+    let mut dst = [0u8; 6];
+    let mut src = [0u8; 6];
+    dst.copy_from_slice(&frame[0..6]);
+    src.copy_from_slice(&frame[6..12]);
+    let etype = u16::from_be_bytes([frame[12], frame[13]]);
+    Some((dst, src, etype))
+}
+
+/// Classify Ethernet dest vs our station MAC.
+///
+/// INVARIANTS:
+/// - Broadcast → `"bcast"`
+/// - Equal to `station` → `"us"`
+/// - Else `"other"`
+/// - Never panics
+pub fn eth_dst_kind(dst: [u8; 6], station: [u8; 6]) -> &'static str {
+    if dst == [0xff; 6] {
+        "bcast"
+    } else if dst == station {
+        "us"
+    } else {
+        "other"
+    }
+}
+
 /// `MAC_MODE` after link: GMII at 1000, MII at 10/100; half-duplex bit.
 /// Includes TDE/RDE/FHDE + RX/TX stats (same as `enable_mac`).
 ///
@@ -999,6 +1072,9 @@ static APE_EVT_SENT: AtomicBool = AtomicBool::new(false);
 static PHY_LINK_UP: AtomicBool = AtomicBool::new(false);
 static RX_OK: AtomicU32 = AtomicU32::new(0);
 static RX_DROP: AtomicU32 = AtomicU32::new(0);
+/// First N RX frames dump dest/etype/len on COM2 (endian / ARP diagnose).
+#[cfg(feature = "uefi-bin")]
+static RX_DUMP_LEFT: AtomicU32 = AtomicU32::new(8);
 
 /// Poll-mode RX/TX snapshot for COM2 (AfterBootOk listen).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1188,6 +1264,7 @@ pub fn init_bcm5720(prefer_mac: [u8; 6]) -> Result<[u8; 6], Bcm5720Error> {
             PHY_LINK_UP.store(last_up, Ordering::Relaxed);
             RX_OK.store(0, Ordering::Relaxed);
             RX_DROP.store(0, Ordering::Relaxed);
+            RX_DUMP_LEFT.store(8, Ordering::Relaxed);
             NIC = Some(NicState {
                 mmio: bar,
                 mac,
@@ -1508,15 +1585,9 @@ unsafe fn hw_init(
     mmio_write(mmio, MEMARB_MODE, MODE_ENABLE);
     mmio_write(mmio, TG3PCI_MISC_HOST_CTRL, misc_host_ctrl());
 
-    let grc = GRC_MODE_WSWAP_NONFRM_DATA
-        | GRC_MODE_WSWAP_DATA
-        | GRC_MODE_NOIRQ_ON_SENDS
-        | GRC_MODE_NOIRQ_ON_RCV
-        | GRC_MODE_HOST_STACKUP
-        | GRC_MODE_HOST_SENDBDS
-        | GRC_MODE_NO_TX_PHDR_CSUM
-        | GRC_MODE_NO_RX_PHDR_CSUM;
+    let grc = grc_mode_le_host();
     mmio_write(mmio, GRC_MODE, grc);
+    serial_step("boot: HOST-NIC BCM5720 grc=bswap+wswap (Linux LE tg3)\n");
     // Prescalar only (bits 7:0). Preserve GRC_MISC_CFG_PRESERVE_PCIE.
     let mut misc = mmio_read(mmio, GRC_MISC_CFG);
     misc &= !0xFF;
@@ -2451,6 +2522,8 @@ unsafe fn rx_one(n: &mut NicState, dma: &mut DmaArena, out: &mut [u8]) -> Option
     n.rx_std_prod = ring_idx(n.rx_std_prod.wrapping_add(1));
     mailbox_write(n.mmio, MAILBOX_RCV_STD_PROD_IDX, u32::from(n.rx_std_prod));
     RX_OK.fetch_add(1, Ordering::Relaxed);
+    #[cfg(feature = "uefi-bin")]
+    dump_first_rx(&out[..ncopy], (idx_len & 0xffff) as u16, n.mac);
     Some(ncopy)
 }
 
@@ -2605,6 +2678,37 @@ fn write_u16_dec(n: u16) {
     for b in &buf[i..] {
         crate::boot::serial::write_byte(*b);
     }
+}
+
+/// First few RX frames: dest kind + ethertype + lengths (COM2 endian check).
+#[cfg(feature = "uefi-bin")]
+fn dump_first_rx(frame: &[u8], hw_len: u16, station: [u8; 6]) {
+    let left = RX_DUMP_LEFT.load(Ordering::Relaxed);
+    if left == 0 {
+        return;
+    }
+    RX_DUMP_LEFT.store(left.saturating_sub(1), Ordering::Relaxed);
+    serial_step("boot: HOST-NIC BCM5720 rx to=");
+    match eth_header_view(frame) {
+        Some((dst, src, etype)) => {
+            serial_step(eth_dst_kind(dst, station));
+            serial_step(" etype=");
+            write_hex_u16(etype);
+            serial_step(" hw=");
+            write_u16_dec(hw_len);
+            serial_step(" n=");
+            write_u16_dec(frame.len() as u16);
+            serial_step(" dst=");
+            write_mac(dst);
+            serial_step(" src=");
+            write_mac(src);
+        }
+        None => {
+            serial_step("short n=");
+            write_u16_dec(frame.len() as u16);
+        }
+    }
+    crate::boot::serial::write_byte(b'\n');
 }
 
 #[cfg(feature = "uefi-bin")]

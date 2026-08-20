@@ -472,4 +472,28 @@ and replayed stale return BDs (~65536 per 5s). `tx_cons=0`. No
 Do **not** take the PHY. Do **not** claim `HOST-NIC-HTTP-OK`.
 Reject skip-CORECLK `26573eb1`. Do not flash take-PHY.
 
+### 2026-08-20 addendum — RX ring wrap closed; tx_prod still 0
+
+Ring-mask EFI (HEAD `7b71cf2` / feature `fc7ed70`) closed wrap replay.
+Complete COM2 listen snippet:
+
+```
+idle listening on 10.99.99.144:8443
+CURL NOW → http://10.99.99.144:8443/  (native BCM5720; SNP is dead)
+poll rx_prod=7 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+poll rx_prod=13 rx_cons=13 tx_prod=0 tx_cons=0 rx_ok=13
+poll rx_prod=24 rx_cons=24 tx_prod=0 tx_cons=0 rx_ok=24
+poll rx_prod=0 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=32
+… rx_ok=70 rx_drop=0; wrap 24→0; tx_prod=0 the whole window
+```
+
+`rx_ok` tracks real LAN (~2 pps after drain). Guest path still green.
+PRE-EBS SNP HTTP timed out this boot (curl after native `CURL NOW`).
+No `HOST-NIC TCP accept`. Next EFI: Linux LE `GRC_MODE_BSWAP_DATA`
+(`grc=bswap+wswap`) so frame DMA is not word-swapped (ethertype at
+offset 12). COM2 dumps first RX `to=` / `etype=` / `hw=` / `n=`.
+smoltcp `Checksum::Tx` on BCM5720 only (fill TX, do not require RX
+csum). Keep `ape-nophylock=yes`. Do **not** take the PHY. Do **not**
+claim `HOST-NIC-HTTP-OK`. Reject skip-CORECLK `26573eb1`.
+
 
