@@ -19,10 +19,11 @@ pub fn spa_launch_relocates_vmcs() -> bool {
     launch.contains("fn try_spa_vmlaunch(")
         && launch.contains("G1_SLAB_OFF_VMCS")
         && launch.contains("build_single_2m_identity")
-        && launch.contains(M7_E4_SPA_LAUNCH_OK_MARKER)
+        && launch.contains("M7_E4_SPA_LAUNCH_OK_MARKER")
         && launch.contains("private 2M EPT")
         && launch.contains("if !M4_LADDER_DONE")
         && launch.contains("save_live_gprs_to_slot(SCHED_SLOT_CUR)")
+        && include_str!("spa_launch.rs").contains(M7_E4_SPA_LAUNCH_OK_MARKER)
 }
 
 /// True when the slab layout reserves host VMCS away from G0 identity.
