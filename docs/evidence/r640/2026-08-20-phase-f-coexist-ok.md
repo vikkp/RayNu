@@ -7,6 +7,11 @@ After `RAYNU-V-R640-BOOT-OK`, COM2 printed `HOST-NIC coexist listening`
 `AuthAllowed` with **no** `sched VMPTRLD failed` / **no** `VMXOFF`.
 Operator SPA stayed up (Refresh / logs / other buttons).
 
+A later same-EFI boot held COM2 through **25** `HOST-NIC-HTTP-OK` lines
+(full paste: [`logs/2026-08-20-phase-f-coexist-hold-com2.txt`](logs/2026-08-20-phase-f-coexist-hold-com2.txt)).
+The first close paste ended mid-accept when SOL went quiet; this hold log is
+the confirmation COM2 can stay up beside VMX-on HTTP.
+
 **Not claimed:** Mount Everest. E4 polish (TLS/console) and a real distro
 installer remain. SPA create/start is the mgmt table only — it does **not**
 VMLAUNCH a new guest. PRE-EBS SNP HTTP does **not** count (timed out this boot).
@@ -34,6 +39,7 @@ Keep `ape-nophylock=yes`. Do **not** flash take-PHY / skip-CORECLK / `c16cbffd` 
 | Gate | Marker | Evidence |
 |------|--------|----------|
 | ADR-013 Phase F iron | coexist + `HOST-NIC-HTTP-OK` while VMX on | [`logs/2026-08-20-phase-f-coexist-ok-com2.txt`](logs/2026-08-20-phase-f-coexist-ok-com2.txt) |
+| Phase F COM2 hold | 25× `HOST-NIC-HTTP-OK`; SOL stayed up | [`logs/2026-08-20-phase-f-coexist-hold-com2.txt`](logs/2026-08-20-phase-f-coexist-hold-com2.txt) |
 | E2 (same boot) | `RAYNU-V-R640-BOOT-OK` | guest path through M4, VMX **stays on** |
 | E5 stamps (same boot) | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` | persist-detect still green |
 | E3b (same path) | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | now with G0 scheduled, not post-`VMXOFF` idle |
@@ -51,6 +57,9 @@ Keep `ape-nophylock=yes`. Do **not** flash take-PHY / skip-CORECLK / `c16cbffd` 
    `sched VMPTRLD failed` after SPA HTTP).
 6. Repeated TCP accept / HTTP exchange / `HOST-NIC-HTTP-OK` / `AuthAllowed`.
    Operator SPA remained up. No `VMXOFF`. No boot-gate fail.
+7. Hold boot (same EFI): COM2 stayed through 25 HTTP-OK. Mixed
+   `AuthAllowed` / `AuthDenied` on GET (`method_tag=1`) is a Bearer miss on
+   REST, not a hang. Paste ends on `TCP accept` (operator iDRAC power-off).
 
 ## Serial excerpt
 
@@ -67,7 +76,8 @@ boot: HOST-NIC HTTP exchange ok
 RAYNU-V-M7-HOST-NIC-HTTP-OK
 ```
 
-Full fingerprint: [`logs/2026-08-20-phase-f-coexist-ok-com2.txt`](logs/2026-08-20-phase-f-coexist-ok-com2.txt).
+First close paste: [`logs/2026-08-20-phase-f-coexist-ok-com2.txt`](logs/2026-08-20-phase-f-coexist-ok-com2.txt).  
+Hold confirmation: [`logs/2026-08-20-phase-f-coexist-hold-com2.txt`](logs/2026-08-20-phase-f-coexist-hold-com2.txt).
 
 ## Honesty
 

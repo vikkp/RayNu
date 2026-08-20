@@ -219,7 +219,8 @@ create/start is the mgmt table only — it does **not** VMLAUNCH a new
 guest. If coexist cannot arm, fallback is Phase D idle after `VMXOFF`.
 Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
 `resume G0 (VMX on; G1–G3 parked)`, repeated `HOST-NIC-HTTP-OK` /
-`AuthAllowed`, no `sched VMPTRLD failed`. Evidence:
+`AuthAllowed`, no `sched VMPTRLD failed`. Same-EFI hold paste: 25×
+`HOST-NIC-HTTP-OK` with COM2 still printing. Evidence:
 [`2026-08-20-phase-f-coexist-ok.md`](../evidence/r640/2026-08-20-phase-f-coexist-ok.md).
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`

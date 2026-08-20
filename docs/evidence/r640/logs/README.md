@@ -32,6 +32,7 @@ Tcp4-absent analysis:
 | `2026-08-17-phase0-census-com2.txt` | ADR-013 Phase 0 iron | `14e4:165f` BCM5720 dual-port; SNP is `01:00.1`; **no HTTP-OK** |
 | `2026-08-20-host-nic-http-ok-com2.txt` | **M7.8 / E3b iron close** | `grc=bswap+wswap`; listen `10.99.99.144:8443`; `HOST-NIC-HTTP-OK` |
 | `2026-08-20-phase-f-coexist-ok-com2.txt` | **ADR-013 Phase F iron close** | coexist `10.99.99.149:8443` VMX on; G0 scheduled; G1–G3 parked |
+| `2026-08-20-phase-f-coexist-hold-com2.txt` | Phase F COM2 hold | same EFI; 25× `HOST-NIC-HTTP-OK`; COM2 stayed up through SPA |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·
