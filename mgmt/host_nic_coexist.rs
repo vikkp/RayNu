@@ -37,6 +37,7 @@ pub fn prop_coexist_wired() -> bool {
         && launch.contains("fn enter_sched_coexist(")
         && launch.contains("M4_LADDER_DONE")
         && launch.contains("HOST-NIC coexist — resume G0")
+        && launch.contains("G1–G3 parked")
         && listen.contains("fn arm_bcm5720_coexist(")
         && listen.contains("fn tick_bcm5720_coexist(")
         && listen.contains("HOST-NIC coexist listening")

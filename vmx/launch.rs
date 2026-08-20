@@ -1566,7 +1566,29 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         }
     };
     if ops::vmptrld(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — sched VMPTRLD failed");
+        serial::write_str("boot: ERROR — sched VMPTRLD failed slot=");
+        write_hex_u32(slot as u32);
+        serial::write_byte(b'\n');
+        // Phase F iron 2026-08-20: G0 Linux identity EPT can scribble G1–G3
+        // VMCS pages. Do not VMXOFF the mgmt plane — reload the current slot.
+        if M4_LADDER_DONE && SCHED_SLOT_CUR != slot {
+            if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
+                if ops::vmptrld(cur_f.vmcs_phys).is_ok() {
+                    serial::write_str("boot: WARN — park slot=");
+                    write_hex_u32(slot as u32);
+                    serial::write_str(" resume slot=");
+                    write_hex_u32(SCHED_SLOT_CUR as u32);
+                    serial::write_line(" (VMX on)");
+                    load_live_gprs_from_slot(SCHED_SLOT_CUR);
+                    ACTIVE_GUEST_ID = guest_id_for_slot(SCHED_SLOT_CUR);
+                    REAL_LINUX_GUEST = SCHED_SLOT_CUR == 0;
+                    BRINGUP_GUEST_CODE_PHYS = cur_f.guest_code_phys;
+                    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+                    arm_sched_slice();
+                    vmresume_with_gprs();
+                }
+            }
+        }
         finish_boot(false);
     }
     SCHED_SLOT_CUR = slot;
@@ -3232,13 +3254,16 @@ unsafe fn enter_sched_coexist() -> ! {
     BLK_PROBE_MODE = false;
     M4_LADDER_DONE = true;
     SCHED_MODE = true;
-    serial::write_line("boot: HOST-NIC coexist — resume G0–G3 (VMX on)");
+    serial::write_line("boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)");
     if !SCHED_OK_LATCHED || frames_for_slot(0).is_none() {
         serial::write_line("boot: WARN — coexist has no scheduler/G0; falling back");
         finish_boot_idle_after_vmxoff();
     }
-    // M4.3–M4.5 paused the scheduler; replenish so pick_next_fair cannot starve.
-    SCHED.consume_quantum(SCHED_SLOT_CUR);
+    // G1–G3 are M4.2 SHELL stubs. G0 precise EPT identity-maps their VMCS
+    // HPA (iron: VMPTRLD fail after SPA HTTP). Keep only G0 runnable.
+    SCHED = CreditScheduler::new();
+    let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
+    SCHED_SLOT_CUR = 0;
     switch_to_sched_slot(0);
 }
 

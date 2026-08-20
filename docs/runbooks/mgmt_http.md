@@ -214,8 +214,9 @@ Do **not** flash an EFI that prints `ape-nophylock=no` or
 `poll rx_prod=` snapshot at listen start, then COM2 stays quiet except TCP
 accept / HTTP-OK (and a WARN if `rx_drop` rises).
 Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
-`BOOT-OK` (guests still scheduled). If coexist cannot arm, fallback is
-Phase D idle after `VMXOFF`.
+`BOOT-OK` (G0 Linux still scheduled; G1–G3 SHELL stubs parked). SPA
+create/start is the mgmt table only — it does **not** VMLAUNCH a new
+guest. If coexist cannot arm, fallback is Phase D idle after `VMXOFF`.
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
 on `:38` / `10.99.99.144:8443`. Evidence:

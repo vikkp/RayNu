@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: 91f66e6213e0b38d3492744ddd3ffbe208d805c7
-last_commit_short: 91f66e6
+last_commit: e5b8c38dcedee963e2554ddda2cd048ca6b1235c
+last_commit_short: e5b8c38
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -125,7 +125,7 @@ All must be true (no hand-waving):
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
-| **Phase F coexist (VMX on)** | IN PROGRESS | In-tree: `bounded_poll` on a credit-scheduler quantum after `BOOT-OK`. Not closed on iron until COM2 shows `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` **and** guests still scheduled **and** `HOST-NIC-HTTP-OK`. |
+| **Phase F coexist (VMX on)** | IN PROGRESS | Iron 2026-08-20: `HOST-NIC-HTTP-OK` while VMX on, then `sched VMPTRLD failed` on G1–G3. Next EFI parks G1–G3. Not closed. |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -260,10 +260,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 91f66e6 |
-| Summary | ADR-013 Phase F in-tree: native `bounded_poll` beside credit scheduler (VMX on). Iron HTTP-OK with guests live not claimed. |
+| Commit | e5b8c38 |
+| Summary | Park G1–G3 after Phase F (G0 identity EPT scribbled stub VMCS). Iron GET / HTTP-OK with VMX on; VMPTRLD fail not claimed closed. |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
-| Gates touched | host `m7_8_host_nic_coexist_wired`; Phase F not closed on iron |
+| Gates touched | host coexist wiring; Phase F not closed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -279,7 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5 stamps closed; Everest residual E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
-| H8 | Phase F coexist not closed on iron | MED | In-tree after `BOOT-OK`; post-`VMXOFF` idle remains fallback. Do not claim until COM2 + live guests + HTTP-OK |
+| H8 | Phase F coexist not closed on iron | MED | 2026-08-20: GET / HTTP-OK with VMX on; VMPTRLD G1–G3 failed (G0 identity EPT). Park stubs; do not claim closed |
 
 ---
 
@@ -287,6 +287,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | e5b8c38 | 0.5 | 93 | Phase F iron: GET / HTTP-OK with VMX on; VMPTRLD G1–G3 failed; park stubs next EFI; not closed |
 | 2026-08-20 | 91f66e6 | 0.5 | 93 | Phase F in-tree: `bounded_poll` on scheduler quantum while VMX on; P0-13 IN PROGRESS; iron coexist HTTP-OK not claimed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |

@@ -200,7 +200,7 @@ pub fn arm_bcm5720_coexist() -> bool {
     write_ipv4(ip);
     serial::write_byte(b':');
     write_u16_dec(port);
-    serial::write_line("/  (native BCM5720; guests still scheduled; SNP is dead)");
+    serial::write_line("/  (native BCM5720; G0 still scheduled; SNP is dead)");
     serial::write_line("boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)");
     print_bcm5720_poll_diag();
     true
