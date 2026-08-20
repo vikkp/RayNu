@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: 41bbe48d469dffe08129bb02426601e437299032
-last_commit_short: 41bbe48
+last_commit: c057749dee4c26571a90573be139c827720477ed
+last_commit_short: c057749
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -261,10 +261,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 41bbe48 |
-| Summary | Phase F hold COM2 archived: 25× HOST-NIC-HTTP-OK while VMX on (`10.99.99.149:8443`). |
+| Commit | c057749 |
+| Summary | ADR-013 table: Phase F CLOSED on iron (was stale Not started). Next: E4 VMLAUNCH + Phase G. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held |
-| Gates touched | Phase F COM2 hold paste; P0-13 already DONE |
+| Gates touched | ADR-013 Phase F row matches COM2 hold |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -288,6 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | c057749 | 0.5 | 94 | ADR-013 Phase F row CLOSED (table was stale); next is E4 VMLAUNCH + Phase G |
 | 2026-08-20 | 41bbe48 | 0.5 | 94 | Phase F hold COM2: 25× `HOST-NIC-HTTP-OK` while VMX on (`10.99.99.149:8443`); SOL stayed up |
 | 2026-08-20 | 181c0d7 | 0.5 | 94 | Phase F CLOSED: coexist HTTP-OK while VMX on (`10.99.99.149:8443`); G0 scheduled; G1–G3 parked; overall 93→94 |
 | 2026-08-20 | 0e94b5b | 0.5 | 93 | Phase F iron: GET / HTTP-OK with VMX on; VMPTRLD G1–G3 failed; park stubs next EFI; not closed |
