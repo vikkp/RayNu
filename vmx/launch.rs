@@ -54,6 +54,7 @@ use crate::devices::virtio_blk::{
     M7_ISO_INSTALL_LAB_OK_MARKER, M7_ISO_REBOOT_PENDING_MARKER,
 };
 use crate::mgmt::iso_install;
+use crate::mgmt::spa_launch::{self, M7_E4_SPA_LAUNCH_OK_MARKER};
 use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
 
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
@@ -241,6 +242,9 @@ static mut NVM_OK_LATCHED: bool = false;
 /// True after M4.3–M4.5 probes finished; scheduler may resume for Phase F.
 static mut M4_LADDER_DONE: bool = false;
 static mut TWO_VM_LATCHED: bool = false;
+/// E4: SPA start VMLAUNCHed G1 from the unmapped 2 MiB slab (not G0 identity VMCS).
+static mut SPA_LAUNCHED: bool = false;
+static mut SPA_RUNNABLE: bool = false;
 
 /// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
 static mut BLK_PROBE_FRAMES: Option<LaunchFrames> = None;
@@ -1654,17 +1658,170 @@ unsafe fn after_shell_cpuid(slot: usize) -> ! {
     enter_sched_mode_from_shell(slot);
 }
 
+/// Consume SPA start/stop flags. VMLAUNCH of G1 may not return.
+///
+/// INVARIANTS:
+/// - Caller is [`schedule_preempt`] (VMX root), never the HTTP tick
+/// - Flags stay queued until [`M4_LADDER_DONE`] (coexist path)
+/// - Live GPRs of `SCHED_SLOT_CUR` are saved before VMLAUNCH
+/// - Fail-soft resumes slot 0; never `finish_boot(false)`
+///
+/// VERIFICATION: L1 (serial + park). FALLBACK: runtime WARN.
+unsafe fn try_spa_vmlaunch() {
+    if spa_launch::take_spa_stop() {
+        SPA_RUNNABLE = false;
+        serial::write_line("boot: E4 SPA stop — park slot=1 (G0 stays scheduled)");
+    }
+    // PRE-EBS / M4 ladder may queue start; do not consume until coexist.
+    if !M4_LADDER_DONE {
+        return;
+    }
+    let Some(_gid) = spa_launch::take_spa_start() else {
+        return;
+    };
+    if SPA_LAUNCHED {
+        SPA_RUNNABLE = true;
+        serial::write_line("boot: E4 SPA start — resume parked slot=1");
+        return;
+    }
+    save_live_gprs_to_slot(SCHED_SLOT_CUR);
+    launch_spa_private_ept();
+}
+
+/// VMLAUNCH G1 from the 2 MiB shell slab (VMCS + 2M EPT not in G0 identity).
+///
+/// INVARIANTS:
+/// - EPT is a single 2 MiB identity leaf (not G0's 512 MiB precise map)
+/// - VMCS / EPT tables / host stack live in the slab punched out of G0 EPT
+/// - Guest is SHELL CPUID, not a Linux distro installer
+///
+/// VERIFICATION: L1. Iron marker: [`M7_E4_SPA_LAUNCH_OK_MARKER`].
+unsafe fn launch_spa_private_ept() -> ! {
+    let Some(old) = frames_for_slot(1) else {
+        serial::write_line("boot: WARN — E4 SPA start skipped (no G1 slab)");
+        switch_to_sched_slot(0);
+    };
+    let slab = old.guest_code_phys & !(ept_hw::TWO_MIB - 1);
+    let mut ept_frames = [
+        slab + ept_hw::G1_SLAB_OFF_EPT_PML4,
+        slab + ept_hw::G1_SLAB_OFF_EPT_PDPT,
+        slab + ept_hw::G1_SLAB_OFF_EPT_PD,
+    ];
+    let eptp = match ept_hw::build_single_2m_identity(slab, &mut ept_frames) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line("boot: WARN — E4 SPA 2M EPT build failed");
+            switch_to_sched_slot(0);
+        }
+    };
+    let _ = ept_hw::write_guest_identity_2m_tables(slab);
+    ept_hw::write_guest_shell_cpuid_page(slab + ept_hw::G1_SLAB_OFF_CODE);
+    let frames = LaunchFrames {
+        vmcs_phys: slab + ept_hw::G1_SLAB_OFF_VMCS,
+        guest_stack_phys: slab + ept_hw::G1_SLAB_OFF_STACK,
+        host_stack_phys: slab + ept_hw::G1_SLAB_OFF_HOST_STACK,
+        tss_phys: slab + ept_hw::G1_SLAB_OFF_TSS,
+        gdt_phys: slab + ept_hw::G1_SLAB_OFF_GDT,
+        eptp,
+        guest_code_phys: slab + ept_hw::G1_SLAB_OFF_CODE,
+        guest_idt_phys: slab + ept_hw::G1_SLAB_OFF_IDT,
+        guest_cr3_phys: Some(slab + ept_hw::G1_SLAB_OFF_PML4),
+        msr_bitmap_phys: Some(slab + ept_hw::G1_SLAB_OFF_MSR_BITMAP),
+        io_bitmap_a_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_A),
+        io_bitmap_b_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_B),
+    };
+    GUEST_FRAMES[1] = Some(frames);
+    if core::ptr::addr_of!(SCHED)
+        .as_ref()
+        .unwrap()
+        .vcpu_count()
+        < 2
+    {
+        let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
+    }
+    SPA_LAUNCHED = true;
+    SPA_RUNNABLE = true;
+    crate::audit_log!(crate::audit::AuditEvent::VmcsCreated {
+        vcpu_id: 1,
+        vmcs_id: frames.vmcs_phys,
+    });
+    crate::audit_log!(crate::audit::AuditEvent::EptMapped {
+        guest_id: guest_id_for_slot(1),
+        gpa: slab,
+        hpa: slab,
+    });
+    ACTIVE_GUEST_ID = guest_id_for_slot(1);
+    REAL_LINUX_GUEST = false;
+    LINUX_GTIMER2_DONE = false;
+    LINUX_GTIMER2_ARMED = false;
+    BRINGUP_GUEST_CODE_PHYS = frames.guest_code_phys;
+    reset_saved_gprs(0);
+    GUEST_GPRS[1] = GuestGprBank::ZERO;
+    SCHED_SLOT_CUR = 1;
+
+    serial::write_line(
+        "boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)",
+    );
+
+    apic::mask_pic();
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    ept_hw::invept_global();
+
+    if prepare_vmcs_region(frames.vmcs_phys).is_err()
+        || ops::vmclear(frames.vmcs_phys).is_err()
+        || prepare_vmcs_region(frames.vmcs_phys).is_err()
+    {
+        serial::write_line("boot: WARN — E4 SPA VMCS prepare failed; resume G0");
+        SPA_LAUNCHED = false;
+        SPA_RUNNABLE = false;
+        switch_to_sched_slot(0);
+    }
+    if let Err(e) = setup_vmcs(&frames) {
+        serial::write_str("boot: WARN — E4 SPA setup_vmcs failed: ");
+        serial::write_line(launch_err_name(e));
+        SPA_LAUNCHED = false;
+        SPA_RUNNABLE = false;
+        switch_to_sched_slot(0);
+    }
+
+    let _ = apic::mask_timer();
+    let _ = apic::eoi();
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    arm_sched_slice();
+
+    serial::write_line("boot: VMLAUNCH → E4 SPA SHELL CPUID");
+    match ops::vmlaunch() {
+        Ok(()) => {
+            serial::write_line("boot: WARN — E4 SPA VMLAUNCH returned Ok; resume G0");
+            SPA_LAUNCHED = false;
+            SPA_RUNNABLE = false;
+            switch_to_sched_slot(0);
+        }
+        Err(_) => {
+            let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+            serial::write_str("boot: WARN — E4 SPA VMLAUNCH failed insn_error=0x");
+            write_hex_u32(ierr);
+            serial::write_line("; resume G0");
+            SPA_LAUNCHED = false;
+            SPA_RUNNABLE = false;
+            switch_to_sched_slot(0);
+        }
+    }
+}
+
 /// Host LAPIC tick while SCHED_MODE: consume quantum and switch.
 unsafe fn schedule_preempt() -> ! {
     let _ = apic::eoi();
     // ADR-013 Phase F: one bounded NIC poll per scheduler quantum (VMX on).
     crate::mgmt::tick_native_coexist();
+    try_spa_vmlaunch();
     let cur = SCHED_SLOT_CUR;
     // Guest `cur` just ran a full host slice — latch progress before switch.
     note_sched_slice(cur);
     save_live_gprs_to_slot(cur);
     SCHED.consume_quantum(cur);
-    let next = match core::ptr::addr_of!(SCHED)
+    let mut next = match core::ptr::addr_of!(SCHED)
         .as_ref()
         .unwrap()
         .pick_next_fair(Some(cur))
@@ -1675,6 +1832,9 @@ unsafe fn schedule_preempt() -> ! {
             finish_boot(false);
         }
     };
+    if next == 1 && !SPA_RUNNABLE {
+        next = 0;
+    }
     if next == cur {
         arm_sched_slice();
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
@@ -2325,6 +2485,13 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
                         serial::write_byte(b'\n');
                     }
                     after_shell_slot = Some(slot);
+                } else if SPA_LAUNCHED && slot == 1 {
+                    static mut E4_SPA_SHELL: bool = false;
+                    if !E4_SPA_SHELL {
+                        E4_SPA_SHELL = true;
+                        serial::write_byte(b'\n');
+                        serial::write_line(M7_E4_SPA_LAUNCH_OK_MARKER);
+                    }
                 } else if slot == 0 && REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
                 serial_pio::note_shell_cpuid();
                 static mut SHELL_CPUID_MARKED: bool = false;

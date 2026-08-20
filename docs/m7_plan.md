@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b closed on iron**. Residual: E4 polish (TLS/console) + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F closed on iron**. Next: E4 SPA VMLAUNCH on coexist (in-tree; iron marker open). Residual after that: TLS/console + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -261,9 +261,11 @@ Do not pull M8 into M7 gate lists.
 **M7.7 stamp-persist closed on iron** (`RAYNU-V-M7-ISO-BOOTED-FROM-DISK`, 2026-08-16).  
 **M7.8 / E3b closed on iron** (`RAYNU-V-M7-HOST-NIC-HTTP-OK`, 2026-08-20) — native BCM5720 after `BOOT-OK` on `:38` / `10.99.99.144:8443`.  
 **Honesty:** E3 (PRE-EBS) and **E3b** (lifetime HTTP on host-owned NIC) are closed. Firmware SNP and
-Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. Then remaining E4 polish + a real distro installer.
+Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. E4 SPA start now queues a real VMLAUNCH
+(private 2 MiB EPT, slab VMCS) on the coexist quantum — **host wiring**; do not claim
+`RAYNU-V-M7-E4-SPA-LAUNCH-OK` without COM2. That guest is SHELL CPUID, not a distro installer.
 
-**Next:** E4 polish (TLS/console) + distro installer.
+**Next:** iron E4 SPA VMLAUNCH marker, then TLS/console + distro installer.
 Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

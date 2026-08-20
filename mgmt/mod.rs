@@ -280,6 +280,8 @@ pub fn prop_lifecycle_roundtrip() -> bool {
     t.get(gid).is_none() && t.len() == 0
 }
 
+pub mod spa_launch;
+pub mod m7_e4_spa_gate;
 pub mod api;
 pub mod datastore;
 pub mod iso;
@@ -408,6 +410,8 @@ pub use mgmt_arena::{
 pub use m7_ship_gate::{run_m7_ship_gate, M7_SHIP_GATE_MARKER};
 pub use m7_store_gate::{run_m7_store_gate, M7_STORE_GATE_MARKER};
 pub use m7_ui_gate::{run_m7_ui_gate, M7_UI_OK_MARKER, UI_GAP_NOTE};
+pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
+pub use spa_launch::{note_spa_start, note_spa_stop, take_spa_start, M7_E4_SPA_LAUNCH_OK_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,

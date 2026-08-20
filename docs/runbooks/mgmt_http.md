@@ -215,8 +215,11 @@ Do **not** flash an EFI that prints `ape-nophylock=no` or
 accept / HTTP-OK (and a WARN if `rx_drop` rises).
 Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
 `BOOT-OK` (G0 Linux still scheduled; G1–G3 SHELL stubs parked). SPA
-create/start is the mgmt table only — it does **not** VMLAUNCH a new
-guest. If coexist cannot arm, fallback is Phase D idle after `VMXOFF`.
+`POST /vms/{id}/start` now **queues** a VMLAUNCH on the next coexist
+quantum (private 2 MiB EPT + VMCS in the G1 slab). Iron marker
+`RAYNU-V-M7-E4-SPA-LAUNCH-OK` is COM2-only; host tests do not claim it.
+That guest is SHELL CPUID, not a Linux distro installer. If coexist
+cannot arm, fallback is Phase D idle after `VMXOFF`.
 Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
 `resume G0 (VMX on; G1–G3 parked)`, repeated `HOST-NIC-HTTP-OK` /
 `AuthAllowed`, no `sched VMPTRLD failed`. Same-EFI hold paste: 25×

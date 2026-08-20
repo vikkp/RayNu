@@ -605,6 +605,17 @@ pub const G1_SLAB_OFF_IDT: u64 = 0x2000;
 pub const G1_SLAB_OFF_PML4: u64 = 0x3000;
 pub const G1_SLAB_OFF_PDPT: u64 = 0x4000;
 pub const G1_SLAB_OFF_PD: u64 = 0x5000;
+/// E4: EPT + VMCS + host state live in the slab (unmapped from G0 identity).
+pub const G1_SLAB_OFF_EPT_PML4: u64 = 0x6000;
+pub const G1_SLAB_OFF_EPT_PDPT: u64 = 0x7000;
+pub const G1_SLAB_OFF_EPT_PD: u64 = 0x8000;
+pub const G1_SLAB_OFF_VMCS: u64 = 0x9000;
+pub const G1_SLAB_OFF_HOST_STACK: u64 = 0xA000;
+pub const G1_SLAB_OFF_TSS: u64 = 0xB000;
+pub const G1_SLAB_OFF_GDT: u64 = 0xC000;
+pub const G1_SLAB_OFF_MSR_BITMAP: u64 = 0xD000;
+pub const G1_SLAB_OFF_IO_A: u64 = 0xE000;
+pub const G1_SLAB_OFF_IO_B: u64 = 0xF000;
 
 /// Build long-mode guest page tables in the G1 slab: one 2 MiB identity map
 /// at `slab_base` (VA == GPA). Returns guest CR3 (PML4 HPA/GPA).
