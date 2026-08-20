@@ -46,3 +46,12 @@ STATUS=closed
 #
 # Claims: RAYNU-V-R640-BOOT-OK · RAYNU-V-M7-UEFI-HTTP-OK
 # Host/CI smoke never prints iron markers (scaffold only).
+#
+# Iron M7.8 / HDA E3b closed (2026-08-20) — native BCM5720 HTTP after BOOT-OK:
+#   docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md
+#   logs/2026-08-20-host-nic-http-ok-com2.txt
+#   Git pin ca198e2 / feature 005f25d; artifact 9389057864 (run 32318819378)
+#   Observed: grc=bswap+wswap; listen 10.99.99.144:8443; TCP accept; HTTP-OK
+#   SPA after BOOT-OK; AuthAllowed on Bearer REST. Keep ape-nophylock=yes.
+#   PRE-EBS SNP window timed out this boot (not E3b).
+#   Claims: RAYNU-V-M7-HOST-NIC-HTTP-OK (plus E2/E5 stamps on same boot)

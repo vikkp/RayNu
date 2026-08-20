@@ -551,7 +551,7 @@
         <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
         <code>80 verified, 0 errors</code>). Iron: E2 BOOT-OK, E3 UEFI-HTTP-OK,
         E5 stamp persist (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>, 2026-08-16).
-        Residual: E3b host-owned NIC (ADR-013 Accepted; firmware SNP dead after EBS), then E4 polish + distro installer — see HDA.
+        Residual: E4 polish + distro installer (E3b native HTTP closed 2026-08-20) — see HDA.
       </p>
 
       <h2 id="related">7. Related Work</h2>
@@ -568,7 +568,7 @@
         <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> <strong>E3b</strong> durable mgmt on a host-owned NIC (ADR-013 Accepted; firmware SNP hung then RSOD after EBS; WARN-only idle later closed with no RSOD; Tcp4 is a platform limit), remaining E4 polish (TLS/console), real distro installer later, live Redfish, R640 soak. E2+E3+E5 stamp persist closed on iron. LBA stamps ≠ guest rootfs. PRE-EBS SNP remains the bring-up mgmt UI.</li>
+        <li><strong>Mount Everest residual:</strong> remaining E4 polish (TLS/console), real distro installer, live Redfish, R640 soak. E2+E3+E3b+E5 stamp persist closed on iron 2026-08-20 (<code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> after <code>BOOT-OK</code> on BCM5720). LBA stamps ≠ guest rootfs. Firmware SNP/Tcp4 stay dead after EBS.</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here

@@ -34,7 +34,8 @@ run on your laptop (fallback only).
 |------|-----------------|
 | Dell PowerEdge R640 in a rack | Rails seated; service tag: _______________ |
 | Power cords (redundant PSUs if present) | Both cords preferred |
-| Network cable to **iDRAC** port | Dedicated Mgmt / iDRAC port on the rear |
+| Network cable to **iDRAC** port | Dedicated Mgmt / iDRAC port on the rear (NIC Selection = Dedicated) |
+| Network cable to a **LOM** jack | Host mgmt LAN for `:8443` — not the iDRAC dedicated jack ([`r640_idrac_dedicated.md`](r640_idrac_dedicated.md)) |
 | Operator laptop on the same mgmt network | Browser + ability to save a text log |
 | iDRAC username / password | Default is often on the pull-tab; change if still factory |
 | Laptop packages for media maker | `dosfstools` + `mtools` (`xorriso` optional for ISO) |

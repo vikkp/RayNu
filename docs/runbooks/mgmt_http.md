@@ -8,7 +8,7 @@
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
-- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D only**, after `BOOT-OK` on a **non-QEMU** census NIC. Do not claim from host or QEMU.
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. Do not claim from host or QEMU.
 
 ## Story
 
@@ -160,15 +160,37 @@ boot: PCI 01:00.01 vid:did=14e4:165f bar0=0x92900000 msix=17
 boot: IOMMU ACPI DMAR=no
 ```
 
-**Chosen:** `14e4:165f` (BCM5720) at `01:00.0`. Func 1 is the second port.
-Evidence: [`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
+**Chosen:** `14e4:165f` (BCM5720) dual-port LOM. Iron 2026-08-18: PRE-EBS SNP
+DHCP used **`01:00.1` MAC `b0:26:28:5c:5a:3a`**. Binding **`01:00.0`**
+(`:5a:38`) left Vignesh's laptop with **no ARP** / ping unreachable /
+curl fail on the parked lease (that bind used station `:38`, not SNP `:3a`).
+Phase D programs the parked SNP MAC on whichever function actually has
+copper: peek each candidate `BMSR`, try func 0 (NCSI/LOM1) then func 1 until
+`LSTATUS`. Iron skip-reset EFI still saw `ape-ncsi=yes` and func 1
+`lpa=0000`. After bind, the **parked SNP MAC** is
+programmed as the station address (iron: BAR0 peek on `01:00.1` was `:39`
+while SNP leased `:3a`; station-MAC EFI programmed `:3a` and still saw
+ping **host unreachable** — PHY link / `MAC_MODE` next). Evidence:
+[`docs/evidence/r640/2026-08-17-phase0-census.md`](../evidence/r640/2026-08-17-phase0-census.md).
 
 ### Phase D — same `Device` trait; idle after BOOT-OK
 
 QEMU e1000 already implements `smoltcp::phy::Device`. After `BOOT-OK` the
 idle path calls `run_post_boot_ok_native_idle`. On R640 that now binds
-**BCM5720 `14e4:165f` @ `01:00.0`** (poll-mode, MSI-X off) and reuses the
-PRE-EBS SNP lease. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
+**BCM5720 `14e4:165f`** (poll-mode, MSI-X off) on the **SNP-lease MAC**
+(R640 expect `pci=01:00.01` / `:5a:3a`) and reuses the
+PRE-EBS SNP lease. Bring-up follows **Linux `tg3`** (`tg3.c` / PG ch. 7),
+**not** `bnxt` (that is BCM57416 10G). Peek `BMSR` **before** any analog work.
+If `LSTATUS` is set, inherit SNP analog (skip `BMCR_RESET` and AN restart) but
+still run Linux `tg3_chip_reset` (`CORECLK_RESET`) so RX/TX RISC leave UNDI.
+Iron 2026-08-19 EFI `26573eb1` skipped CORECLK: `link=up` on `:38` and no
+native TCP accept. Do **not** skip chip reset just because copper is up.
+If the PHY is already down, Linux `tg3_phy_reset` / `tg3_setup_copper_phy`
+(BMCR_RESET, AUXCTL PWRCTL=0, Auto-MDIX, `tg3_phy_toggle_apd(false)`, CPMU EEE
+LPI off) **with** Linux `tg3_ape_lock` on BAR2 around MDIO — **without**
+`CORECLK_RESET` (iron `1213952` still `lpa=0000` after chip reset). Then wait
+`BMSR_LSTATUS` and set `MAC_MODE` MII vs GMII (`tg3_adjust_link`).
+`RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
@@ -177,12 +199,38 @@ ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
 **same** SNP lease on the host LAN (not iDRAC):
 
 ```
-curl -sS "http://<lease>:8443/"
+curl -sS -m 5 "http://<lease>:8443/"
 ```
 
-Expect COM2 `HOST-NIC BCM5720 … rings armed` then
-`HOST-NIC idle listening on <lease>:8443`. The iron HTTP-OK marker is
-only after that exchange. Do not claim it from this runbook.
+Use the numeric lease from COM2 (example `10.99.99.116`). Do **not** type the
+word `LEASE`. Port is **8443** (not 8445, not iDRAC).
+
+Expect COM2 after SNP DHCP: `HINT — E3b: Dedicated iDRAC NIC; host mgmt on LOM jack (not iDRAC dedicated)`
+then `pre-EBS cand`. After EBS: `ape-nophylock=yes` / `keep-ape-phy=yes` /
+`inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)` / `fw-magic=` and
+`HINT — keep APE PHY (iDRAC NCSI); will not take phylock`.
+Do **not** flash an EFI that prints `ape-nophylock=no` or
+`inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`. One
+`poll rx_prod=` snapshot at listen start, then COM2 stays quiet except TCP
+accept / HTTP-OK (and a WARN if `rx_drop` rises).
+E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
+`HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
+on `:38` / `10.99.99.144:8443`. Evidence:
+[`2026-08-20-e3b-host-nic-http-ok.md`](../evidence/r640/2026-08-20-e3b-host-nic-http-ok.md).
+Curl **only** after native `CURL NOW` and `link=up`. If COM2 prints
+`skip listen (no LSTATUS; do not curl)`, do not curl.
+Reject EFI SHA `26573eb1` (skip-CORECLK; size **1217024**). Also reject
+`42b42c99` / `ec08c00f` / `1404f055` / take-PHY.
+
+**E3b cabling (locked):** [`r640_idrac_dedicated.md`](r640_idrac_dedicated.md) —
+iDRAC NIC Selection = Dedicated; host mgmt on a LOM jack, not the iDRAC
+dedicated RJ45. Cable dedicated iDRAC **before** switching off Shared.
+
+PRE-EBS SNP HTTP still works; that is **not** E3b. After `BOOT-OK`, ICMP
+replies with `ttl=63` (one routed hop) while COM2 shows `bmsr=7949` are **not**
+the native stack — curl timeout is expected until `link=up`. Iron HTTP-OK
+closed 2026-08-20 after that exchange
+([`2026-08-20-e3b-host-nic-http-ok.md`](../evidence/r640/2026-08-20-e3b-host-nic-http-ok.md)).
 
 Parse path: e1000 `parse_mocked_rx_desc_bytes` + BCM `parse_mocked_rx_bd_bytes`
 (host fuzz + optional `./tools/host-nic-miri-smoke.sh`; Miri skip is OK).

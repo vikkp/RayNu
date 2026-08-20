@@ -4,7 +4,7 @@
 //! Proven Core: **outside**
 //!
 //! Evidence-only serial. Phase D binds **only** the printed iron pick
-//! (`14e4:165f` BCM5720, prefer `01:00.0`). Lab: QEMU `8086:100e`.
+//! (`14e4:165f` BCM5720; SNP-lease MAC, prefer `01:00.1` on R640). Lab: QEMU `8086:100e`.
 
 use crate::mgmt::e1000_mmio::pci_id_is_qemu_e1000;
 
@@ -53,7 +53,8 @@ pub fn pick_lab_or_none(nics: &[PciNicRecord]) -> Option<PciNicRecord> {
 }
 
 /// R640 Cruzer COM2 2026-08-17 — BCM5720 dual-port LOM (Phase 0 pick).
-/// Phase D may bind **this** `vid:did` only (prefer `01:00.0`). Not a lab driver.
+/// Phase D may bind **this** `vid:did` only (SNP-lease MAC; R640: `01:00.1`).
+/// Not a lab driver.
 pub const IRON_CENSUS_VENDOR: u16 = 0x14e4;
 pub const IRON_CENSUS_DEVICE: u16 = 0x165f;
 
@@ -67,13 +68,17 @@ pub fn census_nic_has_lab_driver(vendor: u16, device: u16) -> bool {
     pci_id_is_qemu_e1000(vendor, device)
 }
 
-/// Phase D iron `Device` is BCM5720 `14e4:165f` only (prefer `01:00.0`).
+/// Phase D iron `Device` is BCM5720 `14e4:165f` only (SNP-lease MAC; prefer func 1).
 pub fn census_nic_has_iron_driver(vendor: u16, device: u16) -> bool {
     pci_id_is_iron_census(vendor, device)
 }
 
 /// Walk a mocked capability list (host tests / Kani). `read_dword(offset)`.
-pub fn find_msix_entries(status: u16, cap_ptr: u8, mut read_dword: impl FnMut(u8) -> u32) -> Option<u16> {
+pub fn find_msix_entries(
+    status: u16,
+    cap_ptr: u8,
+    mut read_dword: impl FnMut(u8) -> u32,
+) -> Option<u16> {
     if status & (1 << 4) == 0 {
         return None;
     }
@@ -132,7 +137,8 @@ pub fn run_pre_ebs_pci_census() {
                     let bar0 = pci_read32(bus, dev, func, 0x10) & !0xF;
                     let status = (pci_read32(bus, dev, func, 0x04) >> 16) as u16;
                     let cap_ptr = pci_read32(bus, dev, func, 0x34) as u8;
-                    let msix = find_msix_entries(status, cap_ptr, |off| pci_read32(bus, dev, func, off));
+                    let msix =
+                        find_msix_entries(status, cap_ptr, |off| pci_read32(bus, dev, func, off));
                     nics[n] = PciNicRecord {
                         bus,
                         dev,

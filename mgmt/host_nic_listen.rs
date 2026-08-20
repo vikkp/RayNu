@@ -4,8 +4,12 @@
 //! Proven Core: **outside**
 //!
 //! Firmware SNP is never polled. QEMU e1000 uses static user-net addressing.
-//! Iron BCM5720 (`14e4:165f` @ `01:00.0`) reuses the PRE-EBS SNP lease.
-//! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
+//! Iron BCM5720 (`14e4:165f`) reuses the PRE-EBS SNP lease and binds the
+//! function with live `BMSR_LSTATUS` first (Dedicated iDRAC + host LOM);
+//! otherwise MAC match to that lease; otherwise try func 0 (LOM1) then func 1.
+//! Hardware bring-up runs **immediately after EBS**
+//! so UNDI analog is not left idle through the guest path; HTTP idle is after
+//! `BOOT-OK`. TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
 //! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
 //!
 //! Iron HTTP-OK is printed from `pci_census`, never here.
@@ -50,6 +54,8 @@ enum ListenWhen {
 }
 
 /// After ExitBootServices: if QEMU e1000 is present, serve GET / then continue.
+/// Iron BCM5720: arm analog/DMA **now** (before VMX/Linux) and listen after BOOT-OK.
+/// Do not take the APE PHY (`ape-nophylock=yes`).
 pub fn run_post_ebs_host_nic_listen() {
     run_listen(ListenWhen::AfterEbs);
 }
@@ -69,21 +75,46 @@ fn run_listen(when: ListenWhen) {
         listen_with_retries(when, NicKind::E1000);
         return;
     }
-    if matches!(when, ListenWhen::AfterBootOk)
-        && crate::mgmt::bcm5720_mmio::bcm5720_present()
-    {
-        listen_with_retries(when, NicKind::Bcm5720);
+    if crate::mgmt::bcm5720_mmio::bcm5720_present() {
+        match when {
+            ListenWhen::AfterEbs => bringup_bcm5720_post_ebs(),
+            ListenWhen::AfterBootOk => listen_with_retries(when, NicKind::Bcm5720),
+        }
         return;
     }
     if matches!(when, ListenWhen::AfterBootOk) {
         if let Some((v, d)) = pci_census::census_pick() {
-            serial::write_str(
-                "boot: HOST-NIC idle: no native Device for census vid:did=",
-            );
+            serial::write_str("boot: HOST-NIC idle: no native Device for census vid:did=");
             write_hex_u16(v);
             serial::write_byte(b':');
             write_hex_u16(d);
             serial::write_line(" (Phase D waits on this id; do not guess LOM)");
+        }
+    }
+}
+
+/// Steal BCM5720 analog immediately after EBS. Do **not** HTTP-listen here
+/// (guest path first). Iron 2026-08-19 complete COM2 (`1404f055`): both
+/// funcs `cand bmsr=7949` then `CORECLK_RESET` without BMCR still
+/// `link=timeout`. AfterBootOk listen is skipped without `LSTATUS`.
+fn bringup_bcm5720_post_ebs() {
+    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
+        serial::write_line(
+            "boot: WARN — HOST-NIC BCM5720 post-EBS bring-up skipped (no parked SNP lease)",
+        );
+        return;
+    };
+    serial::write_line("boot: HOST-NIC BCM5720 post-EBS bring-up (keep analog before guest path)");
+    match Bcm5720Device::init(lease.mac) {
+        Ok(dev) => {
+            serial::write_str("boot: HOST-NIC BCM5720 post-EBS Device MAC=");
+            write_mac(dev.mac());
+            serial::write_line(" (listen after BOOT-OK)");
+        }
+        Err(_) => {
+            serial::write_line(
+                "boot: WARN — HOST-NIC BCM5720 post-EBS bring-up failed (BOOT-OK will retry)",
+            );
         }
     }
 }
@@ -142,19 +173,21 @@ fn fatal_kind(e: MgmtFatal) -> u8 {
     }
 }
 
-fn listen_bcm5720(
-    port: u16,
-    when: ListenWhen,
-    arena: &mut MgmtArena,
-) -> Result<(), MgmtFatal> {
+fn listen_bcm5720(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
     let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
         serial::write_line(
             "boot: WARN — HOST-NIC BCM5720: no parked SNP lease (cannot bind; skip MMIO)",
         );
         return Err(MgmtFatal::Bind);
     };
-    let mut device = Bcm5720Device::init().map_err(|_| MgmtFatal::Device)?;
+    let mut device = Bcm5720Device::init(lease.mac).map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
+    if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
+        && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
+    {
+        serial::write_line("boot: WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)");
+        return Ok(());
+    }
     let ip = Ipv4Address::new(lease.ip[0], lease.ip[1], lease.ip[2], lease.ip[3]);
     let gw = if lease.has_router {
         Some(Ipv4Address::new(
@@ -182,11 +215,7 @@ fn listen_bcm5720(
     )
 }
 
-fn listen_e1000(
-    port: u16,
-    when: ListenWhen,
-    arena: &mut MgmtArena,
-) -> Result<(), MgmtFatal> {
+fn listen_e1000(port: u16, when: ListenWhen, arena: &mut MgmtArena) -> Result<(), MgmtFatal> {
     let mut device = E1000Device::init().map_err(|_| MgmtFatal::Device)?;
     let mac = device.mac();
     serial::write_str("boot: HOST-NIC e1000 MAC=");
@@ -272,6 +301,10 @@ fn listen_loop<D: Device>(
                 serial::write_byte(b':');
                 write_u16_dec(port);
                 serial::write_line("/  (native BCM5720; SNP is dead)");
+                serial::write_line(
+                    "boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)",
+                );
+                print_bcm5720_poll_diag();
             }
         }
     }
@@ -291,6 +324,8 @@ fn listen_loop<D: Device>(
     let mut served: u32 = 0;
     let mut announced = false;
     let mut rx_len: usize = 0;
+    let mut last_diag: i64 = 0;
+    let mut last_rx_drop: u32 = 0;
     let deadline = match when {
         ListenWhen::AfterEbs => HOST_NIC_LISTEN_MS as i64,
         ListenWhen::AfterBootOk => i64::MAX / 4,
@@ -335,8 +370,7 @@ fn listen_loop<D: Device>(
                     }
                 }
             }
-            let headers_done =
-                rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
             if headers_done && sock.can_send() {
                 let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
                 let wn = unsafe {
@@ -392,6 +426,17 @@ fn listen_loop<D: Device>(
 
         millis += 1;
         tsc_spin_ms(1);
+        // E3b closed: do not spam `poll rx_prod=` every 5s. Sample drops only.
+        if nic_tag == "BCM5720" && millis - last_diag >= 5000 {
+            last_diag = millis;
+            if let Some(d) = crate::mgmt::bcm5720_mmio::bcm5720_poll_diag() {
+                if d.rx_drop > last_rx_drop {
+                    serial::write_line("boot: WARN — HOST-NIC BCM5720 rx_drop rose");
+                    print_bcm5720_poll_diag();
+                }
+                last_rx_drop = d.rx_drop;
+            }
+        }
     }
 
     if served == 0 {
@@ -400,6 +445,42 @@ fn listen_loop<D: Device>(
         );
     }
     Ok(())
+}
+
+fn print_bcm5720_poll_diag() {
+    let Some(d) = crate::mgmt::bcm5720_mmio::bcm5720_poll_diag() else {
+        return;
+    };
+    serial::write_str("boot: HOST-NIC BCM5720 poll rx_prod=");
+    write_u16_dec(d.rx_prod);
+    serial::write_str(" rx_cons=");
+    write_u16_dec(d.rx_cons);
+    serial::write_str(" tx_prod=");
+    write_u16_dec(d.tx_prod);
+    serial::write_str(" tx_cons=");
+    write_u16_dec(d.tx_cons);
+    serial::write_str(" rx_ok=");
+    write_u32_dec(d.rx_ok);
+    serial::write_str(" rx_drop=");
+    write_u32_dec(d.rx_drop);
+    serial::write_byte(b'\n');
+}
+
+fn write_u32_dec(mut n: u32) {
+    let mut buf = [0u8; 10];
+    let mut i = 10;
+    if n == 0 {
+        serial::write_byte(b'0');
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte(b);
+    }
 }
 
 fn mac_seed(mac: [u8; 6]) -> u64 {

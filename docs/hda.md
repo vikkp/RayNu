@@ -1,23 +1,23 @@
 ---
 hda_version: 1
-last_updated: 2026-08-17
-last_commit: b72f3265cacd8ade89a06eb55e7910cd56dd226e
-last_commit_short: b72f326
+last_updated: 2026-08-20
+last_commit: ad1fa76ec72cdcc56be8abc3a30de69b2d996b86
+last_commit_short: ad1fa76
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
-months_to_everest: 1.5
-months_to_everest_prev: 0.75
+months_to_everest: 0.5
+months_to_everest_prev: 1.5
 velocity_commits_30d: 345
-velocity_gates_30d: 19
-overall_pct: 88
-confidence: medium
+velocity_gates_30d: 20
+overall_pct: 93
+confidence: high
 baseline_date: 2026-07-20
 baseline_months: 4.5
-everest_eta_month: "2026-10"
+everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 85
+summit_ui_pct: 94
 summit_iso_pct: 82
 summit_prod_pct: 100
 ---
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **88%** | held (E2+E3+E5 stamps; E3b named, not closed) |
-| **Months to Mount Everest** | **1.5** | +0.75 (ADR-013 native NIC; SNP after EBS rejected) |
-| **ETA month** | **2026-10** | slipped from 2026-09 |
-| **Confidence** | medium | E2+E3+E5 on COM2; Phase 0 **closed** (`14e4:165f`); Phase C QEMU GET / closed; Phase D **driver in-tree**; E3b iron HTTP-OK open |
+| **Overall product readiness** | **93%** | +5 (E3b `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720) |
+| **Months to Mount Everest** | **0.5** | −1.0 (E3b closed; E4 polish + distro remain) |
+| **ETA month** | **2026-09** | pulled from 2026-10 |
+| **Confidence** | high | E2+E3+E3b+E5 stamps on COM2; TLS/console + distro installer residual |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~85% | E3 PRE-EBS closed; E3b durable HTTP missing (firmware SNP dead) |
+| **vSphere-like UI (network)** | ~94% | E3 PRE-EBS + E3b durable HTTP closed; TLS/console residual |
 | **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
-Months to Everest  ██░░░░░░░░░░░░░░░░░░  1.5 mo  (was 0.75)
-Overall %          █████████████████░░░  88%
+Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.5 mo  (was 1.5)
+Overall %          ██████████████████░░  93%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -106,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~85% · ~1.5 months residual (E3b host-owned NIC per ADR-013, then TLS/console)**
+**Status: NEAR · ~94% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -119,15 +119,15 @@ All must be true (no hand-waving):
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
-| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual — **after** host-owned post-EBS listen |
-| Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up; iron used lab bring-up |
+| Guest console / serial log UI | PARTIAL | Host UART ring via `GET /logs/serial` + SPA; guest VNC residual |
+| Auth beyond bring-up toy | PARTIAL | ESP `auth.token` overrides bring-up; iron used lab bring-up (`AuthAllowed`) |
 | Networking/storage ops UI | MISSING | probes only |
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
-| **Post-EBS durable HTTP (E3b)** | MISSING | Phase 0 **closed on iron** (`14e4:165f` BCM5720 @ `01:00.0`); Phase C **QEMU GET /** closed; Phase D **driver in-tree**; iron `HOST-NIC-HTTP-OK` waits on an exchange after `BOOT-OK` |
+| **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer; after E3b)**
+**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -159,22 +159,21 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+0 | 2026-07 | **M7.0–M7.4 closed** (lab host); **M7.5 R640 next** | M7.4 Latitude host smoke | **DONE (M7.4 host)** |
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
-| M+3 | 2026-10 | E3b iron HTTP + E4 polish | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **ETA** |
-| M+4 | 2026-11 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
-| M+5 | 2026-12 | Buffer / M8 sketch start | — | BUFFER |
+| M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
+| M+4 | 2026-09 | E4 polish + distro installer | remaining Everest | **ETA** |
+| M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
-2026-08 ████████  R640 boot (E2 CLOSED)
-2026-09 ████░░░░  E3b lab NIC (ADR-013)       ← months_to_everest ≈ 1.5
-2026-10 ████░░░░  E3b iron HTTP / Everest polish
+2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
+2026-09 ████░░░░  E4 polish + distro installer  ← months_to_everest ≈ 0.5
+2026-10 ░░░░░░░░  buffer
 2026-11 ░░░░░░░░  buffer
-2026-12 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16. Shrink months when **E3b** (ADR-013 native HTTP after `BOOT-OK`) lands. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -188,7 +187,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
-| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | 1.0 | P0-4 | Phase 0 **closed** (`14e4:165f`); Phase C QEMU GET / **closed**; Phase D Device **in-tree**; iron HTTP-OK **open** |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -210,6 +209,7 @@ Ordered for critical path (parallelize B with D design):
 - **M6 closed** on Latitude — soak + external audit/spec review (`RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`)
 - **M7.0–M7.4 closed** on Latitude (M7.3–M7.4 = **host package smoke**; residuals named)
 - **M7.5 iron closed:** `RAYNU-V-R640-BOOT-OK` on real R640 COM2 (SHELL + M4; `v0.1.0-xsavesfix`, 2026-08-15)
+- **M7.8 / E3b iron closed:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38` (2026-08-20)
 
 ---
 
@@ -258,11 +258,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | b72f326 |
-| Summary | ADR-013 Phase D **BCM5720 Device in-tree** (`14e4:165f` @ `01:00.0`); HTTP-OK not claimed |
-| Everest impact | months 1.5 held; ETA 2026-10; overall 88 held; E3b still open (iron exchange) |
-| Gates touched | Phase D driver; `HOST-NIC-HTTP-OK` not claimed |
-| Months Δ | 1.5 held |
+| Commit | ad1fa76 |
+| Summary | Merge `main` (CIOSpeak + spa.png) into E3b #162; keep Stories articles; CIO View footer |
+| Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
+| Gates touched | none (site merge; E3b already closed) |
+| Months Δ | 0.5→0.5 |
 
 ---
 
@@ -271,10 +271,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | ID | Blocker / risk | Severity | Mitigations |
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
-| H2 | No in-HV HTTP/TLS stack | HIGH | Size-boxed stack or documented split helper (prefer in-binary for [Z]) |
+| H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
-| H4 | Firmware SNP unusable after EBS | HIGH | **Phase A closed**; Phase C QEMU GET / closed; Phase 0 **closed** (`14e4:165f`); Phase D Device **in-tree**; E3b iron = HTTP exchange after `BOOT-OK` |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E5 stamps closed; Everest residual E3b + E4 polish + distro |
+| H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5 stamps closed; Everest residual E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 
@@ -284,6 +284,29 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
+| 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
+| 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
+| 2026-08-20 | 005f25d | 1.5 | 88 | Ring wrap closed (`rx_ok` 0→70); `tx_prod=0`; GRC BSWAP_DATA + RX dump; HTTP-OK not claimed |
+| 2026-08-20 | fc7ed70 | 1.5 | 88 | CORECLK DMA closed; RX wrap replay (`rx_ok` +65536); `ring_idx`; HTTP-OK not claimed |
+| 2026-08-19 | de52aaf | 1.5 | 88 | Live LOM `:38` `link=up`; skip-CORECLK `26573eb1` no native accept; CORECLK for DMA; HTTP-OK not claimed |
+| 2026-08-19 | be6bed5 | 1.5 | 88 | Ubuntu `eno3` `:38` live LOM; station = GPHY MAC not APE `:3a`; HTTP-OK not claimed |
+| 2026-08-19 | fb96cdb | 1.5 | 88 | PRE-EBS peek SNP `:3a` vs host GPHY `7949`; take PHY from APE; HTTP-OK not claimed |
+| 2026-08-19 | 58d336b | 1.5 | 88 | PCI-restore EFI `ec08c00f` still `cand bmsr=7949` / skip-listen; PRE-EBS BMSR peek; HTTP-OK not claimed |
+| 2026-08-19 | b5ea069 | 1.5 | 88 | CORECLK-sans-BMCR EFI `1404f055` still `cand bmsr=7949`; PCI restore + `phy_setup=post`; HTTP-OK not claimed |
+| 2026-08-19 | f0961f1 | 1.5 | 88 | Skip-BMCR EFI still `cand bmsr=7949`; CORECLK_RESET without BMCR; HTTP-OK not claimed |
+| 2026-08-19 | 84f7a74 | 1.5 | 88 | Post-EBS `cand bmsr=7949` at EBS; skip `BMCR_RESET` when `ape-ncsi=yes`; HTTP-OK not claimed |
+| 2026-08-19 | 5291513 | 1.5 | 88 | Dual-func EFI both ports `bmsr=7949` at BOOT-OK; post-EBS BCM5720 bring-up + BOOT-OK reuse; HTTP-OK not claimed |
+| 2026-08-19 | 26c3158 | 1.5 | 88 | Skip-reset EFI `1212416` `ape-ncsi=yes` still `lpa=0000` on func 1; try both funcs; HTTP-OK not claimed |
+| 2026-08-19 | 295da74 | 1.5 | 88 | PHY-before-reset EFI `1213952` still `lpa=0000`; skip CORECLK_RESET; HTTP-OK not claimed |
+| 2026-08-19 | d82621a | 1.5 | 88 | APE-lock EFI `ape-lock=yes` still `bmsr=7949`; PHY reset before CORECLK_RESET; HTTP-OK not claimed |
+| 2026-08-19 | 1fefa45 | 1.5 | 88 | Inherit EFI `pre-reset bmsr=7949 ape=yes`; APE BAR2 lock; HTTP-OK not claimed |
+| 2026-08-19 | m7-8-bcm-inherit-phy | 1.5 | 88 | PHY-reset EFI still `bmsr=7949`; inherit SNP PHY or APD-off; HTTP-OK not claimed |
+| 2026-08-19 | m7-8-bcm-phy-reset | 1.5 | 88 | Iron `bmsr=7949` no carrier; `tg3_bmcr_reset` + PWRCTL + Auto-MDIX; HTTP-OK not claimed |
+| 2026-08-19 | m7-8-bcm-link | 1.5 | 88 | PHY `BMSR_LSTATUS` wait + MII/GMII + PROMISC; station `:3a` confirmed; HTTP-OK not claimed |
+| 2026-08-18 | m7-8-station-mac | 1.5 | 88 | Station = parked SNP MAC (`:3a`); BAR0 peek `:39` curl miss; HTTP-OK not claimed |
+| 2026-08-18 | m7-8-bcm-tg3 | 1.5 | 88 | Phase D Linux `tg3` bring-up (not `bnxt`); SNP-MAC picker kept; HTTP-OK not claimed |
+| 2026-08-18 | m7-8-bcm-snp-mac | 1.5 | 88 | Phase D bind SNP-lease MAC (`01:00.1` / `:3a`); HTTP-OK not claimed |
 | 2026-08-17 | m7-8-bcm5720 | 1.5 | 88 | Phase D BCM5720 Device in-tree (`14e4:165f`); HTTP-OK not claimed |
 | 2026-08-17 | adr013-0de-iron | 1.5 | 88 | Phase 0 **closed on iron**: `14e4:165f` BCM5720; HTTP-OK not claimed |
 | 2026-08-17 | adr013-0de | 1.5 | 88 | Phase 0 census print + Phase E arena; Phase D parse/idle wired; iron HTTP-OK open |
@@ -327,13 +350,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E5 stamps CLOSED; Phase 0 CLOSED (`14e4:165f`); Phase D in-tree; E3b OPEN
-Months left:   1.5  (ETA ~ 2026-10)
-Next move:     flash Phase D EFI; curl same SNP lease after BOOT-OK
+Now:           E2+E3+E3b+E5 stamps CLOSED; native BCM5720 HTTP after BOOT-OK (`:38` / 10.99.99.144:8443)
+Months left:   0.5  (ETA ~ 2026-09)
+Next move:     E4 polish (TLS/console) + real distro installer; keep APE PHY
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
-SNP after EBS: dead — WARN-only idle closed on iron 2026-08-17 (no RSOD)
+SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  Mount Everest (E3b + E4 polish + distro installer remain)
+Do not claim:  Mount Everest (E4 polish + distro installer remain)
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

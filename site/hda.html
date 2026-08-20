@@ -6,12 +6,12 @@
     <title>RayNu-V — Honest Distance Assessment · Mount Everest</title>
     <meta
       name="description"
-      content="Honest Distance Assessment for RayNu-V: E2+E3+E5 closed on R640; E3b (ADR-013 Accepted) open; residual host-owned NIC + E4 polish + distro."
+      content="Honest Distance Assessment for RayNu-V: E2+E3+E3b+E5 closed on R640; residual E4 polish + distro installer."
     />
     <meta property="og:title" content="RayNu-V · Distance to Mount Everest" />
     <meta
       property="og:description"
-      content="Living tracker: E2+E3+E5 stamps closed; E3b (ADR-013 Accepted) is lifetime HTTP on a host-owned NIC. Months 1.5 · ETA 2026-10."
+      content="Living tracker: E2+E3+E3b+E5 stamps closed. Months 0.5 · ETA 2026-09. Residual: E4 polish + distro installer."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -126,7 +126,7 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3 PRE-EBS closed; Phase D BCM5720 in-tree; HTTP-OK open</span>
+              <span class="hda-summits__note">E3 PRE-EBS closed; SNP :3a vs host GPHY 7949; take PHY from APE; HTTP-OK open</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
@@ -150,13 +150,13 @@
             <code>RAYNU-V-R640-BOOT-OK</code> (E2) and
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP, 2026-08-16). M7.7
             Cruzer Micro two-boot closed stamp persist
-            (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). E3 is bring-up
-            only. <strong>E3b</strong> (ADR-013 <strong>Accepted</strong>) is lifetime HTTP on a
-            host-owned NIC — firmware SNP hung, then RSOD after EBS; WARN-only
-            idle later closed with <strong>no RSOD</strong>. Phase D BCM5720
-            driver is in-tree; iron <code>HOST-NIC-HTTP-OK</code> waits on an
-            exchange after <code>BOOT-OK</code>. Then remaining E4 polish and a
-            real distro installer (not El Torito first).
+            (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>).
+            <strong>E3b</strong> closed 2026-08-20:
+            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> after
+            <code>BOOT-OK</code> on native BCM5720
+            (<code>:38</code> / <code>10.99.99.144:8443</code>). Keep APE PHY.
+            Residual: remaining E4 polish (TLS/console) and a real distro
+            installer.
           </p>
           <div class="cta" data-reveal>
             <a

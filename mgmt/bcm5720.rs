@@ -9,7 +9,7 @@
 #![cfg(feature = "uefi-bin")]
 
 use crate::mgmt::bcm5720_mmio::{self, FRAME_MAX};
-use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
+use smoltcp::phy::{Checksum, Device, DeviceCapabilities, Medium, RxToken, TxToken};
 use smoltcp::time::Instant;
 
 pub struct Bcm5720Device {
@@ -17,8 +17,8 @@ pub struct Bcm5720Device {
 }
 
 impl Bcm5720Device {
-    pub fn init() -> Result<Self, bcm5720_mmio::Bcm5720Error> {
-        let mac = bcm5720_mmio::init_bcm5720()?;
+    pub fn init(prefer_mac: [u8; 6]) -> Result<Self, bcm5720_mmio::Bcm5720Error> {
+        let mac = bcm5720_mmio::init_bcm5720(prefer_mac)?;
         Ok(Self { mac })
     }
 
@@ -59,6 +59,12 @@ impl Device for Bcm5720Device {
         caps.max_transmission_unit = FRAME_MAX;
         caps.max_burst_size = Some(1);
         caps.medium = Medium::Ethernet;
+        // Hardware RX checksums are not trusted (NO_RX_PHDR_CSUM; SNP may
+        // have left offload bits). Still fill TX checksums (NO_TX_PHDR_CSUM).
+        caps.checksum.ipv4 = Checksum::Tx;
+        caps.checksum.udp = Checksum::Tx;
+        caps.checksum.tcp = Checksum::Tx;
+        caps.checksum.icmpv4 = Checksum::Tx;
         caps
     }
 }

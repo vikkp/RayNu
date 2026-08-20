@@ -20,6 +20,8 @@ smoke is **not** first light — only serial from this box closes
       network (note IP, credentials, service tag).
 - [ ] Confirm UEFI boot mode in BIOS; enable virtualization (VT-x / VT-d as
       required for your path).
+- [ ] Confirm iDRAC NIC Selection = **Dedicated** (cable dedicated RJ45 first).
+      Host mgmt on a LOM jack. See [`r640_idrac_dedicated.md`](r640_idrac_dedicated.md).
 - [ ] From a laptop, open the iDRAC web UI and start a **virtual console**
       session (COM1 / serial view ready **before** any reboot).
 - [ ] Decide boot media: physical **USB** or **iDRAC virtual media** (both
