@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: ad1fa76ec72cdcc56be8abc3a30de69b2d996b86
-last_commit_short: ad1fa76
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -187,7 +187,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-2 | **M7.5** R640 boot gate (real iron) | B | **DONE** | P0-1 helpful | `RAYNU-V-R640-BOOT-OK` 2026-08-15; evidence closed |
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
-| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
+| P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013 Phase D) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; first-accept after `VMXOFF` |
+| P0-13 | **ADR-013 Stage 1** Native poll beside VMX (Phase F) + iron E | C | 0.25 | P0-12 | Coexist: no `VMXOFF`-then-listen; iron `MgmtFatal` restart; fuzz `bcm5720_mmio` |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -258,10 +259,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | ad1fa76 |
-| Summary | Merge `main` (CIOSpeak + spa.png) into E3b #162; keep Stories articles; CIO View footer |
+| Commit | PENDING |
+| Summary | ADR-013 amended: Stage 1 not complete while listen is post-`VMXOFF`; Phase D stays closed |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
-| Gates touched | none (site merge; E3b already closed) |
+| Gates touched | none (architecture honesty; P0-13 opened) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -277,6 +278,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5 stamps closed; Everest residual E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
+| H8 | Native HTTP only after `VMXOFF` | MED | ADR-013 amended 2026-08-20; Phase F coexist + iron E; do not reopen Phase D |
 
 ---
 
@@ -284,6 +286,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | PENDING | 0.5 | 93 | ADR-013 amended: Stage 1 residual = coexist + iron E + F; Phase D first-accept stays closed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
 | 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
