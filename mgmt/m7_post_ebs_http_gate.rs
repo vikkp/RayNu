@@ -36,6 +36,8 @@ pub fn post_ebs_http_surface_present() -> bool {
         && snp.contains("firmware SNP dead after EBS")
         && snp.contains("PRE-EBS SNP window")
         && launch.contains("run_post_ebs_http_idle")
+        && launch.contains("try_arm_native_coexist")
+        && launch.contains("run_post_ebs_http_snp_warn_only")
         && !snp.contains("Tcp4Protocol")
         && idle_skips_firmware_snp_poll(snp)
 }

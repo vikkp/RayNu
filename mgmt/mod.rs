@@ -321,6 +321,7 @@ pub mod host_nic;
 pub mod host_nic_poll;
 #[cfg(feature = "uefi-bin")]
 pub mod host_nic_listen;
+pub mod host_nic_coexist;
 pub mod m7_host_nic_gate;
 pub mod m7_post_ebs_http_gate;
 pub mod m7_ship_gate;
@@ -378,9 +379,12 @@ pub use http::{
     prop_http_mgmt_package, M7_HTTP_OK_MARKER, HTTP_GAP_NOTE, HTTP_LAB_NOTE,
 };
 pub use http_listen::{
-    run_post_ebs_http_idle, run_post_ebs_mgmt_listen, run_pre_ebs_mgmt_listen,
-    M7_POST_EBS_HTTP_OK_MARKER, M7_POST_EBS_HTTP_SCAFFOLD_MARKER, M7_UEFI_HTTP_OK_MARKER,
-    M7_UEFI_HTTP_SCAFFOLD_MARKER, UEFI_HTTP_GAP_NOTE,
+    run_post_ebs_http_idle, run_post_ebs_http_snp_warn_only, run_post_ebs_mgmt_listen,
+    run_pre_ebs_mgmt_listen, M7_POST_EBS_HTTP_OK_MARKER, M7_POST_EBS_HTTP_SCAFFOLD_MARKER,
+    M7_UEFI_HTTP_OK_MARKER, M7_UEFI_HTTP_SCAFFOLD_MARKER, UEFI_HTTP_GAP_NOTE,
+};
+pub use host_nic_coexist::{
+    prop_coexist_wired, tick_native_coexist, try_arm_native_coexist,
 };
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_uefi_http_gate::{

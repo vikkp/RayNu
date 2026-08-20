@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: ad1fa76ec72cdcc56be8abc3a30de69b2d996b86
-last_commit_short: ad1fa76
+last_commit: 518249cc699f4be6f5705b07c49e703328c50d64
+last_commit_short: 518249c
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -125,6 +125,7 @@ All must be true (no hand-waving):
 | Audit/tasks pane | PARTIAL | ring exists; UI thin |
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
+| **Phase F coexist (VMX on)** | IN PROGRESS | In-tree: `bounded_poll` on a credit-scheduler quantum after `BOOT-OK`. Not closed on iron until COM2 shows `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` **and** guests still scheduled **and** `HOST-NIC-HTTP-OK`. |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -188,6 +189,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-3 | Live Tier-1 Redfish (read-only health) | B | 0.5 | P0-2 | `idrac/` — after first boot |
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
+| P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **IN PROGRESS** | P0-12 | `bounded_poll` on scheduler quantum; iron HTTP-OK with guests live not claimed |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -258,10 +260,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | ad1fa76 |
-| Summary | Merge `main` (CIOSpeak + spa.png) into E3b #162; keep Stories articles; CIO View footer |
+| Commit | 518249c |
+| Summary | ADR-013 Phase F in-tree: native `bounded_poll` beside credit scheduler (VMX on). Iron HTTP-OK with guests live not claimed. |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
-| Gates touched | none (site merge; E3b already closed) |
+| Gates touched | host `m7_8_host_nic_coexist_wired`; Phase F not closed on iron |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -277,6 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5 stamps closed; Everest residual E4 polish + distro |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
+| H8 | Phase F coexist not closed on iron | MED | In-tree after `BOOT-OK`; post-`VMXOFF` idle remains fallback. Do not claim until COM2 + live guests + HTTP-OK |
 
 ---
 
@@ -284,6 +287,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-20 | 518249c | 0.5 | 93 | Phase F in-tree: `bounded_poll` on scheduler quantum while VMX on; P0-13 IN PROGRESS; iron coexist HTTP-OK not claimed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
 | 2026-08-20 | a87acc6 | 0.5 | 93 | E3b CLOSED: `HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; months 1.5→0.5; ETA→2026-09 |
@@ -352,7 +356,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5 stamps CLOSED; native BCM5720 HTTP after BOOT-OK (`:38` / 10.99.99.144:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     E4 polish (TLS/console) + real distro installer; keep APE PHY
+Next move:     Phase F iron (coexist listen while guests scheduled); then E4 polish + distro; keep APE PHY
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline

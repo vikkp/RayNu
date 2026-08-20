@@ -152,6 +152,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r
 |------|--------|------|
 | E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
+| ADR-013 Phase F | coexist HTTP while VMX on | **In-tree.** Not closed on iron until COM2 `HOST-NIC coexist listening` + guests scheduled + `HOST-NIC-HTTP-OK`. |
 | Everest residual | E4 polish + distro | TLS/console later; distro installer later |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

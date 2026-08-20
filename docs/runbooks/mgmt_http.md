@@ -8,7 +8,7 @@
 - Post-EBS firmware: `RAYNU-V-M7-POST-EBS-HTTP-OK` — **not claimed**. Firmware SNP is dead after EBS on this boot method (iron 2026-08-17).
 - M7.8 scaffold: `RAYNU-V-M7-HOST-NIC-SCAFFOLD-OK` — `./tools/m7-host-nic-smoke.sh` (ADR-013 Phase 0/C/D/E wiring)
 - M7.8 QEMU: `RAYNU-V-M7-HOST-NIC-QEMU-OK` — post-EBS `GET /` on QEMU `e1000` (`8086:100e`); `./tools/m7-host-nic-qemu-smoke.sh` (also greps PRE-EBS `vid:did=8086:100e`)
-- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. Do not claim from host or QEMU.
+- M7.8 iron: `RAYNU-V-M7-HOST-NIC-HTTP-OK` — **Phase D closed on iron** 2026-08-20 after `BOOT-OK` on BCM5720 `:38`. Do not claim from host or QEMU. **Phase F (in tree):** native `bounded_poll` on a credit-scheduler quantum **while VMX is on** (guests stay alive). Post-`VMXOFF` idle is fallback only.
 
 ## Story
 
@@ -213,6 +213,9 @@ Do **not** flash an EFI that prints `ape-nophylock=no` or
 `inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`. One
 `poll rx_prod=` snapshot at listen start, then COM2 stays quiet except TCP
 accept / HTTP-OK (and a WARN if `rx_drop` rises).
+Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
+`BOOT-OK` (guests still scheduled). If coexist cannot arm, fallback is
+Phase D idle after `VMXOFF`.
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
 on `:38` / `10.99.99.144:8443`. Evidence:
