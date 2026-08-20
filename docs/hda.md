@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: e5b8c38dcedee963e2554ddda2cd048ca6b1235c
-last_commit_short: e5b8c38
+last_commit: 0e94b5be9762513319640ea7cf572110549c10a6
+last_commit_short: 0e94b5b
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -260,7 +260,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5b8c38 |
+| Commit | 0e94b5b |
 | Summary | Park G1–G3 after Phase F (G0 identity EPT scribbled stub VMCS). Iron GET / HTTP-OK with VMX on; VMPTRLD fail not claimed closed. |
 | Everest impact | months 0.5 held; overall 93 held; ETA 2026-09 held |
 | Gates touched | host coexist wiring; Phase F not closed |
@@ -287,7 +287,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-20 | e5b8c38 | 0.5 | 93 | Phase F iron: GET / HTTP-OK with VMX on; VMPTRLD G1–G3 failed; park stubs next EFI; not closed |
+| 2026-08-20 | 0e94b5b | 0.5 | 93 | Phase F iron: GET / HTTP-OK with VMX on; VMPTRLD G1–G3 failed; park stubs next EFI; not closed |
 | 2026-08-20 | 91f66e6 | 0.5 | 93 | Phase F in-tree: `bounded_poll` on scheduler quantum while VMX on; P0-13 IN PROGRESS; iron coexist HTTP-OK not claimed |
 | 2026-08-20 | ad1fa76 | 0.5 | 93 | Merge `main` CIOSpeak + spa.png into #162; Stories articles kept; CIO View footer |
 | 2026-08-20 | 7e7232b | 0.5 | 93 | Quiet COM2: stop 5s `poll rx_prod=` spam after E3b; WARN on `rx_drop` only |
