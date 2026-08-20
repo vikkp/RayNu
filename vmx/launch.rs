@@ -237,6 +237,9 @@ static mut SCHED: CreditScheduler = CreditScheduler::new();
 static mut SCHED_SLOT_CUR: usize = 0;
 static mut SCHED_SLICE: [bool; M4_NVM_GUEST_SLOTS] = [false; M4_NVM_GUEST_SLOTS];
 static mut SCHED_OK_LATCHED: bool = false;
+static mut NVM_OK_LATCHED: bool = false;
+/// True after M4.3–M4.5 probes finished; scheduler may resume for Phase F.
+static mut M4_LADDER_DONE: bool = false;
 static mut TWO_VM_LATCHED: bool = false;
 
 /// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
@@ -1531,10 +1534,16 @@ fn note_sched_slice(slot: usize) {
                 }
             }
             if ok {
-                serial::write_line(M4_NVM_OK_MARKER);
-                serial::write_line(
-                    "boot: M4.2 complete — ≥4 concurrent guests under credit scheduler",
-                );
+                if !NVM_OK_LATCHED {
+                    NVM_OK_LATCHED = true;
+                    serial::write_line(M4_NVM_OK_MARKER);
+                    serial::write_line(
+                        "boot: M4.2 complete — ≥4 concurrent guests under credit scheduler",
+                    );
+                }
+                if M4_LADDER_DONE {
+                    return;
+                }
                 if HAS_BLK_PROBE {
                     try_launch_blk_probe();
                 }
@@ -1557,7 +1566,29 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         }
     };
     if ops::vmptrld(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — sched VMPTRLD failed");
+        serial::write_str("boot: ERROR — sched VMPTRLD failed slot=");
+        write_hex_u32(slot as u32);
+        serial::write_byte(b'\n');
+        // Phase F iron 2026-08-20: G0 Linux identity EPT can scribble G1–G3
+        // VMCS pages. Do not VMXOFF the mgmt plane — reload the current slot.
+        if M4_LADDER_DONE && SCHED_SLOT_CUR != slot {
+            if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
+                if ops::vmptrld(cur_f.vmcs_phys).is_ok() {
+                    serial::write_str("boot: WARN — park slot=");
+                    write_hex_u32(slot as u32);
+                    serial::write_str(" resume slot=");
+                    write_hex_u32(SCHED_SLOT_CUR as u32);
+                    serial::write_line(" (VMX on)");
+                    load_live_gprs_from_slot(SCHED_SLOT_CUR);
+                    ACTIVE_GUEST_ID = guest_id_for_slot(SCHED_SLOT_CUR);
+                    REAL_LINUX_GUEST = SCHED_SLOT_CUR == 0;
+                    BRINGUP_GUEST_CODE_PHYS = cur_f.guest_code_phys;
+                    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+                    arm_sched_slice();
+                    vmresume_with_gprs();
+                }
+            }
+        }
         finish_boot(false);
     }
     SCHED_SLOT_CUR = slot;
@@ -1573,9 +1604,11 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
     let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
     let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
     arm_sched_slice();
-    serial::write_str("boot: sched switch → slot=");
-    write_hex_u32(slot as u32);
-    serial::write_byte(b'\n');
+    if !M4_LADDER_DONE {
+        serial::write_str("boot: sched switch → slot=");
+        write_hex_u32(slot as u32);
+        serial::write_byte(b'\n');
+    }
     vmresume_with_gprs();
 }
 
@@ -1624,6 +1657,8 @@ unsafe fn after_shell_cpuid(slot: usize) -> ! {
 /// Host LAPIC tick while SCHED_MODE: consume quantum and switch.
 unsafe fn schedule_preempt() -> ! {
     let _ = apic::eoi();
+    // ADR-013 Phase F: one bounded NIC poll per scheduler quantum (VMX on).
+    crate::mgmt::tick_native_coexist();
     let cur = SCHED_SLOT_CUR;
     // Guest `cur` just ran a full host slice — latch progress before switch.
     note_sched_slice(cur);
@@ -3139,20 +3174,13 @@ unsafe fn resume_or_die() -> ! {
 }
 
 fn finish_boot(ok: bool) -> ! {
-    // SAFETY: still in VMX root after VMEXIT; tear down before QEMU exit.
-    match unsafe { hardware::vmxoff() } {
-        Ok(()) => serial::write_line("boot: VMXOFF ok"),
-        Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
-    }
-
     if ok {
         // Do not call serial::init() here — reprogramming UART mid-SOL can
         // drop the next line(s). Only revive COM*_LIVE after possible THR timeout.
         serial::revive_ports();
 
         // E2 / M7.5 gate marker — print immediately and repeatedly so a SOL
-        // capture cannot miss it between VMXOFF and the mode banner.
-        // Build stamp: if you do not see this line, the floppy is not this EFI.
+        // capture cannot miss it. Phase F keeps VMX on (no VMXOFF-then-listen).
         serial::write_line("boot: E2 marker build=r640-boot-ok-marker");
         serial::write_line(M7_R640_BOOT_OK_MARKER);
         serial::write_line(M7_R640_BOOT_OK_MARKER);
@@ -3185,18 +3213,66 @@ fn finish_boot(ok: bool) -> ! {
         }
         serial::revive_ports();
         serial::write_line(M7_R640_BOOT_OK_MARKER);
-        // Settle so iDRAC SOL drains THR before we spin forever.
         for _ in 0..5_000_000 {
             core::hint::spin_loop();
         }
         serial::qemu_exit_success();
-        // QEMU exits above; iron continues. Do not poll firmware SNP (hang + RSOD).
+        // QEMU exits above; iron continues with VMX still on.
+        crate::mgmt::run_post_ebs_http_snp_warn_only();
+        if crate::mgmt::try_arm_native_coexist() {
+            unsafe {
+                enter_sched_coexist();
+            }
+        }
+        serial::write_line(
+            "boot: WARN — HOST-NIC coexist skipped; Phase D idle after VMXOFF",
+        );
+    }
+
+    // SAFETY: still in VMX root after VMEXIT; tear down before QEMU fail/idle.
+    match unsafe { hardware::vmxoff() } {
+        Ok(()) => serial::write_line("boot: VMXOFF ok"),
+        Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
+    }
+
+    if ok {
         crate::mgmt::run_post_ebs_http_idle();
     } else {
         serial::write_line("boot: boot gate failed");
         serial::qemu_exit_failure();
     }
 
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
+/// Resume G0–G3 under the credit scheduler with native NIC ticks (Phase F).
+unsafe fn enter_sched_coexist() -> ! {
+    SMP_PROBE_MODE = false;
+    NET_PROBE_MODE = false;
+    BLK_PROBE_MODE = false;
+    M4_LADDER_DONE = true;
+    SCHED_MODE = true;
+    serial::write_line("boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)");
+    if !SCHED_OK_LATCHED || frames_for_slot(0).is_none() {
+        serial::write_line("boot: WARN — coexist has no scheduler/G0; falling back");
+        finish_boot_idle_after_vmxoff();
+    }
+    // G1–G3 are M4.2 SHELL stubs. G0 precise EPT identity-maps their VMCS
+    // HPA (iron: VMPTRLD fail after SPA HTTP). Keep only G0 runnable.
+    SCHED = CreditScheduler::new();
+    let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
+    SCHED_SLOT_CUR = 0;
+    switch_to_sched_slot(0);
+}
+
+fn finish_boot_idle_after_vmxoff() -> ! {
+    match unsafe { hardware::vmxoff() } {
+        Ok(()) => serial::write_line("boot: VMXOFF ok"),
+        Err(_) => serial::write_line("boot: ERROR — VMXOFF failed"),
+    }
+    crate::mgmt::run_post_ebs_http_idle();
     loop {
         core::hint::spin_loop();
     }

@@ -8,9 +8,11 @@
 //! function with live `BMSR_LSTATUS` first (Dedicated iDRAC + host LOM);
 //! otherwise MAC match to that lease; otherwise try func 0 (LOM1) then func 1.
 //! Hardware bring-up runs **immediately after EBS**
-//! so UNDI analog is not left idle through the guest path; HTTP idle is after
-//! `BOOT-OK`. TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E).
-//! Socket metadata is stack-local; the arena is `.bss` (no Boot Services heap).
+//! so UNDI analog is not left idle through the guest path. Phase F coexist
+//! listens **while VMX is on** (`bounded_poll` on a scheduler quantum).
+//! Phase D fallback (post-`VMXOFF` idle) remains if coexist cannot arm.
+//! TCP/HTTP scratch comes from [`crate::mgmt::mgmt_arena::MgmtArena`] (Phase E)
+//! or coexist `.bss` buffers (still not the Proven Core allocator).
 //!
 //! Iron HTTP-OK is printed from `pci_census`, never here.
 
@@ -29,7 +31,8 @@ use crate::mgmt::http::MGMT_HTTP_DEFAULT_PORT;
 use crate::mgmt::mgmt_arena::{MgmtArena, MgmtFatal};
 use crate::mgmt::mgmt_lease;
 use crate::mgmt::pci_census;
-use smoltcp::iface::{Config, Interface, SocketSet, SocketStorage};
+use core::mem::MaybeUninit;
+use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
 use smoltcp::phy::Device;
 use smoltcp::socket::tcp;
 use smoltcp::time::Instant;
@@ -38,6 +41,24 @@ use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 /// JUSTIFICATION: dedicated mgmt heap, distinct from the Proven Core allocator
 /// (ADR-013 Phase E). `.bss` so it survives ExitBootServices.
 static mut MGMT_ARENA: MgmtArena = MgmtArena::new();
+
+/// Phase F coexist session (BSP-only; not the Proven Core allocator).
+static mut COEXIST_ARMED: bool = false;
+static mut COEXIST_DEVICE: MaybeUninit<Bcm5720Device> = MaybeUninit::uninit();
+static mut COEXIST_IFACE: MaybeUninit<Interface> = MaybeUninit::uninit();
+static mut COEXIST_SOCK_STORAGE: [SocketStorage<'static>; 1] = [SocketStorage::EMPTY; 1];
+static mut COEXIST_SOCKETS: MaybeUninit<SocketSet<'static>> = MaybeUninit::uninit();
+static mut COEXIST_TCP_HANDLE: MaybeUninit<SocketHandle> = MaybeUninit::uninit();
+static mut COEXIST_TCP_RX: [u8; TCP_RX_N] = [0; TCP_RX_N];
+static mut COEXIST_TCP_TX: [u8; TCP_TX_N] = [0; TCP_TX_N];
+static mut COEXIST_RX_ACC: [u8; RX_ACC_N] = [0; RX_ACC_N];
+static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
+static mut COEXIST_MILLIS: i64 = 0;
+static mut COEXIST_ANNOUNCED: bool = false;
+static mut COEXIST_RX_LEN: usize = 0;
+static mut COEXIST_LAST_DIAG: i64 = 0;
+static mut COEXIST_LAST_RX_DROP: u32 = 0;
+static mut COEXIST_PORT: u16 = MGMT_HTTP_DEFAULT_PORT;
 
 const TCP_RX_N: usize = 8192;
 const TCP_TX_N: usize = 16384;
@@ -66,8 +87,220 @@ pub fn run_post_ebs_host_nic_listen() {
 /// QEMU `8086:100e` may print [`M7_HOST_NIC_QEMU_MARKER`] again.
 /// Iron HTTP-OK (see `pci_census::print_host_nic_exchange_ok_marker`) is only
 /// emitted when the census NIC is BCM5720 **and** an exchange happened.
+///
+/// Phase F prefers [`arm_bcm5720_coexist`] + scheduler ticks instead of this
+/// blocking loop. This remains the fallback if coexist cannot arm.
 pub fn run_post_boot_ok_native_idle() {
     run_listen(ListenWhen::AfterBootOk);
+}
+
+/// Arm native HTTP beside VMX (ADR-013 Phase F). Returns false on skip/fail.
+///
+/// INVARIANTS:
+/// - Does not call `VMXOFF`
+/// - Does not spin; caller resumes guests
+/// - Scratch is `.bss`, not `FrameAllocator`
+pub fn arm_bcm5720_coexist() -> bool {
+    if unsafe { COEXIST_ARMED } {
+        return true;
+    }
+    if crate::mgmt::e1000_mmio::qemu_e1000_present() {
+        return false;
+    }
+    if !crate::mgmt::bcm5720_mmio::bcm5720_present() {
+        return false;
+    }
+    let Some(lease) = mgmt_lease::load().filter(mgmt_lease::lease_is_usable) else {
+        serial::write_line(
+            "boot: WARN — HOST-NIC coexist skip (no parked SNP lease)",
+        );
+        return false;
+    };
+    let mut device = match Bcm5720Device::init(lease.mac) {
+        Ok(d) => d,
+        Err(_) => {
+            serial::write_line("boot: WARN — HOST-NIC coexist skip (device init)");
+            return false;
+        }
+    };
+    if crate::mgmt::bcm5720_mmio::skip_http_listen_without_lstatus()
+        && !crate::mgmt::bcm5720_mmio::bcm5720_phy_link_up()
+    {
+        serial::write_line(
+            "boot: WARN — HOST-NIC BCM5720 skip listen (no LSTATUS; do not curl)",
+        );
+        return false;
+    }
+    let mac = device.mac();
+    let ip = Ipv4Address::new(lease.ip[0], lease.ip[1], lease.ip[2], lease.ip[3]);
+    let gw = if lease.has_router {
+        Some(Ipv4Address::new(
+            lease.router[0],
+            lease.router[1],
+            lease.router[2],
+            lease.router[3],
+        ))
+    } else {
+        None
+    };
+    let port = MGMT_HTTP_DEFAULT_PORT;
+    let mut config = Config::new(EthernetAddress(mac).into());
+    config.random_seed = mac_seed(mac);
+    let mut iface = Interface::new(config, &mut device, Instant::from_millis(0));
+    iface.update_ip_addrs(|addrs| {
+        addrs.clear();
+        let _ = addrs.push(IpCidr::new(IpAddress::Ipv4(ip), lease.prefix));
+    });
+    if let Some(gw) = gw {
+        let _ = iface.routes_mut().add_default_ipv4_route(gw);
+    }
+
+    // SAFETY: BSP-only coexist session; buffers are .bss.
+    // KANI-TARGET: host gate checks wiring; this arm is firmware-only.
+    unsafe {
+        let tcp_rx = tcp::SocketBuffer::new(
+            (&mut *core::ptr::addr_of_mut!(COEXIST_TCP_RX)).as_mut_slice(),
+        );
+        let tcp_tx = tcp::SocketBuffer::new(
+            (&mut *core::ptr::addr_of_mut!(COEXIST_TCP_TX)).as_mut_slice(),
+        );
+        let sockets = SocketSet::new(
+            (&mut *core::ptr::addr_of_mut!(COEXIST_SOCK_STORAGE)).as_mut_slice(),
+        );
+        let mut sockets = sockets;
+        let tcp_handle = sockets.add(tcp::Socket::new(tcp_rx, tcp_tx));
+        if sockets
+            .get_mut::<tcp::Socket>(tcp_handle)
+            .listen(port)
+            .is_err()
+        {
+            serial::write_line("boot: WARN — HOST-NIC coexist skip (tcp bind)");
+            return false;
+        }
+        COEXIST_DEVICE.write(device);
+        COEXIST_IFACE.write(iface);
+        COEXIST_SOCKETS.write(sockets);
+        COEXIST_TCP_HANDLE.write(tcp_handle);
+        COEXIST_MILLIS = 0;
+        COEXIST_ANNOUNCED = false;
+        COEXIST_RX_LEN = 0;
+        COEXIST_LAST_DIAG = 0;
+        COEXIST_LAST_RX_DROP = 0;
+        COEXIST_PORT = port;
+        COEXIST_ARMED = true;
+    }
+
+    crate::mgmt::pre_ebs_mgmt::reset_pre_ebs_mgmt();
+    serial::write_str("boot: HOST-NIC coexist listening on ");
+    write_ipv4(ip);
+    serial::write_byte(b':');
+    write_u16_dec(port);
+    serial::write_line(" (VMX on; ADR-013 Phase F)");
+    serial::write_str("boot: CURL NOW → http://");
+    write_ipv4(ip);
+    serial::write_byte(b':');
+    write_u16_dec(port);
+    serial::write_line("/  (native BCM5720; G0 still scheduled; SNP is dead)");
+    serial::write_line("boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)");
+    print_bcm5720_poll_diag();
+    true
+}
+
+/// One scheduler-quantum NIC/HTTP step. No-op if not armed. Does not spin.
+pub fn tick_bcm5720_coexist() {
+    if !unsafe { COEXIST_ARMED } {
+        return;
+    }
+    // SAFETY: BSP-only; armed once before ticks; guests are VMEXITed here.
+    // HTTP codec uses the leaked PRE-EBS tables (reset at arm). Not NIC MMIO.
+    // KANI-TARGET: host tests cover bounded_poll, not this firmware session.
+    unsafe {
+        let device = COEXIST_DEVICE.assume_init_mut();
+        let iface = COEXIST_IFACE.assume_init_mut();
+        let sockets = COEXIST_SOCKETS.assume_init_mut();
+        let tcp_handle = *COEXIST_TCP_HANDLE.assume_init_ref();
+        let rx_acc = &mut *core::ptr::addr_of_mut!(COEXIST_RX_ACC);
+        let out = &mut *core::ptr::addr_of_mut!(COEXIST_HTTP_OUT);
+        COEXIST_MILLIS = COEXIST_MILLIS.saturating_add(10);
+        let millis = COEXIST_MILLIS;
+        let ts = Instant::from_millis(millis);
+        let _ = bounded_poll(HOST_NIC_POLL_BUDGET, || {
+            matches!(
+                iface.poll(ts, device, sockets),
+                smoltcp::iface::PollResult::SocketStateChanged
+            )
+        });
+
+        let mut do_close = false;
+        let mut did_exchange = false;
+        {
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                COEXIST_RX_LEN = 0;
+                COEXIST_ANNOUNCED = false;
+                let _ = sock.listen(COEXIST_PORT);
+            } else if !sock.is_active() && !sock.is_listening() {
+                let _ = sock.listen(COEXIST_PORT);
+            }
+            if sock.is_active() && !COEXIST_ANNOUNCED {
+                serial::write_line("boot: HOST-NIC TCP accept — client connected");
+                COEXIST_ANNOUNCED = true;
+                COEXIST_RX_LEN = 0;
+            }
+            if sock.can_recv() {
+                let mut chunk = [0u8; 2048];
+                if let Ok(n) = sock.recv_slice(&mut chunk) {
+                    if n > 0 {
+                        let copy = n.min(rx_acc.len().saturating_sub(COEXIST_RX_LEN));
+                        rx_acc[COEXIST_RX_LEN..COEXIST_RX_LEN + copy]
+                            .copy_from_slice(&chunk[..copy]);
+                        COEXIST_RX_LEN += copy;
+                    }
+                }
+            }
+            let rx_len = COEXIST_RX_LEN;
+            let headers_done = rx_len >= 4 && rx_acc[..rx_len].windows(4).any(|w| w == b"\r\n\r\n");
+            if headers_done && sock.can_send() {
+                let raw = core::str::from_utf8(&rx_acc[..rx_len]).unwrap_or("");
+                let wn = crate::mgmt::pre_ebs_mgmt::with_pre_ebs_mgmt(|m| {
+                    handle_http_request(
+                        &mut m.vms,
+                        &mut m.images,
+                        &mut m.iso_plan,
+                        &mut m.iso_install,
+                        raw,
+                        out,
+                    )
+                })
+                .unwrap_or(0);
+                if wn > 0 {
+                    let _ = sock.send_slice(&out[..wn]);
+                    did_exchange = true;
+                    do_close = true;
+                }
+            }
+        }
+        if did_exchange {
+            serial::write_line("boot: HOST-NIC HTTP exchange ok");
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            pci_census::print_host_nic_exchange_ok_marker();
+        }
+        if do_close {
+            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            COEXIST_RX_LEN = 0;
+            COEXIST_ANNOUNCED = false;
+        }
+        if millis - COEXIST_LAST_DIAG >= 5000 {
+            COEXIST_LAST_DIAG = millis;
+            if let Some(d) = crate::mgmt::bcm5720_mmio::bcm5720_poll_diag() {
+                if d.rx_drop > COEXIST_LAST_RX_DROP {
+                    serial::write_line("boot: WARN — HOST-NIC BCM5720 rx_drop rose");
+                    print_bcm5720_poll_diag();
+                }
+                COEXIST_LAST_RX_DROP = d.rx_drop;
+            }
+        }
+    }
 }
 
 fn run_listen(when: ListenWhen) {

@@ -12,6 +12,7 @@ use super::host_nic::{
     M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER, M7_HOST_NIC_SCAFFOLD_MARKER,
 };
 use super::host_nic_poll::prop_bounded_poll_respects_budget;
+use super::host_nic_coexist::prop_coexist_wired;
 use super::mgmt_arena::prop_arena_reset_rewinds;
 use super::pci_census::{
     census_nic_has_iron_driver, census_nic_has_lab_driver, pci_id_is_iron_census,
@@ -158,6 +159,10 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("fn print_bcm5720_poll_diag(")
         && listen.contains("COM2 idle after")
         && listen.contains("rx_drop rose")
+        && listen.contains("fn arm_bcm5720_coexist(")
+        && listen.contains("fn tick_bcm5720_coexist(")
+        && listen.contains("HOST-NIC coexist listening")
+        && listen.contains("VMX on; ADR-013 Phase F")
         && http.contains("run_post_ebs_host_nic_listen")
         && http.contains("run_pre_ebs_pci_census")
         && http.contains("run_post_boot_ok_native_idle")
@@ -209,6 +214,8 @@ pub fn host_nic_scripts_present() -> bool {
         && runbook.contains("Phase 0")
         && runbook.contains("Phase D")
         && runbook.contains("Phase E")
+        && runbook.contains("Phase F")
+        && runbook.contains("VMX on")
         && runbook.contains(M7_HOST_NIC_QEMU_MARKER)
         && runbook.contains(M7_HOST_NIC_SCAFFOLD_MARKER)
         && runbook.contains("8086:100e")
@@ -221,6 +228,7 @@ pub fn prop_host_nic_scaffold_package() -> bool {
         && host_nic_scripts_present()
         && prop_bounded_poll_respects_budget()
         && prop_arena_reset_rewinds()
+        && prop_coexist_wired()
 }
 
 pub fn run_m7_host_nic_scaffold_gate() -> bool {

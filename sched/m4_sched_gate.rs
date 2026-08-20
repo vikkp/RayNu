@@ -22,6 +22,7 @@ pub fn dual_vmcs_switch_present() -> bool {
     launch.contains("SCHED_MODE")
         && launch.contains("switch_to_sched_slot")
         && launch.contains("schedule_preempt")
+        && launch.contains("tick_native_coexist")
         && launch.contains(M4_SCHED_OK_MARKER)
         && launch.contains("GUEST_FRAMES")
         && launch.contains("set_shell_guest")

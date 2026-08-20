@@ -181,6 +181,14 @@ pub fn run_post_ebs_http_idle() {
     }
 }
 
+/// SNP WARN only (Phase F). Native listen is `try_arm_native_coexist` while VMX is on.
+pub fn run_post_ebs_http_snp_warn_only() {
+    #[cfg(feature = "uefi-bin")]
+    {
+        crate::mgmt::snp_listen_uefi::uefi_snp_post_ebs_idle();
+    }
+}
+
 /// True when listen API + markers + host TcpListener proof exist.
 pub fn prop_listen_surface() -> bool {
     let s = include_str!("http_listen.rs");
@@ -195,6 +203,7 @@ pub fn prop_listen_surface() -> bool {
         && s.contains(UEFI_HTTP_GAP_NOTE)
         && s.contains("fn run_post_ebs_mgmt_listen(")
         && s.contains("fn run_post_ebs_http_idle(")
+        && s.contains("fn run_post_ebs_http_snp_warn_only(")
         && s.contains(M7_POST_EBS_HTTP_OK_MARKER)
         && s.contains(M7_POST_EBS_HTTP_SCAFFOLD_MARKER)
         && UEFI_HTTP_GAP_NOTE.contains("CLOSED M7.6")
