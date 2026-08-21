@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-21
-last_commit: a32232c78d19a5328f6cd140aad62ce792b1d803
-last_commit_short: a32232c
+last_commit: 7b750ab3ee0069b0e098638c3c5c34aa6566a71d
+last_commit_short: 7b750ab
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -263,7 +263,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | g0-vmcs-reloc |
+| Commit | 7b750ab |
 | Summary | Iron E4 marker then G0 VMPTRLD fail. Relocate G0 VMCS to host-only slab; fail-soft scheduler (no VMXOFF). E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
 | Gates touched | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` printed then boot-gate failed — **not claimed** |
@@ -290,7 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-21 | g0-vmcs-reloc | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
+| 2026-08-21 | 7b750ab | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
 | 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
 | 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
 | 2026-08-21 | hangfix-boot | 0.5 | 94 | Iron hang-fix: `SLICE-G0` then slot 1; coexist `10.99.99.149:8443`; E4 SPA start still open (GET-only) |
