@@ -285,7 +285,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 010   | Living Verification Paper              | Progressive public audit artifact; evidence-only sections (ADR-010)          |
 | 011   | Evidence Mode ESP Flag                 | `paperverbose.txt` triggers L1 evidence bundle on serial                     |
 | 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4/SNP HTTP PRE-EBS; M7.6; post-EBS SNP rejected 2026-08-17 |
-| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); SNP bring-up only; **Accepted** |
+| 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); Stage 1 0–G closed; shared LOM accepted; SNP bring-up only |
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.

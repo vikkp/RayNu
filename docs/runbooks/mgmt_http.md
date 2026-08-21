@@ -193,6 +193,14 @@ LPI off) **with** Linux `tg3_ape_lock` on BAR2 around MDIO — **without**
 `RX_MODE_PROMISC` is on. `RAYNU-V-M7-HOST-NIC-HTTP-OK` prints only after a
 native HTTP exchange on that id — never from QEMU/host.
 
+**COM2 after E4.** Iron `2b795a0` logged every G0↔SPA scheduler quantum
+(`E4 G0 VMLAUNCH` / `E4 restore` / `E4 SPA VMLAUNCH`). That was E4 bring-up
+debug, not the production console (ADR-011 default is quiet; `paperverbose.txt`
+is verbose). Next EFI logs the first G0 re-entry, first SPA re-entry, first
+restore per slot, then `COM2 quiet after first E4 re-entry` and stays quiet
+except HTTP/WARN/markers. One `poll rx_prod=` snapshot at listen start
+remains. WARN if `rx_drop` rises.
+
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
 ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and
 `auth.token` if present) alone. After `RAYNU-V-R640-BOOT-OK`, curl the
@@ -211,8 +219,10 @@ then `pre-EBS cand`. After EBS: `ape-nophylock=yes` / `keep-ape-phy=yes` /
 `HINT — keep APE PHY (iDRAC NCSI); will not take phylock`.
 Do **not** flash an EFI that prints `ape-nophylock=no` or
 `inherit SNP PHY (skip CORECLK_RESET)`. After `BOOT-OK`: `reuse`. One
-`poll rx_prod=` snapshot at listen start, then COM2 stays quiet except TCP
-accept / HTTP-OK (and a WARN if `rx_drop` rises).
+`poll rx_prod=` snapshot at listen start. After the first E4 G0↔SPA re-entry
+pair, COM2 stays quiet except TCP accept / HTTP-OK / WARN (if `rx_drop`
+rises). Iron `2b795a0` still printed every quantum — that was debug; flash
+the quiet EFI after CI green.
 Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
 `BOOT-OK` (G0 Linux still scheduled; G1–G3 SHELL stubs parked). SPA
 `POST /vms/{id}/start` now **queues** a VMLAUNCH on the next coexist
@@ -229,6 +239,9 @@ Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
 `AuthAllowed`, no `sched VMPTRLD failed`. Same-EFI hold paste: 25×
 `HOST-NIC-HTTP-OK` with COM2 still printing. Evidence:
 [`2026-08-20-phase-f-coexist-ok.md`](../evidence/r640/2026-08-20-phase-f-coexist-ok.md).
+**Phase G closed** 2026-08-21 as accepted-risk: host HTTP and guest virtio-net
+share LOM `:38` ([ADR-013](../adr/ADR-013.md) Appendix B). Not VLAN / second
+NIC. Product next is [ADR-014](../adr/ADR-014.md) installer + TLS/console.
 E3b **closed** 2026-08-20: `grc=bswap+wswap`, then `HOST-NIC TCP accept` /
 `HOST-NIC HTTP exchange ok` / `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK`
 on `:38` / `10.99.99.144:8443`. Evidence:
@@ -295,6 +308,6 @@ M7.1 closed on **plaintext HTTP** lab MVP with an explicit size-budget note.
 
 ## Limits
 
-- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) **Accepted**. Phase C (QEMU e1000 post-EBS `GET /`) is M7.8. WARN-only idle closed on iron 2026-08-17 (no RSOD). `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
+- HDA **E3 MVP DONE** on iron (`RAYNU-V-M7-UEFI-HTTP-OK`, 2026-08-16 COM2). **E3b** (lifetime HTTP) is [ADR-013](../adr/ADR-013.md) **Accepted**. Stage 1 Phases 0–G closed (Phase G = shared-LOM accepted-risk, 2026-08-21). Phase C (QEMU e1000 post-EBS `GET /`) is M7.8. WARN-only idle closed on iron 2026-08-17 (no RSOD). `RAYNU-V-M7-POST-EBS-HTTP-OK` is **not claimed**. Do not chase SNP/Tcp4 after EBS.
 - Datastore / ISO / create-VM UI polish are **M7.2–M7.4** (host closed).
 - Replace bring-up token before production exposure (ESP `EFI/RayNu/auth.token` on Cruzer).

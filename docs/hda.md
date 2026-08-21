@@ -217,6 +217,7 @@ Ordered for critical path (parallelize B with D design):
 - **M7.8 / E3b iron closed:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38` (2026-08-20)
 - **ADR-013 Phase F iron closed:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20)
 - **P0-14 / E4 SPA VMLAUNCH iron closed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). SHELL stub + shadow re-entry; not distro / not TLS.
+- **ADR-013 Stage 1 (0–G) closed:** Phase G is the 2026-08-21 accepted-risk note (shared LOM `:38` with virtio-net). Not VLAN / second NIC.
 
 ---
 
@@ -265,10 +266,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | adr-014 |
-| Summary | File multi-guest-OS ISO model (ADR-014). Product path UEFI+virtio typed ISO; bzImage stays G0 lab. E4 unchanged. |
+| Commit | phase-g |
+| Summary | ADR-013 Phase G closed as accepted-risk (shared LOM + virtio-net). COM2 quiet after first E4 re-entry (in-tree). Product next stays installer + TLS/console. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held |
-| Gates touched | none (design residual; P0-14 already closed) |
+| Gates touched | ADR-013 Phase G (docs close; no new iron marker) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +291,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | phase-g | 0.5 | 95 | ADR-013 Phase G closed (shared LOM accepted-risk); COM2 quiet after first E4 re-entry (in-tree); product next installer+TLS |
 | 2026-08-21 | adr-014 | 0.5 | 95 | ADR-014: typed ISO + UEFI-first product install; bzImage lab-only; Windows later; E4 not blocked |
 | 2026-08-21 | site-stories | 0.5 | 95 | Public Stories + site copy: Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14; residual TLS/console + distro |
 | 2026-08-21 | spa-shadow-ok | 0.5 | 95 | Iron `2b795a0` spec 201/start 200; SPA VMLAUNCH + shadow re-entry fields=98; P0-14 CLOSED; SHELL stub; overall 94→95 |

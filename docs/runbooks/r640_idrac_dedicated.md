@@ -20,8 +20,8 @@ GPHYs were `bmsr=7949`. That analog is APE/NCSI. Taking it can drop iDRAC.
 | **Dedicated iDRAC** | Small RJ45, often labeled iDRAC / dedicated Mgmt | SOL + SSH. Stay on this. Not `:8443`. |
 | **LOM1 / LOM2** | Dual BCM5720 (`14e4:165f`, `01:00.0` / `01:00.1`) | Host mgmt LAN (Mac curl). Not the iDRAC dedicated jack. |
 
-Iron census: `01:00.0` / `:38` was the unused LOM jack; SNP/APE was `:3a`.
-Ubuntu on this R640 (2026-08-19, cable moved):
+Iron census (2026-08-17/18) treated `:38` as unused because SNP leased `:3a`.
+Ubuntu on this R640 (2026-08-19, cable on the live jack):
 
 | Linux | MAC | PCI | State |
 |-------|-----|-----|--------|

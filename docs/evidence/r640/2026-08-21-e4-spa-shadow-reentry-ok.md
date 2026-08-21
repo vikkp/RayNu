@@ -70,11 +70,16 @@ HTTP/1.1 200 OK
 
 First HTTP after coexist was `AuthAllowed` without `VmCreated` (likely
 `GET /`). Spec then start followed. Operator paste truncated mid-loop on
-another G0 `VMLAUNCH`.
+another G0 `VMLAUNCH`. That repeating `E4 G0 VMLAUNCH` / `E4 restore` /
+`E4 SPA VMLAUNCH` pair is **E4 bring-up debug**, not the production console.
+ADR-011 default is quiet COM2 (`paperverbose.txt` is verbose). Next EFI logs
+the first re-entry per slot, then `COM2 quiet after first E4 re-entry`.
 
 ## Next (not blocking P0-14)
 
 Optional: skip `VMCLEAR` when launch-state is launched and `VMRESUME`
 instead, to stop the VMLAUNCH-every-quantum loop. Optional: `GET /` during
-the switch loop to strengthen coexist-during-E4. Product residual is
-TLS/console + a real distro installer — not more NIC bring-up.
+the switch loop to strengthen coexist-during-E4. **ADR-013 Phase G closed**
+2026-08-21 as accepted-risk (shared LOM with virtio-net). Product residual is
+TLS/console + a real distro installer ([ADR-014](../../adr/ADR-014.md)) — not
+more NIC bring-up.

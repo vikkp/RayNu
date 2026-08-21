@@ -35,6 +35,8 @@ pub fn spa_launch_relocates_vmcs() -> bool {
         && launch.contains("fn capture_current_vmcs_shadow")
         && launch.contains("fn restore_vmcs_shadow")
         && launch.contains("Do not VMLAUNCH a VMCLEAR'd VMCS without restoring fields.")
+        && launch.contains("COM2 quiet after first E4 re-entry")
+        && launch.contains("fn e4_quiet_com2_after_first_reentry")
         && !launch.contains("copy_nonoverlapping(g0.vmcs_phys")
         && include_str!("spa_launch.rs").contains(M7_E4_SPA_LAUNCH_OK_MARKER)
 }

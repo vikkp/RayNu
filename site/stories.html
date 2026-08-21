@@ -331,6 +331,10 @@ boot: E4 restore VMCS shadow slot=00000001 fields=98</pre>
           That pair repeated for many quanta. Paste truncated mid-loop.
           No error 7. No error 11. No <code>VMXOFF</code>. That is P0-14 /
           <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> closed on iron.
+          The repeating lines are E4 bring-up debug, not the production
+          console. ADR-011 default is quiet COM2. The next EFI logs the
+          first G0 re-entry, first SPA re-entry, first restore per slot,
+          then stays quiet except HTTP, WARN, and markers.
         </p>
 
         <h3>What we claim — and what we don’t</h3>
@@ -409,8 +413,10 @@ RAYNU-V-M7-HOST-NIC-HTTP-OK</pre>
 RAYNU-V-M7-HOST-NIC-HTTP-OK</pre>
         <p>
           Hold COM2 the same evening: twenty-five HTTP-OK exchanges, SOL
-          stayed up. ADR-013 Stage 1 (Phases 0–F) closed on iron. Phase G
-          (VLAN split vs guest virtio-net) is stretch, not the product next.
+          stayed up. ADR-013 Stage 1 (Phases 0–G) is closed. Phase G is
+          the accepted-risk note: host HTTP and guest virtio-net share the
+          BCM5720 LOM <code>:38</code>. Not 802.1Q, not a second NIC.
+          Product next stays installer + TLS/console.
         </p>
         <p>
           One TCP listen slot. A half-open SPA tab holds it; the next

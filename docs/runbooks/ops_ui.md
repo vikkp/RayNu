@@ -81,7 +81,7 @@ sleep 2
 curl -4 --noproxy '*' -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
-6. Closed COM2: `E4 G0 VMCS relocated`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, `E4 restore VMCS shadow slot=` `fields=98`, repeating G0↔SPA `VMLAUNCH`. Fail if `insn_error=0x00000007` / `0x0000000b`, `VMPTRLD failed`, or `boot gate failed`.
+6. Closed COM2 (iron `2b795a0`): `E4 G0 VMCS relocated`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, `E4 restore VMCS shadow slot=` `fields=98`, then repeating G0↔SPA `VMLAUNCH` every quantum (bring-up debug). Next EFI: first G0 re-entry, first SPA re-entry, first restore per slot, then `COM2 quiet after first E4 re-entry`; HTTP/WARN/markers still print. Fail if `insn_error=0x00000007` / `0x0000000b`, `VMPTRLD failed`, or `boot gate failed`.
 
 Hang-fix `f413a9fc` printed the E4 marker then `VMPTRLD failed slot=0` / VMXOFF.
 Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).
@@ -97,4 +97,4 @@ Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force 
 
 ## Next
 
-Optional: `GET /` during the G0↔SPA switch loop; skip `VMCLEAR` and `VMRESUME` when launch-state is launched. Product residual: distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.
+Optional: `GET /` during the G0↔SPA switch loop; skip `VMCLEAR` and `VMRESUME` when launch-state is launched. Product residual: distro installer on virtio-blk ([ADR-014](../adr/ADR-014.md)), then TLS / console / `auth.token` before wider-than-lab LAN. ADR-013 Phase G is closed as shared-LOM accepted-risk — not a second-NIC campaign.

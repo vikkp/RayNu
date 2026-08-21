@@ -270,6 +270,11 @@ static mut VMCS_SHADOW_PRESENT: [[bool; VMCS_SHADOW_MAX]; 2] = [[false; VMCS_SHA
 static mut VMCS_SHADOW_N: [u32; 2] = [0, 0];
 /// Latch ERROR/WARN once so COM2 is not flooded every scheduler tick.
 static mut SCHED_VMPTRLD_FAIL_LOGGED: bool = false;
+/// First E4 G0/SPA clear-state re-entry logs; later quanta stay quiet.
+static mut E4_G0_REENTRY_LOGGED: bool = false;
+static mut E4_SPA_REENTRY_LOGGED: bool = false;
+static mut E4_RESTORE_LOGGED: [bool; 2] = [false; false];
+static mut E4_SWITCH_QUIET_HINT: bool = false;
 
 /// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
 static mut BLK_PROBE_FRAMES: Option<LaunchFrames> = None;
@@ -1751,21 +1756,29 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
     }
     if slot == 0 && G0_NEEDS_VMLAUNCH {
         G0_NEEDS_VMLAUNCH = false;
-        serial::write_line("boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)");
+        if !E4_G0_REENTRY_LOGGED {
+            serial::write_line("boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)");
+            E4_G0_REENTRY_LOGGED = true;
+        }
         if !restore_vmcs_shadow(0) {
             serial::write_line("boot: WARN — E4 G0 shadow restore failed");
             failsoft_sched_or_finish();
         }
+        e4_quiet_com2_after_first_reentry();
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         vmlaunch_with_gprs();
     }
     if slot == 1 && SPA_NEEDS_VMLAUNCH {
         SPA_NEEDS_VMLAUNCH = false;
-        serial::write_line("boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)");
+        if !E4_SPA_REENTRY_LOGGED {
+            serial::write_line("boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)");
+            E4_SPA_REENTRY_LOGGED = true;
+        }
         if !restore_vmcs_shadow(1) {
             serial::write_line("boot: WARN — E4 SPA shadow restore failed");
             failsoft_sched_or_finish();
         }
+        e4_quiet_com2_after_first_reentry();
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         vmlaunch_with_gprs();
     }
@@ -1927,15 +1940,33 @@ unsafe fn restore_vmcs_shadow(slot: usize) -> bool {
             n_ok += 1;
         }
     }
-    serial::write_str("boot: E4 restore VMCS shadow slot=");
-    write_hex_u32(slot as u32);
-    serial::write_str(" fields=");
-    write_dec_u32(n_ok);
-    serial::write_byte(b'\n');
+    if !E4_RESTORE_LOGGED[slot] {
+        serial::write_str("boot: E4 restore VMCS shadow slot=");
+        write_hex_u32(slot as u32);
+        serial::write_str(" fields=");
+        write_dec_u32(n_ok);
+        serial::write_byte(b'\n');
+        E4_RESTORE_LOGGED[slot] = true;
+    }
     if n_ok < 40 {
         return false;
     }
     true
+}
+
+/// After the first G0↔SPA re-entry pair, stop logging every quantum.
+/// ADR-011 default is quiet COM2; `paperverbose.txt` is the verbose path.
+/// WARN / HTTP / markers still print.
+unsafe fn e4_quiet_com2_after_first_reentry() {
+    if E4_SWITCH_QUIET_HINT {
+        return;
+    }
+    if E4_G0_REENTRY_LOGGED && E4_SPA_REENTRY_LOGGED {
+        serial::write_line(
+            "boot: HINT — COM2 quiet after first E4 re-entry (HTTP/WARN only; switch loop continues)",
+        );
+        E4_SWITCH_QUIET_HINT = true;
+    }
 }
 
 /// Clone the current VMCS to `dst` via VMREAD/VMWRITE (not memcpy).
