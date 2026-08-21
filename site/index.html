@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 closed BOOT-OK (E2) and UEFI-HTTP-OK (E3) — SPA + Bearer REST on the host NIC."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 closed BOOT-OK through E4 SPA VMLAUNCH (SHELL stub). Residual: TLS/console + distro installer."
     />
-    <meta property="og:title" content="RayNu-V — R640 BOOT-OK + UEFI-HTTP-OK" />
+    <meta property="og:title" content="RayNu-V — R640 BOOT-OK through E4 SPA VMLAUNCH" />
     <meta
       property="og:description"
-      content="PowerEdge R640: RAYNU-V-R640-BOOT-OK and RAYNU-V-M7-UEFI-HTTP-OK. Single-binary Type-1 hypervisor designed for proof."
+      content="PowerEdge R640: RAYNU-V-R640-BOOT-OK, HOST-NIC-HTTP-OK beside VMX, E4 SPA VMLAUNCH. Residual: TLS/console + distro. Not Everest."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -61,21 +61,23 @@
       <section class="section section--status" id="status">
         <div class="section__inner">
           <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
-          <h2 class="section__title">R640 iron: BOOT-OK + network HTTP.</h2>
+          <h2 class="section__title">R640 iron: BOOT-OK through E4 SPA VMLAUNCH.</h2>
           <p class="section__lede">
             Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) closed
             HDA <strong>E2</strong> —
-            <code>RAYNU-V-R640-BOOT-OK</code> (M0→SHELL→M4→VMXOFF, 2026-08-15) —
-            and HDA <strong>E3</strong> MVP —
-            <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (PRE-EBS SNP listen on the host
-            NIC; Mac <code>GET /</code> SPA + Bearer <code>/vms</code>,
-            2026-08-16). E4 SPA create is exercised on iron. E5 stamp persist
-            closed on Cruzer Micro
-            (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> — LBA stamps, not a
-            guest rootfs). <strong>E3b</strong> closed 2026-08-20
-            (<code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> after <code>BOOT-OK</code>
-            on native BCM5720). Mount Everest residual: TLS/console and a real distro
-            installer. E4 SPA VMLAUNCH closed on iron 2026-08-21 (SHELL stub).
+            <code>RAYNU-V-R640-BOOT-OK</code> (M0→SHELL→M4, 2026-08-15) —
+            <strong>E3</strong> MVP
+            <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (PRE-EBS SNP, 2026-08-16) —
+            <strong>E5</strong> stamps
+            <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (Cruzer, LBA not a
+            rootfs) —
+            <strong>E3b</strong> + Phase F
+            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> beside VMX (BCM5720
+            <code>:38</code>, 2026-08-20) — and
+            <strong>P0-14</strong>
+            <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (2026-08-21: private-EPT
+            SHELL guest from SPA start + shadow re-entry). Mount Everest
+            residual: TLS/console and a real distro installer. Not Everest.
           </p>
           <figure class="milestone-shot" data-reveal>
             <img
@@ -102,6 +104,8 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             Evidence:
             <code>docs/evidence/r640/2026-08-16-uefi-http-ok.md</code>
             · <a href="stories.html">Stories</a>
+            · <a href="stories.html#r640-2026-08-21-e4-spa">2026-08-21 E4 SPA</a>
+            · <a href="stories.html#r640-2026-08-20-host-nic">2026-08-20 host NIC</a>
             · <a href="stories.html#r640-2026-08-17-snp-dead">2026-08-17 RSOD</a>
             · <a href="stories.html#r640-2026-08-16-cruzer">Cruzer stamps</a>
             · <a href="hda.html">Distance to Mount Everest</a>.
@@ -474,8 +478,9 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                 (<code>RAYNU-V-R640-BOOT-OK</code>) and UEFI HTTP
                 (<code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-15/16.
                 E5 stamp persist closed on Cruzer
-                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>).                 Residual:
-                E4 polish + distro installer (E3b native HTTP closed 2026-08-20).
+                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). Residual:
+                TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
+                E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub).
               </p>
               <ol class="journey__list">
                 <li>
@@ -518,6 +523,22 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                   <span class="journey__text"
                     >Real R640 iron closed (SHELL+M4, 2026-08-15) →
                     <code>RAYNU-V-R640-BOOT-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">M7.8</span>
+                  <span class="journey__text"
+                    >Native BCM5720 HTTP after BOOT-OK + Phase F coexist
+                    (2026-08-20) →
+                    <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E4</span>
+                  <span class="journey__text"
+                    >SPA private-EPT VMLAUNCH + shadow re-entry (2026-08-21,
+                    SHELL stub) →
+                    <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code></span
                   >
                 </li>
               </ol>
@@ -564,8 +585,9 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                 <span class="pillars__name">Dell iDRAC-Native</span>
                 <span class="pillars__why"
                   >Target: deploy and attest on PowerEdge you own, via Redfish —
-                  not a mystery appliance. R640 iron closed BOOT-OK (E2) and
-                  UEFI-HTTP-OK (E3) on 2026-08-15/16.</span
+                  not a mystery appliance. R640 iron closed BOOT-OK (E2),
+                  UEFI-HTTP-OK (E3), host-NIC HTTP (E3b), and E4 SPA VMLAUNCH
+                  (P0-14, SHELL stub) through 2026-08-21.</span
                 >
               </div>
               <span class="pillars__note">Near-term</span>
@@ -629,8 +651,9 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             plus real R640 iron: <code>RAYNU-V-R640-BOOT-OK</code> (E2),
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (E3 MVP),
             <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (E5 stamps), and
-            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b, 2026-08-20). Mount
-            Everest residual: E4 polish + distro installer. See
+            <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b + Phase F, 2026-08-20),
+            and <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (P0-14, 2026-08-21,
+            SHELL stub). Mount Everest residual: TLS/console + distro installer. See
             <a href="hda.html">HDA</a>.
           </p>
           <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU · R640 iron: E2 BOOT-OK + E3 UEFI-HTTP-OK + E5 stamps
@@ -677,8 +700,10 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             <code>RAYNU-V-R640-BOOT-OK</code> and
             <code>RAYNU-V-M7-UEFI-HTTP-OK</code> (2026-08-15/16) and Cruzer
             stamp persist <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> and
-            durable HTTP <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (2026-08-20);
-            Mount Everest residual is remaining E4 polish and a
+            durable HTTP <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (2026-08-20)
+            and E4 SPA VMLAUNCH <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>
+            (2026-08-21, SHELL stub);
+            Mount Everest residual is TLS/console and a
             real distro installer. See the
             <a href="paper.html">living verification paper</a>.
           </p>

@@ -215,6 +215,7 @@ Ordered for critical path (parallelize B with D design):
 - **M7.5 iron closed:** `RAYNU-V-R640-BOOT-OK` on real R640 COM2 (SHELL + M4; `v0.1.0-xsavesfix`, 2026-08-15)
 - **M7.8 / E3b iron closed:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38` (2026-08-20)
 - **ADR-013 Phase F iron closed:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20)
+- **P0-14 / E4 SPA VMLAUNCH iron closed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). SHELL stub + shadow re-entry; not distro / not TLS.
 
 ---
 
@@ -263,10 +264,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-shadow-ok |
-| Summary | Iron `2b795a0`: spec 201/start 200; first SPA VMLAUNCH + G0↔SPA shadow restore `fields=98`; no error 7/11. P0-14 closed. SHELL stub; not Everest. |
-| Everest impact | months 0.5 held; overall 94→95; ETA 2026-09 held; P0-14 DONE |
-| Gates touched | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` closed on iron |
+| Commit | site-stories |
+| Summary | Public Stories + site copy for Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14. Numbers held. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held |
+| Gates touched | none (docs/site; P0-14 already closed on iron) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -288,6 +289,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | site-stories | 0.5 | 95 | Public Stories + site copy: Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14; residual TLS/console + distro |
 | 2026-08-21 | spa-shadow-ok | 0.5 | 95 | Iron `2b795a0` spec 201/start 200; SPA VMLAUNCH + shadow re-entry fields=98; P0-14 CLOSED; SHELL stub; overall 94→95 |
 | 2026-08-21 | spa-zeros | 0.5 | 94 | Iron spec 201/start 200; first SPA VMLAUNCH OK; re-entry ctls all 0 / error 7; restore shadow after VMCLEAR; E4 not closed |
 | 2026-08-21 | flashcruzer-wait | 0.5 | 94 | `--wait` must not feed progress into the GitHub run id; E4 not closed |

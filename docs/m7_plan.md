@@ -218,7 +218,7 @@ Firmware printed `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of
 
 **Honesty:** not a guest filesystem / distro ISO installer. El Torito residual.
 
-**Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (post-EBS HTTP + E4 polish + real distro installer).
+**Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (TLS/console + real distro installer).
 
 ---
 

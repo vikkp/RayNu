@@ -656,8 +656,9 @@
         <h2>Where the work stands</h2>
         <p>
           Early does not mean opaque. Lab gates through M6 are closed on Latitude +
-          QEMU. Real PowerEdge R640 has closed boot and UEFI-HTTP bring-up markers.
-          Residual work is explicit.
+          QEMU. Real PowerEdge R640 has closed boot, UEFI-HTTP, native host-NIC
+          HTTP beside VMX, and E4 SPA VMLAUNCH (SHELL stub). Residual work is
+          explicit: TLS/console and a real distro installer.
         </p>
         <div class="cio-milestones">
           <div class="cio-ms">
@@ -676,8 +677,18 @@
             <span class="cio-ms__badge">Closed</span>
           </div>
           <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E3b</span>
+            <span class="cio-ms__text">Host-owned BCM5720 HTTP beside VMX — <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E4</span>
+            <span class="cio-ms__text">SPA private-EPT VMLAUNCH (SHELL stub) — <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
             <span class="cio-ms__gate">Residual</span>
-            <span class="cio-ms__text">Host-owned NIC (E3b), E4 polish, real distro installer</span>
+            <span class="cio-ms__text">TLS/console polish, real distro installer</span>
             <span class="cio-ms__badge cio-ms__badge--open">Open</span>
           </div>
         </div>
