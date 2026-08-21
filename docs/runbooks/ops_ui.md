@@ -83,6 +83,12 @@ curl -sS -m 5 -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 
 6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`.
 
+Hang-fix iron boot (2026-08-21): `SLICE-G0` then `sched switch → slot=00000001`;
+coexist HTTP-OK on `10.99.99.149:8443`. Evidence:
+[`docs/evidence/r640/2026-08-21-e4-hangfix-boot.md`](../evidence/r640/2026-08-21-e4-hangfix-boot.md).
+That paste is GET-only (`method_tag=1`). **Do not power off** — POST spec+start
+on the same boot.
+
 Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force Power Off**.
 
 ## Next

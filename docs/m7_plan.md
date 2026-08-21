@@ -265,7 +265,7 @@ Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. E4 SPA start now queues a re
 (private 2 MiB EPT, slab VMCS) on the coexist quantum — **host wiring**; do not claim
 `RAYNU-V-M7-E4-SPA-LAUNCH-OK` without COM2. That guest is SHELL CPUID, not a distro installer.
 
-**Next:** F11 boot Cruzer hang-fix EFI `f413a9fc` (flashed 2026-08-21) for iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then TLS/console + distro installer.
+**Next:** same hang-fix boot — POST spec+start on `10.99.99.149:8443` for iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then TLS/console + distro installer.
 Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

@@ -5,8 +5,9 @@
 hang fix `a32232c`). Helper printed `RAYNU-V-CRUZER-FLASH-OK`.
 `installdisk.bin` (1024 bytes) and `auth.token` were left alone.
 
-**Not claimed:** iron boot of this EFI. `RAYNU-V-M7-E4-SPA-LAUNCH-OK` is still
-open. This is not a distro installer and not Mount Everest.
+**Not claimed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK`. Hang-fix iron boot is
+recorded in [`2026-08-21-e4-hangfix-boot.md`](2026-08-21-e4-hangfix-boot.md).
+This is not a distro installer and not Mount Everest.
 
 Hung first E4 EFI `67b0acde` must not be reflashed. Phase F `0d06297b` is the
 last closed coexist kit, not this boot.
@@ -36,7 +37,7 @@ Keep `ape-nophylock=yes`. Bind LOM `:38` / `01:00.0`. Do **not** write PERC
 |------|--------|----------|
 | Cruzer ESP write | **OK** | [`logs/2026-08-21-e4-cruzer-flash-hangfix.txt`](logs/2026-08-21-e4-cruzer-flash-hangfix.txt) |
 | Hang-fix remap | in the flashed binary | `a32232c` — do not remap G1→G0 during the M4.2 ladder |
-| Iron boot of `f413a9fc` | **open** | F11 Cruzer still required |
+| Iron boot of `f413a9fc` | **OK** | [`2026-08-21-e4-hangfix-boot.md`](2026-08-21-e4-hangfix-boot.md) |
 | E4 SPA VMLAUNCH | **open** | COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 
 ## Next on iron

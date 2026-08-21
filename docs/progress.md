@@ -147,15 +147,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
-**E4 SPA VMLAUNCH:** in-tree on coexist (private 2 MiB EPT + slab VMCS). Hang-fix EFI `f413a9fc` flashed to Cruzer `RAYNUV` 2026-08-21. Iron COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed. Not a Linux guest / distro installer.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md](evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md)
+**E4 SPA VMLAUNCH:** hang-fix EFI `f413a9fc` booted on iron (`SLICE-G0` then slot 1; coexist HTTP-OK). Iron COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed (GET-only paste). Not a Linux guest / distro installer.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-hangfix-boot.md](evidence/r640/2026-08-21-e4-hangfix-boot.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | ADR-013 Phase F | coexist HTTP while VMX on | **CLOSED** 2026-08-20 on BCM5720 `:38` / `10.99.99.149:8443`. G0 scheduled; G1–G3 parked. Hold COM2: 25× HTTP-OK. |
-| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN TREE + Cruzer flashed** — EFI `f413a9fc` on `RAYNUV` 2026-08-21. Iron COM2 not claimed. |
+| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **HANG-FIX BOOTED** — coexist HTTP-OK on `10.99.99.149:8443`. SPA start / iron marker not claimed. |
 | Everest residual | TLS/console + distro installer | After iron E4 marker. Not this slice. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
