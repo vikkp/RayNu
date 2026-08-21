@@ -288,8 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| Date | Commit | Months | Overall % | Note |
-|------|--------|-------:|----------:|------|
+| 2026-08-21 | coexist-126 | 0.5 | 94 | EFI `618e89e2` coexist listen `10.99.99.126:8443`; Mac curl `(28)` no TCP accept; E4 open |
 | 2026-08-21 | 1fb32aa | 0.5 | 94 | Cruzer `RAYNUV` flashed `618e89e2` (artifact 9432035922); F11 boot open; E4 not closed |
 | 2026-08-21 | 7b750ab | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
 | 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
@@ -371,7 +370,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     Force Off Ubuntu; F11 Cruzer `618e89e2`; Mac spec→sleep 2→start on COM2 lease (not .124)
+Next move:     HV still at coexist `10.99.99.126:8443`; Mac ping/ARP/`GET /` (not .124); no Force Off yet
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
