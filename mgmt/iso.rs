@@ -7,7 +7,10 @@
 //! Operator registers a distro ISO into the M7.2 image library, then binds a
 //! **documented kernel-extract boot** path (existing bzImage/initrd staging +
 //! `guest::load_bzimage_guest`) with an empty virtio-blk install target.
-//! Full El Torito / CD-ROM attach remains stubbed until a later gate.
+//! That extract path is the M7.3 **lab MVP**, not the product installer.
+//! Product ISO install is typed + UEFI-first ([ADR-014](../docs/adr/ADR-014.md)):
+//! `linux_iso` | `windows_iso` | `generic_uefi`. Full El Torito / CD-ROM attach
+//! remains stubbed until that workstream. Do not hard-wire SPA install to bzImage.
 
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
@@ -20,9 +23,9 @@ pub const M7_ISO_OK_MARKER: &str = "RAYNU-V-M7-ISO-OK";
 /// Linux ISO deploy path GAP closed in M7.3.
 pub const ISO_GAP_NOTE: &str = "GAP(CLOSED M7.3): Linux ISO deploy path";
 
-/// Documented MVP: kernel-extract boot (not full CD-ROM / El Torito).
+/// Documented MVP: kernel-extract boot (lab; not the product installer — ADR-014).
 pub const ISO_EXTRACT_BOOT_NOTE: &str =
-    "MVP: documented kernel-extract boot via bzImage/initrd staging (El Torito/CD-ROM deferred)";
+    "MVP: documented kernel-extract boot via bzImage/initrd staging (El Torito/CD-ROM deferred; product path ADR-014 UEFI-first)";
 
 /// Default empty install disk size for the virtio-blk target (host/CI).
 pub const DEFAULT_INSTALL_DISK_BYTES: u64 = 64 * 1024 * 1024;

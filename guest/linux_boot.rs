@@ -1,10 +1,12 @@
 //! Linux x86_64 boot-protocol packing + synthetic / bzImage load (M3.2–M3.7).
 //!
 //! Pillar: [Z]
-//! Proven Core: **outside** (ADR-002) — protocol glue only; frames claimed
+//! Proven Core: **outside** (ADR-002 / ADR-014) — protocol glue only; frames claimed
 //! via Proven Core `FrameAllocator` + `EptMap`.
 //!
-//! M3.2 places a proto-kernel page, initrd stub, cmdline, and packed
+//! Lab/G0 path only. Product ISO install must not use this as the only installer
+//! (ADR-014: UEFI guest firmware + virtio first; `linux_iso` | `windows_iso` |
+//! `generic_uefi`). M3.2 places a proto-kernel page, initrd stub, cmdline, and packed
 //! `boot_params` into GPA. M3.3 enters at 64-bit with RSI=`boot_params`.
 //! M3.7 loads a bzImage-shaped payload (ESP or embedded minimal) and jumps
 //! to the 64-bit entry at PM+0x200.

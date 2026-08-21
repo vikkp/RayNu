@@ -50,6 +50,8 @@ pub fn iso_scripts_present() -> bool {
         && runbook.contains("virtio-blk")
         && runbook.contains("UnsupportedOnFirmware")
         && runbook.contains("El Torito")
+        && runbook.contains("ADR-014")
+        && include_str!("../docs/adr/ADR-014.md").contains("windows_iso")
 }
 
 /// Full M7.3 artifact + package gate.

@@ -68,10 +68,10 @@ All must be true (no hand-waving):
 | E3 | **Network UI (bring-up)** | Browser/curl on operator LAN reaches SPA/REST during PRE-EBS window (HTTP MVP; TLS deferred); not host-only | [Z][A] |
 | E3b | **Durable mgmt** | Same SPA/REST reachable **after** ExitBootServices / `BOOT-OK` on a host-owned NIC (ADR-013); firmware SNP/Tcp4 do not count | [Z][A] |
 | E4 | **vSphere-like MVP** | Datastore/images, create-VM (CPU/RAM/disk/NIC), attach ISO or boot media, basic console/log, auth beyond bring-up toy | [Z][A] |
-| E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots installer (or documented extract path) → installs to virtio-blk → reboot to disk | [Z] |
+| E5 | **Linux ISO deploy** | Operator registers a distro ISO → VM boots **UEFI installer** (ADR-014) to virtio-blk → reboot to disk. Extract-boot/bzImage is lab MVP only. Windows ISO later, same model. | [Z] |
 | E6 | **Production bar** | M6.8 soak + M6.9 external audit/spec review closed per `progress.md` | [V][A] |
 
-**Out of Everest / M7 scope (→ M8 or later):** vMotion-like live migrate, DRS-like placement, hot-add, full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL.
+**Out of Everest / M7 scope (→ M8 or later):** vMotion-like live migrate, DRS-like placement, hot-add, full vSphere parity, Dell Tier-2 PERC OEM, multi-site DR, Windows guest WHQL. Windows **install** is later under [ADR-014](adr/ADR-014.md); the image type exists now so E5 does not stay Linux-kernel-only.
 
 ---
 
@@ -143,10 +143,11 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | MISSING | later — not next after E5 stamps |
+| ISO parse / El Torito / EFI boot img | MISSING | product path [ADR-014](adr/ADR-014.md) (UEFI-first; not bzImage jump) |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
+| Multi-OS image types | **SPEC** | `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md)); Windows install later |
 | Multi-distro matrix | MISSING | — |
 
 ---
@@ -264,10 +265,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | site-stories |
-| Summary | Public Stories + site copy for Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14. Numbers held. |
+| Commit | adr-014 |
+| Summary | File multi-guest-OS ISO model (ADR-014). Product path UEFI+virtio typed ISO; bzImage stays G0 lab. E4 unchanged. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held |
-| Gates touched | none (docs/site; P0-14 already closed on iron) |
+| Gates touched | none (design residual; P0-14 already closed) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -278,7 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
+| H3 | No full El Torito/CD-ROM | MED | Product installer is UEFI-first ([ADR-014](adr/ADR-014.md)); extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -289,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | adr-014 | 0.5 | 95 | ADR-014: typed ISO + UEFI-first product install; bzImage lab-only; Windows later; E4 not blocked |
 | 2026-08-21 | site-stories | 0.5 | 95 | Public Stories + site copy: Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14; residual TLS/console + distro |
 | 2026-08-21 | spa-shadow-ok | 0.5 | 95 | Iron `2b795a0` spec 201/start 200; SPA VMLAUNCH + shadow re-entry fields=98; P0-14 CLOSED; SHELL stub; overall 94→95 |
 | 2026-08-21 | spa-zeros | 0.5 | 94 | Iron spec 201/start 200; first SPA VMLAUNCH OK; re-entry ctls all 0 / error 7; restore shadow after VMCLEAR; E4 not closed |

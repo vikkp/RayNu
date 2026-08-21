@@ -4,7 +4,7 @@
 **Iron close (COM2):** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of `RAYNU-V-M7-ISO-INSTALL-OK`)  
 **Evidence:** [2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md) — `STATUS-iso-install=closed`  
 **Archive:** `docs/evidence/r640/`  
-**Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · HDA E5  
+**Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · product ISO: [ADR-014](../adr/ADR-014.md) · HDA E5  
 **Prior:** [iso.md](iso.md) (M7.3 deploy plan) · [mgmt_http.md](mgmt_http.md) (E3 network)
 
 ## What this gate is
@@ -125,9 +125,10 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   copies that prefix into the live RAM disk; equal-length copy was the 2026-08-16
   Cruzer `DRIVER_OK` miss. Full disk persist needs writable USB/NVMe, not a
   64 MiB file in the EFI.
-- Outside Proven Core (ADR-009); size still ADR-003.
-- Do **not** claim Mount Everest: E5 stamp persist is closed; next is
-  **E3b** ([ADR-013](../adr/ADR-013.md) Accepted) then E4 polish + a real distro installer.
+- Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
+- Do **not** claim Mount Everest: E5 stamp persist is closed; next product
+  installer is UEFI guest firmware + virtio ([ADR-014](../adr/ADR-014.md)), not
+  another bzImage extract. Windows ISO is later; do not paint a Linux-only corner.
 
 ## Next
 
@@ -143,4 +144,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    Cruzer Micro persist-detect + prefix-copy → `RAYNU-V-M7-ISO-BOOTED-FROM-DISK`
    (2026-08-16). [`STATUS-iso-install`](../evidence/r640/STATUS-iso-install) closed.
 4. Guest filesystem install + full-disk persist (beyond LBA marker lab) — **after** post-EBS HTTP.
-5. El Torito / distro ISO blob upload (not required for M7.7 stamp close; not next).
+5. El Torito / guest UEFI firmware + typed ISO ([ADR-014](../adr/ADR-014.md)) —
+   product installer. Not another bzImage extract. Windows ISO later.

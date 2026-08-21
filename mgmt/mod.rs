@@ -284,6 +284,7 @@ pub mod spa_launch;
 pub mod m7_e4_spa_gate;
 pub mod api;
 pub mod datastore;
+pub mod guest_image;
 pub mod iso;
 pub mod iso_install;
 pub mod pre_ebs_mgmt;
@@ -413,6 +414,7 @@ pub use m7_ui_gate::{run_m7_ui_gate, M7_UI_OK_MARKER, UI_GAP_NOTE};
 pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
 pub use spa_launch::{note_spa_start, note_spa_stop, take_spa_start, M7_E4_SPA_LAUNCH_OK_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
+pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
 };

@@ -2,7 +2,7 @@
 
 **Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F + E4 SPA VMLAUNCH (P0-14) closed on iron**. Residual: TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
-**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
+**Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
 
 **Mount Everest (product loop):**  
@@ -161,7 +161,7 @@ HDA + `site/hda.html` must stay fresh: update `docs/hda.md`, then `./tools/sync-
 4. Host package smoke → `RAYNU-V-M7-ISO-OK` (fast unit tests; not a QEMU installer run).
 5. `GAP(CLOSED M7.3): Linux ISO deploy path`.
 
-**Acceptance (met on Latitude host smoke):** marker + gate. **Residual:** El Torito/CD-ROM attach still stubbed; no full distro installer path on QEMU/iron yet.
+**Acceptance (met on Latitude host smoke):** marker + gate. **Residual:** El Torito/CD-ROM attach still stubbed; no full distro installer path on QEMU/iron yet. Product installer is **UEFI-first + typed ISO** ([ADR-014](adr/ADR-014.md)); kernel-extract is lab MVP only — do not hard-wire SPA install to bzImage.
 
 ---
 
@@ -216,7 +216,7 @@ Firmware printed `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (documented equivalent of
 
 **Goal (met as stamp contract):** Extract-boot → virtio-blk LBA write → ESP persist → reboot-to-disk detect.
 
-**Honesty:** not a guest filesystem / distro ISO installer. El Torito residual.
+**Honesty:** not a guest filesystem / distro ISO installer. El Torito residual. Product path: [ADR-014](adr/ADR-014.md) (UEFI + virtio; `linux_iso` | `windows_iso` | `generic_uefi`).
 
 **Acceptance:** **Met on iron** — persist-detect + `prefix_into=67108864` + `BOOTED-FROM-DISK` + `R640-BOOT-OK`. Mount Everest stays open (TLS/console + real distro installer).
 
@@ -268,7 +268,8 @@ re-entry restored 98 VMCS fields each quantum. Guest is SHELL CPUID, not a
 distro installer. Switches are `VMLAUNCH` after `VMCLEAR`, not `VMRESUME`.
 HTTP during the switch loop is not in the close paste.
 
-**Next:** TLS/console polish + a real distro installer. Optional: skip
+**Next:** TLS/console polish + a real distro installer. Product ISO is
+[ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
 `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, hung E4 prefixes, and take-PHY (`ape-nophylock=no`). Preserve

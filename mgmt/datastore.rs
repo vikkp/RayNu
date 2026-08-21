@@ -31,6 +31,7 @@ pub const IMAGE_CAP: usize = 32;
 pub const IMAGE_NAME_CAP: usize = 64;
 
 /// Image kind for the library (ISO install media, disk, template).
+/// ISO subtype (`linux_iso` | `windows_iso` | `generic_uefi`) is [`crate::mgmt::GuestImageType`] (ADR-014).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageKind {
     Iso = 1,
