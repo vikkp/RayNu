@@ -620,8 +620,9 @@ pub const G1_SLAB_OFF_IO_B: u64 = 0xF000;
 /// E4: host-only 2 MiB slab for G0 VMCS (punched from G0 identity, not SPA EPT).
 ///
 /// Iron 2026-08-21: G0 VMCS at ~92 MiB sits in Linux RAM + precise identity.
-/// After SPA VMLAUNCH, `VMPTRLD` of that page failed (`sched VMPTRLD failed
-/// slot=0` → VMXOFF → `boot gate failed`). Copy the flushed VMCS here first.
+/// After SPA VMLAUNCH, `VMPTRLD` of that page failed. Memcpy of a `VMCLEAR`'d
+/// region at `0x10a00000` also failed VMPTRLD (loop, fail-soft). Clone via
+/// VMREAD/VMWRITE into this slab instead.
 pub const G0_HOST_SLAB_OFF_VMCS: u64 = 0;
 
 /// Next 2 MiB-aligned HPA after the highest shell slab, inside [`PRECISE_BYTES`].

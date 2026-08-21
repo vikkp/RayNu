@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F closed on iron**. Next: E4 SPA VMLAUNCH survive G0 resume (iron marker printed then `VMPTRLD slot=0` fail). Residual after a clean E4: TLS/console + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F closed on iron**. Next: E4 SPA VMLAUNCH survive G0 resume (`618e89e2` printed marker then memcpy'd G0 VMCS failed `VMPTRLD` in a loop; fail-soft held VMX). Residual after a clean E4: TLS/console + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
