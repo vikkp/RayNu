@@ -1,0 +1,40 @@
+# COM2 excerpt — EFI 618e89e2 on Cruzer RAYNUV, lease 10.99.99.126:8443
+# 2026-08-21. Operator paste. PRE-EBS SNP HTTP timed out (expected).
+# Native coexist HTTP-OK, SPA spec 201 + start 200, E4 marker, then
+# memcpy'd G0 VMCS at 0x10a00000 failed VMPTRLD in a loop (fail-soft, no VMXOFF).
+# ERROR/WARN pair repeats every scheduler tick; truncated after a few cycles.
+# Not E4 closed.
+
+RAYNU-V-R640-BOOT-OK
+boot: HOST-NIC coexist listening on 10.99.99.126:8443 (VMX on; ADR-013 Phase F)
+boot: CURL NOW → http://10.99.99.126:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmStarted guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: E4 G0 VMCS relocated HPA=0x0000000010a00000 (host slab; punched from G0 identity)
+RAYNU-V-AUDIT: VmcsCreated vcpu_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=2
+boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)
+boot: VMLAUNCH → E4 SPA SHELL CPUID
+
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: ERROR — sched VMPTRLD failed slot=00000000
+boot: WARN — park VMPTRLD fail; resume slot=00000001 (VMX on; no VMXOFF)
+boot: ERROR — sched VMPTRLD failed slot=00000000
+boot: WARN — park VMPTRLD fail; resume slot=00000001 (VMX on; no VMXOFF)
+boot: ERROR — sched VMPTRLD failed slot=00000000
+boot: WARN — park VMPTRLD fail; resume slot=00000001 (VMX on; no VMXOFF)
+# … pair repeats every credit-scheduler tick (COM2 flood). No VMXOFF. No boot gate failed.

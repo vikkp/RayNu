@@ -33,6 +33,17 @@ Tcp4-absent analysis:
 | `2026-08-20-host-nic-http-ok-com2.txt` | **M7.8 / E3b iron close** | `grc=bswap+wswap`; listen `10.99.99.144:8443`; `HOST-NIC-HTTP-OK` |
 | `2026-08-20-phase-f-coexist-ok-com2.txt` | **ADR-013 Phase F iron close** | coexist `10.99.99.149:8443` VMX on; G0 scheduled; G1–G3 parked |
 | `2026-08-20-phase-f-coexist-hold-com2.txt` | Phase F COM2 hold | same EFI; 25× `HOST-NIC-HTTP-OK`; COM2 stayed up through SPA |
+| `2026-08-21-e4-cruzer-flash-hangfix.txt` | E4 hang-fix Cruzer flash | artifact `9429378906` / EFI `f413a9fc` → `RAYNUV`; `CRUZER-FLASH-OK`; iron boot open |
+| `2026-08-21-e4-hangfix-boot-com2.txt` | E4 hang-fix iron boot | `SLICE-G0` then `sched switch → slot=1`; coexist `10.99.99.149:8443`; E4 marker open |
+| `2026-08-21-e4-spa-vmcs-vmptrld-fail-com2.txt` | E4 SPA start on hang-fix EFI | Marker printed then `VMPTRLD failed slot=0` / VMXOFF / `boot gate failed` — **not E4 closed** |
+| `2026-08-21-e4-cruzer-flash-g0reloc.txt` | E4 G0-relocate Cruzer flash | artifact `9432035922` / EFI `618e89e2` → `RAYNUV`; superseded (memcpy loop) |
+| `2026-08-21-e4-cruzer-flash-g0clone.txt` | E4 G0-clone Cruzer flash | artifact `9461155533` / EFI `63cd694f` → `RAYNUV`; `CRUZER-FLASH-OK` |
+| `2026-08-21-e4-g0clone-spa-slot1-rev11-com2.txt` | E4 `63cd694f` SPA start | Clone+marker+G0 VMLAUNCH OK; slot 1 `VMPTRLD` error 11; fail-soft G0 — **not E4 closed** |
+| `2026-08-21-e4-vmclear-spa-entry7-com2.txt` | E4 `eb456eec` SPA start | Error 11 gone; SPA re-entry `VMLAUNCH` error 7; fail-soft idle — **not E4 closed** |
+| `2026-08-21-e4-norewrite-spa-zeros-com2.txt` | E4 no-incoming-rewrite SPA | Spec 201/start 200; first SPA OK; re-entry ctls all 0 / error 7 — **not E4 closed** |
+| `2026-08-21-e4-spa-shadow-reentry-ok-com2.txt` | **E4 P0-14 iron close** | Spec 201/start 200; marker + shadow `fields=98`; G0↔SPA VMLAUNCH re-entry; no error 7/11 |
+| `2026-08-21-e4-g0reloc-coexist-listen-com2.txt` | E4 `618e89e2` coexist listen | `10.99.99.126:8443`; Mac curl `(28)`; no `TCP accept` |
+| `2026-08-21-e4-g0reloc-spa-vmptrld-loop-com2.txt` | E4 `618e89e2` SPA start | Marker + relocate `0x10a00000` then `VMPTRLD slot=0` loop; fail-soft no VMXOFF — **not E4 closed** |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·

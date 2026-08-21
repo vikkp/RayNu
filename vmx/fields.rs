@@ -213,6 +213,110 @@ pub const LINUX_EXCEPTION_BITMAP: u32 = (1 << 0) // #DE
     | (1 << 17) // #AC
     | (1 << 19); // #XF
 
+/// Writable VMCS fields used to clone G0 (SDM: VMCS data is implementation-specific;
+/// `memcpy` of a `VMCLEAR`'d region is not a valid relocate). Skip `VMREAD` failures
+/// for optional components (PAT, TPR threshold, …).
+pub const VMCS_CLONE_FIELDS: &[u64] = &[
+    GUEST_ES_SELECTOR,
+    GUEST_CS_SELECTOR,
+    GUEST_SS_SELECTOR,
+    GUEST_DS_SELECTOR,
+    GUEST_FS_SELECTOR,
+    GUEST_GS_SELECTOR,
+    GUEST_LDTR_SELECTOR,
+    GUEST_TR_SELECTOR,
+    HOST_ES_SELECTOR,
+    HOST_CS_SELECTOR,
+    HOST_SS_SELECTOR,
+    HOST_DS_SELECTOR,
+    HOST_FS_SELECTOR,
+    HOST_GS_SELECTOR,
+    HOST_TR_SELECTOR,
+    IO_BITMAP_A,
+    IO_BITMAP_B,
+    MSR_BITMAP,
+    EPT_POINTER,
+    VMCS_LINK_POINTER,
+    GUEST_IA32_DEBUGCTL,
+    GUEST_IA32_PAT,
+    GUEST_IA32_EFER,
+    HOST_IA32_PAT,
+    HOST_IA32_EFER,
+    PIN_BASED_VM_EXEC_CONTROL,
+    PRIMARY_PROC_BASED_VM_EXEC_CONTROL,
+    EXCEPTION_BITMAP,
+    PAGE_FAULT_ERROR_CODE_MASK,
+    PAGE_FAULT_ERROR_CODE_MATCH,
+    CR3_TARGET_COUNT,
+    VM_EXIT_CONTROLS,
+    VM_EXIT_MSR_STORE_COUNT,
+    VM_EXIT_MSR_LOAD_COUNT,
+    VM_ENTRY_CONTROLS,
+    VM_ENTRY_MSR_LOAD_COUNT,
+    VM_ENTRY_INTERRUPTION_INFO,
+    VM_ENTRY_EXCEPTION_ERROR_CODE,
+    TPR_THRESHOLD,
+    SECONDARY_VM_EXEC_CONTROL,
+    GUEST_ES_LIMIT,
+    GUEST_CS_LIMIT,
+    GUEST_SS_LIMIT,
+    GUEST_DS_LIMIT,
+    GUEST_FS_LIMIT,
+    GUEST_GS_LIMIT,
+    GUEST_LDTR_LIMIT,
+    GUEST_TR_LIMIT,
+    GUEST_GDTR_LIMIT,
+    GUEST_IDTR_LIMIT,
+    GUEST_ES_ACCESS_RIGHTS,
+    GUEST_CS_ACCESS_RIGHTS,
+    GUEST_SS_ACCESS_RIGHTS,
+    GUEST_DS_ACCESS_RIGHTS,
+    GUEST_FS_ACCESS_RIGHTS,
+    GUEST_GS_ACCESS_RIGHTS,
+    GUEST_LDTR_ACCESS_RIGHTS,
+    GUEST_TR_ACCESS_RIGHTS,
+    GUEST_INTERRUPTIBILITY_STATE,
+    GUEST_ACTIVITY_STATE,
+    GUEST_IA32_SYSENTER_CS,
+    HOST_IA32_SYSENTER_CS,
+    CR0_GUEST_HOST_MASK,
+    CR4_GUEST_HOST_MASK,
+    CR0_READ_SHADOW,
+    CR4_READ_SHADOW,
+    GUEST_CR0,
+    GUEST_CR3,
+    GUEST_CR4,
+    GUEST_ES_BASE,
+    GUEST_CS_BASE,
+    GUEST_SS_BASE,
+    GUEST_DS_BASE,
+    GUEST_FS_BASE,
+    GUEST_GS_BASE,
+    GUEST_LDTR_BASE,
+    GUEST_TR_BASE,
+    GUEST_GDTR_BASE,
+    GUEST_IDTR_BASE,
+    GUEST_DR7,
+    GUEST_RSP,
+    GUEST_RIP,
+    GUEST_RFLAGS,
+    GUEST_PENDING_DBG_EXCEPTIONS,
+    GUEST_IA32_SYSENTER_ESP,
+    GUEST_IA32_SYSENTER_EIP,
+    HOST_CR0,
+    HOST_CR3,
+    HOST_CR4,
+    HOST_FS_BASE,
+    HOST_GS_BASE,
+    HOST_TR_BASE,
+    HOST_GDTR_BASE,
+    HOST_IDTR_BASE,
+    HOST_IA32_SYSENTER_ESP,
+    HOST_IA32_SYSENTER_EIP,
+    HOST_RSP,
+    HOST_RIP,
+];
+
 #[cfg(test)]
 mod fields_test {
     use super::*;
@@ -231,5 +335,24 @@ mod fields_test {
         assert_eq!(SECONDARY_ENABLE_XSAVES, 1 << 20);
         assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
         assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
+    }
+
+    #[test]
+    fn vmcs_clone_fields_unique_and_include_rip() {
+        assert!(VMCS_CLONE_FIELDS.len() >= 60);
+        assert!(VMCS_CLONE_FIELDS.contains(&GUEST_RIP));
+        assert!(VMCS_CLONE_FIELDS.contains(&GUEST_RSP));
+        assert!(VMCS_CLONE_FIELDS.contains(&GUEST_CR3));
+        assert!(VMCS_CLONE_FIELDS.contains(&EPT_POINTER));
+        assert!(VMCS_CLONE_FIELDS.contains(&HOST_RIP));
+        assert!(VMCS_CLONE_FIELDS.contains(&CR4_GUEST_HOST_MASK));
+        assert!(VMCS_CLONE_FIELDS.contains(&EXCEPTION_BITMAP));
+        for (i, &a) in VMCS_CLONE_FIELDS.iter().enumerate() {
+            for (j, &b) in VMCS_CLONE_FIELDS.iter().enumerate() {
+                if i != j {
+                    assert_ne!(a, b, "duplicate VMCS clone encoding 0x{a:x}");
+                }
+            }
+        }
     }
 }

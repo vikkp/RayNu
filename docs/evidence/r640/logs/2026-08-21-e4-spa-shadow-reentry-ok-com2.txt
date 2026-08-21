@@ -1,0 +1,94 @@
+# COM2 excerpt — shadow-restore EFI 2b795a0 (2026-08-21)
+# Full boot M0→SHELL→M4→R640-BOOT-OK then Phase F coexist on 10.99.99.126:8443.
+# Mac: POST spec → 201; POST start → 200. P0-14 closed on iron.
+# Guest is SHELL CPUID stub. Switches are VMLAUNCH (VMCLEAR outgoing), not VMRESUME.
+# Paste truncated mid-loop; no error 7/11, no VMXOFF, no fail-soft.
+boot: HOST-NIC coexist listening on 10.99.99.126:8443 (VMX on; ADR-013 Phase F)
+boot: CURL NOW → http://10.99.99.126:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)
+boot: HOST-NIC BCM5720 poll rx_prod=3 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmStarted guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: E4 G0 VMCS clone fields=98 rip=0xffffffff81160299 (VMREAD/VMWRITE; VMPTRLD verify ok)
+boot: E4 G0 VMCS relocated HPA=0x0000000010a00000 (host slab; VMREAD/VMWRITE clone; punched from G0 identity)
+RAYNU-V-AUDIT: VmcsCreated vcpu_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=2
+boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000001040601e guest_code=0x0000000010400000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → E4 SPA SHELL CPUID
+
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+# operator paste truncated here (more G0/SPA cycles continued on SOL)

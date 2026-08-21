@@ -66,5 +66,6 @@ Full fingerprint: [`logs/2026-08-20-host-nic-http-ok-com2.txt`](logs/2026-08-20-
 
 - QEMU `HOST-NIC-QEMU-OK` does not count.
 - PRE-EBS `RAYNU-V-M7-UEFI-HTTP-OK` does not count.
-- Phase F (native as primary / 72h soak) and Phase G (VLAN split) are later.
+- Phase F (native as primary beside VMX) closed later the same day. 72h soak
+  stays later. Phase G closed 2026-08-21 as accepted-risk (shared LOM).
 - Preserve kit for rollback: `releases/v0.1.0-adr013-baseline`.

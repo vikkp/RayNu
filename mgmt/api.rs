@@ -361,9 +361,20 @@ pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse 
             },
         },
         Ok(RestOp::Start { guest_id }) => {
-            rest_lifecycle(table, CliCommand::Start { guest_id }, 200)
+            let resp = rest_lifecycle(table, CliCommand::Start { guest_id }, 200);
+            if resp.status == 200 {
+                // Queue only. VMLAUNCH runs on the next coexist scheduler quantum.
+                super::spa_launch::note_spa_start(guest_id);
+            }
+            resp
         }
-        Ok(RestOp::Stop { guest_id }) => rest_lifecycle(table, CliCommand::Stop { guest_id }, 200),
+        Ok(RestOp::Stop { guest_id }) => {
+            let resp = rest_lifecycle(table, CliCommand::Stop { guest_id }, 200);
+            if resp.status == 200 {
+                super::spa_launch::note_spa_stop(guest_id);
+            }
+            resp
+        }
         Ok(RestOp::Destroy { guest_id }) => {
             rest_lifecycle(table, CliCommand::Destroy { guest_id }, 200)
         }

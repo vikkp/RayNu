@@ -30,6 +30,37 @@ pub const HOST_NIC_LISTEN_MS: u64 = 20_000;
 /// Max HTTP exchanges in the Phase C window.
 pub const HOST_NIC_MAX_EXCHANGES: u32 = 8;
 
+/// Coexist has **one** TCP listen slot. Iron 2026-08-21: a SPA/browser
+/// half-open ESTABLISHED (COM2 `TCP accept` with no `HTTP exchange ok`)
+/// held the slot so `curl` SYN timed out. Abort and re-listen after this
+/// many coexist-tick milliseconds without complete HTTP headers.
+pub const HOST_NIC_HTTP_IDLE_MS: i64 = 3000;
+
+/// Whether a single-socket HTTP accept should RST and re-listen.
+///
+/// INVARIANTS:
+/// - `true` only when an accept was announced, headers are incomplete,
+///   and `elapsed_since_accept_ms >= limit_ms` with `limit_ms > 0`
+/// - Complete headers never abort (the exchange/close path owns that socket)
+pub fn http_accept_should_idle_abort(
+    announced: bool,
+    headers_done: bool,
+    elapsed_since_accept_ms: i64,
+    limit_ms: i64,
+) -> bool {
+    announced && !headers_done && limit_ms > 0 && elapsed_since_accept_ms >= limit_ms
+}
+
+/// Host/CI: idle abort fires at the limit and never on complete headers.
+pub fn prop_http_accept_idle_abort() -> bool {
+    !http_accept_should_idle_abort(true, false, 0, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(true, false, HOST_NIC_HTTP_IDLE_MS - 1, HOST_NIC_HTTP_IDLE_MS)
+        && http_accept_should_idle_abort(true, false, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(true, true, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(false, false, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_HTTP_IDLE_MS)
+        && !http_accept_should_idle_abort(true, false, 5000, 0)
+}
+
 /// JUSTIFICATION: lab ESP flag; BSP-only; set PRE-EBS, read after EBS.
 static HOST_NIC_LAB: AtomicBool = AtomicBool::new(false);
 
@@ -79,3 +110,7 @@ fn flag_present(fs: &mut uefi::fs::FileSystem, path: &str) -> bool {
 pub fn should_skip_pre_ebs_firmware_listen() -> bool {
     crate::mgmt::e1000_mmio::qemu_e1000_present()
 }
+
+#[cfg(test)]
+#[path = "host_nic_test.rs"]
+mod host_nic_test;

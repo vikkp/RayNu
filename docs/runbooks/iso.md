@@ -1,7 +1,7 @@
 # Runbook — ISO deploy path (M7.3)
 
 **Marker:** `RAYNU-V-M7-ISO-OK`  
-**Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md)  
+**Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · product ISO: [ADR-014](../adr/ADR-014.md)  
 **Prior:** [datastore.md](datastore.md) (M7.2)
 
 ## What this gate proves
@@ -37,11 +37,14 @@ RAYNU-V-M7-ISO-OK
 
 ## Honesty / residuals
 
-- **MVP is kernel-extract**, not full installer media emulation.
+- **MVP is kernel-extract**, not full installer media emulation. Lab/M7.3 only.
+- Product ISO install is **UEFI-first + typed** ([ADR-014](../adr/ADR-014.md)):
+  `linux_iso` | `windows_iso` | `generic_uefi`. Do not hard-wire SPA install to
+  bzImage jump. Windows install is later; the type exists now.
 - **`attach_cdrom_uefi`** returns `UnsupportedOnFirmware` — El Torito / CD-ROM
   attach is deferred.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
-- Outside Proven Core (ADR-009); size still ADR-003.
+- Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
 ## Next
 

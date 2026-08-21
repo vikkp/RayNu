@@ -34,6 +34,7 @@ pub fn prop_coexist_wired() -> bool {
     let coexist = include_str!("host_nic_coexist.rs");
     launch.contains("tick_native_coexist")
         && launch.contains("try_arm_native_coexist")
+        && launch.contains("try_spa_vmlaunch")
         && launch.contains("fn enter_sched_coexist(")
         && launch.contains("M4_LADDER_DONE")
         && launch.contains("HOST-NIC coexist — resume G0")

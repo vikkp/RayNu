@@ -22,8 +22,9 @@ use crate::boot::serial;
 use crate::mgmt::bcm5720::Bcm5720Device;
 use crate::mgmt::e1000::E1000Device;
 use crate::mgmt::host_nic::{
-    host_nic_lab_armed, HOST_NIC_LISTEN_MS, HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER,
-    QEMU_USERNET_GW, QEMU_USERNET_IPV4, QEMU_USERNET_PREFIX,
+    host_nic_lab_armed, http_accept_should_idle_abort, HOST_NIC_HTTP_IDLE_MS, HOST_NIC_LISTEN_MS,
+    HOST_NIC_MAX_EXCHANGES, M7_HOST_NIC_QEMU_MARKER, QEMU_USERNET_GW, QEMU_USERNET_IPV4,
+    QEMU_USERNET_PREFIX,
 };
 use crate::mgmt::host_nic_poll::{bounded_poll, HOST_NIC_POLL_BUDGET};
 use crate::mgmt::http::handle_http_request;
@@ -55,6 +56,7 @@ static mut COEXIST_RX_ACC: [u8; RX_ACC_N] = [0; RX_ACC_N];
 static mut COEXIST_HTTP_OUT: [u8; HTTP_OUT_N] = [0; HTTP_OUT_N];
 static mut COEXIST_MILLIS: i64 = 0;
 static mut COEXIST_ANNOUNCED: bool = false;
+static mut COEXIST_ACCEPT_AT_MS: i64 = 0;
 static mut COEXIST_RX_LEN: usize = 0;
 static mut COEXIST_LAST_DIAG: i64 = 0;
 static mut COEXIST_LAST_RX_DROP: u32 = 0;
@@ -183,6 +185,7 @@ pub fn arm_bcm5720_coexist() -> bool {
         COEXIST_TCP_HANDLE.write(tcp_handle);
         COEXIST_MILLIS = 0;
         COEXIST_ANNOUNCED = false;
+        COEXIST_ACCEPT_AT_MS = 0;
         COEXIST_RX_LEN = 0;
         COEXIST_LAST_DIAG = 0;
         COEXIST_LAST_RX_DROP = 0;
@@ -233,11 +236,13 @@ pub fn tick_bcm5720_coexist() {
 
         let mut do_close = false;
         let mut did_exchange = false;
+        let mut did_idle_abort = false;
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
                 COEXIST_RX_LEN = 0;
                 COEXIST_ANNOUNCED = false;
+                COEXIST_ACCEPT_AT_MS = 0;
                 let _ = sock.listen(COEXIST_PORT);
             } else if !sock.is_active() && !sock.is_listening() {
                 let _ = sock.listen(COEXIST_PORT);
@@ -245,6 +250,7 @@ pub fn tick_bcm5720_coexist() {
             if sock.is_active() && !COEXIST_ANNOUNCED {
                 serial::write_line("boot: HOST-NIC TCP accept — client connected");
                 COEXIST_ANNOUNCED = true;
+                COEXIST_ACCEPT_AT_MS = millis;
                 COEXIST_RX_LEN = 0;
             }
             if sock.can_recv() {
@@ -278,6 +284,17 @@ pub fn tick_bcm5720_coexist() {
                     did_exchange = true;
                     do_close = true;
                 }
+            } else if http_accept_should_idle_abort(
+                COEXIST_ANNOUNCED,
+                headers_done,
+                millis.saturating_sub(COEXIST_ACCEPT_AT_MS),
+                HOST_NIC_HTTP_IDLE_MS,
+            ) {
+                sock.abort();
+                COEXIST_RX_LEN = 0;
+                COEXIST_ANNOUNCED = false;
+                COEXIST_ACCEPT_AT_MS = 0;
+                did_idle_abort = true;
             }
         }
         if did_exchange {
@@ -286,9 +303,26 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            // abort() not close(): FIN_WAIT held the only listen slot so the
+            // next curl (spec→start, 31ms) got RST (`curl: (7)`). Iron 2026-08-21.
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             COEXIST_RX_LEN = 0;
             COEXIST_ANNOUNCED = false;
+            COEXIST_ACCEPT_AT_MS = 0;
+            let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(COEXIST_PORT);
+            }
+            serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
+        }
+        if did_idle_abort {
+            serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+            let _ = iface.poll(Instant::from_millis(millis + 1), device, sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(COEXIST_PORT);
+            }
         }
         if millis - COEXIST_LAST_DIAG >= 5000 {
             COEXIST_LAST_DIAG = millis;
@@ -556,6 +590,7 @@ fn listen_loop<D: Device>(
 
     let mut served: u32 = 0;
     let mut announced = false;
+    let mut accept_at: i64 = 0;
     let mut rx_len: usize = 0;
     let mut last_diag: i64 = 0;
     let mut last_rx_drop: u32 = 0;
@@ -579,11 +614,13 @@ fn listen_loop<D: Device>(
 
         let mut do_close = false;
         let mut did_exchange = false;
+        let mut did_idle_abort = false;
         {
             let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
             if !sock.is_open() {
                 rx_len = 0;
                 announced = false;
+                accept_at = 0;
                 let _ = sock.listen(port);
             } else if !sock.is_active() && !sock.is_listening() {
                 let _ = sock.listen(port);
@@ -591,6 +628,7 @@ fn listen_loop<D: Device>(
             if sock.is_active() && !announced {
                 serial::write_line("boot: HOST-NIC TCP accept — client connected");
                 announced = true;
+                accept_at = millis;
                 rx_len = 0;
             }
             if sock.can_recv() {
@@ -627,6 +665,17 @@ fn listen_loop<D: Device>(
                     did_exchange = true;
                     do_close = true;
                 }
+            } else if http_accept_should_idle_abort(
+                announced,
+                headers_done,
+                millis.saturating_sub(accept_at),
+                HOST_NIC_HTTP_IDLE_MS,
+            ) {
+                sock.abort();
+                rx_len = 0;
+                announced = false;
+                accept_at = 0;
+                did_idle_abort = true;
             }
         }
 
@@ -655,6 +704,16 @@ fn listen_loop<D: Device>(
             sockets.get_mut::<tcp::Socket>(tcp_handle).close();
             rx_len = 0;
             announced = false;
+            accept_at = 0;
+        }
+        if did_idle_abort {
+            serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
+            millis += 1;
+            iface.poll(Instant::from_millis(millis), device, &mut sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(port);
+            }
         }
 
         millis += 1;

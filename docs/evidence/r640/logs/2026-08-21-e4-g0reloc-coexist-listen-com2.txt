@@ -1,0 +1,23 @@
+# Truncated: M4 ladder omitted (same as hang-fix boot). Coexist listen + RX dump.
+
+RAYNU-V-R640-BOOT-OK
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.126:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)
+boot: HOST-NIC BCM5720 reuse (armed post-EBS)
+boot: HOST-NIC coexist listening on 10.99.99.126:8443 (VMX on; ADR-013 Phase F)
+boot: CURL NOW → http://10.99.99.126:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)
+boot: HOST-NIC BCM5720 poll rx_prod=13 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=78 n=74 dst=01:00:5e:00:00:fa src=3c:8d:20:eb:e8:fa
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=78 n=74 dst=01:00:5e:00:00:02 src=28:87:ba:a6:b6:04
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=78 n=74 dst=01:00:5e:53:64:6d src=28:92:00:2f:e5:2c
+boot: HOST-NIC BCM5720 rx to=other etype=88cc hw=147 n=143 dst=01:80:c2:00:00:0e src=c8:c6:fe:6c:0c:40
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=78 n=74 dst=01:00:5e:00:00:16 src=28:87:ba:a6:b6:04
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=282 n=278 dst=33:33:00:00:00:fb src=58:9a:3e:92:5c:c4
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=313 n=309 dst=01:00:5e:00:00:fb src=58:9a:3e:92:5c:c4
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=300 n=296 dst=33:33:00:00:00:fb src=58:9a:3e:92:5c:c4
+
+# Mac (same window):
+# curl: (28) Connection timed out after 20006 milliseconds
+# curl: (28) Connection timed out after 20001 milliseconds
+# No COM2 "HOST-NIC TCP accept"

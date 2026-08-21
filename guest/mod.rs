@@ -1,7 +1,9 @@
-//! Guest bring-up helpers outside the Proven Core (ADR-002).
+//! Guest bring-up helpers outside the Proven Core (ADR-002 / ADR-014).
 //!
 //! Pillar: [Z]
 //! Linux boot protocol packing lives here — not in `memory/` / `vmx/`.
+//! Product ISO install is UEFI-first (`mgmt::guest_image`); this module is the
+//! G0 lab bzImage backend, not the only installer.
 
 pub mod linux_boot;
 

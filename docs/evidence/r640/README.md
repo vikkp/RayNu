@@ -14,7 +14,18 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **Post-EBS SNP dead:** [`2026-08-17-post-ebs-snp-dead.md`](2026-08-17-post-ebs-snp-dead.md) — firmware SNP hang + curl timeout + RSOD; do not claim `POST-EBS-HTTP-OK`  
 **ADR-013 Phase 0 census:** [`2026-08-17-phase0-census.md`](2026-08-17-phase0-census.md) — iron pick **`14e4:165f`** BCM5720 dual-port  
 **E3b / M7.8 iron close:** [`2026-08-20-e3b-host-nic-http-ok.md`](2026-08-20-e3b-host-nic-http-ok.md) — **`RAYNU-V-M7-HOST-NIC-HTTP-OK`** after `BOOT-OK` on `:38` / `10.99.99.144:8443`  
-**Next architecture:** [`docs/adr/ADR-013.md`](../../adr/ADR-013.md) — management network (E3b, **Accepted**; Phase D **closed on iron** 2026-08-20)
+**Next architecture:** [`docs/adr/ADR-013.md`](../../adr/ADR-013.md) — management network (E3b, **Accepted**; Phase D **closed on iron** 2026-08-20)  
+**E4 hang-fix Cruzer flash:** [`2026-08-21-e4-cruzer-flash-hangfix.md`](2026-08-21-e4-cruzer-flash-hangfix.md) — EFI `f413a9fc` on `RAYNUV` (superseded)  
+**E4 G0-relocate Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0reloc.md`](2026-08-21-e4-cruzer-flash-g0reloc.md) — EFI `618e89e2` on `RAYNUV` (superseded; memcpy VMPTRLD loop)  
+**E4 G0-clone Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0clone.md`](2026-08-21-e4-cruzer-flash-g0clone.md) — EFI `63cd694f` on `RAYNUV` (`CRUZER-FLASH-OK`)  
+**E4 63cd694f clone then slot 1 error 11:** [`2026-08-21-e4-g0clone-spa-slot1-rev11.md`](2026-08-21-e4-g0clone-spa-slot1-rev11.md) — clone+marker+G0 VMLAUNCH OK; `VMPTRLD` slot 1 error 11; fail-soft G0; **not E4 closed**  
+**E4 eb456eec VMCLEAR then SPA error 7:** [`2026-08-21-e4-vmclear-spa-entry7.md`](2026-08-21-e4-vmclear-spa-entry7.md) — error 11 gone; slot 1 re-entry `VMLAUNCH` error 7; idle; **not E4 closed**  
+**E4 no-incoming-rewrite first SPA then zeros:** [`2026-08-21-e4-norewrite-spa-zeros.md`](2026-08-21-e4-norewrite-spa-zeros.md) — spec 201/start 200; first SPA `VMLAUNCH` OK; re-entry ctls all 0 / error 7; **not E4 closed** (superseded)
+**E4 SPA VMLAUNCH + re-entry (close):** [`2026-08-21-e4-spa-shadow-reentry-ok.md`](2026-08-21-e4-spa-shadow-reentry-ok.md) — EFI `2b795a0`; spec 201/start 200; marker + shadow restore `fields=98`; G0↔SPA clear-state `VMLAUNCH`; **P0-14 closed on iron** (SHELL stub; not Everest)  
+**E4 618e89e2 coexist listen:** [`2026-08-21-e4-g0reloc-coexist-listen.md`](2026-08-21-e4-g0reloc-coexist-listen.md) — `10.99.99.126:8443`; Mac curl `(28)` on first listen; later curls succeeded  
+**E4 hang-fix iron boot:** [`2026-08-21-e4-hangfix-boot.md`](2026-08-21-e4-hangfix-boot.md) — `SLICE-G0` then slot 1; coexist HTTP-OK; GET-only paste  
+**E4 SPA start then G0 VMPTRLD fail (hang-fix):** [`2026-08-21-e4-spa-launch-vmptrld-fail.md`](2026-08-21-e4-spa-launch-vmptrld-fail.md) — marker then VMXOFF; **not E4 closed**  
+**E4 618e89e2 SPA then VMPTRLD loop:** [`2026-08-21-e4-g0reloc-spa-vmptrld-loop.md`](2026-08-21-e4-g0reloc-spa-vmptrld-loop.md) — marker + fail-soft (no VMXOFF); memcpy'd G0 VMCS at `0x10a00000` fails `VMPTRLD` every tick; **not E4 closed**
 
 **COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +
 SHA256SUMS (keepconfix residual, xsavesfix close, confirming rebuild, and

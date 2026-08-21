@@ -1,0 +1,14 @@
+# Known-bad r640-hypervisor.efi SHA256 prefixes (first 8 hex).
+# flashcruzer.sh refuses these unless --allow-rejected.
+# These are content hashes of EFI binaries, not git commit SHAs.
+26573eb1
+42b42c99
+ec08c00f
+1404f055
+9fc6a3c2
+c16cbffd
+67b0acde
+f413a9fc
+618e89e2
+63cd694f
+26db0610

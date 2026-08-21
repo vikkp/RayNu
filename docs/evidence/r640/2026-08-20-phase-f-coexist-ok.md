@@ -84,6 +84,7 @@ Hold confirmation: [`logs/2026-08-20-phase-f-coexist-hold-com2.txt`](logs/2026-0
 - QEMU `HOST-NIC-QEMU-OK` does not count.
 - PRE-EBS `RAYNU-V-M7-UEFI-HTTP-OK` does not count.
 - Phase D / E3b (post-`VMXOFF` first-accept) closed earlier the same day.
-- Phase G (NIC auto-select / VLAN split) is later. `:38` is the lab default.
+- Phase G closed 2026-08-21 as accepted-risk (shared LOM `:38` with virtio-net;
+  [ADR-013](../../adr/ADR-013.md) Appendix B). `:38` remains the lab default.
 - SPA create/start does not VMLAUNCH.
 - Preserve kit for rollback: `releases/v0.1.0-adr013-baseline`.

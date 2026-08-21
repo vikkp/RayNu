@@ -43,6 +43,8 @@ smoke is **not** first light — only serial from this box closes
 - [ ] Copy `r640-hypervisor.efi` to media as `\EFI\BOOT\BOOTX64.EFI`
       (prefer `./tools/make-boot-media.sh` → map `.img` in iDRAC; see
       [`media_maker.md`](media_maker.md)).
+      On `raynuvsrv1` with Cruzer `RAYNUV` already in front USB 2:
+      `~/projects/raynuv/flashcruzer.sh` (see [`usb_idrac.md`](usb_idrac.md)).
 - [ ] Open iDRAC virtual console **before** reboot; prepare to save the serial
       log.
 - [ ] One-time boot to USB / virtual media (F11 / iDRAC next-boot).
