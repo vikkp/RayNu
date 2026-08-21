@@ -273,7 +273,7 @@ static mut SCHED_VMPTRLD_FAIL_LOGGED: bool = false;
 /// First E4 G0/SPA clear-state re-entry logs; later quanta stay quiet.
 static mut E4_G0_REENTRY_LOGGED: bool = false;
 static mut E4_SPA_REENTRY_LOGGED: bool = false;
-static mut E4_RESTORE_LOGGED: [bool; 2] = [false; false];
+static mut E4_RESTORE_LOGGED: [bool; 2] = [false; 2];
 static mut E4_SWITCH_QUIET_HINT: bool = false;
 
 /// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
