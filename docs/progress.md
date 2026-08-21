@@ -147,15 +147,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
-**E4 SPA VMLAUNCH:** Cruzer `RAYNUV` flashed clone EFI `63cd694f` (`CRUZER-FLASH-OK`). Prior `618e89e2` printed the marker then memcpy `VMPTRLD slot=0` loop — **not E4 closed.** F11 Cruzer boot of `63cd694f` is next. Guest is SHELL CPUID, not a distro installer.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-cruzer-flash-g0clone.md](evidence/r640/2026-08-21-e4-cruzer-flash-g0clone.md)
+**E4 SPA VMLAUNCH:** Iron `63cd694f` printed clone verify + `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + G0 VMLAUNCH, then slot 1 `VMPTRLD` error 11 (revision). Fail-soft G0, no VMXOFF — **not E4 closed.** Next EFI: VMCLEAR outgoing + rewrite revision before switch. Guest is SHELL CPUID, not a distro installer.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-g0clone-spa-slot1-rev11.md](evidence/r640/2026-08-21-e4-g0clone-spa-slot1-rev11.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | ADR-013 Phase F | coexist HTTP while VMX on | **CLOSED** 2026-08-20 on BCM5720 `:38` / `10.99.99.149:8443`. G0 scheduled; G1–G3 parked. Hold COM2: 25× HTTP-OK. |
-| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN PROGRESS** — Cruzer `RAYNUV` holds `63cd694f` (VMREAD/VMWRITE clone). Flash OK; F11 boot open. Not closed. |
+| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN PROGRESS** — iron `63cd694f` clone+marker+G0 VMLAUNCH; slot 1 error 11. Not closed. |
 | Everest residual | TLS/console + distro installer | After iron E4 marker. Not this slice. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

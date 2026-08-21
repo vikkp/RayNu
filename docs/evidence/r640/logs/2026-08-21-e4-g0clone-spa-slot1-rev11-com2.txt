@@ -1,0 +1,38 @@
+# COM2 excerpt — EFI 63cd694f on Cruzer RAYNUV, lease 10.99.99.126:8443
+# 2026-08-21. Operator paste (Mac curl + iDRAC SOL console com2).
+# PRE-EBS SNP HTTP timed out (expected). Full M4 ladder + RAYNU-V-R640-BOOT-OK.
+# Native coexist HTTP-OK. Mac spec 201 + start 200.
+# G0 VMREAD/VMWRITE clone verify ok (98 fields, Linux RIP).
+# E4 SPA SHELL marker + G0 VMLAUNCH of relocated VMCS (0x10a00000) OK.
+# Then sched VMPTRLD slot=1 phys=0x10409000 failed VM_INSTRUCTION_ERROR=11
+# (incorrect VMCS revision identifier). Fail-soft resumed slot 0 (VMX on;
+# no VMXOFF). ERROR/WARN latched once. Not E4 closed.
+
+RAYNU-V-R640-BOOT-OK
+boot: HOST-NIC coexist listening on 10.99.99.126:8443 (VMX on; ADR-013 Phase F)
+boot: CURL NOW → http://10.99.99.126:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+boot: HOST-NIC BCM5720 poll rx_prod=11 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmStarted guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: E4 G0 VMCS clone fields=98 rip=0xffffffff81160299 (VMREAD/VMWRITE; VMPTRLD verify ok)
+boot: E4 G0 VMCS relocated HPA=0x0000000010a00000 (host slab; VMREAD/VMWRITE clone; punched from G0 identity)
+RAYNU-V-AUDIT: VmcsCreated vcpu_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=2
+boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)
+boot: VMLAUNCH → E4 SPA SHELL CPUID
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: ERROR — sched VMPTRLD failed slot=00000001 phys=0x0000000010409000
+boot: VM_INSTRUCTION_ERROR=11
+boot: WARN — park VMPTRLD fail; resume slot=00000000 (VMX on; no VMXOFF)

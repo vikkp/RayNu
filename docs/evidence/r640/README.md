@@ -17,7 +17,8 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **Next architecture:** [`docs/adr/ADR-013.md`](../../adr/ADR-013.md) — management network (E3b, **Accepted**; Phase D **closed on iron** 2026-08-20)  
 **E4 hang-fix Cruzer flash:** [`2026-08-21-e4-cruzer-flash-hangfix.md`](2026-08-21-e4-cruzer-flash-hangfix.md) — EFI `f413a9fc` on `RAYNUV` (superseded)  
 **E4 G0-relocate Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0reloc.md`](2026-08-21-e4-cruzer-flash-g0reloc.md) — EFI `618e89e2` on `RAYNUV` (superseded; memcpy VMPTRLD loop)  
-**E4 G0-clone Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0clone.md`](2026-08-21-e4-cruzer-flash-g0clone.md) — EFI `63cd694f` on `RAYNUV` (`CRUZER-FLASH-OK`; F11 boot open)  
+**E4 G0-clone Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0clone.md`](2026-08-21-e4-cruzer-flash-g0clone.md) — EFI `63cd694f` on `RAYNUV` (`CRUZER-FLASH-OK`)  
+**E4 63cd694f clone then slot 1 error 11:** [`2026-08-21-e4-g0clone-spa-slot1-rev11.md`](2026-08-21-e4-g0clone-spa-slot1-rev11.md) — clone+marker+G0 VMLAUNCH OK; `VMPTRLD` slot 1 error 11; fail-soft G0; **not E4 closed**  
 **E4 618e89e2 coexist listen:** [`2026-08-21-e4-g0reloc-coexist-listen.md`](2026-08-21-e4-g0reloc-coexist-listen.md) — `10.99.99.126:8443`; Mac curl `(28)` on first listen; later curls succeeded  
 **E4 hang-fix iron boot:** [`2026-08-21-e4-hangfix-boot.md`](2026-08-21-e4-hangfix-boot.md) — `SLICE-G0` then slot 1; coexist HTTP-OK; GET-only paste  
 **E4 SPA start then G0 VMPTRLD fail (hang-fix):** [`2026-08-21-e4-spa-launch-vmptrld-fail.md`](2026-08-21-e4-spa-launch-vmptrld-fail.md) — marker then VMXOFF; **not E4 closed**  

@@ -37,8 +37,8 @@ Keep `ape-nophylock=yes`. Bind LOM `:38` / `01:00.0`. Do **not** write PERC
 |------|--------|----------|
 | Cruzer ESP write | **OK** | [`logs/2026-08-21-e4-cruzer-flash-g0clone.txt`](logs/2026-08-21-e4-cruzer-flash-g0clone.txt) |
 | G0 VMCS clone | in the flashed binary | `33155c1` — not yet booted |
-| Iron boot of `63cd694f` | **open** | F11 Cruzer still required |
-| E4 SPA VMLAUNCH | **open** | do not claim from flash |
+| Iron boot of `63cd694f` | **booted** | clone+marker+G0 VMLAUNCH; slot 1 error 11 — see [`2026-08-21-e4-g0clone-spa-slot1-rev11.md`](2026-08-21-e4-g0clone-spa-slot1-rev11.md) |
+| E4 SPA VMLAUNCH | **open** | not a close |
 
 ## Next on iron
 

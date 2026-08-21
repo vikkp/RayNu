@@ -37,7 +37,8 @@ Tcp4-absent analysis:
 | `2026-08-21-e4-hangfix-boot-com2.txt` | E4 hang-fix iron boot | `SLICE-G0` then `sched switch → slot=1`; coexist `10.99.99.149:8443`; E4 marker open |
 | `2026-08-21-e4-spa-vmcs-vmptrld-fail-com2.txt` | E4 SPA start on hang-fix EFI | Marker printed then `VMPTRLD failed slot=0` / VMXOFF / `boot gate failed` — **not E4 closed** |
 | `2026-08-21-e4-cruzer-flash-g0reloc.txt` | E4 G0-relocate Cruzer flash | artifact `9432035922` / EFI `618e89e2` → `RAYNUV`; superseded (memcpy loop) |
-| `2026-08-21-e4-cruzer-flash-g0clone.txt` | E4 G0-clone Cruzer flash | artifact `9461155533` / EFI `63cd694f` → `RAYNUV`; `CRUZER-FLASH-OK`; iron boot open |
+| `2026-08-21-e4-cruzer-flash-g0clone.txt` | E4 G0-clone Cruzer flash | artifact `9461155533` / EFI `63cd694f` → `RAYNUV`; `CRUZER-FLASH-OK` |
+| `2026-08-21-e4-g0clone-spa-slot1-rev11-com2.txt` | E4 `63cd694f` SPA start | Clone+marker+G0 VMLAUNCH OK; slot 1 `VMPTRLD` error 11; fail-soft G0 — **not E4 closed** |
 | `2026-08-21-e4-g0reloc-coexist-listen-com2.txt` | E4 `618e89e2` coexist listen | `10.99.99.126:8443`; Mac curl `(28)`; no `TCP accept` |
 | `2026-08-21-e4-g0reloc-spa-vmptrld-loop-com2.txt` | E4 `618e89e2` SPA start | Marker + relocate `0x10a00000` then `VMPTRLD slot=0` loop; fail-soft no VMXOFF — **not E4 closed** |
 

@@ -255,6 +255,10 @@ static mut G0_VMCS_RELOCATED: bool = false;
 static mut G0_NEEDS_VMLAUNCH: bool = false;
 /// Sticky: first `VMPTRLD` of slot 0 failed after E4 — do not pick slot 0 again.
 static mut G0_VMPTRLD_FAILED: bool = false;
+/// After `VMCLEAR` of slot 1, first re-entry must be `VMLAUNCH` (clear state).
+static mut SPA_NEEDS_VMLAUNCH: bool = false;
+/// Sticky: first `VMPTRLD` of slot 1 failed after E4 — park SPA (no retry flood).
+static mut SPA_VMPTRLD_FAILED: bool = false;
 /// Latch ERROR/WARN once so COM2 is not flooded every scheduler tick.
 static mut SCHED_VMPTRLD_FAIL_LOGGED: bool = false;
 
@@ -394,17 +398,47 @@ pub fn set_smp_probe(bsp: LaunchFrames, ap: LaunchFrames) {
 /// Minimal IA-32e TSS size (SDM Vol. 3A §7.7) — enough for LTR / host TR.
 const TSS_BYTES: usize = 0x68;
 
+/// SDM: IA32_VMX_BASIC[30:0] is the VMCS revision. Bit 31 of the first dword
+/// is the shadow-VMCS indicator and must be 0 for a non-shadow `VMPTRLD`.
+/// App. C error 11 = VMPTRLD with incorrect VMCS revision identifier.
+pub const fn vmcs_revision_from_basic(basic: u64) -> u32 {
+    (basic as u32) & 0x7fff_ffff
+}
+
 /// Prepare VMCS revision ID in the first dword (same as VMXON region).
 ///
 /// SAFETY: `region_phys` is a writable identity-mapped 4K frame.
 pub unsafe fn prepare_vmcs_region(region_phys: u64) -> Result<(), LaunchError> {
     debug_assert_eq!(region_phys & 0xfff, 0);
     let basic = cpu::rdmsr(IA32_VMX_BASIC);
-    let revision = (basic as u32) & 0x7fff_ffff;
+    let revision = vmcs_revision_from_basic(basic);
     let ptr = region_phys as *mut u8;
     core::ptr::write_bytes(ptr, 0, 4096);
     core::ptr::write_volatile(ptr.cast::<u32>(), revision);
     Ok(())
+}
+
+/// Rewrite only the VMCS revision identifier (first dword).
+///
+/// Does **not** zero the 4K region (unlike [`prepare_vmcs_region`]). Bit 31
+/// (shadow-VMCS) is cleared. Nested VT-x / an implicit current-VMCS flush
+/// can leave a revision this CPU will not `VMPTRLD` (iron error 11 on slot 1).
+///
+/// INVARIANTS:
+/// - First dword == `IA32_VMX_BASIC[30:0]` with bit 31 clear
+/// - Remaining 4K bytes unchanged
+///
+/// VERIFICATION: L1 (serial `rev=` on `VMPTRLD` fail)
+/// SAFETY: `region_phys` is a writable identity-mapped 4K-aligned VMCS frame.
+/// KANI-TARGET
+pub unsafe fn rewrite_vmcs_revision(region_phys: u64) {
+    debug_assert_eq!(region_phys & 0xfff, 0);
+    let basic = cpu::rdmsr(IA32_VMX_BASIC);
+    core::ptr::write_volatile(region_phys as *mut u32, vmcs_revision_from_basic(basic));
+}
+
+unsafe fn read_vmcs_revision(region_phys: u64) -> u32 {
+    core::ptr::read_volatile(region_phys as *const u32)
 }
 
 fn ar_busy_tr(mut ar: u32) -> u32 {
@@ -1627,6 +1661,8 @@ unsafe fn log_sched_vmptrld_fail_once(slot: usize, phys: u64) {
     write_hex_u32(slot as u32);
     serial::write_str(" phys=0x");
     write_hex_u64(phys);
+    serial::write_str(" rev=0x");
+    write_hex_u32(read_vmcs_revision(phys));
     serial::write_byte(b'\n');
     if let Ok(ierr) = ops::vmread(VM_INSTRUCTION_ERROR) {
         serial::write_str("boot: VM_INSTRUCTION_ERROR=");
@@ -1638,6 +1674,8 @@ unsafe fn log_sched_vmptrld_fail_once(slot: usize, phys: u64) {
     serial::write_line(" (VMX on; no VMXOFF)");
     if slot == 0 {
         serial::write_line("boot: HINT — G0 parked after VMPTRLD fail (no slot=0 retry)");
+    } else if slot == 1 {
+        serial::write_line("boot: HINT — SPA parked after VMPTRLD fail (no slot=1 retry)");
     }
 }
 
@@ -1650,9 +1688,29 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
             failsoft_sched_or_finish();
         }
     };
+    // Iron 2026-08-21 (`63cd694f`): leaving slot 1 current and `VMPTRLD` G0
+    // flushed the SPA VMCS in an implementation-specific form; next
+    // `VMPTRLD(0x10409000)` failed with error 11 (bad revision). VMCLEAR the
+    // outgoing VMCS, rewrite `IA32_VMX_BASIC[30:0]` (bit 31 clear), then
+    // `VMPTRLD` the incoming. First re-entry after VMCLEAR is VMLAUNCH.
+    if M4_LADDER_DONE && SPA_LAUNCHED && SCHED_SLOT_CUR != slot {
+        if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
+            let _ = ops::vmclear(cur_f.vmcs_phys);
+            rewrite_vmcs_revision(cur_f.vmcs_phys);
+            if SCHED_SLOT_CUR == 0 {
+                G0_NEEDS_VMLAUNCH = true;
+            } else if SCHED_SLOT_CUR == 1 {
+                SPA_NEEDS_VMLAUNCH = true;
+            }
+        }
+        rewrite_vmcs_revision(frames.vmcs_phys);
+    }
     if ops::vmptrld(frames.vmcs_phys).is_err() {
         if slot == 0 {
             G0_VMPTRLD_FAILED = true;
+        } else if slot == 1 {
+            SPA_VMPTRLD_FAILED = true;
+            SPA_RUNNABLE = false;
         }
         log_sched_vmptrld_fail_once(slot, frames.vmcs_phys);
         // Iron 2026-08-21: G0 identity-pool VMCS was scribbled; memcpy of a
@@ -1683,6 +1741,11 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         serial::write_line("boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)");
         vmlaunch_with_gprs();
     }
+    if slot == 1 && SPA_NEEDS_VMLAUNCH {
+        SPA_NEEDS_VMLAUNCH = false;
+        serial::write_line("boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)");
+        vmlaunch_with_gprs();
+    }
     vmresume_with_gprs();
 }
 
@@ -1691,6 +1754,7 @@ unsafe fn failsoft_sched_or_finish() -> ! {
     if M4_LADDER_DONE {
         let resume = SCHED_SLOT_CUR;
         if let Some(cur_f) = frames_for_slot(resume) {
+            rewrite_vmcs_revision(cur_f.vmcs_phys);
             let _ = ops::vmptrld(cur_f.vmcs_phys);
             if !SCHED_VMPTRLD_FAIL_LOGGED {
                 serial::write_str("boot: WARN — park VMPTRLD fail; resume slot=");
@@ -1705,6 +1769,10 @@ unsafe fn failsoft_sched_or_finish() -> ! {
             arm_sched_slice();
             if resume == 0 && G0_NEEDS_VMLAUNCH {
                 G0_NEEDS_VMLAUNCH = false;
+                vmlaunch_with_gprs();
+            }
+            if resume == 1 && SPA_NEEDS_VMLAUNCH {
+                SPA_NEEDS_VMLAUNCH = false;
                 vmlaunch_with_gprs();
             }
             vmresume_with_gprs();
@@ -1779,6 +1847,10 @@ unsafe fn try_spa_vmlaunch() {
         return;
     };
     if SPA_LAUNCHED {
+        if SPA_VMPTRLD_FAILED {
+            serial::write_line("boot: E4 SPA start — slot=1 parked (VMPTRLD fail; stay on G0)");
+            return;
+        }
         SPA_RUNNABLE = true;
         serial::write_line("boot: E4 SPA start — resume parked slot=1");
         return;
@@ -1881,6 +1953,7 @@ unsafe fn clone_current_vmcs_to(src: u64, dst: u64) -> Option<u64> {
         let _ = ops::vmptrld(src);
         return None;
     }
+    rewrite_vmcs_revision(dst);
     serial::write_str("boot: E4 G0 VMCS clone fields=");
     write_dec_u32(n_ok);
     serial::write_str(" rip=0x");
@@ -1954,6 +2027,7 @@ unsafe fn relocate_g0_vmcs_to_host_slab() -> bool {
     if ops::vmclear(g0.vmcs_phys).is_err() {
         serial::write_line("boot: WARN — E4 VMCLEAR G0 source failed; dest still verified");
     }
+    rewrite_vmcs_revision(dst);
     let mut nf = g0;
     nf.vmcs_phys = dst;
     GUEST_FRAMES[0] = Some(nf);
@@ -2105,15 +2179,25 @@ unsafe fn schedule_preempt() -> ! {
             finish_boot(false);
         }
     };
+    // After Phase F, G2/G3 identity-pool stubs stay parked (G0 + SPA only).
+    if M4_LADDER_DONE && next >= 2 {
+        next = 0;
+    }
     // After Phase F, G1's identity-pool VMCS is parked. Remap to G0 until
     // SPA start relocates slot 1. During the M4.2 ladder G1 must still run
     // (iron hung at SLICE-G0 when this ran before M4_LADDER_DONE).
-    if M4_LADDER_DONE && next == 1 && !SPA_RUNNABLE {
+    if M4_LADDER_DONE && next == 1 && (!SPA_RUNNABLE || SPA_VMPTRLD_FAILED) {
         next = 0;
     }
     // Iron 2026-08-21: do not VMPTRLD G0 until the VMREAD/VMWRITE clone
     // verified, and never retry slot 0 after the first VMPTRLD failure.
-    if M4_LADDER_DONE && next == 0 && SPA_LAUNCHED && (!G0_VMCS_RELOCATED || G0_VMPTRLD_FAILED) {
+    if M4_LADDER_DONE
+        && next == 0
+        && SPA_LAUNCHED
+        && (!G0_VMCS_RELOCATED || G0_VMPTRLD_FAILED)
+        && SPA_RUNNABLE
+        && !SPA_VMPTRLD_FAILED
+    {
         next = 1;
     }
     if next == cur {
@@ -3791,5 +3875,13 @@ mod launch_test {
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
         assert_eq!(CPU_BASED_USE_TPR_SHADOW, 1 << 21);
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
+    }
+
+    #[test]
+    fn vmcs_revision_clears_shadow_bit() {
+        assert_eq!(vmcs_revision_from_basic(0x8000_0013), 0x13);
+        assert_eq!(vmcs_revision_from_basic(0x0000_0013), 0x13);
+        assert_eq!(vmcs_revision_from_basic(u64::MAX), 0x7fff_ffff);
+        assert_eq!(vmcs_revision_from_basic(0), 0);
     }
 }
