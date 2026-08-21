@@ -1,0 +1,5 @@
+0.1.0-e4-spa-launch
+git 832ea3273c1299d9228d25361b09d76615ba27ce
+merge b6578f55e418b414991296a7cea892854f639882
+marker RAYNU-V-M7-E4-SPA-LAUNCH-OK + ADR-013 Stage 1 0-G
+iron EFI 2b795a0 (P0-14); this kit is CI rebuild of 832ea32 (COM2 quiet)

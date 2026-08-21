@@ -1,0 +1,12 @@
+RayNu-V EFI release kit
+Version: 0.1.0-e4-spa-launch (git 832ea32 / merge #169 b6578f5)
+Marker: RAYNU-V-M7-E4-SPA-LAUNCH-OK + ADR-013 Stage 1 0-G
+Contents:
+  r640-hypervisor.efi
+  r640-hypervisor.efi.sha256
+  VERSION
+  SHA256SUMS
+  MANIFEST.txt
+  README.md
+Evidence: docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md
+Deploy: see docs/runbooks/usb_idrac.md

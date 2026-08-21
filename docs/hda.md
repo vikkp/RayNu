@@ -218,6 +218,7 @@ Ordered for critical path (parallelize B with D design):
 - **ADR-013 Phase F iron closed:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20)
 - **P0-14 / E4 SPA VMLAUNCH iron closed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). SHELL stub + shadow re-entry; not distro / not TLS.
 - **ADR-013 Stage 1 (0–G) closed:** Phase G is the 2026-08-21 accepted-risk note (shared LOM `:38` with virtio-net). Not VLAN / second NIC.
+- **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
 
@@ -266,10 +267,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | phase-g |
-| Summary | ADR-013 Phase G closed as accepted-risk (shared LOM + virtio-net). COM2 quiet after first E4 re-entry (in-tree). Product next stays installer + TLS/console. |
+| Commit | e4-spa-launch |
+| Summary | Release v0.1.0-e4-spa-launch after #169 on main. CI EFI of 832ea32; iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held |
-| Gates touched | ADR-013 Phase G (docs close; no new iron marker) |
+| Gates touched | none (checkpoint kit; P0-14 + Phase G already closed) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -291,6 +292,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | e4-spa-launch | 0.5 | 95 | Release v0.1.0-e4-spa-launch after #169; CI EFI 832ea32 SHA 00443957; iron P0-14 stays 2b795a0 |
 | 2026-08-21 | phase-g | 0.5 | 95 | ADR-013 Phase G closed (shared LOM accepted-risk); COM2 quiet after first E4 re-entry (in-tree); product next installer+TLS |
 | 2026-08-21 | adr-014 | 0.5 | 95 | ADR-014: typed ISO + UEFI-first product install; bzImage lab-only; Windows later; E4 not blocked |
 | 2026-08-21 | site-stories | 0.5 | 95 | Public Stories + site copy: Aug 19 APE PHY, Aug 20 E3b/Phase F, Aug 21 P0-14; residual TLS/console + distro |
