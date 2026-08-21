@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | tcp-idle-abort |
-| Summary | Coexist one-TCP-slot idle abort (SPA half-open caused curl SYN timeout). E4 SPA start still open. |
+| Commit | tcp-relishen |
+| Summary | Coexist abort+re-listen after HTTP so spec→start is not RST. Iron spec 201 landed; start curl 7. E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | host `prop_http_accept_idle_abort`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
+| Gates touched | `TCP re-listen after HTTP`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
 | 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
 | 2026-08-21 | hangfix-boot | 0.5 | 94 | Iron hang-fix: `SLICE-G0` then slot 1; coexist `10.99.99.149:8443`; E4 SPA start still open (GET-only) |
 | 2026-08-21 | cruzer-f413 | 0.5 | 94 | Cruzer `RAYNUV` holds hang-fix EFI `f413a9fc` (artifact 9429378906); iron boot + E4 marker still open |
@@ -368,7 +369,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     close SPA tabs / Force Off + F11; POST spec+start before opening SPA; WANT `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
+Next move:     retry START only (spec already 201); sleep 2s if curl 7; WANT `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline

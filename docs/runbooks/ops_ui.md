@@ -76,9 +76,11 @@ CURL NOW → http://10.99.99.149:8443/  (native BCM5720; G0 still scheduled; SNP
 ```bash
 LEASE=10.99.99.149   # use the numeric lease COM2 printed
 TOK='Authorization: Bearer raynu-v-bringup'
-curl -sS -m 5 "http://${LEASE}:8443/" | head
-curl -sS -m 5 -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
-curl -sS -m 5 -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
+curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
+# Current Cruzer EFI (`f413a9fc`) has one TCP slot. After 201, wait for
+# COM2 `HTTP exchange ok` then POST start (back-to-back start got curl 7 RST).
+sleep 2
+curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
 6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`.

@@ -303,10 +303,18 @@ pub fn tick_bcm5720_coexist() {
             pci_census::print_host_nic_exchange_ok_marker();
         }
         if do_close {
-            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            // abort() not close(): FIN_WAIT held the only listen slot so the
+            // next curl (spec→start, 31ms) got RST (`curl: (7)`). Iron 2026-08-21.
+            sockets.get_mut::<tcp::Socket>(tcp_handle).abort();
             COEXIST_RX_LEN = 0;
             COEXIST_ANNOUNCED = false;
             COEXIST_ACCEPT_AT_MS = 0;
+            let _ = iface.poll(Instant::from_millis(millis + 2), device, sockets);
+            let sock = sockets.get_mut::<tcp::Socket>(tcp_handle);
+            if !sock.is_open() {
+                let _ = sock.listen(COEXIST_PORT);
+            }
+            serial::write_line("boot: HOST-NIC TCP re-listen after HTTP");
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
