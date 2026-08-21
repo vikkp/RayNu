@@ -1,0 +1,51 @@
+vikkp@raynuvsrv1:~/projects/raynu$ cd ~/projects/raynu
+git fetch origin
+git checkout cursor/e4-spa-launch-a623
+git pull --ff-only origin cursor/e4-spa-launch-a623
+
+# CI-built EFI for HEAD 7d657b1 (clone 33155c1) — PR run 32522622376
+WANT_SHA=63cd694f4f1f1bd8f8e11641df151811707bb063dd49676bb418b1d778348878
+WANT_SIZE=1231872
+ART=9461155533
+
+rm -f /tmp/e4-efi.zip ~/r640-hypervisor.efi
+gh api -H "Accept: application/vnd.github+json" \
+  "/repos/vikkp/RayNu/actions/artifacts/${ART}/zip" > /tmp/e4-efi.zip
+unzip -o /tmp/e4-efi.zip -d ~
+test -f ~/r640-hypervisor.efi
+GOT=$(sha256sum ~/r640-hypervisor.efi | awk '{print $1}')
+BYTES=$(wc -c < ~/r640-hypervisor.efi | tr -d ' ')
+echo "$BYTES $GOT"
+test "$BYTES" = "$WANT_SIZE"
+test "$GOT" = "$WANT_SHA"
+echo "EFI ok prefix=${GOT:0:8}"
+
+# identify by label RAYNUV + USB + Cruzer — never hardcode /dev/sdc
+lsusb | grep -i 0781:5151
+lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -i cruzer
+
+sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 "$WANT_SHA"
+sync
+if findmnt /mnt/usb >/dev/null 2>&1; then sudo umount /mnt/usb; fi
+A	tools/flash-cruzer-esp.sh
+Already on 'cursor/e4-spa-launch-a623'
+Your branch is up to date with 'origin/cursor/e4-spa-launch-a623'.
+From https://github.com/vikkp/RayNu
+ * branch            cursor/e4-spa-launch-a623 -> FETCH_HEAD
+Already up to date.
+Archive:  /tmp/e4-efi.zip
+  inflating: /home/vikkp/r640-hypervisor.efi
+1231872 63cd694f4f1f1bd8f8e11641df151811707bb063dd49676bb418b1d778348878
+EFI ok prefix=63cd694f
+Bus 001 Device 002: ID 0781:5151 SanDisk Corp. Cruzer Micro Flash Drive
+sdc                       Cruzer Micro    usb  977.5M RAYNUV 200524441218e7503e33             vfat
+[sudo: authenticate] Password:
+==> resolved /dev/disk/by-label/RAYNUV -> /dev/sdc
+==> model=Cruzer Micro tran=usb type=disk fstype=vfat size=1024966656 serial=200524441218e7503e33
+==> installdisk.bin bytes=1024 (unchanged)
+==> copying /home/vikkp/r640-hypervisor.efi (1231872 bytes, sha256=63cd694f4f1f1bd8f8e11641df151811707bb063dd49676bb418b1d778348878)
+==> BOOTX64.EFI bytes=1231872 sha256=63cd694f4f1f1bd8f8e11641df151811707bb063dd49676bb418b1d778348878
+==> leave /mnt/usb/EFI/RayNu/installdisk.bin and auth.token alone — done
+Next: BIOS boot order stays Ubuntu on PERC; one-time F11 boot the Cruzer.
+RAYNU-V-CRUZER-FLASH-OK
+vikkp@raynuvsrv1:~/projects/raynu$

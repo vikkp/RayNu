@@ -126,7 +126,7 @@ All must be true (no hand-waving):
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
-| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | `618e89e2` printed marker + relocate `0x10a00000` then `VMPTRLD slot=0` loop (fail-soft, no VMXOFF). Memcpy is not VMPTRLD-safe. **Not closed.** |
+| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | Cruzer `RAYNUV` holds `63cd694f` (`CRUZER-FLASH-OK`). F11 boot open. Prior `618e89e2` memcpy loop — **not closed.** |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -191,7 +191,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
-| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | `618e89e2` marker+fail-soft; memcpy VMPTRLD loop; VMREAD/VMWRITE clone next |
+| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Cruzer `63cd694f` flashed; F11 boot open; prior memcpy VMPTRLD loop not a close |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | g0-clone |
-| Summary | Iron `618e89e2` printed E4 marker then memcpy VMPTRLD loop (fail-soft). Clone G0 via VMREAD/VMWRITE; sticky-park slot 0. E4 still open. |
+| Commit | cruzer-63cd |
+| Summary | Cruzer `RAYNUV` flashed clone EFI `63cd694f` (`CRUZER-FLASH-OK`). Iron boot / E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | archive COM2 loop; `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not a close |
+| Gates touched | `RAYNU-V-CRUZER-FLASH-OK`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -288,6 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | cruzer-63cd | 0.5 | 94 | Cruzer `RAYNUV` flashed `63cd694f` (artifact 9461155533); F11 boot open; E4 not closed |
 | 2026-08-21 | g0-clone | 0.5 | 94 | Iron `618e89e2` marker+fail-soft then memcpy VMPTRLD loop; VMREAD/VMWRITE clone + sticky park; E4 open |
 | 2026-08-21 | coexist-126 | 0.5 | 94 | EFI `618e89e2` coexist listen `10.99.99.126:8443`; Mac curl `(28)` no TCP accept; E4 open |
 | 2026-08-21 | 1fb32aa | 0.5 | 94 | Cruzer `RAYNUV` flashed `618e89e2` (artifact 9432035922); F11 boot open; E4 not closed |
@@ -371,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.126:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     Flash VMREAD/VMWRITE-clone EFI by SHA (not `618e89e2`); F11 Cruzer; spec/start; WANT no VMPTRLD loop
+Next move:     Force Off Ubuntu; F11 Cruzer `63cd694f`; spec/start; WANT clone verify + no VMPTRLD loop
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
