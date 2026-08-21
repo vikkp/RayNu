@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-21
-last_commit: 7b750ab3ee0069b0e098638c3c5c34aa6566a71d
-last_commit_short: 7b750ab
+last_commit: 1fb32aa6557de613880a9f193579e115d20332be
+last_commit_short: 1fb32aa
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -263,7 +263,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | cruzer-618e |
+| Commit | 1fb32aa |
 | Summary | Cruzer `RAYNUV` flashed relocate EFI `618e89e2` (`CRUZER-FLASH-OK`). Iron boot / E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
 | Gates touched | `RAYNU-V-CRUZER-FLASH-OK`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
@@ -290,7 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
-| 2026-08-21 | cruzer-618e | 0.5 | 94 | Cruzer `RAYNUV` flashed `618e89e2` (artifact 9432035922); F11 boot open; E4 not closed |
+| 2026-08-21 | 1fb32aa | 0.5 | 94 | Cruzer `RAYNUV` flashed `618e89e2` (artifact 9432035922); F11 boot open; E4 not closed |
 | 2026-08-21 | 7b750ab | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
 | 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
 | 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
