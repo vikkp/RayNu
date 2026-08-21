@@ -55,6 +55,36 @@ After ADR-013 Phase F, `POST /vms/{id}/start` is no longer table-only:
 
 This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
 
+## Hang-fix EFI on Cruzer (flash done 2026-08-21)
+
+Cruzer `RAYNUV` (front USB 2, `/dev/sdc`) holds EFI `f413a9fc…` / size `1226240`
+(artifact `9429378906`, commit `1a29e33`). Evidence:
+[`docs/evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md`](../evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md).
+Do **not** reflash hung `67b0acde` or Phase F `0d06297b`.
+
+1. iDRAC SOL `console com2` before power.
+2. One-time F11 boot Cruzer `RAYNUV`. BIOS order stays Ubuntu on PERC.
+3. Ignore PRE-EBS SNP `CURL NOW` / 45s `mgmt HTTP accept timeout`.
+4. After `RAYNU-V-M4-SLICE-G0`, COM2 **must** show `boot: sched switch → slot=00000001` (proves the hang fix). Then NVM / BLK / NET / SMP / `RAYNU-V-R640-BOOT-OK`.
+5. Curl **only** after native coexist listen (lease from COM2, port **8443**):
+
+```
+HOST-NIC coexist listening on 10.99.99.149:8443 (VMX on; ADR-013 Phase F)
+CURL NOW → http://10.99.99.149:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+```
+
+```bash
+LEASE=10.99.99.149   # use the numeric lease COM2 printed
+TOK='Authorization: Bearer raynu-v-bringup'
+curl -sS -m 5 "http://${LEASE}:8443/" | head
+curl -sS -m 5 -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
+curl -sS -m 5 -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
+```
+
+6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`.
+
+Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force Power Off**.
+
 ## Next
 
 Iron COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK`. Then distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.

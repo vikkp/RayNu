@@ -14,7 +14,8 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **Post-EBS SNP dead:** [`2026-08-17-post-ebs-snp-dead.md`](2026-08-17-post-ebs-snp-dead.md) — firmware SNP hang + curl timeout + RSOD; do not claim `POST-EBS-HTTP-OK`  
 **ADR-013 Phase 0 census:** [`2026-08-17-phase0-census.md`](2026-08-17-phase0-census.md) — iron pick **`14e4:165f`** BCM5720 dual-port  
 **E3b / M7.8 iron close:** [`2026-08-20-e3b-host-nic-http-ok.md`](2026-08-20-e3b-host-nic-http-ok.md) — **`RAYNU-V-M7-HOST-NIC-HTTP-OK`** after `BOOT-OK` on `:38` / `10.99.99.144:8443`  
-**Next architecture:** [`docs/adr/ADR-013.md`](../../adr/ADR-013.md) — management network (E3b, **Accepted**; Phase D **closed on iron** 2026-08-20)
+**Next architecture:** [`docs/adr/ADR-013.md`](../../adr/ADR-013.md) — management network (E3b, **Accepted**; Phase D **closed on iron** 2026-08-20)  
+**E4 hang-fix Cruzer flash:** [`2026-08-21-e4-cruzer-flash-hangfix.md`](2026-08-21-e4-cruzer-flash-hangfix.md) — EFI `f413a9fc` on `RAYNUV`; iron boot + `RAYNU-V-M7-E4-SPA-LAUNCH-OK` still open
 
 **COM2 serial archives (paper §6):** [`logs/`](logs/) — full operator pastes +
 SHA256SUMS (keepconfix residual, xsavesfix close, confirming rebuild, and

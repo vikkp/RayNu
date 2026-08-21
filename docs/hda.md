@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-20
+last_updated: 2026-08-21
 last_commit: a32232c78d19a5328f6cd140aad62ce792b1d803
 last_commit_short: a32232c
 updated_by: cursor
@@ -44,7 +44,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~95% | E3 + E3b + Phase F closed; E4 SPA VMLAUNCH in-tree (host); iron marker + TLS/console residual |
+| **vSphere-like UI (network)** | ~95% | E3 + E3b + Phase F closed; hang-fix EFI `f413a9fc` on Cruzer; iron E4 marker + TLS/console residual |
 | **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -126,7 +126,7 @@ All must be true (no hand-waving):
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
-| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (host)** | SPA start queues VMLAUNCH of SHELL CPUID in G1 slab (not G0-identity VMCS). Iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed. Not a distro installer. |
+| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (Cruzer flashed)** | Hang-fix EFI `f413a9fc` on `RAYNUV` 2026-08-21. Iron boot + `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed. SHELL CPUID, not a distro installer. |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -191,7 +191,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
-| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Host wiring; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed; SHELL CPUID not distro |
+| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Cruzer `f413a9fc` flashed 2026-08-21; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed; SHELL CPUID not distro |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | a32232c |
-| Summary | E4 hang fix: park slot-1 remap only after M4_LADDER_DONE (iron stuck at SLICE-G0). |
+| Commit | a32232c (EFI on Cruzer) |
+| Summary | Cruzer `RAYNUV` flashed hang-fix EFI `f413a9fc` (artifact 9429378906). Iron boot still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | host `m7_e4_spa_gate`; iron `67b0acde` hung — do not claim E4 |
+| Gates touched | `RAYNU-V-CRUZER-FLASH-OK`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | cruzer-f413 | 0.5 | 94 | Cruzer `RAYNUV` holds hang-fix EFI `f413a9fc` (artifact 9429378906); iron boot + E4 marker still open |
 | 2026-08-21 | a32232c | 0.5 | 94 | Iron hang: `SPA_RUNNABLE` remapped G1→G0 during M4.2; remap only after ladder |
 | 2026-08-20 | 950ed70 | 0.5 | 94 | E4 SPA VMLAUNCH in-tree (private 2M EPT + slab VMCS on coexist); P0-14 IN PROGRESS; iron marker not claimed |
 | 2026-08-20 | 1b3d7bd | 0.5 | 94 | ADR-013 Phase F row CLOSED (table was stale); next is E4 VMLAUNCH + Phase G |
@@ -365,7 +366,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     iron E4 SPA VMLAUNCH (`RAYNU-V-M7-E4-SPA-LAUNCH-OK`); then TLS/console + distro
+Next move:     F11 Cruzer `f413a9fc` → coexist curl → COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
