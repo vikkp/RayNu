@@ -1691,8 +1691,10 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
     // Iron 2026-08-21 (`63cd694f`): leaving slot 1 current and `VMPTRLD` G0
     // flushed the SPA VMCS in an implementation-specific form; next
     // `VMPTRLD(0x10409000)` failed with error 11 (bad revision). VMCLEAR the
-    // outgoing VMCS, rewrite `IA32_VMX_BASIC[30:0]` (bit 31 clear), then
-    // `VMPTRLD` the incoming. First re-entry after VMCLEAR is VMLAUNCH.
+    // outgoing VMCS and rewrite only *that* region's first dword.
+    // Iron `eb456eec`: rewriting the *incoming* VMCS (no VMCLEAR of it this
+    // switch) left VMPTRLD OK but VMLAUNCH error 7 (invalid control field).
+    // Do not rewrite the incoming VMCS.
     if M4_LADDER_DONE && SPA_LAUNCHED && SCHED_SLOT_CUR != slot {
         if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
             let _ = ops::vmclear(cur_f.vmcs_phys);
@@ -1703,7 +1705,6 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
                 SPA_NEEDS_VMLAUNCH = true;
             }
         }
-        rewrite_vmcs_revision(frames.vmcs_phys);
     }
     if ops::vmptrld(frames.vmcs_phys).is_err() {
         if slot == 0 {
@@ -1754,7 +1755,6 @@ unsafe fn failsoft_sched_or_finish() -> ! {
     if M4_LADDER_DONE {
         let resume = SCHED_SLOT_CUR;
         if let Some(cur_f) = frames_for_slot(resume) {
-            rewrite_vmcs_revision(cur_f.vmcs_phys);
             let _ = ops::vmptrld(cur_f.vmcs_phys);
             if !SCHED_VMPTRLD_FAIL_LOGGED {
                 serial::write_str("boot: WARN — park VMPTRLD fail; resume slot=");
@@ -2917,7 +2917,74 @@ unsafe extern "C" fn vmlaunch_gprs_failed() -> ! {
     serial::write_str("boot: ERROR — VMLAUNCH(gprs) failed insn_error=0x");
     write_hex_u32(ierr);
     serial::write_byte(b'\n');
+    dump_vm_entry_fail_ctls();
+    // Iron `eb456eec`: SPA re-entry VMLAUNCH error 7 after incoming rewrite.
+    // Park slot 1 and VMLAUNCH G0 (clear); keep HTTP. Never VMXOFF.
+    if M4_LADDER_DONE && SCHED_SLOT_CUR == 1 {
+        serial::write_line("boot: HINT — SPA VMLAUNCH fail; park slot=1 resume G0");
+        failsoft_resume_g0_after_spa_vmlaunch_fail();
+    }
     coexist_failsoft_idle();
+}
+
+/// Dump VM-entry control words from the current VMCS (error 7 diagnosis).
+unsafe fn dump_vm_entry_fail_ctls() {
+    let pin = ops::vmread(PIN_BASED_VM_EXEC_CONTROL).unwrap_or(0);
+    let prim = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).unwrap_or(0);
+    let sec = ops::vmread(SECONDARY_VM_EXEC_CONTROL).unwrap_or(0);
+    let exit = ops::vmread(VM_EXIT_CONTROLS).unwrap_or(0);
+    let entry = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
+    let eptp = ops::vmread(EPT_POINTER).unwrap_or(0);
+    let link = ops::vmread(VMCS_LINK_POINTER).unwrap_or(0);
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    serial::write_str("boot: VMCS ctls pin=0x");
+    write_hex_u32(pin as u32);
+    serial::write_str(" primary=0x");
+    write_hex_u32(prim as u32);
+    serial::write_str(" secondary=0x");
+    write_hex_u32(sec as u32);
+    serial::write_str(" exit=0x");
+    write_hex_u32(exit as u32);
+    serial::write_str(" entry=0x");
+    write_hex_u32(entry as u32);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: EPTP=0x");
+    write_hex_u64(eptp);
+    serial::write_str(" link=0x");
+    write_hex_u64(link);
+    serial::write_str(" rip=0x");
+    write_hex_u64(rip);
+    serial::write_byte(b'\n');
+}
+
+/// After SPA `VMLAUNCH` error 7: park slot 1, `VMLAUNCH` relocated G0.
+unsafe fn failsoft_resume_g0_after_spa_vmlaunch_fail() -> ! {
+    SPA_RUNNABLE = false;
+    SPA_NEEDS_VMLAUNCH = false;
+    SPA_VMPTRLD_FAILED = true;
+    if let Some(s1) = frames_for_slot(1) {
+        let _ = ops::vmclear(s1.vmcs_phys);
+        rewrite_vmcs_revision(s1.vmcs_phys);
+    }
+    let Some(g0) = frames_for_slot(0) else {
+        coexist_failsoft_idle();
+    };
+    if ops::vmptrld(g0.vmcs_phys).is_err() {
+        G0_VMPTRLD_FAILED = true;
+        log_sched_vmptrld_fail_once(0, g0.vmcs_phys);
+        coexist_failsoft_idle();
+    }
+    SCHED_SLOT_CUR = 0;
+    ACTIVE_GUEST_ID = guest_id_for_slot(0);
+    REAL_LINUX_GUEST = true;
+    LINUX_GTIMER2_DONE = true;
+    BRINGUP_GUEST_CODE_PHYS = g0.guest_code_phys;
+    load_live_gprs_from_slot(0);
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    arm_sched_slice();
+    G0_NEEDS_VMLAUNCH = false;
+    serial::write_line("boot: E4 G0 VMLAUNCH after SPA entry fail (VMX on; no VMXOFF)");
+    vmlaunch_with_gprs();
 }
 
 /// Last-resort: keep native HTTP alive. Do not VMXOFF / `boot gate failed`.

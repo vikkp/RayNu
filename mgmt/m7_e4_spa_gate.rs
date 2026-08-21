@@ -30,6 +30,8 @@ pub fn spa_launch_relocates_vmcs() -> bool {
         && launch.contains("SPA_NEEDS_VMLAUNCH")
         && launch.contains("SPA_VMPTRLD_FAILED")
         && launch.contains("failsoft_sched_or_finish")
+        && launch.contains("Do not rewrite the incoming VMCS.")
+        && launch.contains("fn dump_vm_entry_fail_ctls")
         && !launch.contains("copy_nonoverlapping(g0.vmcs_phys")
         && include_str!("spa_launch.rs").contains(M7_E4_SPA_LAUNCH_OK_MARKER)
 }

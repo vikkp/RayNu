@@ -1,0 +1,31 @@
+# COM2 excerpt — EFI eb456eec on Cruzer RAYNUV, lease 10.99.99.126:8443
+# 2026-08-21. Operator paste (Mac curl + iDRAC SOL console com2).
+# PRE-EBS SNP HTTP timed out (expected). Full M4 ladder + RAYNU-V-R640-BOOT-OK.
+# Mac spec curl (28) 0 bytes; HV still VmCreated. Start HTTP 200.
+# VMCLEAR+rewrite fixed error 11: slot 1 VMPTRLD + SPA re-entry VMLAUNCH ran.
+# Then VMLAUNCH(gprs) insn_error=0x7 (invalid control field). Fail-soft idle
+# (VMX on; no VMXOFF). Not E4 closed.
+
+RAYNU-V-R640-BOOT-OK
+boot: HOST-NIC coexist listening on 10.99.99.126:8443 (VMX on; ADR-013 Phase F)
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmStarted guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP re-listen after HTTP
+boot: E4 G0 VMCS clone fields=98 rip=0xffffffff81160299 (VMREAD/VMWRITE; VMPTRLD verify ok)
+boot: E4 G0 VMCS relocated HPA=0x0000000010a00000 (host slab; VMREAD/VMWRITE clone; punched from G0 identity)
+boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)
+boot: VMLAUNCH → E4 SPA SHELL CPUID
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: ERROR — VMLAUNCH(gprs) failed insn_error=0x00000007
+boot: WARN — VM-entry fail-soft idle (VMX on; coexist)
