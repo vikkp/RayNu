@@ -263,8 +263,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | flashcruzer |
-| Summary | raynuvsrv1 one-liner `~/projects/raynuv/flashcruzer.sh` pulls latest green CI EFI onto Cruzer `RAYNUV`. E4 not closed. |
+| Commit | flashcruzer-wait |
+| Summary | `--wait` progress leaked into the GitHub run id. Parse numeric pick lines only. E4 not closed. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
 | Gates touched | ops Cruzer refresh (not an iron close) |
 | Months Δ | 0.5→0.5 |
@@ -288,6 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | flashcruzer-wait | 0.5 | 94 | `--wait` must not feed progress into the GitHub run id; E4 not closed |
 | 2026-08-21 | flashcruzer | 0.5 | 94 | `~/projects/raynuv/flashcruzer.sh` pulls latest green CI EFI onto Cruzer `RAYNUV`; E4 not closed |
 | 2026-08-21 | spa-entry7 | 0.5 | 94 | Iron `eb456eec` VMCLEAR fixed error 11; SPA re-entry VMLAUNCH error 7; drop incoming rewrite; E4 not closed |
 | 2026-08-21 | slot1-rev11 | 0.5 | 94 | Iron `63cd694f` clone+marker+G0 VMLAUNCH; slot 1 VMPTRLD error 11; VMCLEAR+rewrite next EFI; E4 not closed |

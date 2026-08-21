@@ -35,6 +35,19 @@ WORKFLOW="${RAYNU_WORKFLOW:-ci.yml}"
 WAIT_SECS="${RAYNU_WAIT_SECS:-1200}"
 POLL_SECS="${RAYNU_POLL_SECS:-20}"
 TMPJSON=""
+PICK_FILE=""
+WORKDIR=""
+RUN_ID=""
+MATCH=""
+RUN_SHA=""
+RUN_EVENT=""
+RUN_URL=""
+
+cleanup_all() {
+  rm -rf "${WORKDIR:-}"
+  rm -f "${TMPJSON:-}" "${PICK_FILE:-}"
+}
+trap cleanup_all EXIT
 
 BRANCH=""
 SELFTEST=0
@@ -101,7 +114,30 @@ install_launcher() {
   echo "==> launcher $LAUNCHER -> $SCRIPT_PATH"
 }
 
+# Last tab-separated pick line whose first field is a numeric run id.
+# Ignores --wait progress that must never be captured into RUN_ID.
+parse_pick_file() {
+  local f="$1"
+  local line
+  if [[ ! -s "$f" ]]; then
+    echo "error: empty CI pick file" >&2
+    return 1
+  fi
+  line="$(awk -F'\t' '/^[0-9]+\t/ { line=$0 } END { print line }' "$f")"
+  RUN_ID="$(printf '%s\n' "$line" | awk -F'\t' '{print $1}')"
+  RUN_EVENT="$(printf '%s\n' "$line" | awk -F'\t' '{print $2}')"
+  RUN_SHA="$(printf '%s\n' "$line" | awk -F'\t' '{print $3}')"
+  MATCH="$(printf '%s\n' "$line" | awk -F'\t' '{print $4}')"
+  RUN_URL="$(printf '%s\n' "$line" | awk -F'\t' '{print $5}')"
+  if [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
+    echo "error: could not parse numeric run id from pick file:" >&2
+    cat "$f" >&2 || true
+    return 1
+  fi
+}
+
 self_test() {
+  local tmp
   command -v python3 >/dev/null
   [[ -x "$ESP" ]] || chmod +x "$ESP"
   [[ -x "$SCRIPT_PATH" ]] || chmod +x "$SCRIPT_PATH"
@@ -113,6 +149,17 @@ self_test() {
   grep -q 'RAYNU-V-CRUZER-FLASH-OK' "$ESP"
   grep -q 'installdisk.bin' "$ESP"
   grep -q 'target_is_lab_cruzer' "$ESP"
+  tmp="$(mktemp)"
+  printf '%s\n' \
+    '==> waiting for CI on 68452b0b (PENDING' \
+    $'32529969011\tpull_request\t68452b0bdeadbeef\thead-pr\thttps://github.com/vikkp/RayNu/actions/runs/32529969011' \
+    >"$tmp"
+  RUN_ID=""; RUN_EVENT=""; RUN_SHA=""; MATCH=""; RUN_URL=""
+  parse_pick_file "$tmp"
+  rm -f "$tmp"
+  [[ "$RUN_ID" == "32529969011" ]]
+  [[ "$RUN_EVENT" == "pull_request" ]]
+  [[ "$MATCH" == "head-pr" ]]
   echo "RAYNU-V-FLASHCRUZER-SELFTEST-OK"
 }
 
@@ -191,6 +238,7 @@ pick_from_json() {
 }
 
 wait_for_head() {
+  local out="$1"
   local deadline=$((SECONDS + WAIT_SECS))
   local tmp saved_require
   tmp="$(mktemp)"
@@ -201,13 +249,13 @@ wait_for_head() {
     if ! gh_runs_json "$HEAD" >"$tmp"; then
       : >"$tmp"
     fi
-    if pick_from_json "$tmp" >/tmp/flashcruzer.pick 2>/tmp/flashcruzer.pick.err; then
+    if pick_from_json "$tmp" >"$out" 2>/tmp/flashcruzer.pick.err; then
       REQUIRE_HEAD="$saved_require"
-      cat /tmp/flashcruzer.pick
       rm -f "$tmp"
       return 0
     fi
-    echo "==> waiting for CI on $HEAD_SHORT ($(tr '\n' ' ' </tmp/flashcruzer.pick.err)) — ${POLL_SECS}s"
+    # Progress MUST stay on stderr — stdout is the pick line / command substitution trap.
+    echo "==> waiting for CI on $HEAD_SHORT ($(tr '\n' ' ' </tmp/flashcruzer.pick.err)) — ${POLL_SECS}s" >&2
     sleep "$POLL_SECS"
   done
   REQUIRE_HEAD="$saved_require"
@@ -215,12 +263,6 @@ wait_for_head() {
   echo "error: timed out waiting for CI on $HEAD" >&2
   return 1
 }
-
-RUN_ID=""
-MATCH=""
-RUN_SHA=""
-RUN_EVENT=""
-RUN_URL=""
 
 if [[ -n "$PIN_RUN" ]]; then
   RUN_ID="$PIN_RUN"
@@ -231,14 +273,15 @@ if [[ -n "$PIN_RUN" ]]; then
   echo "==> pinned run $RUN_ID"
 else
   TMPJSON="$(mktemp)"
+  PICK_FILE="$(mktemp)"
   gh_runs_json >"$TMPJSON"
   set +e
-  PICK_LINE="$(pick_from_json "$TMPJSON" 2>/tmp/flashcruzer.pick.err)"
+  pick_from_json "$TMPJSON" >"$PICK_FILE" 2>/tmp/flashcruzer.pick.err
   PICK_RC=$?
   set -e
   if [[ "$PICK_RC" -eq 3 ]]; then
     if [[ "$WAIT" -eq 1 ]]; then
-      PICK_LINE="$(wait_for_head)"
+      wait_for_head "$PICK_FILE"
     else
       echo "error: CI for HEAD $HEAD_SHORT is still running" >&2
       cat /tmp/flashcruzer.pick.err >&2 || true
@@ -247,7 +290,7 @@ else
     fi
   elif [[ "$PICK_RC" -ne 0 ]]; then
     if [[ "$WAIT" -eq 1 ]]; then
-      PICK_LINE="$(wait_for_head)"
+      wait_for_head "$PICK_FILE"
     else
       echo "error: no green CI artifact for $BRANCH $HEAD_SHORT" >&2
       cat /tmp/flashcruzer.pick.err >&2 || true
@@ -255,11 +298,7 @@ else
       exit 1
     fi
   fi
-  RUN_ID="$(printf '%s' "$PICK_LINE" | awk -F'\t' '{print $1}')"
-  RUN_EVENT="$(printf '%s' "$PICK_LINE" | awk -F'\t' '{print $2}')"
-  RUN_SHA="$(printf '%s' "$PICK_LINE" | awk -F'\t' '{print $3}')"
-  MATCH="$(printf '%s' "$PICK_LINE" | awk -F'\t' '{print $4}')"
-  RUN_URL="$(printf '%s' "$PICK_LINE" | awk -F'\t' '{print $5}')"
+  parse_pick_file "$PICK_FILE"
 fi
 
 if [[ -z "$RUN_ID" ]]; then
@@ -284,11 +323,6 @@ if [[ "$DRY" -eq 1 ]]; then
 fi
 
 WORKDIR="$(mktemp -d /tmp/flashcruzer.XXXXXX)"
-cleanup_work() {
-  rm -rf "$WORKDIR"
-  rm -f "${TMPJSON:-}"
-}
-trap cleanup_work EXIT
 
 echo "==> downloading artifact r640-hypervisor.efi from run $RUN_ID"
 set +e
