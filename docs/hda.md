@@ -40,11 +40,11 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Overall product readiness** | **94%** | +1 (Phase F coexist HTTP-OK while VMX on) |
 | **Months to Mount Everest** | **0.5** | held (E4 polish + distro remain) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | high | E2+E3+E3b+E5+Phase F stamps on COM2; E4 SPA VMLAUNCH in-tree (iron marker open); TLS/console + distro residual |
+| **Confidence** | high | E2+E3+E3b+E5+Phase F stamps on COM2; E4 marker printed then G0 VMPTRLD fail (not closed); TLS/console + distro residual |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~95% | E3 + E3b + Phase F closed; hang-fix EFI booted on iron; E4 SPA start + TLS/console residual |
+| **vSphere-like UI (network)** | ~95% | E3 + E3b + Phase F closed; hang-fix EFI booted; E4 marker then VMPTRLD fail (not closed); TLS/console residual |
 | **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -126,7 +126,7 @@ All must be true (no hand-waving):
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
-| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | Hang-fix EFI `f413a9fc` booted: `SLICE-G0` then slot 1; coexist HTTP-OK on `10.99.99.149:8443`. `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not in COM2 yet (GET-only). |
+| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | Hang-fix `f413a9fc`: spec+start printed `RAYNU-V-M7-E4-SPA-LAUNCH-OK` then `VMPTRLD slot=0` / VMXOFF. **Not closed.** Relocate+fail-soft in-tree. |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -191,7 +191,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
-| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Hang-fix boot OK on iron; SPA start not yet; `RAYNU-V-M7-E4-SPA-LAUNCH-OK` open |
+| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Marker printed then G0 `VMPTRLD` fail / VMXOFF; relocate+fail-soft in-tree; not closed |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | tcp-relishen |
-| Summary | Coexist abort+re-listen after HTTP so spec→start is not RST. Iron spec 201 landed; start curl 7. E4 still open. |
+| Commit | g0-vmcs-reloc |
+| Summary | Iron E4 marker then G0 VMPTRLD fail. Relocate G0 VMCS to host-only slab; fail-soft scheduler (no VMXOFF). E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | `TCP re-listen after HTTP`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
+| Gates touched | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` printed then boot-gate failed — **not claimed** |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -279,7 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F stamps closed; E4 SPA VMLAUNCH in-tree (iron open); TLS/console + distro remain |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F stamps closed; E4 marker printed then G0 VMPTRLD fail (not closed); TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | g0-vmcs-reloc | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
 | 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
 | 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
 | 2026-08-21 | hangfix-boot | 0.5 | 94 | Iron hang-fix: `SLICE-G0` then slot 1; coexist `10.99.99.149:8443`; E4 SPA start still open (GET-only) |
@@ -369,11 +370,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     retry START only (spec already 201); sleep 2s if curl 7; WANT `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
+Next move:     flash relocate+fail-soft EFI by SHA; spec→sleep 2→start; WANT marker AND continued coexist
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  Mount Everest / E4 closed (SPA VMLAUNCH iron + TLS/console + distro remain)
+Do not claim:  Mount Everest / E4 closed (marker+VMPTRLD fail is not a close; TLS/console + distro remain)
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

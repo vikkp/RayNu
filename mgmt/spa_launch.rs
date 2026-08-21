@@ -6,7 +6,9 @@
 //!
 //! G1–G3 M4 stubs keep VMCS in the G0 identity pool (Linux can scribble).
 //! SPA start relocates G1 into its 2 MiB slab (already punched out of G0 EPT)
-//! and builds a **single 2 MiB** private EPT. Distro installer / TLS remain later.
+//! and builds a **single 2 MiB** private EPT. G0's VMCS is `VMCLEAR`'d and
+//! copied to a host-only punched slab before leaving G0 (iron: identity-pool
+//! `VMPTRLD` of slot 0 failed after SHELL). Distro installer / TLS remain later.
 
 /// Iron marker when SPA start VMLAUNCHes the private-EPT SHELL guest.
 pub const M7_E4_SPA_LAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E4-SPA-LAUNCH-OK";

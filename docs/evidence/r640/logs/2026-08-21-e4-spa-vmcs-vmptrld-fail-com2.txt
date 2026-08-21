@@ -1,0 +1,43 @@
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK
+boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.149:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)
+boot: HOST-NIC BCM5720 reuse (armed post-EBS)
+boot: HOST-NIC coexist listening on 10.99.99.149:8443 (VMX on; ADR-013 Phase F)
+boot: CURL NOW → http://10.99.99.149:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+boot: HINT — COM2 idle after this snapshot (TCP accept / HTTP only)
+boot: HOST-NIC BCM5720 poll rx_prod=12 rx_cons=0 tx_prod=0 tx_cons=0 rx_ok=0 rx_drop=0
+boot: HOST-NIC coexist — resume G0 (VMX on; G1–G3 parked)
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=268 n=264 dst=01:00:5e:00:00:fb src=d2:49:50:30:80:ac
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=288 n=284 dst=33:33:00:00:00:fb src=d2:49:50:30:80:ac
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=103 n=99 dst=33:33:00:00:00:fb src=12:3d:80:eb:46:8b
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=83 n=79 dst=01:00:5e:00:00:fb src=12:3d:80:eb:46:8b
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=375 n=371 dst=01:00:5e:00:00:fb src=12:3d:80:eb:46:8b
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=395 n=391 dst=33:33:00:00:00:fb src=12:3d:80:eb:46:8b
+boot: HOST-NIC BCM5720 rx to=other etype=0800 hw=706 n=702 dst=01:00:5e:00:00:fb src=a8:51:ab:b3:20:df
+boot: HOST-NIC BCM5720 rx to=other etype=86dd hw=726 n=722 dst=33:33:00:00:00:fb src=a8:51:ab:b3:20:df
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmCreated guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+boot: HOST-NIC TCP accept — client connected
+boot: HOST-NIC TCP accept — client connected
+RAYNU-V-AUDIT: AuthAllowed method_tag=2
+RAYNU-V-AUDIT: VmStarted guest_id=1
+boot: HOST-NIC HTTP exchange ok
+RAYNU-V-M7-HOST-NIC-HTTP-OK
+RAYNU-V-AUDIT: VmcsCreated vcpu_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=2
+boot: E4 SPA VMLAUNCH slot=1 private 2M EPT (VMCS in slab; not G0 identity)
+boot: host TSS reused (post-VMX GDTR.limit fixup)
+boot: I/O exiting via COM1 bitmaps
+boot: VMCS ctls pin=0x00000017 primary=0x970061f2 secondary=0x0010100a exit=0x0033effb entry=0x000093fb
+boot: EPTP=0x000000001040601e guest_code=0x0000000010400000
+boot: host CS=0x00000038 SS=0x00000030 TR=0x00000048 EFER=0x0000000000000500
+boot: VMLAUNCH → E4 SPA SHELL CPUID
+
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: HOST-NIC TCP accept — client connected
+boot: ERROR — sched VMPTRLD failed slot=00000000
+boot: VMXOFF ok
+boot: boot gate failed

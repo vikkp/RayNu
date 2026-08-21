@@ -101,7 +101,7 @@ pub enum EptPageSize {
 /// How many 4K frames [`build_identity_gib`] needs for `gib` GiB of identity.
 pub fn frames_required_gib(page_size: EptPageSize, gib: u64) -> usize {
     match page_size {
-        EptPageSize::OneGib => 2, // PML4 + PDPT
+        EptPageSize::OneGib => 2,                // PML4 + PDPT
         EptPageSize::TwoMib => 2 + gib as usize, // PML4 + PDPT + one PD/GiB
     }
 }
@@ -167,6 +167,11 @@ unsafe fn eptp_memory_type() -> u64 {
 pub fn pack_eptp(pml4_phys: u64, memory_type: u64) -> u64 {
     let walk_len_minus_1: u64 = 3; // 4-level
     (memory_type & 0x7) | ((walk_len_minus_1 & 0x7) << 3) | (pml4_phys & !0xfff)
+}
+
+/// PML4 HPA packed into an EPTP (`pack_eptp` puts it in bits 12+).
+pub fn pml4_from_eptp(eptp: u64) -> u64 {
+    eptp & !0xfff
 }
 
 /// R/W/X bits (2:0). Public for M6.1 HW PTE correspondence checks.
@@ -295,10 +300,7 @@ pub unsafe fn build_identity_gib(
 /// not reach the local APIC MMIO base (hole-by-omission).
 ///
 /// SAFETY: see [`build_identity_gib`].
-pub unsafe fn build_identity_2m_bytes(
-    bytes: u64,
-    frames: &mut [u64],
-) -> Result<u64, EptHwError> {
+pub unsafe fn build_identity_2m_bytes(bytes: u64, frames: &mut [u64]) -> Result<u64, EptHwError> {
     if bytes == 0 || bytes & (TWO_MIB - 1) != 0 {
         return Err(EptHwError::Unsupported);
     }
@@ -358,10 +360,7 @@ pub fn frames_required_single_2m() -> usize {
 /// `hpa_2m` must be 2 MiB-aligned and lie inside [`PRECISE_BYTES`].
 ///
 /// SAFETY: see [`build_identity_gib`].
-pub unsafe fn build_single_2m_identity(
-    hpa_2m: u64,
-    frames: &mut [u64],
-) -> Result<u64, EptHwError> {
+pub unsafe fn build_single_2m_identity(hpa_2m: u64, frames: &mut [u64]) -> Result<u64, EptHwError> {
     if hpa_2m & (TWO_MIB - 1) != 0 {
         return Err(EptHwError::Unsupported);
     }
@@ -388,7 +387,10 @@ pub unsafe fn build_single_2m_identity(
     let pd_i = (hpa_2m >> 21) & 0x1ff;
     core::ptr::write_volatile((pml4 as *mut u64).add(pml4_i as usize), ept_link(pdpt));
     core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_i as usize), ept_link(pd));
-    core::ptr::write_volatile((pd as *mut u64).add(pd_i as usize), ept_leaf_large(hpa_2m, mt));
+    core::ptr::write_volatile(
+        (pd as *mut u64).add(pd_i as usize),
+        ept_leaf_large(hpa_2m, mt),
+    );
     Ok(pack_eptp(pml4, mt))
 }
 
@@ -462,12 +464,11 @@ pub unsafe fn write_guest_blk_probe_page(page_phys: u64, bar_gpa: u64) {
     store_status(p, &mut o, 3); // ACK | DRIVER
     store_status(p, &mut o, 0x0B); // + FEATURES_OK
     store_status(p, &mut o, 0x0F); // + DRIVER_OK
-    // hlt ; jmp $
+                                   // hlt ; jmp $
     core::ptr::write_volatile(p.add(o), 0xF4);
     core::ptr::write_volatile(p.add(o + 1), 0xEB);
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
 }
-
 
 /// M4.4 virtio-net probe: handshake two DeviceStatus registers then HLT.
 ///
@@ -512,7 +513,6 @@ pub unsafe fn write_guest_net_probe_page(page_phys: u64, bar0_gpa: u64, bar1_gpa
     core::ptr::write_volatile(p.add(o + 1), 0xEB);
     core::ptr::write_volatile(p.add(o + 2), 0xFE);
 }
-
 
 /// M4.5 SMP BSP probe: store ready magic at `flag_gpa`, then HLT.
 ///
@@ -616,6 +616,36 @@ pub const G1_SLAB_OFF_GDT: u64 = 0xC000;
 pub const G1_SLAB_OFF_MSR_BITMAP: u64 = 0xD000;
 pub const G1_SLAB_OFF_IO_A: u64 = 0xE000;
 pub const G1_SLAB_OFF_IO_B: u64 = 0xF000;
+
+/// E4: host-only 2 MiB slab for G0 VMCS (punched from G0 identity, not SPA EPT).
+///
+/// Iron 2026-08-21: G0 VMCS at ~92 MiB sits in Linux RAM + precise identity.
+/// After SPA VMLAUNCH, `VMPTRLD` of that page failed (`sched VMPTRLD failed
+/// slot=0` → VMXOFF → `boot gate failed`). Copy the flushed VMCS here first.
+pub const G0_HOST_SLAB_OFF_VMCS: u64 = 0;
+
+/// Next 2 MiB-aligned HPA after the highest shell slab, inside [`PRECISE_BYTES`].
+///
+/// Used to park G0's VMCS outside G0 guest RAM and outside G1–G3 slabs.
+/// Empty input or overflow → `None`.
+pub fn host_only_slab_after_shells(shell_bases: &[u64]) -> Option<u64> {
+    let mut max = 0u64;
+    for &b in shell_bases {
+        let base = b & !(TWO_MIB - 1);
+        if base > max {
+            max = base;
+        }
+    }
+    if max == 0 {
+        return None;
+    }
+    let hpa = max.saturating_add(TWO_MIB);
+    if hpa == 0 || hpa.saturating_add(TWO_MIB) > PRECISE_BYTES {
+        None
+    } else {
+        Some(hpa)
+    }
+}
 
 /// Build long-mode guest page tables in the G1 slab: one 2 MiB identity map
 /// at `slab_base` (VA == GPA). Returns guest CR3 (PML4 HPA/GPA).
@@ -1141,7 +1171,9 @@ mod ept_hw_test {
         assert_eq!(imm, GUEST_STORE_MAGIC);
         // Data slots start zeroed
         assert_eq!(
-            unsafe { core::ptr::read_unaligned((page.as_ptr() as u64 + GUEST_DATA_OFF) as *const u64) },
+            unsafe {
+                core::ptr::read_unaligned((page.as_ptr() as u64 + GUEST_DATA_OFF) as *const u64)
+            },
             0
         );
     }
@@ -1199,5 +1231,33 @@ mod ept_hw_test {
             i += 1;
         }
         assert!(found, "expected mov eax,1 / xor ecx,ecx / cpuid before HLT");
+    }
+
+    #[test]
+    fn pml4_from_eptp_strips_low_bits() {
+        let pml4 = 0x1004_0000u64;
+        let eptp = pack_eptp(pml4, 6);
+        assert_eq!(pml4_from_eptp(eptp), pml4);
+        assert_eq!(eptp & 0x7, 6);
+    }
+
+    #[test]
+    fn host_only_slab_sits_after_g1g2g3() {
+        let g1 = 0x1040_0000u64;
+        let g2 = 0x1060_0000u64;
+        let g3 = 0x1080_0000u64;
+        assert_eq!(
+            host_only_slab_after_shells(&[g1, g2, g3]),
+            Some(0x10A0_0000)
+        );
+        assert_eq!(
+            host_only_slab_after_shells(&[g3 + 0x9000, g1]),
+            Some(0x10A0_0000)
+        );
+        assert_eq!(host_only_slab_after_shells(&[]), None);
+        assert_eq!(host_only_slab_after_shells(&[0]), None);
+        let last = PRECISE_BYTES - TWO_MIB;
+        assert_eq!(host_only_slab_after_shells(&[last]), None);
+        assert_eq!(G0_HOST_SLAB_OFF_VMCS, 0);
     }
 }

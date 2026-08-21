@@ -51,7 +51,8 @@ After ADR-013 Phase F, `POST /vms/{id}/start` is no longer table-only:
 1. REST start (200) queues a flag (`note_spa_start`). It does **not** VMLAUNCH inside the HTTP tick.
 2. The next credit-scheduler quantum (`schedule_preempt`, after `tick_native_coexist`) consumes the flag **once `M4_LADDER_DONE`**.
 3. Slot 1 is relocated into the G1 2 MiB slab already punched out of G0 EPT: private **single 2 MiB** EPT, VMCS + host state in the slab (not the G0 identity pool Linux can scribble).
-4. Iron marker (COM2, **not** host): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on SHELL CPUID.
+4. Before leaving G0, G0's VMCS is `VMCLEAR`'d and copied to a host-only 2 MiB slab punched from G0 identity (iron: identity-pool `VMPTRLD` of slot 0 failed after SHELL).
+5. Iron marker (COM2, **not** host): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on SHELL CPUID. **Not closed** until coexist continues (no `VMPTRLD failed slot=0`, no `boot gate failed`).
 
 This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
 
@@ -83,13 +84,17 @@ sleep 2
 curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
-6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`.
+6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then more `HOST-NIC-HTTP-OK`. Fail if `VMPTRLD failed slot=0` or `boot gate failed`.
 
 Hang-fix iron boot (2026-08-21): `SLICE-G0` then `sched switch → slot=00000001`;
 coexist HTTP-OK on `10.99.99.149:8443`. Evidence:
 [`docs/evidence/r640/2026-08-21-e4-hangfix-boot.md`](../evidence/r640/2026-08-21-e4-hangfix-boot.md).
-That paste is GET-only (`method_tag=1`). **Do not power off** — POST spec+start
-on the same boot.
+
+SPA start on that same hang-fix EFI (`f413a9fc`) printed the E4 marker then
+`sched VMPTRLD failed slot=00000000` / VMXOFF / `boot gate failed`. Evidence:
+[`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).
+**Do not claim E4 closed.** Chassis was Force Off. Flash the relocate+fail-soft
+EFI **by SHA** (not `f413a9fc`). Leave `installdisk.bin` / `auth.token`.
 
 Coexist has **one** TCP listen slot. A SPA/browser (or aborted curl) that
 prints `HOST-NIC TCP accept` without `HTTP exchange ok` holds the slot;
@@ -102,4 +107,5 @@ Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force 
 
 ## Next
 
-Iron COM2 `RAYNU-V-M7-E4-SPA-LAUNCH-OK`. Then distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.
+Flash relocate+fail-soft EFI by SHA. F11 Cruzer. spec → `sleep 2` → start.
+WANT COM2 marker **and** continued coexist. Then distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.

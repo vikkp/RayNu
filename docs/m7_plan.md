@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F closed on iron**. Next: E4 SPA VMLAUNCH on coexist (in-tree; iron marker open). Residual after that: TLS/console + distro installer.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Phase F closed on iron**. Next: E4 SPA VMLAUNCH survive G0 resume (iron marker printed then `VMPTRLD slot=0` fail). Residual after a clean E4: TLS/console + distro installer.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -262,10 +262,15 @@ Do not pull M8 into M7 gate lists.
 **M7.8 / E3b closed on iron** (`RAYNU-V-M7-HOST-NIC-HTTP-OK`, 2026-08-20) — native BCM5720 after `BOOT-OK` on `:38` / `10.99.99.144:8443`.  
 **Honesty:** E3 (PRE-EBS) and **E3b** (lifetime HTTP on host-owned NIC) are closed. Firmware SNP and
 Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. E4 SPA start now queues a real VMLAUNCH
-(private 2 MiB EPT, slab VMCS) on the coexist quantum — **host wiring**; do not claim
-`RAYNU-V-M7-E4-SPA-LAUNCH-OK` without COM2. That guest is SHELL CPUID, not a distro installer.
+(private 2 MiB EPT, slab VMCS) on the coexist quantum. Iron hang-fix `f413a9fc` printed
+`RAYNU-V-M7-E4-SPA-LAUNCH-OK` then `sched VMPTRLD failed slot=0` / VMXOFF — **not closed**.
+G0 VMCS is now relocated to a host-only punched slab before leaving G0; the scheduler
+must not `VMXOFF` the mgmt plane on a failed `VMPTRLD`. Guest is SHELL CPUID, not a
+distro installer.
 
-**Next:** same hang-fix boot — POST spec+start on `10.99.99.149:8443` for iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then TLS/console + distro installer.
+**Next:** flash the relocate+fail-soft EFI **by SHA** (not `f413a9fc`). F11 Cruzer.
+No SPA. spec → `sleep 2` → start on `10.99.99.149:8443`. WANT marker **and** continued
+coexist (no `VMPTRLD failed slot=0`, no `boot gate failed`). Then TLS/console + distro.
 Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

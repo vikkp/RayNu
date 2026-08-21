@@ -54,3 +54,7 @@ RAYNU-V-AUDIT: AuthAllowed method_tag=1
 `POST /vms/1/spec/1/512/1024/0` then `POST /vms/1/start` with Bearer.
 WANT COM2: `AuthAllowed method_tag=2`, `E4 SPA VMLAUNCH slot=1 private 2M EPT`,
 `RAYNU-V-M7-E4-SPA-LAUNCH-OK`.
+
+That start **ran**. Marker printed, then `VMPTRLD failed slot=0` / VMXOFF.
+See [`2026-08-21-e4-spa-launch-vmptrld-fail.md`](2026-08-21-e4-spa-launch-vmptrld-fail.md).
+Chassis is down. Do not claim E4 closed. Flash the relocate+fail-soft EFI next.

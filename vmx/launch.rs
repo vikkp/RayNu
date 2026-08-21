@@ -53,13 +53,12 @@ use crate::devices::virtio_blk::{
     self, M4_BLK_OK_MARKER, M7_ISO_BOOTED_FROM_DISK_MARKER, M7_ISO_DISK_WRITTEN_MARKER,
     M7_ISO_INSTALL_LAB_OK_MARKER, M7_ISO_REBOOT_PENDING_MARKER,
 };
+use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
 use crate::mgmt::iso_install;
 use crate::mgmt::spa_launch::{self, M7_E4_SPA_LAUNCH_OK_MARKER};
-use crate::devices::virtio_net::{self, M4_NET_OK_MARKER};
 
 /// Finish marker when IRQ4 inject is gone and IRQ0 stops at SHELL (M3.19).
 pub const M3_NOIRQ_OK_MARKER: &str = "RAYNU-V-M3-NOIRQ-OK";
-use crate::vmx::{guest_pt, mmio_decode};
 use crate::memory::ept::{
     self, M2_BRINGUP_GUEST_ID, M2_OWN_OK_MARKER, M4_2VM_OK_MARKER, M4_GUEST1_ID, M4_SHELL_G1_MARKER,
 };
@@ -78,6 +77,7 @@ use crate::sched::smp_probe::{self, M4_SMP_OK_MARKER};
 use crate::vmx::fields::*;
 use crate::vmx::hardware;
 use crate::vmx::ops::{self, VmFailKind, VmcsOpError};
+use crate::vmx::{guest_pt, mmio_decode};
 
 /// M7.5 / HDA E2 runtime marker — printed by firmware after a successful
 /// Linux SHELL bring-up (and any armed M4 probes). Closing the *gate* in
@@ -182,8 +182,12 @@ pub enum LaunchError {
     /// Primary CPUID exiting not allowed by capability MSRs.
     CpuidExitingUnsupported,
     /// VMWRITE failed; `field` is the VMCS encoding that was rejected.
-    VmwriteFailed { field: u64 },
-    LaunchFailed { instruction_error: u32 },
+    VmwriteFailed {
+        field: u64,
+    },
+    LaunchFailed {
+        instruction_error: u32,
+    },
 }
 
 impl From<VmcsOpError> for LaunchError {
@@ -245,6 +249,10 @@ static mut TWO_VM_LATCHED: bool = false;
 /// E4: SPA start VMLAUNCHed G1 from the unmapped 2 MiB slab (not G0 identity VMCS).
 static mut SPA_LAUNCHED: bool = false;
 static mut SPA_RUNNABLE: bool = false;
+/// G0 VMCS copied to a host-only punched slab (not Linux-writable identity).
+static mut G0_VMCS_RELOCATED: bool = false;
+/// After `VMCLEAR` of G0, first re-entry must be `VMLAUNCH` (clear state).
+static mut G0_NEEDS_VMLAUNCH: bool = false;
 
 /// M4.3: virtio-blk probe guest frames (launched after NVM-OK).
 static mut BLK_PROBE_FRAMES: Option<LaunchFrames> = None;
@@ -637,8 +645,7 @@ pub unsafe fn run_hlt_guest(frames: &LaunchFrames) -> Result<(), LaunchError> {
 unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     // ── Phase 0: host TSS (before any TR-dependent gather) ──
     // OVMF often has TR=0 → VMLAUNCH fails with insn error 8.
-    let (gdt_base, gdt_limit, tr, tr_base) =
-        install_host_tss(frames.gdt_phys, frames.tss_phys)?;
+    let (gdt_base, gdt_limit, tr, tr_base) = install_host_tss(frames.gdt_phys, frames.tss_phys)?;
 
     // ── Phase 1: gather everything that may VM-exit under nested VT-x ──
     // (RDMSR, serial, GDT walks). No current-VMCS required yet.
@@ -855,7 +862,12 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     match ops::vmptrld_and_vmwrite(frames.vmcs_phys, VMCS_LINK_POINTER, !0u64) {
         Ok(()) => {}
         Err(kind) => {
-            report_vmwrite_fail("VMPTRLD+VMWRITE(link)", VMCS_LINK_POINTER, kind, frames.vmcs_phys);
+            report_vmwrite_fail(
+                "VMPTRLD+VMWRITE(link)",
+                VMCS_LINK_POINTER,
+                kind,
+                frames.vmcs_phys,
+            );
             return Err(LaunchError::VmwriteFailed {
                 field: VMCS_LINK_POINTER,
             });
@@ -865,7 +877,12 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     match ops::vmwrite_detailed(PIN_BASED_VM_EXEC_CONTROL, pin as u64) {
         Ok(()) => {}
         Err(kind) => {
-            report_vmwrite_fail("VMWRITE(pin)", PIN_BASED_VM_EXEC_CONTROL, kind, frames.vmcs_phys);
+            report_vmwrite_fail(
+                "VMWRITE(pin)",
+                PIN_BASED_VM_EXEC_CONTROL,
+                kind,
+                frames.vmcs_phys,
+            );
             return Err(LaunchError::VmwriteFailed {
                 field: PIN_BASED_VM_EXEC_CONTROL,
             });
@@ -1084,6 +1101,46 @@ unsafe extern "C" fn vmresume_with_gprs() -> ! {
     );
 }
 
+/// Restore saved GPRs and VMLAUNCH (G0 after E4 VMCS relocate / VMCLEAR).
+#[unsafe(naked)]
+unsafe extern "C" fn vmlaunch_with_gprs() -> ! {
+    core::arch::naked_asm!(
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
+        "vmlaunch",
+        "jmp {fail}",
+        slot_rax = sym SAVED_GUEST_RAX,
+        slot_rbx = sym SAVED_GUEST_RBX,
+        slot_rcx = sym SAVED_GUEST_RCX,
+        slot_rdx = sym SAVED_GUEST_RDX,
+        slot_rsi = sym SAVED_GUEST_RSI,
+        slot_rdi = sym SAVED_GUEST_RDI,
+        slot_rbp = sym SAVED_GUEST_RBP,
+        slot_r8 = sym SAVED_GUEST_R8,
+        slot_r9 = sym SAVED_GUEST_R9,
+        slot_r10 = sym SAVED_GUEST_R10,
+        slot_r11 = sym SAVED_GUEST_R11,
+        slot_r12 = sym SAVED_GUEST_R12,
+        slot_r13 = sym SAVED_GUEST_R13,
+        slot_r14 = sym SAVED_GUEST_R14,
+        slot_r15 = sym SAVED_GUEST_R15,
+        fail = sym vmlaunch_gprs_failed,
+    );
+}
+
 /// HOST_RIP continuation after [`vmexit_landing`] saves GPRs.
 ///
 /// See [`EXIT_PHASE`] for the M2.4/M2.5 state machine. I/O (M3.0) and CPUID
@@ -1132,9 +1189,7 @@ pub unsafe extern "C" fn vmexit_continue() -> ! {
         handle_cpuid_and_resume(guest_rip);
     }
     // M3.9: emulate allow-listed MSRs without phase-log spam (real Linux).
-    if REAL_LINUX_GUEST
-        && (basic == EXIT_REASON_MSR_READ || basic == EXIT_REASON_MSR_WRITE)
-    {
+    if REAL_LINUX_GUEST && (basic == EXIT_REASON_MSR_READ || basic == EXIT_REASON_MSR_WRITE) {
         handle_msr_and_resume(basic);
     }
     // M3.10: XSETBV always exits; Linux enables XSAVE early after fpu init.
@@ -1524,9 +1579,7 @@ fn note_sched_slice(slot: usize) {
         if SCHED_SLICE[0] && SCHED_SLICE[1] && !SCHED_OK_LATCHED {
             SCHED_OK_LATCHED = true;
             serial::write_line(M4_SCHED_OK_MARKER);
-            serial::write_line(
-                "boot: M4.1 complete — credit scheduler time-sliced G0 + G1",
-            );
+            serial::write_line("boot: M4.1 complete — credit scheduler time-sliced G0 + G1");
         }
         let need = SHELL_SLOT_MAX + 1;
         if need >= 4 {
@@ -1566,34 +1619,17 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         Some(f) => f,
         None => {
             serial::write_line("boot: ERROR — sched slot frames missing");
-            finish_boot(false);
+            failsoft_sched_or_finish();
         }
     };
     if ops::vmptrld(frames.vmcs_phys).is_err() {
         serial::write_str("boot: ERROR — sched VMPTRLD failed slot=");
         write_hex_u32(slot as u32);
         serial::write_byte(b'\n');
-        // Phase F iron 2026-08-20: G0 Linux identity EPT can scribble G1–G3
-        // VMCS pages. Do not VMXOFF the mgmt plane — reload the current slot.
-        if M4_LADDER_DONE && SCHED_SLOT_CUR != slot {
-            if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
-                if ops::vmptrld(cur_f.vmcs_phys).is_ok() {
-                    serial::write_str("boot: WARN — park slot=");
-                    write_hex_u32(slot as u32);
-                    serial::write_str(" resume slot=");
-                    write_hex_u32(SCHED_SLOT_CUR as u32);
-                    serial::write_line(" (VMX on)");
-                    load_live_gprs_from_slot(SCHED_SLOT_CUR);
-                    ACTIVE_GUEST_ID = guest_id_for_slot(SCHED_SLOT_CUR);
-                    REAL_LINUX_GUEST = SCHED_SLOT_CUR == 0;
-                    BRINGUP_GUEST_CODE_PHYS = cur_f.guest_code_phys;
-                    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
-                    arm_sched_slice();
-                    vmresume_with_gprs();
-                }
-            }
-        }
-        finish_boot(false);
+        // Iron 2026-08-21: G0 identity-pool VMCS was scribbled; VMPTRLD slot 0
+        // failed after E4 SHELL. VMfailValid leaves the current-VMCS pointer
+        // unchanged — resume the live slot. Never VMXOFF the mgmt plane.
+        failsoft_sched_or_finish();
     }
     SCHED_SLOT_CUR = slot;
     ACTIVE_GUEST_ID = guest_id_for_slot(slot);
@@ -1613,7 +1649,39 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         write_hex_u32(slot as u32);
         serial::write_byte(b'\n');
     }
+    if slot == 0 && G0_NEEDS_VMLAUNCH {
+        G0_NEEDS_VMLAUNCH = false;
+        serial::write_line("boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)");
+        vmlaunch_with_gprs();
+    }
     vmresume_with_gprs();
+}
+
+/// After a failed VMPTRLD: keep VMX on and resume the live slot, or idle coexist.
+unsafe fn failsoft_sched_or_finish() -> ! {
+    if M4_LADDER_DONE {
+        let resume = SCHED_SLOT_CUR;
+        if let Some(cur_f) = frames_for_slot(resume) {
+            let _ = ops::vmptrld(cur_f.vmcs_phys);
+            serial::write_str("boot: WARN — park VMPTRLD fail; resume slot=");
+            write_hex_u32(resume as u32);
+            serial::write_line(" (VMX on; no VMXOFF)");
+            load_live_gprs_from_slot(resume);
+            ACTIVE_GUEST_ID = guest_id_for_slot(resume);
+            REAL_LINUX_GUEST = resume == 0;
+            BRINGUP_GUEST_CODE_PHYS = cur_f.guest_code_phys;
+            let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+            arm_sched_slice();
+            if resume == 0 && G0_NEEDS_VMLAUNCH {
+                G0_NEEDS_VMLAUNCH = false;
+                vmlaunch_with_gprs();
+            }
+            vmresume_with_gprs();
+        }
+        serial::write_line("boot: WARN — VMPTRLD fail-soft idle (VMX on; coexist)");
+        coexist_failsoft_idle();
+    }
+    finish_boot(false);
 }
 
 /// After the last shell guest SHELL: register all vCPUs and time-slice.
@@ -1688,6 +1756,74 @@ unsafe fn try_spa_vmlaunch() {
     launch_spa_private_ept();
 }
 
+/// Flush G0's cached VMCS out of Linux-writable identity RAM.
+///
+/// INVARIANTS:
+/// - Caller is [`launch_spa_private_ept`] while G0 is still current (or active)
+/// - `VMCLEAR` writes the working VMCS to the identity-pool page, then we copy
+///   4 KiB to a 2 MiB host-only slab punched from G0 EPT (not SPA's 2 MiB map)
+/// - After `VMCLEAR` the G0 VMCS is **clear**; first re-entry is `VMLAUNCH`
+///
+/// VERIFICATION: L1 (serial). FALLBACK: WARN and leave G0 unrepaired (scheduler
+/// will not `VMPTRLD` slot 0).
+unsafe fn relocate_g0_vmcs_to_host_slab() -> bool {
+    if G0_VMCS_RELOCATED {
+        return true;
+    }
+    let Some(g0) = frames_for_slot(0) else {
+        serial::write_line("boot: WARN — E4 G0 VMCS relocate skipped (no G0 frames)");
+        return false;
+    };
+    if g0.vmcs_phys & 0xfff != 0 {
+        serial::write_line("boot: WARN — E4 G0 VMCS not 4K-aligned");
+        return false;
+    }
+    let mut shells = [0u64; M4_NVM_GUEST_SLOTS - 1];
+    let mut n = 0usize;
+    for s in 1..M4_NVM_GUEST_SLOTS {
+        if let Some(f) = frames_for_slot(s) {
+            shells[n] = f.guest_code_phys;
+            n += 1;
+        }
+    }
+    let Some(slab) = ept_hw::host_only_slab_after_shells(&shells[..n]) else {
+        serial::write_line("boot: WARN — E4 no host-only slab for G0 VMCS");
+        return false;
+    };
+    let pml4 = ept_hw::pml4_from_eptp(g0.eptp);
+    // SAFETY: `pml4` is G0's precise-identity EPT root; `slab` is 2 MiB-aligned
+    // inside PRECISE_BYTES and not a G1–G3 shell (picker sits after those HPAs).
+    // KANI-TARGET
+    if ept_hw::clear_2m_identity_leaf(pml4, slab).is_err() {
+        serial::write_line("boot: WARN — E4 could not punch G0-VMCS slab from G0 EPT");
+        return false;
+    }
+    ept_hw::invept_global();
+    // SAFETY: slab is the same class of UEFI-identity RAM as G1–G3 shells.
+    // KANI-TARGET
+    core::ptr::write_bytes(slab as *mut u8, 0, ept_hw::TWO_MIB as usize);
+    // SAFETY: G0 VMCS is (or was) active; VMCLEAR writes the working VMCS to
+    // the identity-pool page. After this, current-VMCS is invalid until VMPTRLD.
+    // KANI-TARGET
+    if ops::vmclear(g0.vmcs_phys).is_err() {
+        serial::write_line("boot: WARN — E4 VMCLEAR G0 failed; VMCS may be stale");
+        return false;
+    }
+    let dst = slab + ept_hw::G0_HOST_SLAB_OFF_VMCS;
+    // SAFETY: src just VMCLEAR'd; dest is a zeroed 4K at the start of the slab.
+    // KANI-TARGET
+    core::ptr::copy_nonoverlapping(g0.vmcs_phys as *const u8, dst as *mut u8, 4096);
+    let mut nf = g0;
+    nf.vmcs_phys = dst;
+    GUEST_FRAMES[0] = Some(nf);
+    G0_VMCS_RELOCATED = true;
+    G0_NEEDS_VMLAUNCH = true;
+    serial::write_str("boot: E4 G0 VMCS relocated HPA=0x");
+    write_hex_u64(dst);
+    serial::write_line(" (host slab; punched from G0 identity)");
+    true
+}
+
 /// VMLAUNCH G1 from the 2 MiB shell slab (VMCS + 2M EPT not in G0 identity).
 ///
 /// INVARIANTS:
@@ -1697,6 +1833,7 @@ unsafe fn try_spa_vmlaunch() {
 ///
 /// VERIFICATION: L1. Iron marker: [`M7_E4_SPA_LAUNCH_OK_MARKER`].
 unsafe fn launch_spa_private_ept() -> ! {
+    let _ = relocate_g0_vmcs_to_host_slab();
     let Some(old) = frames_for_slot(1) else {
         serial::write_line("boot: WARN — E4 SPA start skipped (no G1 slab)");
         switch_to_sched_slot(0);
@@ -1731,12 +1868,7 @@ unsafe fn launch_spa_private_ept() -> ! {
         io_bitmap_b_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_B),
     };
     GUEST_FRAMES[1] = Some(frames);
-    if core::ptr::addr_of!(SCHED)
-        .as_ref()
-        .unwrap()
-        .vcpu_count()
-        < 2
-    {
+    if core::ptr::addr_of!(SCHED).as_ref().unwrap().vcpu_count() < 2 {
         let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
     }
     SPA_LAUNCHED = true;
@@ -1837,6 +1969,10 @@ unsafe fn schedule_preempt() -> ! {
     // (iron hung at SLICE-G0 when this ran before M4_LADDER_DONE).
     if M4_LADDER_DONE && next == 1 && !SPA_RUNNABLE {
         next = 0;
+    }
+    // Iron 2026-08-21: do not VMPTRLD G0 from scribbled identity-pool RAM.
+    if M4_LADDER_DONE && next == 0 && SPA_LAUNCHED && !G0_VMCS_RELOCATED {
+        next = 1;
     }
     if next == cur {
         arm_sched_slice();
@@ -2123,7 +2259,6 @@ unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
     }
 }
 
-
 /// M4.4: after BLK-OK, VMLAUNCH the virtio-net dual-port probe guest.
 unsafe fn try_launch_net_probe() -> ! {
     let frames = match core::ptr::addr_of!(NET_PROBE_FRAMES).read() {
@@ -2204,9 +2339,7 @@ unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 if virtio_net::take_net_ok_latch() {
                     serial::write_line(M4_NET_OK_MARKER);
                 }
-                serial::write_line(
-                    "boot: M4.4 complete — virtio-net dual-port vSwitch exchange",
-                );
+                serial::write_line("boot: M4.4 complete — virtio-net dual-port vSwitch exchange");
                 NET_PROBE_MODE = false;
                 if HAS_SMP_PROBE {
                     try_launch_smp_probe();
@@ -2224,7 +2357,6 @@ unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
         }
     }
 }
-
 
 /// M4.5: after NET-OK, VMLAUNCH the SMP BSP (AP follows on BSP HLT).
 unsafe fn try_launch_smp_probe() -> ! {
@@ -2376,9 +2508,7 @@ unsafe fn handle_smp_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 if smp_probe::take_smp_ok_latch() {
                     serial::write_line(M4_SMP_OK_MARKER);
                 }
-                serial::write_line(
-                    "boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT",
-                );
+                serial::write_line("boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT");
                 finish_boot(true);
             }
             serial::write_line("boot: ERROR — SMP AP HLT but smp_ok not latched");
@@ -2427,8 +2557,7 @@ unsafe fn maybe_arm_interrupt_window_for_apic() {
 /// Emulate guest XSETBV (exit reason 55). Only XCR0 is accepted.
 unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
     let xcr = SAVED_GUEST_RCX as u32;
-    let value =
-        (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
+    let value = (SAVED_GUEST_RAX & 0xffff_ffff) | ((SAVED_GUEST_RDX & 0xffff_ffff) << 32);
     if xcr != 0 {
         inject_gp0();
         vmresume_with_gprs();
@@ -2473,29 +2602,29 @@ unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     // M4.0–M4.2: shell guests use the same SHELL CPUID leaf.
     if leaf == SHELL_CPUID_LEAF && subleaf == SHELL_CPUID_SUBLEAF {
         if let Some(slot) = slot_for_guest_id(ACTIVE_GUEST_ID) {
-                if slot >= 1 && !SCHED_MODE {
-                    if slot == 1 && !TWO_VM_LATCHED {
-                        TWO_VM_LATCHED = true;
-                        serial::write_byte(b'\n');
-                        serial::write_line(M4_SHELL_G1_MARKER);
-                        serial::write_line(M4_2VM_OK_MARKER);
-                        serial::write_line(
-                            "boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)",
-                        );
-                    } else if slot >= 2 {
-                        serial::write_str("boot: shell guest SHELL latched slot=");
-                        write_hex_u32(slot as u32);
-                        serial::write_byte(b'\n');
-                    }
-                    after_shell_slot = Some(slot);
-                } else if SPA_LAUNCHED && slot == 1 {
-                    static mut E4_SPA_SHELL: bool = false;
-                    if !E4_SPA_SHELL {
-                        E4_SPA_SHELL = true;
-                        serial::write_byte(b'\n');
-                        serial::write_line(M7_E4_SPA_LAUNCH_OK_MARKER);
-                    }
-                } else if slot == 0 && REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
+            if slot >= 1 && !SCHED_MODE {
+                if slot == 1 && !TWO_VM_LATCHED {
+                    TWO_VM_LATCHED = true;
+                    serial::write_byte(b'\n');
+                    serial::write_line(M4_SHELL_G1_MARKER);
+                    serial::write_line(M4_2VM_OK_MARKER);
+                    serial::write_line(
+                        "boot: M4.0 complete — G0 Linux SHELL + G1 private EPT SHELL (2VM)",
+                    );
+                } else if slot >= 2 {
+                    serial::write_str("boot: shell guest SHELL latched slot=");
+                    write_hex_u32(slot as u32);
+                    serial::write_byte(b'\n');
+                }
+                after_shell_slot = Some(slot);
+            } else if SPA_LAUNCHED && slot == 1 {
+                static mut E4_SPA_SHELL: bool = false;
+                if !E4_SPA_SHELL {
+                    E4_SPA_SHELL = true;
+                    serial::write_byte(b'\n');
+                    serial::write_line(M7_E4_SPA_LAUNCH_OK_MARKER);
+                }
+            } else if slot == 0 && REAL_LINUX_GUEST && LINUX_GTIMER2_DONE {
                 serial_pio::note_shell_cpuid();
                 static mut SHELL_CPUID_MARKED: bool = false;
                 if !SHELL_CPUID_MARKED {
@@ -2554,6 +2683,26 @@ unsafe extern "C" fn vmresume_gprs_failed() -> ! {
     serial::write_str("boot: ERROR — VMRESUME(gprs) failed insn_error=0x");
     write_hex_u32(ierr);
     serial::write_byte(b'\n');
+    coexist_failsoft_idle();
+}
+
+unsafe extern "C" fn vmlaunch_gprs_failed() -> ! {
+    let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+    serial::write_str("boot: ERROR — VMLAUNCH(gprs) failed insn_error=0x");
+    write_hex_u32(ierr);
+    serial::write_byte(b'\n');
+    coexist_failsoft_idle();
+}
+
+/// Last-resort: keep native HTTP alive. Do not VMXOFF / `boot gate failed`.
+unsafe fn coexist_failsoft_idle() -> ! {
+    if M4_LADDER_DONE {
+        serial::write_line("boot: WARN — VM-entry fail-soft idle (VMX on; coexist)");
+        loop {
+            crate::mgmt::tick_native_coexist();
+            core::hint::spin_loop();
+        }
+    }
     finish_boot(false);
 }
 
@@ -3394,9 +3543,7 @@ fn finish_boot(ok: bool) -> ! {
                 enter_sched_coexist();
             }
         }
-        serial::write_line(
-            "boot: WARN — HOST-NIC coexist skipped; Phase D idle after VMXOFF",
-        );
+        serial::write_line("boot: WARN — HOST-NIC coexist skipped; Phase D idle after VMXOFF");
     }
 
     // SAFETY: still in VMX root after VMEXIT; tear down before QEMU fail/idle.
