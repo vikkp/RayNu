@@ -1,8 +1,8 @@
 ---
 hda_version: 1
 last_updated: 2026-08-20
-last_commit: 950ed700afb04414d0fde8cbe1c485f0dbe3d83c
-last_commit_short: 950ed70
+last_commit: PENDING
+last_commit_short: PENDING
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 950ed70 |
-| Summary | E4 SPA VMLAUNCH in-tree: SPA start queues private 2MiB EPT + slab VMCS on coexist. Iron marker not claimed. |
+| Commit | PENDING |
+| Summary | E4 hang fix: park slot-1 remap only after M4_LADDER_DONE (iron stuck at SLICE-G0). |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | host `m7_e4_spa_gate`; `RAYNU-V-M7-E4-SPA-LAUNCH-OK` iron-only |
+| Gates touched | host `m7_e4_spa_gate`; iron `67b0acde` hung — do not claim E4 |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | PENDING | 0.5 | 94 | Iron hang: `SPA_RUNNABLE` remapped G1→G0 during M4.2; remap only after ladder |
 | 2026-08-20 | 950ed70 | 0.5 | 94 | E4 SPA VMLAUNCH in-tree (private 2M EPT + slab VMCS on coexist); P0-14 IN PROGRESS; iron marker not claimed |
 | 2026-08-20 | 1b3d7bd | 0.5 | 94 | ADR-013 Phase F row CLOSED (table was stale); next is E4 VMLAUNCH + Phase G |
 | 2026-08-20 | 41bbe48 | 0.5 | 94 | Phase F hold COM2: 25× `HOST-NIC-HTTP-OK` while VMX on (`10.99.99.149:8443`); SOL stayed up |

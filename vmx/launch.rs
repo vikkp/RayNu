@@ -1832,7 +1832,10 @@ unsafe fn schedule_preempt() -> ! {
             finish_boot(false);
         }
     };
-    if next == 1 && !SPA_RUNNABLE {
+    // After Phase F, G1's identity-pool VMCS is parked. Remap to G0 until
+    // SPA start relocates slot 1. During the M4.2 ladder G1 must still run
+    // (iron hung at SLICE-G0 when this ran before M4_LADDER_DONE).
+    if M4_LADDER_DONE && next == 1 && !SPA_RUNNABLE {
         next = 0;
     }
     if next == cur {
