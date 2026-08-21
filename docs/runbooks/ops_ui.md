@@ -89,6 +89,13 @@ coexist HTTP-OK on `10.99.99.149:8443`. Evidence:
 That paste is GET-only (`method_tag=1`). **Do not power off** — POST spec+start
 on the same boot.
 
+Coexist has **one** TCP listen slot. A SPA/browser (or aborted curl) that
+prints `HOST-NIC TCP accept` without `HTTP exchange ok` holds the slot;
+new `curl` SYNs time out (`curl: (28)`). Close every tab to `:8443` and retry
+with `-m 20`. If COM2 is still stuck on that accept, iDRAC **Force Power Off**,
+F11 the same Cruzer, and POST spec+start **immediately** after native
+`CURL NOW` — do not open the SPA first.
+
 Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force Power Off**.
 
 ## Next

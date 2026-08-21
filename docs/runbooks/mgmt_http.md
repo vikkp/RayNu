@@ -218,7 +218,11 @@ Expect `HOST-NIC coexist listening` / `VMX on; ADR-013 Phase F` after
 `POST /vms/{id}/start` now **queues** a VMLAUNCH on the next coexist
 quantum (private 2 MiB EPT + VMCS in the G1 slab). Iron marker
 `RAYNU-V-M7-E4-SPA-LAUNCH-OK` is COM2-only; host tests do not claim it.
-That guest is SHELL CPUID, not a Linux distro installer. If coexist
+That guest is SHELL CPUID, not a Linux distro installer. Coexist has **one**
+TCP listen slot: a SPA/browser half-open (`TCP accept` with no `HTTP exchange ok`)
+holds it and `curl` SYN times out. Close tabs to `:8443` or Force Off + F11
+and POST spec+start before opening the SPA. Idle abort (`HOST_NIC_HTTP_IDLE_MS`)
+re-listens after 3 s without headers (next EFI). If coexist
 cannot arm, fallback is Phase D idle after `VMXOFF`.
 Phase F **closed** 2026-08-20 on `0d06297b` / `10.99.99.149:8443`:
 `resume G0 (VMX on; G1–G3 parked)`, repeated `HOST-NIC-HTTP-OK` /

@@ -10,6 +10,7 @@
 use super::e1000_mmio::{pci_id_is_qemu_e1000, E1000_DEVICE, E1000_VENDOR};
 use super::host_nic::{
     M7_HOST_NIC_HTTP_OK_MARKER, M7_HOST_NIC_QEMU_MARKER, M7_HOST_NIC_SCAFFOLD_MARKER,
+    prop_http_accept_idle_abort,
 };
 use super::host_nic_poll::prop_bounded_poll_respects_budget;
 use super::host_nic_coexist::prop_coexist_wired;
@@ -163,6 +164,9 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("fn tick_bcm5720_coexist(")
         && listen.contains("HOST-NIC coexist listening")
         && listen.contains("VMX on; ADR-013 Phase F")
+        && listen.contains("TCP idle abort; re-listen")
+        && listen.contains("http_accept_should_idle_abort")
+        && listen.contains("HOST_NIC_HTTP_IDLE_MS")
         && http.contains("run_post_ebs_host_nic_listen")
         && http.contains("run_pre_ebs_pci_census")
         && http.contains("run_post_boot_ok_native_idle")
@@ -229,6 +233,7 @@ pub fn prop_host_nic_scaffold_package() -> bool {
         && prop_bounded_poll_respects_budget()
         && prop_arena_reset_rewinds()
         && prop_coexist_wired()
+        && prop_http_accept_idle_abort()
 }
 
 pub fn run_m7_host_nic_scaffold_gate() -> bool {

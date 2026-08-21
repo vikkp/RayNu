@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | f413a9fc (EFI on iron) |
-| Summary | Hang-fix EFI booted: SLICE-G0 then slot 1; coexist HTTP-OK. E4 SPA start still open (GET-only COM2). |
+| Commit | tcp-idle-abort |
+| Summary | Coexist one-TCP-slot idle abort (SPA half-open caused curl SYN timeout). E4 SPA start still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | hang-fix iron OK; `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
+| Gates touched | host `prop_http_accept_idle_abort`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
 | 2026-08-21 | hangfix-boot | 0.5 | 94 | Iron hang-fix: `SLICE-G0` then slot 1; coexist `10.99.99.149:8443`; E4 SPA start still open (GET-only) |
 | 2026-08-21 | cruzer-f413 | 0.5 | 94 | Cruzer `RAYNUV` holds hang-fix EFI `f413a9fc` (artifact 9429378906); iron boot + E4 marker still open |
 | 2026-08-21 | a32232c | 0.5 | 94 | Iron hang: `SPA_RUNNABLE` remapped G1→G0 during M4.2; remap only after ladder |
@@ -367,7 +368,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     same boot — POST spec+start on 10.99.99.149:8443; WANT `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
+Next move:     close SPA tabs / Force Off + F11; POST spec+start before opening SPA; WANT `RAYNU-V-M7-E4-SPA-LAUNCH-OK`
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
