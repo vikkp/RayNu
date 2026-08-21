@@ -69,6 +69,20 @@ if ! grep -q 'r640-hypervisor.efi' "$ROOT/tools/package-release.sh"; then
   echo "error: package-release must still name r640-hypervisor.efi" >&2
   exit 1
 fi
+if [[ ! -x "$ROOT/tools/flash-cruzer-esp.sh" ]]; then
+  chmod +x "$ROOT/tools/flash-cruzer-esp.sh"
+fi
+if [[ ! -x "$ROOT/tools/flashcruzer.sh" ]]; then
+  chmod +x "$ROOT/tools/flashcruzer.sh"
+fi
+echo "==> flash-cruzer-esp.sh --self-test"
+"$ROOT/tools/flash-cruzer-esp.sh" --self-test
+echo "==> flashcruzer.sh --self-test"
+"$ROOT/tools/flashcruzer.sh" --self-test
+if ! grep -q 'flashcruzer.sh' "$ROOT/docs/runbooks/usb_idrac.md"; then
+  echo "error: usb_idrac.md must document flashcruzer.sh" >&2
+  exit 1
+fi
 
 echo "==> cargo test m7_5_r640_scaffold_passes (scaffold gate)"
 cargo test --lib m7_5_r640_scaffold_passes -- --nocapture

@@ -147,7 +147,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
-**E4 SPA VMLAUNCH:** Iron `eb456eec` printed clone verify + marker + G0 VMLAUNCH; slot 1 `VMPTRLD` OK (error 11 gone); re-entry `VMLAUNCH` error 7. Fail-soft idle, no VMXOFF — **not E4 closed.** Next EFI: do not rewrite the incoming VMCS. Guest is SHELL CPUID, not a distro installer.  
+**E4 SPA VMLAUNCH:** Iron `eb456eec` printed clone verify + marker + G0 VMLAUNCH; slot 1 `VMPTRLD` OK (error 11 gone); re-entry `VMLAUNCH` error 7. Fail-soft idle, no VMXOFF — **not E4 closed.** Next: `~/projects/raynuv/flashcruzer.sh` then F11 (do not rewrite the incoming VMCS). Guest is SHELL CPUID, not a distro installer.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-vmclear-spa-entry7.md](evidence/r640/2026-08-21-e4-vmclear-spa-entry7.md)
 
 | Gate | Marker | Goal |

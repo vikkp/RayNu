@@ -268,7 +268,8 @@ re-entry `VMLAUNCH` error 7 — **not closed**. Rewrite revision only on the VMC
 just `VMCLEAR`'d; do not rewrite the incoming region. Guest is SHELL CPUID, not a
 distro installer.
 
-**Next:** Flash the no-incoming-rewrite EFI **by SHA** (do not reuse `eb456eec`).
+**Next:** On `raynuvsrv1` run `~/projects/raynuv/flashcruzer.sh` (WANT
+`RAYNU-V-CRUZER-FLASH-OK`; do not reuse `eb456eec` / `26db0610`).
 Force Off Ubuntu; F11 Cruzer. Mac spec → `sleep 2` → start using the **COM2 lease**
 (not Ubuntu `.124`). Spec curl `(28)` is OK if COM2 shows `VmCreated`. WANT clone
 verify + marker + G0 VMLAUNCH **and** slot 1 without error 7/11. No `VMXOFF`.

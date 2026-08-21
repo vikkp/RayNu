@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-entry7 |
-| Summary | Iron `eb456eec` VMCLEAR fixed error 11; SPA re-entry VMLAUNCH error 7. Stop incoming VMCS rewrite. E4 not closed. |
+| Commit | flashcruzer |
+| Summary | raynuvsrv1 one-liner `~/projects/raynuv/flashcruzer.sh` pulls latest green CI EFI onto Cruzer `RAYNUV`. E4 not closed. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | iron marker printed (not a close); next EFI drops incoming revision rewrite |
+| Gates touched | ops Cruzer refresh (not an iron close) |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -288,6 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | flashcruzer | 0.5 | 94 | `~/projects/raynuv/flashcruzer.sh` pulls latest green CI EFI onto Cruzer `RAYNUV`; E4 not closed |
 | 2026-08-21 | spa-entry7 | 0.5 | 94 | Iron `eb456eec` VMCLEAR fixed error 11; SPA re-entry VMLAUNCH error 7; drop incoming rewrite; E4 not closed |
 | 2026-08-21 | slot1-rev11 | 0.5 | 94 | Iron `63cd694f` clone+marker+G0 VMLAUNCH; slot 1 VMPTRLD error 11; VMCLEAR+rewrite next EFI; E4 not closed |
 | 2026-08-21 | cruzer-63cd | 0.5 | 94 | Cruzer `RAYNUV` flashed `63cd694f` (artifact 9461155533); F11 boot open; E4 not closed |
@@ -374,7 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.126:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     Flash no-incoming-rewrite EFI by SHA (not `eb456eec`); F11 Cruzer; spec/start
+Next move:     On raynuvsrv1 run ~/projects/raynuv/flashcruzer.sh (WANT CRUZER-FLASH-OK); F11 Cruzer; spec/start
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline

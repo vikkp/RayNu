@@ -70,11 +70,11 @@ curl: (28) Operation timed out after 20005 milliseconds with 0 bytes received
 HTTP/1.1 200 OK
 ```
 
-## Next (new EFI — do not reuse `eb456eec` for this fix)
+## Next (new EFI — do not reuse `eb456eec` / `26db0610` for this fix)
 
-Flash Cruzer **by SHA** of the no-incoming-rewrite EFI. Leave `installdisk.bin`
-and `auth.token`. F11 Cruzer. spec → `sleep 2` → start (spec `(28)` is OK if
-COM2 shows `VmCreated`).
+On `raynuvsrv1`: `~/projects/raynuv/flashcruzer.sh` (WANT `RAYNU-V-CRUZER-FLASH-OK`).
+Leave `installdisk.bin` and `auth.token`. F11 Cruzer. spec → `sleep 2` → start
+(spec `(28)` is OK if COM2 shows `VmCreated`).
 
 WANT: clone verify + marker + G0 VMLAUNCH **and** slot 1 re-entry without
 error 7/11; or park HINT + G0 resume + HTTP-OK. No `VMXOFF`. No spinning idle

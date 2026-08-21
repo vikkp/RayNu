@@ -78,6 +78,38 @@ Instead of hand-copying to FAT, build a ready image:
 Map the `.img` as iDRAC Virtual Media **USB**, or write it with
 `./tools/make-boot-usb.sh`. Full runbook: [`media_maker.md`](media_maker.md).
 
+## Cruzer Micro on raynuvsrv1 (RAYNUV)
+
+On the R640 Ubuntu PERC host (`vikkp@raynuvsrv1`, clone `~/projects/raynu`),
+refresh `\EFI\BOOT\BOOTX64.EFI` from the latest green CI artifact:
+
+```bash
+~/projects/raynuv/flashcruzer.sh
+# same script: ~/projects/raynu/tools/flashcruzer.sh
+```
+
+First time only (creates the symlink):
+
+```bash
+~/projects/raynu/tools/flashcruzer.sh --install-launcher
+```
+
+The wrapper `git pull --ff-only`s the current branch, downloads
+`r640-hypervisor.efi` from the latest successful `ci` run (prefers
+`pull_request` over `push` so a nested-KVM QEMU flake does not hide a green
+PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
+`sudo ./tools/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 …`.
+
+Identify the stick by **label `RAYNUV` + USB + Cruzer** (`lsusb` `0781:5151`).
+Never hardcode `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
+`EFI/RayNu/installdisk.bin` and `auth.token` alone.
+
+WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
+Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.
+
+`--wait` polls until HEAD CI finishes. `--download-only` writes
+`~/r640-hypervisor.efi` without flashing. `--self-test` is host/CI only.
+
 ## Limits
 
 - This runbook ships the **binary**. Real R640 bring-up quirks (ACPI/APIC/timer)
