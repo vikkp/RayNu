@@ -20,6 +20,7 @@ first light (2026-08-15). See [`2026-08-15-r640-first-light.md`](2026-08-15-r640
 **E4 G0-clone Cruzer flash:** [`2026-08-21-e4-cruzer-flash-g0clone.md`](2026-08-21-e4-cruzer-flash-g0clone.md) — EFI `63cd694f` on `RAYNUV` (`CRUZER-FLASH-OK`)  
 **E4 63cd694f clone then slot 1 error 11:** [`2026-08-21-e4-g0clone-spa-slot1-rev11.md`](2026-08-21-e4-g0clone-spa-slot1-rev11.md) — clone+marker+G0 VMLAUNCH OK; `VMPTRLD` slot 1 error 11; fail-soft G0; **not E4 closed**  
 **E4 eb456eec VMCLEAR then SPA error 7:** [`2026-08-21-e4-vmclear-spa-entry7.md`](2026-08-21-e4-vmclear-spa-entry7.md) — error 11 gone; slot 1 re-entry `VMLAUNCH` error 7; idle; **not E4 closed**  
+**E4 no-incoming-rewrite first SPA then zeros:** [`2026-08-21-e4-norewrite-spa-zeros.md`](2026-08-21-e4-norewrite-spa-zeros.md) — spec 201/start 200; first SPA `VMLAUNCH` OK; re-entry ctls all 0 / error 7; **not E4 closed**  
 **E4 618e89e2 coexist listen:** [`2026-08-21-e4-g0reloc-coexist-listen.md`](2026-08-21-e4-g0reloc-coexist-listen.md) — `10.99.99.126:8443`; Mac curl `(28)` on first listen; later curls succeeded  
 **E4 hang-fix iron boot:** [`2026-08-21-e4-hangfix-boot.md`](2026-08-21-e4-hangfix-boot.md) — `SLICE-G0` then slot 1; coexist HTTP-OK; GET-only paste  
 **E4 SPA start then G0 VMPTRLD fail (hang-fix):** [`2026-08-21-e4-spa-launch-vmptrld-fail.md`](2026-08-21-e4-spa-launch-vmptrld-fail.md) — marker then VMXOFF; **not E4 closed**  

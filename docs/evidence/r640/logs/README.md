@@ -40,6 +40,7 @@ Tcp4-absent analysis:
 | `2026-08-21-e4-cruzer-flash-g0clone.txt` | E4 G0-clone Cruzer flash | artifact `9461155533` / EFI `63cd694f` → `RAYNUV`; `CRUZER-FLASH-OK` |
 | `2026-08-21-e4-g0clone-spa-slot1-rev11-com2.txt` | E4 `63cd694f` SPA start | Clone+marker+G0 VMLAUNCH OK; slot 1 `VMPTRLD` error 11; fail-soft G0 — **not E4 closed** |
 | `2026-08-21-e4-vmclear-spa-entry7-com2.txt` | E4 `eb456eec` SPA start | Error 11 gone; SPA re-entry `VMLAUNCH` error 7; fail-soft idle — **not E4 closed** |
+| `2026-08-21-e4-norewrite-spa-zeros-com2.txt` | E4 no-incoming-rewrite SPA | Spec 201/start 200; first SPA OK; re-entry ctls all 0 / error 7 — **not E4 closed** |
 | `2026-08-21-e4-g0reloc-coexist-listen-com2.txt` | E4 `618e89e2` coexist listen | `10.99.99.126:8443`; Mac curl `(28)`; no `TCP accept` |
 | `2026-08-21-e4-g0reloc-spa-vmptrld-loop-com2.txt` | E4 `618e89e2` SPA start | Marker + relocate `0x10a00000` then `VMPTRLD slot=0` loop; fail-soft no VMXOFF — **not E4 closed** |
 

@@ -262,17 +262,17 @@ Do not pull M8 into M7 gate lists.
 **M7.8 / E3b closed on iron** (`RAYNU-V-M7-HOST-NIC-HTTP-OK`, 2026-08-20) — native BCM5720 after `BOOT-OK` on `:38` / `10.99.99.144:8443`.  
 **Honesty:** E3 (PRE-EBS) and **E3b** (lifetime HTTP on host-owned NIC) are closed. Firmware SNP and
 Tcp4 stay dead after EBS. Keep `ape-nophylock=yes`. E4 SPA start now queues a real VMLAUNCH
-(private 2 MiB EPT, slab VMCS) on the coexist quantum. Iron `eb456eec` printed
-`RAYNU-V-M7-E4-SPA-LAUNCH-OK` + G0 VMLAUNCH; slot 1 `VMPTRLD` OK (error 11 gone);
-re-entry `VMLAUNCH` error 7 — **not closed**. Rewrite revision only on the VMCS
-just `VMCLEAR`'d; do not rewrite the incoming region. Guest is SHELL CPUID, not a
-distro installer.
+(private 2 MiB EPT, slab VMCS) on the coexist quantum. Iron no-incoming-rewrite:
+spec **201** + start **200**; first SPA `VMLAUNCH` printed
+`RAYNU-V-M7-E4-SPA-LAUNCH-OK`; re-entry `VMLAUNCH` error 7 with all-zero ctls —
+**not closed**. Restore clone fields after `VMCLEAR` before the next `VMLAUNCH`.
+Guest is SHELL CPUID, not a distro installer.
 
 **Next:** On `raynuvsrv1` run `~/projects/raynuv/flashcruzer.sh` (WANT
-`RAYNU-V-CRUZER-FLASH-OK`; do not reuse `eb456eec` / `26db0610`).
-Force Off Ubuntu; F11 Cruzer. Mac spec → `sleep 2` → start using the **COM2 lease**
-(not Ubuntu `.124`). Spec curl `(28)` is OK if COM2 shows `VmCreated`. WANT clone
-verify + marker + G0 VMLAUNCH **and** slot 1 without error 7/11. No `VMXOFF`.
+`RAYNU-V-CRUZER-FLASH-OK`).
+Force Off; F11 Cruzer. Mac spec → `sleep 2` → start using the **COM2 lease**
+(not Ubuntu `.124`). Spec **201** / start **200** already proven. WANT
+`E4 restore VMCS shadow` + slot 1 re-entry without error 7/11. No `VMXOFF`.
 Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

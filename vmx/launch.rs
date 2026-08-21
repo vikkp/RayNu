@@ -259,6 +259,15 @@ static mut G0_VMPTRLD_FAILED: bool = false;
 static mut SPA_NEEDS_VMLAUNCH: bool = false;
 /// Sticky: first `VMPTRLD` of slot 1 failed after E4 — park SPA (no retry flood).
 static mut SPA_VMPTRLD_FAILED: bool = false;
+/// Software shadow of [`VMCS_CLONE_FIELDS`] for slots 0 and 1.
+/// Iron 2026-08-21 (no-incoming-rewrite): first SPA `VMLAUNCH` OK, then
+/// `VMCLEAR` + later `VMLAUNCH` saw pin/primary/exit/entry/EPTP/RIP all 0
+/// (error 7). SDM: do not assume `VMCLEAR` leaves VMCS data unmodified.
+/// Restore from this shadow before any clear-state `VMLAUNCH`.
+const VMCS_SHADOW_MAX: usize = 128;
+static mut VMCS_SHADOW_VAL: [[u64; VMCS_SHADOW_MAX]; 2] = [[0; VMCS_SHADOW_MAX]; 2];
+static mut VMCS_SHADOW_PRESENT: [[bool; VMCS_SHADOW_MAX]; 2] = [[false; VMCS_SHADOW_MAX]; 2];
+static mut VMCS_SHADOW_N: [u32; 2] = [0, 0];
 /// Latch ERROR/WARN once so COM2 is not flooded every scheduler tick.
 static mut SCHED_VMPTRLD_FAIL_LOGGED: bool = false;
 
@@ -1697,6 +1706,9 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
     // Do not rewrite the incoming VMCS.
     if M4_LADDER_DONE && SPA_LAUNCHED && SCHED_SLOT_CUR != slot {
         if let Some(cur_f) = frames_for_slot(SCHED_SLOT_CUR) {
+            // Snapshot architectural fields while the outgoing VMCS is current.
+            // Do not VMLAUNCH a VMCLEAR'd VMCS without restoring fields.
+            capture_current_vmcs_shadow(SCHED_SLOT_CUR);
             let _ = ops::vmclear(cur_f.vmcs_phys);
             rewrite_vmcs_revision(cur_f.vmcs_phys);
             if SCHED_SLOT_CUR == 0 {
@@ -1740,11 +1752,21 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
     if slot == 0 && G0_NEEDS_VMLAUNCH {
         G0_NEEDS_VMLAUNCH = false;
         serial::write_line("boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)");
+        if !restore_vmcs_shadow(0) {
+            serial::write_line("boot: WARN — E4 G0 shadow restore failed");
+            failsoft_sched_or_finish();
+        }
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         vmlaunch_with_gprs();
     }
     if slot == 1 && SPA_NEEDS_VMLAUNCH {
         SPA_NEEDS_VMLAUNCH = false;
         serial::write_line("boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)");
+        if !restore_vmcs_shadow(1) {
+            serial::write_line("boot: WARN — E4 SPA shadow restore failed");
+            failsoft_sched_or_finish();
+        }
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
         vmlaunch_with_gprs();
     }
     vmresume_with_gprs();
@@ -1769,10 +1791,12 @@ unsafe fn failsoft_sched_or_finish() -> ! {
             arm_sched_slice();
             if resume == 0 && G0_NEEDS_VMLAUNCH {
                 G0_NEEDS_VMLAUNCH = false;
+                let _ = restore_vmcs_shadow(0);
                 vmlaunch_with_gprs();
             }
             if resume == 1 && SPA_NEEDS_VMLAUNCH {
                 SPA_NEEDS_VMLAUNCH = false;
+                let _ = restore_vmcs_shadow(1);
                 vmlaunch_with_gprs();
             }
             vmresume_with_gprs();
@@ -1859,6 +1883,61 @@ unsafe fn try_spa_vmlaunch() {
     launch_spa_private_ept();
 }
 
+/// Snapshot [`VMCS_CLONE_FIELDS`] from the current VMCS into a slot shadow.
+///
+/// INVARIANTS:
+/// - Caller is VMX root with a current VMCS for `slot` (0 or 1)
+/// - Called **before** `VMCLEAR` of that region
+///
+/// VERIFICATION: L1. FALLBACK: `n_ok == 0` makes restore refuse VMLAUNCH.
+unsafe fn capture_current_vmcs_shadow(slot: usize) {
+    if slot > 1 {
+        return;
+    }
+    debug_assert!(VMCS_CLONE_FIELDS.len() <= VMCS_SHADOW_MAX);
+    let n = VMCS_CLONE_FIELDS.len();
+    let mut n_ok = 0u32;
+    for i in 0..n {
+        VMCS_SHADOW_PRESENT[slot][i] = false;
+        if let Ok(v) = ops::vmread(VMCS_CLONE_FIELDS[i]) {
+            VMCS_SHADOW_VAL[slot][i] = v;
+            VMCS_SHADOW_PRESENT[slot][i] = true;
+            n_ok += 1;
+        }
+    }
+    VMCS_SHADOW_N[slot] = n_ok;
+}
+
+/// VMWRITE a slot's shadow into the **current** VMCS (already `VMPTRLD`).
+///
+/// INVARIANTS:
+/// - Current VMCS is the region for `slot`
+/// - At least 40 architectural fields were captured
+///
+/// Returns false if the shadow is too thin to launch (would be error 7 zeros).
+unsafe fn restore_vmcs_shadow(slot: usize) -> bool {
+    if slot > 1 {
+        return false;
+    }
+    let n = VMCS_CLONE_FIELDS.len();
+    let mut n_ok = 0u32;
+    for i in 0..n {
+        if VMCS_SHADOW_PRESENT[slot][i] {
+            let _ = ops::vmwrite(VMCS_CLONE_FIELDS[i], VMCS_SHADOW_VAL[slot][i]);
+            n_ok += 1;
+        }
+    }
+    serial::write_str("boot: E4 restore VMCS shadow slot=");
+    write_hex_u32(slot as u32);
+    serial::write_str(" fields=");
+    write_dec_u32(n_ok);
+    serial::write_byte(b'\n');
+    if n_ok < 40 {
+        return false;
+    }
+    true
+}
+
 /// Clone the current VMCS to `dst` via VMREAD/VMWRITE (not memcpy).
 ///
 /// INVARIANTS:
@@ -1882,6 +1961,14 @@ unsafe fn clone_current_vmcs_to(src: u64, dst: u64) -> Option<u64> {
             present[i] = true;
             n_ok += 1;
         }
+    }
+    // Keep slot 0 shadow in sync with the clone snapshot (G0 relocate).
+    if n_ok >= 40 {
+        for i in 0..n {
+            VMCS_SHADOW_VAL[0][i] = vals[i];
+            VMCS_SHADOW_PRESENT[0][i] = present[i];
+        }
+        VMCS_SHADOW_N[0] = n_ok;
     }
     let Ok(src_rip) = ops::vmread(GUEST_RIP) else {
         serial::write_line("boot: WARN — E4 G0 VMREAD GUEST_RIP failed");
@@ -2083,6 +2170,18 @@ unsafe fn launch_spa_private_ept() -> ! {
         io_bitmap_b_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_B),
     };
     GUEST_FRAMES[1] = Some(frames);
+    // G0 precise identity still maps the G1 2 MiB slab. Punch it so Linux
+    // cannot scribble the SPA VMCS while G0 runs between VMCLEAR and re-entry.
+    if let Some(g0) = frames_for_slot(0) {
+        let pml4 = ept_hw::pml4_from_eptp(g0.eptp);
+        // SAFETY: `slab` is G1's 2 MiB shell; G0 e820 ends at 256 MiB.
+        // KANI-TARGET
+        if ept_hw::clear_2m_identity_leaf(pml4, slab).is_err() {
+            serial::write_line("boot: WARN — E4 could not punch SPA slab from G0 EPT");
+        } else {
+            ept_hw::invept_global();
+        }
+    }
     if core::ptr::addr_of!(SCHED).as_ref().unwrap().vcpu_count() < 2 {
         let _ = SCHED.register_vcpu(DEFAULT_CREDIT);
     }
@@ -2131,6 +2230,7 @@ unsafe fn launch_spa_private_ept() -> ! {
         SPA_RUNNABLE = false;
         switch_to_sched_slot(0);
     }
+    capture_current_vmcs_shadow(1);
 
     let _ = apic::mask_timer();
     let _ = apic::eoi();
@@ -2984,6 +3084,10 @@ unsafe fn failsoft_resume_g0_after_spa_vmlaunch_fail() -> ! {
     arm_sched_slice();
     G0_NEEDS_VMLAUNCH = false;
     serial::write_line("boot: E4 G0 VMLAUNCH after SPA entry fail (VMX on; no VMXOFF)");
+    if !restore_vmcs_shadow(0) {
+        serial::write_line("boot: WARN — E4 G0 shadow restore failed after SPA entry fail");
+        coexist_failsoft_idle();
+    }
     vmlaunch_with_gprs();
 }
 
