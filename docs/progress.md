@@ -79,6 +79,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.6 | `RAYNU-V-M7-UEFI-HTTP-OK` | Real R640 PRE-EBS SNP+smoltcp HTTP (`10.99.99.127:8443`, 2026-08-16); scaffold `RAYNU-V-M7-UEFI-HTTP-SCAFFOLD-OK` |
 | M7.7 | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` | E5 iron stamp persist closed 2026-08-16 (Cruzer two-boot); scaffold `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; documented equiv. of `ISO-INSTALL-OK` |
 | M7.8 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Real R640 post-`BOOT-OK` native BCM5720 HTTP (`10.99.99.144:8443`, 2026-08-20); SPA + `AuthAllowed`; keep APE PHY |
+| E4 | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | Real R640 SPA start → private-EPT SHELL `VMLAUNCH` + clear-state re-entry (`10.99.99.126:8443`, EFI `2b795a0`, 2026-08-21). Not TLS/distro. |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -147,15 +148,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
-**E4 SPA VMLAUNCH:** Iron no-incoming-rewrite: spec **201** + start **200**; first SPA `VMLAUNCH` printed the marker; slot 1 re-entry `VMLAUNCH` error 7 with **all-zero** ctls. Fail-soft G0, no VMXOFF — **not E4 closed.** Next: restore VMCS shadow after `VMCLEAR`. Guest is SHELL CPUID, not a distro installer.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-norewrite-spa-zeros.md](evidence/r640/2026-08-21-e4-norewrite-spa-zeros.md)
+**E4 SPA VMLAUNCH closed on iron:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` — spec **201** + start **200** on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). First SPA `VMLAUNCH` + G0↔SPA clear-state re-entry via 98-field VMCS shadow. No error 7/11. Guest is SHELL CPUID, not a distro installer.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | ADR-013 Phase F | coexist HTTP while VMX on | **CLOSED** 2026-08-20 on BCM5720 `:38` / `10.99.99.149:8443`. G0 scheduled; G1–G3 parked. Hold COM2: 25× HTTP-OK. |
-| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN PROGRESS** — first SPA VMLAUNCH OK; re-entry zeros/error 7. Not closed. |
-| Everest residual | TLS/console + distro installer | After iron E4 marker. Not this slice. |
+| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **CLOSED** 2026-08-21 on BCM5720 `:38` / `10.99.99.126:8443`. Private 2M EPT SHELL + shadow restore re-entry. |
+| Everest residual | TLS/console + distro installer | After P0-14. Not this slice. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

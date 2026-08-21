@@ -1,15 +1,15 @@
 ---
 hda_version: 1
 last_updated: 2026-08-21
-last_commit: 564d39dd67c9dece61be19f08dd525cfb332dc18
-last_commit_short: 564d39d
+last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
+last_commit_short: 2b795a0
 updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 345
-velocity_gates_30d: 21
-overall_pct: 94
+velocity_commits_30d: 346
+velocity_gates_30d: 22
+overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
 baseline_months: 4.5
@@ -17,7 +17,7 @@ everest_eta_month: "2026-09"
 summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
-summit_ui_pct: 95
+summit_ui_pct: 96
 summit_iso_pct: 82
 summit_prod_pct: 100
 ---
@@ -37,20 +37,20 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
-| **Overall product readiness** | **94%** | +1 (Phase F coexist HTTP-OK while VMX on) |
-| **Months to Mount Everest** | **0.5** | held (E4 polish + distro remain) |
+| **Overall product readiness** | **95%** | +1 (P0-14 E4 SPA VMLAUNCH + re-entry on iron) |
+| **Months to Mount Everest** | **0.5** | held (TLS/console + distro remain) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | high | E2+E3+E3b+E5+Phase F stamps on COM2; `618e89e2` printed E4 marker then memcpy VMPTRLD loop (fail-soft, not closed); TLS/console + distro residual |
+| **Confidence** | high | E2+E3+E3b+E5+Phase F+P0-14 stamps on COM2; SPA guest is SHELL stub; TLS/console + distro residual |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~95% | E3 + E3b + Phase F closed; `618e89e2` E4 marker then memcpy VMPTRLD loop (fail-soft, not closed); TLS/console residual |
+| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
 | **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
 Months to Everest  █░░░░░░░░░░░░░░░░░░░  0.5 mo  (was 1.5)
-Overall %          ███████████████████░  94%
+Overall %          ███████████████████░  95%
 ```
 
 **How the month number moves:** faster closed Everest-path work → `months_to_everest` shrinks and `everest_eta_month` pulls closer. Stalls / new scope → it slips. See [Velocity model](#velocity-model).
@@ -106,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~95% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
+**Status: NEAR · ~96% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -126,7 +126,7 @@ All must be true (no hand-waving):
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
-| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | first SPA `VMLAUNCH` OK; re-entry zeros/error 7 — **not closed.** |
+| E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -162,7 +162,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | E4 polish + distro installer | remaining Everest | **ETA** |
+| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** |
 | M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
@@ -170,12 +170,12 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ████░░░░  E4 polish + distro installer  ← months_to_everest ≈ 0.5
+2026-09 ████░░░░  TLS/console + distro installer  ← months_to_everest ≈ 0.5
 2026-10 ░░░░░░░░  buffer
 2026-11 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -191,7 +191,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
-| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | First SPA VMLAUNCH OK; re-entry zeros/error 7; not a close |
+| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **DONE** | P0-13 | Iron `2b795a0` 2026-08-21; marker + 98-field shadow re-entry; SHELL stub |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | spa-shadow |
-| Summary | Iron no-incoming-rewrite: spec 201/start 200; first SPA VMLAUNCH OK; re-entry all-zero ctls / error 7. Restore VMCS shadow after VMCLEAR. E4 not closed. |
-| Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | iron marker printed (not a close); next EFI restores clone fields after VMCLEAR |
+| Commit | spa-shadow-ok |
+| Summary | Iron `2b795a0`: spec 201/start 200; first SPA VMLAUNCH + G0↔SPA shadow restore `fields=98`; no error 7/11. P0-14 closed. SHELL stub; not Everest. |
+| Everest impact | months 0.5 held; overall 94→95; ETA 2026-09 held; P0-14 DONE |
+| Gates touched | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` closed on iron |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -279,7 +279,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
 | H3 | No full El Torito/CD-ROM | MED | Deferred until post-EBS listen works; extract-boot MVP holds |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F stamps closed; first SPA VMLAUNCH OK then slot 1 re-entry zeros/error 7 (not closed); TLS/console + distro remain |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -288,6 +288,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-21 | spa-shadow-ok | 0.5 | 95 | Iron `2b795a0` spec 201/start 200; SPA VMLAUNCH + shadow re-entry fields=98; P0-14 CLOSED; SHELL stub; overall 94→95 |
 | 2026-08-21 | spa-zeros | 0.5 | 94 | Iron spec 201/start 200; first SPA VMLAUNCH OK; re-entry ctls all 0 / error 7; restore shadow after VMCLEAR; E4 not closed |
 | 2026-08-21 | flashcruzer-wait | 0.5 | 94 | `--wait` must not feed progress into the GitHub run id; E4 not closed |
 | 2026-08-21 | flashcruzer | 0.5 | 94 | `~/projects/raynuv/flashcruzer.sh` pulls latest green CI EFI onto Cruzer `RAYNUV`; E4 not closed |

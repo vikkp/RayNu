@@ -44,24 +44,22 @@ During the M7.6 listen window (`RAYNU-V-M7-UEFI-HTTP-OK` path):
 - **NIC attach** — JSON reports `nics:1` default; virtio-net attach residual.  
 - Host package smoke is unit tests; iron proof is live curl/SPA during PRE-EBS.
 
-## E4 SPA start on the coexist path (in-tree)
+## E4 SPA start on the coexist path (closed on iron)
 
 After ADR-013 Phase F, `POST /vms/{id}/start` is no longer table-only:
 
 1. REST start (200) queues a flag (`note_spa_start`). It does **not** VMLAUNCH inside the HTTP tick.
 2. The next credit-scheduler quantum (`schedule_preempt`, after `tick_native_coexist`) consumes the flag **once `M4_LADDER_DONE`**.
 3. Slot 1 is relocated into the G1 2 MiB slab already punched out of G0 EPT: private **single 2 MiB** EPT, VMCS + host state in the slab (not the G0 identity pool Linux can scribble).
-4. Before leaving G0, G0's VMCS is `VMCLEAR`'d and copied to a host-only 2 MiB slab punched from G0 identity (iron: identity-pool `VMPTRLD` of slot 0 failed after SHELL).
-5. Iron marker (COM2, **not** host): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on SHELL CPUID. **Not closed** until coexist continues (no `VMPTRLD failed slot=0`, no `boot gate failed`).
+4. Before leaving G0, G0's VMCS is `VMCLEAR`'d and cloned to a host-only 2 MiB slab punched from G0 identity. A 98-field software shadow is restored after `VMPTRLD` before clear-state `VMLAUNCH`.
+5. Iron close (COM2, EFI `2b795a0`, 2026-08-21): `RAYNU-V-M7-E4-SPA-LAUNCH-OK` plus G0↔SPA shadow restore re-entry. Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md`](../evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md).
 
-This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
+This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Switches are `VMLAUNCH` after `VMCLEAR`, not `VMRESUME`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
 
-## Relocate EFI on Cruzer (flash done 2026-08-21)
+## Relocate EFI on Cruzer (P0-14 closed)
 
-Cruzer `RAYNUV` (front USB 2, `/dev/sdc`) holds EFI `618e89e2…` / size `1229312`
-(artifact `9432035922`, commit `acba27b`). Evidence:
-[`docs/evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md`](../evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md).
-Do **not** reflash hang-fix `f413a9fc`, hung `67b0acde`, or Phase F `0d06297b`.
+Cruzer `RAYNUV` (front USB 2) held shadow-restore EFI `2b795a0` for the close.
+Do **not** reflash hang-fix `f413a9fc`, hung `67b0acde`, memcpy `618e89e2`, clone `63cd694f`, or zeros `564d39d` unless reproducing a fail.
 `.124` is Ubuntu on PERC, not the HV lease.
 
 1. iDRAC SOL `console com2` before power.
@@ -78,16 +76,15 @@ CURL NOW → http://<LEASE>:8443/  (native BCM5720; G0 still scheduled; SNP is d
 ```bash
 LEASE=10.99.99.REPLACE_FROM_COM2
 TOK='Authorization: Bearer raynu-v-bringup'
-curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
+curl -4 --noproxy '*' -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
 sleep 2
-curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
+curl -4 --noproxy '*' -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
-6. WANT COM2: `E4 G0 VMCS relocated`, `E4 SPA VMLAUNCH slot=1 private 2M EPT`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then more `HOST-NIC-HTTP-OK`. Fail if `VMPTRLD failed slot=0` or `boot gate failed`.
+6. Closed COM2: `E4 G0 VMCS relocated`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, `E4 restore VMCS shadow slot=` `fields=98`, repeating G0↔SPA `VMLAUNCH`. Fail if `insn_error=0x00000007` / `0x0000000b`, `VMPTRLD failed`, or `boot gate failed`.
 
 Hang-fix `f413a9fc` printed the E4 marker then `VMPTRLD failed slot=0` / VMXOFF.
 Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).
-**Do not claim E4 closed** from flash.
 
 Coexist has **one** TCP listen slot. A SPA/browser (or aborted curl) that
 prints `HOST-NIC TCP accept` without `HTTP exchange ok` holds the slot;
@@ -100,5 +97,4 @@ Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force 
 
 ## Next
 
-F11 Cruzer `618e89e2`. Mac spec → `sleep 2` → start using the COM2 lease (not `.124`).
-WANT COM2 marker **and** continued coexist. Then distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.
+Optional: `GET /` during the G0↔SPA switch loop; skip `VMCLEAR` and `VMRESUME` when launch-state is launched. Product residual: distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.
