@@ -1,0 +1,40 @@
+vikkp@raynuvsrv1:~$ set -euo pipefail
+cd ~
+WANT_SIZE=1229312
+WANT_SHA=618e89e2acf852e463c17dce0e33337e452caee6d43a6e3907cb18f392ff68b3
+ART=9432035922   # r640-hypervisor.efi from run 32439799435 / acba27b
+
+gh api -H "Accept: application/vnd.github+json" \
+  "/repos/vikkp/RayNu/actions/artifacts/${ART}/zip" > /tmp/e4-efi.zip
+unzip -o /tmp/e4-efi.zip -d ~
+test -f ~/r640-hypervisor.efi
+GOT=$(sha256sum ~/r640-hypervisor.efi | awk '{print $1}')
+BYTES=$(wc -c < ~/r640-hypervisor.efi | tr -d ' ')
+echo "$BYTES $GOT"
+test "$BYTES" = "$WANT_SIZE"
+test "$GOT" = "$WANT_SHA"
+echo "EFI ok at ~/r640-hypervisor.efi prefix=${GOT:0:8}"
+Archive:  /tmp/e4-efi.zip
+  inflating: /home/vikkp/r640-hypervisor.efi
+1229312 618e89e2acf852e463c17dce0e33337e452caee6d43a6e3907cb18f392ff68b3
+EFI ok at ~/r640-hypervisor.efi prefix=618e89e2
+vikkp@raynuvsrv1:~$ test -x ~/flash-cruzer-esp.sh || {
+  gh api "repos/vikkp/RayNu/contents/tools/flash-cruzer-esp.sh?ref=cursor/raynuvsrv1-cruzer-flash-a623" --jq .content \
+    | base64 -d > ~/flash-cruzer-esp.sh
+  chmod +x ~/flash-cruzer-esp.sh
+}
+bash ~/flash-cruzer-esp.sh --self-test
+sudo bash ~/flash-cruzer-esp.sh --efi ~/r640-hypervisor.efi --sha256 "$WANT_SHA"
+sync
+if findmnt /mnt/usb >/dev/null 2>&1; then sudo umount /mnt/usb; fi
+RAYNU-V-CRUZER-FLASH-SELFTEST-OK
+[sudo: authenticate] Password:
+==> resolved /dev/disk/by-label/RAYNUV -> /dev/sdc
+==> model=Cruzer Micro tran=usb type=disk fstype=vfat size=1024966656 serial=200524441218e7503e33
+==> installdisk.bin bytes=1024 (unchanged)
+==> copying /home/vikkp/r640-hypervisor.efi (1229312 bytes, sha256=618e89e2acf852e463c17dce0e33337e452caee6d43a6e3907cb18f392ff68b3)
+==> BOOTX64.EFI bytes=1229312 sha256=618e89e2acf852e463c17dce0e33337e452caee6d43a6e3907cb18f392ff68b3
+==> leave /mnt/usb/EFI/RayNu/installdisk.bin and auth.token alone — done
+Next: BIOS boot order stays Ubuntu on PERC; one-time F11 boot the Cruzer.
+RAYNU-V-CRUZER-FLASH-OK
+vikkp@raynuvsrv1:~$

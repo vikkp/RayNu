@@ -268,9 +268,9 @@ G0 VMCS is now relocated to a host-only punched slab before leaving G0; the sche
 must not `VMXOFF` the mgmt plane on a failed `VMPTRLD`. Guest is SHELL CPUID, not a
 distro installer.
 
-**Next:** flash the relocate+fail-soft EFI **by SHA** (not `f413a9fc`). F11 Cruzer.
-No SPA. spec → `sleep 2` → start on `10.99.99.149:8443`. WANT marker **and** continued
-coexist (no `VMPTRLD failed slot=0`, no `boot gate failed`). Then TLS/console + distro.
+**Next:** Cruzer `RAYNUV` holds `618e89e2` (`CRUZER-FLASH-OK`). Force Off Ubuntu; F11 Cruzer.
+No SPA. Mac spec → `sleep 2` → start using the **COM2 lease** (not Ubuntu `.124`). WANT marker
+**and** continued coexist (no `VMPTRLD failed slot=0`, no `boot gate failed`). Then TLS/console + distro.
 Keep `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:

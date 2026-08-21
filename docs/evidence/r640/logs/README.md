@@ -36,6 +36,7 @@ Tcp4-absent analysis:
 | `2026-08-21-e4-cruzer-flash-hangfix.txt` | E4 hang-fix Cruzer flash | artifact `9429378906` / EFI `f413a9fc` → `RAYNUV`; `CRUZER-FLASH-OK`; iron boot open |
 | `2026-08-21-e4-hangfix-boot-com2.txt` | E4 hang-fix iron boot | `SLICE-G0` then `sched switch → slot=1`; coexist `10.99.99.149:8443`; E4 marker open |
 | `2026-08-21-e4-spa-vmcs-vmptrld-fail-com2.txt` | E4 SPA start on hang-fix EFI | Marker printed then `VMPTRLD failed slot=0` / VMXOFF / `boot gate failed` — **not E4 closed** |
+| `2026-08-21-e4-cruzer-flash-g0reloc.txt` | E4 G0-relocate Cruzer flash | artifact `9432035922` / EFI `618e89e2` → `RAYNUV`; `CRUZER-FLASH-OK`; iron boot open |
 
 Checksums: [`SHA256SUMS`](SHA256SUMS). Narratives:
 [`../2026-08-15-r640-first-light.md`](../2026-08-15-r640-first-light.md) ·

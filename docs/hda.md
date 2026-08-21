@@ -126,7 +126,7 @@ All must be true (no hand-waving):
 | E4 SPA create on iron | DONE | Firefox create-VM + Bearer; [2026-08-16-e4-spa-install-arm.md](evidence/r640/2026-08-16-e4-spa-install-arm.md) |
 | **Post-EBS durable HTTP (E3b)** | **DONE** | `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38`; [2026-08-20-e3b-host-nic-http-ok.md](evidence/r640/2026-08-20-e3b-host-nic-http-ok.md) |
 | **Phase F coexist (VMX on)** | **DONE** | `HOST-NIC-HTTP-OK` while VMX on; G0 scheduled; G1–G3 parked; [2026-08-20-phase-f-coexist-ok.md](evidence/r640/2026-08-20-phase-f-coexist-ok.md) |
-| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | Hang-fix `f413a9fc`: spec+start printed `RAYNU-V-M7-E4-SPA-LAUNCH-OK` then `VMPTRLD slot=0` / VMXOFF. **Not closed.** Relocate+fail-soft in-tree. |
+| E4 SPA VMLAUNCH (private EPT) | **IN PROGRESS (iron live)** | Cruzer `RAYNUV` holds `618e89e2` (`CRUZER-FLASH-OK`). F11 boot open. Hang-fix `f413a9fc` printed marker then VMPTRLD fail — **not closed.** |
 
 ### Summit D — Deploy Linux ISO
 **Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
@@ -191,7 +191,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-4 | **M7.1** Minimal HTTP server (serve SPA + REST) | C | **DONE** | size budget | Host + iron SNP residual **PRE-EBS** (E3); firmware Tcp4 absent |
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
-| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Marker printed then G0 `VMPTRLD` fail / VMXOFF; relocate+fail-soft in-tree; not closed |
+| P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **IN PROGRESS** | P0-13 | Cruzer `618e89e2` flashed; F11 boot open; prior marker+VMPTRLD fail not a close |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -263,10 +263,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | 7b750ab |
-| Summary | Iron E4 marker then G0 VMPTRLD fail. Relocate G0 VMCS to host-only slab; fail-soft scheduler (no VMXOFF). E4 still open. |
+| Commit | cruzer-618e |
+| Summary | Cruzer `RAYNUV` flashed relocate EFI `618e89e2` (`CRUZER-FLASH-OK`). Iron boot / E4 still open. |
 | Everest impact | months 0.5 held; overall 94 held; ETA 2026-09 held; P0-14 IN PROGRESS |
-| Gates touched | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` printed then boot-gate failed — **not claimed** |
+| Gates touched | `RAYNU-V-CRUZER-FLASH-OK`; iron `RAYNU-V-M7-E4-SPA-LAUNCH-OK` not claimed |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -290,6 +290,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Date | Commit | Months | Overall % | Note |
 |------|--------|-------:|----------:|------|
+| 2026-08-21 | cruzer-618e | 0.5 | 94 | Cruzer `RAYNUV` flashed `618e89e2` (artifact 9432035922); F11 boot open; E4 not closed |
 | 2026-08-21 | 7b750ab | 0.5 | 94 | Iron E4 marker then G0 VMPTRLD fail/VMXOFF; relocate G0 VMCS + fail-soft; E4 not closed |
 | 2026-08-21 | tcp-relisten | 0.5 | 94 | Coexist abort+re-listen after HTTP (spec 201 then start curl 7 RST); E4 start still open |
 | 2026-08-21 | tcp-idle | 0.5 | 94 | Coexist one-TCP-slot idle abort after SPA half-open curl timeout; E4 start still open |
@@ -370,7 +371,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
 Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.149:8443)
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     flash relocate+fail-soft EFI by SHA; spec→sleep 2→start; WANT marker AND continued coexist
+Next move:     Force Off Ubuntu; F11 Cruzer `618e89e2`; Mac spec→sleep 2→start on COM2 lease (not .124)
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline

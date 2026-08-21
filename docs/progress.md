@@ -147,15 +147,15 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **M7.7 closed on iron:** `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` — Cruzer Micro persist-detect + prefix-copy (2026-08-16). LBA stamps, not a distro installer.  
 **M7.8 closed on iron:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` — native BCM5720 after `BOOT-OK` on R640 (`10.99.99.144:8443`, 2026-08-20). SPA + Bearer `AuthAllowed`.  
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
-**E4 SPA VMLAUNCH:** hang-fix EFI `f413a9fc` reached SPA start on iron. COM2 printed `RAYNU-V-M7-E4-SPA-LAUNCH-OK` then `sched VMPTRLD failed slot=0` → VMXOFF → `boot gate failed`. **Not E4 closed.** In-tree follow-up relocates G0 VMCS to a host-only punched slab and fail-softs the scheduler. Guest is SHELL CPUID, not a distro installer.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md](evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md)
+**E4 SPA VMLAUNCH:** Cruzer `RAYNUV` flashed relocate+fail-soft EFI `618e89e2` (`CRUZER-FLASH-OK`). Hang-fix `f413a9fc` printed the marker then `VMPTRLD slot=0` / VMXOFF — **not E4 closed.** F11 Cruzer boot of `618e89e2` is next. Guest is SHELL CPUID, not a distro installer.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · evidence: [evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md](evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
 | E3b Durable HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **CLOSED** 2026-08-20 on BCM5720 `:38` after `BOOT-OK`. SNP/Tcp4 do not count. |
 | Post-EBS SNP | `RAYNU-V-M7-POST-EBS-HTTP-OK` | **Rejected.** Hang + curl timeout + RSOD 2026-08-17. |
 | ADR-013 Phase F | coexist HTTP while VMX on | **CLOSED** 2026-08-20 on BCM5720 `:38` / `10.99.99.149:8443`. G0 scheduled; G1–G3 parked. Hold COM2: 25× HTTP-OK. |
-| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN PROGRESS** — marker printed on iron then G0 `VMPTRLD` fail / VMXOFF. Relocate+fail-soft in-tree; not closed. |
+| E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **IN PROGRESS** — Cruzer `RAYNUV` holds `618e89e2` (relocate+fail-soft). Flash OK; iron boot open. Not closed. |
 | Everest residual | TLS/console + distro installer | After iron E4 marker. Not this slice. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

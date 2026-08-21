@@ -56,45 +56,38 @@ After ADR-013 Phase F, `POST /vms/{id}/start` is no longer table-only:
 
 This is a **SHELL CPUID** guest in the G1 slab, not a Linux distro installer and not TLS/`auth.token`. Stop parks slot 1 (`SPA_RUNNABLE = false`); G0 stays scheduled. Fail-soft resumes G0.
 
-## Hang-fix EFI on Cruzer (flash done 2026-08-21)
+## Relocate EFI on Cruzer (flash done 2026-08-21)
 
-Cruzer `RAYNUV` (front USB 2, `/dev/sdc`) holds EFI `f413a9fc…` / size `1226240`
-(artifact `9429378906`, commit `1a29e33`). Evidence:
-[`docs/evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md`](../evidence/r640/2026-08-21-e4-cruzer-flash-hangfix.md).
-Do **not** reflash hung `67b0acde` or Phase F `0d06297b`.
+Cruzer `RAYNUV` (front USB 2, `/dev/sdc`) holds EFI `618e89e2…` / size `1229312`
+(artifact `9432035922`, commit `acba27b`). Evidence:
+[`docs/evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md`](../evidence/r640/2026-08-21-e4-cruzer-flash-g0reloc.md).
+Do **not** reflash hang-fix `f413a9fc`, hung `67b0acde`, or Phase F `0d06297b`.
+`.124` is Ubuntu on PERC, not the HV lease.
 
 1. iDRAC SOL `console com2` before power.
-2. One-time F11 boot Cruzer `RAYNUV`. BIOS order stays Ubuntu on PERC.
+2. iDRAC **Force Power Off** (leave Cruzer seated). One-time F11 Cruzer `RAYNUV`.
 3. Ignore PRE-EBS SNP `CURL NOW` / 45s `mgmt HTTP accept timeout`.
-4. After `RAYNU-V-M4-SLICE-G0`, COM2 **must** show `boot: sched switch → slot=00000001` (proves the hang fix). Then NVM / BLK / NET / SMP / `RAYNU-V-R640-BOOT-OK`.
-5. Curl **only** after native coexist listen (lease from COM2, port **8443**):
+4. After `RAYNU-V-M4-SLICE-G0`, COM2 **must** show `boot: sched switch → slot=00000001`. Then NVM / BLK / NET / SMP / `RAYNU-V-R640-BOOT-OK`.
+5. Curl **from the Mac** only after native coexist listen (lease from COM2, port **8443**):
 
 ```
-HOST-NIC coexist listening on 10.99.99.149:8443 (VMX on; ADR-013 Phase F)
-CURL NOW → http://10.99.99.149:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
+HOST-NIC coexist listening on <LEASE>:8443 (VMX on; ADR-013 Phase F)
+CURL NOW → http://<LEASE>:8443/  (native BCM5720; G0 still scheduled; SNP is dead)
 ```
 
 ```bash
-LEASE=10.99.99.149   # use the numeric lease COM2 printed
+LEASE=10.99.99.REPLACE_FROM_COM2
 TOK='Authorization: Bearer raynu-v-bringup'
 curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/spec/1/512/1024/0"
-# Current Cruzer EFI (`f413a9fc`) has one TCP slot. After 201, wait for
-# COM2 `HTTP exchange ok` then POST start (back-to-back start got curl 7 RST).
 sleep 2
 curl -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
-6. WANT COM2: `E4 SPA VMLAUNCH slot=1 private 2M EPT` then `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then more `HOST-NIC-HTTP-OK`. Fail if `VMPTRLD failed slot=0` or `boot gate failed`.
+6. WANT COM2: `E4 G0 VMCS relocated`, `E4 SPA VMLAUNCH slot=1 private 2M EPT`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, then more `HOST-NIC-HTTP-OK`. Fail if `VMPTRLD failed slot=0` or `boot gate failed`.
 
-Hang-fix iron boot (2026-08-21): `SLICE-G0` then `sched switch → slot=00000001`;
-coexist HTTP-OK on `10.99.99.149:8443`. Evidence:
-[`docs/evidence/r640/2026-08-21-e4-hangfix-boot.md`](../evidence/r640/2026-08-21-e4-hangfix-boot.md).
-
-SPA start on that same hang-fix EFI (`f413a9fc`) printed the E4 marker then
-`sched VMPTRLD failed slot=00000000` / VMXOFF / `boot gate failed`. Evidence:
-[`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).
-**Do not claim E4 closed.** Chassis was Force Off. Flash the relocate+fail-soft
-EFI **by SHA** (not `f413a9fc`). Leave `installdisk.bin` / `auth.token`.
+Hang-fix `f413a9fc` printed the E4 marker then `VMPTRLD failed slot=0` / VMXOFF.
+Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).
+**Do not claim E4 closed** from flash.
 
 Coexist has **one** TCP listen slot. A SPA/browser (or aborted curl) that
 prints `HOST-NIC TCP accept` without `HTTP exchange ok` holds the slot;
@@ -107,5 +100,5 @@ Keep APE PHY. Bind LOM `:38`. Do not write PERC. Safe shutdown is iDRAC **Force 
 
 ## Next
 
-Flash relocate+fail-soft EFI by SHA. F11 Cruzer. spec → `sleep 2` → start.
+F11 Cruzer `618e89e2`. Mac spec → `sleep 2` → start using the COM2 lease (not `.124`).
 WANT COM2 marker **and** continued coexist. Then distro installer on virtio-blk, then TLS / console / `auth.token` before wider-than-lab LAN.
