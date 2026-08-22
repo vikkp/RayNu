@@ -80,6 +80,8 @@ pub enum GuestFwError {
     MissingEsp,
     /// Slot arm requested before ESP load.
     NotEspLoaded,
+    /// Guest bind requested before the firmware slot was armed.
+    NotSlotArmed,
 }
 
 /// Probed UEFI Firmware Volume (host mock or ESP image). Not VMLAUNCH.
@@ -97,6 +99,15 @@ pub struct OvmfSlot {
 
 /// Host slot id for the ESP-loaded OVMF fixture (single guest).
 pub const OVMF_FW_SLOT_ID: u8 = 1;
+/// Guest id bound to the armed firmware slot (bookkeeping). Not VMLAUNCH.
+pub const OVMF_FW_GUEST_ID: u8 = 1;
+
+/// Firmware-to-guest bind. Not a live UEFI VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfBind {
+    pub guest_id: u8,
+    pub slot_id: u8,
+}
 
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
@@ -116,14 +127,16 @@ static GUEST_FW_LOADED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_PROBED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ESP_LOADED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_SLOT_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_GUEST_BOUND: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot flags (host tests).
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
     GUEST_FW_OVMF_PROBED.store(false, Ordering::Release);
     GUEST_FW_OVMF_ESP_LOADED.store(false, Ordering::Release);
     GUEST_FW_OVMF_SLOT_ARMED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_GUEST_BOUND.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -149,6 +162,11 @@ pub fn ovmf_esp_is_loaded() -> bool {
 /// True after a successful [`arm_ovmf_firmware_slot`].
 pub fn ovmf_slot_is_armed() -> bool {
     GUEST_FW_OVMF_SLOT_ARMED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`bind_ovmf_firmware_guest`].
+pub fn ovmf_guest_is_bound() -> bool {
+    GUEST_FW_OVMF_GUEST_BOUND.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -369,6 +387,27 @@ pub fn arm_ovmf_firmware_slot() -> Result<OvmfSlot, GuestFwError> {
     })
 }
 
+/// Bind the armed firmware slot to guest 1 (ADR-014 Stage 8).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`arm_ovmf_firmware_slot`]
+/// - Records bind bookkeeping only
+/// - Does not VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn bind_ovmf_firmware_guest() -> Result<OvmfBind, GuestFwError> {
+    if !ovmf_slot_is_armed() {
+        return Err(GuestFwError::NotSlotArmed);
+    }
+    audit_log!(AuditEvent::OvmfFirmwareGuestBound {
+        guest_id: u64::from(OVMF_FW_GUEST_ID),
+        slot_id: u64::from(OVMF_FW_SLOT_ID),
+    });
+    GUEST_FW_OVMF_GUEST_BOUND.store(true, Ordering::Release);
+    Ok(OvmfBind {
+        guest_id: OVMF_FW_GUEST_ID,
+        slot_id: OVMF_FW_SLOT_ID,
+    })
+}
+
 /// Write a tiny host mock FV (signature + lengths). Not EDK2 OVMF.
 pub fn write_mock_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
     if buf.len() < MOCK_OVMF_FV_BYTES {
@@ -390,6 +429,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/ovmf"
         || path == "/fw/ovmf/esp"
         || path == "/fw/slot"
+        || path == "/fw/bind"
 }
 
 enum GuestFwOp {
@@ -403,6 +443,8 @@ enum GuestFwOp {
     OvmfEspLoad,
     OvmfSlotStatus,
     OvmfSlotArm,
+    OvmfBindStatus,
+    OvmfBindGuest,
 }
 
 fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
@@ -418,6 +460,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/ovmf/esp") => Ok(GuestFwOp::OvmfEspLoad),
         (RestMethod::Get, "/fw/slot") => Ok(GuestFwOp::OvmfSlotStatus),
         (RestMethod::Post, "/fw/slot") => Ok(GuestFwOp::OvmfSlotArm),
+        (RestMethod::Get, "/fw/bind") => Ok(GuestFwOp::OvmfBindStatus),
+        (RestMethod::Post, "/fw/bind") => Ok(GuestFwOp::OvmfBindGuest),
         _ => Err(()),
     }
 }
@@ -431,7 +475,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::NotLoaded
         | GuestFwError::NotProbed
         | GuestFwError::MissingEsp
-        | GuestFwError::NotEspLoaded => 409,
+        | GuestFwError::NotEspLoaded
+        | GuestFwError::NotSlotArmed => 409,
     }
 }
 
@@ -439,6 +484,7 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// stub payload after box. `POST /fw/ovmf` probes a host mock `_FVH` after
 /// load. `POST /fw/ovmf/esp` loads the ESP fixture after probe.
 /// `POST /fw/slot` arms guest firmware slot 1 after ESP load.
+/// `POST /fw/bind` binds slot 1 to guest 1 after arm.
 /// GET paths return counts. Host mock is not embedded EDK2. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
@@ -537,6 +583,22 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfSlotArm) => match arm_ovmf_firmware_slot() {
+            Ok(_) => RestResponse {
+                status: 201,
+                reply: Some(ApiReply::Ok),
+            },
+            Err(e) => RestResponse {
+                status: guest_fw_err_status(e),
+                reply: None,
+            },
+        },
+        Ok(GuestFwOp::OvmfBindStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_guest_is_bound() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfBindGuest) => match bind_ovmf_firmware_guest() {
             Ok(_) => RestResponse {
                 status: 201,
                 reply: Some(ApiReply::Ok),

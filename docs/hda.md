@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 96
-summit_iso_pct: 89
+summit_iso_pct: 90
 summit_prod_pct: 100
 ---
 
@@ -45,7 +45,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~89% | FW slot armed; guest UEFI VMLAUNCH + distro later |
+| **Deploy Linux ISO** | ~90% | FW guest bound; guest UEFI VMLAUNCH + distro later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -129,7 +129,7 @@ All must be true (no hand-waving):
 | E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~89% · ~0.25–0.5 months residual (real distro installer)**
+**Status: NEAR · ~90% · ~0.25–0.5 months residual (real distro installer)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach+arm+envelope) | Catalog parse + host attach + `FirmwareArmed` + `.asguefw` envelope; no OVMF; no guest UEFI VMLAUNCH |
 | CD-ROM attach | PARTIAL (host firmware arm) | `attach_cdrom_firmware` → FirmwareArmed; `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Guest UEFI firmware blob | PARTIAL (slot armed) | `arm_ovmf_firmware_slot` after ESP load; not VMLAUNCH |
+| Guest UEFI firmware blob | PARTIAL (guest bound) | `bind_ovmf_firmware_guest` after slot arm; not VMLAUNCH |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -202,6 +202,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-20 | **E5 Stage 5** OVMF Firmware Volume probe | D | **DONE (host)** | P0-19 | `RAYNU-V-M7-E5-OVMF-PROBE-OK`; not embedded EDK2 / not VMLAUNCH / not Everest E5 |
 | P0-21 | **E5 Stage 6** ESP OVMF load | D | **DONE (host)** | P0-20 | `RAYNU-V-M7-E5-OVMF-ESP-OK`; not embedded EDK2 / not VMLAUNCH / not Everest E5 |
 | P0-22 | **E5 Stage 7** Guest firmware slot arm | D | **DONE (host)** | P0-21 | `RAYNU-V-M7-E5-OVMF-SLOT-OK`; not VMLAUNCH / not Everest E5 |
+| P0-23 | **E5 Stage 8** Firmware-to-guest bind | D | **DONE (host)** | P0-22 | `RAYNU-V-M7-E5-FW-BIND-OK`; not VMLAUNCH / not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -235,6 +236,7 @@ Ordered for critical path (parallelize B with D design):
 - **P0-20 / E5 Stage 5 closed (host):** `RAYNU-V-M7-E5-OVMF-PROBE-OK`. FV probe + ESP path. Not embedded EDK2. Iron P0-14 remains `2b795a0`.
 - **P0-21 / E5 Stage 6 closed (host):** `RAYNU-V-M7-E5-OVMF-ESP-OK`. ESP fixture load. Not embedded EDK2. Iron P0-14 remains `2b795a0`.
 - **P0-22 / E5 Stage 7 closed (host):** `RAYNU-V-M7-E5-OVMF-SLOT-OK`. Firmware slot arm. Not VMLAUNCH. Iron P0-14 remains `2b795a0`.
+- **P0-23 / E5 Stage 8 closed (host):** `RAYNU-V-M7-E5-FW-BIND-OK`. Firmware-to-guest bind. Not VMLAUNCH. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -284,10 +286,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-slot |
-| Summary | P0-22 firmware slot 1 arm after ESP load. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Slot arm ≠ VMLAUNCH ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-SLOT-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-fw-bind |
+| Summary | P0-23 firmware-to-guest bind after slot arm. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Bind ≠ VMLAUNCH ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-FW-BIND-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -298,7 +300,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No live guest UEFI CD | MED | Slot arm closed (P0-22); `attach_cdrom_uefi` still stub; no guest UEFI VMLAUNCH; extract-boot is lab MVP only |
+| H3 | No live guest UEFI CD | MED | Bind closed (P0-23); `attach_cdrom_uefi` still stub; no guest UEFI VMLAUNCH; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -309,6 +311,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-fw-bind | 0.5 | 95 | P0-23 firmware-to-guest bind; not VMLAUNCH; iso~90%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-slot | 0.5 | 95 | P0-22 firmware slot arm; not VMLAUNCH; iso~89%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-esp | 0.5 | 95 | P0-21 ESP OVMF fixture load; not embedded EDK2; iso~88%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-probe | 0.5 | 95 | P0-20 OVMF FV probe + ESP path; not embedded EDK2; iso~87%; iron P0-14 stays 2b795a0 |

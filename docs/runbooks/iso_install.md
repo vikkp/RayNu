@@ -120,8 +120,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 - **El Torito / firmware CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
   Host catalog parse (Stage 0), host attach (Stage 1), firmware arm
   (Stage 2), guest FW envelope (Stage 3), stub load (Stage 4), OVMF
-  FV probe (Stage 5), ESP load (Stage 6), and slot arm (Stage 7) are
-  closed; they are not guest UEFI VMLAUNCH and not an embedded EDK2 image.
+  FV probe (Stage 5), ESP load (Stage 6), slot arm (Stage 7), and guest
+  bind (Stage 8) are closed; they are not guest UEFI VMLAUNCH and not an
+  embedded EDK2 image.
 - **ISO blob upload** not claimed — REST attach uses the host mock EFI prefix.
   Extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
@@ -160,4 +161,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 5 (host, closed):** OVMF FV probe (`RAYNU-V-M7-E5-OVMF-PROBE-OK`).
    **Stage 6 (host, closed):** ESP OVMF load (`RAYNU-V-M7-E5-OVMF-ESP-OK`).
    **Stage 7 (host, closed):** firmware slot arm (`RAYNU-V-M7-E5-OVMF-SLOT-OK`).
+   **Stage 8 (host, closed):** firmware-to-guest bind (`RAYNU-V-M7-E5-FW-BIND-OK`).
    Guest UEFI VMLAUNCH remains open.

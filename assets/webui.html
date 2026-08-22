@@ -83,16 +83,14 @@
     background: var(--sea);
     color: #f7fbfc;
     cursor: pointer;
-    transition: background 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
   }
   button:hover { background: var(--sea-deep); border-color: var(--sea-deep); }
-  button:active { transform: scale(0.98); }
   button.ghost {
     background: transparent;
     color: var(--sea-deep);
   }
   button.ghost:hover { background: rgba(26, 107, 124, 0.1); }
-  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
   .row {
     display: grid;
     grid-template-columns: 3.5rem 1fr auto;
@@ -188,6 +186,7 @@
       <button id="btn-ovmf">Probe OVMF</button>
       <button id="btn-ovmf-esp">Load ESP OVMF</button>
       <button id="btn-fw-slot">Arm FW slot</button>
+      <button id="btn-fw-bind">Bind FW guest</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -208,7 +207,6 @@
   </p>
 </main>
 <script>
-/* E4 Ops UI */
 (function () {
   const listEl = document.getElementById("vm-list");
   const imgEl = document.getElementById("img-list");
@@ -423,11 +421,12 @@
   document.getElementById("btn-iso-install").onclick = installIso;
   document.getElementById("btn-iso-attach").onclick = attachCdrom;
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
-  document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","Guest FW boxed (not OVMF)","FW box failed");};
-  document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","Guest FW loaded (not OVMF)","FW load failed");};
+  document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","Guest FW boxed","FW box failed");};
+  document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","Guest FW loaded","FW load failed");};
   document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","OVMF probed (not VMLAUNCH)","OVMF probe failed");};
   document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ESP OVMF loaded (not VMLAUNCH)","ESP OVMF failed");};
   document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","FW slot armed (not VMLAUNCH)","FW slot failed");};
+  document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound (not VMLAUNCH)","FW bind failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
