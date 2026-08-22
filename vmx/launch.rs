@@ -315,6 +315,10 @@ pub enum GuestUefiLaunchError {
     /// still absent in a private guest-UEFI VMCS + EPT. The heap
     /// fixture is not those bytes. The VMLAUNCH instruction is not issued.
     LiveEspReadAbsent,
+    /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were copy-attempted. They are
+    /// still absent in a private guest-UEFI VMCS + EPT. The heap
+    /// fixture is not those bytes. The VMLAUNCH instruction is not issued.
+    LiveEspCopyAbsent,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -346,6 +350,8 @@ static GUEST_UEFI_LIVE_ESP_PRESENTED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_LIVE_ESP_ADMITTED: AtomicBool = AtomicBool::new(false);
 /// Stage 27: real ESP `\EFI\RayNu\OVMF.fd` read-attempt. Still absent.
 static GUEST_UEFI_LIVE_ESP_READ: AtomicBool = AtomicBool::new(false);
+/// Stage 28: real ESP `\EFI\RayNu\OVMF.fd` copy-attempt. Still absent.
+static GUEST_UEFI_LIVE_ESP_COPIED: AtomicBool = AtomicBool::new(false);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -387,6 +393,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_LIVE_ESP_PRESENTED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_ADMITTED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_READ.store(false, Ordering::Release);
+    GUEST_UEFI_LIVE_ESP_COPIED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -553,7 +560,7 @@ pub fn guest_uefi_live_esp_is_required() -> bool {
 
 /// Host/CI never has live ESP `\EFI\RayNu\OVMF.fd` bytes.
 /// Production post-EBS FileSystem may be gone. Always false this slice.
-/// Stage 28 may flip this when a private guest-UEFI path can read real
+/// Stage 29 may flip this when a private guest-UEFI path can read real
 /// ESP bytes into a private VMCS + EPT (not this fixture, not the E4 SHELL).
 pub fn guest_uefi_live_esp_bytes_present() -> bool {
     false
@@ -675,6 +682,35 @@ pub fn read_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunchErr
     Ok(())
 }
 
+/// True after a successful [`copy_guest_uefi_live_esp`].
+pub fn guest_uefi_live_esp_is_copied() -> bool {
+    GUEST_UEFI_LIVE_ESP_COPIED.load(Ordering::Acquire)
+}
+
+/// Copy-attempt real ESP `\EFI\RayNu\OVMF.fd` bytes after read (ADR-014 Stage 28).
+///
+/// INVARIANTS:
+/// - Requires a prior live-ESP read-attempt
+/// - Requires `firmware_alias_gpa(bytes_len)` and reset-vector coverage
+/// - Does not allocate a VMCS, does not VMWRITE, and does not issue VMLAUNCH
+/// - Does not write the E4 SHELL EPT
+/// - Does not flip [`guest_uefi_live_esp_bytes_present`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn copy_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_live_esp_is_read() {
+        return Err(GuestUefiLaunchError::LiveEspReadAbsent);
+    }
+    let Some(gpa) = firmware_alias_gpa(bytes_len) else {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    };
+    if !alias_ept_covers_reset(gpa, bytes_len) {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_ALIAS_EPT_GPA.store(gpa, Ordering::Release);
+    GUEST_UEFI_LIVE_ESP_COPIED.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// True after a successful [`probe_guest_uefi_live_bytes`].
 pub fn guest_uefi_live_bytes_is_probed() -> bool {
     GUEST_UEFI_LIVE_BYTES_PROBED.load(Ordering::Acquire)
@@ -793,6 +829,9 @@ pub fn require_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
 /// - Does not write live EPT and does not VMWRITE the E4 SHELL VMCS
 fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_live_esp_bytes_present() {
+        if guest_uefi_live_esp_is_copied() {
+            return Err(GuestUefiLaunchError::LiveEspCopyAbsent);
+        }
         if guest_uefi_live_esp_is_read() {
             return Err(GuestUefiLaunchError::LiveEspReadAbsent);
         }
@@ -861,7 +900,7 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
     Ok(())
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 27).
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 28).
 ///
 /// INVARIANTS:
 /// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture,
@@ -890,8 +929,10 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
 ///   [`GuestUefiLaunchError::LiveEspPresentAbsent`]
 /// - Live ESP admitted, no read-attempt →
 ///   [`GuestUefiLaunchError::LiveEspAdmitAbsent`]
-/// - Live ESP read-attempted, still absent →
+/// - Live ESP read-attempted, no copy-attempt →
 ///   [`GuestUefiLaunchError::LiveEspReadAbsent`]
+/// - Live ESP copy-attempted, still absent →
+///   [`GuestUefiLaunchError::LiveEspCopyAbsent`]
 ///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`] +
 ///   [`GUEST_UEFI_VMLAUNCH_OPCODE`] + [`GUEST_UEFI_PRIVATE_VMCS_ID`];
 ///   no live E4 SHELL EPT write / no VMWRITE / insn not issued)
@@ -977,6 +1018,9 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
     }
     if !guest_uefi_live_esp_is_read() {
         return Err(GuestUefiLaunchError::LiveEspAdmitAbsent);
+    }
+    if !guest_uefi_live_esp_is_copied() {
+        return Err(GuestUefiLaunchError::LiveEspReadAbsent);
     }
     issue_guest_uefi_vmlaunch()
 }
@@ -5110,6 +5154,22 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::LiveEspReadAbsent)
         );
+        assert!(!guest_uefi_live_esp_is_copied());
+        assert_eq!(
+            copy_guest_uefi_live_esp(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_live_esp_is_copied());
+        assert_eq!(
+            copy_guest_uefi_live_esp(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_live_esp_is_copied());
+        assert!(!guest_uefi_live_esp_bytes_present());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::LiveEspCopyAbsent)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
@@ -5126,6 +5186,7 @@ mod launch_test {
         assert!(!guest_uefi_live_esp_is_presented());
         assert!(!guest_uefi_live_esp_is_admitted());
         assert!(!guest_uefi_live_esp_is_read());
+        assert!(!guest_uefi_live_esp_is_copied());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 
