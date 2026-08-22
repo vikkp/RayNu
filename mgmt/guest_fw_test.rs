@@ -1,9 +1,9 @@
 use super::{
     box_guest_firmware, dispatch_guest_fw_rest, guest_fw_bytes, guest_fw_is_boxed, guest_fw_is_loaded,
-    guest_fw_payload, load_guest_firmware, ovmf_fv_is_probed, parse_guest_fw, probe_ovmf_firmware,
-    reset_guest_fw, write_guest_fw_header, write_mock_ovmf_fv, GuestFwError, GuestFwKind,
-    GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED, GUEST_FW_MAX_UNCOMPRESSED,
-    GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, SECTION_GUEST_FW,
+    guest_fw_payload, load_guest_firmware, load_ovmf_from_esp, ovmf_esp_is_loaded, ovmf_fv_is_probed,
+    parse_guest_fw, probe_ovmf_firmware, reset_guest_fw, write_guest_fw_header, write_mock_ovmf_fv,
+    GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
+    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, SECTION_GUEST_FW,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 
@@ -86,6 +86,14 @@ fn rest_box_requires_bearer() {
     });
     assert_eq!(probed.status, 201);
     assert!(ovmf_fv_is_probed());
+
+    let esp = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/ovmf/esp",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(esp.status, 201);
+    assert!(ovmf_esp_is_loaded());
     reset_guest_fw();
 }
 
@@ -112,5 +120,26 @@ fn ovmf_probe_requires_load() {
     let probed = probe_ovmf_firmware(&fv).unwrap();
     assert_eq!(probed.fv_len, MOCK_OVMF_FV_BYTES as u64);
     assert!(ovmf_fv_is_probed());
+    assert_eq!(load_ovmf_from_esp(&[]), Err(GuestFwError::MissingEsp));
+    let esp = load_ovmf_from_esp(&fv).unwrap();
+    assert_eq!(esp.fv_len, MOCK_OVMF_FV_BYTES as u64);
+    assert!(ovmf_esp_is_loaded());
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_esp_requires_probe() {
+    reset_guest_fw();
+    let mut fv = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut fv).unwrap();
+    assert_eq!(load_ovmf_from_esp(&fv), Err(GuestFwError::NotProbed));
+    assert!(!ovmf_esp_is_loaded());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/ovmf/esp",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
     reset_guest_fw();
 }

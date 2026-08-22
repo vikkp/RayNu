@@ -74,6 +74,10 @@ pub enum GuestFwError {
     NotBoxed,
     /// OVMF FV probe requested before the stub was loaded.
     NotLoaded,
+    /// ESP load requested before the FV header was probed.
+    NotProbed,
+    /// ESP load requested with no fixture / staged bytes.
+    MissingEsp,
 }
 
 /// Probed UEFI Firmware Volume (host mock or ESP image). Not VMLAUNCH.
@@ -99,12 +103,14 @@ pub fn guest_fw_bytes() -> &'static [u8] {
 static GUEST_FW_BOXED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_LOADED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_PROBED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_ESP_LOADED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed flags (host tests).
+/// Reset the process-local boxed / loaded / probed / ESP flags (host tests).
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
     GUEST_FW_OVMF_PROBED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_ESP_LOADED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -120,6 +126,11 @@ pub fn guest_fw_is_loaded() -> bool {
 /// True after a successful [`probe_ovmf_firmware`].
 pub fn ovmf_fv_is_probed() -> bool {
     GUEST_FW_OVMF_PROBED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`load_ovmf_from_esp`].
+pub fn ovmf_esp_is_loaded() -> bool {
+    GUEST_FW_OVMF_ESP_LOADED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -298,6 +309,29 @@ pub fn probe_ovmf_firmware(bytes: &[u8]) -> Result<OvmfFv, GuestFwError> {
     Ok(probed)
 }
 
+/// Load ESP split-mode OVMF bytes after the FV header was probed (ADR-014 Stage 6).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`probe_ovmf_firmware`]
+/// - Host REST uses [`write_mock_ovmf_fv`] as the ESP fixture (not a 4 MiB EDK2 image)
+/// - Real bytes stay on ESP [`OVMF_ESP_PATH`] (ADR-003 split-mode)
+/// - Does not VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn load_ovmf_from_esp(bytes: &[u8]) -> Result<OvmfFv, GuestFwError> {
+    if !ovmf_fv_is_probed() {
+        return Err(GuestFwError::NotProbed);
+    }
+    if bytes.is_empty() {
+        return Err(GuestFwError::MissingEsp);
+    }
+    let loaded = probe_ovmf_fv(bytes)?;
+    audit_log!(AuditEvent::OvmfFirmwareEspLoaded {
+        bytes_len: bytes.len() as u64,
+        fv_len: loaded.fv_len,
+    });
+    GUEST_FW_OVMF_ESP_LOADED.store(true, Ordering::Release);
+    Ok(loaded)
+}
+
 /// Write a tiny host mock FV (signature + lengths). Not EDK2 OVMF.
 pub fn write_mock_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
     if buf.len() < MOCK_OVMF_FV_BYTES {
@@ -317,6 +351,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/box"
         || path == "/fw/load"
         || path == "/fw/ovmf"
+        || path == "/fw/ovmf/esp"
 }
 
 enum GuestFwOp {
@@ -326,6 +361,8 @@ enum GuestFwOp {
     Load,
     OvmfStatus,
     OvmfProbe,
+    OvmfEspStatus,
+    OvmfEspLoad,
 }
 
 fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
@@ -337,6 +374,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/load") => Ok(GuestFwOp::Load),
         (RestMethod::Get, "/fw/ovmf") => Ok(GuestFwOp::OvmfStatus),
         (RestMethod::Post, "/fw/ovmf") => Ok(GuestFwOp::OvmfProbe),
+        (RestMethod::Get, "/fw/ovmf/esp") => Ok(GuestFwOp::OvmfEspStatus),
+        (RestMethod::Post, "/fw/ovmf/esp") => Ok(GuestFwOp::OvmfEspLoad),
         _ => Err(()),
     }
 }
@@ -346,14 +385,17 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         GuestFwError::BadMagic
         | GuestFwError::BadState
         | GuestFwError::TooLarge
-        | GuestFwError::NotBoxed
-        | GuestFwError::NotLoaded => 409,
+        |         GuestFwError::NotBoxed
+        | GuestFwError::NotLoaded
+        | GuestFwError::NotProbed
+        | GuestFwError::MissingEsp => 409,
     }
 }
 
 /// REST: `POST /fw/box` boxes the envelope. `POST /fw/load` lazy-loads the
 /// stub payload after box. `POST /fw/ovmf` probes a host mock `_FVH` after
-/// load. `GET /fw` / `GET /fw/load` / `GET /fw/ovmf` return counts.
+/// load. `POST /fw/ovmf/esp` loads the ESP fixture after probe.
+/// `GET /fw` / `GET /fw/load` / `GET /fw/ovmf` / `GET /fw/ovmf/esp` return counts.
 /// Host mock is not embedded EDK2. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
@@ -410,6 +452,31 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
                 };
             }
             match probe_ovmf_firmware(&fv) {
+                Ok(_) => RestResponse {
+                    status: 201,
+                    reply: Some(ApiReply::Ok),
+                },
+                Err(e) => RestResponse {
+                    status: guest_fw_err_status(e),
+                    reply: None,
+                },
+            }
+        }
+        Ok(GuestFwOp::OvmfEspStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_esp_is_loaded() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfEspLoad) => {
+            let mut fv = [0u8; MOCK_OVMF_FV_BYTES];
+            if write_mock_ovmf_fv(&mut fv).is_err() {
+                return RestResponse {
+                    status: 500,
+                    reply: None,
+                };
+            }
+            match load_ovmf_from_esp(&fv) {
                 Ok(_) => RestResponse {
                     status: 201,
                     reply: Some(ApiReply::Ok),
