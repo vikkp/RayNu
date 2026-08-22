@@ -117,7 +117,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 ## Honesty / residuals
 
 - **GAP(CLOSED M7.7)** — iron two-boot LBA stamp persist + reboot-to-disk (`BOOTED-FROM-DISK` on COM2).
-- **El Torito / firmware CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
+- **El Torito / firmware CD-ROM** is GuestVisible on the private
+  guest-UEFI VMCS (`attach_cdrom_uefi`; see `iso.md`). Firmware does
+  not yet boot the CD. Unarmed attach stays `UnsupportedOnFirmware`.
   Host catalog parse (Stage 0), host attach (Stage 1), firmware arm
   (Stage 2), guest FW envelope (Stage 3), stub load (Stage 4), OVMF
   FV probe (Stage 5), ESP load (Stage 6), slot arm (Stage 7), and guest
@@ -205,4 +207,8 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 39 (host + QEMU, closed):** OVMF past SEC
    (`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`). Left last 64 KiB + PEI PCI /
    firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer.
-   Not Everest E5. Next: `attach_cdrom_uefi`.
+   Not Everest E5.
+   **Stage 40 (host + QEMU):** guest-UEFI CD visible
+   (`RAYNU-V-M7-E5-OVMF-CDROM-OK`). `attach_cdrom_uefi` → GuestVisible.
+   PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer.
+   Not Everest E5. Next: PEI/DXE so firmware can boot this CD.

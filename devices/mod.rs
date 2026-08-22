@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 
+pub mod ide_cdrom;
 pub mod lapic_virt;
 pub mod m4_blk_gate;
 pub mod m4_net_gate;
@@ -16,6 +17,7 @@ pub use serial_pio::{
     guest_early_ok, guest_io_ok, guest_shell_ok, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER,
     M3_SHELL_OK_MARKER,
 };
+pub use ide_cdrom::M7_E5_OVMF_CDROM_OK_MARKER;
 pub use virtio_blk::M4_BLK_OK_MARKER;
 pub use virtio_net::M4_NET_OK_MARKER;
 

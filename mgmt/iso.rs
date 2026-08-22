@@ -11,9 +11,11 @@
 //! Product ISO install is typed + UEFI-first ([ADR-014](../docs/adr/ADR-014.md)):
 //! `linux_iso` | `windows_iso` | `generic_uefi`. Catalog parse lives in
 //! [`crate::mgmt::el_torito`] — parse is not attach, and attach is not VMLAUNCH.
-//! `attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Host attach is
-//! [`attach_cdrom_host`] — parse + record a CD-ROM model. That is not guest
-//! UEFI and not VMLAUNCH. Do not hard-wire SPA install to bzImage.
+//! `attach_cdrom_uefi` after [`CdromAttachState::FirmwareArmed`] presents
+//! media on the private guest-UEFI PCI IDE/ATAPI function (`GuestVisible`).
+//! Unarmed calls still return `UnsupportedOnFirmware` (closed-stage gates).
+//! Host attach is [`attach_cdrom_host`] — parse + record a CD-ROM model.
+//! That is not a distro installer. Do not hard-wire SPA install to bzImage.
 
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -57,8 +59,7 @@ pub enum IsoError {
     Store(StoreError),
 }
 
-/// Host / firmware CD-ROM attach state. Not guest-UEFI-live
-/// (that stays [`attach_cdrom_uefi`] → `UnsupportedOnFirmware`).
+/// Host / firmware / guest-UEFI CD-ROM attach state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CdromAttachState {
     Detached,
@@ -66,6 +67,9 @@ pub enum CdromAttachState {
     AttachedHost,
     /// Firmware-facing boot image armed. Not VMLAUNCH and not OVMF.
     FirmwareArmed,
+    /// Media presented on the private guest-UEFI PCI IDE/ATAPI function.
+    /// Not full DXE and not a distro installer.
+    GuestVisible,
 }
 
 /// One host-side CD-ROM / boot-image record (ADR-014 Stage 1).
@@ -137,7 +141,9 @@ impl CdromTable {
             .filter(|a| {
                 matches!(
                     a.state,
-                    CdromAttachState::AttachedHost | CdromAttachState::FirmwareArmed
+                    CdromAttachState::AttachedHost
+                        | CdromAttachState::FirmwareArmed
+                        | CdromAttachState::GuestVisible
                 )
             })
             .count()
@@ -148,7 +154,21 @@ impl CdromTable {
             .iter()
             .copied()
             .flatten()
-            .filter(|a| a.state == CdromAttachState::FirmwareArmed)
+            .filter(|a| {
+                matches!(
+                    a.state,
+                    CdromAttachState::FirmwareArmed | CdromAttachState::GuestVisible
+                )
+            })
+            .count()
+    }
+
+    pub fn guest_visible_count(&self) -> usize {
+        self.slots
+            .iter()
+            .copied()
+            .flatten()
+            .filter(|a| a.state == CdromAttachState::GuestVisible)
             .count()
     }
 }
@@ -186,9 +206,22 @@ fn with_host_cdrom<R>(f: impl FnOnce(&mut CdromTable) -> R) -> R {
     out
 }
 
+/// Non-blocking HOST table access so REST `_locked` paths cannot nest the spinlock.
+fn try_with_host_cdrom<R>(f: impl FnOnce(&mut CdromTable) -> R) -> Option<R> {
+    if HOST_CDROM_LOCK.swap(true, Ordering::Acquire) {
+        return None;
+    }
+    // SAFETY: lock acquired; exclusive mutable access.
+    // KANI-TARGET: host CD-ROM table try-lock (mgmt plane).
+    let out = unsafe { f(&mut *HOST_CDROM.0.get()) };
+    HOST_CDROM_LOCK.store(false, Ordering::Release);
+    Some(out)
+}
+
 /// Reset the process-local host CD-ROM table (host tests).
 pub fn reset_host_cdrom() {
     with_host_cdrom(|t| t.clear());
+    crate::devices::ide_cdrom::reset();
 }
 
 /// One ISO → extract-boot + install-disk plan (management plane).
@@ -255,10 +288,53 @@ pub fn configure_install_disk(plan: &mut IsoDeployPlan, disk_bytes: u64) -> Resu
     Ok(())
 }
 
-/// Firmware CD-ROM / El Torito attach — not wired yet (honest stub).
-pub fn attach_cdrom_uefi(_iso_id: u64) -> Result<(), IsoError> {
+/// Present a FirmwareArmed CD on the private guest-UEFI PCI IDE/ATAPI function.
+///
+/// INVARIANTS:
+/// - `iso_id == 0` → [`IsoError::InvalidId`]
+/// - No `FirmwareArmed` / `GuestVisible` host record → [`IsoError::UnsupportedOnFirmware`]
+///   (keeps closed-stage gates honest for the unarmed path)
+/// - On success, returned `state` is [`CdromAttachState::GuestVisible`]
+/// - Media is retained in [`crate::devices::ide_cdrom`] (mock EFI prefix)
+/// - Does not VMLAUNCH and is not a distro installer
+///
+/// VERIFICATION: L0 (outside Proven Core) — E5 Stage 40 gate
+pub fn attach_cdrom_uefi(iso_id: u64) -> Result<CdromAttach, IsoError> {
     let _ = ISO_EXTRACT_BOOT_NOTE;
-    Err(IsoError::UnsupportedOnFirmware)
+    if iso_id == 0 {
+        return Err(IsoError::InvalidId);
+    }
+    // Firmware arm retains bytes. Do not take HOST_CDROM here — REST
+    // `_locked` helpers already hold that spinlock.
+    if !crate::devices::ide_cdrom::is_retained_for(iso_id) {
+        return Err(IsoError::UnsupportedOnFirmware);
+    }
+    if !crate::devices::ide_cdrom::make_visible() {
+        return Err(IsoError::BadState);
+    }
+    let existing = try_with_host_cdrom(|t| t.get(iso_id)).flatten();
+    let rec = CdromAttach {
+        state: CdromAttachState::GuestVisible,
+        iso_id,
+        catalog_lba: existing.map(|r| r.catalog_lba).unwrap_or(20),
+        load_lba: existing.map(|r| r.load_lba).unwrap_or(22),
+        sector_count: existing.map(|r| r.sector_count).unwrap_or(4),
+        efi: existing.map(|r| r.efi).unwrap_or(true),
+        image_type: existing
+            .map(|r| r.image_type)
+            .unwrap_or(GuestImageType::LinuxIso),
+    };
+    let _ = try_with_host_cdrom(|t| t.insert(rec));
+    audit_log!(AuditEvent::CdromGuestVisible {
+        iso_id: rec.iso_id,
+        load_lba: u64::from(rec.load_lba),
+    });
+    Ok(rec)
+}
+
+/// Insert or replace a host CD-ROM record (tests / firmware arm).
+pub fn host_cdrom_insert(rec: CdromAttach) -> Result<(), IsoError> {
+    with_host_cdrom(|t| t.insert(rec))
 }
 
 /// Host El Torito CD-ROM attach (ADR-014 Stage 1).
@@ -334,7 +410,9 @@ pub fn firmware_boot_image(
     }
     if !matches!(
         attach.state,
-        CdromAttachState::AttachedHost | CdromAttachState::FirmwareArmed
+        CdromAttachState::AttachedHost
+            | CdromAttachState::FirmwareArmed
+            | CdromAttachState::GuestVisible
     ) {
         return Err(IsoError::BadState);
     }
@@ -392,6 +470,9 @@ pub fn attach_cdrom_firmware(
         return Err(IsoError::NotEfi);
     }
     let _ = firmware_boot_image(iso, &host)?;
+    if !crate::devices::ide_cdrom::retain(iso, host.iso_id) {
+        return Err(IsoError::Catalog);
+    }
     audit_log!(AuditEvent::CdromFirmwareArmed {
         iso_id: host.iso_id,
         load_lba: u64::from(host.load_lba),
@@ -441,6 +522,25 @@ pub fn is_iso_firmware_path(path: &str) -> bool {
     segs.next() == Some("firmware") && segs.next().is_none()
 }
 
+/// True when `path` is the guest-UEFI CD attach REST surface.
+pub fn is_iso_uefi_path(path: &str) -> bool {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/uefi" {
+        return true;
+    }
+    let Some(rest) = path.strip_prefix("/iso/") else {
+        return false;
+    };
+    let mut segs = rest.split('/');
+    let Some(id_s) = segs.next() else {
+        return false;
+    };
+    if parse_u64(id_s).is_none() {
+        return false;
+    }
+    segs.next() == Some("uefi") && segs.next().is_none()
+}
+
 /// True when guest bzImage load + ESP/PE stage surfaces exist (extract-boot path).
 pub fn extract_boot_surface_present() -> bool {
     let guest = include_str!("../guest/linux_boot.rs");
@@ -480,6 +580,11 @@ enum IsoAttachOp {
 enum IsoFirmwareOp {
     Status,
     Arm { id: u64 },
+}
+
+enum IsoUefiOp {
+    Status,
+    Attach { id: u64 },
 }
 
 fn parse_u64(s: &str) -> Option<u64> {
@@ -723,6 +828,75 @@ pub fn dispatch_iso_firmware_rest(
 /// HTTP listen path: firmware arm against the process-local host CD-ROM table.
 pub fn dispatch_iso_firmware_locked(store: &mut ImageTable, req: RestRequest<'_>) -> RestResponse {
     with_host_cdrom(|cdrom| dispatch_iso_firmware_rest(store, cdrom, req))
+}
+
+fn route_iso_uefi(method: RestMethod, path: &str) -> Result<IsoUefiOp, ()> {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/uefi" {
+        return match method {
+            RestMethod::Get => Ok(IsoUefiOp::Status),
+            _ => Err(()),
+        };
+    }
+    let rest = path.strip_prefix("/iso/").ok_or(())?;
+    let mut segs = rest.split('/');
+    let id = parse_u64(segs.next().ok_or(())?).ok_or(())?;
+    if segs.next() != Some("uefi") || segs.next().is_some() {
+        return Err(());
+    }
+    match method {
+        RestMethod::Post => Ok(IsoUefiOp::Attach { id }),
+        _ => Err(()),
+    }
+}
+
+/// REST: `POST /iso/{id}/uefi` presents a FirmwareArmed CD to the guest-UEFI
+/// VMCS. `GET /iso/uefi` returns GuestVisible count. Not installer.
+pub fn dispatch_iso_uefi_rest(
+    store: &mut ImageTable,
+    cdrom: &mut CdromTable,
+    req: RestRequest<'_>,
+) -> RestResponse {
+    let _ = store;
+    if !auth_allows(req.auth_token) {
+        return RestResponse {
+            status: 401,
+            reply: None,
+        };
+    }
+    match route_iso_uefi(req.method, req.path) {
+        Ok(IsoUefiOp::Status) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: cdrom.guest_visible_count(),
+            }),
+        },
+        Ok(IsoUefiOp::Attach { id }) => match attach_cdrom_uefi(id) {
+            Ok(rec) => match cdrom.insert(rec) {
+                Ok(()) => RestResponse {
+                    status: 201,
+                    reply: Some(ApiReply::Ok),
+                },
+                Err(e) => RestResponse {
+                    status: iso_err_status(e),
+                    reply: None,
+                },
+            },
+            Err(e) => RestResponse {
+                status: iso_err_status(e),
+                reply: None,
+            },
+        },
+        Err(()) => RestResponse {
+            status: 400,
+            reply: None,
+        },
+    }
+}
+
+/// HTTP listen path: guest-UEFI CD attach against the host CD-ROM table.
+pub fn dispatch_iso_uefi_locked(store: &mut ImageTable, req: RestRequest<'_>) -> RestResponse {
+    with_host_cdrom(|cdrom| dispatch_iso_uefi_rest(store, cdrom, req))
 }
 
 /// REST: `POST /iso/{id}/deploy` registers ISO (if needed) + binds extract-boot;

@@ -57,8 +57,10 @@ RAYNU-V-M7-ISO-OK
 - Product ISO install is **UEFI-first + typed** ([ADR-014](../adr/ADR-014.md)):
   `linux_iso` | `windows_iso` | `generic_uefi`. Do not hard-wire SPA install to
   bzImage jump. Windows install is later; the type exists now.
-- **`attach_cdrom_uefi`** returns `UnsupportedOnFirmware` — live guest firmware
-  CD is still deferred (M7.3 honesty). Host catalog **parse** (`parse_el_torito`)
+- **`attach_cdrom_uefi`** after `FirmwareArmed` is `GuestVisible` — PCI
+  IDE/ATAPI on the private guest-UEFI VMCS (`RAYNU-V-M7-E5-OVMF-CDROM-OK`).
+  Unarmed calls still return `UnsupportedOnFirmware`. Firmware does not
+  yet boot the CD. Host catalog **parse** (`parse_el_torito`)
   is Stage 0. Host **attach** (`attach_cdrom_host`) is Stage 1. Firmware **arm**
   (`attach_cdrom_firmware` / `FirmwareArmed`) is Stage 2
   (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`). Guest firmware **envelope**
@@ -402,3 +404,9 @@ triple-faults. `CR4.VMXE` is host-owned (mask + shadow). Serial
 `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` after linear leaves the last 64 KiB
 and PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE.
 Not installer.
+
+E5 Stage 40 (host + QEMU): `attach_cdrom_uefi` after FirmwareArmed
+presents the ISO on a PIIX3-class PCI IDE/ATAPI function (`00:00.0`)
+with primary PIO. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` after past-SEC
+and PCI enum or an ATAPI sector read. Unarmed attach stays
+`UnsupportedOnFirmware`. Not full DXE. Not installer.

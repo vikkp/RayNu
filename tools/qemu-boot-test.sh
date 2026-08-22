@@ -37,6 +37,7 @@
 # E5.37: RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK (required when VMXON succeeds)
 # E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds)
 # E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds)
+# E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -78,6 +79,7 @@ MARKER_OVMF_RETAIN="${MARKER_OVMF_RETAIN:-RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK}"
 MARKER_OVMF_VMLAUNCH="${MARKER_OVMF_VMLAUNCH:-RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK}"
 MARKER_OVMF_ALIVE="${MARKER_OVMF_ALIVE:-RAYNU-V-M7-E5-OVMF-ALIVE-OK}"
 MARKER_OVMF_PAST_SEC="${MARKER_OVMF_PAST_SEC:-RAYNU-V-M7-E5-OVMF-PAST-SEC-OK}"
+MARKER_OVMF_CDROM="${MARKER_OVMF_CDROM:-RAYNU-V-M7-E5-OVMF-CDROM-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -199,6 +201,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI left SEC tail (PEI-style PCI/COM/HLT)"
   else
     echo "error: marker '$MARKER_OVMF_PAST_SEC' not found after VMXON (still inside SEC window)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_CDROM" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
+  else
+    echo "error: marker '$MARKER_OVMF_CDROM' not found after VMXON (CD not visible to this guest)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then

@@ -157,6 +157,12 @@ pub enum AuditEvent {
         iso_id: u64,
         load_lba: u64,
     },
+    /// Guest-UEFI CD presented on the private VMCS PCI IDE/ATAPI function.
+    /// Not full DXE / not installer.
+    CdromGuestVisible {
+        iso_id: u64,
+        load_lba: u64,
+    },
     /// Guest UEFI firmware envelope boxed (ADR-014 Stage 3). Not OVMF / not VMLAUNCH.
     GuestFirmwareBoxed {
         uncompressed_len: u64,
@@ -339,6 +345,13 @@ pub enum AuditEvent {
         linear: u64,
         com_bytes: u64,
     },
+    /// Guest UEFI enumerated or read the presented ATAPI CD.
+    /// Not full DXE / not installer.
+    OvmfGuestUefiCdrom {
+        exits: u64,
+        pci_enum: u64,
+        sectors: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -510,6 +523,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::MgmtRestarted { .. } => 27,
         AuditEvent::CdromAttached { .. } => 28,
         AuditEvent::CdromFirmwareArmed { .. } => 29,
+        AuditEvent::CdromGuestVisible { .. } => 67,
         AuditEvent::GuestFirmwareBoxed { .. } => 30,
         AuditEvent::GuestFirmwareLoaded { .. } => 31,
         AuditEvent::OvmfFirmwareProbed { .. } => 32,
@@ -547,6 +561,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiVmlaunched { .. } => 64,
         AuditEvent::OvmfGuestUefiAlive { .. } => 65,
         AuditEvent::OvmfGuestUefiPastSec { .. } => 66,
+        AuditEvent::OvmfGuestUefiCdrom { .. } => 68,
     }
 }
 
@@ -734,6 +749,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::CdromAttached { iso_id, .. } => {
             serial::write_str("RAYNU-V-AUDIT: CdromAttached iso_id=");
+            write_u64(iso_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::CdromGuestVisible { iso_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: CdromGuestVisible iso_id=");
             write_u64(iso_id);
             serial::write_byte(b'\n');
         }
@@ -990,6 +1010,19 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(linear);
             serial::write_str(" com=");
             write_u64(com_bytes);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiCdrom {
+            exits,
+            pci_enum,
+            sectors,
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiCdrom exits=");
+            write_u64(exits);
+            serial::write_str(" pci=");
+            write_u64(pci_enum);
+            serial::write_str(" sectors=");
+            write_u64(sectors);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

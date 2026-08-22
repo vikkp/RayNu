@@ -2,7 +2,7 @@ use super::{
     attach_cdrom_firmware, attach_cdrom_host, attach_cdrom_uefi, bind_extract_boot,
     configure_install_disk, dispatch_iso_attach_rest, dispatch_iso_firmware_rest, dispatch_iso_rest,
     extract_boot_surface_present, install_disk_surface_present, prop_iso_deploy_package,
-    register_iso, CdromAttachState, CdromTable, IsoDeployPlan, IsoError,
+    register_iso, reset_host_cdrom, CdromAttachState, CdromTable, IsoDeployPlan, IsoError,
     DEFAULT_INSTALL_DISK_BYTES, ISO_EXTRACT_BOOT_NOTE, ISO_GAP_NOTE, M7_ISO_OK_MARKER,
 };
 use crate::mgmt::el_torito::{write_mock_efi_iso, MOCK_EFI_ISO_BYTES};
@@ -26,7 +26,8 @@ fn register_bind_install_roundtrip() {
 }
 
 #[test]
-fn cdrom_stub_honest() {
+fn cdrom_unarmed_stays_unsupported() {
+    reset_host_cdrom();
     assert_eq!(
         attach_cdrom_uefi(1),
         Err(IsoError::UnsupportedOnFirmware)
@@ -135,10 +136,8 @@ fn host_then_firmware_arm() {
     let host = attach_cdrom_host(&iso, 2, GuestImageType::LinuxIso).unwrap();
     let armed = attach_cdrom_firmware(&iso, host).unwrap();
     assert_eq!(armed.state, CdromAttachState::FirmwareArmed);
-    assert_eq!(
-        attach_cdrom_uefi(2),
-        Err(IsoError::UnsupportedOnFirmware)
-    );
+    let vis = attach_cdrom_uefi(2).expect("FirmwareArmed → GuestVisible");
+    assert_eq!(vis.state, CdromAttachState::GuestVisible);
 }
 
 #[test]
