@@ -51,13 +51,16 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; not full DXE; not installer; attach_cdrom_uefi stays UnsupportedOnFirmware; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; not full DXE; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
 
 /// QEMU / serial marker when OVMF left the SEC tail (not full DXE / not installer).
 pub const M7_E5_OVMF_PAST_SEC_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-PAST-SEC-OK";
+
+/// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
+pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
@@ -370,6 +373,14 @@ unsafe fn launch_uefi(
     serial::write_str(" bytes=");
     write_dec(fw_len);
     serial::write_byte(b'\n');
+
+    if crate::devices::ide_cdrom::present_placeholder_if_idle() {
+        serial::write_str("boot: guest-UEFI CD GuestVisible iso=");
+        write_dec(crate::devices::ide_cdrom::retained_iso_id());
+        serial::write_str(" bytes=");
+        write_dec(crate::devices::ide_cdrom::retained_len() as u64);
+        serial::write_byte(b'\n');
+    }
 
     if let Err(e) = setup_guest_uefi_vmcs(vmcs, host_rsp, gdt, tss, eptp, io_a, io_b, msr_bmp) {
         serial::write_str("boot: guest-UEFI VMCS setup failed: ");
@@ -887,6 +898,12 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(COM_BYTES.load(Ordering::Acquire) as u64);
     serial::write_str(" past_sec=");
     write_dec(PAST_SEC_PRINTED.load(Ordering::Acquire) as u64);
+    serial::write_str(" cd=");
+    write_dec(crate::devices::ide_cdrom::is_visible() as u64);
+    serial::write_str(" pci_ide=");
+    write_dec(crate::devices::ide_cdrom::pci_enumerated() as u64);
+    serial::write_str(" sectors=");
+    write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
     serial::write_byte(b'\n');
     leave_to_e4();
 }
@@ -935,6 +952,27 @@ fn maybe_print_past_sec(guest_hlt: bool) {
         linear: LAST_GUEST_RIP.load(Ordering::Acquire),
         com_bytes: COM_BYTES.load(Ordering::Acquire) as u64,
     });
+    maybe_print_cdrom();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_cdrom() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    if crate::devices::ide_cdrom::take_marker() {
+        serial::write_line(M7_E5_OVMF_CDROM_OK_MARKER);
+        serial::write_str("boot: guest-UEFI CD visible pci_ide=");
+        write_dec(crate::devices::ide_cdrom::pci_enumerated() as u64);
+        serial::write_str(" sectors=");
+        write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
+        serial::write_byte(b'\n');
+        audit_log!(AuditEvent::OvmfGuestUefiCdrom {
+            exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+            pci_enum: crate::devices::ide_cdrom::pci_enumerated() as u64,
+            sectors: crate::devices::ide_cdrom::sectors_read() as u64,
+        });
+    }
 }
 
 #[cfg(target_os = "uefi")]
@@ -952,9 +990,17 @@ unsafe fn handle_io(qual: u64) -> bool {
     let size = (qual & 7) + 1;
     let is_in = (qual & (1 << 3)) != 0;
     let port = io_port_from_qual(qual);
-    if is_pci_config_port(port) {
+    if is_pci_config_port(port) || crate::devices::ide_cdrom::is_pci_data_port(port) {
         PCI_CONFIG_SEEN.store(true, Ordering::Release);
         maybe_print_past_sec(false);
+        handle_pci(port, is_in, size as u8);
+        maybe_print_cdrom();
+        return skip_insn();
+    }
+    if crate::devices::ide_cdrom::is_ata_primary_port(port) {
+        SAVED_RAX = crate::devices::ide_cdrom::ata_io(port, is_in, size as u8, SAVED_RAX);
+        maybe_print_cdrom();
+        return skip_insn();
     }
     if is_com_uart_port(port) {
         return handle_uart(port, is_in, size);
@@ -970,6 +1016,41 @@ unsafe fn handle_io(qual: u64) -> bool {
         SAVED_RAX = (SAVED_RAX & !mask) | mask;
     }
     skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
+    if port == 0xCF8 {
+        if is_in {
+            let mask = if size == 1 {
+                0xffu64
+            } else if size == 2 {
+                0xffff
+            } else {
+                0xffff_ffff
+            };
+            let v = u64::from(crate::devices::ide_cdrom::pci_read_addr());
+            SAVED_RAX = (SAVED_RAX & !mask) | (v & mask);
+        } else {
+            crate::devices::ide_cdrom::pci_write_addr(SAVED_RAX as u32);
+        }
+        return;
+    }
+    if crate::devices::ide_cdrom::is_pci_data_port(port) {
+        if is_in {
+            let mask = if size == 1 {
+                0xffu64
+            } else if size == 2 {
+                0xffff
+            } else {
+                0xffff_ffff
+            };
+            let v = u64::from(crate::devices::ide_cdrom::pci_read_data(port, size));
+            SAVED_RAX = (SAVED_RAX & !mask) | (v & mask);
+        } else {
+            crate::devices::ide_cdrom::pci_write_data(port, size, SAVED_RAX as u32);
+        }
+    }
 }
 
 /// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence).

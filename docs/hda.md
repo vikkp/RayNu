@@ -7,8 +7,8 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 362
-velocity_gates_30d: 56
+velocity_commits_30d: 363
+velocity_gates_30d: 57
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -143,8 +143,8 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach+arm+envelope) | Catalog parse + host attach + `FirmwareArmed` + `.asguefw` envelope; no OVMF; no guest UEFI VMLAUNCH |
-| CD-ROM attach | PARTIAL (host firmware arm) | `attach_cdrom_firmware` → FirmwareArmed; `attach_cdrom_uefi` → UnsupportedOnFirmware |
+| ISO parse / El Torito / EFI boot img | PARTIAL (guest-visible CD) | Catalog parse + host attach + FirmwareArmed + GuestVisible PCI IDE/ATAPI; not DXE boot / not installer |
+| CD-ROM attach | PARTIAL (guest-visible) | `attach_cdrom_uefi` → GuestVisible + PCI IDE/ATAPI; firmware does not yet boot the CD |
 | Guest UEFI firmware blob | PARTIAL (ESP retained + past SEC) | Real ESP OVMF.fd retained; private VMCS past SEC on QEMU/VMX; not full DXE / not installer / not Everest E5 |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
@@ -347,10 +347,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-past-sec |
-| Summary | P0-54 OVMF past SEC. COM1/COM2 forwarded. Left last 64 KiB + PEI PCI/COM/HLT. Not full DXE. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Past-SEC ≠ installer. Next is attach_cdrom_uefi. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` (host + QEMU). Retain + VMLAUNCH + ALIVE still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-cdrom |
+| Summary | P0-55 guest-UEFI CD visible. attach_cdrom_uefi → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. CD visible ≠ installer. Next is PEI/DXE boot of this CD. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-CDROM-OK` (host + QEMU). Past-SEC still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No live guest UEFI CD | MED | OVMF past SEC (P0-54); `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | CD visible on private VMCS (P0-55); firmware does not yet boot it; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-ovmf-cdrom | 0.5 | 95 | P0-55 guest-UEFI CD visible; PCI IDE/ATAPI; not full DXE; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-past-sec | 0.5 | 95 | P0-54 OVMF past SEC; COM forwarded; not full DXE; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-alive | 0.5 | 95 | P0-53 OVMF past first triple-fault; CR4.VMXE host-owned; not full OVMF; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-vmlaunch | 0.5 | 95 | P0-52 private guest-UEFI VMLAUNCH of retained ESP OVMF.fd; not E4 SHELL; not installer; iso 99%; iron P0-14 stays 2b795a0 |

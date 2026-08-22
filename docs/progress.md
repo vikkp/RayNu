@@ -120,6 +120,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 37 | `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK` | Private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP OVMF.fd; not E4 SHELL; first entry only; not installer (2026-08-22). |
 | E5 Stage 38 | `RAYNU-V-M7-E5-OVMF-ALIVE-OK` | Past first triple-fault: CR4.VMXE host-owned; short resume loop; not full OVMF boot; not installer (2026-08-22). |
 | E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | Left SEC tail (last 64 KiB) + PEI PCI / firmware COM / HLT; COM1/COM2 forwarded; not full DXE; not installer (2026-08-22). |
+| E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | `attach_cdrom_uefi` → GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE; not installer (2026-08-22). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -230,6 +231,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-52 / E5 Stage 37 closed (host + QEMU):** private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP `OVMF.fd` (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`). Not the E4 SHELL VMCS/EPT. First entry only. Host `cargo test` still does not execute the instruction. Not installer. Not Everest E5.  
 **P0-53 / E5 Stage 38 closed (host + QEMU):** OVMF past first triple-fault (`RAYNU-V-M7-E5-OVMF-ALIVE-OK`). Root cause: SEC `mov cr4, 0x640` cleared VMXE → `#GP` → TF. Host-owns CR4.VMXE (same as E4 Linux). 32 MiB low RAM + short resume. Not full OVMF boot. Not installer. Not Everest E5.  
 **P0-54 / E5 Stage 39 closed (host + QEMU):** OVMF past SEC (`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`). Linear left last 64 KiB + PEI PCI config / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5.  
+**P0-55 / E5 Stage 40 (host + QEMU):** guest-UEFI CD visible (`RAYNU-V-M7-E5-OVMF-CDROM-OK`). `attach_cdrom_uefi` after FirmwareArmed is GuestVisible. PCI IDE/ATAPI on the private VMCS. Unarmed path stays `UnsupportedOnFirmware`. Not full DXE. Not installer. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -279,6 +281,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-52 / E5 Stage 37 | `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK` | **CLOSED (host + QEMU).** Private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP OVMF.fd. Not E4 SHELL. First entry only. Not installer. Not Everest E5. |
 | P0-53 / E5 Stage 38 | `RAYNU-V-M7-E5-OVMF-ALIVE-OK` | **CLOSED (host + QEMU).** Past first triple-fault. CR4.VMXE host-owned. Not full OVMF boot. Not installer. Not Everest E5. |
 | P0-54 / E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | **CLOSED (host + QEMU).** Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5. |
-| Everest residual | guest CD (`attach_cdrom_uefi`) + TLS/console + distro installer | After P0-54. Product ISO: [ADR-014](adr/ADR-014.md). Next: CD visible to this guest. |
+| P0-55 / E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | **Host + QEMU.** `attach_cdrom_uefi` → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Not Everest E5. |
+| Everest residual | PEI/DXE so firmware can boot this CD + TLS/console + distro installer | After P0-55. Product ISO: [ADR-014](adr/ADR-014.md). CD is visible; firmware does not yet boot it. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

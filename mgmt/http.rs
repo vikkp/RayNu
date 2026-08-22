@@ -15,8 +15,8 @@ use super::api::{
 use super::datastore::{dispatch_store_rest, ImageTable};
 use super::guest_fw::{dispatch_guest_fw_rest, is_guest_fw_path};
 use super::iso::{
-    dispatch_iso_attach_locked, dispatch_iso_firmware_locked, dispatch_iso_rest, is_iso_attach_path,
-    is_iso_firmware_path, IsoDeployPlan,
+    dispatch_iso_attach_locked, dispatch_iso_firmware_locked, dispatch_iso_rest, dispatch_iso_uefi_locked,
+    is_iso_attach_path, is_iso_firmware_path, is_iso_uefi_path, IsoDeployPlan,
 };
 use super::iso_install::{dispatch_iso_install_rest, InstallToDiskPlan};
 use super::webui::{load_webui, webui_raw_bytes};
@@ -429,6 +429,8 @@ pub fn handle_http_request(
         dispatch_iso_install_rest(images, iso_install, req)
     } else if is_guest_fw_path(parsed.path) {
         dispatch_guest_fw_rest(req)
+    } else if is_iso_uefi_path(parsed.path) {
+        dispatch_iso_uefi_locked(images, req)
     } else if is_iso_firmware_path(parsed.path) {
         dispatch_iso_firmware_locked(images, req)
     } else if is_iso_attach_path(parsed.path) {
