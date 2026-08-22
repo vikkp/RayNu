@@ -147,6 +147,8 @@ pub enum GuestFwError {
     LiveEspPlaceAbsent,
     /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were apply-attempted; they are still absent.
     LiveEspApplyAbsent,
+    /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were commit-attempted; they are still absent.
+    LiveEspCommitAbsent,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -323,6 +325,13 @@ pub struct OvmfLiveApply {
     pub gpa: u64,
 }
 
+/// Live-ESP commit bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfLiveCommit {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -364,8 +373,9 @@ static GUEST_FW_OVMF_LIVE_ESP_READ: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_COPIED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_PLACED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_APPLIED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_LIVE_ESP_COMMITTED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec / private-VMCS / live-issue / live-bytes / live-fd / live-present / live-admit / live-read / live-copy / live-place / live-apply flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec / private-VMCS / live-issue / live-bytes / live-fd / live-present / live-admit / live-read / live-copy / live-place / live-apply / live-commit flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -395,6 +405,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LIVE_ESP_COPIED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_PLACED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_APPLIED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_LIVE_ESP_COMMITTED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -536,6 +547,11 @@ pub fn ovmf_live_esp_is_placed() -> bool {
 /// True after a successful [`apply_ovmf_live_esp`].
 pub fn ovmf_live_esp_is_applied() -> bool {
     GUEST_FW_OVMF_LIVE_ESP_APPLIED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`commit_ovmf_live_esp`].
+pub fn ovmf_live_esp_is_committed() -> bool {
+    GUEST_FW_OVMF_LIVE_ESP_COMMITTED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -826,7 +842,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   [`GuestFwError::LiveEspReadAbsent`]; live ESP copy-attempted →
 ///   [`GuestFwError::LiveEspCopyAbsent`]; live ESP place-attempted →
 ///   [`GuestFwError::LiveEspPlaceAbsent`]; live ESP apply-attempted →
-///   [`GuestFwError::LiveEspApplyAbsent`])
+///   [`GuestFwError::LiveEspApplyAbsent`]; live ESP commit-attempted →
+///   [`GuestFwError::LiveEspCommitAbsent`])
 /// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
 ///   the E4 SHELL EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
@@ -895,6 +912,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspApplyAbsent) => {
                 Err(GuestFwError::LiveEspApplyAbsent)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspCommitAbsent) => {
+                Err(GuestFwError::LiveEspCommitAbsent)
             }
         };
     }
@@ -1702,6 +1722,51 @@ pub fn apply_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveApply, GuestFwError> 
     })
 }
 
+/// Commit-attempt real ESP `\EFI\RayNu\OVMF.fd` bytes after apply (ADR-014 Stage 31).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`apply_ovmf_live_esp`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Does not flip [`crate::vmx::launch::guest_uefi_live_esp_bytes_present`]
+/// - Does not write the E4 SHELL EPT and does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn commit_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveCommit, GuestFwError> {
+    if !ovmf_live_esp_is_applied() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::commit_guest_uefi_live_esp(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfLiveEspCommitted {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_LIVE_ESP_COMMITTED.store(true, Ordering::Release);
+    Ok(OvmfLiveCommit {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    })
+}
+
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
 ///
 /// INVARIANTS:
@@ -1879,6 +1944,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/live-copy"
         || path == "/fw/live-place"
         || path == "/fw/live-apply"
+        || path == "/fw/live-commit"
         || path == "/fw/vmlaunch"
 }
 
@@ -1939,6 +2005,8 @@ enum GuestFwOp {
     OvmfLivePlace,
     OvmfLiveApplyStatus,
     OvmfLiveApply,
+    OvmfLiveCommitStatus,
+    OvmfLiveCommit,
     OvmfTryVmlaunch,
 }
 
@@ -2001,6 +2069,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/live-place") => Ok(GuestFwOp::OvmfLivePlace),
         (RestMethod::Get, "/fw/live-apply") => Ok(GuestFwOp::OvmfLiveApplyStatus),
         (RestMethod::Post, "/fw/live-apply") => Ok(GuestFwOp::OvmfLiveApply),
+        (RestMethod::Get, "/fw/live-commit") => Ok(GuestFwOp::OvmfLiveCommitStatus),
+        (RestMethod::Post, "/fw/live-commit") => Ok(GuestFwOp::OvmfLiveCommit),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -2040,7 +2110,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::LiveEspReadAbsent
         | GuestFwError::LiveEspCopyAbsent
         | GuestFwError::LiveEspPlaceAbsent
-        | GuestFwError::LiveEspApplyAbsent => 409,
+        | GuestFwError::LiveEspApplyAbsent
+        | GuestFwError::LiveEspCommitAbsent => 409,
     }
 }
 
@@ -2091,6 +2162,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// live-copy (host test heap fixture only).
 /// `POST /fw/live-apply` records a real-ESP apply-attempt after
 /// live-place (host test heap fixture only).
+/// `POST /fw/live-commit` records a real-ESP commit-attempt after
+/// live-apply (host test heap fixture only).
 /// Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
@@ -2108,7 +2181,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// 409 `LiveEspReadAbsent`; live ESP copy-attempted →
 /// 409 `LiveEspCopyAbsent`; live ESP place-attempted →
 /// 409 `LiveEspPlaceAbsent`; live ESP apply-attempted →
-/// 409 `LiveEspApplyAbsent`).
+/// 409 `LiveEspApplyAbsent`; live ESP commit-attempted →
+/// 409 `LiveEspCommitAbsent`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 /// Not a live E4 SHELL EPT write.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
@@ -2423,6 +2497,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfLiveApply) => live_apply_rest(),
+        Ok(GuestFwOp::OvmfLiveCommitStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_live_esp_is_committed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfLiveCommit) => live_commit_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -3042,6 +3123,38 @@ fn live_apply_rest() -> RestResponse {
 /// Production: no embedded 4 MiB live-apply image (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn live_apply_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn live_commit_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match commit_ovmf_live_esp(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB live-commit image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn live_commit_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
