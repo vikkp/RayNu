@@ -270,6 +270,11 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Real ESP `\EFI\RayNu\OVMF.fd` read-attempt (ADR-014 Stage 27). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfLiveEspRead {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -465,6 +470,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveFdRequired { .. } => 51,
         AuditEvent::OvmfLiveEspPresented { .. } => 52,
         AuditEvent::OvmfLiveEspAdmitted { .. } => 53,
+        AuditEvent::OvmfLiveEspRead { .. } => 54,
     }
 }
 
@@ -807,6 +813,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfLiveEspAdmitted { bytes_len, gpa } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspAdmitted bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfLiveEspRead { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspRead bytes=");
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
