@@ -195,3 +195,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    `accept_real_ovmf_bytes` on the retained buffer. Heap fixtures are
    rejected. Private guest-UEFI VMCS is not allocated. VMLAUNCH insn
    not issued. No further `*Absent` bookkeeping stages.
+   **Stage 37 (host + QEMU, closed):** private guest-UEFI VMCS + EPT +
+   VMLAUNCH of retained ESP `OVMF.fd`
+   (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`). Not the E4 SHELL VMCS/EPT.
+   First entry only. Not installer. Not Everest E5.

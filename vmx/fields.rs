@@ -193,6 +193,10 @@ pub const EXIT_REASON_IO_INSTRUCTION: u32 = 30;
 pub const EXIT_REASON_MSR_READ: u32 = 31;
 /// WRMSR
 pub const EXIT_REASON_MSR_WRITE: u32 = 32;
+/// VM-entry failure due to invalid guest state.
+pub const EXIT_REASON_VMENTRY_GUEST_STATE: u32 = 33;
+/// VM-entry failure due to MSR loading.
+pub const EXIT_REASON_VMENTRY_MSR_LOAD: u32 = 34;
 /// EPT violation.
 pub const EXIT_REASON_EPT_VIOLATION: u32 = 48;
 /// XSETBV (always exits from non-root).

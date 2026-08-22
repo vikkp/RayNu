@@ -451,6 +451,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LIVE_ESP_LOCKED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_HELD.store(false, Ordering::Release);
     crate::boot::ovmf_esp::clear_retained();
+    crate::vmx::guest_uefi::reset_guest_uefi_launch();
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -996,6 +997,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspHoldAbsent) => {
                 Err(GuestFwError::LiveEspHoldAbsent)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::LaunchSetupFailed) => {
+                Err(GuestFwError::PrivateVmcsNotLaunched)
             }
         };
     }

@@ -347,6 +347,8 @@ pub enum GuestUefiLaunchError {
     /// still absent in a private guest-UEFI VMCS + EPT. The heap
     /// fixture is not those bytes. The VMLAUNCH instruction is not issued.
     LiveEspHoldAbsent,
+    /// Private VMCS/EPT setup or VMLAUNCH failed. Not a bookkeeping `*Absent`.
+    LaunchSetupFailed,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -1076,14 +1078,13 @@ pub fn require_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
     Ok(())
 }
 
-/// Issue guest-UEFI VMLAUNCH only when live ESP `\EFI\RayNu\OVMF.fd`
-/// bytes are present **and** a private guest-UEFI VMCS + EPT exist.
+/// Report guest-UEFI VMLAUNCH status for the REST bookkeeping path.
 ///
 /// INVARIANTS:
 /// - Presence is checked first; heap fixtures stay on the `*Absent` ladder
-/// - When bytes are retained, this slice still refuses VMLAUNCH
-///   ([`GuestUefiLaunchError::PrivateVmcsNotLaunched`]) — no private VMCS
-/// - Does not write live EPT and does not VMWRITE the E4 SHELL VMCS
+/// - Boot issues the real instruction from [`crate::vmx::guest_uefi`]
+/// - This helper never calls `ops::vmlaunch` (would hit the E4 SHELL VMCS
+///   or `#UD` on host)
 fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_live_esp_bytes_present() {
         if guest_uefi_live_esp_is_held() {
@@ -1133,9 +1134,13 @@ fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
         }
         return Err(GuestUefiLaunchError::LiveEspRequired);
     }
-    // Bytes are retained. A private guest-UEFI VMCS + EPT are still not
-    // allocated (Stages 21+ are bookkeeping). Do not issue VMLAUNCH —
-    // that would target the E4 SHELL VMCS or #UD on host cargo test.
+    if crate::vmx::guest_uefi::guest_uefi_vmlaunch_entered() {
+        return Ok(());
+    }
+    // Host cargo test / REST before boot launch: presence is true but the
+    // private VMCS is not allocated on this path. Boot issues VMLAUNCH from
+    // guest_uefi::run_retained_ovmf_vmlaunch. Do not call ops::vmlaunch here
+    // (would target the E4 SHELL VMCS or #UD on host).
     let _ = GUEST_UEFI_PRIVATE_VMCS_ID;
     Err(GuestUefiLaunchError::PrivateVmcsNotLaunched)
 }
@@ -1619,7 +1624,7 @@ static mut INSTALLED_TR_BASE: u64 = 0;
 /// Returns `(new_gdtr_base, new_gdtr_limit, tr_selector, tr_base)`.
 ///
 /// SAFETY: `gdt_phys`/`tss_phys` are owned zeroable frames; interrupts off.
-unsafe fn install_host_tss(
+pub(crate) unsafe fn install_host_tss(
     gdt_phys: u64,
     tss_phys: u64,
 ) -> Result<(u64, u16, u16, u64), LaunchError> {

@@ -185,6 +185,33 @@ pub fn ept_leaf_large(hpa: u64, memory_type: u64) -> u64 {
     ept_rwe() | ((memory_type & 0x7) << 3) | (1 << 7) | (hpa & !0xfff)
 }
 
+/// Pack a 4 KiB EPT leaf (no large bit). Used for the firmware-alias window.
+pub fn ept_leaf_4k(hpa: u64, memory_type: u64) -> u64 {
+    ept_rwe() | ((memory_type & 0x7) << 3) | (hpa & !0xfff)
+}
+
+/// 2 MiB regions touched by `[gpa, gpa + bytes)`.
+pub fn firmware_alias_pt_count(gpa: u64, bytes: u64) -> usize {
+    if bytes == 0 {
+        return 0;
+    }
+    let start = gpa & !(TWO_MIB - 1);
+    let end = match gpa.checked_add(bytes) {
+        Some(e) => e,
+        None => return 0,
+    };
+    let end_aln = end.saturating_add(TWO_MIB - 1) & !(TWO_MIB - 1);
+    ((end_aln - start) / TWO_MIB) as usize
+}
+
+/// Frames for [`build_firmware_alias_ept`]: PML4 + PDPT + high PD + PTs + low PD.
+///
+/// INVARIANTS:
+/// - Result is at least 5 and at most 8 for a 1–4 MiB firmware window
+pub fn frames_required_firmware_alias(gpa: u64, bytes: u64) -> usize {
+    3 + firmware_alias_pt_count(gpa, bytes) + 1
+}
+
 /// Pack a non-leaf EPT link to the next table (no large bit).
 pub fn ept_link(next_phys: u64) -> u64 {
     ept_rwe() | (next_phys & !0xfff)
@@ -391,6 +418,110 @@ pub unsafe fn build_single_2m_identity(hpa_2m: u64, frames: &mut [u64]) -> Resul
         (pd as *mut u64).add(pd_i as usize),
         ept_leaf_large(hpa_2m, mt),
     );
+    Ok(pack_eptp(pml4, mt))
+}
+
+/// Build a **private** guest-UEFI EPT: firmware alias at `gpa_base` → `hpa_base`,
+/// plus a 2 MiB identity RAM leaf at GPA 0 → `ram_hpa`.
+///
+/// This is not the E4 SHELL precise identity map and must not mutate it.
+///
+/// INVARIANTS:
+/// - `fw_bytes` is a non-zero 4 KiB multiple, `<= 4 MiB`
+/// - `gpa_base + fw_bytes` does not overflow and covers `0xFFFF_FFF0`
+/// - `hpa_base` / `ram_hpa` are 4 KiB / 2 MiB aligned
+/// - Frames are exclusively owned by this guest (ADR-004)
+///
+/// VERIFICATION: L1 (runtime assert + unit tests for index math)
+/// SAFETY: `frames` are writable identity-mapped 4 KiB tables; `hpa_base` and
+/// `ram_hpa` are owned guest frames. Caller must not pass E4 SHELL EPT frames.
+/// KANI-TARGET: table walk for reset-vector GPA after build.
+pub unsafe fn build_firmware_alias_ept(
+    gpa_base: u64,
+    hpa_base: u64,
+    fw_bytes: u64,
+    ram_hpa: u64,
+    frames: &mut [u64],
+) -> Result<u64, EptHwError> {
+    if fw_bytes == 0 || fw_bytes > 4 * 1024 * 1024 || (fw_bytes & 0xfff) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    if (gpa_base & 0xfff) != 0 || (hpa_base & 0xfff) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    if (ram_hpa & (TWO_MIB - 1)) != 0 {
+        return Err(EptHwError::Unsupported);
+    }
+    let Some(fw_end) = gpa_base.checked_add(fw_bytes) else {
+        return Err(EptHwError::Unsupported);
+    };
+    let reset = 0xFFFF_FFF0u64;
+    if !(gpa_base <= reset && reset < fw_end) {
+        return Err(EptHwError::Unsupported);
+    }
+    let need = frames_required_firmware_alias(gpa_base, fw_bytes);
+    if frames.len() < need {
+        return Err(EptHwError::OutOfFrames);
+    }
+    for &f in frames.iter().take(need) {
+        if f & 0xfff != 0 {
+            return Err(EptHwError::Unsupported);
+        }
+        core::ptr::write_bytes(f as *mut u8, 0, 4096);
+    }
+
+    let mt = eptp_memory_type();
+    let pml4 = frames[0];
+    let pdpt = frames[1];
+    let pd_hi = frames[2];
+    let pd_lo = frames[3];
+    core::ptr::write_volatile((pml4 as *mut u64).add(0), ept_link(pdpt));
+    core::ptr::write_volatile((pdpt as *mut u64).add(0), ept_link(pd_lo));
+    core::ptr::write_volatile((pd_lo as *mut u64).add(0), ept_leaf_large(ram_hpa, mt));
+
+    let pdpt_hi = ((gpa_base >> 30) & 0x1ff) as usize;
+    core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_hi), ept_link(pd_hi));
+
+    let mut next_pt = 4usize;
+    let pt_slots = need.saturating_sub(4);
+    let mut pt_for_2m = [0u64; 4];
+    let mut mapped_2m = [u64::MAX; 4];
+    let mut n2m = 0usize;
+
+    let mut off = 0u64;
+    while off < fw_bytes {
+        let gpa = gpa_base + off;
+        let hpa = hpa_base + off;
+        let key = gpa >> 21;
+        let mut pt = 0u64;
+        let mut found = false;
+        for i in 0..n2m {
+            if mapped_2m[i] == key {
+                pt = pt_for_2m[i];
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            if n2m >= pt_slots || n2m >= 4 || next_pt >= need {
+                return Err(EptHwError::OutOfFrames);
+            }
+            pt = frames[next_pt];
+            next_pt += 1;
+            let pd_i = ((gpa >> 21) & 0x1ff) as usize;
+            core::ptr::write_volatile((pd_hi as *mut u64).add(pd_i), ept_link(pt));
+            pt_for_2m[n2m] = pt;
+            mapped_2m[n2m] = key;
+            n2m += 1;
+        }
+        let pt_i = ((gpa >> 12) & 0x1ff) as usize;
+        core::ptr::write_volatile((pt as *mut u64).add(pt_i), ept_leaf_4k(hpa, mt));
+        off += 4096;
+    }
+
+    debug_assert!(gpa_is_mapped(pml4, reset));
+    debug_assert!(gpa_is_mapped(pml4, gpa_base));
+    debug_assert!(gpa_is_mapped(pml4, 0));
     Ok(pack_eptp(pml4, mt))
 }
 
@@ -1092,6 +1223,18 @@ mod ept_hw_test {
         assert_eq!(frames_required_gib(EptPageSize::TwoMib, 4), 6);
         assert_eq!(frames_required_precise(), 3); // 512 MiB @ 2M → one PD
         assert_eq!(frames_required_2m_bytes(PRECISE_BYTES), 3);
+        assert_eq!(firmware_alias_pt_count(0xFFC0_0000, 4 * 1024 * 1024), 2);
+        assert_eq!(firmware_alias_pt_count(0xFFE0_0000, 2 * 1024 * 1024), 1);
+        assert_eq!(firmware_alias_pt_count(0xFFF0_0000, 1024 * 1024), 1);
+        assert_eq!(
+            frames_required_firmware_alias(0xFFC0_0000, 4 * 1024 * 1024),
+            6
+        );
+        assert_eq!(
+            frames_required_firmware_alias(0xFFE0_0000, 2 * 1024 * 1024),
+            5
+        );
+        assert_eq!(frames_required_firmware_alias(0xFFF0_0000, 1024 * 1024), 5);
         assert_eq!(GUEST_PRECISE_PT_FRAMES, 3);
         assert_eq!(PRECISE_BYTES, 512 * 1024 * 1024);
         assert!(PRECISE_BYTES < (1 << 30), "M3.20 window must be < 1 GiB");
