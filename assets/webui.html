@@ -103,6 +103,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-fw-lx">Require live ESP</button>
       <button id="btn-fw-pv">Arm private VMCS</button>
       <button id="btn-is">Arm live issue</button>
+      <button id="btn-lb">Probe live bytes</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -237,26 +238,27 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-iso-install").onclick = installIso;
   document.getElementById("btn-iso-attach").onclick = attachCdrom;
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
-  document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","Guest FW boxed","FW box failed");};
-  document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","Guest FW loaded","FW load failed");};
-  document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","OVMF probed","OVMF probe failed");};
-  document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ESP OVMF loaded","ESP OVMF failed");};
-  document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","FW slot armed","FW slot failed");};
-  document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound","FW bind failed");};
-  document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","FW launch prepped","FW prep failed");};
-  document.getElementById("btn-fw-floor").onclick=function(){fwPost("/fw/floor","FW floor staged","FW floor failed");};
-  document.getElementById("btn-fw-edk2").onclick=function(){fwPost("/fw/edk2","EDK2 staged","EDK2 failed");};
-  document.getElementById("btn-fw-esp").onclick=function(){fwPost("/fw/esp-launch","ESP launch armed","ESP launch failed");};
-  document.getElementById("btn-fw-map").onclick=function(){fwPost("/fw/esp-map","ESP mapped","ESP map failed");};
-  document.getElementById("btn-fw-rv").onclick=function(){fwPost("/fw/reset-vec","Reset vec armed","Reset vec failed");};
-  document.getElementById("btn-fw-al").onclick=function(){fwPost("/fw/alias","FW alias armed","FW alias failed");};
-  document.getElementById("btn-fw-ae").onclick=function(){fwPost("/fw/alias-ept","Alias EPT programmed","Alias EPT failed");};
-  document.getElementById("btn-fw-ei").onclick=function(){fwPost("/fw/ept-install","FW EPT installed","FW EPT failed");};
-  document.getElementById("btn-fw-re").onclick=function(){fwPost("/fw/real-esp","Real ESP qualified","Real ESP failed");};
-  document.getElementById("btn-fw-rl").onclick=function(){fwPost("/fw/real-launch","Real launch armed","Real launch failed");};
-  document.getElementById("btn-fw-lx").onclick=function(){fwPost("/fw/live-exec","Live ESP required","Live ESP failed");};
-  document.getElementById("btn-fw-pv").onclick=function(){fwPost("/fw/priv-vmcs","Private VMCS armed","Private VMCS failed");};
+  document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","ok","err");};
+  document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","ok","err");};
+  document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","ok","err");};
+  document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ok","err");};
+  document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","ok","err");};
+  document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","ok","err");};
+  document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","ok","err");};
+  document.getElementById("btn-fw-floor").onclick=function(){fwPost("/fw/floor","ok","err");};
+  document.getElementById("btn-fw-edk2").onclick=function(){fwPost("/fw/edk2","ok","err");};
+  document.getElementById("btn-fw-esp").onclick=function(){fwPost("/fw/esp-launch","ok","err");};
+  document.getElementById("btn-fw-map").onclick=function(){fwPost("/fw/esp-map","ok","err");};
+  document.getElementById("btn-fw-rv").onclick=function(){fwPost("/fw/reset-vec","ok","err");};
+  document.getElementById("btn-fw-al").onclick=function(){fwPost("/fw/alias","ok","err");};
+  document.getElementById("btn-fw-ae").onclick=function(){fwPost("/fw/alias-ept","ok","err");};
+  document.getElementById("btn-fw-ei").onclick=function(){fwPost("/fw/ept-install","ok","err");};
+  document.getElementById("btn-fw-re").onclick=function(){fwPost("/fw/real-esp","ok","err");};
+  document.getElementById("btn-fw-rl").onclick=function(){fwPost("/fw/real-launch","ok","err");};
+  document.getElementById("btn-fw-lx").onclick=function(){fwPost("/fw/live-exec","ok","err");};
+  document.getElementById("btn-fw-pv").onclick=function(){fwPost("/fw/priv-vmcs","ok","err");};
   document.getElementById("btn-is").onclick=function(){fwPost("/fw/live-issue","ok","err");};
+  document.getElementById("btn-lb").onclick=function(){fwPost("/fw/live-bytes","ok","err");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

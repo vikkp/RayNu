@@ -177,9 +177,10 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 20 (host, closed):** live-ESP VMLAUNCH execute gate (`RAYNU-V-M7-E5-LIVE-EXEC-OK`).
    **Stage 21 (host, closed):** private guest-UEFI VMCS arm (`RAYNU-V-M7-E5-PRIV-VMCS-OK`).
    **Stage 22 (host, closed):** live-ESP VMLAUNCH issue path (`RAYNU-V-M7-E5-LIVE-ISSUE-OK`).
+   **Stage 23 (host, closed):** live-ESP bytes probe (`RAYNU-V-M7-E5-LIVE-BYTES-OK`).
    Presence of real ESP `OVMF.fd` bytes remains open (mock, 4 KiB floor, 1 MiB
    EDK2 fixture, 2 MiB live-map fixture, synthetic `0xEA` stub, 4 MiB
    alias fixture, alias-EPT program record, private-install record,
    real-ESP qualify record, insn-arm record, live-exec require record,
-   private-VMCS record, and live-issue record refused; live E4 SHELL EPT
+   private-VMCS record, live-issue record, and live-bytes probe refused; live E4 SHELL EPT
    is not written; VMLAUNCH insn not issued).

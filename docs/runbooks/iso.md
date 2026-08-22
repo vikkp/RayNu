@@ -100,7 +100,9 @@ RAYNU-V-M7-ISO-OK
   (`arm_ovmf_private_vmcs`) is Stage 21
   (`RAYNU-V-M7-E5-PRIV-VMCS-OK`). Live-ESP VMLAUNCH **issue**
   (`arm_ovmf_live_issue`) is Stage 22
-  (`RAYNU-V-M7-E5-LIVE-ISSUE-OK`);
+  (`RAYNU-V-M7-E5-LIVE-ISSUE-OK`). Live-ESP **bytes probe**
+  (`probe_ovmf_live_bytes`) is Stage 23
+  (`RAYNU-V-M7-E5-LIVE-BYTES-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
   `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
@@ -112,7 +114,8 @@ RAYNU-V-M7-ISO-OK
   `RealLaunchNotIssued` (insn path armed), or
   `LiveEspRequired` (live ESP bytes required), or
   `PrivateVmcsNotLaunched` (private guest-UEFI VMCS selected), or
-  `LiveEspBytesNotPresent` (live-ESP issue path armed; live E4
+  `LiveEspBytesNotPresent` (live-ESP issue path armed), or
+  `LiveEspBytesAbsent` (live ESP bytes probed; live E4
   SHELL EPT not written; VMLAUNCH insn not issued).
   Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
@@ -232,5 +235,12 @@ E5 Stage 22 (host, closed): `POST /fw/live-issue` records the
 live-ESP VMLAUNCH issue path after private VMCS (host test heap
 fixture only). Production UEFI returns 409 (no embedded 4 MiB).
 `POST /fw/vmlaunch` returns 409 (`LiveEspBytesNotPresent`). Live E4
+SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
+VMLAUNCH insn not issued.
+
+E5 Stage 23 (host, closed): `POST /fw/live-bytes` records a live-ESP
+bytes probe after live-issue (host test heap fixture only).
+Production UEFI returns 409 (no embedded 4 MiB).
+`POST /fw/vmlaunch` returns 409 (`LiveEspBytesAbsent`). Live E4
 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
 VMLAUNCH insn not issued.
