@@ -343,6 +343,10 @@ pub enum GuestUefiLaunchError {
     /// still absent in a private guest-UEFI VMCS + EPT. The heap
     /// fixture is not those bytes. The VMLAUNCH instruction is not issued.
     LiveEspLockAbsent,
+    /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were hold-attempted. They are
+    /// still absent in a private guest-UEFI VMCS + EPT. The heap
+    /// fixture is not those bytes. The VMLAUNCH instruction is not issued.
+    LiveEspHoldAbsent,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -388,6 +392,8 @@ static GUEST_UEFI_LIVE_ESP_LATCHED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_LIVE_ESP_SEALED: AtomicBool = AtomicBool::new(false);
 /// Stage 34: real ESP `\EFI\RayNu\OVMF.fd` lock-attempt. Still absent.
 static GUEST_UEFI_LIVE_ESP_LOCKED: AtomicBool = AtomicBool::new(false);
+/// Stage 35: real ESP `\EFI\RayNu\OVMF.fd` hold-attempt. Still absent.
+static GUEST_UEFI_LIVE_ESP_HELD: AtomicBool = AtomicBool::new(false);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -436,6 +442,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_LIVE_ESP_LATCHED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_SEALED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_LOCKED.store(false, Ordering::Release);
+    GUEST_UEFI_LIVE_ESP_HELD.store(false, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -602,7 +609,7 @@ pub fn guest_uefi_live_esp_is_required() -> bool {
 
 /// Host/CI never has live ESP `\EFI\RayNu\OVMF.fd` bytes.
 /// Production post-EBS FileSystem may be gone. Always false this slice.
-/// Stage 35 may flip this when a private guest-UEFI path can read real
+/// Stage 36 may flip this when a private guest-UEFI path can read real
 /// ESP bytes into a private VMCS + EPT (not this fixture, not the E4 SHELL).
 pub fn guest_uefi_live_esp_bytes_present() -> bool {
     false
@@ -927,6 +934,35 @@ pub fn lock_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunchErr
     Ok(())
 }
 
+/// True after a successful [`hold_guest_uefi_live_esp`].
+pub fn guest_uefi_live_esp_is_held() -> bool {
+    GUEST_UEFI_LIVE_ESP_HELD.load(Ordering::Acquire)
+}
+
+/// Hold-attempt real ESP `\EFI\RayNu\OVMF.fd` bytes after lock (ADR-014 Stage 35).
+///
+/// INVARIANTS:
+/// - Requires a prior live-ESP lock-attempt
+/// - Requires `firmware_alias_gpa(bytes_len)` and reset-vector coverage
+/// - Does not allocate a VMCS, does not VMWRITE, and does not issue VMLAUNCH
+/// - Does not write the E4 SHELL EPT
+/// - Does not flip [`guest_uefi_live_esp_bytes_present`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn hold_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_live_esp_is_locked() {
+        return Err(GuestUefiLaunchError::LiveEspLockAbsent);
+    }
+    let Some(gpa) = firmware_alias_gpa(bytes_len) else {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    };
+    if !alias_ept_covers_reset(gpa, bytes_len) {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_ALIAS_EPT_GPA.store(gpa, Ordering::Release);
+    GUEST_UEFI_LIVE_ESP_HELD.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// True after a successful [`probe_guest_uefi_live_bytes`].
 pub fn guest_uefi_live_bytes_is_probed() -> bool {
     GUEST_UEFI_LIVE_BYTES_PROBED.load(Ordering::Acquire)
@@ -1045,6 +1081,9 @@ pub fn require_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
 /// - Does not write live EPT and does not VMWRITE the E4 SHELL VMCS
 fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_live_esp_bytes_present() {
+        if guest_uefi_live_esp_is_held() {
+            return Err(GuestUefiLaunchError::LiveEspHoldAbsent);
+        }
         if guest_uefi_live_esp_is_locked() {
             return Err(GuestUefiLaunchError::LiveEspLockAbsent);
         }
@@ -1177,8 +1216,10 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
 ///   [`GuestUefiLaunchError::LiveEspLatchAbsent`]
 /// - Live ESP seal-attempted, no lock-attempt →
 ///   [`GuestUefiLaunchError::LiveEspSealAbsent`]
-/// - Live ESP lock-attempted, still absent →
+/// - Live ESP lock-attempted, no hold-attempt →
 ///   [`GuestUefiLaunchError::LiveEspLockAbsent`]
+/// - Live ESP hold-attempted, still absent →
+///   [`GuestUefiLaunchError::LiveEspHoldAbsent`]
 ///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`] +
 ///   [`GUEST_UEFI_VMLAUNCH_OPCODE`] + [`GUEST_UEFI_PRIVATE_VMCS_ID`];
 ///   no live E4 SHELL EPT write / no VMWRITE / insn not issued)
@@ -1285,6 +1326,9 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
     }
     if !guest_uefi_live_esp_is_locked() {
         return Err(GuestUefiLaunchError::LiveEspSealAbsent);
+    }
+    if !guest_uefi_live_esp_is_held() {
+        return Err(GuestUefiLaunchError::LiveEspLockAbsent);
     }
     issue_guest_uefi_vmlaunch()
 }
@@ -5530,6 +5574,22 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::LiveEspLockAbsent)
         );
+        assert!(!guest_uefi_live_esp_is_held());
+        assert_eq!(
+            hold_guest_uefi_live_esp(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_live_esp_is_held());
+        assert_eq!(
+            hold_guest_uefi_live_esp(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_live_esp_is_held());
+        assert!(!guest_uefi_live_esp_bytes_present());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::LiveEspHoldAbsent)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
@@ -5553,6 +5613,7 @@ mod launch_test {
         assert!(!guest_uefi_live_esp_is_latched());
         assert!(!guest_uefi_live_esp_is_sealed());
         assert!(!guest_uefi_live_esp_is_locked());
+        assert!(!guest_uefi_live_esp_is_held());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 

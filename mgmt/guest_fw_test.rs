@@ -3,28 +3,28 @@ use super::{
     arm_ovmf_firmware_slot, arm_ovmf_live_issue, arm_ovmf_private_vmcs, arm_ovmf_real_launch,
     arm_ovmf_reset_vector, bind_ovmf_firmware_guest, box_guest_firmware, commit_ovmf_live_esp,
     copy_ovmf_live_esp, dispatch_guest_fw_rest, guest_fw_bytes, guest_fw_is_boxed,
-    guest_fw_is_loaded, guest_fw_payload, install_ovmf_alias_ept, latch_ovmf_live_esp,
-    load_guest_firmware, load_ovmf_from_esp, lock_ovmf_live_esp, map_live_esp_ovmf,
-    ovmf_alias_ept_is_installed, ovmf_alias_ept_is_programmed, ovmf_edk2_is_staged,
-    ovmf_esp_is_loaded, ovmf_esp_launch_is_armed, ovmf_firmware_alias_is_armed,
-    ovmf_floor_is_staged, ovmf_fv_is_probed, ovmf_guest_is_bound, ovmf_launch_is_prepared,
-    ovmf_live_bytes_is_probed, ovmf_live_esp_is_admitted, ovmf_live_esp_is_applied,
-    ovmf_live_esp_is_committed, ovmf_live_esp_is_copied, ovmf_live_esp_is_latched,
-    ovmf_live_esp_is_locked, ovmf_live_esp_is_mapped, ovmf_live_esp_is_placed,
-    ovmf_live_esp_is_presented, ovmf_live_esp_is_read, ovmf_live_esp_is_required,
-    ovmf_live_esp_is_sealed, ovmf_live_fd_is_required, ovmf_live_issue_is_armed,
-    ovmf_private_vmcs_is_armed, ovmf_real_esp_is_qualified, ovmf_real_launch_is_armed,
-    ovmf_reset_vector_is_armed, ovmf_slot_is_armed, parse_guest_fw, place_ovmf_live_esp,
-    prepare_ovmf_firmware_launch, present_ovmf_live_esp, probe_ovmf_firmware,
-    probe_ovmf_live_bytes, program_ovmf_alias_ept, qualify_real_esp_ovmf, read_ovmf_live_esp,
-    require_ovmf_live_esp, require_ovmf_live_fd, reset_guest_fw, seal_ovmf_live_esp,
-    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware,
-    write_edk2_sized_fv, write_firmware_alias_fv, write_guest_fw_header, write_live_esp_ovmf_fv,
-    write_mock_ovmf_fv, write_reset_vector_stub, write_size_floor_ovmf_fv, GuestFwError,
-    GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
-    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MIN_EDK2_OVMF_BYTES,
-    MIN_FIRMWARE_ALIAS_BYTES, MIN_LIVE_ESP_OVMF_BYTES, MOCK_OVMF_FV_BYTES, OVMF_FW_GUEST_ID,
-    OVMF_FW_SLOT_ID, SECTION_GUEST_FW, SIZE_FLOOR_FV_BYTES,
+    guest_fw_is_loaded, guest_fw_payload, hold_ovmf_live_esp, install_ovmf_alias_ept,
+    latch_ovmf_live_esp, load_guest_firmware, load_ovmf_from_esp, lock_ovmf_live_esp,
+    map_live_esp_ovmf, ovmf_alias_ept_is_installed, ovmf_alias_ept_is_programmed,
+    ovmf_edk2_is_staged, ovmf_esp_is_loaded, ovmf_esp_launch_is_armed,
+    ovmf_firmware_alias_is_armed, ovmf_floor_is_staged, ovmf_fv_is_probed, ovmf_guest_is_bound,
+    ovmf_launch_is_prepared, ovmf_live_bytes_is_probed, ovmf_live_esp_is_admitted,
+    ovmf_live_esp_is_applied, ovmf_live_esp_is_committed, ovmf_live_esp_is_copied,
+    ovmf_live_esp_is_held, ovmf_live_esp_is_latched, ovmf_live_esp_is_locked,
+    ovmf_live_esp_is_mapped, ovmf_live_esp_is_placed, ovmf_live_esp_is_presented,
+    ovmf_live_esp_is_read, ovmf_live_esp_is_required, ovmf_live_esp_is_sealed,
+    ovmf_live_fd_is_required, ovmf_live_issue_is_armed, ovmf_private_vmcs_is_armed,
+    ovmf_real_esp_is_qualified, ovmf_real_launch_is_armed, ovmf_reset_vector_is_armed,
+    ovmf_slot_is_armed, parse_guest_fw, place_ovmf_live_esp, prepare_ovmf_firmware_launch,
+    present_ovmf_live_esp, probe_ovmf_firmware, probe_ovmf_live_bytes, program_ovmf_alias_ept,
+    qualify_real_esp_ovmf, read_ovmf_live_esp, require_ovmf_live_esp, require_ovmf_live_fd,
+    reset_guest_fw, seal_ovmf_live_esp, stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor,
+    try_vmlaunch_ovmf_firmware, write_edk2_sized_fv, write_firmware_alias_fv,
+    write_guest_fw_header, write_live_esp_ovmf_fv, write_mock_ovmf_fv, write_reset_vector_stub,
+    write_size_floor_ovmf_fv, GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN,
+    GUEST_FW_MAX_COMPRESSED, GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN,
+    MIN_EDK2_OVMF_BYTES, MIN_FIRMWARE_ALIAS_BYTES, MIN_LIVE_ESP_OVMF_BYTES, MOCK_OVMF_FV_BYTES,
+    OVMF_FW_GUEST_ID, OVMF_FW_SLOT_ID, SECTION_GUEST_FW, SIZE_FLOOR_FV_BYTES,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 
@@ -1878,6 +1878,78 @@ fn ovmf_live_lock_requires_seal_and_refuses_vmlaunch() {
     assert_eq!(
         try_vmlaunch_ovmf_firmware(),
         Err(GuestFwError::LiveEspLockAbsent)
+    );
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_live_hold_requires_lock_and_refuses_vmlaunch() {
+    reset_guest_fw();
+    let mut live = vec![0u8; MIN_LIVE_ESP_OVMF_BYTES];
+    write_live_esp_ovmf_fv(&mut live).unwrap();
+    write_reset_vector_stub(&mut live).unwrap();
+    assert_eq!(hold_ovmf_live_esp(&live), Err(GuestFwError::LaunchNotWired));
+    assert!(!ovmf_live_esp_is_held());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/live-hold",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let mut mock = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut mock).unwrap();
+    probe_ovmf_firmware(&mock).unwrap();
+    load_ovmf_from_esp(&mock).unwrap();
+    arm_ovmf_firmware_slot().unwrap();
+    bind_ovmf_firmware_guest().unwrap();
+    prepare_ovmf_firmware_launch().unwrap();
+    let mut floor = [0u8; SIZE_FLOOR_FV_BYTES];
+    write_size_floor_ovmf_fv(&mut floor).unwrap();
+    stage_ovmf_firmware_floor(&floor).unwrap();
+    let mut edk2 = vec![0u8; MIN_EDK2_OVMF_BYTES];
+    write_edk2_sized_fv(&mut edk2).unwrap();
+    stage_edk2_ovmf_firmware(&edk2).unwrap();
+    arm_ovmf_esp_launch().unwrap();
+    map_live_esp_ovmf(&live).unwrap();
+    arm_ovmf_reset_vector(&live).unwrap();
+    let mut alias = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    write_firmware_alias_fv(&mut alias).unwrap();
+    arm_ovmf_firmware_alias(&alias).unwrap();
+    program_ovmf_alias_ept(&alias).unwrap();
+    install_ovmf_alias_ept(&alias).unwrap();
+    qualify_real_esp_ovmf(&alias).unwrap();
+    arm_ovmf_real_launch(&alias).unwrap();
+    require_ovmf_live_esp(&alias).unwrap();
+    arm_ovmf_private_vmcs(&alias).unwrap();
+    arm_ovmf_live_issue(&alias).unwrap();
+    probe_ovmf_live_bytes(&alias).unwrap();
+    require_ovmf_live_fd(&alias).unwrap();
+    present_ovmf_live_esp(&alias).unwrap();
+    admit_ovmf_live_esp(&alias).unwrap();
+    read_ovmf_live_esp(&alias).unwrap();
+    copy_ovmf_live_esp(&alias).unwrap();
+    place_ovmf_live_esp(&alias).unwrap();
+    apply_ovmf_live_esp(&alias).unwrap();
+    commit_ovmf_live_esp(&alias).unwrap();
+    latch_ovmf_live_esp(&alias).unwrap();
+    seal_ovmf_live_esp(&alias).unwrap();
+    lock_ovmf_live_esp(&alias).unwrap();
+    assert_eq!(hold_ovmf_live_esp(&live), Err(GuestFwError::TooSmall));
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::LiveEspLockAbsent)
+    );
+    let held = hold_ovmf_live_esp(&alias).unwrap();
+    assert_eq!(held.bytes_len, MIN_FIRMWARE_ALIAS_BYTES as u64);
+    assert_eq!(held.gpa, 0xFFC0_0000);
+    assert!(ovmf_live_esp_is_held());
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::LiveEspHoldAbsent)
     );
     reset_guest_fw();
 }
