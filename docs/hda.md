@@ -7,8 +7,8 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 358
-velocity_gates_30d: 52
+velocity_commits_30d: 359
+velocity_gates_30d: 53
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -45,7 +45,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~99% | Real ESP OVMF.fd hold-attempted; live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; distro later |
+| **Deploy Linux ISO** | ~99% | Real ESP OVMF.fd retained in QEMU; presence rule closed; private VMCS not allocated; VMLAUNCH insn not issued; distro later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach+arm+envelope) | Catalog parse + host attach + `FirmwareArmed` + `.asguefw` envelope; no OVMF; no guest UEFI VMLAUNCH |
 | CD-ROM attach | PARTIAL (host firmware arm) | `attach_cdrom_firmware` → FirmwareArmed; `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Guest UEFI firmware blob | PARTIAL (live-hold) | Real ESP OVMF.fd hold-attempted; live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued |
+| Guest UEFI firmware blob | PARTIAL (ESP retained) | Real ESP OVMF.fd retained pre-EBS when present; presence rule closed; private VMCS not allocated; VMLAUNCH insn not issued |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -230,6 +230,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-48 | **E5 Stage 33** Live-ESP seal-attempt | D | **DONE (host)** | P0-47 | `RAYNU-V-M7-E5-LIVE-SEAL-OK`; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
 | P0-49 | **E5 Stage 34** Live-ESP lock-attempt | D | **DONE (host)** | P0-48 | `RAYNU-V-M7-E5-LIVE-LOCK-OK`; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
 | P0-50 | **E5 Stage 35** Live-ESP hold-attempt | D | **DONE (host)** | P0-49 | `RAYNU-V-M7-E5-LIVE-HOLD-OK`; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
+| P0-51 | **E5 Stage 36** Real ESP OVMF retain | D | **DONE (host + QEMU)** | P0-50 | `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK`; presence rule; private VMCS not allocated; VMLAUNCH insn not issued; no further *Absent bookkeeping; not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -291,6 +292,7 @@ Ordered for critical path (parallelize B with D design):
 - **P0-48 / E5 Stage 33 closed (host):** `RAYNU-V-M7-E5-LIVE-SEAL-OK`. Live-ESP seal-attempt. Live E4 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
 - **P0-49 / E5 Stage 34 closed (host):** `RAYNU-V-M7-E5-LIVE-LOCK-OK`. Live-ESP lock-attempt. Live E4 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
 - **P0-50 / E5 Stage 35 closed (host):** `RAYNU-V-M7-E5-LIVE-HOLD-OK`. Live-ESP hold-attempt. Live E4 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
+- **P0-51 / E5 Stage 36 closed (host + QEMU):** `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK`. Real ESP `OVMF.fd` retained. Presence rule closed. Private VMCS not allocated. VMLAUNCH insn not issued. No further `*Absent` bookkeeping. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -340,10 +342,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-live-hold |
-| Summary | P0-50 live-ESP hold-attempt after live-lock; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Hold-attempted ≠ live ESP bytes present ≠ live E4 SHELL EPT write ≠ shipped OVMF.fd ≠ VMLAUNCH insn ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-LIVE-HOLD-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-retain |
+| Summary | P0-51 real ESP OVMF.fd retain + presence rule; QEMU stages system OVMF; private VMCS not allocated; VMLAUNCH insn not issued. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Retained bytes ≠ private VMCS ≠ VMLAUNCH insn ≠ installer. No further *Absent bookkeeping. |
+| Gates touched | `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK` (host + QEMU). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -354,7 +356,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No live guest UEFI CD | MED | Live-ESP hold-attempt closed (P0-50); live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
+| H3 | No live guest UEFI CD | MED | Real ESP OVMF retain closed (P0-51); private VMCS not allocated; VMLAUNCH insn not issued; `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -365,6 +367,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-ovmf-retain | 0.5 | 95 | P0-51 real ESP OVMF retain + presence rule; QEMU system OVMF.fd; private VMCS not allocated; VMLAUNCH insn not issued; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-live-hold | 0.5 | 95 | P0-50 live-ESP hold-attempt; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-live-lock | 0.5 | 95 | P0-49 live-ESP lock-attempt; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-live-seal | 0.5 | 95 | P0-48 live-ESP seal-attempt; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; iso 99%; iron P0-14 stays 2b795a0 |

@@ -443,6 +443,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_LIVE_ESP_SEALED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_LOCKED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ESP_HELD.store(false, Ordering::Release);
+    crate::boot::ovmf_esp::clear_retained();
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -607,12 +608,15 @@ pub fn guest_uefi_live_esp_is_required() -> bool {
     GUEST_UEFI_LIVE_ESP_REQUIRED.load(Ordering::Acquire)
 }
 
-/// Host/CI never has live ESP `\EFI\RayNu\OVMF.fd` bytes.
-/// Production post-EBS FileSystem may be gone. Always false this slice.
-/// Stage 36 may flip this when a private guest-UEFI path can read real
-/// ESP bytes into a private VMCS + EPT (not this fixture, not the E4 SHELL).
+/// True when a retained buffer holds accepted ESP `\EFI\RayNu\OVMF.fd` bytes.
+///
+/// Presence rule (ADR-014): [`crate::boot::ovmf_esp::accept_real_ovmf_bytes`]
+/// — size `>= 1 MiB`, `_FVH`, and enough nonempty bytes to reject the
+/// Stage 5–35 heap fixtures. Host `cargo test` stays false unless a test
+/// calls [`crate::boot::ovmf_esp::retain_ovmf_bytes`]. Presence is not a
+/// private VMCS and is not a VMLAUNCH.
 pub fn guest_uefi_live_esp_bytes_present() -> bool {
-    false
+    crate::boot::ovmf_esp::bytes_present()
 }
 
 /// True after a successful [`require_guest_uefi_live_fd`].
@@ -1073,11 +1077,12 @@ pub fn require_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
 }
 
 /// Issue guest-UEFI VMLAUNCH only when live ESP `\EFI\RayNu\OVMF.fd`
-/// bytes are present. Host/CI and heap fixtures never take the insn path.
+/// bytes are present **and** a private guest-UEFI VMCS + EPT exist.
 ///
 /// INVARIANTS:
-/// - Presence is checked first; the VMLAUNCH instruction is unreachable
-///   when [`guest_uefi_live_esp_bytes_present`] is false
+/// - Presence is checked first; heap fixtures stay on the `*Absent` ladder
+/// - When bytes are retained, this slice still refuses VMLAUNCH
+///   ([`GuestUefiLaunchError::PrivateVmcsNotLaunched`]) — no private VMCS
 /// - Does not write live EPT and does not VMWRITE the E4 SHELL VMCS
 fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_live_esp_bytes_present() {
@@ -1128,17 +1133,11 @@ fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
         }
         return Err(GuestUefiLaunchError::LiveEspRequired);
     }
-    // SAFETY: reached only when live ESP `\EFI\RayNu\OVMF.fd` bytes are
-    // present in a private guest-UEFI VMCS + EPT (not the E4 SHELL).
-    // Host/CI never has those bytes; heap fixtures never set presence.
-    // On success VMLAUNCH does not return (HOST_RIP). Failure is a
-    // VM-instruction error, not an E4 SHELL launch.
-    // KANI-TARGET: bounded check that presence is false under host fixtures
-    // so this unsafe is not reached.
-    match unsafe { super::ops::vmlaunch() } {
-        Ok(()) => Ok(()),
-        Err(_) => Err(GuestUefiLaunchError::LiveEspBytesNotPresent),
-    }
+    // Bytes are retained. A private guest-UEFI VMCS + EPT are still not
+    // allocated (Stages 21+ are bookkeeping). Do not issue VMLAUNCH —
+    // that would target the E4 SHELL VMCS or #UD on host cargo test.
+    let _ = GUEST_UEFI_PRIVATE_VMCS_ID;
+    Err(GuestUefiLaunchError::PrivateVmcsNotLaunched)
 }
 
 /// Probe a JMP FAR reset-vector stub at the end of a live-sized image.
@@ -5614,7 +5613,33 @@ mod launch_test {
         assert!(!guest_uefi_live_esp_is_sealed());
         assert!(!guest_uefi_live_esp_is_locked());
         assert!(!guest_uefi_live_esp_is_held());
+        assert!(!guest_uefi_live_esp_bytes_present());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
+    }
+
+    #[test]
+    fn retained_real_ovmf_sets_presence_and_still_refuses_vmlaunch() {
+        reset_live_esp_ovmf_mapping();
+        assert!(!guest_uefi_live_esp_bytes_present());
+        let mut realish = vec![0u8; crate::boot::ovmf_esp::MIN_REAL_OVMF_BYTES];
+        let realish_len = realish.len() as u64;
+        realish[0x20..0x28].copy_from_slice(&realish_len.to_le_bytes());
+        realish[0x28..0x2C].copy_from_slice(b"_FVH");
+        realish[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
+        for (i, b) in realish.iter_mut().enumerate().skip(0x38) {
+            *b = (i % 251) as u8 + 1;
+        }
+        assert_eq!(
+            crate::boot::ovmf_esp::retain_ovmf_bytes(&realish),
+            Ok(crate::boot::ovmf_esp::MIN_REAL_OVMF_BYTES)
+        );
+        assert!(guest_uefi_live_esp_bytes_present());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        reset_live_esp_ovmf_mapping();
+        assert!(!guest_uefi_live_esp_bytes_present());
     }
 
     #[test]

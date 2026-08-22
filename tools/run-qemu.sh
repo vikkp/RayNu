@@ -74,6 +74,41 @@ if [[ -f "$INITRD_SRC" ]]; then
   echo "==> ESP INITRD: $ESP/EFI/BOOT/INITRD ($(wc -c <"$ESP/EFI/BOOT/INITRD") bytes)"
 fi
 
+# ADR-014 Presence rule: stage a real 1-4 MiB system OVMF.fd onto the ESP
+# (split-mode, not PE embed). Skip images without _FVH at offset 0x28 —
+# those fail accept_real_ovmf_bytes.
+mkdir -p "$ESP/EFI/RayNu"
+rm -f "$ESP/EFI/RayNu/OVMF.fd"
+ovmf_has_fvh() {
+  # EFI_FIRMWARE_VOLUME_HEADER.Signature at 0x28 is "_FVH".
+  local sig
+  sig=$(od -An -tx1 -N 4 -j 40 "$1" 2>/dev/null | tr -d ' \n')
+  [[ "$sig" == "5f465648" ]]
+}
+GUEST_OVMF_STAGED=0
+for f in ${GUEST_OVMF:-} ${OVMF_BIOS:-} ${OVMF_CODE:-} \
+  /usr/share/OVMF/OVMF.fd \
+  /usr/share/ovmf/OVMF.fd \
+  /usr/share/OVMF/OVMF_CODE.fd \
+  /usr/share/OVMF/OVMF_CODE_4M.fd \
+  /usr/share/edk2/ovmf/OVMF.fd \
+  /usr/share/edk2/ovmf/OVMF_CODE.fd \
+  /usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+do
+  [[ -n "$f" && -f "$f" ]] || continue
+  sz=$(wc -c <"$f" | tr -d ' ')
+  if (( sz >= 1048576 && sz <= 4194304 )) && ovmf_has_fvh "$f"; then
+    cp "$f" "$ESP/EFI/RayNu/OVMF.fd"
+    echo "==> Guest ESP OVMF.fd: $ESP/EFI/RayNu/OVMF.fd ($sz bytes) from $f"
+    GUEST_OVMF_STAGED=1
+    break
+  fi
+done
+if [[ "$GUEST_OVMF_STAGED" != "1" ]]; then
+  echo "error: no real 1-4 MiB _FVH OVMF.fd to stage at EFI/RayNu/OVMF.fd" >&2
+  exit 1
+fi
+
 # ADR-011: stage paperverbose.txt so the EFI activates evidence mode.
 # Default path stays clean when EVIDENCE_MODE is unset/0.
 rm -f "$ESP/paperverbose.txt" "$ESP/EFI/RayNu/paperverbose.txt" 2>/dev/null || true

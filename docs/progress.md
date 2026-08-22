@@ -116,6 +116,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 33 | `RAYNU-V-M7-E5-LIVE-SEAL-OK` | Host live-ESP seal-attempt after live-latch; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 34 | `RAYNU-V-M7-E5-LIVE-LOCK-OK` | Host live-ESP lock-attempt after live-seal; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 35 | `RAYNU-V-M7-E5-LIVE-HOLD-OK` | Host live-ESP hold-attempt after live-lock; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
+| E5 Stage 36 | `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK` | Real ESP OVMF.fd retained pre-EBS; presence rule closed; QEMU proof via system OVMF.fd; private VMCS not allocated; VMLAUNCH insn not issued (2026-08-22). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -222,6 +223,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-48 / E5 Stage 33 closed (host):** live-ESP seal-attempt (`RAYNU-V-M7-E5-LIVE-SEAL-OK`). Real ESP `OVMF.fd` bytes seal-attempted; live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-49 / E5 Stage 34 closed (host):** live-ESP lock-attempt (`RAYNU-V-M7-E5-LIVE-LOCK-OK`). Real ESP `OVMF.fd` bytes lock-attempted; live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-50 / E5 Stage 35 closed (host):** live-ESP hold-attempt (`RAYNU-V-M7-E5-LIVE-HOLD-OK`). Real ESP `OVMF.fd` bytes hold-attempted; live ESP bytes still absent; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
+**P0-51 / E5 Stage 36 closed (host + QEMU):** real ESP `OVMF.fd` retain (`RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK`). Presence is true only for accepted retained bytes. QEMU stages a system `OVMF.fd`. Private VMCS is not allocated. VMLAUNCH insn not issued. No further `*Absent` bookkeeping stages. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -267,6 +269,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-48 / E5 Stage 33 | `RAYNU-V-M7-E5-LIVE-SEAL-OK` | **CLOSED (host).** Live-ESP seal-attempt. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-49 / E5 Stage 34 | `RAYNU-V-M7-E5-LIVE-LOCK-OK` | **CLOSED (host).** Live-ESP lock-attempt. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-50 / E5 Stage 35 | `RAYNU-V-M7-E5-LIVE-HOLD-OK` | **CLOSED (host).** Live-ESP hold-attempt. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-50. Product ISO: [ADR-014](adr/ADR-014.md). Presence of real ESP OVMF.fd bytes is Stage 36. |
+| P0-51 / E5 Stage 36 | `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK` | **CLOSED (host + QEMU).** Real ESP OVMF.fd retained. Presence rule closed. Private VMCS not allocated. VMLAUNCH insn not issued. No further *Absent bookkeeping. Not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-51. Product ISO: [ADR-014](adr/ADR-014.md). Next: private VMCS + EPT for retained bytes, or TLS/console. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

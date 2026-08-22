@@ -9,6 +9,7 @@ pub mod esp_assets;
 pub mod evidence_mode;
 pub mod handoff;
 pub mod mem;
+pub mod ovmf_esp;
 pub mod pe_assets;
 pub mod serial;
 
