@@ -15,10 +15,10 @@ use super::guest_fw::{
     reset_guest_fw, write_guest_fw_header, ADR003_GUEST_FW, GUEST_FW_HEADER_LEN,
     GUEST_FW_MAX_COMPRESSED, GUEST_FW_MAX_UNCOMPRESSED, SECTION_GUEST_FW,
 };
-use super::iso::attach_cdrom_uefi;
+use super::iso::{attach_cdrom_uefi, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_cdrom_firmware_gate::run_m7_e5_cdrom_firmware_gate;
-use super::{IsoError, VmTable};
+use super::VmTable;
 
 /// Host / CI marker when the E5 Stage 3 guest-firmware envelope gate passes.
 pub const M7_E5_GUEST_FW_OK_MARKER: &str = "RAYNU-V-M7-E5-GUEST-FW-OK";
@@ -66,7 +66,7 @@ pub fn prop_guest_fw_box_rejects() -> bool {
     if parse_guest_fw(&oversize).is_ok() {
         return false;
     }
-    let mut bad = [0u8; GUEST_FW_HEADER_LEN];
+    let bad = [0u8; GUEST_FW_HEADER_LEN];
     if parse_guest_fw(&bad).is_ok() {
         return false;
     }
