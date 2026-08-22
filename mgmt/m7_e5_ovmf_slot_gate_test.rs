@@ -1,0 +1,19 @@
+use super::{
+    ovmf_slot_surface_present, prop_ovmf_slot_after_esp, prop_ovmf_slot_rejects,
+    prop_rest_ovmf_slot, run_m7_e5_ovmf_slot_gate, E5_OVMF_SLOT_RESIDUAL_NOTE,
+    M7_E5_OVMF_SLOT_OK_MARKER,
+};
+
+#[test]
+fn m7_e5_ovmf_slot_gate_passes() {
+    assert_eq!(M7_E5_OVMF_SLOT_OK_MARKER, "RAYNU-V-M7-E5-OVMF-SLOT-OK");
+    assert!(E5_OVMF_SLOT_RESIDUAL_NOTE.contains("UnsupportedOnFirmware"));
+    assert!(prop_ovmf_slot_after_esp());
+    assert!(prop_ovmf_slot_rejects());
+    assert!(prop_rest_ovmf_slot());
+    assert!(ovmf_slot_surface_present());
+    assert!(
+        run_m7_e5_ovmf_slot_gate(),
+        "E5 Stage 7 firmware slot arm must hold"
+    );
+}
