@@ -7,8 +7,8 @@
 
 M7.4 / E4 upgrades the embedded SPA for operator MVP over lab HTTP:
 
-1. Form: guest id, CPU, RAM MiB, disk MiB, ISO id  
-2. REST: `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}`  
+1. Form: guest id, CPU, RAM MiB, disk MiB, ISO id, image type (`linux_iso` / `windows_iso` / `generic_uefi`; none = E4 SHELL)  
+2. REST: `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}` and optional `/{linux_iso|windows_iso|generic_uefi}` (ADR-014 Stage 0; `iso=0` stays SHELL)  
 3. Media: `GET /images`, `POST /iso/{id}/deploy` (extract-boot), `POST /iso/{id}/install`  
 4. Start / stop  
 5. **Host serial log:** `GET /logs/serial` + SPA panel (HV UART ring — not guest console)  

@@ -9,13 +9,17 @@
 //! `guest::load_bzimage_guest`) with an empty virtio-blk install target.
 //! That extract path is the M7.3 **lab MVP**, not the product installer.
 //! Product ISO install is typed + UEFI-first ([ADR-014](../docs/adr/ADR-014.md)):
-//! `linux_iso` | `windows_iso` | `generic_uefi`. Full El Torito / CD-ROM attach
-//! remains stubbed until that workstream. Do not hard-wire SPA install to bzImage.
+//! `linux_iso` | `windows_iso` | `generic_uefi`. Catalog parse lives in
+//! [`crate::mgmt::el_torito`] — parse is not attach, and attach is not VMLAUNCH.
+//! `attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Do not hard-wire SPA
+//! install to bzImage.
 
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{ImageKind, ImageTable, StoreError};
+
+pub use super::el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
 
 /// Host / CI marker when the M7.3 ISO deploy gate passes.
 pub const M7_ISO_OK_MARKER: &str = "RAYNU-V-M7-ISO-OK";

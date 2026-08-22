@@ -682,12 +682,17 @@ fn listen_loop<D: Device>(
         if did_exchange {
             served = served.saturating_add(1);
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
-            for _ in 0..80 {
-                millis += 1;
-                let ts = Instant::from_millis(millis);
-                iface.poll(ts, device, &mut sockets);
-                tsc_spin_ms(1);
-            }
+        }
+        if do_close {
+            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
+            // FIN + drain before qemu_exit. Exiting with an open socket RSTs
+            // curl (SPA ~15 KiB; TCG user-net).
+            flush_tcp_tx(&mut iface, device, &mut sockets, tcp_handle, &mut millis);
+            rx_len = 0;
+            announced = false;
+            accept_at = 0;
+        }
+        if did_exchange {
             match when {
                 ListenWhen::AfterEbs => {
                     serial::write_line(M7_HOST_NIC_QEMU_MARKER);
@@ -699,12 +704,6 @@ fn listen_loop<D: Device>(
                     pci_census::print_host_nic_exchange_ok_marker();
                 }
             }
-        }
-        if do_close {
-            sockets.get_mut::<tcp::Socket>(tcp_handle).close();
-            rx_len = 0;
-            announced = false;
-            accept_at = 0;
         }
         if did_idle_abort {
             serial::write_line("boot: WARN — HOST-NIC TCP idle abort; re-listen");
@@ -737,6 +736,31 @@ fn listen_loop<D: Device>(
         );
     }
     Ok(())
+}
+
+/// Poll until TX is empty (and the socket is no longer active after `close`).
+/// QEMU lab `qemu_exit`s after GET /; a RST or queued tail makes curl fail.
+fn flush_tcp_tx<D: Device>(
+    iface: &mut Interface,
+    device: &mut D,
+    sockets: &mut SocketSet,
+    tcp_handle: SocketHandle,
+    millis: &mut i64,
+) {
+    for _ in 0..400 {
+        *millis += 1;
+        iface.poll(Instant::from_millis(*millis), device, sockets);
+        tsc_spin_ms(1);
+        let sock = sockets.get::<tcp::Socket>(tcp_handle);
+        if sock.send_queue() == 0 && !sock.is_active() {
+            break;
+        }
+    }
+    for _ in 0..64 {
+        *millis += 1;
+        iface.poll(Instant::from_millis(*millis), device, sockets);
+        tsc_spin_ms(1);
+    }
 }
 
 fn print_bcm5720_poll_diag() {

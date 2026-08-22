@@ -93,8 +93,9 @@ pub enum BootDevice {
     Disk,
 }
 
-/// SPA create/start boot contract (ADR-014). Not wired to REST yet — E4 spec
-/// `{cpu,ram,disk,iso}` stays. Extra fields land with the real ISO installer.
+/// SPA create/start boot contract (ADR-014). REST/SPA accept the type on
+/// `POST /vms/{id}/spec/.../{linux_iso|windows_iso|generic_uefi}`. That is
+/// boot spec on the wire, not El Torito attach and not guest UEFI VMLAUNCH.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestBootSpec {
     pub image_type: GuestImageType,

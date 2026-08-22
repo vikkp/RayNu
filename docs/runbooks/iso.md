@@ -42,7 +42,8 @@ RAYNU-V-M7-ISO-OK
   `linux_iso` | `windows_iso` | `generic_uefi`. Do not hard-wire SPA install to
   bzImage jump. Windows install is later; the type exists now.
 - **`attach_cdrom_uefi`** returns `UnsupportedOnFirmware` — El Torito / CD-ROM
-  attach is deferred.
+  attach is deferred. Host catalog **parse** (`parse_el_torito`) is Stage 0 only
+  (`RAYNU-V-M7-E5-BOOT-SPEC-OK`). Parse is not attach.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
 - Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
@@ -52,3 +53,7 @@ M7.4 Ops Web UI MVP (`RAYNU-V-M7-UI-OK`) surfaces create-VM + media attach.
 
 E5 / M7.7 install-to-disk: see [iso_install.md](iso_install.md)
 (`RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; iron `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` closed 2026-08-16).
+
+E5 Stage 0 (host): typed boot spec on REST/SPA + El Torito catalog parse.
+`POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}/{linux_iso|windows_iso|generic_uefi}`.
+`iso=0` stays E4 SHELL. Not a live CD-ROM and not guest UEFI VMLAUNCH.

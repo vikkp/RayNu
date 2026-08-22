@@ -149,6 +149,7 @@ pub enum ApiReply {
         ram_mib: u32,
         disk_mib: u32,
         iso_id: u64,
+        image_type: Option<super::guest_image::GuestImageType>,
     },
     /// M7.2 image library record (`/images/{id}`).
     Image {
@@ -297,6 +298,7 @@ pub fn parse_rest_method(s: &str) -> Result<RestMethod, ApiParseError> {
 /// - `GET  /vms/{id}`         → get one
 /// - `POST /vms/{id}`         → create (default spec)
 /// - `POST /vms/{id}/spec/{cpu}/{ram_mib}/{disk_mib}/{iso_id}` → create with fields (M7.4)
+/// - `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}/{linux_iso|windows_iso|generic_uefi}` → ADR-014 boot spec (E5)
 /// - `POST /vms/{id}/start`   → start
 /// - `POST /vms/{id}/stop`    → stop
 /// - `DELETE /vms/{id}`       → destroy
@@ -332,6 +334,7 @@ pub fn dispatch_rest(table: &mut VmTable, req: RestRequest<'_>) -> RestResponse 
                     ram_mib: r.ram_mib,
                     disk_mib: r.disk_mib,
                     iso_id: r.iso_id,
+                    image_type: r.image_type,
                 }),
             },
             None => RestResponse {
@@ -468,9 +471,18 @@ fn route_rest(method: RestMethod, path: &str) -> Result<RestOp, ApiParseError> {
                 .ok_or(ApiParseError::BadPath)?;
             let iso = parse_u64(segs.next().ok_or(ApiParseError::BadPath)?)
                 .ok_or(ApiParseError::BadPath)?;
-            if segs.next().is_some() {
-                return Err(ApiParseError::BadPath);
-            }
+            let image_type = match segs.next() {
+                None => None,
+                Some(tag) => {
+                    if segs.next().is_some() {
+                        return Err(ApiParseError::BadPath);
+                    }
+                    Some(
+                        super::guest_image::GuestImageType::parse(tag)
+                            .ok_or(ApiParseError::BadPath)?,
+                    )
+                }
+            };
             if cpu > 64 || ram > u64::from(u32::MAX) || disk > u64::from(u32::MAX) {
                 return Err(ApiParseError::BadPath);
             }
@@ -481,6 +493,7 @@ fn route_rest(method: RestMethod, path: &str) -> Result<RestOp, ApiParseError> {
                     ram_mib: ram as u32,
                     disk_mib: disk as u32,
                     iso_id: iso,
+                    image_type,
                 },
             })
         }
@@ -545,6 +558,7 @@ pub fn prop_cli_rest_roundtrip() -> bool {
                 ram_mib: 512,
                 disk_mib: 1024,
                 iso_id: 0,
+                image_type: None,
             })
     {
         return false;

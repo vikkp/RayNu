@@ -146,3 +146,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 4. Guest filesystem install + full-disk persist (beyond LBA marker lab) — **after** post-EBS HTTP.
 5. El Torito / guest UEFI firmware + typed ISO ([ADR-014](../adr/ADR-014.md)) —
    product installer. Not another bzImage extract. Windows ISO later.
+   **Stage 0 (host, in progress):** boot spec on the wire + catalog parse
+   (`RAYNU-V-M7-E5-BOOT-SPEC-OK`). Attach and guest UEFI VMLAUNCH remain open.

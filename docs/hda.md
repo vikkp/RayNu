@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-21
+last_updated: 2026-08-22
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -143,11 +143,11 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | MISSING | product path [ADR-014](adr/ADR-014.md) (UEFI-first; not bzImage jump) |
+| ISO parse / El Torito / EFI boot img | PARTIAL (host parse) | Catalog parse `mgmt/el_torito.rs`; attach still stub; no guest UEFI VMLAUNCH |
 | CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
-| Multi-OS image types | **SPEC** | `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md)); Windows install later |
+| Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
 
 ---
@@ -193,6 +193,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
 | P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **DONE** | P0-13 | Iron `2b795a0` 2026-08-21; marker + 98-field shadow re-entry; SHELL stub |
+| P0-15 | **E5 Stage 0** Boot spec on the wire + El Torito parse | D | **IN PROGRESS (host)** | P0-14 | `RAYNU-V-M7-E5-BOOT-SPEC-OK`; not attach / not guest UEFI / not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -267,10 +268,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e4-spa-launch |
-| Summary | Release v0.1.0-e4-spa-launch after #169 on main. CI EFI of 832ea32; iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held |
-| Gates touched | none (checkpoint kit; P0-14 + Phase G already closed) |
+| Commit | e5-boot-spec |
+| Summary | P0-15 host boot spec + drain HOST-NIC TCP TX before QEMU qemu_exit (SPA ~15 KiB). Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Boot spec ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-BOOT-SPEC-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -292,6 +293,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-boot-spec | 0.5 | 95 | P0-15 host boot spec; HOST-NIC QEMU GET /: FIN+drain before qemu_exit (SPA ~15 KiB); iron P0-14 stays 2b795a0 |
 | 2026-08-21 | e4-spa-launch | 0.5 | 95 | Release v0.1.0-e4-spa-launch after #169; CI EFI 832ea32 SHA 00443957; iron P0-14 stays 2b795a0 |
 | 2026-08-21 | phase-g | 0.5 | 95 | ADR-013 Phase G closed (shared LOM accepted-risk); COM2 quiet after first E4 re-entry (in-tree); product next installer+TLS |
 | 2026-08-21 | adr-014 | 0.5 | 95 | ADR-014: typed ISO + UEFI-first product install; bzImage lab-only; Windows later; E4 not blocked |

@@ -155,6 +155,8 @@ pub fn host_nic_surface_present() -> bool {
         && listen.contains("iface.poll")
         && listen.contains("bounded_poll")
         && listen.contains("handle_http_request")
+        && listen.contains("fn flush_tcp_tx<")
+        && listen.contains("send_queue()")
         && listen.contains("rx_prod=")
         && listen.contains("tx_prod=")
         && listen.contains("fn print_bcm5720_poll_diag(")

@@ -78,7 +78,7 @@
     letter-spacing: 0.04em;
     color: rgba(12,26,34,0.6);
   }
-  input {
+  input, select {
     font-family: var(--font-ui);
     font-size: 0.95rem;
     padding: 0.45rem 0.55rem;
@@ -152,7 +152,7 @@
 <body data-raynu-webui="1" data-raynu-api="/vms" data-raynu-m7-ui="1" data-raynu-e4="1">
 <header>
   <div class="brand">RayNu-V</div>
-  <p class="tag">Ops UI — create guests, images/ISO extract-boot, host serial log (PRE-EBS lab HTTP).</p>
+  <p class="tag">Ops UI — create guests, typed ISO (ADR-014 UEFI-first), extract-boot is lab, host serial log (plaintext lab HTTP).</p>
 </header>
 <main>
   <section>
@@ -171,6 +171,14 @@
       <label>RAM MiB <input id="f-ram" type="number" min="64" value="2048"/></label>
       <label>Disk MiB <input id="f-disk" type="number" min="64" value="10240"/></label>
       <label>ISO id <input id="f-iso" type="number" min="0" value="0"/></label>
+      <label>Image type
+        <select id="f-image">
+          <option value="none">none (E4 SHELL)</option>
+          <option value="linux_iso">linux_iso</option>
+          <option value="windows_iso">windows_iso</option>
+          <option value="generic_uefi">generic_uefi</option>
+        </select>
+      </label>
       <button type="button" id="btn-create" data-action="create">Create</button>
       <button type="button" class="ghost" id="btn-refresh" data-action="list">Refresh</button>
     </div>
@@ -202,7 +210,8 @@
   <p class="status" id="status" role="status"></p>
   <p class="note">
     Host serial log is HV UART ring (not guest console). TLS deferred (plaintext lab HTTP).
-    El Torito/CD-ROM residual. Auth: ESP auth.token overrides bring-up when present.
+    Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
+    El Torito catalog parse is host-only; CD-ROM attach residual. Auth: ESP auth.token overrides bring-up when present.
   </p>
 </main>
 <script>
@@ -269,7 +278,9 @@
         ram_mib: body && body.ram_mib,
         disk_mib: body && body.disk_mib,
         iso_id: body && body.iso_id,
-        nics: body && body.nics
+        nics: body && body.nics,
+        image_type: body && body.image_type,
+        firmware: body && body.firmware
       });
     }
     render(items);
@@ -282,7 +293,12 @@
     const ram = num("f-ram", 512);
     const disk = num("f-disk", 1024);
     const iso = num("f-iso", 0);
-    const path = API + "/" + id + "/spec/" + cpu + "/" + ram + "/" + disk + "/" + iso;
+    const typEl = document.getElementById("f-image");
+    const typ = typEl ? typEl.value : "none";
+    let path = API + "/" + id + "/spec/" + cpu + "/" + ram + "/" + disk + "/" + iso;
+    if (iso !== 0 && typ && typ !== "none") {
+      path += "/" + typ;
+    }
     setStatus("Creating " + id + "…");
     const res = await api("POST", path);
     if (res.ok) remember(id);
@@ -359,7 +375,9 @@
         " ram=" + (vm.ram_mib != null ? vm.ram_mib : "?") + "MiB" +
         " disk=" + (vm.disk_mib != null ? vm.disk_mib : "?") + "MiB" +
         " iso=" + (vm.iso_id != null ? vm.iso_id : "0") +
-        " nics=" + (vm.nics != null ? vm.nics : "1");
+        " nics=" + (vm.nics != null ? vm.nics : "1") +
+        " type=" + (vm.image_type ? vm.image_type : "none") +
+        (vm.firmware ? (" fw=" + vm.firmware) : "");
       row.innerHTML =
         '<span class="id">' + id + "</span>" +
         '<span><div class="meta">' + meta + '</div><div class="state">' + state + "</div></span>" +
