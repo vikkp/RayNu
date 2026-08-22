@@ -280,6 +280,11 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Real ESP `\EFI\RayNu\OVMF.fd` place-attempt (ADR-014 Stage 29). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfLiveEspPlaced {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -477,6 +482,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveEspAdmitted { .. } => 53,
         AuditEvent::OvmfLiveEspRead { .. } => 54,
         AuditEvent::OvmfLiveEspCopied { .. } => 55,
+        AuditEvent::OvmfLiveEspPlaced { .. } => 56,
     }
 }
 
@@ -833,6 +839,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfLiveEspCopied { bytes_len, gpa } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspCopied bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfLiveEspPlaced { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspPlaced bytes=");
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
