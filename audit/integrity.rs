@@ -104,6 +104,8 @@ pub enum AuditEvent {
     OvmfFirmwareFloorStaged { bytes_len: u64 },
     /// EDK2-sized FV staged (ADR-014 Stage 11). Not a shipped OVMF.fd / not VMLAUNCH.
     OvmfFirmwareEdk2Staged { bytes_len: u64 },
+    /// ESP-path guest UEFI VMLAUNCH armed (ADR-014 Stage 12). No live OVMF.fd mapping.
+    OvmfEspLaunchArmed { guest_id: u64, slot_id: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -284,6 +286,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfFirmwareLaunchPrepared { .. } => 36,
         AuditEvent::OvmfFirmwareFloorStaged { .. } => 37,
         AuditEvent::OvmfFirmwareEdk2Staged { .. } => 38,
+        AuditEvent::OvmfEspLaunchArmed { .. } => 39,
     }
 }
 
@@ -530,6 +533,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::OvmfFirmwareEdk2Staged { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareEdk2Staged bytes=");
             write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfEspLaunchArmed { guest_id, slot_id } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfEspLaunchArmed guest=");
+            write_u64(guest_id);
+            serial::write_str(" slot=");
+            write_u64(slot_id);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

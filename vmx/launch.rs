@@ -197,6 +197,37 @@ impl From<VmcsOpError> for LaunchError {
     }
 }
 
+/// ADR-003 split-mode path for a live EDK2 `OVMF.fd`. Not embedded.
+pub const GUEST_UEFI_OVMF_ESP_PATH: &str = "\\EFI\\RayNu\\OVMF.fd";
+
+/// Guest UEFI VMLAUNCH error. Not the E4 SHELL path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestUefiLaunchError {
+    /// No live ESP `\\EFI\\RayNu\\OVMF.fd` mapping. Mock / floor / 1 MiB fixture refused.
+    MissingEspFirmware,
+}
+
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 12).
+///
+/// INVARIANTS:
+/// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, or 1 MiB size fixture
+/// - Requires a live mapping of ESP [`GUEST_UEFI_OVMF_ESP_PATH`]
+/// - This slice has no live mapping → [`GuestUefiLaunchError::MissingEspFirmware`]
+/// - Does not change `iso=0` E4 SHELL and does not write VMCS
+///
+/// VERIFICATION: L0 (documented). Outside the firmware-blob Proven Core set.
+pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
+    if !live_esp_ovmf_is_mapped() {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    Err(GuestUefiLaunchError::MissingEspFirmware)
+}
+
+/// Live ESP OVMF mapping. Never armed from the in-tree mock / floor / 1 MiB fixture.
+fn live_esp_ovmf_is_mapped() -> bool {
+    false
+}
+
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
 #[derive(Clone, Copy)]
 pub struct LaunchFrames {
@@ -4077,6 +4108,11 @@ mod launch_test {
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
         assert_eq!(CPU_BASED_USE_TPR_SHADOW, 1 << 21);
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
+        assert_eq!(GUEST_UEFI_OVMF_ESP_PATH, "\\EFI\\RayNu\\OVMF.fd");
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
     }
 
     #[test]

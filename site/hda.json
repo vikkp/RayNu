@@ -23,12 +23,12 @@
   "summits": {
     "core": 88,
     "efi": 95,
-    "iso": 93,
+    "iso": 94,
     "prod": 100,
     "r640": 98,
     "ui": 96
   },
   "updated_by": "cursor",
   "velocity_commits_30d": 346,
-  "velocity_gates_30d": 28
+  "velocity_gates_30d": 29
 }
