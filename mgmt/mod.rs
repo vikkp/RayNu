@@ -352,6 +352,7 @@ pub mod m7_e5_esp_map_gate;
 pub mod m7_e5_ept_install_gate;
 pub mod m7_e5_fw_alias_gate;
 pub mod m7_e5_real_esp_gate;
+pub mod m7_e5_real_launch_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -411,10 +412,11 @@ pub use guest_fw::{
     arm_ovmf_esp_launch, arm_ovmf_firmware_alias, arm_ovmf_firmware_slot, arm_ovmf_reset_vector,
     bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware,
     load_ovmf_from_esp, map_live_esp_ovmf, prepare_ovmf_firmware_launch, probe_ovmf_firmware,
-    install_ovmf_alias_ept, program_ovmf_alias_ept, qualify_real_esp_ovmf, stage_edk2_ovmf_firmware,
-    stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob, GuestFwError, GuestFwKind,
-    OvmfAlias, OvmfAliasEpt, OvmfAliasEptInstall, OvmfBind, OvmfEdk2, OvmfEspLaunch, OvmfFloor,
-    OvmfFv, OvmfLaunchPrep, OvmfLiveMap, OvmfRealEsp, OvmfResetVec, OvmfSlot,
+    arm_ovmf_real_launch, install_ovmf_alias_ept, program_ovmf_alias_ept, qualify_real_esp_ovmf,
+    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob,
+    GuestFwError, GuestFwKind, OvmfAlias, OvmfAliasEpt, OvmfAliasEptInstall, OvmfBind, OvmfEdk2,
+    OvmfEspLaunch, OvmfFloor, OvmfFv, OvmfLaunchPrep, OvmfLiveMap, OvmfRealEsp, OvmfRealLaunch,
+    OvmfResetVec, OvmfSlot,
 };
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use ha::{
@@ -464,6 +466,7 @@ pub use m7_e5_esp_map_gate::{run_m7_e5_esp_map_gate, M7_E5_ESP_MAP_OK_MARKER};
 pub use m7_e5_ept_install_gate::{run_m7_e5_ept_install_gate, M7_E5_EPT_INSTALL_OK_MARKER};
 pub use m7_e5_fw_alias_gate::{run_m7_e5_fw_alias_gate, M7_E5_FW_ALIAS_OK_MARKER};
 pub use m7_e5_real_esp_gate::{run_m7_e5_real_esp_gate, M7_E5_REAL_ESP_OK_MARKER};
+pub use m7_e5_real_launch_gate::{run_m7_e5_real_launch_gate, M7_E5_REAL_LAUNCH_OK_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};

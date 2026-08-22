@@ -229,6 +229,11 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Guest-UEFI VMLAUNCH insn path armed (ADR-014 Stage 19). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfRealLaunchArmed {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -416,6 +421,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfAliasEptProgrammed { .. } => 43,
         AuditEvent::OvmfAliasEptInstalled { .. } => 44,
         AuditEvent::OvmfRealEspQualified { .. } => 45,
+        AuditEvent::OvmfRealLaunchArmed { .. } => 46,
     }
 }
 
@@ -702,6 +708,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfRealEspQualified { bytes_len, gpa } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfRealEspQualified bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfRealLaunchArmed { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfRealLaunchArmed bytes=");
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
