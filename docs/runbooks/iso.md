@@ -81,10 +81,12 @@ RAYNU-V-M7-ISO-OK
   (`stage_edk2_ovmf_firmware`) is Stage 11
   (`RAYNU-V-M7-E5-FW-EDK2-OK`). ESP-path **launch**
   (`arm_ovmf_esp_launch` / `try_vmlaunch_guest_uefi_ovmf`) is Stage 12
-  (`RAYNU-V-M7-E5-ESP-LAUNCH-OK`); `try_vmlaunch_ovmf_firmware` refuses the
-  80-byte mock, the 4 KiB floor, and the 1 MiB EDK2-sized fixture, then
-  `MissingEsp` (no live `OVMF.fd`). Real EDK2 bytes stay on ESP
-  `EFI/RayNu/OVMF.fd`.
+  (`RAYNU-V-M7-E5-ESP-LAUNCH-OK`). Live-sized ESP **map**
+  (`map_live_esp_ovmf`) is Stage 13 (`RAYNU-V-M7-E5-ESP-MAP-OK`);
+  `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
+  and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map) or
+  `LiveMappedNotLaunched` (2 MiB+ map recorded; VMLAUNCH insn not issued).
+  Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
@@ -140,3 +142,8 @@ E5 Stage 12 (host, closed): `POST /fw/esp-launch` arms the ESP-path
 VMLAUNCH contract after EDK2. `POST /fw/vmlaunch` calls
 `try_vmlaunch_guest_uefi_ovmf` and returns 409 (`MissingEsp` — no live
 `OVMF.fd`). The 1 MiB fixture is not launched. Not VMLAUNCH.
+
+E5 Stage 13 (host, closed): `POST /fw/esp-map` records a live-sized
+(2 MiB+) ESP map after launch-arm (host test heap only). Production UEFI
+returns 409 (no embedded 2 MiB). `POST /fw/vmlaunch` returns 409
+(`LiveMappedNotLaunched`). Not a shipped `OVMF.fd`. VMLAUNCH insn not issued.

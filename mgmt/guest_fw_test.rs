@@ -3,13 +3,14 @@ use super::{
     guest_fw_payload, load_guest_firmware, load_ovmf_from_esp, ovmf_esp_is_loaded, ovmf_fv_is_probed,
     ovmf_floor_is_staged, ovmf_guest_is_bound, ovmf_launch_is_prepared, ovmf_slot_is_armed,
     parse_guest_fw, prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw,
-    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware,
-    write_edk2_sized_fv, write_guest_fw_header, write_mock_ovmf_fv, write_size_floor_ovmf_fv,
-    arm_ovmf_esp_launch, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest, ovmf_edk2_is_staged,
-    ovmf_esp_launch_is_armed, GuestFwError,
-    GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
-    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MIN_EDK2_OVMF_BYTES, MOCK_OVMF_FV_BYTES,
-    OVMF_FW_GUEST_ID, SIZE_FLOOR_FV_BYTES, OVMF_FW_SLOT_ID, SECTION_GUEST_FW,
+    map_live_esp_ovmf, ovmf_live_esp_is_mapped, stage_edk2_ovmf_firmware,
+    stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, write_edk2_sized_fv, write_guest_fw_header,
+    write_live_esp_ovmf_fv, write_mock_ovmf_fv, write_size_floor_ovmf_fv, arm_ovmf_esp_launch,
+    arm_ovmf_firmware_slot, bind_ovmf_firmware_guest, ovmf_edk2_is_staged, ovmf_esp_launch_is_armed,
+    GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
+    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MIN_EDK2_OVMF_BYTES,
+    MIN_LIVE_ESP_OVMF_BYTES, MOCK_OVMF_FV_BYTES, OVMF_FW_GUEST_ID, SIZE_FLOOR_FV_BYTES,
+    OVMF_FW_SLOT_ID, SECTION_GUEST_FW,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 
@@ -148,6 +149,14 @@ fn rest_box_requires_bearer() {
     });
     assert_eq!(esp_launch.status, 201);
     assert!(ovmf_esp_launch_is_armed());
+
+    let mapped = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/esp-map",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(mapped.status, 201);
+    assert!(ovmf_live_esp_is_mapped());
 
     let refused = dispatch_guest_fw_rest(RestRequest {
         method: RestMethod::Post,
@@ -429,6 +438,51 @@ fn ovmf_esp_launch_requires_edk2_and_refuses_without_live_file() {
     assert_eq!(
         try_vmlaunch_ovmf_firmware(),
         Err(GuestFwError::MissingEsp)
+    );
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_esp_map_requires_launch_and_refuses_vmlaunch() {
+    reset_guest_fw();
+    let mut live = vec![0u8; MIN_LIVE_ESP_OVMF_BYTES];
+    write_live_esp_ovmf_fv(&mut live).unwrap();
+    assert_eq!(map_live_esp_ovmf(&live), Err(GuestFwError::LaunchNotWired));
+    assert!(!ovmf_live_esp_is_mapped());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/esp-map",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let mut mock = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut mock).unwrap();
+    probe_ovmf_firmware(&mock).unwrap();
+    load_ovmf_from_esp(&mock).unwrap();
+    arm_ovmf_firmware_slot().unwrap();
+    bind_ovmf_firmware_guest().unwrap();
+    prepare_ovmf_firmware_launch().unwrap();
+    let mut floor = [0u8; SIZE_FLOOR_FV_BYTES];
+    write_size_floor_ovmf_fv(&mut floor).unwrap();
+    stage_ovmf_firmware_floor(&floor).unwrap();
+    let mut edk2 = vec![0u8; MIN_EDK2_OVMF_BYTES];
+    write_edk2_sized_fv(&mut edk2).unwrap();
+    stage_edk2_ovmf_firmware(&edk2).unwrap();
+    arm_ovmf_esp_launch().unwrap();
+    assert_eq!(
+        map_live_esp_ovmf(&edk2),
+        Err(GuestFwError::TooSmall)
+    );
+    let mapped = map_live_esp_ovmf(&live).unwrap();
+    assert_eq!(mapped.bytes_len, MIN_LIVE_ESP_OVMF_BYTES as u64);
+    assert!(ovmf_live_esp_is_mapped());
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::LiveMappedNotLaunched)
     );
     reset_guest_fw();
 }

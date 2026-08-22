@@ -167,5 +167,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 10 (host, closed):** firmware size-floor (`RAYNU-V-M7-E5-FW-FLOOR-OK`).
    **Stage 11 (host, closed):** firmware EDK2-sized stage (`RAYNU-V-M7-E5-FW-EDK2-OK`).
    **Stage 12 (host, closed):** ESP-path VMLAUNCH (`RAYNU-V-M7-E5-ESP-LAUNCH-OK`).
-   Live ESP `OVMF.fd` map + VMLAUNCH remains open (mock, 4 KiB floor, and
-   1 MiB size fixture refused; no live mapping on host).
+   **Stage 13 (host, closed):** live ESP OVMF map (`RAYNU-V-M7-E5-ESP-MAP-OK`).
+   Real ESP `OVMF.fd` VMLAUNCH remains open (mock, 4 KiB floor, 1 MiB
+   EDK2 fixture, and 2 MiB live-map fixture refused; VMLAUNCH insn not issued).
