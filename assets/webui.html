@@ -104,6 +104,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-fw-pv">Arm private VMCS</button>
       <button id="btn-is">Arm live issue</button>
       <button id="btn-lb">Probe live bytes</button>
+      <button id="btn-fd">Require live FD</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -259,6 +260,7 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-fw-pv").onclick=function(){fwPost("/fw/priv-vmcs","ok","err");};
   document.getElementById("btn-is").onclick=function(){fwPost("/fw/live-issue","ok","err");};
   document.getElementById("btn-lb").onclick=function(){fwPost("/fw/live-bytes","ok","err");};
+  document.getElementById("btn-fd").onclick=function(){fwPost("/fw/live-fd","ok","err");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
