@@ -1,6 +1,7 @@
 use super::{
-    guest_uefi_vmlaunch_entered, last_exit_reason, live_firmware_alias_gpa,
-    run_retained_ovmf_vmlaunch, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    guest_uefi_alive, guest_uefi_non_tf_exits, guest_uefi_vmlaunch_entered, last_exit_reason,
+    live_firmware_alias_gpa, run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -41,6 +42,11 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UnsupportedOnFirmware"));
     assert!(!guest_uefi_vmlaunch_entered());
     assert_eq!(last_exit_reason(), 0);
+    assert_eq!(M7_E5_OVMF_ALIVE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-ALIVE-OK");
+    assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
+    assert!(!guest_uefi_alive());
+    assert_eq!(guest_uefi_non_tf_exits(), 0);
 }
 
 #[test]

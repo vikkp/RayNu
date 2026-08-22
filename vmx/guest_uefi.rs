@@ -21,8 +21,8 @@ use crate::vmx::launch::{
 
 #[cfg(target_os = "uefi")]
 use crate::arch::cpu::{
-    self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
-    IA32_SYSENTER_CS, IA32_SYSENTER_EIP, IA32_SYSENTER_ESP, IA32_VMX_CR0_FIXED0,
+    self, adjust_vmx_controls, true_ctl_msrs_supported, CR4_VMXE, IA32_EFER, IA32_FS_BASE,
+    IA32_GS_BASE, IA32_SYSENTER_CS, IA32_SYSENTER_EIP, IA32_SYSENTER_ESP, IA32_VMX_CR0_FIXED0,
     IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1, IA32_VMX_ENTRY_CTLS,
     IA32_VMX_EXIT_CTLS, IA32_VMX_PINBASED_CTLS, IA32_VMX_PROCBASED_CTLS, IA32_VMX_PROCBASED_CTLS2,
     IA32_VMX_TRUE_ENTRY_CTLS, IA32_VMX_TRUE_EXIT_CTLS, IA32_VMX_TRUE_PINBASED_CTLS,
@@ -35,7 +35,7 @@ use crate::audit_log;
 #[cfg(target_os = "uefi")]
 use crate::boot::serial;
 #[cfg(target_os = "uefi")]
-use crate::memory::ept_hw::{self, frames_required_firmware_alias, TWO_MIB};
+use crate::memory::ept_hw::{self, frames_required_firmware_alias, GUEST_UEFI_LOW_RAM_BYTES};
 #[cfg(target_os = "uefi")]
 use crate::vmx::fields::*;
 #[cfg(target_os = "uefi")]
@@ -51,7 +51,14 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; first entry only; not installer; attach_cdrom_uefi stays UnsupportedOnFirmware; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; short resume loop; not installer; attach_cdrom_uefi stays UnsupportedOnFirmware; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+
+/// QEMU / serial marker when OVMF ran past the first triple-fault.
+pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
+
+/// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
+/// Same #GP as Linux `startup_64` without the E4 CR4.VMXE mask.
+pub const E5_OVMF_SEC_CR4_VALUE: u64 = 0x640;
 
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
 static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -59,6 +66,41 @@ static LAST_EXIT_REASON: AtomicU32 = AtomicU32::new(0);
 static LAST_GUEST_RIP: AtomicU64 = AtomicU64::new(0);
 static LAST_GUEST_PHYS: AtomicU64 = AtomicU64::new(0);
 static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
+static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
+static NON_TF_EXITS: AtomicU32 = AtomicU32::new(0);
+static ALIVE_PRINTED: AtomicBool = AtomicBool::new(false);
+static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "uefi")]
+static mut SAVED_RAX: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RBX: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RCX: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RDX: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RSI: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RDI: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_RBP: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R8: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R9: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R10: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R11: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R12: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R13: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R14: u64 = 0;
+#[cfg(target_os = "uefi")]
+static mut SAVED_R15: u64 = 0;
 
 static mut SAVED_VMCS: u64 = 0;
 static mut E4_ALLOC: *mut FrameAllocator = core::ptr::null_mut();
@@ -102,6 +144,19 @@ pub fn reset_guest_uefi_launch() {
     LAST_GUEST_RIP.store(0, Ordering::Release);
     LAST_GUEST_PHYS.store(0, Ordering::Release);
     LAST_INSN_ERROR.store(0, Ordering::Release);
+    EXIT_COUNT.store(0, Ordering::Release);
+    NON_TF_EXITS.store(0, Ordering::Release);
+    ALIVE_PRINTED.store(false, Ordering::Release);
+    CONTINUE_GUEST.store(false, Ordering::Release);
+}
+
+/// Exits after a successful entry that were not triple-fault / VM-entry fail.
+pub fn guest_uefi_non_tf_exits() -> u32 {
+    NON_TF_EXITS.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_alive() -> bool {
+    ALIVE_PRINTED.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -179,12 +234,13 @@ unsafe fn launch_uefi(
     core::ptr::write_bytes(fw_hpa as *mut u8, 0, (pages * 4096) as usize);
     core::ptr::copy_nonoverlapping(bytes.as_ptr(), fw_hpa as *mut u8, bytes.len());
 
-    let Some(ram_frame) = alloc.allocate_contiguous_aligned(512, 512) else {
-        serial::write_line("boot: guest-UEFI no 2MiB RAM slab");
+    let ram_pages = GUEST_UEFI_LOW_RAM_BYTES / 4096;
+    let Some(ram_frame) = alloc.allocate_contiguous_aligned(ram_pages, 512) else {
+        serial::write_line("boot: guest-UEFI no 32MiB RAM slab");
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
     let ram_hpa = ram_frame.to_phys();
-    core::ptr::write_bytes(ram_hpa as *mut u8, 0, TWO_MIB as usize);
+    core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -215,6 +271,7 @@ unsafe fn launch_uefi(
     if !ept_hw::gpa_is_mapped(pml4, GUEST_UEFI_RESET_VECTOR_GPA)
         || !ept_hw::gpa_is_mapped(pml4, gpa)
         || !ept_hw::gpa_is_mapped(pml4, 0)
+        || !ept_hw::gpa_is_mapped(pml4, GUEST_UEFI_LOW_RAM_BYTES - 4096)
     {
         serial::write_line("boot: guest-UEFI alias EPT walk failed");
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
@@ -410,7 +467,7 @@ unsafe fn setup_guest_uefi_vmcs(
     ops::vmclear(vmcs).map_err(|_| LaunchError::ClearFailed)?;
     prepare_vmcs_region(vmcs)?;
 
-    let host_rip = guest_uefi_vmexit as *const () as u64;
+    let host_rip = guest_uefi_vmexit_landing as *const () as u64;
 
     match ops::vmptrld_and_vmwrite(vmcs, VMCS_LINK_POINTER, !0u64) {
         Ok(()) => {}
@@ -425,7 +482,9 @@ unsafe fn setup_guest_uefi_vmcs(
     vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
     vw(VM_EXIT_CONTROLS, exit_ctls as u64)?;
     vw(VM_ENTRY_CONTROLS, entry_ctls as u64)?;
-    vw(EXCEPTION_BITMAP, 0)?;
+    // Catch #DF/#GP/#PF before they become a silent triple-fault.
+    const UEFI_EXC_BITMAP: u32 = (1 << 8) | (1 << 13) | (1 << 14);
+    vw(EXCEPTION_BITMAP, UEFI_EXC_BITMAP as u64)?;
     vw(PAGE_FAULT_ERROR_CODE_MASK, 0)?;
     vw(PAGE_FAULT_ERROR_CODE_MATCH, 0)?;
     vw(CR3_TARGET_COUNT, 0)?;
@@ -434,9 +493,10 @@ unsafe fn setup_guest_uefi_vmcs(
     vw(VM_ENTRY_MSR_LOAD_COUNT, 0)?;
     vw(VM_ENTRY_INTERRUPTION_INFO, 0)?;
     vw(CR0_GUEST_HOST_MASK, 0)?;
-    vw(CR4_GUEST_HOST_MASK, 0)?;
+    // Host-own CR4.VMXE (E4 Linux path). OVMF SEC `mov cr4, 0x640` clears it.
+    vw(CR4_GUEST_HOST_MASK, CR4_VMXE)?;
     vw(CR0_READ_SHADOW, 0)?;
-    vw(CR4_READ_SHADOW, 0)?;
+    vw(CR4_READ_SHADOW, guest_cr4 & !CR4_VMXE)?;
     vw(SECONDARY_VM_EXEC_CONTROL, secondary as u64)?;
     vw(EPT_POINTER, eptp)?;
     if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
@@ -499,7 +559,7 @@ unsafe fn setup_guest_uefi_vmcs(
 
     vw(GUEST_CR0, guest_cr0)?;
     vw(GUEST_CR3, 0)?;
-    vw(GUEST_CR4, guest_cr4)?;
+    vw(GUEST_CR4, guest_cr4 | CR4_VMXE)?;
     vw(GUEST_DR7, 0x400)?;
     vw(GUEST_IA32_EFER, 0)?;
     vw(GUEST_RSP, 0)?;
@@ -561,7 +621,93 @@ unsafe fn vw(field: u64, value: u64) -> Result<(), LaunchError> {
     ops::vmwrite(field, value).map_err(|_| LaunchError::VmwriteFailed { field })
 }
 
-/// HOST_RIP for the private guest-UEFI VMCS. Not the E4 SHELL landing.
+/// HOST_RIP trampoline — save guest GPRs before Rust clobbers them.
+#[cfg(target_os = "uefi")]
+#[unsafe(naked)]
+pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
+    core::arch::naked_asm!(
+        "mov [rip + {slot_rax}], rax",
+        "mov [rip + {slot_rbx}], rbx",
+        "mov [rip + {slot_rcx}], rcx",
+        "mov [rip + {slot_rdx}], rdx",
+        "mov [rip + {slot_rsi}], rsi",
+        "mov [rip + {slot_rdi}], rdi",
+        "mov [rip + {slot_rbp}], rbp",
+        "mov [rip + {slot_r8}], r8",
+        "mov [rip + {slot_r9}], r9",
+        "mov [rip + {slot_r10}], r10",
+        "mov [rip + {slot_r11}], r11",
+        "mov [rip + {slot_r12}], r12",
+        "mov [rip + {slot_r13}], r13",
+        "mov [rip + {slot_r14}], r14",
+        "mov [rip + {slot_r15}], r15",
+        "jmp {cont}",
+        slot_rax = sym SAVED_RAX,
+        slot_rbx = sym SAVED_RBX,
+        slot_rcx = sym SAVED_RCX,
+        slot_rdx = sym SAVED_RDX,
+        slot_rsi = sym SAVED_RSI,
+        slot_rdi = sym SAVED_RDI,
+        slot_rbp = sym SAVED_RBP,
+        slot_r8 = sym SAVED_R8,
+        slot_r9 = sym SAVED_R9,
+        slot_r10 = sym SAVED_R10,
+        slot_r11 = sym SAVED_R11,
+        slot_r12 = sym SAVED_R12,
+        slot_r13 = sym SAVED_R13,
+        slot_r14 = sym SAVED_R14,
+        slot_r15 = sym SAVED_R15,
+        cont = sym guest_uefi_vmexit,
+    );
+}
+
+#[cfg(target_os = "uefi")]
+#[unsafe(naked)]
+unsafe extern "C" fn guest_uefi_vmresume() -> ! {
+    core::arch::naked_asm!(
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
+        "vmresume",
+        "jmp {fail}",
+        slot_rax = sym SAVED_RAX,
+        slot_rbx = sym SAVED_RBX,
+        slot_rcx = sym SAVED_RCX,
+        slot_rdx = sym SAVED_RDX,
+        slot_rsi = sym SAVED_RSI,
+        slot_rdi = sym SAVED_RDI,
+        slot_rbp = sym SAVED_RBP,
+        slot_r8 = sym SAVED_R8,
+        slot_r9 = sym SAVED_R9,
+        slot_r10 = sym SAVED_R10,
+        slot_r11 = sym SAVED_R11,
+        slot_r12 = sym SAVED_R12,
+        slot_r13 = sym SAVED_R13,
+        slot_r14 = sym SAVED_R14,
+        slot_r15 = sym SAVED_R15,
+        fail = sym guest_uefi_resume_failed,
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
+    serial::write_line("boot: guest-UEFI VMRESUME failed — continuing E4 SHELL");
+    leave_to_e4();
+}
+
+/// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     LAUNCH_ENTERED.store(true, Ordering::Release);
@@ -570,28 +716,39 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
+    let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
     LAST_EXIT_REASON.store(reason, Ordering::Release);
     LAST_GUEST_RIP.store(rip, Ordering::Release);
     LAST_GUEST_PHYS.store(gpa, Ordering::Release);
 
-    serial::write_str("boot: guest-UEFI VMEXIT reason=0x");
-    write_hex_u32(reason);
-    serial::write_str(" rip=0x");
-    write_hex(rip);
-    serial::write_str(" cs_base=0x");
-    write_hex(cs_base);
-    serial::write_str(" qual=0x");
-    write_hex(qual);
-    serial::write_str(" gpa=0x");
-    write_hex(gpa);
-    serial::write_byte(b'\n');
-
+    let n = EXIT_COUNT.fetch_add(1, Ordering::AcqRel) + 1;
     let basic = reason & 0xFFFF;
     let entry_fail = (reason & 0x8000_0000) != 0
         || basic == EXIT_REASON_VMENTRY_GUEST_STATE
         || basic == EXIT_REASON_VMENTRY_MSR_LOAD;
-    let linear = cs_base.wrapping_add(rip);
+    let tf = basic == EXIT_REASON_TRIPLE_FAULT;
     let fetch_fail = basic == EXIT_REASON_EPT_VIOLATION && gpa == GUEST_UEFI_RESET_VECTOR_GPA;
+    let linear = cs_base.wrapping_add(rip);
+
+    if n <= 16 {
+        serial::write_str("boot: guest-UEFI VMEXIT n=");
+        write_dec(n as u64);
+        serial::write_str(" reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" cs_base=0x");
+        write_hex(cs_base);
+        serial::write_str(" qual=0x");
+        write_hex(qual);
+        serial::write_str(" gpa=0x");
+        write_hex(gpa);
+        if basic == EXIT_REASON_EXCEPTION_NMI {
+            serial::write_str(" intr=0x");
+            write_hex(intr);
+        }
+        serial::write_byte(b'\n');
+    }
 
     if !entry_fail && !fetch_fail {
         if !MARKER_PRINTED.swap(true, Ordering::AcqRel) {
@@ -600,19 +757,143 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             write_hex(linear);
             serial::write_byte(b'\n');
         }
-        audit_log!(AuditEvent::OvmfGuestUefiVmlaunched {
-            exit_reason: reason as u64,
-            guest_rip: rip,
-        });
+        if n == 1 {
+            audit_log!(AuditEvent::OvmfGuestUefiVmlaunched {
+                exit_reason: reason as u64,
+                guest_rip: rip,
+            });
+        }
+        if !tf {
+            let nt = NON_TF_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
+            if nt >= 2 || basic == EXIT_REASON_HLT {
+                maybe_print_alive(basic);
+            }
+        }
     } else {
         serial::write_line("boot: guest-UEFI VM-entry/fetch failed — marker not claimed");
     }
 
+    let mut resume = false;
+    if !entry_fail && !tf && !fetch_fail && n < 64 {
+        resume = match basic {
+            EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
+            EXIT_REASON_CPUID => handle_cpuid(),
+            EXIT_REASON_MSR_READ => handle_rdmsr(),
+            EXIT_REASON_MSR_WRITE => handle_wrmsr(),
+            EXIT_REASON_HLT => {
+                maybe_print_alive(basic);
+                false
+            }
+            EXIT_REASON_EPT_VIOLATION => {
+                serial::write_str("boot: guest-UEFI EPT violation gpa=0x");
+                write_hex(gpa);
+                serial::write_byte(b'\n');
+                false
+            }
+            EXIT_REASON_EXCEPTION_NMI => {
+                serial::write_str("boot: guest-UEFI exception intr=0x");
+                write_hex(intr);
+                serial::write_byte(b'\n');
+                false
+            }
+            EXIT_REASON_EXTERNAL_INTERRUPT => true,
+            EXIT_REASON_XSETBV => skip_insn(),
+            _ => false,
+        };
+    }
+
+    if resume {
+        CONTINUE_GUEST.store(true, Ordering::Release);
+        guest_uefi_vmresume();
+    }
+    leave_to_e4();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_alive(basic: u32) {
+    if MARKER_PRINTED.load(Ordering::Acquire)
+        && !ALIVE_PRINTED.swap(true, Ordering::AcqRel)
+        && (NON_TF_EXITS.load(Ordering::Acquire) >= 2 || basic == EXIT_REASON_HLT)
+    {
+        serial::write_line(M7_E5_OVMF_ALIVE_OK_MARKER);
+        serial::write_str("boot: guest-UEFI non-tf exits=");
+        write_dec(NON_TF_EXITS.load(Ordering::Acquire) as u64);
+        serial::write_byte(b'\n');
+        audit_log!(AuditEvent::OvmfGuestUefiAlive {
+            exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+            last_reason: LAST_EXIT_REASON.load(Ordering::Acquire) as u64,
+        });
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn skip_insn() -> bool {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    if len == 0 || len > 15 {
+        return false;
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_io(qual: u64) -> bool {
+    let size = (qual & 7) + 1;
+    let is_in = (qual & (1 << 3)) != 0;
+    if is_in {
+        let mask = if size == 1 {
+            0xffu64
+        } else if size == 2 {
+            0xffff
+        } else {
+            0xffff_ffff
+        };
+        SAVED_RAX = (SAVED_RAX & !mask) | mask;
+    }
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_cpuid() -> bool {
+    let leaf = SAVED_RAX as u32;
+    let sub = SAVED_RCX as u32;
+    let r = core::arch::x86_64::__cpuid_count(leaf, sub);
+    SAVED_RAX = r.eax as u64;
+    SAVED_RBX = r.ebx as u64;
+    SAVED_RCX = r.ecx as u64;
+    SAVED_RDX = r.edx as u64;
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_rdmsr() -> bool {
+    let msr = SAVED_RCX as u32;
+    let v = if msr == IA32_EFER {
+        ops::vmread(GUEST_IA32_EFER).unwrap_or(0)
+    } else {
+        0
+    };
+    SAVED_RAX = v as u32 as u64;
+    SAVED_RDX = (v >> 32) as u32 as u64;
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_wrmsr() -> bool {
+    let msr = SAVED_RCX as u32;
+    let v = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
+    if msr == IA32_EFER {
+        let _ = ops::vmwrite(GUEST_IA32_EFER, v);
+    }
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn leave_to_e4() -> ! {
     let vmcs = SAVED_VMCS;
     if vmcs != 0 {
         let _ = ops::vmclear(vmcs);
     }
-
     let rsp = E4_RSP;
     let rip_cont = E4_RESUME;
     if rsp != 0 && rip_cont != 0 {

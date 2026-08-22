@@ -199,3 +199,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    VMLAUNCH of retained ESP `OVMF.fd`
    (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`). Not the E4 SHELL VMCS/EPT.
    First entry only. Not installer. Not Everest E5.
+   **Stage 38 (host + QEMU, closed):** OVMF past first triple-fault
+   (`RAYNU-V-M7-E5-OVMF-ALIVE-OK`). CR4.VMXE host-owned. Not full
+   OVMF boot. Not installer. Not Everest E5.

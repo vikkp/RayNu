@@ -326,6 +326,12 @@ pub enum AuditEvent {
         exit_reason: u64,
         guest_rip: u64,
     },
+    /// Guest UEFI continued past the first triple-fault (CR4.VMXE host-owned).
+    /// Not full OVMF boot / not installer.
+    OvmfGuestUefiAlive {
+        exits: u64,
+        last_reason: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -532,6 +538,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveEspHeld { .. } => 62,
         AuditEvent::OvmfLiveEspBytesRetained { .. } => 63,
         AuditEvent::OvmfGuestUefiVmlaunched { .. } => 64,
+        AuditEvent::OvmfGuestUefiAlive { .. } => 65,
     }
 }
 
@@ -955,6 +962,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(exit_reason);
             serial::write_str(" rip=0x");
             write_u64(guest_rip);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiAlive { exits, last_reason } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiAlive exits=");
+            write_u64(exits);
+            serial::write_str(" reason=0x");
+            write_u64(last_reason);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
