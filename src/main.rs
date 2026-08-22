@@ -176,7 +176,45 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
     }
 }
 
+extern "C" fn resume_e4_shell() -> ! {
+    let alloc = vmx::guest_uefi::e4_alloc();
+    let life = vmx::guest_uefi::e4_life();
+    if !alloc.is_null() && !life.is_null() {
+        // SAFETY: pointers saved from run_m2_ept_launch; single-threaded boot.
+        unsafe { run_m2_ept_launch_e4(&mut *alloc, &mut *life) };
+    }
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
 fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLifecycle) {
+    // SAFETY: single-threaded VMX root; resume uses the original UEFI stack.
+    unsafe {
+        vmx::guest_uefi::arm_e4_resume(alloc, life, resume_e4_shell);
+    }
+    if boot::ovmf_esp::bytes_present() {
+        match unsafe { vmx::guest_uefi::run_retained_ovmf_vmlaunch(alloc) } {
+            Ok(()) => {
+                boot::serial::write_line("boot: guest-UEFI VMLAUNCH returned without VMEXIT");
+            }
+            Err(vmx::launch::GuestUefiLaunchError::LaunchSetupFailed) => {
+                boot::serial::write_line(
+                    "boot: guest-UEFI VMLAUNCH setup/insn failed — continuing E4 SHELL",
+                );
+            }
+            Err(vmx::launch::GuestUefiLaunchError::PrivateVmcsNotLaunched) => {
+                boot::serial::write_line("boot: guest-UEFI VMLAUNCH not issued on this target");
+            }
+            Err(_) => {
+                boot::serial::write_line("boot: guest-UEFI VMLAUNCH skipped");
+            }
+        }
+    }
+    run_m2_ept_launch_e4(alloc, life);
+}
+
+fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLifecycle) {
     boot::serial::write_line("boot: M1.1 complete — entering M2 EPT + guest");
 
     // M3.20: tight precise path always uses 2M leaves (sub-GiB window).

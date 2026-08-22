@@ -33,6 +33,8 @@
 # M4.3: RAYNU-V-M4-BLK-OK (virtio-blk MMIO handshake + host write/readback)
 # M4.4: RAYNU-V-M4-NET-OK (virtio-net dual-port + vSwitch exchange)
 # M4.5: RAYNU-V-M4-SMP-OK (dual-vCPU BSP+AP shared-EPT probe)
+# E5.36: RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK (real ESP OVMF.fd retain; always)
+# E5.37: RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -71,6 +73,7 @@ MARKER_BLK="${MARKER_BLK:-RAYNU-V-M4-BLK-OK}"
 MARKER_NET="${MARKER_NET:-RAYNU-V-M4-NET-OK}"
 MARKER_SMP="${MARKER_SMP:-RAYNU-V-M4-SMP-OK}"
 MARKER_OVMF_RETAIN="${MARKER_OVMF_RETAIN:-RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK}"
+MARKER_OVMF_VMLAUNCH="${MARKER_OVMF_VMLAUNCH:-RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -176,6 +179,12 @@ fi
 
 if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   echo "==> M1.1 VMXON marker found"
+  if grep -qF "$MARKER_OVMF_VMLAUNCH" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI VMLAUNCH of retained OVMF found"
+  else
+    echo "error: marker '$MARKER_OVMF_VMLAUNCH' not found after VMXON (need real VMLAUNCH of retained OVMF)" >&2
+    fail=1
+  fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then
     echo "==> M1.2 VMEXIT marker found"
   else

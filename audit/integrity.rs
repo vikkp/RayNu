@@ -320,6 +320,12 @@ pub enum AuditEvent {
     OvmfLiveEspBytesRetained {
         bytes_len: u64,
     },
+    /// Private guest-UEFI VMLAUNCH of retained ESP `OVMF.fd` entered (first VMEXIT).
+    /// Not Everest E5 / not a shipped installer.
+    OvmfGuestUefiVmlaunched {
+        exit_reason: u64,
+        guest_rip: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -525,6 +531,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveEspLocked { .. } => 61,
         AuditEvent::OvmfLiveEspHeld { .. } => 62,
         AuditEvent::OvmfLiveEspBytesRetained { .. } => 63,
+        AuditEvent::OvmfGuestUefiVmlaunched { .. } => 64,
     }
 }
 
@@ -938,6 +945,16 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::OvmfLiveEspBytesRetained { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspBytesRetained bytes=");
             write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiVmlaunched {
+            exit_reason,
+            guest_rip,
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiVmlaunched reason=0x");
+            write_u64(exit_reason);
+            serial::write_str(" rip=0x");
+            write_u64(guest_rip);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

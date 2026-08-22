@@ -128,7 +128,9 @@ RAYNU-V-M7-ISO-OK
   (`hold_ovmf_live_esp`) is Stage 35
   (`RAYNU-V-M7-E5-LIVE-HOLD-OK`). Real ESP **retain**
   (`probe_ovmf_esp` / `accept_real_ovmf_bytes`) is Stage 36
-  (`RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK`);
+  (`RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK`). Private guest-UEFI
+  VMLAUNCH of those retained bytes is Stage 37
+  (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
   `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
@@ -384,5 +386,12 @@ real ESP `OVMF.fd` when the image passes `accept_real_ovmf_bytes`.
 QEMU stages a system `OVMF.fd` onto `EFI/RayNu/OVMF.fd`.
 `guest_uefi_live_esp_bytes_present` follows that retain. Private
 guest-UEFI VMCS is not allocated. `POST /fw/vmlaunch` after retain
-returns 409 (`PrivateVmcsNotLaunched`). VMLAUNCH insn not issued.
-No further `*Absent` bookkeeping stages.
+returns 409 (`PrivateVmcsNotLaunched`) on host. No further `*Absent`
+bookkeeping stages.
+
+E5 Stage 37 (host + QEMU, closed): after retain, boot allocates a
+private guest-UEFI VMCS + alias EPT and issues `VMLAUNCH` of the
+retained bytes at `0xFFFF_FFF0` (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`).
+That path is not the E4 SHELL VMCS/EPT. Host `cargo test` still
+returns `PrivateVmcsNotLaunched` and does not execute the instruction.
+First entry is not a distro installer. Do not claim `ISO-INSTALL-OK`.
