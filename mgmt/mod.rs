@@ -320,6 +320,7 @@ pub mod m7_e5_guest_fw_load_gate;
 pub mod m7_e5_ovmf_probe_gate;
 pub mod m7_e5_ovmf_esp_gate;
 pub mod m7_e5_ovmf_slot_gate;
+pub mod m7_e5_fw_bind_gate;
 pub mod api;
 pub mod datastore;
 pub mod guest_image;
@@ -466,15 +467,16 @@ pub use m7_e5_cdrom_firmware_gate::{
     run_m7_e5_cdrom_firmware_gate, M7_E5_CDROM_FIRMWARE_OK_MARKER,
 };
 pub use guest_fw::{
-    arm_ovmf_firmware_slot, box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware,
-    load_ovmf_from_esp, probe_ovmf_firmware, GuestFwBlob, GuestFwError, GuestFwKind, OvmfFv,
-    OvmfSlot,
+    arm_ovmf_firmware_slot, bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest,
+    load_guest_firmware, load_ovmf_from_esp, probe_ovmf_firmware, GuestFwBlob, GuestFwError,
+    GuestFwKind, OvmfBind, OvmfFv, OvmfSlot,
 };
 pub use m7_e5_guest_fw_gate::{run_m7_e5_guest_fw_gate, M7_E5_GUEST_FW_OK_MARKER};
 pub use m7_e5_guest_fw_load_gate::{run_m7_e5_guest_fw_load_gate, M7_E5_GUEST_FW_LOAD_OK_MARKER};
 pub use m7_e5_ovmf_probe_gate::{run_m7_e5_ovmf_probe_gate, M7_E5_OVMF_PROBE_OK_MARKER};
 pub use m7_e5_ovmf_esp_gate::{run_m7_e5_ovmf_esp_gate, M7_E5_OVMF_ESP_OK_MARKER};
 pub use m7_e5_ovmf_slot_gate::{run_m7_e5_ovmf_slot_gate, M7_E5_OVMF_SLOT_OK_MARKER};
+pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
 };

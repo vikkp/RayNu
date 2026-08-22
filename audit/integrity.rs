@@ -96,6 +96,8 @@ pub enum AuditEvent {
     OvmfFirmwareEspLoaded { bytes_len: u64, fv_len: u64 },
     /// Guest firmware slot armed (ADR-014 Stage 7). Not VMLAUNCH.
     OvmfFirmwareSlotArmed { slot_id: u64 },
+    /// Firmware slot bound to a guest (ADR-014 Stage 8). Not VMLAUNCH.
+    OvmfFirmwareGuestBound { guest_id: u64, slot_id: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -272,6 +274,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfFirmwareProbed { .. } => 32,
         AuditEvent::OvmfFirmwareEspLoaded { .. } => 33,
         AuditEvent::OvmfFirmwareSlotArmed { .. } => 34,
+        AuditEvent::OvmfFirmwareGuestBound { .. } => 35,
     }
 }
 
@@ -493,6 +496,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfFirmwareSlotArmed { slot_id } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareSlotArmed slot=");
+            write_u64(slot_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfFirmwareGuestBound { guest_id, slot_id } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareGuestBound guest=");
+            write_u64(guest_id);
+            serial::write_str(" slot=");
             write_u64(slot_id);
             serial::write_byte(b'\n');
         }

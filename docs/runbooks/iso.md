@@ -33,6 +33,8 @@ M7.3 closes a **documented kernel-extract** deploy path on top of the image libr
 | `GET` | `/fw/ovmf/esp` | 200 — listed count of ESP-loaded OVMF volumes (0/1) |
 | `POST` | `/fw/slot` | 201 — arm guest firmware slot 1 after ESP load (not VMLAUNCH) |
 | `GET` | `/fw/slot` | 200 — listed count of armed firmware slots (0/1) |
+| `POST` | `/fw/bind` | 201 — bind firmware slot 1 to guest 1 after arm (not VMLAUNCH) |
+| `GET` | `/fw/bind` | 200 — listed count of bound firmware guests (0/1) |
 
 Token: `Authorization: Bearer raynu-v-bringup` (same as M6.4 / M7.1 / M7.2).
 
@@ -69,7 +71,9 @@ RAYNU-V-M7-ISO-OK
   (`load_ovmf_from_esp`) is Stage 6
   (`RAYNU-V-M7-E5-OVMF-ESP-OK`). Slot **arm**
   (`arm_ovmf_firmware_slot`) is Stage 7
-  (`RAYNU-V-M7-E5-OVMF-SLOT-OK`). Real EDK2 bytes stay on ESP
+  (`RAYNU-V-M7-E5-OVMF-SLOT-OK`). Guest **bind**
+  (`bind_ovmf_firmware_guest`) is Stage 8
+  (`RAYNU-V-M7-E5-FW-BIND-OK`). Real EDK2 bytes stay on ESP
   `EFI/RayNu/OVMF.fd`. Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
@@ -106,3 +110,6 @@ probe. Not embedded EDK2 and not VMLAUNCH.
 
 E5 Stage 7 (host, closed): `POST /fw/slot` arms firmware slot 1 after ESP
 load. Not VMLAUNCH.
+
+E5 Stage 8 (host, closed): `POST /fw/bind` binds slot 1 to guest 1 after
+slot arm. Not VMLAUNCH.
