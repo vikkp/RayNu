@@ -146,8 +146,8 @@ pub fn write_mock_efi_iso(iso: &mut [u8]) -> Result<usize, ElToritoError> {
 
 /// Minimal ISO prefix with a Boot Record at sector 17 and a catalog at 20.
 #[cfg(test)]
-pub fn mock_efi_iso() -> alloc::vec::Vec<u8> {
-    let mut iso = alloc::vec![0u8; MOCK_EFI_ISO_BYTES];
+pub fn mock_efi_iso() -> [u8; MOCK_EFI_ISO_BYTES] {
+    let mut iso = [0u8; MOCK_EFI_ISO_BYTES];
     let _ = write_mock_efi_iso(&mut iso);
     iso
 }

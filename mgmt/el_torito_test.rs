@@ -13,7 +13,7 @@ fn parses_mock_efi_catalog() {
 #[test]
 fn rejects_truncated() {
     assert_eq!(parse_el_torito(&[0u8; 32]), Err(ElToritoError::NoBootRecord));
-    let short = alloc::vec![0u8; 17 * ISO_SECTOR];
+    let short = [0u8; 17 * ISO_SECTOR];
     assert_eq!(parse_el_torito(&short), Err(ElToritoError::NoBootRecord));
 }
 
