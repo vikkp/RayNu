@@ -120,7 +120,9 @@ RAYNU-V-M7-ISO-OK
   (`commit_ovmf_live_esp`) is Stage 31
   (`RAYNU-V-M7-E5-LIVE-COMMIT-OK`). Live-ESP **latch**
   (`latch_ovmf_live_esp`) is Stage 32
-  (`RAYNU-V-M7-E5-LIVE-LATCH-OK`);
+  (`RAYNU-V-M7-E5-LIVE-LATCH-OK`). Live-ESP **seal**
+  (`seal_ovmf_live_esp`) is Stage 33
+  (`RAYNU-V-M7-E5-LIVE-SEAL-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
   `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
@@ -150,6 +152,8 @@ RAYNU-V-M7-ISO-OK
   `LiveEspCommitAbsent` (real ESP bytes commit-attempted; live E4
   SHELL EPT not written; VMLAUNCH insn not issued), or
   `LiveEspLatchAbsent` (real ESP bytes latch-attempted; live E4
+  SHELL EPT not written; VMLAUNCH insn not issued), or
+  `LiveEspSealAbsent` (real ESP bytes seal-attempted; live E4
   SHELL EPT not written; VMLAUNCH insn not issued).
   Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
@@ -339,5 +343,12 @@ E5 Stage 32 (host, closed): `POST /fw/live-latch` records a real-ESP
 latch-attempt after live-commit (host test heap fixture only).
 Production UEFI returns 409 (no embedded 4 MiB).
 `POST /fw/vmlaunch` returns 409 (`LiveEspLatchAbsent`). Live E4
+SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
+VMLAUNCH insn not issued.
+
+E5 Stage 33 (host, closed): `POST /fw/live-seal` records a real-ESP
+seal-attempt after live-latch (host test heap fixture only).
+Production UEFI returns 409 (no embedded 4 MiB).
+`POST /fw/vmlaunch` returns 409 (`LiveEspSealAbsent`). Live E4
 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
 VMLAUNCH insn not issued.
