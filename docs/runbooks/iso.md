@@ -84,11 +84,14 @@ RAYNU-V-M7-ISO-OK
   (`RAYNU-V-M7-E5-ESP-LAUNCH-OK`). Live-sized ESP **map**
   (`map_live_esp_ovmf`) is Stage 13 (`RAYNU-V-M7-E5-ESP-MAP-OK`).
   Reset-vector **arm** (`arm_ovmf_reset_vector`) is Stage 14
-  (`RAYNU-V-M7-E5-RESET-VEC-OK`);
+  (`RAYNU-V-M7-E5-RESET-VEC-OK`). Firmware-alias **arm**
+  (`arm_ovmf_firmware_alias`) is Stage 15
+  (`RAYNU-V-M7-E5-FW-ALIAS-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
-  `LiveMappedNotLaunched` (2 MiB+ map, no reset stub), or
-  `ResetVectorNotLaunched` (JMP FAR stub recorded; VMLAUNCH insn not issued).
+  `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
+  `ResetVectorNotLaunched` (JMP FAR stub recorded), or
+  `FirmwareAliasNotLaunched` (4 MiB alias recorded; VMLAUNCH insn not issued).
   Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
@@ -156,3 +159,9 @@ reset-vector VMCS contract after the live map (host test heap stub only).
 Production UEFI returns 409 (no embedded 2 MiB). `POST /fw/vmlaunch`
 returns 409 (`ResetVectorNotLaunched`). Synthetic `0xEA` stub is not a
 shipped `OVMF.fd`. VMLAUNCH insn not issued.
+
+E5 Stage 15 (host, closed): `POST /fw/alias` records the unrestricted-guest
++ 4 GiB firmware-alias contract after reset-vector (host test heap fixture
+only). Production UEFI returns 409 (no embedded 4 MiB). `POST /fw/vmlaunch`
+returns 409 (`FirmwareAliasNotLaunched`). 4 MiB fixture is not a shipped
+`OVMF.fd`. VMLAUNCH insn not issued.

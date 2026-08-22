@@ -14,14 +14,16 @@ pub mod noirq_gate;
 pub mod ops;
 pub mod vmcs;
 
-pub use hardware::{M1_VMXON_OK_MARKER, M1_VMXON_SKIP_MARKER};
 pub use crate::memory::{M2_EPT_OK_MARKER, M2_GUEST_OK_MARKER, M2_OWN_OK_MARKER};
+pub use hardware::{M1_VMXON_OK_MARKER, M1_VMXON_SKIP_MARKER};
 pub use launch::{
-    arm_guest_uefi_reset_vector, arm_live_esp_ovmf_mapping, guest_uefi_reset_vector_is_armed,
+    arm_guest_uefi_firmware_alias, arm_guest_uefi_reset_vector, arm_live_esp_ovmf_mapping,
+    firmware_alias_gpa, guest_uefi_firmware_alias_is_armed, guest_uefi_reset_vector_is_armed,
     live_esp_ovmf_is_mapped, reset_guest_uefi_reset_vector, reset_live_esp_ovmf_mapping,
     try_vmlaunch_guest_uefi_ovmf, GuestUefiLaunchError, GuestUefiResetVmcs, LaunchError,
-    LaunchFrames, GUEST_UEFI_OVMF_ESP_PATH, GUEST_UEFI_RESET_VMCS, MIN_LIVE_ESP_OVMF_BYTES,
-    M1_VMEXIT_OK_MARKER,
+    LaunchFrames, GUEST_UEFI_FIRMWARE_TOP_GPA, GUEST_UEFI_OVMF_ESP_PATH, GUEST_UEFI_RESET_VMCS,
+    GUEST_UEFI_UNRESTRICTED_GUEST, M1_VMEXIT_OK_MARKER, MIN_FIRMWARE_ALIAS_BYTES,
+    MIN_LIVE_ESP_OVMF_BYTES,
 };
 pub use lifecycle::{VmxError, VmxLifecycle, VmxState};
 pub use noirq_gate::{run_noirq_gate, M3_NOIRQ_OK_MARKER};

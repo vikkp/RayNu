@@ -203,6 +203,8 @@ impl From<VmcsOpError> for LaunchError {
 pub const GUEST_UEFI_OVMF_ESP_PATH: &str = "\\EFI\\RayNu\\OVMF.fd";
 /// Minimum live-sized ESP map. 1 MiB EDK2 fixture stays below this.
 pub const MIN_LIVE_ESP_OVMF_BYTES: usize = 2 * 1024 * 1024;
+/// Minimum firmware-alias image. Live-sized map stays below this.
+pub const MIN_FIRMWARE_ALIAS_BYTES: usize = 4 * 1024 * 1024;
 /// x86 reset-vector stub length at the end of a firmware image (SDM 9.1.4).
 pub const GUEST_UEFI_RESET_VECTOR_LEN: usize = 16;
 /// JMP FAR opcode that qualifies a reset-vector stub. Not EDK2 SEC.
@@ -213,8 +215,15 @@ pub const GUEST_UEFI_RESET_CS: u16 = 0xF000;
 pub const GUEST_UEFI_RESET_RIP: u64 = 0xFFF0;
 /// GPA of the x86 reset vector (firmware alias at the top of 4 GiB).
 pub const GUEST_UEFI_RESET_VECTOR_GPA: u64 = 0xFFFF_FFF0;
+/// Top of the 4 GiB firmware-alias window (exclusive).
+pub const GUEST_UEFI_FIRMWARE_TOP_GPA: u64 = 0x1_0000_0000;
+/// Unrestricted-guest secondary bit. Contract only — not ORed into E4 SHELL VMCS.
+pub const GUEST_UEFI_UNRESTRICTED_GUEST: u32 =
+    crate::vmx::fields::SECONDARY_ENABLE_UNRESTRICTED_GUEST;
 
 const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES > 1024 * 1024);
+const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES < MIN_FIRMWARE_ALIAS_BYTES);
+const _: () = assert!(GUEST_UEFI_UNRESTRICTED_GUEST == 1 << 7);
 
 /// Documented reset-vector VMCS entry. Not a live VMWRITE / not VMLAUNCH.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -242,6 +251,8 @@ pub enum GuestUefiLaunchError {
     NoResetVector,
     /// Reset-vector VMCS contract is recorded; VMLAUNCH instruction is not issued.
     ResetVectorNotLaunched,
+    /// Firmware-alias contract is recorded; VMLAUNCH instruction is not issued.
+    FirmwareAliasNotLaunched,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -249,6 +260,8 @@ pub enum GuestUefiLaunchError {
 static LIVE_ESP_OVMF_MAPPED: AtomicBool = AtomicBool::new(false);
 static LIVE_ESP_OVMF_BYTES: AtomicU64 = AtomicU64::new(0);
 static GUEST_UEFI_RESET_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_UEFI_FIRMWARE_ALIAS_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_UEFI_FIRMWARE_ALIAS_BYTES: AtomicU64 = AtomicU64::new(0);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -270,11 +283,13 @@ pub fn live_esp_ovmf_bytes_len() -> u64 {
     LIVE_ESP_OVMF_BYTES.load(Ordering::Acquire)
 }
 
-/// Clear the process-local live-map and reset-vector flags (host tests / `reset_guest_fw`).
+/// Clear the process-local live-map, reset-vector, and firmware-alias flags.
 pub fn reset_live_esp_ovmf_mapping() {
     LIVE_ESP_OVMF_MAPPED.store(false, Ordering::Release);
     LIVE_ESP_OVMF_BYTES.store(0, Ordering::Release);
     GUEST_UEFI_RESET_ARMED.store(false, Ordering::Release);
+    GUEST_UEFI_FIRMWARE_ALIAS_ARMED.store(false, Ordering::Release);
+    GUEST_UEFI_FIRMWARE_ALIAS_BYTES.store(0, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -285,6 +300,38 @@ pub fn guest_uefi_reset_vector_is_armed() -> bool {
 /// Clear only the reset-vector flag.
 pub fn reset_guest_uefi_reset_vector() {
     GUEST_UEFI_RESET_ARMED.store(false, Ordering::Release);
+}
+
+/// GPA of a firmware-alias mapping under the 4 GiB top. None if undersized.
+pub fn firmware_alias_gpa(bytes_len: u64) -> Option<u64> {
+    if bytes_len < MIN_FIRMWARE_ALIAS_BYTES as u64 || bytes_len > MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return None;
+    }
+    Some(GUEST_UEFI_FIRMWARE_TOP_GPA - bytes_len)
+}
+
+/// True after a successful [`arm_guest_uefi_firmware_alias`].
+pub fn guest_uefi_firmware_alias_is_armed() -> bool {
+    GUEST_UEFI_FIRMWARE_ALIAS_ARMED.load(Ordering::Acquire)
+}
+
+/// Record the unrestricted-guest + 4 GiB firmware-alias contract (ADR-014 Stage 15).
+///
+/// INVARIANTS:
+/// - Requires a prior reset-vector arm
+/// - Requires `bytes_len >= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Does not VMWRITE and does not issue VMLAUNCH
+/// - Does not OR unrestricted guest into the E4 SHELL VMCS
+pub fn arm_guest_uefi_firmware_alias(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_reset_vector_is_armed() {
+        return Err(GuestUefiLaunchError::ResetVectorNotLaunched);
+    }
+    if firmware_alias_gpa(bytes_len).is_none() {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_FIRMWARE_ALIAS_BYTES.store(bytes_len, Ordering::Release);
+    GUEST_UEFI_FIRMWARE_ALIAS_ARMED.store(true, Ordering::Release);
+    Ok(())
 }
 
 /// Probe a JMP FAR reset-vector stub at the end of a live-sized image.
@@ -319,14 +366,17 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
     Ok(())
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 14).
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 15).
 ///
 /// INVARIANTS:
-/// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture, or 2 MiB map
+/// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture,
+///   2 MiB map, synthetic `0xEA` stub, or 4 MiB alias fixture
 /// - Unmapped → [`GuestUefiLaunchError::MissingEspFirmware`]
 /// - Mapped, no reset-vector → [`GuestUefiLaunchError::LiveMappedNotLaunched`]
-/// - Reset-vector armed → [`GuestUefiLaunchError::ResetVectorNotLaunched`]
-///   (contract [`GUEST_UEFI_RESET_VMCS`] only; no VMWRITE / no insn)
+/// - Reset-vector armed, no alias → [`GuestUefiLaunchError::ResetVectorNotLaunched`]
+/// - Alias armed → [`GuestUefiLaunchError::FirmwareAliasNotLaunched`]
+///   (contracts [`GUEST_UEFI_RESET_VMCS`] + unrestricted guest + 4 GiB alias;
+///   no VMWRITE / no insn)
 /// - Does not change `iso=0` E4 SHELL
 ///
 /// VERIFICATION: L0 (documented). Outside the firmware-blob Proven Core set.
@@ -337,8 +387,16 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_reset_vector_is_armed() {
         return Err(GuestUefiLaunchError::LiveMappedNotLaunched);
     }
-    let _ = GUEST_UEFI_RESET_VMCS;
-    Err(GuestUefiLaunchError::ResetVectorNotLaunched)
+    if !guest_uefi_firmware_alias_is_armed() {
+        let _ = GUEST_UEFI_RESET_VMCS;
+        return Err(GuestUefiLaunchError::ResetVectorNotLaunched);
+    }
+    let _ = (
+        GUEST_UEFI_RESET_VMCS,
+        GUEST_UEFI_UNRESTRICTED_GUEST,
+        firmware_alias_gpa(GUEST_UEFI_FIRMWARE_ALIAS_BYTES.load(Ordering::Acquire)),
+    );
+    Err(GuestUefiLaunchError::FirmwareAliasNotLaunched)
 }
 
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
@@ -4223,6 +4281,13 @@ mod launch_test {
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
         assert_eq!(GUEST_UEFI_OVMF_ESP_PATH, "\\EFI\\RayNu\\OVMF.fd");
         assert_eq!(MIN_LIVE_ESP_OVMF_BYTES, 2 * 1024 * 1024);
+        assert_eq!(MIN_FIRMWARE_ALIAS_BYTES, 4 * 1024 * 1024);
+        assert_eq!(GUEST_UEFI_FIRMWARE_TOP_GPA, 0x1_0000_0000);
+        assert_eq!(GUEST_UEFI_UNRESTRICTED_GUEST, 1 << 7);
+        assert_eq!(
+            firmware_alias_gpa(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Some(0xFFC0_0000)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert_eq!(
@@ -4259,9 +4324,24 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::ResetVectorNotLaunched)
         );
+        assert_eq!(
+            arm_guest_uefi_firmware_alias(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_firmware_alias_is_armed());
+        assert_eq!(
+            arm_guest_uefi_firmware_alias(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_firmware_alias_is_armed());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::FirmwareAliasNotLaunched)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
+        assert!(!guest_uefi_firmware_alias_is_armed());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 

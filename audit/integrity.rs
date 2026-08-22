@@ -31,85 +31,189 @@ pub enum Milestone {
 /// Security-relevant events that MUST be audited (CLAUDE.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuditEvent {
-    BootStarted { milestone: Milestone },
-    VmxEnabled { vcpu_id: u32 },
-    VmcsCreated { vcpu_id: u32, vmcs_id: u64 },
-    EptMapped { guest_id: u64, gpa: u64, hpa: u64 },
-    EptUnmapped { guest_id: u64, gpa: u64, hpa: u64 },
-    MsrBlocked { vcpu_id: u32, msr_index: u32 },
-    FrameAllocated { frame: u64 },
-    FrameFreed { frame: u64 },
+    BootStarted {
+        milestone: Milestone,
+    },
+    VmxEnabled {
+        vcpu_id: u32,
+    },
+    VmcsCreated {
+        vcpu_id: u32,
+        vmcs_id: u64,
+    },
+    EptMapped {
+        guest_id: u64,
+        gpa: u64,
+        hpa: u64,
+    },
+    EptUnmapped {
+        guest_id: u64,
+        gpa: u64,
+        hpa: u64,
+    },
+    MsrBlocked {
+        vcpu_id: u32,
+        msr_index: u32,
+    },
+    FrameAllocated {
+        frame: u64,
+    },
+    FrameFreed {
+        frame: u64,
+    },
     /// Management-plane VM created (Defined). M5.0.
-    VmCreated { guest_id: u64 },
+    VmCreated {
+        guest_id: u64,
+    },
     /// Management-plane VM started (Running). M5.0.
-    VmStarted { guest_id: u64 },
+    VmStarted {
+        guest_id: u64,
+    },
     /// Management-plane VM stopped. M5.0.
-    VmStopped { guest_id: u64 },
+    VmStopped {
+        guest_id: u64,
+    },
     /// Management-plane VM destroyed. M5.0.
-    VmDestroyed { guest_id: u64 },
+    VmDestroyed {
+        guest_id: u64,
+    },
     /// VMware migrate batch started (ADR-007 / M5.5).
-    MigrateStarted { batch_id: u64, count: u32 },
+    MigrateStarted {
+        batch_id: u64,
+        count: u32,
+    },
     /// VMware migrate batch completed successfully.
-    MigrateCompleted { batch_id: u64, count: u32 },
+    MigrateCompleted {
+        batch_id: u64,
+        count: u32,
+    },
     /// VMware migrate batch failed.
-    MigrateFailed { batch_id: u64, count: u32 },
+    MigrateFailed {
+        batch_id: u64,
+        count: u32,
+    },
     /// REST control-plane auth allowed (M6.4).
-    AuthAllowed { method_tag: u8 },
+    AuthAllowed {
+        method_tag: u8,
+    },
     /// REST control-plane auth denied (M6.4).
-    AuthDenied { method_tag: u8 },
+    AuthDenied {
+        method_tag: u8,
+    },
     /// Mock HA failover started (M6.6); role tags: 0=Primary, 1=Standby.
-    HaFailoverStarted { from_role: u8, to_role: u8 },
+    HaFailoverStarted {
+        from_role: u8,
+        to_role: u8,
+    },
     /// Mock HA failover completed with transferred guest count (M6.6).
-    HaFailoverCompleted { guest_count: u32 },
+    HaFailoverCompleted {
+        guest_count: u32,
+    },
     /// Fault injected (M6.7); kind: 0=KillVcpu,1=CorruptPage,2=DropIrq,3=NetPartition.
-    FaultInjected { kind: u8, detail: u64 },
+    FaultInjected {
+        kind: u8,
+        detail: u64,
+    },
     /// Fault recovered (M6.7).
-    FaultRecovered { kind: u8, detail: u64 },
+    FaultRecovered {
+        kind: u8,
+        detail: u64,
+    },
     /// Fault denied / fail-closed path taken (M6.7).
-    FaultFailClosed { kind: u8, detail: u64 },
+    FaultFailClosed {
+        kind: u8,
+        detail: u64,
+    },
     /// Soak run started (M6.8); detail = target hours.
-    SoakStarted { target_hours: u32 },
+    SoakStarted {
+        target_hours: u32,
+    },
     /// Soak run completed within thresholds (M6.8); detail = hours completed.
-    SoakCompleted { hours: u32 },
+    SoakCompleted {
+        hours: u32,
+    },
     /// Soak run failed thresholds (M6.8); detail = hours completed at fail.
-    SoakFailed { hours: u32 },
+    SoakFailed {
+        hours: u32,
+    },
     /// Evidence / verbose mode activated via ESP flag file (ADR-011).
     /// `source`: 1 = volume root `paperverbose.txt`, 2 = `\\EFI\\RayNu\\paperverbose.txt`.
-    EvidenceModeActivated { source: u8 },
+    EvidenceModeActivated {
+        source: u8,
+    },
     /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E).
     /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced.
-    MgmtRestarted { generation: u32, kind: u8 },
+    MgmtRestarted {
+        generation: u32,
+        kind: u8,
+    },
     /// Host El Torito CD-ROM attach armed (ADR-014 Stage 1). Not guest UEFI.
-    CdromAttached { iso_id: u64, load_lba: u64 },
+    CdromAttached {
+        iso_id: u64,
+        load_lba: u64,
+    },
     /// Firmware-facing CD armed (ADR-014 Stage 2). Not VMLAUNCH / not OVMF.
-    CdromFirmwareArmed { iso_id: u64, load_lba: u64 },
+    CdromFirmwareArmed {
+        iso_id: u64,
+        load_lba: u64,
+    },
     /// Guest UEFI firmware envelope boxed (ADR-014 Stage 3). Not OVMF / not VMLAUNCH.
     GuestFirmwareBoxed {
         uncompressed_len: u64,
         compressed_len: u64,
     },
     /// Guest firmware stub payload lazy-loaded (ADR-014 Stage 4). Not OVMF / not VMLAUNCH.
-    GuestFirmwareLoaded { payload_len: u64 },
+    GuestFirmwareLoaded {
+        payload_len: u64,
+    },
     /// OVMF Firmware Volume header probed (ADR-014 Stage 5). Not VMLAUNCH / not embedded EDK2.
-    OvmfFirmwareProbed { fv_len: u64 },
+    OvmfFirmwareProbed {
+        fv_len: u64,
+    },
     /// OVMF loaded from ESP split-mode path (ADR-014 Stage 6). Not VMLAUNCH.
-    OvmfFirmwareEspLoaded { bytes_len: u64, fv_len: u64 },
+    OvmfFirmwareEspLoaded {
+        bytes_len: u64,
+        fv_len: u64,
+    },
     /// Guest firmware slot armed (ADR-014 Stage 7). Not VMLAUNCH.
-    OvmfFirmwareSlotArmed { slot_id: u64 },
+    OvmfFirmwareSlotArmed {
+        slot_id: u64,
+    },
     /// Firmware slot bound to a guest (ADR-014 Stage 8). Not VMLAUNCH.
-    OvmfFirmwareGuestBound { guest_id: u64, slot_id: u64 },
+    OvmfFirmwareGuestBound {
+        guest_id: u64,
+        slot_id: u64,
+    },
     /// Firmware launch-prepare after bind (ADR-014 Stage 9). Not VMLAUNCH.
-    OvmfFirmwareLaunchPrepared { guest_id: u64, slot_id: u64 },
+    OvmfFirmwareLaunchPrepared {
+        guest_id: u64,
+        slot_id: u64,
+    },
     /// Size-floor FV staged (ADR-014 Stage 10). Not EDK2 / not VMLAUNCH.
-    OvmfFirmwareFloorStaged { bytes_len: u64 },
+    OvmfFirmwareFloorStaged {
+        bytes_len: u64,
+    },
     /// EDK2-sized FV staged (ADR-014 Stage 11). Not a shipped OVMF.fd / not VMLAUNCH.
-    OvmfFirmwareEdk2Staged { bytes_len: u64 },
+    OvmfFirmwareEdk2Staged {
+        bytes_len: u64,
+    },
     /// ESP-path guest UEFI VMLAUNCH armed (ADR-014 Stage 12). No live OVMF.fd mapping.
-    OvmfEspLaunchArmed { guest_id: u64, slot_id: u64 },
+    OvmfEspLaunchArmed {
+        guest_id: u64,
+        slot_id: u64,
+    },
     /// Live-sized ESP OVMF map recorded (ADR-014 Stage 13). Not a shipped OVMF.fd / not VMLAUNCH.
-    OvmfEspLiveMapped { bytes_len: u64 },
+    OvmfEspLiveMapped {
+        bytes_len: u64,
+    },
     /// Reset-vector VMCS contract armed (ADR-014 Stage 14). Not a shipped OVMF.fd / not VMLAUNCH.
-    OvmfResetVectorArmed { bytes_len: u64 },
+    OvmfResetVectorArmed {
+        bytes_len: u64,
+    },
+    /// Firmware-alias contract armed (ADR-014 Stage 15). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfFirmwareAliasArmed {
+        bytes_len: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -293,6 +397,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfEspLaunchArmed { .. } => 39,
         AuditEvent::OvmfEspLiveMapped { .. } => 40,
         AuditEvent::OvmfResetVectorArmed { .. } => 41,
+        AuditEvent::OvmfFirmwareAliasArmed { .. } => 42,
     }
 }
 
@@ -555,6 +660,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfResetVectorArmed { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfResetVectorArmed bytes=");
+            write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfFirmwareAliasArmed { bytes_len } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareAliasArmed bytes=");
             write_u64(bytes_len);
             serial::write_byte(b'\n');
         }
