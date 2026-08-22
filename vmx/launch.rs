@@ -35,6 +35,8 @@
 //! M4.4: after BLK-OK, virtio-net dual-port vSwitch → `RAYNU-V-M4-NET-OK`.
 //! M4.5: after NET-OK, dual-vCPU BSP+AP shared-EPT probe → `RAYNU-V-M4-SMP-OK`.
 
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
 use crate::arch::apic;
 use crate::arch::cpu::{
     self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE, IA32_GS_BASE,
@@ -199,33 +201,66 @@ impl From<VmcsOpError> for LaunchError {
 
 /// ADR-003 split-mode path for a live EDK2 `OVMF.fd`. Not embedded.
 pub const GUEST_UEFI_OVMF_ESP_PATH: &str = "\\EFI\\RayNu\\OVMF.fd";
+/// Minimum live-sized ESP map. 1 MiB EDK2 fixture stays below this.
+pub const MIN_LIVE_ESP_OVMF_BYTES: usize = 2 * 1024 * 1024;
+
+const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES > 1024 * 1024);
 
 /// Guest UEFI VMLAUNCH error. Not the E4 SHELL path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuestUefiLaunchError {
     /// No live ESP `\\EFI\\RayNu\\OVMF.fd` mapping. Mock / floor / 1 MiB fixture refused.
     MissingEspFirmware,
+    /// Live-sized map is recorded; VMLAUNCH instruction is not issued this slice.
+    LiveMappedNotLaunched,
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 12).
+/// JUSTIFICATION (global state): live-map bookkeeping is process-local.
+/// Host tests reset via [`reset_live_esp_ovmf_mapping`]. Not a VMCS write.
+static LIVE_ESP_OVMF_MAPPED: AtomicBool = AtomicBool::new(false);
+static LIVE_ESP_OVMF_BYTES: AtomicU64 = AtomicU64::new(0);
+
+/// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
+pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if bytes_len < MIN_LIVE_ESP_OVMF_BYTES as u64 {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    LIVE_ESP_OVMF_BYTES.store(bytes_len, Ordering::Release);
+    LIVE_ESP_OVMF_MAPPED.store(true, Ordering::Release);
+    Ok(())
+}
+
+/// True after a successful [`arm_live_esp_ovmf_mapping`].
+pub fn live_esp_ovmf_is_mapped() -> bool {
+    LIVE_ESP_OVMF_MAPPED.load(Ordering::Acquire)
+}
+
+/// Recorded live-map length. Zero when unmapped.
+pub fn live_esp_ovmf_bytes_len() -> u64 {
+    LIVE_ESP_OVMF_BYTES.load(Ordering::Acquire)
+}
+
+/// Clear the process-local live-map flags (host tests / `reset_guest_fw`).
+pub fn reset_live_esp_ovmf_mapping() {
+    LIVE_ESP_OVMF_MAPPED.store(false, Ordering::Release);
+    LIVE_ESP_OVMF_BYTES.store(0, Ordering::Release);
+}
+
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 13).
 ///
 /// INVARIANTS:
 /// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, or 1 MiB size fixture
-/// - Requires a live mapping of ESP [`GUEST_UEFI_OVMF_ESP_PATH`]
-/// - This slice has no live mapping → [`GuestUefiLaunchError::MissingEspFirmware`]
-/// - Does not change `iso=0` E4 SHELL and does not write VMCS
+/// - Requires a live-sized mapping of ESP [`GUEST_UEFI_OVMF_ESP_PATH`]
+/// - Unmapped → [`GuestUefiLaunchError::MissingEspFirmware`]
+/// - Mapped → [`GuestUefiLaunchError::LiveMappedNotLaunched`] (no VMCS / no insn)
+/// - Does not change `iso=0` E4 SHELL
 ///
 /// VERIFICATION: L0 (documented). Outside the firmware-blob Proven Core set.
 pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
     if !live_esp_ovmf_is_mapped() {
         return Err(GuestUefiLaunchError::MissingEspFirmware);
     }
-    Err(GuestUefiLaunchError::MissingEspFirmware)
-}
-
-/// Live ESP OVMF mapping. Never armed from the in-tree mock / floor / 1 MiB fixture.
-fn live_esp_ovmf_is_mapped() -> bool {
-    false
+    Err(GuestUefiLaunchError::LiveMappedNotLaunched)
 }
 
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
@@ -4109,10 +4144,31 @@ mod launch_test {
         assert_eq!(CPU_BASED_USE_TPR_SHADOW, 1 << 21);
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
         assert_eq!(GUEST_UEFI_OVMF_ESP_PATH, "\\EFI\\RayNu\\OVMF.fd");
+        assert_eq!(MIN_LIVE_ESP_OVMF_BYTES, 2 * 1024 * 1024);
+        reset_live_esp_ovmf_mapping();
+        assert!(!live_esp_ovmf_is_mapped());
         assert_eq!(
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::MissingEspFirmware)
         );
+        assert_eq!(
+            arm_live_esp_ovmf_mapping(1024 * 1024),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!live_esp_ovmf_is_mapped());
+        assert_eq!(
+            arm_live_esp_ovmf_mapping(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Ok(())
+        );
+        assert!(live_esp_ovmf_is_mapped());
+        assert_eq!(live_esp_ovmf_bytes_len(), MIN_LIVE_ESP_OVMF_BYTES as u64);
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::LiveMappedNotLaunched)
+        );
+        reset_live_esp_ovmf_mapping();
+        assert!(!live_esp_ovmf_is_mapped());
+        assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 
     #[test]

@@ -52,10 +52,14 @@ pub const MIN_LAUNCH_FV_BYTES: usize = 4096;
 pub const SIZE_FLOOR_FV_BYTES: usize = 4096;
 /// Minimum real EDK2 OVMF size. Size-floor stays below this.
 pub const MIN_EDK2_OVMF_BYTES: usize = 1024 * 1024;
+/// Minimum live-sized ESP map. EDK2-sized fixture stays below this.
+pub const MIN_LIVE_ESP_OVMF_BYTES: usize = 2 * 1024 * 1024;
 
 const _: () = assert!(SIZE_FLOOR_FV_BYTES > MOCK_OVMF_FV_BYTES);
 const _: () = assert!(SIZE_FLOOR_FV_BYTES == MIN_LAUNCH_FV_BYTES);
 const _: () = assert!(SIZE_FLOOR_FV_BYTES < MIN_EDK2_OVMF_BYTES);
+const _: () = assert!(MIN_EDK2_OVMF_BYTES < MIN_LIVE_ESP_OVMF_BYTES);
+const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES <= GUEST_FW_MAX_UNCOMPRESSED as usize);
 
 /// Envelope kind. Only the UEFI envelope exists in Stage 3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +106,8 @@ pub enum GuestFwError {
     NotRealFirmware,
     /// EDK2-sized candidate is staged; guest UEFI VMLAUNCH is not wired.
     LaunchNotWired,
+    /// Live-sized ESP map is recorded; VMLAUNCH instruction is not issued.
+    LiveMappedNotLaunched,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -155,6 +161,12 @@ pub struct OvmfEdk2 {
     pub bytes_len: u64,
 }
 
+/// Live-sized ESP map bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfLiveMap {
+    pub bytes_len: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -178,8 +190,9 @@ static GUEST_FW_OVMF_LAUNCH_PREPPED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_FLOOR_STAGED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_EDK2_STAGED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ESP_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_LIVE_MAPPED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -191,6 +204,8 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_FLOOR_STAGED.store(false, Ordering::Release);
     GUEST_FW_OVMF_EDK2_STAGED.store(false, Ordering::Release);
     GUEST_FW_OVMF_ESP_LAUNCH_ARMED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_LIVE_MAPPED.store(false, Ordering::Release);
+    crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -241,6 +256,11 @@ pub fn ovmf_edk2_is_staged() -> bool {
 /// True after a successful [`arm_ovmf_esp_launch`].
 pub fn ovmf_esp_launch_is_armed() -> bool {
     GUEST_FW_OVMF_ESP_LAUNCH_ARMED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`map_live_esp_ovmf`].
+pub fn ovmf_live_esp_is_mapped() -> bool {
+    GUEST_FW_OVMF_LIVE_MAPPED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -511,8 +531,9 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 /// - Size-floor staged (no EDK2) → [`GuestFwError::NotRealFirmware`]
 /// - EDK2-sized staged (no ESP launch arm) → [`GuestFwError::LaunchNotWired`]
 /// - ESP launch armed → [`crate::vmx::launch::try_vmlaunch_guest_uefi_ovmf`]
-///   (no live mapping this slice → [`GuestFwError::MissingEsp`])
-/// - Does not VMLAUNCH the 1 MiB fixture and does not flip attach_cdrom_uefi
+///   (unmapped → [`GuestFwError::MissingEsp`]; live-sized map →
+///   [`GuestFwError::LiveMappedNotLaunched`])
+/// - Does not VMLAUNCH the 1 MiB or 2 MiB fixture and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
     if !ovmf_launch_is_prepared() {
         return Err(GuestFwError::NotGuestBound);
@@ -522,6 +543,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             Ok(()) => Ok(()),
             Err(crate::vmx::launch::GuestUefiLaunchError::MissingEspFirmware) => {
                 Err(GuestFwError::MissingEsp)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::LiveMappedNotLaunched) => {
+                Err(GuestFwError::LiveMappedNotLaunched)
             }
         };
     }
@@ -553,6 +577,39 @@ pub fn arm_ovmf_esp_launch() -> Result<OvmfEspLaunch, GuestFwError> {
     Ok(OvmfEspLaunch {
         guest_id: OVMF_FW_GUEST_ID,
         slot_id: OVMF_FW_SLOT_ID,
+    })
+}
+
+/// Map a live-sized ESP `OVMF.fd` after ESP launch arm (ADR-014 Stage 13).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`arm_ovmf_esp_launch`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_LIVE_ESP_OVMF_BYTES`
+/// - Accepts a live-sized map only — not a shipped EDK2 `OVMF.fd`
+/// - Records the map in `vmx/launch.rs`; does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn map_live_esp_ovmf(bytes: &[u8]) -> Result<OvmfLiveMap, GuestFwError> {
+    if !ovmf_esp_launch_is_armed() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_LIVE_ESP_OVMF_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_LIVE_ESP_OVMF_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    crate::vmx::launch::arm_live_esp_ovmf_mapping(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    audit_log!(AuditEvent::OvmfEspLiveMapped {
+        bytes_len: bytes.len() as u64,
+    });
+    GUEST_FW_OVMF_LIVE_MAPPED.store(true, Ordering::Release);
+    Ok(OvmfLiveMap {
+        bytes_len: bytes.len() as u64,
     })
 }
 
@@ -655,6 +712,21 @@ pub fn write_edk2_sized_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
     Ok(())
 }
 
+/// Write a live-sized `_FVH` into a caller-provided buffer. Not a shipped image.
+///
+/// Caller must supply at least [`MIN_LIVE_ESP_OVMF_BYTES`]. This writes the
+/// header only (`FvLength` = 2 MiB). Do not VMLAUNCH this fixture.
+pub fn write_live_esp_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
+    if buf.len() < MIN_LIVE_ESP_OVMF_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    buf[..MOCK_OVMF_FV_BYTES].fill(0);
+    buf[0x20..0x28].copy_from_slice(&(MIN_LIVE_ESP_OVMF_BYTES as u64).to_le_bytes());
+    buf[OVMF_FV_SIG_OFF..OVMF_FV_SIG_OFF + 4].copy_from_slice(&OVMF_FV_SIGNATURE);
+    buf[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
+    Ok(())
+}
+
 /// True when `path` is the guest-firmware envelope REST surface.
 pub fn is_guest_fw_path(path: &str) -> bool {
     let path = path.trim().trim_end_matches('/');
@@ -669,6 +741,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/floor"
         || path == "/fw/edk2"
         || path == "/fw/esp-launch"
+        || path == "/fw/esp-map"
         || path == "/fw/vmlaunch"
 }
 
@@ -693,6 +766,8 @@ enum GuestFwOp {
     OvmfEdk2Stage,
     OvmfEspLaunchStatus,
     OvmfEspLaunchArm,
+    OvmfEspMapStatus,
+    OvmfEspMap,
     OvmfTryVmlaunch,
 }
 
@@ -719,6 +794,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/edk2") => Ok(GuestFwOp::OvmfEdk2Stage),
         (RestMethod::Get, "/fw/esp-launch") => Ok(GuestFwOp::OvmfEspLaunchStatus),
         (RestMethod::Post, "/fw/esp-launch") => Ok(GuestFwOp::OvmfEspLaunchArm),
+        (RestMethod::Get, "/fw/esp-map") => Ok(GuestFwOp::OvmfEspMapStatus),
+        (RestMethod::Post, "/fw/esp-map") => Ok(GuestFwOp::OvmfEspMap),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -739,7 +816,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::MockFirmwareRefused
         | GuestFwError::TooSmall
         | GuestFwError::NotRealFirmware
-        | GuestFwError::LaunchNotWired => 409,
+        | GuestFwError::LaunchNotWired
+        | GuestFwError::LiveMappedNotLaunched => 409,
     }
 }
 
@@ -753,8 +831,11 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `POST /fw/edk2` stages an EDK2-sized candidate after floor (host test
 /// heap fixture only). Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 1 MiB image (ADR-003). `POST /fw/esp-launch` arms the ESP-path
-/// VMLAUNCH contract after EDK2. `POST /fw/vmlaunch` then calls
-/// `try_vmlaunch_guest_uefi_ovmf` (409 `MissingEsp` — no live `OVMF.fd`).
+/// VMLAUNCH contract after EDK2. `POST /fw/esp-map` records a live-sized
+/// ESP map after launch-arm (host test heap fixture only). Production UEFI
+/// returns 409 (`MissingEsp`) — no embedded 2 MiB (ADR-003).
+/// `POST /fw/vmlaunch` then calls `try_vmlaunch_guest_uefi_ovmf`
+/// (unmapped → 409 `MissingEsp`; mapped → 409 `LiveMappedNotLaunched`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
@@ -942,6 +1023,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
                 reply: None,
             },
         },
+        Ok(GuestFwOp::OvmfEspMapStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_live_esp_is_mapped() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfEspMap) => live_esp_map_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -985,6 +1073,38 @@ fn edk2_stage_rest() -> RestResponse {
 /// Production: no embedded 1 MiB EDK2 (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn edk2_stage_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 2 MiB live-sized fixture. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 2 MiB (ADR-003).
+#[cfg(test)]
+fn live_esp_map_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_LIVE_ESP_OVMF_BYTES];
+    if write_live_esp_ovmf_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match map_live_esp_ovmf(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 2 MiB live map (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn live_esp_map_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
