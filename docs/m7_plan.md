@@ -273,7 +273,7 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 25):** flip
+**First action (E5 Stage 26):** flip
 `guest_uefi_live_esp_bytes_present()` only when **real** ESP
 `\\EFI\\RayNu\\OVMF.fd` bytes can be read into a private guest-UEFI
 VMCS + EPT (not the E4 SHELL path) **or** TLS/console polish.
@@ -281,17 +281,18 @@ Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays val
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
 EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
 or a 4 MiB firmware-alias / alias-EPT / private-install / real-ESP /
-insn-arm / live-exec / private-VMCS / live-issue / live-bytes / live-FD fixture.
+insn-arm / live-exec / private-VMCS / live-issue / live-bytes / live-FD /
+live-present fixture.
 
-**Closed host:** Stage 0–23 as before · Stage 24 `RAYNU-V-M7-E5-LIVE-FD-OK`
-(`require_ovmf_live_fd` + `POST /fw/live-fd`;
-`try_vmlaunch_guest_uefi_ovmf` → `LiveEspFdAbsent`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 24 **requires**
-a real ESP `OVMF.fd` and does **not** write the E4 SHELL EPT,
+**Closed host:** Stage 0–24 as before · Stage 25 `RAYNU-V-M7-E5-LIVE-PRESENT-OK`
+(`present_ovmf_live_esp` + `POST /fw/live-present`;
+`try_vmlaunch_guest_uefi_ovmf` → `LiveEspPresentAbsent`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 25 **presents**
+real ESP `OVMF.fd` bytes and does **not** write the E4 SHELL EPT,
 flip presence, or issue the VMLAUNCH instruction (4 MiB fixture is
 not a shipped `OVMF.fd`).
 
-**Next after Stage 24:** real ESP `OVMF.fd` presence **or** TLS/console polish.
+**Next after Stage 25:** real ESP `OVMF.fd` presence **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

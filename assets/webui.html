@@ -105,6 +105,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-is">Arm live issue</button>
       <button id="btn-lb">Probe live bytes</button>
       <button id="btn-fd">Require live FD</button>
+      <button id="btn-lp">Present live ESP</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -261,6 +262,7 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-is").onclick=function(){fwPost("/fw/live-issue","ok","err");};
   document.getElementById("btn-lb").onclick=function(){fwPost("/fw/live-bytes","ok","err");};
   document.getElementById("btn-fd").onclick=function(){fwPost("/fw/live-fd","ok","err");};
+  document.getElementById("btn-lp").onclick=function(){fwPost("/fw/live-present","ok","err");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
