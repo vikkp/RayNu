@@ -174,8 +174,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 17 (host, closed):** private alias-EPT install (`RAYNU-V-M7-E5-EPT-INSTALL-OK`).
    **Stage 18 (host, closed):** real-ESP VMLAUNCH-ready (`RAYNU-V-M7-E5-REAL-ESP-OK`).
    **Stage 19 (host, closed):** guest-UEFI VMLAUNCH insn arm (`RAYNU-V-M7-E5-REAL-LAUNCH-OK`).
+   **Stage 20 (host, closed):** live-ESP VMLAUNCH execute gate (`RAYNU-V-M7-E5-LIVE-EXEC-OK`).
    Execute VMLAUNCH of real ESP `OVMF.fd` remains open (mock, 4 KiB floor, 1 MiB
    EDK2 fixture, 2 MiB live-map fixture, synthetic `0xEA` stub, 4 MiB
    alias fixture, alias-EPT program record, private-install record,
-   real-ESP qualify record, and insn-arm record refused; live E4 SHELL
-   EPT is not written; VMLAUNCH insn not issued).
+   real-ESP qualify record, insn-arm record, and live-exec require
+   record refused; live E4 SHELL EPT is not written; VMLAUNCH insn not issued).

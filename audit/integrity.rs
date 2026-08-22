@@ -234,6 +234,12 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Live ESP `\EFI\RayNu\OVMF.fd` required before VMLAUNCH (ADR-014 Stage 20).
+    /// Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfLiveEspRequired {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -422,6 +428,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfAliasEptInstalled { .. } => 44,
         AuditEvent::OvmfRealEspQualified { .. } => 45,
         AuditEvent::OvmfRealLaunchArmed { .. } => 46,
+        AuditEvent::OvmfLiveEspRequired { .. } => 47,
     }
 }
 
@@ -715,6 +722,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfRealLaunchArmed { bytes_len, gpa } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfRealLaunchArmed bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfLiveEspRequired { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspRequired bytes=");
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
