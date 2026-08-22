@@ -316,6 +316,7 @@ pub mod m7_e5_boot_spec_gate;
 pub mod m7_e5_cdrom_attach_gate;
 pub mod m7_e5_cdrom_firmware_gate;
 pub mod m7_e5_guest_fw_gate;
+pub mod m7_e5_guest_fw_load_gate;
 pub mod api;
 pub mod datastore;
 pub mod guest_image;
@@ -462,9 +463,11 @@ pub use m7_e5_cdrom_firmware_gate::{
     run_m7_e5_cdrom_firmware_gate, M7_E5_CDROM_FIRMWARE_OK_MARKER,
 };
 pub use guest_fw::{
-    box_guest_firmware, dispatch_guest_fw_rest, GuestFwBlob, GuestFwError, GuestFwKind,
+    box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware, GuestFwBlob, GuestFwError,
+    GuestFwKind,
 };
 pub use m7_e5_guest_fw_gate::{run_m7_e5_guest_fw_gate, M7_E5_GUEST_FW_OK_MARKER};
+pub use m7_e5_guest_fw_load_gate::{run_m7_e5_guest_fw_load_gate, M7_E5_GUEST_FW_LOAD_OK_MARKER};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
 };

@@ -35,7 +35,7 @@ pub fn prop_guest_fw_box_embedded() -> bool {
         Ok(p) => p,
         Err(_) => return false,
     };
-    if parsed.payload_len != 0 || parsed.boxed {
+    if parsed.payload_len == 0 || parsed.boxed {
         return false;
     }
     if parsed.uncompressed_len > GUEST_FW_MAX_UNCOMPRESSED

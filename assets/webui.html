@@ -7,13 +7,11 @@
 <style>
   :root {
     --ink: #0c1a22;
-    --fog: #e8f0f4;
     --sea: #1a6b7c;
     --sea-deep: #0e3d48;
-    --sand: #c4a574;
     --line: rgba(12, 26, 34, 0.12);
-    --font-brand: "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif;
-    --font-ui: "Trebuchet MS", "Segoe UI", sans-serif;
+    --font-brand: Palatino, "Times New Roman", serif;
+    --font-ui: "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -159,7 +157,7 @@
     <h2>Auth</h2>
     <div class="toolbar">
       <label>Bearer token <input id="f-token" class="token" type="password" autocomplete="off" spellcheck="false"/></label>
-      <button type="button" class="ghost" id="btn-save-token" data-action="save-token">Save token</button>
+      <button class="ghost" id="btn-save-token" data-action="save-token">Save token</button>
     </div>
   </section>
 
@@ -179,8 +177,8 @@
           <option value="generic_uefi">generic_uefi</option>
         </select>
       </label>
-      <button type="button" id="btn-create" data-action="create">Create</button>
-      <button type="button" class="ghost" id="btn-refresh" data-action="list">Refresh</button>
+      <button id="btn-create" data-action="create">Create</button>
+      <button class="ghost" id="btn-refresh" data-action="list">Refresh</button>
     </div>
   </section>
 
@@ -192,12 +190,13 @@
   <section>
     <h2>Images</h2>
     <div class="toolbar">
-      <button type="button" class="ghost" id="btn-images" data-action="images">List images</button>
-      <button type="button" class="ghost" id="btn-iso-deploy" data-action="iso-deploy">Deploy ISO → extract-boot</button>
-      <button type="button" class="ghost" id="btn-iso-install" data-action="iso-install">Install → disk contract</button>
-      <button type="button" class="ghost" id="btn-iso-attach" data-action="iso-attach">Attach CD (host)</button>
-      <button type="button" class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Arm firmware CD</button>
+      <button class="ghost" id="btn-images" data-action="images">List images</button>
+      <button class="ghost" id="btn-iso-deploy" data-action="iso-deploy">Deploy ISO → extract-boot</button>
+      <button class="ghost" id="btn-iso-install" data-action="iso-install">Install → disk contract</button>
+      <button class="ghost" id="btn-iso-attach" data-action="iso-attach">Attach CD (host)</button>
+      <button class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Arm firmware CD</button>
       <button id="btn-fw">Box guest FW</button>
+      <button id="btn-load">Load guest FW</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -205,7 +204,7 @@
   <section>
     <h2>Host serial log</h2>
     <div class="toolbar">
-      <button type="button" class="ghost" id="btn-logs" data-action="logs">Refresh log</button>
+      <button class="ghost" id="btn-logs" data-action="logs">Refresh log</button>
     </div>
     <pre id="serial-log" class="empty">No log loaded yet. GET /logs/serial</pre>
   </section>
@@ -214,11 +213,11 @@
   <p class="note">
     Host serial log is HV UART ring (not guest console). TLS deferred (plaintext lab HTTP).
     Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
-    Host attach parses El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. Guest FW box is not OVMF. Auth: ESP auth.token overrides bring-up when present.
+    Host attach parses El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. Guest FW box/load is not OVMF. Auth: ESP auth.token or bring-up.
   </p>
 </main>
 <script>
-/* RayNu-V E4 Ops UI — create-VM + media + serial log over Bearer lab HTTP */
+/* E4 Ops UI */
 (function () {
   const listEl = document.getElementById("vm-list");
   const imgEl = document.getElementById("img-list");
@@ -370,6 +369,11 @@
     setStatus(res.ok ? "Guest FW boxed (not OVMF)" : ("FW box failed ("+res.status+")"));
   }
 
+  async function loadGuestFw() {
+    const res = await api("POST", "/fw/load");
+    setStatus(res.ok ? "Guest FW loaded (not OVMF)" : ("FW load failed ("+res.status+")"));
+  }
+
   async function refreshLogs() {
     setStatus("Fetching host serial log…");
     const res = await api("GET", "/logs/serial");
@@ -438,6 +442,7 @@
   document.getElementById("btn-iso-attach").onclick = attachCdrom;
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
   document.getElementById("btn-fw").onclick = boxGuestFw;
+  document.getElementById("btn-load").onclick = loadGuestFw;
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
