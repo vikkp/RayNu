@@ -13,12 +13,11 @@
 
 use super::api::{dispatch_rest, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 use super::guest_fw::{
-    arm_ovmf_firmware_alias, arm_ovmf_firmware_slot, arm_ovmf_reset_vector,
-    bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, guest_fw_bytes,
-    load_guest_firmware, load_ovmf_from_esp, map_live_esp_ovmf, ovmf_firmware_alias_is_armed,
-    prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw, stage_ovmf_firmware_floor,
-    write_mock_ovmf_fv, write_size_floor_ovmf_fv, GuestFwError, MOCK_OVMF_FV_BYTES,
-    SIZE_FLOOR_FV_BYTES,
+    arm_ovmf_firmware_alias, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest, box_guest_firmware,
+    dispatch_guest_fw_rest, guest_fw_bytes, load_guest_firmware, load_ovmf_from_esp,
+    ovmf_firmware_alias_is_armed, prepare_ovmf_firmware_launch, probe_ovmf_firmware,
+    reset_guest_fw, stage_ovmf_firmware_floor, write_mock_ovmf_fv, write_size_floor_ovmf_fv,
+    GuestFwError, MOCK_OVMF_FV_BYTES, SIZE_FLOOR_FV_BYTES,
 };
 use super::iso::attach_cdrom_uefi;
 use super::iso::IsoError;
@@ -28,9 +27,10 @@ use super::VmTable;
 
 #[cfg(test)]
 use super::guest_fw::{
-    arm_ovmf_esp_launch, stage_edk2_ovmf_firmware, try_vmlaunch_ovmf_firmware, write_edk2_sized_fv,
-    write_firmware_alias_fv, write_live_esp_ovmf_fv, write_reset_vector_stub, MIN_EDK2_OVMF_BYTES,
-    MIN_FIRMWARE_ALIAS_BYTES, MIN_LIVE_ESP_OVMF_BYTES,
+    arm_ovmf_esp_launch, arm_ovmf_reset_vector, map_live_esp_ovmf, stage_edk2_ovmf_firmware,
+    try_vmlaunch_ovmf_firmware, write_edk2_sized_fv, write_firmware_alias_fv,
+    write_live_esp_ovmf_fv, write_reset_vector_stub, MIN_EDK2_OVMF_BYTES, MIN_FIRMWARE_ALIAS_BYTES,
+    MIN_LIVE_ESP_OVMF_BYTES,
 };
 
 /// Host / CI marker when the E5 Stage 15 firmware-alias gate passes.
