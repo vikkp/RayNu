@@ -75,8 +75,10 @@ RAYNU-V-M7-ISO-OK
   (`bind_ovmf_firmware_guest`) is Stage 8
   (`RAYNU-V-M7-E5-FW-BIND-OK`). Launch **prepare**
   (`prepare_ovmf_firmware_launch`) is Stage 9
-  (`RAYNU-V-M7-E5-FW-PREP-OK`); `try_vmlaunch_ovmf_firmware` refuses the
-  80-byte mock. Real EDK2 bytes stay on ESP
+  (`RAYNU-V-M7-E5-FW-PREP-OK`). Size-floor **stage**
+  (`stage_ovmf_firmware_floor`) is Stage 10
+  (`RAYNU-V-M7-E5-FW-FLOOR-OK`); `try_vmlaunch_ovmf_firmware` refuses the
+  80-byte mock and the 4 KiB floor (not EDK2). Real EDK2 bytes stay on ESP
   `EFI/RayNu/OVMF.fd`. Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
@@ -119,3 +121,6 @@ slot arm. Not VMLAUNCH.
 
 E5 Stage 9 (host, closed): `POST /fw/prepare` records launch-prepare after
 bind. `POST /fw/vmlaunch` refuses the 80-byte mock (409). Not VMLAUNCH.
+
+E5 Stage 10 (host, closed): `POST /fw/floor` stages a 4 KiB size-floor FV
+after prepare. `POST /fw/vmlaunch` refuses (not EDK2, 409). Not VMLAUNCH.

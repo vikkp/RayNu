@@ -121,9 +121,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   Host catalog parse (Stage 0), host attach (Stage 1), firmware arm
   (Stage 2), guest FW envelope (Stage 3), stub load (Stage 4), OVMF
   FV probe (Stage 5), ESP load (Stage 6), slot arm (Stage 7), and guest
-  bind (Stage 8), and launch-prepare (Stage 9) are closed; they are not
-  guest UEFI VMLAUNCH and not an embedded EDK2 image. The 80-byte mock is
-  refused for VMLAUNCH.
+  bind (Stage 8), launch-prepare (Stage 9), and size-floor (Stage 10) are
+  closed; they are not guest UEFI VMLAUNCH and not an embedded EDK2 image.
+  The 80-byte mock and 4 KiB floor are refused for VMLAUNCH.
 - **ISO blob upload** not claimed — REST attach uses the host mock EFI prefix.
   Extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
@@ -164,4 +164,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 7 (host, closed):** firmware slot arm (`RAYNU-V-M7-E5-OVMF-SLOT-OK`).
    **Stage 8 (host, closed):** firmware-to-guest bind (`RAYNU-V-M7-E5-FW-BIND-OK`).
    **Stage 9 (host, closed):** firmware launch-prepare (`RAYNU-V-M7-E5-FW-PREP-OK`).
-   Guest UEFI VMLAUNCH remains open (real EDK2 only; mock refused).
+   **Stage 10 (host, closed):** firmware size-floor (`RAYNU-V-M7-E5-FW-FLOOR-OK`).
+   Guest UEFI VMLAUNCH remains open (real EDK2 only; mock and 4 KiB floor refused).

@@ -18,10 +18,7 @@
     min-height: 100vh;
     font-family: var(--font-ui);
     color: var(--ink);
-    background:
-      radial-gradient(120% 80% at 10% -10%, #b8d4de 0%, transparent 55%),
-      radial-gradient(90% 70% at 100% 0%, #d9c4a0 0%, transparent 45%),
-      linear-gradient(165deg, #f3f7f9 0%, #dce8ee 48%, #c5d5dc 100%);
+    background: linear-gradient(165deg, #f3f7f9 0%, #dce8ee 48%, #c5d5dc 100%);
   }
   header {
     padding: 2.5rem clamp(1.25rem, 4vw, 3rem) 1rem;
@@ -61,7 +58,6 @@
     gap: 0.2rem;
     font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
     color: rgba(12,26,34,0.6);
   }
   input, select {
@@ -98,15 +94,14 @@
     padding: 0.85rem 0;
     border-bottom: 1px solid var(--line);
   }
-  .row .id { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sea); }
+  .row .id { font-weight: 700; color: var(--sea); }
   .row .meta { font-size: 0.85rem; color: rgba(12,26,34,0.7); }
-  .row .state { letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; color: rgba(12,26,34,0.55); }
+  .row .state { text-transform: uppercase; font-size: 0.75rem; color: rgba(12,26,34,0.55); }
   .row .acts { display: flex; gap: 0.4rem; }
   .status {
     margin-top: 1rem;
     font-size: 0.85rem;
     color: rgba(12, 26, 34, 0.6);
-    min-height: 1.2em;
   }
   .empty { padding: 1.25rem 0; color: rgba(12, 26, 34, 0.55); }
   .note {
@@ -187,6 +182,7 @@
       <button id="btn-fw-slot">Arm FW slot</button>
       <button id="btn-fw-bind">Bind FW guest</button>
       <button id="btn-fw-prep">Prep FW launch</button>
+      <button id="btn-fw-floor">Stage FW floor</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -428,6 +424,7 @@
   document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","FW slot armed","FW slot failed");};
   document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound","FW bind failed");};
   document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","FW launch prepped","FW prep failed");};
+  document.getElementById("btn-fw-floor").onclick=function(){fwPost("/fw/floor","FW floor staged","FW floor failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

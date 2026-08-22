@@ -1,11 +1,13 @@
 use super::{
     box_guest_firmware, dispatch_guest_fw_rest, guest_fw_bytes, guest_fw_is_boxed, guest_fw_is_loaded,
     guest_fw_payload, load_guest_firmware, load_ovmf_from_esp, ovmf_esp_is_loaded, ovmf_fv_is_probed,
-    ovmf_guest_is_bound, ovmf_launch_is_prepared, ovmf_slot_is_armed, parse_guest_fw,
-    prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw, try_vmlaunch_ovmf_firmware,
-    write_guest_fw_header, write_mock_ovmf_fv, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest,
+    ovmf_floor_is_staged, ovmf_guest_is_bound, ovmf_launch_is_prepared, ovmf_slot_is_armed,
+    parse_guest_fw, prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw,
+    stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, write_guest_fw_header,
+    write_mock_ovmf_fv, write_size_floor_ovmf_fv, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest,
     GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
     GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, OVMF_FW_GUEST_ID,
+    SIZE_FLOOR_FV_BYTES,
     OVMF_FW_SLOT_ID, SECTION_GUEST_FW,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
@@ -121,6 +123,14 @@ fn rest_box_requires_bearer() {
     });
     assert_eq!(prepped.status, 201);
     assert!(ovmf_launch_is_prepared());
+
+    let floor = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/floor",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(floor.status, 201);
+    assert!(ovmf_floor_is_staged());
 
     let refused = dispatch_guest_fw_rest(RestRequest {
         method: RestMethod::Post,
@@ -271,6 +281,47 @@ fn ovmf_prep_requires_bind_and_refuses_mock() {
     assert_eq!(
         try_vmlaunch_ovmf_firmware(),
         Err(GuestFwError::MockFirmwareRefused)
+    );
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_floor_requires_prep_and_refuses_edk2_claim() {
+    reset_guest_fw();
+    let mut floor = [0u8; SIZE_FLOOR_FV_BYTES];
+    write_size_floor_ovmf_fv(&mut floor).unwrap();
+    assert_eq!(
+        stage_ovmf_firmware_floor(&floor),
+        Err(GuestFwError::NotGuestBound)
+    );
+    assert!(!ovmf_floor_is_staged());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/floor",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let mut mock = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut mock).unwrap();
+    probe_ovmf_firmware(&mock).unwrap();
+    load_ovmf_from_esp(&mock).unwrap();
+    arm_ovmf_firmware_slot().unwrap();
+    bind_ovmf_firmware_guest().unwrap();
+    prepare_ovmf_firmware_launch().unwrap();
+    assert_eq!(
+        stage_ovmf_firmware_floor(&mock),
+        Err(GuestFwError::TooSmall)
+    );
+    let staged = stage_ovmf_firmware_floor(&floor).unwrap();
+    assert_eq!(staged.bytes_len, SIZE_FLOOR_FV_BYTES as u64);
+    assert!(ovmf_floor_is_staged());
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::NotRealFirmware)
     );
     reset_guest_fw();
 }
