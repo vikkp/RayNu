@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–6 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-21** are host gates. Residual: guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–7 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-22** are host gates. Residual: guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,16 +273,16 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 7):** map probed ESP OVMF into a guest firmware
-slot and `VMLAUNCH` UEFI **or** TLS/console polish.
+**First action (E5 Stage 8):** `VMLAUNCH` guest UEFI from the armed firmware
+slot **or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 
-**Closed host:** Stage 0–5 as before · Stage 6 `RAYNU-V-M7-E5-OVMF-ESP-OK`
-(`load_ovmf_from_esp` + `POST /fw/ovmf/esp` + host mock ESP fixture).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 6 does **not**
-embed a 4 MiB EDK2 image.
+**Closed host:** Stage 0–6 as before · Stage 7 `RAYNU-V-M7-E5-OVMF-SLOT-OK`
+(`arm_ovmf_firmware_slot` + `POST /fw/slot`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 7 does **not**
+VMLAUNCH guest UEFI.
 
-**Next after Stage 6:** guest UEFI VMLAUNCH **or** TLS/console polish.
+**Next after Stage 7:** guest UEFI VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
