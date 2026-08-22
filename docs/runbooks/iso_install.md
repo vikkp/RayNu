@@ -119,8 +119,8 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 - **GAP(CLOSED M7.7)** — iron two-boot LBA stamp persist + reboot-to-disk (`BOOTED-FROM-DISK` on COM2).
 - **El Torito / firmware CD-ROM** still `UnsupportedOnFirmware` (see `iso.md`).
   Host catalog parse (Stage 0), host attach (Stage 1), firmware arm
-  (Stage 2), and guest FW envelope (Stage 3) are closed; they are not
-  guest UEFI VMLAUNCH and not OVMF.
+  (Stage 2), guest FW envelope (Stage 3), and stub load (Stage 4) are
+  closed; they are not guest UEFI VMLAUNCH and not OVMF.
 - **ISO blob upload** not claimed — REST attach uses the host mock EFI prefix.
   Extract-boot uses existing PE/ESP assets first.
 - **QEMU / firmware persist** is ESP `installdisk.bin` (LBA stamps), not a guest
@@ -155,4 +155,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 1 (host, closed):** host CD-ROM attach (`RAYNU-V-M7-E5-CDROM-ATTACH-OK`).
    **Stage 2 (host, closed):** firmware-facing CD arm (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`).
    **Stage 3 (host, closed):** guest FW envelope boxed (`RAYNU-V-M7-E5-GUEST-FW-OK`).
-   Guest UEFI VMLAUNCH / real OVMF payload remains open.
+   **Stage 4 (host, closed):** stub payload load (`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK`).
+   Guest UEFI VMLAUNCH / real OVMF bytes remains open.

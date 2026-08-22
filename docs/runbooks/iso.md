@@ -25,6 +25,8 @@ M7.3 closes a **documented kernel-extract** deploy path on top of the image libr
 | `GET` | `/iso/firmware` | 200 — listed count of FirmwareArmed records |
 | `POST` | `/fw/box` | 201 — box the embedded guest UEFI firmware envelope (not OVMF) |
 | `GET` | `/fw` | 200 — listed count of boxed guest firmware envelopes (0/1) |
+| `POST` | `/fw/load` | 201 — identity-lazy load the stub payload (requires box first) |
+| `GET` | `/fw/load` | 200 — listed count of loaded guest firmware stubs (0/1) |
 
 Token: `Authorization: Bearer raynu-v-bringup` (same as M6.4 / M7.1 / M7.2).
 
@@ -53,8 +55,10 @@ RAYNU-V-M7-ISO-OK
   (`attach_cdrom_firmware` / `FirmwareArmed`) is Stage 2
   (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`). Guest firmware **envelope**
   (`box_guest_firmware` / `.asguefw`) is Stage 3
-  (`RAYNU-V-M7-E5-GUEST-FW-OK`). Envelope box is not guest UEFI VMLAUNCH
-  and not OVMF.
+  (`RAYNU-V-M7-E5-GUEST-FW-OK`). Stub **load**
+  (`load_guest_firmware` / `RAYNUFD`) is Stage 4
+  (`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK`). Envelope box / stub load is not guest
+  UEFI VMLAUNCH and not OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
 - Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
@@ -75,4 +79,7 @@ E5 Stage 2 (host, closed): `POST /iso/{id}/firmware` arms FirmwareArmed after
 host attach + boot-image sector validate. Not OVMF and not VMLAUNCH.
 
 E5 Stage 3 (host, closed): `POST /fw/box` boxes the ADR-003 guest firmware
-envelope (`.asguefw` header-only placeholder). Not OVMF and not VMLAUNCH.
+envelope (`.asguefw`). Not OVMF and not VMLAUNCH.
+
+E5 Stage 4 (host, closed): `POST /fw/load` identity-lazy loads the `RAYNUFD`
+stub payload after box. Not OVMF and not VMLAUNCH.

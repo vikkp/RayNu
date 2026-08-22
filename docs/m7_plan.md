@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0/1/2/3 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15** boot spec + **P0-16** host CD attach + **P0-17** firmware CD arm + **P0-18** guest FW envelope are host gates. Residual: real OVMF payload / guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0/1/2/3/4 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15** boot spec + **P0-16** host CD attach + **P0-17** firmware CD arm + **P0-18** guest FW envelope + **P0-19** guest FW stub load are host gates. Residual: real OVMF bytes / guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,19 +273,21 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 4):** real OVMF-sized guest firmware payload
-(lazy/zstd inside the boxed envelope) **or** TLS/console polish. Do **not**
-VMLAUNCH guest UEFI until that payload exists. Do **not** claim Everest E5 /
-`ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
+**First action (E5 Stage 5):** real EDK2 OVMF bytes (lazy/zstd inside the
+boxed envelope) **or** TLS/console polish. Do **not** VMLAUNCH guest UEFI
+until that payload exists. Do **not** claim Everest E5 / `ISO-INSTALL-OK`.
+`iso=0` E4 SHELL start stays valid.
 
 **Closed host:** Stage 0 `RAYNU-V-M7-E5-BOOT-SPEC-OK` (#172) · Stage 1
 `RAYNU-V-M7-E5-CDROM-ATTACH-OK` (#173) · Stage 2
 `RAYNU-V-M7-E5-CDROM-FIRMWARE-OK` (`attach_cdrom_firmware` +
 `POST /iso/{id}/firmware`) · Stage 3 `RAYNU-V-M7-E5-GUEST-FW-OK`
-(`box_guest_firmware` + `POST /fw/box`). `attach_cdrom_uefi` stays
-`UnsupportedOnFirmware`. The Stage 3 blob is a header-only envelope, not OVMF.
+(`box_guest_firmware` + `POST /fw/box`) · Stage 4
+`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK` (`load_guest_firmware` + `POST /fw/load`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. The Stage 4 payload is an
+identity-lazy `RAYNUFD` stub, not OVMF.
 
-**Next after Stage 3:** real OVMF payload **or** TLS/console polish.
+**Next after Stage 4:** real OVMF bytes **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

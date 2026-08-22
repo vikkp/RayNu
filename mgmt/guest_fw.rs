@@ -5,9 +5,10 @@
 //! VERIFICATION: N/A
 //!
 //! Boxes a sized guest-firmware envelope under ADR-003 (lazy/zstd, 15 MB /
-//! 20 MB). The PE section `.asguefw` (ADR-003 `.assets.guefw`) holds a
-//! header-only placeholder. That is **not** EDK2 OVMF and does **not**
-//! VMLAUNCH guest UEFI. `attach_cdrom_uefi` stays `UnsupportedOnFirmware`.
+//! 20 MB). The PE section `.asguefw` (ADR-003 `.assets.guefw`) holds the
+//! envelope plus a **stub payload** (identity-lazy, `RAYNUFD`). That is
+//! **not** EDK2 OVMF and does **not** VMLAUNCH guest UEFI.
+//! `attach_cdrom_uefi` stays `UnsupportedOnFirmware`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -23,10 +24,14 @@ pub const ADR003_GUEST_FW: &str = ".assets.guefw";
 
 /// Envelope magic (`RAYNUFW` + NUL).
 pub const GUEST_FW_MAGIC: [u8; 8] = *b"RAYNUFW\0";
-/// Header bytes before an optional payload. Placeholder payload_len is 0.
+/// Header bytes before an optional payload.
 pub const GUEST_FW_HEADER_LEN: usize = 32;
-/// Embedded placeholder length (header + reserved).
+/// Embedded envelope length (header + stub payload).
 pub const GUEST_FW_BLOB_LEN: usize = 64;
+/// In-tree stub payload length (not OVMF).
+pub const GUEST_FW_STUB_PAYLOAD_LEN: u32 = 32;
+/// Stub payload magic (`RAYNUFD` + NUL).
+pub const GUEST_FW_PAYLOAD_MAGIC: [u8; 8] = *b"RAYNUFD\0";
 /// ADR-003 uncompressed envelope cap (real OVMF later, lazy/zstd).
 pub const GUEST_FW_MAX_UNCOMPRESSED: u32 = 4 * 1024 * 1024;
 /// ADR-003 compressed / lazy envelope cap.
@@ -57,6 +62,8 @@ pub enum GuestFwError {
     BadMagic,
     BadState,
     TooLarge,
+    /// Load requested before the envelope was boxed.
+    NotBoxed,
 }
 
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
@@ -65,23 +72,30 @@ pub enum GuestFwError {
 static PE_GUEST_FW: [u8; include_bytes!("../assets/guest_fw.bin").len()] =
     *include_bytes!("../assets/guest_fw.bin");
 
-/// Embedded envelope bytes (header-only placeholder; not OVMF).
+/// Embedded envelope bytes (header + stub payload; not OVMF).
 pub fn guest_fw_bytes() -> &'static [u8] {
     &PE_GUEST_FW[..]
 }
 
 /// JUSTIFICATION (global state): HTTP listen loops must not grow another
-/// argument (HOST-NIC FIN-close). Boxing is a process-local flag.
+/// argument (HOST-NIC FIN-close). Boxing / load are process-local flags.
 static GUEST_FW_BOXED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_LOADED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed flag (host tests).
+/// Reset the process-local boxed / loaded flags (host tests).
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
+    GUEST_FW_LOADED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
 pub fn guest_fw_is_boxed() -> bool {
     GUEST_FW_BOXED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`load_guest_firmware`].
+pub fn guest_fw_is_loaded() -> bool {
+    GUEST_FW_LOADED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -95,7 +109,7 @@ fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
 /// - Requires `GUEST_FW_MAGIC` and version 1
 /// - `uncompressed_len` / `compressed_len` stay inside ADR-003 caps
 /// - `payload_len` must fit in `bytes` after the header
-/// - Does not treat a zero-payload header as OVMF
+/// - Payload, when present, must fit after the header (not treated as OVMF)
 pub fn parse_guest_fw(bytes: &[u8]) -> Result<GuestFwBlob, GuestFwError> {
     if bytes.len() < GUEST_FW_HEADER_LEN {
         return Err(GuestFwError::BadMagic);
@@ -160,15 +174,59 @@ pub fn box_guest_firmware(bytes: &[u8]) -> Result<GuestFwBlob, GuestFwError> {
     })
 }
 
+/// Slice the stub payload from a parsed envelope. Identity-lazy (no zstd crate).
+///
+/// INVARIANTS:
+/// - Requires `payload_len > 0` and `RAYNUFD` magic
+/// - Does not allocate
+/// - Does not VMLAUNCH and does not treat the stub as OVMF
+pub fn guest_fw_payload(bytes: &[u8]) -> Result<&[u8], GuestFwError> {
+    let parsed = parse_guest_fw(bytes)?;
+    if parsed.payload_len == 0 {
+        return Err(GuestFwError::BadState);
+    }
+    let start = GUEST_FW_HEADER_LEN;
+    let end = start.saturating_add(parsed.payload_len as usize);
+    let payload = bytes.get(start..end).ok_or(GuestFwError::BadState)?;
+    if payload.len() < 8 || payload[..8] != GUEST_FW_PAYLOAD_MAGIC {
+        return Err(GuestFwError::BadMagic);
+    }
+    Ok(payload)
+}
+
+/// Lazy-load the boxed stub payload (ADR-014 Stage 4).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`box_guest_firmware`]
+/// - On success the process-local loaded flag is set
+/// - Does not change [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - Does not VMLAUNCH and does not load OVMF
+pub fn load_guest_firmware(bytes: &[u8]) -> Result<GuestFwBlob, GuestFwError> {
+    if !guest_fw_is_boxed() {
+        return Err(GuestFwError::NotBoxed);
+    }
+    let payload = guest_fw_payload(bytes)?;
+    let mut parsed = parse_guest_fw(bytes)?;
+    parsed.boxed = true;
+    audit_log!(AuditEvent::GuestFirmwareLoaded {
+        payload_len: u64::from(parsed.payload_len),
+    });
+    let _ = payload;
+    GUEST_FW_LOADED.store(true, Ordering::Release);
+    Ok(parsed)
+}
+
 /// True when `path` is the guest-firmware envelope REST surface.
 pub fn is_guest_fw_path(path: &str) -> bool {
     let path = path.trim().trim_end_matches('/');
-    path == "/fw" || path == "/fw/box"
+    path == "/fw" || path == "/fw/box" || path == "/fw/load"
 }
 
 enum GuestFwOp {
     Status,
     Box,
+    LoadStatus,
+    Load,
 }
 
 fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
@@ -176,18 +234,24 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
     match (method, path) {
         (RestMethod::Get, "/fw") => Ok(GuestFwOp::Status),
         (RestMethod::Post, "/fw/box") => Ok(GuestFwOp::Box),
+        (RestMethod::Get, "/fw/load") => Ok(GuestFwOp::LoadStatus),
+        (RestMethod::Post, "/fw/load") => Ok(GuestFwOp::Load),
         _ => Err(()),
     }
 }
 
 fn guest_fw_err_status(e: GuestFwError) -> u16 {
     match e {
-        GuestFwError::BadMagic | GuestFwError::BadState | GuestFwError::TooLarge => 409,
+        GuestFwError::BadMagic
+        | GuestFwError::BadState
+        | GuestFwError::TooLarge
+        | GuestFwError::NotBoxed => 409,
     }
 }
 
-/// REST: `POST /fw/box` validates the embedded envelope. `GET /fw` returns
-/// boxed count (0/1). Not OVMF. Not VMLAUNCH.
+/// REST: `POST /fw/box` boxes the envelope. `POST /fw/load` lazy-loads the
+/// stub payload after box. `GET /fw` / `GET /fw/load` return counts.
+/// Not OVMF. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
         return RestResponse {
@@ -203,6 +267,22 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::Box) => match box_guest_firmware(guest_fw_bytes()) {
+            Ok(_) => RestResponse {
+                status: 201,
+                reply: Some(ApiReply::Ok),
+            },
+            Err(e) => RestResponse {
+                status: guest_fw_err_status(e),
+                reply: None,
+            },
+        },
+        Ok(GuestFwOp::LoadStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if guest_fw_is_loaded() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::Load) => match load_guest_firmware(guest_fw_bytes()) {
             Ok(_) => RestResponse {
                 status: 201,
                 reply: Some(ApiReply::Ok),
