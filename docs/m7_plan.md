@@ -273,7 +273,7 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 34):** flip
+**First action (E5 Stage 35):** flip
 `guest_uefi_live_esp_bytes_present()` only when **real** ESP
 `\\EFI\\RayNu\\OVMF.fd` bytes can be read into a private guest-UEFI
 VMCS + EPT (not the E4 SHELL path) **or** TLS/console polish.
@@ -283,17 +283,17 @@ EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
 or a 4 MiB firmware-alias / alias-EPT / private-install / real-ESP /
 insn-arm / live-exec / private-VMCS / live-issue / live-bytes / live-FD /
 live-present / live-admit / live-read / live-copy / live-place / live-apply /
-live-commit / live-latch / live-seal fixture.
+live-commit / live-latch / live-seal / live-lock fixture.
 
-**Closed host:** Stage 0–32 as before · Stage 33 `RAYNU-V-M7-E5-LIVE-SEAL-OK`
-(`seal_ovmf_live_esp` + `POST /fw/live-seal`;
-`try_vmlaunch_guest_uefi_ovmf` → `LiveEspSealAbsent`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 33 **seals**
+**Closed host:** Stage 0–33 as before · Stage 34 `RAYNU-V-M7-E5-LIVE-LOCK-OK`
+(`lock_ovmf_live_esp` + `POST /fw/live-lock`;
+`try_vmlaunch_guest_uefi_ovmf` → `LiveEspLockAbsent`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 34 **locks**
 real ESP `OVMF.fd` bytes and does **not** write the E4 SHELL EPT,
 flip presence, or issue the VMLAUNCH instruction (4 MiB fixture is
 not a shipped `OVMF.fd`).
 
-**Next after Stage 33:** real ESP `OVMF.fd` presence **or** TLS/console polish.
+**Next after Stage 34:** real ESP `OVMF.fd` presence **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
