@@ -46,6 +46,16 @@ pub const OVMF_FV_SIG_OFF: usize = 0x28;
 pub const OVMF_ESP_PATH: &str = "\\EFI\\RayNu\\OVMF.fd";
 /// Host mock FV size (header + empty block map). Not a 4 MiB EDK2 image.
 pub const MOCK_OVMF_FV_BYTES: usize = 80;
+/// Minimum size-floor FV (larger than the 80-byte mock). Not EDK2.
+pub const MIN_LAUNCH_FV_BYTES: usize = 4096;
+/// Host size-floor fixture. Not a 4 MiB EDK2 `OVMF.fd`.
+pub const SIZE_FLOOR_FV_BYTES: usize = 4096;
+/// Minimum real EDK2 OVMF size. Size-floor stays below this.
+pub const MIN_EDK2_OVMF_BYTES: usize = 1024 * 1024;
+
+const _: () = assert!(SIZE_FLOOR_FV_BYTES > MOCK_OVMF_FV_BYTES);
+const _: () = assert!(SIZE_FLOOR_FV_BYTES == MIN_LAUNCH_FV_BYTES);
+const _: () = assert!(SIZE_FLOOR_FV_BYTES < MIN_EDK2_OVMF_BYTES);
 
 /// Envelope kind. Only the UEFI envelope exists in Stage 3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +96,10 @@ pub enum GuestFwError {
     NotGuestBound,
     /// In-tree 80-byte mock FV is refused for guest UEFI VMLAUNCH.
     MockFirmwareRefused,
+    /// Size-floor stage requested with fewer bytes than [`MIN_LAUNCH_FV_BYTES`].
+    TooSmall,
+    /// Size-floor is staged but is not EDK2-sized; VMLAUNCH stays refused.
+    NotRealFirmware,
 }
 
 /// Probed UEFI Firmware Volume (host mock or ESP image). Not VMLAUNCH.
@@ -120,6 +134,12 @@ pub struct OvmfLaunchPrep {
     pub slot_id: u8,
 }
 
+/// Size-floor FV bookkeeping. Not EDK2 and not a live UEFI VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfFloor {
+    pub bytes_len: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -140,8 +160,9 @@ static GUEST_FW_OVMF_ESP_LOADED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_SLOT_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_GUEST_BOUND: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LAUNCH_PREPPED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_FLOOR_STAGED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -150,6 +171,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_SLOT_ARMED.store(false, Ordering::Release);
     GUEST_FW_OVMF_GUEST_BOUND.store(false, Ordering::Release);
     GUEST_FW_OVMF_LAUNCH_PREPPED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_FLOOR_STAGED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -185,6 +207,11 @@ pub fn ovmf_guest_is_bound() -> bool {
 /// True after a successful [`prepare_ovmf_firmware_launch`].
 pub fn ovmf_launch_is_prepared() -> bool {
     GUEST_FW_OVMF_LAUNCH_PREPPED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`stage_ovmf_firmware_floor`].
+pub fn ovmf_floor_is_staged() -> bool {
+    GUEST_FW_OVMF_FLOOR_STAGED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -447,17 +474,51 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
     })
 }
 
-/// Refuse guest UEFI VMLAUNCH of the in-tree 80-byte mock FV.
+/// Refuse guest UEFI VMLAUNCH of the in-tree mock / size-floor fixtures.
 ///
 /// INVARIANTS:
 /// - Requires a prior successful [`prepare_ovmf_firmware_launch`]
-/// - Always returns [`GuestFwError::MockFirmwareRefused`] for the mock
+/// - Mock (no floor) → [`GuestFwError::MockFirmwareRefused`]
+/// - Size-floor staged → [`GuestFwError::NotRealFirmware`] (not EDK2)
 /// - Does not write VMCS and does not VMLAUNCH
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
     if !ovmf_launch_is_prepared() {
         return Err(GuestFwError::NotGuestBound);
     }
+    if ovmf_floor_is_staged() {
+        return Err(GuestFwError::NotRealFirmware);
+    }
     Err(GuestFwError::MockFirmwareRefused)
+}
+
+/// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`prepare_ovmf_firmware_launch`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_LAUNCH_FV_BYTES`
+/// - Still below [`MIN_EDK2_OVMF_BYTES`] — not embedded EDK2
+/// - Does not VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn stage_ovmf_firmware_floor(bytes: &[u8]) -> Result<OvmfFloor, GuestFwError> {
+    if !ovmf_launch_is_prepared() {
+        return Err(GuestFwError::NotGuestBound);
+    }
+    if bytes.len() < MIN_LAUNCH_FV_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_LAUNCH_FV_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    audit_log!(AuditEvent::OvmfFirmwareFloorStaged {
+        bytes_len: bytes.len() as u64,
+    });
+    GUEST_FW_OVMF_FLOOR_STAGED.store(true, Ordering::Release);
+    Ok(OvmfFloor {
+        bytes_len: bytes.len() as u64,
+    })
 }
 
 /// Write a tiny host mock FV (signature + lengths). Not EDK2 OVMF.
@@ -467,6 +528,18 @@ pub fn write_mock_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
     }
     buf[..MOCK_OVMF_FV_BYTES].fill(0);
     buf[0x20..0x28].copy_from_slice(&(MOCK_OVMF_FV_BYTES as u64).to_le_bytes());
+    buf[OVMF_FV_SIG_OFF..OVMF_FV_SIG_OFF + 4].copy_from_slice(&OVMF_FV_SIGNATURE);
+    buf[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
+    Ok(())
+}
+
+/// Write a 4 KiB size-floor FV (signature + lengths). Not EDK2 OVMF.
+pub fn write_size_floor_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
+    if buf.len() < SIZE_FLOOR_FV_BYTES {
+        return Err(GuestFwError::BadState);
+    }
+    buf[..SIZE_FLOOR_FV_BYTES].fill(0);
+    buf[0x20..0x28].copy_from_slice(&(SIZE_FLOOR_FV_BYTES as u64).to_le_bytes());
     buf[OVMF_FV_SIG_OFF..OVMF_FV_SIG_OFF + 4].copy_from_slice(&OVMF_FV_SIGNATURE);
     buf[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
     Ok(())
@@ -483,6 +556,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/slot"
         || path == "/fw/bind"
         || path == "/fw/prepare"
+        || path == "/fw/floor"
         || path == "/fw/vmlaunch"
 }
 
@@ -501,6 +575,8 @@ enum GuestFwOp {
     OvmfBindGuest,
     OvmfPrepStatus,
     OvmfPrepLaunch,
+    OvmfFloorStatus,
+    OvmfFloorStage,
     OvmfTryVmlaunch,
 }
 
@@ -521,6 +597,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/bind") => Ok(GuestFwOp::OvmfBindGuest),
         (RestMethod::Get, "/fw/prepare") => Ok(GuestFwOp::OvmfPrepStatus),
         (RestMethod::Post, "/fw/prepare") => Ok(GuestFwOp::OvmfPrepLaunch),
+        (RestMethod::Get, "/fw/floor") => Ok(GuestFwOp::OvmfFloorStatus),
+        (RestMethod::Post, "/fw/floor") => Ok(GuestFwOp::OvmfFloorStage),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -538,7 +616,9 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::NotEspLoaded
         | GuestFwError::NotSlotArmed
         | GuestFwError::NotGuestBound
-        | GuestFwError::MockFirmwareRefused => 409,
+        | GuestFwError::MockFirmwareRefused
+        | GuestFwError::TooSmall
+        | GuestFwError::NotRealFirmware => 409,
     }
 }
 
@@ -548,7 +628,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `POST /fw/slot` arms guest firmware slot 1 after ESP load.
 /// `POST /fw/bind` binds slot 1 to guest 1 after arm.
 /// `POST /fw/prepare` records launch-prepare after bind.
-/// `POST /fw/vmlaunch` refuses the 80-byte mock (409).
+/// `POST /fw/floor` stages a 4 KiB size-floor FV after prepare.
+/// `POST /fw/vmlaunch` refuses mock / non-EDK2 (409).
 /// GET paths return counts. Host mock is not embedded EDK2. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
@@ -688,6 +769,31 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
                 reply: None,
             },
         },
+        Ok(GuestFwOp::OvmfFloorStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_floor_is_staged() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfFloorStage) => {
+            let mut fv = [0u8; SIZE_FLOOR_FV_BYTES];
+            if write_size_floor_ovmf_fv(&mut fv).is_err() {
+                return RestResponse {
+                    status: 500,
+                    reply: None,
+                };
+            }
+            match stage_ovmf_firmware_floor(&fv) {
+                Ok(_) => RestResponse {
+                    status: 201,
+                    reply: Some(ApiReply::Ok),
+                },
+                Err(e) => RestResponse {
+                    status: guest_fw_err_status(e),
+                    reply: None,
+                },
+            }
+        }
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,

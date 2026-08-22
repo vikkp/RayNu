@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–9 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-24** are host gates. Residual: guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–10 (host) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-25** are host gates. Residual: guest UEFI VMLAUNCH + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,18 +273,18 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 10):** `VMLAUNCH` guest UEFI from **real** EDK2
-bytes on ESP **or** TLS/console polish.
+**First action (E5 Stage 11):** `VMLAUNCH` guest UEFI from **real** EDK2
+bytes on ESP (`>= 1 MiB`) **or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
-Do **not** VMLAUNCH the 80-byte mock FV.
+Do **not** VMLAUNCH the 80-byte mock or the 4 KiB size-floor.
 
-**Closed host:** Stage 0–8 as before · Stage 9 `RAYNU-V-M7-E5-FW-PREP-OK`
-(`prepare_ovmf_firmware_launch` + `POST /fw/prepare`;
-`try_vmlaunch_ovmf_firmware` refuses the mock).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 9 does **not**
+**Closed host:** Stage 0–9 as before · Stage 10 `RAYNU-V-M7-E5-FW-FLOOR-OK`
+(`stage_ovmf_firmware_floor` + `POST /fw/floor`;
+`try_vmlaunch_ovmf_firmware` → `NotRealFirmware`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 10 does **not**
 VMLAUNCH guest UEFI.
 
-**Next after Stage 9:** guest UEFI VMLAUNCH from real firmware **or** TLS/console polish.
+**Next after Stage 10:** guest UEFI VMLAUNCH from real EDK2 **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
