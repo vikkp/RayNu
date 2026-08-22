@@ -358,6 +358,17 @@ fn serves_spa_and_rest() {
         &mut images,
         &mut iso_plan,
         &mut iso_install,
+        "POST /fw/live-issue HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 201"), "{s}");
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
         "POST /fw/vmlaunch HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
         &mut out,
     )

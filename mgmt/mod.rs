@@ -355,6 +355,7 @@ pub mod m7_e5_real_esp_gate;
 pub mod m7_e5_real_launch_gate;
 pub mod m7_e5_live_exec_gate;
 pub mod m7_e5_priv_vmcs_gate;
+pub mod m7_e5_live_issue_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -415,11 +416,11 @@ pub use guest_fw::{
     bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware,
     load_ovmf_from_esp, map_live_esp_ovmf, prepare_ovmf_firmware_launch, probe_ovmf_firmware,
     arm_ovmf_real_launch, install_ovmf_alias_ept, program_ovmf_alias_ept, qualify_real_esp_ovmf,
-    arm_ovmf_private_vmcs, require_ovmf_live_esp, stage_edk2_ovmf_firmware,
+    arm_ovmf_live_issue, arm_ovmf_private_vmcs, require_ovmf_live_esp, stage_edk2_ovmf_firmware,
     stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob, GuestFwError, GuestFwKind,
     OvmfAlias, OvmfAliasEpt, OvmfAliasEptInstall, OvmfBind, OvmfEdk2, OvmfEspLaunch, OvmfFloor,
-    OvmfFv, OvmfLaunchPrep, OvmfLiveExec, OvmfLiveMap, OvmfPrivateVmcs, OvmfRealEsp, OvmfRealLaunch,
-    OvmfResetVec, OvmfSlot,
+    OvmfFv, OvmfLaunchPrep, OvmfLiveExec, OvmfLiveIssue, OvmfLiveMap, OvmfPrivateVmcs, OvmfRealEsp,
+    OvmfRealLaunch, OvmfResetVec, OvmfSlot,
 };
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use ha::{
@@ -472,6 +473,7 @@ pub use m7_e5_real_esp_gate::{run_m7_e5_real_esp_gate, M7_E5_REAL_ESP_OK_MARKER}
 pub use m7_e5_real_launch_gate::{run_m7_e5_real_launch_gate, M7_E5_REAL_LAUNCH_OK_MARKER};
 pub use m7_e5_live_exec_gate::{run_m7_e5_live_exec_gate, M7_E5_LIVE_EXEC_OK_MARKER};
 pub use m7_e5_priv_vmcs_gate::{run_m7_e5_priv_vmcs_gate, M7_E5_PRIV_VMCS_OK_MARKER};
+pub use m7_e5_live_issue_gate::{run_m7_e5_live_issue_gate, M7_E5_LIVE_ISSUE_OK_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};
