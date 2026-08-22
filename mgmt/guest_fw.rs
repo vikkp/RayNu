@@ -104,6 +104,13 @@ pub enum GuestFwError {
     LaunchNotWired,
 }
 
+/// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfEspLaunch {
+    pub guest_id: u8,
+    pub slot_id: u8,
+}
+
 /// Probed UEFI Firmware Volume (host mock or ESP image). Not VMLAUNCH.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OvmfFv {
@@ -170,8 +177,9 @@ static GUEST_FW_OVMF_GUEST_BOUND: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LAUNCH_PREPPED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_FLOOR_STAGED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_EDK2_STAGED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_ESP_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -182,6 +190,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LAUNCH_PREPPED.store(false, Ordering::Release);
     GUEST_FW_OVMF_FLOOR_STAGED.store(false, Ordering::Release);
     GUEST_FW_OVMF_EDK2_STAGED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_ESP_LAUNCH_ARMED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -227,6 +236,11 @@ pub fn ovmf_floor_is_staged() -> bool {
 /// True after a successful [`stage_edk2_ovmf_firmware`].
 pub fn ovmf_edk2_is_staged() -> bool {
     GUEST_FW_OVMF_EDK2_STAGED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`arm_ovmf_esp_launch`].
+pub fn ovmf_esp_launch_is_armed() -> bool {
+    GUEST_FW_OVMF_ESP_LAUNCH_ARMED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -489,17 +503,27 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
     })
 }
 
-/// Refuse guest UEFI VMLAUNCH of the in-tree mock / size-floor / EDK2-sized fixtures.
+/// Refuse guest UEFI VMLAUNCH unless a live ESP `OVMF.fd` is mapped.
 ///
 /// INVARIANTS:
 /// - Requires a prior successful [`prepare_ovmf_firmware_launch`]
 /// - Mock (no floor) → [`GuestFwError::MockFirmwareRefused`]
 /// - Size-floor staged (no EDK2) → [`GuestFwError::NotRealFirmware`]
-/// - EDK2-sized staged → [`GuestFwError::LaunchNotWired`] (not a shipped image)
-/// - Does not write VMCS and does not VMLAUNCH
+/// - EDK2-sized staged (no ESP launch arm) → [`GuestFwError::LaunchNotWired`]
+/// - ESP launch armed → [`crate::vmx::launch::try_vmlaunch_guest_uefi_ovmf`]
+///   (no live mapping this slice → [`GuestFwError::MissingEsp`])
+/// - Does not VMLAUNCH the 1 MiB fixture and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
     if !ovmf_launch_is_prepared() {
         return Err(GuestFwError::NotGuestBound);
+    }
+    if ovmf_esp_launch_is_armed() {
+        return match crate::vmx::launch::try_vmlaunch_guest_uefi_ovmf() {
+            Ok(()) => Ok(()),
+            Err(crate::vmx::launch::GuestUefiLaunchError::MissingEspFirmware) => {
+                Err(GuestFwError::MissingEsp)
+            }
+        };
     }
     if ovmf_edk2_is_staged() {
         return Err(GuestFwError::LaunchNotWired);
@@ -508,6 +532,28 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
         return Err(GuestFwError::NotRealFirmware);
     }
     Err(GuestFwError::MockFirmwareRefused)
+}
+
+/// Arm the ESP-path guest UEFI VMLAUNCH contract after EDK2 (ADR-014 Stage 12).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`stage_edk2_ovmf_firmware`]
+/// - Records [`OVMF_ESP_PATH`] as the only allowed firmware source
+/// - Does not map the 1 MiB fixture and does not VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn arm_ovmf_esp_launch() -> Result<OvmfEspLaunch, GuestFwError> {
+    if !ovmf_edk2_is_staged() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    audit_log!(AuditEvent::OvmfEspLaunchArmed {
+        guest_id: u64::from(OVMF_FW_GUEST_ID),
+        slot_id: u64::from(OVMF_FW_SLOT_ID),
+    });
+    GUEST_FW_OVMF_ESP_LAUNCH_ARMED.store(true, Ordering::Release);
+    Ok(OvmfEspLaunch {
+        guest_id: OVMF_FW_GUEST_ID,
+        slot_id: OVMF_FW_SLOT_ID,
+    })
 }
 
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
@@ -622,6 +668,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/prepare"
         || path == "/fw/floor"
         || path == "/fw/edk2"
+        || path == "/fw/esp-launch"
         || path == "/fw/vmlaunch"
 }
 
@@ -644,6 +691,8 @@ enum GuestFwOp {
     OvmfFloorStage,
     OvmfEdk2Status,
     OvmfEdk2Stage,
+    OvmfEspLaunchStatus,
+    OvmfEspLaunchArm,
     OvmfTryVmlaunch,
 }
 
@@ -668,6 +717,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/floor") => Ok(GuestFwOp::OvmfFloorStage),
         (RestMethod::Get, "/fw/edk2") => Ok(GuestFwOp::OvmfEdk2Status),
         (RestMethod::Post, "/fw/edk2") => Ok(GuestFwOp::OvmfEdk2Stage),
+        (RestMethod::Get, "/fw/esp-launch") => Ok(GuestFwOp::OvmfEspLaunchStatus),
+        (RestMethod::Post, "/fw/esp-launch") => Ok(GuestFwOp::OvmfEspLaunchArm),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -701,7 +752,9 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `POST /fw/floor` stages a 4 KiB size-floor FV after prepare.
 /// `POST /fw/edk2` stages an EDK2-sized candidate after floor (host test
 /// heap fixture only). Production UEFI returns 409 (`MissingEsp`) — no
-/// embedded 1 MiB image (ADR-003). `POST /fw/vmlaunch` refuses (409).
+/// embedded 1 MiB image (ADR-003). `POST /fw/esp-launch` arms the ESP-path
+/// VMLAUNCH contract after EDK2. `POST /fw/vmlaunch` then calls
+/// `try_vmlaunch_guest_uefi_ovmf` (409 `MissingEsp` — no live `OVMF.fd`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
@@ -873,6 +926,22 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfEdk2Stage) => edk2_stage_rest(),
+        Ok(GuestFwOp::OvmfEspLaunchStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_esp_launch_is_armed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfEspLaunchArm) => match arm_ovmf_esp_launch() {
+            Ok(_) => RestResponse {
+                status: 201,
+                reply: Some(ApiReply::Ok),
+            },
+            Err(e) => RestResponse {
+                status: guest_fw_err_status(e),
+                reply: None,
+            },
+        },
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,

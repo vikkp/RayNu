@@ -8,7 +8,7 @@ mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy 
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
 velocity_commits_30d: 346
-velocity_gates_30d: 28
+velocity_gates_30d: 29
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 96
-summit_iso_pct: 93
+summit_iso_pct: 94
 summit_prod_pct: 100
 ---
 
@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach+arm+envelope) | Catalog parse + host attach + `FirmwareArmed` + `.asguefw` envelope; no OVMF; no guest UEFI VMLAUNCH |
 | CD-ROM attach | PARTIAL (host firmware arm) | `attach_cdrom_firmware` → FirmwareArmed; `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Guest UEFI firmware blob | PARTIAL (EDK2-sized) | `stage_edk2_ovmf_firmware` after floor; 1 MiB not a shipped OVMF.fd; VMLAUNCH not wired |
+| Guest UEFI firmware blob | PARTIAL (ESP launch) | `try_vmlaunch_guest_uefi_ovmf` wired; no live OVMF.fd; 1 MiB fixture refused |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -206,6 +206,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-24 | **E5 Stage 9** Firmware launch-prepare | D | **DONE (host)** | P0-23 | `RAYNU-V-M7-E5-FW-PREP-OK`; mock refused; not VMLAUNCH / not Everest E5 |
 | P0-25 | **E5 Stage 10** Firmware size-floor | D | **DONE (host)** | P0-24 | `RAYNU-V-M7-E5-FW-FLOOR-OK`; 4 KiB not EDK2; not VMLAUNCH / not Everest E5 |
 | P0-26 | **E5 Stage 11** Firmware EDK2-sized stage | D | **DONE (host)** | P0-25 | `RAYNU-V-M7-E5-FW-EDK2-OK`; 1 MiB not shipped OVMF.fd; not VMLAUNCH / not Everest E5 |
+| P0-27 | **E5 Stage 12** ESP-path guest UEFI VMLAUNCH | D | **DONE (host)** | P0-26 | `RAYNU-V-M7-E5-ESP-LAUNCH-OK`; launch.rs wired; no live OVMF.fd; not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -243,6 +244,7 @@ Ordered for critical path (parallelize B with D design):
 - **P0-24 / E5 Stage 9 closed (host):** `RAYNU-V-M7-E5-FW-PREP-OK`. Firmware launch-prepare. Mock VMLAUNCH refused. Iron P0-14 remains `2b795a0`.
 - **P0-25 / E5 Stage 10 closed (host):** `RAYNU-V-M7-E5-FW-FLOOR-OK`. 4 KiB size-floor. Not EDK2. VMLAUNCH refused. Iron P0-14 remains `2b795a0`.
 - **P0-26 / E5 Stage 11 closed (host):** `RAYNU-V-M7-E5-FW-EDK2-OK`. 1 MiB EDK2-sized candidate. Not a shipped `OVMF.fd`. VMLAUNCH not wired. Iron P0-14 remains `2b795a0`.
+- **P0-27 / E5 Stage 12 closed (host):** `RAYNU-V-M7-E5-ESP-LAUNCH-OK`. ESP-path VMLAUNCH wired in launch.rs. No live `OVMF.fd`. Fixture refused. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -292,10 +294,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-fw-edk2 |
-| Summary | P0-26 firmware EDK2-sized stage after floor; 1 MiB not a shipped OVMF.fd; VMLAUNCH not wired. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. EDK2-sized ≠ shipped OVMF.fd ≠ VMLAUNCH ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-FW-EDK2-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-esp-launch |
+| Summary | P0-27 ESP-path VMLAUNCH wired in launch.rs after EDK2; no live OVMF.fd; fixture refused. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ESP-path wired ≠ live OVMF.fd ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-ESP-LAUNCH-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---

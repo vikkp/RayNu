@@ -273,19 +273,20 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 12):** `VMLAUNCH` guest UEFI from **real** ESP
-EDK2 bytes (`\\EFI\\RayNu\\OVMF.fd`) **or** TLS/console polish.
+**First action (E5 Stage 13):** map a **live** ESP `\\EFI\\RayNu\\OVMF.fd`
+and `VMLAUNCH` those bytes **or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, or a
 synthetic 1 MiB `_FVH` fixture.
 
-**Closed host:** Stage 0–10 as before · Stage 11 `RAYNU-V-M7-E5-FW-EDK2-OK`
-(`stage_edk2_ovmf_firmware` + `POST /fw/edk2`;
-`try_vmlaunch_ovmf_firmware` → `LaunchNotWired`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 11 does **not**
-VMLAUNCH guest UEFI and does **not** ship an EDK2 `OVMF.fd`.
+**Closed host:** Stage 0–11 as before · Stage 12 `RAYNU-V-M7-E5-ESP-LAUNCH-OK`
+(`arm_ovmf_esp_launch` + `POST /fw/esp-launch`;
+`try_vmlaunch_guest_uefi_ovmf` → `MissingEspFirmware`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 12 **wires**
+the ESP-path VMLAUNCH entry in `vmx/launch.rs` and does **not** launch
+a live `OVMF.fd` (no mapping on host/CI).
 
-**Next after Stage 11:** guest UEFI VMLAUNCH from real ESP EDK2 **or** TLS/console polish.
+**Next after Stage 12:** live ESP `OVMF.fd` map + VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

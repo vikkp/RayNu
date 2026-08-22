@@ -23,12 +23,7 @@
   header {
     padding: 2rem 1.25rem 1rem;
   }
-  .brand {
-    font-family: var(--font-brand);
-    font-size: clamp(2.4rem, 6vw, 3.6rem);
-    color: var(--sea-deep);
-    line-height: 1.05;
-  }
+  .brand { font-family: var(--font-brand); font-size: 2.4rem; color: var(--sea-deep); }
   .tag {
     margin-top: 0.4rem;
     max-width: 36rem;
@@ -111,19 +106,7 @@
     max-width: 40rem;
   }
   #img-list { margin-top: 0.5rem; font-size: 0.9rem; color: rgba(12,26,34,0.7); }
-  #serial-log {
-    margin-top: 0.5rem;
-    max-height: 14rem;
-    overflow: auto;
-    font-family: monospace;
-    font-size: 0.75rem;
-    line-height: 1.35;
-    white-space: pre-wrap;
-    background: rgba(12, 26, 34, 0.06);
-    padding: 0.75rem;
-    border: 1px solid var(--line);
-    color: rgba(12,26,34,0.8);
-  }
+  #serial-log { max-height: 14rem; overflow: auto; font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; padding: 0.75rem; border: 1px solid var(--line); }
   section { margin-bottom: 1.75rem; }
 </style>
 </head>
@@ -184,6 +167,7 @@
       <button id="btn-fw-prep">Prep FW launch</button>
       <button id="btn-fw-floor">Stage FW floor</button>
       <button id="btn-fw-edk2">Stage EDK2</button>
+      <button id="btn-fw-esp">Arm ESP launch</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -427,6 +411,7 @@
   document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","FW launch prepped","FW prep failed");};
   document.getElementById("btn-fw-floor").onclick=function(){fwPost("/fw/floor","FW floor staged","FW floor failed");};
   document.getElementById("btn-fw-edk2").onclick=function(){fwPost("/fw/edk2","EDK2 staged","EDK2 failed");};
+  document.getElementById("btn-fw-esp").onclick=function(){fwPost("/fw/esp-launch","ESP launch armed","ESP launch failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
