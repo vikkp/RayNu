@@ -44,7 +44,7 @@ fn retain_rejects_too_small_and_missing_fvh() {
     clear_retained();
     let small = vec![0xAAu8; 4096];
     assert!(!accept_real_ovmf_bytes(&small));
-    let mut no_sig = vec![1u8; MIN_REAL_OVMF_BYTES];
+    let no_sig = vec![1u8; MIN_REAL_OVMF_BYTES];
     assert!(no_sig.iter().filter(|b| **b != 0).count() >= MIN_REAL_OVMF_NONEMPTY);
     assert!(!accept_real_ovmf_bytes(&no_sig));
     assert_eq!(

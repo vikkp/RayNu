@@ -5622,7 +5622,8 @@ mod launch_test {
         reset_live_esp_ovmf_mapping();
         assert!(!guest_uefi_live_esp_bytes_present());
         let mut realish = vec![0u8; crate::boot::ovmf_esp::MIN_REAL_OVMF_BYTES];
-        realish[0x20..0x28].copy_from_slice(&(realish.len() as u64).to_le_bytes());
+        let realish_len = realish.len() as u64;
+        realish[0x20..0x28].copy_from_slice(&realish_len.to_le_bytes());
         realish[0x28..0x2C].copy_from_slice(b"_FVH");
         realish[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
         for (i, b) in realish.iter_mut().enumerate().skip(0x38) {

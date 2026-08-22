@@ -17,8 +17,12 @@ use super::iso::IsoError;
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_live_hold_gate::run_m7_e5_live_hold_gate;
 use crate::boot::ovmf_esp::{
-    accept_real_ovmf_bytes, bytes_present, clear_retained, retain_ovmf_bytes,
-    E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER, MIN_REAL_OVMF_BYTES,
+    clear_retained, E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER,
+};
+
+#[cfg(test)]
+use crate::boot::ovmf_esp::{
+    accept_real_ovmf_bytes, bytes_present, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
 };
 
 #[cfg(test)]
