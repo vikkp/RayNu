@@ -108,7 +108,9 @@ RAYNU-V-M7-ISO-OK
   (`present_ovmf_live_esp`) is Stage 25
   (`RAYNU-V-M7-E5-LIVE-PRESENT-OK`). Live-ESP **admit**
   (`admit_ovmf_live_esp`) is Stage 26
-  (`RAYNU-V-M7-E5-LIVE-ADMIT-OK`);
+  (`RAYNU-V-M7-E5-LIVE-ADMIT-OK`). Live-ESP **read**
+  (`read_ovmf_live_esp`) is Stage 27
+  (`RAYNU-V-M7-E5-LIVE-READ-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
   `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
@@ -126,6 +128,8 @@ RAYNU-V-M7-ISO-OK
   `LiveEspPresentAbsent` (real ESP bytes presented; live E4
   SHELL EPT not written; VMLAUNCH insn not issued), or
   `LiveEspAdmitAbsent` (real ESP bytes admitted; live E4
+  SHELL EPT not written; VMLAUNCH insn not issued), or
+  `LiveEspReadAbsent` (real ESP bytes read-attempted; live E4
   SHELL EPT not written; VMLAUNCH insn not issued).
   Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
@@ -273,5 +277,12 @@ E5 Stage 26 (host, closed): `POST /fw/live-admit` records a real-ESP
 admit-attempt after live-present (host test heap fixture only).
 Production UEFI returns 409 (no embedded 4 MiB).
 `POST /fw/vmlaunch` returns 409 (`LiveEspAdmitAbsent`). Live E4
+SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
+VMLAUNCH insn not issued.
+
+E5 Stage 27 (host, closed): `POST /fw/live-read` records a real-ESP
+read-attempt after live-admit (host test heap fixture only).
+Production UEFI returns 409 (no embedded 4 MiB).
+`POST /fw/vmlaunch` returns 409 (`LiveEspReadAbsent`). Live E4
 SHELL EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`.
 VMLAUNCH insn not issued.

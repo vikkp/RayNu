@@ -139,6 +139,8 @@ pub enum GuestFwError {
     LiveEspPresentAbsent,
     /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were admitted; they are still absent.
     LiveEspAdmitAbsent,
+    /// Real ESP `\EFI\RayNu\OVMF.fd` bytes were read-attempted; they are still absent.
+    LiveEspReadAbsent,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -287,6 +289,13 @@ pub struct OvmfLiveAdmit {
     pub gpa: u64,
 }
 
+/// Live-ESP read bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfLiveRead {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -324,8 +333,9 @@ static GUEST_FW_OVMF_LIVE_BYTES_PROBED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_FD_REQUIRED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_PRESENTED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_ADMITTED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_LIVE_ESP_READ: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec / private-VMCS / live-issue / live-bytes / live-fd / live-present / live-admit flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec / private-VMCS / live-issue / live-bytes / live-fd / live-present / live-admit / live-read flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -351,6 +361,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LIVE_FD_REQUIRED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_PRESENTED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_ADMITTED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_LIVE_ESP_READ.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -472,6 +483,11 @@ pub fn ovmf_live_esp_is_presented() -> bool {
 /// True after a successful [`admit_ovmf_live_esp`].
 pub fn ovmf_live_esp_is_admitted() -> bool {
     GUEST_FW_OVMF_LIVE_ESP_ADMITTED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`read_ovmf_live_esp`].
+pub fn ovmf_live_esp_is_read() -> bool {
+    GUEST_FW_OVMF_LIVE_ESP_READ.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -758,7 +774,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   [`GuestFwError::LiveEspBytesAbsent`]; live FD required →
 ///   [`GuestFwError::LiveEspFdAbsent`]; live ESP presented →
 ///   [`GuestFwError::LiveEspPresentAbsent`]; live ESP admitted →
-///   [`GuestFwError::LiveEspAdmitAbsent`])
+///   [`GuestFwError::LiveEspAdmitAbsent`]; live ESP read-attempted →
+///   [`GuestFwError::LiveEspReadAbsent`])
 /// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
 ///   the E4 SHELL EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
@@ -815,6 +832,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspAdmitAbsent) => {
                 Err(GuestFwError::LiveEspAdmitAbsent)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspReadAbsent) => {
+                Err(GuestFwError::LiveEspReadAbsent)
             }
         };
     }
@@ -1442,6 +1462,51 @@ pub fn admit_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveAdmit, GuestFwError> 
     })
 }
 
+/// Read-attempt real ESP `\EFI\RayNu\OVMF.fd` bytes after admit (ADR-014 Stage 27).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`admit_ovmf_live_esp`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Does not flip [`crate::vmx::launch::guest_uefi_live_esp_bytes_present`]
+/// - Does not write the E4 SHELL EPT and does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn read_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveRead, GuestFwError> {
+    if !ovmf_live_esp_is_admitted() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::read_guest_uefi_live_esp(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfLiveEspRead {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_LIVE_ESP_READ.store(true, Ordering::Release);
+    Ok(OvmfLiveRead {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    })
+}
+
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
 ///
 /// INVARIANTS:
@@ -1615,6 +1680,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/live-fd"
         || path == "/fw/live-present"
         || path == "/fw/live-admit"
+        || path == "/fw/live-read"
         || path == "/fw/vmlaunch"
 }
 
@@ -1667,6 +1733,8 @@ enum GuestFwOp {
     OvmfLivePresent,
     OvmfLiveAdmitStatus,
     OvmfLiveAdmit,
+    OvmfLiveReadStatus,
+    OvmfLiveRead,
     OvmfTryVmlaunch,
 }
 
@@ -1721,6 +1789,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/live-present") => Ok(GuestFwOp::OvmfLivePresent),
         (RestMethod::Get, "/fw/live-admit") => Ok(GuestFwOp::OvmfLiveAdmitStatus),
         (RestMethod::Post, "/fw/live-admit") => Ok(GuestFwOp::OvmfLiveAdmit),
+        (RestMethod::Get, "/fw/live-read") => Ok(GuestFwOp::OvmfLiveReadStatus),
+        (RestMethod::Post, "/fw/live-read") => Ok(GuestFwOp::OvmfLiveRead),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -1756,7 +1826,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::LiveEspBytesAbsent
         | GuestFwError::LiveEspFdAbsent
         | GuestFwError::LiveEspPresentAbsent
-        | GuestFwError::LiveEspAdmitAbsent => 409,
+        | GuestFwError::LiveEspAdmitAbsent
+        | GuestFwError::LiveEspReadAbsent => 409,
     }
 }
 
@@ -1799,6 +1870,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// live-FD require (host test heap fixture only).
 /// `POST /fw/live-admit` records a real-ESP admit-attempt after
 /// live-present (host test heap fixture only).
+/// `POST /fw/live-read` records a real-ESP read-attempt after
+/// live-admit (host test heap fixture only).
 /// Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
@@ -1812,7 +1885,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `LiveEspBytesNotPresent`; live bytes probed → 409
 /// `LiveEspBytesAbsent`; live FD required → 409 `LiveEspFdAbsent`;
 /// live ESP presented → 409 `LiveEspPresentAbsent`; live ESP admitted →
-/// 409 `LiveEspAdmitAbsent`).
+/// 409 `LiveEspAdmitAbsent`; live ESP read-attempted →
+/// 409 `LiveEspReadAbsent`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 /// Not a live E4 SHELL EPT write.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
@@ -2099,6 +2173,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfLiveAdmit) => live_admit_rest(),
+        Ok(GuestFwOp::OvmfLiveReadStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_live_esp_is_read() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfLiveRead) => live_read_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -2590,6 +2671,38 @@ fn live_admit_rest() -> RestResponse {
 /// Production: no embedded 4 MiB live-admit image (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn live_admit_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn live_read_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match read_ovmf_live_esp(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB live-read image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn live_read_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
