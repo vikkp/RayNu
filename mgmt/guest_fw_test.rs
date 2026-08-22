@@ -3,12 +3,12 @@ use super::{
     guest_fw_payload, load_guest_firmware, load_ovmf_from_esp, ovmf_esp_is_loaded, ovmf_fv_is_probed,
     ovmf_floor_is_staged, ovmf_guest_is_bound, ovmf_launch_is_prepared, ovmf_slot_is_armed,
     parse_guest_fw, prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw,
-    stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, write_guest_fw_header,
-    write_mock_ovmf_fv, write_size_floor_ovmf_fv, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest,
-    GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
-    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, OVMF_FW_GUEST_ID,
-    SIZE_FLOOR_FV_BYTES,
-    OVMF_FW_SLOT_ID, SECTION_GUEST_FW,
+    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware,
+    write_edk2_sized_fv, write_guest_fw_header, write_mock_ovmf_fv, write_size_floor_ovmf_fv,
+    arm_ovmf_firmware_slot, bind_ovmf_firmware_guest, ovmf_edk2_is_staged, GuestFwError,
+    GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
+    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MIN_EDK2_OVMF_BYTES, MOCK_OVMF_FV_BYTES,
+    OVMF_FW_GUEST_ID, SIZE_FLOOR_FV_BYTES, OVMF_FW_SLOT_ID, SECTION_GUEST_FW,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 
@@ -131,6 +131,14 @@ fn rest_box_requires_bearer() {
     });
     assert_eq!(floor.status, 201);
     assert!(ovmf_floor_is_staged());
+
+    let edk2 = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/edk2",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(edk2.status, 201);
+    assert!(ovmf_edk2_is_staged());
 
     let refused = dispatch_guest_fw_rest(RestRequest {
         method: RestMethod::Post,
@@ -322,6 +330,54 @@ fn ovmf_floor_requires_prep_and_refuses_edk2_claim() {
     assert_eq!(
         try_vmlaunch_ovmf_firmware(),
         Err(GuestFwError::NotRealFirmware)
+    );
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_edk2_requires_floor_and_refuses_launch() {
+    reset_guest_fw();
+    let mut edk2 = vec![0u8; MIN_EDK2_OVMF_BYTES];
+    write_edk2_sized_fv(&mut edk2).unwrap();
+    assert_eq!(
+        stage_edk2_ovmf_firmware(&edk2),
+        Err(GuestFwError::NotRealFirmware)
+    );
+    assert!(!ovmf_edk2_is_staged());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/edk2",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let mut mock = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut mock).unwrap();
+    probe_ovmf_firmware(&mock).unwrap();
+    load_ovmf_from_esp(&mock).unwrap();
+    arm_ovmf_firmware_slot().unwrap();
+    bind_ovmf_firmware_guest().unwrap();
+    prepare_ovmf_firmware_launch().unwrap();
+    let mut floor = [0u8; SIZE_FLOOR_FV_BYTES];
+    write_size_floor_ovmf_fv(&mut floor).unwrap();
+    stage_ovmf_firmware_floor(&floor).unwrap();
+    assert_eq!(
+        stage_edk2_ovmf_firmware(&mock),
+        Err(GuestFwError::TooSmall)
+    );
+    assert_eq!(
+        stage_edk2_ovmf_firmware(&floor),
+        Err(GuestFwError::TooSmall)
+    );
+    let staged = stage_edk2_ovmf_firmware(&edk2).unwrap();
+    assert_eq!(staged.bytes_len, MIN_EDK2_OVMF_BYTES as u64);
+    assert!(ovmf_edk2_is_staged());
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::LaunchNotWired)
     );
     reset_guest_fw();
 }

@@ -165,4 +165,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 8 (host, closed):** firmware-to-guest bind (`RAYNU-V-M7-E5-FW-BIND-OK`).
    **Stage 9 (host, closed):** firmware launch-prepare (`RAYNU-V-M7-E5-FW-PREP-OK`).
    **Stage 10 (host, closed):** firmware size-floor (`RAYNU-V-M7-E5-FW-FLOOR-OK`).
-   Guest UEFI VMLAUNCH remains open (real EDK2 only; mock and 4 KiB floor refused).
+   **Stage 11 (host, closed):** firmware EDK2-sized stage (`RAYNU-V-M7-E5-FW-EDK2-OK`).
+   Guest UEFI VMLAUNCH remains open (real ESP EDK2 only; mock, 4 KiB floor,
+   and 1 MiB size fixture refused).
