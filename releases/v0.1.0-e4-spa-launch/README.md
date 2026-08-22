@@ -40,8 +40,8 @@ boot: E4 restore VMCS shadow slot=00000001 fields=98
 ```
 
 This kit then prints `COM2 quiet after first E4 re-entry` and stays quiet
-except HTTP / WARN / markers. That quiet line is **in-tree**, not yet
-re-proven on Cruzer.
+except HTTP / WARN / markers. **Closed on iron** 2026-08-21 — evidence:
+[`docs/evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md`](../../docs/evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md).
 
 ## Verify / remap
 
@@ -60,7 +60,6 @@ rebuild of the same source — same caveat as `v0.1.0-e4-spa-arm`.
 ## Honesty
 
 Does **not** claim Mount Everest, a Linux distro guest, TLS, `VMRESUME`,
-802.1Q, a dedicated mgmt NIC, or iron proof of the quiet COM2 path.
-Guest from SPA start is SHELL CPUID. Switches are `VMLAUNCH` after
-`VMCLEAR`. Preserve kit for NIC rollback remains
-`releases/v0.1.0-adr013-baseline`.
+802.1Q, or a dedicated mgmt NIC. Quiet COM2 is on iron; switches are
+still `VMLAUNCH` after `VMCLEAR`. Guest from SPA start is SHELL CPUID.
+Preserve kit for NIC rollback remains `releases/v0.1.0-adr013-baseline`.

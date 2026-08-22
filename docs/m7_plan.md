@@ -269,9 +269,10 @@ distro installer. Switches are `VMLAUNCH` after `VMCLEAR`, not `VMRESUME`.
 HTTP during the switch loop is not in the close paste. **ADR-013 Phase G
 closed 2026-08-21** as accepted-risk: host HTTP and guest virtio-net share LOM
 `:38` (Appendix B). Not VLAN / second NIC. Iron `2b795a0` logged every
-scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
-re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
-quiet except HTTP/WARN/markers.
+scheduler quantum on COM2 (E4 bring-up debug). **`v0.1.0-e4-spa-launch`
+(`832ea32`) closed quiet COM2 on iron** the same evening: first G0 re-entry,
+first SPA re-entry, first restore per slot, then
+`COM2 quiet after first E4 re-entry`.
 
 **Next:** TLS/console polish + a real distro installer. Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
@@ -279,4 +280,4 @@ quiet except HTTP/WARN/markers.
 `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
 `26573eb1`, hung E4 prefixes, and take-PHY (`ape-nophylock=no`). Preserve
 `releases/v0.1.0-adr013-baseline`. Evidence:
-[`docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md`](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md).
+[`docs/evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md`](evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md).

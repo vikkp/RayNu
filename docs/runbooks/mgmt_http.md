@@ -195,11 +195,11 @@ native HTTP exchange on that id — never from QEMU/host.
 
 **COM2 after E4.** Iron `2b795a0` logged every G0↔SPA scheduler quantum
 (`E4 G0 VMLAUNCH` / `E4 restore` / `E4 SPA VMLAUNCH`). That was E4 bring-up
-debug, not the production console (ADR-011 default is quiet; `paperverbose.txt`
-is verbose). Next EFI logs the first G0 re-entry, first SPA re-entry, first
-restore per slot, then `COM2 quiet after first E4 re-entry` and stays quiet
-except HTTP/WARN/markers. One `poll rx_prod=` snapshot at listen start
-remains. WARN if `rx_drop` rises.
+debug. **`v0.1.0-e4-spa-launch` closed quiet COM2 on iron** 2026-08-21: first
+G0 re-entry, first SPA re-entry, first restore per slot, then
+`COM2 quiet after first E4 re-entry`. HTTP/WARN/markers still print. One
+`poll rx_prod=` snapshot at listen start remains. WARN if `rx_drop` rises.
+Evidence: [`2026-08-21-e4-spa-quiet-com2-ok.md`](../evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md).
 
 **Iron flash (replace-only):** copy the new `BOOTX64.EFI` onto the Cruzer
 ESP (`EFI/BOOT/BOOTX64.EFI`). Leave `EFI/RayNu/installdisk.bin` (and

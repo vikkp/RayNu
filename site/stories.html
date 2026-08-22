@@ -331,10 +331,12 @@ boot: E4 restore VMCS shadow slot=00000001 fields=98</pre>
           That pair repeated for many quanta. Paste truncated mid-loop.
           No error 7. No error 11. No <code>VMXOFF</code>. That is P0-14 /
           <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> closed on iron.
-          The repeating lines are E4 bring-up debug, not the production
-          console. ADR-011 default is quiet COM2. The next EFI logs the
-          first G0 re-entry, first SPA re-entry, first restore per slot,
-          then stays quiet except HTTP, WARN, and markers.
+          The repeating lines on <code>2b795a0</code> were E4 bring-up
+          debug. The same evening, <code>v0.1.0-e4-spa-launch</code> on
+          Cruzer printed the first G0 re-entry, first SPA re-entry, first
+          restore per slot, then
+          <code>COM2 quiet after first E4 re-entry</code>. HTTP, WARN, and
+          markers still print.
         </p>
 
         <h3>What we claim — and what we don’t</h3>
