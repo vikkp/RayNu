@@ -296,6 +296,10 @@ pub enum GuestUefiLaunchError {
     /// Live-ESP VMLAUNCH issue path is armed. Live ESP bytes are still
     /// absent. The VMLAUNCH instruction is not issued.
     LiveEspBytesNotPresent,
+    /// Live ESP `\EFI\RayNu\OVMF.fd` bytes were probed. They are still
+    /// absent. The heap fixture is not those bytes. The VMLAUNCH
+    /// instruction is not issued.
+    LiveEspBytesAbsent,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -317,6 +321,8 @@ static GUEST_UEFI_LIVE_ESP_REQUIRED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_PRIVATE_VMCS_ARMED: AtomicBool = AtomicBool::new(false);
 /// Stage 22: live-ESP VMLAUNCH issue path armed. Bytes still absent.
 static GUEST_UEFI_LIVE_ISSUE_ARMED: AtomicBool = AtomicBool::new(false);
+/// Stage 23: live ESP `\EFI\RayNu\OVMF.fd` bytes probed. Still absent.
+static GUEST_UEFI_LIVE_BYTES_PROBED: AtomicBool = AtomicBool::new(false);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -353,6 +359,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_LIVE_ESP_REQUIRED.store(false, Ordering::Release);
     GUEST_UEFI_PRIVATE_VMCS_ARMED.store(false, Ordering::Release);
     GUEST_UEFI_LIVE_ISSUE_ARMED.store(false, Ordering::Release);
+    GUEST_UEFI_LIVE_BYTES_PROBED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -519,9 +526,39 @@ pub fn guest_uefi_live_esp_is_required() -> bool {
 
 /// Host/CI never has live ESP `\EFI\RayNu\OVMF.fd` bytes.
 /// Production post-EBS FileSystem may be gone. Always false this slice.
-/// Stage 23 may flip this when a private guest-UEFI path can read ESP bytes.
+/// Stage 24 may flip this when a private guest-UEFI path can read real
+/// ESP bytes (not this fixture, not the E4 SHELL path).
 pub fn guest_uefi_live_esp_bytes_present() -> bool {
     false
+}
+
+/// True after a successful [`probe_guest_uefi_live_bytes`].
+pub fn guest_uefi_live_bytes_is_probed() -> bool {
+    GUEST_UEFI_LIVE_BYTES_PROBED.load(Ordering::Acquire)
+}
+
+/// Probe for live ESP `\EFI\RayNu\OVMF.fd` bytes after live-issue (ADR-014 Stage 23).
+///
+/// INVARIANTS:
+/// - Requires a prior live-issue arm
+/// - Requires `firmware_alias_gpa(bytes_len)` and reset-vector coverage
+/// - Does not allocate a VMCS, does not VMWRITE, and does not issue VMLAUNCH
+/// - Does not write the E4 SHELL EPT
+/// - Does not flip [`guest_uefi_live_esp_bytes_present`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn probe_guest_uefi_live_bytes(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_live_issue_is_armed() {
+        return Err(GuestUefiLaunchError::LiveEspBytesNotPresent);
+    }
+    let Some(gpa) = firmware_alias_gpa(bytes_len) else {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    };
+    if !alias_ept_covers_reset(gpa, bytes_len) {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_ALIAS_EPT_GPA.store(gpa, Ordering::Release);
+    GUEST_UEFI_LIVE_BYTES_PROBED.store(true, Ordering::Release);
+    Ok(())
 }
 
 /// True after a successful [`arm_guest_uefi_live_issue`].
@@ -613,6 +650,9 @@ pub fn require_guest_uefi_live_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
 /// - Does not write live EPT and does not VMWRITE the E4 SHELL VMCS
 fn issue_guest_uefi_vmlaunch() -> Result<(), GuestUefiLaunchError> {
     if !guest_uefi_live_esp_bytes_present() {
+        if guest_uefi_live_bytes_is_probed() {
+            return Err(GuestUefiLaunchError::LiveEspBytesAbsent);
+        }
         if guest_uefi_live_issue_is_armed() {
             return Err(GuestUefiLaunchError::LiveEspBytesNotPresent);
         }
@@ -666,7 +706,7 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
     Ok(())
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 22).
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 23).
 ///
 /// INVARIANTS:
 /// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture,
@@ -685,8 +725,10 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
 ///   [`GuestUefiLaunchError::LiveEspRequired`]
 /// - Private VMCS selected, no live-issue arm →
 ///   [`GuestUefiLaunchError::PrivateVmcsNotLaunched`]
-/// - Live-issue armed, bytes not present →
+/// - Live-issue armed, no live-bytes probe →
 ///   [`GuestUefiLaunchError::LiveEspBytesNotPresent`]
+/// - Live bytes probed, still absent →
+///   [`GuestUefiLaunchError::LiveEspBytesAbsent`]
 ///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`] +
 ///   [`GUEST_UEFI_VMLAUNCH_OPCODE`] + [`GUEST_UEFI_PRIVATE_VMCS_ID`];
 ///   no live E4 SHELL EPT write / no VMWRITE / insn not issued)
@@ -757,6 +799,9 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
     }
     if !guest_uefi_live_issue_is_armed() {
         return Err(GuestUefiLaunchError::PrivateVmcsNotLaunched);
+    }
+    if !guest_uefi_live_bytes_is_probed() {
+        return Err(GuestUefiLaunchError::LiveEspBytesNotPresent);
     }
     issue_guest_uefi_vmlaunch()
 }
@@ -4810,6 +4855,22 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::LiveEspBytesNotPresent)
         );
+        assert!(!guest_uefi_live_bytes_is_probed());
+        assert_eq!(
+            probe_guest_uefi_live_bytes(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_live_bytes_is_probed());
+        assert_eq!(
+            probe_guest_uefi_live_bytes(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_live_bytes_is_probed());
+        assert!(!guest_uefi_live_esp_bytes_present());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::LiveEspBytesAbsent)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
@@ -4821,6 +4882,7 @@ mod launch_test {
         assert!(!guest_uefi_live_esp_is_required());
         assert!(!guest_uefi_private_vmcs_is_armed());
         assert!(!guest_uefi_live_issue_is_armed());
+        assert!(!guest_uefi_live_bytes_is_probed());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 
