@@ -450,6 +450,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LIVE_ESP_SEALED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_LOCKED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_HELD.store(false, Ordering::Release);
+    crate::boot::ovmf_esp::clear_retained();
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 

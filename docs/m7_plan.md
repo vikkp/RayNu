@@ -273,10 +273,10 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 36):** flip
-`guest_uefi_live_esp_bytes_present()` only when **real** ESP
-`\\EFI\\RayNu\\OVMF.fd` bytes can be read into a private guest-UEFI
-VMCS + EPT (not the E4 SHELL path) **or** TLS/console polish.
+**First action (after Stage 36 retain):** allocate a private guest-UEFI
+VMCS + EPT and VMLAUNCH the **retained** ESP `OVMF.fd` bytes, **or**
+TLS/console polish. Do **not** add another `*Absent` bookkeeping stage
+or SPA flag button. ADR-014 Decision stands.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
 EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
@@ -285,15 +285,14 @@ insn-arm / live-exec / private-VMCS / live-issue / live-bytes / live-FD /
 live-present / live-admit / live-read / live-copy / live-place / live-apply /
 live-commit / live-latch / live-seal / live-lock / live-hold fixture.
 
-**Closed host:** Stage 0–34 as before · Stage 35 `RAYNU-V-M7-E5-LIVE-HOLD-OK`
-(`hold_ovmf_live_esp` + `POST /fw/live-hold`;
-`try_vmlaunch_guest_uefi_ovmf` → `LiveEspHoldAbsent`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 35 **holds**
-real ESP `OVMF.fd` bytes and does **not** write the E4 SHELL EPT,
-flip presence, or issue the VMLAUNCH instruction (4 MiB fixture is
-not a shipped `OVMF.fd`).
+**Closed host + QEMU:** Stage 0–35 as before · Stage 36
+`RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK` (`probe_ovmf_esp` retains a real
+ESP `OVMF.fd`; `guest_uefi_live_esp_bytes_present` follows
+`accept_real_ovmf_bytes`; QEMU stages system OVMF onto the ESP).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Presence is **not**
+a private VMCS and does **not** issue the VMLAUNCH instruction.
 
-**Next after Stage 35:** real ESP `OVMF.fd` presence **or** TLS/console polish.
+**Next after Stage 36:** private VMCS + EPT for the retained bytes, **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

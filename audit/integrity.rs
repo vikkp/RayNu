@@ -315,6 +315,11 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Real ESP `\EFI\RayNu\OVMF.fd` bytes retained in a pre-EBS buffer (ADR-014 presence rule).
+    /// Not a private VMCS and not VMLAUNCH.
+    OvmfLiveEspBytesRetained {
+        bytes_len: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -519,6 +524,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveEspSealed { .. } => 60,
         AuditEvent::OvmfLiveEspLocked { .. } => 61,
         AuditEvent::OvmfLiveEspHeld { .. } => 62,
+        AuditEvent::OvmfLiveEspBytesRetained { .. } => 63,
     }
 }
 
@@ -927,6 +933,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfLiveEspBytesRetained { bytes_len } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfLiveEspBytesRetained bytes=");
+            write_u64(bytes_len);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

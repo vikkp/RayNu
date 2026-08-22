@@ -369,6 +369,7 @@ pub mod m7_e5_live_latch_gate;
 pub mod m7_e5_live_seal_gate;
 pub mod m7_e5_live_lock_gate;
 pub mod m7_e5_live_hold_gate;
+pub mod m7_e5_ovmf_retain_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -500,6 +501,7 @@ pub use m7_e5_live_latch_gate::{run_m7_e5_live_latch_gate, M7_E5_LIVE_LATCH_OK_M
 pub use m7_e5_live_seal_gate::{run_m7_e5_live_seal_gate, M7_E5_LIVE_SEAL_OK_MARKER};
 pub use m7_e5_live_lock_gate::{run_m7_e5_live_lock_gate, M7_E5_LIVE_LOCK_OK_MARKER};
 pub use m7_e5_live_hold_gate::{run_m7_e5_live_hold_gate, M7_E5_LIVE_HOLD_OK_MARKER};
+pub use m7_e5_ovmf_retain_gate::{run_m7_e5_ovmf_retain_gate, M7_E5_OVMF_RETAIN_OK_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};

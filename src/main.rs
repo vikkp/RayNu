@@ -63,6 +63,7 @@ fn main() -> Status {
     // Probe ESP before EBS so fallback remains available if PE is empty.
     boot_note("boot: probing PE/ESP assets (pre-EBS)");
     boot::esp_assets::probe_bzimage();
+    boot::ovmf_esp::probe_ovmf_esp();
     if boot::pe_assets::embedded_present() {
         boot_note("boot: PE assets embedded (.askern/.asinit) — prefer PE");
         boot::serial::write_line(boot::M3_ASSETS_OK_MARKER);

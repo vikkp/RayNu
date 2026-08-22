@@ -70,6 +70,7 @@ MARKER_NVM="${MARKER_NVM:-RAYNU-V-M4-NVM-OK}"
 MARKER_BLK="${MARKER_BLK:-RAYNU-V-M4-BLK-OK}"
 MARKER_NET="${MARKER_NET:-RAYNU-V-M4-NET-OK}"
 MARKER_SMP="${MARKER_SMP:-RAYNU-V-M4-SMP-OK}"
+MARKER_OVMF_RETAIN="${MARKER_OVMF_RETAIN:-RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -163,6 +164,13 @@ if grep -qF "$MARKER_ASSETS" "$SERIAL_LOG"; then
   echo "==> M3.22 PE assets marker found"
 else
   echo "error: marker '$MARKER_ASSETS' not found (need PE .askern/.asinit embed)" >&2
+  fail=1
+fi
+
+if grep -qF "$MARKER_OVMF_RETAIN" "$SERIAL_LOG"; then
+  echo "==> E5 real ESP OVMF.fd retain marker found"
+else
+  echo "error: marker '$MARKER_OVMF_RETAIN' not found (need real ESP OVMF.fd retain)" >&2
   fail=1
 fi
 
