@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–38 closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-53** are host/QEMU gates. Residual: more guest-UEFI exits / virtio-in-guest + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–39 closed**. Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-54** are host/QEMU gates. Residual: guest CD (`attach_cdrom_uefi`) + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,9 +273,10 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (after Stage 38 alive):** more guest-UEFI exits /
-virtio in the guest, **or** TLS/console polish. Do **not** add another
-`*Absent` bookkeeping stage or SPA flag button. ADR-014 Decision stands.
+**First action (after Stage 39 past-SEC):** `attach_cdrom_uefi` so the
+private guest-UEFI VMCS can see CD media. Do **not** add another
+`*Absent` bookkeeping stage or SPA flag button. Do **not** open another
+pure “more exits” PR without a new capability. ADR-014 Decision stands.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
 EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
@@ -288,10 +289,12 @@ live-commit / live-latch / live-seal / live-lock / live-hold fixture.
 `RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK` · Stage 37
 `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK` · Stage 38
 `RAYNU-V-M7-E5-OVMF-ALIVE-OK` (CR4.VMXE host-owned so OVMF SEC
-`mov cr4, 0x640` does not triple-fault; short resume; not full OVMF).
+`mov cr4, 0x640` does not triple-fault; short resume; not full OVMF) ·
+Stage 39 `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` (left last 64 KiB + PEI PCI /
+firmware COM / HLT; COM1/COM2 forwarded; not full DXE).
 `attach_cdrom_uefi` stays `UnsupportedOnFirmware`.
 
-**Next after Stage 38:** more guest-UEFI exits / virtio-in-guest, **or** TLS/console polish.
+**Next after Stage 39:** `attach_cdrom_uefi` for this guest.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

@@ -202,3 +202,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 38 (host + QEMU, closed):** OVMF past first triple-fault
    (`RAYNU-V-M7-E5-OVMF-ALIVE-OK`). CR4.VMXE host-owned. Not full
    OVMF boot. Not installer. Not Everest E5.
+   **Stage 39 (host + QEMU, closed):** OVMF past SEC
+   (`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`). Left last 64 KiB + PEI PCI /
+   firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer.
+   Not Everest E5. Next: `attach_cdrom_uefi`.

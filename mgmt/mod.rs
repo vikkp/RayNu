@@ -372,6 +372,7 @@ pub mod m7_e5_live_hold_gate;
 pub mod m7_e5_ovmf_retain_gate;
 pub mod m7_e5_ovmf_vmlaunch_gate;
 pub mod m7_e5_ovmf_alive_gate;
+pub mod m7_e5_ovmf_past_sec_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -506,6 +507,7 @@ pub use m7_e5_live_hold_gate::{run_m7_e5_live_hold_gate, M7_E5_LIVE_HOLD_OK_MARK
 pub use m7_e5_ovmf_retain_gate::{run_m7_e5_ovmf_retain_gate, M7_E5_OVMF_RETAIN_OK_MARKER};
 pub use m7_e5_ovmf_vmlaunch_gate::{run_m7_e5_ovmf_vmlaunch_gate, M7_E5_OVMF_VMLAUNCH_GATE_MARKER};
 pub use m7_e5_ovmf_alive_gate::{run_m7_e5_ovmf_alive_gate, M7_E5_OVMF_ALIVE_GATE_MARKER};
+pub use m7_e5_ovmf_past_sec_gate::{run_m7_e5_ovmf_past_sec_gate, M7_E5_OVMF_PAST_SEC_GATE_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};

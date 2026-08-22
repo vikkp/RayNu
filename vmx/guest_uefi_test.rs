@@ -1,7 +1,10 @@
 use super::{
-    guest_uefi_alive, guest_uefi_non_tf_exits, guest_uefi_vmlaunch_entered, last_exit_reason,
-    live_firmware_alias_gpa, run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE,
-    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    guest_uefi_alive, guest_uefi_com_bytes, guest_uefi_non_tf_exits, guest_uefi_past_sec,
+    guest_uefi_vmlaunch_entered, io_port_from_qual, is_com_uart_port, is_pci_config_port,
+    last_exit_reason, linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence,
+    run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER,
+    M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -43,10 +46,42 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_vmlaunch_entered());
     assert_eq!(last_exit_reason(), 0);
     assert_eq!(M7_E5_OVMF_ALIVE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-ALIVE-OK");
+    assert_eq!(
+        M7_E5_OVMF_PAST_SEC_OK_MARKER,
+        "RAYNU-V-M7-E5-OVMF-PAST-SEC-OK"
+    );
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
+    assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
+    assert_eq!(GUEST_UEFI_RESUME_CAP, 256);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("COM1/COM2 forwarded"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC"));
     assert!(!guest_uefi_alive());
+    assert!(!guest_uefi_past_sec());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
+    assert_eq!(guest_uefi_com_bytes(), 0);
+}
+
+#[test]
+fn past_sec_predicates_are_honest() {
+    assert_eq!(io_port_from_qual(0x00cf_8000_b), 0xCF8);
+    assert_eq!(io_port_from_qual(0x00cf_c000_3), 0xCFC);
+    assert!(is_pci_config_port(0xCF8));
+    assert!(is_pci_config_port(0xCFC));
+    assert!(!is_pci_config_port(0x3F8));
+    assert!(is_com_uart_port(0x3F8));
+    assert!(is_com_uart_port(0x3FD));
+    assert!(is_com_uart_port(0x2F8));
+    assert!(!is_com_uart_port(0x80));
+    assert!(!linear_left_sec_tail(0xFFFF_FBC6));
+    assert!(!linear_left_sec_tail(0xFFFF_0000));
+    assert!(linear_left_sec_tail(0xFFFC_DF76));
+    assert!(linear_left_sec_tail(0xFFFD_37A9));
+    assert!(!past_sec_evidence(false, true, 1, true));
+    assert!(!past_sec_evidence(true, false, 0, false));
+    assert!(past_sec_evidence(true, true, 0, false));
+    assert!(past_sec_evidence(true, false, 1, false));
+    assert!(past_sec_evidence(true, false, 0, true));
 }
 
 #[test]
