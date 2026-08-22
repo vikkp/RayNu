@@ -362,6 +362,7 @@ pub mod m7_e5_live_present_gate;
 pub mod m7_e5_live_admit_gate;
 pub mod m7_e5_live_read_gate;
 pub mod m7_e5_live_copy_gate;
+pub mod m7_e5_live_place_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -486,6 +487,7 @@ pub use m7_e5_live_present_gate::{run_m7_e5_live_present_gate, M7_E5_LIVE_PRESEN
 pub use m7_e5_live_admit_gate::{run_m7_e5_live_admit_gate, M7_E5_LIVE_ADMIT_OK_MARKER};
 pub use m7_e5_live_read_gate::{run_m7_e5_live_read_gate, M7_E5_LIVE_READ_OK_MARKER};
 pub use m7_e5_live_copy_gate::{run_m7_e5_live_copy_gate, M7_E5_LIVE_COPY_OK_MARKER};
+pub use m7_e5_live_place_gate::{run_m7_e5_live_place_gate, M7_E5_LIVE_PLACE_OK_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};
