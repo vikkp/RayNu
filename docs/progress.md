@@ -100,6 +100,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 17 | `RAYNU-V-M7-E5-EPT-INSTALL-OK` | Host private alias-EPT install after program; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 18 | `RAYNU-V-M7-E5-REAL-ESP-OK` | Host real-ESP VMLAUNCH-ready contract after install; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 19 | `RAYNU-V-M7-E5-REAL-LAUNCH-OK` | Host guest-UEFI VMLAUNCH insn-path arm after qualify; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
+| E5 Stage 20 | `RAYNU-V-M7-E5-LIVE-EXEC-OK` | Host live-ESP VMLAUNCH execute gate after insn arm; live E4 SHELL EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -190,6 +191,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-32 / E5 Stage 17 closed (host):** private alias-EPT install (`RAYNU-V-M7-E5-EPT-INSTALL-OK`). Private window recorded; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-33 / E5 Stage 18 closed (host):** real-ESP VMLAUNCH-ready contract (`RAYNU-V-M7-E5-REAL-ESP-OK`). Real-ESP qualify recorded; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-34 / E5 Stage 19 closed (host):** guest-UEFI VMLAUNCH insn-path arm (`RAYNU-V-M7-E5-REAL-LAUNCH-OK`). Insn selected for real ESP only; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
+**P0-35 / E5 Stage 20 closed (host):** live-ESP VMLAUNCH execute gate (`RAYNU-V-M7-E5-LIVE-EXEC-OK`). Live ESP bytes required before insn path; live E4 SHELL EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -219,6 +221,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-32 / E5 Stage 17 | `RAYNU-V-M7-E5-EPT-INSTALL-OK` | **CLOSED (host).** Private alias-EPT install. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-33 / E5 Stage 18 | `RAYNU-V-M7-E5-REAL-ESP-OK` | **CLOSED (host).** Real-ESP VMLAUNCH-ready contract. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-34 / E5 Stage 19 | `RAYNU-V-M7-E5-REAL-LAUNCH-OK` | **CLOSED (host).** Guest-UEFI VMLAUNCH insn-path arm. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-34. Product ISO: [ADR-014](adr/ADR-014.md). Execute VMLAUNCH of real ESP OVMF.fd is Stage 20. |
+| P0-35 / E5 Stage 20 | `RAYNU-V-M7-E5-LIVE-EXEC-OK` | **CLOSED (host).** Live-ESP VMLAUNCH execute gate. Live E4 SHELL EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-35. Product ISO: [ADR-014](adr/ADR-014.md). Execute VMLAUNCH of real ESP OVMF.fd is Stage 21. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

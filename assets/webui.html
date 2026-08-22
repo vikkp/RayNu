@@ -100,6 +100,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-fw-ei">Install FW EPT</button>
       <button id="btn-fw-re">Qualify real ESP</button>
       <button id="btn-fw-rl">Arm real launch</button>
+      <button id="btn-fw-lx">Require live ESP</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -169,53 +170,17 @@ section{margin-bottom:1.75rem}
 
   async function listImages(){setStatus("Listing images…");const res=await api("GET","/images");if(!res.ok){setStatus("Images failed ("+res.status+")");return;}imgEl.className="";imgEl.textContent="Images endpoint OK ("+res.status+"). Register via POST /images/{id}/iso.";setStatus("Images listed");}
 
-  async function deployIso() {
-    const iso = num("f-iso", 1) || 1;
-    setStatus("Deploy ISO " + iso + "…");
-    const res = await api("POST", "/iso/" + iso + "/deploy");
-    setStatus(res.ok ? ("ISO " + iso + " extract-boot bound") : ("ISO deploy failed (" + res.status + ")"));
-    await listImages();
-  }
+  async function deployIso(){const iso=num("f-iso",1)||1;setStatus("Deploy ISO "+iso+"…");const res=await api("POST","/iso/"+iso+"/deploy");setStatus(res.ok?("ISO "+iso+" extract-boot bound"):("ISO deploy failed ("+res.status+")"));await listImages();}
 
-  async function installIso() {
-    const iso = num("f-iso", 1) || 1;
-    setStatus("Install ISO " + iso + "…");
-    const res = await api("POST", "/iso/" + iso + "/install");
-    setStatus(res.ok ? ("ISO " + iso + " install contract armed") : ("ISO install failed (" + res.status + ")"));
-  }
+  async function installIso(){const iso=num("f-iso",1)||1;setStatus("Install ISO "+iso+"…");const res=await api("POST","/iso/"+iso+"/install");setStatus(res.ok?("ISO "+iso+" install contract armed"):("ISO install failed ("+res.status+")"));}
 
-  async function attachCdrom() {
-    const iso = num("f-iso", 1) || 1;
-    const typEl = document.getElementById("f-image");
-    const typ = typEl ? typEl.value : "linux_iso";
-    let path = "/iso/" + iso + "/attach";
-    if (typ && typ !== "none") path += "/" + typ;
-    setStatus("Attaching CD " + iso + "…");
-    const res = await api("POST", path);
-    setStatus(res.ok ? ("ISO " + iso + " host CD attached (not guest UEFI)") : ("CD attach failed (" + res.status + ")"));
-  }
+  async function attachCdrom(){const iso=num("f-iso",1)||1;const typEl=document.getElementById("f-image");const typ=typEl?typEl.value:"linux_iso";let path="/iso/"+iso+"/attach";if(typ&&typ!=="none")path+="/"+typ;setStatus("Attaching CD "+iso+"…");const res=await api("POST",path);setStatus(res.ok?("ISO "+iso+" host CD attached (not guest UEFI)"):("CD attach failed ("+res.status+")"));}
 
-  async function armFirmwareCd() {
-    const iso = num("f-iso", 1) || 1;
-    setStatus("Arming firmware CD " + iso + "…");
-    const res = await api("POST", "/iso/" + iso + "/firmware");
-    setStatus(res.ok ? ("ISO " + iso + " firmware CD armed (not guest UEFI)") : ("Firmware arm failed (" + res.status + ")"));
-  }
+  async function armFirmwareCd(){const iso=num("f-iso",1)||1;setStatus("Arming firmware CD "+iso+"…");const res=await api("POST","/iso/"+iso+"/firmware");setStatus(res.ok?("ISO "+iso+" firmware CD armed (not guest UEFI)"):("Firmware arm failed ("+res.status+")"));}
 
   async function fwPost(p,ok,bad){const res=await api("POST",p);setStatus(res.ok?ok:(bad+" ("+res.status+")"));}
 
-  async function refreshLogs() {
-    setStatus("Fetching host serial log…");
-    const res = await api("GET", "/logs/serial");
-    if (!res.ok) {
-      setStatus("Log failed (" + res.status + ")");
-      return;
-    }
-    const text = await res.text();
-    logEl.className = "";
-    logEl.textContent = text.length ? text : "(empty log ring)";
-    setStatus("Host serial log refreshed");
-  }
+  async function refreshLogs(){setStatus("Fetching host serial log…");const res=await api("GET","/logs/serial");if(!res.ok){setStatus("Log failed ("+res.status+")");return;}const text=await res.text();logEl.className="";logEl.textContent=text.length?text:"(empty log ring)";setStatus("Host serial log refreshed");}
 
   function render(items) {
     if (!items.length) {
@@ -287,6 +252,7 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-fw-ei").onclick=function(){fwPost("/fw/ept-install","FW EPT installed","FW EPT failed");};
   document.getElementById("btn-fw-re").onclick=function(){fwPost("/fw/real-esp","Real ESP qualified","Real ESP failed");};
   document.getElementById("btn-fw-rl").onclick=function(){fwPost("/fw/real-launch","Real launch armed","Real launch failed");};
+  document.getElementById("btn-fw-lx").onclick=function(){fwPost("/fw/live-exec","Live ESP required","Live ESP failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

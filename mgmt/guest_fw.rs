@@ -125,6 +125,8 @@ pub enum GuestFwError {
     RealEspNotLaunched,
     /// Guest-UEFI VMLAUNCH insn path is armed; instruction is not issued.
     RealLaunchNotIssued,
+    /// Live ESP `\EFI\RayNu\OVMF.fd` bytes are required; instruction is not issued.
+    LiveEspRequired,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -224,6 +226,13 @@ pub struct OvmfRealLaunch {
     pub gpa: u64,
 }
 
+/// Live-ESP execute bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfLiveExec {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -254,8 +263,9 @@ static GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ALIAS_EPT_INSTALLED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_REAL_ESP_QUALIFIED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_REAL_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_LIVE_ESP_REQUIRED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -274,6 +284,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_ALIAS_EPT_INSTALLED.store(false, Ordering::Release);
     GUEST_FW_OVMF_REAL_ESP_QUALIFIED.store(false, Ordering::Release);
     GUEST_FW_OVMF_REAL_LAUNCH_ARMED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_LIVE_ESP_REQUIRED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -360,6 +371,11 @@ pub fn ovmf_real_esp_is_qualified() -> bool {
 /// True after a successful [`arm_ovmf_real_launch`].
 pub fn ovmf_real_launch_is_armed() -> bool {
     GUEST_FW_OVMF_REAL_LAUNCH_ARMED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`require_ovmf_live_esp`].
+pub fn ovmf_live_esp_is_required() -> bool {
+    GUEST_FW_OVMF_LIVE_ESP_REQUIRED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -639,7 +655,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   [`GuestFwError::AliasEptNotLaunched`]; private EPT installed →
 ///   [`GuestFwError::AliasEptInstalledNotLaunched`]; real-ESP qualified →
 ///   [`GuestFwError::RealEspNotLaunched`]; insn path armed →
-///   [`GuestFwError::RealLaunchNotIssued`])
+///   [`GuestFwError::RealLaunchNotIssued`]; live-ESP required →
+///   [`GuestFwError::LiveEspRequired`])
 /// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
 ///   the E4 SHELL EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
@@ -675,6 +692,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::RealLaunchNotIssued) => {
                 Err(GuestFwError::RealLaunchNotIssued)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspRequired) => {
+                Err(GuestFwError::LiveEspRequired)
             }
         };
     }
@@ -988,6 +1008,50 @@ pub fn arm_ovmf_real_launch(bytes: &[u8]) -> Result<OvmfRealLaunch, GuestFwError
     })
 }
 
+/// Require live ESP `\EFI\RayNu\OVMF.fd` bytes before VMLAUNCH (ADR-014 Stage 20).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`arm_ovmf_real_launch`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Does not write the E4 SHELL EPT and does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn require_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveExec, GuestFwError> {
+    if !ovmf_real_launch_is_armed() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::require_guest_uefi_live_esp(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfLiveEspRequired {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_LIVE_ESP_REQUIRED.store(true, Ordering::Release);
+    Ok(OvmfLiveExec {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    })
+}
+
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
 ///
 /// INVARIANTS:
@@ -1154,6 +1218,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/ept-install"
         || path == "/fw/real-esp"
         || path == "/fw/real-launch"
+        || path == "/fw/live-exec"
         || path == "/fw/vmlaunch"
 }
 
@@ -1192,6 +1257,8 @@ enum GuestFwOp {
     OvmfRealEspQualify,
     OvmfRealLaunchStatus,
     OvmfRealLaunchArm,
+    OvmfLiveExecStatus,
+    OvmfLiveExecRequire,
     OvmfTryVmlaunch,
 }
 
@@ -1232,6 +1299,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/real-esp") => Ok(GuestFwOp::OvmfRealEspQualify),
         (RestMethod::Get, "/fw/real-launch") => Ok(GuestFwOp::OvmfRealLaunchStatus),
         (RestMethod::Post, "/fw/real-launch") => Ok(GuestFwOp::OvmfRealLaunchArm),
+        (RestMethod::Get, "/fw/live-exec") => Ok(GuestFwOp::OvmfLiveExecStatus),
+        (RestMethod::Post, "/fw/live-exec") => Ok(GuestFwOp::OvmfLiveExecRequire),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -1260,7 +1329,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::AliasEptNotLaunched
         | GuestFwError::AliasEptInstalledNotLaunched
         | GuestFwError::RealEspNotLaunched
-        | GuestFwError::RealLaunchNotIssued => 409,
+        | GuestFwError::RealLaunchNotIssued
+        | GuestFwError::LiveEspRequired => 409,
     }
 }
 
@@ -1289,6 +1359,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// the real-ESP VMLAUNCH-ready contract after install (host test heap
 /// fixture only). `POST /fw/real-launch` records the guest-UEFI
 /// VMLAUNCH insn-path arm after qualify (host test heap fixture only).
+/// `POST /fw/live-exec` records that live ESP `\EFI\RayNu\OVMF.fd`
+/// bytes are required before VMLAUNCH (host test heap fixture only).
 /// Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
@@ -1296,7 +1368,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `ResetVectorNotLaunched`; alias armed → 409 `FirmwareAliasNotLaunched`;
 /// alias-EPT programmed → 409 `AliasEptNotLaunched`; private EPT
 /// installed → 409 `AliasEptInstalledNotLaunched`; real-ESP qualified →
-/// 409 `RealEspNotLaunched`; insn path armed → 409 `RealLaunchNotIssued`).
+/// 409 `RealEspNotLaunched`; insn path armed → 409 `RealLaunchNotIssued`;
+/// live-ESP required → 409 `LiveEspRequired`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 /// Not a live E4 SHELL EPT write.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
@@ -1534,6 +1607,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfRealLaunchArm) => real_launch_rest(),
+        Ok(GuestFwOp::OvmfLiveExecStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_live_esp_is_required() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfLiveExecRequire) => live_exec_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -1801,6 +1881,38 @@ fn real_launch_rest() -> RestResponse {
 /// Production: no embedded 4 MiB real-launch image (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn real_launch_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn live_exec_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match require_ovmf_live_esp(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB live-exec image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn live_exec_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
