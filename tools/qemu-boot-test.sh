@@ -35,6 +35,7 @@
 # M4.5: RAYNU-V-M4-SMP-OK (dual-vCPU BSP+AP shared-EPT probe)
 # E5.36: RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK (real ESP OVMF.fd retain; always)
 # E5.37: RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK (required when VMXON succeeds)
+# E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -74,6 +75,7 @@ MARKER_NET="${MARKER_NET:-RAYNU-V-M4-NET-OK}"
 MARKER_SMP="${MARKER_SMP:-RAYNU-V-M4-SMP-OK}"
 MARKER_OVMF_RETAIN="${MARKER_OVMF_RETAIN:-RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK}"
 MARKER_OVMF_VMLAUNCH="${MARKER_OVMF_VMLAUNCH:-RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK}"
+MARKER_OVMF_ALIVE="${MARKER_OVMF_ALIVE:-RAYNU-V-M7-E5-OVMF-ALIVE-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -183,6 +185,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI VMLAUNCH of retained OVMF found"
   else
     echo "error: marker '$MARKER_OVMF_VMLAUNCH' not found after VMXON (need real VMLAUNCH of retained OVMF)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_ALIVE" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI ran past first triple-fault"
+  else
+    echo "error: marker '$MARKER_OVMF_ALIVE' not found after VMXON (OVMF died at first triple-fault)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then

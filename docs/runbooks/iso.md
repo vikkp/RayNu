@@ -395,3 +395,8 @@ retained bytes at `0xFFFF_FFF0` (`RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`).
 That path is not the E4 SHELL VMCS/EPT. Host `cargo test` still
 returns `PrivateVmcsNotLaunched` and does not execute the instruction.
 First entry is not a distro installer. Do not claim `ISO-INSTALL-OK`.
+
+E5 Stage 38 (host + QEMU, closed): OVMF SEC `mov cr4, 0x640` no longer
+triple-faults. `CR4.VMXE` is host-owned (mask + shadow). Serial
+`RAYNU-V-M7-E5-OVMF-ALIVE-OK` after two non-TF exits or a guest HLT.
+Not full OVMF boot. Not installer.

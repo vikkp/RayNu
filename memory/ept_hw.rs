@@ -190,6 +190,10 @@ pub fn ept_leaf_4k(hpa: u64, memory_type: u64) -> u64 {
     ept_rwe() | ((memory_type & 0x7) << 3) | (hpa & !0xfff)
 }
 
+/// Guest-UEFI low identity RAM. OVMF SEC/PEI temp RAM sits at 8–16 MiB on
+/// 4 MiB CODE images; 2 MiB was not enough once CR4.VMXE stopped the first #GP.
+pub const GUEST_UEFI_LOW_RAM_BYTES: u64 = 32 * 1024 * 1024;
+
 /// 2 MiB regions touched by `[gpa, gpa + bytes)`.
 pub fn firmware_alias_pt_count(gpa: u64, bytes: u64) -> usize {
     if bytes == 0 {
@@ -452,6 +456,9 @@ pub unsafe fn build_firmware_alias_ept(
     if (ram_hpa & (TWO_MIB - 1)) != 0 {
         return Err(EptHwError::Unsupported);
     }
+    if GUEST_UEFI_LOW_RAM_BYTES % TWO_MIB != 0 || GUEST_UEFI_LOW_RAM_BYTES / TWO_MIB > 512 {
+        return Err(EptHwError::Unsupported);
+    }
     let Some(fw_end) = gpa_base.checked_add(fw_bytes) else {
         return Err(EptHwError::Unsupported);
     };
@@ -477,7 +484,14 @@ pub unsafe fn build_firmware_alias_ept(
     let pd_lo = frames[3];
     core::ptr::write_volatile((pml4 as *mut u64).add(0), ept_link(pdpt));
     core::ptr::write_volatile((pdpt as *mut u64).add(0), ept_link(pd_lo));
-    core::ptr::write_volatile((pd_lo as *mut u64).add(0), ept_leaf_large(ram_hpa, mt));
+    // Low identity RAM for OVMF SEC/PEI temp (32 MiB of 2 MiB leaves).
+    const LOW_RAM_LEAVES: u64 = GUEST_UEFI_LOW_RAM_BYTES / TWO_MIB;
+    for i in 0..LOW_RAM_LEAVES {
+        core::ptr::write_volatile(
+            (pd_lo as *mut u64).add(i as usize),
+            ept_leaf_large(ram_hpa + i * TWO_MIB, mt),
+        );
+    }
 
     let pdpt_hi = ((gpa_base >> 30) & 0x1ff) as usize;
     core::ptr::write_volatile((pdpt as *mut u64).add(pdpt_hi), ept_link(pd_hi));
@@ -1235,6 +1249,9 @@ mod ept_hw_test {
             5
         );
         assert_eq!(frames_required_firmware_alias(0xFFF0_0000, 1024 * 1024), 5);
+        assert_eq!(GUEST_UEFI_LOW_RAM_BYTES, 32 * 1024 * 1024);
+        assert_eq!(GUEST_UEFI_LOW_RAM_BYTES % TWO_MIB, 0);
+        assert!(GUEST_UEFI_LOW_RAM_BYTES / TWO_MIB <= 512);
         assert_eq!(GUEST_PRECISE_PT_FRAMES, 3);
         assert_eq!(PRECISE_BYTES, 512 * 1024 * 1024);
         assert!(PRECISE_BYTES < (1 << 30), "M3.20 window must be < 1 GiB");
