@@ -5,41 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>RayNu-V</title>
 <style>
-  :root {
-    --ink: #0c1a22;
-    --sea: #1a6b7c;
-    --sea-deep: #0e3d48;
-    --line: rgba(12, 26, 34, 0.12);
-    --font-brand: Palatino,serif;
-    --font-ui: sans-serif;
-  }
+  :root{--ink:#0c1a22;--sea:#1a6b7c;--sea-deep:#0e3d48;--line:rgba(12,26,34,.12);--font-brand:Palatino,serif;--font-ui:sans-serif}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    min-height: 100vh;
-    font-family: var(--font-ui);
-    color: var(--ink);
-    background: #dce8ee;
-  }
-  header {
-    padding: 2rem 1.25rem 1rem;
-  }
+  body{min-height:100vh;font-family:var(--font-ui);color:var(--ink);background:#dce8ee}
+  header{padding:2rem 1.25rem 1rem}
   .brand { font-family: var(--font-brand); font-size: 2.4rem; color: var(--sea-deep); }
-  .tag {
-    margin-top: 0.4rem;
-    max-width: 36rem;
-    font-size: 1rem;
-    color: rgba(12, 26, 34, 0.72);
-  }
-  main {
-    padding: 0.5rem 1.25rem 2rem;
-  }
-  h2 {
-    font-family: var(--font-brand);
-    font-size: 1.35rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-    color: var(--sea-deep);
-  }
+  .tag{margin-top:.4rem;max-width:36rem;font-size:1rem;color:rgba(12,26,34,.72)}
+  main{padding:.5rem 1.25rem 2rem}
+  h2{font-family:var(--font-brand);font-size:1.35rem;font-weight:600;margin-bottom:.75rem;color:var(--sea-deep)}
   .toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -160,6 +133,7 @@
       <button id="btn-fw-edk2">Stage EDK2</button>
       <button id="btn-fw-esp">Arm ESP launch</button>
       <button id="btn-fw-map">Map live ESP</button>
+      <button id="btn-fw-rv">Arm reset vec</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -405,6 +379,7 @@
   document.getElementById("btn-fw-edk2").onclick=function(){fwPost("/fw/edk2","EDK2 staged","EDK2 failed");};
   document.getElementById("btn-fw-esp").onclick=function(){fwPost("/fw/esp-launch","ESP launch armed","ESP launch failed");};
   document.getElementById("btn-fw-map").onclick=function(){fwPost("/fw/esp-map","ESP mapped","ESP map failed");};
+  document.getElementById("btn-fw-rv").onclick=function(){fwPost("/fw/reset-vec","Reset vec armed","Reset vec failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

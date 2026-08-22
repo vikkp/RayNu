@@ -273,20 +273,21 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 14):** issue VMLAUNCH of **real** ESP
-`\\EFI\\RayNu\\OVMF.fd` bytes (reset-vector VMCS) **or** TLS/console polish.
+**First action (E5 Stage 15):** issue VMLAUNCH of **real** ESP
+`\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + 4 GiB firmware alias)
+**or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
-EDK2 fixture, or a synthetic 2 MiB live-map `_FVH`.
+EDK2 fixture, the 2 MiB live-map `_FVH`, or a synthetic `0xEA` reset stub.
 
-**Closed host:** Stage 0–12 as before · Stage 13 `RAYNU-V-M7-E5-ESP-MAP-OK`
-(`map_live_esp_ovmf` + `POST /fw/esp-map`;
-`try_vmlaunch_guest_uefi_ovmf` → `LiveMappedNotLaunched`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 13 **records**
-a live-sized ESP map and does **not** issue the VMLAUNCH instruction
-(2 MiB fixture is not a shipped `OVMF.fd`).
+**Closed host:** Stage 0–13 as before · Stage 14 `RAYNU-V-M7-E5-RESET-VEC-OK`
+(`arm_ovmf_reset_vector` + `POST /fw/reset-vec`;
+`try_vmlaunch_guest_uefi_ovmf` → `ResetVectorNotLaunched`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 14 **records**
+the SDM 9.1.4 reset-vector VMCS contract and does **not** issue the
+VMLAUNCH instruction (synthetic stub is not a shipped `OVMF.fd`).
 
-**Next after Stage 13:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
+**Next after Stage 14:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
