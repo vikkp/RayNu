@@ -196,6 +196,7 @@
       <button type="button" class="ghost" id="btn-iso-deploy" data-action="iso-deploy">Deploy ISO → extract-boot</button>
       <button type="button" class="ghost" id="btn-iso-install" data-action="iso-install">Install → disk contract</button>
       <button type="button" class="ghost" id="btn-iso-attach" data-action="iso-attach">Attach CD (host)</button>
+      <button type="button" class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Arm firmware CD</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -212,7 +213,7 @@
   <p class="note">
     Host serial log is HV UART ring (not guest console). TLS deferred (plaintext lab HTTP).
     Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
-    Host attach parses El Torito (not guest UEFI). Auth: ESP auth.token overrides bring-up when present.
+    Host attach parses El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. Auth: ESP auth.token overrides bring-up when present.
   </p>
 </main>
 <script>
@@ -356,6 +357,13 @@
     setStatus(res.ok ? ("ISO " + iso + " host CD attached (not guest UEFI)") : ("CD attach failed (" + res.status + ")"));
   }
 
+  async function armFirmwareCd() {
+    const iso = num("f-iso", 1) || 1;
+    setStatus("Arming firmware CD " + iso + "…");
+    const res = await api("POST", "/iso/" + iso + "/firmware");
+    setStatus(res.ok ? ("ISO " + iso + " firmware CD armed (not guest UEFI)") : ("Firmware arm failed (" + res.status + ")"));
+  }
+
   async function refreshLogs() {
     setStatus("Fetching host serial log…");
     const res = await api("GET", "/logs/serial");
@@ -422,6 +430,7 @@
   document.getElementById("btn-iso-deploy").onclick = deployIso;
   document.getElementById("btn-iso-install").onclick = installIso;
   document.getElementById("btn-iso-attach").onclick = attachCdrom;
+  document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

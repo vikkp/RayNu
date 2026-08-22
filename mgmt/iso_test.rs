@@ -1,9 +1,9 @@
 use super::{
-    attach_cdrom_host, attach_cdrom_uefi, bind_extract_boot, configure_install_disk,
-    dispatch_iso_attach_rest, dispatch_iso_rest, extract_boot_surface_present,
-    install_disk_surface_present, prop_iso_deploy_package, register_iso, CdromAttachState,
-    CdromTable, IsoDeployPlan, IsoError, DEFAULT_INSTALL_DISK_BYTES, ISO_EXTRACT_BOOT_NOTE,
-    ISO_GAP_NOTE, M7_ISO_OK_MARKER,
+    attach_cdrom_firmware, attach_cdrom_host, attach_cdrom_uefi, bind_extract_boot,
+    configure_install_disk, dispatch_iso_attach_rest, dispatch_iso_firmware_rest, dispatch_iso_rest,
+    extract_boot_surface_present, install_disk_surface_present, prop_iso_deploy_package,
+    register_iso, CdromAttachState, CdromTable, IsoDeployPlan, IsoError,
+    DEFAULT_INSTALL_DISK_BYTES, ISO_EXTRACT_BOOT_NOTE, ISO_GAP_NOTE, M7_ISO_OK_MARKER,
 };
 use crate::mgmt::el_torito::{write_mock_efi_iso, MOCK_EFI_ISO_BYTES};
 use crate::mgmt::guest_image::GuestImageType;
@@ -126,4 +126,54 @@ fn iso_rest_host_attach() {
         },
     );
     assert_eq!(st.reply, Some(ApiReply::Listed { count: 1 }));
+}
+
+#[test]
+fn host_then_firmware_arm() {
+    let mut iso = [0u8; MOCK_EFI_ISO_BYTES];
+    write_mock_efi_iso(&mut iso).unwrap();
+    let host = attach_cdrom_host(&iso, 2, GuestImageType::LinuxIso).unwrap();
+    let armed = attach_cdrom_firmware(&iso, host).unwrap();
+    assert_eq!(armed.state, CdromAttachState::FirmwareArmed);
+    assert_eq!(
+        attach_cdrom_uefi(2),
+        Err(IsoError::UnsupportedOnFirmware)
+    );
+}
+
+#[test]
+fn iso_rest_firmware_requires_host_attach() {
+    let mut store = crate::mgmt::datastore::ImageTable::new();
+    let mut cdrom = CdromTable::empty();
+    let tok = Some(BRINGUP_AUTH_TOKEN);
+    let missing = dispatch_iso_firmware_rest(
+        &mut store,
+        &mut cdrom,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/iso/5/firmware",
+            auth_token: tok,
+        },
+    );
+    assert_eq!(missing.status, 409);
+    let _ = dispatch_iso_attach_rest(
+        &mut store,
+        &mut cdrom,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/iso/5/attach",
+            auth_token: tok,
+        },
+    );
+    let armed = dispatch_iso_firmware_rest(
+        &mut store,
+        &mut cdrom,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/iso/5/firmware",
+            auth_token: tok,
+        },
+    );
+    assert_eq!(armed.status, 201);
+    assert_eq!(cdrom.firmware_armed_count(), 1);
 }

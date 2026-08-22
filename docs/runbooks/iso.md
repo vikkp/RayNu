@@ -21,6 +21,8 @@ M7.3 closes a **documented kernel-extract** deploy path on top of the image libr
 | `GET` | `/iso/deploy` | 200 — listed count `1` when plan ready |
 | `POST` | `/iso/{id}/attach` or `/iso/{id}/attach/{type}` | 201 — host El Torito CD-ROM attach (mock EFI prefix until blob upload) |
 | `GET` | `/iso/attach` | 200 — listed count of host-attached CD-ROMs |
+| `POST` | `/iso/{id}/firmware` | 201 — firmware-facing CD arm (requires host attach first) |
+| `GET` | `/iso/firmware` | 200 — listed count of FirmwareArmed records |
 
 Token: `Authorization: Bearer raynu-v-bringup` (same as M6.4 / M7.1 / M7.2).
 
@@ -43,10 +45,12 @@ RAYNU-V-M7-ISO-OK
 - Product ISO install is **UEFI-first + typed** ([ADR-014](../adr/ADR-014.md)):
   `linux_iso` | `windows_iso` | `generic_uefi`. Do not hard-wire SPA install to
   bzImage jump. Windows install is later; the type exists now.
-- **`attach_cdrom_uefi`** returns `UnsupportedOnFirmware` — firmware CD-ROM
-  is still deferred (M7.3 honesty). Host catalog **parse** (`parse_el_torito`)
-  is Stage 0 (`RAYNU-V-M7-E5-BOOT-SPEC-OK`). Host **attach** (`attach_cdrom_host`)
-  is Stage 1 (`RAYNU-V-M7-E5-CDROM-ATTACH-OK`). Host attach is not guest UEFI.
+- **`attach_cdrom_uefi`** returns `UnsupportedOnFirmware` — live guest firmware
+  CD is still deferred (M7.3 honesty). Host catalog **parse** (`parse_el_torito`)
+  is Stage 0. Host **attach** (`attach_cdrom_host`) is Stage 1. Firmware **arm**
+  (`attach_cdrom_firmware` / `FirmwareArmed`) is Stage 2
+  (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`). Firmware arm is not guest UEFI VMLAUNCH
+  and not OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
 - Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
@@ -62,4 +66,6 @@ E5 Stage 0 (host, closed): typed boot spec on REST/SPA + El Torito catalog parse
 `iso=0` stays E4 SHELL.
 
 E5 Stage 1 (host, closed): `POST /iso/{id}/attach` arms host CD-ROM from El Torito.
-Not a live guest firmware CD and not VMLAUNCH.
+
+E5 Stage 2 (host, closed): `POST /iso/{id}/firmware` arms FirmwareArmed after
+host attach + boot-image sector validate. Not OVMF and not VMLAUNCH.

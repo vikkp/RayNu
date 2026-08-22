@@ -25,7 +25,7 @@ use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{ImageKind, ImageTable, StoreError};
-use super::el_torito::{write_mock_efi_iso, MOCK_EFI_ISO_BYTES};
+use super::el_torito::{write_mock_efi_iso, ISO_SECTOR, MOCK_EFI_ISO_BYTES};
 use super::guest_image::GuestImageType;
 
 pub use super::el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
@@ -57,12 +57,15 @@ pub enum IsoError {
     Store(StoreError),
 }
 
-/// Host CD-ROM attach state. Not firmware-live (that stays [`attach_cdrom_uefi`]).
+/// Host / firmware CD-ROM attach state. Not guest-UEFI-live
+/// (that stays [`attach_cdrom_uefi`] → `UnsupportedOnFirmware`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CdromAttachState {
     Detached,
     Parsed,
     AttachedHost,
+    /// Firmware-facing boot image armed. Not VMLAUNCH and not OVMF.
+    FirmwareArmed,
 }
 
 /// One host-side CD-ROM / boot-image record (ADR-014 Stage 1).
@@ -131,9 +134,33 @@ impl CdromTable {
             .iter()
             .copied()
             .flatten()
-            .filter(|a| a.state == CdromAttachState::AttachedHost)
+            .filter(|a| {
+                matches!(
+                    a.state,
+                    CdromAttachState::AttachedHost | CdromAttachState::FirmwareArmed
+                )
+            })
             .count()
     }
+
+    pub fn firmware_armed_count(&self) -> usize {
+        self.slots
+            .iter()
+            .copied()
+            .flatten()
+            .filter(|a| a.state == CdromAttachState::FirmwareArmed)
+            .count()
+    }
+}
+
+/// Firmware-facing El Torito boot image (no alloc; metadata only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FirmwareBootImage {
+    pub iso_id: u64,
+    pub catalog_lba: u32,
+    pub load_lba: u32,
+    pub sector_count: u16,
+    pub efi: bool,
 }
 
 /// JUSTIFICATION (global state): the HTTP listen loops already take
@@ -274,6 +301,108 @@ pub fn attach_cdrom_host(
     })
 }
 
+/// Firmware-facing 2048-byte CD sector read (El Torito / ECMA-119).
+///
+/// INVARIANTS:
+/// - Does not allocate
+/// - Does not mutate `iso`
+/// - Rejects an LBA that is not fully inside `iso`
+pub fn cdrom_read_sector(iso: &[u8], lba: u32) -> Result<[u8; ISO_SECTOR], IsoError> {
+    let start = (lba as usize).saturating_mul(ISO_SECTOR);
+    let end = start.saturating_add(ISO_SECTOR);
+    if end > iso.len() {
+        return Err(IsoError::Catalog);
+    }
+    let mut out = [0u8; ISO_SECTOR];
+    out.copy_from_slice(&iso[start..end]);
+    Ok(out)
+}
+
+/// Resolve the firmware boot image from a host attach + ISO bytes.
+///
+/// INVARIANTS:
+/// - Requires `AttachedHost` or `FirmwareArmed`
+/// - Product types require `efi == true`
+/// - Every catalog `sector_count` sector from `load_lba` must be present
+/// - Does not VMLAUNCH and does not load OVMF
+pub fn firmware_boot_image(
+    iso: &[u8],
+    attach: &CdromAttach,
+) -> Result<FirmwareBootImage, IsoError> {
+    if attach.iso_id == 0 {
+        return Err(IsoError::InvalidId);
+    }
+    if !matches!(
+        attach.state,
+        CdromAttachState::AttachedHost | CdromAttachState::FirmwareArmed
+    ) {
+        return Err(IsoError::BadState);
+    }
+    if attach.image_type.is_lab_only() {
+        return Err(IsoError::BadState);
+    }
+    if !attach.efi {
+        return Err(IsoError::NotEfi);
+    }
+    if attach.sector_count == 0 {
+        return Err(IsoError::Catalog);
+    }
+    let last = (attach.load_lba as u64)
+        .checked_add(u64::from(attach.sector_count))
+        .and_then(|n| n.checked_sub(1))
+        .ok_or(IsoError::Catalog)?;
+    if last > u64::from(u32::MAX) {
+        return Err(IsoError::Catalog);
+    }
+    let _ = cdrom_read_sector(iso, attach.load_lba)?;
+    let _ = cdrom_read_sector(iso, last as u32)?;
+    Ok(FirmwareBootImage {
+        iso_id: attach.iso_id,
+        catalog_lba: attach.catalog_lba,
+        load_lba: attach.load_lba,
+        sector_count: attach.sector_count,
+        efi: attach.efi,
+    })
+}
+
+/// Arm a firmware-facing CD from an existing host attach (ADR-014 Stage 2).
+///
+/// INVARIANTS:
+/// - Requires [`CdromAttachState::AttachedHost`] (or already `FirmwareArmed`)
+/// - Re-parses El Torito and requires catalog `load_lba` to match the host record
+/// - On success, returned `state` is [`CdromAttachState::FirmwareArmed`]
+/// - Does not change [`attach_cdrom_uefi`] and does not VMLAUNCH
+pub fn attach_cdrom_firmware(
+    iso: &[u8],
+    host: CdromAttach,
+) -> Result<CdromAttach, IsoError> {
+    if host.state != CdromAttachState::AttachedHost
+        && host.state != CdromAttachState::FirmwareArmed
+    {
+        return Err(IsoError::BadState);
+    }
+    let parsed = parse_el_torito(iso).map_err(|_| IsoError::Catalog)?;
+    if parsed.load_lba != host.load_lba
+        || parsed.catalog_lba != host.catalog_lba
+        || parsed.sector_count != host.sector_count
+    {
+        return Err(IsoError::Catalog);
+    }
+    if !parsed.efi {
+        return Err(IsoError::NotEfi);
+    }
+    let _ = firmware_boot_image(iso, &host)?;
+    audit_log!(AuditEvent::CdromFirmwareArmed {
+        iso_id: host.iso_id,
+        load_lba: u64::from(host.load_lba),
+    });
+    Ok(CdromAttach {
+        state: CdromAttachState::FirmwareArmed,
+        efi: parsed.efi,
+        ..host
+    })
+}
+
 /// True when `path` is the host CD-ROM attach REST surface.
 pub fn is_iso_attach_path(path: &str) -> bool {
     let path = path.trim().trim_end_matches('/');
@@ -291,6 +420,25 @@ pub fn is_iso_attach_path(path: &str) -> bool {
         return false;
     }
     segs.next() == Some("attach")
+}
+
+/// True when `path` is the firmware-CD arm REST surface.
+pub fn is_iso_firmware_path(path: &str) -> bool {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/firmware" {
+        return true;
+    }
+    let Some(rest) = path.strip_prefix("/iso/") else {
+        return false;
+    };
+    let mut segs = rest.split('/');
+    let Some(id_s) = segs.next() else {
+        return false;
+    };
+    if parse_u64(id_s).is_none() {
+        return false;
+    }
+    segs.next() == Some("firmware") && segs.next().is_none()
 }
 
 /// True when guest bzImage load + ESP/PE stage surfaces exist (extract-boot path).
@@ -327,6 +475,11 @@ enum IsoAttachOp {
         id: u64,
         image_type: GuestImageType,
     },
+}
+
+enum IsoFirmwareOp {
+    Status,
+    Arm { id: u64 },
 }
 
 fn parse_u64(s: &str) -> Option<u64> {
@@ -482,6 +635,94 @@ pub fn dispatch_iso_attach_rest(
 /// HTTP listen path: attach against the process-local host CD-ROM table.
 pub fn dispatch_iso_attach_locked(store: &mut ImageTable, req: RestRequest<'_>) -> RestResponse {
     with_host_cdrom(|cdrom| dispatch_iso_attach_rest(store, cdrom, req))
+}
+
+fn route_iso_firmware(method: RestMethod, path: &str) -> Result<IsoFirmwareOp, ()> {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/firmware" {
+        return match method {
+            RestMethod::Get => Ok(IsoFirmwareOp::Status),
+            _ => Err(()),
+        };
+    }
+    let rest = path.strip_prefix("/iso/").ok_or(())?;
+    let mut segs = rest.split('/');
+    let id = parse_u64(segs.next().ok_or(())?).ok_or(())?;
+    if segs.next() != Some("firmware") || segs.next().is_some() {
+        return Err(());
+    }
+    match method {
+        RestMethod::Post => Ok(IsoFirmwareOp::Arm { id }),
+        _ => Err(()),
+    }
+}
+
+/// REST: `POST /iso/{id}/firmware` arms firmware CD from an existing host
+/// attach. `GET /iso/firmware` returns FirmwareArmed count.
+/// Does not VMLAUNCH. Does not flip [`attach_cdrom_uefi`].
+pub fn dispatch_iso_firmware_rest(
+    store: &mut ImageTable,
+    cdrom: &mut CdromTable,
+    req: RestRequest<'_>,
+) -> RestResponse {
+    let _ = store;
+    if !auth_allows(req.auth_token) {
+        return RestResponse {
+            status: 401,
+            reply: None,
+        };
+    }
+    match route_iso_firmware(req.method, req.path) {
+        Ok(IsoFirmwareOp::Status) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: cdrom.firmware_armed_count(),
+            }),
+        },
+        Ok(IsoFirmwareOp::Arm { id }) => {
+            let host = match cdrom.get(id) {
+                Some(a) => a,
+                None => {
+                    return RestResponse {
+                        status: 409,
+                        reply: None,
+                    };
+                }
+            };
+            let mut buf = [0u8; MOCK_EFI_ISO_BYTES];
+            if write_mock_efi_iso(&mut buf).is_err() {
+                return RestResponse {
+                    status: 500,
+                    reply: None,
+                };
+            }
+            match attach_cdrom_firmware(&buf, host) {
+                Ok(rec) => match cdrom.insert(rec) {
+                    Ok(()) => RestResponse {
+                        status: 201,
+                        reply: Some(ApiReply::Ok),
+                    },
+                    Err(e) => RestResponse {
+                        status: iso_err_status(e),
+                        reply: None,
+                    },
+                },
+                Err(e) => RestResponse {
+                    status: iso_err_status(e),
+                    reply: None,
+                },
+            }
+        }
+        Err(()) => RestResponse {
+            status: 400,
+            reply: None,
+        },
+    }
+}
+
+/// HTTP listen path: firmware arm against the process-local host CD-ROM table.
+pub fn dispatch_iso_firmware_locked(store: &mut ImageTable, req: RestRequest<'_>) -> RestResponse {
+    with_host_cdrom(|cdrom| dispatch_iso_firmware_rest(store, cdrom, req))
 }
 
 /// REST: `POST /iso/{id}/deploy` registers ISO (if needed) + binds extract-boot;
