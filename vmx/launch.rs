@@ -220,6 +220,9 @@ pub const GUEST_UEFI_FIRMWARE_TOP_GPA: u64 = 0x1_0000_0000;
 /// Unrestricted-guest secondary bit. Contract only — not ORed into E4 SHELL VMCS.
 pub const GUEST_UEFI_UNRESTRICTED_GUEST: u32 =
     crate::vmx::fields::SECONDARY_ENABLE_UNRESTRICTED_GUEST;
+/// VMLAUNCH opcode (SDM Vol. 3C 30.3). Selected for real ESP only.
+/// Not issued against the E4 SHELL VMCS or a heap fixture.
+pub const GUEST_UEFI_VMLAUNCH_OPCODE: [u8; 3] = [0x0F, 0x01, 0xC2];
 
 const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES > 1024 * 1024);
 const _: () = assert!(MIN_LIVE_ESP_OVMF_BYTES < MIN_FIRMWARE_ALIAS_BYTES);
@@ -278,6 +281,8 @@ pub enum GuestUefiLaunchError {
     AliasEptInstalledNotLaunched,
     /// Real-ESP VMLAUNCH-ready contract is recorded; VMLAUNCH instruction is not issued.
     RealEspNotLaunched,
+    /// Guest-UEFI VMLAUNCH insn path is armed; instruction is not issued.
+    RealLaunchNotIssued,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -291,6 +296,7 @@ static GUEST_UEFI_ALIAS_EPT_PROGRAMMED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_ALIAS_EPT_GPA: AtomicU64 = AtomicU64::new(0);
 static GUEST_UEFI_ALIAS_EPT_INSTALLED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_REAL_ESP_QUALIFIED: AtomicBool = AtomicBool::new(false);
+static GUEST_UEFI_REAL_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -323,6 +329,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_ALIAS_EPT_GPA.store(0, Ordering::Release);
     GUEST_UEFI_ALIAS_EPT_INSTALLED.store(false, Ordering::Release);
     GUEST_UEFI_REAL_ESP_QUALIFIED.store(false, Ordering::Release);
+    GUEST_UEFI_REAL_LAUNCH_ARMED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -454,6 +461,34 @@ pub fn qualify_guest_uefi_real_esp(bytes_len: u64) -> Result<(), GuestUefiLaunch
     Ok(())
 }
 
+/// True after a successful [`arm_guest_uefi_real_launch`].
+pub fn guest_uefi_real_launch_is_armed() -> bool {
+    GUEST_UEFI_REAL_LAUNCH_ARMED.load(Ordering::Acquire)
+}
+
+/// Arm the guest-UEFI VMLAUNCH insn path after real-ESP qualify (ADR-014 Stage 19).
+///
+/// INVARIANTS:
+/// - Requires a prior real-ESP qualify
+/// - Requires `firmware_alias_gpa(bytes_len)` and reset-vector coverage
+/// - Selects [`GUEST_UEFI_VMLAUNCH_OPCODE`] for `\\EFI\\RayNu\\OVMF.fd` only
+/// - Does not write the E4 SHELL EPT, does not VMWRITE, and does not issue VMLAUNCH
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn arm_guest_uefi_real_launch(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_real_esp_is_qualified() {
+        return Err(GuestUefiLaunchError::RealEspNotLaunched);
+    }
+    let Some(gpa) = firmware_alias_gpa(bytes_len) else {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    };
+    if !alias_ept_covers_reset(gpa, bytes_len) {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_ALIAS_EPT_GPA.store(gpa, Ordering::Release);
+    GUEST_UEFI_REAL_LAUNCH_ARMED.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// Probe a JMP FAR reset-vector stub at the end of a live-sized image.
 ///
 /// INVARIANTS:
@@ -486,7 +521,7 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
     Ok(())
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 18).
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 19).
 ///
 /// INVARIANTS:
 /// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture,
@@ -498,9 +533,11 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
 /// - Alias-EPT programmed, no install → [`GuestUefiLaunchError::AliasEptNotLaunched`]
 /// - Private alias-EPT installed, no real-ESP qualify →
 ///   [`GuestUefiLaunchError::AliasEptInstalledNotLaunched`]
-/// - Real-ESP qualified → [`GuestUefiLaunchError::RealEspNotLaunched`]
-///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`];
-///   no live E4 SHELL EPT write / no VMWRITE / no insn)
+/// - Real-ESP qualified, no insn arm → [`GuestUefiLaunchError::RealEspNotLaunched`]
+/// - Insn path armed → [`GuestUefiLaunchError::RealLaunchNotIssued`]
+///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`] +
+///   [`GUEST_UEFI_VMLAUNCH_OPCODE`]; no live E4 SHELL EPT write / no
+///   VMWRITE / insn not issued)
 /// - Does not change `iso=0` E4 SHELL
 ///
 /// VERIFICATION: L0 (documented). Outside the firmware-blob Proven Core set.
@@ -541,14 +578,25 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
         );
         return Err(GuestUefiLaunchError::AliasEptInstalledNotLaunched);
     }
+    if !guest_uefi_real_launch_is_armed() {
+        let _ = (
+            GUEST_UEFI_RESET_VMCS,
+            GUEST_UEFI_UNRESTRICTED_GUEST,
+            GUEST_UEFI_ALIAS_EPT,
+            GUEST_UEFI_ALIAS_EPT_GPA.load(Ordering::Acquire),
+            GUEST_UEFI_OVMF_ESP_PATH,
+        );
+        return Err(GuestUefiLaunchError::RealEspNotLaunched);
+    }
     let _ = (
         GUEST_UEFI_RESET_VMCS,
         GUEST_UEFI_UNRESTRICTED_GUEST,
         GUEST_UEFI_ALIAS_EPT,
         GUEST_UEFI_ALIAS_EPT_GPA.load(Ordering::Acquire),
         GUEST_UEFI_OVMF_ESP_PATH,
+        GUEST_UEFI_VMLAUNCH_OPCODE,
     );
-    Err(GuestUefiLaunchError::RealEspNotLaunched)
+    Err(GuestUefiLaunchError::RealLaunchNotIssued)
 }
 
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
@@ -4537,6 +4585,21 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::RealEspNotLaunched)
         );
+        assert_eq!(
+            arm_guest_uefi_real_launch(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_real_launch_is_armed());
+        assert_eq!(
+            arm_guest_uefi_real_launch(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_real_launch_is_armed());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::RealLaunchNotIssued)
+        );
+        assert_eq!(GUEST_UEFI_VMLAUNCH_OPCODE, [0x0F, 0x01, 0xC2]);
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
@@ -4544,6 +4607,7 @@ mod launch_test {
         assert!(!guest_uefi_alias_ept_is_programmed());
         assert!(!guest_uefi_alias_ept_is_installed());
         assert!(!guest_uefi_real_esp_is_qualified());
+        assert!(!guest_uefi_real_launch_is_armed());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 

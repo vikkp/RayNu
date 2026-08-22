@@ -123,6 +123,8 @@ pub enum GuestFwError {
     AliasEptInstalledNotLaunched,
     /// Real-ESP VMLAUNCH-ready contract is recorded; VMLAUNCH instruction is not issued.
     RealEspNotLaunched,
+    /// Guest-UEFI VMLAUNCH insn path is armed; instruction is not issued.
+    RealLaunchNotIssued,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -215,6 +217,13 @@ pub struct OvmfRealEsp {
     pub gpa: u64,
 }
 
+/// Guest-UEFI VMLAUNCH insn-path bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfRealLaunch {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -244,6 +253,7 @@ static GUEST_FW_OVMF_ALIAS_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ALIAS_EPT_INSTALLED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_REAL_ESP_QUALIFIED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_REAL_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 
 /// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP flags.
 pub fn reset_guest_fw() {
@@ -263,6 +273,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED.store(false, Ordering::Release);
     GUEST_FW_OVMF_ALIAS_EPT_INSTALLED.store(false, Ordering::Release);
     GUEST_FW_OVMF_REAL_ESP_QUALIFIED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_REAL_LAUNCH_ARMED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -344,6 +355,11 @@ pub fn ovmf_alias_ept_is_installed() -> bool {
 /// True after a successful [`qualify_real_esp_ovmf`].
 pub fn ovmf_real_esp_is_qualified() -> bool {
     GUEST_FW_OVMF_REAL_ESP_QUALIFIED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`arm_ovmf_real_launch`].
+pub fn ovmf_real_launch_is_armed() -> bool {
+    GUEST_FW_OVMF_REAL_LAUNCH_ARMED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -622,7 +638,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   [`GuestFwError::FirmwareAliasNotLaunched`]; alias-EPT programmed →
 ///   [`GuestFwError::AliasEptNotLaunched`]; private EPT installed →
 ///   [`GuestFwError::AliasEptInstalledNotLaunched`]; real-ESP qualified →
-///   [`GuestFwError::RealEspNotLaunched`])
+///   [`GuestFwError::RealEspNotLaunched`]; insn path armed →
+///   [`GuestFwError::RealLaunchNotIssued`])
 /// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
 ///   the E4 SHELL EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
@@ -655,6 +672,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::RealEspNotLaunched) => {
                 Err(GuestFwError::RealEspNotLaunched)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::RealLaunchNotIssued) => {
+                Err(GuestFwError::RealLaunchNotIssued)
             }
         };
     }
@@ -924,6 +944,50 @@ pub fn qualify_real_esp_ovmf(bytes: &[u8]) -> Result<OvmfRealEsp, GuestFwError> 
     })
 }
 
+/// Arm the guest-UEFI VMLAUNCH insn path after real-ESP qualify (ADR-014 Stage 19).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`qualify_real_esp_ovmf`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Selects the VMLAUNCH opcode in `vmx/launch.rs`; does not write the E4 SHELL EPT
+/// - Does not issue VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn arm_ovmf_real_launch(bytes: &[u8]) -> Result<OvmfRealLaunch, GuestFwError> {
+    if !ovmf_real_esp_is_qualified() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::arm_guest_uefi_real_launch(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfRealLaunchArmed {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_REAL_LAUNCH_ARMED.store(true, Ordering::Release);
+    Ok(OvmfRealLaunch {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    })
+}
+
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
 ///
 /// INVARIANTS:
@@ -1089,6 +1153,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/alias-ept"
         || path == "/fw/ept-install"
         || path == "/fw/real-esp"
+        || path == "/fw/real-launch"
         || path == "/fw/vmlaunch"
 }
 
@@ -1125,6 +1190,8 @@ enum GuestFwOp {
     OvmfAliasEptInstall,
     OvmfRealEspStatus,
     OvmfRealEspQualify,
+    OvmfRealLaunchStatus,
+    OvmfRealLaunchArm,
     OvmfTryVmlaunch,
 }
 
@@ -1163,6 +1230,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/ept-install") => Ok(GuestFwOp::OvmfAliasEptInstall),
         (RestMethod::Get, "/fw/real-esp") => Ok(GuestFwOp::OvmfRealEspStatus),
         (RestMethod::Post, "/fw/real-esp") => Ok(GuestFwOp::OvmfRealEspQualify),
+        (RestMethod::Get, "/fw/real-launch") => Ok(GuestFwOp::OvmfRealLaunchStatus),
+        (RestMethod::Post, "/fw/real-launch") => Ok(GuestFwOp::OvmfRealLaunchArm),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -1190,7 +1259,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::FirmwareAliasNotLaunched
         | GuestFwError::AliasEptNotLaunched
         | GuestFwError::AliasEptInstalledNotLaunched
-        | GuestFwError::RealEspNotLaunched => 409,
+        | GuestFwError::RealEspNotLaunched
+        | GuestFwError::RealLaunchNotIssued => 409,
     }
 }
 
@@ -1217,15 +1287,18 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// `POST /fw/ept-install` records a private alias-EPT install after
 /// program (host test heap fixture only). `POST /fw/real-esp` records
 /// the real-ESP VMLAUNCH-ready contract after install (host test heap
-/// fixture only). Production UEFI returns 409 (`MissingEsp`) — no
+/// fixture only). `POST /fw/real-launch` records the guest-UEFI
+/// VMLAUNCH insn-path arm after qualify (host test heap fixture only).
+/// Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
 /// 409 `LiveMappedNotLaunched`; reset-vector armed → 409
 /// `ResetVectorNotLaunched`; alias armed → 409 `FirmwareAliasNotLaunched`;
 /// alias-EPT programmed → 409 `AliasEptNotLaunched`; private EPT
 /// installed → 409 `AliasEptInstalledNotLaunched`; real-ESP qualified →
-/// 409 `RealEspNotLaunched`). GET paths return counts. Not a shipped
-/// EDK2 `OVMF.fd`. Not VMLAUNCH. Not a live E4 SHELL EPT write.
+/// 409 `RealEspNotLaunched`; insn path armed → 409 `RealLaunchNotIssued`).
+/// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
+/// Not a live E4 SHELL EPT write.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
         return RestResponse {
@@ -1454,6 +1527,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfRealEspQualify) => real_esp_rest(),
+        Ok(GuestFwOp::OvmfRealLaunchStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_real_launch_is_armed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfRealLaunchArm) => real_launch_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -1689,6 +1769,38 @@ fn real_esp_rest() -> RestResponse {
 /// Production: no embedded 4 MiB real-ESP image (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn real_esp_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn real_launch_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match arm_ovmf_real_launch(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB real-launch image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn real_launch_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
