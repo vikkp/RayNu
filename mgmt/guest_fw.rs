@@ -127,6 +127,8 @@ pub enum GuestFwError {
     RealLaunchNotIssued,
     /// Live ESP `\EFI\RayNu\OVMF.fd` bytes are required; instruction is not issued.
     LiveEspRequired,
+    /// Private guest-UEFI VMCS is selected (not E4 SHELL); instruction is not issued.
+    PrivateVmcsNotLaunched,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -233,6 +235,13 @@ pub struct OvmfLiveExec {
     pub gpa: u64,
 }
 
+/// Private guest-UEFI VMCS bookkeeping. Not the E4 SHELL VMCS and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfPrivateVmcs {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -264,8 +273,9 @@ static GUEST_FW_OVMF_ALIAS_EPT_INSTALLED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_REAL_ESP_QUALIFIED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_REAL_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_ESP_REQUIRED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_PRIVATE_VMCS_ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT / EPT-install / real-ESP / live-exec / private-VMCS flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -285,6 +295,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_REAL_ESP_QUALIFIED.store(false, Ordering::Release);
     GUEST_FW_OVMF_REAL_LAUNCH_ARMED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_ESP_REQUIRED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_PRIVATE_VMCS_ARMED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -376,6 +387,11 @@ pub fn ovmf_real_launch_is_armed() -> bool {
 /// True after a successful [`require_ovmf_live_esp`].
 pub fn ovmf_live_esp_is_required() -> bool {
     GUEST_FW_OVMF_LIVE_ESP_REQUIRED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`arm_ovmf_private_vmcs`].
+pub fn ovmf_private_vmcs_is_armed() -> bool {
+    GUEST_FW_OVMF_PRIVATE_VMCS_ARMED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -656,7 +672,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   [`GuestFwError::AliasEptInstalledNotLaunched`]; real-ESP qualified →
 ///   [`GuestFwError::RealEspNotLaunched`]; insn path armed →
 ///   [`GuestFwError::RealLaunchNotIssued`]; live-ESP required →
-///   [`GuestFwError::LiveEspRequired`])
+///   [`GuestFwError::LiveEspRequired`]; private VMCS selected →
+///   [`GuestFwError::PrivateVmcsNotLaunched`])
 /// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
 ///   the E4 SHELL EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
@@ -695,6 +712,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::LiveEspRequired) => {
                 Err(GuestFwError::LiveEspRequired)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::PrivateVmcsNotLaunched) => {
+                Err(GuestFwError::PrivateVmcsNotLaunched)
             }
         };
     }
@@ -1052,6 +1072,51 @@ pub fn require_ovmf_live_esp(bytes: &[u8]) -> Result<OvmfLiveExec, GuestFwError>
     })
 }
 
+/// Select a private guest-UEFI VMCS after live-ESP require (ADR-014 Stage 21).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`require_ovmf_live_esp`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Selects a private VMCS (not the E4 SHELL); does not allocate or VMWRITE
+/// - Does not write the E4 SHELL EPT and does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+/// - A heap fixture is not a shipped EDK2 `OVMF.fd`
+pub fn arm_ovmf_private_vmcs(bytes: &[u8]) -> Result<OvmfPrivateVmcs, GuestFwError> {
+    if !ovmf_live_esp_is_required() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::arm_guest_uefi_private_vmcs(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfPrivateVmcsArmed {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_PRIVATE_VMCS_ARMED.store(true, Ordering::Release);
+    Ok(OvmfPrivateVmcs {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    })
+}
+
 /// Stage a size-floor FV after launch-prepare (ADR-014 Stage 10).
 ///
 /// INVARIANTS:
@@ -1219,6 +1284,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/real-esp"
         || path == "/fw/real-launch"
         || path == "/fw/live-exec"
+        || path == "/fw/priv-vmcs"
         || path == "/fw/vmlaunch"
 }
 
@@ -1259,6 +1325,8 @@ enum GuestFwOp {
     OvmfRealLaunchArm,
     OvmfLiveExecStatus,
     OvmfLiveExecRequire,
+    OvmfPrivateVmcsStatus,
+    OvmfPrivateVmcsArm,
     OvmfTryVmlaunch,
 }
 
@@ -1301,6 +1369,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/real-launch") => Ok(GuestFwOp::OvmfRealLaunchArm),
         (RestMethod::Get, "/fw/live-exec") => Ok(GuestFwOp::OvmfLiveExecStatus),
         (RestMethod::Post, "/fw/live-exec") => Ok(GuestFwOp::OvmfLiveExecRequire),
+        (RestMethod::Get, "/fw/priv-vmcs") => Ok(GuestFwOp::OvmfPrivateVmcsStatus),
+        (RestMethod::Post, "/fw/priv-vmcs") => Ok(GuestFwOp::OvmfPrivateVmcsArm),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -1330,7 +1400,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::AliasEptInstalledNotLaunched
         | GuestFwError::RealEspNotLaunched
         | GuestFwError::RealLaunchNotIssued
-        | GuestFwError::LiveEspRequired => 409,
+        | GuestFwError::LiveEspRequired
+        | GuestFwError::PrivateVmcsNotLaunched => 409,
     }
 }
 
@@ -1361,6 +1432,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// VMLAUNCH insn-path arm after qualify (host test heap fixture only).
 /// `POST /fw/live-exec` records that live ESP `\EFI\RayNu\OVMF.fd`
 /// bytes are required before VMLAUNCH (host test heap fixture only).
+/// `POST /fw/priv-vmcs` records a private guest-UEFI VMCS (not E4 SHELL)
+/// after live-ESP require (host test heap fixture only).
 /// Production UEFI returns 409 (`MissingEsp`) — no
 /// embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
@@ -1369,7 +1442,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// alias-EPT programmed → 409 `AliasEptNotLaunched`; private EPT
 /// installed → 409 `AliasEptInstalledNotLaunched`; real-ESP qualified →
 /// 409 `RealEspNotLaunched`; insn path armed → 409 `RealLaunchNotIssued`;
-/// live-ESP required → 409 `LiveEspRequired`).
+/// live-ESP required → 409 `LiveEspRequired`; private VMCS selected →
+/// 409 `PrivateVmcsNotLaunched`).
 /// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 /// Not a live E4 SHELL EPT write.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
@@ -1614,6 +1688,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfLiveExecRequire) => live_exec_rest(),
+        Ok(GuestFwOp::OvmfPrivateVmcsStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_private_vmcs_is_armed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfPrivateVmcsArm) => priv_vmcs_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -1913,6 +1994,38 @@ fn live_exec_rest() -> RestResponse {
 /// Production: no embedded 4 MiB live-exec image (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn live_exec_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn priv_vmcs_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match arm_ovmf_private_vmcs(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB private-VMCS image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn priv_vmcs_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
