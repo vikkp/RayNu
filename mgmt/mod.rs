@@ -313,6 +313,7 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 pub mod spa_launch;
 pub mod m7_e4_spa_gate;
 pub mod m7_e5_boot_spec_gate;
+pub mod m7_e5_cdrom_attach_gate;
 pub mod api;
 pub mod datastore;
 pub mod guest_image;
@@ -400,7 +401,8 @@ pub use datastore::{
     STORE_GAP_NOTE,
 };
 pub use iso::{
-    dispatch_iso_rest, prop_iso_deploy_package, IsoDeployPlan, M7_ISO_OK_MARKER, ISO_GAP_NOTE,
+    attach_cdrom_host, dispatch_iso_attach_rest, dispatch_iso_rest, prop_iso_deploy_package,
+    CdromAttach, CdromAttachState, CdromTable, IsoDeployPlan, M7_ISO_OK_MARKER, ISO_GAP_NOTE,
 };
 pub use iso_install::{
     dispatch_iso_install_rest, disk_bytes_for_virtio_launch, install_disk_armed_for_launch,
@@ -449,6 +451,9 @@ pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
 pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
+pub use m7_e5_cdrom_attach_gate::{
+    run_m7_e5_cdrom_attach_gate, M7_E5_CDROM_ATTACH_OK_MARKER,
+};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
 };

@@ -11,13 +11,22 @@
 //! Product ISO install is typed + UEFI-first ([ADR-014](../docs/adr/ADR-014.md)):
 //! `linux_iso` | `windows_iso` | `generic_uefi`. Catalog parse lives in
 //! [`crate::mgmt::el_torito`] — parse is not attach, and attach is not VMLAUNCH.
-//! `attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Do not hard-wire SPA
-//! install to bzImage.
+//! `attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Host attach is
+//! [`attach_cdrom_host`] — parse + record a CD-ROM model. That is not guest
+//! UEFI and not VMLAUNCH. Do not hard-wire SPA install to bzImage.
+
+use core::cell::UnsafeCell;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+use crate::audit::AuditEvent;
+use crate::audit_log;
 
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{ImageKind, ImageTable, StoreError};
+use super::el_torito::{write_mock_efi_iso, MOCK_EFI_ISO_BYTES};
+use super::guest_image::GuestImageType;
 
 pub use super::el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
 
@@ -41,7 +50,118 @@ pub enum IsoError {
     BadState,
     InvalidId,
     UnsupportedOnFirmware,
+    /// El Torito catalog missing, truncated, or not bootable.
+    Catalog,
+    /// Product ISO types require an EFI (0xEF) catalog entry.
+    NotEfi,
     Store(StoreError),
+}
+
+/// Host CD-ROM attach state. Not firmware-live (that stays [`attach_cdrom_uefi`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CdromAttachState {
+    Detached,
+    Parsed,
+    AttachedHost,
+}
+
+/// One host-side CD-ROM / boot-image record (ADR-014 Stage 1).
+///
+/// INVARIANTS:
+/// - `state == AttachedHost` only after a successful [`attach_cdrom_host`]
+/// - `efi` is the catalog platform flag; product types require `efi == true`
+/// - Does not imply guest UEFI firmware or a VMLAUNCH CD
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CdromAttach {
+    pub iso_id: u64,
+    pub catalog_lba: u32,
+    pub load_lba: u32,
+    pub sector_count: u16,
+    pub efi: bool,
+    pub image_type: GuestImageType,
+    pub state: CdromAttachState,
+}
+
+/// Fixed host CD-ROM table (no alloc). One slot per `iso_id`.
+pub const CDROM_CAP: usize = 8;
+
+#[derive(Debug, Clone, Copy)]
+pub struct CdromTable {
+    slots: [Option<CdromAttach>; CDROM_CAP],
+}
+
+impl CdromTable {
+    pub const fn empty() -> Self {
+        Self {
+            slots: [None; CDROM_CAP],
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.slots = [None; CDROM_CAP];
+    }
+
+    pub fn get(&self, iso_id: u64) -> Option<CdromAttach> {
+        self.slots.iter().copied().flatten().find(|a| a.iso_id == iso_id)
+    }
+
+    pub fn insert(&mut self, attach: CdromAttach) -> Result<(), IsoError> {
+        if attach.iso_id == 0 {
+            return Err(IsoError::InvalidId);
+        }
+        for slot in self.slots.iter_mut() {
+            if let Some(existing) = slot {
+                if existing.iso_id == attach.iso_id {
+                    *slot = Some(attach);
+                    return Ok(());
+                }
+            }
+        }
+        for slot in self.slots.iter_mut() {
+            if slot.is_none() {
+                *slot = Some(attach);
+                return Ok(());
+            }
+        }
+        Err(IsoError::Store(StoreError::Full))
+    }
+
+    pub fn attached_count(&self) -> usize {
+        self.slots
+            .iter()
+            .copied()
+            .flatten()
+            .filter(|a| a.state == CdromAttachState::AttachedHost)
+            .count()
+    }
+}
+
+/// JUSTIFICATION (global state): the HTTP listen loops already take
+/// `IsoDeployPlan` / `InstallToDiskPlan`. Adding another argument would
+/// touch HOST-NIC FIN-close. One host CD-ROM table, spinlock for `cargo test`.
+struct HostCdrom(UnsafeCell<CdromTable>);
+
+// SAFETY: exclusive access is enforced by `HOST_CDROM_LOCK`.
+// KANI-TARGET: management-plane table; outside Proven Core.
+unsafe impl Sync for HostCdrom {}
+
+static HOST_CDROM: HostCdrom = HostCdrom(UnsafeCell::new(CdromTable::empty()));
+static HOST_CDROM_LOCK: AtomicBool = AtomicBool::new(false);
+
+fn with_host_cdrom<R>(f: impl FnOnce(&mut CdromTable) -> R) -> R {
+    while HOST_CDROM_LOCK.swap(true, Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    // SAFETY: lock held; exclusive mutable access to the host CD-ROM table.
+    // KANI-TARGET: host CD-ROM table mutex (mgmt plane).
+    let out = unsafe { f(&mut *HOST_CDROM.0.get()) };
+    HOST_CDROM_LOCK.store(false, Ordering::Release);
+    out
+}
+
+/// Reset the process-local host CD-ROM table (host tests).
+pub fn reset_host_cdrom() {
+    with_host_cdrom(|t| t.clear());
 }
 
 /// One ISO → extract-boot + install-disk plan (management plane).
@@ -114,6 +234,65 @@ pub fn attach_cdrom_uefi(_iso_id: u64) -> Result<(), IsoError> {
     Err(IsoError::UnsupportedOnFirmware)
 }
 
+/// Host El Torito CD-ROM attach (ADR-014 Stage 1).
+///
+/// INVARIANTS:
+/// - Parses `iso` via [`parse_el_torito`]; does not mutate `iso`
+/// - Rejects lab `linux_bzimage` and `iso_id == 0`
+/// - Product types require `efi == true` on the catalog
+/// - On success, returned `state` is [`CdromAttachState::AttachedHost`]
+/// - Does not VMLAUNCH and does not change [`attach_cdrom_uefi`]
+///
+/// VERIFICATION: L0 (outside Proven Core) — runtime checks in the E5 Stage 1 gate
+pub fn attach_cdrom_host(
+    iso: &[u8],
+    iso_id: u64,
+    image_type: GuestImageType,
+) -> Result<CdromAttach, IsoError> {
+    if iso_id == 0 {
+        return Err(IsoError::InvalidId);
+    }
+    if image_type.is_lab_only() {
+        return Err(IsoError::BadState);
+    }
+    let img = parse_el_torito(iso).map_err(|_| IsoError::Catalog)?;
+    if !img.efi {
+        return Err(IsoError::NotEfi);
+    }
+    audit_log!(AuditEvent::CdromAttached {
+        iso_id,
+        load_lba: u64::from(img.load_lba),
+    });
+    Ok(CdromAttach {
+        iso_id,
+        catalog_lba: img.catalog_lba,
+        load_lba: img.load_lba,
+        sector_count: img.sector_count,
+        efi: img.efi,
+        image_type,
+        state: CdromAttachState::AttachedHost,
+    })
+}
+
+/// True when `path` is the host CD-ROM attach REST surface.
+pub fn is_iso_attach_path(path: &str) -> bool {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/attach" {
+        return true;
+    }
+    let Some(rest) = path.strip_prefix("/iso/") else {
+        return false;
+    };
+    let mut segs = rest.split('/');
+    let Some(id_s) = segs.next() else {
+        return false;
+    };
+    if parse_u64(id_s).is_none() {
+        return false;
+    }
+    segs.next() == Some("attach")
+}
+
 /// True when guest bzImage load + ESP/PE stage surfaces exist (extract-boot path).
 pub fn extract_boot_surface_present() -> bool {
     let guest = include_str!("../guest/linux_boot.rs");
@@ -140,6 +319,14 @@ pub fn install_disk_surface_present() -> bool {
 enum IsoOp {
     Status,
     Deploy { id: u64 },
+}
+
+enum IsoAttachOp {
+    Status,
+    Attach {
+        id: u64,
+        image_type: GuestImageType,
+    },
 }
 
 fn parse_u64(s: &str) -> Option<u64> {
@@ -176,6 +363,125 @@ fn route_iso(method: RestMethod, path: &str) -> Result<IsoOp, ()> {
         (RestMethod::Post, Some("deploy")) => Ok(IsoOp::Deploy { id }),
         _ => Err(()),
     }
+}
+
+fn route_iso_attach(method: RestMethod, path: &str) -> Result<IsoAttachOp, ()> {
+    let path = path.trim().trim_end_matches('/');
+    if path == "/iso/attach" {
+        return match method {
+            RestMethod::Get => Ok(IsoAttachOp::Status),
+            _ => Err(()),
+        };
+    }
+    let rest = path.strip_prefix("/iso/").ok_or(())?;
+    let mut segs = rest.split('/');
+    let id = parse_u64(segs.next().ok_or(())?).ok_or(())?;
+    if segs.next() != Some("attach") {
+        return Err(());
+    }
+    let image_type = match segs.next() {
+        None => GuestImageType::LinuxIso,
+        Some(tag) => GuestImageType::parse(tag).ok_or(())?,
+    };
+    if segs.next().is_some() {
+        return Err(());
+    }
+    match method {
+        RestMethod::Post => Ok(IsoAttachOp::Attach { id, image_type }),
+        _ => Err(()),
+    }
+}
+
+fn register_iso_if_needed(store: &mut ImageTable, id: u64) -> Result<(), IsoError> {
+    if store.get(id).is_none() {
+        register_iso(store, id, 0, "distro.iso")?;
+        return Ok(());
+    }
+    if store.get(id).map(|r| r.kind) != Some(ImageKind::Iso) {
+        return Err(IsoError::BadState);
+    }
+    Ok(())
+}
+
+fn iso_err_status(e: IsoError) -> u16 {
+    match e {
+        IsoError::Store(StoreError::Full) => 507,
+        IsoError::NotFound => 404,
+        IsoError::BadState
+        | IsoError::InvalidId
+        | IsoError::Catalog
+        | IsoError::NotEfi
+        | IsoError::Store(StoreError::BadState)
+        | IsoError::Store(StoreError::InvalidId)
+        | IsoError::Store(StoreError::BadName) => 409,
+        IsoError::UnsupportedOnFirmware => 409,
+        IsoError::Store(_) => 500,
+    }
+}
+
+/// REST: `POST /iso/{id}/attach[/{type}]` registers ISO if needed, parses the
+/// host mock EFI El Torito prefix (blob upload residual), and records
+/// [`CdromAttachState::AttachedHost`]. `GET /iso/attach` returns attached count.
+/// Does not VMLAUNCH. Does not flip [`attach_cdrom_uefi`].
+pub fn dispatch_iso_attach_rest(
+    store: &mut ImageTable,
+    cdrom: &mut CdromTable,
+    req: RestRequest<'_>,
+) -> RestResponse {
+    if !auth_allows(req.auth_token) {
+        return RestResponse {
+            status: 401,
+            reply: None,
+        };
+    }
+    match route_iso_attach(req.method, req.path) {
+        Ok(IsoAttachOp::Status) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: cdrom.attached_count(),
+            }),
+        },
+        Ok(IsoAttachOp::Attach { id, image_type }) => {
+            if let Err(e) = register_iso_if_needed(store, id) {
+                return RestResponse {
+                    status: iso_err_status(e),
+                    reply: None,
+                };
+            }
+            let mut buf = [0u8; MOCK_EFI_ISO_BYTES];
+            if write_mock_efi_iso(&mut buf).is_err() {
+                return RestResponse {
+                    status: 500,
+                    reply: None,
+                };
+            }
+            match attach_cdrom_host(&buf, id, image_type) {
+                Ok(rec) => match cdrom.insert(rec) {
+                    Ok(()) => RestResponse {
+                        status: 201,
+                        reply: Some(ApiReply::Ok),
+                    },
+                    Err(e) => RestResponse {
+                        status: iso_err_status(e),
+                        reply: None,
+                    },
+                },
+                Err(e) => RestResponse {
+                    status: iso_err_status(e),
+                    reply: None,
+                },
+            }
+        }
+        Err(()) => RestResponse {
+            status: 400,
+            reply: None,
+        },
+    }
+}
+
+/// HTTP listen path: attach against the process-local host CD-ROM table.
+pub fn dispatch_iso_attach_locked(store: &mut ImageTable, req: RestRequest<'_>) -> RestResponse {
+    with_host_cdrom(|cdrom| dispatch_iso_attach_rest(store, cdrom, req))
 }
 
 /// REST: `POST /iso/{id}/deploy` registers ISO (if needed) + binds extract-boot;
