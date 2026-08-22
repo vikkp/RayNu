@@ -118,7 +118,8 @@ fn id_starts_with(field: &[u8], prefix: &[u8]) -> bool {
 }
 
 /// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + load LBA).
-pub const MOCK_EFI_ISO_BYTES: usize = 24 * ISO_SECTOR;
+/// Boot record at 17, catalog at 20, load LBA 22 with 4 sectors → need 26.
+pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
 
 /// Write a minimal EFI El Torito prefix into `iso`. No allocation.
 pub fn write_mock_efi_iso(iso: &mut [u8]) -> Result<usize, ElToritoError> {

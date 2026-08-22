@@ -81,6 +81,8 @@ pub enum AuditEvent {
     MgmtRestarted { generation: u32, kind: u8 },
     /// Host El Torito CD-ROM attach armed (ADR-014 Stage 1). Not guest UEFI.
     CdromAttached { iso_id: u64, load_lba: u64 },
+    /// Firmware-facing CD armed (ADR-014 Stage 2). Not VMLAUNCH / not OVMF.
+    CdromFirmwareArmed { iso_id: u64, load_lba: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -251,6 +253,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::EvidenceModeActivated { .. } => 26,
         AuditEvent::MgmtRestarted { .. } => 27,
         AuditEvent::CdromAttached { .. } => 28,
+        AuditEvent::CdromFirmwareArmed { .. } => 29,
     }
 }
 
@@ -438,6 +441,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::CdromAttached { iso_id, .. } => {
             serial::write_str("RAYNU-V-AUDIT: CdromAttached iso_id=");
+            write_u64(iso_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::CdromFirmwareArmed { iso_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: CdromFirmwareArmed iso_id=");
             write_u64(iso_id);
             serial::write_byte(b'\n');
         }
