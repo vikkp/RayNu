@@ -13,7 +13,7 @@ use super::api::{
     auth_allows, dispatch_rest, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{dispatch_store_rest, ImageTable};
-use super::iso::{dispatch_iso_rest, IsoDeployPlan};
+use super::iso::{dispatch_iso_attach_locked, dispatch_iso_rest, is_iso_attach_path, IsoDeployPlan};
 use super::iso_install::{dispatch_iso_install_rest, InstallToDiskPlan};
 use super::webui::{load_webui, webui_raw_bytes};
 use super::VmTable;
@@ -423,6 +423,8 @@ pub fn handle_http_request(
         || (parsed.path.starts_with("/iso/") && parsed.path.ends_with("/install"))
     {
         dispatch_iso_install_rest(images, iso_install, req)
+    } else if is_iso_attach_path(parsed.path) {
+        dispatch_iso_attach_locked(images, req)
     } else if parsed.path == "/iso/deploy" || parsed.path.starts_with("/iso/") {
         dispatch_iso_rest(images, iso_plan, req)
     } else {

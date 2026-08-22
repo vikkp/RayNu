@@ -1,9 +1,12 @@
 use super::{
-    attach_cdrom_uefi, bind_extract_boot, configure_install_disk, dispatch_iso_rest,
-    extract_boot_surface_present, install_disk_surface_present, prop_iso_deploy_package,
-    register_iso, IsoDeployPlan, IsoError, DEFAULT_INSTALL_DISK_BYTES, ISO_EXTRACT_BOOT_NOTE,
+    attach_cdrom_host, attach_cdrom_uefi, bind_extract_boot, configure_install_disk,
+    dispatch_iso_attach_rest, dispatch_iso_rest, extract_boot_surface_present,
+    install_disk_surface_present, prop_iso_deploy_package, register_iso, CdromAttachState,
+    CdromTable, IsoDeployPlan, IsoError, DEFAULT_INSTALL_DISK_BYTES, ISO_EXTRACT_BOOT_NOTE,
     ISO_GAP_NOTE, M7_ISO_OK_MARKER,
 };
+use crate::mgmt::el_torito::{write_mock_efi_iso, MOCK_EFI_ISO_BYTES};
+use crate::mgmt::guest_image::GuestImageType;
 use crate::mgmt::api::{ApiReply, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 use crate::mgmt::datastore::{ImageKind, ImageTable};
 
@@ -81,4 +84,46 @@ fn iso_deploy_package_prop() {
     assert!(prop_iso_deploy_package());
     assert!(ISO_GAP_NOTE.contains("CLOSED M7.3"));
     assert_eq!(M7_ISO_OK_MARKER, "RAYNU-V-M7-ISO-OK");
+}
+
+#[test]
+fn host_cdrom_attach_mock_efi() {
+    let mut iso = [0u8; MOCK_EFI_ISO_BYTES];
+    write_mock_efi_iso(&mut iso).unwrap();
+    let rec = attach_cdrom_host(&iso, 2, GuestImageType::GenericUefi).unwrap();
+    assert_eq!(rec.state, CdromAttachState::AttachedHost);
+    assert!(rec.efi);
+    assert_eq!(rec.image_type, GuestImageType::GenericUefi);
+    assert_eq!(
+        attach_cdrom_uefi(2),
+        Err(IsoError::UnsupportedOnFirmware)
+    );
+}
+
+#[test]
+fn iso_rest_host_attach() {
+    let mut store = crate::mgmt::datastore::ImageTable::new();
+    let mut cdrom = CdromTable::empty();
+    let tok = Some(BRINGUP_AUTH_TOKEN);
+    let r = dispatch_iso_attach_rest(
+        &mut store,
+        &mut cdrom,
+        RestRequest {
+            method: RestMethod::Post,
+            path: "/iso/5/attach",
+            auth_token: tok,
+        },
+    );
+    assert_eq!(r.status, 201);
+    assert_eq!(cdrom.attached_count(), 1);
+    let st = dispatch_iso_attach_rest(
+        &mut store,
+        &mut cdrom,
+        RestRequest {
+            method: RestMethod::Get,
+            path: "/iso/attach",
+            auth_token: tok,
+        },
+    );
+    assert_eq!(st.reply, Some(ApiReply::Listed { count: 1 }));
 }

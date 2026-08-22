@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 96
-summit_iso_pct: 82
+summit_iso_pct: 83
 summit_prod_pct: 100
 ---
 
@@ -45,7 +45,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~82% | iron two-boot LBA persist closed; guest FS / distro installer later |
+| **Deploy Linux ISO** | ~83% | host El Torito attach closed; firmware CD + distro installer later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -129,7 +129,7 @@ All must be true (no hand-waving):
 | E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~82% · ~0.25–0.5 months residual (real distro installer)**
+**Status: NEAR · ~83% · ~0.25–0.5 months residual (real distro installer)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -143,8 +143,8 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (host parse) | Catalog parse `mgmt/el_torito.rs`; attach still stub; no guest UEFI VMLAUNCH |
-| CD-ROM attach | STUB | `attach_cdrom_uefi` → UnsupportedOnFirmware |
+| ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach) | Catalog parse + `attach_cdrom_host`; firmware CD stub; no guest UEFI VMLAUNCH |
+| CD-ROM attach | PARTIAL (host) | `attach_cdrom_host` → AttachedHost; `attach_cdrom_uefi` → UnsupportedOnFirmware |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -193,7 +193,8 @@ Ordered for critical path (parallelize B with D design):
 | P0-12 | **M7.8 / E3b** Host-owned mgmt NIC (ADR-013) | C | **DONE** | P0-4 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` 2026-08-20; BCM5720 `:38` after `BOOT-OK` |
 | P0-13 | **ADR-013 Phase F** Native HTTP beside VMX | C | **DONE** | P0-12 | coexist `10.99.99.149:8443` 2026-08-20; G0 scheduled; G1–G3 parked |
 | P0-14 | **E4 SPA VMLAUNCH** Private-EPT guest from SPA start | C | **DONE** | P0-13 | Iron `2b795a0` 2026-08-21; marker + 98-field shadow re-entry; SHELL stub |
-| P0-15 | **E5 Stage 0** Boot spec on the wire + El Torito parse | D | **IN PROGRESS (host)** | P0-14 | `RAYNU-V-M7-E5-BOOT-SPEC-OK`; not attach / not guest UEFI / not Everest E5 |
+| P0-15 | **E5 Stage 0** Boot spec on the wire + El Torito parse | D | **DONE (host)** | P0-14 | `RAYNU-V-M7-E5-BOOT-SPEC-OK` (#172); not attach |
+| P0-16 | **E5 Stage 1** Host El Torito CD-ROM attach | D | **DONE (host)** | P0-15 | `RAYNU-V-M7-E5-CDROM-ATTACH-OK`; not guest UEFI / not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -219,6 +220,8 @@ Ordered for critical path (parallelize B with D design):
 - **ADR-013 Phase F iron closed:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20)
 - **P0-14 / E4 SPA VMLAUNCH iron closed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). SHELL stub + shadow re-entry; not distro / not TLS.
 - **ADR-013 Stage 1 (0–G) closed:** Phase G is the 2026-08-21 accepted-risk note (shared LOM `:38` with virtio-net). Not VLAN / second NIC.
+- **P0-15 / E5 Stage 0 closed (host):** `RAYNU-V-M7-E5-BOOT-SPEC-OK` (#172, 2026-08-22). Boot spec on the wire + catalog parse.
+- **P0-16 / E5 Stage 1 closed (host):** `RAYNU-V-M7-E5-CDROM-ATTACH-OK`. Host CD-ROM attach. Not guest UEFI. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -268,10 +271,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-boot-spec |
-| Summary | P0-15 host boot spec + drain HOST-NIC TCP TX before QEMU qemu_exit (SPA ~15 KiB). Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Boot spec ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-BOOT-SPEC-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-cdrom-attach |
+| Summary | P0-16 host El Torito CD-ROM attach + REST/SPA. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Host attach ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-CDROM-ATTACH-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -282,7 +285,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No full El Torito/CD-ROM | MED | Product installer is UEFI-first ([ADR-014](adr/ADR-014.md)); extract-boot is lab MVP only |
+| H3 | No firmware El Torito/CD-ROM | MED | Host attach closed (P0-16); `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -293,6 +296,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-cdrom-attach | 0.5 | 95 | P0-16 host El Torito CD-ROM attach; firmware stub held; iso~83%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-boot-spec | 0.5 | 95 | P0-15 host boot spec; HOST-NIC QEMU GET /: FIN+drain before qemu_exit (SPA ~15 KiB); iron P0-14 stays 2b795a0 |
 | 2026-08-21 | e4-spa-launch | 0.5 | 95 | Release v0.1.0-e4-spa-launch after #169; CI EFI 832ea32 SHA 00443957; iron P0-14 stays 2b795a0 |
 | 2026-08-21 | phase-g | 0.5 | 95 | ADR-013 Phase G closed (shared LOM accepted-risk); COM2 quiet after first E4 re-entry (in-tree); product next installer+TLS |

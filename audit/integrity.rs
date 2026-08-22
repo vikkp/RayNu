@@ -79,6 +79,8 @@ pub enum AuditEvent {
     /// Management-plane listen restarted after `MgmtFatal` (ADR-013 Phase E).
     /// `kind`: 0=Device, 1=Bind, 2=ArenaExhausted, 3=Induced.
     MgmtRestarted { generation: u32, kind: u8 },
+    /// Host El Torito CD-ROM attach armed (ADR-014 Stage 1). Not guest UEFI.
+    CdromAttached { iso_id: u64, load_lba: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -248,6 +250,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::SoakFailed { .. } => 25,
         AuditEvent::EvidenceModeActivated { .. } => 26,
         AuditEvent::MgmtRestarted { .. } => 27,
+        AuditEvent::CdromAttached { .. } => 28,
     }
 }
 
@@ -431,6 +434,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u32(generation);
             serial::write_str(" kind=");
             write_u32(kind as u32);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::CdromAttached { iso_id, .. } => {
+            serial::write_str("RAYNU-V-AUDIT: CdromAttached iso_id=");
+            write_u64(iso_id);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

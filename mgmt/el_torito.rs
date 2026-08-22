@@ -1,8 +1,9 @@
 //! El Torito boot-catalog probe (ADR-014 / E5). Outside Proven Core.
 //!
-//! Parses a boot record + catalog from ISO 9660 bytes. Does **not** attach a
-//! CD-ROM or VMLAUNCH guest UEFI firmware. Live `attach_cdrom_uefi` stays
-//! `UnsupportedOnFirmware` until a firmware blob + virtio CD path exist.
+//! Parses a boot record + catalog from ISO 9660 bytes. Host attach lives in
+//! [`crate::mgmt::iso::attach_cdrom_host`]. That is not guest UEFI firmware.
+//! Live `attach_cdrom_uefi` stays `UnsupportedOnFirmware` until a firmware
+//! blob + virtio CD path exist.
 
 /// ISO 9660 logical sector size (El Torito / ECMA-119).
 pub const ISO_SECTOR: usize = 2048;

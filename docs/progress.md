@@ -80,6 +80,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | M7.7 | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` | E5 iron stamp persist closed 2026-08-16 (Cruzer two-boot); scaffold `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`; documented equiv. of `ISO-INSTALL-OK` |
 | M7.8 | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | Real R640 post-`BOOT-OK` native BCM5720 HTTP (`10.99.99.144:8443`, 2026-08-20); SPA + `AuthAllowed`; keep APE PHY |
 | E4 | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | Real R640 SPA start → private-EPT SHELL `VMLAUNCH` + clear-state re-entry (`10.99.99.126:8443`, EFI `2b795a0`, 2026-08-21). Not TLS/distro. |
+| E5 Stage 0 | `RAYNU-V-M7-E5-BOOT-SPEC-OK` | Host boot spec on REST/SPA + El Torito catalog parse (2026-08-22). Not attach. Not guest UEFI. |
+| E5 Stage 1 | `RAYNU-V-M7-E5-CDROM-ATTACH-OK` | Host El Torito CD-ROM attach + REST/SPA (2026-08-22). Not firmware CD. Not VMLAUNCH. |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -150,7 +152,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
 **E4 SPA VMLAUNCH closed on iron:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` — spec **201** + start **200** on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). First SPA `VMLAUNCH` + G0↔SPA clear-state re-entry via 98-field VMCS shadow. No error 7/11. Guest is SHELL CPUID, not a distro installer.  
 **ADR-013 Phase G closed** 2026-08-21 as accepted-risk (shared LOM `:38` with virtio-net; Appendix B). Not VLAN / second NIC. Stage 1 is 0–G.  
-**P0-15 / E5 Stage 0 IN PROGRESS (host):** typed boot spec on REST/SPA + El Torito catalog parse. Not attach, not guest UEFI VMLAUNCH, not Everest E5.  
+**P0-15 / E5 Stage 0 closed (host):** typed boot spec on REST/SPA + El Torito catalog parse (`RAYNU-V-M7-E5-BOOT-SPEC-OK`, #172).  
+**P0-16 / E5 Stage 1 closed (host):** host El Torito CD-ROM attach (`RAYNU-V-M7-E5-CDROM-ATTACH-OK`). Not guest UEFI, not VMLAUNCH, not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -160,7 +163,8 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | ADR-013 Phase F | coexist HTTP while VMX on | **CLOSED** 2026-08-20 on BCM5720 `:38` / `10.99.99.149:8443`. G0 scheduled; G1–G3 parked. Hold COM2: 25× HTTP-OK. |
 | E4 SPA VMLAUNCH | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` | **CLOSED** 2026-08-21 on BCM5720 `:38` / `10.99.99.126:8443`. Private 2M EPT SHELL + shadow restore re-entry. |
 | ADR-013 Phase G | shared LOM vs virtio-net | **CLOSED** 2026-08-21 as accepted-risk note ([ADR-013](adr/ADR-013.md) Appendix B). Host HTTP + guest virtio share `:38`. Not 802.1Q / dedicated NIC. |
-| P0-15 / E5 Stage 0 | `RAYNU-V-M7-E5-BOOT-SPEC-OK` | **IN PROGRESS (host).** Boot spec on the wire + El Torito catalog parse. Not attach, not guest UEFI VMLAUNCH, not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-14 + Phase G. Product ISO: [ADR-014](adr/ADR-014.md) (UEFI-first, typed; not bzImage-only). |
+| P0-15 / E5 Stage 0 | `RAYNU-V-M7-E5-BOOT-SPEC-OK` | **CLOSED (host, #172).** Boot spec on the wire + El Torito catalog parse. Not attach. |
+| P0-16 / E5 Stage 1 | `RAYNU-V-M7-E5-CDROM-ATTACH-OK` | **CLOSED (host).** Host El Torito CD-ROM attach. Not guest UEFI VMLAUNCH, not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-16. Product ISO: [ADR-014](adr/ADR-014.md) (UEFI-first, typed; not bzImage-only). Guest firmware CD is Stage 2. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

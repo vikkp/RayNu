@@ -117,6 +117,19 @@ fn serves_spa_and_rest() {
     let s = core::str::from_utf8(&out[..n]).unwrap();
     assert!(s.contains("HTTP/1.1 201"), "{s}");
     assert!(iso_install.is_contract_ready());
+
+    crate::mgmt::iso::reset_host_cdrom();
+    let n = handle_http_request(
+        &mut table,
+        &mut images,
+        &mut iso_plan,
+        &mut iso_install,
+        "POST /iso/4/attach/linux_iso HTTP/1.1\r\nAuthorization: Bearer raynu-v-bringup\r\n\r\n",
+        &mut out,
+    )
+    .unwrap();
+    let s = core::str::from_utf8(&out[..n]).unwrap();
+    assert!(s.contains("HTTP/1.1 201"), "{s}");
 }
 
 #[test]
