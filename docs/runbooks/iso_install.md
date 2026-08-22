@@ -169,6 +169,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 12 (host, closed):** ESP-path VMLAUNCH (`RAYNU-V-M7-E5-ESP-LAUNCH-OK`).
    **Stage 13 (host, closed):** live ESP OVMF map (`RAYNU-V-M7-E5-ESP-MAP-OK`).
    **Stage 14 (host, closed):** reset-vector VMCS (`RAYNU-V-M7-E5-RESET-VEC-OK`).
+   **Stage 15 (host, closed):** firmware-alias EPT (`RAYNU-V-M7-E5-FW-ALIAS-OK`).
    Real ESP `OVMF.fd` VMLAUNCH remains open (mock, 4 KiB floor, 1 MiB
-   EDK2 fixture, 2 MiB live-map fixture, and synthetic `0xEA` stub refused;
-   VMLAUNCH insn not issued).
+   EDK2 fixture, 2 MiB live-map fixture, synthetic `0xEA` stub, and 4 MiB
+   alias fixture refused; VMLAUNCH insn not issued).

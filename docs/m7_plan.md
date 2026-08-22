@@ -273,21 +273,22 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 15):** issue VMLAUNCH of **real** ESP
-`\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + 4 GiB firmware alias)
-**or** TLS/console polish.
+**First action (E5 Stage 16):** issue VMLAUNCH of **real** ESP
+`\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + 4 GiB firmware-alias
+EPT actually programmed) **or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
-EDK2 fixture, the 2 MiB live-map `_FVH`, or a synthetic `0xEA` reset stub.
+EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
+or a 4 MiB firmware-alias fixture.
 
-**Closed host:** Stage 0–13 as before · Stage 14 `RAYNU-V-M7-E5-RESET-VEC-OK`
-(`arm_ovmf_reset_vector` + `POST /fw/reset-vec`;
-`try_vmlaunch_guest_uefi_ovmf` → `ResetVectorNotLaunched`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 14 **records**
-the SDM 9.1.4 reset-vector VMCS contract and does **not** issue the
-VMLAUNCH instruction (synthetic stub is not a shipped `OVMF.fd`).
+**Closed host:** Stage 0–14 as before · Stage 15 `RAYNU-V-M7-E5-FW-ALIAS-OK`
+(`arm_ovmf_firmware_alias` + `POST /fw/alias`;
+`try_vmlaunch_guest_uefi_ovmf` → `FirmwareAliasNotLaunched`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 15 **records**
+the unrestricted-guest + 4 GiB firmware-alias contract and does **not**
+issue the VMLAUNCH instruction (4 MiB fixture is not a shipped `OVMF.fd`).
 
-**Next after Stage 14:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
+**Next after Stage 15:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
