@@ -269,7 +269,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-boot-spec |
-| Summary | P0-15 / E5 Stage 0: ADR-014 boot spec on REST/SPA + host El Torito catalog parse. Iron P0-14 stays 2b795a0. |
+| Summary | P0-15 host boot spec + drain HOST-NIC TCP TX before QEMU qemu_exit (SPA ~15 KiB). Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Boot spec ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-BOOT-SPEC-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -293,7 +293,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-08-22 | e5-boot-spec | 0.5 | 95 | P0-15 host: boot spec on the wire + El Torito parse; attach/UEFI VMLAUNCH residual; iron P0-14 stays 2b795a0 |
+| 2026-08-22 | e5-boot-spec | 0.5 | 95 | P0-15 host boot spec + El Torito parse; drain HOST-NIC TX before QEMU exit (SPA grew); iron P0-14 stays 2b795a0 |
 | 2026-08-21 | e4-spa-launch | 0.5 | 95 | Release v0.1.0-e4-spa-launch after #169; CI EFI 832ea32 SHA 00443957; iron P0-14 stays 2b795a0 |
 | 2026-08-21 | phase-g | 0.5 | 95 | ADR-013 Phase G closed (shared LOM accepted-risk); COM2 quiet after first E4 re-entry (in-tree); product next installer+TLS |
 | 2026-08-21 | adr-014 | 0.5 | 95 | ADR-014: typed ISO + UEFI-first product install; bzImage lab-only; Windows later; E4 not blocked |

@@ -183,6 +183,7 @@ pub fn boot_spec_surface_present() -> bool {
         && spa.contains("f-image")
         && spa.contains("UEFI-first")
         && spa.contains("extract-boot is lab")
+        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
         && api.contains("linux_iso|windows_iso|generic_uefi")
         && adr.contains("Stage 0")
         && adr.contains("boot spec on the wire")

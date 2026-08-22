@@ -682,12 +682,9 @@ fn listen_loop<D: Device>(
         if did_exchange {
             served = served.saturating_add(1);
             serial::write_line("boot: HOST-NIC HTTP exchange ok");
-            for _ in 0..80 {
-                millis += 1;
-                let ts = Instant::from_millis(millis);
-                iface.poll(ts, device, &mut sockets);
-                tsc_spin_ms(1);
-            }
+            // Drain TX before qemu_exit. SPA HTML + headers are ~15 KiB;
+            // a fixed 80-poll window dropped the tail on TCG (curl GET / failed).
+            flush_tcp_tx(&mut iface, device, &mut sockets, tcp_handle, &mut millis);
             match when {
                 ListenWhen::AfterEbs => {
                     serial::write_line(M7_HOST_NIC_QEMU_MARKER);
@@ -737,6 +734,30 @@ fn listen_loop<D: Device>(
         );
     }
     Ok(())
+}
+
+/// Poll until the TCP TX queue is empty (or a bounded cap). QEMU lab
+/// `qemu_exit`s immediately after GET /; leaving octets queued makes curl fail.
+fn flush_tcp_tx<D: Device>(
+    iface: &mut Interface,
+    device: &mut D,
+    sockets: &mut SocketSet,
+    tcp_handle: SocketHandle,
+    millis: &mut i64,
+) {
+    for _ in 0..240 {
+        *millis += 1;
+        iface.poll(Instant::from_millis(*millis), device, sockets);
+        tsc_spin_ms(1);
+        if sockets.get::<tcp::Socket>(tcp_handle).send_queue() == 0 {
+            for _ in 0..16 {
+                *millis += 1;
+                iface.poll(Instant::from_millis(*millis), device, sockets);
+                tsc_spin_ms(1);
+            }
+            return;
+        }
+    }
 }
 
 fn print_bcm5720_poll_diag() {
