@@ -176,7 +176,7 @@ pub fn cdrom_attach_surface_present() -> bool {
     let adr = include_str!("../docs/adr/ADR-014.md");
     let http = include_str!("http.rs");
     spa.contains("Attach CD")
-        && spa.contains("host attach")
+        && spa.contains("Host attach")
         && spa.contains("not guest UEFI")
         && spa.contains("UEFI-first")
         && spa.contains("extract-boot is lab")
