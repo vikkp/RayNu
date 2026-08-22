@@ -102,6 +102,8 @@ pub enum AuditEvent {
     OvmfFirmwareLaunchPrepared { guest_id: u64, slot_id: u64 },
     /// Size-floor FV staged (ADR-014 Stage 10). Not EDK2 / not VMLAUNCH.
     OvmfFirmwareFloorStaged { bytes_len: u64 },
+    /// EDK2-sized FV staged (ADR-014 Stage 11). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfFirmwareEdk2Staged { bytes_len: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -281,6 +283,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfFirmwareGuestBound { .. } => 35,
         AuditEvent::OvmfFirmwareLaunchPrepared { .. } => 36,
         AuditEvent::OvmfFirmwareFloorStaged { .. } => 37,
+        AuditEvent::OvmfFirmwareEdk2Staged { .. } => 38,
     }
 }
 
@@ -521,6 +524,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfFirmwareFloorStaged { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareFloorStaged bytes=");
+            write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfFirmwareEdk2Staged { bytes_len } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareEdk2Staged bytes=");
             write_u64(bytes_len);
             serial::write_byte(b'\n');
         }

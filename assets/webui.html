@@ -10,18 +10,18 @@
     --sea: #1a6b7c;
     --sea-deep: #0e3d48;
     --line: rgba(12, 26, 34, 0.12);
-    --font-brand: Palatino, "Times New Roman", serif;
-    --font-ui: "Segoe UI", sans-serif;
+    --font-brand: Palatino,serif;
+    --font-ui: sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
     font-family: var(--font-ui);
     color: var(--ink);
-    background: linear-gradient(165deg, #f3f7f9 0%, #dce8ee 48%, #c5d5dc 100%);
+    background: #dce8ee;
   }
   header {
-    padding: 2.5rem clamp(1.25rem, 4vw, 3rem) 1rem;
+    padding: 2rem 1.25rem 1rem;
   }
   .brand {
     font-family: var(--font-brand);
@@ -36,7 +36,7 @@
     color: rgba(12, 26, 34, 0.72);
   }
   main {
-    padding: 0.5rem clamp(1.25rem, 4vw, 3rem) 3rem;
+    padding: 0.5rem 1.25rem 2rem;
   }
   h2 {
     font-family: var(--font-brand);
@@ -183,6 +183,7 @@
       <button id="btn-fw-bind">Bind FW guest</button>
       <button id="btn-fw-prep">Prep FW launch</button>
       <button id="btn-fw-floor">Stage FW floor</button>
+      <button id="btn-fw-edk2">Stage EDK2</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -425,6 +426,7 @@
   document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound","FW bind failed");};
   document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","FW launch prepped","FW prep failed");};
   document.getElementById("btn-fw-floor").onclick=function(){fwPost("/fw/floor","FW floor staged","FW floor failed");};
+  document.getElementById("btn-fw-edk2").onclick=function(){fwPost("/fw/edk2","EDK2 staged","EDK2 failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

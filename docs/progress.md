@@ -91,6 +91,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 8 | `RAYNU-V-M7-E5-FW-BIND-OK` | Host firmware-to-guest bind after slot arm (2026-08-22). Not VMLAUNCH. |
 | E5 Stage 9 | `RAYNU-V-M7-E5-FW-PREP-OK` | Host firmware launch-prepare after bind; mock VMLAUNCH refused (2026-08-22). |
 | E5 Stage 10 | `RAYNU-V-M7-E5-FW-FLOOR-OK` | Host 4 KiB size-floor FV after prepare; not EDK2; VMLAUNCH refused (2026-08-22). |
+| E5 Stage 11 | `RAYNU-V-M7-E5-FW-EDK2-OK` | Host 1 MiB EDK2-sized FV after floor; not a shipped OVMF.fd; VMLAUNCH not wired (2026-08-22). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -172,6 +173,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-23 / E5 Stage 8 closed (host):** firmware-to-guest bind (`RAYNU-V-M7-E5-FW-BIND-OK`). Not VMLAUNCH, not Everest E5.  
 **P0-24 / E5 Stage 9 closed (host):** firmware launch-prepare (`RAYNU-V-M7-E5-FW-PREP-OK`). Mock VMLAUNCH refused. Not Everest E5.  
 **P0-25 / E5 Stage 10 closed (host):** firmware size-floor (`RAYNU-V-M7-E5-FW-FLOOR-OK`). 4 KiB fixture; not EDK2; VMLAUNCH refused. Not Everest E5.  
+**P0-26 / E5 Stage 11 closed (host):** firmware EDK2-sized stage (`RAYNU-V-M7-E5-FW-EDK2-OK`). 1 MiB size-qualified candidate; not a shipped `OVMF.fd`; VMLAUNCH not wired. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -192,6 +194,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-23 / E5 Stage 8 | `RAYNU-V-M7-E5-FW-BIND-OK` | **CLOSED (host).** Firmware-to-guest bind after slot arm. Not VMLAUNCH, not Everest E5. |
 | P0-24 / E5 Stage 9 | `RAYNU-V-M7-E5-FW-PREP-OK` | **CLOSED (host).** Firmware launch-prepare after bind. Mock VMLAUNCH refused. Not Everest E5. |
 | P0-25 / E5 Stage 10 | `RAYNU-V-M7-E5-FW-FLOOR-OK` | **CLOSED (host).** 4 KiB size-floor FV after prepare. Not EDK2. VMLAUNCH refused. Not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-25. Product ISO: [ADR-014](adr/ADR-014.md). Guest UEFI VMLAUNCH is Stage 11 (real EDK2 only). |
+| P0-26 / E5 Stage 11 | `RAYNU-V-M7-E5-FW-EDK2-OK` | **CLOSED (host).** 1 MiB EDK2-sized FV after floor. Not a shipped OVMF.fd. VMLAUNCH not wired. Not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-26. Product ISO: [ADR-014](adr/ADR-014.md). Guest UEFI VMLAUNCH is Stage 12 (real ESP EDK2 only). |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
