@@ -274,6 +274,8 @@ pub enum GuestUefiLaunchError {
     FirmwareAliasNotLaunched,
     /// Alias-EPT program contract is recorded; VMLAUNCH instruction is not issued.
     AliasEptNotLaunched,
+    /// Private alias-EPT install is recorded; VMLAUNCH instruction is not issued.
+    AliasEptInstalledNotLaunched,
 }
 
 /// JUSTIFICATION (global state): live-map bookkeeping is process-local.
@@ -285,6 +287,7 @@ static GUEST_UEFI_FIRMWARE_ALIAS_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_FIRMWARE_ALIAS_BYTES: AtomicU64 = AtomicU64::new(0);
 static GUEST_UEFI_ALIAS_EPT_PROGRAMMED: AtomicBool = AtomicBool::new(false);
 static GUEST_UEFI_ALIAS_EPT_GPA: AtomicU64 = AtomicU64::new(0);
+static GUEST_UEFI_ALIAS_EPT_INSTALLED: AtomicBool = AtomicBool::new(false);
 
 /// Record a live-sized ESP map. Rejects the 1 MiB fixture. Not VMLAUNCH.
 pub fn arm_live_esp_ovmf_mapping(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
@@ -315,6 +318,7 @@ pub fn reset_live_esp_ovmf_mapping() {
     GUEST_UEFI_FIRMWARE_ALIAS_BYTES.store(0, Ordering::Release);
     GUEST_UEFI_ALIAS_EPT_PROGRAMMED.store(false, Ordering::Release);
     GUEST_UEFI_ALIAS_EPT_GPA.store(0, Ordering::Release);
+    GUEST_UEFI_ALIAS_EPT_INSTALLED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`arm_guest_uefi_reset_vector`].
@@ -393,6 +397,32 @@ pub fn program_guest_uefi_alias_ept(bytes_len: u64) -> Result<(), GuestUefiLaunc
     Ok(())
 }
 
+/// True after a successful [`install_guest_uefi_alias_ept`].
+pub fn guest_uefi_alias_ept_is_installed() -> bool {
+    GUEST_UEFI_ALIAS_EPT_INSTALLED.load(Ordering::Acquire)
+}
+
+/// Record a private guest-UEFI alias-EPT install after program (ADR-014 Stage 17).
+///
+/// INVARIANTS:
+/// - Requires a prior alias-EPT program
+/// - Requires `firmware_alias_gpa(bytes_len)` and reset-vector coverage
+/// - Does not write the E4 SHELL EPT, does not VMWRITE, and does not issue VMLAUNCH
+pub fn install_guest_uefi_alias_ept(bytes_len: u64) -> Result<(), GuestUefiLaunchError> {
+    if !guest_uefi_alias_ept_is_programmed() {
+        return Err(GuestUefiLaunchError::AliasEptNotLaunched);
+    }
+    let Some(gpa) = firmware_alias_gpa(bytes_len) else {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    };
+    if !alias_ept_covers_reset(gpa, bytes_len) {
+        return Err(GuestUefiLaunchError::MissingEspFirmware);
+    }
+    GUEST_UEFI_ALIAS_EPT_GPA.store(gpa, Ordering::Release);
+    GUEST_UEFI_ALIAS_EPT_INSTALLED.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// Probe a JMP FAR reset-vector stub at the end of a live-sized image.
 ///
 /// INVARIANTS:
@@ -425,7 +455,7 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
     Ok(())
 }
 
-/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 16).
+/// Guest UEFI VMLAUNCH from ESP `\\EFI\\RayNu\\OVMF.fd` (ADR-014 Stage 17).
 ///
 /// INVARIANTS:
 /// - Does not VMLAUNCH the 80-byte mock, 4 KiB floor, 1 MiB fixture,
@@ -434,9 +464,10 @@ pub fn arm_guest_uefi_reset_vector(bytes: &[u8]) -> Result<(), GuestUefiLaunchEr
 /// - Mapped, no reset-vector → [`GuestUefiLaunchError::LiveMappedNotLaunched`]
 /// - Reset-vector armed, no alias → [`GuestUefiLaunchError::ResetVectorNotLaunched`]
 /// - Alias armed, no EPT program → [`GuestUefiLaunchError::FirmwareAliasNotLaunched`]
-/// - Alias-EPT programmed → [`GuestUefiLaunchError::AliasEptNotLaunched`]
+/// - Alias-EPT programmed, no install → [`GuestUefiLaunchError::AliasEptNotLaunched`]
+/// - Private alias-EPT installed → [`GuestUefiLaunchError::AliasEptInstalledNotLaunched`]
 ///   (contracts [`GUEST_UEFI_RESET_VMCS`] + [`GUEST_UEFI_ALIAS_EPT`];
-///   no live EPT write / no VMWRITE / no insn)
+///   no live E4 SHELL EPT write / no VMWRITE / no insn)
 /// - Does not change `iso=0` E4 SHELL
 ///
 /// VERIFICATION: L0 (documented). Outside the firmware-blob Proven Core set.
@@ -459,13 +490,22 @@ pub fn try_vmlaunch_guest_uefi_ovmf() -> Result<(), GuestUefiLaunchError> {
         );
         return Err(GuestUefiLaunchError::FirmwareAliasNotLaunched);
     }
+    if !guest_uefi_alias_ept_is_installed() {
+        let _ = (
+            GUEST_UEFI_RESET_VMCS,
+            GUEST_UEFI_UNRESTRICTED_GUEST,
+            GUEST_UEFI_ALIAS_EPT,
+            GUEST_UEFI_ALIAS_EPT_GPA.load(Ordering::Acquire),
+        );
+        return Err(GuestUefiLaunchError::AliasEptNotLaunched);
+    }
     let _ = (
         GUEST_UEFI_RESET_VMCS,
         GUEST_UEFI_UNRESTRICTED_GUEST,
         GUEST_UEFI_ALIAS_EPT,
         GUEST_UEFI_ALIAS_EPT_GPA.load(Ordering::Acquire),
     );
-    Err(GuestUefiLaunchError::AliasEptNotLaunched)
+    Err(GuestUefiLaunchError::AliasEptInstalledNotLaunched)
 }
 
 /// Physical frames needed for the M1.2/M2.x HLT + IRQ guest under EPT.
@@ -4426,11 +4466,26 @@ mod launch_test {
             try_vmlaunch_guest_uefi_ovmf(),
             Err(GuestUefiLaunchError::AliasEptNotLaunched)
         );
+        assert_eq!(
+            install_guest_uefi_alias_ept(MIN_LIVE_ESP_OVMF_BYTES as u64),
+            Err(GuestUefiLaunchError::MissingEspFirmware)
+        );
+        assert!(!guest_uefi_alias_ept_is_installed());
+        assert_eq!(
+            install_guest_uefi_alias_ept(MIN_FIRMWARE_ALIAS_BYTES as u64),
+            Ok(())
+        );
+        assert!(guest_uefi_alias_ept_is_installed());
+        assert_eq!(
+            try_vmlaunch_guest_uefi_ovmf(),
+            Err(GuestUefiLaunchError::AliasEptInstalledNotLaunched)
+        );
         reset_live_esp_ovmf_mapping();
         assert!(!live_esp_ovmf_is_mapped());
         assert!(!guest_uefi_reset_vector_is_armed());
         assert!(!guest_uefi_firmware_alias_is_armed());
         assert!(!guest_uefi_alias_ept_is_programmed());
+        assert!(!guest_uefi_alias_ept_is_installed());
         assert_eq!(live_esp_ovmf_bytes_len(), 0);
     }
 

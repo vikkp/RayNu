@@ -97,6 +97,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-fw-rv">Arm reset vec</button>
       <button id="btn-fw-al">Arm FW alias</button>
       <button id="btn-fw-ae">Program alias EPT</button>
+      <button id="btn-fw-ei">Install FW EPT</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -111,9 +112,9 @@ section{margin-bottom:1.75rem}
 
   <p class="status" id="status"></p>
   <p class="note">
-    Host serial log is HV UART ring (not guest console). TLS deferred (plaintext lab HTTP).
+    Host serial is HV UART (not guest console). TLS deferred (lab HTTP).
     Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
-    Host attach parses El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. Guest FW box/load is not OVMF. Auth: ESP auth.token or bring-up.
+    Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. Auth: ESP or bring-up.
   </p>
 </main>
 <script>
@@ -128,15 +129,8 @@ section{margin-bottom:1.75rem}
   const known = [];
 
   function defaultToken() { return "raynu-v-bringup"; }
-  function loadToken() {
-    try {
-      const t = sessionStorage.getItem(TOKEN_KEY);
-      return t && t.length ? t : defaultToken();
-    } catch (e) { return defaultToken(); }
-  }
-  function saveToken(t) {
-    try { sessionStorage.setItem(TOKEN_KEY, t); } catch (e) {}
-  }
+  function loadToken(){try{const t=sessionStorage.getItem(TOKEN_KEY);return t&&t.length?t:defaultToken();}catch(e){return defaultToken();}}
+  function saveToken(t){try{sessionStorage.setItem(TOKEN_KEY,t);}catch(e){}}
   tokenEl.value = loadToken();
 
   function authHeader() {
@@ -145,17 +139,8 @@ section{margin-bottom:1.75rem}
 
   function setStatus(msg) { statusEl.textContent = msg || ""; }
 
-  function num(id, fallback) {
-    const v = parseInt(document.getElementById(id).value, 10);
-    return isNaN(v) ? fallback : v;
-  }
-
-  async function api(method, path) {
-    return fetch(path, {
-      method: method,
-      headers: { "Accept": "application/json, text/plain", "Authorization": authHeader() }
-    });
-  }
+  function num(id, fallback){const v=parseInt(document.getElementById(id).value,10);return isNaN(v)?fallback:v;}
+  async function api(method, path){return fetch(path,{method:method,headers:{"Accept":"application/json, text/plain","Authorization":authHeader()}});}
 
   function remember(id) {
     if (known.indexOf(id) < 0) known.push(id);
@@ -345,6 +330,7 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-fw-rv").onclick=function(){fwPost("/fw/reset-vec","Reset vec armed","Reset vec failed");};
   document.getElementById("btn-fw-al").onclick=function(){fwPost("/fw/alias","FW alias armed","FW alias failed");};
   document.getElementById("btn-fw-ae").onclick=function(){fwPost("/fw/alias-ept","Alias EPT programmed","Alias EPT failed");};
+  document.getElementById("btn-fw-ei").onclick=function(){fwPost("/fw/ept-install","FW EPT installed","FW EPT failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
