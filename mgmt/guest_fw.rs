@@ -108,6 +108,10 @@ pub enum GuestFwError {
     LaunchNotWired,
     /// Live-sized ESP map is recorded; VMLAUNCH instruction is not issued.
     LiveMappedNotLaunched,
+    /// Live map is present but the image has no JMP FAR reset-vector stub.
+    NoResetVector,
+    /// Reset-vector VMCS contract is recorded; VMLAUNCH instruction is not issued.
+    ResetVectorNotLaunched,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -167,6 +171,12 @@ pub struct OvmfLiveMap {
     pub bytes_len: u64,
 }
 
+/// Reset-vector VMCS bookkeeping. Not a shipped `OVMF.fd` and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfResetVec {
+    pub bytes_len: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -191,8 +201,9 @@ static GUEST_FW_OVMF_FLOOR_STAGED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_EDK2_STAGED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ESP_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_MAPPED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_RESET_ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -205,6 +216,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_EDK2_STAGED.store(false, Ordering::Release);
     GUEST_FW_OVMF_ESP_LAUNCH_ARMED.store(false, Ordering::Release);
     GUEST_FW_OVMF_LIVE_MAPPED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_RESET_ARMED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -261,6 +273,11 @@ pub fn ovmf_esp_launch_is_armed() -> bool {
 /// True after a successful [`map_live_esp_ovmf`].
 pub fn ovmf_live_esp_is_mapped() -> bool {
     GUEST_FW_OVMF_LIVE_MAPPED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`arm_ovmf_reset_vector`].
+pub fn ovmf_reset_vector_is_armed() -> bool {
+    GUEST_FW_OVMF_RESET_ARMED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -532,7 +549,8 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 /// - EDK2-sized staged (no ESP launch arm) → [`GuestFwError::LaunchNotWired`]
 /// - ESP launch armed → [`crate::vmx::launch::try_vmlaunch_guest_uefi_ovmf`]
 ///   (unmapped → [`GuestFwError::MissingEsp`]; live-sized map →
-///   [`GuestFwError::LiveMappedNotLaunched`])
+///   [`GuestFwError::LiveMappedNotLaunched`]; reset-vector armed →
+///   [`GuestFwError::ResetVectorNotLaunched`])
 /// - Does not VMLAUNCH the 1 MiB or 2 MiB fixture and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
     if !ovmf_launch_is_prepared() {
@@ -546,6 +564,12 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::LiveMappedNotLaunched) => {
                 Err(GuestFwError::LiveMappedNotLaunched)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+                Err(GuestFwError::NoResetVector)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::ResetVectorNotLaunched) => {
+                Err(GuestFwError::ResetVectorNotLaunched)
             }
         };
     }
@@ -609,6 +633,37 @@ pub fn map_live_esp_ovmf(bytes: &[u8]) -> Result<OvmfLiveMap, GuestFwError> {
     });
     GUEST_FW_OVMF_LIVE_MAPPED.store(true, Ordering::Release);
     Ok(OvmfLiveMap {
+        bytes_len: bytes.len() as u64,
+    })
+}
+
+/// Arm the reset-vector VMCS contract after a live-sized map (ADR-014 Stage 14).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`map_live_esp_ovmf`]
+/// - Last 16 bytes must start with JMP FAR (`0xEA`)
+/// - A synthetic stub is not a shipped EDK2 `OVMF.fd`
+/// - Records the contract in `vmx/launch.rs`; does not issue VMLAUNCH
+/// - Does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn arm_ovmf_reset_vector(bytes: &[u8]) -> Result<OvmfResetVec, GuestFwError> {
+    if !ovmf_live_esp_is_mapped() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    match crate::vmx::launch::arm_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::MissingEspFirmware) => {
+            return Err(GuestFwError::MissingEsp);
+        }
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    audit_log!(AuditEvent::OvmfResetVectorArmed {
+        bytes_len: bytes.len() as u64,
+    });
+    GUEST_FW_OVMF_RESET_ARMED.store(true, Ordering::Release);
+    Ok(OvmfResetVec {
         bytes_len: bytes.len() as u64,
     })
 }
@@ -727,6 +782,22 @@ pub fn write_live_esp_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
     Ok(())
 }
 
+/// Write a JMP FAR reset-vector stub at the end of a live-sized buffer.
+///
+/// Not EDK2 SEC and not a shipped `OVMF.fd`. Do not VMLAUNCH this stub.
+pub fn write_reset_vector_stub(buf: &mut [u8]) -> Result<(), GuestFwError> {
+    if buf.len() < MIN_LIVE_ESP_OVMF_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    let off = buf.len() - crate::vmx::launch::GUEST_UEFI_RESET_VECTOR_LEN;
+    buf[off] = crate::vmx::launch::GUEST_UEFI_RESET_VECTOR_OPCODE;
+    buf[off + 1] = 0x00;
+    buf[off + 2] = 0x00;
+    buf[off + 3] = 0x00;
+    buf[off + 4] = 0xF0;
+    Ok(())
+}
+
 /// True when `path` is the guest-firmware envelope REST surface.
 pub fn is_guest_fw_path(path: &str) -> bool {
     let path = path.trim().trim_end_matches('/');
@@ -742,6 +813,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/edk2"
         || path == "/fw/esp-launch"
         || path == "/fw/esp-map"
+        || path == "/fw/reset-vec"
         || path == "/fw/vmlaunch"
 }
 
@@ -768,6 +840,8 @@ enum GuestFwOp {
     OvmfEspLaunchArm,
     OvmfEspMapStatus,
     OvmfEspMap,
+    OvmfResetVecStatus,
+    OvmfResetVecArm,
     OvmfTryVmlaunch,
 }
 
@@ -796,6 +870,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/esp-launch") => Ok(GuestFwOp::OvmfEspLaunchArm),
         (RestMethod::Get, "/fw/esp-map") => Ok(GuestFwOp::OvmfEspMapStatus),
         (RestMethod::Post, "/fw/esp-map") => Ok(GuestFwOp::OvmfEspMap),
+        (RestMethod::Get, "/fw/reset-vec") => Ok(GuestFwOp::OvmfResetVecStatus),
+        (RestMethod::Post, "/fw/reset-vec") => Ok(GuestFwOp::OvmfResetVecArm),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -817,7 +893,9 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::TooSmall
         | GuestFwError::NotRealFirmware
         | GuestFwError::LaunchNotWired
-        | GuestFwError::LiveMappedNotLaunched => 409,
+        | GuestFwError::LiveMappedNotLaunched
+        | GuestFwError::NoResetVector
+        | GuestFwError::ResetVectorNotLaunched => 409,
     }
 }
 
@@ -834,9 +912,13 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// VMLAUNCH contract after EDK2. `POST /fw/esp-map` records a live-sized
 /// ESP map after launch-arm (host test heap fixture only). Production UEFI
 /// returns 409 (`MissingEsp`) — no embedded 2 MiB (ADR-003).
-/// `POST /fw/vmlaunch` then calls `try_vmlaunch_guest_uefi_ovmf`
-/// (unmapped → 409 `MissingEsp`; mapped → 409 `LiveMappedNotLaunched`).
-/// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
+/// `POST /fw/reset-vec` records the reset-vector VMCS contract after
+/// the live map (host test heap stub only). Production UEFI returns 409
+/// (`MissingEsp`) — no embedded 2 MiB. `POST /fw/vmlaunch` then calls
+/// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
+/// 409 `LiveMappedNotLaunched`; reset-vector armed → 409
+/// `ResetVectorNotLaunched`). GET paths return counts. Not a shipped
+/// EDK2 `OVMF.fd`. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
         return RestResponse {
@@ -1030,6 +1112,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfEspMap) => live_esp_map_rest(),
+        Ok(GuestFwOp::OvmfResetVecStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_reset_vector_is_armed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfResetVecArm) => reset_vec_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -1105,6 +1194,38 @@ fn live_esp_map_rest() -> RestResponse {
 /// Production: no embedded 2 MiB live map (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn live_esp_map_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 2 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 2 MiB (ADR-003).
+#[cfg(test)]
+fn reset_vec_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_LIVE_ESP_OVMF_BYTES];
+    if write_live_esp_ovmf_fv(&mut fv).is_err() || write_reset_vector_stub(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match arm_ovmf_reset_vector(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded reset-vector image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn reset_vec_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,

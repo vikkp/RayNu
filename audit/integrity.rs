@@ -108,6 +108,8 @@ pub enum AuditEvent {
     OvmfEspLaunchArmed { guest_id: u64, slot_id: u64 },
     /// Live-sized ESP OVMF map recorded (ADR-014 Stage 13). Not a shipped OVMF.fd / not VMLAUNCH.
     OvmfEspLiveMapped { bytes_len: u64 },
+    /// Reset-vector VMCS contract armed (ADR-014 Stage 14). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfResetVectorArmed { bytes_len: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -290,6 +292,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfFirmwareEdk2Staged { .. } => 38,
         AuditEvent::OvmfEspLaunchArmed { .. } => 39,
         AuditEvent::OvmfEspLiveMapped { .. } => 40,
+        AuditEvent::OvmfResetVectorArmed { .. } => 41,
     }
 }
 
@@ -547,6 +550,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfEspLiveMapped { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfEspLiveMapped bytes=");
+            write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfResetVectorArmed { bytes_len } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfResetVectorArmed bytes=");
             write_u64(bytes_len);
             serial::write_byte(b'\n');
         }
