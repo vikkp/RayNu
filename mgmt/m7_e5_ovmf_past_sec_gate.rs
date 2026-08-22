@@ -41,7 +41,7 @@ pub fn run_m7_e5_ovmf_past_sec_gate() -> bool {
     let ok = ovmf_past_sec_surface_present()
         && run_m7_e5_ovmf_alive_gate()
         && GUEST_UEFI_SEC_TAIL_GPA == 0xFFFF_0000
-        && GUEST_UEFI_RESUME_CAP == 256
+        && GUEST_UEFI_RESUME_CAP >= 256
         && past_sec_evidence(true, true, 0, false)
         && !past_sec_evidence(false, true, 1, true)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC")

@@ -38,6 +38,7 @@
 # E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds)
 # E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds)
 # E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
+# E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -80,6 +81,7 @@ MARKER_OVMF_VMLAUNCH="${MARKER_OVMF_VMLAUNCH:-RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK}"
 MARKER_OVMF_ALIVE="${MARKER_OVMF_ALIVE:-RAYNU-V-M7-E5-OVMF-ALIVE-OK}"
 MARKER_OVMF_PAST_SEC="${MARKER_OVMF_PAST_SEC:-RAYNU-V-M7-E5-OVMF-PAST-SEC-OK}"
 MARKER_OVMF_CDROM="${MARKER_OVMF_CDROM:-RAYNU-V-M7-E5-OVMF-CDROM-OK}"
+MARKER_OVMF_DXE="${MARKER_OVMF_DXE:-RAYNU-V-M7-E5-OVMF-DXE-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -207,6 +209,12 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
   else
     echo "error: marker '$MARKER_OVMF_CDROM' not found after VMXON (CD not visible to this guest)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_DXE" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI past-PEI/DXE or CD boot attempt"
+  else
+    echo "error: marker '$MARKER_OVMF_DXE' not found after VMXON (no past-PEI/DXE or CD boot attempt)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then

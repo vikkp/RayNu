@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 
+pub mod guest_platform;
 pub mod ide_cdrom;
 pub mod lapic_virt;
 pub mod m4_blk_gate;
@@ -12,12 +13,12 @@ pub mod serial_pio;
 pub mod virtio_blk;
 pub mod virtio_net;
 
+pub use ide_cdrom::M7_E5_OVMF_CDROM_OK_MARKER;
 pub use lapic_virt::M3_GTIMER3_OK_MARKER;
 pub use serial_pio::{
     guest_early_ok, guest_io_ok, guest_shell_ok, M3_EARLY_OK_MARKER, M3_IO_OK_MARKER,
     M3_SHELL_OK_MARKER,
 };
-pub use ide_cdrom::M7_E5_OVMF_CDROM_OK_MARKER;
 pub use virtio_blk::M4_BLK_OK_MARKER;
 pub use virtio_net::M4_NET_OK_MARKER;
 
@@ -34,7 +35,11 @@ pub enum DeviceKind {
 
 /// Registry — serial (M3.0), virtio-blk (M4.3), virtio-net (M4.4).
 pub fn supported_kinds() -> &'static [DeviceKind] {
-    &[DeviceKind::Serial, DeviceKind::VirtioBlk, DeviceKind::VirtioNet]
+    &[
+        DeviceKind::Serial,
+        DeviceKind::VirtioBlk,
+        DeviceKind::VirtioNet,
+    ]
 }
 
 #[cfg(test)]

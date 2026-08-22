@@ -7,8 +7,8 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 363
-velocity_gates_30d: 57
+velocity_commits_30d: 364
+velocity_gates_30d: 58
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -347,10 +347,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-cdrom |
-| Summary | P0-55 guest-UEFI CD visible. attach_cdrom_uefi → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. CD visible ≠ installer. Next is PEI/DXE boot of this CD. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-CDROM-OK` (host + QEMU). Past-SEC still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-dxe |
+| Summary | P0-56 PEI/DXE platform or CD boot attempt. CMOS/fw_cfg/i440FX + EPT sink-resume. Not a completed firmware CD boot. Not installer. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Past-PEI/DXE ≠ installer. Next is virtio-blk + boot order CD→disk. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-DXE-OK` (host + QEMU). Past-SEC and CD visible still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | CD visible on private VMCS (P0-55); firmware does not yet boot it; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Past-PEI/DXE or CD boot attempt (P0-56); firmware CD boot not completed; virtio-blk + CD→disk is next; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-ovmf-dxe | 0.5 | 95 | P0-56 past-PEI/DXE or CD boot attempt; CMOS/fw_cfg/i440FX; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-cdrom | 0.5 | 95 | P0-55 guest-UEFI CD visible; PCI IDE/ATAPI; not full DXE; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-past-sec | 0.5 | 95 | P0-54 OVMF past SEC; COM forwarded; not full DXE; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-alive | 0.5 | 95 | P0-53 OVMF past first triple-fault; CR4.VMXE host-owned; not full OVMF; not installer; iso 99%; iron P0-14 stays 2b795a0 |

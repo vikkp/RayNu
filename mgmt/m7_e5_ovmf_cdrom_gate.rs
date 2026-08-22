@@ -21,8 +21,8 @@ use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_past_sec_gate::run_m7_e5_ovmf_past_sec_gate;
 use super::VmTable;
 use crate::devices::ide_cdrom::{
-    cdrom_visible_evidence, host_identify_word0, host_read10, pci_read_data, pci_write_addr,
-    GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, M7_E5_OVMF_CDROM_OK_MARKER,
+    cdrom_visible_evidence, host_identify_word0, host_read10, pci_config_addr, pci_read_data,
+    pci_write_addr, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
 use crate::vmx::guest_uefi::E5_OVMF_VMLAUNCH_RESIDUAL_NOTE;
 
@@ -59,7 +59,7 @@ pub fn prop_uefi_attach_after_firmware() -> bool {
     if vis.state != CdromAttachState::GuestVisible || vis.iso_id != 3 {
         return false;
     }
-    pci_write_addr(0x8000_0000);
+    pci_write_addr(pci_config_addr());
     let id = pci_read_data(0xCFC, 4);
     if id as u16 != GUEST_CD_PCI_VENDOR || (id >> 16) as u16 != GUEST_CD_PCI_DEVICE {
         return false;

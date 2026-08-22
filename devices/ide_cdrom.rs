@@ -4,7 +4,7 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.0` (PIIX3-class) plus primary ATA PIO (`0x1F0`/`0x3F6`).
+//! PCI IDE at `00:01.1` (PIIX3-class) plus primary ATA PIO (`0x1F0`/`0x3F6`).
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
@@ -23,8 +23,8 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
-pub const GUEST_CD_PCI_DEV: u8 = 0;
-pub const GUEST_CD_PCI_FN: u8 = 0;
+pub const GUEST_CD_PCI_DEV: u8 = 1;
+pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
 
@@ -139,6 +139,14 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
     bus == GUEST_CD_PCI_BUS && dev == GUEST_CD_PCI_DEV && fun == GUEST_CD_PCI_FN
+}
+
+/// PCI config address for the guest IDE function (`00:01.1`).
+pub fn pci_config_addr() -> u32 {
+    0x8000_0000
+        | (u32::from(GUEST_CD_PCI_BUS) << 16)
+        | (u32::from(GUEST_CD_PCI_DEV) << 11)
+        | (u32::from(GUEST_CD_PCI_FN) << 8)
 }
 
 pub fn is_ata_primary_port(port: u16) -> bool {
