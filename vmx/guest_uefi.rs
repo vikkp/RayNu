@@ -10,7 +10,7 @@
 //! VMCS or EPT. Fixtures are refused. Host `cargo test` never executes the
 //! instruction.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 use crate::boot::ovmf_esp::{self, MIN_REAL_OVMF_BYTES};
 use crate::memory::frame_allocator::FrameAllocator;
@@ -51,14 +51,52 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; short resume loop; not installer; attach_cdrom_uefi stays UnsupportedOnFirmware; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; not full DXE; not installer; attach_cdrom_uefi stays UnsupportedOnFirmware; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
 
+/// QEMU / serial marker when OVMF left the SEC tail (not full DXE / not installer).
+pub const M7_E5_OVMF_PAST_SEC_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-PAST-SEC-OK";
+
+/// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
+/// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
+pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
+
+/// Resume cap after Stage 38's 64-exit window — enough for PEI PCI scan.
+pub const GUEST_UEFI_RESUME_CAP: u32 = 256;
+
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
 /// Same #GP as Linux `startup_64` without the E4 CR4.VMXE mask.
 pub const E5_OVMF_SEC_CR4_VALUE: u64 = 0x640;
+
+/// I/O exit qualification → port (SDM 28.2.1 bits 31:16).
+pub fn io_port_from_qual(qual: u64) -> u16 {
+    ((qual >> 16) & 0xffff) as u16
+}
+
+/// Linear RIP has left the last 64 KiB (typical OVMF 4M SEC/VTF window).
+pub fn linear_left_sec_tail(linear: u64) -> bool {
+    linear < GUEST_UEFI_SEC_TAIL_GPA
+}
+
+pub fn is_pci_config_port(port: u16) -> bool {
+    port == 0xCF8 || port == 0xCFC
+}
+
+pub fn is_com_uart_port(port: u16) -> bool {
+    (0x03F8..=0x03FF).contains(&port) || (0x02F8..=0x02FF).contains(&port)
+}
+
+/// Honest past-SEC: left the SEC tail and saw PEI PCI, firmware COM, or HLT.
+pub fn past_sec_evidence(
+    left_sec: bool,
+    pci_config: bool,
+    com_bytes: u32,
+    guest_hlt: bool,
+) -> bool {
+    left_sec && (pci_config || com_bytes > 0 || guest_hlt)
+}
 
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
 static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -69,6 +107,13 @@ static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
 static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
 static NON_TF_EXITS: AtomicU32 = AtomicU32::new(0);
 static ALIVE_PRINTED: AtomicBool = AtomicBool::new(false);
+static PAST_SEC_PRINTED: AtomicBool = AtomicBool::new(false);
+static LEFT_SEC: AtomicBool = AtomicBool::new(false);
+static PCI_CONFIG_SEEN: AtomicBool = AtomicBool::new(false);
+static COM_BYTES: AtomicU32 = AtomicU32::new(0);
+static COM_BANNER: AtomicBool = AtomicBool::new(false);
+static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
+static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "uefi")]
@@ -147,6 +192,13 @@ pub fn reset_guest_uefi_launch() {
     EXIT_COUNT.store(0, Ordering::Release);
     NON_TF_EXITS.store(0, Ordering::Release);
     ALIVE_PRINTED.store(false, Ordering::Release);
+    PAST_SEC_PRINTED.store(false, Ordering::Release);
+    LEFT_SEC.store(false, Ordering::Release);
+    PCI_CONFIG_SEEN.store(false, Ordering::Release);
+    COM_BYTES.store(0, Ordering::Release);
+    COM_BANNER.store(false, Ordering::Release);
+    UART_LCR_COM1.store(0, Ordering::Release);
+    UART_LCR_COM2.store(0, Ordering::Release);
     CONTINUE_GUEST.store(false, Ordering::Release);
 }
 
@@ -157,6 +209,14 @@ pub fn guest_uefi_non_tf_exits() -> u32 {
 
 pub fn guest_uefi_alive() -> bool {
     ALIVE_PRINTED.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_past_sec() -> bool {
+    PAST_SEC_PRINTED.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_com_bytes() -> u32 {
+    COM_BYTES.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -729,6 +789,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let tf = basic == EXIT_REASON_TRIPLE_FAULT;
     let fetch_fail = basic == EXIT_REASON_EPT_VIOLATION && gpa == GUEST_UEFI_RESET_VECTOR_GPA;
     let linear = cs_base.wrapping_add(rip);
+    if linear_left_sec_tail(linear) {
+        LEFT_SEC.store(true, Ordering::Release);
+    }
 
     if n <= 16 {
         serial::write_str("boot: guest-UEFI VMEXIT n=");
@@ -768,13 +831,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             if nt >= 2 || basic == EXIT_REASON_HLT {
                 maybe_print_alive(basic);
             }
+            maybe_print_past_sec(basic == EXIT_REASON_HLT);
         }
     } else {
         serial::write_line("boot: guest-UEFI VM-entry/fetch failed — marker not claimed");
     }
 
     let mut resume = false;
-    if !entry_fail && !tf && !fetch_fail && n < 64 {
+    if !entry_fail && !tf && !fetch_fail && n < GUEST_UEFI_RESUME_CAP {
         resume = match basic {
             EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
             EXIT_REASON_CPUID => handle_cpuid(),
@@ -782,6 +846,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_MSR_WRITE => handle_wrmsr(),
             EXIT_REASON_HLT => {
                 maybe_print_alive(basic);
+                maybe_print_past_sec(true);
                 false
             }
             EXIT_REASON_EPT_VIOLATION => {
@@ -798,6 +863,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             }
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
             EXIT_REASON_XSETBV => skip_insn(),
+            // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
+            13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
         };
     }
@@ -806,6 +873,21 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();
     }
+    serial::write_str("boot: guest-UEFI stop n=");
+    write_dec(n as u64);
+    serial::write_str(" reason=0x");
+    write_hex_u32(reason);
+    serial::write_str(" rip=0x");
+    write_hex(rip);
+    serial::write_str(" left_sec=");
+    write_dec(LEFT_SEC.load(Ordering::Acquire) as u64);
+    serial::write_str(" pci=");
+    write_dec(PCI_CONFIG_SEEN.load(Ordering::Acquire) as u64);
+    serial::write_str(" com=");
+    write_dec(COM_BYTES.load(Ordering::Acquire) as u64);
+    serial::write_str(" past_sec=");
+    write_dec(PAST_SEC_PRINTED.load(Ordering::Acquire) as u64);
+    serial::write_byte(b'\n');
     leave_to_e4();
 }
 
@@ -827,6 +909,35 @@ fn maybe_print_alive(basic: u32) {
 }
 
 #[cfg(target_os = "uefi")]
+fn maybe_print_past_sec(guest_hlt: bool) {
+    if !MARKER_PRINTED.load(Ordering::Acquire) || !ALIVE_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    if !past_sec_evidence(
+        LEFT_SEC.load(Ordering::Acquire),
+        PCI_CONFIG_SEEN.load(Ordering::Acquire),
+        COM_BYTES.load(Ordering::Acquire),
+        guest_hlt,
+    ) {
+        return;
+    }
+    if PAST_SEC_PRINTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    serial::write_line(M7_E5_OVMF_PAST_SEC_OK_MARKER);
+    serial::write_str("boot: guest-UEFI past-SEC linear left 0xFFFF_0000 pci=");
+    write_dec(PCI_CONFIG_SEEN.load(Ordering::Acquire) as u64);
+    serial::write_str(" com=");
+    write_dec(COM_BYTES.load(Ordering::Acquire) as u64);
+    serial::write_byte(b'\n');
+    audit_log!(AuditEvent::OvmfGuestUefiPastSec {
+        exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+        linear: LAST_GUEST_RIP.load(Ordering::Acquire),
+        com_bytes: COM_BYTES.load(Ordering::Acquire) as u64,
+    });
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
@@ -840,6 +951,14 @@ unsafe fn skip_insn() -> bool {
 unsafe fn handle_io(qual: u64) -> bool {
     let size = (qual & 7) + 1;
     let is_in = (qual & (1 << 3)) != 0;
+    let port = io_port_from_qual(qual);
+    if is_pci_config_port(port) {
+        PCI_CONFIG_SEEN.store(true, Ordering::Release);
+        maybe_print_past_sec(false);
+    }
+    if is_com_uart_port(port) {
+        return handle_uart(port, is_in, size);
+    }
     if is_in {
         let mask = if size == 1 {
             0xffu64
@@ -849,6 +968,40 @@ unsafe fn handle_io(qual: u64) -> bool {
             0xffff_ffff
         };
         SAVED_RAX = (SAVED_RAX & !mask) | mask;
+    }
+    skip_insn()
+}
+
+/// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_uart(port: u16, is_in: bool, size: u64) -> bool {
+    let off = port & 7;
+    let com1 = (0x03F8..=0x03FF).contains(&port);
+    let lcr_slot: &AtomicU8 = if com1 { &UART_LCR_COM1 } else { &UART_LCR_COM2 };
+    let mask = if size == 1 {
+        0xffu64
+    } else if size == 2 {
+        0xffff
+    } else {
+        0xffff_ffff
+    };
+    if is_in {
+        let val = match off {
+            2 => 0x01u64, // IIR: no interrupt
+            5 => 0x60,    // LSR: THRE | TEMT
+            _ => 0,
+        };
+        SAVED_RAX = (SAVED_RAX & !mask) | (val & mask);
+    } else if off == 3 {
+        lcr_slot.store(SAVED_RAX as u8, Ordering::Release);
+    } else if off == 0 && (lcr_slot.load(Ordering::Acquire) & 0x80) == 0 {
+        let b = SAVED_RAX as u8;
+        if !COM_BANNER.swap(true, Ordering::AcqRel) {
+            serial::write_line("boot: guest-UEFI firmware-serial begin");
+        }
+        serial::write_byte(b);
+        COM_BYTES.fetch_add(1, Ordering::AcqRel);
+        maybe_print_past_sec(false);
     }
     skip_insn()
 }

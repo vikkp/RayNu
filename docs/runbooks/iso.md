@@ -399,4 +399,6 @@ First entry is not a distro installer. Do not claim `ISO-INSTALL-OK`.
 E5 Stage 38 (host + QEMU, closed): OVMF SEC `mov cr4, 0x640` no longer
 triple-faults. `CR4.VMXE` is host-owned (mask + shadow). Serial
 `RAYNU-V-M7-E5-OVMF-ALIVE-OK` after two non-TF exits or a guest HLT.
-Not full OVMF boot. Not installer.
+`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` after linear leaves the last 64 KiB
+and PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE.
+Not installer.

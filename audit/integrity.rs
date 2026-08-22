@@ -332,6 +332,13 @@ pub enum AuditEvent {
         exits: u64,
         last_reason: u64,
     },
+    /// Guest UEFI left the OVMF SEC tail (last 64 KiB) with PEI-style evidence.
+    /// Not full DXE / not installer.
+    OvmfGuestUefiPastSec {
+        exits: u64,
+        linear: u64,
+        com_bytes: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -539,6 +546,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfLiveEspBytesRetained { .. } => 63,
         AuditEvent::OvmfGuestUefiVmlaunched { .. } => 64,
         AuditEvent::OvmfGuestUefiAlive { .. } => 65,
+        AuditEvent::OvmfGuestUefiPastSec { .. } => 66,
     }
 }
 
@@ -969,6 +977,19 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(exits);
             serial::write_str(" reason=0x");
             write_u64(last_reason);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiPastSec {
+            exits,
+            linear,
+            com_bytes,
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiPastSec exits=");
+            write_u64(exits);
+            serial::write_str(" linear=0x");
+            write_u64(linear);
+            serial::write_str(" com=");
+            write_u64(com_bytes);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}
