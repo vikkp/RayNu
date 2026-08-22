@@ -72,8 +72,9 @@ First HTTP after coexist was `AuthAllowed` without `VmCreated` (likely
 `GET /`). Spec then start followed. Operator paste truncated mid-loop on
 another G0 `VMLAUNCH`. That repeating `E4 G0 VMLAUNCH` / `E4 restore` /
 `E4 SPA VMLAUNCH` pair is **E4 bring-up debug**, not the production console.
-ADR-011 default is quiet COM2 (`paperverbose.txt` is verbose). Next EFI logs
-the first re-entry per slot, then `COM2 quiet after first E4 re-entry`.
+ADR-011 default is quiet COM2 (`paperverbose.txt` is verbose). The next EFI
+(`v0.1.0-e4-spa-launch` / `832ea32`) closed that on iron the same evening:
+[`2026-08-21-e4-spa-quiet-com2-ok.md`](2026-08-21-e4-spa-quiet-com2-ok.md).
 
 ## Next (not blocking P0-14)
 

@@ -81,7 +81,7 @@ sleep 2
 curl -4 --noproxy '*' -sS -m 20 -D - -H "$TOK" -X POST "http://${LEASE}:8443/vms/1/start"
 ```
 
-6. Closed COM2 (iron `2b795a0`): `E4 G0 VMCS relocated`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, `E4 restore VMCS shadow slot=` `fields=98`, then repeating G0↔SPA `VMLAUNCH` every quantum (bring-up debug). Next EFI: first G0 re-entry, first SPA re-entry, first restore per slot, then `COM2 quiet after first E4 re-entry`; HTTP/WARN/markers still print. Fail if `insn_error=0x00000007` / `0x0000000b`, `VMPTRLD failed`, or `boot gate failed`.
+6. Closed COM2: `E4 G0 VMCS relocated`, `RAYNU-V-M7-E4-SPA-LAUNCH-OK`, first `E4 restore` per slot `fields=98`, first G0/SPA re-entry, then `COM2 quiet after first E4 re-entry` (`v0.1.0-e4-spa-launch` / `832ea32` on iron 2026-08-21). Iron `2b795a0` instead repeats G0↔SPA `VMLAUNCH` every quantum (bring-up debug). Fail if `insn_error=0x00000007` / `0x0000000b`, `VMPTRLD failed`, or `boot gate failed`.
 
 Hang-fix `f413a9fc` printed the E4 marker then `VMPTRLD failed slot=0` / VMXOFF.
 Evidence: [`docs/evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md`](../evidence/r640/2026-08-21-e4-spa-launch-vmptrld-fail.md).

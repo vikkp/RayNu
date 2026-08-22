@@ -150,7 +150,8 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **ADR-013 Phase F closed on iron:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20). G0 scheduled; G1–G3 parked. Hold COM2: 25× `HOST-NIC-HTTP-OK`.  
 **E4 SPA VMLAUNCH closed on iron:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` — spec **201** + start **200** on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). First SPA `VMLAUNCH` + G0↔SPA clear-state re-entry via 98-field VMCS shadow. No error 7/11. Guest is SHELL CPUID, not a distro installer.  
 **ADR-013 Phase G closed** 2026-08-21 as accepted-risk (shared LOM `:38` with virtio-net; Appendix B). Not VLAN / second NIC. Stage 1 is 0–G.  
-Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
+**COM2 quiet on iron:** `v0.1.0-e4-spa-launch` (`832ea32`) printed one G0/SPA re-entry pair + restore, then `COM2 quiet after first E4 re-entry`.  
+Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · evidence: [evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md](evidence/r640/2026-08-21-e4-spa-quiet-com2-ok.md)
 
 | Gate | Marker | Goal |
 |------|--------|------|
