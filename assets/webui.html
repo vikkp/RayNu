@@ -186,6 +186,7 @@
       <button id="btn-fw">Box guest FW</button>
       <button id="btn-load">Load guest FW</button>
       <button id="btn-ovmf">Probe OVMF</button>
+      <button id="btn-ovmf-esp">Load ESP OVMF</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -353,20 +354,7 @@
     setStatus(res.ok ? ("ISO " + iso + " firmware CD armed (not guest UEFI)") : ("Firmware arm failed (" + res.status + ")"));
   }
 
-  async function boxGuestFw() {
-    const res = await api("POST", "/fw/box");
-    setStatus(res.ok ? "Guest FW boxed (not OVMF)" : ("FW box failed ("+res.status+")"));
-  }
-
-  async function loadGuestFw() {
-    const res = await api("POST", "/fw/load");
-    setStatus(res.ok ? "Guest FW loaded (not OVMF)" : ("FW load failed ("+res.status+")"));
-  }
-
-  async function probeOvmf() {
-    const res = await api("POST", "/fw/ovmf");
-    setStatus(res.ok ? "OVMF probed (not VMLAUNCH)" : ("OVMF probe failed ("+res.status+")"));
-  }
+  async function fwPost(p,ok,bad){const res=await api("POST",p);setStatus(res.ok?ok:(bad+" ("+res.status+")"));}
 
   async function refreshLogs() {
     setStatus("Fetching host serial log…");
@@ -392,7 +380,6 @@
     items.forEach(function (vm, i) {
       const row = document.createElement("div");
       row.className = "row";
-      row.style.animationDelay = (0.04 * i) + "s";
       const id = vm.guest_id != null ? vm.guest_id : vm.id;
       const state = vm.state || "?";
       const meta = "cpu=" + (vm.cpu != null ? vm.cpu : "?") +
@@ -435,9 +422,10 @@
   document.getElementById("btn-iso-install").onclick = installIso;
   document.getElementById("btn-iso-attach").onclick = attachCdrom;
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
-  document.getElementById("btn-fw").onclick = boxGuestFw;
-  document.getElementById("btn-load").onclick = loadGuestFw;
-  document.getElementById("btn-ovmf").onclick = probeOvmf;
+  document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","Guest FW boxed (not OVMF)","FW box failed");};
+  document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","Guest FW loaded (not OVMF)","FW load failed");};
+  document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","OVMF probed (not VMLAUNCH)","OVMF probe failed");};
+  document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ESP OVMF loaded (not VMLAUNCH)","ESP OVMF failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,
