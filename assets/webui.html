@@ -29,7 +29,6 @@
   .brand {
     font-family: var(--font-brand);
     font-size: clamp(2.4rem, 6vw, 3.6rem);
-    letter-spacing: -0.02em;
     color: var(--sea-deep);
     line-height: 1.05;
   }
@@ -121,7 +120,7 @@
     margin-top: 0.5rem;
     max-height: 14rem;
     overflow: auto;
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-family: monospace;
     font-size: 0.75rem;
     line-height: 1.35;
     white-space: pre-wrap;
@@ -142,7 +141,7 @@
   <section>
     <h2>Auth</h2>
     <div class="toolbar">
-      <label>Bearer token <input id="f-token" class="token" type="password" autocomplete="off" spellcheck="false"/></label>
+      <label>Bearer token <input id="f-token" class="token" type="password"/></label>
       <button class="ghost" id="btn-save-token" data-action="save-token">Save token</button>
     </div>
   </section>
@@ -187,6 +186,7 @@
       <button id="btn-ovmf-esp">Load ESP OVMF</button>
       <button id="btn-fw-slot">Arm FW slot</button>
       <button id="btn-fw-bind">Bind FW guest</button>
+      <button id="btn-fw-prep">Prep FW launch</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -199,7 +199,7 @@
     <pre id="serial-log" class="empty">No log loaded yet. GET /logs/serial</pre>
   </section>
 
-  <p class="status" id="status" role="status"></p>
+  <p class="status" id="status"></p>
   <p class="note">
     Host serial log is HV UART ring (not guest console). TLS deferred (plaintext lab HTTP).
     Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab.
@@ -423,10 +423,11 @@
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
   document.getElementById("btn-fw").onclick=function(){fwPost("/fw/box","Guest FW boxed","FW box failed");};
   document.getElementById("btn-load").onclick=function(){fwPost("/fw/load","Guest FW loaded","FW load failed");};
-  document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","OVMF probed (not VMLAUNCH)","OVMF probe failed");};
-  document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ESP OVMF loaded (not VMLAUNCH)","ESP OVMF failed");};
-  document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","FW slot armed (not VMLAUNCH)","FW slot failed");};
-  document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound (not VMLAUNCH)","FW bind failed");};
+  document.getElementById("btn-ovmf").onclick=function(){fwPost("/fw/ovmf","OVMF probed","OVMF probe failed");};
+  document.getElementById("btn-ovmf-esp").onclick=function(){fwPost("/fw/ovmf/esp","ESP OVMF loaded","ESP OVMF failed");};
+  document.getElementById("btn-fw-slot").onclick=function(){fwPost("/fw/slot","FW slot armed","FW slot failed");};
+  document.getElementById("btn-fw-bind").onclick=function(){fwPost("/fw/bind","FW guest bound","FW bind failed");};
+  document.getElementById("btn-fw-prep").onclick=function(){fwPost("/fw/prepare","FW launch prepped","FW prep failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

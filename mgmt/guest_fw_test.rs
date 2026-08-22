@@ -1,7 +1,8 @@
 use super::{
     box_guest_firmware, dispatch_guest_fw_rest, guest_fw_bytes, guest_fw_is_boxed, guest_fw_is_loaded,
     guest_fw_payload, load_guest_firmware, load_ovmf_from_esp, ovmf_esp_is_loaded, ovmf_fv_is_probed,
-    ovmf_guest_is_bound, ovmf_slot_is_armed, parse_guest_fw, probe_ovmf_firmware, reset_guest_fw,
+    ovmf_guest_is_bound, ovmf_launch_is_prepared, ovmf_slot_is_armed, parse_guest_fw,
+    prepare_ovmf_firmware_launch, probe_ovmf_firmware, reset_guest_fw, try_vmlaunch_ovmf_firmware,
     write_guest_fw_header, write_mock_ovmf_fv, arm_ovmf_firmware_slot, bind_ovmf_firmware_guest,
     GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
     GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, OVMF_FW_GUEST_ID,
@@ -112,6 +113,21 @@ fn rest_box_requires_bearer() {
     });
     assert_eq!(bound.status, 201);
     assert!(ovmf_guest_is_bound());
+
+    let prepped = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/prepare",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(prepped.status, 201);
+    assert!(ovmf_launch_is_prepared());
+
+    let refused = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/vmlaunch",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(refused.status, 409);
     reset_guest_fw();
 }
 
@@ -217,5 +233,44 @@ fn ovmf_bind_requires_slot() {
     assert_eq!(bound.guest_id, OVMF_FW_GUEST_ID);
     assert_eq!(bound.slot_id, OVMF_FW_SLOT_ID);
     assert!(ovmf_guest_is_bound());
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_prep_requires_bind_and_refuses_mock() {
+    reset_guest_fw();
+    assert_eq!(
+        prepare_ovmf_firmware_launch(),
+        Err(GuestFwError::NotGuestBound)
+    );
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::NotGuestBound)
+    );
+    assert!(!ovmf_launch_is_prepared());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/prepare",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let mut fv = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut fv).unwrap();
+    probe_ovmf_firmware(&fv).unwrap();
+    load_ovmf_from_esp(&fv).unwrap();
+    arm_ovmf_firmware_slot().unwrap();
+    bind_ovmf_firmware_guest().unwrap();
+    let prepped = prepare_ovmf_firmware_launch().unwrap();
+    assert_eq!(prepped.guest_id, OVMF_FW_GUEST_ID);
+    assert_eq!(prepped.slot_id, OVMF_FW_SLOT_ID);
+    assert!(ovmf_launch_is_prepared());
+    assert_eq!(
+        try_vmlaunch_ovmf_firmware(),
+        Err(GuestFwError::MockFirmwareRefused)
+    );
     reset_guest_fw();
 }
