@@ -152,10 +152,16 @@ fn format_reply_json<'a>(reply: Option<ApiReply>, buf: &'a mut [u8]) -> &'a [u8]
             ram_mib,
             disk_mib,
             iso_id,
+            image_type,
         }) => {
             let st = state_str(state);
-            // {"ok":true,"record":true,"guest_id":N,"state":"...","cpu":N,"ram_mib":N,"disk_mib":N,"iso_id":N,"nics":1}
-            let mut tmp = [0u8; 192];
+            let img = image_type.map(|t| t.as_str()).unwrap_or("");
+            let fw = image_type
+                .map(|t| t.firmware().as_str())
+                .unwrap_or("none");
+            let order = if image_type.is_some() { "cd,disk" } else { "" };
+            // {"ok":true,"record":true,...,"image_type":"...","firmware":"...","boot_order":"cd,disk"}
+            let mut tmp = [0u8; 320];
             let mut i = 0;
             macro_rules! push {
                 ($bytes:expr) => {{
@@ -177,7 +183,13 @@ fn format_reply_json<'a>(reply: Option<ApiReply>, buf: &'a mut [u8]) -> &'a [u8]
             i += write_u64_digits(&mut tmp[i..], disk_mib as u64);
             push!(b",\"iso_id\":");
             i += write_u64_digits(&mut tmp[i..], iso_id);
-            push!(b",\"nics\":1}");
+            push!(b",\"nics\":1,\"image_type\":\"");
+            push!(img.as_bytes());
+            push!(b"\",\"firmware\":\"");
+            push!(fw.as_bytes());
+            push!(b"\",\"boot_order\":\"");
+            push!(order.as_bytes());
+            push!(b"\"}");
             let n = i.min(buf.len());
             buf[..n].copy_from_slice(&tmp[..n]);
             return &buf[..n];
@@ -416,7 +428,7 @@ pub fn handle_http_request(
     } else {
         dispatch_rest(table, req)
     };
-    let mut json_buf = [0u8; 256];
+    let mut json_buf = [0u8; 320];
     let body = match resp.reply {
         Some(ApiReply::Record { .. })
         | Some(ApiReply::Listed { .. })

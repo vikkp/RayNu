@@ -66,6 +66,8 @@ pub struct VmRecord {
     pub disk_mib: u32,
     /// Attached ISO image id (0 = none); from M7.2 library.
     pub iso_id: u64,
+    /// ADR-014 image type. `None` = E4 SHELL / no product ISO.
+    pub image_type: Option<guest_image::GuestImageType>,
 }
 
 /// Create-VM resource / media specification (M7.4).
@@ -75,6 +77,8 @@ pub struct VmSpec {
     pub ram_mib: u32,
     pub disk_mib: u32,
     pub iso_id: u64,
+    /// Product ISO type when `iso_id != 0`. Lab `linux_bzimage` is rejected.
+    pub image_type: Option<guest_image::GuestImageType>,
 }
 
 impl VmSpec {
@@ -84,6 +88,7 @@ impl VmSpec {
             ram_mib: 512,
             disk_mib: 1024,
             iso_id: 0,
+            image_type: None,
         }
     }
 
@@ -94,7 +99,22 @@ impl VmSpec {
         if self.ram_mib == 0 || self.disk_mib == 0 {
             return Err(LifecycleError::InvalidGuest);
         }
+        match (self.iso_id, self.image_type) {
+            (0, Some(_)) => return Err(LifecycleError::InvalidGuest),
+            (0, None) => {}
+            (_, Some(t)) if t.is_lab_only() => return Err(LifecycleError::InvalidGuest),
+            (_, Some(_)) => {}
+            (_, None) => {}
+        }
         Ok(())
+    }
+
+    /// Fill `linux_iso` when an ISO is attached and the caller omitted the type.
+    pub fn with_product_iso_default(mut self) -> Self {
+        if self.iso_id != 0 && self.image_type.is_none() {
+            self.image_type = Some(guest_image::GuestImageType::LinuxIso);
+        }
+        self
     }
 }
 
@@ -148,6 +168,7 @@ impl VmTable {
         if guest_id == 0 {
             return Err(LifecycleError::InvalidGuest);
         }
+        let spec = spec.with_product_iso_default();
         spec.validate()?;
         if self.get(guest_id).is_some() {
             return Err(LifecycleError::BadState);
@@ -159,6 +180,7 @@ impl VmTable {
             ram_mib: spec.ram_mib,
             disk_mib: spec.disk_mib,
             iso_id: spec.iso_id,
+            image_type: spec.image_type,
         };
         // Reuse a Destroyed slot if present; else take a free slot.
         for slot in self.slots.iter_mut() {
@@ -241,6 +263,14 @@ impl VmTable {
     }
 }
 
+impl VmRecord {
+    /// ADR-014 product boot spec when an ISO type is attached. `None` for E4 SHELL.
+    pub fn boot_spec(self) -> Option<guest_image::GuestBootSpec> {
+        let t = self.image_type?;
+        guest_image::GuestBootSpec::product_iso(t, self.iso_id, self.disk_mib)
+    }
+}
+
 impl Default for VmTable {
     fn default() -> Self {
         Self::new()
@@ -282,9 +312,11 @@ pub fn prop_lifecycle_roundtrip() -> bool {
 
 pub mod spa_launch;
 pub mod m7_e4_spa_gate;
+pub mod m7_e5_boot_spec_gate;
 pub mod api;
 pub mod datastore;
 pub mod guest_image;
+pub mod el_torito;
 pub mod iso;
 pub mod iso_install;
 pub mod pre_ebs_mgmt;
@@ -415,6 +447,8 @@ pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
 pub use spa_launch::{note_spa_start, note_spa_stop, take_spa_start, M7_E4_SPA_LAUNCH_OK_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
+pub use el_torito::{parse_el_torito, ElToritoError, ElToritoImage};
+pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
 pub use m7_iso_install_gate::{
     run_m7_iso_install_scaffold_gate, M7_ISO_INSTALL_GATE_MARKER,
 };

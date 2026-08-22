@@ -7,8 +7,9 @@
 //! in the embedded SPA. TLS / El Torito remain residual.
 
 use super::api::{dispatch_rest, prop_cli_rest_roundtrip, RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
+use super::guest_image::GuestImageType;
 use super::webui::{prop_webui_list_start_stop, webui_html_wires_api, webui_present};
-use super::{VmSpec, VmTable};
+use super::VmTable;
 
 /// Host / CI marker when the M7.4 Ops UI gate passes.
 pub const M7_UI_OK_MARKER: &str = "RAYNU-V-M7-UI-OK";
@@ -36,7 +37,13 @@ pub fn prop_create_vm_spec() -> bool {
         return false;
     }
     match t.get(4) {
-        Some(r) => r.cpu == 2 && r.ram_mib == 2048 && r.disk_mib == 10240 && r.iso_id == 1,
+        Some(r) => {
+            r.cpu == 2
+                && r.ram_mib == 2048
+                && r.disk_mib == 10240
+                && r.iso_id == 1
+                && r.image_type == Some(GuestImageType::LinuxIso)
+        }
         None => false,
     }
 }
@@ -54,6 +61,8 @@ pub fn ui_surface_present() -> bool {
         && s.contains("listImages")
         && s.contains("refreshLogs")
         && s.contains("Host serial log")
+        && s.contains("linux_iso")
+        && s.contains("f-image")
         && webui_present()
         && webui_html_wires_api()
 }

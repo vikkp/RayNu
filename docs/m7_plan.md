@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) closed**. Phase G is the accepted-risk note (shared LOM). Residual: TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) closed**. Phase G is the accepted-risk note (shared LOM). **P0-15 / E5 Stage 0 IN PROGRESS (host):** boot spec on the wire + El Torito catalog parse. Residual: guest UEFI attach + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,7 +273,14 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**Next:** TLS/console polish + a real distro installer. Product ISO is
+**First action (E5 Stage 0 / P0-15):** wire ADR-014 `GuestBootSpec` onto REST/SPA
+(`linux_iso` | `windows_iso` | `generic_uefi`), host-only El Torito catalog parse,
+host marker `RAYNU-V-M7-E5-BOOT-SPEC-OK`. Do **not** VMLAUNCH guest UEFI firmware
+and do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays
+valid. No OVMF blob this slice (ADR-003).
+
+**Next after Stage 0:** El Torito / guest UEFI attach, then TLS/console polish.
+Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep
 `NO_PHYLOCK` / skip BMCR when NCSI. Reject `42b42c99`, `ec08c00f`, `1404f055`, skip-CORECLK
