@@ -2,8 +2,9 @@
 //!
 //! Parses a boot record + catalog from ISO 9660 bytes. Host attach lives in
 //! [`crate::mgmt::iso::attach_cdrom_host`]. That is not guest UEFI firmware.
-//! Live `attach_cdrom_uefi` stays `UnsupportedOnFirmware` until a firmware
-//! blob + virtio CD path exist.
+//! Live `attach_cdrom_uefi` stays `UnsupportedOnFirmware` until a live
+//! guest UEFI firmware payload + virtio CD path exist. Stage 3 boxes the
+//! ADR-003 envelope only.
 
 /// ISO 9660 logical sector size (El Torito / ECMA-119).
 pub const ISO_SECTOR: usize = 2048;
