@@ -1,8 +1,9 @@
 use super::{
     box_guest_firmware, dispatch_guest_fw_rest, guest_fw_bytes, guest_fw_is_boxed, guest_fw_is_loaded,
-    guest_fw_payload, load_guest_firmware, parse_guest_fw, reset_guest_fw, write_guest_fw_header,
-    GuestFwError, GuestFwKind, GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED,
-    GUEST_FW_MAX_UNCOMPRESSED, GUEST_FW_STUB_PAYLOAD_LEN, SECTION_GUEST_FW,
+    guest_fw_payload, load_guest_firmware, ovmf_fv_is_probed, parse_guest_fw, probe_ovmf_firmware,
+    reset_guest_fw, write_guest_fw_header, write_mock_ovmf_fv, GuestFwError, GuestFwKind,
+    GUEST_FW_BLOB_LEN, GUEST_FW_HEADER_LEN, GUEST_FW_MAX_COMPRESSED, GUEST_FW_MAX_UNCOMPRESSED,
+    GUEST_FW_STUB_PAYLOAD_LEN, MOCK_OVMF_FV_BYTES, SECTION_GUEST_FW,
 };
 use crate::mgmt::api::{RestMethod, RestRequest, BRINGUP_AUTH_TOKEN};
 
@@ -77,5 +78,39 @@ fn rest_box_requires_bearer() {
         auth_token: Some(BRINGUP_AUTH_TOKEN),
     });
     assert_eq!(st.status, 200);
+
+    let probed = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/ovmf",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(probed.status, 201);
+    assert!(ovmf_fv_is_probed());
+    reset_guest_fw();
+}
+
+#[test]
+fn ovmf_probe_requires_load() {
+    reset_guest_fw();
+    let mut fv = [0u8; MOCK_OVMF_FV_BYTES];
+    write_mock_ovmf_fv(&mut fv).unwrap();
+    assert_eq!(
+        probe_ovmf_firmware(&fv),
+        Err(GuestFwError::NotLoaded)
+    );
+    assert!(!ovmf_fv_is_probed());
+
+    let missing = dispatch_guest_fw_rest(RestRequest {
+        method: RestMethod::Post,
+        path: "/fw/ovmf",
+        auth_token: Some(BRINGUP_AUTH_TOKEN),
+    });
+    assert_eq!(missing.status, 409);
+
+    box_guest_firmware(guest_fw_bytes()).unwrap();
+    load_guest_firmware(guest_fw_bytes()).unwrap();
+    let probed = probe_ovmf_firmware(&fv).unwrap();
+    assert_eq!(probed.fv_len, MOCK_OVMF_FV_BYTES as u64);
+    assert!(ovmf_fv_is_probed());
     reset_guest_fw();
 }
