@@ -7,8 +7,8 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 346
-velocity_gates_30d: 32
+velocity_commits_30d: 347
+velocity_gates_30d: 33
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -18,7 +18,7 @@ summit_core_pct: 88
 summit_efi_pct: 95
 summit_r640_pct: 98
 summit_ui_pct: 96
-summit_iso_pct: 97
+summit_iso_pct: 98
 summit_prod_pct: 100
 ---
 
@@ -45,7 +45,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~97% | Firmware-alias contract recorded; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; distro later |
+| **Deploy Linux ISO** | ~98% | Alias-EPT program contract recorded; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; distro later |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | PARTIAL (host parse+attach+arm+envelope) | Catalog parse + host attach + `FirmwareArmed` + `.asguefw` envelope; no OVMF; no guest UEFI VMLAUNCH |
 | CD-ROM attach | PARTIAL (host firmware arm) | `attach_cdrom_firmware` → FirmwareArmed; `attach_cdrom_uefi` → UnsupportedOnFirmware |
-| Guest UEFI firmware blob | PARTIAL (fw-alias) | Unrestricted-guest + 4 GiB alias contract recorded; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued |
+| Guest UEFI firmware blob | PARTIAL (alias-EPT) | 4 GiB alias-EPT window recorded; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -210,6 +210,7 @@ Ordered for critical path (parallelize B with D design):
 | P0-28 | **E5 Stage 13** Live ESP OVMF map | D | **DONE (host)** | P0-27 | `RAYNU-V-M7-E5-ESP-MAP-OK`; 2 MiB+ map; not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
 | P0-29 | **E5 Stage 14** Reset-vector VMCS contract | D | **DONE (host)** | P0-28 | `RAYNU-V-M7-E5-RESET-VEC-OK`; 0xEA stub not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
 | P0-30 | **E5 Stage 15** Firmware-alias EPT contract | D | **DONE (host)** | P0-29 | `RAYNU-V-M7-E5-FW-ALIAS-OK`; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
+| P0-31 | **E5 Stage 16** Alias-EPT program contract | D | **DONE (host)** | P0-30 | `RAYNU-V-M7-E5-ALIAS-EPT-OK`; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; not Everest E5 |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
 | P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
@@ -251,6 +252,7 @@ Ordered for critical path (parallelize B with D design):
 - **P0-28 / E5 Stage 13 closed (host):** `RAYNU-V-M7-E5-ESP-MAP-OK`. Live-sized ESP OVMF map (2 MiB+). Not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
 - **P0-29 / E5 Stage 14 closed (host):** `RAYNU-V-M7-E5-RESET-VEC-OK`. Reset-vector VMCS contract. Synthetic `0xEA` stub is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
 - **P0-30 / E5 Stage 15 closed (host):** `RAYNU-V-M7-E5-FW-ALIAS-OK`. Firmware-alias EPT contract. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
+- **P0-31 / E5 Stage 16 closed (host):** `RAYNU-V-M7-E5-ALIAS-EPT-OK`. Alias-EPT program contract. Live EPT is not written. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -300,10 +302,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-fw-alias |
-| Summary | P0-30 firmware-alias EPT contract after reset-vector; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Firmware-alias contract ≠ shipped OVMF.fd ≠ VMLAUNCH insn ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-FW-ALIAS-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-alias-ept |
+| Summary | P0-31 alias-EPT program contract after firmware-alias; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Alias-EPT program ≠ live EPT write ≠ shipped OVMF.fd ≠ VMLAUNCH insn ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-ALIAS-EPT-OK` (host). Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -314,7 +316,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | No live guest UEFI CD | MED | Firmware-alias closed (P0-30); 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
+| H3 | No live guest UEFI CD | MED | Alias-EPT closed (P0-31); live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; `attach_cdrom_uefi` still stub; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -325,6 +327,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-22 | e5-alias-ept | 0.5 | 95 | P0-31 alias-EPT program contract; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; iso 98%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-fw-alias | 0.5 | 95 | P0-30 firmware-alias EPT contract; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued; iso 97%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-reset-vec | 0.5 | 95 | P0-29 reset-vector VMCS contract; 0xEA stub not shipped OVMF.fd; VMLAUNCH insn not issued; iso 96%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-esp-map | 0.5 | 95 | P0-28 live ESP OVMF map; 2 MiB+ not shipped OVMF.fd; VMLAUNCH insn not issued; iso 95%; iron P0-14 stays 2b795a0 |

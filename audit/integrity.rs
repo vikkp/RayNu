@@ -214,6 +214,11 @@ pub enum AuditEvent {
     OvmfFirmwareAliasArmed {
         bytes_len: u64,
     },
+    /// Alias-EPT program contract recorded (ADR-014 Stage 16). Not a live EPT write / not VMLAUNCH.
+    OvmfAliasEptProgrammed {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -398,6 +403,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfEspLiveMapped { .. } => 40,
         AuditEvent::OvmfResetVectorArmed { .. } => 41,
         AuditEvent::OvmfFirmwareAliasArmed { .. } => 42,
+        AuditEvent::OvmfAliasEptProgrammed { .. } => 43,
     }
 }
 
@@ -666,6 +672,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::OvmfFirmwareAliasArmed { bytes_len } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareAliasArmed bytes=");
             write_u64(bytes_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfAliasEptProgrammed { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfAliasEptProgrammed bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

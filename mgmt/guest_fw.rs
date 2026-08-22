@@ -117,6 +117,8 @@ pub enum GuestFwError {
     ResetVectorNotLaunched,
     /// Firmware-alias contract is recorded; VMLAUNCH instruction is not issued.
     FirmwareAliasNotLaunched,
+    /// Alias-EPT program contract is recorded; VMLAUNCH instruction is not issued.
+    AliasEptNotLaunched,
 }
 
 /// ESP-path launch bookkeeping. Not a live OVMF mapping / not VMLAUNCH.
@@ -188,6 +190,13 @@ pub struct OvmfAlias {
     pub bytes_len: u64,
 }
 
+/// Alias-EPT program bookkeeping. Not a live EPT write and not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfAliasEpt {
+    pub bytes_len: u64,
+    pub gpa: u64,
+}
+
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
 #[link_section = ".asguefw"]
 #[used]
@@ -214,8 +223,9 @@ static GUEST_FW_OVMF_ESP_LAUNCH_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_LIVE_MAPPED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_RESET_ARMED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_OVMF_ALIAS_ARMED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias flags.
+/// Reset the process-local boxed / loaded / probed / ESP / slot / bind / prep / floor / EDK2 / ESP-launch / live-map / reset-vector / alias / alias-EPT flags.
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
@@ -230,6 +240,7 @@ pub fn reset_guest_fw() {
     GUEST_FW_OVMF_LIVE_MAPPED.store(false, Ordering::Release);
     GUEST_FW_OVMF_RESET_ARMED.store(false, Ordering::Release);
     GUEST_FW_OVMF_ALIAS_ARMED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED.store(false, Ordering::Release);
     crate::vmx::launch::reset_live_esp_ovmf_mapping();
 }
 
@@ -296,6 +307,11 @@ pub fn ovmf_reset_vector_is_armed() -> bool {
 /// True after a successful [`arm_ovmf_firmware_alias`].
 pub fn ovmf_firmware_alias_is_armed() -> bool {
     GUEST_FW_OVMF_ALIAS_ARMED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`program_ovmf_alias_ept`].
+pub fn ovmf_alias_ept_is_programmed() -> bool {
+    GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -571,8 +587,10 @@ pub fn prepare_ovmf_firmware_launch() -> Result<OvmfLaunchPrep, GuestFwError> {
 ///   (unmapped → [`GuestFwError::MissingEsp`]; live-sized map →
 ///   [`GuestFwError::LiveMappedNotLaunched`]; reset-vector armed →
 ///   [`GuestFwError::ResetVectorNotLaunched`]; alias armed →
-///   [`GuestFwError::FirmwareAliasNotLaunched`])
-/// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture and does not flip attach_cdrom_uefi
+///   [`GuestFwError::FirmwareAliasNotLaunched`]; alias-EPT programmed →
+///   [`GuestFwError::AliasEptNotLaunched`])
+/// - Does not VMLAUNCH the 1 MiB, 2 MiB, or 4 MiB fixture, does not write
+///   live EPT, and does not flip attach_cdrom_uefi
 pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
     if !ovmf_launch_is_prepared() {
         return Err(GuestFwError::NotGuestBound);
@@ -594,6 +612,9 @@ pub fn try_vmlaunch_ovmf_firmware() -> Result<(), GuestFwError> {
             }
             Err(crate::vmx::launch::GuestUefiLaunchError::FirmwareAliasNotLaunched) => {
                 Err(GuestFwError::FirmwareAliasNotLaunched)
+            }
+            Err(crate::vmx::launch::GuestUefiLaunchError::AliasEptNotLaunched) => {
+                Err(GuestFwError::AliasEptNotLaunched)
             }
         };
     }
@@ -730,6 +751,49 @@ pub fn arm_ovmf_firmware_alias(bytes: &[u8]) -> Result<OvmfAlias, GuestFwError> 
     GUEST_FW_OVMF_ALIAS_ARMED.store(true, Ordering::Release);
     Ok(OvmfAlias {
         bytes_len: bytes.len() as u64,
+    })
+}
+
+/// Program the alias-EPT window after firmware-alias (ADR-014 Stage 16).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`arm_ovmf_firmware_alias`]
+/// - `bytes.len()` and `_FVH` `FvLength` must be `>= MIN_FIRMWARE_ALIAS_BYTES`
+/// - Reset vector GPA must sit inside the alias window
+/// - Records the contract in `vmx/launch.rs`; does not write live EPT
+/// - Does not issue VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn program_ovmf_alias_ept(bytes: &[u8]) -> Result<OvmfAliasEpt, GuestFwError> {
+    if !ovmf_firmware_alias_is_armed() {
+        return Err(GuestFwError::LaunchNotWired);
+    }
+    if bytes.len() < MIN_FIRMWARE_ALIAS_BYTES {
+        return Err(GuestFwError::TooSmall);
+    }
+    if bytes.len() > GUEST_FW_MAX_UNCOMPRESSED as usize {
+        return Err(GuestFwError::TooLarge);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    if probed.fv_len < MIN_FIRMWARE_ALIAS_BYTES as u64 {
+        return Err(GuestFwError::TooSmall);
+    }
+    match crate::vmx::launch::probe_guest_uefi_reset_vector(bytes) {
+        Ok(()) => {}
+        Err(crate::vmx::launch::GuestUefiLaunchError::NoResetVector) => {
+            return Err(GuestFwError::NoResetVector);
+        }
+        Err(_) => return Err(GuestFwError::BadState),
+    }
+    crate::vmx::launch::program_guest_uefi_alias_ept(bytes.len() as u64)
+        .map_err(|_| GuestFwError::TooSmall)?;
+    let gpa = crate::vmx::launch::firmware_alias_gpa(bytes.len() as u64).unwrap_or(0);
+    audit_log!(AuditEvent::OvmfAliasEptProgrammed {
+        bytes_len: bytes.len() as u64,
+        gpa,
+    });
+    GUEST_FW_OVMF_ALIAS_EPT_PROGRAMMED.store(true, Ordering::Release);
+    Ok(OvmfAliasEpt {
+        bytes_len: bytes.len() as u64,
+        gpa,
     })
 }
 
@@ -895,6 +959,7 @@ pub fn is_guest_fw_path(path: &str) -> bool {
         || path == "/fw/esp-map"
         || path == "/fw/reset-vec"
         || path == "/fw/alias"
+        || path == "/fw/alias-ept"
         || path == "/fw/vmlaunch"
 }
 
@@ -925,6 +990,8 @@ enum GuestFwOp {
     OvmfResetVecArm,
     OvmfAliasStatus,
     OvmfAliasArm,
+    OvmfAliasEptStatus,
+    OvmfAliasEptProgram,
     OvmfTryVmlaunch,
 }
 
@@ -957,6 +1024,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/reset-vec") => Ok(GuestFwOp::OvmfResetVecArm),
         (RestMethod::Get, "/fw/alias") => Ok(GuestFwOp::OvmfAliasStatus),
         (RestMethod::Post, "/fw/alias") => Ok(GuestFwOp::OvmfAliasArm),
+        (RestMethod::Get, "/fw/alias-ept") => Ok(GuestFwOp::OvmfAliasEptStatus),
+        (RestMethod::Post, "/fw/alias-ept") => Ok(GuestFwOp::OvmfAliasEptProgram),
         (RestMethod::Post, "/fw/vmlaunch") => Ok(GuestFwOp::OvmfTryVmlaunch),
         _ => Err(()),
     }
@@ -981,7 +1050,8 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         | GuestFwError::LiveMappedNotLaunched
         | GuestFwError::NoResetVector
         | GuestFwError::ResetVectorNotLaunched
-        | GuestFwError::FirmwareAliasNotLaunched => 409,
+        | GuestFwError::FirmwareAliasNotLaunched
+        | GuestFwError::AliasEptNotLaunched => 409,
     }
 }
 
@@ -1006,8 +1076,12 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
 /// (`MissingEsp`) — no embedded 4 MiB. `POST /fw/vmlaunch` then calls
 /// `try_vmlaunch_guest_uefi_ovmf` (unmapped → 409 `MissingEsp`; mapped →
 /// 409 `LiveMappedNotLaunched`; reset-vector armed → 409
-/// `ResetVectorNotLaunched`; alias armed → 409 `FirmwareAliasNotLaunched`).
-/// GET paths return counts. Not a shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
+/// `ResetVectorNotLaunched`; alias armed → 409 `FirmwareAliasNotLaunched`;
+/// alias-EPT programmed → 409 `AliasEptNotLaunched`).
+/// `POST /fw/alias-ept` records the alias-EPT program contract after
+/// alias (host test heap fixture only). Production UEFI returns 409
+/// (`MissingEsp`) — no embedded 4 MiB. GET paths return counts. Not a
+/// shipped EDK2 `OVMF.fd`. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
         return RestResponse {
@@ -1215,6 +1289,13 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
             }),
         },
         Ok(GuestFwOp::OvmfAliasArm) => firmware_alias_rest(),
+        Ok(GuestFwOp::OvmfAliasEptStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_alias_ept_is_programmed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfAliasEptProgram) => alias_ept_rest(),
         Ok(GuestFwOp::OvmfTryVmlaunch) => match try_vmlaunch_ovmf_firmware() {
             Ok(()) => RestResponse {
                 status: 500,
@@ -1354,6 +1435,38 @@ fn firmware_alias_rest() -> RestResponse {
 /// Production: no embedded 4 MiB firmware alias (ADR-003 split-mode / ESP only).
 #[cfg(not(test))]
 fn firmware_alias_rest() -> RestResponse {
+    RestResponse {
+        status: guest_fw_err_status(GuestFwError::MissingEsp),
+        reply: None,
+    }
+}
+
+/// Host tests: heap 4 MiB + JMP FAR stub. Not a shipped `OVMF.fd`.
+/// Production UEFI: 409 `MissingEsp` — no embedded 4 MiB (ADR-003).
+#[cfg(test)]
+fn alias_ept_rest() -> RestResponse {
+    let mut fv = vec![0u8; MIN_FIRMWARE_ALIAS_BYTES];
+    if write_firmware_alias_fv(&mut fv).is_err() {
+        return RestResponse {
+            status: 500,
+            reply: None,
+        };
+    }
+    match program_ovmf_alias_ept(&fv) {
+        Ok(_) => RestResponse {
+            status: 201,
+            reply: Some(ApiReply::Ok),
+        },
+        Err(e) => RestResponse {
+            status: guest_fw_err_status(e),
+            reply: None,
+        },
+    }
+}
+
+/// Production: no embedded 4 MiB alias-EPT image (ADR-003 split-mode / ESP only).
+#[cfg(not(test))]
+fn alias_ept_rest() -> RestResponse {
     RestResponse {
         status: guest_fw_err_status(GuestFwError::MissingEsp),
         reply: None,
