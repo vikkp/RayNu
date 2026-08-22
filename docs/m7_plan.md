@@ -273,22 +273,22 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 16):** issue VMLAUNCH of **real** ESP
-`\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + 4 GiB firmware-alias
-EPT actually programmed) **or** TLS/console polish.
+**First action (E5 Stage 17):** issue VMLAUNCH of **real** ESP
+`\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + alias EPT actually
+installed in the live EPT) **or** TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
 EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
-or a 4 MiB firmware-alias fixture.
+or a 4 MiB firmware-alias / alias-EPT fixture.
 
-**Closed host:** Stage 0–14 as before · Stage 15 `RAYNU-V-M7-E5-FW-ALIAS-OK`
-(`arm_ovmf_firmware_alias` + `POST /fw/alias`;
-`try_vmlaunch_guest_uefi_ovmf` → `FirmwareAliasNotLaunched`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 15 **records**
-the unrestricted-guest + 4 GiB firmware-alias contract and does **not**
-issue the VMLAUNCH instruction (4 MiB fixture is not a shipped `OVMF.fd`).
+**Closed host:** Stage 0–15 as before · Stage 16 `RAYNU-V-M7-E5-ALIAS-EPT-OK`
+(`program_ovmf_alias_ept` + `POST /fw/alias-ept`;
+`try_vmlaunch_guest_uefi_ovmf` → `AliasEptNotLaunched`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 16 **records**
+the alias-EPT window and does **not** write live EPT or issue the
+VMLAUNCH instruction (4 MiB fixture is not a shipped `OVMF.fd`).
 
-**Next after Stage 15:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
+**Next after Stage 16:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

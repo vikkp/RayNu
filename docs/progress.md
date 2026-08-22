@@ -96,6 +96,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 13 | `RAYNU-V-M7-E5-ESP-MAP-OK` | Host live-sized ESP OVMF map (2 MiB+) after ESP launch; not a shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 14 | `RAYNU-V-M7-E5-RESET-VEC-OK` | Host reset-vector VMCS contract after live map; synthetic 0xEA stub not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 | E5 Stage 15 | `RAYNU-V-M7-E5-FW-ALIAS-OK` | Host firmware-alias EPT contract after reset-vector; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
+| E5 Stage 16 | `RAYNU-V-M7-E5-ALIAS-EPT-OK` | Host alias-EPT program contract after firmware-alias; live EPT not written; 4 MiB fixture not shipped OVMF.fd; VMLAUNCH insn not issued (2026-08-22). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -182,6 +183,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-28 / E5 Stage 13 closed (host):** live ESP OVMF map (`RAYNU-V-M7-E5-ESP-MAP-OK`). 2 MiB+ live-sized map recorded; not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-29 / E5 Stage 14 closed (host):** reset-vector VMCS contract (`RAYNU-V-M7-E5-RESET-VEC-OK`). SDM 9.1.4 CS=`0xF000` / RIP=`0xFFF0`; synthetic `0xEA` stub is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 **P0-30 / E5 Stage 15 closed (host):** firmware-alias EPT contract (`RAYNU-V-M7-E5-FW-ALIAS-OK`). Unrestricted-guest bit + 4 GiB alias recorded; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
+**P0-31 / E5 Stage 16 closed (host):** alias-EPT program contract (`RAYNU-V-M7-E5-ALIAS-EPT-OK`). 4 GiB window recorded; live EPT not written; 4 MiB fixture is not a shipped `OVMF.fd`; VMLAUNCH insn not issued. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -207,6 +209,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-28 / E5 Stage 13 | `RAYNU-V-M7-E5-ESP-MAP-OK` | **CLOSED (host).** Live-sized ESP OVMF map (2 MiB+). Not a shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-29 / E5 Stage 14 | `RAYNU-V-M7-E5-RESET-VEC-OK` | **CLOSED (host).** Reset-vector VMCS contract. Synthetic 0xEA stub not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
 | P0-30 / E5 Stage 15 | `RAYNU-V-M7-E5-FW-ALIAS-OK` | **CLOSED (host).** Firmware-alias EPT contract. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-30. Product ISO: [ADR-014](adr/ADR-014.md). Real ESP OVMF.fd VMLAUNCH is Stage 16. |
+| P0-31 / E5 Stage 16 | `RAYNU-V-M7-E5-ALIAS-EPT-OK` | **CLOSED (host).** Alias-EPT program contract. Live EPT not written. 4 MiB fixture not shipped OVMF.fd. VMLAUNCH insn not issued. Not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-31. Product ISO: [ADR-014](adr/ADR-014.md). Real ESP OVMF.fd VMLAUNCH is Stage 17. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

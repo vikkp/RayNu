@@ -343,6 +343,7 @@ pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod m6_soak_gate;
 pub mod m7_e4_spa_gate;
+pub mod m7_e5_alias_ept_gate;
 pub mod m7_e5_boot_spec_gate;
 pub mod m7_e5_cdrom_attach_gate;
 pub mod m7_e5_cdrom_firmware_gate;
@@ -408,9 +409,10 @@ pub use guest_fw::{
     arm_ovmf_esp_launch, arm_ovmf_firmware_alias, arm_ovmf_firmware_slot, arm_ovmf_reset_vector,
     bind_ovmf_firmware_guest, box_guest_firmware, dispatch_guest_fw_rest, load_guest_firmware,
     load_ovmf_from_esp, map_live_esp_ovmf, prepare_ovmf_firmware_launch, probe_ovmf_firmware,
-    stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor, try_vmlaunch_ovmf_firmware, GuestFwBlob,
-    GuestFwError, GuestFwKind, OvmfAlias, OvmfBind, OvmfEdk2, OvmfEspLaunch, OvmfFloor, OvmfFv,
-    OvmfLaunchPrep, OvmfLiveMap, OvmfResetVec, OvmfSlot,
+    program_ovmf_alias_ept, stage_edk2_ovmf_firmware, stage_ovmf_firmware_floor,
+    try_vmlaunch_ovmf_firmware, GuestFwBlob, GuestFwError, GuestFwKind, OvmfAlias, OvmfAliasEpt,
+    OvmfBind, OvmfEdk2, OvmfEspLaunch, OvmfFloor, OvmfFv, OvmfLaunchPrep, OvmfLiveMap,
+    OvmfResetVec, OvmfSlot,
 };
 pub use guest_image::{GuestBootSpec, GuestFirmware, GuestImageType};
 pub use ha::{
@@ -449,6 +451,7 @@ pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
 pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
+pub use m7_e5_alias_ept_gate::{run_m7_e5_alias_ept_gate, M7_E5_ALIAS_EPT_OK_MARKER};
 pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
 pub use m7_e5_cdrom_attach_gate::{run_m7_e5_cdrom_attach_gate, M7_E5_CDROM_ATTACH_OK_MARKER};
 pub use m7_e5_cdrom_firmware_gate::{
