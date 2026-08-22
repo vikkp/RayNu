@@ -90,15 +90,18 @@ RAYNU-V-M7-ISO-OK
   (`program_ovmf_alias_ept`) is Stage 16
   (`RAYNU-V-M7-E5-ALIAS-EPT-OK`). Private alias-EPT **install**
   (`install_ovmf_alias_ept`) is Stage 17
-  (`RAYNU-V-M7-E5-EPT-INSTALL-OK`);
+  (`RAYNU-V-M7-E5-EPT-INSTALL-OK`). Real-ESP **qualify**
+  (`qualify_real_esp_ovmf`) is Stage 18
+  (`RAYNU-V-M7-E5-REAL-ESP-OK`);
   `try_vmlaunch_ovmf_firmware` refuses the 80-byte mock, the 4 KiB floor,
   and the 1 MiB EDK2-sized fixture, then `MissingEsp` (no live map),
   `LiveMappedNotLaunched` (2 MiB+ map, no reset stub),
   `ResetVectorNotLaunched` (JMP FAR stub recorded),
   `FirmwareAliasNotLaunched` (4 MiB alias recorded),
-  `AliasEptNotLaunched` (4 GiB window recorded), or
-  `AliasEptInstalledNotLaunched` (private install recorded; live E4
-  SHELL EPT not written; VMLAUNCH insn not issued).
+  `AliasEptNotLaunched` (4 GiB window recorded),
+  `AliasEptInstalledNotLaunched` (private install recorded), or
+  `RealEspNotLaunched` (real-ESP qualify recorded; live E4 SHELL EPT
+  not written; VMLAUNCH insn not issued).
   Real EDK2 bytes stay on ESP `EFI/RayNu/OVMF.fd`.
   Envelope box / stub load / FV probe / ESP load is not guest
   UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
@@ -185,3 +188,9 @@ Production UEFI returns 409 (no embedded 4 MiB). `POST /fw/vmlaunch`
 returns 409 (`AliasEptInstalledNotLaunched`). Live E4 SHELL EPT is
 not written. 4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn
 not issued.
+
+E5 Stage 18 (host, closed): `POST /fw/real-esp` records the real-ESP
+VMLAUNCH-ready contract after install (host test heap fixture only).
+Production UEFI returns 409 (no embedded 4 MiB). `POST /fw/vmlaunch`
+returns 409 (`RealEspNotLaunched`). Live E4 SHELL EPT is not written.
+4 MiB fixture is not a shipped `OVMF.fd`. VMLAUNCH insn not issued.

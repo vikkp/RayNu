@@ -98,6 +98,7 @@ section{margin-bottom:1.75rem}
       <button id="btn-fw-al">Arm FW alias</button>
       <button id="btn-fw-ae">Program alias EPT</button>
       <button id="btn-fw-ei">Install FW EPT</button>
+      <button id="btn-fw-re">Qualify real ESP</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -128,23 +129,19 @@ section{margin-bottom:1.75rem}
   const TOKEN_KEY = "raynu-v-token";
   const known = [];
 
-  function defaultToken() { return "raynu-v-bringup"; }
+  function defaultToken(){return"raynu-v-bringup";}
   function loadToken(){try{const t=sessionStorage.getItem(TOKEN_KEY);return t&&t.length?t:defaultToken();}catch(e){return defaultToken();}}
   function saveToken(t){try{sessionStorage.setItem(TOKEN_KEY,t);}catch(e){}}
   tokenEl.value = loadToken();
 
-  function authHeader() {
-    return "Bearer " + (tokenEl.value || defaultToken());
-  }
+  function authHeader(){return"Bearer "+(tokenEl.value||defaultToken());}
 
-  function setStatus(msg) { statusEl.textContent = msg || ""; }
+  function setStatus(msg){statusEl.textContent=msg||"";}
 
   function num(id, fallback){const v=parseInt(document.getElementById(id).value,10);return isNaN(v)?fallback:v;}
   async function api(method, path){return fetch(path,{method:method,headers:{"Accept":"application/json, text/plain","Authorization":authHeader()}});}
 
-  function remember(id) {
-    if (known.indexOf(id) < 0) known.push(id);
-  }
+  function remember(id){if(known.indexOf(id)<0)known.push(id);}
 
   async function listVms() {
     setStatus("Listing…");
@@ -157,63 +154,19 @@ section{margin-bottom:1.75rem}
       if (!g.ok) continue;
       let body = null;
       try { body = await g.json(); } catch (e) { body = null; }
-      items.push({
-        guest_id: id,
-        state: (body && body.state) ? body.state : (body && body.record ? "defined" : "?"),
-        cpu: body && body.cpu,
-        ram_mib: body && body.ram_mib,
-        disk_mib: body && body.disk_mib,
-        iso_id: body && body.iso_id,
-        nics: body && body.nics,
-        image_type: body && body.image_type,
-        firmware: body && body.firmware
-      });
+      items.push({guest_id:id,state:(body&&body.state)?body.state:(body&&body.record?"defined":"?"),cpu:body&&body.cpu,ram_mib:body&&body.ram_mib,disk_mib:body&&body.disk_mib,iso_id:body&&body.iso_id,nics:body&&body.nics,image_type:body&&body.image_type,firmware:body&&body.firmware});
     }
     render(items);
     setStatus(items.length ? (items.length + " guest(s)") : "Empty (create one)");
   }
 
-  async function createVm() {
-    const id = num("f-id", 1);
-    const cpu = num("f-cpu", 1);
-    const ram = num("f-ram", 512);
-    const disk = num("f-disk", 1024);
-    const iso = num("f-iso", 0);
-    const typEl = document.getElementById("f-image");
-    const typ = typEl ? typEl.value : "none";
-    let path = API + "/" + id + "/spec/" + cpu + "/" + ram + "/" + disk + "/" + iso;
-    if (iso !== 0 && typ && typ !== "none") {
-      path += "/" + typ;
-    }
-    setStatus("Creating " + id + "…");
-    const res = await api("POST", path);
-    if (res.ok) remember(id);
-    setStatus(res.ok ? ("Created " + id) : ("Create failed (" + res.status + ")"));
-    await listVms();
-  }
+  async function createVm(){const id=num("f-id",1),cpu=num("f-cpu",1),ram=num("f-ram",512),disk=num("f-disk",1024),iso=num("f-iso",0);const typEl=document.getElementById("f-image");const typ=typEl?typEl.value:"none";let path=API+"/"+id+"/spec/"+cpu+"/"+ram+"/"+disk+"/"+iso;if(iso!==0&&typ&&typ!=="none")path+="/"+typ;setStatus("Creating "+id+"…");const res=await api("POST",path);if(res.ok)remember(id);setStatus(res.ok?("Created "+id):("Create failed ("+res.status+")"));await listVms();}
 
-  async function startVm(id) {
-    setStatus("Starting " + id + "…");
-    const res = await api("POST", API + "/" + id + "/start");
-    setStatus(res.ok ? ("Started " + id) : ("Start failed (" + res.status + ")"));
-    await listVms();
-  }
+  async function startVm(id){setStatus("Starting "+id+"…");const res=await api("POST",API+"/"+id+"/start");setStatus(res.ok?("Started "+id):("Start failed ("+res.status+")"));await listVms();}
 
-  async function stopVm(id) {
-    setStatus("Stopping " + id + "…");
-    const res = await api("POST", API + "/" + id + "/stop");
-    setStatus(res.ok ? ("Stopped " + id) : ("Stop failed (" + res.status + ")"));
-    await listVms();
-  }
+  async function stopVm(id){setStatus("Stopping "+id+"…");const res=await api("POST",API+"/"+id+"/stop");setStatus(res.ok?("Stopped "+id):("Stop failed ("+res.status+")"));await listVms();}
 
-  async function listImages() {
-    setStatus("Listing images…");
-    const res = await api("GET", "/images");
-    if (!res.ok) { setStatus("Images failed (" + res.status + ")"); return; }
-    imgEl.className = "";
-    imgEl.textContent = "Images endpoint OK (" + res.status + "). Register via POST /images/{id}/iso.";
-    setStatus("Images listed");
-  }
+  async function listImages(){setStatus("Listing images…");const res=await api("GET","/images");if(!res.ok){setStatus("Images failed ("+res.status+")");return;}imgEl.className="";imgEl.textContent="Images endpoint OK ("+res.status+"). Register via POST /images/{id}/iso.";setStatus("Images listed");}
 
   async function deployIso() {
     const iso = num("f-iso", 1) || 1;
@@ -331,6 +284,7 @@ section{margin-bottom:1.75rem}
   document.getElementById("btn-fw-al").onclick=function(){fwPost("/fw/alias","FW alias armed","FW alias failed");};
   document.getElementById("btn-fw-ae").onclick=function(){fwPost("/fw/alias-ept","Alias EPT programmed","Alias EPT failed");};
   document.getElementById("btn-fw-ei").onclick=function(){fwPost("/fw/ept-install","FW EPT installed","FW EPT failed");};
+  document.getElementById("btn-fw-re").onclick=function(){fwPost("/fw/real-esp","Real ESP qualified","Real ESP failed");};
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

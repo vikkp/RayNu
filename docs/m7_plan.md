@@ -273,23 +273,24 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (E5 Stage 18):** issue VMLAUNCH of **real** ESP
+**First action (E5 Stage 19):** issue VMLAUNCH of **real** ESP
 `\\EFI\\RayNu\\OVMF.fd` bytes (unrestricted guest + alias EPT actually
-installed in the live guest-UEFI EPT, not the E4 SHELL EPT) **or**
+installed in a guest-UEFI EPT, not the E4 SHELL EPT) **or**
 TLS/console polish.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
 Do **not** VMLAUNCH the 80-byte mock, the 4 KiB size-floor, the 1 MiB
 EDK2 fixture, the 2 MiB live-map `_FVH`, a synthetic `0xEA` reset stub,
-or a 4 MiB firmware-alias / alias-EPT / private-install fixture.
+or a 4 MiB firmware-alias / alias-EPT / private-install / real-ESP fixture.
 
-**Closed host:** Stage 0–16 as before · Stage 17 `RAYNU-V-M7-E5-EPT-INSTALL-OK`
-(`install_ovmf_alias_ept` + `POST /fw/ept-install`;
-`try_vmlaunch_guest_uefi_ovmf` → `AliasEptInstalledNotLaunched`).
-`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 17 **records**
-a private alias-EPT install and does **not** write the E4 SHELL EPT or
-issue the VMLAUNCH instruction (4 MiB fixture is not a shipped `OVMF.fd`).
+**Closed host:** Stage 0–17 as before · Stage 18 `RAYNU-V-M7-E5-REAL-ESP-OK`
+(`qualify_real_esp_ovmf` + `POST /fw/real-esp`;
+`try_vmlaunch_guest_uefi_ovmf` → `RealEspNotLaunched`).
+`attach_cdrom_uefi` stays `UnsupportedOnFirmware`. Stage 18 **records**
+the real-ESP VMLAUNCH-ready contract and does **not** write the E4 SHELL
+EPT or issue the VMLAUNCH instruction (4 MiB fixture is not a shipped
+`OVMF.fd`).
 
-**Next after Stage 17:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
+**Next after Stage 18:** real ESP `OVMF.fd` VMLAUNCH **or** TLS/console polish.
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

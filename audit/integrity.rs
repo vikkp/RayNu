@@ -224,6 +224,11 @@ pub enum AuditEvent {
         bytes_len: u64,
         gpa: u64,
     },
+    /// Real-ESP VMLAUNCH-ready contract recorded (ADR-014 Stage 18). Not a shipped OVMF.fd / not VMLAUNCH.
+    OvmfRealEspQualified {
+        bytes_len: u64,
+        gpa: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -410,6 +415,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfFirmwareAliasArmed { .. } => 42,
         AuditEvent::OvmfAliasEptProgrammed { .. } => 43,
         AuditEvent::OvmfAliasEptInstalled { .. } => 44,
+        AuditEvent::OvmfRealEspQualified { .. } => 45,
     }
 }
 
@@ -689,6 +695,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         }
         AuditEvent::OvmfAliasEptInstalled { bytes_len, gpa } => {
             serial::write_str("RAYNU-V-AUDIT: OvmfAliasEptInstalled bytes=");
+            write_u64(bytes_len);
+            serial::write_str(" gpa=0x");
+            write_u64(gpa);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfRealEspQualified { bytes_len, gpa } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfRealEspQualified bytes=");
             write_u64(bytes_len);
             serial::write_str(" gpa=0x");
             write_u64(gpa);
