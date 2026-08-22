@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# M3.22 / M5.2 / M5.4 — verify PE sections .askern / .asinit / .aswebui / .aschema (ADR-003).
+# M3.22 / M5.2 / M5.4 / E5 Stage 3 — verify PE sections
+# .askern / .asinit / .aswebui / .aschema / .asguefw (ADR-003).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -47,6 +48,11 @@ if ! grep -qE '\.aschema' <<<"$HEADERS"; then
   echo "$HEADERS" >&2
   exit 1
 fi
+if ! grep -qE '\.asguefw' <<<"$HEADERS"; then
+  echo "error: PE section .asguefw (assets.guefw) missing in $OUT" >&2
+  echo "$HEADERS" >&2
+  exit 1
+fi
 
-echo "==> PE assets OK (.askern + .asinit + .aswebui + .aschema) in $OUT"
+echo "==> PE assets OK (.askern + .asinit + .aswebui + .aschema + .asguefw) in $OUT"
 ls -la "$OUT"

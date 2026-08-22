@@ -83,6 +83,11 @@ pub enum AuditEvent {
     CdromAttached { iso_id: u64, load_lba: u64 },
     /// Firmware-facing CD armed (ADR-014 Stage 2). Not VMLAUNCH / not OVMF.
     CdromFirmwareArmed { iso_id: u64, load_lba: u64 },
+    /// Guest UEFI firmware envelope boxed (ADR-014 Stage 3). Not OVMF / not VMLAUNCH.
+    GuestFirmwareBoxed {
+        uncompressed_len: u64,
+        compressed_len: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -254,6 +259,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::MgmtRestarted { .. } => 27,
         AuditEvent::CdromAttached { .. } => 28,
         AuditEvent::CdromFirmwareArmed { .. } => 29,
+        AuditEvent::GuestFirmwareBoxed { .. } => 30,
     }
 }
 
@@ -447,6 +453,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::CdromFirmwareArmed { iso_id, .. } => {
             serial::write_str("RAYNU-V-AUDIT: CdromFirmwareArmed iso_id=");
             write_u64(iso_id);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::GuestFirmwareBoxed {
+            uncompressed_len, ..
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: GuestFirmwareBoxed uncompressed=");
+            write_u64(uncompressed_len);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

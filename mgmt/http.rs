@@ -13,6 +13,7 @@ use super::api::{
     auth_allows, dispatch_rest, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
 use super::datastore::{dispatch_store_rest, ImageTable};
+use super::guest_fw::{dispatch_guest_fw_rest, is_guest_fw_path};
 use super::iso::{
     dispatch_iso_attach_locked, dispatch_iso_firmware_locked, dispatch_iso_rest, is_iso_attach_path,
     is_iso_firmware_path, IsoDeployPlan,
@@ -426,6 +427,8 @@ pub fn handle_http_request(
         || (parsed.path.starts_with("/iso/") && parsed.path.ends_with("/install"))
     {
         dispatch_iso_install_rest(images, iso_install, req)
+    } else if is_guest_fw_path(parsed.path) {
+        dispatch_guest_fw_rest(req)
     } else if is_iso_firmware_path(parsed.path) {
         dispatch_iso_firmware_locked(images, req)
     } else if is_iso_attach_path(parsed.path) {

@@ -40,6 +40,7 @@ pub fn assets_scripts_present() -> bool {
         && pe.contains(".asinit")
         && pe.contains(".aswebui")
         && pe.contains(".aschema")
+        && pe.contains(".asguefw")
         && build.contains("check-pe-assets.sh")
         && smoke.contains("MARKER_ASSETS")
         && smoke.contains(M3_ASSETS_OK_MARKER)
