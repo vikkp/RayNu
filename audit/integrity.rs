@@ -90,6 +90,8 @@ pub enum AuditEvent {
     },
     /// Guest firmware stub payload lazy-loaded (ADR-014 Stage 4). Not OVMF / not VMLAUNCH.
     GuestFirmwareLoaded { payload_len: u64 },
+    /// OVMF Firmware Volume header probed (ADR-014 Stage 5). Not VMLAUNCH / not embedded EDK2.
+    OvmfFirmwareProbed { fv_len: u64 },
 }
 
 /// One sealed audit record in the hash chain.
@@ -263,6 +265,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::CdromFirmwareArmed { .. } => 29,
         AuditEvent::GuestFirmwareBoxed { .. } => 30,
         AuditEvent::GuestFirmwareLoaded { .. } => 31,
+        AuditEvent::OvmfFirmwareProbed { .. } => 32,
     }
 }
 
@@ -468,6 +471,11 @@ fn mirror_audit_to_com1(event: AuditEvent) {
         AuditEvent::GuestFirmwareLoaded { payload_len } => {
             serial::write_str("RAYNU-V-AUDIT: GuestFirmwareLoaded payload=");
             write_u64(payload_len);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfFirmwareProbed { fv_len } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfFirmwareProbed fv_len=");
+            write_u64(fv_len);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

@@ -27,6 +27,8 @@ M7.3 closes a **documented kernel-extract** deploy path on top of the image libr
 | `GET` | `/fw` | 200 — listed count of boxed guest firmware envelopes (0/1) |
 | `POST` | `/fw/load` | 201 — identity-lazy load the stub payload (requires box first) |
 | `GET` | `/fw/load` | 200 — listed count of loaded guest firmware stubs (0/1) |
+| `POST` | `/fw/ovmf` | 201 — probe a host mock UEFI `_FVH` (requires load first; not embedded EDK2) |
+| `GET` | `/fw/ovmf` | 200 — listed count of probed OVMF volumes (0/1) |
 
 Token: `Authorization: Bearer raynu-v-bringup` (same as M6.4 / M7.1 / M7.2).
 
@@ -57,8 +59,11 @@ RAYNU-V-M7-ISO-OK
   (`box_guest_firmware` / `.asguefw`) is Stage 3
   (`RAYNU-V-M7-E5-GUEST-FW-OK`). Stub **load**
   (`load_guest_firmware` / `RAYNUFD`) is Stage 4
-  (`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK`). Envelope box / stub load is not guest
-  UEFI VMLAUNCH and not OVMF.
+  (`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK`). OVMF **probe**
+  (`probe_ovmf_firmware` / `_FVH`) is Stage 5
+  (`RAYNU-V-M7-E5-OVMF-PROBE-OK`). Real EDK2 bytes stay on ESP
+  `EFI/RayNu/OVMF.fd`. Envelope box / stub load / FV probe is not guest
+  UEFI VMLAUNCH and not an embedded 4 MiB OVMF.
 - **ISO blob upload** (raw bytes into ESP) is not claimed; metadata register is.
 - Outside Proven Core (ADR-009 / ADR-014); size still ADR-003.
 
@@ -83,3 +88,7 @@ envelope (`.asguefw`). Not OVMF and not VMLAUNCH.
 
 E5 Stage 4 (host, closed): `POST /fw/load` identity-lazy loads the `RAYNUFD`
 stub payload after box. Not OVMF and not VMLAUNCH.
+
+E5 Stage 5 (host, closed): `POST /fw/ovmf` probes a host mock `_FVH` after
+load. ESP split-mode path is `EFI/RayNu/OVMF.fd`. Not embedded EDK2 and
+not VMLAUNCH.

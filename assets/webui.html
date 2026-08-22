@@ -22,19 +22,9 @@
       radial-gradient(120% 80% at 10% -10%, #b8d4de 0%, transparent 55%),
       radial-gradient(90% 70% at 100% 0%, #d9c4a0 0%, transparent 45%),
       linear-gradient(165deg, #f3f7f9 0%, #dce8ee 48%, #c5d5dc 100%);
-    animation: wash-in 0.7s ease-out both;
-  }
-  @keyframes wash-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
   }
   header {
     padding: 2.5rem clamp(1.25rem, 4vw, 3rem) 1rem;
-    animation: rise 0.55s ease-out 0.08s both;
   }
   .brand {
     font-family: var(--font-brand);
@@ -51,7 +41,6 @@
   }
   main {
     padding: 0.5rem clamp(1.25rem, 4vw, 3rem) 3rem;
-    animation: rise 0.6s ease-out 0.18s both;
   }
   h2 {
     font-family: var(--font-brand);
@@ -111,7 +100,6 @@
     align-items: center;
     padding: 0.85rem 0;
     border-bottom: 1px solid var(--line);
-    animation: rise 0.4s ease-out both;
   }
   .row .id { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sea); }
   .row .meta { font-size: 0.85rem; color: rgba(12,26,34,0.7); }
@@ -197,6 +185,7 @@
       <button class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Arm firmware CD</button>
       <button id="btn-fw">Box guest FW</button>
       <button id="btn-load">Load guest FW</button>
+      <button id="btn-ovmf">Probe OVMF</button>
     </div>
     <div id="img-list" class="empty">No image list yet.</div>
   </section>
@@ -374,6 +363,11 @@
     setStatus(res.ok ? "Guest FW loaded (not OVMF)" : ("FW load failed ("+res.status+")"));
   }
 
+  async function probeOvmf() {
+    const res = await api("POST", "/fw/ovmf");
+    setStatus(res.ok ? "OVMF probed (not VMLAUNCH)" : ("OVMF probe failed ("+res.status+")"));
+  }
+
   async function refreshLogs() {
     setStatus("Fetching host serial log…");
     const res = await api("GET", "/logs/serial");
@@ -443,6 +437,7 @@
   document.getElementById("btn-iso-firmware").onclick = armFirmwareCd;
   document.getElementById("btn-fw").onclick = boxGuestFw;
   document.getElementById("btn-load").onclick = loadGuestFw;
+  document.getElementById("btn-ovmf").onclick = probeOvmf;
   document.getElementById("btn-logs").onclick = refreshLogs;
   window.raynuWebUi = {
     listVms: listVms,

@@ -38,6 +38,14 @@ pub const GUEST_FW_MAX_UNCOMPRESSED: u32 = 4 * 1024 * 1024;
 pub const GUEST_FW_MAX_COMPRESSED: u32 = 1024 * 1024;
 /// Flag bit 0: payload is lazy/zstd (required).
 pub const GUEST_FW_FLAG_LAZY_ZSTD: u32 = 1;
+/// UEFI Firmware Volume signature (PI spec Vol 3).
+pub const OVMF_FV_SIGNATURE: [u8; 4] = *b"_FVH";
+/// Byte offset of `_FVH` in `EFI_FIRMWARE_VOLUME_HEADER`.
+pub const OVMF_FV_SIG_OFF: usize = 0x28;
+/// ADR-003 split-mode path for a real OVMF image (not embedded).
+pub const OVMF_ESP_PATH: &str = "\\EFI\\RayNu\\OVMF.fd";
+/// Host mock FV size (header + empty block map). Not a 4 MiB EDK2 image.
+pub const MOCK_OVMF_FV_BYTES: usize = 80;
 
 /// Envelope kind. Only the UEFI envelope exists in Stage 3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +72,15 @@ pub enum GuestFwError {
     TooLarge,
     /// Load requested before the envelope was boxed.
     NotBoxed,
+    /// OVMF FV probe requested before the stub was loaded.
+    NotLoaded,
+}
+
+/// Probed UEFI Firmware Volume (host mock or ESP image). Not VMLAUNCH.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OvmfFv {
+    pub fv_len: u64,
+    pub header_len: u16,
 }
 
 // `include_bytes!(…).len()` is const — keeps the PE section sized to the asset.
@@ -81,11 +98,13 @@ pub fn guest_fw_bytes() -> &'static [u8] {
 /// argument (HOST-NIC FIN-close). Boxing / load are process-local flags.
 static GUEST_FW_BOXED: AtomicBool = AtomicBool::new(false);
 static GUEST_FW_LOADED: AtomicBool = AtomicBool::new(false);
+static GUEST_FW_OVMF_PROBED: AtomicBool = AtomicBool::new(false);
 
-/// Reset the process-local boxed / loaded flags (host tests).
+/// Reset the process-local boxed / loaded / probed flags (host tests).
 pub fn reset_guest_fw() {
     GUEST_FW_BOXED.store(false, Ordering::Release);
     GUEST_FW_LOADED.store(false, Ordering::Release);
+    GUEST_FW_OVMF_PROBED.store(false, Ordering::Release);
 }
 
 /// True after a successful [`box_guest_firmware`].
@@ -96,6 +115,11 @@ pub fn guest_fw_is_boxed() -> bool {
 /// True after a successful [`load_guest_firmware`].
 pub fn guest_fw_is_loaded() -> bool {
     GUEST_FW_LOADED.load(Ordering::Acquire)
+}
+
+/// True after a successful [`probe_ovmf_firmware`].
+pub fn ovmf_fv_is_probed() -> bool {
+    GUEST_FW_OVMF_PROBED.load(Ordering::Acquire)
 }
 
 fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
@@ -216,10 +240,83 @@ pub fn load_guest_firmware(bytes: &[u8]) -> Result<GuestFwBlob, GuestFwError> {
     Ok(parsed)
 }
 
+fn read_u16_le(bytes: &[u8], off: usize) -> Option<u16> {
+    let slice = bytes.get(off..off.saturating_add(2))?;
+    Some(u16::from_le_bytes([slice[0], slice[1]]))
+}
+
+fn read_u64_le(bytes: &[u8], off: usize) -> Option<u64> {
+    let slice = bytes.get(off..off.saturating_add(8))?;
+    Some(u64::from_le_bytes([
+        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
+    ]))
+}
+
+/// Probe a UEFI Firmware Volume header (PI Vol 3). Not VMLAUNCH.
+///
+/// INVARIANTS:
+/// - Requires `_FVH` at offset `0x28`
+/// - `HeaderLength >= 0x38` and `FvLength` inside ADR-003 uncompressed cap
+/// - `FvLength` must be fully present in `bytes` (host mock is 80 bytes)
+/// - Does not treat the probe as an embedded EDK2 OVMF ship image
+pub fn probe_ovmf_fv(bytes: &[u8]) -> Result<OvmfFv, GuestFwError> {
+    let sig_end = OVMF_FV_SIG_OFF.saturating_add(4);
+    let sig = bytes.get(OVMF_FV_SIG_OFF..sig_end).ok_or(GuestFwError::BadMagic)?;
+    if sig != OVMF_FV_SIGNATURE {
+        return Err(GuestFwError::BadMagic);
+    }
+    let fv_len = read_u64_le(bytes, 0x20).ok_or(GuestFwError::BadMagic)?;
+    let header_len = read_u16_le(bytes, 0x30).ok_or(GuestFwError::BadMagic)?;
+    if header_len < 0x38 || u64::from(header_len) > fv_len {
+        return Err(GuestFwError::BadState);
+    }
+    if fv_len == 0 || fv_len > u64::from(GUEST_FW_MAX_UNCOMPRESSED) {
+        return Err(GuestFwError::TooLarge);
+    }
+    if fv_len > bytes.len() as u64 {
+        return Err(GuestFwError::BadState);
+    }
+    Ok(OvmfFv { fv_len, header_len })
+}
+
+/// Probe an OVMF-style FV after the stub is loaded (ADR-014 Stage 5).
+///
+/// INVARIANTS:
+/// - Requires a prior successful [`load_guest_firmware`]
+/// - Host REST uses [`write_mock_ovmf_fv`], not a 4 MiB EDK2 image
+/// - Real bytes stay on ESP [`OVMF_ESP_PATH`] (ADR-003 split-mode)
+/// - Does not VMLAUNCH and does not flip [`crate::mgmt::iso::attach_cdrom_uefi`]
+pub fn probe_ovmf_firmware(bytes: &[u8]) -> Result<OvmfFv, GuestFwError> {
+    if !guest_fw_is_loaded() {
+        return Err(GuestFwError::NotLoaded);
+    }
+    let probed = probe_ovmf_fv(bytes)?;
+    audit_log!(AuditEvent::OvmfFirmwareProbed {
+        fv_len: probed.fv_len,
+    });
+    GUEST_FW_OVMF_PROBED.store(true, Ordering::Release);
+    Ok(probed)
+}
+
+/// Write a tiny host mock FV (signature + lengths). Not EDK2 OVMF.
+pub fn write_mock_ovmf_fv(buf: &mut [u8]) -> Result<(), GuestFwError> {
+    if buf.len() < MOCK_OVMF_FV_BYTES {
+        return Err(GuestFwError::BadState);
+    }
+    buf[..MOCK_OVMF_FV_BYTES].fill(0);
+    buf[0x20..0x28].copy_from_slice(&(MOCK_OVMF_FV_BYTES as u64).to_le_bytes());
+    buf[OVMF_FV_SIG_OFF..OVMF_FV_SIG_OFF + 4].copy_from_slice(&OVMF_FV_SIGNATURE);
+    buf[0x30..0x32].copy_from_slice(&0x38u16.to_le_bytes());
+    Ok(())
+}
+
 /// True when `path` is the guest-firmware envelope REST surface.
 pub fn is_guest_fw_path(path: &str) -> bool {
     let path = path.trim().trim_end_matches('/');
-    path == "/fw" || path == "/fw/box" || path == "/fw/load"
+    path == "/fw"
+        || path == "/fw/box"
+        || path == "/fw/load"
+        || path == "/fw/ovmf"
 }
 
 enum GuestFwOp {
@@ -227,6 +324,8 @@ enum GuestFwOp {
     Box,
     LoadStatus,
     Load,
+    OvmfStatus,
+    OvmfProbe,
 }
 
 fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
@@ -236,6 +335,8 @@ fn route_guest_fw(method: RestMethod, path: &str) -> Result<GuestFwOp, ()> {
         (RestMethod::Post, "/fw/box") => Ok(GuestFwOp::Box),
         (RestMethod::Get, "/fw/load") => Ok(GuestFwOp::LoadStatus),
         (RestMethod::Post, "/fw/load") => Ok(GuestFwOp::Load),
+        (RestMethod::Get, "/fw/ovmf") => Ok(GuestFwOp::OvmfStatus),
+        (RestMethod::Post, "/fw/ovmf") => Ok(GuestFwOp::OvmfProbe),
         _ => Err(()),
     }
 }
@@ -245,13 +346,15 @@ fn guest_fw_err_status(e: GuestFwError) -> u16 {
         GuestFwError::BadMagic
         | GuestFwError::BadState
         | GuestFwError::TooLarge
-        | GuestFwError::NotBoxed => 409,
+        | GuestFwError::NotBoxed
+        | GuestFwError::NotLoaded => 409,
     }
 }
 
 /// REST: `POST /fw/box` boxes the envelope. `POST /fw/load` lazy-loads the
-/// stub payload after box. `GET /fw` / `GET /fw/load` return counts.
-/// Not OVMF. Not VMLAUNCH.
+/// stub payload after box. `POST /fw/ovmf` probes a host mock `_FVH` after
+/// load. `GET /fw` / `GET /fw/load` / `GET /fw/ovmf` return counts.
+/// Host mock is not embedded EDK2. Not VMLAUNCH.
 pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
     if !auth_allows(req.auth_token) {
         return RestResponse {
@@ -292,6 +395,31 @@ pub fn dispatch_guest_fw_rest(req: RestRequest<'_>) -> RestResponse {
                 reply: None,
             },
         },
+        Ok(GuestFwOp::OvmfStatus) => RestResponse {
+            status: 200,
+            reply: Some(ApiReply::Listed {
+                count: if ovmf_fv_is_probed() { 1 } else { 0 },
+            }),
+        },
+        Ok(GuestFwOp::OvmfProbe) => {
+            let mut fv = [0u8; MOCK_OVMF_FV_BYTES];
+            if write_mock_ovmf_fv(&mut fv).is_err() {
+                return RestResponse {
+                    status: 500,
+                    reply: None,
+                };
+            }
+            match probe_ovmf_firmware(&fv) {
+                Ok(_) => RestResponse {
+                    status: 201,
+                    reply: Some(ApiReply::Ok),
+                },
+                Err(e) => RestResponse {
+                    status: guest_fw_err_status(e),
+                    reply: None,
+                },
+            }
+        }
         Err(()) => RestResponse {
             status: 400,
             reply: None,

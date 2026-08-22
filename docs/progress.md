@@ -85,6 +85,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 2 | `RAYNU-V-M7-E5-CDROM-FIRMWARE-OK` | Host firmware-facing CD arm + sector validate (2026-08-22). Not OVMF. Not VMLAUNCH. |
 | E5 Stage 3 | `RAYNU-V-M7-E5-GUEST-FW-OK` | Host guest UEFI firmware envelope boxed under ADR-003 (2026-08-22). Not OVMF. Not VMLAUNCH. |
 | E5 Stage 4 | `RAYNU-V-M7-E5-GUEST-FW-LOAD-OK` | Host identity-lazy stub payload load (2026-08-22). Not OVMF. Not VMLAUNCH. |
+| E5 Stage 5 | `RAYNU-V-M7-E5-OVMF-PROBE-OK` | Host UEFI `_FVH` probe + ESP split-mode path (2026-08-22). Not embedded EDK2. Not VMLAUNCH. |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -160,6 +161,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-17 / E5 Stage 2 closed (host):** firmware-facing CD arm (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`). Not OVMF, not VMLAUNCH, not Everest E5.  
 **P0-18 / E5 Stage 3 closed (host):** guest UEFI firmware envelope boxed (`RAYNU-V-M7-E5-GUEST-FW-OK`). Not OVMF, not VMLAUNCH, not Everest E5.  
 **P0-19 / E5 Stage 4 closed (host):** guest firmware stub payload load (`RAYNU-V-M7-E5-GUEST-FW-LOAD-OK`). Not OVMF, not VMLAUNCH, not Everest E5.  
+**P0-20 / E5 Stage 5 closed (host):** OVMF FV probe (`RAYNU-V-M7-E5-OVMF-PROBE-OK`). Not embedded EDK2, not VMLAUNCH, not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -174,6 +176,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-17 / E5 Stage 2 | `RAYNU-V-M7-E5-CDROM-FIRMWARE-OK` | **CLOSED (host).** Firmware-facing CD arm + sector validate. Not OVMF, not VMLAUNCH, not Everest E5. |
 | P0-18 / E5 Stage 3 | `RAYNU-V-M7-E5-GUEST-FW-OK` | **CLOSED (host).** Guest UEFI firmware envelope boxed under ADR-003. Not OVMF, not VMLAUNCH, not Everest E5. |
 | P0-19 / E5 Stage 4 | `RAYNU-V-M7-E5-GUEST-FW-LOAD-OK` | **CLOSED (host).** Identity-lazy stub payload load. Not OVMF, not VMLAUNCH, not Everest E5. |
-| Everest residual | TLS/console + distro installer | After P0-19. Product ISO: [ADR-014](adr/ADR-014.md). Real OVMF bytes / guest UEFI VMLAUNCH is Stage 5. |
+| P0-20 / E5 Stage 5 | `RAYNU-V-M7-E5-OVMF-PROBE-OK` | **CLOSED (host).** UEFI `_FVH` probe + ESP split-mode path. Not embedded EDK2, not VMLAUNCH, not Everest E5. |
+| Everest residual | TLS/console + distro installer | After P0-20. Product ISO: [ADR-014](adr/ADR-014.md). Real ESP OVMF.fd / guest UEFI VMLAUNCH is Stage 6. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
