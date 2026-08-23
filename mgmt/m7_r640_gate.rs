@@ -73,6 +73,7 @@ pub fn r640_scripts_present() -> bool {
         && include_str!("../vmx/launch.rs").contains("RAYNU-V-R640-BOOT-OK")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("RAYNU-V-CRUZER-FLASH-OK")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("target_is_lab_cruzer")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("EFI/RayNu/OVMF.fd")
         && include_str!("../tools/flashcruzer.sh").contains("RAYNU-V-FLASHCRUZER-SELFTEST-OK")
         && include_str!("../tools/flashcruzer.sh").contains("~/projects/raynuv/flashcruzer.sh")
 }

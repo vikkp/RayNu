@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Replace-only flash of EFI/BOOT/BOOTX64.EFI onto the lab Cruzer Micro.
+# Replace-only flash of EFI/BOOT/BOOTX64.EFI onto the lab Cruzer Micro,
+# plus EFI/RayNu/OVMF.fd (ADR-014 guest-UEFI retain). Leaves
+# installdisk.bin and auth.token alone.
 #
 # Pillar: [Z] [D]
 # Proven Core: outside
@@ -13,9 +15,11 @@
 #   ./tools/flash-cruzer-esp.sh --self-test
 #   sudo ./tools/flash-cruzer-esp.sh --efi /path/to/r640-hypervisor.efi
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --sha256 <hex>
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --ovmf /path/to/OVMF.fd
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-ovmf
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
-# SERIAL when the device reports one.
+# SERIAL when the device reports one. GUEST_OVMF overrides the host search.
 set -euo pipefail
 
 LABEL="${CRUZER_LABEL:-RAYNUV}"
@@ -25,12 +29,44 @@ MAX_BYTES=$((4 * 1024 * 1024 * 1024))
 MNT_DEFAULT="/mnt/usb"
 EFI_PATH=""
 EXPECT_SHA=""
+OVMF_SRC=""
+NO_OVMF=0
 SELFTEST=0
 DRY=0
 
 usage() {
-  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
+}
+
+# EFI_FIRMWARE_VOLUME_HEADER.Signature at 0x28 is "_FVH".
+# Same accept rule as tools/run-qemu.sh / boot::ovmf_esp::accept_real_ovmf_bytes.
+ovmf_has_fvh() {
+  local sig
+  sig=$(od -An -tx1 -N 4 -j 40 "$1" 2>/dev/null | tr -d ' \n')
+  [[ "$sig" == "5f465648" ]]
+}
+
+# Prefer 4M CODE then combined OVMF.fd. Size 1-4 MiB + _FVH (not a fixture).
+pick_host_ovmf() {
+  local f sz
+  for f in ${OVMF_SRC:-} ${GUEST_OVMF:-} \
+    /usr/share/OVMF/OVMF_CODE_4M.fd \
+    /usr/share/OVMF/OVMF.fd \
+    /usr/share/ovmf/OVMF.fd \
+    /usr/share/OVMF/OVMF_CODE.fd \
+    /usr/share/edk2/ovmf/OVMF.fd \
+    /usr/share/edk2/ovmf/OVMF_CODE.fd \
+    /usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+  do
+    [[ -n "$f" && -f "$f" ]] || continue
+    sz=$(wc -c <"$f" | tr -d ' ')
+    if (( sz >= 1048576 && sz <= 4194304 )) && ovmf_has_fvh "$f"; then
+      printf '%s\n' "$f"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # Host-testable: lab Cruzer vs PERC / vMedia / random USB.
@@ -57,6 +93,7 @@ target_is_lab_cruzer() {
 }
 
 self_test() {
+  local tmp
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 RAYNUV
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 WRONG && return 1
   target_is_lab_cruzer "PERC H740P Mini" usb 1024966656 RAYNUV && return 1
@@ -64,6 +101,16 @@ self_test() {
   target_is_lab_cruzer "Cruzer Micro" usb $((200 * 1024 * 1024 * 1024)) RAYNUV && return 1
   target_is_lab_cruzer "Virtual Floppy" usb 0 RAYNUV && return 1
   target_is_lab_cruzer "Virtual CD" usb $((1024 * 1024 * 1024)) RAYNUV && return 1
+  tmp="$(mktemp)"
+  dd if=/dev/zero of="$tmp" bs=64 count=1 status=none
+  printf '\x5f\x46\x56\x48' | dd of="$tmp" bs=1 seek=40 conv=notrunc status=none
+  ovmf_has_fvh "$tmp" || { rm -f "$tmp"; return 1; }
+  printf '\x00\x00\x00\x00' | dd of="$tmp" bs=1 seek=40 conv=notrunc status=none
+  if ovmf_has_fvh "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  rm -f "$tmp"
   echo "RAYNU-V-CRUZER-FLASH-SELFTEST-OK"
 }
 
@@ -74,6 +121,8 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY=1; shift ;;
     --efi) EFI_PATH="${2:-}"; shift 2 ;;
     --sha256) EXPECT_SHA="${2:-}"; shift 2 ;;
+    --ovmf) OVMF_SRC="${2:-}"; shift 2 ;;
+    --no-ovmf) NO_OVMF=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
       echo "error: unknown arg: $1" >&2
@@ -85,6 +134,11 @@ done
 if [[ "$SELFTEST" == "1" ]]; then
   self_test
   exit 0
+fi
+
+if [[ "$NO_OVMF" == "1" && -n "$OVMF_SRC" ]]; then
+  echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
+  exit 1
 fi
 
 if [[ -z "$EFI_PATH" ]]; then
@@ -172,6 +226,11 @@ fi
 
 if [[ "$DRY" == "1" ]]; then
   echo "==> dry-run: would copy $EFI_ABS -> ${RAW} EFI/BOOT/BOOTX64.EFI"
+  if [[ "$NO_OVMF" == "1" ]]; then
+    echo "==> dry-run: would skip EFI/RayNu/OVMF.fd"
+  else
+    echo "==> dry-run: would stage EFI/RayNu/OVMF.fd (1-4 MiB _FVH)"
+  fi
   echo "RAYNU-V-CRUZER-FLASH-DRY-OK"
   exit 0
 fi
@@ -218,11 +277,38 @@ sudo sync -f "$MNT/EFI/BOOT/BOOTX64.EFI" 2>/dev/null || sudo sync
 
 DEST_SHA="$(sha256sum "$MNT/EFI/BOOT/BOOTX64.EFI" | awk '{print $1}')"
 DEST_BYTES="$(wc -c <"$MNT/EFI/BOOT/BOOTX64.EFI" | tr -d ' ')"
-INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
 if [[ "$DEST_SHA" != "$GOT_SHA" ]]; then
   echo "error: destination SHA256 $DEST_SHA != $GOT_SHA" >&2
   exit 1
 fi
+
+if [[ "$NO_OVMF" == "1" ]]; then
+  echo "==> --no-ovmf: leaving EFI/RayNu/OVMF.fd alone (guest-UEFI skips if missing)"
+else
+  OVMF_PICK="$(pick_host_ovmf || true)"
+  if [[ -z "$OVMF_PICK" ]]; then
+    echo "error: no real 1-4 MiB _FVH OVMF.fd to stage at EFI/RayNu/OVMF.fd" >&2
+    echo "       apt install ovmf  (or pass --ovmf PATH / --no-ovmf)" >&2
+    exit 1
+  fi
+  OVMF_BYTES="$(wc -c <"$OVMF_PICK" | tr -d ' ')"
+  echo "==> staging EFI/RayNu/OVMF.fd ($OVMF_BYTES bytes) from $OVMF_PICK"
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo cp --remove-destination "$OVMF_PICK" "$MNT/EFI/RayNu/OVMF.fd"
+  sudo sync -f "$MNT/EFI/RayNu/OVMF.fd" 2>/dev/null || sudo sync
+  DEST_OVMF_BYTES="$(wc -c <"$MNT/EFI/RayNu/OVMF.fd" | tr -d ' ')"
+  if (( DEST_OVMF_BYTES < 1048576 || DEST_OVMF_BYTES > 4194304 )); then
+    echo "error: staged OVMF.fd size $DEST_OVMF_BYTES is outside 1-4 MiB" >&2
+    exit 1
+  fi
+  if ! ovmf_has_fvh "$MNT/EFI/RayNu/OVMF.fd"; then
+    echo "error: staged EFI/RayNu/OVMF.fd missing _FVH at 0x28" >&2
+    exit 1
+  fi
+  echo "==> OVMF.fd bytes=$DEST_OVMF_BYTES _FVH=ok"
+fi
+
+INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
 if [[ "$INSTALL_AFTER" != "$INSTALL_BEFORE" ]]; then
   echo "error: installdisk.bin size changed ($INSTALL_BEFORE -> $INSTALL_AFTER)" >&2
   exit 1
@@ -231,4 +317,5 @@ fi
 echo "==> BOOTX64.EFI bytes=$DEST_BYTES sha256=$DEST_SHA"
 echo "==> leave $MNT/EFI/RayNu/installdisk.bin and auth.token alone — done"
 echo "Next: BIOS boot order stays Ubuntu on PERC; one-time F11 boot the Cruzer."
+echo "Confirm EFI/RayNu/OVMF.fd (1-4 MiB, _FVH) before F11 if Stage 44."
 echo "RAYNU-V-CRUZER-FLASH-OK"

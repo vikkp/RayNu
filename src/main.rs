@@ -210,6 +210,8 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 boot::serial::write_line("boot: guest-UEFI VMLAUNCH skipped");
             }
         }
+    } else {
+        boot::serial::write_line("boot: guest-UEFI skipped (no retained OVMF.fd)");
     }
     run_m2_ept_launch_e4(alloc, life);
 }

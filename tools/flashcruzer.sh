@@ -14,7 +14,8 @@
 #
 # Identifies the stick by label RAYNUV + USB + Cruzer. Never hardcodes
 # /dev/sdc. Never writes PERC sda/sdb. Never formats. Leaves installdisk.bin
-# and auth.token alone.
+# and auth.token alone. Stages EFI/RayNu/OVMF.fd from the host OVMF package
+# (required for guest-UEFI / Stage 44; pass --no-ovmf to skip).
 set -euo pipefail
 
 # `. ~/projects/raynuv/flashcruzer.sh` must not `exit` the login shell.
@@ -61,6 +62,8 @@ REQUIRE_HEAD=0
 ALLOW_REJECTED=0
 PIN_RUN=""
 PIN_SHA=""
+NO_OVMF=0
+OVMF_PATH=""
 
 usage() {
   cat <<'EOF'
@@ -71,13 +74,15 @@ Usage:
   ./tools/flashcruzer.sh --install-launcher
 
 Downloads the latest green CI r640-hypervisor.efi for this clone's branch
-and copies it to Cruzer RAYNUV (EFI/BOOT/BOOTX64.EFI only).
+and copies it to Cruzer RAYNUV (EFI/BOOT/BOOTX64.EFI plus EFI/RayNu/OVMF.fd).
 
 Options:
   --branch BRANCH     git fetch + checkout + ff-only pull (default: current)
   --wait              poll until CI for HEAD finishes (default 20 min)
   --download-only     write ~/r640-hypervisor.efi; do not flash
   --dry-run           pick the CI run; do not download or flash
+  --ovmf PATH         stage this 1-4 MiB _FVH OVMF.fd onto EFI/RayNu/OVMF.fd
+  --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -103,6 +108,8 @@ while [[ $# -gt 0 ]]; do
     --require-head) REQUIRE_HEAD=1; shift ;;
     --allow-uefi-only) ALLOW_UEFI_ONLY=1; shift ;;
     --allow-rejected) ALLOW_REJECTED=1; shift ;;
+    --no-ovmf) NO_OVMF=1; shift ;;
+    --ovmf) OVMF_PATH="${2:-}"; shift 2 ;;
     --no-git) NO_GIT=1; shift ;;
     *) echo "error: unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -149,6 +156,9 @@ self_test() {
   grep -q 'RAYNU-V-CRUZER-FLASH-OK' "$ESP"
   grep -q 'installdisk.bin' "$ESP"
   grep -q 'target_is_lab_cruzer' "$ESP"
+  grep -q 'EFI/RayNu/OVMF.fd' "$ESP"
+  grep -q 'ovmf_has_fvh' "$ESP"
+  grep -q -- '--no-ovmf' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -395,10 +405,20 @@ if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qi cruzer; then
 fi
 lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -i cruzer || true
 
+ESP_ARGS=(--efi "$EFI_OUT" --sha256 "$GOT")
+if [[ "$NO_OVMF" -eq 1 && -n "$OVMF_PATH" ]]; then
+  echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$NO_OVMF" -eq 1 ]]; then
+  ESP_ARGS+=(--no-ovmf)
+elif [[ -n "$OVMF_PATH" ]]; then
+  ESP_ARGS+=(--ovmf "$OVMF_PATH")
+fi
 if [[ "$(id -u)" -eq 0 ]]; then
-  "$ESP" --efi "$EFI_OUT" --sha256 "$GOT"
+  "$ESP" "${ESP_ARGS[@]}"
 else
-  sudo "$ESP" --efi "$EFI_OUT" --sha256 "$GOT"
+  sudo "$ESP" "${ESP_ARGS[@]}"
 fi
 sync
 if findmnt /mnt/usb >/dev/null 2>&1; then

@@ -108,6 +108,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let guest = include_str!("../vmx/guest_uefi.rs");
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plat = include_str!("../devices/guest_platform.rs");
+    let flash = include_str!("../tools/flash-cruzer-esp.sh");
     attach_cdrom_uefi(1) == Err(IsoError::UnsupportedOnFirmware)
         && !spa.contains("Launch OVMF")
         && !spa.contains("btn-vl")
@@ -135,6 +136,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && ide.contains("ata_io_accesses")
         && plat.contains("fill_isa_cfg")
         && plat.contains("PIRQA")
+        && flash.contains("EFI/RayNu/OVMF.fd")
+        && flash.contains("ovmf_has_fvh")
         && e4_shell_launch_no_cdrom()
 }
 

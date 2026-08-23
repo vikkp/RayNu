@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–43 closed**. Stage 44 / P0-59 ATAPI host package is open (nested VT-x pending). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-58** are closed host/QEMU gates. Residual: firmware El Torito CD boot + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–43 closed**. Stage 44 / P0-59 ATAPI host package is open (nested VT-x pending; iron COM2 2026-08-23 skipped guest-UEFI — Cruzer lacked `OVMF.fd`). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-58** are closed host/QEMU gates. Residual: firmware El Torito CD boot + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -274,14 +274,17 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 44 / P0-59):**
-firmware ATAPI `READ(10)` so nested VT-x serial shows `sectors>0` and
+firmware ATAPI `READ(10)` so nested VT-x **or iron COM2** serial shows `sectors>0` and
 `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. Stage 43 closed on nested VT-x `1b07692`
 with BOTH-OK then stop n=1111 `sectors=0` — do not stop on both-enum-alone.
 Nested VT-x `8e55abf` BOTH-OK then n=2048 `ata=0x0` `unh=0`
 `cf8=0x80000838` (PIIX ISA `00:01.0` offset `0x38` — PciBus programming).
 PIIX3 ISA PIRQ `0x60-0x63` reset `0x80` (QEMU) so IRQ assign is not IRQ0.
 8192-exit cap so firmware can Connect and PACKET.
-ATAPI signature + PACKET interrupt-reason. Not firmware El Torito boot.
+Iron COM2 2026-08-23 skipped guest-UEFI: Cruzer `RAYNUV` had no
+`\EFI\RayNu\OVMF.fd` (flash copied BOOTX64 only). Re-flash after staging
+host OVMF; WANT `LIVE-BYTES-PRESENT-OK` then ATAPI-OK. ATAPI signature +
+PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another
@@ -313,7 +316,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**closed** nested VT-x `1b07692`:
 `pci select 00:00.01` `val=0x70108086`; `OVMF-BOTH-OK`; stop n=1111
 `pci_ide=1 virtio=1` `sectors=0` `spin=1`; E4 Linux #DF fail-soft).
-Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; nested VT-x pending).
+Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; nested VT-x / iron
+retain pending). Iron COM2 2026-08-23 was E4 + HOST-NIC, not guest-UEFI.
 
 **Next after Stage 44:** firmware El Torito CD boot (not `sectors>0` alone).
 Product ISO is

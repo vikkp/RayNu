@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN PIIX3 ISA PIRQ after nested VT-x 8e55abf cf8=0x80000838 ISA 00:01.0:0x38. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN iron COM2 skipped guest-UEFI (Cruzer lacked EFI/RayNu/OVMF.fd). Flash stages host OVMF. Nested VT-x 8e55abf still ata=0. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum closed (P0-58); ATAPI `sectors>0` host-open (P0-59); nested VT-x `8e55abf` `cf8=0x80000838` ISA programming; firmware El Torito boot not completed; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum closed (P0-58); ATAPI `sectors>0` host-open (P0-59); iron COM2 2026-08-23 skipped guest-UEFI (no ESP `OVMF.fd`); nested VT-x `8e55abf` `cf8=0x80000838` ISA programming; firmware El Torito boot not completed; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 skipped guest-UEFI (Cruzer lacked EFI/RayNu/OVMF.fd); flash stages host OVMF; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN PIIX3 ISA PIRQ after nested VT-x 8e55abf cf8=0x80000838 ISA 00:01.0:0x38; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 CLOSED nested VT-x 1b07692 OVMF-BOTH-OK pci select 00:00.01 val=0x70108086 pci_ide=1 virtio=1 sectors=0 spin=1; E4 #DF fail-soft; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN 3dbafb7 spin-jmp skip SKIP-only on push+PR; nested VT-x 707a849 insn=ebf3 still required; not installer; iron P0-14 stays 2b795a0 |

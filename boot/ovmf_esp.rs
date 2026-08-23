@@ -156,8 +156,8 @@ pub fn remap_i440fx_did_imm(buf: &mut [u8]) -> u32 {
 
 /// Probe ESP `\\EFI\\RayNu\\OVMF.fd` before ExitBootServices.
 ///
-/// Missing file is silent (iron Cruzer may not have one). Accepted
-/// bytes print [`M7_E5_LIVE_BYTES_PRESENT_OK_MARKER`].
+/// Missing file prints one COM2 line (iron Cruzer used to skip silently).
+/// Accepted bytes print [`M7_E5_LIVE_BYTES_PRESENT_OK_MARKER`].
 #[cfg(target_os = "uefi")]
 pub fn probe_ovmf_esp() {
     use crate::boot::serial;
@@ -167,6 +167,7 @@ pub fn probe_ovmf_esp() {
 
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {
+        serial::write_line("boot: ESP OVMF.fd probe skipped (no SimpleFileSystem)");
         return;
     };
     let mut fs = FileSystem::new(sfs);
@@ -174,6 +175,9 @@ pub fn probe_ovmf_esp() {
         return;
     };
     let Ok(data) = fs.read(path.as_ref()) else {
+        serial::write_line(
+            "boot: ESP OVMF.fd missing — guest-UEFI skipped (need EFI/RayNu/OVMF.fd)",
+        );
         return;
     };
     match retain_ovmf_bytes(&data) {
