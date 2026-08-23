@@ -1211,24 +1211,23 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 false
             }
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
-            EXIT_REASON_PREEMPTION_TIMER => {
-                // Preemption is not an instruction exit (VM_EXIT_INSTRUCTION_LEN
-                // is 0). CpuDeadLoop `eb xx` (xx negative) never does I/O;
-                // skip the jmp so firmware can fall through. Delay `jcc` is
-                // left in place so HPET time can complete the wait.
-                if skip_spin_short_jmp(linear, rip) {
-                    let k = SPIN_JMP_SKIPS.fetch_add(1, Ordering::AcqRel);
-                    if k < 8 {
-                        serial::write_line("boot: guest-UEFI spin jmp skip");
-                    }
-                }
-                true
-            }
+            EXIT_REASON_PREEMPTION_TIMER => true,
             EXIT_REASON_XSETBV => skip_insn(),
             // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
             13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
         };
+        if resume {
+            // Preemption (and any other resume) is not always an instruction
+            // exit. CpuDeadLoop `eb xx` (xx negative) never does I/O; skip
+            // the jmp so firmware can fall through. Delay `jcc` stays.
+            if skip_spin_short_jmp(linear, rip) {
+                let k = SPIN_JMP_SKIPS.fetch_add(1, Ordering::AcqRel);
+                if k < 8 {
+                    serial::write_line("boot: guest-UEFI spin jmp skip");
+                }
+            }
+        }
         if resume
             && post_dxe_should_stop(
                 DXE_PRINTED.load(Ordering::Acquire),

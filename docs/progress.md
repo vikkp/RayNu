@@ -123,7 +123,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | `attach_cdrom_uefi` → GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE; not installer (2026-08-22). |
 | E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **CLOSED** nested VT-x: CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID `0x7010`) + EPT sink-resume; `OVMF-CDROM-OK` pci_ide=1 sectors=0; post-DXE tail then E4; not installer (2026-08-23). |
 | E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED** nested VT-x: PEI DID `00:00.0` `val=0x1042`; `OVMF-VIRTIO-OK` pci=1; CD GuestVisible; `pci_ide=0` sectors=0; stop n=115 virtio=1; not installer (2026-08-23). |
-| E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host):** firmware-simultaneous virtio `00:00.0` + IDE `00:00.1` on one boot. Nested VT-x `707a849`: 1s HPET + RIP dump, n=2048 `rip=0x6e812d insn=ebf3` `pci_ide=0` (CpuDeadLoop). Spin-jmp skip. Nested VT-x must print both DIDs (`0x1042` and `0x7010`). Still `sectors=0`. Not installer. |
+| E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host):** firmware-simultaneous virtio `00:00.0` + IDE `00:00.1` on one boot. Nested VT-x `707a849`: 1s HPET + RIP dump, n=2048 `rip=0x6e812d insn=ebf3` `pci_ide=0` (CpuDeadLoop). `3dbafb7` spin-jmp skip is SKIP-only on GitHub. Nested VT-x must print both DIDs (`0x1042` and `0x7010`). Still `sectors=0`. Not installer. |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
