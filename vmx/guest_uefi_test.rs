@@ -1,12 +1,12 @@
 use super::{
-    atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
-    exec_from_low_ram, flash_window_gpa_and_pad, guest_uefi_alive, guest_uefi_atapi,
+    apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
+    exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
-    preempt_deadloop_should_skip, preempt_deadloop_skip_len, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE,
+    preempt_deadloop_should_skip, preempt_deadloop_skip_len, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
@@ -61,6 +61,9 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 32768);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.OSXSAVE host-owned"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0ca02e6"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("#UD intercept XSAVE retry"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("COM1/COM2 forwarded"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("GuestVisible"));
@@ -142,6 +145,30 @@ fn marker_and_residual_honest() {
     assert_eq!(xsetbv_masked_xcr0(0, 0x7), 1);
     assert_eq!(xsetbv_masked_xcr0(0x4, 0x7), 0x7);
     assert_eq!(xsetbv_masked_xcr0(0x7, 0x3), 0x3);
+    assert_eq!(GUEST_UEFI_CR4_VMXE, 1 << 13);
+    assert_eq!(GUEST_UEFI_CR4_OSXSAVE, 1 << 18);
+    assert_eq!(
+        GUEST_UEFI_CR4_HOST_OWNED,
+        GUEST_UEFI_CR4_VMXE | GUEST_UEFI_CR4_OSXSAVE
+    );
+    // Iron 0ca02e6 dump CR4=0x668 (DE+PAE+MCE+OSFXSR+OSXMMEXCPT), no OSXSAVE.
+    assert_eq!(apply_guest_cr4_write(0x640) & GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_HOST_OWNED);
+    assert_eq!(apply_guest_cr4_write(0x668) & GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_OSXSAVE);
+    assert_eq!(apply_guest_cr4_write(0x668) & GUEST_UEFI_CR4_VMXE, GUEST_UEFI_CR4_VMXE);
+    assert_eq!(guest_cr4_read_shadow(apply_guest_cr4_write(0x668)) & GUEST_UEFI_CR4_VMXE, 0);
+    assert_ne!(guest_cr4_read_shadow(apply_guest_cr4_write(0x668)) & GUEST_UEFI_CR4_OSXSAVE, 0);
+    assert!(ud_xsave_family(&[0x0F, 0xAE, 0x20])); // xsave [rax]  /4
+    assert!(ud_xsave_family(&[0x48, 0x0F, 0xAE, 0x21])); // rex.w xsave [rcx]
+    assert!(ud_xsave_family(&[0x0F, 0xAE, 0x28])); // xrstor [rax] /5
+    assert!(ud_xsave_family(&[0x0F, 0xAE, 0x30])); // xsaveopt [rax] /6
+    assert!(ud_xsave_family(&[0x0F, 0xC7, 0x28])); // xsaves [rax] /5
+    assert!(ud_xsave_family(&[0x0F, 0xC7, 0x20])); // xsavec [rax] /4
+    assert!(ud_xsave_family(&[0x0F, 0xC7, 0x18])); // xrstors [rax] /3
+    assert!(!ud_xsave_family(&[0x0F, 0xAE, 0x00])); // fxsave /0
+    assert!(!ud_xsave_family(&[0x0F, 0xAE, 0x08])); // fxrstor /1
+    assert!(ud_is_ud2(&[0x0F, 0x0B]));
+    assert!(!ud_is_ud2(&[0x0F, 0xAE, 0x20]));
+    assert!(!ud_xsave_family(&[0x0F, 0x0B]));
     assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
     assert_eq!(pci_bdf_bit(1, 1), Some((0, 1u64 << 9)));

@@ -461,6 +461,7 @@ mod cpu_test {
         assert_eq!(IA32_VMX_BASIC, 0x480);
         assert_eq!(IA32_VMX_EPT_VPID_CAP, 0x48C);
         assert_eq!(CR4_VMXE, 1 << 13);
+        assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }
 }

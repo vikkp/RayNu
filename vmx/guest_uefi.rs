@@ -21,7 +21,7 @@ use crate::vmx::launch::{
 
 #[cfg(target_os = "uefi")]
 use crate::arch::cpu::{
-    self, adjust_vmx_controls, true_ctl_msrs_supported, CR4_VMXE, IA32_EFER, IA32_FS_BASE,
+    self, adjust_vmx_controls, true_ctl_msrs_supported, IA32_EFER, IA32_FS_BASE,
     IA32_GS_BASE, IA32_SYSENTER_CS, IA32_SYSENTER_EIP, IA32_SYSENTER_ESP, IA32_VMX_CR0_FIXED0,
     IA32_VMX_CR0_FIXED1, IA32_VMX_CR4_FIXED0, IA32_VMX_CR4_FIXED1, IA32_VMX_ENTRY_CTLS,
     IA32_VMX_EXIT_CTLS, IA32_VMX_PINBASED_CTLS, IA32_VMX_PROCBASED_CTLS, IA32_VMX_PROCBASED_CTLS2,
@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (master drive@0, not slave drive@1); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (master drive@0, not slave drive@1); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -215,6 +215,57 @@ pub fn pci_bdf_bit(dev: u8, fun: u8) -> Option<(usize, u64)> {
 /// Same #GP as Linux `startup_64` without the E4 CR4.VMXE mask.
 pub const E5_OVMF_SEC_CR4_VALUE: u64 = 0x640;
 
+/// CR4.VMXE — host-owned so SEC `mov cr4,0x640` does not #GP.
+pub const GUEST_UEFI_CR4_VMXE: u64 = 1 << 13;
+/// CR4.OSXSAVE — host-owned so CpuDxe `mov cr4,0x668` cannot clear it.
+/// Iron `0ca02e6`: dump CR4=0x668 (no bit 18), then XSAVE `#UD` RIP `0x109D`.
+pub const GUEST_UEFI_CR4_OSXSAVE: u64 = 1 << 18;
+/// Guest-UEFI CR4 bits the host keeps set across MOV CR4.
+pub const GUEST_UEFI_CR4_HOST_OWNED: u64 = GUEST_UEFI_CR4_VMXE | GUEST_UEFI_CR4_OSXSAVE;
+
+/// Apply a guest MOV-to-CR4: keep VMXE+OSXSAVE set (SDM 28.2.1 mask).
+pub fn apply_guest_cr4_write(requested: u64) -> u64 {
+    (requested & !GUEST_UEFI_CR4_HOST_OWNED) | GUEST_UEFI_CR4_HOST_OWNED
+}
+
+/// CR4 read shadow: guest must not see VMXE; guest must see OSXSAVE.
+pub fn guest_cr4_read_shadow(guest_cr4: u64) -> u64 {
+    guest_cr4 & !GUEST_UEFI_CR4_VMXE
+}
+
+/// Strip 66/67/F0/F2/F3 and REX so host tests can match XSAVE/UD2 encodings.
+pub fn skip_x86_legacy_prefixes(bytes: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            0x66 | 0x67 | 0xF0 | 0xF2 | 0xF3 | 0x40..=0x4F => i += 1,
+            _ => break,
+        }
+    }
+    &bytes[i..]
+}
+
+/// `#UD` that is XSAVE/XRSTOR/XSAVEOPT/XSAVEC/XSAVES/XRSTORS (needs OSXSAVE).
+/// Not FXSAVE (`0F AE /0`) — that uses OSFXSR.
+pub fn ud_xsave_family(bytes: &[u8]) -> bool {
+    let b = skip_x86_legacy_prefixes(bytes);
+    if b.len() < 3 || b[0] != 0x0F {
+        return false;
+    }
+    let reg = (b[2] >> 3) & 7;
+    match b[1] {
+        0xAE => reg == 4 || reg == 5 || reg == 6,
+        0xC7 => reg == 3 || reg == 4 || reg == 5,
+        _ => false,
+    }
+}
+
+/// ASSERT / DebugLib `ud2` (`0F 0B`).
+pub fn ud_is_ud2(bytes: &[u8]) -> bool {
+    let b = skip_x86_legacy_prefixes(bytes);
+    b.len() >= 2 && b[0] == 0x0F && b[1] == 0x0B
+}
+
 /// I/O exit qualification → port (SDM 28.2.1 bits 31:16).
 pub fn io_port_from_qual(qual: u64) -> u16 {
     ((qual >> 16) & 0xffff) as u16
@@ -323,6 +374,10 @@ static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
 static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static XSETBV_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static UD_XSAVE_RETRY: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -918,7 +973,7 @@ unsafe fn setup_guest_uefi_vmcs(
     let sysenter_eip = cpu::rdmsr(IA32_SYSENTER_EIP);
 
     let guest_cr0 = guest_cr0_real();
-    let guest_cr4 = guest_cr4_real();
+    let guest_cr4 = apply_guest_cr4_write(guest_cr4_real());
 
     prepare_vmcs_region(vmcs)?;
     ops::vmclear(vmcs).map_err(|_| LaunchError::ClearFailed)?;
@@ -944,8 +999,9 @@ unsafe fn setup_guest_uefi_vmcs(
     vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
     vw(VM_EXIT_CONTROLS, exit_ctls as u64)?;
     vw(VM_ENTRY_CONTROLS, entry_ctls as u64)?;
-    // Catch #DF/#GP/#PF before they become a silent triple-fault.
-    const UEFI_EXC_BITMAP: u32 = (1 << 8) | (1 << 13) | (1 << 14);
+    // Catch #UD/#DF/#GP/#PF. #UD: iron 0ca02e6 XSAVE without OSXSAVE
+    // dumped COM1 in the guest; intercept so we can set OSXSAVE and retry.
+    const UEFI_EXC_BITMAP: u32 = (1 << 6) | (1 << 8) | (1 << 13) | (1 << 14);
     vw(EXCEPTION_BITMAP, UEFI_EXC_BITMAP as u64)?;
     vw(PAGE_FAULT_ERROR_CODE_MASK, 0)?;
     vw(PAGE_FAULT_ERROR_CODE_MATCH, 0)?;
@@ -955,10 +1011,11 @@ unsafe fn setup_guest_uefi_vmcs(
     vw(VM_ENTRY_MSR_LOAD_COUNT, 0)?;
     vw(VM_ENTRY_INTERRUPTION_INFO, 0)?;
     vw(CR0_GUEST_HOST_MASK, 0)?;
-    // Host-own CR4.VMXE (E4 Linux path). OVMF SEC `mov cr4, 0x640` clears it.
-    vw(CR4_GUEST_HOST_MASK, CR4_VMXE)?;
+    // Host-own CR4.VMXE (E4 Linux path) and CR4.OSXSAVE (iron 0ca02e6).
+    // OVMF SEC `mov cr4, 0x640` clears VMXE; CpuDxe `mov cr4, 0x668` clears OSXSAVE.
+    vw(CR4_GUEST_HOST_MASK, GUEST_UEFI_CR4_HOST_OWNED)?;
     vw(CR0_READ_SHADOW, 0)?;
-    vw(CR4_READ_SHADOW, guest_cr4 & !CR4_VMXE)?;
+    vw(CR4_READ_SHADOW, guest_cr4_read_shadow(guest_cr4))?;
     vw(SECONDARY_VM_EXEC_CONTROL, secondary as u64)?;
     vw(EPT_POINTER, eptp)?;
     if primary & CPU_BASED_USE_MSR_BITMAPS != 0 {
@@ -1021,7 +1078,7 @@ unsafe fn setup_guest_uefi_vmcs(
 
     vw(GUEST_CR0, guest_cr0)?;
     vw(GUEST_CR3, 0)?;
-    vw(GUEST_CR4, guest_cr4 | CR4_VMXE)?;
+    vw(GUEST_CR4, guest_cr4)?;
     vw(GUEST_DR7, 0x400)?;
     vw(GUEST_IA32_EFER, 0)?;
     vw(GUEST_RSP, 0)?;
@@ -1324,27 +1381,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             }
             EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
             EXIT_REASON_CR_ACCESS => handle_cr(qual),
-            EXIT_REASON_EXCEPTION_NMI => {
-                let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
-                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
-                let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
-                let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
-                let linear = cs_base.wrapping_add(rip);
-                serial::write_str("boot: guest-UEFI exception intr=0x");
-                write_hex(intr);
-                serial::write_str(" err=0x");
-                write_hex(err);
-                serial::write_str(" cs=0x");
-                write_hex(cs);
-                serial::write_str(" cr0=0x");
-                write_hex(cr0);
-                serial::write_str(" linear=0x");
-                write_hex(linear);
-                serial::write_str(" insn=");
-                dump_low_ram_insn(linear);
-                serial::write_byte(b'\n');
-                false
-            }
+            EXIT_REASON_EXCEPTION_NMI => handle_exception_nmi(intr, rip, linear),
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
             EXIT_REASON_PREEMPTION_TIMER => true,
             EXIT_REASON_XSETBV => handle_xsetbv(),
@@ -1358,7 +1395,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             // jmp so firmware can fall through. Delay `jcc` on I/O stays.
             // Iron d5f9431: pause+jcc deadloop at 0x6e81ca only on
             // preemption (HPET +256 per 256 exits, no PCI/ATA).
-            let skipped = if basic == EXIT_REASON_PREEMPTION_TIMER {
+            let skipped = if basic == EXIT_REASON_EXCEPTION_NMI {
+                false
+            } else if basic == EXIT_REASON_PREEMPTION_TIMER {
                 skip_preempt_deadloop(linear, rip)
             } else {
                 skip_spin_short_jmp(linear, rip)
@@ -1719,7 +1758,97 @@ fn write_hex_u8(v: u8) {
     serial::write_byte(HEX[(v & 0xf) as usize]);
 }
 
-/// SDM 28.2.1 CR-access: MOV to/from CR0/CR3/CR4, keep CR4.VMXE host-owned.
+/// Keep guest+host CR4.OSXSAVE set (XSAVE / XSETBV). Host-owned bit 18.
+#[cfg(target_os = "uefi")]
+unsafe fn force_guest_cr4_osxsave() {
+    let cur = ops::vmread(GUEST_CR4).unwrap_or(0);
+    let val = apply_guest_cr4_write(cur);
+    let _ = ops::vmwrite(GUEST_CR4, val);
+    let _ = ops::vmwrite(CR4_READ_SHADOW, guest_cr4_read_shadow(val));
+    // SAFETY: VMX root. OSXSAVE is not CR4-fixed0-forbidden on this CPU.
+    // KANI-TARGET: guest-UEFI host CR4.OSXSAVE (outside Proven Core).
+    let host = cpu::read_cr4();
+    if host & cpu::CR4_OSXSAVE == 0 {
+        cpu::write_cr4(host | cpu::CR4_OSXSAVE);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn read_low_ram_insn(linear: u64, buf: &mut [u8; 16]) -> usize {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return 0;
+    }
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: #UD insn fetch from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    copy_low_ram_at(ram, linear, buf)
+}
+
+/// Iron `0ca02e6`: `#UD` RIP `0x109D` CR4=0x668 (no OSXSAVE). Guest DebugLib
+/// dumped COM1; preempt skip of `eb ec` re-entered the dump until n=32768.
+/// Retry XSAVE after setting OSXSAVE. Skip `ud2` so ASSERT does not dump-loop.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_ud(rip: u64, linear: u64) -> bool {
+    let mut buf = [0u8; 16];
+    let n = read_low_ram_insn(linear, &mut buf);
+    force_guest_cr4_osxsave();
+    if ud_xsave_family(&buf[..n]) {
+        let k = UD_XSAVE_RETRY.fetch_add(1, Ordering::AcqRel);
+        if k < 4 {
+            serial::write_str("boot: guest-UEFI #UD XSAVE retry OSXSAVE insn=");
+            dump_low_ram_insn(linear);
+            serial::write_byte(b'\n');
+        }
+        return true;
+    }
+    if ud_is_ud2(&buf[..n]) {
+        let k = UD2_SKIPS.fetch_add(1, Ordering::AcqRel);
+        if k < 4 {
+            serial::write_str("boot: guest-UEFI #UD2 skip insn=");
+            dump_low_ram_insn(linear);
+            serial::write_byte(b'\n');
+        }
+        if k >= 32 {
+            return false;
+        }
+        return ops::vmwrite(GUEST_RIP, rip.wrapping_add(2)).is_ok();
+    }
+    serial::write_str("boot: guest-UEFI #UD unknown linear=0x");
+    write_hex(linear);
+    serial::write_str(" insn=");
+    dump_low_ram_insn(linear);
+    serial::write_byte(b'\n');
+    false
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_exception_nmi(intr: u64, rip: u64, linear: u64) -> bool {
+    let valid = (intr & (1u64 << 31)) != 0;
+    let vec = (intr & 0xff) as u8;
+    if valid && vec == 6 {
+        return handle_ud(rip, linear);
+    }
+    let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+    let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+    let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
+    serial::write_str("boot: guest-UEFI exception intr=0x");
+    write_hex(intr);
+    serial::write_str(" err=0x");
+    write_hex(err);
+    serial::write_str(" cs=0x");
+    write_hex(cs);
+    serial::write_str(" cr0=0x");
+    write_hex(cr0);
+    serial::write_str(" linear=0x");
+    write_hex(linear);
+    serial::write_str(" insn=");
+    dump_low_ram_insn(linear);
+    serial::write_byte(b'\n');
+    false
+}
+
+/// SDM 28.2.1 CR-access: MOV to/from CR0/CR3/CR4, keep VMXE+OSXSAVE host-owned.
 #[cfg(target_os = "uefi")]
 unsafe fn handle_cr(qual: u64) -> bool {
     let n = CR_ACCESSES.fetch_add(1, Ordering::AcqRel);
@@ -1741,10 +1870,9 @@ unsafe fn handle_cr(qual: u64) -> bool {
             let _ = ops::vmwrite(GUEST_CR3, cr_gpr(gpr));
         }
         (4, 0) => {
-            let cur = ops::vmread(GUEST_CR4).unwrap_or(0);
-            let val = (cr_gpr(gpr) & !CR4_VMXE) | (cur & CR4_VMXE);
+            let val = apply_guest_cr4_write(cr_gpr(gpr));
             let _ = ops::vmwrite(GUEST_CR4, val);
-            let _ = ops::vmwrite(CR4_READ_SHADOW, val & !CR4_VMXE);
+            let _ = ops::vmwrite(CR4_READ_SHADOW, guest_cr4_read_shadow(val));
         }
         (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
         (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
@@ -2152,12 +2280,7 @@ unsafe fn handle_xsetbv() -> bool {
         ((r.edx as u64) << 32) | (r.eax as u64)
     };
     let v = xsetbv_masked_xcr0(value, host_mask);
-    // SAFETY: VMX root. OSXSAVE is not CR4-fixed0-forbidden on this CPU
-    // (same as E4 Linux XSETBV). Host CR4 often lacks OSXSAVE after EBS.
-    let cr4 = cpu::read_cr4();
-    if cr4 & cpu::CR4_OSXSAVE == 0 {
-        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
-    }
+    force_guest_cr4_osxsave();
     // SAFETY: CR4.OSXSAVE is set; v is masked to CPUID.0D:0 with x87 set.
     // KANI-TARGET: guest-UEFI XSETBV XCR0 mask (outside Proven Core).
     cpu::xsetbv(0, v);
