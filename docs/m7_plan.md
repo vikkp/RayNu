@@ -288,7 +288,9 @@ preemption/HLT/ACPI. 8042 KBC. 32768-exit cap. PIIX3 ISA PIRQ `0x60-0x63` reset 
 Iron COM2 (Cruzer with ESP OVMF): `LIVE-BYTES-PRESENT-OK` then #UD RIP
 `0x109D` `pci_ide=0` `com=15515` — guest-UEFI VMCS lacked INVPCID/XSAVES/RDTSCP
 (host CPUID advertises them on Xeon Silver 4110). Enable those secondary bits
-(same as E4 SHELL). ATAPI signature +
+(same as E4 SHELL). Iron `d5f9431`: DXE then n=8192 `rip=0x6e81ca`
+(CpuDeadLoop). Preempt skip includes GCC `eb fc` and near `0F 84` (`e2af81e`
+only skipped `pause`/`jcc rel8`/`eb f3`/`eb fe`). ATAPI signature +
 PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.
@@ -321,8 +323,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**closed** nested VT-x `1b07692`:
 `pci select 00:00.01` `val=0x70108086`; `OVMF-BOTH-OK`; stop n=1111
 `pci_ide=1 virtio=1` `sectors=0` `spin=1`; E4 Linux #DF fail-soft).
-Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; iron COM2 #UD RIP `0x109D`
-`pci_ide=0` — guest-UEFI INVPCID/RDTSCP/XSAVES + XSETBV XCR0; fw_cfg `etc/boot-menu-wait` 0 ms).
+Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; iron COM2 `d5f9431`
+`rip=0x6e81ca` CpuDeadLoop — preempt `eb fc` / `0F 84` skip; fw_cfg `etc/boot-menu-wait` 0 ms).
 
 **Next after Stage 44:** firmware El Torito CD boot (not `sectors>0` alone).
 Product ISO is

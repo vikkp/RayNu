@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32; preempt eb/jcc32 skip; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -120,22 +120,42 @@ pub fn spin_short_jmp_should_skip(b0: u8, b1: u8) -> bool {
 
 /// Preemption-only CpuDeadLoop (iron `d5f9431` n=1280..8192 `reason=0x34`
 /// `rip=0x6e81ca`, one tick `0x6e81b8`). Ubuntu OVMF `CpuDeadLoop` is
-/// `for (;;) CpuPause()` — `pause` (`f3 90`) + backward `jcc rel8`, no I/O,
-/// so `eb f3` skip never fired. Not used on I/O exits (Delay `jcc` stays).
+/// `for (;;) CpuPause()`. GCC `-O2` is often `pause` + `jmp rel8` −4
+/// (`eb fc`); MSVC/near is `0F 84` rel32. `e2af81e` skipped only
+/// `pause` / `jcc rel8` / `eb f3`/`eb fe`, so `eb fc` stayed stuck.
+/// Not used on I/O exits (Delay `jcc` stays; never skip every
+/// backward `jmp rel8` on I/O — that #UD-dumped COM1).
 pub fn preempt_deadloop_should_skip(b0: u8, b1: u8) -> bool {
-    if spin_short_jmp_should_skip(b0, b1) {
-        return true;
-    }
     if b0 == 0xF3 && b1 == 0x90 {
         return true;
     }
-    if (0x70..=0x7F).contains(&b0) {
+    if b0 == 0xEB || (0x70..=0x7F).contains(&b0) {
         let off = b1 as i8;
         if off <= -2 && off >= -32 {
             return true;
         }
     }
     false
+}
+
+/// Bytes to advance guest RIP on a preemption CpuDeadLoop match.
+/// 2: `pause` / backward `jmp rel8` / backward `jcc rel8`.
+/// 6: near `jcc` (`0F 8x` rel32) with a small backward displacement.
+/// 0: unknown — do **not** blind +2 (that caused `#UD`).
+pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
+    if bytes.len() < 2 {
+        return 0;
+    }
+    if preempt_deadloop_should_skip(bytes[0], bytes[1]) {
+        return 2;
+    }
+    if bytes.len() >= 6 && bytes[0] == 0x0F && (0x80..=0x8F).contains(&bytes[1]) {
+        let disp = i32::from_le_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]);
+        if disp <= -2 && disp >= -64 {
+            return 6;
+        }
+    }
+    0
 }
 
 /// XSETBV only accepts XCR0. Other XCRs would #GP; we skip those.
@@ -286,6 +306,8 @@ static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_BAR_TRACE: AtomicU32 = AtomicU32::new(0);
 static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
 static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
+static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
+static PREEMPT_SAME_RIP: AtomicU32 = AtomicU32::new(0);
 static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
 static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
 static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
@@ -453,6 +475,8 @@ pub fn reset_guest_uefi_launch() {
     PCI_BAR_TRACE.store(0, Ordering::Release);
     HLT_SKIPS.store(0, Ordering::Release);
     SPIN_JMP_SKIPS.store(0, Ordering::Release);
+    LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
+    PREEMPT_SAME_RIP.store(0, Ordering::Release);
     CR_ACCESSES.store(0, Ordering::Release);
     PCI_BDF_SEEN0.store(0, Ordering::Release);
     PCI_BDF_SEEN1.store(0, Ordering::Release);
@@ -1203,6 +1227,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     if linear_left_sec_tail(linear) {
         LEFT_SEC.store(true, Ordering::Release);
     }
+    if basic == EXIT_REASON_PREEMPTION_TIMER {
+        let prev = LAST_PREEMPT_RIP.swap(rip, Ordering::AcqRel);
+        if prev == rip {
+            PREEMPT_SAME_RIP.fetch_add(1, Ordering::AcqRel);
+        } else {
+            PREEMPT_SAME_RIP.store(1, Ordering::Release);
+        }
+    }
 
     if n <= 16 {
         serial::write_str("boot: guest-UEFI VMEXIT n=");
@@ -1235,6 +1267,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         write_dec(crate::devices::ide_cdrom::pci_enumerated() as u64);
         serial::write_str(" ataio=");
         write_dec(crate::devices::ide_cdrom::ata_io_accesses() as u64);
+        serial::write_str(" spin=");
+        write_dec(SPIN_JMP_SKIPS.load(Ordering::Acquire) as u64);
+        serial::write_str(" same=");
+        write_dec(PREEMPT_SAME_RIP.load(Ordering::Acquire) as u64);
         serial::write_str(" insn=");
         dump_low_ram_insn(linear);
         serial::write_byte(b'\n');
@@ -1331,6 +1367,15 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 let k = SPIN_JMP_SKIPS.fetch_add(1, Ordering::AcqRel);
                 if k < 8 {
                     serial::write_str("boot: guest-UEFI spin jmp skip insn=");
+                    dump_low_ram_insn(linear);
+                    serial::write_byte(b'\n');
+                }
+            } else if basic == EXIT_REASON_PREEMPTION_TIMER {
+                let same = PREEMPT_SAME_RIP.load(Ordering::Acquire);
+                if same == 8 || same == 64 {
+                    serial::write_str("boot: guest-UEFI preempt noskip same=");
+                    write_dec(same as u64);
+                    serial::write_str(" insn=");
                     dump_low_ram_insn(linear);
                     serial::write_byte(b'\n');
                 }
@@ -1783,7 +1828,20 @@ unsafe fn skip_spin_short_jmp(linear: u64, rip: u64) -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
-    skip_rel8_if(linear, rip, preempt_deadloop_should_skip)
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return false;
+    }
+    let mut buf = [0u8; 6];
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is in VMX.
+    // KANI-TARGET: CpuDeadLoop skip from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    let n = copy_low_ram_at(ram, linear, &mut buf);
+    let len = u64::from(preempt_deadloop_skip_len(&buf[..n]));
+    if len == 0 {
+        return false;
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
 #[cfg(target_os = "uefi")]
