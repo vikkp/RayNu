@@ -1,12 +1,37 @@
 //! Guest linear → GPA walk for VMEXIT emulation (M3.11).
 //!
-//! Assumes 4-level long-mode paging and identity EPT for guest RAM (GPA=HPA).
-//! Used to fetch instruction bytes at high kernel VAs (not host-identity).
+//! [`va_to_gpa`] assumes 4-level long-mode paging and identity EPT (GPA=HPA)
+//! for the E4 Linux path. Guest-UEFI alias EPT maps GPA → `ram_hpa + GPA`;
+//! [`identity_map_not_present`] takes `ram_hpa` so table writes hit the slab.
 
 /// Bits 51:12 of a paging-structure pointer / leaf frame.
 const ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
 const PRESENT: u64 = 1;
+const RW: u64 = 1 << 1;
+const USER: u64 = 1 << 2;
+const ACCESSED: u64 = 1 << 5;
+const DIRTY: u64 = 1 << 6;
 const LARGE: u64 = 1 << 7;
+const TWO_MIB: u64 = 2 * 1024 * 1024;
+/// P|RW|US|A|D — CPL0 identity data/exec (NXE is off on guest-UEFI).
+const LEAF_FLAGS: u64 = PRESENT | RW | USER | ACCESSED | DIRTY;
+const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
+
+/// How a not-present hole was filled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdentityMapKind {
+    Large2M,
+    Page4K,
+}
+
+/// Why [`identity_map_not_present`] refused to write a leaf.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdentityMapError {
+    OutOfRam,
+    TableOutOfRam,
+    NeedAlloc,
+    AlreadyPresent,
+}
 
 /// Translate a guest linear address to a GPA via the guest's CR3.
 ///
@@ -78,6 +103,107 @@ unsafe fn read_entry(table_gpa: u64, index: u64) -> Option<u64> {
     Some(core::ptr::read_volatile(p))
 }
 
+unsafe fn read_entry_ram(ram_hpa: u64, ram_len: u64, table_gpa: u64, index: u64) -> Option<u64> {
+    if index > 511 {
+        return None;
+    }
+    let off = (table_gpa & ADDR_MASK).checked_add(index * 8)?;
+    if off.saturating_add(8) > ram_len {
+        return None;
+    }
+    let p = (ram_hpa.wrapping_add(off)) as *const u64;
+    // SAFETY: `off+8 <= ram_len` and `ram_hpa` is the slab/test buffer base.
+    // KANI-TARGET: guest-UEFI alias-EPT page-table read (outside Proven Core walk).
+    Some(core::ptr::read_volatile(p))
+}
+
+unsafe fn write_entry_ram(ram_hpa: u64, ram_len: u64, table_gpa: u64, index: u64, val: u64) -> bool {
+    if index > 511 {
+        return false;
+    }
+    let Some(off) = (table_gpa & ADDR_MASK).checked_add(index * 8) else {
+        return false;
+    };
+    if off.saturating_add(8) > ram_len {
+        return false;
+    }
+    let p = (ram_hpa.wrapping_add(off)) as *mut u64;
+    // SAFETY: `off+8 <= ram_len` and `ram_hpa` is the exclusive guest-UEFI slab
+    // (or the identity_map unit-test buffer).
+    // KANI-TARGET: guest-UEFI alias-EPT page-table write (outside Proven Core walk).
+    core::ptr::write_volatile(p, val);
+    true
+}
+
+/// Fill a not-present identity leaf for `gva` in 4-level tables that live in
+/// guest RAM at `ram_hpa` (alias EPT: GPA `g` → HPA `ram_hpa + g`).
+///
+/// Does **not** allocate new table pages. A missing PML4/PDPT entry, or a
+/// 2 MiB hole that would extend past `ram_len`, is [`IdentityMapError::NeedAlloc`].
+/// A present leaf is [`IdentityMapError::AlreadyPresent`] (protection #PF).
+///
+/// Iron `d5fceb1`: CpuDxe finished, then `#PF` `err=0` on `mov al,[0x80B000]`
+/// (OVMF 4M MEMFD). Guest paging left that 2 MiB NP; EPT already identity-maps
+/// the 32 MiB slab.
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI 32 MiB slab (or a test
+/// buffer whose table GPAs fit). `cr3` table frames must lie in `[0, ram_len)`.
+pub unsafe fn identity_map_not_present(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> Result<IdentityMapKind, IdentityMapError> {
+    if ram_hpa == 0 || gva >= ram_len {
+        return Err(IdentityMapError::OutOfRam);
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 >= ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e4 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pdpt = e4 & ADDR_MASK;
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e3 & LARGE) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    let pd = e3 & ADDR_MASK;
+    let idx2 = (gva >> 21) & 0x1ff;
+    let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e2 & PRESENT) == 0 {
+        let base = gva & !(TWO_MIB - 1);
+        if base.saturating_add(TWO_MIB) > ram_len {
+            return Err(IdentityMapError::NeedAlloc);
+        }
+        if !write_entry_ram(ram_hpa, ram_len, pd, idx2, base | LARGE_2M_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        return Ok(IdentityMapKind::Large2M);
+    }
+    if (e2 & LARGE) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    let pt = e2 & ADDR_MASK;
+    let idx1 = (gva >> 12) & 0x1ff;
+    let e1 = read_entry_ram(ram_hpa, ram_len, pt, idx1).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e1 & PRESENT) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    let base = gva & !0xFFF;
+    if !write_entry_ram(ram_hpa, ram_len, pt, idx1, base | LEAF_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    Ok(IdentityMapKind::Page4K)
+}
+
 #[cfg(test)]
 mod guest_pt_test {
     use super::*;
@@ -132,6 +258,63 @@ mod guest_pt_test {
             core::hint::black_box(&pml4);
             core::hint::black_box(&pdpt);
             core::hint::black_box(&pd);
+        }
+    }
+
+    #[test]
+    fn identity_map_np_2m_memfd() {
+        // Iron d5fceb1: PD[4] for GPA 0x80B000 is NP after CpuDxe.
+        let mut ram = vec![0u8; 0x4000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        // SAFETY: exclusive 16KiB buffer; PML4/PDPT GPAs 0/0x1000 fit; PD at 0x2000.
+        unsafe {
+            write_entry_ram(ram_hpa, ram_len, 0, 0, 0x1000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x1000, 0, 0x2000 | PRESENT);
+            let kind =
+                identity_map_not_present(0, 0x80B000, ram_hpa, ram_len).expect("map MEMFD");
+            assert_eq!(kind, IdentityMapKind::Large2M);
+            let pde = read_entry_ram(ram_hpa, ram_len, 0x2000, 4).unwrap();
+            assert_eq!(pde, 0x800000 | LARGE_2M_FLAGS);
+            assert_eq!(
+                identity_map_not_present(0, 0x80B000, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
+            );
+        }
+    }
+
+    #[test]
+    fn identity_map_np_4k_leaf() {
+        let mut ram = vec![0u8; 0x4000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        // SAFETY: exclusive 16KiB buffer; PT GPA 0x3000 fits for 4K leaf.
+        unsafe {
+            write_entry_ram(ram_hpa, ram_len, 0, 0, 0x1000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x1000, 0, 0x2000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x2000, 0, 0x3000 | PRESENT);
+            let kind = identity_map_not_present(0, 0x4000, ram_hpa, ram_len).expect("map 4K");
+            assert_eq!(kind, IdentityMapKind::Page4K);
+            let pte = read_entry_ram(ram_hpa, ram_len, 0x3000, 4).unwrap();
+            assert_eq!(pte, 0x4000 | LEAF_FLAGS);
+        }
+    }
+
+    #[test]
+    fn identity_map_np_rejects_oob_and_missing_root() {
+        let mut ram = vec![0u8; 0x1000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        // SAFETY: exclusive 4KiB PML4; no PDPT so NeedAlloc; OOB gva does not walk.
+        unsafe {
+            assert_eq!(
+                identity_map_not_present(0, ram_len, ram_hpa, ram_len),
+                Err(IdentityMapError::OutOfRam)
+            );
+            assert_eq!(
+                identity_map_not_present(0, 0x80B000, ram_hpa, ram_len),
+                Err(IdentityMapError::NeedAlloc)
+            );
         }
     }
 }

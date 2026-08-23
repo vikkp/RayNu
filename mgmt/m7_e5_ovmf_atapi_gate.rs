@@ -46,7 +46,9 @@
 //! (`efer=0x500`) `imgentry` CpuDxe still ASSERT `lastmsr=0x23f`
 //! (MtrrLib GetMemoryAttributes, not XP). MAXPHYADDR clip-to-36
 //! was a mask regression vs `a9ffaa5` host width; keep NXE off and
-//! phys bits in [36, 48]. Nested
+//! phys bits in [36, 48]. Iron `d5fceb1` unclip: ASSERT gone, then
+//! `#PF` `err=0` `mov al,[0x80B000]` (MEMFD; dump `linear=` was RIP).
+//! Identity-map NP 2M/4K in guest PT (`identity_map_not_present`). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -74,8 +76,9 @@ use crate::vmx::guest_uefi::{
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
-    spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
+    guest_uefi_pf_should_identity_map, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_KVM_CPUID_LEAF,
+    GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
 
@@ -239,6 +242,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_phys_bits")
         && guest.contains("ldri ImageBase")
         && guest.contains("CoreStartImage")
+        && guest.contains("d5fceb1")
+        && guest.contains("0x80B000")
+        && guest.contains("identity_map_not_present")
+        && guest.contains("guest_uefi_pf_should_identity_map")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -362,6 +369,13 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5f59c86")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("lastmsr=0x23f")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("clip-36")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d5fceb1")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80B000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_map_not_present")
+        && guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2)
+        && GUEST_UEFI_IRON_PF_CR2 == GUEST_UEFI_MEMFD_BASE + 0xB000
+        && !guest_uefi_pf_should_identity_map(1, GUEST_UEFI_IRON_PF_CR2)
+        && !guest_uefi_pf_should_identity_map(0, 0xFFFF_0000)
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)
