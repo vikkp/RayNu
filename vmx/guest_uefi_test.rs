@@ -15,10 +15,11 @@ use super::{
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
     guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
-    guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, is_debugcon_port,
+    guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
-    GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_CR0_PG,
-    GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_VM_ENTRY_IA32E,
+    GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
+    GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
+    CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
@@ -211,6 +212,13 @@ fn marker_and_residual_honest() {
     assert_eq!(kvm.eax, GUEST_UEFI_KVM_CPUID_LEAF + 1);
     let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);
     assert!((phys.eax & 0xFF) <= 36);
+    let phys_ecx = guest_uefi_filter_cpuid(0x8000_0008, 0x8000_0008);
+    assert_eq!(phys_ecx.eax & 0xFF, phys.eax & 0xFF);
+    let ext = guest_uefi_filter_cpuid(0x8000_0001, 0);
+    assert_eq!(ext.edx & CPUID_80000001_EDX_NX, 0);
+    assert_eq!(ext.edx & CPUID_80000001_EDX_PAGE1GB, 0);
+    let leaf7 = guest_uefi_filter_cpuid(7, 0);
+    assert_eq!(leaf7.ecx & CPUID_LEAF7_ECX_TME_EN, 0);
     let top = guest_uefi_filter_cpuid(0xB, 0);
     assert_eq!(top.eax, 0);
     assert_eq!(top.ebx, 0);
@@ -263,6 +271,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("power-on E=0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DXE assert skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pcdsig=1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("a9ffaa5"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ldri ImageBase"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EFER.NXE"));
     assert!(guest_uefi_is_pcd_database_sig(&GUEST_UEFI_PCD_DATABASE_SIG));
     assert!(!guest_uefi_is_pcd_database_sig(&[0u8; 16]));
     assert_eq!(GUEST_UEFI_DEBUGCON_PORT, 0x402);
@@ -284,6 +295,14 @@ fn marker_and_residual_honest() {
         guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA, false),
         GUEST_UEFI_EFER_LME
     );
+    assert_eq!(
+        guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_NXE, true),
+        GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA
+    );
+    assert_eq!(GUEST_UEFI_EFER_NXE, 1 << 11);
+    assert!(guest_uefi_is_ldri_sig(&GUEST_UEFI_LDRI_SIG));
+    assert!(!guest_uefi_is_ldri_sig(b"ptal"));
+    assert_eq!(GUEST_UEFI_LDRI_IMAGEBASE_OFF, 0x68);
     assert_eq!(
         guest_uefi_ia32e_entry_ctls(0, true),
         GUEST_UEFI_VM_ENTRY_IA32E

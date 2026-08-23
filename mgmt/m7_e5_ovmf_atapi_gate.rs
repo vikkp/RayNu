@@ -69,7 +69,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
-    guest_uefi_assert_caller_is_dxe_ram, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -226,6 +226,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_mtrr_poweron_disabled")
         && guest.contains("guest_uefi_mtrr_valid_var_pairs")
         && plat.contains("bootorder_nul_terminated")
+        && guest.contains("a9ffaa5")
+        && guest.contains("GUEST_UEFI_EFER_NXE")
+        && guest.contains("ldri ImageBase")
+        && guest.contains("CoreStartImage")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -342,6 +346,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr0=0x80000000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DXE assert skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pcdsig=1")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("a9ffaa5")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ldri ImageBase")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EFER.NXE")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CoreStartImage")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)
@@ -366,6 +374,18 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             let k = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
             guest_uefi_cpuid_is_kvm(k.ebx, k.ecx, k.edx)
         }
+        && {
+            let ext = guest_uefi_filter_cpuid(0x8000_0001, 0);
+            ext.edx & crate::vmx::guest_uefi::CPUID_80000001_EDX_NX == 0
+                && ext.edx & crate::vmx::guest_uefi::CPUID_80000001_EDX_PAGE1GB == 0
+        }
+        && guest_uefi_filter_cpuid(7, 0).ecx & crate::vmx::guest_uefi::CPUID_LEAF7_ECX_TME_EN == 0
+        && guest_uefi_efer_with_lma(
+            crate::vmx::guest_uefi::GUEST_UEFI_EFER_LME
+                | crate::vmx::guest_uefi::GUEST_UEFI_EFER_NXE,
+            true,
+        ) & crate::vmx::guest_uefi::GUEST_UEFI_EFER_NXE
+            == 0
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")
