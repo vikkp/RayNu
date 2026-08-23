@@ -427,4 +427,5 @@ boot. Not installer. Next: Stage 43 simultaneous virtio `00:00.0` + IDE
 `00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`; ACPI PM timer + PIIX4 PM
 `00:01.3` + guest-private i440FX DID remap so PEI Delay can
 end on DID `0x1042`; 4 MiB flash + empty VARS `_FVH` after nested
-VT-x `1991a27` EPT `gpa=0xffc00000`), then firmware CD boot (ATAPI/El Torito).
+VT-x `1991a27` EPT `gpa=0xffc00000`; live HPET 1 s step after nested
+VT-x `105ffbe` n=2048 `rip=0x6e812d` `pci_ide=0`), then firmware CD boot (ATAPI/El Torito).

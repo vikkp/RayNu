@@ -249,6 +249,7 @@ fn hpet_lives_in_2mib_sink_and_ticks() {
     assert_eq!(cap, HPET_CAP_REV);
     assert_eq!(period, HPET_CLK_PERIOD_FS);
     assert_eq!(en, 1);
+    assert_eq!(HPET_MAIN_STEP, 100_000_000);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP * 2);
 }

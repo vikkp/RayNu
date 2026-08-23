@@ -226,5 +226,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). ACPI PM timer + PIIX4 PM `00:01.3` +
    guest-private i440FX DID remap after nested VT-x `699c9a6`
    n=2048 `pci_ide=0`. Nested VT-x `1991a27` EPT `gpa=0xffc00000`;
-   4 MiB flash + empty VARS `_FVH`. Still `sectors=0`.
+   4 MiB flash + empty VARS `_FVH`. Nested VT-x `105ffbe` n=2048
+   `rip=0x6e812d` `pci_ide=0`; live HPET 1 s step. Still `sectors=0`.
    Next: firmware CD boot (ATAPI/El Torito).

@@ -286,8 +286,10 @@ then EPT `gpa=0xffc00000` (CODE-only image left a VARS gap). Map a 4 MiB
 flash window at `0xFFC00000` and stamp an empty VARS `_FVH` (Debian
 `OVMF_VARS_4M.fd` prefix; not erased NOR). Nested VT-x `20763e4`: VARS
 mapped (`alias_gpa=0xffc00000`), no EPT at the floor, then 300 s QEMU
-kill with no `stop n=` / no `00:00.1` (HPET sink was zeros). Live HPET
-in the `0xFED00000` sink + VMX preemption. Do not move virtio off `00:00.0`. Do not fake
+kill with no `stop n=` / no `00:00.1` (HPET sink was zeros). Nested
+VT-x `105ffbe`: live HPET + preemption, n=2048 `reason=0x34`
+`rip=0x6e812d` `pci_ide=0` (10 ms step burned Delay). 1 s of HPET
+time per VMEXIT so Delay can end. Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another
@@ -319,7 +321,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**open** host: simultaneous
 virtio `00:00.0` + IDE `00:00.1`; ACPI PM timer after `699c9a6` n=2048
 only `00:00.0`; PIIX4 PM `00:01.3` + guest-private i440FX DID remap;
-2048-exit cap; HLT skip + CR-access resume; 4 MiB flash + empty VARS `_FVH`).
+2048-exit cap; HLT skip + CR-access resume; 4 MiB flash + empty VARS `_FVH`;
+live HPET 1 s step after `105ffbe` n=2048 `rip=0x6e812d` `pci_ide=0`).
 
 **Next after Stage 43:** firmware CD boot (ATAPI/El Torito).
 Product ISO is

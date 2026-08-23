@@ -13,9 +13,10 @@
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
 //! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
-//! (no `00:00.1`). The 2 MiB sink at `0xFEC00000` covers HPET
-//! `0xFED00000` as zeros; firmware Delay can spin with no VMEXIT.
-//! Live HPET in that sink + VMX preemption so the counter moves.
+//! (no `00:00.1`). Nested VT-x `105ffbe`: live HPET + preemption hit
+//! the 2048 cap (`reason=0x34` `rip=0x6e812d` `pci_ide=0`) because
+//! `HPET_MAIN_STEP` was ~10 ms per VMEXIT. 1 s of HPET time per
+//! exit so Delay can finish without burning the cap.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
@@ -265,8 +266,10 @@ pub const HPET_SINK_OFF: usize = (HPET_GPA - HPET_SINK_PAGE) as usize;
 pub const HPET_CAP_REV: u32 = 0x8086_A201;
 /// 10 ns period in femtoseconds.
 pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
-/// ~10 ms of HPET time per VMEXIT so Delay cannot freeze on a zero sink.
-pub const HPET_MAIN_STEP: u64 = 1_000_000;
+/// ~1 s of HPET time per VMEXIT (10 ns ticks). Nested VT-x `105ffbe`
+/// burned n=1024–2048 at `rip=0x6e812d` with 1e6 ticks (~10 ms) per
+/// exit — Delay never finished. Cap 2048 still bounds a forever-poll.
+pub const HPET_MAIN_STEP: u64 = 100_000_000;
 
 /// Stamp a live HPET into the 2 MiB platform sink (offset [`HPET_SINK_OFF`]).
 ///
