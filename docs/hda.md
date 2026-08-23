@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. Nested VT-x 105ffbe n=2048 rip=0x6e812d pci_ide=0; 1s HPET + stop RIP dump. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. Nested VT-x 707a849 insn=ebf3 CpuDeadLoop pci_ide=0; spin-jmp skip. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 707a849 n=2048 rip=0x6e812d insn=ebf3 pci_ide=0 (CpuDeadLoop); spin-jmp skip; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN stop RIP insn dump after fd88785 SKIP-only; nested VT-x 105ffbe n=2048 rip=0x6e812d pci_ide=0; 1s HPET step; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 105ffbe n=2048 reason=0x34 rip=0x6e812d pci_ide=0 (10ms HPET); 1s step; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 20763e4 VARS mapped alias_gpa=0xffc00000 then 300s kill no 00:00.1; live HPET; not installer; iron P0-14 stays 2b795a0 |

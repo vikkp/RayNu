@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -100,6 +100,13 @@ const EXIT_REASON_PREEMPTION_TIMER: u32 = 52;
 /// PciBus walk of IDE `00:00.1`. Not a timer inject. Not ATAPI.
 pub fn hlt_should_resume() -> bool {
     true
+}
+
+/// Unconditional short backward `jmp rel8` is CpuDeadLoop, not Delay.
+/// Nested VT-x `707a849`: 1s HPET left `rip=0x6e812d insn=ebf3…` `pci_ide=0`.
+/// Preemption resumes at the same RIP, so time never unsticks this spin.
+pub fn spin_short_jmp_should_skip(b0: u8, b1: u8) -> bool {
+    b0 == 0xEB && (b1 as i8) < 0
 }
 
 /// Stop the private VMCS after DXE once both PCI functions enumerated, or the tail is spent.
@@ -232,6 +239,7 @@ static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
 static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
 static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
+static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
 static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
 static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
@@ -391,6 +399,7 @@ pub fn reset_guest_uefi_launch() {
     PCI_DID_TRACE.store(0, Ordering::Release);
     PCI_HT_TRACE.store(0, Ordering::Release);
     HLT_SKIPS.store(0, Ordering::Release);
+    SPIN_JMP_SKIPS.store(0, Ordering::Release);
     CR_ACCESSES.store(0, Ordering::Release);
     PCI_BDF_SEEN0.store(0, Ordering::Release);
     PCI_BDF_SEEN1.store(0, Ordering::Release);
@@ -1202,7 +1211,19 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 false
             }
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
-            EXIT_REASON_PREEMPTION_TIMER => true,
+            EXIT_REASON_PREEMPTION_TIMER => {
+                // Preemption is not an instruction exit (VM_EXIT_INSTRUCTION_LEN
+                // is 0). CpuDeadLoop `eb xx` (xx negative) never does I/O;
+                // skip the jmp so firmware can fall through. Delay `jcc` is
+                // left in place so HPET time can complete the wait.
+                if skip_spin_short_jmp(linear, rip) {
+                    let k = SPIN_JMP_SKIPS.fetch_add(1, Ordering::AcqRel);
+                    if k < 8 {
+                        serial::write_line("boot: guest-UEFI spin jmp skip");
+                    }
+                }
+                true
+            }
             EXIT_REASON_XSETBV => skip_insn(),
             // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
             13 | 14 | 16 | 40 | 54 => skip_insn(),
@@ -1266,6 +1287,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     );
     serial::write_str(" hlt=");
     write_dec(HLT_SKIPS.load(Ordering::Acquire) as u64);
+    serial::write_str(" spin=");
+    write_dec(SPIN_JMP_SKIPS.load(Ordering::Acquire) as u64);
     serial::write_str(" cr=");
     write_dec(CR_ACCESSES.load(Ordering::Acquire) as u64);
     serial::write_str(" acpi=");
@@ -1276,6 +1299,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_hex_u32(u32::from(crate::devices::guest_platform::last_cmos_index()));
     serial::write_str(" hpet=");
     write_dec(HPET_TICKS.load(Ordering::Acquire) as u64);
+    serial::write_str(" pre=");
+    dump_low_ram_insn(linear.saturating_sub(16));
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
@@ -1550,6 +1575,25 @@ unsafe fn set_cr_gpr(idx: u8, val: u64) {
         15 => SAVED_R15 = val,
         _ => {}
     }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn skip_spin_short_jmp(linear: u64, rip: u64) -> bool {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return false;
+    }
+    let mut buf = [0u8; 2];
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is in VMX.
+    // KANI-TARGET: CpuDeadLoop jmp skip from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    if copy_low_ram_at(ram, linear, &mut buf) < 2 {
+        return false;
+    }
+    if !spin_short_jmp_should_skip(buf[0], buf[1]) {
+        return false;
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(2)).is_ok()
 }
 
 #[cfg(target_os = "uefi")]

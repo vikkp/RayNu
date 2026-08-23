@@ -288,9 +288,9 @@ flash window at `0xFFC00000` and stamp an empty VARS `_FVH` (Debian
 mapped (`alias_gpa=0xffc00000`), no EPT at the floor, then 300 s QEMU
 kill with no `stop n=` / no `00:00.1` (HPET sink was zeros). Nested
 VT-x `105ffbe`: live HPET + preemption, n=2048 `reason=0x34`
-`rip=0x6e812d` `pci_ide=0` (10 ms step burned Delay). 1 s of HPET
-time per VMEXIT so Delay can end. Stop dumps identity RIP bytes.
-Do not move virtio off `00:00.0`. Do not fake
+`rip=0x6e812d` `pci_ide=0` (10 ms step burned Delay). Nested VT-x
+`707a849`: 1s HPET + RIP dump still `insn=ebf3` (CpuDeadLoop). Skip
+backward `jmp rel8` so firmware can fall through. Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another
@@ -323,8 +323,8 @@ Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**open** host: simultaneous
 virtio `00:00.0` + IDE `00:00.1`; ACPI PM timer after `699c9a6` n=2048
 only `00:00.0`; PIIX4 PM `00:01.3` + guest-private i440FX DID remap;
 2048-exit cap; HLT skip + CR-access resume; 4 MiB flash + empty VARS `_FVH`;
-live HPET 1 s step after `105ffbe` n=2048 `rip=0x6e812d` `pci_ide=0`;
-stop RIP insn dump).
+live HPET 1 s step after `105ffbe`; spin-jmp skip after `707a849`
+`insn=ebf3` CpuDeadLoop).
 
 **Next after Stage 43:** firmware CD boot (ATAPI/El Torito).
 Product ISO is
