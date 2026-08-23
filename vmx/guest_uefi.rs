@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:01.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; ISA 00:01.0 is multifunction so a walk finds IDE; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:01.1 plus virtio (not virtio-alone); HLT skip so DXE can walk PCI; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:01.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; ISA 00:01.0 is multifunction so a walk finds IDE; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 384 I/O still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -80,9 +80,10 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, keep a short tail so firmware can walk `00:01.1`, then
-/// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
-pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
+/// After DXE evidence, spend the rest of [`GUEST_UEFI_RESUME_CAP`] unless both
+/// PCI functions enumerated. Nested VT-x `41d0ebe`: 384 I/O exits after DXE
+/// still only DID `00:00.0` / `pci_ide=0`. Not a faked `pci_enum`.
+pub const GUEST_UEFI_POST_DXE_TAIL: u32 = GUEST_UEFI_RESUME_CAP;
 
 /// Guest-UEFI HLT must skip/resume. Stopping on HLT aborts the post-DXE
 /// PciBus walk of PIIX IDE `00:01.1`. Not a timer inject. Not ATAPI.
@@ -95,8 +96,8 @@ pub fn hlt_should_resume() -> bool {
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
 /// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:01.1` enumerated
-/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
-/// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1)
+/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print (the 2048 cap)
+/// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1; 384 I/O was not a walk)
 ///
 /// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is PIIX `00:01.1`.
 pub fn post_dxe_should_stop(
@@ -117,6 +118,15 @@ pub fn post_dxe_should_stop(
 /// Do not fake. GuestVisible is not `ide_enum`.
 pub fn both_pci_evidence(virtio_enum: bool, ide_enum: bool) -> bool {
     virtio_enum && ide_enum
+}
+
+/// Bitmask slot for bus 0 `dev.fun` (devs 0–15). Used to log a CF8 select once.
+pub fn pci_bdf_bit(dev: u8, fun: u8) -> Option<(usize, u64)> {
+    if fun > 7 || dev > 15 {
+        return None;
+    }
+    let idx = u32::from(dev) * 8 + u32::from(fun);
+    Some(((idx / 64) as usize, 1u64 << (idx % 64)))
 }
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
@@ -196,6 +206,9 @@ static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
 static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
 static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
+static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
+static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
+static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -291,6 +304,9 @@ pub fn reset_guest_uefi_launch() {
     PCI_DID_TRACE.store(0, Ordering::Release);
     PCI_HT_TRACE.store(0, Ordering::Release);
     HLT_SKIPS.store(0, Ordering::Release);
+    CR_ACCESSES.store(0, Ordering::Release);
+    PCI_BDF_SEEN0.store(0, Ordering::Release);
+    PCI_BDF_SEEN1.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
 }
@@ -992,6 +1008,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 }
             }
             EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
+            EXIT_REASON_CR_ACCESS => handle_cr(qual),
             EXIT_REASON_EXCEPTION_NMI => {
                 serial::write_str("boot: guest-UEFI exception intr=0x");
                 write_hex(intr);
@@ -1204,6 +1221,124 @@ fn maybe_print_dxe() {
 }
 
 #[cfg(target_os = "uefi")]
+fn note_pci_cf8(addr: u32) {
+    if (addr & 0x8000_0000) == 0 {
+        return;
+    }
+    let (bus, dev, fun, _) = crate::devices::guest_platform::pci_bdf(addr);
+    if bus != 0 {
+        return;
+    }
+    let Some((word, bit)) = pci_bdf_bit(dev, fun) else {
+        return;
+    };
+    let slot = if word == 0 {
+        &PCI_BDF_SEEN0
+    } else {
+        &PCI_BDF_SEEN1
+    };
+    let prev = slot.fetch_or(bit, Ordering::AcqRel);
+    if prev & bit != 0 {
+        return;
+    }
+    serial::write_str("boot: guest-UEFI pci select 00:");
+    write_hex_u8(dev);
+    serial::write_byte(b'.');
+    write_hex_u8(fun);
+    serial::write_byte(b'\n');
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex_u8(v: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    serial::write_byte(HEX[(v >> 4) as usize]);
+    serial::write_byte(HEX[(v & 0xf) as usize]);
+}
+
+/// SDM 28.2.1 CR-access: MOV to/from CR0/CR3/CR4, keep CR4.VMXE host-owned.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_cr(qual: u64) -> bool {
+    let n = CR_ACCESSES.fetch_add(1, Ordering::AcqRel);
+    if n < 4 {
+        serial::write_str("boot: guest-UEFI CR access cr=");
+        write_dec(qual & 0xf);
+        serial::write_str(" type=");
+        write_dec((qual >> 4) & 3);
+        serial::write_byte(b'\n');
+    }
+    let cr = (qual & 0xf) as u8;
+    let typ = ((qual >> 4) & 3) as u8;
+    let gpr = ((qual >> 8) & 0xf) as u8;
+    match (cr, typ) {
+        (0, 0) => {
+            let _ = ops::vmwrite(GUEST_CR0, cr_gpr(gpr));
+        }
+        (3, 0) => {
+            let _ = ops::vmwrite(GUEST_CR3, cr_gpr(gpr));
+        }
+        (4, 0) => {
+            let cur = ops::vmread(GUEST_CR4).unwrap_or(0);
+            let val = (cr_gpr(gpr) & !CR4_VMXE) | (cur & CR4_VMXE);
+            let _ = ops::vmwrite(GUEST_CR4, val);
+            let _ = ops::vmwrite(CR4_READ_SHADOW, val & !CR4_VMXE);
+        }
+        (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
+        (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
+        (4, 1) => set_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0)),
+        _ => {}
+    }
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn cr_gpr(idx: u8) -> u64 {
+    match idx {
+        0 => SAVED_RAX,
+        1 => SAVED_RCX,
+        2 => SAVED_RDX,
+        3 => SAVED_RBX,
+        4 => ops::vmread(GUEST_RSP).unwrap_or(0),
+        5 => SAVED_RBP,
+        6 => SAVED_RSI,
+        7 => SAVED_RDI,
+        8 => SAVED_R8,
+        9 => SAVED_R9,
+        10 => SAVED_R10,
+        11 => SAVED_R11,
+        12 => SAVED_R12,
+        13 => SAVED_R13,
+        14 => SAVED_R14,
+        15 => SAVED_R15,
+        _ => 0,
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn set_cr_gpr(idx: u8, val: u64) {
+    match idx {
+        0 => SAVED_RAX = val,
+        1 => SAVED_RCX = val,
+        2 => SAVED_RDX = val,
+        3 => SAVED_RBX = val,
+        4 => {
+            let _ = ops::vmwrite(GUEST_RSP, val);
+        }
+        5 => SAVED_RBP = val,
+        6 => SAVED_RSI = val,
+        7 => SAVED_RDI = val,
+        8 => SAVED_R8 = val,
+        9 => SAVED_R9 = val,
+        10 => SAVED_R10 = val,
+        11 => SAVED_R11 = val,
+        12 => SAVED_R12 = val,
+        13 => SAVED_R13 = val,
+        14 => SAVED_R14 = val,
+        15 => SAVED_R15 = val,
+        _ => {}
+    }
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
@@ -1271,6 +1406,7 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             crate::devices::ide_cdrom::pci_write_addr(addr);
             crate::devices::guest_platform::pci_write_addr(addr);
             crate::devices::guest_virtio_blk::pci_write_addr(addr);
+            note_pci_cf8(addr);
         }
         return;
     }

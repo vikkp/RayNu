@@ -98,6 +98,8 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("both_pci_evidence")
         && guest.contains("IDE at 00:01.1")
         && guest.contains("HLT skip so DXE can walk PCI")
+        && guest.contains("CR-access resume")
+        && guest.contains("2048-exit cap")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -124,6 +126,8 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT skip so DXE can walk PCI")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR-access resume")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2048-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

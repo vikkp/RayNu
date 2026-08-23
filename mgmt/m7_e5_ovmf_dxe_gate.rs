@@ -95,7 +95,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && prop_platform_memory_honest()
         && run_m7_e5_ovmf_cdrom_gate()
         && GUEST_UEFI_RESUME_CAP == 2048
-        && GUEST_UEFI_POST_DXE_TAIL == 384
+        && GUEST_UEFI_POST_DXE_TAIL == GUEST_UEFI_RESUME_CAP
         && dxe_or_cd_boot_evidence(true, 1, false, false)
         && dxe_or_cd_boot_evidence(true, 0, true, true)
         && !dxe_or_cd_boot_evidence(true, 0, true, false)
@@ -110,7 +110,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:01.1")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE stop waits")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 2048-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_DXE_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-DXE-OK";
