@@ -284,7 +284,10 @@ LZMA `37 12`) so the host-bridge switch matches virtio (hardware DID stays `0x10
 Nested VT-x `1991a27`: remap n=1, ACPI timer live (`acpi=13`), `OVMF-DXE-OK`,
 then EPT `gpa=0xffc00000` (CODE-only image left a VARS gap). Map a 4 MiB
 flash window at `0xFFC00000` and stamp an empty VARS `_FVH` (Debian
-`OVMF_VARS_4M.fd` prefix; not erased NOR). Do not move virtio off `00:00.0`. Do not fake
+`OVMF_VARS_4M.fd` prefix; not erased NOR). Nested VT-x `20763e4`: VARS
+mapped (`alias_gpa=0xffc00000`), no EPT at the floor, then 300 s QEMU
+kill with no `stop n=` / no `00:00.1` (HPET sink was zeros). Live HPET
+in the `0xFED00000` sink + VMX preemption. Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another

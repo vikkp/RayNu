@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. 4MiB flash + empty VARS _FVH after nested VT-x 1991a27 EPT 0xffc00000. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. Nested VT-x 20763e4 VARS mapped then 300s kill; live HPET. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 20763e4 VARS mapped alias_gpa=0xffc00000 then 300s kill no 00:00.1; live HPET; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN empty VARS _FVH in 4MiB flash pad after 1991a27 EPT 0xffc00000; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 1991a27 dxe=1 acpi=13 then EPT gpa=0xffc00000 VARS gap; 4MiB flash window; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK cmp bx i440FX DID remap (not LZMA 37 12) + RAM remap after decompress; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |

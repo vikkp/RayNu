@@ -11,7 +11,9 @@
 //! timer so PEI Delay can end. 8259 PIC RAZ/WI. fw_cfg `etc/e820` 32 MiB.
 //! Exception insn dump on `#GP`. 4 MiB flash window so CODE-only ESP
 //! images still cover VARS GPA `0xFFC00000`. Empty VARS `_FVH` (Debian
-//! `OVMF_VARS_4M.fd` prefix) so PEI does not parse erased NOR. Stop the private VMCS only after firmware
+//! `OVMF_VARS_4M.fd` prefix) so PEI does not parse erased NOR. Live HPET in
+//! the `0xFED00000` sink so Delay does not spin on zeros (nested VT-x
+//! `20763e4` 300 s kill). Stop the private VMCS only after firmware
 //! enumerates **both** (or the post-DXE tail). ISA `00:01.0` is
 //! multifunction so a bus walk finds IDE. Marker after past-SEC and both
 //! PCI enums. Not ATAPI sectors. Not installer. No new `*Absent` enum.
@@ -136,6 +138,8 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("flash_window_gpa_and_pad")
         && guest.contains("stamp_empty_ovmf_vars")
         && guest.contains("empty VARS _FVH")
+        && guest.contains("hpet_tick_sink")
+        && guest.contains("live HPET")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -173,6 +177,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

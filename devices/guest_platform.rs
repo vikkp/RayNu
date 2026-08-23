@@ -11,13 +11,11 @@
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
 //! fw_cfg `etc/e820` (32 MiB RAM), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
-//! Nested VT-x `699c9a6`: 2048 I/O still only `00:00.0` because
-//! `AcpiTimerLibConstructor` rejects virtio DID `0x1042`. Guest-private
-//! OVMF remap teaches that switch to accept `0x1042` as i440FX-class
-//! (hardware DID stays virtio; not two-phase DID). Nested VT-x `5b2739a`
-//! remapped LZMA (`n=21`) then `#GP` after CMOS; PIC/e820 are the next
-//! honest PEI/DXE devices after `cmp bx` n=1. Not installer. Not
-//! Everest E5.
+//! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
+//! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
+//! (no `00:00.1`). The 2 MiB sink at `0xFEC00000` covers HPET
+//! `0xFED00000` as zeros; firmware Delay can spin with no VMEXIT.
+//! Live HPET in that sink + VMX preemption so the counter moves.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
@@ -257,6 +255,46 @@ pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     (gpa >= PLATFORM_RAM_BYTES && gpa < GIB)
         || (gpa >= MMIO_LO && gpa < FW_FLOOR)
         || (gpa >= IOAPIC && gpa < APIC_TOP)
+}
+
+/// QEMU/ICH HPET MMIO. Lives in the 2 MiB sink page at [`HPET_SINK_PAGE`].
+pub const HPET_GPA: u64 = 0xFED0_0000;
+pub const HPET_SINK_PAGE: u64 = 0xFEC0_0000;
+pub const HPET_SINK_OFF: usize = (HPET_GPA - HPET_SINK_PAGE) as usize;
+/// Rev 1, 3 timers, 64-bit, Intel vendor — same shape as QEMU `hpet.c`.
+pub const HPET_CAP_REV: u32 = 0x8086_A201;
+/// 10 ns period in femtoseconds.
+pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
+/// ~10 ms of HPET time per VMEXIT so Delay cannot freeze on a zero sink.
+pub const HPET_MAIN_STEP: u64 = 1_000_000;
+
+/// Stamp a live HPET into the 2 MiB platform sink (offset [`HPET_SINK_OFF`]).
+///
+/// INVARIANTS:
+/// - Writes only when `sink.len()` covers HPET config + main counter
+/// - Does not fake PCI enum
+pub fn hpet_init_sink(sink: &mut [u8]) -> bool {
+    if sink.len() < HPET_SINK_OFF + 0xF8 {
+        return false;
+    }
+    let h = HPET_SINK_OFF;
+    sink[h..h + 4].copy_from_slice(&HPET_CAP_REV.to_le_bytes());
+    sink[h + 4..h + 8].copy_from_slice(&HPET_CLK_PERIOD_FS.to_le_bytes());
+    sink[h + 0x10..h + 0x14].copy_from_slice(&1u32.to_le_bytes());
+    true
+}
+
+/// Advance HPET main counter. Call on each guest-UEFI VMEXIT.
+pub fn hpet_tick_sink(sink: &mut [u8]) -> u64 {
+    if sink.len() < HPET_SINK_OFF + 0xF8 {
+        return 0;
+    }
+    let off = HPET_SINK_OFF + 0xF0;
+    let mut cur = [0u8; 8];
+    cur.copy_from_slice(&sink[off..off + 8]);
+    let v = u64::from_le_bytes(cur).wrapping_add(HPET_MAIN_STEP);
+    sink[off..off + 8].copy_from_slice(&v.to_le_bytes());
+    v
 }
 
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {

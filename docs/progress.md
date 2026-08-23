@@ -123,7 +123,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | `attach_cdrom_uefi` → GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE; not installer (2026-08-22). |
 | E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **CLOSED** nested VT-x: CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID `0x7010`) + EPT sink-resume; `OVMF-CDROM-OK` pci_ide=1 sectors=0; post-DXE tail then E4; not installer (2026-08-23). |
 | E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED** nested VT-x: PEI DID `00:00.0` `val=0x1042`; `OVMF-VIRTIO-OK` pci=1; CD GuestVisible; `pci_ide=0` sectors=0; stop n=115 virtio=1; not installer (2026-08-23). |
-| E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host):** firmware-simultaneous virtio `00:00.0` + IDE `00:00.1` on one boot. Virtio-alone no longer stops DXE. 2048-exit cap (`699c9a6` n=2048 still only `00:00.0`). ACPI PM timer + PIIX4 PM `00:01.3` + guest-private i440FX DID remap (`cmp bx`, not LZMA). Nested VT-x `1991a27`: remap n=1, `acpi=13`, `dxe=1`, then EPT `gpa=0xffc00000` (VARS gap). 4 MiB flash window + empty VARS `_FVH`. Nested VT-x must print both DIDs (`0x1042` and `0x7010`). Still `sectors=0`. Not installer. |
+| E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host):** firmware-simultaneous virtio `00:00.0` + IDE `00:00.1` on one boot. Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` mapped, then 300 s kill (no `00:00.1`). Live HPET. Nested VT-x must print both DIDs (`0x1042` and `0x7010`). Still `sectors=0`. Not installer. |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -290,7 +290,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-55 / E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | **CLOSED (host + QEMU).** `attach_cdrom_uefi` → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Not Everest E5. |
 | P0-56 / E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **CLOSED (host + QEMU nested VT-x).** CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID `0x7010`). `OVMF-CDROM-OK` pci_ide=1 sectors=0. Post-DXE tail then E4. Not a completed firmware CD boot. Not installer. Not Everest E5. |
 | P0-57 / E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED (host + QEMU nested VT-x).** Empty PCI virtio-blk at `00:00.0` (PEI DID `0x1042`). `OVMF-VIRTIO-OK` pci=1. CD GuestVisible. `pci_ide=0` sectors=0. Stop n=115 virtio=1. Not a completed firmware CD boot. Not installer. Not Everest E5. |
-| P0-58 / E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host).** Firmware-simultaneous virtio `00:00.0` + IDE `00:00.1`. Nested VT-x `1991a27`: remap n=1, `acpi=13`, `dxe=1`, then EPT `gpa=0xffc00000` (VARS gap). 4 MiB flash window + empty VARS `_FVH`. Still `sectors=0`. Not installer. Not Everest E5. |
+| P0-58 / E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **OPEN (host).** Firmware-simultaneous virtio `00:00.0` + IDE `00:00.1`. Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` (`alias_gpa=0xffc00000`), then 300 s kill, no `00:00.1`. Live HPET next. Still `sectors=0`. Not installer. Not Everest E5. |
 | Everest residual | firmware CD boot + TLS/console + distro installer | After P0-58 (simultaneous enum, then ATAPI). Product ISO: [ADR-014](adr/ADR-014.md). |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |
