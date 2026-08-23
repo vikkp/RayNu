@@ -229,8 +229,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    CD boot. Not installer. Not Everest E5.
    **Stage 44 (host, open):** firmware ATAPI READ
    (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). Stop on `sectors>0`, not both-enum-alone.
-   Iron COM2 `e2af81e` `insn=ebec`. Preempt skip includes
-   GCC `eb fc` / `0F 84` / `eb ec`. fw_cfg CD master `drive@0`.
+   Iron COM2 `891eb5b` skipped `ebecc9c3` (`leave; ret`) then `#UD` at
+   `0x109D`. Do not skip ASSERT epilogue. fw_cfg CD PIIX `ide@1,1` then
+   virtio-fn1 master `drive@0`.
    fw_cfg `etc/boot-menu-wait` 0 ms.
    Not El Torito boot. Not installer. Not Everest E5.
    Next: firmware El Torito CD boot.

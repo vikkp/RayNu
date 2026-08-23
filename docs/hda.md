@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 891eb5b skipped ebecc9c3 leave;ret then #UD 0x109D; do not skip ASSERT epilogue; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron e2af81e insn=ebec jmp -20; fw_cfg CD master drive@0 (not slave); not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 rip=0x6e81ca; e2af81e missed GCC eb fc / 0F 84; preempt eb/jcc32 skip; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 reason=0x34 rip=0x6e81ca pause CpuDeadLoop; preempt pause/jcc skip; not installer; iron P0-14 stays 2b795a0 |

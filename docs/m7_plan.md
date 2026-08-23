@@ -289,8 +289,11 @@ Iron COM2 (Cruzer with ESP OVMF): `LIVE-BYTES-PRESENT-OK` then #UD RIP
 `0x109D` `pci_ide=0` `com=15515` — guest-UEFI VMCS lacked INVPCID/XSAVES/RDTSCP
 (host CPUID advertises them on Xeon Silver 4110). Enable those secondary bits
 (same as E4 SHELL). Iron `d5f9431`: DXE then n=8192 `rip=0x6e81ca`
-(CpuDeadLoop). Iron `e2af81e`: `insn=ebec`. Preempt skip includes GCC `eb fc`
-and near `0F 84`. fw_cfg CD path is master `drive@0` (not slave). ATAPI signature +
+(CpuDeadLoop). Iron `e2af81e`: `insn=ebec`. Iron `891eb5b`: OSXSAVE CR4
+intercept, then skip of `ebecc9c3` (`leave; ret`) escaped ASSERT → `#UD`
+PE-header `0x109D` stop n=1439. Do not skip that jmp; dump ASSERT retaddr.
+Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
+fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +
 PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.

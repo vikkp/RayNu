@@ -6,7 +6,8 @@ use super::{
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
-    preempt_deadloop_should_skip, preempt_deadloop_skip_len, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FLASH_BASE,
+    preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
+    insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
@@ -86,6 +87,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preempt pause/jcc skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preempt eb/jcc32 skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preempt noskip dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("891eb5b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("leave; ret"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("acpi=16612"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));
@@ -136,9 +140,19 @@ fn marker_and_residual_honest() {
     assert!(!spin_short_jmp_should_skip(0xF3, 0x90));
     assert_eq!(preempt_deadloop_skip_len(&[0xF3, 0x90]), 2);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xFC]), 2);
+    assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]), 0);
+    assert!(preempt_deadloop_is_assert_epilogue(&[0xEB, 0xEC, 0xC9, 0xC3]));
+    assert!(insn_fallthrough_is_leave_ret(&[0xEB, 0xEC, 0xC9, 0xC3], 2));
+    assert!(!preempt_deadloop_is_assert_epilogue(&[0xEB, 0xFC, 0x90, 0x90]));
+    assert_eq!(assert_deadloop_return_gpa(0x2000, true), 0x2008);
+    assert_eq!(assert_deadloop_return_gpa(0x2000, false), 0x2004);
     assert_eq!(
         preempt_deadloop_skip_len(&[0x0F, 0x84, 0xE8, 0xFF, 0xFF, 0xFF]),
         6
+    );
+    assert_eq!(
+        preempt_deadloop_skip_len(&[0x0F, 0x84, 0xE8, 0xFF, 0xFF, 0xFF, 0xC9, 0xC3]),
+        0
     );
     assert_eq!(preempt_deadloop_skip_len(&[0x0F, 0x84, 0x10, 0, 0, 0]), 0);
     assert_eq!(preempt_deadloop_skip_len(&[0x90, 0x90]), 0);
