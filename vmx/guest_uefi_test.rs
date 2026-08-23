@@ -78,6 +78,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("XSETBV executes XCR0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x6e81ca"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("acpi=16612"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));

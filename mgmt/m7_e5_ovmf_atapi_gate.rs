@@ -13,7 +13,9 @@
 //! (`in eax,dx` BdsWait). ACPI PM 1s step. fw_cfg BootMenu=on +
 //! `etc/boot-menu-wait` 0ms so FrontPage skips. Iron COM2: LIVE-BYTES-OK
 //! then #UD RIP `0x109D` `pci_ide=0` `com=15515` (INVPCID/XSAVES/RDTSCP
-//! missing on guest-UEFI VMCS; XSETBV must execute XCR0, not skip). Nested
+//! missing on guest-UEFI VMCS; XSETBV must execute XCR0, not skip). Iron
+//! `d5f9431` COM2: #UD gone, DXE, then tick n=1280 `reason=0x34`
+//! `rip=0x6e81ca` (preemption; paste had no `stop n=`). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -146,6 +148,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("SECONDARY_ENABLE_XSAVES")
         && guest.contains("SECONDARY_ENABLE_RDTSCP")
         && guest.contains("0x109D")
+        && guest.contains("0x6e81ca")
+        && guest.contains("tick n=")
         && guest.contains("PIIX3 ISA PIRQ")
         && guest.contains("ataio=")
         && guest.contains("0x80000838")
@@ -197,6 +201,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("XSETBV executes XCR0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x6e81ca")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")

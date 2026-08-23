@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 #UD gone; DXE then tick n=1280 reason=0x34 rip=0x6e81ca (no stop n=); not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN fw_cfg etc/boot-menu-wait 0ms skip BdsWait; guest-UEFI XSETBV executes XCR0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0 com=15515; guest-UEFI INVPCID/RDTSCP/XSAVES; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0; ACPI PM 1s step; not installer; iron P0-14 stays 2b795a0 |
