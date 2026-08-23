@@ -6,7 +6,7 @@
 //!
 //! Guest-UEFI PCI virtio 1.0 block at `00:00.0` plus fw_cfg `bootorder`
 //! (CD then disk). This OVMF PEI only `inw` Device ID of `00:00.0`.
-//! IDE is `00:00.1` (not scanned by this PEI). Marker after past-SEC and
+//! IDE is PIIX `00:01.1` (ISA `00:01.0` is multifunction). Marker after past-SEC and
 //! virtio PCI enum. Not a completed firmware CD boot. Not installer.
 //! No new `*Absent` enum. No TLS.
 
@@ -56,7 +56,7 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
         return false;
     }
     pci_write_addr(pci_config_addr() | 0x0C);
-    if !pci_header_is_multifunction(pci_read_data(0xCFC, 4)) {
+    if pci_header_is_multifunction(pci_read_data(0xCFC, 4)) {
         return false;
     }
     if !ide_cdrom::present_placeholder() {
@@ -96,7 +96,7 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     virtio_ok
         && boot_served
         && first == *b"/pci@i0c"
-        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@0,1")
+        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1")
 }
 
 pub fn ovmf_virtio_surface_present() -> bool {

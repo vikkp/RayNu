@@ -4,9 +4,10 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: N/A
 //!
-//! Keep virtio 1.0 at `00:00.0` and IDE at `00:00.1`. Stop the private
+//! Keep virtio 1.0 at `00:00.0` and IDE at PIIX `00:01.1`. Stop the private
 //! VMCS only after firmware enumerates **both** (or the post-DXE tail).
-//! Marker after past-SEC and both PCI enums. Not ATAPI sectors. Not
+//! ISA `00:01.0` is multifunction so a bus walk finds IDE. Marker after
+//! past-SEC and both PCI enums. Not ATAPI sectors. Not installer.
 //! installer. No new `*Absent` enum. No TLS.
 
 use super::guest_fw::reset_guest_fw;
@@ -50,7 +51,7 @@ pub fn prop_both_pci_on_one_boot() -> bool {
         return false;
     }
     virtio_write(virtio_cfg() | 0x0C);
-    if !pci_header_is_multifunction(virtio_read(0xCFC, 4)) {
+    if pci_header_is_multifunction(virtio_read(0xCFC, 4)) {
         return false;
     }
     ide_cdrom::pci_write_addr(ide_cdrom::pci_config_addr());
@@ -63,6 +64,14 @@ pub fn prop_both_pci_on_one_boot() -> bool {
         Some(v) => v,
         None => return false,
     };
+    plat_pci_write(0x8000_080C);
+    let isa_ht = match plat_pci_read(0xCFC, 4) {
+        Some(v) => v,
+        None => return false,
+    };
+    if !pci_header_is_multifunction(isa_ht) {
+        return false;
+    }
     let virtio_ok = crate::devices::guest_virtio_blk::pci_enumerated();
     let ide_ok = ide_cdrom::pci_enumerated();
     reset_virtio();
@@ -71,7 +80,7 @@ pub fn prop_both_pci_on_one_boot() -> bool {
     both_pci_evidence(virtio_ok, ide_ok)
         && (host_id >> 16) as u16 == HOST_BRIDGE_DEVICE
         && virtio_cfg() == 0x8000_0000
-        && ide_cdrom::pci_config_addr() == 0x8000_0100
+        && ide_cdrom::pci_config_addr() == 0x8000_0900
 }
 
 pub fn ovmf_both_surface_present() -> bool {
@@ -87,6 +96,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && qemu.contains("RAYNU-V-M7-E5-OVMF-BOTH-OK")
         && guest.contains("maybe_print_both")
         && guest.contains("both_pci_evidence")
+        && guest.contains("IDE at 00:01.1")
         && e4_shell_launch_no_cdrom()
 }
 

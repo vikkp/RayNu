@@ -230,7 +230,7 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_BOTH" "$SERIAL_LOG"; then
-    echo "==> E5 guest-UEFI simultaneous virtio 00:00.0 + IDE 00:00.1"
+    echo "==> E5 guest-UEFI simultaneous virtio 00:00.0 + IDE 00:01.1"
   else
     echo "error: marker '$MARKER_OVMF_BOTH' not found after VMXON (firmware did not enum both PCI functions on this boot)" >&2
     fail=1

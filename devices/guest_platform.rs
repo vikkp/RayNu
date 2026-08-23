@@ -48,12 +48,12 @@ const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
 
-/// QEMU `bootorder` (OFW paths). CD (`ide@0,1`) then virtio disk (`scsi@0`).
-pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
+/// QEMU `bootorder` (OFW paths). CD (`ide@1,1` = `00:01.1`) then virtio disk (`scsi@0`).
+pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@1,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
 
 /// Product boot order is CD then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
-    let ide = find_bytes(BOOTORDER, b"ide@0,1");
+    let ide = find_bytes(BOOTORDER, b"ide@1,1");
     let disk = find_bytes(BOOTORDER, b"scsi@0");
     match (ide, disk) {
         (Some(i), Some(d)) => i < d,

@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:00.1 plus virtio (not virtio-alone); firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:01.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; ISA 00:01.0 is multifunction so a walk finds IDE; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:01.1 plus virtio (not virtio-alone); firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -69,7 +69,7 @@ pub const M7_E5_OVMF_DXE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-DXE-OK";
 /// QEMU / serial marker when guest-UEFI sees empty virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
-/// QEMU / serial marker when firmware enumerated virtio `00:00.0` and IDE `00:00.1`
+/// QEMU / serial marker when firmware enumerated virtio `00:00.0` and IDE `00:01.1`
 /// on the same boot. Not ATAPI sectors. Not installer.
 pub const M7_E5_OVMF_BOTH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-BOTH-OK";
 
@@ -80,7 +80,7 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, keep a short tail so firmware can walk `00:00.1`, then
+/// After DXE evidence, keep a short tail so firmware can walk `00:01.1`, then
 /// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
 
@@ -88,11 +88,11 @@ pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
-/// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:00.1` enumerated
+/// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:01.1` enumerated
 /// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
 /// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1)
 ///
-/// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is `00:00.1`.
+/// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is PIIX `00:01.1`.
 pub fn post_dxe_should_stop(
     dxe_printed: bool,
     exit_n: u32,

@@ -12,7 +12,8 @@ fn pci_bdf_is_probe_slot_not_ide() {
     assert_eq!(pci_bdf(addr), (0, 0, 0, 0));
     assert!(pci_addr_selects_virtio(addr));
     assert!(pci_addr_selects_virtio(0x8000_0000));
-    assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 IDE
+    assert!(!pci_addr_selects_virtio(0x8000_0900)); // 00:01.1 IDE
+    assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 empty
     assert!(!pci_addr_selects_virtio(0x8000_4000)); // 00:08.0 host
     assert!(!pci_addr_selects_virtio(0x8000_0800)); // 00:01.0 ISA
 }
@@ -44,13 +45,13 @@ fn present_enumerates_virtio_and_cd_then_disk() {
 }
 
 #[test]
-fn virtio_fn0_is_multifunction_so_ide_fn1_is_scannable() {
+fn virtio_fn0_is_single_function() {
     use crate::devices::guest_platform::pci_header_is_multifunction;
     reset();
     assert!(present());
     pci_write_addr(pci_config_addr() | 0x0C);
     let ht = pci_read_data(0xCFC, 4);
-    assert!(pci_header_is_multifunction(ht));
+    assert!(!pci_header_is_multifunction(ht));
     reset();
 }
 

@@ -107,7 +107,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && exec_from_low_ram(0x0010_0000)
         && !exec_from_low_ram(0xFFFD_3759)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:01.1")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE stop waits")

@@ -5,16 +5,15 @@
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
 //! Empty virtio 1.0 block function at `00:00.0` (Red Hat `1AF4:1042`).
-//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` (host
-//! `0x1237` and IDE `0x7010` both looped; never Header Type, never another
-//! BDF). The probe slot is virtio so that read can enum it. IDE is `00:00.1`
-//! (multifunction child). Boot order is CD then disk (fw_cfg `bootorder`).
+//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0`. The probe
+//! slot is virtio so that read can enum it. IDE is PIIX `00:01.1` (ISA
+//! `00:01.0` is multifunction so a bus walk finds it). Single-function
+//! Header Type: do not hide `00:01.1` behind virtio fn1. Boot order is CD
+//! then disk (fw_cfg `bootorder`).
 //! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,
 //! not an installer.
 
-use crate::devices::guest_platform::{
-    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, PCI_HEADER_MULTIFUNCTION,
-};
+use crate::devices::guest_platform::{boot_order_cd_then_disk, pci_bdf, pci_cfg_offset};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 /// QEMU / serial marker when guest-UEFI sees virtio-blk + CD→disk order.
@@ -141,7 +140,7 @@ fn config_dword(v: &VirtioPci, off: u8) -> u32 {
         0x00 => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_DEVICE) << 16),
         0x04 => u32::from(v.pci_cmd) | 0x0010_0000, // CapList
         0x08 => 0x0100_0001,                        // SCSI mass-storage, rev 1
-        0x0C => PCI_HEADER_MULTIFUNCTION,
+        0x0C => 0x0000_0000,
         0x10 => v.bar0,
         0x2C => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_SUBSYS) << 16),
         0x34 => 0x0000_0040, // cap pointer
