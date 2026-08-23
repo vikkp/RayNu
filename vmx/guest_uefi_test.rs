@@ -1,14 +1,15 @@
 use super::{
     both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence, exec_from_low_ram,
-    guest_uefi_alive, guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe,
-    guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume,
-    io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
+    flash_window_gpa_and_pad, guest_uefi_alive, guest_uefi_both, guest_uefi_com_bytes,
+    guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
+    hlt_should_resume, io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
     linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit,
     post_dxe_should_stop, run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE,
-    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
-    GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_BOTH_OK_MARKER,
-    M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER,
-    M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW,
+    GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA,
+    M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER,
+    M7_E5_OVMF_DXE_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
+    M7_E5_OVMF_VMLAUNCH_OK_MARKER,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -81,6 +82,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8259 PIC RAZ/WI"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VARS gap at 0xFFC00000"));
     assert!(hlt_should_resume());
     assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
@@ -206,4 +209,27 @@ fn copy_low_ram_at_identity_window() {
     assert_eq!(copy_low_ram_at(&ram, 100, &mut out), 0);
     assert_eq!(copy_low_ram_at(&ram, 5, &mut out), 1);
     assert_eq!(out[0], 0xFA);
+}
+
+#[test]
+fn flash_window_pads_code_only_image_to_4mib() {
+    assert_eq!(GUEST_UEFI_FLASH_BASE, 0xFFC0_0000);
+    assert_eq!(GUEST_UEFI_FLASH_WINDOW, 4 * 1024 * 1024);
+    assert_eq!(
+        flash_window_gpa_and_pad(3653632),
+        Some((GUEST_UEFI_FLASH_BASE, 0x84000))
+    );
+    assert_eq!(
+        flash_window_gpa_and_pad(GUEST_UEFI_FLASH_WINDOW),
+        Some((GUEST_UEFI_FLASH_BASE, 0))
+    );
+    assert_eq!(
+        flash_window_gpa_and_pad(1024 * 1024),
+        Some((GUEST_UEFI_FLASH_BASE, 3 * 1024 * 1024))
+    );
+    assert!(flash_window_gpa_and_pad(4096).is_none());
+    let (gpa, pad) = flash_window_gpa_and_pad(3653632).unwrap();
+    assert!(alias_ept_covers_reset(gpa, GUEST_UEFI_FLASH_WINDOW));
+    assert_eq!(gpa + pad, 0xFFC8_4000);
+    assert!(frames_required_firmware_alias(gpa, GUEST_UEFI_FLASH_WINDOW) <= 8);
 }

@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -276,6 +276,22 @@ pub fn last_exit_reason() -> u32 {
     LAST_EXIT_REASON.load(Ordering::Acquire)
 }
 
+/// QEMU/OVMF 4 MiB pflash base (`OVMF.fd` VARS at `0xFFC00000`, CODE on top).
+pub const GUEST_UEFI_FLASH_BASE: u64 = 0xFFC0_0000;
+/// Full flash window. Nested VT-x `1991a27` EPT-faulted at `gpa=0xffc00000`
+/// because a CODE-only image was top-aligned at `0xFFC84000` (VARS gap).
+pub const GUEST_UEFI_FLASH_WINDOW: u64 = 4 * 1024 * 1024;
+
+/// Map any 1–4 MiB retained image into a 4 MiB window at [`GUEST_UEFI_FLASH_BASE`].
+/// Pad is leading erased flash (`0xFF`). Reset vector stays at `0xFFFF_FFF0`.
+pub fn flash_window_gpa_and_pad(image_len: u64) -> Option<(u64, u64)> {
+    const MIN: u64 = MIN_REAL_OVMF_BYTES as u64;
+    if image_len < MIN || image_len > GUEST_UEFI_FLASH_WINDOW {
+        return None;
+    }
+    Some((GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW - image_len))
+}
+
 /// Live alias window for a retained 1–4 MiB image: `4 GiB - len`.
 ///
 /// Stage 15 [`crate::vmx::launch::firmware_alias_gpa`] stays 4 MiB-only
@@ -391,14 +407,13 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
     if bytes.len() < MIN_REAL_OVMF_BYTES || !ovmf_esp::accept_real_ovmf_bytes(bytes) {
         return Err(GuestUefiLaunchError::MissingEspFirmware);
     }
-    let fw_len = bytes.len() as u64;
-    let map_len = (fw_len + 0xfff) & !0xfff;
-    let Some(gpa) = live_firmware_alias_gpa(map_len) else {
+    let Some((gpa, _pad)) = flash_window_gpa_and_pad(bytes.len() as u64) else {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
-    if !alias_ept_covers_reset(gpa, map_len) {
+    if !alias_ept_covers_reset(gpa, GUEST_UEFI_FLASH_WINDOW) {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     }
+    let map_len = GUEST_UEFI_FLASH_WINDOW;
 
     #[cfg(not(target_os = "uefi"))]
     {
@@ -432,15 +447,23 @@ unsafe fn launch_uefi(
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
     let fw_hpa = fw_frame.to_phys();
-    core::ptr::write_bytes(fw_hpa as *mut u8, 0, (pages * 4096) as usize);
-    core::ptr::copy_nonoverlapping(bytes.as_ptr(), fw_hpa as *mut u8, bytes.len());
+    let pad = (fw_len as usize).saturating_sub(bytes.len());
+    // SAFETY: exclusive 4 MiB guest-private flash copy; pad is in-range.
+    // KANI-TARGET: pad CODE-only OVMF into 4MiB window (outside Proven Core).
+    unsafe {
+        core::ptr::write_bytes(fw_hpa as *mut u8, 0xFF, (pages * 4096) as usize);
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), (fw_hpa as *mut u8).add(pad), bytes.len());
+    }
     // SAFETY: exclusive guest-private firmware copy; the retain buffer is
     // a different range. Remap only this image so OVMF's host-bridge
     // switch matches virtio DID `0x1042` as i440FX-class.
     // KANI-TARGET: remap guest-private OVMF copy (outside Proven Core).
     let remap_n = crate::boot::ovmf_esp::remap_i440fx_did_imm(unsafe {
-        core::slice::from_raw_parts_mut(fw_hpa as *mut u8, bytes.len())
+        core::slice::from_raw_parts_mut((fw_hpa as *mut u8).add(pad), bytes.len())
     });
+    serial::write_str("boot: guest-UEFI 4MiB flash pad=0x");
+    write_hex(pad as u64);
+    serial::write_byte(b'\n');
     serial::write_str("boot: guest-UEFI ovmf remap i440FX DID->virtio n=");
     write_dec(remap_n as u64);
     serial::write_byte(b'\n');

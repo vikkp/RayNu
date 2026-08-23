@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK 8259 PIC + fw_cfg etc/e820 + #GP insn dump after 5b2739a n=21 #GP; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 1991a27 dxe=1 acpi=13 then EPT gpa=0xffc00000 VARS gap; 4MiB flash window; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK cmp bx i440FX DID remap (not LZMA 37 12) + RAM remap after decompress; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK PIIX4 PM 00:01.3 + guest-private i440FX DID remap; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK ACPI PM timer after 699c9a6 n=2048 pci_ide=0; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
