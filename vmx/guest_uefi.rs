@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; PIIX3 multifunction header so firmware scans 00:01.1; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -72,6 +72,23 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
+
+/// After DXE evidence, keep a short tail so IDE can enumerate, then fail-soft
+/// to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
+pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
+
+/// Stop the private VMCS after DXE once IDE is visible or the tail is spent.
+///
+/// INVARIANTS:
+/// - `false` until DXE printed (PEI still needs the full resume cap)
+/// - `true` as soon as DXE printed **and** the IDE function enumerated
+/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
+pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, pci_ide: bool) -> bool {
+    if !dxe_printed {
+        return false;
+    }
+    pci_ide || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+}
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
 /// Same #GP as Linux `startup_64` without the E4 CR4.VMXE mask.
@@ -142,6 +159,7 @@ static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
 static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
 static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
+static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
 static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
@@ -232,6 +250,7 @@ pub fn reset_guest_uefi_launch() {
     UART_LCR_COM2.store(0, Ordering::Release);
     CONTINUE_GUEST.store(false, Ordering::Release);
     DXE_PRINTED.store(false, Ordering::Release);
+    DXE_AT_N.store(0, Ordering::Release);
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
     SINK_MAPS.store(0, Ordering::Release);
@@ -930,6 +949,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
         };
+        if resume
+            && post_dxe_should_stop(
+                DXE_PRINTED.load(Ordering::Acquire),
+                n,
+                DXE_AT_N.load(Ordering::Acquire),
+                crate::devices::ide_cdrom::pci_enumerated(),
+            )
+        {
+            resume = false;
+        }
     }
 
     if resume {
@@ -1051,6 +1080,7 @@ fn maybe_print_dxe() {
     if DXE_PRINTED.swap(true, Ordering::AcqRel) {
         return;
     }
+    DXE_AT_N.store(EXIT_COUNT.load(Ordering::Acquire), Ordering::Release);
     serial::write_line(M7_E5_OVMF_DXE_OK_MARKER);
     serial::write_str("boot: guest-UEFI past-PEI/DXE or CD boot attempt sectors=");
     write_dec(crate::devices::ide_cdrom::sectors_read() as u64);

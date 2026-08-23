@@ -13,12 +13,13 @@ use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_cdrom_gate::run_m7_e5_ovmf_cdrom_gate;
 use crate::devices::guest_platform::{
-    cmos_above_16m_chunks, io, is_platform_sink_gpa, pci_read_data, pci_write_addr, reset,
-    HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
+    cmos_above_16m_chunks, io, is_platform_sink_gpa, pci_header_is_multifunction, pci_read_data,
+    pci_write_addr, reset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
 };
 use crate::vmx::guest_uefi::{
-    dxe_or_cd_boot_evidence, exec_from_low_ram, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_RESUME_CAP, M7_E5_OVMF_DXE_OK_MARKER,
+    dxe_or_cd_boot_evidence, exec_from_low_ram, post_dxe_should_stop,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    M7_E5_OVMF_DXE_OK_MARKER,
 };
 
 /// Host / CI / QEMU marker when PEI/DXE progressed or the guest attempted CD boot.
@@ -46,8 +47,15 @@ pub fn prop_platform_memory_honest() -> bool {
         Some(v) => v,
         None => return false,
     };
+    pci_write_addr(0x8000_080C);
+    let isa_ht = match pci_read_data(0xCFC, 4) {
+        Some(v) => v,
+        None => return false,
+    };
     reset();
-    id as u16 == HOST_BRIDGE_VENDOR && (id >> 16) as u16 == HOST_BRIDGE_DEVICE
+    id as u16 == HOST_BRIDGE_VENDOR
+        && (id >> 16) as u16 == HOST_BRIDGE_DEVICE
+        && pci_header_is_multifunction(isa_ht)
 }
 
 pub fn ovmf_dxe_surface_present() -> bool {
@@ -62,6 +70,7 @@ pub fn ovmf_dxe_surface_present() -> bool {
         && adr.contains("RAYNU-V-M7-E5-OVMF-DXE-OK")
         && qemu.contains("RAYNU-V-M7-E5-OVMF-DXE-OK")
         && guest.contains("maybe_print_dxe")
+        && guest.contains("post_dxe_should_stop")
         && guest.contains("handle_ept")
         && guest.contains("guest_platform")
         && is_platform_sink_gpa(0xFCF8_F000)
@@ -77,12 +86,19 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && prop_platform_memory_honest()
         && run_m7_e5_ovmf_cdrom_gate()
         && GUEST_UEFI_RESUME_CAP == 2048
+        && GUEST_UEFI_POST_DXE_TAIL == 384
         && dxe_or_cd_boot_evidence(true, 1, false, false)
         && dxe_or_cd_boot_evidence(true, 0, true, true)
         && !dxe_or_cd_boot_evidence(true, 0, true, false)
+        && !post_dxe_should_stop(false, 2000, 0, true)
+        && !post_dxe_should_stop(true, 115, 115, false)
+        && post_dxe_should_stop(true, 115, 115, true)
+        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false)
         && exec_from_low_ram(0x0010_0000)
         && !exec_from_low_ram(0xFFFD_3759)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 multifunction header")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_DXE_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-DXE-OK";

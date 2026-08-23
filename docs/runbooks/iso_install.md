@@ -213,6 +213,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer.
    Not Everest E5.
    **Stage 41 (host + QEMU):** past-PEI/DXE or CD boot attempt
-   (`RAYNU-V-M7-E5-OVMF-DXE-OK`). CMOS/fw_cfg/i440FX + EPT sink-resume.
-   Not a completed firmware CD boot. Not installer. Not Everest E5.
+   (`RAYNU-V-M7-E5-OVMF-DXE-OK`). CMOS/fw_cfg/i440FX + PIIX3 multifunction
+   + EPT sink-resume. Post-DXE tail then E4. Not a completed firmware
+   CD boot. Not installer. Not Everest E5.
    Next: virtio-blk + boot order CD→disk.

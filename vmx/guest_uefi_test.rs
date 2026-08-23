@@ -2,10 +2,11 @@ use super::{
     dxe_or_cd_boot_evidence, exec_from_low_ram, guest_uefi_alive, guest_uefi_com_bytes,
     guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
     io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
-    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, run_retained_ovmf_vmlaunch,
-    E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_RESUME_CAP,
-    GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER,
-    M7_E5_OVMF_DXE_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, post_dxe_should_stop,
+    run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA,
+    M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
+    M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -54,11 +55,14 @@ fn marker_and_residual_honest() {
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 2048);
+    assert_eq!(GUEST_UEFI_POST_DXE_TAIL, 384);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("COM1/COM2 forwarded"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("GuestVisible"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 multifunction header"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert_eq!(M7_E5_OVMF_CDROM_OK_MARKER, "RAYNU-V-M7-E5-OVMF-CDROM-OK");
     assert_eq!(M7_E5_OVMF_DXE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-DXE-OK");
@@ -96,6 +100,21 @@ fn past_sec_predicates_are_honest() {
     assert!(!dxe_or_cd_boot_evidence(true, 0, true, false));
     assert!(dxe_or_cd_boot_evidence(true, 1, false, false));
     assert!(dxe_or_cd_boot_evidence(true, 0, true, true));
+    assert!(!post_dxe_should_stop(false, 2000, 0, true));
+    assert!(!post_dxe_should_stop(true, 115, 115, false));
+    assert!(post_dxe_should_stop(true, 115, 115, true));
+    assert!(post_dxe_should_stop(
+        true,
+        115 + GUEST_UEFI_POST_DXE_TAIL,
+        115,
+        false
+    ));
+    assert!(!post_dxe_should_stop(
+        true,
+        115 + GUEST_UEFI_POST_DXE_TAIL - 1,
+        115,
+        false
+    ));
 }
 
 #[test]

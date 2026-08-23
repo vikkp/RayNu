@@ -31,6 +31,9 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_CD_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_CD_PCI_DEVICE);
+    pci_write_addr(pci_config_addr() | 0x0C);
+    let ide_ht = pci_read_data(0xCFC, 4);
+    assert_eq!((ide_ht >> 16) & 0xff, 0x80);
     assert_eq!(host_identify_word0(), Some(0x8500));
     let pvd = host_read10(16).expect("READ(10) LBA 16");
     assert_eq!(&pvd[1..6], b"CD001");

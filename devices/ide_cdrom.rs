@@ -281,7 +281,8 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
         0x08 => 0x01018000, // class IDE, prog-if 0x80
-        0x0C => 0x0000_0000,
+        // PIIX3 is multifunction (`00:01.0` ISA + `00:01.1` IDE).
+        0x0C => 0x0080_0000,
         0x10 => m.bar0,
         0x14 => 0x03F5,
         0x18 => 0x0171,

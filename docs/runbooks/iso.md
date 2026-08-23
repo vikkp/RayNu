@@ -412,8 +412,10 @@ with primary PIO. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` after past-SEC
 and PCI enum or an ATAPI sector read. Unarmed attach stays
 `UnsupportedOnFirmware`. Not full DXE. Not installer.
 
-E5 Stage 41 (host + QEMU): CMOS/fw_cfg/i440FX platform plus EPT
-sink-resume so PEI can leave the `0xFCF8_F000` stall. Serial
+E5 Stage 41 (host + QEMU): CMOS/fw_cfg/i440FX platform plus PIIX3
+multifunction header (`00:01.0` so firmware scans `00:01.1` IDE) plus
+EPT sink-resume so PEI can leave the `0xFCF8_F000` stall. After DXE
+evidence a short resume tail, then E4 fail-soft. Serial
 `RAYNU-V-M7-E5-OVMF-DXE-OK` after past-SEC and (ATAPI sector read or
 exec-from-RAM + platform memory). Not a completed firmware CD boot.
 Not installer. Next: virtio-blk + boot order CD→disk.

@@ -24,6 +24,11 @@ pub const HOST_BRIDGE_DEVICE: u16 = 0x1237;
 pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
 
+/// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
+/// PIIX3 is `00:01.0` ISA + `00:01.1` IDE; firmware only scans fn 1–7 when
+/// function 0 advertises this bit. Intel PCI spec §6.2.1.
+pub const PCI_HEADER_MULTIFUNCTION: u32 = 0x0080_0000;
+
 pub const FW_CFG_SELECTOR_PORT: u16 = 0x0510;
 pub const FW_CFG_DATA_PORT: u16 = 0x0511;
 pub const CMOS_INDEX_PORT: u16 = 0x70;
@@ -268,6 +273,11 @@ pub fn platform_memory_served() -> bool {
     cmos_mem_served() || fwcfg_ram_served()
 }
 
+/// Header Type byte (bits 23:16 of config dword `0x0C`) has the multifunction bit.
+pub fn pci_header_is_multifunction(dword_0c: u32) -> bool {
+    ((dword_0c >> 16) & 0xff) == 0x80
+}
+
 pub fn pci_write_addr(addr: u32) {
     with_plat(|p| p.pci_addr = addr);
 }
@@ -291,7 +301,8 @@ fn isa_dword(off: u8) -> u32 {
         0x00 => u32::from(ISA_BRIDGE_VENDOR) | (u32::from(ISA_BRIDGE_DEVICE) << 16),
         0x04 => 0x0000_0007,
         0x08 => 0x0601_0000,
-        0x0C => 0x0000_0000,
+        // Single-function (0x00) made firmware skip `00:01.1` (VT-x: pci_ide=0).
+        0x0C => PCI_HEADER_MULTIFUNCTION,
         _ => 0,
     }
 }
