@@ -122,6 +122,8 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("PIIX4 PM at 00:01.3")
         && guest.contains("remap i440FX DID")
         && guest.contains("remap_i440fx_did_imm")
+        && guest.contains("cmp bx")
+        && guest.contains("maybe_remap_guest_ram")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -153,6 +155,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM at 00:01.3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cmp bx")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

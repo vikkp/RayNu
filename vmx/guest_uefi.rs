@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -211,6 +211,9 @@ static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
 static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
 static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
 static LAST_CF8: AtomicU32 = AtomicU32::new(0);
+static RAM_HPA: AtomicU64 = AtomicU64::new(0);
+static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
+static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -311,6 +314,9 @@ pub fn reset_guest_uefi_launch() {
     PCI_BDF_SEEN1.store(0, Ordering::Release);
     LAST_IO_PORT.store(0, Ordering::Release);
     LAST_CF8.store(0, Ordering::Release);
+    RAM_HPA.store(0, Ordering::Release);
+    RAM_REMAP_N.store(0, Ordering::Release);
+    RAM_REMAP_TRIES.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
 }
@@ -432,6 +438,7 @@ unsafe fn launch_uefi(
     };
     let ram_hpa = ram_frame.to_phys();
     core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    RAM_HPA.store(ram_hpa, Ordering::Release);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -1420,6 +1427,38 @@ unsafe fn handle_io(qual: u64) -> bool {
     skip_insn()
 }
 
+/// After PEIMs LZMA-decompress into low RAM, patch `cmp bx, 0x1237` there too.
+/// Flash remap cannot see compressed copies. Retry a few DID probes until a
+/// hit (first `inw` of `00:00.0` can race decompress). Not two-phase DID.
+#[cfg(target_os = "uefi")]
+unsafe fn maybe_remap_guest_ram() {
+    if RAM_REMAP_N.load(Ordering::Acquire) > 0 {
+        return;
+    }
+    let tries = RAM_REMAP_TRIES.fetch_add(1, Ordering::AcqRel);
+    if tries >= 8 {
+        return;
+    }
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 {
+        return;
+    }
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: remap decompressed OVMF in guest RAM (outside Proven Core).
+    let n = crate::boot::ovmf_esp::remap_i440fx_did_imm(core::slice::from_raw_parts_mut(
+        hpa as *mut u8,
+        GUEST_UEFI_LOW_RAM_BYTES as usize,
+    ));
+    if n > 0 {
+        RAM_REMAP_N.store(n, Ordering::Release);
+        serial::write_str("boot: guest-UEFI ram remap i440FX DID->virtio n=");
+        write_dec(n as u64);
+        serial::write_byte(b'\n');
+    } else if tries == 0 {
+        serial::write_line("boot: guest-UEFI ram remap i440FX DID->virtio n=0");
+    }
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
     if port == 0xCF8 {
@@ -1466,6 +1505,13 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
                 | u32::from(port.wrapping_sub(0xCFC) & 3);
             let off = (cfg & 0xff) as u8;
             let aligned = off & 0xFC;
+            if aligned == 0
+                && crate::devices::guest_virtio_blk::pci_addr_selects_virtio(
+                    crate::devices::guest_virtio_blk::pci_read_addr(),
+                )
+            {
+                maybe_remap_guest_ram();
+            }
             if aligned == 0 || aligned == 0x0C {
                 let n = if aligned == 0 {
                     PCI_DID_TRACE.fetch_add(1, Ordering::AcqRel)

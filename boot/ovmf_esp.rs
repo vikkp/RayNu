@@ -115,31 +115,38 @@ pub fn clear_retained() {
     OVMF_LEN.store(0, Ordering::Release);
 }
 
-/// Replace LE i440FX DID immediates `0x1237` with virtio DID `0x1042`.
+/// Patch OVMF host-bridge switch immediates: i440FX DID `0x1237` → virtio `0x1042`.
 ///
-/// OVMF `AcpiTimerLibConstructor` / `PlatformMiscInitialization` switch on
-/// `PciRead16(OVMF_HOSTBRIDGE_DID)` at `00:00.0`. i440FX is immediate
-/// `0x1237`; Q35 is `0x29C0`; any other DID (`ASSERT(FALSE); return`).
-/// Stage 43 keeps honest virtio DID `0x1042` on `00:00.0` (no two-phase
-/// DID, no slot swap). Patch the **guest-private** firmware copy so that
-/// switch treats virtio DID as the i440FX class and programs PIIX4 PM.
+/// Debian/QEMU 4M `OVMF.fd` compiles the switch as `cmp bx, imm16`
+/// (`66 81 fb 37 12` then `66 81 fb c0 29` for Q35). Blind `37 12`
+/// replace also hits LZMA payload in FV1 (~20 coincidences) and would
+/// corrupt PEIM decompress. Only the `cmp r16, imm16` encoding is
+/// rewritten. Hardware DID at `00:00.0` stays virtio (not two-phase DID).
 /// Does **not** rewrite the retain buffer.
 ///
 /// INVARIANTS:
 /// - Hardware DID at `00:00.0` stays `0x1042`
 /// - Retain buffer is not this slice
-/// - Returns the number of 16-bit immediates replaced (0 = still compressed)
+/// - Lone `37 12` in compressed FVs is left alone
+/// - Returns the number of `cmp r16, 0x1237` sites replaced
 pub fn remap_i440fx_did_imm(buf: &mut [u8]) -> u32 {
+    // `66 81 /7 iw` with ModRM 11_111_r/m: cmp r16, imm16.
     const I440FX: [u8; 2] = [0x37, 0x12];
     const VIRTIO: [u8; 2] = [0x42, 0x10];
     let mut n = 0u32;
     let mut i = 0usize;
-    while i + 1 < buf.len() {
-        if buf[i] == I440FX[0] && buf[i + 1] == I440FX[1] {
-            buf[i] = VIRTIO[0];
-            buf[i + 1] = VIRTIO[1];
+    while i + 5 <= buf.len() {
+        let modrm = buf[i + 2];
+        if buf[i] == 0x66
+            && buf[i + 1] == 0x81
+            && (modrm & 0xF8) == 0xF8
+            && buf[i + 3] == I440FX[0]
+            && buf[i + 4] == I440FX[1]
+        {
+            buf[i + 3] = VIRTIO[0];
+            buf[i + 4] = VIRTIO[1];
             n = n.saturating_add(1);
-            i += 2;
+            i += 5;
         } else {
             i += 1;
         }

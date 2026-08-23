@@ -279,8 +279,8 @@ virtio `00:00.0` DID `0x1042` **and** IDE `00:00.1` DID `0x7010`, stop
 `pci_ide=1 virtio=1`. Nested VT-x `699c9a6`: n=2048 still only `00:00.0`
 (`pci_ide=0`). ACPI PM timer (port 0 dword + PIIX `0x408`) so PEI Delay
 can end when DID is virtio. PIIX4 PM at `00:01.3` plus guest-private
-OVMF remap of i440FX DID immediates `0x1237`→`0x1042` so the host-bridge
-switch matches virtio (hardware DID stays `0x1042`; not two-phase DID).
+OVMF remap of i440FX DID immediates `0x1237`→`0x1042` (`cmp bx`, not
+LZMA `37 12`) so the host-bridge switch matches virtio (hardware DID stays `0x1042`; not two-phase DID).
 Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
