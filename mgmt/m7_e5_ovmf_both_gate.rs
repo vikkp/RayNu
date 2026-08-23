@@ -124,6 +124,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("remap_i440fx_did_imm")
         && guest.contains("cmp bx")
         && guest.contains("maybe_remap_guest_ram")
+        && guest.contains("is_piix_pm_io")
         && e4_shell_launch_no_cdrom()
 }
 

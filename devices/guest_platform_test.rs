@@ -1,9 +1,9 @@
 use super::{
     acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
     cmos_mem_served, fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated,
-    host_pci_config_addr, io, is_acpi_pm_timer_io, is_platform_io_port, is_platform_sink_gpa,
-    pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
-    pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
+    host_pci_config_addr, io, is_acpi_pm_timer_io, is_piix_pm_io, is_platform_io_port,
+    is_platform_sink_gpa, pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm,
+    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, pm_pci_config_addr, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL,
     HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR,
     PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PM_BRIDGE_DEVICE, PM_BRIDGE_VENDOR,
@@ -163,5 +163,14 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     assert_ne!(v, 0xFFFF_FFFF);
     let v2 = io(0x508, true, 4, 0) as u32;
     assert_eq!(v2, 0x0001_0000);
+    assert!(is_piix_pm_io(0x500));
+    let sts = io(0x500, true, 4, 0xFFFF_FFFF) as u32;
+    assert_eq!(sts, 0);
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xB001);
+    assert!(is_piix_pm_io(0xB000));
+    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    let t = io(0xB008, true, 4, 0) as u32;
+    assert_ne!(t, 0xFFFF_FFFF);
     reset();
 }

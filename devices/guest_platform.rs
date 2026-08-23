@@ -168,6 +168,17 @@ fn acpi_pm_timer_matches(port: u16, size: u8, pmba: u32) -> bool {
     acpi_pm_timer_fixed(port, size) || acpi_pm_timer_pmba(port, pmba)
 }
 
+/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; other regs RAZ/WI.
+pub fn is_piix_pm_io(port: u16) -> bool {
+    with_plat(|p| is_piix_pm_io_port(port, p.pmba))
+}
+
+fn is_piix_pm_io_port(port: u16, pmba: u32) -> bool {
+    let base = pmba & !1;
+    let p32 = u32::from(port);
+    p32 >= base && p32 < base.wrapping_add(64)
+}
+
 fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
     if port == 0 {
         return 0;
@@ -615,6 +626,12 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                 let v = tick_pm_timer(p);
                 let shift = acpi_pm_timer_shift(port, p.pmba);
                 return (rax & !mask) | (u64::from(v >> shift) & mask);
+            }
+            return rax;
+        }
+        if is_piix_pm_io_port(port, p.pmba) {
+            if is_in {
+                return rax & !mask;
             }
             return rax;
         }

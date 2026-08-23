@@ -1031,8 +1031,17 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
             EXIT_REASON_CR_ACCESS => handle_cr(qual),
             EXIT_REASON_EXCEPTION_NMI => {
+                let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+                let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
                 serial::write_str("boot: guest-UEFI exception intr=0x");
                 write_hex(intr);
+                serial::write_str(" err=0x");
+                write_hex(err);
+                serial::write_str(" cs=0x");
+                write_hex(cs);
+                serial::write_str(" cr0=0x");
+                write_hex(cr0);
                 serial::write_byte(b'\n');
                 false
             }
@@ -1100,6 +1109,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(CR_ACCESSES.load(Ordering::Acquire) as u64);
     serial::write_str(" acpi=");
     write_dec(crate::devices::guest_platform::acpi_pm_timer_reads() as u64);
+    serial::write_str(" ramr=");
+    write_dec(RAM_REMAP_N.load(Ordering::Acquire) as u64);
     serial::write_byte(b'\n');
     leave_to_e4();
 }
@@ -1406,6 +1417,7 @@ unsafe fn handle_io(qual: u64) -> bool {
     }
     if crate::devices::guest_platform::is_platform_io_port(port)
         || crate::devices::guest_platform::is_acpi_pm_timer_io(port, size as u8)
+        || crate::devices::guest_platform::is_piix_pm_io(port)
     {
         SAVED_RAX = crate::devices::guest_platform::io(port, is_in, size as u8, SAVED_RAX);
         maybe_print_dxe();
