@@ -41,7 +41,8 @@
 //! ASSERT `callerrip=0x1d25193`; `r8` is `gPcdDataBaseSignatureGuid`.
 //! Iron `c40f4a8`: `pcdsig=1` after 32-pair MTRR walk, same ASSERT.
 //! Iron `aee545f`: DXE `eb ec` skip then `#UD` `0x109d`. Revert skip.
-//! MTRR power-on `E=0` VCNT=8, no UC hole. Nested
+//! Iron `10cb881`: VCNT=8 power-on still ASSERT `mtrr0=0x80000000`.
+//! VCNT=32 power-on, no UC hole. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -65,7 +66,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
-    guest_uefi_mtrr_poweron_disabled, guest_uefi_xapic_is_not_sink, hlt_should_resume,
+    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
@@ -219,9 +220,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("gPcdDataBaseSignatureGuid")
         && guest.contains("c40f4a8")
         && guest.contains("aee545f")
+        && guest.contains("10cb881")
         && guest.contains("power-on E=0")
         && guest.contains("DXE assert skip")
         && guest.contains("guest_uefi_mtrr_poweron_disabled")
+        && guest.contains("guest_uefi_mtrr_valid_var_pairs")
         && plat.contains("bootorder_nul_terminated")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
@@ -334,7 +337,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("gPcdDataBaseSignatureGuid")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c40f4a8")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("aee545f")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("10cb881")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("power-on E=0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr0=0x80000000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DXE assert skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pcdsig=1")
         && guest_uefi_xapic_is_not_sink()
@@ -343,6 +348,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             == Some(crate::vmx::guest_uefi::GUEST_UEFI_MTRRCAP)
         && !guest_uefi_mtrr_pci_uc_hole()
         && guest_uefi_mtrr_poweron_disabled()
+        && guest_uefi_mtrr_valid_var_pairs() == 0
         && bootorder_nul_terminated()
         && guest_uefi_mtrr_write(0x200, 6)
         && guest_uefi_mtrr_read(0x200) == Some(6)

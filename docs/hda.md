@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN iron aee545f DXE assert skip then #UD 0x109d. Revert skip. MTRR power-on E=0 VCNT=8 no UC hole. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT mtrr0=0x80000000. VCNT=32 power-on no hole. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000; VCNT=32 power-on no hole; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron aee545f DXE assert skip then #UD 0x109d stop n=5364; revert skip; MTRR power-on E=0 VCNT=8 no UC hole; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron c40f4a8 pcdsig=1 after 32-pair MTRR still ASSERT callerrip=0x1d25193; guarded DXE ebec skip when RIP/caller in [1MiB,32MiB); not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron b4b4847 EFER.LMA efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193; r8 is gPcdDataBaseSignatureGuid; not installer; iron P0-14 stays 2b795a0 |

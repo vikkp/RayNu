@@ -312,7 +312,8 @@ Iron `b4b4847`: `efer=0xd00` `pg=1` `csl=1` still ASSERT; `r8` is
 `gPcdDataBaseSignatureGuid`. Iron `c40f4a8`: `pcdsig=1` after 32-pair MTRR
 walk, same ASSERT. Iron `aee545f`: DXE `eb ec` skip then `#UD` `0x109d`
 stop n=5364. Revert iron `eb ec` skip. MTRR power-on `E=0` VCNT=8, no UC
-hole (firmware programs). PE-header `0x109D` stays noskip.
+hole (firmware programs). Iron `10cb881`: VCNT=8 still ASSERT `mtrr0=0x80000000`.
+VCNT=32 power-on, no hole. PE-header `0x109D` stays noskip.
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +
