@@ -94,7 +94,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
     let ok = ovmf_dxe_surface_present()
         && prop_platform_memory_honest()
         && run_m7_e5_ovmf_cdrom_gate()
-        && GUEST_UEFI_RESUME_CAP == 2048
+        && GUEST_UEFI_RESUME_CAP >= 2048
         && GUEST_UEFI_POST_DXE_TAIL == GUEST_UEFI_RESUME_CAP
         && dxe_or_cd_boot_evidence(true, 1, false, false)
         && dxe_or_cd_boot_evidence(true, 0, true, true)
@@ -109,7 +109,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 2048-exit cap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 8192-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")

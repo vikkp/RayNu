@@ -6,10 +6,12 @@
 //!
 //! Stage 43 closed both PCI enums then stopped the private VMCS
 //! (`1b07692` n=1111 `sectors=0`). Keep running after BOTH-OK until
-//! firmware issues PACKET/`READ(10)` (honest `sectors>0`) or the 2048
+//! firmware issues PACKET/`READ(10)` (honest `sectors>0`) or the 8192
 //! cap. Nested VT-x `80129d3` kept running after BOTH-OK but stopped
 //! `n=2048` `sectors=0` `packet=0` — firmware never issued PACKET on
-//! hardcoded `0x1F0`. 8-byte command BAR + BAR-relocated ATA, secondary
+//! hardcoded `0x1F0`. Nested VT-x `8e55abf`: BOTH-OK then n=2048
+//! `ata=0x0` `unh=0` `port=0xcf8` — still PciBus, never ATA. 8192-exit
+//! cap so PciBus can finish and issue PACKET. 8-byte command BAR + BAR-relocated ATA, secondary
 //! `0x170`, EXECUTE DEVICE DIAGNOSTIC `0x90` restores `0xEB14`, BMIDE
 //! BAR4 RAZ/WI. ATAPI signature after reset (`LBA mid=0x14` high=`0xEB`),
 //! PACKET interrupt-reason (CDB `0x01`, data-in `0x02`, complete `0x03`),
@@ -116,6 +118,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("PACKET interrupt-reason")
         && guest.contains("ata cmd=")
         && guest.contains("io unhandled port=0x")
+        && guest.contains("pci wr=0x")
+        && guest.contains("8192-exit cap")
         && ide.contains("ATAPI_INT_CD")
         && ide.contains("ATAPI_SIG_LBA")
         && ide.contains("EL TORITO SPECIFICATION")
@@ -149,6 +153,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PACKET interrupt-reason")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8-byte IDE command BAR")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EXECUTE DEVICE DIAGNOSTIC")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not firmware El Torito boot")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_ATAPI_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-ATAPI-OK";
