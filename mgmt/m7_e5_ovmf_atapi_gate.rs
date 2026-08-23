@@ -37,7 +37,9 @@
 //! `0xfe=0x520` and PCI UC hole present; firmware then zeroed `0x200`.
 //! Same ASSERT `lastmsr=0xc0000080`. QEMU BOTH-OK skipped `eb f3`, not
 //! an ASSERT fix. EFER.LMA = LME && CR0.PG; IA-32e entry matches LMA;
-//! debugcon 0x402. Nested
+//! debugcon 0x402. Iron `b4b4847`: `efer=0xd00` `pg=1` `csl=1` still
+//! ASSERT `callerrip=0x1d25193`; `r8` is `gPcdDataBaseSignatureGuid`.
+//! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -207,6 +209,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("CR0.PG")
         && guest.contains("IA-32e entry")
         && guest.contains("debugcon 0x402")
+        && guest.contains("b4b4847")
+        && guest.contains("gPcdDataBaseSignatureGuid")
         && plat.contains("bootorder_nul_terminated")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
@@ -309,6 +313,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR0.PG")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IA-32e entry")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("debugcon 0x402")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("b4b4847")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("gPcdDataBaseSignatureGuid")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)

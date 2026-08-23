@@ -13,10 +13,10 @@ use super::{
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
-    guest_uefi_ia32e_entry_ctls, is_debugcon_port,
+    guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_CR0_PG,
-    GUEST_UEFI_VM_ENTRY_IA32E,
+    GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_VM_ENTRY_IA32E,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
@@ -232,6 +232,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR0.PG"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IA-32e entry"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("debugcon 0x402"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("b4b4847"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("gPcdDataBaseSignatureGuid"));
+    assert!(guest_uefi_is_pcd_database_sig(&GUEST_UEFI_PCD_DATABASE_SIG));
+    assert!(!guest_uefi_is_pcd_database_sig(&[0u8; 16]));
     assert_eq!(GUEST_UEFI_DEBUGCON_PORT, 0x402);
     assert!(is_debugcon_port(0x402));
     assert!(!is_debugcon_port(0x3f8));

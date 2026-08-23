@@ -308,6 +308,8 @@ RDMSR spin. MtrrLib `WorkingRangeCount` vs VCNT=8. Guest-UEFI MTRR VCNT=32 + PCI
 Iron `0b7d647`: `0xfe=0x520` PCI UC hole present; firmware then zeroed `0x200`;
 same ASSERT `lastmsr=EFER`. QEMU BOTH-OK skipped `eb f3`. EFER.LMA = LME &&
 CR0.PG; IA-32e entry matches LMA; debugcon 0x402.
+Iron `b4b4847`: `efer=0xd00` `pg=1` `csl=1` still ASSERT; `r8` is
+`gPcdDataBaseSignatureGuid`. Do not skip iron `eb ec`.
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +
