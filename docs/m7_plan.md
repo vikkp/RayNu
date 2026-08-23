@@ -281,7 +281,9 @@ virtio `00:00.0` DID `0x1042` **and** IDE `00:00.1` DID `0x7010`, stop
 can end when DID is virtio. PIIX4 PM at `00:01.3` plus guest-private
 OVMF remap of i440FX DID immediates `0x1237`→`0x1042` (`cmp bx`, not
 LZMA `37 12`) so the host-bridge switch matches virtio (hardware DID stays `0x1042`; not two-phase DID).
-Do not move virtio off `00:00.0`. Do not fake
+Nested VT-x `5b2739a` remapped LZMA (`n=21`) then `#GP` after CMOS.
+8259 PIC RAZ/WI + fw_cfg `etc/e820` 32 MiB + `#GP` insn dump so PEI/DXE
+can continue after a clean `cmp bx` remap. Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another

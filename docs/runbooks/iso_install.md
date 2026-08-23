@@ -225,5 +225,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    **Stage 43 (host, open):** simultaneous virtio `00:00.0` + IDE `00:00.1`
    (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). ACPI PM timer + PIIX4 PM `00:01.3` +
    guest-private i440FX DID remap after nested VT-x `699c9a6`
-   n=2048 `pci_ide=0`. Still `sectors=0`.
+   n=2048 `pci_ide=0`. Nested VT-x `5b2739a` n=21 `#GP` after CMOS.
+   8259 PIC + fw_cfg `etc/e820` + `#GP` insn dump. Still `sectors=0`.
    Next: firmware CD boot (ATAPI/El Torito).

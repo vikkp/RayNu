@@ -8,15 +8,18 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk), and a
+//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
+//! fw_cfg `etc/e820` (32 MiB RAM), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `699c9a6`: 2048 I/O still only `00:00.0` because
 //! `AcpiTimerLibConstructor` rejects virtio DID `0x1042`. Guest-private
 //! OVMF remap teaches that switch to accept `0x1042` as i440FX-class
-//! (hardware DID stays virtio; not two-phase DID). Not installer. Not
+//! (hardware DID stays virtio; not two-phase DID). Nested VT-x `5b2739a`
+//! remapped LZMA (`n=21`) then `#GP` after CMOS; PIC/e820 are the next
+//! honest PEI/DXE devices after `cmp bx` n=1. Not installer. Not
 //! Everest E5.
 
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
 /// Kept local so this module does not import the Proven Core EPT builder.
@@ -62,6 +65,12 @@ const FW_CFG_MAX_CPUS: u16 = 0x0F;
 const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
+/// Second named file: OVMF `PlatformScanE820` (`etc/e820`).
+pub const FW_CFG_E820_SEL: u16 = 0x21;
+/// Packed QEMU e820 entry size (`address:u64`, `length:u64`, `type:u32`).
+pub const E820_ENTRY_BYTES: u8 = 20;
+/// QEMU `E820_RAM`.
+pub const E820_RAM: u32 = 1;
 
 /// QEMU `bootorder` (OFW paths). CD (`ide@0,1` = `00:00.1`) then virtio disk (`scsi@0`).
 pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
@@ -88,23 +97,55 @@ fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-fn file_dir_byte(off: u16) -> u8 {
-    let o = off as usize;
-    match o {
-        0..=3 => 1u32.to_be_bytes()[o],
-        4..=7 => (BOOTORDER.len() as u32).to_be_bytes()[o - 4],
-        8..=9 => FW_CFG_BOOTORDER_SEL.to_be_bytes()[o - 8],
-        10 | 11 => 0,
-        12..=67 => {
-            let name = b"bootorder";
-            let i = o - 12;
-            if i < name.len() {
-                name[i]
+fn file_entry_byte(i: usize, size: u32, sel: u16, name: &[u8]) -> u8 {
+    match i {
+        0..=3 => size.to_be_bytes()[i],
+        4..=5 => sel.to_be_bytes()[i - 4],
+        6 | 7 => 0,
+        8..=63 => {
+            let ni = i - 8;
+            if ni < name.len() {
+                name[ni]
             } else {
                 0
             }
         }
         _ => 0,
+    }
+}
+
+fn file_dir_byte(off: u16) -> u8 {
+    const ENTRY: usize = 64;
+    let o = off as usize;
+    if o < 4 {
+        return 2u32.to_be_bytes()[o];
+    }
+    let body = o - 4;
+    let ent = body / ENTRY;
+    let i = body % ENTRY;
+    match ent {
+        0 => file_entry_byte(
+            i,
+            BOOTORDER.len() as u32,
+            FW_CFG_BOOTORDER_SEL,
+            b"bootorder",
+        ),
+        1 => file_entry_byte(i, u32::from(E820_ENTRY_BYTES), FW_CFG_E820_SEL, b"etc/e820"),
+        _ => 0,
+    }
+}
+
+/// One packed QEMU e820 RAM entry covering [`PLATFORM_RAM_BYTES`].
+pub fn e820_byte(off: u16) -> u8 {
+    let o = off as usize;
+    if o < 8 {
+        0
+    } else if o < 16 {
+        PLATFORM_RAM_BYTES.to_le_bytes()[o - 8]
+    } else if o < 20 {
+        E820_RAM.to_le_bytes()[o - 16]
+    } else {
+        0
     }
 }
 
@@ -141,6 +182,11 @@ pub fn is_fwcfg_port(port: u16) -> bool {
 
 pub fn is_timer_port(port: u16) -> bool {
     (0x40..=0x43).contains(&port) || port == 0x61 || port == 0x80 || port == 0x92
+}
+
+/// 8259 PIC + ELCR. Unhandled `IN` was `0xFF` (all IRQs in service).
+pub fn is_pic_port(port: u16) -> bool {
+    matches!(port, 0x20 | 0x21 | 0xA0 | 0xA1 | 0x4D0 | 0x4D1)
 }
 
 /// OVMF `AcpiTimerLibConstructor` leaves `mAcpiTimerIoAddr=0` when `00:00.0`
@@ -198,7 +244,7 @@ fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
 }
 
 pub fn is_platform_io_port(port: u16) -> bool {
-    is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port)
+    is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port) || is_pic_port(port)
 }
 
 /// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus APIC/HPET.
@@ -274,6 +320,8 @@ struct Platform {
     fw_len: u8,
     pit: u16,
     port61: u8,
+    port92: u8,
+    pic_imr: [u8; 2],
     pm_timer: u32,
     pmba: u32,
     pm_cmd: u16,
@@ -292,6 +340,8 @@ impl Platform {
             fw_len: 0,
             pit: 0xFFFF,
             port61: 0x10,
+            port92: 0x02,
+            pic_imr: [0xFF, 0xFF],
             pm_timer: 0,
             pmba: PIIX4_PMBA_DEFAULT,
             pm_cmd: 0x0001,
@@ -313,8 +363,10 @@ static PLAT_LOCK: AtomicBool = AtomicBool::new(false);
 static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
 static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
+static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
+static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
 
 fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
     while PLAT_LOCK.swap(true, Ordering::Acquire) {
@@ -386,11 +438,15 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_FILE_DIR => {
-            p.fw_len = 68;
+            p.fw_len = (4 + 64 * 2) as u8;
         }
         FW_CFG_BOOTORDER_SEL => {
             p.fw_len = BOOTORDER.len() as u8;
             FWCFG_BOOT.store(true, Ordering::Release);
+        }
+        FW_CFG_E820_SEL => {
+            p.fw_len = E820_ENTRY_BYTES;
+            FWCFG_E820.store(true, Ordering::Release);
         }
         _ => {
             p.fw_len = 0;
@@ -415,8 +471,10 @@ pub fn reset() {
     CMOS_MEM.store(false, Ordering::Release);
     FWCFG_RAM.store(false, Ordering::Release);
     FWCFG_BOOT.store(false, Ordering::Release);
+    FWCFG_E820.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
+    LAST_CMOS.store(0, Ordering::Release);
 }
 
 /// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.
@@ -445,13 +503,22 @@ pub fn fwcfg_bootorder_served() -> bool {
     FWCFG_BOOT.load(Ordering::Acquire)
 }
 
+pub fn fwcfg_e820_served() -> bool {
+    FWCFG_E820.load(Ordering::Acquire)
+}
+
+/// Last CMOS index (NMI bit stripped). Nested VT-x `5b2739a` died on `port=0x71`.
+pub fn last_cmos_index() -> u8 {
+    LAST_CMOS.load(Ordering::Acquire)
+}
+
 pub fn host_bridge_enumerated() -> bool {
     HOST_ENUM.load(Ordering::Acquire)
 }
 
-/// Honest platform-memory evidence: CMOS size or fw_cfg RAM_SIZE was read.
+/// Honest platform-memory evidence: CMOS size, fw_cfg RAM_SIZE, or etc/e820.
 pub fn platform_memory_served() -> bool {
-    cmos_mem_served() || fwcfg_ram_served()
+    cmos_mem_served() || fwcfg_ram_served() || fwcfg_e820_served()
 }
 
 /// Header Type byte (bits 23:16 of config dword `0x0C`) has the multifunction bit.
@@ -573,9 +640,11 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     return (rax & !mask) | (u64::from(p.cmos_idx) & mask);
                 }
                 p.cmos_idx = (rax as u8) & 0x7F;
+                LAST_CMOS.store(p.cmos_idx, Ordering::Release);
                 return rax;
             }
             let idx = p.cmos_idx;
+            LAST_CMOS.store(idx, Ordering::Release);
             if is_in {
                 note_cmos_mem(idx);
                 let v = p.cmos[idx as usize] as u64;
@@ -602,6 +671,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                                 FW_CFG_BOOTORDER_SEL => {
                                     BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
                                 }
+                                FW_CFG_E820_SEL => e820_byte(p.fw_off),
                                 _ => p.fw_buf[p.fw_off as usize],
                             };
                             p.fw_off = p.fw_off.saturating_add(1);
@@ -635,6 +705,22 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             }
             return rax;
         }
+        if is_pic_port(port) {
+            if is_in {
+                let v = match port {
+                    0x21 => p.pic_imr[0],
+                    0xA1 => p.pic_imr[1],
+                    _ => 0,
+                };
+                return (rax & !mask) | (u64::from(v) & mask);
+            }
+            if port == 0x21 {
+                p.pic_imr[0] = rax as u8;
+            } else if port == 0xA1 {
+                p.pic_imr[1] = rax as u8;
+            }
+            return rax;
+        }
         if is_in {
             let val = match port {
                 0x61 => {
@@ -642,7 +728,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     u64::from(p.port61)
                 }
                 0x80 => 0,
-                0x92 => 0x02,
+                0x92 => u64::from(p.port92),
                 0x40 => {
                     let v = p.pit;
                     p.pit = p.pit.wrapping_sub(0x40);
@@ -655,6 +741,8 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         } else {
             if port == 0x61 {
                 p.port61 = (rax as u8 & !0x10) | (p.port61 & 0x10);
+            } else if port == 0x92 {
+                p.port92 = (rax as u8) | 0x02;
             } else if port == 0x40 {
                 p.pit = (rax as u16) | 0x00FF;
             } else if port == 0x43 {

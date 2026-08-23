@@ -8,7 +8,8 @@
 //! PIIX `00:01.1` is the same CD. PIIX4 PM at `00:01.3`. Guest-private
 //! OVMF remap of i440FX DID immediates so `AcpiTimerLib` matches virtio
 //! `0x1042` (hardware DID stays virtio; not two-phase DID). ACPI PM
-//! timer so PEI Delay can end. Stop the private VMCS only after firmware
+//! timer so PEI Delay can end. 8259 PIC RAZ/WI. fw_cfg `etc/e820` 32 MiB.
+//! Exception insn dump on `#GP`. Stop the private VMCS only after firmware
 //! enumerates **both** (or the post-DXE tail). ISA `00:01.0` is
 //! multifunction so a bus walk finds IDE. Marker after past-SEC and both
 //! PCI enums. Not ATAPI sectors. Not installer. No new `*Absent` enum.
@@ -125,6 +126,10 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("cmp bx")
         && guest.contains("maybe_remap_guest_ram")
         && guest.contains("is_piix_pm_io")
+        && guest.contains("8259 PIC RAZ/WI")
+        && guest.contains("fw_cfg etc/e820")
+        && guest.contains("exception insn dump")
+        && guest.contains("copy_low_ram_at")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -157,6 +162,9 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM at 00:01.3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cmp bx")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8259 PIC RAZ/WI")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

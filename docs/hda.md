@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. PIIX4 PM 00:01.3 + cmp bx i440FX DID remap (not LZMA 37 12) after nested VT-x 699c9a6 n=2048 pci_ide=0. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. PIIX4 PM 00:01.3 + cmp bx i440FX DID remap (not LZMA). 8259 PIC + etc/e820 + #GP insn dump after 5b2739a n=21 #GP. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK 8259 PIC + fw_cfg etc/e820 + #GP insn dump after 5b2739a n=21 #GP; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK cmp bx i440FX DID remap (not LZMA 37 12) + RAM remap after decompress; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK PIIX4 PM 00:01.3 + guest-private i440FX DID remap; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK ACPI PM timer after 699c9a6 n=2048 pci_ide=0; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |

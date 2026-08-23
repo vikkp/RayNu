@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -177,6 +177,20 @@ pub fn dxe_or_cd_boot_evidence(
     exec_ram: bool,
 ) -> bool {
     past_sec && (sectors > 0 || (platform_mem && exec_ram))
+}
+
+/// Copy up to `out.len()` bytes of guest-UEFI low RAM at identity `linear`.
+///
+/// Used to dump the `#GP` instruction (nested VT-x `5b2739a` `rip=0x80201a`).
+/// PEI runs with paging off / identity, so GPA = linear.
+pub fn copy_low_ram_at(ram: &[u8], linear: u64, out: &mut [u8]) -> usize {
+    let start = linear as usize;
+    if out.is_empty() || start >= ram.len() {
+        return 0;
+    }
+    let n = out.len().min(ram.len() - start);
+    out[..n].copy_from_slice(&ram[start..start + n]);
+    n
 }
 
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
@@ -1034,6 +1048,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
                 let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
                 let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
+                let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
+                let linear = cs_base.wrapping_add(rip);
                 serial::write_str("boot: guest-UEFI exception intr=0x");
                 write_hex(intr);
                 serial::write_str(" err=0x");
@@ -1042,6 +1058,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 write_hex(cs);
                 serial::write_str(" cr0=0x");
                 write_hex(cr0);
+                serial::write_str(" linear=0x");
+                write_hex(linear);
+                serial::write_str(" insn=");
+                dump_low_ram_insn(linear);
                 serial::write_byte(b'\n');
                 false
             }
@@ -1111,6 +1131,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::guest_platform::acpi_pm_timer_reads() as u64);
     serial::write_str(" ramr=");
     write_dec(RAM_REMAP_N.load(Ordering::Acquire) as u64);
+    serial::write_str(" cmos=0x");
+    write_hex_u32(u32::from(crate::devices::guest_platform::last_cmos_index()));
     serial::write_byte(b'\n');
     leave_to_e4();
 }
@@ -1383,6 +1405,29 @@ unsafe fn set_cr_gpr(idx: u8, val: u64) {
         15 => SAVED_R15 = val,
         _ => {}
     }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn dump_low_ram_insn(linear: u64) {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return;
+    }
+    let mut buf = [0u8; 16];
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: #GP insn dump from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    let n = copy_low_ram_at(ram, linear, &mut buf);
+    for i in 0..n {
+        write_hex2(buf[i]);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex2(b: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    serial::write_byte(HEX[(b >> 4) as usize]);
+    serial::write_byte(HEX[(b & 0xf) as usize]);
 }
 
 #[cfg(target_os = "uefi")]
