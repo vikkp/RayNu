@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-virtio |
-| Summary | P0-57 empty PCI virtio-blk at 00:01.2 + fw_cfg bootorder CD then disk. i440FX at 00:00.0 (PEI no longer loops DID 0x7010). Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-57 empty PCI virtio-blk at 00:00.0 (PEI DID probe) + fw_cfg bootorder CD then disk. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (host + QEMU). DXE/CDROM still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:00.0 (PEI DID probe); nested VT-x proved no bus walk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CLOSED nested VT-x DXE-OK + CDROM-OK pci_ide=1 sectors=0; not installer; iron P0-14 stays 2b795a0 |

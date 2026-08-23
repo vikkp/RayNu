@@ -4,9 +4,10 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:01.1` plus primary ATA PIO (`0x1F0`/`0x3F6`).
-//! Stage 41 put this function at `00:00.0` so PEI's DID probe printed
-//! CDROM-OK; that layout looped `val=0x7010` and never scanned virtio.
+//! PCI IDE at `00:00.1` plus primary ATA PIO (`0x1F0`/`0x3F6`).
+//! PEI only probes `00:00.0` Device ID; that slot is virtio (Stage 42).
+//! Stage 41 printed CDROM-OK with IDE at `00:00.0`; this PEI will not
+//! re-enum IDE. CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
@@ -26,7 +27,7 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
-pub const GUEST_CD_PCI_DEV: u8 = 1;
+pub const GUEST_CD_PCI_DEV: u8 = 0;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
@@ -144,7 +145,7 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
     bus == GUEST_CD_PCI_BUS && dev == GUEST_CD_PCI_DEV && fun == GUEST_CD_PCI_FN
 }
 
-/// PCI config address for the guest IDE function (`00:01.1`).
+/// PCI config address for the guest IDE function (`00:00.1`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_CD_PCI_BUS) << 16)

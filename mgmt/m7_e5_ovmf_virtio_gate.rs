@@ -4,9 +4,9 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: N/A
 //!
-//! Guest-UEFI PCI virtio 1.0 block at `00:01.2` plus fw_cfg `bootorder`
-//! (CD then disk). i440FX at `00:00.0`; PIIX ISA `00:01.0` is multifunction
-//! so the walk finds IDE `00:01.1` and virtio. Marker after past-SEC and
+//! Guest-UEFI PCI virtio 1.0 block at `00:00.0` plus fw_cfg `bootorder`
+//! (CD then disk). This OVMF PEI only `inw` Device ID of `00:00.0`.
+//! IDE is `00:00.1` (not scanned by this PEI). Marker after past-SEC and
 //! virtio PCI enum. Not a completed firmware CD boot. Not installer.
 //! No new `*Absent` enum. No TLS.
 
@@ -16,9 +16,9 @@ use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_dxe_gate::run_m7_e5_ovmf_dxe_gate;
 use crate::devices::guest_platform::{
-    boot_order_cd_then_disk, fwcfg_bootorder_served, io, pci_header_is_multifunction,
-    pci_read_data as plat_pci_read, pci_write_addr as plat_pci_write, reset as reset_plat,
-    BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
+    boot_order_cd_then_disk, fwcfg_bootorder_served, host_pci_config_addr, io,
+    pci_header_is_multifunction, pci_read_data as plat_pci_read, pci_write_addr as plat_pci_write,
+    reset as reset_plat, BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
 };
 use crate::devices::guest_virtio_blk::{
     pci_config_addr, pci_read_data, pci_write_addr, present, reset as reset_virtio,
@@ -55,6 +55,10 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     if id as u16 != GUEST_VIRTIO_PCI_VENDOR || (id >> 16) as u16 != GUEST_VIRTIO_PCI_DEVICE {
         return false;
     }
+    pci_write_addr(pci_config_addr() | 0x0C);
+    if !pci_header_is_multifunction(pci_read_data(0xCFC, 4)) {
+        return false;
+    }
     if !ide_cdrom::present_placeholder() {
         return false;
     }
@@ -63,7 +67,7 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     if ide_id as u16 != 0x8086 || (ide_id >> 16) as u16 != 0x7010 {
         return false;
     }
-    plat_pci_write(0x8000_0000);
+    plat_pci_write(host_pci_config_addr());
     let host_id = match plat_pci_read(0xCFC, 4) {
         Some(v) => v,
         None => return false,
@@ -92,7 +96,7 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     virtio_ok
         && boot_served
         && first == *b"/pci@i0c"
-        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1")
+        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@0,1")
 }
 
 pub fn ovmf_virtio_surface_present() -> bool {
@@ -109,7 +113,8 @@ pub fn ovmf_virtio_surface_present() -> bool {
         && qemu.contains("RAYNU-V-M7-E5-OVMF-VIRTIO-OK")
         && guest.contains("maybe_print_virtio")
         && guest.contains("guest_virtio_blk")
-        && virt.contains("00:01.2")
+        && virt.contains("00:00.0")
+        && qemu.contains("PEI DID slot is virtio")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -125,7 +130,7 @@ pub fn run_m7_e5_ovmf_virtio_gate() -> bool {
         && !post_dxe_should_stop(true, 115, 115, false)
         && post_dxe_should_stop(true, 115, 115, true)
         && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false)
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:01.2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_VIRTIO_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";

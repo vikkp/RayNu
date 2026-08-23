@@ -218,7 +218,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    + IDE at `00:00.0`. Post-DXE tail then E4. Not a completed firmware
    CD boot. Not installer.    Not Everest E5.
    **Stage 42 (host + QEMU):** empty virtio-blk + boot order CD then disk
-   (`RAYNU-V-M7-E5-OVMF-VIRTIO-OK`). PCI virtio 1.0 at `00:01.2`; i440FX
-   at `00:00.0`; IDE at `00:01.1`. Not a completed firmware CD boot.
+   (`RAYNU-V-M7-E5-OVMF-VIRTIO-OK`). PCI virtio 1.0 at `00:00.0` (PEI DID
+   probe). IDE at `00:00.1`. Not a completed firmware CD boot.
    Not installer. Not Everest E5.
    Next: firmware CD boot (ATAPI/El Torito).

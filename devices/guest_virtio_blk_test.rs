@@ -7,13 +7,13 @@ use crate::devices::guest_platform::{boot_order_cd_then_disk, pci_bdf};
 use crate::devices::ide_cdrom;
 
 #[test]
-fn pci_bdf_is_piix_fn2_not_ide() {
+fn pci_bdf_is_probe_slot_not_ide() {
     let addr = pci_config_addr();
-    assert_eq!(pci_bdf(addr), (0, 1, 2, 0));
+    assert_eq!(pci_bdf(addr), (0, 0, 0, 0));
     assert!(pci_addr_selects_virtio(addr));
-    assert!(pci_addr_selects_virtio(0x8000_0A00));
-    assert!(!pci_addr_selects_virtio(0x8000_0000)); // 00:00.0 host
-    assert!(!pci_addr_selects_virtio(0x8000_0900)); // 00:01.1 IDE
+    assert!(pci_addr_selects_virtio(0x8000_0000));
+    assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 IDE
+    assert!(!pci_addr_selects_virtio(0x8000_4000)); // 00:08.0 host
     assert!(!pci_addr_selects_virtio(0x8000_0800)); // 00:01.0 ISA
 }
 
@@ -30,8 +30,8 @@ fn present_enumerates_virtio_and_cd_then_disk() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_VIRTIO_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_VIRTIO_PCI_DEVICE);
-    // PIIX walk: CF8 offset 2 + inw(CFC) at 00:01.2.
-    pci_write_addr(0x8000_0A02);
+    // PEI DID probe: CF8=0x80000002 + inw(CFC) at 00:00.0.
+    pci_write_addr(0x8000_0002);
     assert_eq!(
         pci_read_data(0xCFC, 2) & 0xffff,
         u32::from(GUEST_VIRTIO_PCI_DEVICE)
@@ -44,15 +44,14 @@ fn present_enumerates_virtio_and_cd_then_disk() {
 }
 
 #[test]
-fn isa_is_multifunction_so_fn1_and_fn2_are_scannable() {
-    use crate::devices::guest_platform::{
-        pci_header_is_multifunction, pci_read_data as plat_read, pci_write_addr as plat_write,
-        PCI_HEADER_MULTIFUNCTION,
-    };
-    plat_write(0x8000_080C);
-    let ht = plat_read(0xCFC, 4).expect("isa ht");
-    assert_eq!(ht, PCI_HEADER_MULTIFUNCTION);
+fn virtio_fn0_is_multifunction_so_ide_fn1_is_scannable() {
+    use crate::devices::guest_platform::pci_header_is_multifunction;
+    reset();
+    assert!(present());
+    pci_write_addr(pci_config_addr() | 0x0C);
+    let ht = pci_read_data(0xCFC, 4);
     assert!(pci_header_is_multifunction(ht));
+    reset();
 }
 
 #[test]

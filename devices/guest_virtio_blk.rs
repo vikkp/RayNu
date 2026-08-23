@@ -4,22 +4,25 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
-//! Empty virtio 1.0 block function at `00:01.2` (Red Hat `1AF4:1042`).
-//! i440FX is at `00:00.0`; PIIX ISA `00:01.0` is multifunction so a bus
-//! walk finds IDE `00:01.1` and this slot. Nested VT-x proved `00:00.1`
-//! is never scanned while PEI loops DID `0x7010` at `00:00.0`.
-//! Boot order is CD then disk (fw_cfg `bootorder`). This is not the M4.3
-//! virtio-mmio probe, not a completed firmware CD boot, not an installer.
+//! Empty virtio 1.0 block function at `00:00.0` (Red Hat `1AF4:1042`).
+//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` (host
+//! `0x1237` and IDE `0x7010` both looped; never Header Type, never another
+//! BDF). The probe slot is virtio so that read can enum it. IDE is `00:00.1`
+//! (multifunction child). Boot order is CD then disk (fw_cfg `bootorder`).
+//! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,
+//! not an installer.
 
-use crate::devices::guest_platform::{boot_order_cd_then_disk, pci_bdf, pci_cfg_offset};
+use crate::devices::guest_platform::{
+    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, PCI_HEADER_MULTIFUNCTION,
+};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 /// QEMU / serial marker when guest-UEFI sees virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
 pub const GUEST_VIRTIO_PCI_BUS: u8 = 0;
-pub const GUEST_VIRTIO_PCI_DEV: u8 = 1;
-pub const GUEST_VIRTIO_PCI_FN: u8 = 2;
+pub const GUEST_VIRTIO_PCI_DEV: u8 = 0;
+pub const GUEST_VIRTIO_PCI_FN: u8 = 0;
 /// Virtio 1.0 PCI vendor (Red Hat).
 pub const GUEST_VIRTIO_PCI_VENDOR: u16 = 0x1AF4;
 /// Virtio 1.0 block device id.
@@ -79,7 +82,7 @@ pub fn pci_addr_selects_virtio(addr: u32) -> bool {
     bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_VIRTIO_PCI_DEV && fun == GUEST_VIRTIO_PCI_FN
 }
 
-/// PCI config address for the guest virtio-blk function (`00:01.2`).
+/// PCI config address for the guest virtio-blk function (`00:00.0`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
@@ -138,7 +141,7 @@ fn config_dword(v: &VirtioPci, off: u8) -> u32 {
         0x00 => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_DEVICE) << 16),
         0x04 => u32::from(v.pci_cmd) | 0x0010_0000, // CapList
         0x08 => 0x0100_0001,                        // SCSI mass-storage, rev 1
-        0x0C => 0x0000_0000,
+        0x0C => PCI_HEADER_MULTIFUNCTION,
         0x10 => v.bar0,
         0x2C => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_SUBSYS) << 16),
         0x34 => 0x0000_0040, // cap pointer

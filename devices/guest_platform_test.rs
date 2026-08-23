@@ -78,7 +78,8 @@ fn fwcfg_bootorder_is_cd_then_disk() {
 fn i440fx_host_and_isa_enumerate() {
     reset();
     pci_write_addr(0x8000_0000);
-    assert!(pci_addr_selects_host(0x8000_0000));
+    assert!(pci_read_data(0xCFC, 4).is_none());
+    assert!(!pci_addr_selects_host(0x8000_0000));
     pci_write_addr(host_pci_config_addr());
     let id = pci_read_data(0xCFC, 4).expect("host");
     assert_eq!(id as u16, HOST_BRIDGE_VENDOR);

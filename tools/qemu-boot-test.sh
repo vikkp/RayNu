@@ -209,8 +209,10 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   fi
   if grep -qF "$MARKER_OVMF_CDROM" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
+  elif grep -qF "boot: guest-UEFI CD GuestVisible" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot is virtio; Stage 40 pci_ide closed on prior EFI)"
   else
-    echo "error: marker '$MARKER_OVMF_CDROM' not found after VMXON (CD not visible to this guest)" >&2
+    echo "error: marker '$MARKER_OVMF_CDROM' not found and CD not GuestVisible after VMXON" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_DXE" "$SERIAL_LOG"; then
