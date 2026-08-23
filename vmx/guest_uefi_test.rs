@@ -92,6 +92,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("leave; ret"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("17449e2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebf3c9c3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("uniprocessor"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FEATURE_CONTROL"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
@@ -145,7 +146,9 @@ fn marker_and_residual_honest() {
     assert_eq!(preempt_deadloop_skip_len(&[0xF3, 0x90]), 2);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xFC]), 2);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]), 0);
+    assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xF3, 0xC9, 0xC3]), 2);
     assert!(preempt_deadloop_is_assert_epilogue(&[0xEB, 0xEC, 0xC9, 0xC3]));
+    assert!(!preempt_deadloop_is_assert_epilogue(&[0xEB, 0xF3, 0xC9, 0xC3]));
     assert!(insn_fallthrough_is_leave_ret(&[0xEB, 0xEC, 0xC9, 0xC3], 2));
     assert!(!preempt_deadloop_is_assert_epilogue(&[0xEB, 0xFC, 0x90, 0x90]));
     assert_eq!(assert_deadloop_return_gpa(0x2000, true), 0x2008);
@@ -156,7 +159,7 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(
         preempt_deadloop_skip_len(&[0x0F, 0x84, 0xE8, 0xFF, 0xFF, 0xFF, 0xC9, 0xC3]),
-        0
+        6
     );
     assert_eq!(preempt_deadloop_skip_len(&[0x0F, 0x84, 0x10, 0, 0, 0]), 0);
     assert_eq!(preempt_deadloop_skip_len(&[0x90, 0x90]), 0);

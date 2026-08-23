@@ -167,6 +167,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("891eb5b")
         && guest.contains("leave; ret")
         && guest.contains("ebecc9c3")
+        && guest.contains("ebf3c9c3")
         && guest.contains("guest_uefi_filter_cpuid")
         && guest.contains("GUEST_UEFI_FEATURE_CONTROL_VALUE")
         && guest.contains("17449e2")
@@ -216,7 +217,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && preempt_deadloop_should_skip(0xEB, 0xFC)
         && preempt_deadloop_should_skip(0xEB, 0xEC)
         && preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]) == 0
+        && preempt_deadloop_skip_len(&[0xEB, 0xF3, 0xC9, 0xC3]) == 2
         && preempt_deadloop_is_assert_epilogue(&[0xEB, 0xEC, 0xC9, 0xC3])
+        && !preempt_deadloop_is_assert_epilogue(&[0xEB, 0xF3, 0xC9, 0xC3])
         && !preempt_deadloop_is_assert_epilogue(&[0xEB, 0xFC, 0x90, 0x90])
         && !spin_short_jmp_should_skip(0xEB, 0xFC)
         && !spin_short_jmp_should_skip(0xEB, 0xEC)
@@ -249,6 +252,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("891eb5b")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("leave; ret")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("17449e2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebf3c9c3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("uniprocessor")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FEATURE_CONTROL")
         && GUEST_UEFI_FEATURE_CONTROL_VALUE == 1
