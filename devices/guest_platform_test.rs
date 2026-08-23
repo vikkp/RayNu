@@ -3,7 +3,7 @@ use super::{
     cmos_extended_kb, cmos_mem_served, e820_byte, fwcfg_boot_wait_served, fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
-    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, last_cmos_index,
+    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_xapic_2m_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
@@ -222,7 +222,9 @@ fn piix3_isa_pirq_resets_disabled_like_qemu() {
 #[test]
 fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0xFCF8_F000));
-    assert!(is_platform_sink_gpa(0xFEE0_0000));
+    assert!(is_xapic_2m_gpa(0xFEE0_0000));
+    assert!(is_xapic_2m_gpa(0xFEE0_1000));
+    assert!(!is_platform_sink_gpa(0xFEE0_0000));
     assert!(is_platform_sink_gpa(0xFEC0_0000));
     assert!(is_platform_sink_gpa(0xFED0_0000));
     assert!(!is_platform_sink_gpa(0x0000_1000));

@@ -296,13 +296,23 @@ pub fn is_platform_io_port(port: u16) -> bool {
         || is_kbc_port(port)
 }
 
-/// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus APIC/HPET.
+/// Local APIC 2 MiB window (`0xFEE00000`). Not a zero sink — version 0
+/// is a typical OVMF `GetApicVersion() != 0` DebugAssert (iron `ad78f12`).
+pub fn is_xapic_2m_gpa(gpa: u64) -> bool {
+    (gpa & !0x1F_FFFF) == 0xFEE0_0000
+}
+
+/// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus IOAPIC/HPET.
+/// The xAPIC 2 MiB window is excluded so guest-UEFI can map a live 4 KiB page.
 pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     const GIB: u64 = 1 << 30;
     const MMIO_LO: u64 = 0xF000_0000;
     const FW_FLOOR: u64 = 0xFFC0_0000;
     const IOAPIC: u64 = 0xFEC0_0000;
     const APIC_TOP: u64 = 0xFEF0_0000;
+    if is_xapic_2m_gpa(gpa) {
+        return false;
+    }
     (gpa >= PLATFORM_RAM_BYTES && gpa < GIB)
         || (gpa >= MMIO_LO && gpa < FW_FLOOR)
         || (gpa >= IOAPIC && gpa < APIC_TOP)

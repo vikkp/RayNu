@@ -13,6 +13,18 @@ fn marker_and_range() {
 fn mmio_version_readable() {
     let r = mmio_access(APIC_GPA + 0x30, false, 0).unwrap().unwrap();
     assert_eq!(r & 0xFF, 0x14);
+    assert_eq!(XAPIC_VERSION, 0x50014);
+}
+
+#[test]
+fn fill_xapic_page_version_not_zero() {
+    let mut page = [0u8; 4096];
+    fill_xapic_page(&mut page);
+    let ver = u32::from_le_bytes(page[0x30..0x34].try_into().unwrap());
+    assert_eq!(ver, XAPIC_VERSION);
+    assert_ne!(ver, 0);
+    let svr = u32::from_le_bytes(page[0xF0..0xF4].try_into().unwrap());
+    assert_eq!(svr & (1 << 8), 1 << 8);
 }
 
 #[test]

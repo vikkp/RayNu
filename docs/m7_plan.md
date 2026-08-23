@@ -294,6 +294,9 @@ intercept, then skip of `ebecc9c3` (`leave; ret`) escaped ASSERT → `#UD`
 PE-header `0x109D` stop n=1439. Iron `17449e2`: ASSERT noskip
 `ret=0x6e8946` `rip=0x6e81ca` after host CPUID (Xeon topology+VMX).
 Guest-UEFI CPUID is uniprocessor, VMX/x2APIC hidden, FEATURE_CONTROL locked.
+Iron `ad78f12`: same ASSERT after seven `RDMSR 0x1B` (APIC_BASE) then
+CPUID `0x1cf11b5`. xAPIC MMIO was a 2MiB zero sink (`GetApicVersion()==0`);
+map a 4KiB xAPIC page (version `0x50014`).
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +

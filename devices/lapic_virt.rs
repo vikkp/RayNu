@@ -42,6 +42,8 @@ const REG_DIVIDE: u32 = 0x3E0;
 const LVT_MASKED: u32 = 1 << 16;
 const LVT_PERIODIC: u32 = 1 << 17;
 const SVR_ENABLED: u32 = 1 << 8;
+/// Version 0x14, 6 LVT entries (Intel xAPIC). Sink zeros made this 0.
+pub const XAPIC_VERSION: u32 = 0x0005_0014;
 
 /// TSC ticks per undivided APIC-bus cycle (~100 MHz bus @ ~3.2 GHz TSC).
 const TSC_PER_BUS_CYCLE: u64 = 32;
@@ -235,7 +237,7 @@ fn read_reg(reg: u32) -> u32 {
         }
         match reg {
             REG_ID => APIC_ID,
-            REG_VERSION => 0x50014, // version 0x14, 6 LVT entries
+            REG_VERSION => XAPIC_VERSION,
             REG_TPR => APIC_TPR,
             REG_PPR => processor_priority(),
             REG_EOI => 0,
@@ -407,6 +409,26 @@ pub fn wrmsr(index: u32, value: u64) -> Option<bool> {
     }
     write_reg(reg_from_msr(index), value as u32);
     Some(unsafe { HOST_TIMER_FOR_GUEST })
+}
+
+/// Stamp a 4 KiB xAPIC MMIO image (version ≠ 0, LVTs masked, flat DFR).
+///
+/// Guest-UEFI maps this at GPA `0xFEE00000` so OVMF `MmioRead32` of
+/// the version register is not the 2 MiB platform-sink zero page.
+pub fn fill_xapic_page(page: &mut [u8]) {
+    if page.len() < 0x400 {
+        return;
+    }
+    page[..0x400].fill(0);
+    fn poke(page: &mut [u8], off: usize, v: u32) {
+        page[off..off + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    poke(page, REG_VERSION as usize, XAPIC_VERSION);
+    poke(page, 0xE0, 0xFFFF_FFFF); // DFR flat
+    poke(page, REG_SVR as usize, 0xFF | SVR_ENABLED);
+    for off in [0x320usize, 0x330, 0x340, 0x350, 0x360, 0x370] {
+        poke(page, off, LVT_MASKED);
+    }
 }
 
 /// Handle APIC MMIO access at `gpa`.
