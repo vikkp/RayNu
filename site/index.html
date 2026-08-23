@@ -109,9 +109,9 @@
           Memory isolation isn’t tested. It’s proved.
         </h1>
         <p class="lede reveal reveal--delay-2">
-          Single-binary Type-1 hypervisor — on real PowerEdge R640: COM2 printed
-          <code>RAYNU-V-R640-BOOT-OK</code>, then the operator LAN reached
-          <code>RAYNU-V-M7-UEFI-HTTP-OK</code>.
+          A single-binary Type-1 hypervisor for Dell PowerEdge. It boots on
+          real R640 iron, serves its own Web UI over the network, and is built
+          so memory isolation can be machine-proved — not just re-tested.
         </p>
         <div class="cta reveal reveal--delay-3">
           <a class="cta__primary" href="https://github.com/vikkp/RayNu"
@@ -123,6 +123,11 @@
             >Read the architecture</a
           >
         </div>
+        <p class="hero__proof reveal reveal--delay-3">
+          On real R640 iron: <code>RAYNU-V-R640-BOOT-OK</code> ·
+          <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> ·
+          <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>
+        </p>
       </div>
     </header>
 
@@ -189,6 +194,31 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             · <a href="stories.html#r640-2026-08-16-cruzer">Cruzer stamps</a>
             · <a href="hda.html">Distance to Mount Everest</a>.
           </p>
+        </div>
+      </section>
+
+      <section class="section section--fork" id="start-here">
+        <div class="section__inner">
+          <div class="fork">
+            <a class="fork__card" href="ciospeak.html" data-reveal>
+              <span class="fork__kicker">For infrastructure leaders</span>
+              <span class="fork__title">Your PowerEdge fleet has years left.</span>
+              <span class="fork__text"
+                >License economics, isolation assurance, and what a reversible
+                design partnership looks like — the executive view.</span
+              >
+              <span class="fork__cta">CIO View →</span>
+            </a>
+            <a class="fork__card" href="#journey" data-reveal>
+              <span class="fork__kicker">For engineers</span>
+              <span class="fork__title">Every claim has a marker.</span>
+              <span class="fork__text"
+                >Dozens of closed gates, Verus proof transcripts, and serial
+                logs from real iron — the evidence, end to end.</span
+              >
+              <span class="fork__cta">The journey ↓</span>
+            </a>
+          </div>
         </div>
       </section>
 
