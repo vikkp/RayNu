@@ -59,8 +59,9 @@ RAYNU-V-M7-ISO-OK
   bzImage jump. Windows install is later; the type exists now.
 - **`attach_cdrom_uefi`** after `FirmwareArmed` is `GuestVisible` — PCI
   IDE/ATAPI on the private guest-UEFI VMCS (`RAYNU-V-M7-E5-OVMF-CDROM-OK`).
-  Unarmed calls still return `UnsupportedOnFirmware`. Firmware does not
-  yet boot the CD. Host catalog **parse** (`parse_el_torito`)
+  Unarmed calls still return `UnsupportedOnFirmware`. Stage 41
+  (`RAYNU-V-M7-E5-OVMF-DXE-OK`) is past-PEI/DXE or a CD boot
+  **attempt**, not a completed firmware CD boot. Host catalog **parse** (`parse_el_torito`)
   is Stage 0. Host **attach** (`attach_cdrom_host`) is Stage 1. Firmware **arm**
   (`attach_cdrom_firmware` / `FirmwareArmed`) is Stage 2
   (`RAYNU-V-M7-E5-CDROM-FIRMWARE-OK`). Guest firmware **envelope**
@@ -410,3 +411,10 @@ presents the ISO on a PIIX3-class PCI IDE/ATAPI function (`00:00.0`)
 with primary PIO. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` after past-SEC
 and PCI enum or an ATAPI sector read. Unarmed attach stays
 `UnsupportedOnFirmware`. Not full DXE. Not installer.
+
+E5 Stage 41 (host + QEMU nested VT-x, closed): CMOS/fw_cfg plus i440FX
+host at `00:08.0`. PEI only reads `00:00.0` Device ID, so the guest IDE
+lives there. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` with `pci_ide=1`
+`sectors=0` (`val=0x7010`) and `RAYNU-V-M7-E5-OVMF-DXE-OK` (`plat=1`
+`ram_rip=1`). Not a completed firmware CD boot. Not installer.
+Next: virtio-blk + boot order CD→disk.

@@ -34,8 +34,9 @@ use crate::audit::AuditEvent;
 use crate::audit_log;
 #[cfg(target_os = "uefi")]
 use crate::boot::serial;
+use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 #[cfg(target_os = "uefi")]
-use crate::memory::ept_hw::{self, frames_required_firmware_alias, GUEST_UEFI_LOW_RAM_BYTES};
+use crate::memory::ept_hw::{self, frames_required_firmware_alias};
 #[cfg(target_os = "uefi")]
 use crate::vmx::fields::*;
 #[cfg(target_os = "uefi")]
@@ -51,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; not full DXE; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.0); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0 (PEI only probes 00:00.0 DID); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -62,12 +63,32 @@ pub const M7_E5_OVMF_PAST_SEC_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-PAST-SEC-OK"
 /// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
 pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 
+/// QEMU / serial marker when PEI/DXE progressed or the guest attempted CD boot.
+pub const M7_E5_OVMF_DXE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-DXE-OK";
+
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 
-/// Resume cap after Stage 38's 64-exit window — enough for PEI PCI scan.
-pub const GUEST_UEFI_RESUME_CAP: u32 = 256;
+/// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
+pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
+
+/// After DXE evidence, keep a short tail so IDE can enumerate, then fail-soft
+/// to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
+pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
+
+/// Stop the private VMCS after DXE once IDE is visible or the tail is spent.
+///
+/// INVARIANTS:
+/// - `false` until DXE printed (PEI still needs the full resume cap)
+/// - `true` as soon as DXE printed **and** the IDE function enumerated
+/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
+pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, pci_ide: bool) -> bool {
+    if !dxe_printed {
+        return false;
+    }
+    pci_ide || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+}
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
 /// Same #GP as Linux `startup_64` without the E4 CR4.VMXE mask.
@@ -101,10 +122,29 @@ pub fn past_sec_evidence(
     left_sec && (pci_config || com_bytes > 0 || guest_hlt)
 }
 
+/// Linear RIP is executing from guest-UEFI low RAM (PEI relocated / DXE).
+pub fn exec_from_low_ram(linear: u64) -> bool {
+    linear < GUEST_UEFI_LOW_RAM_BYTES
+}
+
+/// Honest past-PEI/DXE or a guest CD boot attempt (ATAPI sector read).
+///
+/// Platform CMOS/fw_cfg alone is not enough. Need a CD READ or firmware
+/// executing from the low-RAM window after past-SEC.
+pub fn dxe_or_cd_boot_evidence(
+    past_sec: bool,
+    sectors: u32,
+    platform_mem: bool,
+    exec_ram: bool,
+) -> bool {
+    past_sec && (sectors > 0 || (platform_mem && exec_ram))
+}
+
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
 static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
 static LAST_EXIT_REASON: AtomicU32 = AtomicU32::new(0);
 static LAST_GUEST_RIP: AtomicU64 = AtomicU64::new(0);
+static LAST_LINEAR: AtomicU64 = AtomicU64::new(0);
 static LAST_GUEST_PHYS: AtomicU64 = AtomicU64::new(0);
 static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
 static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
@@ -118,6 +158,12 @@ static COM_BANNER: AtomicBool = AtomicBool::new(false);
 static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
 static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
+static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
+static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
+static EPT_PML4: AtomicU64 = AtomicU64::new(0);
+static SINK_HPA: AtomicU64 = AtomicU64::new(0);
+static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
+static PCI_TRACE: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -190,6 +236,7 @@ pub fn reset_guest_uefi_launch() {
     MARKER_PRINTED.store(false, Ordering::Release);
     LAST_EXIT_REASON.store(0, Ordering::Release);
     LAST_GUEST_RIP.store(0, Ordering::Release);
+    LAST_LINEAR.store(0, Ordering::Release);
     LAST_GUEST_PHYS.store(0, Ordering::Release);
     LAST_INSN_ERROR.store(0, Ordering::Release);
     EXIT_COUNT.store(0, Ordering::Release);
@@ -203,6 +250,13 @@ pub fn reset_guest_uefi_launch() {
     UART_LCR_COM1.store(0, Ordering::Release);
     UART_LCR_COM2.store(0, Ordering::Release);
     CONTINUE_GUEST.store(false, Ordering::Release);
+    DXE_PRINTED.store(false, Ordering::Release);
+    DXE_AT_N.store(0, Ordering::Release);
+    EPT_PML4.store(0, Ordering::Release);
+    SINK_HPA.store(0, Ordering::Release);
+    SINK_MAPS.store(0, Ordering::Release);
+    PCI_TRACE.store(0, Ordering::Release);
+    crate::devices::guest_platform::reset();
 }
 
 /// Exits after a successful entry that were not triple-fault / VM-entry fail.
@@ -220,6 +274,10 @@ pub fn guest_uefi_past_sec() -> bool {
 
 pub fn guest_uefi_com_bytes() -> u32 {
     COM_BYTES.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_dxe() -> bool {
+    DXE_PRINTED.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -338,6 +396,25 @@ unsafe fn launch_uefi(
     {
         serial::write_line("boot: guest-UEFI alias EPT walk failed");
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
+    }
+    crate::devices::guest_platform::reset();
+    EPT_PML4.store(pml4, Ordering::Release);
+    if let Some(sink_frame) = alloc.allocate_contiguous_aligned(512, 512) {
+        let sink_hpa = sink_frame.to_phys();
+        core::ptr::write_bytes(sink_hpa as *mut u8, 0, 2 * 1024 * 1024);
+        SINK_HPA.store(sink_hpa, Ordering::Release);
+        for &mm in &[0xFCE0_0000u64, 0xFEC0_0000, 0xFED0_0000, 0xFEE0_0000] {
+            if ept_map_2m_sink(mm) {
+                SINK_MAPS.fetch_add(1, Ordering::AcqRel);
+            }
+        }
+        serial::write_str("boot: guest-UEFI platform sink_hpa=0x");
+        write_hex(sink_hpa);
+        serial::write_str(" maps=");
+        write_dec(SINK_MAPS.load(Ordering::Acquire) as u64);
+        serial::write_byte(b'\n');
+    } else {
+        serial::write_line("boot: guest-UEFI no 2MiB platform sink — CMOS/fw_cfg still live");
     }
 
     let Some(vmcs) = alloc_phys(alloc) else {
@@ -800,6 +877,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let tf = basic == EXIT_REASON_TRIPLE_FAULT;
     let fetch_fail = basic == EXIT_REASON_EPT_VIOLATION && gpa == GUEST_UEFI_RESET_VECTOR_GPA;
     let linear = cs_base.wrapping_add(rip);
+    LAST_LINEAR.store(linear, Ordering::Release);
     if linear_left_sec_tail(linear) {
         LEFT_SEC.store(true, Ordering::Release);
     }
@@ -860,12 +938,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 maybe_print_past_sec(true);
                 false
             }
-            EXIT_REASON_EPT_VIOLATION => {
-                serial::write_str("boot: guest-UEFI EPT violation gpa=0x");
-                write_hex(gpa);
-                serial::write_byte(b'\n');
-                false
-            }
+            EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
             EXIT_REASON_EXCEPTION_NMI => {
                 serial::write_str("boot: guest-UEFI exception intr=0x");
                 write_hex(intr);
@@ -878,6 +951,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
         };
+        if resume
+            && post_dxe_should_stop(
+                DXE_PRINTED.load(Ordering::Acquire),
+                n,
+                DXE_AT_N.load(Ordering::Acquire),
+                crate::devices::ide_cdrom::pci_enumerated(),
+            )
+        {
+            resume = false;
+        }
     }
 
     if resume {
@@ -904,6 +987,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::ide_cdrom::pci_enumerated() as u64);
     serial::write_str(" sectors=");
     write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
+    serial::write_str(" plat=");
+    write_dec(crate::devices::guest_platform::platform_memory_served() as u64);
+    serial::write_str(" dxe=");
+    write_dec(DXE_PRINTED.load(Ordering::Acquire) as u64);
     serial::write_byte(b'\n');
     leave_to_e4();
 }
@@ -953,6 +1040,7 @@ fn maybe_print_past_sec(guest_hlt: bool) {
         com_bytes: COM_BYTES.load(Ordering::Acquire) as u64,
     });
     maybe_print_cdrom();
+    maybe_print_dxe();
 }
 
 #[cfg(target_os = "uefi")]
@@ -973,6 +1061,41 @@ fn maybe_print_cdrom() {
             sectors: crate::devices::ide_cdrom::sectors_read() as u64,
         });
     }
+    maybe_print_dxe();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_dxe() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    let linear = LAST_LINEAR.load(Ordering::Acquire);
+    let cs_ok = exec_from_low_ram(linear);
+    if !dxe_or_cd_boot_evidence(
+        true,
+        crate::devices::ide_cdrom::sectors_read(),
+        crate::devices::guest_platform::platform_memory_served(),
+        cs_ok,
+    ) {
+        return;
+    }
+    if DXE_PRINTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    DXE_AT_N.store(EXIT_COUNT.load(Ordering::Acquire), Ordering::Release);
+    serial::write_line(M7_E5_OVMF_DXE_OK_MARKER);
+    serial::write_str("boot: guest-UEFI past-PEI/DXE or CD boot attempt sectors=");
+    write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
+    serial::write_str(" plat=");
+    write_dec(crate::devices::guest_platform::platform_memory_served() as u64);
+    serial::write_str(" ram_rip=");
+    write_dec(cs_ok as u64);
+    serial::write_byte(b'\n');
+    audit_log!(AuditEvent::OvmfGuestUefiDxe {
+        exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+        sectors: crate::devices::ide_cdrom::sectors_read() as u64,
+        platform: crate::devices::guest_platform::platform_memory_served() as u64,
+    });
 }
 
 #[cfg(target_os = "uefi")]
@@ -1000,6 +1123,11 @@ unsafe fn handle_io(qual: u64) -> bool {
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
         SAVED_RAX = crate::devices::ide_cdrom::ata_io(port, is_in, size as u8, SAVED_RAX);
         maybe_print_cdrom();
+        return skip_insn();
+    }
+    if crate::devices::guest_platform::is_platform_io_port(port) {
+        SAVED_RAX = crate::devices::guest_platform::io(port, is_in, size as u8, SAVED_RAX);
+        maybe_print_dxe();
         return skip_insn();
     }
     if is_com_uart_port(port) {
@@ -1032,7 +1160,9 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             let v = u64::from(crate::devices::ide_cdrom::pci_read_addr());
             SAVED_RAX = (SAVED_RAX & !mask) | (v & mask);
         } else {
-            crate::devices::ide_cdrom::pci_write_addr(SAVED_RAX as u32);
+            let addr = SAVED_RAX as u32;
+            crate::devices::ide_cdrom::pci_write_addr(addr);
+            crate::devices::guest_platform::pci_write_addr(addr);
         }
         return;
     }
@@ -1045,12 +1175,81 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             } else {
                 0xffff_ffff
             };
-            let v = u64::from(crate::devices::ide_cdrom::pci_read_data(port, size));
+            let v = if let Some(p) = crate::devices::guest_platform::pci_read_data(port, size) {
+                u64::from(p)
+            } else {
+                u64::from(crate::devices::ide_cdrom::pci_read_data(port, size))
+            };
             SAVED_RAX = (SAVED_RAX & !mask) | (v & mask);
+            let cfg = crate::devices::ide_cdrom::pci_read_addr()
+                | u32::from(port.wrapping_sub(0xCFC) & 3);
+            let off = (cfg & 0xff) as u8;
+            if off & 0xFC == 0 || off & 0xFC == 0x0C {
+                let n = PCI_TRACE.fetch_add(1, Ordering::AcqRel);
+                if n < 24 {
+                    serial::write_str("boot: guest-UEFI pci cfg=0x");
+                    write_hex_u32(cfg);
+                    serial::write_str(" val=0x");
+                    write_hex_u32(v as u32);
+                    serial::write_str(" size=");
+                    write_dec(size as u64);
+                    serial::write_byte(b'\n');
+                }
+            }
         } else {
+            crate::devices::guest_platform::pci_write_data(port, size, SAVED_RAX as u32);
             crate::devices::ide_cdrom::pci_write_data(port, size, SAVED_RAX as u32);
         }
     }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_ept(gpa: u64) -> bool {
+    if crate::devices::guest_platform::is_platform_sink_gpa(gpa) && ept_map_2m_sink(gpa) {
+        SINK_MAPS.fetch_add(1, Ordering::AcqRel);
+        if SINK_MAPS.load(Ordering::Acquire) <= 8 {
+            serial::write_str("boot: guest-UEFI EPT sink gpa=0x");
+            write_hex(gpa);
+            serial::write_byte(b'\n');
+        }
+        maybe_print_dxe();
+        return true;
+    }
+    serial::write_str("boot: guest-UEFI EPT violation gpa=0x");
+    write_hex(gpa);
+    serial::write_byte(b'\n');
+    false
+}
+
+/// Map a 2 MiB sink leaf for `gpa` in the private guest-UEFI EPT (outside Proven Core).
+#[cfg(target_os = "uefi")]
+unsafe fn ept_map_2m_sink(gpa: u64) -> bool {
+    let pml4 = EPT_PML4.load(Ordering::Acquire);
+    let sink = SINK_HPA.load(Ordering::Acquire);
+    if pml4 == 0 || sink == 0 || (sink & ((1 << 21) - 1)) != 0 {
+        return false;
+    }
+    let pml4_i = ((gpa >> 39) & 0x1ff) as usize;
+    let e0 = core::ptr::read_volatile((pml4 as *const u64).add(pml4_i));
+    if e0 & 0b111 == 0 {
+        return false;
+    }
+    let pdpt = e0 & !0xfff;
+    let pdpt_i = ((gpa >> 30) & 0x1ff) as usize;
+    let e1 = core::ptr::read_volatile((pdpt as *const u64).add(pdpt_i));
+    if e1 & 0b111 == 0 || (e1 & (1 << 7)) != 0 {
+        return false;
+    }
+    let pd = e1 & !0xfff;
+    let pd_i = ((gpa >> 21) & 0x1ff) as usize;
+    let e2 = core::ptr::read_volatile((pd as *const u64).add(pd_i));
+    if e2 & 0b111 != 0 {
+        return true;
+    }
+    let leaf = crate::memory::ept_hw::ept_leaf_large(sink, 0);
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i), leaf);
+    crate::memory::ept_hw::invept_global();
+    true
 }
 
 /// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence).
@@ -1104,6 +1303,8 @@ unsafe fn handle_rdmsr() -> bool {
     let msr = SAVED_RCX as u32;
     let v = if msr == IA32_EFER {
         ops::vmread(GUEST_IA32_EFER).unwrap_or(0)
+    } else if msr == 0x1B {
+        0xFEE0_0000 | (1 << 8) | (1 << 11)
     } else {
         0
     };
