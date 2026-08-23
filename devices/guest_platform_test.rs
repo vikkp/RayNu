@@ -6,9 +6,9 @@ use super::{
     is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
-    platform_memory_served, pm_pci_config_addr, reset, BOOTORDER, E820_ENTRY_BYTES, E820_RAM,
-    FW_CFG_BOOTORDER_SEL, FW_CFG_E820_SEL, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
-    HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
+    platform_memory_served, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, E820_ENTRY_BYTES,
+    E820_RAM, FW_CFG_BOOTORDER_SEL, FW_CFG_E820_SEL, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
+    HPET_CAP_REV, HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PM_BRIDGE_DEVICE,
     PM_BRIDGE_VENDOR,
 };
@@ -217,11 +217,13 @@ fn acpi_pm_timer_ticks_port0_and_pmba() {
     let a = io(0, true, 4, 0) as u32;
     let b = io(0, true, 4, 0) as u32;
     assert_eq!(a, 0);
-    assert_eq!(b, 0x0001_0000);
+    assert_eq!(ACPI_PM_STEP, 0x0040_0000);
+    assert!(ACPI_PM_STEP >= 3_579_545, ">= 1s of PM ticks");
+    assert_eq!(b, ACPI_PM_STEP);
     assert_ne!(b, 0xFFFF_FFFF);
     assert_eq!(acpi_pm_timer_reads(), 2);
     let c = io(0x408, true, 4, 0) as u32;
-    assert_eq!(c, 0x0002_0000);
+    assert_eq!(c, ACPI_PM_STEP.wrapping_mul(2));
     assert_eq!(acpi_pm_timer_reads(), 3);
     reset();
     assert_eq!(acpi_pm_timer_reads(), 0);
@@ -243,7 +245,7 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     assert_eq!(v, 0);
     assert_ne!(v, 0xFFFF_FFFF);
     let v2 = io(0x508, true, 4, 0) as u32;
-    assert_eq!(v2, 0x0001_0000);
+    assert_eq!(v2, ACPI_PM_STEP);
     assert!(is_piix_pm_io(0x500));
     let sts = io(0x500, true, 4, 0xFFFF_FFFF) as u32;
     assert_eq!(sts, 0);

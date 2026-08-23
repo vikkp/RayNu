@@ -21,7 +21,9 @@
 //! `unh=3` `port=0xcf8` after the empty-slot walk; 1 s per PCI I/O
 //! made guest time jump ~2 h before AtaAtapiPassThru Start. PCI I/O
 //! does not advance HPET. 8042 `0x60`/`0x64` (unhandled `IN` was
-//! `0xFF` / IBF stuck). Nested VT-x `8e55abf` stop `cf8=0x80000838`
+//! `0xFF` / IBF stuck). Nested VT-x `2674629`: 32768 cap then
+//! `acpi=16612` `port=0` `ataio=0` (BdsWait on 18 ms ACPI steps).
+//! Nested VT-x `8e55abf` stop `cf8=0x80000838`
 //! is PIIX ISA `00:01.0` offset `0x38` (PciBus programming, not
 //! empty-slot scan). PIRQ `0x60-0x63` reset `0x80` (disabled) matches
 //! QEMU so IRQ assign is not IRQ0.
@@ -588,12 +590,17 @@ pub fn acpi_pm_timer_reads() -> u32 {
     ACPI_PM.load(Ordering::Acquire)
 }
 
+/// ~1.17 s of ACPI PM time (3.579545 MHz, 24-bit). Nested VT-x `2674629`:
+/// BOTH-OK then n=32768 `ataio=0` `acpi=16612` `port=0` `hpet=10`
+/// (`in eax,dx` at `rip=0x6fb153`). 64 Ki step is ~18 ms so a 1 s
+/// `MicroSecondDelay` / BdsWait takes ~55 INs; ~300 waits burned the
+/// cap before AtaAtapiPassThru. One step ≥ 1 s of PM ticks.
+pub const ACPI_PM_STEP: u32 = 0x0040_0000;
+
 fn tick_pm_timer(p: &mut Platform) -> u32 {
     ACPI_PM.fetch_add(1, Ordering::AcqRel);
     let v = p.pm_timer & 0x00FF_FFFF;
-    // Bit 23 of (ticks - current) ends InternalAcpiDelay. Step 64Ki so a
-    // handful of reads complete a PEI MicroSecondDelay.
-    p.pm_timer = p.pm_timer.wrapping_add(0x0001_0000);
+    p.pm_timer = p.pm_timer.wrapping_add(ACPI_PM_STEP);
     v
 }
 

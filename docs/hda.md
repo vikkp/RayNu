@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN nested VT-x 5d9e346 n=8192 ataio=0 port=0xcf8. HPET 1s on preemption only; 8042; 32768 cap. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0. ACPI PM 1s step. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0; ACPI PM 1s step; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 5d9e346 n=8192 ataio=0 port=0xcf8; HPET 1s on preemption only; 8042; 32768 cap; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 skipped guest-UEFI (Cruzer lacked EFI/RayNu/OVMF.fd); flash stages host OVMF; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN PIIX3 ISA PIRQ after nested VT-x 8e55abf cf8=0x80000838 ISA 00:01.0:0x38; not installer; iron P0-14 stays 2b795a0 |

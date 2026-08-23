@@ -280,9 +280,10 @@ with BOTH-OK then stop n=1111 `sectors=0` — do not stop on both-enum-alone.
 Nested VT-x `8e55abf` BOTH-OK then n=2048 `ata=0x0` `unh=0`
 `cf8=0x80000838` (PIIX ISA `00:01.0` offset `0x38` — PciBus programming).
 Nested VT-x `5d9e346` BOTH-OK then n=8192 `ataio=0` `unh=3`
-`port=0xcf8` (empty-slot walk + KBC). 1 s HPET per PCI I/O expired
-Connect before PACKET. HPET 1 s only on preemption/HLT. 8042 KBC.
-32768-exit cap. PIIX3 ISA PIRQ `0x60-0x63` reset `0x80` (QEMU).
+`port=0xcf8` (empty-slot walk + KBC). Nested VT-x `2674629`
+n=32768 `ataio=0` `acpi=16612` `port=0` `hpet=10` (BdsWait on
+18 ms ACPI steps). ACPI PM 1s step. HPET 1 s only on
+preemption/HLT/ACPI. 8042 KBC. 32768-exit cap. PIIX3 ISA PIRQ `0x60-0x63` reset `0x80` (QEMU).
 Iron COM2 2026-08-23 skipped guest-UEFI: Cruzer `RAYNUV` had no
 `\EFI\RayNu\OVMF.fd` (flash copied BOOTX64 only). Re-flash after staging
 host OVMF; WANT `LIVE-BYTES-PRESENT-OK` then ATAPI-OK. ATAPI signature +
@@ -318,8 +319,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**closed** nested VT-x `1b07692`:
 `pci select 00:00.01` `val=0x70108086`; `OVMF-BOTH-OK`; stop n=1111
 `pci_ide=1 virtio=1` `sectors=0` `spin=1`; E4 Linux #DF fail-soft).
-Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; nested VT-x `5d9e346`
-n=8192 `ataio=0` — HPET/KBC/32768 next).
+Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; nested VT-x `2674629`
+n=32768 `ataio=0` `acpi=16612` — ACPI PM 1s step).
 
 **Next after Stage 44:** firmware El Torito CD boot (not `sectors>0` alone).
 Product ISO is

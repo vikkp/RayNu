@@ -9,6 +9,8 @@
 //! firmware issues PACKET/`READ(10)` (honest `sectors>0`) or the 32768
 //! cap. Nested VT-x `5d9e346`: BOTH-OK then n=8192 `ataio=0` `unh=3`
 //! `port=0xcf8` (empty-slot walk + KBC; 1s HPET per PCI I/O). Nested
+//! VT-x `2674629`: n=32768 `ataio=0` `acpi=16612` `port=0` `hpet=10`
+//! (`in eax,dx` BdsWait). ACPI PM 1s step. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -127,6 +129,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("hpet_tick_sink_by")
         && plat.contains("is_kbc_port")
         && plat.contains("hpet_tick_sink_by")
+        && plat.contains("ACPI_PM_STEP")
+        && plat.contains("0x0040_0000")
+        && guest.contains("ACPI PM 1s step")
+        && guest.contains("2674629")
         && guest.contains("PIIX3 ISA PIRQ")
         && guest.contains("ataio=")
         && guest.contains("0x80000838")
@@ -171,6 +177,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("32768-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5d9e346")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM 1s step")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")
