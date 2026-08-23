@@ -39,6 +39,8 @@
 //! an ASSERT fix. EFER.LMA = LME && CR0.PG; IA-32e entry matches LMA;
 //! debugcon 0x402. Iron `b4b4847`: `efer=0xd00` `pg=1` `csl=1` still
 //! ASSERT `callerrip=0x1d25193`; `r8` is `gPcdDataBaseSignatureGuid`.
+//! Iron `c40f4a8`: `pcdsig=1` after 32-pair MTRR walk, same ASSERT.
+//! Guarded DXE `eb ec` skip when RIP and caller are in `[1MiB,32MiB)`.
 //! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
@@ -64,7 +66,8 @@ use crate::vmx::guest_uefi::{
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole, guest_uefi_xapic_is_not_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
-    preempt_deadloop_skip_len, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
+    guest_uefi_assert_caller_is_dxe_ram, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -184,6 +187,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("preempt_deadloop_should_skip")
         && guest.contains("preempt_deadloop_skip_len")
         && guest.contains("preempt_deadloop_is_assert_epilogue")
+        && guest.contains("preempt_deadloop_guarded_assert_skip_len")
+        && guest.contains("guest_uefi_assert_caller_is_dxe_ram")
         && guest.contains("891eb5b")
         && guest.contains("leave; ret")
         && guest.contains("ebecc9c3")
@@ -211,6 +216,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("debugcon 0x402")
         && guest.contains("b4b4847")
         && guest.contains("gPcdDataBaseSignatureGuid")
+        && guest.contains("c40f4a8")
+        && guest.contains("DXE assert skip")
         && plat.contains("bootorder_nul_terminated")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
@@ -261,6 +268,12 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && preempt_deadloop_should_skip(0xEB, 0xEC)
         && preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]) == 0
         && preempt_deadloop_skip_len(&[0xEB, 0xF3, 0xC9, 0xC3]) == 2
+        && preempt_deadloop_guarded_assert_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3], 0x6e81ca, 0x1d25193)
+            == 2
+        && preempt_deadloop_guarded_assert_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3], 0x109D, 0x1d25193)
+            == 0
+        && guest_uefi_assert_caller_is_dxe_ram(0x1d25193)
+        && !guest_uefi_assert_caller_is_dxe_ram(0x109D)
         && preempt_deadloop_is_assert_epilogue(&[0xEB, 0xEC, 0xC9, 0xC3])
         && !preempt_deadloop_is_assert_epilogue(&[0xEB, 0xF3, 0xC9, 0xC3])
         && !preempt_deadloop_is_assert_epilogue(&[0xEB, 0xFC, 0x90, 0x90])
@@ -315,6 +328,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("debugcon 0x402")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("b4b4847")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("gPcdDataBaseSignatureGuid")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c40f4a8")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DXE assert skip")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pcdsig=1")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)

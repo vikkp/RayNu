@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN iron b4b4847 EFER.LMA efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193. r8 is gPcdDataBaseSignatureGuid. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN iron c40f4a8 pcdsig=1 efer=0xd00 still ASSERT callerrip=0x1d25193. Guarded DXE ebec skip when RIP/caller in [1MiB,32MiB). Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron c40f4a8 pcdsig=1 after 32-pair MTRR still ASSERT callerrip=0x1d25193; guarded DXE ebec skip when RIP/caller in [1MiB,32MiB); not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron b4b4847 EFER.LMA efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193; r8 is gPcdDataBaseSignatureGuid; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 0b7d647 VCNT=32 still ASSERT callerrip=0x1d25193 lastmsr=EFER; QEMU BOTH skipped ebf3; EFER.LMA=LME&&CR0.PG + IA-32e entry + debugcon 0x402; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193; MTRR VCNT=32 + PCI UC hole + bootorder NUL; not installer; iron P0-14 stays 2b795a0 |
