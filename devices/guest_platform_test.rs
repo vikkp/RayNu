@@ -1,5 +1,5 @@
 use super::{
-    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, cmos_above_16m_chunks,
+    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, fwcfg_boot_wait_served, fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
@@ -62,6 +62,8 @@ fn fwcfg_signature_and_ram_size() {
 fn fwcfg_bootorder_is_cd_then_disk() {
     reset();
     assert!(boot_order_cd_then_disk());
+    assert!(bootorder_nul_terminated());
+    assert_eq!(*BOOTORDER.last().unwrap(), 0);
     let _ = io(0x510, false, 2, 0x19);
     let mut count = 0u32;
     for i in 0..4 {

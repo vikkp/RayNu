@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN iron 408788c MTRR walk completed, still ASSERT after CPUID 0x1cf11b5. Guest-UEFI hypervisor CPUID + KVMKVMKVM (nested KVM vs iron). Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR/RDMSR. MTRR VCNT=32 + PCI UC hole + bootorder NUL. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193; MTRR VCNT=32 + PCI UC hole + bootorder NUL; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 408788c MTRR walk done still ASSERT after CPUID 0x1cf11b5; guest-UEFI hypervisor CPUID + KVMKVMKVM; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR 0xFE/0x2FF/0x250; guest MTRR shadow; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 891eb5b skipped ebecc9c3 leave;ret then #UD 0x109D; do not skip ASSERT epilogue; not installer; iron P0-14 stays 2b795a0 |

@@ -54,7 +54,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=8 FIX WB VGA UC read-your-writes; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); noskip only iron eb ec; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); noskip only iron eb ec; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -224,8 +224,9 @@ pub const GUEST_UEFI_MISC_ENABLE_DEFAULT: u64 = 0x4_0089;
 /// for L2, so BOTH-OK never hit this ASSERT.
 /// Iron `408788c`: MTRR walk finished, then the same ASSERT after CPUID
 /// `0x1cf11b5`. Nested KVM sets ECX.hypervisor (bit 31) and
-/// `CPUID.40000000` = `KVMKVMKVM`; bare-metal iron does not. OVMF takes
-/// the KVM path on nested and the DebugAssert path on iron.
+/// `CPUID.40000000` = `KVMKVMKVM`; bare-metal iron did not.
+/// Iron `8700cbb`: hypervisor CPUID + `KVMKVMKVM` still ASSERT
+/// `callerrip=0x1d25193` after WRMSR then RDMSR spin. Not the KVM path.
 pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     if leaf == GUEST_UEFI_KVM_CPUID_LEAF {
         return CpuidRegs {
@@ -494,9 +495,15 @@ static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static ASSERT_DEADLOOP_DUMP: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
-static MSR_SEEN: [AtomicU32; 16] = [const { AtomicU32::new(0xFFFF_FFFF) }; 16];
+static MSR_SEEN: [AtomicU32; 24] = [const { AtomicU32::new(0xFFFF_FFFF) }; 24];
 #[cfg(target_os = "uefi")]
 static MSR_SEEN_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static WRMSR_SEEN: [AtomicU32; 16] = [const { AtomicU32::new(0xFFFF_FFFF) }; 16];
+#[cfg(target_os = "uefi")]
+static WRMSR_SEEN_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LAST_GUEST_MSR: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -626,17 +633,28 @@ pub fn guest_uefi_xapic_is_not_sink() -> bool {
         && crate::devices::lapic_virt::XAPIC_VERSION == 0x0005_0014
 }
 
-/// IA32_MTRRCAP: VCNT=8, FIX, WC. Never passthrough the host (iron `3f417ca`
-/// walked `0xFE`/`0x2FF`/`0x250`… then ASSERT — host MTRRs describe 64 GiB
-/// DRAM, guest-UEFI RAM is 32 MiB; fixed MTRR reads were 0).
-pub const GUEST_UEFI_MTRRCAP: u64 = 8 | (1 << 8) | (1 << 10);
+/// IA32_MTRRCAP: VCNT=32 (MtrrLib max), FIX, WC. Never passthrough the host
+/// (iron `3f417ca` walked `0xFE`/`0x2FF`/`0x250`… then ASSERT — host MTRRs
+/// describe 64 GiB DRAM, guest-UEFI RAM is 32 MiB; fixed MTRR reads were 0).
+/// Iron `8700cbb`: hypervisor CPUID still ASSERT `callerrip=0x1d25193` after
+/// WRMSR then RDMSR spin. MtrrLib
+/// `WorkingRangeCount <= 2*(VCNT-reserved)+1` trips at VCNT=8.
+pub const GUEST_UEFI_MTRR_VCNT: u64 = 32;
+pub const GUEST_UEFI_MTRRCAP: u64 = GUEST_UEFI_MTRR_VCNT | (1 << 8) | (1 << 10);
 /// E + FE + WB.
 pub const GUEST_UEFI_MTRR_DEF_DEFAULT: u64 = (1 << 11) | (1 << 10) | 6;
 /// Eight packed WB types (Intel MTRR type 6).
 pub const GUEST_UEFI_MTRR_WB_PACKED: u64 = 0x0606_0606_0606_0606;
+/// 32 variable pairs (`0x200`–`0x23F`).
+pub const GUEST_UEFI_MTRR_VAR_MSRS: usize = 64;
+/// QEMU-like PCI/MMIO UC hole: 1 GiB at `0xC000_0000` (APIC/HPET/flash/32-bit PCI).
+pub const GUEST_UEFI_MTRR_PCI_UC_BASE: u64 = 0xC000_0000;
+/// 36-bit physmask for that 1 GiB region plus Valid (bit 11).
+pub const GUEST_UEFI_MTRR_PCI_UC_MASK: u64 = 0xF_C000_0800;
 
 static GUEST_MTRR_DEF: AtomicU64 = AtomicU64::new(GUEST_UEFI_MTRR_DEF_DEFAULT);
-static GUEST_MTRR_VAR: [AtomicU64; 16] = [const { AtomicU64::new(0) }; 16];
+static GUEST_MTRR_VAR: [AtomicU64; GUEST_UEFI_MTRR_VAR_MSRS] =
+    [const { AtomicU64::new(0) }; GUEST_UEFI_MTRR_VAR_MSRS];
 static GUEST_MTRR_FIXED: [AtomicU64; 11] =
     [const { AtomicU64::new(GUEST_UEFI_MTRR_WB_PACKED) }; 11];
 static GUEST_MISC_ENABLE: AtomicU64 = AtomicU64::new(GUEST_UEFI_MISC_ENABLE_DEFAULT);
@@ -644,7 +662,7 @@ static GUEST_MISC_ENABLE: AtomicU64 = AtomicU64::new(GUEST_UEFI_MISC_ENABLE_DEFA
 /// True for IA32 MTRR MSRs (not PAT `0x277`).
 pub fn guest_uefi_is_mtrr_msr(msr: u32) -> bool {
     matches!(msr, 0x00FE | 0x02FF | 0x0250 | 0x0258 | 0x0259)
-        || (0x0200..=0x020F).contains(&msr)
+        || (0x0200..=0x023F).contains(&msr)
         || (0x0268..=0x026F).contains(&msr)
 }
 
@@ -666,16 +684,25 @@ fn mtrr_fixed_default(idx: usize) -> u64 {
     }
 }
 
-/// Restore QEMU-like MTRRs: default WB, VGA hole UC, no variable ranges.
+/// Restore QEMU-like MTRRs: default WB, VGA hole UC, PCI/MMIO UC 1 GiB at 3–4 GiB.
 pub fn guest_uefi_mtrr_reset() {
     GUEST_MTRR_DEF.store(GUEST_UEFI_MTRR_DEF_DEFAULT, Ordering::Release);
     for slot in GUEST_MTRR_VAR.iter() {
         slot.store(0, Ordering::Release);
     }
+    GUEST_MTRR_VAR[0].store(GUEST_UEFI_MTRR_PCI_UC_BASE, Ordering::Release);
+    GUEST_MTRR_VAR[1].store(GUEST_UEFI_MTRR_PCI_UC_MASK, Ordering::Release);
     for (i, slot) in GUEST_MTRR_FIXED.iter().enumerate() {
         slot.store(mtrr_fixed_default(i), Ordering::Release);
     }
     GUEST_MISC_ENABLE.store(GUEST_UEFI_MISC_ENABLE_DEFAULT, Ordering::Release);
+}
+
+/// True when variable MTRR 0 is the 1 GiB UC PCI hole.
+pub fn guest_uefi_mtrr_pci_uc_hole() -> bool {
+    guest_uefi_mtrr_read(0x200) == Some(GUEST_UEFI_MTRR_PCI_UC_BASE)
+        && guest_uefi_mtrr_read(0x201) == Some(GUEST_UEFI_MTRR_PCI_UC_MASK)
+        && (GUEST_UEFI_MTRRCAP & 0xFF) == GUEST_UEFI_MTRR_VCNT
 }
 
 /// Shadowed MTRR read. `None` if `msr` is not an MTRR.
@@ -686,7 +713,7 @@ pub fn guest_uefi_mtrr_read(msr: u32) -> Option<u64> {
     if msr == 0x02FF {
         return Some(GUEST_MTRR_DEF.load(Ordering::Acquire));
     }
-    if (0x0200..=0x020F).contains(&msr) {
+    if (0x0200..=0x023F).contains(&msr) {
         return Some(GUEST_MTRR_VAR[(msr - 0x0200) as usize].load(Ordering::Acquire));
     }
     let i = mtrr_fixed_index(msr)?;
@@ -705,7 +732,7 @@ pub fn guest_uefi_mtrr_write(msr: u32, value: u64) -> bool {
         GUEST_MTRR_DEF.store(value, Ordering::Release);
         return true;
     }
-    if (0x0200..=0x020F).contains(&msr) {
+    if (0x0200..=0x023F).contains(&msr) {
         GUEST_MTRR_VAR[(msr - 0x0200) as usize].store(value, Ordering::Release);
         return true;
     }
@@ -2313,6 +2340,8 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
     write_hex(home1);
     serial::write_str(" home2=0x");
     write_hex(home2);
+    serial::write_str(" file1=");
+    dump_low_ram_cstr(home1);
     serial::write_str(" file2=");
     dump_low_ram_cstr(home0);
     serial::write_str(" desc2=");
@@ -2323,8 +2352,29 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
     dump_low_ram_cstr(home2);
     serial::write_str(" arg0hex=");
     dump_low_ram_hex(home0, 24);
+    serial::write_str(" arg1hex=");
+    dump_low_ram_hex(home1, 24);
     serial::write_str(" arg2hex=");
     dump_low_ram_hex(home2, 24);
+    serial::write_str(" rcxhex=");
+    dump_low_ram_hex(SAVED_RCX, 24);
+    serial::write_str(" r8hex=");
+    dump_low_ram_hex(SAVED_R8, 24);
+    let loc0 = peek_low_u64(prev_rbp.wrapping_sub(0x08));
+    let loc1 = peek_low_u64(prev_rbp.wrapping_sub(0x10));
+    let loc2 = peek_low_u64(prev_rbp.wrapping_sub(0x18));
+    serial::write_str(" loc0=0x");
+    write_hex(loc0);
+    serial::write_str(" loc1=0x");
+    write_hex(loc1);
+    serial::write_str(" loc2=0x");
+    write_hex(loc2);
+    serial::write_str(" loc1s=");
+    dump_low_ram_cstr(loc1);
+    serial::write_str(" loc2s=");
+    dump_low_ram_cstr(loc2);
+    serial::write_str(" lastmsr=0x");
+    write_hex(u64::from(LAST_GUEST_MSR.load(Ordering::Acquire)));
     serial::write_byte(b'\n');
 }
 
@@ -2772,6 +2822,7 @@ unsafe fn handle_xsetbv() -> bool {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_rdmsr() -> bool {
     let msr = SAVED_RCX as u32;
+    LAST_GUEST_MSR.store(msr, Ordering::Release);
     let v = guest_uefi_rdmsr(msr);
     if msr != 0x10 && note_unique_rdmsr(msr) {
         serial::write_str("boot: guest-UEFI RDMSR index=0x");
@@ -2787,17 +2838,33 @@ unsafe fn handle_rdmsr() -> bool {
 
 #[cfg(target_os = "uefi")]
 fn note_unique_rdmsr(msr: u32) -> bool {
-    let n = MSR_SEEN_N.load(Ordering::Acquire).min(16) as usize;
+    let n = MSR_SEEN_N.load(Ordering::Acquire).min(24) as usize;
     for slot in MSR_SEEN.iter().take(n) {
         if slot.load(Ordering::Acquire) == msr {
             return false;
         }
     }
     let i = MSR_SEEN_N.fetch_add(1, Ordering::AcqRel) as usize;
-    if i >= 16 {
+    if i >= 24 {
         return false;
     }
     MSR_SEEN[i].store(msr, Ordering::Release);
+    true
+}
+
+#[cfg(target_os = "uefi")]
+fn note_unique_wrmsr(msr: u32) -> bool {
+    let n = WRMSR_SEEN_N.load(Ordering::Acquire).min(16) as usize;
+    for slot in WRMSR_SEEN.iter().take(n) {
+        if slot.load(Ordering::Acquire) == msr {
+            return false;
+        }
+    }
+    let i = WRMSR_SEEN_N.fetch_add(1, Ordering::AcqRel) as usize;
+    if i >= 16 {
+        return false;
+    }
+    WRMSR_SEEN[i].store(msr, Ordering::Release);
     true
 }
 
@@ -2840,7 +2907,15 @@ unsafe fn guest_uefi_rdmsr(msr: u32) -> u64 {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_wrmsr() -> bool {
     let msr = SAVED_RCX as u32;
+    LAST_GUEST_MSR.store(msr, Ordering::Release);
     let v = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
+    if msr != 0x10 && note_unique_wrmsr(msr) {
+        serial::write_str("boot: guest-UEFI WRMSR index=0x");
+        write_hex(u64::from(msr));
+        serial::write_str(" val=0x");
+        write_hex(v);
+        serial::write_byte(b'\n');
+    }
     if crate::devices::lapic_virt::wrmsr(msr, v).is_some() {
         return skip_insn();
     }

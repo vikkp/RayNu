@@ -98,8 +98,10 @@ pub const E820_RAM: u32 = 1;
 /// enumerated IDE fn1 as a sibling and did not Start AtaAtapiPassThru.
 /// QEMU/OVMF TranslatePciOfwNodes: `ide@1,1/drive@0/disk@0` →
 /// `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`. Master is `DEV=0`.
+/// Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects the file unless the
+/// last byte is `'\0'` (`RETURN_INVALID_PARAMETER` otherwise).
 pub const BOOTORDER: &[u8] =
-    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
+    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n\0";
 
 /// Product boot order is CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
@@ -111,6 +113,11 @@ pub fn boot_order_cd_then_disk() -> bool {
         (Some(p), Some(f), None, Some(d)) => p < f && f < d,
         _ => false,
     }
+}
+
+/// OVMF `ConnectDevicesFromQemu` / `StoreQemuBootOrder` require a C string.
+pub fn bootorder_nul_terminated() -> bool {
+    matches!(BOOTORDER.last(), Some(&0))
 }
 
 /// True when splash-time is 0 ms so OVMF skips BdsWait / FrontPage delay.

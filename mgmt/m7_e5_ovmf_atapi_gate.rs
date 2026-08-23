@@ -30,7 +30,10 @@
 //! `408788c`: MTRR walk completed, still ASSERT after CPUID `0x1cf11b5`.
 //! Nested KVM sets hypervisor CPUID bit 31 + `KVMKVMKVM`; iron did not.
 //! Guest-UEFI CPUID hypervisor present + KVM signature; IA32_MISC_ENABLE
-//! shadowed. Nested
+//! shadowed. Iron `8700cbb`: hypervisor CPUID still ASSERT
+//! `callerrip=0x1d25193` after WRMSR then RDMSR spin. MTRR VCNT=32 +
+//! PCI UC 1GiB at `0xC0000000`. fw_cfg `bootorder` trailing NUL so
+//! `ConnectDevicesFromQemu` is not `INVALID_PARAMETER`. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -47,13 +50,13 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
-use crate::devices::guest_platform::boot_menu_wait_skips_bds;
+use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated};
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
-    guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_xapic_is_not_sink, hlt_should_resume,
+    guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole, guest_uefi_xapic_is_not_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
@@ -191,6 +194,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("408788c")
         && guest.contains("KVMKVMKVM")
         && guest.contains("callerrip")
+        && guest.contains("8700cbb")
+        && guest.contains("VCNT=32")
+        && guest.contains("bootorder NUL")
+        && guest.contains("0xC0000000")
+        && plat.contains("bootorder_nul_terminated")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -220,6 +228,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
     reset_guest_fw();
     reset_host_cdrom();
     ide_cdrom::reset();
+    guest_uefi_mtrr_reset();
     let ok = ovmf_atapi_surface_present()
         && prop_atapi_signature_and_read10()
         && prop_bar_relocated_read10()
@@ -283,10 +292,15 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("408788c")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KVMKVMKVM")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("callerrip")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8700cbb")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VCNT=32")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("bootorder NUL")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)
             == Some(crate::vmx::guest_uefi::GUEST_UEFI_MTRRCAP)
+        && guest_uefi_mtrr_pci_uc_hole()
+        && bootorder_nul_terminated()
         && guest_uefi_mtrr_write(0x200, 6)
         && guest_uefi_mtrr_read(0x200) == Some(6)
         && guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR)

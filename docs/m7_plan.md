@@ -302,6 +302,9 @@ Iron `3f417ca`: 4K xAPIC mapped, still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x
 Iron `408788c`: MTRR walk completed, still ASSERT after CPUID `0x1cf11b5`. Nested KVM
 sets hypervisor CPUID bit 31 + `KVMKVMKVM`; iron passthrough did not. Guest-UEFI
 CPUID hypervisor present + KVM signature. IA32_MISC_ENABLE shadowed.
+Iron `8700cbb`: hypervisor CPUID still ASSERT `callerrip=0x1d25193` after WRMSR then
+RDMSR spin. MtrrLib `WorkingRangeCount` vs VCNT=8. Guest-UEFI MTRR VCNT=32 + PCI UC
+1GiB at `0xC0000000`. fw_cfg `bootorder` trailing NUL (`ConnectDevicesFromQemu`).
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +

@@ -433,6 +433,8 @@ Stop on `sectors>0`, not both-enum-alone. Iron `3f417ca` xAPIC 4K mapped,
   still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x250`. Guest MTRR shadow
   (not host passthrough). Iron `408788c` MTRR walk completed, still ASSERT
   after CPUID `0x1cf11b5`. Guest-UEFI hypervisor CPUID + `KVMKVMKVM`.
+  Iron `8700cbb`: still ASSERT `callerrip=0x1d25193` after WRMSR/RDMSR.
+  MTRR VCNT=32 + PCI UC hole. fw_cfg `bootorder` trailing NUL.
   Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
 CD bootorder PIIX `ide@1,1` then virtio-fn1 master `drive@0`.
 fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
