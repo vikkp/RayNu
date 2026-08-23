@@ -14,6 +14,32 @@
       content="2026-08-21: P0-14 closed — SPA start launched a private-EPT SHELL guest and it re-entered. Not Everest. TLS/console + distro remain."
     />
     <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://raynuv.com/stories.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/r640-boot-ok-com2.png"
+    />
+    <meta property="og:image:width" content="1556" />
+    <meta property="og:image:height" content="926" />
+    <meta
+      property="og:image:alt"
+      content="Operator Terminal showing RAYNU-V-R640-BOOT-OK over iDRAC SOL on a real PowerEdge R640"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Stories of RayNu — iron stamps, then the guest that came back"
+    />
+    <meta
+      name="twitter:description"
+      content="2026-08-21: P0-14 closed — SPA start launched a private-EPT SHELL guest and it re-entered. Not Everest. TLS/console + distro remain."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/r640-boot-ok-com2.png" />
+    <link rel="canonical" href="https://raynuv.com/stories.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -188,6 +214,19 @@
     </style>
   </head>
   <body class="page-stories">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html" aria-current="page">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="stories-mast">
       <div class="stories-mast__inner">
         <p class="stories-mast__nav">
@@ -200,7 +239,8 @@
         <p class="stories-mast__lede">
           What actually happened on iron — not a roadmap slide. Each story is
           dated, marker-backed, and honest about residuals. Latest close:
-          2026-08-21 E4 SPA VMLAUNCH on a real R640 (SHELL stub, not Everest).
+          2026-08-23 guest-UEFI OVMF past SEC with CD + virtio-blk on nested
+          VT-x (not a distro boot, not Everest E5).
         </p>
       </div>
     </header>
@@ -208,6 +248,11 @@
     <main class="stories-body">
       <div class="stories-index">
         <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#ovmf-2026-08-23"
+            >2026-08-23 — A firmware of its own: OVMF on a private VMCS</a
+          >
+        </p>
         <p>
           <a href="#r640-2026-08-21-e4-spa"
             >2026-08-21 — E4 SPA VMLAUNCH: the guest that came back</a
@@ -249,6 +294,72 @@
           >
         </p>
       </div>
+
+      <article class="story" id="ovmf-2026-08-23">
+        <p class="story__date">2026-08-22 → 2026-08-23 · raynuvsrv1 (Ubuntu, nested VT-x) · ADR-014 Stages 36–42</p>
+        <h2 class="story__title">A firmware of its own</h2>
+
+        <p>
+          Everest E5 is a real distro ISO booting in a guest. Our Linux boots
+          so far came in through the zero-page path we control — no firmware
+          in the middle. A distro installer expects UEFI: OVMF, a CD it can
+          see, a disk it can install to. ADR-014 builds that on a
+          <strong>private VMCS</strong> — the guest gets its own firmware,
+          its own EPT, its own VMCS, separate from the E4 SHELL path.
+        </p>
+
+        <h3>The firmware's first act: kill the hypervisor</h3>
+        <p>
+          Stage 37 VMLAUNCHed the retained ESP OVMF.fd on the private VMCS
+          (<code>RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK</code>). Stage 38 found the
+          first wall: OVMF's SEC phase runs <code>mov cr4, 0x640</code> —
+          which <em>clears VMXE</em>. On a guest that shares CR4 with the
+          host, that is an instant <code>#GP</code> → triple-fault. The fix
+          is the same lesson E4 Linux taught: <strong>the host owns
+          CR4.VMXE</strong>. With 32 MiB of low RAM and a short resume,
+          OVMF stayed alive past the first triple-fault
+          (<code>RAYNU-V-M7-E5-OVMF-ALIVE-OK</code>).
+        </p>
+
+        <h3>Past SEC, then a CD and a disk</h3>
+        <p>
+          Stage 39 walked OVMF out of the SEC tail — PEI PCI config,
+          firmware COM, HLT, COM1/COM2 forwarded
+          (<code>RAYNU-V-M7-E5-OVMF-PAST-SEC-OK</code>). Stage 40 made the
+          attached CD guest-visible on PCI IDE/ATAPI
+          (<code>RAYNU-V-M7-E5-OVMF-CDROM-OK</code>). Stage 41 put i440FX
+          and IDE where PEI's Device-ID probe actually looks
+          (<code>00:00.0</code>, DID <code>0x7010</code>) for the DXE
+          platform boot attempt (<code>RAYNU-V-M7-E5-OVMF-DXE-OK</code>).
+          Stage 42 swapped in an empty virtio-blk disk (DID
+          <code>0x1042</code>) and set the boot order — CD, then disk:
+        </p>
+        <pre>RAYNU-V-M7-E5-OVMF-VIRTIO-OK  pci=1 boot=CD,disk  CD GuestVisible
+RAYNU-V-M7-E5-OVMF-DXE-OK     plat=1 ram_rip=1</pre>
+
+        <h3>What we still don't claim</h3>
+        <p>
+          This is <strong>not</strong> a completed firmware CD boot, not an
+          installer, and not Everest E5. No distro has booted. What is true:
+          guest UEFI now runs on its own VMCS, survives its own SEC, and
+          sees both a CD and a virtio disk in the right boot order — the
+          pieces a distro installer will need, closed one gate at a time on
+          nested VT-x before the next iron run.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/progress.md"
+            >progress.md P0-51…P0-57</a
+          >
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
 
       <article class="story" id="r640-2026-08-21-e4-spa">
         <p class="story__date">2026-08-21 · Dell PowerEdge R640 · Cruzer RAYNUV · front USB 2</p>
@@ -703,13 +814,23 @@ RAYNU-V-R640-BOOT-OK</pre>
         </p>
 
         <figure class="story-shot">
-          <img
-            src="assets/r640-boot-ok-com2.png"
-            alt="macOS Terminal: iDRAC SOL ending in RAYNU-V-R640-BOOT-OK"
-            width="1600"
-            height="900"
-            loading="lazy"
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcset="
+                assets/r640-boot-ok-com2-800.webp   800w,
+                assets/r640-boot-ok-com2-1556.webp 1556w
+              "
+              sizes="(max-width: 700px) 100vw, 42rem"
+            />
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="macOS Terminal: iDRAC SOL ending in RAYNU-V-R640-BOOT-OK"
+              width="1556"
+              height="926"
+              loading="lazy"
+            />
+          </picture>
         </figure>
 
         <pre>boot: VMXOFF ok

@@ -14,6 +14,32 @@
       content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
     />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://raynuv.com/ciospeak.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/hero.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1347" />
+    <meta
+      property="og:image:alt"
+      content="A lone climber with a headlamp ascending a snow ridge at dusk — the RayNu-V Mount Everest"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="RayNu-V · For CIOs & Directors"
+    />
+    <meta
+      name="twitter:description"
+      content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
+    <link rel="canonical" href="https://raynuv.com/ciospeak.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -550,6 +576,19 @@
     </style>
   </head>
   <body class="page-cio">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html" aria-current="page">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
     <header class="cio-mast">
       <div class="cio-mast__inner">
         <p class="cio-mast__nav">
@@ -696,13 +735,23 @@
           Full tracker and living verification paper are public. Claims never run ahead of evidence.
         </p>
         <figure class="cio-evidence">
-          <img
-            src="assets/r640-boot-ok-com2.png"
-            alt="Terminal showing RAYNU-V-R640-BOOT-OK on real PowerEdge R640 via iDRAC SOL"
-            width="1600"
-            height="900"
-            loading="lazy"
-          />
+          <picture>
+            <source
+              type="image/webp"
+              srcset="
+                assets/r640-boot-ok-com2-800.webp   800w,
+                assets/r640-boot-ok-com2-1556.webp 1556w
+              "
+              sizes="(max-width: 700px) 100vw, 36rem"
+            />
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="Terminal showing RAYNU-V-R640-BOOT-OK on real PowerEdge R640 via iDRAC SOL"
+              width="1556"
+              height="926"
+              loading="lazy"
+            />
+          </picture>
           <figcaption>Real PowerEdge R640 · iDRAC SOL · RAYNU-V-R640-BOOT-OK</figcaption>
         </figure>
       </section>
