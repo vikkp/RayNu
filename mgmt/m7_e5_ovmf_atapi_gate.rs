@@ -7,7 +7,11 @@
 //! Stage 43 closed both PCI enums then stopped the private VMCS
 //! (`1b07692` n=1111 `sectors=0`). Keep running after BOTH-OK until
 //! firmware issues PACKET/`READ(10)` (honest `sectors>0`) or the 2048
-//! cap. ATAPI signature after reset (`LBA mid=0x14` high=`0xEB`),
+//! cap. Nested VT-x `80129d3` kept running after BOTH-OK but stopped
+//! `n=2048` `sectors=0` `packet=0` — firmware never issued PACKET on
+//! hardcoded `0x1F0`. 8-byte command BAR + BAR-relocated ATA, secondary
+//! `0x170`, EXECUTE DEVICE DIAGNOSTIC `0x90` restores `0xEB14`, BMIDE
+//! BAR4 RAZ/WI. ATAPI signature after reset (`LBA mid=0x14` high=`0xEB`),
 //! PACKET interrupt-reason (CDB `0x01`, data-in `0x02`, complete `0x03`),
 //! and cylinder byte count. Placeholder ISO has PVD `CD001` plus a
 //! minimal EFI El Torito catalog. Marker after past-SEC and a real
@@ -72,6 +76,27 @@ pub fn prop_atapi_signature_and_read10() -> bool {
         && scsi == 0x28
 }
 
+pub fn prop_bar_relocated_read10() -> bool {
+    ide_cdrom::reset();
+    if !ide_cdrom::present_placeholder() {
+        return false;
+    }
+    ide_cdrom::pci_write_addr(ide_cdrom::pci_config_addr() | 0x10);
+    ide_cdrom::pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    let probe = ide_cdrom::pci_read_data(0xCFC, 4);
+    ide_cdrom::pci_write_data(0xCFC, 4, 0xC000);
+    let _ = ide_cdrom::ata_io(0xC007, false, 1, 0xA0);
+    let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
+    for chunk in cdb.chunks(2) {
+        let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
+        let _ = ide_cdrom::ata_io(0xC000, false, 2, w);
+    }
+    let pvd0 = ide_cdrom::ata_io(0xC000, true, 1, 0) as u8;
+    let sectors = ide_cdrom::sectors_read();
+    ide_cdrom::reset();
+    probe == 0xFFFF_FFF9 && pvd0 == 1 && atapi_read_evidence(sectors)
+}
+
 pub fn ovmf_atapi_surface_present() -> bool {
     reset_host_cdrom();
     let spa = include_str!("../assets/webui.html");
@@ -89,10 +114,15 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("not both-enum-alone")
         && guest.contains("ATAPI signature")
         && guest.contains("PACKET interrupt-reason")
+        && guest.contains("ata cmd=")
+        && guest.contains("io unhandled port=0x")
         && ide.contains("ATAPI_INT_CD")
         && ide.contains("ATAPI_SIG_LBA")
         && ide.contains("EL TORITO SPECIFICATION")
         && ide.contains("SCSI_REQUEST_SENSE")
+        && ide.contains("ATA_CMD_DIAGNOSTIC")
+        && ide.contains("0xFFFF_FFF8")
+        && ide.contains("0xFFFF_FFF0")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -103,6 +133,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
     ide_cdrom::reset();
     let ok = ovmf_atapi_surface_present()
         && prop_atapi_signature_and_read10()
+        && prop_bar_relocated_read10()
         && run_m7_e5_ovmf_both_gate()
         && !atapi_read_evidence(0)
         && atapi_read_evidence(1)
@@ -116,6 +147,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not both-enum-alone")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATAPI signature")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PACKET interrupt-reason")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8-byte IDE command BAR")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EXECUTE DEVICE DIAGNOSTIC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not firmware El Torito boot")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_ATAPI_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-ATAPI-OK";

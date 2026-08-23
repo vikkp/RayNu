@@ -229,5 +229,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    CD boot. Not installer. Not Everest E5.
    **Stage 44 (host, open):** firmware ATAPI READ
    (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). Stop on `sectors>0`, not both-enum-alone.
-   Nested VT-x pending. Not El Torito boot. Not installer. Not Everest E5.
+   Nested VT-x `80129d3` n=2048 `packet=0`. 8-byte IDE BAR + diagnostic `0x90`.
+   Not El Torito boot. Not installer. Not Everest E5.
    Next: firmware El Torito CD boot.

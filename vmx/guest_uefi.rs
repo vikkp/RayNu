@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -255,6 +255,7 @@ static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
 static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
 static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
 static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
+static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -416,6 +417,7 @@ pub fn reset_guest_uefi_launch() {
     RAM_REMAP_TRIES.store(0, Ordering::Release);
     HPET_TICKS.store(0, Ordering::Release);
     PREEMPT_RELOAD.store(0, Ordering::Release);
+    IO_UNHANDLED_N.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
 }
@@ -1284,6 +1286,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::ide_cdrom::packet_commands() as u64);
     serial::write_str(" scsi=0x");
     write_hex_u32(u32::from(crate::devices::ide_cdrom::last_scsi()));
+    serial::write_str(" ata=0x");
+    write_hex_u32(u32::from(crate::devices::ide_cdrom::last_ata_cmd()));
+    serial::write_str(" unh=");
+    write_dec(IO_UNHANDLED_N.load(Ordering::Acquire) as u64);
     serial::write_str(" plat=");
     write_dec(crate::devices::guest_platform::platform_memory_served() as u64);
     serial::write_str(" dxe=");
@@ -1689,9 +1695,22 @@ unsafe fn handle_io(qual: u64) -> bool {
         return skip_insn();
     }
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
+        let before = crate::devices::ide_cdrom::ata_commands();
         SAVED_RAX = crate::devices::ide_cdrom::ata_io(port, is_in, size as u8, SAVED_RAX);
+        let n = crate::devices::ide_cdrom::ata_commands();
+        if n > before && n <= 8 {
+            serial::write_str("boot: guest-UEFI ata cmd=0x");
+            write_hex_u32(u32::from(crate::devices::ide_cdrom::last_ata_cmd()));
+            serial::write_str(" n=");
+            write_dec(n as u64);
+            serial::write_byte(b'\n');
+        }
         maybe_print_cdrom();
         maybe_print_atapi();
+        return skip_insn();
+    }
+    if crate::devices::ide_cdrom::is_bmide_port(port) {
+        SAVED_RAX = crate::devices::ide_cdrom::bmide_io(port, is_in, size as u8, SAVED_RAX);
         return skip_insn();
     }
     if crate::devices::guest_platform::is_platform_io_port(port)
@@ -1704,6 +1723,16 @@ unsafe fn handle_io(qual: u64) -> bool {
     }
     if is_com_uart_port(port) {
         return handle_uart(port, is_in, size);
+    }
+    let k = IO_UNHANDLED_N.fetch_add(1, Ordering::AcqRel);
+    if k < 12 {
+        serial::write_str("boot: guest-UEFI io unhandled port=0x");
+        write_hex_u32(u32::from(port));
+        serial::write_str(" in=");
+        write_dec(is_in as u64);
+        serial::write_str(" size=");
+        write_dec(size);
+        serial::write_byte(b'\n');
     }
     if is_in {
         let mask = if size == 1 {

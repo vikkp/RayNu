@@ -277,6 +277,8 @@ quiet except HTTP/WARN/markers.
 firmware ATAPI `READ(10)` so nested VT-x serial shows `sectors>0` and
 `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. Stage 43 closed on nested VT-x `1b07692`
 with BOTH-OK then stop n=1111 `sectors=0` — do not stop on both-enum-alone.
+Nested VT-x `80129d3` kept running to n=2048 with `packet=0` — 8-byte
+IDE command BAR, BAR-relocated ATA, diagnostic `0x90`, BMIDE BAR4 RAZ/WI.
 ATAPI signature + PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.

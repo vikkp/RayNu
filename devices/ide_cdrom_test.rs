@@ -1,12 +1,14 @@
 use super::{
-    ata_io, cdrom_visible_evidence, host_identify_word0, host_read10, is_ata_primary_port,
-    is_pci_data_port, pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr,
-    present, present_placeholder, reset, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR,
-    ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
+    ata_io, bmide_io, cdrom_visible_evidence, host_identify_word0, host_read10,
+    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_scsi, pci_addr_selects_cd, pci_bdf,
+    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present, present_placeholder,
+    reset, sectors_read, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, ISO_SECTOR,
+    M7_E5_OVMF_CDROM_OK_MARKER,
 };
 
 #[test]
 fn pci_bdf_and_ports() {
+    reset();
     let addr = pci_config_addr();
     assert_eq!(pci_bdf(addr), (0, 0, 1, 0));
     assert!(pci_addr_selects_cd(addr));
@@ -18,7 +20,11 @@ fn pci_bdf_and_ports() {
     assert!(is_ata_primary_port(0x1F0));
     assert!(is_ata_primary_port(0x1F7));
     assert!(is_ata_primary_port(0x3F6));
+    assert!(is_ata_primary_port(0x170));
+    assert!(is_ata_primary_port(0x177));
+    assert!(is_ata_primary_port(0x376));
     assert!(!is_ata_primary_port(0x3F8));
+    assert!(!is_bmide_port(0xC400));
     assert!(is_pci_data_port(0xCFC));
     assert!(is_pci_data_port(0xCFE));
     assert!(!is_pci_data_port(0xCF8));
@@ -71,6 +77,73 @@ fn atapi_signature_packet_reason_and_ata_identify_abort() {
     assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);
     let _ = ata_io(0x01F7, false, 1, 0xA0);
     assert_eq!(ata_io(0x01F2, true, 1, 0) as u8, 0x01);
+    let _ = ata_io(0x01F7, false, 1, 0x90);
+    assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);
+    assert_eq!(ata_io(0x01F5, true, 1, 0) as u8, 0xEB);
+    reset();
+}
+
+#[test]
+fn pci_bar0_probe_reports_eight_byte_io() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFF9,
+        "8-byte I/O BAR: mask 0xFFFFFFF8 | 1"
+    );
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFF1,
+        "16-byte I/O BMIDE: mask 0xFFFFFFF0 | 1"
+    );
+    reset();
+}
+
+#[test]
+fn pci_bar0_relocated_packet_read10_counts_sector() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xC000);
+    assert_eq!(pci_read_data(0xCFC, 4) & 0xFFF8, 0xC000);
+    assert!(is_ata_primary_port(0xC000));
+    assert!(is_ata_primary_port(0x1F0), "legacy 1F0 stays decoded");
+    let _ = ata_io(0xC006, false, 1, 0xA0);
+    let _ = ata_io(0xC007, false, 1, 0xA0);
+    assert_eq!(ata_io(0xC002, true, 1, 0) as u8, 0x01);
+    let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
+    for chunk in cdb.chunks(2) {
+        let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
+        let _ = ata_io(0xC000, false, 2, w);
+    }
+    assert_eq!(last_scsi(), 0x28);
+    assert_eq!(ata_io(0xC000, true, 1, 0) as u8, 1);
+    assert!(sectors_read() >= 1);
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xC400);
+    assert!(is_bmide_port(0xC400));
+    assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
+    assert!(!is_bmide_port(0x1F0));
+    reset();
+}
+
+#[test]
+fn secondary_channel_packet_read10() {
+    reset();
+    assert!(present_placeholder());
+    let _ = ata_io(0x0177, false, 1, 0xA0);
+    let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
+    for chunk in cdb.chunks(2) {
+        let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
+        let _ = ata_io(0x0170, false, 2, w);
+    }
+    assert_eq!(last_scsi(), 0x28);
+    assert!(sectors_read() >= 1);
     reset();
 }
 

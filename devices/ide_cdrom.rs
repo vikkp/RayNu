@@ -10,6 +10,10 @@
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
+//! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
+//! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
+//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
+//! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
@@ -41,6 +45,7 @@ const ATA_STATUS_SEEK: u8 = 0x10;
 const ATA_STATUS_DRDY: u8 = 0x40;
 const ATA_STATUS_BSY: u8 = 0x80;
 const ATA_CMD_DEVICE_RESET: u8 = 0x08;
+const ATA_CMD_DIAGNOSTIC: u8 = 0x90;
 const ATA_CMD_IDENTIFY: u8 = 0xEC;
 const ATA_CMD_IDENTIFY_PACKET: u8 = 0xA1;
 const ATA_CMD_PACKET: u8 = 0xA0;
@@ -85,6 +90,10 @@ struct CdMedia {
     pci_addr: u32,
     pci_cmd: u16,
     bar0: u32,
+    bar1: u32,
+    bar2: u32,
+    bar3: u32,
+    bar4: u32,
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -115,6 +124,10 @@ impl CdMedia {
             pci_addr: 0,
             pci_cmd: 0x0001,
             bar0: 0x1F1,
+            bar1: 0x03F5,
+            bar2: 0x0171,
+            bar3: 0x0375,
+            bar4: 1,
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -165,6 +178,8 @@ static ISO_LEN: AtomicU32 = AtomicU32::new(0);
 static MARKER: AtomicBool = AtomicBool::new(false);
 static PACKET_N: AtomicU32 = AtomicU32::new(0);
 static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
+static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
+static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 
 /// Decode PCI config address (mechanism #1).
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
@@ -193,7 +208,61 @@ pub fn pci_config_addr() -> u32 {
 }
 
 pub fn is_ata_primary_port(port: u16) -> bool {
-    (0x01F0..=0x01F7).contains(&port) || port == 0x03F6
+    with_cd(|m| ata_reg(m, port).is_some())
+}
+
+/// Map an I/O port onto the ATA command block (0–7) or control port.
+fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
+    // Compatibility mode keeps ISA ports even after PciBus relocates BARs.
+    if (0x01F0..=0x01F7).contains(&port) {
+        return Some((port - 0x01F0) as u8);
+    }
+    if (0x0170..=0x0177).contains(&port) {
+        return Some((port - 0x0170) as u8);
+    }
+    if port == 0x03F6 || port == 0x0376 {
+        return Some(8);
+    }
+    let cmd = (m.bar0 & !7) as u16;
+    if port.wrapping_sub(cmd) < 8 {
+        return Some((port - cmd) as u8);
+    }
+    let cmd2 = (m.bar2 & !7) as u16;
+    if port.wrapping_sub(cmd2) < 8 {
+        return Some((port - cmd2) as u8);
+    }
+    let ctl = (m.bar1 & !3) as u16;
+    if port == ctl.wrapping_add(2) {
+        return Some(8);
+    }
+    let ctl2 = (m.bar3 & !3) as u16;
+    if port == ctl2.wrapping_add(2) {
+        return Some(8);
+    }
+    None
+}
+
+fn bmide_base(m: &CdMedia) -> u16 {
+    (m.bar4 & !0xF) as u16
+}
+
+/// Bus-master IDE (BAR4, 16-byte I/O). Address 0 is unprogrammed — do not
+/// steal the PIC/PIT range.
+pub fn is_bmide_port(port: u16) -> bool {
+    with_cd(|m| {
+        let base = bmide_base(m);
+        base != 0 && port.wrapping_sub(base) < 16
+    })
+}
+
+/// RAZ/WI BMIDE. Unhandled `IN` was `0xFF` (looks busy/error).
+pub fn bmide_io(_port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
+    if is_in {
+        let mask = io_mask(size);
+        rax & !mask
+    } else {
+        rax
+    }
 }
 
 pub fn is_pci_data_port(port: u16) -> bool {
@@ -244,6 +313,8 @@ pub fn reset() {
     MARKER.store(false, Ordering::Release);
     PACKET_N.store(0, Ordering::Release);
     LAST_SCSI.store(0, Ordering::Release);
+    ATA_CMD_N.store(0, Ordering::Release);
+    LAST_ATA_CMD.store(0, Ordering::Release);
 }
 
 /// PACKET commands issued since last reset (firmware ATAPI activity).
@@ -254,6 +325,16 @@ pub fn packet_commands() -> u32 {
 /// Last SCSI opcode from a completed 12-byte CDB.
 pub fn last_scsi() -> u8 {
     LAST_SCSI.load(Ordering::Acquire)
+}
+
+/// ATA commands written to 0x1F7 since last reset.
+pub fn ata_commands() -> u32 {
+    ATA_CMD_N.load(Ordering::Acquire)
+}
+
+/// Last byte written to the ATA command register.
+pub fn last_ata_cmd() -> u8 {
+    LAST_ATA_CMD.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -361,9 +442,10 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
         0x10 => m.bar0,
-        0x14 => 0x03F5,
-        0x18 => 0x0171,
-        0x1C => 0x0375,
+        0x14 => m.bar1,
+        0x18 => m.bar2,
+        0x1C => m.bar3,
+        0x20 => m.bar4,
         0x2C => 0x0000_0000,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
@@ -396,17 +478,27 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
     })
 }
 
-pub fn pci_write_data(port: u16, size: u8, val: u32) {
+pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
         let off = pci_cfg_offset(m.pci_addr, port);
+        let aligned = off & 0xFC;
         if off == 0x04 {
             m.pci_cmd = (val as u16) | 0x0001;
-        } else if off == 0x10 {
-            let mask = if size >= 4 { 0xFFFF_FFFC } else { 0xFFFF };
-            m.bar0 = (val & mask) | 1;
+        } else if aligned == 0x10 {
+            // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
+            m.bar0 = (val & 0xFFFF_FFF8) | 1;
+        } else if aligned == 0x14 {
+            m.bar1 = (val & 0xFFFF_FFFC) | 1;
+        } else if aligned == 0x18 {
+            m.bar2 = (val & 0xFFFF_FFF8) | 1;
+        } else if aligned == 0x1C {
+            m.bar3 = (val & 0xFFFF_FFFC) | 1;
+        } else if aligned == 0x20 {
+            // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
+            m.bar4 = (val & 0xFFFF_FFF0) | 1;
         }
     });
 }
@@ -623,57 +715,62 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
         }
+        let Some(reg) = ata_reg(m, port) else {
+            return if is_in { rax | 0xff } else { rax };
+        };
         if is_in {
-            let val = match port {
-                0x01F0 => read_data(m, size),
-                0x01F1 => u64::from(m.ata_err),
-                0x01F2 => u64::from(m.ata_count),
-                0x01F3 => u64::from(m.ata_lba[0]),
-                0x01F4 => u64::from(m.ata_lba[1]),
-                0x01F5 => u64::from(m.ata_lba[2]),
-                0x01F6 => u64::from(m.ata_dev),
-                0x01F7 | 0x03F6 => u64::from(m.ata_status),
-                _ => 0,
+            let val = match reg {
+                0 => read_data(m, size),
+                1 => u64::from(m.ata_err),
+                2 => u64::from(m.ata_count),
+                3 => u64::from(m.ata_lba[0]),
+                4 => u64::from(m.ata_lba[1]),
+                5 => u64::from(m.ata_lba[2]),
+                6 => u64::from(m.ata_dev),
+                _ => u64::from(m.ata_status),
             };
             let mask = io_mask(size);
             (rax & !mask) | (val & mask)
         } else {
             let v = rax as u8;
-            match port {
-                0x01F0 => write_data(m, size, rax),
-                0x01F1 => m.ata_feat = v,
-                0x01F2 => m.ata_count = v,
-                0x01F3 => m.ata_lba[0] = v,
-                0x01F4 => m.ata_lba[1] = v,
-                0x01F5 => m.ata_lba[2] = v,
-                0x01F6 => m.ata_dev = v,
-                0x01F7 => match v {
-                    ATA_CMD_IDENTIFY_PACKET => start_identify(m),
-                    ATA_CMD_PACKET => {
-                        PACKET_N.fetch_add(1, Ordering::AcqRel);
-                        m.xfer = AtaXfer::PacketCdb;
-                        m.cdb_got = 0;
-                        m.cdb.fill(0);
-                        m.byte_limit = u16::from(m.ata_lba[1]) | (u16::from(m.ata_lba[2]) << 8);
-                        m.ata_err = 0;
-                        m.ata_count = ATAPI_INT_CD;
-                        m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+            match reg {
+                0 => write_data(m, size, rax),
+                1 => m.ata_feat = v,
+                2 => m.ata_count = v,
+                3 => m.ata_lba[0] = v,
+                4 => m.ata_lba[1] = v,
+                5 => m.ata_lba[2] = v,
+                6 => m.ata_dev = v,
+                7 => {
+                    LAST_ATA_CMD.store(v, Ordering::Release);
+                    ATA_CMD_N.fetch_add(1, Ordering::AcqRel);
+                    match v {
+                        ATA_CMD_IDENTIFY_PACKET => start_identify(m),
+                        ATA_CMD_PACKET => {
+                            PACKET_N.fetch_add(1, Ordering::AcqRel);
+                            m.xfer = AtaXfer::PacketCdb;
+                            m.cdb_got = 0;
+                            m.cdb.fill(0);
+                            m.byte_limit = u16::from(m.ata_lba[1]) | (u16::from(m.ata_lba[2]) << 8);
+                            m.ata_err = 0;
+                            m.ata_count = ATAPI_INT_CD;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+                        }
+                        ATA_CMD_DEVICE_RESET | ATA_CMD_DIAGNOSTIC => apply_atapi_signature(m),
+                        ATA_CMD_IDENTIFY => {
+                            m.ata_err = 0x04;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+                            m.ata_lba = ATAPI_SIG_LBA;
+                            m.ata_count = 0x01;
+                            m.xfer = AtaXfer::Idle;
+                        }
+                        _ => {
+                            m.ata_err = 0x04;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+                        }
                     }
-                    ATA_CMD_DEVICE_RESET => apply_atapi_signature(m),
-                    ATA_CMD_IDENTIFY => {
-                        // ATAPI devices abort ATA IDENTIFY (not PACKET).
-                        m.ata_err = 0x04;
-                        m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
-                        m.ata_lba = ATAPI_SIG_LBA;
-                        m.ata_count = 0x01;
-                        m.xfer = AtaXfer::Idle;
-                    }
-                    _ => {
-                        m.ata_err = 0x04;
-                        m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
-                    }
-                },
-                0x03F6 => {
+                }
+                8 => {
                     let prev = m.ata_devctl;
                     m.ata_devctl = v;
                     if (v & ATA_DEVCTL_SRST) != 0 {
