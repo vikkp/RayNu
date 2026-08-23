@@ -8,9 +8,10 @@ use super::{
 #[test]
 fn pci_bdf_and_ports() {
     let addr = pci_config_addr();
-    assert_eq!(pci_bdf(addr), (0, 1, 1, 0));
+    assert_eq!(pci_bdf(addr), (0, 0, 0, 0));
     assert!(pci_addr_selects_cd(addr));
-    assert!(!pci_addr_selects_cd(0x8000_0000)); // 00:00.0 host bridge
+    assert!(pci_addr_selects_cd(0x8000_0000)); // 00:00.0 IDE (PEI probe)
+    assert!(!pci_addr_selects_cd(0x8000_4000)); // 00:08.0 host bridge
     assert!(!pci_addr_selects_cd(0x8000_0800)); // 00:01.0 ISA
     assert!(is_ata_primary_port(0x1F0));
     assert!(is_ata_primary_port(0x1F7));
@@ -31,11 +32,17 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_CD_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_CD_PCI_DEVICE);
+    // raynuvsrv1 PEI: CF8=0x80000002 + inw(0xCFC) — Device ID at 00:00.0.
+    pci_write_addr(0x8000_0002);
+    assert_eq!(
+        pci_read_data(0xCFC, 2) & 0xffff,
+        u32::from(GUEST_CD_PCI_DEVICE)
+    );
     pci_write_addr(pci_config_addr() | 0x0C);
     let ide_ht = pci_read_data(0xCFC, 4);
-    assert_eq!((ide_ht >> 16) & 0xff, 0x80);
+    assert_eq!((ide_ht >> 16) & 0xff, 0x00);
     pci_write_addr(pci_config_addr() | 0x0E);
-    assert_eq!(pci_read_data(0xCFC, 1) & 0xff, 0x80);
+    assert_eq!(pci_read_data(0xCFC, 1) & 0xff, 0x00);
     assert_eq!(host_identify_word0(), Some(0x8500));
     let pvd = host_read10(16).expect("READ(10) LBA 16");
     assert_eq!(&pvd[1..6], b"CD001");
@@ -52,7 +59,7 @@ fn unpresented_pci_is_empty() {
     pci_write_addr(pci_config_addr());
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     assert!(present(&[0u8; ISO_SECTOR], 2));
-    pci_write_addr(0x8000_0000);
+    pci_write_addr(0x8000_0800);
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     reset();
 }

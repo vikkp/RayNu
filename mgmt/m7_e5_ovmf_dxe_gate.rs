@@ -13,8 +13,9 @@ use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_cdrom_gate::run_m7_e5_ovmf_cdrom_gate;
 use crate::devices::guest_platform::{
-    cmos_above_16m_chunks, io, is_platform_sink_gpa, pci_header_is_multifunction, pci_read_data,
-    pci_write_addr, reset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
+    cmos_above_16m_chunks, host_pci_config_addr, io, is_platform_sink_gpa,
+    pci_header_is_multifunction, pci_read_data, pci_write_addr, reset, HOST_BRIDGE_DEVICE,
+    HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
 };
 use crate::vmx::guest_uefi::{
     dxe_or_cd_boot_evidence, exec_from_low_ram, post_dxe_should_stop,
@@ -42,7 +43,7 @@ pub fn prop_platform_memory_honest() -> bool {
     if &sig != b"QEMU" {
         return false;
     }
-    pci_write_addr(0x8000_0000);
+    pci_write_addr(host_pci_config_addr());
     let id = match pci_read_data(0xCFC, 4) {
         Some(v) => v,
         None => return false,
@@ -105,7 +106,8 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && exec_from_low_ram(0x0010_0000)
         && !exec_from_low_ram(0xFFFD_3759)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 multifunction header")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")

@@ -16,17 +16,19 @@ use core::sync::atomic::{AtomicBool, Ordering};
 /// Kept local so this module does not import the Proven Core EPT builder.
 pub const PLATFORM_RAM_BYTES: u64 = 32 * 1024 * 1024;
 
-/// i440FX host bridge at `00:00.0` (Intel 82441FX).
+/// i440FX host bridge at `00:08.0` (Intel 82441FX).
+/// PEI only probes `00:00.0` Device ID (raynuvsrv1: `cfg=0x80000002 val=0x1237`).
+/// That slot is the guest IDE so CDROM-OK can print; host lives here.
 pub const HOST_BRIDGE_VENDOR: u16 = 0x8086;
 pub const HOST_BRIDGE_DEVICE: u16 = 0x1237;
+pub const HOST_BRIDGE_DEV: u8 = 8;
+pub const HOST_BRIDGE_FN: u8 = 0;
 
 /// PIIX3 ISA / LPC at `00:01.0`.
 pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
 
 /// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
-/// PIIX3 is `00:01.0` ISA + `00:01.1` IDE; firmware only scans fn 1–7 when
-/// function 0 advertises this bit. Intel PCI spec §6.2.1.
 pub const PCI_HEADER_MULTIFUNCTION: u32 = 0x0080_0000;
 
 pub const FW_CFG_SELECTOR_PORT: u16 = 0x0510;
@@ -112,12 +114,16 @@ pub fn pci_cfg_offset(addr: u32, port: u16) -> u8 {
     ((addr | data) & 0xff) as u8
 }
 
+pub fn host_pci_config_addr() -> u32 {
+    0x8000_0000 | (u32::from(HOST_BRIDGE_DEV) << 11) | (u32::from(HOST_BRIDGE_FN) << 8)
+}
+
 pub fn pci_addr_selects_host(addr: u32) -> bool {
     if (addr & 0x8000_0000) == 0 {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
-    bus == 0 && dev == 0 && fun == 0
+    bus == 0 && dev == HOST_BRIDGE_DEV && fun == HOST_BRIDGE_FN
 }
 
 pub fn pci_addr_selects_isa(addr: u32) -> bool {

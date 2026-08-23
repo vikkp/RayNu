@@ -7,7 +7,7 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 366
+velocity_commits_30d: 367
 velocity_gates_30d: 58
 overall_pct: 95
 confidence: high
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 IDE at 00:00.0 (PEI DID probe); i440FX at 00:08.0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CF8\|CFC Header Type byte offset; raynuvsrv1 nested VT-x DXE-OK pci_ide=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 PIIX3 multifunction + post-DXE tail; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-dxe | 0.5 | 95 | P0-56 past-PEI/DXE or CD boot attempt; CMOS/fw_cfg/i440FX; not installer; iso 99%; iron P0-14 stays 2b795a0 |

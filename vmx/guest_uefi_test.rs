@@ -61,7 +61,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("GuestVisible"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 multifunction header"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:08.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));

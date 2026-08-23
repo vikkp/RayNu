@@ -121,7 +121,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 38 | `RAYNU-V-M7-E5-OVMF-ALIVE-OK` | Past first triple-fault: CR4.VMXE host-owned; short resume loop; not full OVMF boot; not installer (2026-08-22). |
 | E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | Left SEC tail (last 64 KiB) + PEI PCI / firmware COM / HLT; COM1/COM2 forwarded; not full DXE; not installer (2026-08-22). |
 | E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | `attach_cdrom_uefi` → GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE; not installer (2026-08-22). |
-| E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | CMOS/fw_cfg/i440FX + PIIX3 multifunction header + EPT sink-resume; post-DXE tail then E4; past-PEI/DXE or CD boot attempt; not installer (2026-08-22). |
+| E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID probe) + EPT sink-resume; post-DXE tail then E4; past-PEI/DXE or CD boot attempt; not installer (2026-08-23). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -233,7 +233,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-53 / E5 Stage 38 closed (host + QEMU):** OVMF past first triple-fault (`RAYNU-V-M7-E5-OVMF-ALIVE-OK`). Root cause: SEC `mov cr4, 0x640` cleared VMXE → `#GP` → TF. Host-owns CR4.VMXE (same as E4 Linux). 32 MiB low RAM + short resume. Not full OVMF boot. Not installer. Not Everest E5.  
 **P0-54 / E5 Stage 39 closed (host + QEMU):** OVMF past SEC (`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`). Linear left last 64 KiB + PEI PCI config / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5.  
 **P0-55 / E5 Stage 40 closed (host + QEMU):** guest-UEFI CD visible (`RAYNU-V-M7-E5-OVMF-CDROM-OK`). `attach_cdrom_uefi` after FirmwareArmed is GuestVisible. PCI IDE/ATAPI on the private VMCS. Unarmed path stays `UnsupportedOnFirmware`. Not full DXE. Not installer. Not Everest E5.  
-**P0-56 / E5 Stage 41 (host + QEMU):** PEI/DXE platform or CD boot attempt (`RAYNU-V-M7-E5-OVMF-DXE-OK`). Honest CMOS/fw_cfg RAM size + i440FX host bridge + PIIX3 multifunction header (`00:01.0` so firmware scans `00:01.1`) + CF8|CFC byte offset (QEMU `pci_host_data_read`) + EPT sink-resume for the Stage 40 `0xFCF8_F000` stall. Post-DXE resume tail, then E4 fail-soft. Not a completed firmware CD boot. Not installer. Not Everest E5.  
+**P0-56 / E5 Stage 41 (host + QEMU):** PEI/DXE platform or CD boot attempt (`RAYNU-V-M7-E5-OVMF-DXE-OK`). Honest CMOS/fw_cfg RAM size + i440FX host at `00:08.0` + guest IDE at `00:00.0` (PEI only probes that Device ID) + CF8|CFC byte offset + EPT sink-resume. Post-DXE resume tail, then E4 fail-soft. Not a completed firmware CD boot. Not installer. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -284,7 +284,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-53 / E5 Stage 38 | `RAYNU-V-M7-E5-OVMF-ALIVE-OK` | **CLOSED (host + QEMU).** Past first triple-fault. CR4.VMXE host-owned. Not full OVMF boot. Not installer. Not Everest E5. |
 | P0-54 / E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | **CLOSED (host + QEMU).** Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5. |
 | P0-55 / E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | **CLOSED (host + QEMU).** `attach_cdrom_uefi` → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Not Everest E5. |
-| P0-56 / E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **Host + QEMU.** CMOS/fw_cfg/i440FX + PIIX3 multifunction + EPT sink-resume. Post-DXE tail then E4. Past-PEI/DXE or CD boot attempt. Not installer. Not Everest E5. |
+| P0-56 / E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **Host + QEMU.** CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID probe) + EPT sink-resume. Post-DXE tail then E4. Past-PEI/DXE or CD boot attempt. Not installer. Not Everest E5. |
 | Everest residual | virtio-blk + boot order CD→disk + TLS/console + distro installer | After P0-56. Product ISO: [ADR-014](adr/ADR-014.md). Firmware can attempt this CD; virtio disk is next. |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

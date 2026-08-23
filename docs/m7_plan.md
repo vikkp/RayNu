@@ -294,9 +294,9 @@ Stage 39 `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` (left last 64 KiB + PEI PCI /
 firmware COM / HLT; COM1/COM2 forwarded; not full DXE) ·
 Stage 40 `RAYNU-V-M7-E5-OVMF-CDROM-OK` (`attach_cdrom_uefi` →
 GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE) ·
-Stage 41 `RAYNU-V-M7-E5-OVMF-DXE-OK` (CMOS/fw_cfg/i440FX platform +
-PIIX3 multifunction header + EPT sink-resume; post-DXE tail then E4;
-past-PEI/DXE or CD boot attempt; not installer).
+Stage 41 `RAYNU-V-M7-E5-OVMF-DXE-OK` (CMOS/fw_cfg + i440FX at `00:08.0` +
+IDE at `00:00.0` for the PEI Device ID probe + EPT sink-resume; post-DXE
+tail then E4; past-PEI/DXE or CD boot attempt; not installer).
 
 **Next after Stage 41:** virtio-blk + boot order CD→disk.
 Product ISO is
