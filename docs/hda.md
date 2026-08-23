@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + PIIX IDE 00:01.1. 2048-exit cap after DXE (41d0ebe 384 I/O still only 00:00.0). HLT skip + CR-access resume. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. ACPI PM timer after nested VT-x 699c9a6 n=2048 pci_ide=0 (AcpiTimerLib rejects DID 0x1042). HLT skip + CR-access resume. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK 2048-exit cap after DXE + HLT skip + CR-access resume (41d0ebe n=476 pci_ide=0); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK ACPI PM timer after 699c9a6 n=2048 pci_ide=0; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1; HLT skip so DXE can walk PCI; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1 (ISA multifunction walk); virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1; virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |

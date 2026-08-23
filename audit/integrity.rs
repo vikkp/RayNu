@@ -365,7 +365,7 @@ pub enum AuditEvent {
         exits: u64,
         pci_enum: u64,
     },
-    /// Guest UEFI enumerated virtio `00:00.0` and IDE `00:01.1` on one boot.
+    /// Guest UEFI enumerated virtio `00:00.0` and IDE `00:00.1` on one boot.
     /// Not ATAPI sectors / not installer.
     OvmfGuestUefiBoth {
         exits: u64,

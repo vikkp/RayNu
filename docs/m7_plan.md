@@ -275,12 +275,12 @@ quiet except HTTP/WARN/markers.
 
 **First action (Stage 43 / P0-58):**
 firmware-simultaneous PCI enum on one nested VT-x serial (`RAYNU-V-M7-E5-OVMF-BOTH-OK`):
-virtio `00:00.0` DID `0x1042` **and** IDE `00:01.1` DID `0x7010`, stop
-`pci_ide=1 virtio=1`. Spend the 2048-exit cap after DXE (`41d0ebe`: 384 I/O
-still only `00:00.0`). HLT skip + CR-access resume. Do not move virtio off
-`00:00.0`. Do not fake `pci_enum`.
-Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito read).
-Not another `*Absent` bookkeeping stage or SPA flag button.
+virtio `00:00.0` DID `0x1042` **and** IDE `00:00.1` DID `0x7010`, stop
+`pci_ide=1 virtio=1`. Nested VT-x `699c9a6`: n=2048 still only `00:00.0`
+(`pci_ide=0`). ACPI PM timer (port 0 dword + PIIX `0x408`) so PEI Delay
+can end when DID is virtio. Do not move virtio off `00:00.0`. Do not fake
+`pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
+read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another
 pure "more exits" PR without a new capability. ADR-014 Decision stands.
 Do **not** claim Everest E5 / `ISO-INSTALL-OK`. `iso=0` E4 SHELL start stays valid.
@@ -308,8 +308,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 `00:00.0` `val=0x1042`; `OVMF-VIRTIO-OK` pci=1; CD GuestVisible;
 `pci_ide=0` sectors=0; stop n=115 virtio=1; not installer) ·
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**open** host: simultaneous
-virtio `00:00.0` + PIIX IDE `00:01.1`; 2048-exit cap after DXE; HLT skip +
-CR-access resume).
+virtio `00:00.0` + IDE `00:00.1`; ACPI PM timer after `699c9a6` n=2048
+only `00:00.0`; 2048-exit cap; HLT skip + CR-access resume).
 
 **Next after Stage 43:** firmware CD boot (ATAPI/El Torito).
 Product ISO is

@@ -1,11 +1,11 @@
 use super::{
-    boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb, cmos_mem_served,
-    fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, io,
-    is_platform_io_port, is_platform_sink_gpa, pci_addr_selects_host, pci_addr_selects_isa,
-    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr,
-    platform_memory_served, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
-    HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION,
-    PLATFORM_RAM_BYTES,
+    acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
+    cmos_mem_served, fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated,
+    host_pci_config_addr, io, is_acpi_pm_timer_io, is_platform_io_port, is_platform_sink_gpa,
+    pci_addr_selects_host, pci_addr_selects_isa, pci_cfg_offset, pci_header_is_multifunction,
+    pci_read_data, pci_write_addr, platform_memory_served, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL,
+    HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR,
+    PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -123,4 +123,24 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_io_port(0x40));
     assert!(!is_platform_io_port(0xCF8));
     assert!(!is_platform_io_port(0x3F8));
+    assert!(is_acpi_pm_timer_io(0, 4));
+    assert!(!is_acpi_pm_timer_io(0, 1));
+    assert!(is_acpi_pm_timer_io(0x408, 4));
+}
+
+#[test]
+fn acpi_pm_timer_ticks_port0_and_pmba() {
+    reset();
+    assert_eq!(acpi_pm_timer_reads(), 0);
+    let a = io(0, true, 4, 0) as u32;
+    let b = io(0, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, 0x0001_0000);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let c = io(0x408, true, 4, 0) as u32;
+    assert_eq!(c, 0x0002_0000);
+    assert_eq!(acpi_pm_timer_reads(), 3);
+    reset();
+    assert_eq!(acpi_pm_timer_reads(), 0);
 }

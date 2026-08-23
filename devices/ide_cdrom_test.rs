@@ -8,12 +8,12 @@ use super::{
 #[test]
 fn pci_bdf_and_ports() {
     let addr = pci_config_addr();
-    assert_eq!(pci_bdf(addr), (0, 1, 1, 0));
+    assert_eq!(pci_bdf(addr), (0, 0, 1, 0));
     assert!(pci_addr_selects_cd(addr));
-    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 IDE
+    assert!(pci_addr_selects_cd(0x8000_0100)); // 00:00.1 IDE (virtio fn1)
+    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 same CD (PIIX fn1)
     assert!(!pci_addr_selects_cd(0x8000_0000)); // 00:00.0 virtio
     assert!(!pci_addr_selects_cd(0x8000_0800)); // 00:01.0 ISA
-    assert!(!pci_addr_selects_cd(0x8000_0100)); // 00:00.1 empty
     assert!(!pci_addr_selects_cd(0x8000_4000)); // 00:08.0 host
     assert!(is_ata_primary_port(0x1F0));
     assert!(is_ata_primary_port(0x1F7));
@@ -34,7 +34,12 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_CD_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_CD_PCI_DEVICE);
-    // IDE is 00:01.1 — PIIX fn1; PEI does not scan this function.
+    // IDE is 00:00.1 — virtio fn1; PEI DID probe is 00:00.0.
+    pci_write_addr(0x8000_0102);
+    assert_eq!(
+        pci_read_data(0xCFC, 2) & 0xffff,
+        u32::from(GUEST_CD_PCI_DEVICE)
+    );
     pci_write_addr(0x8000_0902);
     assert_eq!(
         pci_read_data(0xCFC, 2) & 0xffff,

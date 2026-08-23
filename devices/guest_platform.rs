@@ -8,10 +8,13 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! and fw_cfg `bootorder` (CD then virtio disk). Not installer. Not
+//! fw_cfg `bootorder` (CD then virtio disk), and a 24-bit ACPI PM
+//! timer (port 0 dword + PIIX `0x408`). Nested VT-x `699c9a6`: 2048 I/O
+//! still only `00:00.0` because `AcpiTimerLibConstructor` rejects virtio
+//! DID `0x1042` and `IoRead32(0)` was `0xFFFFFFFF`. Not installer. Not
 //! Everest E5.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
 /// Kept local so this module does not import the Proven Core EPT builder.
@@ -48,12 +51,12 @@ const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
 
-/// QEMU `bootorder` (OFW paths). CD (`ide@1,1` = `00:01.1`) then virtio disk (`scsi@0`).
-pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@1,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
+/// QEMU `bootorder` (OFW paths). CD (`ide@0,1` = `00:00.1`) then virtio disk (`scsi@0`).
+pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
 
 /// Product boot order is CD then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
-    let ide = find_bytes(BOOTORDER, b"ide@1,1");
+    let ide = find_bytes(BOOTORDER, b"ide@0,1");
     let disk = find_bytes(BOOTORDER, b"scsi@0");
     match (ide, disk) {
         (Some(i), Some(d)) => i < d,
@@ -128,6 +131,13 @@ pub fn is_timer_port(port: u16) -> bool {
     (0x40..=0x43).contains(&port) || port == 0x61 || port == 0x80 || port == 0x92
 }
 
+/// OVMF `AcpiTimerLibConstructor` leaves `mAcpiTimerIoAddr=0` when `00:00.0`
+/// DID is not i440FX/Q35. PEI then `IoRead32(0)` in `InternalAcpiDelay`.
+/// PIIX4 PMBA timer is `0x408`. Q35/ICH9 default is `0xB008`.
+pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
+    (port == 0 && size == 4) || (0x408..=0x40B).contains(&port) || (0xB008..=0xB00B).contains(&port)
+}
+
 pub fn is_platform_io_port(port: u16) -> bool {
     is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port)
 }
@@ -193,6 +203,7 @@ struct Platform {
     fw_len: u8,
     pit: u16,
     port61: u8,
+    pm_timer: u32,
 }
 
 impl Platform {
@@ -207,6 +218,7 @@ impl Platform {
             fw_len: 0,
             pit: 0xFFFF,
             port61: 0x10,
+            pm_timer: 0,
         }
     }
 }
@@ -225,6 +237,7 @@ static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
 static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
+static ACPI_PM: AtomicU32 = AtomicU32::new(0);
 
 fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
     while PLAT_LOCK.swap(true, Ordering::Acquire) {
@@ -326,6 +339,21 @@ pub fn reset() {
     FWCFG_RAM.store(false, Ordering::Release);
     FWCFG_BOOT.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
+    ACPI_PM.store(0, Ordering::Release);
+}
+
+/// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.
+pub fn acpi_pm_timer_reads() -> u32 {
+    ACPI_PM.load(Ordering::Acquire)
+}
+
+fn tick_pm_timer(p: &mut Platform) -> u32 {
+    ACPI_PM.fetch_add(1, Ordering::AcqRel);
+    let v = p.pm_timer & 0x00FF_FFFF;
+    // Bit 23 of (ticks - current) ends InternalAcpiDelay. Step 64Ki so a
+    // handful of reads complete a PEI MicroSecondDelay.
+    p.pm_timer = p.pm_timer.wrapping_add(0x0001_0000);
+    v
 }
 
 pub fn cmos_mem_served() -> bool {
@@ -479,6 +507,20 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             // DMA ports: traditional-only (ID bit1 clear). RAZ/WI.
             if is_in {
                 return rax & !mask;
+            }
+            return rax;
+        }
+        if is_acpi_pm_timer_io(port, size) {
+            if is_in {
+                let v = tick_pm_timer(p);
+                let shift = match port {
+                    0 | 0x408 | 0xB008 => 0,
+                    0x409 | 0xB009 => 8,
+                    0x40A | 0xB00A => 16,
+                    0x40B | 0xB00B => 24,
+                    _ => 0,
+                };
+                return (rax & !mask) | (u64::from(v >> shift) & mask);
             }
             return rax;
         }
