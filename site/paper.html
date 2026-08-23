@@ -246,7 +246,7 @@
           <span aria-hidden="true">·</span>
           <span>Living Verification Paper</span>
         </p>
-        <span class="paper-badge">Living Draft · v0.2.1-r640-boot-confirm</span>
+        <span class="paper-badge">Living Draft · v0.3.0-e3b-e4-iron</span>
         <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
         <p class="paper-mast__subtitle">
           Optimized for Dell PowerEdge R640 / R650 / R660
@@ -258,7 +258,7 @@
           >
         </p>
         <p class="paper-meta">
-          Last updated: 2026-08-15 · ADR-010 · iron COM2 evidence ·
+          Last updated: 2026-08-23 · ADR-010 · iron COM2 evidence ·
           <a href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md"
             >Source on GitHub</a
           >
@@ -325,7 +325,7 @@
       </p>
       <div class="paper-evidence">
         Evidence block template (fill only with real data):<br />
-        <strong>Evidence (YYYY-MM-DD, commit <hash>, run <id>)</strong><br />
+        <strong>Evidence (YYYY-MM-DD, commit &lt;hash&gt;, run &lt;id&gt;)</strong><br />
         – Maturity: Lx<br />
         – Artifact: serial log / Verus transcript / audit-ring hash / gate checklist<br />
         – Observation: one factual sentence
@@ -554,6 +554,50 @@
         Residual: TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
         E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub) — see HDA.
       </p>
+
+      <h3>6.7 Milestone 7 — Mount Everest iron track (living)</h3>
+      <p>
+        <strong>Status:</strong> E2, E3, E3b + Phase F, E5 stamps, and E4 SPA
+        VMLAUNCH closed on real R640 iron through 2026-08-21. Guest-UEFI
+        (OVMF) chain closed on nested VT-x through 2026-08-23 (ADR-014 Stages
+        36–42). Remaining: TLS/console, a real distro installer, live Redfish,
+        R640 soak.
+      </p>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-20, run r640 BCM5720 :38, E3b + Phase F)</strong><br />
+        Maturity: L1 (runtime / gate) · Artifact: serial log + evidence notes ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md">e3b-host-nic-http-ok.md</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-phase-f-coexist-ok.md">phase-f-coexist-ok.md</a><br />
+        Observation: After <code>BOOT-OK</code>, the host-owned BCM5720 LOM
+        (<code>:38</code>) served SPA + Bearer REST as
+        <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>; Phase F repeated the listen
+        with VMX on (G0 scheduled, G1–G3 parked), 25× HTTP-OK on hold. Firmware
+        SNP/Tcp4 remain dead after EBS by design (ADR-013).
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-21, run r640 SPA launch, E4)</strong><br />
+        Maturity: L1 (runtime / gate) · Artifact: serial log + evidence note ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md">e4-spa-shadow-reentry-ok.md</a><br />
+        Observation: SPA start launched a private-EPT SHELL guest and
+        re-entered it after shadow restore —
+        <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>. The guest is a SHELL stub,
+        not a distro.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-22 → 2026-08-23, raynuvsrv1 nested VT-x, ADR-014 Stages 36–42)</strong><br />
+        Maturity: L1 (runtime / gate) · Artifact: host + QEMU gate markers ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/progress.md">progress.md</a>
+        P0-51…P0-57 ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md">ADR-014</a><br />
+        Observation: Retained ESP OVMF.fd VMLAUNCHed on a private VMCS
+        (<code>OVMF-VMLAUNCH-OK</code>), kept past the first triple-fault
+        (host owns CR4.VMXE), driven past SEC (<code>OVMF-PAST-SEC-OK</code>),
+        given a GuestVisible CD (<code>OVMF-CDROM-OK</code>), PEI/DXE platform
+        boot attempt (<code>OVMF-DXE-OK</code>), and an empty virtio-blk disk
+        with CD-then-disk boot order (<code>OVMF-VIRTIO-OK</code>). Not a
+        completed firmware CD boot; not an installer; not Everest E5.
+      </div>
 
       <h2 id="related">7. Related Work</h2>
       <p><em>[To be filled later with precise citations.]</em></p>
