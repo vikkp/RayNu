@@ -1,0 +1,8 @@
+{
+  "name": "raynuv-site",
+  "private": true,
+  "description": "Wrangler pin for the raynuv.com static-assets Worker deploy (CI only)",
+  "devDependencies": {
+    "wrangler": "4.125.0"
+  }
+}
