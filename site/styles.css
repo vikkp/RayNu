@@ -191,12 +191,14 @@ code {
   border-color: #fff;
 }
 
-.section--close .cta__secondary {
+.section--close .cta__secondary,
+.section--buddies .cta__secondary {
   color: var(--ink-soft);
   border-bottom-color: rgba(16, 24, 32, 0.35);
 }
 
-.section--close .cta__secondary:hover {
+.section--close .cta__secondary:hover,
+.section--buddies .cta__secondary:hover {
   color: var(--ink);
   border-color: var(--ink);
 }
