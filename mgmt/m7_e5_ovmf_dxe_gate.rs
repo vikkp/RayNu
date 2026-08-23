@@ -52,10 +52,16 @@ pub fn prop_platform_memory_honest() -> bool {
         Some(v) => v,
         None => return false,
     };
+    pci_write_addr(0x8000_080E);
+    let ht_byte = match pci_read_data(0xCFC, 1) {
+        Some(v) => v,
+        None => return false,
+    };
     reset();
     id as u16 == HOST_BRIDGE_VENDOR
         && (id >> 16) as u16 == HOST_BRIDGE_DEVICE
         && pci_header_is_multifunction(isa_ht)
+        && ht_byte == 0x80
 }
 
 pub fn ovmf_dxe_surface_present() -> bool {
@@ -64,6 +70,7 @@ pub fn ovmf_dxe_surface_present() -> bool {
     let adr = include_str!("../docs/adr/ADR-014.md");
     let qemu = include_str!("../tools/qemu-boot-test.sh");
     let guest = include_str!("../vmx/guest_uefi.rs");
+    let plat = include_str!("../devices/guest_platform.rs");
     attach_cdrom_uefi(1) == Err(IsoError::UnsupportedOnFirmware)
         && !spa.contains("Launch OVMF")
         && !spa.contains("btn-vl")
@@ -73,6 +80,7 @@ pub fn ovmf_dxe_surface_present() -> bool {
         && guest.contains("post_dxe_should_stop")
         && guest.contains("handle_ept")
         && guest.contains("guest_platform")
+        && plat.contains("pci_cfg_offset")
         && is_platform_sink_gpa(0xFCF8_F000)
         && e4_shell_launch_no_cdrom()
 }
@@ -98,6 +106,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && !exec_from_low_ram(0xFFFD_3759)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 multifunction header")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")

@@ -101,6 +101,17 @@ pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
     (bus, dev, fun, off)
 }
 
+/// Byte offset in the 256-byte PCI config space.
+///
+/// QEMU `pci_host_data_read` uses `config_reg | (data_port & 3)`.
+/// OVMF often writes CF8 with register `0x0E` (Header Type) and `inb(0xCFC)`.
+/// Masking CF8 to `0xFC` first returns Cache Line Size (`0`) instead of `0x80`,
+/// so firmware treats PIIX3 as single-function and never scans `00:01.1`.
+pub fn pci_cfg_offset(addr: u32, port: u16) -> u8 {
+    let data = u32::from(port.wrapping_sub(0xCFC) & 3);
+    ((addr | data) & 0xff) as u8
+}
+
 pub fn pci_addr_selects_host(addr: u32) -> bool {
     if (addr & 0x8000_0000) == 0 {
         return false;
@@ -321,7 +332,7 @@ fn shift_dword(dword: u32, off: u8, size: u8) -> u32 {
 pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
     with_plat(|p| {
         let addr = p.pci_addr;
-        let off = (addr as u8 & 0xFC).wrapping_add((port.wrapping_sub(0xCFC)) as u8);
+        let off = pci_cfg_offset(addr, port);
         let aligned = off & 0xFC;
         if pci_addr_selects_host(addr) {
             if aligned == 0 {

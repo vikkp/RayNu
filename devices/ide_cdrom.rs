@@ -9,6 +9,7 @@
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
+use crate::devices::guest_platform::pci_cfg_offset;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// ECMA-119 / El Torito sector size.
@@ -302,7 +303,7 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
         if !pci_addr_selects_cd(addr) {
             return 0xFFFF_FFFF;
         }
-        let off = (addr as u8 & 0xFC).wrapping_add((port.wrapping_sub(0xCFC)) as u8);
+        let off = pci_cfg_offset(addr, port);
         let aligned = off & 0xFC;
         if aligned == 0 {
             m.pci_enum = true;
@@ -324,7 +325,7 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
-        let off = (m.pci_addr as u8 & 0xFC).wrapping_add((port.wrapping_sub(0xCFC)) as u8);
+        let off = pci_cfg_offset(m.pci_addr, port);
         if off == 0x04 {
             m.pci_cmd = (val as u16) | 0x0001;
         } else if off == 0x10 {

@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; PIIX3 multifunction header so firmware scans 00:01.1; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; PIIX3 multifunction header so firmware scans 00:01.1; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -163,6 +163,7 @@ static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
 static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
+static PCI_TRACE: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -254,6 +255,7 @@ pub fn reset_guest_uefi_launch() {
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
     SINK_MAPS.store(0, Ordering::Release);
+    PCI_TRACE.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
 }
 
@@ -1179,6 +1181,21 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
                 u64::from(crate::devices::ide_cdrom::pci_read_data(port, size))
             };
             SAVED_RAX = (SAVED_RAX & !mask) | (v & mask);
+            let cfg = crate::devices::ide_cdrom::pci_read_addr()
+                | u32::from(port.wrapping_sub(0xCFC) & 3);
+            let off = (cfg & 0xff) as u8;
+            if off & 0xFC == 0 || off & 0xFC == 0x0C {
+                let n = PCI_TRACE.fetch_add(1, Ordering::AcqRel);
+                if n < 24 {
+                    serial::write_str("boot: guest-UEFI pci cfg=0x");
+                    write_hex_u32(cfg);
+                    serial::write_str(" val=0x");
+                    write_hex_u32(v as u32);
+                    serial::write_str(" size=");
+                    write_dec(size as u64);
+                    serial::write_byte(b'\n');
+                }
+            }
         } else {
             crate::devices::guest_platform::pci_write_data(port, size, SAVED_RAX as u32);
             crate::devices::ide_cdrom::pci_write_data(port, size, SAVED_RAX as u32);

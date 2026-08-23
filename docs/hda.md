@@ -7,7 +7,7 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 365
+velocity_commits_30d: 366
 velocity_gates_30d: 58
 overall_pct: 95
 confidence: high
@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-dxe |
-| Summary | P0-56 PEI/DXE platform or CD boot attempt. PIIX3 multifunction header + post-DXE tail. Not a completed firmware CD boot. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-56 CF8\|CFC byte offset so PIIX3 Header Type 0x80 is visible. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Past-PEI/DXE ≠ installer. Next is virtio-blk + boot order CD→disk. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-DXE-OK` (host + QEMU). Past-SEC and CD visible still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CF8\|CFC Header Type byte offset; raynuvsrv1 nested VT-x DXE-OK pci_ide=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 PIIX3 multifunction + post-DXE tail; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-dxe | 0.5 | 95 | P0-56 past-PEI/DXE or CD boot attempt; CMOS/fw_cfg/i440FX; not installer; iso 99%; iron P0-14 stays 2b795a0 |
 | 2026-08-22 | e5-ovmf-cdrom | 0.5 | 95 | P0-55 guest-UEFI CD visible; PCI IDE/ATAPI; not full DXE; not installer; iso 99%; iron P0-14 stays 2b795a0 |

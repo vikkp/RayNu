@@ -1,9 +1,9 @@
 use super::{
     cmos_above_16m_chunks, cmos_extended_kb, cmos_mem_served, fwcfg_ram_served,
     host_bridge_enumerated, io, is_platform_io_port, is_platform_sink_gpa, pci_addr_selects_host,
-    pci_addr_selects_isa, pci_header_is_multifunction, pci_read_data, pci_write_addr,
-    platform_memory_served, reset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE,
-    ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES,
+    pci_addr_selects_isa, pci_cfg_offset, pci_header_is_multifunction, pci_read_data,
+    pci_write_addr, platform_memory_served, reset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
+    ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -68,6 +68,13 @@ fn i440fx_host_and_isa_enumerate() {
     let isa_ht = pci_read_data(0xCFC, 4).expect("isa header");
     assert_eq!(isa_ht, PCI_HEADER_MULTIFUNCTION);
     assert!(pci_header_is_multifunction(isa_ht));
+    pci_write_addr(0x8000_080C);
+    assert_eq!(pci_read_data(0xCFE, 1).expect("ht via cfe"), 0x80);
+    // OVMF: CF8 register 0x0E + inb(0xCFC) — must not return Cache Line Size 0.
+    pci_write_addr(0x8000_080E);
+    assert_eq!(pci_read_data(0xCFC, 1).expect("ht via unaligned cf8"), 0x80);
+    assert_eq!(pci_cfg_offset(0x8000_080E, 0xCFC), 0x0E);
+    assert_eq!(pci_cfg_offset(0x8000_080C, 0xCFE), 0x0E);
     pci_write_addr(0x8000_000C);
     let host_ht = pci_read_data(0xCFC, 4).expect("host header");
     assert!(!pci_header_is_multifunction(host_ht));
