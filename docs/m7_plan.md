@@ -305,6 +305,9 @@ CPUID hypervisor present + KVM signature. IA32_MISC_ENABLE shadowed.
 Iron `8700cbb`: hypervisor CPUID still ASSERT `callerrip=0x1d25193` after WRMSR then
 RDMSR spin. MtrrLib `WorkingRangeCount` vs VCNT=8. Guest-UEFI MTRR VCNT=32 + PCI UC
 1GiB at `0xC0000000`. fw_cfg `bootorder` trailing NUL (`ConnectDevicesFromQemu`).
+Iron `0b7d647`: `0xfe=0x520` PCI UC hole present; firmware then zeroed `0x200`;
+same ASSERT `lastmsr=EFER`. QEMU BOTH-OK skipped `eb f3`. EFER.LMA = LME &&
+CR0.PG; IA-32e entry matches LMA; debugcon 0x402.
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +

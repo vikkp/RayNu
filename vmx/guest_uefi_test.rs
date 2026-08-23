@@ -11,7 +11,12 @@ use super::{
     guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_filter_cpuid,
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
-    guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
+    guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
+    guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_ia32e_entry_ctls, is_debugcon_port,
+    ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
+    GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_CR0_PG,
+    GUEST_UEFI_VM_ENTRY_IA32E,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
@@ -222,6 +227,38 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8700cbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VCNT=32"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("bootorder NUL"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0b7d647"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EFER.LMA"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR0.PG"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IA-32e entry"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("debugcon 0x402"));
+    assert_eq!(GUEST_UEFI_DEBUGCON_PORT, 0x402);
+    assert!(is_debugcon_port(0x402));
+    assert!(!is_debugcon_port(0x3f8));
+    assert!(!guest_uefi_cs_ar_is_long(0x009B));
+    assert!(guest_uefi_cs_ar_is_long(1 << 13));
+    assert!(!guest_uefi_cr0_is_paging(1));
+    assert!(guest_uefi_cr0_is_paging(GUEST_UEFI_CR0_PG));
+    assert_eq!(
+        guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME, false),
+        GUEST_UEFI_EFER_LME
+    );
+    assert_eq!(
+        guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME, true),
+        GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA
+    );
+    assert_eq!(
+        guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA, false),
+        GUEST_UEFI_EFER_LME
+    );
+    assert_eq!(
+        guest_uefi_ia32e_entry_ctls(0, true),
+        GUEST_UEFI_VM_ENTRY_IA32E
+    );
+    assert_eq!(
+        guest_uefi_ia32e_entry_ctls(GUEST_UEFI_VM_ENTRY_IA32E, false),
+        0
+    );
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
     assert_eq!(pci_bdf_bit(1, 1), Some((0, 1u64 << 9)));
     assert_eq!(pci_bdf_bit(8, 0), Some((1, 1)));

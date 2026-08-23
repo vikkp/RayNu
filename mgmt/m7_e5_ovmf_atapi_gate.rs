@@ -33,7 +33,11 @@
 //! shadowed. Iron `8700cbb`: hypervisor CPUID still ASSERT
 //! `callerrip=0x1d25193` after WRMSR then RDMSR spin. MTRR VCNT=32 +
 //! PCI UC 1GiB at `0xC0000000`. fw_cfg `bootorder` trailing NUL so
-//! `ConnectDevicesFromQemu` is not `INVALID_PARAMETER`. Nested
+//! `ConnectDevicesFromQemu` is not `INVALID_PARAMETER`. Iron `0b7d647`:
+//! `0xfe=0x520` and PCI UC hole present; firmware then zeroed `0x200`.
+//! Same ASSERT `lastmsr=0xc0000080`. QEMU BOTH-OK skipped `eb f3`, not
+//! an ASSERT fix. EFER.LMA = LME && CR0.PG; IA-32e entry matches LMA;
+//! debugcon 0x402. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -198,6 +202,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("VCNT=32")
         && guest.contains("bootorder NUL")
         && guest.contains("0xC0000000")
+        && guest.contains("0b7d647")
+        && guest.contains("EFER.LMA")
+        && guest.contains("CR0.PG")
+        && guest.contains("IA-32e entry")
+        && guest.contains("debugcon 0x402")
         && plat.contains("bootorder_nul_terminated")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
@@ -295,6 +304,11 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8700cbb")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VCNT=32")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("bootorder NUL")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0b7d647")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EFER.LMA")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR0.PG")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IA-32e entry")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("debugcon 0x402")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)

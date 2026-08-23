@@ -231,8 +231,10 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). Stop on `sectors>0`, not both-enum-alone.
    Iron COM2 `408788c` MTRR walk completed, still ASSERT after CPUID
    `0x1cf11b5`. Guest-UEFI hypervisor CPUID + `KVMKVMKVM` (nested KVM vs
-   iron). Iron `8700cbb`: still ASSERT `callerrip=0x1d25193`. MTRR VCNT=32
-   + PCI UC hole. fw_cfg `bootorder` trailing NUL.
+   iron).    Iron `8700cbb`: still ASSERT `callerrip=0x1d25193`. MTRR VCNT=32
+   + PCI UC hole. fw_cfg `bootorder` trailing NUL. Iron `0b7d647`:
+   VCNT=32 (`0xfe=0x520`) still ASSERT `lastmsr=EFER`. EFER.LMA =
+   LME && CR0.PG; IA-32e entry matches LMA; debugcon `0x402`.
    Do not skip ASSERT epilogue. fw_cfg CD PIIX `ide@1,1` then
    virtio-fn1 master `drive@0`.
    fw_cfg `etc/boot-menu-wait` 0 ms.

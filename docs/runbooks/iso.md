@@ -435,6 +435,8 @@ Stop on `sectors>0`, not both-enum-alone. Iron `3f417ca` xAPIC 4K mapped,
   after CPUID `0x1cf11b5`. Guest-UEFI hypervisor CPUID + `KVMKVMKVM`.
   Iron `8700cbb`: still ASSERT `callerrip=0x1d25193` after WRMSR/RDMSR.
   MTRR VCNT=32 + PCI UC hole. fw_cfg `bootorder` trailing NUL.
+  Iron `0b7d647`: VCNT=32 still ASSERT `lastmsr=EFER`. EFER.LMA = LME &&
+  CR0.PG; IA-32e entry matches LMA; debugcon `0x402`.
   Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
 CD bootorder PIIX `ide@1,1` then virtio-fn1 master `drive@0`.
 fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
