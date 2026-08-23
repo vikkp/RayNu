@@ -6,7 +6,7 @@ use super::{
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
-    xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE,
+    preempt_deadloop_should_skip, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
@@ -79,6 +79,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x6e81ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pause CpuDeadLoop"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("acpi=16612"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));
@@ -113,6 +114,12 @@ fn marker_and_residual_honest() {
     assert!(!spin_short_jmp_should_skip(0xEB, 0xE0));
     assert!(!spin_short_jmp_should_skip(0xEB, 0x02));
     assert!(!spin_short_jmp_should_skip(0x74, 0xF3));
+    assert!(preempt_deadloop_should_skip(0xF3, 0x90));
+    assert!(preempt_deadloop_should_skip(0x74, 0xEC));
+    assert!(preempt_deadloop_should_skip(0xEB, 0xF3));
+    assert!(!preempt_deadloop_should_skip(0x74, 0x02));
+    assert!(!preempt_deadloop_should_skip(0x90, 0x90));
+    assert!(!spin_short_jmp_should_skip(0xF3, 0x90));
     assert!(xsetbv_accepts_xcr(0));
     assert!(!xsetbv_accepts_xcr(1));
     assert_eq!(xsetbv_masked_xcr0(0, 0x7), 1);
