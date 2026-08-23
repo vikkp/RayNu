@@ -76,6 +76,8 @@ fn fwcfg_bootorder_is_cd_then_disk() {
         *b = io(0x511, true, 1, 0) as u8;
     }
     assert_eq!(&got[..n], BOOTORDER);
+    assert!(BOOTORDER.windows(8).any(|w| w == b"drive@0/"));
+    assert!(!BOOTORDER.windows(8).any(|w| w == b"drive@1/"));
     assert!(fwcfg_bootorder_served());
     reset();
 }

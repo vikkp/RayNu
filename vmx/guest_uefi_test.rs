@@ -90,6 +90,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("drive@0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("insn=ebec"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not both-enum-alone"));
@@ -121,7 +123,9 @@ fn marker_and_residual_honest() {
     assert!(preempt_deadloop_should_skip(0x74, 0xEC));
     assert!(preempt_deadloop_should_skip(0xEB, 0xF3));
     assert!(preempt_deadloop_should_skip(0xEB, 0xFC));
+    assert!(preempt_deadloop_should_skip(0xEB, 0xEC));
     assert!(!spin_short_jmp_should_skip(0xEB, 0xFC));
+    assert!(!spin_short_jmp_should_skip(0xEB, 0xEC));
     assert!(!preempt_deadloop_should_skip(0x74, 0x02));
     assert!(!preempt_deadloop_should_skip(0x90, 0x90));
     assert!(!spin_short_jmp_should_skip(0xF3, 0x90));

@@ -143,6 +143,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("etc/boot-menu-wait")
         && plat.contains("BOOT_MENU_WAIT")
         && plat.contains("FW_CFG_BOOT_MENU")
+        && plat.contains("ide@0,1/drive@0")
         && guest.contains("ACPI PM 1s step")
         && guest.contains("handle_xsetbv")
         && guest.contains("xsetbv_masked_xcr0")
@@ -197,7 +198,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && preempt_deadloop_should_skip(0xF3, 0x90)
         && preempt_deadloop_should_skip(0x74, 0xEC)
         && preempt_deadloop_should_skip(0xEB, 0xFC)
+        && preempt_deadloop_should_skip(0xEB, 0xEC)
         && !spin_short_jmp_should_skip(0xEB, 0xFC)
+        && !spin_short_jmp_should_skip(0xEB, 0xEC)
         && !preempt_deadloop_should_skip(0x74, 0x02)
         && preempt_deadloop_skip_len(&[0xF3, 0x90]) == 2
         && preempt_deadloop_skip_len(&[0x0F, 0x84, 0xE8, 0xFF, 0xFF, 0xFF]) == 6
@@ -216,6 +219,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("INVPCID/RDTSCP/XSAVES")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("XSETBV executes XCR0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("drive@0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("insn=ebec")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x6e81ca")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pause CpuDeadLoop")

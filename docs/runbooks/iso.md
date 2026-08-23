@@ -429,7 +429,7 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 `pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
 E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
-Stop on `sectors>0`, not both-enum-alone. Iron COM2 `d5f9431` `rip=0x6e81ca`
-CpuDeadLoop. Preempt skip includes GCC `eb fc` / `0F 84`.
+Stop on `sectors>0`, not both-enum-alone. Iron `e2af81e` `insn=ebec`.
+CD bootorder master `drive@0`. Preempt skip includes `eb ec`.
 fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
 Next: firmware El Torito CD boot.
