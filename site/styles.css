@@ -979,6 +979,54 @@ figure[id] {
   color: var(--copper);
 }
 
+/* —— Journey stat band —— */
+
+.statband {
+  margin: 1.75rem 0 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .statband {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+}
+
+.statband__item {
+  padding: 1rem 1.15rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(16, 24, 32, 0.1);
+}
+
+.statband__item dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.statband__item dd {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  color: var(--steel);
+}
+
+.statband__unit {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
 /* —— Motion —— */
 
 .reveal {
