@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A chat with Mr. COM2 — a guided read of a real R640 boot log</title>
+    <meta
+      name="description"
+      content="One real, unedited COM2 serial capture from a Dell PowerEdge R640 booting RayNu-V, annotated beat by beat: what the console says, what computer science says should happen, and what RayNu-V proves."
+    />
+    <meta property="og:title" content="A chat with Mr. COM2 — RayNu-V boot log, annotated" />
+    <meta
+      property="og:description"
+      content="One real R640 COM2 capture, annotated: what the serial console says, what CS says should happen, and what RayNu-V proves."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://raynuv.com/com2.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/r640-boot-ok-com2.png"
+    />
+    <meta property="og:image:width" content="1556" />
+    <meta property="og:image:height" content="926" />
+    <meta
+      property="og:image:alt"
+      content="Operator Terminal showing RAYNU-V-R640-BOOT-OK over iDRAC SOL on a real PowerEdge R640"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="A chat with Mr. COM2 — RayNu-V boot log, annotated"
+    />
+    <meta
+      name="twitter:description"
+      content="One real R640 COM2 capture, annotated: what the serial console says, what CS says should happen, and what RayNu-V proves."
+    />
+    <meta
+      name="twitter:image"
+      content="https://raynuv.com/assets/r640-boot-ok-com2.png"
+    />
+    <link rel="canonical" href="https://raynuv.com/com2.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .page-com2 .com2-mast {
+        padding: clamp(2.5rem, 8vh, 4.5rem) 0 clamp(1.75rem, 4vh, 2.5rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          radial-gradient(90% 70% at 0% 0%, rgba(15, 110, 106, 0.12) 0%, transparent 55%),
+          radial-gradient(70% 50% at 100% 10%, rgba(184, 107, 52, 0.1) 0%, transparent 50%),
+          linear-gradient(180deg, rgba(26, 58, 74, 0.06) 0%, transparent 70%);
+      }
+      .com2-mast__inner {
+        width: min(100% - 2.5rem, 46rem);
+        margin: 0 auto;
+      }
+      .com2-mast__nav {
+        margin: 0 0 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .com2-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .com2-mast__nav a:hover {
+        color: var(--steel);
+      }
+      .com2-kicker {
+        margin: 0 0 0.75rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      .com2-mast__title {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(2.2rem, 1.4rem + 3vw, 3.4rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--steel);
+      }
+      .com2-mast__lede {
+        margin: 0;
+        max-width: 40rem;
+        font-size: 1.1rem;
+        color: var(--ink-soft);
+      }
+      .com2-body {
+        width: min(100% - 2.5rem, 46rem);
+        margin: 0 auto;
+        padding: clamp(2rem, 5vh, 3.5rem) 0 4rem;
+      }
+      .com2-body > p {
+        margin: 0 0 1rem;
+        color: var(--ink-soft);
+      }
+      .com2-howto {
+        margin: 0 0 2.5rem;
+        padding: 1rem 1.2rem;
+        background: rgba(26, 58, 74, 0.05);
+        border: 1px solid rgba(16, 24, 32, 0.1);
+        font-size: 0.98rem;
+        color: var(--ink-soft);
+      }
+      .com2-howto strong {
+        color: var(--ink);
+      }
+      .com2-section {
+        margin: 0 0 clamp(2.5rem, 6vh, 4rem);
+      }
+      .com2-section > h2 {
+        margin: 0 0 1rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.85rem);
+        line-height: 1.2;
+        color: var(--steel);
+      }
+      .beat {
+        margin: 0 0 1.1rem;
+      }
+      .beat__who {
+        margin: 0 0 0.45rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      .beat__who--cs {
+        color: var(--teal);
+      }
+      .beat__who--raynuv {
+        color: var(--steel);
+      }
+      .beat p {
+        margin: 0;
+        color: var(--ink-soft);
+      }
+      .term {
+        margin: 0;
+        padding: 1rem 1.15rem;
+        overflow-x: auto;
+        background: #0c1a22;
+        color: #c9dcd8;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.55;
+        border-left: 3px solid var(--copper);
+        white-space: pre;
+      }
+      .term .mk {
+        color: #7ee0b8;
+        font-weight: 500;
+      }
+      .term .dim {
+        color: rgba(201, 220, 216, 0.55);
+      }
+      .com2-close {
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(16, 24, 32, 0.12);
+      }
+      .com2-close .cta {
+        margin-top: 1.25rem;
+      }
+      .com2-close .cta__secondary {
+        color: var(--ink-soft);
+        border-bottom-color: rgba(16, 24, 32, 0.35);
+      }
+      .com2-close .cta__secondary:hover {
+        color: var(--ink);
+        border-color: var(--ink);
+      }
+    </style>
+  </head>
+  <body class="page-com2">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+    <header class="com2-mast">
+      <div class="com2-mast__inner">
+        <p class="com2-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Making buddies</span>
+        </p>
+        <p class="com2-kicker">A guided read · real iron</p>
+        <h1 class="com2-mast__title">A chat with Mr. COM2</h1>
+        <p class="com2-mast__lede">
+          One full, unedited serial capture from a Dell PowerEdge R640 booting
+          RayNu-V on 2026-08-15 — annotated beat by beat, so the core concepts
+          tell themselves.
+        </p>
+      </div>
+    </header>
+
+    <main class="com2-body">
+      <p class="com2-howto">
+        <strong>How to listen yourself:</strong> every PowerEdge ships with an
+        iDRAC — the Integrated Dell Remote Access Controller, a tiny computer
+        inside the computer. <code>ssh</code> into it and run
+        <code>console com2</code>, and Serial over LAN (SOL) pipes the
+        machine’s second serial port — COM2 — to your terminal. RayNu-V writes
+        everything there. Below, each beat of the boot appears three ways:
+        what <strong>COM2 says</strong> (the real bytes), what
+        <strong>computer science says</strong> should happen here, and what
+        <strong>RayNu-V says</strong> it just did. Monikers are expanded once,
+        at first appearance.
+      </p>
+
+      <section class="com2-section">
+        <h2>1 · The handshake</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">Booting from Virtual Floppy Drive
+RayNu-V r640-hypervisor — formally verified bare-metal hypervisor
+pillars: [V] verified · [Z] single-binary · [D] iDRAC · [A] audit
+serial: COM1+COM2 mirror (iDRAC SOL = console com2)
+<span class="mk">RAYNU-V-M0-BOOT-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            A UEFI (Unified Extensible Firmware Interface) application starts
+            life inside firmware — no drivers, no OS, nothing. The cheapest
+            way to prove you are alive is a UART (Universal Asynchronous
+            Receiver/Transmitter): put bytes on a wire at an agreed baud rate.
+            No negotiation, no stack. If your banner prints, milestone M0 is
+            real.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            The banner prints on real iron, and the audit chain opens with the
+            very first line (<code>RAYNU-V-AUDIT: BootStarted</code> follows
+            immediately after). From byte one, this machine is keeping
+            receipts.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>2 · Taking the machine</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: probing PE/ESP assets (pre-EBS)
+boot: PE assets embedded (.askern/.asinit) — prefer PE
+<span class="mk">RAYNU-V-M3-ASSETS-OK</span>
+boot: calling ExitBootServices — ConOut/video ends after this line
+boot: ExitBootServices returned; scanning conventional memory
+boot: conventional regions=9 pages_above_1MiB=16574029
+boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free
+boot: frame pool phys=0x1000000 pages=61440
+<span class="mk">RAYNU-V-M1-EBS-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            Until ExitBootServices (EBS), the firmware owns the machine: its
+            console, its memory map, its rules. After that call returns, the
+            hypervisor owns everything — and firmware conveniences (like the
+            video console, ConOut) are gone. The kernel image and initrd
+            (initial ramdisk) ride inside the single binary as PE (Portable
+            Executable) sections — <code>.askern</code>/<code>.asinit</code> —
+            found on the ESP (EFI System Partition) before EBS, because after
+            EBS there is no filesystem to ask.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            Assets found, firmware politely dismissed, 16,574,029 pages
+            counted, and a frame pool clipped for guests — with the device BAR
+            (Base Address Register) window deliberately left free. Owning the
+            memory map is what makes a hypervisor a hypervisor.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>3 · Root mode</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: VMXON region phys=0x1003000
+<span class="mk">RAYNU-V-M1-VMXON-OK</span>
+RAYNU-V-AUDIT: VmxEnabled vcpu_id=0</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            Intel’s virtualization extensions (VMX, marketed as VT-x) split the
+            CPU into root mode (hypervisor) and non-root mode (guests). VMXON
+            enters root operation. From here, every guest runs inside a VMCS —
+            a Virtual Machine Control Structure that declares, per virtual CPU,
+            exactly what it may do without asking.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            VMXON on the R640’s Xeon, audited. The CPU is now ours to lend.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>4 · The isolation engine</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: EPT page_size=2M
+boot: precise EPT [0,512MiB); APIC MMIO unmapped
+boot: guest CR3 (precise identity)=0x1007000 host CR3=0x47e01000
+RAYNU-V-AUDIT: EptMapped guest_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=1
+RAYNU-V-AUDIT: EptMapped guest_id=1
+boot: ADR-004 ownership selftest ok</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            Extended Page Tables (EPT) are hardware second-level address
+            translation: guest-physical addresses get rewritten to
+            host-physical frames by the CPU itself. If a frame is not mapped,
+            the guest cannot touch it — full stop. CR3 is the register holding
+            the page-table root; host and guest keep distinct roots. Note the
+            APIC (Advanced Programmable Interrupt Controller) MMIO
+            (memory-mapped I/O) window deliberately unmapped: even the
+            interrupt controller is fenced out of guest space.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            A precise [0, 512 MiB) guest window, a separate host CR3, every
+            mapping audited — and the ADR-004 ownership selftest passing on
+            iron. This is the property the Verus proofs machine-check:
+            “exclusively owned by one guest, belonging to neither the
+            hypervisor nor any other guest.”
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>5 · Loading a real kernel</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: load kernel=0x1200000 entry=0x1200200 initrd=0x1bc0000
+      boot_params=0x1bc2000 cmdline=0x1bc1000 magic=0x53726448
+<span class="mk">RAYNU-V-M3-LOAD-OK</span>
+<span class="mk">RAYNU-V-M3-BZIMAGE-OK</span>
+boot: real Linux bzImage detected
+boot: e820_entries=3</pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            Linux on x86 boots via a decades-old contract: a zero page of boot
+            parameters, a command line, an initrd, and the e820 memory map the
+            firmware would normally supply. The magic number
+            <code>0x53726448</code> is literally “HdrS” — the bzImage (big
+            compressed kernel image) signature. Check the magic, fill the
+            contract, jump.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            That is a genuine, unmodified Linux 6.12.40 bzImage out of the
+            embedded asset — not a toy payload. We hand it a faithful boot
+            protocol and get out of the way.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>6 · The trap door</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: VMLAUNCH → guest store+loop+HLT + IRQ inject (EPT)
+boot: VMEXIT phase=00000000 reason=0x0000000c rip=0x000000000100a0a7
+<span class="mk">RAYNU-V-M1-VMEXIT-OK</span>
+<span class="mk">RAYNU-V-M2-EPT-OK</span>  <span class="mk">RAYNU-V-M2-GUEST-OK</span>  <span class="mk">RAYNU-V-M2-OWN-OK</span>  <span class="mk">RAYNU-V-M2-ALLOC-OK</span>
+boot: software inject vector 0x00000021 + VMRESUME
+boot: VMEXIT phase=00000001 reason=0x00000001
+boot: external IRQ vector=0x00000021
+boot: APIC EOI ok
+boot: timer re-inject vector 0x00000021 + VMRESUME
+boot: VMEXIT phase=00000003 reason=0x0000000c
+<span class="mk">RAYNU-V-M2-TIMER-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            VMLAUNCH drops the CPU into non-root mode; the guest runs until
+            hardware says otherwise — a VMEXIT. Reason 0x0c is HLT (the guest
+            halted); reason 0x01 is an external interrupt. The hypervisor
+            injects a timer IRQ (interrupt request) as vector 0x21, the LAPIC
+            (Local APIC) delivers it, the guest acknowledges, the host sees
+            the EOI (end-of-interrupt), and VMRESUME re-enters. That loop is
+            the heartbeat of every hypervisor on earth.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            Full cycle on iron: guest runs, halts, takes a timer interrupt,
+            comes back, and asks for another. Four M2 markers in one breath —
+            EPT, guest execution, ownership, allocator — because this one loop
+            exercises all of them.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>7 · Unmodified Linux speaks</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: entering 64-bit Linux rip=0x0000000001200200
+boot: Linux CR4.VMXE host-owned
+Linux version 6<span class="dim">.12.40 (ubuntu@cursor) (gcc …) #2 Sun Jul 19 2026</span>
+Command line: earlyprintk=serial,ttyS0,115200,keep rdinit=/init …
+NX (Execute Disable) protection: active
+CPU topo: Num. cores per package:     1
+<span class="dim">… pages, zones, hash tables, XSAVE feature list …</span>
+Freei<span class="mk">RAYNU-V-M3-GTIMER3-OK</span>
+ng initrd memory: 4K
+Run /init as init process
+<span class="mk">RAYNU-V-M3-SHELL-OK</span>
+<span class="mk">RAYNU-V-M3-NOIRQ-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            <code>earlyprintk</code> writes straight to the UART before the
+            kernel’s console stack exists — that is why you can watch a kernel
+            think. CR4 is a control register; its VMXE bit turns VMX on, and
+            here it is host-owned, so the guest cannot switch the hypervisor
+            off (a lesson that later saved our guest-firmware work — see the
+            Stories page). NX is the no-execute bit. And the charming
+            <code>FreeiRAYNU-V…</code> mid-word collision is what happens when
+            Linux and the hypervisor print in the same microsecond: one wire,
+            two authors, zero editing.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            A real distro kernel walks its whole bring-up — memory map, CPU
+            topology, XSAVE feature negotiation, initramfs unpack — and lands
+            at <code>Run /init</code> and a shell, under our EPT, with the
+            guest timer (GTIMER) markers green. Nothing about the guest was
+            modified to make this work.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>8 · Four guests, one scheduler</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: M4.2 — launching shell guest slot=00000001 id=0x…02
+<span class="dim">… slot 2, slot 3 launch the same way …</span>
+<span class="mk">RAYNU-V-M4-2VM-OK</span>
+boot: credit scheduler armed slots=0..00000003
+boot: sched switch → slot=00000000
+<span class="mk">RAYNU-V-M4-SLICE-G0</span>
+boot: sched switch → slot=00000001
+<span class="mk">RAYNU-V-M4-SLICE-G1</span>
+<span class="dim">… G2, G3 sliced in turn …</span>
+<span class="mk">RAYNU-V-M4-SCHED-OK</span>
+<span class="mk">RAYNU-V-M4-NVM-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            Virtualization is CPU multiplexing: a credit-based scheduler hands
+            out time slices, and each guest lives behind its own VMCS and EPT
+            so isolation holds per guest, not per machine. Four guests on one
+            core means four clean entries and exits per round-robin — every
+            switch a full VMCS swap.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            One Linux plus three shell guests, time-sliced under the credit
+            scheduler, each printing its SHELL marker through its own private
+            EPT. Multi-VM is not a slide; it is slots 0–3 taking turns on the
+            wire.
+          </p>
+        </div>
+      </section>
+
+      <section class="com2-section">
+        <h2>9 · Devices, two vCPUs, and the marker</h2>
+        <div class="beat">
+          <p class="beat__who">COM2 says</p>
+          <pre class="term">boot: VMLAUNCH → virtio-blk status probe
+<span class="mk">RAYNU-V-M4-BLK-OK</span>
+boot: M4.3 complete — virtio-blk MMIO handshake + write/readback
+boot: VMLAUNCH → virtio-net dual-port probe
+<span class="mk">RAYNU-V-M4-NET-OK</span>
+boot: M4.5 BSP ready — waking AP
+boot: AP wake via host VMLAUNCH (documented INIT-SIPI equiv)
+<span class="mk">RAYNU-V-M4-SMP-OK</span>
+boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+<span class="mk">RAYNU-V-R640-BOOT-OK</span>
+<span class="mk">RAYNU-V-R640-BOOT-OK</span>
+<span class="mk">RAYNU-V-R640-BOOT-OK</span></pre>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--cs">Computer science says</p>
+          <p>
+            virtio is the paravirtual device standard — guests talk to
+            virtual disks and network cards through shared-memory rings
+            instead of emulated hardware. SMP (symmetric multiprocessing)
+            means a BSP (bootstrap processor) waking an AP (application
+            processor); real hardware does it with INIT-SIPI inter-processor
+            interrupts, and a hypervisor may document a host-side equivalent.
+            VMXOFF then leaves VMX mode as cleanly as VMXON entered it.
+          </p>
+        </div>
+        <div class="beat">
+          <p class="beat__who beat__who--raynuv">RayNu-V says</p>
+          <p>
+            Disk handshake with write/readback, a dual-port virtual switch
+            exchange, two vCPUs under one shared EPT — then a polite VMXOFF
+            and the marker, three times, for the camera. That is the whole
+            loop: firmware to four guests to a clean exit, on a real Dell
+            PowerEdge R640, with every step on the record.
+          </p>
+        </div>
+      </section>
+
+      <div class="com2-close">
+        <p>
+          That is the entire conversation — unedited bytes are in the
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+            >raw transcript</a
+          >
+          (SHA-256 checksummed in
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/SHA256SUMS"
+            >SHA256SUMS</a
+          >). For the days COM2 brought worse news — a hang, a timeout, a red
+          screen — the <a href="stories.html">Stories</a> page keeps those
+          too.
+        </p>
+        <div class="cta">
+          <a class="cta__primary" href="stories.html">Read the field stories</a>
+          <a class="cta__secondary" href="paper.html">The verification paper</a>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Making buddies along the way
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="stories.html">Stories</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>
