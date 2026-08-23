@@ -1027,6 +1027,47 @@ figure[id] {
   color: var(--muted);
 }
 
+/* —— 404 —— */
+
+.page-404 {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+}
+
+.nf {
+  text-align: center;
+  padding: 2rem 1.25rem;
+}
+
+.nf__code {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(4rem, 14vw, 8rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--steel);
+}
+
+.nf__title {
+  margin: 0.5rem 0 0.75rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+  color: var(--ink);
+}
+
+.nf__text {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+}
+
+.nf__links {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
 /* —— Motion —— */
 
 .reveal {
