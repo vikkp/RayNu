@@ -70,7 +70,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(count, FW_CFG_NAMED_FILE_COUNT);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
-    let mut got = [0u8; 80];
+    let mut got = [0u8; 128];
     let n = BOOTORDER.len();
     for b in got.iter_mut().take(n) {
         *b = io(0x511, true, 1, 0) as u8;
@@ -78,6 +78,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(&got[..n], BOOTORDER);
     assert!(BOOTORDER.windows(8).any(|w| w == b"drive@0/"));
     assert!(!BOOTORDER.windows(8).any(|w| w == b"drive@1/"));
+    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
     assert!(fwcfg_bootorder_served());
     reset();
 }

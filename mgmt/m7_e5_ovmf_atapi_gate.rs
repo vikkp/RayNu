@@ -143,6 +143,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("etc/boot-menu-wait")
         && plat.contains("BOOT_MENU_WAIT")
         && plat.contains("FW_CFG_BOOT_MENU")
+        && plat.contains("ide@1,1/drive@0")
         && plat.contains("ide@0,1/drive@0")
         && guest.contains("ACPI PM 1s step")
         && guest.contains("handle_xsetbv")

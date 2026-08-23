@@ -92,18 +92,23 @@ pub const E820_ENTRY_BYTES: u8 = 20;
 /// QEMU `E820_RAM`.
 pub const E820_RAM: u32 = 1;
 
-/// QEMU `bootorder` (OFW paths). CD at `00:00.1` **master** (`drive@0`)
-/// then virtio disk (`scsi@0`). Nested VT-x BOTH-OK with `ataio=0`:
-/// BDS Connects this path; `drive@1` is slave and this ATAPI is `DEV=0`.
-pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
+/// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
+/// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk (`scsi@0`).
+/// Nested VT-x BOTH-OK with `ataio=0`: ConnectDevicesFromQemu of `scsi@0`
+/// enumerated IDE fn1 as a sibling and did not Start AtaAtapiPassThru.
+/// QEMU/OVMF TranslatePciOfwNodes: `ide@1,1/drive@0/disk@0` →
+/// `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`. Master is `DEV=0`.
+pub const BOOTORDER: &[u8] =
+    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
 
-/// Product boot order is CD then virtio disk (ADR-014).
+/// Product boot order is CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
-    let ide = find_bytes(BOOTORDER, b"ide@0,1/drive@0");
+    let piix = find_bytes(BOOTORDER, b"ide@1,1/drive@0");
+    let fn1 = find_bytes(BOOTORDER, b"ide@0,1/drive@0");
     let slave = find_bytes(BOOTORDER, b"drive@1");
     let disk = find_bytes(BOOTORDER, b"scsi@0");
-    match (ide, slave, disk) {
-        (Some(i), None, Some(d)) => i < d,
+    match (piix, fn1, slave, disk) {
+        (Some(p), Some(f), None, Some(d)) => p < f && f < d,
         _ => false,
     }
 }
