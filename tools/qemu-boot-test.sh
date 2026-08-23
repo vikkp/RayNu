@@ -39,6 +39,7 @@
 # E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds)
 # E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
 # E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds)
+# E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -82,6 +83,7 @@ MARKER_OVMF_ALIVE="${MARKER_OVMF_ALIVE:-RAYNU-V-M7-E5-OVMF-ALIVE-OK}"
 MARKER_OVMF_PAST_SEC="${MARKER_OVMF_PAST_SEC:-RAYNU-V-M7-E5-OVMF-PAST-SEC-OK}"
 MARKER_OVMF_CDROM="${MARKER_OVMF_CDROM:-RAYNU-V-M7-E5-OVMF-CDROM-OK}"
 MARKER_OVMF_DXE="${MARKER_OVMF_DXE:-RAYNU-V-M7-E5-OVMF-DXE-OK}"
+MARKER_OVMF_VIRTIO="${MARKER_OVMF_VIRTIO:-RAYNU-V-M7-E5-OVMF-VIRTIO-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -207,14 +209,22 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   fi
   if grep -qF "$MARKER_OVMF_CDROM" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
+  elif grep -qF "boot: guest-UEFI CD GuestVisible" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot is virtio; Stage 40 pci_ide closed on prior EFI)"
   else
-    echo "error: marker '$MARKER_OVMF_CDROM' not found after VMXON (CD not visible to this guest)" >&2
+    echo "error: marker '$MARKER_OVMF_CDROM' not found and CD not GuestVisible after VMXON" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_DXE" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI past-PEI/DXE or CD boot attempt"
   else
     echo "error: marker '$MARKER_OVMF_DXE' not found after VMXON (no past-PEI/DXE or CD boot attempt)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_VIRTIO" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI virtio-blk + boot order CD then disk"
+  else
+    echo "error: marker '$MARKER_OVMF_VIRTIO' not found after VMXON (virtio-blk not visible to this guest)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then

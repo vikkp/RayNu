@@ -359,6 +359,12 @@ pub enum AuditEvent {
         sectors: u64,
         platform: u64,
     },
+    /// Guest UEFI enumerated empty virtio-blk with CD then disk boot order.
+    /// Not a completed firmware CD boot / not installer.
+    OvmfGuestUefiVirtio {
+        exits: u64,
+        pci_enum: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -570,6 +576,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiPastSec { .. } => 66,
         AuditEvent::OvmfGuestUefiCdrom { .. } => 68,
         AuditEvent::OvmfGuestUefiDxe { .. } => 69,
+        AuditEvent::OvmfGuestUefiVirtio { .. } => 70,
     }
 }
 
@@ -1044,6 +1051,13 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(sectors);
             serial::write_str(" plat=");
             write_u64(platform);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiVirtio { exits, pci_enum } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiVirtio exits=");
+            write_u64(exits);
+            serial::write_str(" pci=");
+            write_u64(pci_enum);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

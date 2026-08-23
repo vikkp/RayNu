@@ -122,6 +122,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | Left SEC tail (last 64 KiB) + PEI PCI / firmware COM / HLT; COM1/COM2 forwarded; not full DXE; not installer (2026-08-22). |
 | E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | `attach_cdrom_uefi` → GuestVisible; PCI IDE/ATAPI on the private VMCS; not full DXE; not installer (2026-08-22). |
 | E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **CLOSED** nested VT-x: CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID `0x7010`) + EPT sink-resume; `OVMF-CDROM-OK` pci_ide=1 sectors=0; post-DXE tail then E4; not installer (2026-08-23). |
+| E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED** nested VT-x: PEI DID `00:00.0` `val=0x1042`; `OVMF-VIRTIO-OK` pci=1; CD GuestVisible; `pci_ide=0` sectors=0; stop n=115 virtio=1; not installer (2026-08-23). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -234,6 +235,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 **P0-54 / E5 Stage 39 closed (host + QEMU):** OVMF past SEC (`RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`). Linear left last 64 KiB + PEI PCI config / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5.  
 **P0-55 / E5 Stage 40 closed (host + QEMU):** guest-UEFI CD visible (`RAYNU-V-M7-E5-OVMF-CDROM-OK`). `attach_cdrom_uefi` after FirmwareArmed is GuestVisible. PCI IDE/ATAPI on the private VMCS. Unarmed path stays `UnsupportedOnFirmware`. Not full DXE. Not installer. Not Everest E5.  
 **P0-56 / E5 Stage 41 closed (host + QEMU nested VT-x):** PEI/DXE platform or CD boot attempt (`RAYNU-V-M7-E5-OVMF-DXE-OK`). raynuvsrv1: `pci cfg=0x80000002 val=0x7010`, `OVMF-CDROM-OK` pci_ide=1 sectors=0, `OVMF-DXE-OK` plat=1 ram_rip=1, stop n=115, E4 SHELL fail-soft. Not a completed firmware CD boot. Not installer. Not Everest E5.  
+**P0-57 / E5 Stage 42 closed (host + QEMU nested VT-x):** empty virtio-blk + boot order CD then disk (`RAYNU-V-M7-E5-OVMF-VIRTIO-OK`). raynuvsrv1: `pci cfg=0x80000002 val=0x1042`, `OVMF-VIRTIO-OK` pci=1 boot=CD,disk, CD GuestVisible, `OVMF-DXE-OK` plat=1 ram_rip=1, stop n=115 `pci_ide=0 virtio=1` sectors=0, E4 SHELL fail-soft. Boot gate PASSED. Not a completed firmware CD boot. Not installer. Not Everest E5.  
 Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013.md](adr/ADR-013.md) · ADR-014: [adr/ADR-014.md](adr/ADR-014.md) · evidence: [evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md)
 
 | Gate | Marker | Goal |
@@ -285,6 +287,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-54 / E5 Stage 39 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK` | **CLOSED (host + QEMU).** Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Not Everest E5. |
 | P0-55 / E5 Stage 40 | `RAYNU-V-M7-E5-OVMF-CDROM-OK` | **CLOSED (host + QEMU).** `attach_cdrom_uefi` → GuestVisible. PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer. Not Everest E5. |
 | P0-56 / E5 Stage 41 | `RAYNU-V-M7-E5-OVMF-DXE-OK` | **CLOSED (host + QEMU nested VT-x).** CMOS/fw_cfg + i440FX at `00:08.0` + IDE at `00:00.0` (PEI DID `0x7010`). `OVMF-CDROM-OK` pci_ide=1 sectors=0. Post-DXE tail then E4. Not a completed firmware CD boot. Not installer. Not Everest E5. |
-| Everest residual | virtio-blk + boot order CD→disk + TLS/console + distro installer | After P0-56. Product ISO: [ADR-014](adr/ADR-014.md). Firmware can attempt this CD; virtio disk is next. |
+| P0-57 / E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED (host + QEMU nested VT-x).** Empty PCI virtio-blk at `00:00.0` (PEI DID `0x1042`). `OVMF-VIRTIO-OK` pci=1. CD GuestVisible. `pci_ide=0` sectors=0. Stop n=115 virtio=1. Not a completed firmware CD boot. Not installer. Not Everest E5. |
+| Everest residual | firmware CD boot + TLS/console + distro installer | After P0-57 (closed). Product ISO: [ADR-014](adr/ADR-014.md). |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

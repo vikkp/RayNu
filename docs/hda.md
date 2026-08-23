@@ -7,8 +7,8 @@ updated_by: cursor
 mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)"
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
-velocity_commits_30d: 367
-velocity_gates_30d: 58
+velocity_commits_30d: 368
+velocity_gates_30d: 59
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -347,10 +347,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-dxe |
-| Summary | P0-56 CF8\|CFC byte offset so PIIX3 Header Type 0x80 is visible. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Past-PEI/DXE ≠ installer. Next is virtio-blk + boot order CD→disk. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-DXE-OK` (host + QEMU). Past-SEC and CD visible still required. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-virtio |
+| Summary | P0-57 CLOSED nested VT-x: OVMF-VIRTIO-OK val=0x1042 pci=1 virtio=1. CD GuestVisible. pci_ide=0 sectors=0. Not installer. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Past-PEI/DXE or CD boot attempt (P0-56); firmware CD boot not completed; virtio-blk + CD→disk is next; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Virtio-blk + CD→disk order presented (P0-57); firmware CD boot not completed; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CLOSED nested VT-x DXE-OK + CDROM-OK pci_ide=1 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 IDE at 00:00.0 (PEI DID probe); i440FX at 00:08.0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CF8\|CFC Header Type byte offset; raynuvsrv1 nested VT-x DXE-OK pci_ide=0; not installer; iron P0-14 stays 2b795a0 |
