@@ -64,7 +64,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(count, 1);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
-    let mut got = [0u8; 64];
+    let mut got = [0u8; 80];
     let n = BOOTORDER.len();
     for b in got.iter_mut().take(n) {
         *b = io(0x511, true, 1, 0) as u8;
@@ -78,7 +78,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
 fn i440fx_host_and_isa_enumerate() {
     reset();
     pci_write_addr(0x8000_0000);
-    assert!(pci_read_data(0xCFC, 4).is_none());
+    assert!(pci_addr_selects_host(0x8000_0000));
     pci_write_addr(host_pci_config_addr());
     let id = pci_read_data(0xCFC, 4).expect("host");
     assert_eq!(id as u16, HOST_BRIDGE_VENDOR);

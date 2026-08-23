@@ -7,8 +7,9 @@
 //! Stage 40 stopped on EPT at `0xFCF8_F000` after unhandled CMOS `IN`
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
-//! host bridge, and fw_cfg `bootorder` (CD then virtio disk). Not
-//! installer. Not Everest E5.
+//! host bridge at `00:00.0`, PIIX3 ISA at `00:01.0` (multifunction),
+//! and fw_cfg `bootorder` (CD then virtio disk). Not installer. Not
+//! Everest E5.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -16,12 +17,14 @@ use core::sync::atomic::{AtomicBool, Ordering};
 /// Kept local so this module does not import the Proven Core EPT builder.
 pub const PLATFORM_RAM_BYTES: u64 = 32 * 1024 * 1024;
 
-/// i440FX host bridge at `00:08.0` (Intel 82441FX).
-/// PEI only probes `00:00.0` Device ID (raynuvsrv1: `cfg=0x80000002 val=0x1237`).
-/// That slot is the guest IDE so CDROM-OK can print; host lives here.
+/// i440FX host bridge at `00:00.0` (Intel 82441FX).
+/// Stage 41 parked the host at `00:08.0` so PEI's `00:00.0` DID probe
+/// could see IDE `0x7010`. Nested VT-x then looped that DID through the
+/// post-DXE tail (`n=499`, `virtio=0`) and never scanned `00:00.1`.
+/// Host belongs at slot 0 so PEI can walk PIIX `00:01.x`.
 pub const HOST_BRIDGE_VENDOR: u16 = 0x8086;
 pub const HOST_BRIDGE_DEVICE: u16 = 0x1237;
-pub const HOST_BRIDGE_DEV: u8 = 8;
+pub const HOST_BRIDGE_DEV: u8 = 0;
 pub const HOST_BRIDGE_FN: u8 = 0;
 
 /// PIIX3 ISA / LPC at `00:01.0`.
@@ -46,13 +49,13 @@ const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
 
-/// QEMU `bootorder` (OFW paths). CD (`ide@0`) then virtio disk (`scsi@0,1`).
-pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0/drive@1/disk@0\n/pci@i0cf8/scsi@0,1/disk@0,0\n";
+/// QEMU `bootorder` (OFW paths). CD (`ide@1,1`) then virtio disk (`scsi@1,2`).
+pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@1,1/drive@1/disk@0\n/pci@i0cf8/scsi@1,2/disk@0,0\n";
 
 /// Product boot order is CD then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
-    let ide = find_bytes(BOOTORDER, b"ide@0");
-    let disk = find_bytes(BOOTORDER, b"scsi@0,1");
+    let ide = find_bytes(BOOTORDER, b"ide@1,1");
+    let disk = find_bytes(BOOTORDER, b"scsi@1,2");
     match (ide, disk) {
         (Some(i), Some(d)) => i < d,
         _ => false,

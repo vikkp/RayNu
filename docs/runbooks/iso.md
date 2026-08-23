@@ -419,7 +419,10 @@ lives there. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` with `pci_ide=1`
 `ram_rip=1`). Not a completed firmware CD boot. Not installer.
 Stage 42 is virtio-blk + CD→disk order.
 
-E5 Stage 42 (host + QEMU): empty PCI virtio-blk at `00:00.1` plus fw_cfg
-`bootorder` (CD then disk). Serial `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` after
-past-SEC and virtio PCI enum. Not a completed firmware CD boot. Not
-installer. Next: firmware CD boot (ATAPI/El Torito).
+E5 Stage 42 (host + QEMU): empty PCI virtio-blk at `00:01.2` plus fw_cfg
+`bootorder` (CD then disk). i440FX at `00:00.0`; PIIX ISA `00:01.0`
+multifunction; IDE `00:01.1`. Nested VT-x: `00:00.1` was never scanned
+while PEI looped DID `0x7010` at `00:00.0`. Serial
+`RAYNU-V-M7-E5-OVMF-VIRTIO-OK` after past-SEC and virtio PCI enum. Not a
+completed firmware CD boot. Not installer. Next: firmware CD boot
+(ATAPI/El Torito).

@@ -4,9 +4,9 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.0` plus primary ATA PIO (`0x1F0`/`0x3F6`).
-//! OVMF PEI only probes `00:00.0` Device ID (not a full bus walk). Stage 40
-//! had `pci_ide=1` here; Stage 41 host bridge stole that slot.
+//! PCI IDE at `00:01.1` plus primary ATA PIO (`0x1F0`/`0x3F6`).
+//! Stage 41 put this function at `00:00.0` so PEI's DID probe printed
+//! CDROM-OK; that layout looped `val=0x7010` and never scanned virtio.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
@@ -26,8 +26,8 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
-pub const GUEST_CD_PCI_DEV: u8 = 0;
-pub const GUEST_CD_PCI_FN: u8 = 0;
+pub const GUEST_CD_PCI_DEV: u8 = 1;
+pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
 
@@ -144,7 +144,7 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
     bus == GUEST_CD_PCI_BUS && dev == GUEST_CD_PCI_DEV && fun == GUEST_CD_PCI_FN
 }
 
-/// PCI config address for the guest IDE function (`00:00.0`).
+/// PCI config address for the guest IDE function (`00:01.1`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_CD_PCI_BUS) << 16)
@@ -284,7 +284,8 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
         0x08 => 0x01018000, // class IDE, prog-if 0x80
-        0x0C => crate::devices::guest_platform::PCI_HEADER_MULTIFUNCTION,
+        // Multifunction bit lives on ISA `00:01.0`. This is function 1.
+        0x0C => 0x0000_0000,
         0x10 => m.bar0,
         0x14 => 0x03F5,
         0x18 => 0x0171,

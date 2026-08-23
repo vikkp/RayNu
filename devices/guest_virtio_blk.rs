@@ -4,8 +4,10 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
-//! Empty virtio 1.0 block function at `00:00.1` (Red Hat `1AF4:1042`).
-//! IDE at `00:00.0` is multifunction so firmware can scan this slot.
+//! Empty virtio 1.0 block function at `00:01.2` (Red Hat `1AF4:1042`).
+//! i440FX is at `00:00.0`; PIIX ISA `00:01.0` is multifunction so a bus
+//! walk finds IDE `00:01.1` and this slot. Nested VT-x proved `00:00.1`
+//! is never scanned while PEI loops DID `0x7010` at `00:00.0`.
 //! Boot order is CD then disk (fw_cfg `bootorder`). This is not the M4.3
 //! virtio-mmio probe, not a completed firmware CD boot, not an installer.
 
@@ -16,8 +18,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
 pub const GUEST_VIRTIO_PCI_BUS: u8 = 0;
-pub const GUEST_VIRTIO_PCI_DEV: u8 = 0;
-pub const GUEST_VIRTIO_PCI_FN: u8 = 1;
+pub const GUEST_VIRTIO_PCI_DEV: u8 = 1;
+pub const GUEST_VIRTIO_PCI_FN: u8 = 2;
 /// Virtio 1.0 PCI vendor (Red Hat).
 pub const GUEST_VIRTIO_PCI_VENDOR: u16 = 0x1AF4;
 /// Virtio 1.0 block device id.
@@ -77,7 +79,7 @@ pub fn pci_addr_selects_virtio(addr: u32) -> bool {
     bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_VIRTIO_PCI_DEV && fun == GUEST_VIRTIO_PCI_FN
 }
 
-/// PCI config address for the guest virtio-blk function (`00:00.1`).
+/// PCI config address for the guest virtio-blk function (`00:01.2`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)

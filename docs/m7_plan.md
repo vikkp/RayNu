@@ -299,7 +299,8 @@ Stage 41 `RAYNU-V-M7-E5-OVMF-DXE-OK` (**closed** nested VT-x: CMOS/fw_cfg
 `OVMF-CDROM-OK` pci_ide=1 sectors=0; post-DXE tail then E4; not
 installer) ·
 Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (empty PCI virtio-blk at
-`00:00.1` + fw_cfg bootorder CD then disk; not installer).
+`00:01.2` + fw_cfg bootorder CD then disk; i440FX at `00:00.0`; PIIX
+walk finds IDE `00:01.1`; not installer).
 
 **Next after Stage 42:** firmware CD boot (ATAPI/El Torito).
 Product ISO is
