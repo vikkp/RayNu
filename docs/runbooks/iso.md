@@ -423,9 +423,9 @@ E5 Stage 42 (host + QEMU nested VT-x, closed): empty PCI virtio-blk at
 `00:00.0` (PEI DID probe) plus fw_cfg `bootorder` (CD then disk). Serial
 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` with `val=0x1042` pci=1, CD GuestVisible,
 `pci_ide=0` sectors=0, stop n=115 virtio=1. Not a completed firmware CD
-boot. Not installer. Next: Stage 43 simultaneous virtio `00:00.0` + IDE
-`00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`; ACPI PM timer + PIIX4 PM
-`00:01.3` + guest-private i440FX DID remap so PEI Delay can
-end on DID `0x1042`; 4 MiB flash + empty VARS `_FVH` after nested
-VT-x `1991a27` EPT `gpa=0xffc00000`; live HPET 1 s step after nested
-VT-x `105ffbe` n=2048 `rip=0x6e812d` `pci_ide=0`), then firmware CD boot (ATAPI/El Torito).
+boot. Not installer.
+E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
++ IDE `00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). Nested VT-x `1b07692`:
+`pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
+`sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
+Next: firmware CD boot (ATAPI/El Torito, `sectors>0`).

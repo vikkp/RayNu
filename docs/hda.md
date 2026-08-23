@@ -348,9 +348,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. Nested VT-x 707a849 insn=ebf3 CpuDeadLoop pci_ide=0; 3dbafb7 spin-jmp skip SKIP-only. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 CLOSED nested VT-x 1b07692 OVMF-BOTH-OK pci_ide=1 virtio=1 sectors=0 spin=1. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum in flight (P0-58); firmware CD boot not completed; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum closed (P0-58); firmware CD boot (ATAPI) not completed; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 CLOSED nested VT-x 1b07692 OVMF-BOTH-OK pci select 00:00.01 val=0x70108086 pci_ide=1 virtio=1 sectors=0 spin=1; E4 #DF fail-soft; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN 3dbafb7 spin-jmp skip SKIP-only on push+PR; nested VT-x 707a849 insn=ebf3 still required; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 707a849 n=2048 rip=0x6e812d insn=ebf3 pci_ide=0 (CpuDeadLoop); spin-jmp skip; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN stop RIP insn dump after fd88785 SKIP-only; nested VT-x 105ffbe n=2048 rip=0x6e812d pci_ide=0; 1s HPET step; not installer; iron P0-14 stays 2b795a0 |
