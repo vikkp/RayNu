@@ -212,9 +212,9 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-CDROM-OK`). `attach_cdrom_uefi` → GuestVisible.
    PCI IDE/ATAPI on the private VMCS. Not full DXE. Not installer.
    Not Everest E5.
-   **Stage 41 (host + QEMU):** past-PEI/DXE or CD boot attempt
-   (`RAYNU-V-M7-E5-OVMF-DXE-OK`). CMOS/fw_cfg + i440FX at `00:08.0` +
-   IDE at `00:00.0` (PEI Device ID probe) + EPT sink-resume. Post-DXE
-   tail then E4. Not a completed firmware CD boot. Not installer.
-   Not Everest E5.
+   **Stage 41 (host + QEMU nested VT-x, closed):** past-PEI/DXE or CD
+   boot attempt (`RAYNU-V-M7-E5-OVMF-DXE-OK`). `OVMF-CDROM-OK`
+   pci_ide=1 sectors=0 (`val=0x7010`). CMOS/fw_cfg + i440FX at `00:08.0`
+   + IDE at `00:00.0`. Post-DXE tail then E4. Not a completed firmware
+   CD boot. Not installer. Not Everest E5.
    Next: virtio-blk + boot order CD→disk.

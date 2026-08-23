@@ -412,10 +412,9 @@ with primary PIO. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` after past-SEC
 and PCI enum or an ATAPI sector read. Unarmed attach stays
 `UnsupportedOnFirmware`. Not full DXE. Not installer.
 
-E5 Stage 41 (host + QEMU): CMOS/fw_cfg plus i440FX host at `00:08.0`.
-PEI only reads `00:00.0` Device ID, so the guest IDE lives there (Stage 40
-enum). EPT sink-resume so PEI can leave the `0xFCF8_F000` stall. After DXE
-evidence a short resume tail, then E4 fail-soft. Serial
-`RAYNU-V-M7-E5-OVMF-DXE-OK` after past-SEC and (ATAPI sector read or
-exec-from-RAM + platform memory). Not a completed firmware CD boot.
-Not installer. Next: virtio-blk + boot order CD→disk.
+E5 Stage 41 (host + QEMU nested VT-x, closed): CMOS/fw_cfg plus i440FX
+host at `00:08.0`. PEI only reads `00:00.0` Device ID, so the guest IDE
+lives there. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` with `pci_ide=1`
+`sectors=0` (`val=0x7010`) and `RAYNU-V-M7-E5-OVMF-DXE-OK` (`plat=1`
+`ram_rip=1`). Not a completed firmware CD boot. Not installer.
+Next: virtio-blk + boot order CD→disk.

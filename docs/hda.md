@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CLOSED nested VT-x DXE-OK + CDROM-OK pci_ide=1 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 IDE at 00:00.0 (PEI DID probe); i440FX at 00:08.0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CF8\|CFC Header Type byte offset; raynuvsrv1 nested VT-x DXE-OK pci_ide=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 PIIX3 multifunction + post-DXE tail; not installer; iso 99%; iron P0-14 stays 2b795a0 |
