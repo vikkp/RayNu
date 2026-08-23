@@ -277,8 +277,10 @@ quiet except HTTP/WARN/markers.
 firmware ATAPI `READ(10)` so nested VT-x serial shows `sectors>0` and
 `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. Stage 43 closed on nested VT-x `1b07692`
 with BOTH-OK then stop n=1111 `sectors=0` — do not stop on both-enum-alone.
-Nested VT-x `8e55abf` BOTH-OK then n=2048 `ata=0x0` `unh=0` `port=0xcf8`
-(still PciBus). 8192-exit cap so firmware can leave config and PACKET.
+Nested VT-x `8e55abf` BOTH-OK then n=2048 `ata=0x0` `unh=0`
+`cf8=0x80000838` (PIIX ISA `00:01.0` offset `0x38` — PciBus programming).
+PIIX3 ISA PIRQ `0x60-0x63` reset `0x80` (QEMU) so IRQ assign is not IRQ0.
+8192-exit cap so firmware can Connect and PACKET.
 ATAPI signature + PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.

@@ -161,6 +161,27 @@ fn i440fx_host_and_isa_enumerate() {
 }
 
 #[test]
+fn piix3_isa_pirq_resets_disabled_like_qemu() {
+    reset();
+    pci_write_addr(0x8000_0860);
+    let pirq = pci_read_data(0xCFC, 4).expect("pirq");
+    assert_eq!(pirq, 0x8080_8080, "PIRQA-D reset 0x80 (disabled), not IRQ0");
+    pci_write_data(0xCFC, 4, 0x0E0B_0A09);
+    assert_eq!(pci_read_data(0xCFC, 4).expect("pirq wr"), 0x0E0B_0A09);
+    pci_write_addr(0x8000_080C);
+    let isa_ht = pci_read_data(0xCFC, 4).expect("ht after pirq");
+    assert_eq!(isa_ht, PCI_HEADER_MULTIFUNCTION);
+    pci_write_addr(0x8000_0800);
+    pci_write_data(0xCFC, 4, 0x1234_5678);
+    assert_eq!(
+        pci_read_data(0xCFC, 4).expect("vid"),
+        u32::from(ISA_BRIDGE_VENDOR) | (u32::from(ISA_BRIDGE_DEVICE) << 16),
+        "VID/DID stay 8086:7000"
+    );
+    reset();
+}
+
+#[test]
 fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0xFCF8_F000));
     assert!(is_platform_sink_gpa(0xFEE0_0000));

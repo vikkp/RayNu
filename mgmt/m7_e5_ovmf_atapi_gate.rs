@@ -10,8 +10,9 @@
 //! cap. Nested VT-x `80129d3` kept running after BOTH-OK but stopped
 //! `n=2048` `sectors=0` `packet=0` — firmware never issued PACKET on
 //! hardcoded `0x1F0`. Nested VT-x `8e55abf`: BOTH-OK then n=2048
-//! `ata=0x0` `unh=0` `port=0xcf8` — still PciBus, never ATA. 8192-exit
-//! cap so PciBus can finish and issue PACKET. 8-byte command BAR + BAR-relocated ATA, secondary
+//! `ata=0x0` `unh=0` `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
+//! (PciBus programming, never ATA). 8192-exit cap. PIIX3 ISA PIRQ
+//! `0x60-0x63` reset `0x80` so IRQ assign is not IRQ0. 8-byte command BAR + BAR-relocated ATA, secondary
 //! `0x170`, EXECUTE DEVICE DIAGNOSTIC `0x90` restores `0xEB14`, BMIDE
 //! BAR4 RAZ/WI. ATAPI signature after reset (`LBA mid=0x14` high=`0xEB`),
 //! PACKET interrupt-reason (CDB `0x01`, data-in `0x02`, complete `0x03`),
@@ -106,6 +107,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let qemu = include_str!("../tools/qemu-boot-test.sh");
     let guest = include_str!("../vmx/guest_uefi.rs");
     let ide = include_str!("../devices/ide_cdrom.rs");
+    let plat = include_str!("../devices/guest_platform.rs");
     attach_cdrom_uefi(1) == Err(IsoError::UnsupportedOnFirmware)
         && !spa.contains("Launch OVMF")
         && !spa.contains("btn-vl")
@@ -120,6 +122,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("io unhandled port=0x")
         && guest.contains("pci wr=0x")
         && guest.contains("8192-exit cap")
+        && guest.contains("PIIX3 ISA PIRQ")
+        && guest.contains("ataio=")
+        && guest.contains("0x80000838")
         && ide.contains("ATAPI_INT_CD")
         && ide.contains("ATAPI_SIG_LBA")
         && ide.contains("EL TORITO SPECIFICATION")
@@ -127,6 +132,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && ide.contains("ATA_CMD_DIAGNOSTIC")
         && ide.contains("0xFFFF_FFF8")
         && ide.contains("0xFFFF_FFF0")
+        && ide.contains("ata_io_accesses")
+        && plat.contains("fill_isa_cfg")
+        && plat.contains("PIRQA")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -155,6 +163,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EXECUTE DEVICE DIAGNOSTIC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000838")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not firmware El Torito boot")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_ATAPI_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-ATAPI-OK";

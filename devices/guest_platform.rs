@@ -16,7 +16,10 @@
 //! (no `00:00.1`). Nested VT-x `105ffbe`: live HPET + preemption hit
 //! the 2048 cap (`reason=0x34` `rip=0x6e812d` `pci_ide=0`) because
 //! `HPET_MAIN_STEP` was ~10 ms per VMEXIT. 1 s of HPET time per
-//! exit so Delay can finish without burning the cap.
+//! exit so Delay can finish without burning the cap. Nested VT-x
+//! `8e55abf` stop `cf8=0x80000838` is PIIX ISA `00:01.0` offset `0x38`
+//! (PciBus programming, not empty-slot scan). PIRQ `0x60-0x63` reset
+//! `0x80` (disabled) matches QEMU so IRQ assign is not IRQ0.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
@@ -367,6 +370,8 @@ struct Platform {
     pmba: u32,
     pm_cmd: u16,
     pm_iose: u8,
+    /// PIIX3 ISA config (QEMU `piix3_reset`). PIRQ at `0x60–0x63`.
+    isa_cfg: [u8; 256],
 }
 
 impl Platform {
@@ -387,6 +392,7 @@ impl Platform {
             pmba: PIIX4_PMBA_DEFAULT,
             pm_cmd: 0x0001,
             pm_iose: 0,
+            isa_cfg: [0u8; 256],
         }
     }
 }
@@ -420,6 +426,9 @@ fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
         if p.cmos[0x0D] == 0 && p.cmos[0x15] == 0 && p.cmos[0x35] == 0 {
             fill_cmos(&mut p.cmos);
         }
+        if p.isa_cfg[0] == 0 {
+            fill_isa_cfg(&mut p.isa_cfg);
+        }
         f(p)
     };
     PLAT_LOCK.store(false, Ordering::Release);
@@ -450,6 +459,35 @@ fn fill_cmos(c: &mut [u8; 128]) {
     let above = cmos_above_16m_chunks(PLATFORM_RAM_BYTES).to_le_bytes();
     c[0x34] = above[0];
     c[0x35] = above[1];
+}
+
+/// QEMU `piix3_reset` (82371SB). PIRQA–D `0x80` = route disabled.
+fn fill_isa_cfg(c: &mut [u8; 256]) {
+    c.fill(0);
+    let vid = ISA_BRIDGE_VENDOR.to_le_bytes();
+    let did = ISA_BRIDGE_DEVICE.to_le_bytes();
+    c[0] = vid[0];
+    c[1] = vid[1];
+    c[2] = did[0];
+    c[3] = did[1];
+    c[4] = 0x07; // I/O + memory + bus master
+    c[7] = 0x02; // medium DEVSEL
+    c[10] = 0x01; // PCI-to-ISA bridge
+    c[11] = 0x06;
+    c[0x0E] = 0x80; // Header Type multifunction
+    c[0x4C] = 0x4D;
+    c[0x4E] = 0x03;
+    c[0x60] = 0x80;
+    c[0x61] = 0x80;
+    c[0x62] = 0x80;
+    c[0x63] = 0x80;
+    c[0x69] = 0x02;
+    c[0x70] = 0x80;
+    c[0x76] = 0x0C;
+    c[0x77] = 0x0C;
+    c[0x78] = 0x02;
+    c[0xA0] = 0x08;
+    c[0xA8] = 0x0F;
 }
 
 fn select_fwcfg(p: &mut Platform, sel: u16) {
@@ -508,6 +546,7 @@ pub fn reset() {
     with_plat(|p| {
         *p = Platform::empty();
         fill_cmos(&mut p.cmos);
+        fill_isa_cfg(&mut p.isa_cfg);
     });
     CMOS_MEM.store(false, Ordering::Release);
     FWCFG_RAM.store(false, Ordering::Release);
@@ -585,14 +624,32 @@ fn host_dword(off: u8) -> u32 {
     }
 }
 
-fn isa_dword(off: u8) -> u32 {
-    match off {
-        0x00 => u32::from(ISA_BRIDGE_VENDOR) | (u32::from(ISA_BRIDGE_DEVICE) << 16),
-        0x04 => 0x0000_0007,
-        0x08 => 0x0601_0000,
-        // Single-function (0x00) made firmware skip `00:01.1` (VT-x: pci_ide=0).
-        0x0C => PCI_HEADER_MULTIFUNCTION,
-        _ => 0,
+fn isa_dword(p: &Platform, off: u8) -> u32 {
+    let o = off as usize;
+    u32::from_le_bytes([
+        p.isa_cfg[o],
+        p.isa_cfg[o + 1],
+        p.isa_cfg[o + 2],
+        p.isa_cfg[o + 3],
+    ])
+}
+
+fn isa_write_cfg(cfg: &mut [u8; 256], off: u8, size: u8, val: u32) {
+    let n = match size {
+        1 => 1usize,
+        2 => 2,
+        _ => 4,
+    };
+    for i in 0..n {
+        let o = off as usize + i;
+        if o >= 256 {
+            break;
+        }
+        // Keep VID/DID, class, Header Type (multifunction bit).
+        if o < 4 || (8..12).contains(&o) || o == 0x0E {
+            continue;
+        }
+        cfg[o] = (val >> (8 * i)) as u8;
     }
 }
 
@@ -630,7 +687,7 @@ pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
             }
             Some(shift_dword(host_dword(aligned), off, size))
         } else if pci_addr_selects_isa(addr) {
-            Some(shift_dword(isa_dword(aligned), off, size))
+            Some(shift_dword(isa_dword(p, aligned), off, size))
         } else if pci_addr_selects_pm(addr) {
             Some(shift_dword(pm_dword(p, aligned), off, size))
         } else {
@@ -641,6 +698,11 @@ pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
 
 pub fn pci_write_data(port: u16, size: u8, val: u32) {
     with_plat(|p| {
+        if pci_addr_selects_isa(p.pci_addr) {
+            let off = pci_cfg_offset(p.pci_addr, port);
+            isa_write_cfg(&mut p.isa_cfg, off, size, val);
+            return;
+        }
         if !pci_addr_selects_pm(p.pci_addr) {
             return;
         }

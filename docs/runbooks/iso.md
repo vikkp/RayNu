@@ -429,7 +429,7 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 `pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
 E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
-Stop on `sectors>0`, not both-enum-alone. Nested VT-x `8e55abf` `ata=0` still PciBus.
-8192-exit cap. Not El Torito
+Stop on `sectors>0`, not both-enum-alone. Nested VT-x `8e55abf` `cf8=0x80000838`
+ISA `00:01.0:0x38`. PIIX3 ISA PIRQ reset `0x80`. 8192-exit cap. Not El Torito
 boot. Not installer.
 Next: firmware El Torito CD boot.

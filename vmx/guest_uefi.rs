@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 8192-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 8192-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -82,8 +82,9 @@ pub const M7_E5_OVMF_ATAPI_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ATAPI-OK";
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 
 /// Resume cap after Stage 40's 256-exit window — PEI/DXE + PciBus + ATAPI.
-/// Nested VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0` `port=0xcf8`
-/// (still PciBus I/O). 2048 was not enough to reach PACKET.
+/// Nested VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
+/// `cf8=0x80000838` (PIIX ISA `00:01.0` offset `0x38` — PciBus
+/// programming, not empty-slot scan). 2048 was not enough to Connect ATAPI.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 8192;
 
 /// After DXE evidence, spend the rest of [`GUEST_UEFI_RESUME_CAP`] unless firmware
@@ -144,9 +145,9 @@ pub fn both_pci_evidence(virtio_enum: bool, ide_enum: bool) -> bool {
     virtio_enum && ide_enum
 }
 
-/// Bitmask slot for bus 0 `dev.fun` (devs 0–15). Used to log a CF8 select once.
+/// Bitmask slot for bus 0 `dev.fun` (devs 0–31). Used to log a CF8 select once.
 pub fn pci_bdf_bit(dev: u8, fun: u8) -> Option<(usize, u64)> {
-    if fun > 7 || dev > 15 {
+    if fun > 7 || dev > 31 {
         return None;
     }
     let idx = u32::from(dev) * 8 + u32::from(fun);
@@ -251,6 +252,8 @@ static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
 static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
 static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
+static PCI_BDF_SEEN2: AtomicU64 = AtomicU64::new(0);
+static PCI_BDF_SEEN3: AtomicU64 = AtomicU64::new(0);
 static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
 static LAST_CF8: AtomicU32 = AtomicU32::new(0);
 static RAM_HPA: AtomicU64 = AtomicU64::new(0);
@@ -414,6 +417,8 @@ pub fn reset_guest_uefi_launch() {
     CR_ACCESSES.store(0, Ordering::Release);
     PCI_BDF_SEEN0.store(0, Ordering::Release);
     PCI_BDF_SEEN1.store(0, Ordering::Release);
+    PCI_BDF_SEEN2.store(0, Ordering::Release);
+    PCI_BDF_SEEN3.store(0, Ordering::Release);
     LAST_IO_PORT.store(0, Ordering::Release);
     LAST_CF8.store(0, Ordering::Release);
     RAM_HPA.store(0, Ordering::Release);
@@ -1292,6 +1297,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_hex_u32(u32::from(crate::devices::ide_cdrom::last_scsi()));
     serial::write_str(" ata=0x");
     write_hex_u32(u32::from(crate::devices::ide_cdrom::last_ata_cmd()));
+    serial::write_str(" ataio=");
+    write_dec(crate::devices::ide_cdrom::ata_io_accesses() as u64);
     serial::write_str(" unh=");
     write_dec(IO_UNHANDLED_N.load(Ordering::Acquire) as u64);
     serial::write_str(" plat=");
@@ -1305,7 +1312,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     serial::write_str(" bdfs=");
     write_dec(
         u64::from(PCI_BDF_SEEN0.load(Ordering::Acquire).count_ones())
-            + u64::from(PCI_BDF_SEEN1.load(Ordering::Acquire).count_ones()),
+            + u64::from(PCI_BDF_SEEN1.load(Ordering::Acquire).count_ones())
+            + u64::from(PCI_BDF_SEEN2.load(Ordering::Acquire).count_ones())
+            + u64::from(PCI_BDF_SEEN3.load(Ordering::Acquire).count_ones()),
     );
     serial::write_str(" hlt=");
     write_dec(HLT_SKIPS.load(Ordering::Acquire) as u64);
@@ -1524,10 +1533,11 @@ fn note_pci_cf8(addr: u32) {
     let Some((word, bit)) = pci_bdf_bit(dev, fun) else {
         return;
     };
-    let slot = if word == 0 {
-        &PCI_BDF_SEEN0
-    } else {
-        &PCI_BDF_SEEN1
+    let slot = match word {
+        0 => &PCI_BDF_SEEN0,
+        1 => &PCI_BDF_SEEN1,
+        2 => &PCI_BDF_SEEN2,
+        _ => &PCI_BDF_SEEN3,
     };
     let prev = slot.fetch_or(bit, Ordering::AcqRel);
     if prev & bit != 0 {

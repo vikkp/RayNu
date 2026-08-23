@@ -1,5 +1,5 @@
 use super::{
-    ata_io, bmide_io, cdrom_visible_evidence, host_identify_word0, host_read10,
+    ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, host_identify_word0, host_read10,
     is_ata_primary_port, is_bmide_port, is_pci_data_port, last_scsi, pci_addr_selects_cd, pci_bdf,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present, present_placeholder,
     reset, sectors_read, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, ISO_SECTOR,
@@ -70,8 +70,10 @@ fn present_placeholder_enumerates_and_reads_pvd() {
 fn atapi_signature_packet_reason_and_ata_identify_abort() {
     reset();
     assert!(present_placeholder());
+    assert_eq!(ata_io_accesses(), 0);
     assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);
     assert_eq!(ata_io(0x01F5, true, 1, 0) as u8, 0xEB);
+    assert_eq!(ata_io_accesses(), 2);
     let _ = ata_io(0x01F7, false, 1, 0xEC);
     assert_eq!(ata_io(0x01F7, true, 1, 0) as u8 & 0x01, 0x01);
     assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);

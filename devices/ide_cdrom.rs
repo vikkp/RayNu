@@ -180,6 +180,7 @@ static PACKET_N: AtomicU32 = AtomicU32::new(0);
 static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
+static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 
 /// Decode PCI config address (mechanism #1).
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
@@ -315,6 +316,7 @@ pub fn reset() {
     LAST_SCSI.store(0, Ordering::Release);
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
+    ATA_IO_N.store(0, Ordering::Release);
 }
 
 /// PACKET commands issued since last reset (firmware ATAPI activity).
@@ -335,6 +337,12 @@ pub fn ata_commands() -> u32 {
 /// Last byte written to the ATA command register.
 pub fn last_ata_cmd() -> u8 {
     LAST_ATA_CMD.load(Ordering::Acquire)
+}
+
+/// ATA PIO accesses (status polls and commands). Nested VT-x `8e55abf`
+/// `ata=0x0` only counted command-register writes.
+pub fn ata_io_accesses() -> u32 {
+    ATA_IO_N.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -718,6 +726,7 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         let Some(reg) = ata_reg(m, port) else {
             return if is_in { rax | 0xff } else { rax };
         };
+        ATA_IO_N.fetch_add(1, Ordering::AcqRel);
         if is_in {
             let val = match reg {
                 0 => read_data(m, size),
