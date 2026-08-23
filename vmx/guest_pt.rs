@@ -24,6 +24,8 @@ pub enum IdentityMapKind {
     Page4K,
     /// Iron `3311ff3`: GUEST_CR3 was 0 (`fail=alloc`). Loaded SEC PML4.
     Cr3Sec,
+    /// Iron `13e8bd2`: walker `fail=present` after SEC CR3; CPU still #PF NP.
+    Rebuild4G,
 }
 
 /// Why [`identity_map_not_present`] refused to write a leaf.
@@ -206,6 +208,36 @@ pub unsafe fn identity_map_not_present(
     Ok(IdentityMapKind::Page4K)
 }
 
+/// PD (2 MiB) or 1 GiB PDPTE for `gva`. 0 if the walk cannot read an entry.
+///
+/// Iron `13e8bd2` dump: walker present vs CPU #PF NP.
+pub unsafe fn identity_walk_pde(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> u64 {
+    if ram_hpa == 0 || gva >= ram_len {
+        return 0;
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    let Some(e4) = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff) else {
+        return 0;
+    };
+    if (e4 & PRESENT) == 0 {
+        return e4;
+    }
+    let pdpt = e4 & ADDR_MASK;
+    let Some(e3) = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff) else {
+        return 0;
+    };
+    if (e3 & PRESENT) == 0 || (e3 & LARGE) != 0 {
+        return e3;
+    }
+    let pd = e3 & ADDR_MASK;
+    read_entry_ram(ram_hpa, ram_len, pd, (gva >> 21) & 0x1ff).unwrap_or(0)
+}
+
 /// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs (4 GiB of 2 MiB leaves).
 pub const IDENTITY_4G_PAGES: u64 = 6;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
@@ -379,6 +411,10 @@ mod guest_pt_test {
             assert_eq!(
                 identity_map_not_present(0, 0x80B000, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
+            );
+            assert_eq!(
+                identity_walk_pde(0, 0x80B000, ram_hpa, ram_len),
+                0x800000 | LARGE_2M_FLAGS
             );
         }
     }
