@@ -419,9 +419,8 @@ lives there. Serial `RAYNU-V-M7-E5-OVMF-CDROM-OK` with `pci_ide=1`
 `ram_rip=1`). Not a completed firmware CD boot. Not installer.
 Stage 42 is virtio-blk + CD→disk order.
 
-E5 Stage 42 (host + QEMU): empty PCI virtio-blk at `00:00.0` (PEI DID
-probe) plus fw_cfg `bootorder` (CD then disk). Nested VT-x: PEI never
-walks — `0x7010` and `0x1237` at `00:00.0` both looped with `virtio=0`.
-IDE stays `00:00.1` / GuestVisible. Serial `RAYNU-V-M7-E5-OVMF-VIRTIO-OK`
-after past-SEC and virtio PCI enum. Not a completed firmware CD boot.
-Not installer. Next: firmware CD boot (ATAPI/El Torito).
+E5 Stage 42 (host + QEMU nested VT-x, closed): empty PCI virtio-blk at
+`00:00.0` (PEI DID probe) plus fw_cfg `bootorder` (CD then disk). Serial
+`RAYNU-V-M7-E5-OVMF-VIRTIO-OK` with `val=0x1042` pci=1, CD GuestVisible,
+`pci_ide=0` sectors=0, stop n=115 virtio=1. Not a completed firmware CD
+boot. Not installer. Next: firmware CD boot (ATAPI/El Torito).
