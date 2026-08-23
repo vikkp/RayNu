@@ -5,6 +5,7 @@
 //! VERIFICATION: N/A
 
 pub mod guest_platform;
+pub mod guest_virtio_blk;
 pub mod ide_cdrom;
 pub mod lapic_virt;
 pub mod m4_blk_gate;
@@ -13,6 +14,7 @@ pub mod serial_pio;
 pub mod virtio_blk;
 pub mod virtio_net;
 
+pub use guest_virtio_blk::M7_E5_OVMF_VIRTIO_OK_MARKER;
 pub use ide_cdrom::M7_E5_OVMF_CDROM_OK_MARKER;
 pub use lapic_virt::M3_GTIMER3_OK_MARKER;
 pub use serial_pio::{

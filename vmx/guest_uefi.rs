@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.0); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0 (PEI only probes 00:00.0 DID); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.0); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0 (PEI only probes 00:00.0 DID); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.1; fw_cfg bootorder CD then disk; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -66,6 +66,9 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 /// QEMU / serial marker when PEI/DXE progressed or the guest attempted CD boot.
 pub const M7_E5_OVMF_DXE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-DXE-OK";
 
+/// QEMU / serial marker when guest-UEFI sees empty virtio-blk + CD→disk order.
+pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
+
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
@@ -73,21 +76,23 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, keep a short tail so IDE can enumerate, then fail-soft
-/// to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
+/// After DXE evidence, keep a short tail so virtio-blk can enumerate, then
+/// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
 
-/// Stop the private VMCS after DXE once IDE is visible or the tail is spent.
+/// Stop the private VMCS after DXE once virtio-blk is visible or the tail is spent.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
-/// - `true` as soon as DXE printed **and** the IDE function enumerated
+/// - `true` as soon as DXE printed **and** the virtio-blk function enumerated
 /// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
-pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, pci_ide: bool) -> bool {
+///
+/// Stage 41 stopped on IDE enum and never scanned `00:00.1`.
+pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, virtio_enum: bool) -> bool {
     if !dxe_printed {
         return false;
     }
-    pci_ide || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+    virtio_enum || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
 }
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
@@ -257,6 +262,7 @@ pub fn reset_guest_uefi_launch() {
     SINK_MAPS.store(0, Ordering::Release);
     PCI_TRACE.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
+    crate::devices::guest_virtio_blk::reset();
 }
 
 /// Exits after a successful entry that were not triple-fault / VM-entry fail.
@@ -457,6 +463,9 @@ unsafe fn launch_uefi(
         serial::write_str(" bytes=");
         write_dec(crate::devices::ide_cdrom::retained_len() as u64);
         serial::write_byte(b'\n');
+    }
+    if crate::devices::guest_virtio_blk::present() {
+        serial::write_line("boot: guest-UEFI virtio-blk empty CD→disk order");
     }
 
     if let Err(e) = setup_guest_uefi_vmcs(vmcs, host_rsp, gdt, tss, eptp, io_a, io_b, msr_bmp) {
@@ -956,7 +965,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 DXE_PRINTED.load(Ordering::Acquire),
                 n,
                 DXE_AT_N.load(Ordering::Acquire),
-                crate::devices::ide_cdrom::pci_enumerated(),
+                crate::devices::guest_virtio_blk::pci_enumerated(),
             )
         {
             resume = false;
@@ -985,6 +994,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::ide_cdrom::is_visible() as u64);
     serial::write_str(" pci_ide=");
     write_dec(crate::devices::ide_cdrom::pci_enumerated() as u64);
+    serial::write_str(" virtio=");
+    write_dec(crate::devices::guest_virtio_blk::pci_enumerated() as u64);
     serial::write_str(" sectors=");
     write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
     serial::write_str(" plat=");
@@ -1040,6 +1051,7 @@ fn maybe_print_past_sec(guest_hlt: bool) {
         com_bytes: COM_BYTES.load(Ordering::Acquire) as u64,
     });
     maybe_print_cdrom();
+    maybe_print_virtio();
     maybe_print_dxe();
 }
 
@@ -1059,6 +1071,26 @@ fn maybe_print_cdrom() {
             exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
             pci_enum: crate::devices::ide_cdrom::pci_enumerated() as u64,
             sectors: crate::devices::ide_cdrom::sectors_read() as u64,
+        });
+    }
+    maybe_print_virtio();
+    maybe_print_dxe();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_virtio() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    if crate::devices::guest_virtio_blk::take_marker() {
+        serial::write_line(M7_E5_OVMF_VIRTIO_OK_MARKER);
+        serial::write_str("boot: guest-UEFI virtio-blk pci=");
+        write_dec(crate::devices::guest_virtio_blk::pci_enumerated() as u64);
+        serial::write_str(" boot=CD,disk");
+        serial::write_byte(b'\n');
+        audit_log!(AuditEvent::OvmfGuestUefiVirtio {
+            exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+            pci_enum: crate::devices::guest_virtio_blk::pci_enumerated() as u64,
         });
     }
     maybe_print_dxe();
@@ -1118,6 +1150,7 @@ unsafe fn handle_io(qual: u64) -> bool {
         maybe_print_past_sec(false);
         handle_pci(port, is_in, size as u8);
         maybe_print_cdrom();
+        maybe_print_virtio();
         return skip_insn();
     }
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
@@ -1163,6 +1196,7 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             let addr = SAVED_RAX as u32;
             crate::devices::ide_cdrom::pci_write_addr(addr);
             crate::devices::guest_platform::pci_write_addr(addr);
+            crate::devices::guest_virtio_blk::pci_write_addr(addr);
         }
         return;
     }
@@ -1177,6 +1211,10 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             };
             let v = if let Some(p) = crate::devices::guest_platform::pci_read_data(port, size) {
                 u64::from(p)
+            } else if crate::devices::guest_virtio_blk::pci_addr_selects_virtio(
+                crate::devices::guest_virtio_blk::pci_read_addr(),
+            ) {
+                u64::from(crate::devices::guest_virtio_blk::pci_read_data(port, size))
             } else {
                 u64::from(crate::devices::ide_cdrom::pci_read_data(port, size))
             };
@@ -1199,6 +1237,7 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
         } else {
             crate::devices::guest_platform::pci_write_data(port, size, SAVED_RAX as u32);
             crate::devices::ide_cdrom::pci_write_data(port, size, SAVED_RAX as u32);
+            crate::devices::guest_virtio_blk::pci_write_data(port, size, SAVED_RAX as u32);
         }
     }
 }

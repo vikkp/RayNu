@@ -222,6 +222,7 @@ fn try_with_host_cdrom<R>(f: impl FnOnce(&mut CdromTable) -> R) -> Option<R> {
 pub fn reset_host_cdrom() {
     with_host_cdrom(|t| t.clear());
     crate::devices::ide_cdrom::reset();
+    crate::devices::guest_virtio_blk::reset();
 }
 
 /// One ISO → extract-boot + install-disk plan (management plane).

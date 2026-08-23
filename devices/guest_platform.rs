@@ -6,8 +6,8 @@
 //!
 //! Stage 40 stopped on EPT at `0xFCF8_F000` after unhandled CMOS `IN`
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
-//! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, and an i440FX
-//! host bridge so PEI can leave that stall. Not virtio-in-guest. Not
+//! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
+//! host bridge, and fw_cfg `bootorder` (CD then virtio disk). Not
 //! installer. Not Everest E5.
 
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -43,6 +43,53 @@ const FW_CFG_NB_CPUS: u16 = 0x05;
 const FW_CFG_MACHINE_ID: u16 = 0x06;
 const FW_CFG_MAX_CPUS: u16 = 0x0F;
 const FW_CFG_FILE_DIR: u16 = 0x19;
+/// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
+pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
+
+/// QEMU `bootorder` (OFW paths). CD (`ide@0`) then virtio disk (`scsi@0,1`).
+pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0/drive@1/disk@0\n/pci@i0cf8/scsi@0,1/disk@0,0\n";
+
+/// Product boot order is CD then virtio disk (ADR-014).
+pub fn boot_order_cd_then_disk() -> bool {
+    let ide = find_bytes(BOOTORDER, b"ide@0");
+    let disk = find_bytes(BOOTORDER, b"scsi@0,1");
+    match (ide, disk) {
+        (Some(i), Some(d)) => i < d,
+        _ => false,
+    }
+}
+
+fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    for i in 0..=hay.len() - needle.len() {
+        if &hay[i..i + needle.len()] == needle {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn file_dir_byte(off: u16) -> u8 {
+    let o = off as usize;
+    match o {
+        0..=3 => 1u32.to_be_bytes()[o],
+        4..=7 => (BOOTORDER.len() as u32).to_be_bytes()[o - 4],
+        8..=9 => FW_CFG_BOOTORDER_SEL.to_be_bytes()[o - 8],
+        10 | 11 => 0,
+        12..=67 => {
+            let name = b"bootorder";
+            let i = o - 12;
+            if i < name.len() {
+                name[i]
+            } else {
+                0
+            }
+        }
+        _ => 0,
+    }
+}
 
 /// Memory above 16 MiB in 64 KiB chunks (CMOS 0x34/0x35).
 pub fn cmos_above_16m_chunks(ram_bytes: u64) -> u16 {
@@ -174,6 +221,7 @@ static PLAT: GuestPlat = GuestPlat(core::cell::UnsafeCell::new(Platform::empty()
 static PLAT_LOCK: AtomicBool = AtomicBool::new(false);
 static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
+static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 
 fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
@@ -246,7 +294,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_FILE_DIR => {
-            p.fw_len = 4;
+            p.fw_len = 68;
+        }
+        FW_CFG_BOOTORDER_SEL => {
+            p.fw_len = BOOTORDER.len() as u8;
+            FWCFG_BOOT.store(true, Ordering::Release);
         }
         _ => {
             p.fw_len = 0;
@@ -270,6 +322,7 @@ pub fn reset() {
     });
     CMOS_MEM.store(false, Ordering::Release);
     FWCFG_RAM.store(false, Ordering::Release);
+    FWCFG_BOOT.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
 }
 
@@ -279,6 +332,10 @@ pub fn cmos_mem_served() -> bool {
 
 pub fn fwcfg_ram_served() -> bool {
     FWCFG_RAM.load(Ordering::Acquire)
+}
+
+pub fn fwcfg_bootorder_served() -> bool {
+    FWCFG_BOOT.load(Ordering::Acquire)
 }
 
 pub fn host_bridge_enumerated() -> bool {
@@ -399,7 +456,13 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     let mut v = 0u64;
                     for i in 0..size {
                         let b = if (p.fw_off as usize) < (p.fw_len as usize) {
-                            let b = p.fw_buf[p.fw_off as usize];
+                            let b = match p.fw_sel {
+                                FW_CFG_FILE_DIR => file_dir_byte(p.fw_off),
+                                FW_CFG_BOOTORDER_SEL => {
+                                    BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
+                                }
+                                _ => p.fw_buf[p.fw_off as usize],
+                            };
                             p.fw_off = p.fw_off.saturating_add(1);
                             b
                         } else {

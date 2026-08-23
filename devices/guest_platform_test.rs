@@ -1,8 +1,9 @@
 use super::{
-    cmos_above_16m_chunks, cmos_extended_kb, cmos_mem_served, fwcfg_ram_served,
-    host_bridge_enumerated, host_pci_config_addr, io, is_platform_io_port, is_platform_sink_gpa,
-    pci_addr_selects_host, pci_addr_selects_isa, pci_cfg_offset, pci_header_is_multifunction,
-    pci_read_data, pci_write_addr, platform_memory_served, reset, HOST_BRIDGE_DEVICE,
+    boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb, cmos_mem_served,
+    fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, io,
+    is_platform_io_port, is_platform_sink_gpa, pci_addr_selects_host, pci_addr_selects_isa,
+    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr,
+    platform_memory_served, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
     HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION,
     PLATFORM_RAM_BYTES,
 };
@@ -48,6 +49,28 @@ fn fwcfg_signature_and_ram_size() {
     }
     assert_eq!(ram, PLATFORM_RAM_BYTES);
     assert!(fwcfg_ram_served());
+    reset();
+}
+
+#[test]
+fn fwcfg_bootorder_is_cd_then_disk() {
+    reset();
+    assert!(boot_order_cd_then_disk());
+    let _ = io(0x510, false, 2, 0x19);
+    let mut count = 0u32;
+    for i in 0..4 {
+        count |= (io(0x511, true, 1, 0) as u32) << (8 * (3 - i));
+    }
+    assert_eq!(count, 1);
+    reset();
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
+    let mut got = [0u8; 64];
+    let n = BOOTORDER.len();
+    for b in got.iter_mut().take(n) {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    assert_eq!(&got[..n], BOOTORDER);
+    assert!(fwcfg_bootorder_served());
     reset();
 }
 
