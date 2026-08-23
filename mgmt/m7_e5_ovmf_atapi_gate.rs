@@ -54,7 +54,10 @@
 //! `13e8bd2`: CR3 identity `cr3=0x800000` then same `#PF` `fail=present` (walker
 //! present, CPU NP). Rebuild SEC 4G identity once; hide LA57. Iron COM2 after
 //! CR3 load: `#PF` `err=0x9` `cr2=0xa027c8` (P+RSVD; NX-in-PTE with NXE=0).
-//! Rebuild 4G on reserved-bit #PF. Nested
+//! Rebuild 4G on reserved-bit #PF. Iron `101b8ec`: 4G n=1 n=2 then
+//! `fail=present` `cr2=0x1ae7078` `pde=0x30646870` (MEMFD heap clobber).
+//! HV identity PML4 at `0x200000`, e820 reserved 24KiB, always rebuild.
+//! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -83,7 +86,7 @@ use crate::vmx::guest_uefi::{
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_KVM_CPUID_LEAF,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -240,6 +243,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_mtrr_poweron_disabled")
         && guest.contains("guest_uefi_mtrr_valid_var_pairs")
         && plat.contains("bootorder_nul_terminated")
+        && plat.contains("HV_IDENTITY_PML4")
+        && plat.contains("E820_RESERVED")
+        && plat.contains("E820_FILE_BYTES")
         && guest.contains("a9ffaa5")
         && guest.contains("GUEST_UEFI_EFER_NXE")
         && guest.contains("5f59c86")
@@ -266,6 +272,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("0xa027c8")
         && guest.contains("guest_uefi_pf_error_is_reserved")
         && guest.contains("GUEST_UEFI_IRON_PF_RSVD_CR2")
+        && guest.contains("101b8ec")
+        && guest.contains("GUEST_UEFI_HV_PML4")
+        && guest.contains("0x1ae7078")
+        && guest.contains("0x30646870")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -402,12 +412,18 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("hide LA57")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xa027c8")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("err=0x9")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("101b8ec")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1ae7078")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x30646870")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x200000")
         && guest_uefi_pf_error_is_reserved(0x9)
         && guest_uefi_pf_should_identity_map(0x9, GUEST_UEFI_IRON_PF_RSVD_CR2)
         && GUEST_UEFI_IRON_PF_RSVD_CR2 == 0xA027C8
-        && guest_uefi_pf_sec_cr3() == GUEST_UEFI_MEMFD_BASE
+        && guest_uefi_pf_sec_cr3() == GUEST_UEFI_HV_PML4
+        && guest_uefi_pf_sec_cr3() != GUEST_UEFI_MEMFD_BASE
         && guest_uefi_pf_should_load_sec_cr3(0)
         && !guest_uefi_pf_should_load_sec_cr3(GUEST_UEFI_MEMFD_BASE)
+        && guest_uefi_pf_should_rebuild_sec_cr3(GUEST_UEFI_HV_PML4)
         && guest_uefi_pf_should_rebuild_sec_cr3(GUEST_UEFI_MEMFD_BASE)
         && !guest_uefi_pf_should_rebuild_sec_cr3(0)
         && guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2)

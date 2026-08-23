@@ -9,7 +9,7 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (32 MiB RAM), fw_cfg `etc/boot-menu-wait` 0 ms
+//! fw_cfg `etc/e820` (32 MiB RAM with 24 KiB reserved HV identity PML4), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
@@ -91,6 +91,15 @@ pub const BOOT_MENU_WAIT: [u8; 2] = [0, 0];
 pub const E820_ENTRY_BYTES: u8 = 20;
 /// QEMU `E820_RAM`.
 pub const E820_RAM: u32 = 1;
+/// QEMU `E820_RESERVED`. Host-owned 4 GiB identity PML4 (not OVMF MEMFD).
+pub const E820_RESERVED: u32 = 2;
+/// GPA of the hypervisor 4 GiB identity PML4 (2 MiB). Below OVMF MEMFD
+/// `0x800000` so CpuDxe heap cannot clobber CR3 (iron `101b8ec` `pde=0x30646870`).
+pub const HV_IDENTITY_PML4: u64 = 0x200000;
+/// Six 4 KiB pages: PML4 + PDPT + 4 PDs. Must match `guest_pt::IDENTITY_4G_BYTES`.
+pub const HV_IDENTITY_PML4_BYTES: u64 = 6 * 4096;
+/// Three e820 entries: RAM / reserved PML4 / RAM.
+pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * 3;
 
 /// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
 /// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk (`scsi@0`).
@@ -170,7 +179,7 @@ fn file_dir_byte(off: u16) -> u8 {
             FW_CFG_BOOTORDER_SEL,
             b"bootorder",
         ),
-        1 => file_entry_byte(i, u32::from(E820_ENTRY_BYTES), FW_CFG_E820_SEL, b"etc/e820"),
+        1 => file_entry_byte(i, u32::from(E820_FILE_BYTES), FW_CFG_E820_SEL, b"etc/e820"),
         2 => file_entry_byte(
             i,
             BOOT_MENU_WAIT.len() as u32,
@@ -181,15 +190,28 @@ fn file_dir_byte(off: u16) -> u8 {
     }
 }
 
-/// One packed QEMU e820 RAM entry covering [`PLATFORM_RAM_BYTES`].
+/// Three packed QEMU e820 entries: RAM below the HV PML4, reserved identity
+/// tables, RAM up to [`PLATFORM_RAM_BYTES`]. Iron `101b8ec` smashed CR3 in MEMFD.
 pub fn e820_byte(off: u16) -> u8 {
     let o = off as usize;
-    if o < 8 {
-        0
-    } else if o < 16 {
-        PLATFORM_RAM_BYTES.to_le_bytes()[o - 8]
-    } else if o < 20 {
-        E820_RAM.to_le_bytes()[o - 16]
+    let ent = o / 20;
+    let i = o % 20;
+    let (addr, len, typ) = match ent {
+        0 => (0u64, HV_IDENTITY_PML4, E820_RAM),
+        1 => (HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, E820_RESERVED),
+        2 => (
+            HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES,
+            PLATFORM_RAM_BYTES.saturating_sub(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES),
+            E820_RAM,
+        ),
+        _ => return 0,
+    };
+    if i < 8 {
+        addr.to_le_bytes()[i]
+    } else if i < 16 {
+        len.to_le_bytes()[i - 8]
+    } else if i < 20 {
+        typ.to_le_bytes()[i - 16]
     } else {
         0
     }
@@ -604,7 +626,7 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             FWCFG_BOOT.store(true, Ordering::Release);
         }
         FW_CFG_E820_SEL => {
-            p.fw_len = E820_ENTRY_BYTES;
+            p.fw_len = E820_FILE_BYTES;
             FWCFG_E820.store(true, Ordering::Release);
         }
         FW_CFG_BOOT_WAIT_SEL => {
