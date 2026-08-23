@@ -32,3 +32,16 @@ jobs:
           command: deploy
           packageManager: npm
           wranglerVersion: "4.125.0"
+      - name: Purge Cloudflare edge cache
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          ZONE_ID=$(curl -sf "https://api.cloudflare.com/client/v4/zones?name=raynuv.com" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
+          curl -sf -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}'
+          echo "purged edge cache for zone $ZONE_ID"
