@@ -125,6 +125,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("IDE at 00:00.1")
         && guest.contains("HLT skip so DXE can walk PCI")
         && guest.contains("CR-access resume")
+        && guest.contains("32768-exit cap")
         && guest.contains("8192-exit cap")
         && guest.contains("ACPI PM timer")
         && guest.contains("PIIX4 PM at 00:01.3")

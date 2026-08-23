@@ -229,8 +229,8 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    CD boot. Not installer. Not Everest E5.
    **Stage 44 (host, open):** firmware ATAPI READ
    (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). Stop on `sectors>0`, not both-enum-alone.
-   Nested VT-x `8e55abf` n=2048 `cf8=0x80000838` ISA `00:01.0:0x38`.
-   PIIX3 ISA PIRQ reset `0x80`. 8192-exit cap.
+   Nested VT-x `5d9e346` n=8192 `ataio=0` `port=0xcf8`. HPET 1s on
+   preemption only. 8042. 32768-exit cap.
    Iron COM2 2026-08-23 skipped guest-UEFI (Cruzer lacked `EFI/RayNu/OVMF.fd`).
    Flash now stages host OVMF. Not El Torito boot. Not installer. Not Everest E5.
    Next: firmware El Torito CD boot.

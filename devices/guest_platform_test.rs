@@ -1,10 +1,11 @@
 use super::{
     acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
     cmos_mem_served, e820_byte, fwcfg_bootorder_served, fwcfg_e820_served, fwcfg_ram_served,
-    host_bridge_enumerated, host_pci_config_addr, hpet_init_sink, hpet_tick_sink, io,
-    is_acpi_pm_timer_io, is_pic_port, is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa,
-    last_cmos_index, pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm,
-    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
+    host_bridge_enumerated, host_pci_config_addr, hpet_init_sink, hpet_tick_sink,
+    hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
+    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, last_cmos_index,
+    pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
+    pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, pm_pci_config_addr, reset, BOOTORDER, E820_ENTRY_BYTES, E820_RAM,
     FW_CFG_BOOTORDER_SEL, FW_CFG_E820_SEL, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
@@ -196,6 +197,14 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(!is_platform_io_port(0xCF8));
     assert!(!is_platform_io_port(0x3F8));
     assert!(is_platform_io_port(0x20));
+    assert!(is_platform_io_port(0x60));
+    assert!(is_platform_io_port(0x64));
+    assert!(is_kbc_port(0x60));
+    assert!(is_kbc_port(0x64));
+    assert!(!is_kbc_port(0x61));
+    assert!(is_hpet_gpa(HPET_GPA));
+    assert!(is_hpet_gpa(HPET_GPA + 0xF0));
+    assert!(!is_hpet_gpa(0xFEC0_0000));
     assert!(is_acpi_pm_timer_io(0, 4));
     assert!(!is_acpi_pm_timer_io(0, 1));
     assert!(is_acpi_pm_timer_io(0x408, 4));
@@ -273,4 +282,16 @@ fn hpet_lives_in_2mib_sink_and_ticks() {
     assert_eq!(HPET_MAIN_STEP, 100_000_000);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP * 2);
+    assert_eq!(hpet_tick_sink_by(&mut sink, 0), HPET_MAIN_STEP * 2);
+}
+
+#[test]
+fn kbc_status_is_not_0xff() {
+    reset();
+    let st = io(0x64, true, 1, 0) as u8;
+    let data = io(0x60, true, 1, 0) as u8;
+    assert_eq!(st, 0x10);
+    assert_eq!(data, 0);
+    let _ = io(0x64, false, 1, 0xAE);
+    assert_eq!(io(0x64, true, 1, 0) as u8, 0x10);
 }

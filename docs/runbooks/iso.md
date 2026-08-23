@@ -429,8 +429,7 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 `pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
 E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
-Stop on `sectors>0`, not both-enum-alone. Nested VT-x `8e55abf` `cf8=0x80000838`
-ISA `00:01.0:0x38`. PIIX3 ISA PIRQ reset `0x80`. 8192-exit cap. Iron COM2
-2026-08-23 skipped guest-UEFI (Cruzer lacked `EFI/RayNu/OVMF.fd`). Flash now
-stages host OVMF. Not El Torito boot. Not installer.
+Stop on `sectors>0`, not both-enum-alone. Nested VT-x `5d9e346` n=8192
+`ataio=0` `port=0xcf8`. HPET 1s on preemption only. 8042. 32768-exit cap.
+Iron COM2 2026-08-23 skipped guest-UEFI (Cruzer lacked `EFI/RayNu/OVMF.fd`).
 Next: firmware El Torito CD boot.

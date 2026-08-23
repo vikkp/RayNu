@@ -122,7 +122,7 @@ impl CdMedia {
             pci_enum: false,
             sectors_read: 0,
             pci_addr: 0,
-            pci_cmd: 0x0001,
+            pci_cmd: 0x0005,
             bar0: 0x1F1,
             bar1: 0x03F5,
             bar2: 0x0171,

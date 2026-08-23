@@ -109,7 +109,7 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 8192-exit cap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 32768-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")

@@ -16,10 +16,15 @@
 //! (no `00:00.1`). Nested VT-x `105ffbe`: live HPET + preemption hit
 //! the 2048 cap (`reason=0x34` `rip=0x6e812d` `pci_ide=0`) because
 //! `HPET_MAIN_STEP` was ~10 ms per VMEXIT. 1 s of HPET time per
-//! exit so Delay can finish without burning the cap. Nested VT-x
-//! `8e55abf` stop `cf8=0x80000838` is PIIX ISA `00:01.0` offset `0x38`
-//! (PciBus programming, not empty-slot scan). PIRQ `0x60-0x63` reset
-//! `0x80` (disabled) matches QEMU so IRQ assign is not IRQ0.
+//! **preemption/HLT/HPET-EPT** exit so Delay can finish without burning
+//! the cap. Nested VT-x `5d9e346`: BOTH-OK then n=8192 `ataio=0`
+//! `unh=3` `port=0xcf8` after the empty-slot walk; 1 s per PCI I/O
+//! made guest time jump ~2 h before AtaAtapiPassThru Start. PCI I/O
+//! does not advance HPET. 8042 `0x60`/`0x64` (unhandled `IN` was
+//! `0xFF` / IBF stuck). Nested VT-x `8e55abf` stop `cf8=0x80000838`
+//! is PIIX ISA `00:01.0` offset `0x38` (PciBus programming, not
+//! empty-slot scan). PIRQ `0x60-0x63` reset `0x80` (disabled) matches
+//! QEMU so IRQ assign is not IRQ0.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
@@ -186,6 +191,12 @@ pub fn is_timer_port(port: u16) -> bool {
     (0x40..=0x43).contains(&port) || port == 0x61 || port == 0x80 || port == 0x92
 }
 
+/// i8042 keyboard controller. Nested VT-x `5d9e346` `IN 0x64`/`0x60`
+/// was unhandled `0xFF` (IBF stuck). Status `0x10` = sys flag, buffers empty.
+pub fn is_kbc_port(port: u16) -> bool {
+    port == 0x60 || port == 0x64
+}
+
 /// 8259 PIC + ELCR. Unhandled `IN` was `0xFF` (all IRQs in service).
 pub fn is_pic_port(port: u16) -> bool {
     matches!(port, 0x20 | 0x21 | 0xA0 | 0xA1 | 0x4D0 | 0x4D1)
@@ -246,7 +257,11 @@ fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
 }
 
 pub fn is_platform_io_port(port: u16) -> bool {
-    is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port) || is_pic_port(port)
+    is_cmos_port(port)
+        || is_fwcfg_port(port)
+        || is_timer_port(port)
+        || is_pic_port(port)
+        || is_kbc_port(port)
 }
 
 /// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus APIC/HPET.
@@ -269,10 +284,16 @@ pub const HPET_SINK_OFF: usize = (HPET_GPA - HPET_SINK_PAGE) as usize;
 pub const HPET_CAP_REV: u32 = 0x8086_A201;
 /// 10 ns period in femtoseconds.
 pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
-/// ~1 s of HPET time per VMEXIT (10 ns ticks). Nested VT-x `105ffbe`
-/// burned n=1024–2048 at `rip=0x6e812d` with 1e6 ticks (~10 ms) per
-/// exit — Delay never finished. Cap 2048 still bounds a forever-poll.
+/// ~1 s of HPET time (10 ns ticks) on preemption / HLT / HPET-EPT.
+/// Nested VT-x `105ffbe` burned n=1024–2048 at `rip=0x6e812d` with
+/// 1e6 ticks (~10 ms) per exit — Delay never finished. Do **not**
+/// apply this on PCI config I/O (`5d9e346` n=8192 `ataio=0`).
 pub const HPET_MAIN_STEP: u64 = 100_000_000;
+
+/// HPET GPA in the sink page (for EPT-exit classification).
+pub fn is_hpet_gpa(gpa: u64) -> bool {
+    (gpa & !0xFFFu64) == HPET_GPA
+}
 
 /// Stamp a live HPET into the 2 MiB platform sink (offset [`HPET_SINK_OFF`]).
 ///
@@ -290,15 +311,20 @@ pub fn hpet_init_sink(sink: &mut [u8]) -> bool {
     true
 }
 
-/// Advance HPET main counter. Call on each guest-UEFI VMEXIT.
+/// Advance HPET main counter by [`HPET_MAIN_STEP`] (preemption/HLT path).
 pub fn hpet_tick_sink(sink: &mut [u8]) -> u64 {
+    hpet_tick_sink_by(sink, HPET_MAIN_STEP)
+}
+
+/// Advance HPET main counter by `step` (0 = PCI I/O exits keep guest time).
+pub fn hpet_tick_sink_by(sink: &mut [u8], step: u64) -> u64 {
     if sink.len() < HPET_SINK_OFF + 0xF8 {
         return 0;
     }
     let off = HPET_SINK_OFF + 0xF0;
     let mut cur = [0u8; 8];
     cur.copy_from_slice(&sink[off..off + 8]);
-    let v = u64::from_le_bytes(cur).wrapping_add(HPET_MAIN_STEP);
+    let v = u64::from_le_bytes(cur).wrapping_add(step);
     sink[off..off + 8].copy_from_slice(&v.to_le_bytes());
     v
 }
@@ -821,6 +847,15 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                 p.pic_imr[0] = rax as u8;
             } else if port == 0xA1 {
                 p.pic_imr[1] = rax as u8;
+            }
+            return rax;
+        }
+        if is_kbc_port(port) {
+            if is_in {
+                // 0x64 bit2 = system flag; OBF/IBF clear so firmware does not
+                // wait forever (unhandled IN was 0xFF).
+                let v = if port == 0x64 { 0x10u64 } else { 0 };
+                return (rax & !mask) | (v & mask);
             }
             return rax;
         }
