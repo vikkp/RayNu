@@ -15,7 +15,7 @@ use super::{
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
     guest_uefi_phys_bits, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
-    guest_uefi_pf_should_identity_map, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
@@ -224,6 +224,9 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_MEMFD_BASE, 0x800000);
     assert_eq!(GUEST_UEFI_PF_IDENTITY_CAP, 256);
     assert!(guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2));
+    assert_eq!(guest_uefi_pf_sec_cr3(), GUEST_UEFI_MEMFD_BASE);
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("3311ff3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fail=alloc"));
     assert!(!guest_uefi_pf_should_identity_map(1, GUEST_UEFI_IRON_PF_CR2));
     assert!(!guest_uefi_pf_should_identity_map(0, 0xFFFF_0000));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d5fceb1"));

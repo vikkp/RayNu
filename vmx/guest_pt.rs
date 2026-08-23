@@ -22,6 +22,8 @@ const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
 pub enum IdentityMapKind {
     Large2M,
     Page4K,
+    /// Iron `3311ff3`: GUEST_CR3 was 0 (`fail=alloc`). Loaded SEC PML4.
+    Cr3Sec,
 }
 
 /// Why [`identity_map_not_present`] refused to write a leaf.
@@ -204,6 +206,51 @@ pub unsafe fn identity_map_not_present(
     Ok(IdentityMapKind::Page4K)
 }
 
+/// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs (4 GiB of 2 MiB leaves).
+pub const IDENTITY_4G_PAGES: u64 = 6;
+pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
+
+/// Write a 4-level 4 GiB identity map at `pml4_gpa` (OVMF SEC layout).
+///
+/// Iron `3311ff3`: `#PF` `cr3=0x0` `fail=alloc` — PML4 at GPA 0 is empty.
+/// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+/// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
+pub unsafe fn build_identity_4g(
+    ram_hpa: u64,
+    ram_len: u64,
+    pml4_gpa: u64,
+) -> Result<u64, IdentityMapError> {
+    let pml4 = pml4_gpa & ADDR_MASK;
+    if ram_hpa == 0 || pml4.saturating_add(IDENTITY_4G_BYTES) > ram_len {
+        return Err(IdentityMapError::OutOfRam);
+    }
+    for i in 0..IDENTITY_4G_PAGES {
+        let off = pml4 + i * 4096;
+        // SAFETY: each page is inside `[pml4, pml4+IDENTITY_4G_BYTES)` ⊂ RAM.
+        // KANI-TARGET: guest-UEFI SEC identity CR3 tables (outside Proven Core).
+        core::ptr::write_bytes((ram_hpa.wrapping_add(off)) as *mut u8, 0, 4096);
+    }
+    let pdpt = pml4 + 0x1000;
+    if !write_entry_ram(ram_hpa, ram_len, pml4, 0, pdpt | LEAF_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    for g in 0..4u64 {
+        let pd = pml4 + 0x2000 + g * 0x1000;
+        if !write_entry_ram(ram_hpa, ram_len, pdpt, g, pd | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        for i in 0..512u64 {
+            let gpa = (g * 512 + i) * TWO_MIB;
+            if !write_entry_ram(ram_hpa, ram_len, pd, i, gpa | LARGE_2M_FLAGS) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+        }
+    }
+    Ok(pml4)
+}
+
 #[cfg(test)]
 mod guest_pt_test {
     use super::*;
@@ -314,6 +361,24 @@ mod guest_pt_test {
             assert_eq!(
                 identity_map_not_present(0, 0x80B000, ram_hpa, ram_len),
                 Err(IdentityMapError::NeedAlloc)
+            );
+        }
+    }
+
+    #[test]
+    fn build_identity_4g_maps_memfd() {
+        let mut ram = vec![0u8; 0x6000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        // SAFETY: exclusive 6-page buffer is the SEC PML4/PDPT/PD blob.
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            let pde = read_entry_ram(ram_hpa, ram_len, 0x2000, 4).unwrap();
+            assert_eq!(pde, 0x800000 | LARGE_2M_FLAGS);
+            assert_eq!(
+                identity_map_not_present(0, 0x80B000, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
             );
         }
     }
