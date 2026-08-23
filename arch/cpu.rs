@@ -12,6 +12,8 @@ pub const CPUID_EDX_APIC: u32 = 1 << 9;
 pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
 /// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
 pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
+/// CPUID.1:ECX bit 31 — hypervisor present (KVM sets this; bare metal does not).
+pub const CPUID_ECX_HYPERVISOR: u32 = 1 << 31;
 
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;

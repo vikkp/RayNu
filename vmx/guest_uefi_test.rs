@@ -8,9 +8,12 @@ use super::{
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
-    guest_uefi_filter_cpuid, guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr,
+    guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_filter_cpuid,
+    guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
+    guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
-    GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
@@ -173,7 +176,13 @@ fn marker_and_residual_honest() {
     let leaf1 = guest_uefi_filter_cpuid(1, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_X2APIC, 0);
+    assert!(guest_uefi_cpuid_has_hypervisor(leaf1.ecx));
     assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(leaf1.ebx, leaf1.edx));
+    let kvm = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
+    assert!(guest_uefi_cpuid_is_kvm(kvm.ebx, kvm.ecx, kvm.edx));
+    assert_eq!(kvm.eax, GUEST_UEFI_KVM_CPUID_LEAF + 1);
+    let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);
+    assert!((phys.eax & 0xFF) <= 36);
     let top = guest_uefi_filter_cpuid(0xB, 0);
     assert_eq!(top.eax, 0);
     assert_eq!(top.ebx, 0);
@@ -207,6 +216,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("xAPIC 4K"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("3f417ca"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR shadow"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("408788c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KVMKVMKVM"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("callerrip"));
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
     assert_eq!(pci_bdf_bit(1, 1), Some((0, 1u64 << 9)));
     assert_eq!(pci_bdf_bit(8, 0), Some((1, 1)));
@@ -248,6 +260,19 @@ fn mtrr_shadow_is_guest_not_host() {
     guest_uefi_mtrr_reset();
     assert_eq!(guest_uefi_mtrr_read(0x2FF), Some(GUEST_UEFI_MTRR_DEF_DEFAULT));
     assert_eq!(guest_uefi_mtrr_read(0x200), Some(0));
+    assert!(guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR));
+    assert!(!guest_uefi_is_misc_enable(0xFE));
+    assert_eq!(
+        guest_uefi_misc_enable_read(GUEST_UEFI_MISC_ENABLE_MSR),
+        Some(GUEST_UEFI_MISC_ENABLE_DEFAULT)
+    );
+    assert!(guest_uefi_misc_enable_write(GUEST_UEFI_MISC_ENABLE_MSR, 1));
+    assert_eq!(guest_uefi_misc_enable_read(GUEST_UEFI_MISC_ENABLE_MSR), Some(1));
+    guest_uefi_mtrr_reset();
+    assert_eq!(
+        guest_uefi_misc_enable_read(GUEST_UEFI_MISC_ENABLE_MSR),
+        Some(GUEST_UEFI_MISC_ENABLE_DEFAULT)
+    );
 }
 
 #[test]

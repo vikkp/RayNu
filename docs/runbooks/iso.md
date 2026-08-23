@@ -430,8 +430,10 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
 E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
 Stop on `sectors>0`, not both-enum-alone. Iron `3f417ca` xAPIC 4K mapped,
-still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x250`. Guest MTRR shadow
-(not host passthrough). Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
+  still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x250`. Guest MTRR shadow
+  (not host passthrough). Iron `408788c` MTRR walk completed, still ASSERT
+  after CPUID `0x1cf11b5`. Guest-UEFI hypervisor CPUID + `KVMKVMKVM`.
+  Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
 CD bootorder PIIX `ide@1,1` then virtio-fn1 master `drive@0`.
 fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
 Next: firmware El Torito CD boot.

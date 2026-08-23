@@ -26,7 +26,11 @@
 //! `ad78f12`: same ASSERT after seven `RDMSR 0x1B` — xAPIC MMIO was a
 //! 2MiB zero sink (`GetApicVersion()==0`). Map a 4KiB xAPIC page
 //! (version 0x50014). Iron `3f417ca`: xAPIC 4K mapped, still ASSERT after
-//! MTRR walk `0xFE`/`0x2FF`/`0x250`. Shadow guest MTRRs (not host). Nested
+//! MTRR walk `0xFE`/`0x2FF`/`0x250`. Shadow guest MTRRs (not host). Iron
+//! `408788c`: MTRR walk completed, still ASSERT after CPUID `0x1cf11b5`.
+//! Nested KVM sets hypervisor CPUID bit 31 + `KVMKVMKVM`; iron did not.
+//! Guest-UEFI CPUID hypervisor present + KVM signature; IA32_MISC_ENABLE
+//! shadowed. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -46,12 +50,14 @@ use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
 use crate::devices::guest_platform::boot_menu_wait_skips_bds;
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
-    atapi_read_evidence, guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid,
-    guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_mtrr_read,
-    guest_uefi_mtrr_reset, guest_uefi_mtrr_write, hlt_should_resume, post_dxe_should_stop, preempt_deadloop_should_skip,
-    preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue, spin_short_jmp_should_skip,
-    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_POST_DXE_TAIL,
-    M7_E5_OVMF_ATAPI_OK_MARKER,
+    atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
+    guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
+    guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
+    guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_xapic_is_not_sink, hlt_should_resume,
+    post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
+    preempt_deadloop_skip_len, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -182,6 +188,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_is_mtrr_msr")
         && guest.contains("3f417ca")
         && guest.contains("MTRR shadow")
+        && guest.contains("408788c")
+        && guest.contains("KVMKVMKVM")
+        && guest.contains("callerrip")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -271,17 +280,28 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("xAPIC 4K")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("3f417ca")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR shadow")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("408788c")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KVMKVMKVM")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("callerrip")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)
             == Some(crate::vmx::guest_uefi::GUEST_UEFI_MTRRCAP)
         && guest_uefi_mtrr_write(0x200, 6)
         && guest_uefi_mtrr_read(0x200) == Some(6)
+        && guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR)
+        && guest_uefi_misc_enable_read(GUEST_UEFI_MISC_ENABLE_MSR)
+            == Some(GUEST_UEFI_MISC_ENABLE_DEFAULT)
         && GUEST_UEFI_FEATURE_CONTROL_VALUE == 1
         && {
             let r = guest_uefi_filter_cpuid(1, 0);
             guest_uefi_cpuid_leaf1_is_uniprocessor(r.ebx, r.edx)
                 && (r.ecx & crate::arch::cpu::CPUID_ECX_VMX) == 0
+                && guest_uefi_cpuid_has_hypervisor(r.ecx)
+        }
+        && {
+            let k = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
+            guest_uefi_cpuid_is_kvm(k.ebx, k.ecx, k.edx)
         }
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
