@@ -20,7 +20,9 @@
 //! `eb fc` or `0F 84` rel32. Iron `891eb5b`: OSXSAVE CR4 intercept,
 //! then skip of `ebecc9c3` (`leave; ret`) escaped ASSERT → `#UD` at
 //! PE-header `0x109D` (stopped n=1439). Do not skip that jmp; dump
-//! ASSERT return address. Nested
+//! ASSERT return address. Iron `17449e2`: ASSERT noskip `ret=0x6e8946`
+//! `rip=0x6e81ca` after host CPUID (Xeon topology+VMX). Filter guest-UEFI
+//! CPUID to uniprocessor, hide VMX/x2APIC, lock FEATURE_CONTROL. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -40,9 +42,11 @@ use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
 use crate::devices::guest_platform::boot_menu_wait_skips_bds;
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
-    atapi_read_evidence, hlt_should_resume, post_dxe_should_stop, preempt_deadloop_should_skip,
+    atapi_read_evidence, guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid,
+    hlt_should_resume, post_dxe_should_stop, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue, spin_short_jmp_should_skip,
-    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_POST_DXE_TAIL,
+    M7_E5_OVMF_ATAPI_OK_MARKER,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -163,6 +167,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("891eb5b")
         && guest.contains("leave; ret")
         && guest.contains("ebecc9c3")
+        && guest.contains("guest_uefi_filter_cpuid")
+        && guest.contains("GUEST_UEFI_FEATURE_CONTROL_VALUE")
+        && guest.contains("17449e2")
+        && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
         && guest.contains("preempt noskip")
         && guest.contains("eb fc")
@@ -240,6 +248,15 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preempt noskip dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("891eb5b")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("leave; ret")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("17449e2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("uniprocessor")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FEATURE_CONTROL")
+        && GUEST_UEFI_FEATURE_CONTROL_VALUE == 1
+        && {
+            let r = guest_uefi_filter_cpuid(1, 0);
+            guest_uefi_cpuid_leaf1_is_uniprocessor(r.ebx, r.edx)
+                && (r.ecx & crate::arch::cpu::CPUID_ECX_VMX) == 0
+        }
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")

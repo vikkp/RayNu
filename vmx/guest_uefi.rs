@@ -12,8 +12,10 @@
 
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
+use crate::arch::cpu::CPUID_ECX_X2APIC;
 use crate::boot::ovmf_esp::{self, MIN_REAL_OVMF_BYTES};
 use crate::memory::frame_allocator::FrameAllocator;
+use crate::sched::msr_firewall::{self, CpuidRegs};
 use crate::vmx::launch::{
     alias_ept_covers_reset, GuestUefiLaunchError, GUEST_UEFI_FIRMWARE_TOP_GPA,
     GUEST_UEFI_PRIVATE_VMCS_ID,
@@ -52,7 +54,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -206,6 +208,45 @@ pub fn xsetbv_masked_xcr0(value: u64, host_mask: u64) -> u64 {
         v |= 0x2;
     }
     v
+}
+
+/// IA32_FEATURE_CONTROL for guest-UEFI: locked, VMX off.
+/// Raw `rdmsr` was 0 (unlocked); OVMF CpuDxe then ASSERTs. Nested QEMU
+/// already presents a locked MSR. Do not `#GP` firmware.
+pub const GUEST_UEFI_FEATURE_CONTROL_VALUE: u64 = 1;
+
+/// CPUID.1:EDX bit 28 — HTT / multi-thread package.
+pub const CPUID_EDX_HTT: u32 = 1 << 28;
+
+/// Filter guest-UEFI CPUID to a uniprocessor without VMX/x2APIC.
+///
+/// Iron `17449e2`: DXE CPUID at `rip=0x1cf11b5` then ASSERT `CpuDeadLoop`
+/// `ret=0x6e8946` `rip=0x6e81ca`. Host passthrough advertised Xeon Silver
+/// 4110 topology + VMX (16 threads). Nested QEMU is `-smp 1` without VMX
+/// for L2, so BOTH-OK never hit this ASSERT.
+pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
+    let mut r = msr_firewall::filter_cpuid(leaf, subleaf);
+    r.ecx &= !CPUID_ECX_X2APIC;
+    match leaf {
+        1 => {
+            r.ebx = (r.ebx & 0xFFFF) | (1 << 16);
+            r.edx &= !CPUID_EDX_HTT;
+        }
+        4 => r.eax &= !(0x3F << 26),
+        0xB | 0x1F => {
+            r.eax = 0;
+            r.ebx = 0;
+            r.ecx = subleaf & 0xFF;
+            r.edx = 0;
+        }
+        _ => {}
+    }
+    r
+}
+
+/// Leaf 1 reports one logical processor and APIC ID 0.
+pub fn guest_uefi_cpuid_leaf1_is_uniprocessor(ebx: u32, edx: u32) -> bool {
+    ((ebx >> 16) & 0xFF) == 1 && (ebx >> 24) == 0 && (edx & CPUID_EDX_HTT) == 0
 }
 
 /// Stop the private VMCS after DXE once firmware read an ATAPI sector, or the tail is spent.
@@ -415,6 +456,8 @@ static UD_XSAVE_RETRY: AtomicU32 = AtomicU32::new(0);
 static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static ASSERT_DEADLOOP_DUMP: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static MSR_RD_TRACE: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -1450,7 +1493,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 }
             } else if basic == EXIT_REASON_PREEMPTION_TIMER {
                 let same = PREEMPT_SAME_RIP.load(Ordering::Acquire);
-                if same == 8 || same == 64 {
+                if ASSERT_DEADLOOP_DUMP.load(Ordering::Acquire) == 0 && (same == 8 || same == 64)
+                {
                     serial::write_str("boot: guest-UEFI preempt noskip same=");
                     write_dec(same as u64);
                     serial::write_str(" insn=");
@@ -2006,6 +2050,18 @@ pub fn assert_deadloop_return_gpa(rbp: u64, long_mode: bool) -> u64 {
 }
 
 #[cfg(target_os = "uefi")]
+unsafe fn peek_low_u64(linear: u64) -> u64 {
+    let mut slot = [0u8; 16];
+    let n = read_low_ram_insn(linear, &mut slot);
+    if n < 8 {
+        return 0;
+    }
+    let mut le = [0u8; 8];
+    le.copy_from_slice(&slot[..8]);
+    u64::from_le_bytes(le)
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn dump_assert_deadloop_once(linear: u64) {
     if ASSERT_DEADLOOP_DUMP.fetch_add(1, Ordering::AcqRel) != 0 {
         return;
@@ -2032,10 +2088,16 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
     write_hex(rsp);
     serial::write_str(" ret=0x");
     write_hex(ret);
+    let prev_rbp = peek_low_u64(rbp);
+    let site = assert_deadloop_return_gpa(prev_rbp, long);
+    serial::write_str(" site=0x");
+    write_hex(site);
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_str(" caller=");
     dump_low_ram_insn(ret);
+    serial::write_str(" siteinsn=");
+    dump_low_ram_insn(site);
     serial::write_byte(b'\n');
 }
 
@@ -2347,7 +2409,7 @@ unsafe fn handle_uart(port: u16, is_in: bool, size: u64) -> bool {
 unsafe fn handle_cpuid() -> bool {
     let leaf = SAVED_RAX as u32;
     let sub = SAVED_RCX as u32;
-    let r = core::arch::x86_64::__cpuid_count(leaf, sub);
+    let r = guest_uefi_filter_cpuid(leaf, sub);
     SAVED_RAX = r.eax as u64;
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
@@ -2385,24 +2447,75 @@ unsafe fn handle_xsetbv() -> bool {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_rdmsr() -> bool {
     let msr = SAVED_RCX as u32;
-    let v = if msr == IA32_EFER {
-        ops::vmread(GUEST_IA32_EFER).unwrap_or(0)
-    } else if msr == 0x1B {
-        0xFEE0_0000 | (1 << 8) | (1 << 11)
-    } else {
-        0
-    };
+    if msr != 0x10 {
+        let n = MSR_RD_TRACE.fetch_add(1, Ordering::AcqRel);
+        if n < 8 {
+            serial::write_str("boot: guest-UEFI RDMSR index=0x");
+            write_hex(u64::from(msr));
+            serial::write_byte(b'\n');
+        }
+    }
+    let v = guest_uefi_rdmsr(msr);
     SAVED_RAX = v as u32 as u64;
     SAVED_RDX = (v >> 32) as u32 as u64;
     skip_insn()
 }
 
 #[cfg(target_os = "uefi")]
+unsafe fn guest_uefi_rdmsr(msr: u32) -> u64 {
+    if msr == crate::arch::cpu::IA32_FEATURE_CONTROL {
+        return GUEST_UEFI_FEATURE_CONTROL_VALUE;
+    }
+    match msr_firewall::classify_msr(msr, msr_firewall::MsrAccess::Read) {
+        msr_firewall::MsrAction::HostPassthrough => cpu::rdmsr(msr),
+        msr_firewall::MsrAction::VmcsEfer => ops::vmread(GUEST_IA32_EFER).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsPat => ops::vmread(GUEST_IA32_PAT).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsSysenterCs => ops::vmread(GUEST_IA32_SYSENTER_CS).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsSysenterEsp => ops::vmread(GUEST_IA32_SYSENTER_ESP).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsSysenterEip => ops::vmread(GUEST_IA32_SYSENTER_EIP).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsFsBase => ops::vmread(GUEST_FS_BASE).unwrap_or(0),
+        msr_firewall::MsrAction::VmcsGsBase => ops::vmread(GUEST_GS_BASE).unwrap_or(0),
+        msr_firewall::MsrAction::Shadow => {
+            if msr == 0x1B {
+                0xFEE0_0000 | (1 << 8) | (1 << 11)
+            } else {
+                msr_firewall::shadow_read(msr)
+            }
+        }
+        msr_firewall::MsrAction::InjectGp
+        | msr_firewall::MsrAction::ReadZero
+        | msr_firewall::MsrAction::IgnoreWrite => 0,
+    }
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn handle_wrmsr() -> bool {
     let msr = SAVED_RCX as u32;
     let v = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
-    if msr == IA32_EFER {
-        let _ = ops::vmwrite(GUEST_IA32_EFER, v);
+    match msr_firewall::classify_msr(msr, msr_firewall::MsrAccess::Write) {
+        msr_firewall::MsrAction::VmcsEfer => {
+            let _ = ops::vmwrite(GUEST_IA32_EFER, v);
+        }
+        msr_firewall::MsrAction::VmcsPat => {
+            let _ = ops::vmwrite(GUEST_IA32_PAT, v);
+        }
+        msr_firewall::MsrAction::VmcsSysenterCs => {
+            let _ = ops::vmwrite(GUEST_IA32_SYSENTER_CS, v);
+        }
+        msr_firewall::MsrAction::VmcsSysenterEsp => {
+            let _ = ops::vmwrite(GUEST_IA32_SYSENTER_ESP, v);
+        }
+        msr_firewall::MsrAction::VmcsSysenterEip => {
+            let _ = ops::vmwrite(GUEST_IA32_SYSENTER_EIP, v);
+        }
+        msr_firewall::MsrAction::VmcsFsBase => {
+            let _ = ops::vmwrite(GUEST_FS_BASE, v);
+        }
+        msr_firewall::MsrAction::VmcsGsBase => {
+            let _ = ops::vmwrite(GUEST_GS_BASE, v);
+        }
+        msr_firewall::MsrAction::Shadow => msr_firewall::shadow_write(msr, v),
+        _ => {}
     }
     skip_insn()
 }

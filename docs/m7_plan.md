@@ -291,7 +291,10 @@ Iron COM2 (Cruzer with ESP OVMF): `LIVE-BYTES-PRESENT-OK` then #UD RIP
 (same as E4 SHELL). Iron `d5f9431`: DXE then n=8192 `rip=0x6e81ca`
 (CpuDeadLoop). Iron `e2af81e`: `insn=ebec`. Iron `891eb5b`: OSXSAVE CR4
 intercept, then skip of `ebecc9c3` (`leave; ret`) escaped ASSERT → `#UD`
-PE-header `0x109D` stop n=1439. Do not skip that jmp; dump ASSERT retaddr.
+PE-header `0x109D` stop n=1439. Iron `17449e2`: ASSERT noskip
+`ret=0x6e8946` `rip=0x6e81ca` after host CPUID (Xeon topology+VMX).
+Guest-UEFI CPUID is uniprocessor, VMX/x2APIC hidden, FEATURE_CONTROL locked.
+Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +
 PACKET interrupt-reason. Not firmware El Torito boot.

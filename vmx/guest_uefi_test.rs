@@ -7,7 +7,8 @@ use super::{
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
-    insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FLASH_BASE,
+    insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
+    guest_uefi_filter_cpuid, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
@@ -90,6 +91,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("891eb5b"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("leave; ret"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("17449e2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("uniprocessor"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FEATURE_CONTROL"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("acpi=16612"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));
@@ -161,6 +165,14 @@ fn marker_and_residual_honest() {
     assert_eq!(xsetbv_masked_xcr0(0, 0x7), 1);
     assert_eq!(xsetbv_masked_xcr0(0x4, 0x7), 0x7);
     assert_eq!(xsetbv_masked_xcr0(0x7, 0x3), 0x3);
+    assert_eq!(GUEST_UEFI_FEATURE_CONTROL_VALUE, 1);
+    let leaf1 = guest_uefi_filter_cpuid(1, 0);
+    assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
+    assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_X2APIC, 0);
+    assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(leaf1.ebx, leaf1.edx));
+    let top = guest_uefi_filter_cpuid(0xB, 0);
+    assert_eq!(top.eax, 0);
+    assert_eq!(top.ebx, 0);
     assert_eq!(GUEST_UEFI_CR4_VMXE, 1 << 13);
     assert_eq!(GUEST_UEFI_CR4_OSXSAVE, 1 << 18);
     assert_eq!(
