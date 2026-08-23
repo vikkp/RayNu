@@ -175,6 +175,21 @@
       .term .dim {
         color: rgba(201, 220, 216, 0.55);
       }
+      .com2-footnote {
+        margin: 0.9rem 0 0;
+        padding-top: 0.75rem;
+        border-top: 1px dashed rgba(16, 24, 32, 0.18);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+      .com2-footnote a {
+        color: var(--teal);
+      }
+      .com2-howto a {
+        color: var(--teal);
+      }
       .com2-close {
         margin-top: 3rem;
         padding-top: 1.5rem;
@@ -236,6 +251,13 @@
         <strong>computer science says</strong> should happen here, and what
         <strong>RayNu-V says</strong> it just did. Monikers are expanded once,
         at first appearance.
+      </p>
+      <p class="com2-howto" style="margin-top:-1.25rem">
+        <strong>A snapshot, not the frontier:</strong> this capture is the E2
+        boot-ok path of 2026-08-15. Later COM2 conversations — management HTTP
+        on a host-owned NIC, guest UEFI — live on
+        <a href="stories.html">Stories</a> and in the
+        <a href="https://github.com/vikkp/RayNu/tree/main/docs/evidence/r640">evidence archive</a>.
       </p>
 
       <section class="com2-section">
@@ -356,7 +378,9 @@ boot: ADR-004 ownership selftest ok</pre>
             the page-table root; host and guest keep distinct roots. Note the
             APIC (Advanced Programmable Interrupt Controller) MMIO
             (memory-mapped I/O) window deliberately unmapped: even the
-            interrupt controller is fenced out of guest space.
+            interrupt controller is fenced out of guest space — a guest that
+            could program it would fire inter-processor interrupts at the host
+            or its neighbors.
           </p>
         </div>
         <div class="beat">
@@ -560,6 +584,12 @@ boot: E2 marker build=r640-boot-ok-marker
             and the marker, three times, for the camera. That is the whole
             loop: firmware to four guests to a clean exit, on a real Dell
             PowerEdge R640, with every step on the record.
+          </p>
+          <p class="com2-footnote">
+            This marker build exits VMX at the end of the path. Later builds
+            keep VMX on — the management plane serves HTTP beside running
+            guests (ADR-013 Phase F, 2026-08-20;
+            <a href="stories.html#r640-2026-08-20-host-nic">the story</a>).
           </p>
         </div>
       </section>
