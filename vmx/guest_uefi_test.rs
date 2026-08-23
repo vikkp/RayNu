@@ -8,8 +8,9 @@ use super::{
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
-    guest_uefi_filter_cpuid, guest_uefi_xapic_is_not_sink, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
-    GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    guest_uefi_filter_cpuid, guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr,
+    guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
+    GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
@@ -204,6 +205,8 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_xapic_is_not_sink());
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ad78f12"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("xAPIC 4K"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("3f417ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR shadow"));
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
     assert_eq!(pci_bdf_bit(1, 1), Some((0, 1u64 << 9)));
     assert_eq!(pci_bdf_bit(8, 0), Some((1, 1)));
@@ -221,6 +224,30 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_atapi());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
     assert_eq!(guest_uefi_com_bytes(), 0);
+}
+
+#[test]
+fn mtrr_shadow_is_guest_not_host() {
+    guest_uefi_mtrr_reset();
+    assert!(guest_uefi_is_mtrr_msr(0xFE));
+    assert!(guest_uefi_is_mtrr_msr(0x250));
+    assert!(guest_uefi_is_mtrr_msr(0x26B));
+    assert!(!guest_uefi_is_mtrr_msr(0x277));
+    assert!(!guest_uefi_is_mtrr_msr(0x1B));
+    assert_eq!(guest_uefi_mtrr_read(0xFE), Some(GUEST_UEFI_MTRRCAP));
+    assert_eq!(guest_uefi_mtrr_read(0x2FF), Some(GUEST_UEFI_MTRR_DEF_DEFAULT));
+    assert_eq!(guest_uefi_mtrr_read(0x250), Some(GUEST_UEFI_MTRR_WB_PACKED));
+    assert_eq!(guest_uefi_mtrr_read(0x259), Some(0));
+    assert_eq!(guest_uefi_mtrr_read(0x200), Some(0));
+    assert!(guest_uefi_mtrr_write(0x2FF, 0xC00));
+    assert_eq!(guest_uefi_mtrr_read(0x2FF), Some(0xC00));
+    assert!(guest_uefi_mtrr_write(0x200, 6));
+    assert_eq!(guest_uefi_mtrr_read(0x200), Some(6));
+    assert!(guest_uefi_mtrr_write(0xFE, 0xFFFF));
+    assert_eq!(guest_uefi_mtrr_read(0xFE), Some(GUEST_UEFI_MTRRCAP));
+    guest_uefi_mtrr_reset();
+    assert_eq!(guest_uefi_mtrr_read(0x2FF), Some(GUEST_UEFI_MTRR_DEF_DEFAULT));
+    assert_eq!(guest_uefi_mtrr_read(0x200), Some(0));
 }
 
 #[test]

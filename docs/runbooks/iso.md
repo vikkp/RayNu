@@ -429,9 +429,9 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 `pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
 E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
-Stop on `sectors>0`, not both-enum-alone. Iron `ad78f12` ASSERT noskip
-`ret=0x6e8946` after seven `RDMSR 0x1B`. xAPIC 4K version `0x50014` (not
-sink zeros). Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
+Stop on `sectors>0`, not both-enum-alone. Iron `3f417ca` xAPIC 4K mapped,
+still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x250`. Guest MTRR shadow
+(not host passthrough). Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
 CD bootorder PIIX `ide@1,1` then virtio-fn1 master `drive@0`.
 fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
 Next: firmware El Torito CD boot.

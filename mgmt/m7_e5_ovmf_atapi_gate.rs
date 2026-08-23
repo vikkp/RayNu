@@ -25,7 +25,8 @@
 //! CPUID to uniprocessor, hide VMX/x2APIC, lock FEATURE_CONTROL. Iron
 //! `ad78f12`: same ASSERT after seven `RDMSR 0x1B` — xAPIC MMIO was a
 //! 2MiB zero sink (`GetApicVersion()==0`). Map a 4KiB xAPIC page
-//! (version 0x50014). Nested
+//! (version 0x50014). Iron `3f417ca`: xAPIC 4K mapped, still ASSERT after
+//! MTRR walk `0xFE`/`0x2FF`/`0x250`. Shadow guest MTRRs (not host). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -46,7 +47,8 @@ use crate::devices::guest_platform::boot_menu_wait_skips_bds;
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid,
-    guest_uefi_xapic_is_not_sink, hlt_should_resume, post_dxe_should_stop, preempt_deadloop_should_skip,
+    guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_mtrr_read,
+    guest_uefi_mtrr_reset, guest_uefi_mtrr_write, hlt_should_resume, post_dxe_should_stop, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue, spin_short_jmp_should_skip,
     E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_POST_DXE_TAIL,
     M7_E5_OVMF_ATAPI_OK_MARKER,
@@ -177,6 +179,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("xAPIC 4K")
         && guest.contains("GetApicVersion")
         && plat.contains("is_xapic_2m_gpa")
+        && guest.contains("guest_uefi_is_mtrr_msr")
+        && guest.contains("3f417ca")
+        && guest.contains("MTRR shadow")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -264,7 +269,14 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FEATURE_CONTROL")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ad78f12")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("xAPIC 4K")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("3f417ca")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR shadow")
         && guest_uefi_xapic_is_not_sink()
+        && guest_uefi_is_mtrr_msr(0x250)
+        && guest_uefi_mtrr_read(0xFE)
+            == Some(crate::vmx::guest_uefi::GUEST_UEFI_MTRRCAP)
+        && guest_uefi_mtrr_write(0x200, 6)
+        && guest_uefi_mtrr_read(0x200) == Some(6)
         && GUEST_UEFI_FEATURE_CONTROL_VALUE == 1
         && {
             let r = guest_uefi_filter_cpuid(1, 0);
@@ -281,6 +293,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
     ide_cdrom::reset();
     reset_host_cdrom();
     reset_guest_fw();
+    guest_uefi_mtrr_reset();
     ok
 }
 
