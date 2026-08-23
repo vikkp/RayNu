@@ -1,13 +1,14 @@
 use super::{
-    both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence, exec_from_low_ram,
-    flash_window_gpa_and_pad, guest_uefi_alive, guest_uefi_both, guest_uefi_com_bytes,
-    guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
-    hlt_should_resume, io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
-    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit,
-    post_dxe_should_stop, run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip,
-    stamp_empty_ovmf_vars, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL,
-    GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER,
+    atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
+    exec_from_low_ram, flash_window_gpa_and_pad, guest_uefi_alive, guest_uefi_atapi,
+    guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_non_tf_exits,
+    guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
+    is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
+    live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
+    run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
+    E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE,
+    GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
     OVMF_VARS_EMPTY_PREFIX, OVMF_VARS_FV_BYTES,
@@ -74,6 +75,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not both-enum-alone"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATAPI signature"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PACKET interrupt-reason"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT skip so DXE can walk PCI"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR-access resume"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer"));
@@ -104,10 +108,12 @@ fn marker_and_residual_honest() {
     assert_eq!(M7_E5_OVMF_DXE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-DXE-OK");
     assert_eq!(M7_E5_OVMF_VIRTIO_OK_MARKER, "RAYNU-V-M7-E5-OVMF-VIRTIO-OK");
     assert_eq!(M7_E5_OVMF_BOTH_OK_MARKER, "RAYNU-V-M7-E5-OVMF-BOTH-OK");
+    assert_eq!(M7_E5_OVMF_ATAPI_OK_MARKER, "RAYNU-V-M7-E5-OVMF-ATAPI-OK");
     assert!(!guest_uefi_alive());
     assert!(!guest_uefi_past_sec());
     assert!(!guest_uefi_dxe());
     assert!(!guest_uefi_both());
+    assert!(!guest_uefi_atapi());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
     assert_eq!(guest_uefi_com_bytes(), 0);
 }
@@ -142,24 +148,22 @@ fn past_sec_predicates_are_honest() {
     assert!(!both_pci_evidence(true, false));
     assert!(!both_pci_evidence(false, true));
     assert!(both_pci_evidence(true, true));
-    assert!(!post_dxe_should_stop(false, 2000, 0, true, true));
-    assert!(!post_dxe_should_stop(true, 115, 115, false, false));
-    assert!(!post_dxe_should_stop(true, 115, 115, true, false));
-    assert!(!post_dxe_should_stop(true, 115, 115, false, true));
-    assert!(post_dxe_should_stop(true, 115, 115, true, true));
+    assert!(!atapi_read_evidence(0));
+    assert!(atapi_read_evidence(1));
+    assert!(!post_dxe_should_stop(false, 2000, 0, 1));
+    assert!(!post_dxe_should_stop(true, 115, 115, 0));
+    assert!(post_dxe_should_stop(true, 115, 115, 1));
     assert!(post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL,
         115,
-        false,
-        false
+        0
     ));
     assert!(!post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL - 1,
         115,
-        true,
-        false
+        0
     ));
     assert!(hlt_should_resume());
 }

@@ -17,11 +17,9 @@
 //! step; 1 s per VMEXIT so Delay can end. Stop dumps identity RIP bytes
 //! so a leftover HPET poll is readable. Nested VT-x `707a849`: 1s HPET left
 //! `rip=0x6e812d insn=ebf3` (CpuDeadLoop); skip backward `jmp rel8` so
-//! firmware can fall through to PciBus. Stop the private VMCS only after firmware
-//! enumerates **both** (or the post-DXE tail). ISA `00:01.0` is
-//! multifunction so a bus walk finds IDE. Marker after past-SEC and both
-//! PCI enums. Not ATAPI sectors. Not installer. No new `*Absent` enum.
-//! No TLS.
+//! firmware can fall through to PciBus. Marker after past-SEC and both
+//! PCI enums. Stage 44 stop is ATAPI `sectors>0` (not both-enum-alone).
+//! Not installer. No new `*Absent` enum. No TLS.
 
 use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
@@ -166,17 +164,17 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && !both_pci_evidence(true, false)
         && !both_pci_evidence(false, true)
         && both_pci_evidence(true, true)
-        && !post_dxe_should_stop(false, 2000, 0, true, true)
-        && !post_dxe_should_stop(true, 115, 115, true, false)
-        && !post_dxe_should_stop(true, 115, 115, false, true)
-        && post_dxe_should_stop(true, 115, 115, true, true)
-        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false, false)
-        && !post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL - 1, 115, true, false)
+        && !post_dxe_should_stop(false, 2000, 0, 1)
+        && !post_dxe_should_stop(true, 115, 115, 0)
+        && post_dxe_should_stop(true, 115, 115, 1)
+        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, 0)
+        && !post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL - 1, 115, 0)
         && hlt_should_resume()
         && spin_short_jmp_should_skip(0xEB, 0xF3)
         && !spin_short_jmp_should_skip(0x74, 0xF3)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not both-enum-alone")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT skip so DXE can walk PCI")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR-access resume")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2048-exit cap")

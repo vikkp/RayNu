@@ -227,4 +227,7 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    `1b07692`: `pci select 00:00.01` `val=0x70108086`, stop n=1111
    `pci_ide=1 virtio=1` `sectors=0` `spin=1`. Not a completed firmware
    CD boot. Not installer. Not Everest E5.
-   Next: firmware CD boot (ATAPI/El Torito, `sectors>0`).
+   **Stage 44 (host, open):** firmware ATAPI READ
+   (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). Stop on `sectors>0`, not both-enum-alone.
+   Nested VT-x pending. Not El Torito boot. Not installer. Not Everest E5.
+   Next: firmware El Torito CD boot.

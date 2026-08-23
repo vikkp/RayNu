@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -73,6 +73,10 @@ pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 /// on the same boot. Not ATAPI sectors. Not installer.
 pub const M7_E5_OVMF_BOTH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-BOTH-OK";
 
+/// QEMU / serial marker when firmware issued ATAPI READ and `sectors>0`.
+/// Not a completed El Torito CD boot. Not installer.
+pub const M7_E5_OVMF_ATAPI_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ATAPI-OK";
+
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
@@ -80,9 +84,9 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, spend the rest of [`GUEST_UEFI_RESUME_CAP`] unless both
-/// PCI functions enumerated. Nested VT-x `41d0ebe`: 384 I/O exits after DXE
-/// still only DID `00:00.0` / `pci_ide=0`. Not a faked `pci_enum`.
+/// After DXE evidence, spend the rest of [`GUEST_UEFI_RESUME_CAP`] unless firmware
+/// actually read an ATAPI sector. Nested VT-x `1b07692`: BOTH-OK at n=1111
+/// then the private VMCS stopped with `sectors=0` — PciBus never reached PACKET.
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = GUEST_UEFI_RESUME_CAP;
 
 /// Pin-based VMX-preemption timer (SDM 24.6.1 bit 6). Lets a HPET Delay
@@ -109,27 +113,27 @@ pub fn spin_short_jmp_should_skip(b0: u8, b1: u8) -> bool {
     b0 == 0xEB && (b1 as i8) < 0
 }
 
-/// Stop the private VMCS after DXE once both PCI functions enumerated, or the tail is spent.
+/// Stop the private VMCS after DXE once firmware read an ATAPI sector, or the tail is spent.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
-/// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:00.1` enumerated
+/// - `true` as soon as DXE printed **and** `sectors > 0` (honest PACKET READ)
 /// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print (the 2048 cap)
-/// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1; 384 I/O was not a walk)
+/// - both PCI enums alone do **not** stop (Stage 43 `1b07692` n=1111 BOTH then
+///   stopped with `sectors=0`; firmware never issued PACKET)
 ///
 /// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is virtio fn1 `00:00.1`.
-pub fn post_dxe_should_stop(
-    dxe_printed: bool,
-    exit_n: u32,
-    dxe_at: u32,
-    virtio_enum: bool,
-    ide_enum: bool,
-) -> bool {
+pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, sectors: u32) -> bool {
     if !dxe_printed {
         return false;
     }
-    both_pci_evidence(virtio_enum, ide_enum)
-        || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+    atapi_read_evidence(sectors) || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+}
+
+/// Honest ATAPI evidence: firmware (or a host PACKET path) read a CD sector.
+/// Do not fake. PCI enum is not a sector read.
+pub fn atapi_read_evidence(sectors: u32) -> bool {
+    sectors > 0
 }
 
 /// Firmware-simultaneous CD + disk: both PCI functions enumerated on one boot.
@@ -232,6 +236,7 @@ static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
 static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
 static BOTH_PRINTED: AtomicBool = AtomicBool::new(false);
+static ATAPI_PRINTED: AtomicBool = AtomicBool::new(false);
 static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
@@ -392,6 +397,7 @@ pub fn reset_guest_uefi_launch() {
     CONTINUE_GUEST.store(false, Ordering::Release);
     DXE_PRINTED.store(false, Ordering::Release);
     BOTH_PRINTED.store(false, Ordering::Release);
+    ATAPI_PRINTED.store(false, Ordering::Release);
     DXE_AT_N.store(0, Ordering::Release);
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
@@ -437,6 +443,10 @@ pub fn guest_uefi_dxe() -> bool {
 
 pub fn guest_uefi_both() -> bool {
     BOTH_PRINTED.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_atapi() -> bool {
+    ATAPI_PRINTED.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -1233,8 +1243,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 DXE_PRINTED.load(Ordering::Acquire),
                 n,
                 DXE_AT_N.load(Ordering::Acquire),
-                crate::devices::guest_virtio_blk::pci_enumerated(),
-                crate::devices::ide_cdrom::pci_enumerated(),
+                crate::devices::ide_cdrom::sectors_read(),
             )
         {
             resume = false;
@@ -1271,6 +1280,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::guest_virtio_blk::pci_enumerated() as u64);
     serial::write_str(" sectors=");
     write_dec(crate::devices::ide_cdrom::sectors_read() as u64);
+    serial::write_str(" packet=");
+    write_dec(crate::devices::ide_cdrom::packet_commands() as u64);
+    serial::write_str(" scsi=0x");
+    write_hex_u32(u32::from(crate::devices::ide_cdrom::last_scsi()));
     serial::write_str(" plat=");
     write_dec(crate::devices::guest_platform::platform_memory_served() as u64);
     serial::write_str(" dxe=");
@@ -1353,6 +1366,7 @@ fn maybe_print_past_sec(guest_hlt: bool) {
     maybe_print_cdrom();
     maybe_print_virtio();
     maybe_print_both();
+    maybe_print_atapi();
     maybe_print_dxe();
 }
 
@@ -1376,6 +1390,7 @@ fn maybe_print_cdrom() {
     }
     maybe_print_virtio();
     maybe_print_both();
+    maybe_print_atapi();
     maybe_print_dxe();
 }
 
@@ -1396,6 +1411,7 @@ fn maybe_print_virtio() {
         });
     }
     maybe_print_both();
+    maybe_print_atapi();
     maybe_print_dxe();
 }
 
@@ -1420,6 +1436,34 @@ fn maybe_print_both() {
         exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
         virtio: 1,
         ide: 1,
+    });
+    maybe_print_atapi();
+    maybe_print_dxe();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_atapi() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    let sectors = crate::devices::ide_cdrom::sectors_read();
+    if !atapi_read_evidence(sectors) {
+        return;
+    }
+    if ATAPI_PRINTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    serial::write_line(M7_E5_OVMF_ATAPI_OK_MARKER);
+    serial::write_str("boot: guest-UEFI atapi sectors=");
+    write_dec(sectors as u64);
+    serial::write_str(" packet=");
+    write_dec(crate::devices::ide_cdrom::packet_commands() as u64);
+    serial::write_str(" scsi=0x");
+    write_hex_u32(u32::from(crate::devices::ide_cdrom::last_scsi()));
+    serial::write_byte(b'\n');
+    audit_log!(AuditEvent::OvmfGuestUefiAtapi {
+        exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+        sectors: sectors as u64,
     });
     maybe_print_dxe();
 }
@@ -1641,11 +1685,13 @@ unsafe fn handle_io(qual: u64) -> bool {
         maybe_print_cdrom();
         maybe_print_virtio();
         maybe_print_both();
+        maybe_print_atapi();
         return skip_insn();
     }
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
         SAVED_RAX = crate::devices::ide_cdrom::ata_io(port, is_in, size as u8, SAVED_RAX);
         maybe_print_cdrom();
+        maybe_print_atapi();
         return skip_insn();
     }
     if crate::devices::guest_platform::is_platform_io_port(port)

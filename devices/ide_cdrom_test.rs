@@ -1,5 +1,5 @@
 use super::{
-    cdrom_visible_evidence, host_identify_word0, host_read10, is_ata_primary_port,
+    ata_io, cdrom_visible_evidence, host_identify_word0, host_read10, is_ata_primary_port,
     is_pci_data_port, pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr,
     present, present_placeholder, reset, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR,
     ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
@@ -51,10 +51,26 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     assert_eq!(host_identify_word0(), Some(0x8500));
     let pvd = host_read10(16).expect("READ(10) LBA 16");
     assert_eq!(&pvd[1..6], b"CD001");
+    let br = host_read10(17).expect("READ(10) LBA 17");
+    assert_eq!(&br[7..30], b"EL TORITO SPECIFICATION");
     assert!(cdrom_visible_evidence(true, true, 1));
     assert!(take_marker());
     assert!(!take_marker());
     assert_eq!(M7_E5_OVMF_CDROM_OK_MARKER, "RAYNU-V-M7-E5-OVMF-CDROM-OK");
+    reset();
+}
+
+#[test]
+fn atapi_signature_packet_reason_and_ata_identify_abort() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);
+    assert_eq!(ata_io(0x01F5, true, 1, 0) as u8, 0xEB);
+    let _ = ata_io(0x01F7, false, 1, 0xEC);
+    assert_eq!(ata_io(0x01F7, true, 1, 0) as u8 & 0x01, 0x01);
+    assert_eq!(ata_io(0x01F4, true, 1, 0) as u8, 0x14);
+    let _ = ata_io(0x01F7, false, 1, 0xA0);
+    assert_eq!(ata_io(0x01F2, true, 1, 0) as u8, 0x01);
     reset();
 }
 
