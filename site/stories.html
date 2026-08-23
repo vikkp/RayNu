@@ -238,9 +238,10 @@
         <h1 class="stories-mast__title">Stories of RayNu</h1>
         <p class="stories-mast__lede">
           What actually happened on iron — not a roadmap slide. Each story is
-          dated, marker-backed, and honest about residuals. Latest close:
-          2026-08-23 guest-UEFI OVMF past SEC with CD + virtio-blk on nested
-          VT-x (not a distro boot, not Everest E5).
+          dated, marker-backed, and honest about residuals. Latest:
+          2026-08-23 — OVMF sees CD and disk at once (Stage 43 closed) and the
+          ATAPI read chase reached real R640 iron (Stage 44 open). Not a
+          distro boot, not Everest E5.
         </p>
       </div>
     </header>
@@ -248,6 +249,11 @@
     <main class="stories-body">
       <div class="stories-index">
         <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#ovmf-2026-08-23-atapi"
+            >2026-08-23 — The firmware asks for the CD</a
+          >
+        </p>
         <p>
           <a href="#ovmf-2026-08-23"
             >2026-08-23 — A firmware of its own: OVMF on a private VMCS</a
@@ -294,6 +300,80 @@
           >
         </p>
       </div>
+
+      <article class="story" id="ovmf-2026-08-23-atapi">
+        <p class="story__date">2026-08-23 · raynuvsrv1 nested VT-x + PowerEdge R640 · ADR-014 Stages 43–44</p>
+        <h2 class="story__title">The firmware asks for the CD</h2>
+
+        <p>
+          Yesterday left OVMF past SEC with a CD visible and a virtio disk
+          attached. Today the question got sharper: can the guest firmware
+          actually <em>read</em> the disc?
+        </p>
+
+        <h3>Stage 43: both at once</h3>
+        <p>
+          First the enumeration had to be firmware-simultaneous — OVMF seeing
+          the virtio disk at <code>00:00.0</code> and the IDE CD at
+          <code>00:00.1</code> in the same boot, not one or the other. A
+          CpuDeadLoop <code>eb f3</code> skip let PciBus walk
+          <code>00:00.1</code>, and nested VT-x build <code>1b07692</code>
+          printed it:
+        </p>
+        <pre>pci select 00:00.01  cfg=0x80000100  val=0x70108086
+RAYNU-V-M7-E5-OVMF-BOTH-OK
+stop n=1111  pci_ide=1 virtio=1  sectors=0</pre>
+        <p>
+          E4 Linux stayed fail-soft through it. Simultaneous enumeration is
+          not a firmware CD boot — but a boot order only means something when
+          the firmware can see both devices at once.
+        </p>
+
+        <h3>Stage 44: the iron chase</h3>
+        <p>
+          Then the operator loop moved to the R640: build EFI, flash, watch
+          COM2, fix, reflash. What iron taught today:
+        </p>
+        <ul>
+          <li>Host owns <code>CR4.OSXSAVE</code> too, and <code>#UD</code> gets
+            intercepted (build <code>891eb5b</code>) — OVMF's
+            <code>XSETBV</code> may not run bare.</li>
+          <li>Do not skip the <code>leave; ret</code> at
+            <code>0xebecc9c3</code> — skipping it let an escaped ASSERT run
+            into a PE header and <code>#UD</code> at <code>0x109D</code>.</li>
+          <li>CpuDeadLoop is not always dead: the <code>pause; jcc</code> at
+            <code>0x6e81ca</code> was a preemption artifact, not a halt.</li>
+          <li>The fw_cfg boot order is PIIX <code>ide@1,1</code> before virtio
+            scsi — and the CD is master <code>drive@0</code>, not slave.</li>
+        </ul>
+        <p>
+          On nested VT-x the same chain now walks past BOTH-OK into ACPI
+          <code>BdsWait</code> — boot device selection. On iron we are
+          chasing the last guest-internal stops.
+        </p>
+
+        <h3>Where it stands tonight</h3>
+        <p>
+          Stage 44 (<code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code>) is
+          <strong>open</strong>. Not an El Torito boot, not an installer, not
+          Everest E5. But the CD is no longer decoration: the firmware is
+          trying to read it.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/pull/215">#215 — Stage 43, in review</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/pull/217">#217 — Stage 44, draft</a>
+          (gate logs in the PR branches' <code>docs/progress.md</code>,
+          P0-58 / P0-59)
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
 
       <article class="story" id="ovmf-2026-08-23">
         <p class="story__date">2026-08-22 → 2026-08-23 · raynuvsrv1 (Ubuntu, nested VT-x) · ADR-014 Stages 36–42</p>
