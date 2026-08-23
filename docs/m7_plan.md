@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–43 closed**. Stage 44 / P0-59 ATAPI host package is open (nested VT-x pending; iron COM2 2026-08-23 skipped guest-UEFI — Cruzer lacked `OVMF.fd`). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-58** are closed host/QEMU gates. Residual: firmware El Torito CD boot + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–43 closed**. Stage 44 / P0-59 ATAPI host package is open (iron COM2 #UD RIP `0x109D` `pci_ide=0`; guest-UEFI INVPCID/RDTSCP/XSAVES). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-58** are closed host/QEMU gates. Residual: firmware El Torito CD boot + TLS/console + distro installer. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -284,9 +284,10 @@ Nested VT-x `5d9e346` BOTH-OK then n=8192 `ataio=0` `unh=3`
 n=32768 `ataio=0` `acpi=16612` `port=0` `hpet=10` (BdsWait on
 18 ms ACPI steps). ACPI PM 1s step. HPET 1 s only on
 preemption/HLT/ACPI. 8042 KBC. 32768-exit cap. PIIX3 ISA PIRQ `0x60-0x63` reset `0x80` (QEMU).
-Iron COM2 2026-08-23 skipped guest-UEFI: Cruzer `RAYNUV` had no
-`\EFI\RayNu\OVMF.fd` (flash copied BOOTX64 only). Re-flash after staging
-host OVMF; WANT `LIVE-BYTES-PRESENT-OK` then ATAPI-OK. ATAPI signature +
+Iron COM2 (Cruzer with ESP OVMF): `LIVE-BYTES-PRESENT-OK` then #UD RIP
+`0x109D` `pci_ide=0` `com=15515` — guest-UEFI VMCS lacked INVPCID/XSAVES/RDTSCP
+(host CPUID advertises them on Xeon Silver 4110). Enable those secondary bits
+(same as E4 SHELL). ATAPI signature +
 PACKET interrupt-reason. Not firmware El Torito boot.
 Not installer. Do not move virtio off `00:00.0`. Do not fake `sectors`.
 After ATAPI: not another `*Absent` bookkeeping stage or SPA flag button.
@@ -319,8 +320,8 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**closed** nested VT-x `1b07692`:
 `pci select 00:00.01` `val=0x70108086`; `OVMF-BOTH-OK`; stop n=1111
 `pci_ide=1 virtio=1` `sectors=0` `spin=1`; E4 Linux #DF fail-soft).
-Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; nested VT-x `2674629`
-n=32768 `ataio=0` `acpi=16612` — ACPI PM 1s step).
+Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (**open** host; iron COM2 #UD RIP `0x109D`
+`pci_ide=0` — guest-UEFI INVPCID/RDTSCP/XSAVES).
 
 **Next after Stage 44:** firmware El Torito CD boot (not `sectors>0` alone).
 Product ISO is

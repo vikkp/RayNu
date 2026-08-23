@@ -74,6 +74,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s on preemption/HLT not PCI I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM 1s step"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("INVPCID/RDTSCP/XSAVES"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("acpi=16612"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));
@@ -105,6 +107,7 @@ fn marker_and_residual_honest() {
     assert!(hlt_should_resume());
     assert!(spin_short_jmp_should_skip(0xEB, 0xF3));
     assert!(spin_short_jmp_should_skip(0xEB, 0xFE));
+    assert!(!spin_short_jmp_should_skip(0xEB, 0xE0));
     assert!(!spin_short_jmp_should_skip(0xEB, 0x02));
     assert!(!spin_short_jmp_should_skip(0x74, 0xF3));
     assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
