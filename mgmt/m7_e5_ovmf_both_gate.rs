@@ -14,7 +14,8 @@
 //! `OVMF_VARS_4M.fd` prefix) so PEI does not parse erased NOR. Live HPET in
 //! the `0xFED00000` sink (nested VT-x `20763e4` 300 s kill). Nested VT-x
 //! `105ffbe` burned the 2048 cap at `rip=0x6e812d` with a 10 ms HPET
-//! step; 1 s per VMEXIT so Delay can end. Stop the private VMCS only after firmware
+//! step; 1 s per VMEXIT so Delay can end. Stop dumps identity RIP bytes
+//! so a leftover HPET poll is readable. Stop the private VMCS only after firmware
 //! enumerates **both** (or the post-DXE tail). ISA `00:01.0` is
 //! multifunction so a bus walk finds IDE. Marker after past-SEC and both
 //! PCI enums. Not ATAPI sectors. Not installer. No new `*Absent` enum.
@@ -143,6 +144,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("hpet_tick_sink")
         && guest.contains("live HPET")
         && guest.contains("HPET 1s step")
+        && guest.contains("stop RIP insn dump")
         && plat.contains("HPET_MAIN_STEP: u64 = 100_000_000")
         && e4_shell_launch_no_cdrom()
 }
@@ -183,6 +185,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s step")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

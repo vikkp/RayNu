@@ -87,6 +87,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s step"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump"));
     assert!(hlt_should_resume());
     assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
@@ -212,6 +213,13 @@ fn copy_low_ram_at_identity_window() {
     assert_eq!(copy_low_ram_at(&ram, 100, &mut out), 0);
     assert_eq!(copy_low_ram_at(&ram, 5, &mut out), 1);
     assert_eq!(out[0], 0xFA);
+    let mut sixteen = [0u8; 16];
+    let ram16: [u8; 20] = [
+        0x8b, 0x04, 0x25, 0xf0, 0x00, 0xd0, 0xfe, 0x48, 0x3b, 0xc1, 0x72, 0xf3, 0x90, 0x90, 0x90,
+        0x90, 0xcc, 0xcc, 0xcc, 0xcc,
+    ];
+    assert_eq!(copy_low_ram_at(&ram16, 0, &mut sixteen), 16);
+    assert_eq!(&sixteen[..4], &[0x8b, 0x04, 0x25, 0xf0]);
 }
 
 #[test]
