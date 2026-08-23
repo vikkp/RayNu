@@ -347,10 +347,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-virtio |
-| Summary | P0-57 CLOSED nested VT-x: OVMF-VIRTIO-OK val=0x1042 pci=1 virtio=1. CD GuestVisible. pci_ide=0 sectors=0. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-both |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1. Virtio-alone no longer stops DXE. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Virtio-blk + CD→disk order presented (P0-57); firmware CD boot not completed; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum in flight (P0-58); firmware CD boot not completed; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1; virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |

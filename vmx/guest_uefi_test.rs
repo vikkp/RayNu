@@ -1,12 +1,13 @@
 use super::{
-    dxe_or_cd_boot_evidence, exec_from_low_ram, guest_uefi_alive, guest_uefi_com_bytes,
-    guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
-    io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
-    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, post_dxe_should_stop,
-    run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA,
-    M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
-    M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    both_pci_evidence, dxe_or_cd_boot_evidence, exec_from_low_ram, guest_uefi_alive,
+    guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_non_tf_exits,
+    guest_uefi_past_sec, guest_uefi_vmlaunch_entered, io_port_from_qual, is_com_uart_port,
+    is_pci_config_port, last_exit_reason, linear_left_sec_tail, live_firmware_alias_gpa,
+    past_sec_evidence, post_dxe_should_stop, run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_BOTH_OK_MARKER,
+    M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER,
+    M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -64,16 +65,20 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE stop waits"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone"));
     assert_eq!(M7_E5_OVMF_CDROM_OK_MARKER, "RAYNU-V-M7-E5-OVMF-CDROM-OK");
     assert_eq!(M7_E5_OVMF_DXE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-DXE-OK");
     assert_eq!(M7_E5_OVMF_VIRTIO_OK_MARKER, "RAYNU-V-M7-E5-OVMF-VIRTIO-OK");
+    assert_eq!(M7_E5_OVMF_BOTH_OK_MARKER, "RAYNU-V-M7-E5-OVMF-BOTH-OK");
     assert!(!guest_uefi_alive());
     assert!(!guest_uefi_past_sec());
     assert!(!guest_uefi_dxe());
+    assert!(!guest_uefi_both());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
     assert_eq!(guest_uefi_com_bytes(), 0);
 }
@@ -105,19 +110,26 @@ fn past_sec_predicates_are_honest() {
     assert!(!dxe_or_cd_boot_evidence(true, 0, true, false));
     assert!(dxe_or_cd_boot_evidence(true, 1, false, false));
     assert!(dxe_or_cd_boot_evidence(true, 0, true, true));
-    assert!(!post_dxe_should_stop(false, 2000, 0, true));
-    assert!(!post_dxe_should_stop(true, 115, 115, false));
-    assert!(post_dxe_should_stop(true, 115, 115, true));
+    assert!(!both_pci_evidence(true, false));
+    assert!(!both_pci_evidence(false, true));
+    assert!(both_pci_evidence(true, true));
+    assert!(!post_dxe_should_stop(false, 2000, 0, true, true));
+    assert!(!post_dxe_should_stop(true, 115, 115, false, false));
+    assert!(!post_dxe_should_stop(true, 115, 115, true, false));
+    assert!(!post_dxe_should_stop(true, 115, 115, false, true));
+    assert!(post_dxe_should_stop(true, 115, 115, true, true));
     assert!(post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL,
         115,
+        false,
         false
     ));
     assert!(!post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL - 1,
         115,
+        true,
         false
     ));
 }

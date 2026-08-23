@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:00.1 plus virtio (not virtio-alone); firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -69,6 +69,10 @@ pub const M7_E5_OVMF_DXE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-DXE-OK";
 /// QEMU / serial marker when guest-UEFI sees empty virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
+/// QEMU / serial marker when firmware enumerated virtio `00:00.0` and IDE `00:00.1`
+/// on the same boot. Not ATAPI sectors. Not installer.
+pub const M7_E5_OVMF_BOTH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-BOTH-OK";
+
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
@@ -76,23 +80,37 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, keep a short tail so virtio-blk can enumerate, then
+/// After DXE evidence, keep a short tail so firmware can walk `00:00.1`, then
 /// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
 
-/// Stop the private VMCS after DXE once virtio-blk is visible or the tail is spent.
+/// Stop the private VMCS after DXE once both PCI functions enumerated, or the tail is spent.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
-/// - `true` as soon as DXE printed **and** the virtio-blk function enumerated
+/// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:00.1` enumerated
 /// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
+/// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1)
 ///
-/// Nested VT-x: PEI only `inw` DID of `00:00.0`. That slot is virtio.
-pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, virtio_enum: bool) -> bool {
+/// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is `00:00.1`.
+pub fn post_dxe_should_stop(
+    dxe_printed: bool,
+    exit_n: u32,
+    dxe_at: u32,
+    virtio_enum: bool,
+    ide_enum: bool,
+) -> bool {
     if !dxe_printed {
         return false;
     }
-    virtio_enum || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+    both_pci_evidence(virtio_enum, ide_enum)
+        || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+}
+
+/// Firmware-simultaneous CD + disk: both PCI functions enumerated on one boot.
+/// Do not fake. GuestVisible is not `ide_enum`.
+pub fn both_pci_evidence(virtio_enum: bool, ide_enum: bool) -> bool {
+    virtio_enum && ide_enum
 }
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
@@ -164,6 +182,7 @@ static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
 static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
 static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
+static BOTH_PRINTED: AtomicBool = AtomicBool::new(false);
 static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
@@ -256,6 +275,7 @@ pub fn reset_guest_uefi_launch() {
     UART_LCR_COM2.store(0, Ordering::Release);
     CONTINUE_GUEST.store(false, Ordering::Release);
     DXE_PRINTED.store(false, Ordering::Release);
+    BOTH_PRINTED.store(false, Ordering::Release);
     DXE_AT_N.store(0, Ordering::Release);
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
@@ -284,6 +304,10 @@ pub fn guest_uefi_com_bytes() -> u32 {
 
 pub fn guest_uefi_dxe() -> bool {
     DXE_PRINTED.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_both() -> bool {
+    BOTH_PRINTED.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -966,6 +990,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 n,
                 DXE_AT_N.load(Ordering::Acquire),
                 crate::devices::guest_virtio_blk::pci_enumerated(),
+                crate::devices::ide_cdrom::pci_enumerated(),
             )
         {
             resume = false;
@@ -1052,6 +1077,7 @@ fn maybe_print_past_sec(guest_hlt: bool) {
     });
     maybe_print_cdrom();
     maybe_print_virtio();
+    maybe_print_both();
     maybe_print_dxe();
 }
 
@@ -1074,6 +1100,7 @@ fn maybe_print_cdrom() {
         });
     }
     maybe_print_virtio();
+    maybe_print_both();
     maybe_print_dxe();
 }
 
@@ -1093,6 +1120,32 @@ fn maybe_print_virtio() {
             pci_enum: crate::devices::guest_virtio_blk::pci_enumerated() as u64,
         });
     }
+    maybe_print_both();
+    maybe_print_dxe();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_both() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    if !both_pci_evidence(
+        crate::devices::guest_virtio_blk::pci_enumerated(),
+        crate::devices::ide_cdrom::pci_enumerated(),
+    ) {
+        return;
+    }
+    if BOTH_PRINTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    serial::write_line(M7_E5_OVMF_BOTH_OK_MARKER);
+    serial::write_str("boot: guest-UEFI both pci virtio=1 ide=1");
+    serial::write_byte(b'\n');
+    audit_log!(AuditEvent::OvmfGuestUefiBoth {
+        exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+        virtio: 1,
+        ide: 1,
+    });
     maybe_print_dxe();
 }
 
@@ -1151,6 +1204,7 @@ unsafe fn handle_io(qual: u64) -> bool {
         handle_pci(port, is_in, size as u8);
         maybe_print_cdrom();
         maybe_print_virtio();
+        maybe_print_both();
         return skip_insn();
     }
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
