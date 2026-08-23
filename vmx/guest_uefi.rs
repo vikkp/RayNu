@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -414,6 +414,16 @@ unsafe fn launch_uefi(
     let fw_hpa = fw_frame.to_phys();
     core::ptr::write_bytes(fw_hpa as *mut u8, 0, (pages * 4096) as usize);
     core::ptr::copy_nonoverlapping(bytes.as_ptr(), fw_hpa as *mut u8, bytes.len());
+    // SAFETY: exclusive guest-private firmware copy; the retain buffer is
+    // a different range. Remap only this image so OVMF's host-bridge
+    // switch matches virtio DID `0x1042` as i440FX-class.
+    // KANI-TARGET: remap guest-private OVMF copy (outside Proven Core).
+    let remap_n = crate::boot::ovmf_esp::remap_i440fx_did_imm(unsafe {
+        core::slice::from_raw_parts_mut(fw_hpa as *mut u8, bytes.len())
+    });
+    serial::write_str("boot: guest-UEFI ovmf remap i440FX DID->virtio n=");
+    write_dec(remap_n as u64);
+    serial::write_byte(b'\n');
 
     let ram_pages = GUEST_UEFI_LOW_RAM_BYTES / 4096;
     let Some(ram_frame) = alloc.allocate_contiguous_aligned(ram_pages, 512) else {

@@ -2,10 +2,11 @@ use super::{
     acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
     cmos_mem_served, fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated,
     host_pci_config_addr, io, is_acpi_pm_timer_io, is_platform_io_port, is_platform_sink_gpa,
-    pci_addr_selects_host, pci_addr_selects_isa, pci_cfg_offset, pci_header_is_multifunction,
-    pci_read_data, pci_write_addr, platform_memory_served, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL,
+    pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
+    pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
+    platform_memory_served, pm_pci_config_addr, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL,
     HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR,
-    PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES,
+    PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PM_BRIDGE_DEVICE, PM_BRIDGE_VENDOR,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -143,4 +144,24 @@ fn acpi_pm_timer_ticks_port0_and_pmba() {
     assert_eq!(acpi_pm_timer_reads(), 3);
     reset();
     assert_eq!(acpi_pm_timer_reads(), 0);
+}
+
+#[test]
+fn piix4_pm_enumerates_and_pmba_write_ticks() {
+    reset();
+    assert_eq!(pm_pci_config_addr(), 0x8000_0B00);
+    pci_write_addr(pm_pci_config_addr());
+    let id = pci_read_data(0xCFC, 4).expect("pm");
+    assert_eq!(id as u16, PM_BRIDGE_VENDOR);
+    assert_eq!((id >> 16) as u16, PM_BRIDGE_DEVICE);
+    assert!(pci_addr_selects_pm(pm_pci_config_addr()));
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0x501);
+    assert!(is_acpi_pm_timer_io(0x508, 4));
+    let v = io(0x508, true, 4, 0) as u32;
+    assert_eq!(v, 0);
+    assert_ne!(v, 0xFFFF_FFFF);
+    let v2 = io(0x508, true, 4, 0) as u32;
+    assert_eq!(v2, 0x0001_0000);
+    reset();
 }

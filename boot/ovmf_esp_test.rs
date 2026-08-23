@@ -1,7 +1,7 @@
 use super::{
-    accept_real_ovmf_bytes, bytes_present, clear_retained, retain_ovmf_bytes, retained_bytes,
-    E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER, MIN_REAL_OVMF_BYTES,
-    MIN_REAL_OVMF_NONEMPTY, OVMF_ESP_CAP,
+    accept_real_ovmf_bytes, bytes_present, clear_retained, remap_i440fx_did_imm, retain_ovmf_bytes,
+    retained_bytes, E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER,
+    MIN_REAL_OVMF_BYTES, MIN_REAL_OVMF_NONEMPTY, OVMF_ESP_CAP,
 };
 
 fn write_fvh(buf: &mut [u8]) {
@@ -53,4 +53,38 @@ fn retain_rejects_too_small_and_missing_fvh() {
     );
     assert!(E5_OVMF_RETAIN_RESIDUAL_NOTE.contains("VMLAUNCH insn not issued"));
     assert!(E5_OVMF_RETAIN_RESIDUAL_NOTE.contains("not allocated"));
+}
+
+#[test]
+fn remap_i440fx_did_imm_replaces_le_immediates() {
+    let mut buf = [0u8; 8];
+    buf[0] = 0x37;
+    buf[1] = 0x12;
+    buf[4] = 0x37;
+    buf[5] = 0x12;
+    assert_eq!(remap_i440fx_did_imm(&mut buf), 2);
+    assert_eq!(&buf[0..2], &[0x42, 0x10]);
+    assert_eq!(&buf[4..6], &[0x42, 0x10]);
+    let mut none = [0x42u8, 0x10, 0x00, 0x00];
+    assert_eq!(remap_i440fx_did_imm(&mut none), 0);
+}
+
+#[test]
+fn remap_does_not_mutate_retain_buffer() {
+    clear_retained();
+    let mut realish = vec![0u8; MIN_REAL_OVMF_BYTES];
+    write_fvh(&mut realish);
+    for (i, b) in realish.iter_mut().enumerate().skip(0x38) {
+        *b = (i % 251) as u8 + 1;
+    }
+    realish[0x40] = 0x37;
+    realish[0x41] = 0x12;
+    assert_eq!(retain_ovmf_bytes(&realish), Ok(MIN_REAL_OVMF_BYTES));
+    let mut copy = retained_bytes().unwrap().to_vec();
+    assert!(remap_i440fx_did_imm(&mut copy) >= 1);
+    assert_eq!(retained_bytes().unwrap()[0x40], 0x37);
+    assert_eq!(retained_bytes().unwrap()[0x41], 0x12);
+    assert_eq!(copy[0x40], 0x42);
+    assert_eq!(copy[0x41], 0x10);
+    clear_retained();
 }

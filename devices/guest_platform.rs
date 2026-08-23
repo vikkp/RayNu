@@ -8,10 +8,12 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! fw_cfg `bootorder` (CD then virtio disk), and a 24-bit ACPI PM
-//! timer (port 0 dword + PIIX `0x408`). Nested VT-x `699c9a6`: 2048 I/O
-//! still only `00:00.0` because `AcpiTimerLibConstructor` rejects virtio
-//! DID `0x1042` and `IoRead32(0)` was `0xFFFFFFFF`. Not installer. Not
+//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk), and a
+//! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
+//! Nested VT-x `699c9a6`: 2048 I/O still only `00:00.0` because
+//! `AcpiTimerLibConstructor` rejects virtio DID `0x1042`. Guest-private
+//! OVMF remap teaches that switch to accept `0x1042` as i440FX-class
+//! (hardware DID stays virtio; not two-phase DID). Not installer. Not
 //! Everest E5.
 
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -32,6 +34,16 @@ pub const HOST_BRIDGE_FN: u8 = 0;
 /// PIIX3 ISA / LPC at `00:01.0`.
 pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
+
+/// PIIX4 PM/ACPI at `00:01.3` (Intel 82371AB). OVMF programs PMBA here
+/// after the i440FX host-bridge switch. DID remap lets that switch match
+/// virtio `0x1042` at `00:00.0` without faking the Device ID read.
+pub const PM_BRIDGE_VENDOR: u16 = 0x8086;
+pub const PM_BRIDGE_DEVICE: u16 = 0x7113;
+pub const PM_BRIDGE_DEV: u8 = 1;
+pub const PM_BRIDGE_FN: u8 = 3;
+/// Default PIIX4 PMBA (IO bit set). Timer is at `PMBA&~1 + 8` = `0x408`.
+pub const PIIX4_PMBA_DEFAULT: u32 = 0x401;
 
 /// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
 pub const PCI_HEADER_MULTIFUNCTION: u32 = 0x0080_0000;
@@ -134,8 +146,44 @@ pub fn is_timer_port(port: u16) -> bool {
 /// OVMF `AcpiTimerLibConstructor` leaves `mAcpiTimerIoAddr=0` when `00:00.0`
 /// DID is not i440FX/Q35. PEI then `IoRead32(0)` in `InternalAcpiDelay`.
 /// PIIX4 PMBA timer is `0x408`. Q35/ICH9 default is `0xB008`.
+/// Programmed PMBA+8 is also a timer (after firmware writes `00:01.3`).
 pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
+    if acpi_pm_timer_fixed(port, size) {
+        return true;
+    }
+    with_plat(|p| acpi_pm_timer_pmba(port, p.pmba))
+}
+
+fn acpi_pm_timer_fixed(port: u16, size: u8) -> bool {
     (port == 0 && size == 4) || (0x408..=0x40B).contains(&port) || (0xB008..=0xB00B).contains(&port)
+}
+
+fn acpi_pm_timer_pmba(port: u16, pmba: u32) -> bool {
+    let base = (pmba & !1).wrapping_add(8);
+    let p32 = u32::from(port);
+    p32 >= base && p32 < base.wrapping_add(4)
+}
+
+fn acpi_pm_timer_matches(port: u16, size: u8, pmba: u32) -> bool {
+    acpi_pm_timer_fixed(port, size) || acpi_pm_timer_pmba(port, pmba)
+}
+
+fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
+    if port == 0 {
+        return 0;
+    }
+    let base = (pmba & !1).wrapping_add(8);
+    let p32 = u32::from(port);
+    if p32 >= base && p32 < base.wrapping_add(4) {
+        return (p32 - base) * 8;
+    }
+    if (0x408..=0x40B).contains(&port) {
+        return u32::from(port - 0x408) * 8;
+    }
+    if (0xB008..=0xB00B).contains(&port) {
+        return u32::from(port - 0xB008) * 8;
+    }
+    0
 }
 
 pub fn is_platform_io_port(port: u16) -> bool {
@@ -193,6 +241,18 @@ pub fn pci_addr_selects_isa(addr: u32) -> bool {
     bus == 0 && dev == 1 && fun == 0
 }
 
+pub fn pci_addr_selects_pm(addr: u32) -> bool {
+    if (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == PM_BRIDGE_DEV && fun == PM_BRIDGE_FN
+}
+
+pub fn pm_pci_config_addr() -> u32 {
+    0x8000_0000 | (u32::from(PM_BRIDGE_DEV) << 11) | (u32::from(PM_BRIDGE_FN) << 8)
+}
+
 struct Platform {
     pci_addr: u32,
     cmos_idx: u8,
@@ -204,6 +264,9 @@ struct Platform {
     pit: u16,
     port61: u8,
     pm_timer: u32,
+    pmba: u32,
+    pm_cmd: u16,
+    pm_iose: u8,
 }
 
 impl Platform {
@@ -219,6 +282,9 @@ impl Platform {
             pit: 0xFFFF,
             port61: 0x10,
             pm_timer: 0,
+            pmba: PIIX4_PMBA_DEFAULT,
+            pm_cmd: 0x0001,
+            pm_iose: 0,
         }
     }
 }
@@ -411,6 +477,18 @@ fn isa_dword(off: u8) -> u32 {
     }
 }
 
+fn pm_dword(p: &Platform, off: u8) -> u32 {
+    match off {
+        0x00 => u32::from(PM_BRIDGE_VENDOR) | (u32::from(PM_BRIDGE_DEVICE) << 16),
+        0x04 => u32::from(p.pm_cmd) | 0x0280_0000, // cap list unused; medium DEVSEL
+        0x08 => 0x0680_0000,                       // bridge / other
+        0x0C => 0x0000_0000,
+        0x40 => p.pmba,
+        0x80 => u32::from(p.pm_iose),
+        _ => 0,
+    }
+}
+
 fn shift_dword(dword: u32, off: u8, size: u8) -> u32 {
     let shift = (off & 3) * 8;
     let shifted = dword >> shift;
@@ -421,7 +499,7 @@ fn shift_dword(dword: u32, off: u8, size: u8) -> u32 {
     }
 }
 
-/// `Some` when this BDF is the host or ISA bridge.
+/// `Some` when this BDF is the host, ISA, or PIIX4 PM bridge.
 pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
     with_plat(|p| {
         let addr = p.pci_addr;
@@ -434,14 +512,36 @@ pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
             Some(shift_dword(host_dword(aligned), off, size))
         } else if pci_addr_selects_isa(addr) {
             Some(shift_dword(isa_dword(aligned), off, size))
+        } else if pci_addr_selects_pm(addr) {
+            Some(shift_dword(pm_dword(p, aligned), off, size))
         } else {
             None
         }
     })
 }
 
-pub fn pci_write_data(port: u16, _size: u8, _val: u32) {
-    let _ = port;
+pub fn pci_write_data(port: u16, size: u8, val: u32) {
+    with_plat(|p| {
+        if !pci_addr_selects_pm(p.pci_addr) {
+            return;
+        }
+        let off = pci_cfg_offset(p.pci_addr, port);
+        if off == 0x04 {
+            p.pm_cmd = val as u16;
+        } else if (0x40..0x44).contains(&off) {
+            let shift = (off & 3) * 8;
+            let mut v = p.pmba;
+            let mask = match size {
+                1 => 0xffu32,
+                2 => 0xffff,
+                _ => 0xffff_ffff,
+            };
+            v = (v & !(mask << shift)) | ((val & mask) << shift);
+            p.pmba = v | 1;
+        } else if off == 0x80 {
+            p.pm_iose = val as u8;
+        }
+    });
 }
 
 fn io_mask(size: u8) -> u64 {
@@ -510,16 +610,10 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             }
             return rax;
         }
-        if is_acpi_pm_timer_io(port, size) {
+        if acpi_pm_timer_matches(port, size, p.pmba) {
             if is_in {
                 let v = tick_pm_timer(p);
-                let shift = match port {
-                    0 | 0x408 | 0xB008 => 0,
-                    0x409 | 0xB009 => 8,
-                    0x40A | 0xB00A => 16,
-                    0x40B | 0xB00B => 24,
-                    _ => 0,
-                };
+                let shift = acpi_pm_timer_shift(port, p.pmba);
                 return (rax & !mask) | (u64::from(v >> shift) & mask);
             }
             return rax;

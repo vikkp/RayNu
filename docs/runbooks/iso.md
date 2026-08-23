@@ -424,5 +424,6 @@ E5 Stage 42 (host + QEMU nested VT-x, closed): empty PCI virtio-blk at
 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` with `val=0x1042` pci=1, CD GuestVisible,
 `pci_ide=0` sectors=0, stop n=115 virtio=1. Not a completed firmware CD
 boot. Not installer. Next: Stage 43 simultaneous virtio `00:00.0` + IDE
-`00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`; ACPI PM timer so PEI Delay can
+`00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`; ACPI PM timer + PIIX4 PM
+`00:01.3` + guest-private i440FX DID remap so PEI Delay can
 end on DID `0x1042`), then firmware CD boot (ATAPI/El Torito).

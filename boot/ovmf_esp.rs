@@ -115,6 +115,38 @@ pub fn clear_retained() {
     OVMF_LEN.store(0, Ordering::Release);
 }
 
+/// Replace LE i440FX DID immediates `0x1237` with virtio DID `0x1042`.
+///
+/// OVMF `AcpiTimerLibConstructor` / `PlatformMiscInitialization` switch on
+/// `PciRead16(OVMF_HOSTBRIDGE_DID)` at `00:00.0`. i440FX is immediate
+/// `0x1237`; Q35 is `0x29C0`; any other DID (`ASSERT(FALSE); return`).
+/// Stage 43 keeps honest virtio DID `0x1042` on `00:00.0` (no two-phase
+/// DID, no slot swap). Patch the **guest-private** firmware copy so that
+/// switch treats virtio DID as the i440FX class and programs PIIX4 PM.
+/// Does **not** rewrite the retain buffer.
+///
+/// INVARIANTS:
+/// - Hardware DID at `00:00.0` stays `0x1042`
+/// - Retain buffer is not this slice
+/// - Returns the number of 16-bit immediates replaced (0 = still compressed)
+pub fn remap_i440fx_did_imm(buf: &mut [u8]) -> u32 {
+    const I440FX: [u8; 2] = [0x37, 0x12];
+    const VIRTIO: [u8; 2] = [0x42, 0x10];
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i + 1 < buf.len() {
+        if buf[i] == I440FX[0] && buf[i + 1] == I440FX[1] {
+            buf[i] = VIRTIO[0];
+            buf[i + 1] = VIRTIO[1];
+            n = n.saturating_add(1);
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    n
+}
+
 /// Probe ESP `\\EFI\\RayNu\\OVMF.fd` before ExitBootServices.
 ///
 /// Missing file is silent (iron Cruzer may not have one). Accepted

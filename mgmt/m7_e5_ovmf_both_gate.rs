@@ -5,12 +5,14 @@
 //! VERIFICATION: N/A
 //!
 //! Keep virtio 1.0 at `00:00.0` (multifunction) and IDE at `00:00.1`.
-//! PIIX `00:01.1` is the same CD. ACPI PM timer so PEI Delay can end
-//! when `00:00.0` DID is virtio `0x1042`. Stop the private
-//! VMCS only after firmware enumerates **both** (or the post-DXE tail).
-//! ISA `00:01.0` is multifunction so a bus walk finds IDE. Marker after
-//! past-SEC and both PCI enums. Not ATAPI sectors. Not installer.
-//! No new `*Absent` enum. No TLS.
+//! PIIX `00:01.1` is the same CD. PIIX4 PM at `00:01.3`. Guest-private
+//! OVMF remap of i440FX DID immediates so `AcpiTimerLib` matches virtio
+//! `0x1042` (hardware DID stays virtio; not two-phase DID). ACPI PM
+//! timer so PEI Delay can end. Stop the private VMCS only after firmware
+//! enumerates **both** (or the post-DXE tail). ISA `00:01.0` is
+//! multifunction so a bus walk finds IDE. Marker after past-SEC and both
+//! PCI enums. Not ATAPI sectors. Not installer. No new `*Absent` enum.
+//! No TLS.
 
 use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
@@ -18,8 +20,8 @@ use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_virtio_gate::run_m7_e5_ovmf_virtio_gate;
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, host_pci_config_addr, pci_header_is_multifunction,
-    pci_read_data as plat_pci_read, pci_write_addr as plat_pci_write, reset as reset_plat,
-    HOST_BRIDGE_DEVICE,
+    pci_read_data as plat_pci_read, pci_write_addr as plat_pci_write, pm_pci_config_addr,
+    reset as reset_plat, HOST_BRIDGE_DEVICE, PM_BRIDGE_DEVICE, PM_BRIDGE_VENDOR,
 };
 use crate::devices::guest_virtio_blk::{
     pci_config_addr as virtio_cfg, pci_read_data as virtio_read, pci_write_addr as virtio_write,
@@ -79,6 +81,14 @@ pub fn prop_both_pci_on_one_boot() -> bool {
     if !pci_header_is_multifunction(isa_ht) {
         return false;
     }
+    plat_pci_write(pm_pci_config_addr());
+    let pm_id = match plat_pci_read(0xCFC, 4) {
+        Some(v) => v,
+        None => return false,
+    };
+    if pm_id as u16 != PM_BRIDGE_VENDOR || (pm_id >> 16) as u16 != PM_BRIDGE_DEVICE {
+        return false;
+    }
     let virtio_ok = crate::devices::guest_virtio_blk::pci_enumerated();
     let ide_ok = ide_cdrom::pci_enumerated();
     reset_virtio();
@@ -86,6 +96,7 @@ pub fn prop_both_pci_on_one_boot() -> bool {
     ide_cdrom::reset();
     both_pci_evidence(virtio_ok, ide_ok)
         && (host_id >> 16) as u16 == HOST_BRIDGE_DEVICE
+        && pm_pci_config_addr() == 0x8000_0B00
         && virtio_cfg() == 0x8000_0000
         && ide_cdrom::pci_config_addr() == 0x8000_0100
 }
@@ -108,6 +119,9 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("CR-access resume")
         && guest.contains("2048-exit cap")
         && guest.contains("ACPI PM timer")
+        && guest.contains("PIIX4 PM at 00:01.3")
+        && guest.contains("remap i440FX DID")
+        && guest.contains("remap_i440fx_did_imm")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -137,6 +151,8 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR-access resume")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2048-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM at 00:01.3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();
