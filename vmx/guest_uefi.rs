@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; guest-UEFI INVPCID/RDTSCP/XSAVES; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -115,6 +115,21 @@ pub fn hlt_should_resume() -> bool {
 /// then #UD-dumped COM1 until the cap (`pci_ide=0`). Delay `jcc` stays.
 pub fn spin_short_jmp_should_skip(b0: u8, b1: u8) -> bool {
     b0 == 0xEB && (b1 == 0xF3 || b1 == 0xFE)
+}
+
+/// XSETBV only accepts XCR0. Other XCRs would #GP; we skip those.
+pub fn xsetbv_accepts_xcr(xcr: u32) -> bool {
+    xcr == 0
+}
+
+/// Mask guest XSETBV XCR0 to host CPUID.0D:0. Bit 0 (x87) stays set.
+/// AVX (bit 2) requires SSE (bit 1). Same rule as E4 `handle_xsetbv_and_resume`.
+pub fn xsetbv_masked_xcr0(value: u64, host_mask: u64) -> u64 {
+    let mut v = (value & host_mask) | 1;
+    if v & 0x6 == 0x4 {
+        v |= 0x2;
+    }
+    v
 }
 
 /// Stop the private VMCS after DXE once firmware read an ATAPI sector, or the tail is spent.
@@ -263,6 +278,8 @@ static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
 static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
 static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
 static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static XSETBV_N: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -1267,7 +1284,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             }
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
             EXIT_REASON_PREEMPTION_TIMER => true,
-            EXIT_REASON_XSETBV => skip_insn(),
+            EXIT_REASON_XSETBV => handle_xsetbv(),
             // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
             13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
@@ -2014,6 +2031,38 @@ unsafe fn handle_cpuid() -> bool {
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
     SAVED_RDX = r.edx as u64;
+    skip_insn()
+}
+
+/// XSETBV always VM-exits. Skipping without writing XCR0 leaves XCR0=0,
+/// then XSAVES #UD/#GP after INVPCID bits (iron COM2 next after RIP 0x109D).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_xsetbv() -> bool {
+    let xcr = SAVED_RCX as u32;
+    if !xsetbv_accepts_xcr(xcr) {
+        return skip_insn();
+    }
+    let value = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    let v = xsetbv_masked_xcr0(value, host_mask);
+    // SAFETY: VMX root. OSXSAVE is not CR4-fixed0-forbidden on this CPU
+    // (same as E4 Linux XSETBV). Host CR4 often lacks OSXSAVE after EBS.
+    let cr4 = cpu::read_cr4();
+    if cr4 & cpu::CR4_OSXSAVE == 0 {
+        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
+    }
+    // SAFETY: CR4.OSXSAVE is set; v is masked to CPUID.0D:0 with x87 set.
+    // KANI-TARGET: guest-UEFI XSETBV XCR0 mask (outside Proven Core).
+    cpu::xsetbv(0, v);
+    let n = XSETBV_N.fetch_add(1, Ordering::AcqRel);
+    if n < 2 {
+        serial::write_str("boot: guest-UEFI XSETBV xcr0=0x");
+        write_hex(v);
+        serial::write_byte(b'\n');
+    }
     skip_insn()
 }
 

@@ -1,14 +1,15 @@
 use super::{
-    acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
-    cmos_mem_served, e820_byte, fwcfg_bootorder_served, fwcfg_e820_served, fwcfg_ram_served,
-    host_bridge_enumerated, host_pci_config_addr, hpet_init_sink, hpet_tick_sink,
-    hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
+    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, cmos_above_16m_chunks,
+    cmos_extended_kb, cmos_mem_served, e820_byte, fwcfg_boot_wait_served, fwcfg_bootorder_served,
+    fwcfg_e820_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
+    hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
     is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
-    platform_memory_served, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, E820_ENTRY_BYTES,
-    E820_RAM, FW_CFG_BOOTORDER_SEL, FW_CFG_E820_SEL, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
-    HPET_CAP_REV, HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
+    platform_memory_served, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
+    E820_ENTRY_BYTES, E820_RAM, FW_CFG_BOOTORDER_SEL, FW_CFG_BOOT_MENU, FW_CFG_BOOT_WAIT_SEL,
+    FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
+    HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PM_BRIDGE_DEVICE,
     PM_BRIDGE_VENDOR,
 };
@@ -66,7 +67,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     for i in 0..4 {
         count |= (io(0x511, true, 1, 0) as u32) << (8 * (3 - i));
     }
-    assert_eq!(count, 2);
+    assert_eq!(count, FW_CFG_NAMED_FILE_COUNT);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
     let mut got = [0u8; 80];
@@ -98,6 +99,39 @@ fn fwcfg_e820_is_32m_ram() {
     assert!(platform_memory_served());
     reset();
     assert!(!fwcfg_e820_served());
+}
+
+#[test]
+fn fwcfg_boot_menu_wait_is_zero_ms() {
+    reset();
+    assert!(boot_menu_wait_skips_bds());
+    assert_eq!(BOOT_MENU_WAIT, [0, 0]);
+    assert_eq!(FW_CFG_NAMED_FILE_COUNT, 3);
+    assert_eq!(FW_CFG_BOOT_MENU, 0x0E);
+    assert_eq!(FW_CFG_BOOT_WAIT_SEL, 0x22);
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOT_MENU));
+    let mut menu = 0u16;
+    menu |= io(0x511, true, 1, 0) as u16;
+    menu |= (io(0x511, true, 1, 0) as u16) << 8;
+    assert_eq!(menu, 1, "menu=on so OVMF reads etc/boot-menu-wait");
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOT_WAIT_SEL));
+    let mut wait = 0u16;
+    wait |= io(0x511, true, 1, 0) as u16;
+    wait |= (io(0x511, true, 1, 0) as u16) << 8;
+    assert_eq!(wait, 0);
+    assert!(fwcfg_boot_wait_served());
+    let _ = io(0x510, false, 2, 0x19);
+    let mut name = [0u8; 56];
+    for _ in 0..(4 + 64 * 2 + 8) {
+        let _ = io(0x511, true, 1, 0);
+    }
+    for b in &mut name {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
+    assert_eq!(&name[..end], b"etc/boot-menu-wait");
+    reset();
+    assert!(!fwcfg_boot_wait_served());
 }
 
 #[test]

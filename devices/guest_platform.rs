@@ -9,7 +9,8 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (32 MiB RAM), 8259 PIC RAZ/WI, and a
+//! fw_cfg `etc/e820` (32 MiB RAM), fw_cfg `etc/boot-menu-wait` 0 ms
+//! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
 //! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
@@ -22,7 +23,7 @@
 //! made guest time jump ~2 h before AtaAtapiPassThru Start. PCI I/O
 //! does not advance HPET. 8042 `0x60`/`0x64` (unhandled `IN` was
 //! `0xFF` / IBF stuck). Nested VT-x `2674629`: 32768 cap then
-//! `acpi=16612` `port=0` `ataio=0` (BdsWait on 18 ms ACPI steps).
+//! `acpi=16612` `port=0` `ataio=0` (BdsWait; BootMenu 0x0e was 0).
 //! Nested VT-x `8e55abf` stop `cf8=0x80000838`
 //! is PIIX ISA `00:01.0` offset `0x38` (PciBus programming, not
 //! empty-slot scan). PIRQ `0x60-0x63` reset `0x80` (disabled) matches
@@ -70,12 +71,22 @@ const FW_CFG_ID: u16 = 0x01;
 const FW_CFG_RAM_SIZE: u16 = 0x03;
 const FW_CFG_NB_CPUS: u16 = 0x05;
 const FW_CFG_MACHINE_ID: u16 = 0x06;
+/// QEMU `FW_CFG_BOOT_MENU`. OVMF `GetFrontPageTimeoutFromQemu` treats 0 as
+/// menu=off and returns `PcdPlatformBootTimeOut` (often 5 s) — nested
+/// VT-x `2674629` BdsWait. 1 = menu=on, then `etc/boot-menu-wait`.
+pub const FW_CFG_BOOT_MENU: u16 = 0x0E;
 const FW_CFG_MAX_CPUS: u16 = 0x0F;
 const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
 /// Second named file: OVMF `PlatformScanE820` (`etc/e820`).
 pub const FW_CFG_E820_SEL: u16 = 0x21;
+/// Third named file: OVMF splash-time (UINT16 LE milliseconds).
+pub const FW_CFG_BOOT_WAIT_SEL: u16 = 0x22;
+/// Named files in the fw_cfg directory (`bootorder`, `etc/e820`, `etc/boot-menu-wait`).
+pub const FW_CFG_NAMED_FILE_COUNT: u32 = 3;
+/// QEMU `-boot menu=on,splash-time=0`. `(0+999)/1000` → 0 s FrontPage wait.
+pub const BOOT_MENU_WAIT: [u8; 2] = [0, 0];
 /// Packed QEMU e820 entry size (`address:u64`, `length:u64`, `type:u32`).
 pub const E820_ENTRY_BYTES: u8 = 20;
 /// QEMU `E820_RAM`.
@@ -92,6 +103,11 @@ pub fn boot_order_cd_then_disk() -> bool {
         (Some(i), Some(d)) => i < d,
         _ => false,
     }
+}
+
+/// True when splash-time is 0 ms so OVMF skips BdsWait / FrontPage delay.
+pub fn boot_menu_wait_skips_bds() -> bool {
+    u16::from_le_bytes(BOOT_MENU_WAIT) == 0
 }
 
 fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
@@ -127,7 +143,7 @@ fn file_dir_byte(off: u16) -> u8 {
     const ENTRY: usize = 64;
     let o = off as usize;
     if o < 4 {
-        return 2u32.to_be_bytes()[o];
+        return FW_CFG_NAMED_FILE_COUNT.to_be_bytes()[o];
     }
     let body = o - 4;
     let ent = body / ENTRY;
@@ -140,6 +156,12 @@ fn file_dir_byte(off: u16) -> u8 {
             b"bootorder",
         ),
         1 => file_entry_byte(i, u32::from(E820_ENTRY_BYTES), FW_CFG_E820_SEL, b"etc/e820"),
+        2 => file_entry_byte(
+            i,
+            BOOT_MENU_WAIT.len() as u32,
+            FW_CFG_BOOT_WAIT_SEL,
+            b"etc/boot-menu-wait",
+        ),
         _ => 0,
     }
 }
@@ -439,6 +461,7 @@ static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
 static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
 static FWCFG_E820: AtomicBool = AtomicBool::new(false);
+static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
 static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
@@ -545,7 +568,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_FILE_DIR => {
-            p.fw_len = (4 + 64 * 2) as u8;
+            p.fw_len = (4 + 64 * FW_CFG_NAMED_FILE_COUNT as usize) as u8;
+        }
+        FW_CFG_BOOT_MENU => {
+            p.fw_buf[..2].copy_from_slice(&1u16.to_le_bytes());
+            p.fw_len = 2;
         }
         FW_CFG_BOOTORDER_SEL => {
             p.fw_len = BOOTORDER.len() as u8;
@@ -554,6 +581,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
         FW_CFG_E820_SEL => {
             p.fw_len = E820_ENTRY_BYTES;
             FWCFG_E820.store(true, Ordering::Release);
+        }
+        FW_CFG_BOOT_WAIT_SEL => {
+            p.fw_buf[..2].copy_from_slice(&BOOT_MENU_WAIT);
+            p.fw_len = 2;
+            FWCFG_WAIT.store(true, Ordering::Release);
         }
         _ => {
             p.fw_len = 0;
@@ -580,6 +612,7 @@ pub fn reset() {
     FWCFG_RAM.store(false, Ordering::Release);
     FWCFG_BOOT.store(false, Ordering::Release);
     FWCFG_E820.store(false, Ordering::Release);
+    FWCFG_WAIT.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
@@ -618,6 +651,10 @@ pub fn fwcfg_bootorder_served() -> bool {
 
 pub fn fwcfg_e820_served() -> bool {
     FWCFG_E820.load(Ordering::Acquire)
+}
+
+pub fn fwcfg_boot_wait_served() -> bool {
+    FWCFG_WAIT.load(Ordering::Acquire)
 }
 
 /// Last CMOS index (NMI bit stripped). Nested VT-x `5b2739a` died on `port=0x71`.

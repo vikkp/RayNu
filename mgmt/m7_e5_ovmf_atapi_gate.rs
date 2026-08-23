@@ -10,9 +10,10 @@
 //! cap. Nested VT-x `5d9e346`: BOTH-OK then n=8192 `ataio=0` `unh=3`
 //! `port=0xcf8` (empty-slot walk + KBC; 1s HPET per PCI I/O). Nested
 //! VT-x `2674629`: n=32768 `ataio=0` `acpi=16612` `port=0` `hpet=10`
-//! (`in eax,dx` BdsWait). ACPI PM 1s step. Iron COM2: LIVE-BYTES-OK
+//! (`in eax,dx` BdsWait). ACPI PM 1s step. fw_cfg BootMenu=on +
+//! `etc/boot-menu-wait` 0ms so FrontPage skips. Iron COM2: LIVE-BYTES-OK
 //! then #UD RIP `0x109D` `pci_ide=0` `com=15515` (INVPCID/XSAVES/RDTSCP
-//! missing on guest-UEFI VMCS). Nested
+//! missing on guest-UEFI VMCS; XSETBV must execute XCR0, not skip). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -29,6 +30,7 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
+use crate::devices::guest_platform::boot_menu_wait_skips_bds;
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, hlt_should_resume, post_dxe_should_stop, spin_short_jmp_should_skip,
@@ -133,7 +135,13 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("hpet_tick_sink_by")
         && plat.contains("ACPI_PM_STEP")
         && plat.contains("0x0040_0000")
+        && plat.contains("etc/boot-menu-wait")
+        && plat.contains("BOOT_MENU_WAIT")
+        && plat.contains("FW_CFG_BOOT_MENU")
         && guest.contains("ACPI PM 1s step")
+        && guest.contains("handle_xsetbv")
+        && guest.contains("xsetbv_masked_xcr0")
+        && guest.contains("XSETBV executes XCR0")
         && guest.contains("SECONDARY_ENABLE_INVPCID")
         && guest.contains("SECONDARY_ENABLE_XSAVES")
         && guest.contains("SECONDARY_ENABLE_RDTSCP")
@@ -174,6 +182,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && !post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL - 1, 115, 0)
         && hlt_should_resume()
         && spin_short_jmp_should_skip(0xEB, 0xF3)
+        && boot_menu_wait_skips_bds()
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not both-enum-alone")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATAPI signature")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PACKET interrupt-reason")
@@ -185,6 +194,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM 1s step")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("INVPCID/RDTSCP/XSAVES")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("XSETBV executes XCR0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x109D")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")

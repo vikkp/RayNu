@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0. Guest-UEFI INVPCID/RDTSCP/XSAVES. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0. Guest-UEFI INVPCID/RDTSCP/XSAVES + XSETBV XCR0. fw_cfg etc/boot-menu-wait 0ms. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN fw_cfg etc/boot-menu-wait 0ms skip BdsWait; guest-UEFI XSETBV executes XCR0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0 com=15515; guest-UEFI INVPCID/RDTSCP/XSAVES; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0; ACPI PM 1s step; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 5d9e346 n=8192 ataio=0 port=0xcf8; HPET 1s on preemption only; 8042; 32768 cap; not installer; iron P0-14 stays 2b795a0 |
