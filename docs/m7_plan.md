@@ -283,7 +283,8 @@ OVMF remap of i440FX DID immediates `0x1237`→`0x1042` (`cmp bx`, not
 LZMA `37 12`) so the host-bridge switch matches virtio (hardware DID stays `0x1042`; not two-phase DID).
 Nested VT-x `1991a27`: remap n=1, ACPI timer live (`acpi=13`), `OVMF-DXE-OK`,
 then EPT `gpa=0xffc00000` (CODE-only image left a VARS gap). Map a 4 MiB
-flash window at `0xFFC00000` (leading `0xFF` pad). Do not move virtio off `00:00.0`. Do not fake
+flash window at `0xFFC00000` and stamp an empty VARS `_FVH` (Debian
+`OVMF_VARS_4M.fd` prefix; not erased NOR). Do not move virtio off `00:00.0`. Do not fake
 `pci_enum`. Still `sectors=0`. After that: firmware CD boot (ATAPI/El Torito
 read). Not another `*Absent` bookkeeping stage or SPA flag button.
 Do **not** open another
@@ -315,7 +316,7 @@ Stage 42 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` (**closed** nested VT-x: PEI DID
 Stage 43 `RAYNU-V-M7-E5-OVMF-BOTH-OK` (**open** host: simultaneous
 virtio `00:00.0` + IDE `00:00.1`; ACPI PM timer after `699c9a6` n=2048
 only `00:00.0`; PIIX4 PM `00:01.3` + guest-private i440FX DID remap;
-2048-exit cap; HLT skip + CR-access resume).
+2048-exit cap; HLT skip + CR-access resume; 4 MiB flash + empty VARS `_FVH`).
 
 **Next after Stage 43:** firmware CD boot (ATAPI/El Torito).
 Product ISO is

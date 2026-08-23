@@ -4,12 +4,12 @@ use super::{
     guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
     hlt_should_resume, io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
     linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit,
-    post_dxe_should_stop, run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE,
+    post_dxe_should_stop, run_retained_ovmf_vmlaunch, stamp_empty_ovmf_vars, E5_OVMF_SEC_CR4_VALUE,
     E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW,
     GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA,
     M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER,
     M7_E5_OVMF_DXE_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
-    M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    M7_E5_OVMF_VMLAUNCH_OK_MARKER, OVMF_VARS_EMPTY_PREFIX, OVMF_VARS_FV_BYTES,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -84,6 +84,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VARS gap at 0xFFC00000"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH"));
     assert!(hlt_should_resume());
     assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
     assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
@@ -232,4 +233,37 @@ fn flash_window_pads_code_only_image_to_4mib() {
     assert!(alias_ept_covers_reset(gpa, GUEST_UEFI_FLASH_WINDOW));
     assert_eq!(gpa + pad, 0xFFC8_4000);
     assert!(frames_required_firmware_alias(gpa, GUEST_UEFI_FLASH_WINDOW) <= 8);
+}
+
+#[test]
+fn stamp_empty_ovmf_vars_matches_debian_4m_template() {
+    let mut wrong = vec![0xFFu8; 4096];
+    assert!(!stamp_empty_ovmf_vars(&mut wrong));
+    let mut pad = vec![0xFFu8; OVMF_VARS_FV_BYTES];
+    assert!(stamp_empty_ovmf_vars(&mut pad));
+    assert_eq!(&pad[0x28..0x2C], b"_FVH");
+    assert_eq!(
+        u64::from_le_bytes(pad[0x20..0x28].try_into().unwrap()),
+        0x84000
+    );
+    assert_eq!(
+        &pad[..OVMF_VARS_EMPTY_PREFIX.len()],
+        &OVMF_VARS_EMPTY_PREFIX
+    );
+    assert!(pad[OVMF_VARS_EMPTY_PREFIX.len()..]
+        .iter()
+        .all(|&b| b == 0xFF));
+    let hdrlen = u16::from_le_bytes(pad[0x30..0x32].try_into().unwrap()) as usize;
+    assert_eq!(hdrlen, 0x48);
+    let mut sum: u32 = 0;
+    for i in (0..hdrlen).step_by(2) {
+        sum = sum.wrapping_add(u16::from_le_bytes([pad[i], pad[i + 1]]) as u32);
+    }
+    assert_eq!(sum & 0xffff, 0);
+    assert_eq!(pad[0x5C], 0x5A);
+    assert_eq!(pad[0x5D], 0xFE);
+    assert_eq!(
+        u32::from_le_bytes(pad[0x58..0x5C].try_into().unwrap()),
+        0x3ffb8
+    );
 }

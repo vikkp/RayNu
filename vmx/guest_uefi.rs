@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -283,13 +283,51 @@ pub const GUEST_UEFI_FLASH_BASE: u64 = 0xFFC0_0000;
 pub const GUEST_UEFI_FLASH_WINDOW: u64 = 4 * 1024 * 1024;
 
 /// Map any 1–4 MiB retained image into a 4 MiB window at [`GUEST_UEFI_FLASH_BASE`].
-/// Pad is leading erased flash (`0xFF`). Reset vector stays at `0xFFFF_FFF0`.
+/// Pad is leading erased flash (`0xFF`); [`stamp_empty_ovmf_vars`] writes a
+/// VARS `_FVH` when the pad is Debian 4M sized. Reset vector stays at `0xFFFF_FFF0`.
 pub fn flash_window_gpa_and_pad(image_len: u64) -> Option<(u64, u64)> {
     const MIN: u64 = MIN_REAL_OVMF_BYTES as u64;
     if image_len < MIN || image_len > GUEST_UEFI_FLASH_WINDOW {
         return None;
     }
     Some((GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW - image_len))
+}
+
+/// Debian/QEMU 4M VARS firmware-volume size (`OVMF_VARS_4M.fd`).
+pub const OVMF_VARS_FV_BYTES: usize = 0x84000;
+
+/// Empty NV storage prefix: `EFI_FIRMWARE_VOLUME_HEADER` + authenticated
+/// `VARIABLE_STORE_HEADER`. Byte-identical to the first 0x64 bytes of
+/// Debian `OVMF_VARS_4M.fd`. Remainder of the FV is erased NOR (`0xFF`).
+///
+/// FileSystemGuid is `EFI_SYSTEM_NV_DATA_FV_GUID`. Store signature is
+/// `gEfiAuthenticatedVariableGuid`. Format `0x5A` / State `0xFE` (healthy).
+pub const OVMF_VARS_EMPTY_PREFIX: [u8; 0x64] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x8d, 0x2b, 0xf1, 0xff, 0x96, 0x76, 0x8b, 0x4c, 0xa9, 0x85, 0x27, 0x47, 0x07, 0x5b, 0x4f, 0x50,
+    0x00, 0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x46, 0x56, 0x48, 0xff, 0xfe, 0x04, 0x00,
+    0x48, 0x00, 0xaf, 0xb8, 0x00, 0x00, 0x00, 0x02, 0x84, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0x2c, 0xf3, 0xaa, 0x7b, 0x94, 0x9a, 0x43,
+    0xa1, 0x80, 0x2e, 0x14, 0x4e, 0xc3, 0x77, 0x92, 0xb8, 0xff, 0x03, 0x00, 0x5a, 0xfe, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+];
+
+/// Stamp an empty VARS firmware volume into a CODE-only 4 MiB pad.
+///
+/// INVARIANTS:
+/// - Writes only when `pad.len() == OVMF_VARS_FV_BYTES` (Debian 4M CODE-only)
+/// - Prefix is `_FVH` + empty authenticated variable store
+/// - Does not touch CODE (caller copies CODE after this)
+/// - Does not fake PCI enum
+///
+/// VERIFICATION: L1 (host tests)
+pub fn stamp_empty_ovmf_vars(pad: &mut [u8]) -> bool {
+    if pad.len() != OVMF_VARS_FV_BYTES {
+        return false;
+    }
+    let n = OVMF_VARS_EMPTY_PREFIX.len();
+    pad[..n].copy_from_slice(&OVMF_VARS_EMPTY_PREFIX);
+    true
 }
 
 /// Live alias window for a retained 1–4 MiB image: `4 GiB - len`.
@@ -452,6 +490,20 @@ unsafe fn launch_uefi(
     // KANI-TARGET: pad CODE-only OVMF into 4MiB window (outside Proven Core).
     unsafe {
         core::ptr::write_bytes(fw_hpa as *mut u8, 0xFF, (pages * 4096) as usize);
+    }
+    // Empty VARS `_FVH` at 0xFFC00000 so PEI does not parse erased NOR.
+    // Matches Debian OVMF_VARS_4M.fd prefix; remainder stays 0xFF.
+    let vars_n = if pad > 0 {
+        // SAFETY: pad bytes are the leading range of the exclusive 4 MiB copy.
+        // KANI-TARGET: stamp empty VARS into CODE-only pad (outside Proven Core).
+        let pad_slice = unsafe { core::slice::from_raw_parts_mut(fw_hpa as *mut u8, pad) };
+        u32::from(stamp_empty_ovmf_vars(pad_slice))
+    } else {
+        0
+    };
+    // SAFETY: CODE image fits after `pad` in the exclusive 4 MiB copy.
+    // KANI-TARGET: copy CODE-only OVMF after VARS pad (outside Proven Core).
+    unsafe {
         core::ptr::copy_nonoverlapping(bytes.as_ptr(), (fw_hpa as *mut u8).add(pad), bytes.len());
     }
     // SAFETY: exclusive guest-private firmware copy; the retain buffer is
@@ -463,6 +515,9 @@ unsafe fn launch_uefi(
     });
     serial::write_str("boot: guest-UEFI 4MiB flash pad=0x");
     write_hex(pad as u64);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: guest-UEFI empty VARS _FVH n=");
+    write_dec(vars_n as u64);
     serial::write_byte(b'\n');
     serial::write_str("boot: guest-UEFI ovmf remap i440FX DID->virtio n=");
     write_dec(remap_n as u64);
