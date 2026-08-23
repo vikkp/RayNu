@@ -54,7 +54,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; guarded DXE ebec skip when RIP and caller are in [1MiB,32MiB) (iron 0x6e81ca / 0x1d25193); PE-header 0x109D and flash stay noskip; DXE assert skip; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; iron aee545f DXE assert skip caller=0x1d25193 then #UD linear=0x109d stop n=5364 sectors=0; revert iron ebec skip; MTRR power-on E=0 VCNT=8 no UC hole (firmware programs); QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -172,19 +172,13 @@ pub fn guest_uefi_assert_caller_is_dxe_ram(addr: u64) -> bool {
 
 /// Guarded skip of iron `eb ec` + `leave; ret`.
 ///
-/// Unguarded skip (`891eb5b`) escaped ASSERT into `#UD` at PE-header `0x109D`.
-/// QEMU BOTH-OK skips `eb f3` via [`preempt_deadloop_skip_len`] (unchanged).
-/// Iron `c40f4a8`: dump first, then skip only when RIP **and** DebugAssert
-/// caller are in DXE RAM (`0x6e81ca` / `0x1d25193`). Flash / `0x109D` stay 0.
+/// Iron `aee545f`: RIP/caller were in DXE RAM (`0x6e81ca` / `0x1d25193`);
+/// skip then `#UD` at `0x109d` (same as unguarded `891eb5b`). Never skip
+/// iron `ebecc9c3`. QEMU `eb f3` stays on [`preempt_deadloop_skip_len`].
 pub fn preempt_deadloop_guarded_assert_skip_len(bytes: &[u8], rip: u64, caller: u64) -> u8 {
-    if !preempt_deadloop_is_assert_epilogue(bytes) {
-        return 0;
-    }
-    if guest_uefi_assert_caller_is_dxe_ram(rip) && guest_uefi_assert_caller_is_dxe_ram(caller) {
-        2
-    } else {
-        0
-    }
+    let _ = (rip, caller);
+    let _ = preempt_deadloop_is_assert_epilogue(bytes);
+    0
 }
 
 /// Bytes to advance guest RIP on a preemption CpuDeadLoop match.
@@ -736,21 +730,23 @@ pub fn guest_uefi_xapic_is_not_sink() -> bool {
         && crate::devices::lapic_virt::XAPIC_VERSION == 0x0005_0014
 }
 
-/// IA32_MTRRCAP: VCNT=32 (MtrrLib max), FIX, WC. Never passthrough the host
+/// IA32_MTRRCAP: VCNT=8 (QEMU-like), FIX, WC. Never passthrough the host
 /// (iron `3f417ca` walked `0xFE`/`0x2FF`/`0x250`… then ASSERT — host MTRRs
-/// describe 64 GiB DRAM, guest-UEFI RAM is 32 MiB; fixed MTRR reads were 0).
-/// Iron `8700cbb`: hypervisor CPUID still ASSERT `callerrip=0x1d25193` after
-/// WRMSR then RDMSR spin. MtrrLib
-/// `WorkingRangeCount <= 2*(VCNT-reserved)+1` trips at VCNT=8.
-pub const GUEST_UEFI_MTRR_VCNT: u64 = 32;
+/// describe 64 GiB DRAM, guest-UEFI RAM is 32 MiB).
+/// Iron `aee545f`: pre-enabled VCNT=32 + 1 GiB UC hole at `0xC000_0000`
+/// (`E=1`); firmware zeroed the hole then ASSERTed; DXE skip then `#UD`
+/// `0x109d`. SDM power-on: `IA32_MTRR_DEF_TYPE=0` (E=0, UC), variable
+/// pairs 0, fixed 0. Firmware programs MTRRs; we only shadow.
+/// Iron `8700cbb`: `WorkingRangeCount` vs VCNT=8 was with an enabled map.
+pub const GUEST_UEFI_MTRR_VCNT: u64 = 8;
 pub const GUEST_UEFI_MTRRCAP: u64 = GUEST_UEFI_MTRR_VCNT | (1 << 8) | (1 << 10);
-/// E + FE + WB.
-pub const GUEST_UEFI_MTRR_DEF_DEFAULT: u64 = (1 << 11) | (1 << 10) | 6;
-/// Eight packed WB types (Intel MTRR type 6).
+/// SDM reset: E=0, FE=0, default type UC.
+pub const GUEST_UEFI_MTRR_DEF_DEFAULT: u64 = 0;
+/// Eight packed WB types (Intel MTRR type 6). Firmware WRMSR, not reset.
 pub const GUEST_UEFI_MTRR_WB_PACKED: u64 = 0x0606_0606_0606_0606;
-/// 32 variable pairs (`0x200`–`0x23F`).
+/// 32 variable-pair MSR slots (`0x200`–`0x23F`) so VCNT can grow; reset uses 8.
 pub const GUEST_UEFI_MTRR_VAR_MSRS: usize = 64;
-/// QEMU-like PCI/MMIO UC hole: 1 GiB at `0xC000_0000` (APIC/HPET/flash/32-bit PCI).
+/// Historical pre-enabled UC hole (`aee545f`). Not programmed at reset.
 pub const GUEST_UEFI_MTRR_PCI_UC_BASE: u64 = 0xC000_0000;
 /// 36-bit physmask for that 1 GiB region plus Valid (bit 11).
 pub const GUEST_UEFI_MTRR_PCI_UC_MASK: u64 = 0xF_C000_0800;
@@ -759,7 +755,7 @@ static GUEST_MTRR_DEF: AtomicU64 = AtomicU64::new(GUEST_UEFI_MTRR_DEF_DEFAULT);
 static GUEST_MTRR_VAR: [AtomicU64; GUEST_UEFI_MTRR_VAR_MSRS] =
     [const { AtomicU64::new(0) }; GUEST_UEFI_MTRR_VAR_MSRS];
 static GUEST_MTRR_FIXED: [AtomicU64; 11] =
-    [const { AtomicU64::new(GUEST_UEFI_MTRR_WB_PACKED) }; 11];
+    [const { AtomicU64::new(0) }; 11];
 static GUEST_MISC_ENABLE: AtomicU64 = AtomicU64::new(GUEST_UEFI_MISC_ENABLE_DEFAULT);
 
 /// True for IA32 MTRR MSRs (not PAT `0x277`).
@@ -779,33 +775,32 @@ fn mtrr_fixed_index(msr: u32) -> Option<usize> {
     }
 }
 
-fn mtrr_fixed_default(idx: usize) -> u64 {
-    if idx == 2 {
-        0
-    } else {
-        GUEST_UEFI_MTRR_WB_PACKED
-    }
-}
-
-/// Restore QEMU-like MTRRs: default WB, VGA hole UC, PCI/MMIO UC 1 GiB at 3–4 GiB.
+/// SDM power-on MTRRs: disabled (`E=0`), no variable ranges, fixed 0.
 pub fn guest_uefi_mtrr_reset() {
     GUEST_MTRR_DEF.store(GUEST_UEFI_MTRR_DEF_DEFAULT, Ordering::Release);
     for slot in GUEST_MTRR_VAR.iter() {
         slot.store(0, Ordering::Release);
     }
-    GUEST_MTRR_VAR[0].store(GUEST_UEFI_MTRR_PCI_UC_BASE, Ordering::Release);
-    GUEST_MTRR_VAR[1].store(GUEST_UEFI_MTRR_PCI_UC_MASK, Ordering::Release);
-    for (i, slot) in GUEST_MTRR_FIXED.iter().enumerate() {
-        slot.store(mtrr_fixed_default(i), Ordering::Release);
+    for slot in GUEST_MTRR_FIXED.iter() {
+        slot.store(0, Ordering::Release);
     }
     GUEST_MISC_ENABLE.store(GUEST_UEFI_MISC_ENABLE_DEFAULT, Ordering::Release);
 }
 
-/// True when variable MTRR 0 is the 1 GiB UC PCI hole.
+/// True when MTRRs are SDM power-on (disabled, no pre-cooked UC hole).
+pub fn guest_uefi_mtrr_poweron_disabled() -> bool {
+    guest_uefi_mtrr_read(0x2FF) == Some(0)
+        && guest_uefi_mtrr_read(0x200) == Some(0)
+        && guest_uefi_mtrr_read(0x201) == Some(0)
+        && guest_uefi_mtrr_read(0x250) == Some(0)
+        && (GUEST_UEFI_MTRRCAP & 0xFF) == GUEST_UEFI_MTRR_VCNT
+        && GUEST_UEFI_MTRR_VCNT == 8
+}
+
+/// Historical: pre-enabled 1 GiB UC PCI hole. False at power-on reset.
 pub fn guest_uefi_mtrr_pci_uc_hole() -> bool {
     guest_uefi_mtrr_read(0x200) == Some(GUEST_UEFI_MTRR_PCI_UC_BASE)
         && guest_uefi_mtrr_read(0x201) == Some(GUEST_UEFI_MTRR_PCI_UC_MASK)
-        && (GUEST_UEFI_MTRRCAP & 0xFF) == GUEST_UEFI_MTRR_VCNT
 }
 
 /// Shadowed MTRR read. `None` if `msr` is not an MTRR.
@@ -1791,9 +1786,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             // Preemption (and any other resume) is not always an instruction
             // exit. CpuDeadLoop `pause` / `jmp $` never does I/O; skip those
             // so firmware can fall through. Delay `jcc` on I/O stays.
-            // Iron `eb ec` + `leave; ret`: dump, then skip only when RIP
-            // and DebugAssert caller are DXE RAM (c40f4a8 0x6e81ca /
-            // 0x1d25193). Blind skip on 891eb5b #UD-d at PE 0x109D.
+            // Iron `eb ec` + `leave; ret`: dump only. `aee545f` DXE-RAM
+            // skip then #UD at 0x109d (same as 891eb5b). QEMU keeps eb f3.
             // Iron d5f9431: pause+jcc deadloop at 0x6e81ca only on
             // preemption (HPET +256 per 256 exits, no PCI/ATA).
             let skipped = if basic == EXIT_REASON_EXCEPTION_NMI {
@@ -2499,6 +2493,10 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
     write_hex(SAVED_RAX);
     serial::write_str(" cr4=0x");
     write_hex(ops::vmread(GUEST_CR4).unwrap_or(0));
+    serial::write_str(" mtrrdef=0x");
+    write_hex(guest_uefi_mtrr_read(0x2FF).unwrap_or(0));
+    serial::write_str(" mtrr0=0x");
+    write_hex(guest_uefi_mtrr_read(0x200).unwrap_or(0));
     let mut sig = [0u8; 16];
     let nsig = read_low_ram_insn(SAVED_R8, &mut sig);
     serial::write_str(" pcdsig=");
@@ -2515,15 +2513,6 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
 }
 
 #[cfg(target_os = "uefi")]
-unsafe fn assert_deadloop_caller_rip() -> u64 {
-    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
-    let long = (ar & (1 << 13)) != 0;
-    let prev_rbp = peek_low_u64(SAVED_RBP);
-    let site = assert_deadloop_return_gpa(prev_rbp, long);
-    peek_low_u64(site)
-}
-
-#[cfg(target_os = "uefi")]
 unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
     let hpa = RAM_HPA.load(Ordering::Acquire);
     if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
@@ -2536,20 +2525,8 @@ unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
     let n = copy_low_ram_at(ram, linear, &mut buf);
     if preempt_deadloop_is_assert_epilogue(&buf[..n]) {
         dump_assert_deadloop_once(linear);
-        let caller = assert_deadloop_caller_rip();
-        let len = u64::from(preempt_deadloop_guarded_assert_skip_len(
-            &buf[..n],
-            rip,
-            caller,
-        ));
-        if len == 0 {
-            serial::write_line("boot: guest-UEFI ASSERT CpuDeadLoop noskip");
-            return false;
-        }
-        serial::write_str("boot: guest-UEFI DXE assert skip caller=0x");
-        write_hex(caller);
-        serial::write_byte(b'\n');
-        return ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok();
+        serial::write_line("boot: guest-UEFI ASSERT CpuDeadLoop noskip");
+        return false;
     }
     let len = u64::from(preempt_deadloop_skip_len(&buf[..n]));
     if len == 0 {

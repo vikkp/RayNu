@@ -310,8 +310,9 @@ same ASSERT `lastmsr=EFER`. QEMU BOTH-OK skipped `eb f3`. EFER.LMA = LME &&
 CR0.PG; IA-32e entry matches LMA; debugcon 0x402.
 Iron `b4b4847`: `efer=0xd00` `pg=1` `csl=1` still ASSERT; `r8` is
 `gPcdDataBaseSignatureGuid`. Iron `c40f4a8`: `pcdsig=1` after 32-pair MTRR
-walk, same ASSERT. Guarded DXE `eb ec` skip when RIP and caller are in
-`[1MiB,32MiB)` (iron `0x6e81ca` / `0x1d25193`). PE-header `0x109D` stays noskip.
+walk, same ASSERT. Iron `aee545f`: DXE `eb ec` skip then `#UD` `0x109d`
+stop n=5364. Revert iron `eb ec` skip. MTRR power-on `E=0` VCNT=8, no UC
+hole (firmware programs). PE-header `0x109D` stays noskip.
 Do not skip ASSERT `leave; ret`.
 Preempt skip includes GCC `eb fc` and near `0F 84` but not ASSERT epilogue.
 fw_cfg CD path is PIIX `ide@1,1` then virtio-fn1 master `drive@0`. ATAPI signature +
