@@ -42,7 +42,11 @@
 //! Iron `c40f4a8`: `pcdsig=1` after 32-pair MTRR walk, same ASSERT.
 //! Iron `aee545f`: DXE `eb ec` skip then `#UD` `0x109d`. Revert skip.
 //! Iron `10cb881`: VCNT=8 power-on still ASSERT `mtrr0=0x80000000`.
-//! VCNT=32 power-on, no UC hole. Nested
+//! VCNT=32 power-on, no UC hole. Iron `5f59c86`: NXE stripped
+//! (`efer=0x500`) `imgentry` CpuDxe still ASSERT `lastmsr=0x23f`
+//! (MtrrLib GetMemoryAttributes, not XP). MAXPHYADDR clip-to-36
+//! was a mask regression vs `a9ffaa5` host width; keep NXE off and
+//! phys bits in [36, 48]. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -69,7 +73,8 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
-    guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
+    spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -228,6 +233,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("bootorder_nul_terminated")
         && guest.contains("a9ffaa5")
         && guest.contains("GUEST_UEFI_EFER_NXE")
+        && guest.contains("5f59c86")
+        && guest.contains("lastmsr=0x23f")
+        && guest.contains("MAXPHYADDR")
+        && guest.contains("guest_uefi_phys_bits")
         && guest.contains("ldri ImageBase")
         && guest.contains("CoreStartImage")
         && guest.contains("17449e2")
@@ -350,6 +359,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ldri ImageBase")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EFER.NXE")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CoreStartImage")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5f59c86")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("lastmsr=0x23f")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("clip-36")
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)
@@ -386,6 +398,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             true,
         ) & crate::vmx::guest_uefi::GUEST_UEFI_EFER_NXE
             == 0
+        && guest_uefi_phys_bits(46) == 46
+        && guest_uefi_phys_bits(32) == 36
+        && guest_uefi_phys_bits(52) == 48
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")
