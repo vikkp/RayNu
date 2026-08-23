@@ -26,7 +26,7 @@ use crate::devices::guest_virtio_blk::{
 };
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
-    both_pci_evidence, post_dxe_should_stop, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    both_pci_evidence, hlt_should_resume, post_dxe_should_stop, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_BOTH_OK_MARKER,
 };
 
@@ -97,6 +97,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("maybe_print_both")
         && guest.contains("both_pci_evidence")
         && guest.contains("IDE at 00:01.1")
+        && guest.contains("HLT skip so DXE can walk PCI")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -119,8 +120,10 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && post_dxe_should_stop(true, 115, 115, true, true)
         && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false, false)
         && !post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL - 1, 115, true, false)
+        && hlt_should_resume()
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT skip so DXE can walk PCI")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_BOTH_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-BOTH-OK";
     reset_virtio();

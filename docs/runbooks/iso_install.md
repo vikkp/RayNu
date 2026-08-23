@@ -223,5 +223,5 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    Stop n=115 virtio=1. Not a completed firmware CD boot.
    Not installer. Not Everest E5.
    **Stage 43 (host, open):** simultaneous virtio `00:00.0` + PIIX IDE `00:01.1`
-   (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). Still `sectors=0`.
+   (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). HLT skip so DXE can walk PCI. Still `sectors=0`.
    Next: firmware CD boot (ATAPI/El Torito).

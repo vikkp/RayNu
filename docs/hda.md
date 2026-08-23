@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-both |
-| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + PIIX IDE 00:01.1. Virtio-alone no longer stops DXE. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-58 OPEN host: OVMF-BOTH-OK simultaneous virtio 00:00.0 + PIIX IDE 00:01.1. Virtio-alone no longer stops DXE. HLT skip so DXE can walk PCI. Nested VT-x still required. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Simultaneous enum ≠ installer. |
 | Gates touched | `RAYNU-V-M7-E5-OVMF-BOTH-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1; HLT skip so DXE can walk PCI; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1 (ISA multifunction walk); virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1; virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |

@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:01.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; ISA 00:01.0 is multifunction so a walk finds IDE; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:01.1 plus virtio (not virtio-alone); firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:01.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; ISA 00:01.0 is multifunction so a walk finds IDE; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE stop waits for IDE 00:01.1 plus virtio (not virtio-alone); HLT skip so DXE can walk PCI; firmware-simultaneous PCI enum; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -83,6 +83,12 @@ pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 /// After DXE evidence, keep a short tail so firmware can walk `00:01.1`, then
 /// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
+
+/// Guest-UEFI HLT must skip/resume. Stopping on HLT aborts the post-DXE
+/// PciBus walk of PIIX IDE `00:01.1`. Not a timer inject. Not ATAPI.
+pub fn hlt_should_resume() -> bool {
+    true
+}
 
 /// Stop the private VMCS after DXE once both PCI functions enumerated, or the tail is spent.
 ///
@@ -187,7 +193,9 @@ static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
 static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
-static PCI_TRACE: AtomicU32 = AtomicU32::new(0);
+static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
+static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
+static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -280,7 +288,9 @@ pub fn reset_guest_uefi_launch() {
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
     SINK_MAPS.store(0, Ordering::Release);
-    PCI_TRACE.store(0, Ordering::Release);
+    PCI_DID_TRACE.store(0, Ordering::Release);
+    PCI_HT_TRACE.store(0, Ordering::Release);
+    HLT_SKIPS.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
 }
@@ -969,7 +979,17 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_HLT => {
                 maybe_print_alive(basic);
                 maybe_print_past_sec(true);
-                false
+                // Skip, do not stop: a firmware HLT would otherwise cut the
+                // post-DXE tail before PciBus walks PIIX `00:01.1`.
+                if hlt_should_resume() {
+                    let k = HLT_SKIPS.fetch_add(1, Ordering::AcqRel);
+                    if k < 4 {
+                        serial::write_line("boot: guest-UEFI HLT skip");
+                    }
+                    skip_insn()
+                } else {
+                    false
+                }
             }
             EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
             EXIT_REASON_EXCEPTION_NMI => {
@@ -1276,9 +1296,15 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             let cfg = crate::devices::ide_cdrom::pci_read_addr()
                 | u32::from(port.wrapping_sub(0xCFC) & 3);
             let off = (cfg & 0xff) as u8;
-            if off & 0xFC == 0 || off & 0xFC == 0x0C {
-                let n = PCI_TRACE.fetch_add(1, Ordering::AcqRel);
-                if n < 24 {
+            let aligned = off & 0xFC;
+            if aligned == 0 || aligned == 0x0C {
+                let n = if aligned == 0 {
+                    PCI_DID_TRACE.fetch_add(1, Ordering::AcqRel)
+                } else {
+                    PCI_HT_TRACE.fetch_add(1, Ordering::AcqRel)
+                };
+                let cap = if aligned == 0 { 16 } else { 8 };
+                if n < cap {
                     serial::write_str("boot: guest-UEFI pci cfg=0x");
                     write_hex_u32(cfg);
                     serial::write_str(" val=0x");
