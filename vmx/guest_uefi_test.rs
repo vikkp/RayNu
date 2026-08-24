@@ -260,12 +260,13 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_pf_should_identity_map(0, 0xFFFF_0000));
     assert_eq!(GUEST_UEFI_IRON_PF_MTRR_UC_CR2, 0x8000_0008);
     assert!(guest_uefi_pf_error_is_reserved(0xb));
-    assert!(guest_uefi_pf_should_identity_map(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2));
+    assert!(!guest_uefi_pf_should_identity_map(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2));
     assert!(guest_uefi_pf_should_map_mmio(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2));
     assert!(!guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_MTRR_UC_CR2));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("eb4b27d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73576cc"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d5fceb1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80B000"));
     assert_eq!(guest_uefi_cpuid_80000008_eax(0x0030_2E2E), 0x2E2E);

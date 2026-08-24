@@ -65,7 +65,9 @@
 //! plus UC 2MiB sink `#PF`. Nested `5db28e3`: `#PF` `cr2=0xffc00000`
 //! (flash NP) stop n=1007 BOTH missing. Identity also maps flash + xAPIC.
 //! Iron `eb4b27d`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
-//! (RSVD 1GiB PDPTE). UC 2MiB identity for the MTRR hole + split RSVD 1GiB.
+//! (RSVD 1GiB PDPTE). Iron `73576cc`: bulk UC 2MiB for the MTRR hole
+//! then `#PF` `0x1e9000` 4G n=2 ASSERT `callerrip=0x1d25193` (UC- vs UC).
+//! On-demand PAT-UC 2MiB + split RSVD 1GiB; hole stays NP at 4G rebuild.
 //! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
@@ -300,6 +302,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("IDENTITY_XAPIC_GPA")
         && gpt.contains("IDENTITY_MTRR_UC_FLOOR")
         && gpt.contains("0xc0400083")
+        && gpt.contains("PCD | PWT")
+        && gpt.contains("73576cc")
         && guest.contains("GUEST_UEFI_IRON_PF_MTRR_UC_CR2")
         && guest.contains("eb4b27d")
         && guest.contains("17449e2")
@@ -453,6 +457,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("eb4b27d")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73576cc")
         && guest_uefi_pci_hole_is_sink()
         && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && GUEST_UEFI_IRON_PF_HEAP_WR_CR2 == 0x1E9000
@@ -460,7 +465,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_map_mmio(1, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
-        && guest_uefi_pf_should_identity_map(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2)
+        && !guest_uefi_pf_should_identity_map(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2)
         && guest_uefi_pf_should_map_mmio(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2)
         && GUEST_UEFI_IRON_PF_MTRR_UC_CR2 == 0x8000_0008
         && guest_uefi_pf_should_identity_map(0, crate::vmx::guest_uefi::GUEST_UEFI_FLASH_BASE)

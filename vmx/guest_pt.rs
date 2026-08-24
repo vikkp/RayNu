@@ -13,12 +13,13 @@ const ACCESSED: u64 = 1 << 5;
 const DIRTY: u64 = 1 << 6;
 const LARGE: u64 = 1 << 7;
 const PCD: u64 = 1 << 4;
+const PWT: u64 = 1 << 3;
 const TWO_MIB: u64 = 2 * 1024 * 1024;
 /// P|RW|US|A|D — CPL0 identity data/exec (NXE is off on guest-UEFI).
 const LEAF_FLAGS: u64 = PRESENT | RW | USER | ACCESSED | DIRTY;
 const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
-/// 2 MiB UC- (PCD) for PCI-hole / sink GPA. Not RAM (ADR-004).
-const LARGE_2M_UC_FLAGS: u64 = LARGE_2M_FLAGS | PCD;
+/// 2 MiB UC (PCD+PWT → PAT index 3). PCD-only is UC- (`73576cc` ASSERT).
+const LARGE_2M_UC_FLAGS: u64 = LARGE_2M_FLAGS | PCD | PWT;
 
 /// How a not-present hole was filled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -258,12 +259,10 @@ pub const IDENTITY_MTRR_UC_FLOOR: u64 = 0x8000_0000;
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
         gpa | LARGE_2M_FLAGS
-    } else if gpa >= IDENTITY_MTRR_UC_FLOOR {
-        // Iron eb4b27d: NP at 0x80000008 let firmware write a reserved-bit
-        // 1GiB PDPTE (pde=0xc0400083, err=0xb). Pre-map UC 2MiB to match
-        // MTRR. Do not use WB — that is the fdf07ba ASSERT.
-        gpa | LARGE_2M_UC_FLAGS
     } else {
+        // Iron 73576cc: bulk UC 2MiB for [0x80000000, flash) reopened
+        // fdf07ba ASSERT callerrip=0x1d25193 lastmsr=0x23f. Hole stays NP.
+        // On-demand identity_map_mmio_2m fills one PAT-UC 2MiB.
         0
     }
 }
@@ -274,8 +273,9 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
 /// Iron `fdf07ba`: filling 4 GiB of WB 2 MiB leaves made MTRR UC (2–4 GiB)
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
-/// `[0, ram_len)` plus flash and xAPIC are WB. `[0x80000000, flash)` is
-/// UC 2 MiB (not RAM). `[ram_len, 0x80000000)` stays NP.
+/// Iron `73576cc`: bulk UC 2 MiB in that hole still ASSERTed (PAT UC- vs
+/// MTRR UC). Only `[0, ram_len)` plus flash and xAPIC are present. The
+/// MTRR hole stays NP; one PAT-UC 2 MiB is filled on sink `#PF`.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -508,15 +508,19 @@ mod guest_pt_test {
                 0x800000 | LARGE_2M_FLAGS
             );
             let pci = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
-            assert_eq!(pci, 0xC000_0000 | LARGE_2M_UC_FLAGS);
+            assert_eq!(pci, 0);
             let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
-            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            assert_eq!(mtrr_uc, 0);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, 0);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
             assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
             assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
+            let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
+            assert_eq!(uc, 0xC000_0000 | LARGE_2M_UC_FLAGS);
             assert_eq!(
                 identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
@@ -538,16 +542,10 @@ mod guest_pt_test {
                 identity_walk_pde(0, 0x8000_0008, ram_hpa, ram_len),
                 0xC040_0083
             );
-            assert_eq!(
-                identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len),
-                Err(IdentityMapError::AlreadyPresent)
-            );
-            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
-            assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
-            write_entry_ram(ram_hpa, ram_len, 0x1000, 2, 0xC040_0083);
-            write_entry_ram(ram_hpa, ram_len, 0x4000, 0, 0);
             let kind = identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len).expect("split");
             assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
+            assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
         }
