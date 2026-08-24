@@ -83,7 +83,9 @@
 //! `cr2=0x1d1e6cb`. Refill the RAM PD (do not restore a 0xAF-filled table).
 //! Iron `0bad45d`: refill then MMIO `0x80000008` / scratch `0xC0A00000`
 //! then `EPT sink gpa=0xc0c00000`, leftover CR2, `#DE` RIP `0xCFFF9E`.
-//! Scratch pool 32. Nested
+//! Scratch pool 32. Nested Intel `c19b91f` BOTH-OK then n=32768
+//! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
+//! 8042 status `0x10` never set OBF after `0xAA`). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -214,6 +216,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("32768-exit cap")
         && guest.contains("hpet_tick_sink_by")
         && plat.contains("is_kbc_port")
+        && plat.contains("KeyboardWaitForValue")
+        && plat.contains("kbc_push")
         && plat.contains("hpet_tick_sink_by")
         && plat.contains("ACPI_PM_STEP")
         && plat.contains("0x0040_0000")
@@ -424,6 +428,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5d9e346")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2674629")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM 1s step")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("self-test 0x55")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("INVPCID/RDTSCP/XSAVES")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("XSETBV executes XCR0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("etc/boot-menu-wait")

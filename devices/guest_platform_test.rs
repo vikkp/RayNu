@@ -353,3 +353,17 @@ fn kbc_status_is_not_0xff() {
     let _ = io(0x64, false, 1, 0xAE);
     assert_eq!(io(0x64, true, 1, 0) as u8, 0x10);
 }
+
+#[test]
+fn kbc_self_test_and_reset_set_obf() {
+    reset();
+    let _ = io(0x64, false, 1, 0xAA);
+    let st = io(0x64, true, 1, 0) as u8;
+    assert_eq!(st & 0x01, 0x01, "OBF after self-test");
+    assert_ne!(st, 0xFF);
+    assert_eq!(io(0x60, true, 1, 0) as u8, 0x55);
+    assert_eq!(io(0x64, true, 1, 0) as u8 & 0x01, 0);
+    let _ = io(0x60, false, 1, 0xFF);
+    assert_eq!(io(0x60, true, 1, 0) as u8, 0xFA);
+    assert_eq!(io(0x60, true, 1, 0) as u8, 0xAA);
+}

@@ -22,7 +22,11 @@
 //! `unh=3` `port=0xcf8` after the empty-slot walk; 1 s per PCI I/O
 //! made guest time jump ~2 h before AtaAtapiPassThru Start. PCI I/O
 //! does not advance HPET. 8042 `0x60`/`0x64` (unhandled `IN` was
-//! `0xFF` / IBF stuck). Nested VT-x `2674629`: 32768 cap then
+//! `0xFF` / IBF stuck). Status-only `0x10` (OBF never set) left
+//! Ps2Keyboard `KeyboardWaitForValue` Stall-looping: nested Intel
+//! `c19b91f` BOTH-OK then n=32768 `ataio=0` `acpi=14903` `port=0x64`.
+//! Self-test `0xAA`→`0x55` plus command ACK so that wait returns.
+//! Nested VT-x `2674629`: 32768 cap then
 //! `acpi=16612` `port=0` `ataio=0` (BdsWait; BootMenu 0x0e was 0).
 //! Nested VT-x `8e55abf` stop `cf8=0x80000838`
 //! is PIIX ISA `00:01.0` offset `0x38` (PciBus programming, not
@@ -254,9 +258,108 @@ pub fn is_timer_port(port: u16) -> bool {
 }
 
 /// i8042 keyboard controller. Nested VT-x `5d9e346` `IN 0x64`/`0x60`
-/// was unhandled `0xFF` (IBF stuck). Status `0x10` = sys flag, buffers empty.
+/// was unhandled `0xFF` (IBF stuck). Status `0x10` = unlocked, buffers
+/// empty. Nested Intel `c19b91f` then `KeyboardWaitForValue` Stall on
+/// missing OBF after `0xAA`/`0xFF` — ACK those so BDS can Start ATA.
 pub fn is_kbc_port(port: u16) -> bool {
     port == 0x60 || port == 0x64
+}
+
+/// 8042 status: output-buffer full (data waiting at `0x60`).
+const KBC_STAT_OBF: u8 = 0x01;
+/// 8042 status: POST complete (set after controller self-test).
+const KBC_STAT_SYS: u8 = 0x04;
+/// 8042 status: keyboard unlocked (not IBF; unhandled `IN` was `0xFF`).
+const KBC_STAT_UNLOCK: u8 = 0x10;
+const KBC_QCAP: usize = 4;
+const KBC_EXPECT_NONE: u8 = 0;
+const KBC_EXPECT_CCB: u8 = 1;
+const KBC_EXPECT_OUT: u8 = 2;
+const KBC_EXPECT_LED: u8 = 3;
+const KBC_EXPECT_EXTRA: u8 = 4;
+/// Command-byte default: translate + enable + system flag (QEMU 8042).
+const KBC_CCB_DEFAULT: u8 = 0x47;
+
+fn kbc_status(p: &Platform) -> u8 {
+    let mut s = KBC_STAT_UNLOCK | p.kbc_sys;
+    if p.kbc_n > 0 {
+        s |= KBC_STAT_OBF;
+    }
+    s
+}
+
+fn kbc_push(p: &mut Platform, b: u8) {
+    let n = p.kbc_n as usize;
+    if n < KBC_QCAP {
+        p.kbc_q[n] = b;
+        p.kbc_n = p.kbc_n.saturating_add(1);
+    }
+}
+
+fn kbc_pop(p: &mut Platform) -> u8 {
+    if p.kbc_n == 0 {
+        return 0;
+    }
+    let b = p.kbc_q[0];
+    let n = p.kbc_n as usize;
+    for i in 1..n {
+        p.kbc_q[i - 1] = p.kbc_q[i];
+    }
+    p.kbc_n -= 1;
+    b
+}
+
+fn kbc_write_cmd(p: &mut Platform, cmd: u8) {
+    p.kbc_expect = KBC_EXPECT_NONE;
+    match cmd {
+        0xAA => {
+            p.kbc_sys = KBC_STAT_SYS;
+            kbc_push(p, 0x55);
+        }
+        0xAB => kbc_push(p, 0x00),
+        0x20 => kbc_push(p, p.kbc_ccb),
+        0x60 => p.kbc_expect = KBC_EXPECT_CCB,
+        0xD1 => p.kbc_expect = KBC_EXPECT_OUT,
+        0xD4 => p.kbc_expect = KBC_EXPECT_EXTRA,
+        _ => {}
+    }
+}
+
+fn kbc_write_data(p: &mut Platform, data: u8) {
+    match p.kbc_expect {
+        KBC_EXPECT_CCB => {
+            p.kbc_ccb = data;
+            p.kbc_expect = KBC_EXPECT_NONE;
+        }
+        KBC_EXPECT_OUT => {
+            p.kbc_expect = KBC_EXPECT_NONE;
+        }
+        KBC_EXPECT_LED | KBC_EXPECT_EXTRA => {
+            p.kbc_expect = KBC_EXPECT_NONE;
+            kbc_push(p, 0xFA);
+        }
+        _ => match data {
+            0xFF => {
+                kbc_push(p, 0xFA);
+                kbc_push(p, 0xAA);
+            }
+            0xF2 => {
+                kbc_push(p, 0xFA);
+                kbc_push(p, 0xAB);
+                kbc_push(p, 0x83);
+            }
+            0xEA | 0xEE => kbc_push(p, 0xEE),
+            0xED => {
+                kbc_push(p, 0xFA);
+                p.kbc_expect = KBC_EXPECT_LED;
+            }
+            0xF0 | 0xF3 => {
+                kbc_push(p, 0xFA);
+                p.kbc_expect = KBC_EXPECT_EXTRA;
+            }
+            _ => kbc_push(p, 0xFA),
+        },
+    }
 }
 
 /// 8259 PIC + ELCR. Unhandled `IN` was `0xFF` (all IRQs in service).
@@ -468,6 +571,12 @@ struct Platform {
     pm_iose: u8,
     /// PIIX3 ISA config (QEMU `piix3_reset`). PIRQ at `0x60–0x63`.
     isa_cfg: [u8; 256],
+    /// 8042 output queue (`0x60` reads). Not keystrokes.
+    kbc_q: [u8; KBC_QCAP],
+    kbc_n: u8,
+    kbc_expect: u8,
+    kbc_sys: u8,
+    kbc_ccb: u8,
 }
 
 impl Platform {
@@ -489,6 +598,11 @@ impl Platform {
             pm_cmd: 0x0001,
             pm_iose: 0,
             isa_cfg: [0u8; 256],
+            kbc_q: [0u8; KBC_QCAP],
+            kbc_n: 0,
+            kbc_expect: KBC_EXPECT_NONE,
+            kbc_sys: 0,
+            kbc_ccb: KBC_CCB_DEFAULT,
         }
     }
 }
@@ -942,10 +1056,18 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         }
         if is_kbc_port(port) {
             if is_in {
-                // 0x64 bit2 = system flag; OBF/IBF clear so firmware does not
-                // wait forever (unhandled IN was 0xFF).
-                let v = if port == 0x64 { 0x10u64 } else { 0 };
+                let v = if port == 0x64 {
+                    u64::from(kbc_status(p))
+                } else {
+                    u64::from(kbc_pop(p))
+                };
                 return (rax & !mask) | (v & mask);
+            }
+            let b = rax as u8;
+            if port == 0x64 {
+                kbc_write_cmd(p, b);
+            } else {
+                kbc_write_data(p, b);
             }
             return rax;
         }
