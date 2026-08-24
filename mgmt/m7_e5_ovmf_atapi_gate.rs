@@ -64,6 +64,8 @@
 //! `lastmsr=0x23f` `mtrr0=0x80000000` (4G WB vs MTRR UC). RAM-only identity
 //! plus UC 2MiB sink `#PF`. Nested `5db28e3`: `#PF` `cr2=0xffc00000`
 //! (flash NP) stop n=1007 BOTH missing. Identity also maps flash + xAPIC.
+//! Iron `eb4b27d`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
+//! (RSVD 1GiB PDPTE). UC 2MiB identity for the MTRR hole + split RSVD 1GiB.
 //! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
@@ -94,7 +96,7 @@ use crate::vmx::guest_uefi::{
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -296,6 +298,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("gpa < ram_len")
         && gpt.contains("IDENTITY_FLASH_FLOOR")
         && gpt.contains("IDENTITY_XAPIC_GPA")
+        && gpt.contains("IDENTITY_MTRR_UC_FLOOR")
+        && gpt.contains("0xc0400083")
+        && guest.contains("GUEST_UEFI_IRON_PF_MTRR_UC_CR2")
+        && guest.contains("eb4b27d")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -444,6 +450,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("RAM-only identity")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5db28e3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xffc00000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("eb4b27d")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083")
         && guest_uefi_pci_hole_is_sink()
         && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && GUEST_UEFI_IRON_PF_HEAP_WR_CR2 == 0x1E9000
@@ -451,6 +460,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_map_mmio(1, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
+        && guest_uefi_pf_should_identity_map(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2)
+        && guest_uefi_pf_should_map_mmio(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2)
+        && GUEST_UEFI_IRON_PF_MTRR_UC_CR2 == 0x8000_0008
         && guest_uefi_pf_should_identity_map(0, crate::vmx::guest_uefi::GUEST_UEFI_FLASH_BASE)
         && guest_uefi_pf_should_identity_map(0, 0xFFFF_0000)
         && guest_uefi_pf_error_is_reserved(0x9)

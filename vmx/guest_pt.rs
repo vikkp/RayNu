@@ -252,10 +252,17 @@ pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
 pub const IDENTITY_FLASH_FLOOR: u64 = 0xFFC0_0000;
 /// Live xAPIC 2 MiB (EPT 4 KiB version page). Not a zero sink.
 pub const IDENTITY_XAPIC_GPA: u64 = 0xFEE0_0000;
+/// Iron `mtrr0=0x80000000` UC hole. Not RAM (ADR-004 / `fdf07ba` ASSERT).
+pub const IDENTITY_MTRR_UC_FLOOR: u64 = 0x8000_0000;
 
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
         gpa | LARGE_2M_FLAGS
+    } else if gpa >= IDENTITY_MTRR_UC_FLOOR {
+        // Iron eb4b27d: NP at 0x80000008 let firmware write a reserved-bit
+        // 1GiB PDPTE (pde=0xc0400083, err=0xb). Pre-map UC 2MiB to match
+        // MTRR. Do not use WB — that is the fdf07ba ASSERT.
+        gpa | LARGE_2M_UC_FLAGS
     } else {
         0
     }
@@ -267,8 +274,8 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
 /// Iron `fdf07ba`: filling 4 GiB of WB 2 MiB leaves made MTRR UC (2–4 GiB)
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
-/// Only `[0, ram_len)` plus flash (`0xFFC00000`) and xAPIC (`0xFEE00000`)
-/// are present; PCI-hole / MTRR UC PDEs stay NP.
+/// `[0, ram_len)` plus flash and xAPIC are WB. `[0x80000000, flash)` is
+/// UC 2 MiB (not RAM). `[ram_len, 0x80000000)` stays NP.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -307,9 +314,10 @@ pub unsafe fn build_identity_4g(
     Ok(pml4)
 }
 
-/// Present a 2 MiB UC leaf for a sink GPA (PCI hole). Tables already exist.
+/// Present a 2 MiB UC leaf for a sink GPA (PCI hole / MTRR UC). Tables exist.
 ///
-/// Does **not** back the GPA with RAM (ADR-004). Guest-UEFI EPT sink-resumes.
+/// Splits a firmware 1 GiB PDPTE (`eb4b27d` `pde=0xc0400083`) back to the
+/// SEC PD. Does **not** back the GPA with RAM (ADR-004). EPT sink-resumes.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `cr3` table frames must lie in `[0, ram_len)`.
@@ -332,22 +340,35 @@ pub unsafe fn identity_map_mmio_2m(
         return Err(IdentityMapError::NeedAlloc);
     }
     let pdpt = e4 & ADDR_MASK;
-    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff)
+    let pdpt_i = (gva >> 30) & 0x1ff;
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e3 & PRESENT) == 0 {
         return Err(IdentityMapError::NeedAlloc);
     }
-    if (e3 & LARGE) != 0 {
-        return Err(IdentityMapError::AlreadyPresent);
-    }
-    let pd = e3 & ADDR_MASK;
+    let pd = if (e3 & LARGE) != 0 {
+        // Iron eb4b27d: 1GiB PDPTE pde=0xc0400083 (reserved bits 29:13).
+        // Restore the SEC PD for this GiB; do not resume on AlreadyPresent.
+        let expected_pdpt = pml4 + 0x1000;
+        if pdpt != expected_pdpt || pdpt_i > 3 {
+            return Err(IdentityMapError::NeedAlloc);
+        }
+        let pd = pml4 + 0x2000 + pdpt_i * 0x1000;
+        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, pd | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        pd
+    } else {
+        e3 & ADDR_MASK
+    };
     let idx2 = (gva >> 21) & 0x1ff;
     let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
-    if (e2 & PRESENT) != 0 {
+    let base = gva & !(TWO_MIB - 1);
+    let want = base | LARGE_2M_UC_FLAGS;
+    if e2 == want {
         return Err(IdentityMapError::AlreadyPresent);
     }
-    let base = gva & !(TWO_MIB - 1);
-    if !write_entry_ram(ram_hpa, ram_len, pd, idx2, base | LARGE_2M_UC_FLAGS) {
+    if !write_entry_ram(ram_hpa, ram_len, pd, idx2, want) {
         return Err(IdentityMapError::TableOutOfRam);
     }
     Ok(IdentityMapKind::Mmio2M)
@@ -487,21 +508,48 @@ mod guest_pt_test {
                 0x800000 | LARGE_2M_FLAGS
             );
             let pci = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
-            assert_eq!(pci, 0);
+            assert_eq!(pci, 0xC000_0000 | LARGE_2M_UC_FLAGS);
+            let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
+            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, 0);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
             assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
             assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
-            let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
-            assert_eq!(kind, IdentityMapKind::Mmio2M);
-            let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
-            assert_eq!(uc, 0xC000_0000 | LARGE_2M_UC_FLAGS);
             assert_eq!(
                 identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
             );
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_splits_rsvd_1g() {
+        // Iron eb4b27d: PDPT[2] = 0xc0400083 (1GiB + reserved bit 22).
+        let mut ram = vec![0u8; 0x6000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            write_entry_ram(ram_hpa, ram_len, 0x1000, 2, 0xC040_0083);
+            assert_eq!(
+                identity_walk_pde(0, 0x8000_0008, ram_hpa, ram_len),
+                0xC040_0083
+            );
+            assert_eq!(
+                identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
+            );
+            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
+            assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x1000, 2, 0xC040_0083);
+            write_entry_ram(ram_hpa, ram_len, 0x4000, 0, 0);
+            let kind = identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len).expect("split");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let pde = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
+            assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
         }
     }
 }
