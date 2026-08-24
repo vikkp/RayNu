@@ -1,7 +1,7 @@
 {
   // Redeploy trigger: bump this note to force a CI redeploy from main.
   // worker.yml watches this file; deploy then purges the edge cache.
-  // Last trigger: 2026-08-23T18:45Z — first full sweep with purge permissions.
+  // Last trigger: 2026-08-24T01:16Z — Kimi Kleen sweep on request.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "raynuv",
   "compatibility_date": "2026-07-19",
