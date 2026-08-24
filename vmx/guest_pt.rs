@@ -255,6 +255,8 @@ pub const IDENTITY_FLASH_FLOOR: u64 = 0xFFC0_0000;
 pub const IDENTITY_XAPIC_GPA: u64 = 0xFEE0_0000;
 /// Iron `mtrr0=0x80000000` UC hole. Not RAM (ADR-004 / `fdf07ba` ASSERT).
 pub const IDENTITY_MTRR_UC_FLOOR: u64 = 0x8000_0000;
+/// Same GPA as guest-UEFI `GUEST_UEFI_HV_PML4` (not MEMFD `0x800000`).
+pub const IDENTITY_HV_PML4: u64 = 0x200000;
 
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
@@ -347,19 +349,30 @@ pub unsafe fn identity_map_mmio_2m(
         return Err(IdentityMapError::NeedAlloc);
     }
     let pd = if (e3 & LARGE) != 0 {
-        // Iron eb4b27d: 1GiB PDPTE pde=0xc0400083 (reserved bits 29:13).
-        // Restore the SEC PD for this GiB; do not resume on AlreadyPresent.
-        let expected_pdpt = pml4 + 0x1000;
-        if pdpt != expected_pdpt || pdpt_i > 3 {
+        // Iron eb4b27d / a428202: 1GiB PDPTE pde=0xc0400083. Firmware may
+        // retarget PML4[0] at a PDPT in MEMFD so pdpt != pml4+0x1000
+        // (iron a428202 printed identity MMIO fail). Restore the SEC PD
+        // for this GiB into the PDPT the CPU actually walked.
+        if pdpt_i > 3 {
             return Err(IdentityMapError::NeedAlloc);
         }
-        let pd = pml4 + 0x2000 + pdpt_i * 0x1000;
-        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, pd | LEAF_FLAGS) {
+        let sec_pd = pml4 + 0x2000 + pdpt_i * 0x1000;
+        if pml4 != IDENTITY_HV_PML4 && pdpt != pml4 + 0x1000 {
+            return Err(IdentityMapError::NeedAlloc);
+        }
+        if sec_pd.saturating_add(0x1000) > ram_len {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, sec_pd | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        sec_pd
+    } else {
+        let pd = e3 & ADDR_MASK;
+        if pd >= ram_len {
             return Err(IdentityMapError::TableOutOfRam);
         }
         pd
-    } else {
-        e3 & ADDR_MASK
     };
     let idx2 = (gva >> 21) & 0x1ff;
     let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
@@ -547,6 +560,28 @@ mod guest_pt_test {
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
             assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
+            assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_splits_1g_retargeted_pdpt() {
+        // Iron a428202: CR3=0x200000, pde=0xc0400083, identity MMIO fail.
+        // PML4[0] pointed at a PDPT that was not pml4+0x1000.
+        let mut ram = vec![0u8; 0x210000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x8000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x8000, 2, 0xC040_0083);
+            let kind =
+                identity_map_mmio_2m(IDENTITY_HV_PML4, 0x8000_0008, ram_hpa, ram_len).expect("split");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x8000, 2).unwrap();
+            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
+            let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
         }
     }

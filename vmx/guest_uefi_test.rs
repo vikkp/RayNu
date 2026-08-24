@@ -267,6 +267,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73576cc"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("a428202"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity MMIO fail"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d5fceb1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80B000"));
     assert_eq!(guest_uefi_cpuid_80000008_eax(0x0030_2E2E), 0x2E2E);

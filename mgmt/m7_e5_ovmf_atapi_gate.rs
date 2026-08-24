@@ -68,6 +68,8 @@
 //! (RSVD 1GiB PDPTE). Iron `73576cc`: bulk UC 2MiB for the MTRR hole
 //! then `#PF` `0x1e9000` 4G n=2 ASSERT `callerrip=0x1d25193` (UC- vs UC).
 //! On-demand PAT-UC 2MiB + split RSVD 1GiB; hole stays NP at 4G rebuild.
+//! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
+//! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
@@ -306,6 +308,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("73576cc")
         && guest.contains("GUEST_UEFI_IRON_PF_MTRR_UC_CR2")
         && guest.contains("eb4b27d")
+        && gpt.contains("IDENTITY_HV_PML4")
+        && gpt.contains("a428202")
+        && guest.contains("identity MMIO fail")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -458,6 +463,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73576cc")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("a428202")
         && guest_uefi_pci_hole_is_sink()
         && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && GUEST_UEFI_IRON_PF_HEAP_WR_CR2 == 0x1E9000
