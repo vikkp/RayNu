@@ -312,6 +312,40 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     }
 }
 
+/// Unused 32 MiB slab / OVMF debug-fill. Present + reserved phys bits.
+/// Iron `d757a0a`: `#PF` `err=0x9` `pde=0xafafafafafafafaf`.
+pub const IDENTITY_POISON_PTE: u64 = 0xAFAF_AFAF_AFAF_AFAF;
+
+pub fn identity_pde_is_poison(pde: u64) -> bool {
+    pde == IDENTITY_POISON_PTE
+}
+
+/// Rewrite every 2 MiB slot in a low-4G PD (RAM WB, hole NP).
+///
+/// Iron `d757a0a`: SPLIT restored SEC PD at `pml4+0x2000` after firmware
+/// promoted PDPT[0] to `0xc0000083` and 0xAF-filled the PD. One 2 MiB
+/// leaf left DXE at `0x1d1e6cb` walking `pde=0xafafafafafafafaf`.
+///
+/// SAFETY: `pd_gpa` is a 4 KiB table in `[0, ram_len)`.
+unsafe fn identity_refill_low4g_pd(
+    ram_hpa: u64,
+    ram_len: u64,
+    pd_gpa: u64,
+    pdpt_i: u64,
+) -> Result<(), IdentityMapError> {
+    if pdpt_i > 3 {
+        return Ok(());
+    }
+    for i in 0..512u64 {
+        let gpa = (pdpt_i * 512 + i) * TWO_MIB;
+        let val = identity_leaf_flags(gpa, ram_len);
+        if !write_entry_ram(ram_hpa, ram_len, pd_gpa, i, val) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+    }
+    Ok(())
+}
+
 /// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout plus
 /// 3 high-half pages).
 ///
@@ -472,6 +506,8 @@ pub unsafe fn identity_map_mmio_2m(
         if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, sec_pd | LEAF_FLAGS) {
             return Err(IdentityMapError::TableOutOfRam);
         }
+        // Iron d757a0a: firmware 0xAF-filled this PD after the 1GiB promote.
+        identity_refill_low4g_pd(ram_hpa, ram_len, sec_pd, pdpt_i)?;
         sec_pd
     } else {
         let pd = e3 & ADDR_MASK;
@@ -481,7 +517,11 @@ pub unsafe fn identity_map_mmio_2m(
         pd
     };
     let idx2 = (gva >> 21) & 0x1ff;
-    let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    let mut e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    if identity_pde_is_poison(e2) {
+        identity_refill_low4g_pd(ram_hpa, ram_len, pd, pdpt_i)?;
+        e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    }
     // Iron 124c1a8 / 577c9eb: high-half or leftover-high VA, leaf GPA is
     // the zero-extended 32-bit hole so EPT scratch still applies.
     let leaf_gpa = identity_hole32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
@@ -762,12 +802,17 @@ mod guest_pt_test {
     #[test]
     fn identity_map_mmio_splits_ram_1g_heap() {
         // Iron 471391f: PDPT[0] = 0xc0000083 covering VA 0x1e9000.
+        // Iron d757a0a: firmware 0xAF-filled the SEC PD after the 1GiB
+        // promote; SPLIT must refill so 0x1d1e6cb is WB not poison.
         let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
             let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
             assert_eq!(cr3, 0);
+            for i in 0..512u64 {
+                write_entry_ram(ram_hpa, ram_len, 0x2000, i, IDENTITY_POISON_PTE);
+            }
             write_entry_ram(ram_hpa, ram_len, 0x1000, 0, 0xC000_0083);
             assert_eq!(identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len), 0xC000_0083);
             let r = identity_map_mmio_2m(0, 0x1E9000, ram_hpa, ram_len);
@@ -782,6 +827,42 @@ mod guest_pt_test {
             assert_eq!(pdpt0, 0x2000 | LEAF_FLAGS);
             let pde = identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len);
             assert_eq!(pde, LARGE_2M_FLAGS);
+            let code = identity_walk_pde(0, 0x1D1_E6CB, ram_hpa, ram_len);
+            assert_eq!(code, 0x1C0_0000 | LARGE_2M_FLAGS);
+            assert!(!identity_pde_is_poison(code));
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_refills_poison_pd() {
+        // Iron d757a0a SPLIT n=3: PD pointer live, PD[14]=0xAF, err=0x9.
+        let mut ram = vec![0u8; 0xB000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            write_entry_ram(ram_hpa, ram_len, 0x2000, 14, IDENTITY_POISON_PTE);
+            assert_eq!(
+                identity_walk_pde(0, 0x1D1_E6CB, ram_hpa, ram_len),
+                IDENTITY_POISON_PTE
+            );
+            let r = identity_map_mmio_2m(0, 0x1D1_E6CB, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Mmio2M) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
+            assert_eq!(
+                identity_walk_pde(0, 0x1D1_E6CB, ram_hpa, ram_len),
+                0x1C0_0000 | LARGE_2M_FLAGS
+            );
+            assert_eq!(
+                identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len),
+                LARGE_2M_FLAGS
+            );
         }
     }
 }
