@@ -35,11 +35,22 @@ jobs:
       - name: Purge Cloudflare edge cache
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CF_KEY: ${{ secrets.CLOUDFLARE_GLOBAL_KEY }}
         run: |
           set -euo pipefail
+          # Custom API tokens 401 on /purge_cache despite Cache Purge:Purge
+          # showing in the dashboard (known Cloudflare quirk — the internal
+          # purge-write scope is not applied to custom tokens). The Global
+          # API Key works, so prefer it when present; token is the fallback.
+          if [ -n "${CF_EMAIL}" ] && [ -n "${CF_KEY}" ]; then
+            AUTH=(-H "X-Auth-Email: ${CF_EMAIL}" -H "X-Auth-Key: ${CF_KEY}")
+          else
+            AUTH=(-H "Authorization: Bearer ${CF_TOKEN}")
+          fi
           resp=$(curl -s -w "\n%{http_code}" \
             "https://api.cloudflare.com/client/v4/zones?name=raynuv.com" \
-            -H "Authorization: Bearer $CF_TOKEN")
+            "${AUTH[@]}")
           code=$(tail -n1 <<<"$resp")
           if [ "$code" != "200" ]; then
             echo "zone lookup failed: HTTP $code"
@@ -49,7 +60,7 @@ jobs:
           ZONE_ID=$(sed '$d' <<<"$resp" | python3 -c "import json,sys; print(json.load(sys.stdin)['result'][0]['id'])")
           presp=$(curl -s -w "\n%{http_code}" -X POST \
             "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache" \
-            -H "Authorization: Bearer $CF_TOKEN" \
+            "${AUTH[@]}" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}')
           pcode=$(tail -n1 <<<"$presp")
