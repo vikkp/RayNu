@@ -758,4 +758,30 @@ mod guest_pt_test {
             assert_eq!(pml4_1, IDENTITY_OVERFLOW_PDPT_OFF | LEAF_FLAGS);
         }
     }
+
+    #[test]
+    fn identity_map_mmio_splits_ram_1g_heap() {
+        // Iron 471391f: PDPT[0] = 0xc0000083 covering VA 0x1e9000.
+        let mut ram = vec![0u8; 0xB000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            write_entry_ram(ram_hpa, ram_len, 0x1000, 0, 0xC000_0083);
+            assert_eq!(identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len), 0xC000_0083);
+            let r = identity_map_mmio_2m(0, 0x1E9000, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Mmio2M) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
+            let pdpt0 = read_entry_ram(ram_hpa, ram_len, 0x1000, 0).unwrap();
+            assert_eq!(pdpt0, 0x2000 | LEAF_FLAGS);
+            let pde = identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len);
+            assert_eq!(pde, LARGE_2M_FLAGS);
+        }
+    }
 }

@@ -77,6 +77,8 @@
 //! Iron `577c9eb`: scratch `0x80000000` then EPT sink `gpa=0xc0200000`
 //! then `#PF` `cr2=0x9896808086` `rip=0x300001`. Scratch pool for hole
 //! PT pages except live HPET. Leftover-high 32-bit CR2.
+//! Iron `471391f`: pool=8 then `#PF` `cr2=0x1e9000` `pde=0xc0000083`
+//! 4G n=2 ASSERT `callerrip=0x1d25193`. Split 1GiB RAM PDPTE.
 //! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
@@ -106,7 +108,7 @@ use crate::vmx::guest_uefi::{
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_insn_is_poison_fill, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
@@ -332,6 +334,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("0x9896808086")
         && guest.contains("scratch pool")
         && guest.contains("GUEST_UEFI_MMIO_SCRATCH_SLOTS")
+        && guest.contains("471391f")
+        && guest.contains("guest_uefi_pf_should_split_ram_1g")
+        && guest.contains("identity SPLIT")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -493,6 +498,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x9896808086")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0200000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("scratch pool")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("471391f")
+        && guest_uefi_pde_is_large(0xC000_0083)
+        && guest_uefi_pf_should_split_ram_1g(0x2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, 0xC000_0083)
+        && !guest_uefi_pf_should_split_ram_1g(0x2, 0x8000_0008, 0xC040_0083)
         && guest_uefi_pci_hole_is_sink()
         && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && GUEST_UEFI_IRON_PF_HEAP_WR_CR2 == 0x1E9000
