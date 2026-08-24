@@ -62,7 +62,9 @@
 //! `[32MiB, flash)`. Iron `fdf07ba`: EPT sink `maps=4` then `#PF` `err=0x2`
 //! `cr2=0x1e9000` `pde=0xc0000083` 4G n=2 then ASSERT `callerrip=0x1d25193`
 //! `lastmsr=0x23f` `mtrr0=0x80000000` (4G WB vs MTRR UC). RAM-only identity
-//! plus UC 2MiB sink `#PF`. Nested
+//! plus UC 2MiB sink `#PF`. Nested `5db28e3`: `#PF` `cr2=0xffc00000`
+//! (flash NP) stop n=1007 BOTH missing. Identity also maps flash + xAPIC.
+//! Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -292,6 +294,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_pf_should_map_mmio")
         && gpt.contains("identity_map_mmio_2m")
         && gpt.contains("gpa < ram_len")
+        && gpt.contains("IDENTITY_FLASH_FLOOR")
+        && gpt.contains("IDENTITY_XAPIC_GPA")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -438,6 +442,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fdf07ba")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1e9000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("RAM-only identity")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5db28e3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xffc00000")
         && guest_uefi_pci_hole_is_sink()
         && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && GUEST_UEFI_IRON_PF_HEAP_WR_CR2 == 0x1E9000
@@ -445,6 +451,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_map_mmio(1, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
         && !guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA)
+        && guest_uefi_pf_should_identity_map(0, crate::vmx::guest_uefi::GUEST_UEFI_FLASH_BASE)
+        && guest_uefi_pf_should_identity_map(0, 0xFFFF_0000)
         && guest_uefi_pf_error_is_reserved(0x9)
         && guest_uefi_pf_should_identity_map(0x9, GUEST_UEFI_IRON_PF_RSVD_CR2)
         && GUEST_UEFI_IRON_PF_RSVD_CR2 == 0xA027C8
@@ -458,7 +466,6 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2)
         && GUEST_UEFI_IRON_PF_CR2 == GUEST_UEFI_MEMFD_BASE + 0xB000
         && !guest_uefi_pf_should_identity_map(1, GUEST_UEFI_IRON_PF_CR2)
-        && !guest_uefi_pf_should_identity_map(0, 0xFFFF_0000)
         && guest_uefi_xapic_is_not_sink()
         && guest_uefi_is_mtrr_msr(0x250)
         && guest_uefi_mtrr_read(0xFE)

@@ -244,9 +244,22 @@ pub unsafe fn identity_walk_pde(
     read_entry_ram(ram_hpa, ram_len, pd, (gva >> 21) & 0x1ff).unwrap_or(0)
 }
 
-/// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs (4 GiB of 2 MiB leaves).
+/// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs.
 pub const IDENTITY_4G_PAGES: u64 = 6;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
+/// 4 MiB firmware alias (`0xFFC00000`). EPT already maps this; guest PT
+/// must be present or CpuDxe `#PF`s (`5db28e3` `cr2=0xffc00000`).
+pub const IDENTITY_FLASH_FLOOR: u64 = 0xFFC0_0000;
+/// Live xAPIC 2 MiB (EPT 4 KiB version page). Not a zero sink.
+pub const IDENTITY_XAPIC_GPA: u64 = 0xFEE0_0000;
+
+fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
+    if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
+        gpa | LARGE_2M_FLAGS
+    } else {
+        0
+    }
+}
 
 /// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout).
 ///
@@ -254,7 +267,8 @@ pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
 /// Iron `fdf07ba`: filling 4 GiB of WB 2 MiB leaves made MTRR UC (2–4 GiB)
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
-/// Only `[0, ram_len)` is present; PCI-hole PDEs stay NP.
+/// Only `[0, ram_len)` plus flash (`0xFFC00000`) and xAPIC (`0xFEE00000`)
+/// are present; PCI-hole / MTRR UC PDEs stay NP.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -284,11 +298,7 @@ pub unsafe fn build_identity_4g(
         }
         for i in 0..512u64 {
             let gpa = (g * 512 + i) * TWO_MIB;
-            let val = if gpa < ram_len {
-                gpa | LARGE_2M_FLAGS
-            } else {
-                0
-            };
+            let val = identity_leaf_flags(gpa, ram_len);
             if !write_entry_ram(ram_hpa, ram_len, pd, i, val) {
                 return Err(IdentityMapError::TableOutOfRam);
             }
@@ -480,6 +490,10 @@ mod guest_pt_test {
             assert_eq!(pci, 0);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, 0);
+            let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
+            assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_FLAGS);
+            let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
+            assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
             let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
             assert_eq!(kind, IdentityMapKind::Mmio2M);
             let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
