@@ -12,10 +12,13 @@ const USER: u64 = 1 << 2;
 const ACCESSED: u64 = 1 << 5;
 const DIRTY: u64 = 1 << 6;
 const LARGE: u64 = 1 << 7;
+const PCD: u64 = 1 << 4;
 const TWO_MIB: u64 = 2 * 1024 * 1024;
 /// P|RW|US|A|D — CPL0 identity data/exec (NXE is off on guest-UEFI).
 const LEAF_FLAGS: u64 = PRESENT | RW | USER | ACCESSED | DIRTY;
 const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
+/// 2 MiB UC- (PCD) for PCI-hole / sink GPA. Not RAM (ADR-004).
+const LARGE_2M_UC_FLAGS: u64 = LARGE_2M_FLAGS | PCD;
 
 /// How a not-present hole was filled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +29,8 @@ pub enum IdentityMapKind {
     Cr3Sec,
     /// Iron `13e8bd2`: walker `fail=present` after SEC CR3; CPU still #PF NP.
     Rebuild4G,
+    /// Iron `fdf07ba`: NP #PF in the PCI hole after RAM-only identity.
+    Mmio2M,
 }
 
 /// Why [`identity_map_not_present`] refused to write a leaf.
@@ -211,13 +216,14 @@ pub unsafe fn identity_map_not_present(
 /// PD (2 MiB) or 1 GiB PDPTE for `gva`. 0 if the walk cannot read an entry.
 ///
 /// Iron `13e8bd2` dump: walker present vs CPU #PF NP.
+/// Tables must sit in `[0, ram_len)`; `gva` may be a sink GPA above RAM.
 pub unsafe fn identity_walk_pde(
     cr3: u64,
     gva: u64,
     ram_hpa: u64,
     ram_len: u64,
 ) -> u64 {
-    if ram_hpa == 0 || gva >= ram_len {
+    if ram_hpa == 0 {
         return 0;
     }
     let pml4 = cr3 & ADDR_MASK;
@@ -242,10 +248,13 @@ pub unsafe fn identity_walk_pde(
 pub const IDENTITY_4G_PAGES: u64 = 6;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
 
-/// Write a 4-level 4 GiB identity map at `pml4_gpa` (OVMF SEC layout).
+/// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout).
 ///
 /// Iron `3311ff3`: `#PF` `cr3=0x0` `fail=alloc` — PML4 at GPA 0 is empty.
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
+/// Iron `fdf07ba`: filling 4 GiB of WB 2 MiB leaves made MTRR UC (2–4 GiB)
+/// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
+/// Only `[0, ram_len)` is present; PCI-hole PDEs stay NP.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -275,12 +284,63 @@ pub unsafe fn build_identity_4g(
         }
         for i in 0..512u64 {
             let gpa = (g * 512 + i) * TWO_MIB;
-            if !write_entry_ram(ram_hpa, ram_len, pd, i, gpa | LARGE_2M_FLAGS) {
+            let val = if gpa < ram_len {
+                gpa | LARGE_2M_FLAGS
+            } else {
+                0
+            };
+            if !write_entry_ram(ram_hpa, ram_len, pd, i, val) {
                 return Err(IdentityMapError::TableOutOfRam);
             }
         }
     }
     Ok(pml4)
+}
+
+/// Present a 2 MiB UC leaf for a sink GPA (PCI hole). Tables already exist.
+///
+/// Does **not** back the GPA with RAM (ADR-004). Guest-UEFI EPT sink-resumes.
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+/// `cr3` table frames must lie in `[0, ram_len)`.
+pub unsafe fn identity_map_mmio_2m(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> Result<IdentityMapKind, IdentityMapError> {
+    if ram_hpa == 0 {
+        return Err(IdentityMapError::OutOfRam);
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 >= ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e4 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pdpt = e4 & ADDR_MASK;
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e3 & LARGE) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    let pd = e3 & ADDR_MASK;
+    let idx2 = (gva >> 21) & 0x1ff;
+    let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e2 & PRESENT) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    let base = gva & !(TWO_MIB - 1);
+    if !write_entry_ram(ram_hpa, ram_len, pd, idx2, base | LARGE_2M_UC_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    Ok(IdentityMapKind::Mmio2M)
 }
 
 #[cfg(test)]
@@ -415,6 +475,18 @@ mod guest_pt_test {
             assert_eq!(
                 identity_walk_pde(0, 0x80B000, ram_hpa, ram_len),
                 0x800000 | LARGE_2M_FLAGS
+            );
+            let pci = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
+            assert_eq!(pci, 0);
+            let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
+            assert_eq!(above_ram, 0);
+            let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
+            assert_eq!(uc, 0xC000_0000 | LARGE_2M_UC_FLAGS);
+            assert_eq!(
+                identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
             );
         }
     }
