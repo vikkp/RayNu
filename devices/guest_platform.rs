@@ -331,20 +331,18 @@ pub fn is_xapic_2m_gpa(gpa: u64) -> bool {
     (gpa & !0x1F_FFFF) == 0xFEE0_0000
 }
 
-/// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus IOAPIC/HPET.
-/// The xAPIC 2 MiB window is excluded so guest-UEFI can map a live 4 KiB page.
+/// Unbacked GPA above the 32 MiB slab and below the 4 MiB flash floor.
+///
+/// Iron `cc7d78a`: 4G identity CR3 made the PCI hole present; EPT sink
+/// stopped at 1 GiB so `gpa=0xC01DF1B7` (`reason=0x30`) halted. Include
+/// `[1GiB, 0xFFC00000)` (PCI hole at `0xC0000000`, IOAPIC/HPET). The
+/// xAPIC 2 MiB window stays excluded so guest-UEFI can map a live 4 KiB page.
 pub fn is_platform_sink_gpa(gpa: u64) -> bool {
-    const GIB: u64 = 1 << 30;
-    const MMIO_LO: u64 = 0xF000_0000;
     const FW_FLOOR: u64 = 0xFFC0_0000;
-    const IOAPIC: u64 = 0xFEC0_0000;
-    const APIC_TOP: u64 = 0xFEF0_0000;
     if is_xapic_2m_gpa(gpa) {
         return false;
     }
-    (gpa >= PLATFORM_RAM_BYTES && gpa < GIB)
-        || (gpa >= MMIO_LO && gpa < FW_FLOOR)
-        || (gpa >= IOAPIC && gpa < APIC_TOP)
+    gpa >= PLATFORM_RAM_BYTES && gpa < FW_FLOOR
 }
 
 /// QEMU/ICH HPET MMIO. Lives in the 2 MiB sink page at [`HPET_SINK_PAGE`].

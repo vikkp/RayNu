@@ -57,7 +57,9 @@
 //! Rebuild 4G on reserved-bit #PF. Iron `101b8ec`: 4G n=1 n=2 then
 //! `fail=present` `cr2=0x1ae7078` `pde=0x30646870` (MEMFD heap clobber).
 //! HV identity PML4 at `0x200000`, e820 reserved 24KiB, always rebuild.
-//! Nested
+//! Iron `cc7d78a`: 4G n=1 `cr3=0x200000` then `EPT violation gpa=0xc01df1b7`
+//! `reason=0x30` (PCI hole; sink range had stopped at 1GiB). Sink-resume
+//! `[32MiB, flash)`. Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
 //! `cf8=0x80000838` — PIIX ISA `00:01.0` offset `0x38`
 //! (PciBus programming, never ATA). 32768-exit cap. PIIX3 ISA PIRQ
@@ -81,12 +83,13 @@ use crate::vmx::guest_uefi::{
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
-    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink, hlt_should_resume,
+    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink,
+    guest_uefi_pci_hole_is_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -276,6 +279,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("GUEST_UEFI_HV_PML4")
         && guest.contains("0x1ae7078")
         && guest.contains("0x30646870")
+        && guest.contains("cc7d78a")
+        && guest.contains("0xc01df1b7")
+        && guest.contains("guest_uefi_pci_hole_is_sink")
+        && plat.contains("PCI hole")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -416,6 +423,11 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1ae7078")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x30646870")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x200000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cc7d78a")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc01df1b7")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("sink-resume PCI hole")
+        && guest_uefi_pci_hole_is_sink()
+        && GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA == 0xC01D_F1B7
         && guest_uefi_pf_error_is_reserved(0x9)
         && guest_uefi_pf_should_identity_map(0x9, GUEST_UEFI_IRON_PF_RSVD_CR2)
         && GUEST_UEFI_IRON_PF_RSVD_CR2 == 0xA027C8
