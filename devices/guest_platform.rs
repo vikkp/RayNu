@@ -96,9 +96,9 @@ pub const E820_RESERVED: u32 = 2;
 /// GPA of the hypervisor 4 GiB identity PML4 (2 MiB). Below OVMF MEMFD
 /// `0x800000` so CpuDxe heap cannot clobber CR3 (iron `101b8ec` `pde=0x30646870`).
 pub const HV_IDENTITY_PML4: u64 = 0x200000;
-/// Nine 4 KiB pages: PML4 + PDPT + 4 PDs + high-half PDPT + 2 PDs.
-/// Must match `guest_pt::IDENTITY_4G_BYTES` (iron `124c1a8` sign-ext MMIO).
-pub const HV_IDENTITY_PML4_BYTES: u64 = 9 * 4096;
+/// Nine 4 KiB pages became eleven: PML4 + PDPT + 4 PDs + high-half PDPT +
+/// 2 PDs + leftover-high overflow PDPT+PD. Must match `guest_pt::IDENTITY_4G_BYTES`.
+pub const HV_IDENTITY_PML4_BYTES: u64 = 11 * 4096;
 /// Three e820 entries: RAM / reserved PML4 / RAM.
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * 3;
 

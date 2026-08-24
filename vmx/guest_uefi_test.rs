@@ -15,11 +15,11 @@ use super::{
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
     guest_uefi_phys_bits, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_insn_is_poison_fill, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
-    GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
+    GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
     GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN,
@@ -271,7 +271,7 @@ fn marker_and_residual_honest() {
         crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES,
         crate::vmx::guest_pt::IDENTITY_4G_BYTES
     );
-    assert_eq!(crate::vmx::guest_pt::IDENTITY_4G_BYTES, 0x9000);
+    assert_eq!(crate::vmx::guest_pt::IDENTITY_4G_BYTES, 0xB000);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("eb4b27d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000008"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083"));
@@ -282,10 +282,22 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xffffffff96808086"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("b25d75b"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x301093"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("577c9eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x9896808086"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0200000"));
     assert_eq!(GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, 0x8000_0000);
+    assert_eq!(GUEST_UEFI_IRON_SINK_PT_GPA, 0xC020_0000);
+    assert_eq!(GUEST_UEFI_IRON_PF_TRUNC32_CR2, 0x0000_0098_9680_8086);
     assert!(guest_uefi_mmio_needs_scratch(0x8000_0008));
-    assert!(!guest_uefi_mmio_needs_scratch(0xC020_0000));
-    assert!(!guest_uefi_mmio_needs_scratch(GUEST_UEFI_IRON_PF_SIGNEXT_CR2));
+    assert!(guest_uefi_mmio_needs_scratch(0xC020_0000));
+    assert!(guest_uefi_mmio_needs_scratch(GUEST_UEFI_IRON_PF_SIGNEXT_CR2));
+    assert!(guest_uefi_mmio_needs_scratch(GUEST_UEFI_IRON_PF_TRUNC32_CR2));
+    assert!(!guest_uefi_mmio_needs_scratch(0xFED0_0000));
+    assert!(!guest_uefi_mmio_needs_scratch(0xFEC0_0000));
+    assert_eq!(guest_uefi_pf_gpa32(GUEST_UEFI_IRON_PF_TRUNC32_CR2), 0x9680_8086);
+    assert!(guest_uefi_pf_should_map_mmio(0x2, GUEST_UEFI_IRON_PF_TRUNC32_CR2));
+    assert!(guest_uefi_insn_is_poison_fill(0xAF, 0xAF, 0xAF, 0xAF));
+    assert!(!guest_uefi_insn_is_poison_fill(0x4D, 0x85, 0xC9, 0x74));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d5fceb1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80B000"));
     assert_eq!(guest_uefi_cpuid_80000008_eax(0x0030_2E2E), 0x2E2E);

@@ -54,7 +54,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; iron aee545f DXE assert skip caller=0x1d25193 then #UD linear=0x109d stop n=5364 sectors=0; revert iron ebec skip; MTRR power-on E=0 VCNT=8 no UC hole (firmware programs); iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000 noskip flood; VCNT=32 power-on no hole plus mtrr1/mtrrv dump; iron a9ffaa5 VCNT=32 power-on mtrr0=0x80000000 lastmsr=EFER still ASSERT; DxeCore CoreStartImage call EntryPoint (c6401801ff5020) loc2=ldri CpuDxe; MTRR GetAllMtrrs then paging refresh IsExecuteDisableEnabled; hide NX/1G/TME and strip EFER.NXE so CpuDxe does not ASSERT_EFI_ERROR SetMemorySpaceAttributes XP; dump ldri ImageBase; 80000008 subleaf 0; iron 5f59c86 efer=0x500 lastmsr=0x23f imgentry CpuDxe NXE-off still ASSERT (MtrrGetMemoryAttributes not XP); MAXPHYADDR [36,48] not clip-36; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; iron d5fceb1 MAXPHYADDR unclip past CpuDxe then #PF err=0 CR2 0x80B000 MEMFD mov al,[disp32] (linear dump was RIP not CR2); identity_map_not_present NP 2M/4K in guest PT via ram_hpa; iron 3311ff3 #PF cr3=0x0 fail=alloc; build_identity_4g SEC PML4 0x800000; iron 7ea62ea fail=present SEC already mapped CR2 still VMWRITE CR3; iron 13e8bd2 CR3 identity then same #PF fail=present (walker present, CPU NP); rebuild SEC 4G identity once; hide LA57; iron COM2 after CR3 load #PF err=0x9 cr2=0xa027c8 (P+RSVD; NX-in-PTE with NXE=0); rebuild 4G on reserved-bit #PF; iron 101b8ec 4G n=1 n=2 then fail=present cr2=0x1ae7078 pde=0x30646870 (MEMFD heap clobber); HV identity PML4 at 0x200000 not 0x800000; e820 reserved 36KiB; always rebuild 4G; iron cc7d78a HV PML4 4G n=1 cr3=0x200000 then EPT violation gpa=0xc01df1b7 reason=0x30 (PCI hole; 4G identity present, EPT sink stopped at 1GiB); sink-resume PCI hole 0xC0000000; iron fdf07ba maps=4 EPT sink worked then #PF err=0x2 cr2=0x1e9000 pde=0xc0000083 4G n=2 then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 (4G WB identity vs MTRR UC 2-4GiB); RAM-only identity leaves plus UC 2MiB sink #PF; nested 5db28e3 #PF cr2=0xffc00000 after RAM-only (flash NP) stop n=1007 BOTH missing; identity also maps flash 0xFFC00000 plus xAPIC 0xFEE00000; iron eb4b27d flash+xAPIC identity then #PF cr2=0x80000008 err=0xb pde=0xc0400083 (RSVD 1GiB PDPTE in MTRR UC hole); iron 73576cc bulk UC 2MiB identity then #PF cr2=0x1e9000 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f (PAT UC- vs MTRR UC); iron a428202 on-demand mmio then #PF cr2=0x80000008 err=0xb pde=0xc0400083 identity MMIO fail (1GiB PDPTE after retargeted PDPT); split RSVD 1GiB into SEC PD even when PML4[0] is not pml4+0x1000; rebuild 4G then retry one PAT-UC 2MiB; hole stays NP at 4G rebuild; iron 124c1a8 identity MMIO n=2 then #PF cr2=0xffffffff96808086 err=0x2 pde=0 rip=0x300000 insn=afafafaf (sign-extended 32-bit 0x96808086 walks PML4[511] not low 4G); map high-half 2MiB to zero-extended GPA; e820 reserved 36KiB; iron b25d75b identity MMIO n=3 then #PF cr2=0x80000008 rip=0x30108e #UD linear=0x301093 insn=82bf (firmware PT stores at 0x80000008 hit shared HPET EPT sink); dedicated 2MiB UC scratch HPA for GPA 0x80000000 not zero sink; not bulk 2-4GiB (73576cc ASSERT); not WB RAM (fdf07ba ASSERT); VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi-first skipped IDE Start); ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; iron aee545f DXE assert skip caller=0x1d25193 then #UD linear=0x109d stop n=5364 sectors=0; revert iron ebec skip; MTRR power-on E=0 VCNT=8 no UC hole (firmware programs); iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000 noskip flood; VCNT=32 power-on no hole plus mtrr1/mtrrv dump; iron a9ffaa5 VCNT=32 power-on mtrr0=0x80000000 lastmsr=EFER still ASSERT; DxeCore CoreStartImage call EntryPoint (c6401801ff5020) loc2=ldri CpuDxe; MTRR GetAllMtrrs then paging refresh IsExecuteDisableEnabled; hide NX/1G/TME and strip EFER.NXE so CpuDxe does not ASSERT_EFI_ERROR SetMemorySpaceAttributes XP; dump ldri ImageBase; 80000008 subleaf 0; iron 5f59c86 efer=0x500 lastmsr=0x23f imgentry CpuDxe NXE-off still ASSERT (MtrrGetMemoryAttributes not XP); MAXPHYADDR [36,48] not clip-36; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; iron d5fceb1 MAXPHYADDR unclip past CpuDxe then #PF err=0 CR2 0x80B000 MEMFD mov al,[disp32] (linear dump was RIP not CR2); identity_map_not_present NP 2M/4K in guest PT via ram_hpa; iron 3311ff3 #PF cr3=0x0 fail=alloc; build_identity_4g SEC PML4 0x800000; iron 7ea62ea fail=present SEC already mapped CR2 still VMWRITE CR3; iron 13e8bd2 CR3 identity then same #PF fail=present (walker present, CPU NP); rebuild SEC 4G identity once; hide LA57; iron COM2 after CR3 load #PF err=0x9 cr2=0xa027c8 (P+RSVD; NX-in-PTE with NXE=0); rebuild 4G on reserved-bit #PF; iron 101b8ec 4G n=1 n=2 then fail=present cr2=0x1ae7078 pde=0x30646870 (MEMFD heap clobber); HV identity PML4 at 0x200000 not 0x800000; e820 reserved 36KiB; always rebuild 4G; iron cc7d78a HV PML4 4G n=1 cr3=0x200000 then EPT violation gpa=0xc01df1b7 reason=0x30 (PCI hole; 4G identity present, EPT sink stopped at 1GiB); sink-resume PCI hole 0xC0000000; iron fdf07ba maps=4 EPT sink worked then #PF err=0x2 cr2=0x1e9000 pde=0xc0000083 4G n=2 then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 (4G WB identity vs MTRR UC 2-4GiB); RAM-only identity leaves plus UC 2MiB sink #PF; nested 5db28e3 #PF cr2=0xffc00000 after RAM-only (flash NP) stop n=1007 BOTH missing; identity also maps flash 0xFFC00000 plus xAPIC 0xFEE00000; iron eb4b27d flash+xAPIC identity then #PF cr2=0x80000008 err=0xb pde=0xc0400083 (RSVD 1GiB PDPTE in MTRR UC hole); iron 73576cc bulk UC 2MiB identity then #PF cr2=0x1e9000 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f (PAT UC- vs MTRR UC); iron a428202 on-demand mmio then #PF cr2=0x80000008 err=0xb pde=0xc0400083 identity MMIO fail (1GiB PDPTE after retargeted PDPT); split RSVD 1GiB into SEC PD even when PML4[0] is not pml4+0x1000; rebuild 4G then retry one PAT-UC 2MiB; hole stays NP at 4G rebuild; iron 124c1a8 identity MMIO n=2 then #PF cr2=0xffffffff96808086 err=0x2 pde=0 rip=0x300000 insn=afafafaf (sign-extended 32-bit 0x96808086 walks PML4[511] not low 4G); map high-half 2MiB to zero-extended GPA; e820 reserved 44KiB; iron b25d75b identity MMIO n=3 then #PF cr2=0x80000008 rip=0x30108e #UD linear=0x301093 insn=82bf (firmware PT stores at 0x80000008 hit shared HPET EPT sink); dedicated 2MiB UC scratch HPA for GPA 0x80000000 not zero sink; iron 577c9eb scratch 0x80000000 then EPT sink gpa=0xc0200000 then #PF cr2=0x9896808086 err=0x2 pde=0 rip=0x300001 insn=afafafaf (leftover-high 32-bit hole; PT stores at 0xC0200000 hit shared zero sink); scratch pool for hole PT pages except live HPET 2MiB; leftover-high CR2 overflow PML4[1]; poison-fill RIP not resume; not bulk 2-4GiB (73576cc ASSERT); not WB RAM (fdf07ba ASSERT); VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -403,10 +403,26 @@ pub const GUEST_UEFI_IRON_PF_SIGNEXT_CR2: u64 = 0xFFFF_FFFF_9680_8086;
 /// at `0x80000008`; the shared EPT sink discarded those writes. Not RAM
 /// (ADR-004 / `fdf07ba`). Dedicated 2 MiB scratch HPA, PAT-UC + EPT UC.
 pub const GUEST_UEFI_IRON_MMIO_SCRATCH_GPA: u64 = 0x8000_0000;
+/// Iron `577c9eb`: after scratch `0x80000000`, EPT sink `gpa=0xc0200000`
+/// then `#PF` `cr2=0x9896808086` `rip=0x300001` `insn=afafafaf`.
+pub const GUEST_UEFI_IRON_SINK_PT_GPA: u64 = 0xC020_0000;
+/// Leftover high dword `0x98` plus 32-bit hole GPA `0x96808086`.
+pub const GUEST_UEFI_IRON_PF_TRUNC32_CR2: u64 = 0x0000_0098_9680_8086;
+/// Dedicated UC 2 MiB frames for hole PT stores (not the HPET zero page).
+pub const GUEST_UEFI_MMIO_SCRATCH_SLOTS: usize = 8;
 
-/// First 2 MiB of the MTRR UC hole: firmware PT stores, not PCI MMIO.
+/// Hole PT pages persist on scratch HPA. Live HPET/IOAPIC 2 MiB stays the
+/// shared sink (`0xFEC00000`). Not bulk 2–4 GiB (`73576cc` ASSERT).
 pub fn guest_uefi_mmio_needs_scratch(gpa: u64) -> bool {
-    (gpa & !0x1F_FFFF) == GUEST_UEFI_IRON_MMIO_SCRATCH_GPA
+    let g = guest_uefi_pf_gpa32(gpa);
+    crate::devices::guest_platform::is_platform_sink_gpa(g)
+        && (g & !0x1F_FFFF) != crate::devices::guest_platform::HPET_SINK_PAGE
+}
+
+/// Iron `b25d75b` / `577c9eb`: unused 32 MiB slab is `0xAF` fill. RIP in
+/// that fill is wild control flow. Do not resume.
+pub fn guest_uefi_insn_is_poison_fill(b0: u8, b1: u8, b2: u8, b3: u8) -> bool {
+    b0 == 0xAF && b1 == 0xAF && b2 == 0xAF && b3 == 0xAF
 }
 /// SDM 27.2.1 #PF error bit 3 is RSVD.
 pub const GUEST_UEFI_PF_ERR_RSVD: u64 = 1 << 3;
@@ -444,8 +460,9 @@ pub fn guest_uefi_pf_should_identity_map(err: u64, cr2: u64) -> bool {
 /// Iron `eb4b27d`: `err=0xb` is present+RSVD — NP-only missed the 1GiB PDPTE.
 /// Iron `124c1a8`: sign-extended 32-bit CR2 is not a 64-bit GPA; canonicalize
 /// before the sink check, then map the high-half walk.
+/// Iron `577c9eb`: leftover-high `0x9896808086` is the same 32-bit hole GPA.
 pub fn guest_uefi_pf_gpa32(cr2: u64) -> u64 {
-    crate::vmx::guest_pt::identity_signext32_gpa(cr2).unwrap_or(cr2)
+    crate::vmx::guest_pt::identity_hole32_gpa(cr2).unwrap_or(cr2)
 }
 
 pub fn guest_uefi_pf_should_map_mmio(err: u64, cr2: u64) -> bool {
@@ -456,7 +473,7 @@ pub fn guest_uefi_pf_should_map_mmio(err: u64, cr2: u64) -> bool {
     if crate::devices::guest_platform::is_platform_sink_gpa(gpa) {
         return true;
     }
-    crate::vmx::guest_pt::identity_signext32_gpa(cr2).is_some()
+    crate::vmx::guest_pt::identity_hole32_gpa(cr2).is_some()
         && gpa >= crate::vmx::guest_pt::IDENTITY_MTRR_UC_FLOOR
         && gpa < 0x1_0000_0000
 }
@@ -732,7 +749,26 @@ static ATAPI_PRINTED: AtomicBool = AtomicBool::new(false);
 static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
-static MMIO_SCRATCH_HPA: AtomicU64 = AtomicU64::new(0);
+static MMIO_SCRATCH_HPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] = [
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+];
+static MMIO_SCRATCH_GPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] = [
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+    AtomicU64::new(u64::MAX),
+];
 static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
 static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
@@ -1112,7 +1148,10 @@ pub fn reset_guest_uefi_launch() {
     DXE_AT_N.store(0, Ordering::Release);
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
-    MMIO_SCRATCH_HPA.store(0, Ordering::Release);
+    for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
+        MMIO_SCRATCH_HPA[i].store(0, Ordering::Release);
+        MMIO_SCRATCH_GPA[i].store(u64::MAX, Ordering::Release);
+    }
     SINK_MAPS.store(0, Ordering::Release);
     PCI_DID_TRACE.store(0, Ordering::Release);
     PCI_HT_TRACE.store(0, Ordering::Release);
@@ -1332,25 +1371,41 @@ unsafe fn launch_uefi(
             core::slice::from_raw_parts_mut(sink_hpa as *mut u8, 2 * 1024 * 1024)
         });
         SINK_HPA.store(sink_hpa, Ordering::Release);
-        if let Some(scratch_frame) = alloc.allocate_contiguous_aligned(512, 512) {
-            let scratch_hpa = scratch_frame.to_phys();
-            core::ptr::write_bytes(scratch_hpa as *mut u8, 0, 2 * 1024 * 1024);
-            MMIO_SCRATCH_HPA.store(scratch_hpa, Ordering::Release);
+        let mut scratch_n = 0u64;
+        let mut scratch0 = 0u64;
+        for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
+            if let Some(scratch_frame) = alloc.allocate_contiguous_aligned(512, 512) {
+                let scratch_hpa = scratch_frame.to_phys();
+                core::ptr::write_bytes(scratch_hpa as *mut u8, 0, 2 * 1024 * 1024);
+                MMIO_SCRATCH_HPA[i].store(scratch_hpa, Ordering::Release);
+                MMIO_SCRATCH_GPA[i].store(u64::MAX, Ordering::Release);
+                if i == 0 {
+                    scratch0 = scratch_hpa;
+                }
+                scratch_n += 1;
+            } else {
+                break;
+            }
+        }
+        if scratch0 != 0 {
             serial::write_str("boot: guest-UEFI mmio scratch_hpa=0x");
-            write_hex(scratch_hpa);
+            write_hex(scratch0);
+            serial::write_str(" pool=");
+            write_dec(scratch_n);
             serial::write_byte(b'\n');
         }
         // Do not 2MiB-sink 0xFEE00000: OVMF GetApicVersion() reads 0 and
         // DebugAssert (iron ad78f12, seven RDMSR 0x1B, then ret=0x6e8946).
         // Iron cc7d78a: 4G identity then EPT violation gpa=0xC01DF1B7
-        // (PCI hole). PDPT[3] already exists for flash; pre-sink 0xC0000000
-        // and link empty PDs for 1–3GiB so later 4G walks can 2MiB-sink.
+        // (PCI hole). PDPT[3] already exists for flash; link empty PDs for
+        // 1–3GiB so later 4G walks can 2MiB-scratch. Do not pre-sink
+        // 0xC0000000 (iron 577c9eb PT stores must persist).
         for i in 1u64..=2 {
             if let Some(pd) = alloc_phys(alloc) {
                 let _ = ept_link_empty_pd(i as usize, pd);
             }
         }
-        for &mm in &[0xC000_0000u64, 0xFCE0_0000, 0xFEC0_0000, 0xFED0_0000] {
+        for &mm in &[0xFEC0_0000u64, 0xFED0_0000] {
             if ept_map_2m_sink(mm) {
                 SINK_MAPS.fetch_add(1, Ordering::AcqRel);
             }
@@ -2556,6 +2611,10 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
         if !guest_uefi_pf_should_map_mmio(err, cr2) {
             return false;
         }
+        if guest_uefi_rip_is_poison_fill(rip) {
+            serial::write_line("boot: guest-UEFI #PF poison fill — not resume");
+            return false;
+        }
         let k = PF_FIXUPS.fetch_add(1, Ordering::AcqRel);
         if k >= GUEST_UEFI_PF_IDENTITY_CAP {
             serial::write_line("boot: guest-UEFI #PF identity cap");
@@ -3274,11 +3333,11 @@ unsafe fn handle_ept(gpa: u64) -> bool {
         serial::write_byte(b'\n');
         return false;
     }
-    // Iron b25d75b: firmware PT stores at 0x80000008 must land on a
-    // dedicated scratch HPA. The shared sink is the HPET zero page.
+    // Iron b25d75b / 577c9eb: firmware PT stores in the MTRR/PCI hole must
+    // land on a dedicated scratch HPA. The shared sink is the HPET zero page.
     if guest_uefi_mmio_needs_scratch(gpa) && ept_map_2m_scratch(gpa) {
         serial::write_str("boot: guest-UEFI EPT scratch gpa=0x");
-        write_hex(gpa & !0x1F_FFFF);
+        write_hex(guest_uefi_pf_gpa32(gpa) & !0x1F_FFFF);
         serial::write_byte(b'\n');
         maybe_print_dxe();
         return true;
@@ -3412,14 +3471,53 @@ unsafe fn ept_map_2m_sink(gpa: u64) -> bool {
     ept_map_2m_hpa(gpa, sink, false)
 }
 
-/// Iron `b25d75b`: persist firmware stores at GPA `0x80000000` (not the HPET sink).
+/// Iron `b25d75b` / `577c9eb`: persist firmware stores in the MTRR/PCI hole
+/// (not the HPET sink). One dedicated 2 MiB HPA per 2 MiB GPA.
 #[cfg(target_os = "uefi")]
 unsafe fn ept_map_2m_scratch(gpa: u64) -> bool {
     if !guest_uefi_mmio_needs_scratch(gpa) {
         return false;
     }
-    let hpa = MMIO_SCRATCH_HPA.load(Ordering::Acquire);
-    ept_map_2m_hpa(gpa, hpa, true)
+    let g = guest_uefi_pf_gpa32(gpa);
+    let hpa = mmio_scratch_hpa_for(g);
+    if hpa == 0 {
+        return false;
+    }
+    ept_map_2m_hpa(g, hpa, true)
+}
+
+fn mmio_scratch_hpa_for(gpa: u64) -> u64 {
+    let key = gpa & !0x1F_FFFF;
+    for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
+        if MMIO_SCRATCH_GPA[i].load(Ordering::Acquire) == key {
+            return MMIO_SCRATCH_HPA[i].load(Ordering::Acquire);
+        }
+    }
+    for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
+        if MMIO_SCRATCH_GPA[i].load(Ordering::Acquire) == u64::MAX {
+            let hpa = MMIO_SCRATCH_HPA[i].load(Ordering::Acquire);
+            if hpa == 0 {
+                continue;
+            }
+            MMIO_SCRATCH_GPA[i].store(key, Ordering::Release);
+            return hpa;
+        }
+    }
+    0
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn guest_uefi_rip_is_poison_fill(rip: u64) -> bool {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || rip >= GUEST_UEFI_LOW_RAM_BYTES {
+        return false;
+    }
+    let mut buf = [0u8; 4];
+    // SAFETY: exclusive guest-UEFI 32 MiB slab; VMX-halted dump.
+    // KANI-TARGET: poison-fill RIP peek (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    let n = copy_low_ram_at(ram, rip, &mut buf);
+    n >= 4 && guest_uefi_insn_is_poison_fill(buf[0], buf[1], buf[2], buf[3])
 }
 
 /// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence).

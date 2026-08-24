@@ -246,13 +246,16 @@ pub unsafe fn identity_walk_pde(
 }
 
 /// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs, plus 3 pages for
-/// sign-extended 32-bit MMIO (PML4[511] PDPT + PDPT[510]/[511] PDs).
-/// Iron `124c1a8`: `#PF` `cr2=0xffffffff96808086` after identity MMIO n=2.
-pub const IDENTITY_4G_PAGES: u64 = 9;
+/// sign-extended 32-bit MMIO (PML4[511] PDPT + PDPT[510]/[511] PDs), plus
+/// 2 overflow pages for leftover-high 32-bit hole CR2 (iron `577c9eb`
+/// `cr2=0x9896808086` walks PML4[1]).
+pub const IDENTITY_4G_PAGES: u64 = 11;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
 const IDENTITY_HIGH_PDPT_OFF: u64 = 0x6000;
 const IDENTITY_HIGH_PD_8000_OFF: u64 = 0x7000;
 const IDENTITY_HIGH_PD_C000_OFF: u64 = 0x8000;
+const IDENTITY_OVERFLOW_PDPT_OFF: u64 = 0x9000;
+const IDENTITY_OVERFLOW_PD_OFF: u64 = 0xA000;
 /// 4 MiB firmware alias (`0xFFC00000`). EPT already maps this; guest PT
 /// must be present or CpuDxe `#PF`s (`5db28e3` `cr2=0xffc00000`).
 pub const IDENTITY_FLASH_FLOOR: u64 = 0xFFC0_0000;
@@ -271,6 +274,23 @@ pub fn identity_signext32_gpa(gva: u64) -> Option<u64> {
     } else {
         None
     }
+}
+
+/// Iron `577c9eb`: CR2 `0x9896808086` is leftover high dword `0x98` plus
+/// 32-bit hole GPA `0x96808086` (not canonical sign-extend). Walks PML4[1].
+pub fn identity_trunc32_hole_gpa(gva: u64) -> Option<u64> {
+    let hi = gva >> 32;
+    let lo = gva as u32 as u64;
+    if hi != 0 && hi != 0xFFFF_FFFF && lo >= IDENTITY_MTRR_UC_FLOOR && lo < IDENTITY_FLASH_FLOOR {
+        Some(lo)
+    } else {
+        None
+    }
+}
+
+/// Canonical 32-bit hole GPA from a sign-extended or leftover-high CR2.
+pub fn identity_hole32_gpa(gva: u64) -> Option<u64> {
+    identity_signext32_gpa(gva).or_else(|| identity_trunc32_hole_gpa(gva))
 }
 
 fn identity_high_pd_off(pdpt_i: u64) -> Option<u64> {
@@ -304,6 +324,7 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
 /// MTRR hole stays NP; one PAT-UC 2 MiB is filled on sink `#PF`.
 /// Iron `124c1a8`: PML4[511] is linked so a sign-extended 32-bit CR2 can
 /// take an on-demand 2 MiB leaf (GPA stays zero-extended; not bulk 2–4 GiB).
+/// Iron `577c9eb`: leftover-high CR2 uses overflow PDPT+PD (PML4[1]).
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -388,34 +409,50 @@ pub unsafe fn identity_map_mmio_2m(
         return Err(IdentityMapError::TableOutOfRam);
     }
     let pml4_i = (gva >> 39) & 0x1ff;
+    let tables_ok = pml4.saturating_add(IDENTITY_4G_BYTES) <= ram_len;
+    let leftover = identity_trunc32_hole_gpa(gva).is_some();
     let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, pml4_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e4 & PRESENT) == 0 {
-        if pml4_i != 511 || pml4.saturating_add(IDENTITY_4G_BYTES) > ram_len {
+        if pml4_i == 511 && tables_ok {
+            let high_pdpt = pml4 + IDENTITY_HIGH_PDPT_OFF;
+            if !write_entry_ram(ram_hpa, ram_len, pml4, 511, high_pdpt | LEAF_FLAGS) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+            e4 = high_pdpt | LEAF_FLAGS;
+        } else if leftover && tables_ok {
+            let ov = pml4 + IDENTITY_OVERFLOW_PDPT_OFF;
+            if !write_entry_ram(ram_hpa, ram_len, pml4, pml4_i, ov | LEAF_FLAGS) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+            e4 = ov | LEAF_FLAGS;
+        } else {
             return Err(IdentityMapError::NeedAlloc);
         }
-        let high_pdpt = pml4 + IDENTITY_HIGH_PDPT_OFF;
-        if !write_entry_ram(ram_hpa, ram_len, pml4, 511, high_pdpt | LEAF_FLAGS) {
-            return Err(IdentityMapError::TableOutOfRam);
-        }
-        e4 = high_pdpt | LEAF_FLAGS;
     }
     let pdpt = e4 & ADDR_MASK;
     let pdpt_i = (gva >> 30) & 0x1ff;
     let mut e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e3 & PRESENT) == 0 {
-        let Some(off) = identity_high_pd_off(pdpt_i) else {
-            return Err(IdentityMapError::NeedAlloc);
-        };
-        if pml4_i != 511 || pml4.saturating_add(IDENTITY_4G_BYTES) > ram_len {
+        if let Some(off) = identity_high_pd_off(pdpt_i) {
+            if pml4_i != 511 || !tables_ok {
+                return Err(IdentityMapError::NeedAlloc);
+            }
+            let pd_gpa = pml4 + off;
+            if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, pd_gpa | LEAF_FLAGS) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+            e3 = pd_gpa | LEAF_FLAGS;
+        } else if leftover && tables_ok {
+            let ov = pml4 + IDENTITY_OVERFLOW_PD_OFF;
+            if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, ov | LEAF_FLAGS) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+            e3 = ov | LEAF_FLAGS;
+        } else {
             return Err(IdentityMapError::NeedAlloc);
         }
-        let pd_gpa = pml4 + off;
-        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, pd_gpa | LEAF_FLAGS) {
-            return Err(IdentityMapError::TableOutOfRam);
-        }
-        e3 = pd_gpa | LEAF_FLAGS;
     }
     let pd = if (e3 & LARGE) != 0 {
         // Iron eb4b27d / a428202: 1GiB PDPTE pde=0xc0400083. Firmware may
@@ -445,9 +482,9 @@ pub unsafe fn identity_map_mmio_2m(
     };
     let idx2 = (gva >> 21) & 0x1ff;
     let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
-    // Iron 124c1a8: VA 0xFFFFFFFF96808086 must walk PML4[511], but the
-    // leaf GPA is zero-extended 0x96800000 so EPT sink still applies.
-    let leaf_gpa = identity_signext32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
+    // Iron 124c1a8 / 577c9eb: high-half or leftover-high VA, leaf GPA is
+    // the zero-extended 32-bit hole so EPT scratch still applies.
+    let leaf_gpa = identity_hole32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
     let flags = identity_leaf_flags(leaf_gpa, ram_len);
     let want = if flags != 0 {
         flags
@@ -579,10 +616,10 @@ mod guest_pt_test {
 
     #[test]
     fn build_identity_4g_maps_memfd() {
-        let mut ram = vec![0u8; 0x9000];
+        let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
-        // SAFETY: exclusive 9-page buffer is the SEC PML4/PDPT/PD blob plus high half.
+        // SAFETY: exclusive 11-page buffer is the SEC PML4/PDPT/PD blob plus high half plus overflow.
         unsafe {
             let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
             assert_eq!(cr3, 0);
@@ -620,7 +657,7 @@ mod guest_pt_test {
     #[test]
     fn identity_map_mmio_splits_rsvd_1g() {
         // Iron eb4b27d: PDPT[2] = 0xc0400083 (1GiB + reserved bit 22).
-        let mut ram = vec![0u8; 0x9000];
+        let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
@@ -666,7 +703,7 @@ mod guest_pt_test {
     fn identity_map_mmio_signext32_high_half() {
         // Iron 124c1a8: identity MMIO n=2 then #PF cr2=0xffffffff96808086
         // err=0x2 pde=0 (PML4[511] walk; leaf must be GPA 0x96800000).
-        let mut ram = vec![0u8; 0x9000];
+        let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         let cr2 = 0xFFFF_FFFF_9680_8086u64;
@@ -695,6 +732,30 @@ mod guest_pt_test {
                 identity_walk_pde(0, c0, ram_hpa, ram_len),
                 0xC020_0000 | LARGE_2M_UC_FLAGS
             );
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_trunc32_leftover_high() {
+        // Iron 577c9eb: CR2 0x9896808086 walks PML4[1]; leaf GPA is 0x96800000.
+        let mut ram = vec![0u8; 0xB000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        let cr2 = 0x0000_0098_9680_8086u64;
+        assert_eq!(identity_trunc32_hole_gpa(cr2), Some(0x9680_8086));
+        assert_eq!(identity_hole32_gpa(cr2), Some(0x9680_8086));
+        assert_eq!(identity_signext32_gpa(cr2), None);
+        assert_eq!(identity_trunc32_hole_gpa(0xFFFF_FFFF_9680_8086), None);
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            assert_eq!(identity_walk_pde(0, cr2, ram_hpa, ram_len), 0);
+            let kind = identity_map_mmio_2m(0, cr2, ram_hpa, ram_len).expect("trunc32");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
+            assert_eq!(pde, 0x9680_0000 | LARGE_2M_UC_FLAGS);
+            let pml4_1 = read_entry_ram(ram_hpa, ram_len, 0, 1).unwrap();
+            assert_eq!(pml4_1, IDENTITY_OVERFLOW_PDPT_OFF | LEAF_FLAGS);
         }
     }
 }
