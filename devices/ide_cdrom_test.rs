@@ -54,7 +54,7 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     pci_write_addr(pci_config_addr() | 0x0C);
     let ide_ht = pci_read_data(0xCFC, 4);
     assert_eq!((ide_ht >> 16) & 0xff, 0x00);
-    assert_eq!(host_identify_word0(), Some(0x8500));
+    assert_eq!(host_identify_word0(), Some(0x85C0));
     let pvd = host_read10(16).expect("READ(10) LBA 16");
     assert_eq!(&pvd[1..6], b"CD001");
     let br = host_read10(17).expect("READ(10) LBA 17");
@@ -131,6 +131,20 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(is_bmide_port(0xC400));
     assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
     assert!(!is_bmide_port(0x1F0));
+    reset();
+}
+
+#[test]
+fn slave_absent_status_zero_identify_aborts() {
+    reset();
+    assert!(present_placeholder());
+    // DEV bit 4: slave. Nested Intel f93caee identified four CDs (0xA1 x4).
+    let _ = ata_io(0x01F6, false, 1, 0xB0);
+    assert_eq!(ata_io(0x01F7, true, 1, 0) as u8, 0);
+    let _ = ata_io(0x01F7, false, 1, 0xA1);
+    assert_eq!(ata_io(0x01F7, true, 1, 0) as u8, 0);
+    let _ = ata_io(0x01F6, false, 1, 0xA0);
+    assert_eq!(host_identify_word0(), Some(0x85C0));
     reset();
 }
 

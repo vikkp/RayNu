@@ -11,6 +11,9 @@
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
 //! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
+//! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
+//! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
+//! (nested Intel `f93caee`: `0xA1`×4 `ataio=408` `packet=0`).
 //! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
 //! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
@@ -210,6 +213,22 @@ pub fn pci_config_addr() -> u32 {
 
 pub fn is_ata_primary_port(port: u16) -> bool {
     with_cd(|m| ata_reg(m, port).is_some())
+}
+
+fn ata_is_slave(m: &CdMedia) -> bool {
+    (m.ata_dev & 0x10) != 0
+}
+
+fn ata_absent_status() -> u8 {
+    0
+}
+
+fn apply_no_device(m: &mut CdMedia) {
+    m.xfer = AtaXfer::Idle;
+    m.ata_err = 0x04;
+    m.ata_status = ATA_STATUS_ERR;
+    m.ata_count = 0;
+    m.ata_lba = [0, 0, 0];
 }
 
 /// Map an I/O port onto the ATA command block (0–7) or control port.
@@ -558,8 +577,9 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
 
 fn start_identify(m: &mut CdMedia) {
     m.data.fill(0);
-    // Word 0: ATAPI CD-ROM, packet size 12.
-    m.data[0] = 0x00;
+    // Word 0: ATAPI CD-ROM, removable, 12-byte packet (QEMU 0x85C0).
+    // Nested Intel f93caee: 0x8500 (no RMB) then 0xA1×4 packet=0.
+    m.data[0] = 0xC0;
     m.data[1] = 0x85;
     let model = b"RAYNU-V CD                          ";
     for (i, &b) in model.iter().enumerate() {
@@ -728,31 +748,69 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         };
         ATA_IO_N.fetch_add(1, Ordering::AcqRel);
         if is_in {
-            let val = match reg {
-                0 => read_data(m, size),
-                1 => u64::from(m.ata_err),
-                2 => u64::from(m.ata_count),
-                3 => u64::from(m.ata_lba[0]),
-                4 => u64::from(m.ata_lba[1]),
-                5 => u64::from(m.ata_lba[2]),
-                6 => u64::from(m.ata_dev),
-                _ => u64::from(m.ata_status),
+            // Nested Intel f93caee: IDENTIFY PACKET 0xA1 x4 (2 channels x 2
+            // devices). Slave is absent: status 0x00, no DRQ identify.
+            let val = if ata_is_slave(m) {
+                match reg {
+                    6 => u64::from(m.ata_dev),
+                    7 | 8 => u64::from(ata_absent_status()),
+                    _ => 0,
+                }
+            } else {
+                match reg {
+                    0 => read_data(m, size),
+                    1 => u64::from(m.ata_err),
+                    2 => u64::from(m.ata_count),
+                    3 => u64::from(m.ata_lba[0]),
+                    4 => u64::from(m.ata_lba[1]),
+                    5 => u64::from(m.ata_lba[2]),
+                    6 => u64::from(m.ata_dev),
+                    _ => u64::from(m.ata_status),
+                }
             };
             let mask = io_mask(size);
             (rax & !mask) | (val & mask)
         } else {
             let v = rax as u8;
             match reg {
-                0 => write_data(m, size, rax),
-                1 => m.ata_feat = v,
-                2 => m.ata_count = v,
-                3 => m.ata_lba[0] = v,
-                4 => m.ata_lba[1] = v,
-                5 => m.ata_lba[2] = v,
+                0 => {
+                    if !ata_is_slave(m) {
+                        write_data(m, size, rax);
+                    }
+                }
+                1 => {
+                    if !ata_is_slave(m) {
+                        m.ata_feat = v;
+                    }
+                }
+                2 => {
+                    if !ata_is_slave(m) {
+                        m.ata_count = v;
+                    }
+                }
+                3 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[0] = v;
+                    }
+                }
+                4 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[1] = v;
+                    }
+                }
+                5 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[2] = v;
+                    }
+                }
                 6 => m.ata_dev = v,
                 7 => {
                     LAST_ATA_CMD.store(v, Ordering::Release);
                     ATA_CMD_N.fetch_add(1, Ordering::AcqRel);
+                    if ata_is_slave(m) {
+                        apply_no_device(m);
+                        return rax;
+                    }
                     match v {
                         ATA_CMD_IDENTIFY_PACKET => start_identify(m),
                         ATA_CMD_PACKET => {

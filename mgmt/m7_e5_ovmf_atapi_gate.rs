@@ -89,7 +89,13 @@
 //! only on EPT **data write**; hole reads and bit-8 page-walks get an
 //! R+X sink (`EPT hole ro`). Iron `da2c9c4`: fetch+walk `qual=0x184`
 //! still filled the pool (`gpa=0xc3e00000` RIP `0x3dfffff`).
-//! Nested Intel `c19b91f` BOTH-OK then n=32768
+//! Iron `f93caee`: write-only scratch then `EPT hole ro` `qual=0x184`
+//! plus `qual=0x1ab` A/D scratch, then leftover CR2 `0x9896808086`
+//! RIP `0x300001` poison fill (`SINK_HPA` is live HPET). Dedicated
+//! zero 2MiB for hole RO; never RO-sink onto HPET. Nested Intel
+//! `f93caee` BOTH-OK then `0xA1`×4 `ataio=408` `packet=0` (IDENTIFY
+//! word 0 was `0x8500`; slave was a second CD). Word 0 is `0x85C0`;
+//! slave absent. Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
@@ -120,8 +126,8 @@ use crate::vmx::guest_uefi::{
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, spin_short_jmp_should_skip, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -361,6 +367,16 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA")
         && guest.contains("guest_uefi_ept_qual_is_walk")
         && guest.contains("0x3dfffff")
+        && guest.contains("f93caee")
+        && guest.contains("0x1ab")
+        && guest.contains("0x300001")
+        && guest.contains("poison fill")
+        && guest.contains("dedicated zero")
+        && guest.contains("guest_uefi_hole_ro_uses_dedicated_zero")
+        && guest.contains("HOLE_ZERO_HPA")
+        && guest.contains("GUEST_UEFI_IRON_EPT_QUAL_AD_WALK")
+        && ide.contains("0x85C0")
+        && ide.contains("ata_is_slave")
         && guest.contains("471391f")
         && guest.contains("guest_uefi_pf_should_split_ram_1g")
         && guest.contains("identity SPLIT")
@@ -561,6 +577,15 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x184")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3dfffff")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("data-write only")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f93caee")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1ab")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("dedicated zero")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poison fill")
+        && guest_uefi_hole_ro_uses_dedicated_zero(0x3C0_0000, 0x380_0000)
+        && !guest_uefi_hole_ro_uses_dedicated_zero(0x380_0000, 0x380_0000)
+        && !guest_uefi_hole_ro_uses_dedicated_zero(0, 0x380_0000)
+        && guest_uefi_ept_scratch_on_qual(GUEST_UEFI_IRON_EPT_QUAL_AD_WALK)
+        && GUEST_UEFI_IRON_HOLE_RO_HPET_RIP == 0x300001
         && guest_uefi_pde_is_large(0xC000_0083)
         && guest_uefi_pde_is_poison(GUEST_UEFI_IRON_PF_POISON_PDE)
         && !guest_uefi_pde_is_poison(0xC000_0083)
