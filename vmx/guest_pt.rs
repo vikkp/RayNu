@@ -245,9 +245,14 @@ pub unsafe fn identity_walk_pde(
     read_entry_ram(ram_hpa, ram_len, pd, (gva >> 21) & 0x1ff).unwrap_or(0)
 }
 
-/// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs.
-pub const IDENTITY_4G_PAGES: u64 = 6;
+/// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs, plus 3 pages for
+/// sign-extended 32-bit MMIO (PML4[511] PDPT + PDPT[510]/[511] PDs).
+/// Iron `124c1a8`: `#PF` `cr2=0xffffffff96808086` after identity MMIO n=2.
+pub const IDENTITY_4G_PAGES: u64 = 9;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
+const IDENTITY_HIGH_PDPT_OFF: u64 = 0x6000;
+const IDENTITY_HIGH_PD_8000_OFF: u64 = 0x7000;
+const IDENTITY_HIGH_PD_C000_OFF: u64 = 0x8000;
 /// 4 MiB firmware alias (`0xFFC00000`). EPT already maps this; guest PT
 /// must be present or CpuDxe `#PF`s (`5db28e3` `cr2=0xffc00000`).
 pub const IDENTITY_FLASH_FLOOR: u64 = 0xFFC0_0000;
@@ -257,6 +262,24 @@ pub const IDENTITY_XAPIC_GPA: u64 = 0xFEE0_0000;
 pub const IDENTITY_MTRR_UC_FLOOR: u64 = 0x8000_0000;
 /// Same GPA as guest-UEFI `GUEST_UEFI_HV_PML4` (not MEMFD `0x800000`).
 pub const IDENTITY_HV_PML4: u64 = 0x200000;
+
+/// Iron `124c1a8`: long-mode CR2 `0xffffffff96808086` is sign-extended
+/// `0x96808086`. The CPU walks PML4[511], not the low 4G PDPT.
+pub fn identity_signext32_gpa(gva: u64) -> Option<u64> {
+    if gva >> 32 == 0xFFFF_FFFF {
+        Some(gva as u32 as u64)
+    } else {
+        None
+    }
+}
+
+fn identity_high_pd_off(pdpt_i: u64) -> Option<u64> {
+    match pdpt_i {
+        510 => Some(IDENTITY_HIGH_PD_8000_OFF),
+        511 => Some(IDENTITY_HIGH_PD_C000_OFF),
+        _ => None,
+    }
+}
 
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
@@ -269,7 +292,8 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     }
 }
 
-/// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout).
+/// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout plus
+/// 3 high-half pages).
 ///
 /// Iron `3311ff3`: `#PF` `cr3=0x0` `fail=alloc` — PML4 at GPA 0 is empty.
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
@@ -278,6 +302,8 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
 /// Iron `73576cc`: bulk UC 2 MiB in that hole still ASSERTed (PAT UC- vs
 /// MTRR UC). Only `[0, ram_len)` plus flash and xAPIC are present. The
 /// MTRR hole stays NP; one PAT-UC 2 MiB is filled on sink `#PF`.
+/// Iron `124c1a8`: PML4[511] is linked so a sign-extended 32-bit CR2 can
+/// take an on-demand 2 MiB leaf (GPA stays zero-extended; not bulk 2–4 GiB).
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `pml4_gpa + IDENTITY_4G_BYTES` must lie in `[0, ram_len)`.
@@ -313,6 +339,31 @@ pub unsafe fn build_identity_4g(
             }
         }
     }
+    // Sign-extended 32-bit MMIO walks PML4[511] (iron 124c1a8). PDPT[510]
+    // covers VA 0xFFFFFFFF80000000 (GPA 0x80000000); PDPT[511] covers
+    // 0xFFFFFFFFC0000000 (GPA 0xC0000000). Leaves stay NP until a #PF.
+    let high_pdpt = pml4 + IDENTITY_HIGH_PDPT_OFF;
+    if !write_entry_ram(ram_hpa, ram_len, pml4, 511, high_pdpt | LEAF_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    if !write_entry_ram(
+        ram_hpa,
+        ram_len,
+        high_pdpt,
+        510,
+        (pml4 + IDENTITY_HIGH_PD_8000_OFF) | LEAF_FLAGS,
+    ) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    if !write_entry_ram(
+        ram_hpa,
+        ram_len,
+        high_pdpt,
+        511,
+        (pml4 + IDENTITY_HIGH_PD_C000_OFF) | LEAF_FLAGS,
+    ) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
     Ok(pml4)
 }
 
@@ -336,17 +387,35 @@ pub unsafe fn identity_map_mmio_2m(
     if pml4 >= ram_len {
         return Err(IdentityMapError::TableOutOfRam);
     }
-    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff)
+    let pml4_i = (gva >> 39) & 0x1ff;
+    let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, pml4_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e4 & PRESENT) == 0 {
-        return Err(IdentityMapError::NeedAlloc);
+        if pml4_i != 511 || pml4.saturating_add(IDENTITY_4G_BYTES) > ram_len {
+            return Err(IdentityMapError::NeedAlloc);
+        }
+        let high_pdpt = pml4 + IDENTITY_HIGH_PDPT_OFF;
+        if !write_entry_ram(ram_hpa, ram_len, pml4, 511, high_pdpt | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        e4 = high_pdpt | LEAF_FLAGS;
     }
     let pdpt = e4 & ADDR_MASK;
     let pdpt_i = (gva >> 30) & 0x1ff;
-    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
+    let mut e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e3 & PRESENT) == 0 {
-        return Err(IdentityMapError::NeedAlloc);
+        let Some(off) = identity_high_pd_off(pdpt_i) else {
+            return Err(IdentityMapError::NeedAlloc);
+        };
+        if pml4_i != 511 || pml4.saturating_add(IDENTITY_4G_BYTES) > ram_len {
+            return Err(IdentityMapError::NeedAlloc);
+        }
+        let pd_gpa = pml4 + off;
+        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, pd_gpa | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        e3 = pd_gpa | LEAF_FLAGS;
     }
     let pd = if (e3 & LARGE) != 0 {
         // Iron eb4b27d / a428202: 1GiB PDPTE pde=0xc0400083. Firmware may
@@ -376,8 +445,15 @@ pub unsafe fn identity_map_mmio_2m(
     };
     let idx2 = (gva >> 21) & 0x1ff;
     let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
-    let base = gva & !(TWO_MIB - 1);
-    let want = base | LARGE_2M_UC_FLAGS;
+    // Iron 124c1a8: VA 0xFFFFFFFF96808086 must walk PML4[511], but the
+    // leaf GPA is zero-extended 0x96800000 so EPT sink still applies.
+    let leaf_gpa = identity_signext32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
+    let flags = identity_leaf_flags(leaf_gpa, ram_len);
+    let want = if flags != 0 {
+        flags
+    } else {
+        leaf_gpa | LARGE_2M_UC_FLAGS
+    };
     if e2 == want {
         return Err(IdentityMapError::AlreadyPresent);
     }
@@ -503,10 +579,10 @@ mod guest_pt_test {
 
     #[test]
     fn build_identity_4g_maps_memfd() {
-        let mut ram = vec![0u8; 0x6000];
+        let mut ram = vec![0u8; 0x9000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
-        // SAFETY: exclusive 6-page buffer is the SEC PML4/PDPT/PD blob.
+        // SAFETY: exclusive 9-page buffer is the SEC PML4/PDPT/PD blob plus high half.
         unsafe {
             let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
             assert_eq!(cr3, 0);
@@ -544,7 +620,7 @@ mod guest_pt_test {
     #[test]
     fn identity_map_mmio_splits_rsvd_1g() {
         // Iron eb4b27d: PDPT[2] = 0xc0400083 (1GiB + reserved bit 22).
-        let mut ram = vec![0u8; 0x6000];
+        let mut ram = vec![0u8; 0x9000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
@@ -583,6 +659,42 @@ mod guest_pt_test {
             assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_signext32_high_half() {
+        // Iron 124c1a8: identity MMIO n=2 then #PF cr2=0xffffffff96808086
+        // err=0x2 pde=0 (PML4[511] walk; leaf must be GPA 0x96800000).
+        let mut ram = vec![0u8; 0x9000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        let cr2 = 0xFFFF_FFFF_9680_8086u64;
+        assert_eq!(identity_signext32_gpa(cr2), Some(0x9680_8086));
+        assert_eq!(identity_signext32_gpa(0x8000_0008), None);
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            let pml4_511 = read_entry_ram(ram_hpa, ram_len, 0, 511).unwrap();
+            assert_eq!(pml4_511, 0x6000 | LEAF_FLAGS);
+            assert_eq!(identity_walk_pde(0, cr2, ram_hpa, ram_len), 0);
+            let kind = identity_map_mmio_2m(0, cr2, ram_hpa, ram_len).expect("signext");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
+            assert_eq!(pde, 0x9680_0000 | LARGE_2M_UC_FLAGS);
+            let low = identity_walk_pde(0, 0x9680_8086, ram_hpa, ram_len);
+            assert_eq!(low, 0);
+            assert_eq!(
+                identity_map_mmio_2m(0, cr2, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
+            );
+            let c0 = 0xFFFF_FFFF_C020_0000u64;
+            let kind = identity_map_mmio_2m(0, c0, ram_hpa, ram_len).expect("c000");
+            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            assert_eq!(
+                identity_walk_pde(0, c0, ram_hpa, ram_len),
+                0xC020_0000 | LARGE_2M_UC_FLAGS
+            );
         }
     }
 }
