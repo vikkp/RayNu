@@ -447,6 +447,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ataio=1308"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SET FEATURES"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("edc9c3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("sibling 1GiB"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);

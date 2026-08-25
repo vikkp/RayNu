@@ -430,6 +430,58 @@ unsafe fn identity_refill_low4g_pd(
     Ok(())
 }
 
+/// Other 1 GiB PDPT index in firmware's MTRR UC hole `[2GiB, 4GiB)`.
+///
+/// Iron PAT-UC `48c598a`/`855ba1c`: xAPIC `#PF` split PDPT[3] (`0xc0600083`)
+/// then ASSERT `callerrip=0x1d25193`. PDPT[2] can stay a clean 1 GiB WB
+/// page over `[2GiB, 3GiB)` — no RSVD, no `#PF`, WB vs MTRR UC.
+pub fn identity_mtrr_uc_sibling_pdpt(pdpt_i: u64) -> Option<u64> {
+    match pdpt_i {
+        2 => Some(3),
+        3 => Some(2),
+        _ => None,
+    }
+}
+
+/// Split a firmware 1 GiB PDPTE back to the SEC PD (RAM-only / UC leaves).
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+unsafe fn identity_split_1g_pdpte(
+    ram_hpa: u64,
+    ram_len: u64,
+    pml4: u64,
+    pdpt: u64,
+    pdpt_i: u64,
+) -> Result<u64, IdentityMapError> {
+    if pdpt_i > 3 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e3 & LARGE) == 0 {
+        let pd = e3 & ADDR_MASK;
+        if pd >= ram_len {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        return Ok(pd);
+    }
+    let sec_pd = pml4 + 0x2000 + pdpt_i * 0x1000;
+    if pml4 != IDENTITY_HV_PML4 && pdpt != pml4 + 0x1000 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if sec_pd.saturating_add(0x1000) > ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, sec_pd | LEAF_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    identity_refill_low4g_pd(ram_hpa, ram_len, sec_pd, pdpt_i)?;
+    Ok(sec_pd)
+}
+
 /// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout plus
 /// 3 high-half pages).
 ///
@@ -578,22 +630,7 @@ pub unsafe fn identity_map_mmio_2m(
         // retarget PML4[0] at a PDPT in MEMFD so pdpt != pml4+0x1000
         // (iron a428202 printed identity MMIO fail). Restore the SEC PD
         // for this GiB into the PDPT the CPU actually walked.
-        if pdpt_i > 3 {
-            return Err(IdentityMapError::NeedAlloc);
-        }
-        let sec_pd = pml4 + 0x2000 + pdpt_i * 0x1000;
-        if pml4 != IDENTITY_HV_PML4 && pdpt != pml4 + 0x1000 {
-            return Err(IdentityMapError::NeedAlloc);
-        }
-        if sec_pd.saturating_add(0x1000) > ram_len {
-            return Err(IdentityMapError::TableOutOfRam);
-        }
-        if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, sec_pd | LEAF_FLAGS) {
-            return Err(IdentityMapError::TableOutOfRam);
-        }
-        // Iron d757a0a: firmware 0xAF-filled this PD after the 1GiB promote.
-        identity_refill_low4g_pd(ram_hpa, ram_len, sec_pd, pdpt_i)?;
-        sec_pd
+        identity_split_1g_pdpte(ram_hpa, ram_len, pml4, pdpt, pdpt_i)?
     } else {
         let pd = e3 & ADDR_MASK;
         if pd >= ram_len {
@@ -601,6 +638,12 @@ pub unsafe fn identity_map_mmio_2m(
         }
         pd
     };
+    // Iron COM2 after PAT-UC: PDPT[3] RSVD split, PDPT[2] stayed 1GiB WB
+    // over the 2–3GiB MTRR UC hole (no #PF). Split that sibling too.
+    // Do not bulk-map the hole at 4G rebuild (73576cc).
+    if let Some(other) = identity_mtrr_uc_sibling_pdpt(pdpt_i) {
+        let _ = identity_split_1g_pdpte(ram_hpa, ram_len, pml4, pdpt, other);
+    }
     let idx2 = (gva >> 21) & 0x1ff;
     let mut e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
     if identity_pde_is_poison(e2) {
@@ -953,11 +996,15 @@ mod guest_pt_test {
             let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
             assert_eq!(cr3, IDENTITY_HV_PML4);
             write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 2, 0x8000_0083);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
             assert_eq!(
                 identity_walk_pdpte(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len),
                 0xC060_0083
             );
+            assert_eq!(identity_mtrr_uc_sibling_pdpt(3), Some(2));
+            assert_eq!(identity_mtrr_uc_sibling_pdpt(2), Some(3));
+            assert_eq!(identity_mtrr_uc_sibling_pdpt(0), None);
             let r = identity_map_mmio_2m(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
             assert!(
                 matches!(
@@ -969,6 +1016,11 @@ mod guest_pt_test {
             let pdpt3 = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
             assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
             assert_eq!((pdpt3 & LARGE), 0);
+            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x5000, 2).unwrap();
+            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
+            assert_eq!((pdpt2 & LARGE), 0);
+            let hole2 = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
+            assert_eq!(hole2, 0, "2-3GiB stays NP; not WB 1GiB");
             let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
             assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
         }

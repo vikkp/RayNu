@@ -98,6 +98,9 @@
 //! slave absent. Nested Intel `48c598a` BOTH-OK then `ataio=1308`
 //! `packet=0` (`insn=ef` then `edc9c3` IN EAX,DX poll) because SET
 //! FEATURES `0xEF` ABRT'd. SET FEATURES succeeds with DRDY.
+//! Iron COM2 PAT-UC still ASSERT `callerrip=0x1d25193` after
+//! `identity MMIO n=3` — PDPT[2] 1GiB WB over 2–3GiB (no `#PF`).
+//! Split the sibling 1GiB in the MTRR UC hole. Dump `pdpte2`.
 //! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
@@ -392,12 +395,15 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("0xfee00020")
         && guest.contains("map_mmio xAPIC")
         && gpt.contains("identity_map_mmio_splits_xapic_rsvd_1g")
+        && gpt.contains("identity_mtrr_uc_sibling_pdpt")
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
         && guest.contains("48c598a")
         && guest.contains("SET FEATURES")
         && guest.contains("ataio=1308")
+        && guest.contains("pdpte2=0x")
+        && guest.contains("sibling 1GiB")
         && ide.contains("ATA_CMD_SET_FEATURES")
         && guest.contains("HOLE_ZERO_HPA")
         && guest.contains("GUEST_UEFI_IRON_EPT_QUAL_AD_WALK")
@@ -678,6 +684,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ataio=1308")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SET FEATURES")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("edc9c3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("sibling 1GiB")
         && GUEST_UEFI_IRON_HOLE_X_RIP == 0x27E_22D5
         && GUEST_UEFI_IRON_ZERO_FILL_RIP == 0x3ED0_0001
         && guest_uefi_rip_is_hole_execute(GUEST_UEFI_IRON_HOLE_X_RIP)
