@@ -482,6 +482,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HOST_IA32_PAT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1a93cb8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("OSFXSR+OSXMMEXCPT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ab25682"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x8400276"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("emulate MOV CR4"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT WB proved"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest PT WB"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde20"));
