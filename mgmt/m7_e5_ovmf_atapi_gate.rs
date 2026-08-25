@@ -71,6 +71,8 @@
 //! `pdpte2=0x204067` then ASSERT — NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT
 //! fills `[2GiB, 4GiB)` at 4G rebuild. Iron `1a93cb8`: PAT WB then
 //! NP `[32MiB, 2GiB)` vs MTRR WB — guest PT WB, not EPT. Dump `pde20`.
+//! Iron `28f42d2`: `pde20=0x20000e7` still ASSERT — live PDPT[1] 1–2GiB.
+//! Dump `pde4000` / `pdpte1`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -430,6 +432,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && launch.contains("handle_linux_cr_and_resume")
         && launch.contains("0x8400276")
         && guest.contains("pde20=0x")
+        && guest.contains("pde4000=0x")
+        && guest.contains("pdpte1=0x")
+        && gpt.contains("identity_ensure_pdpt_2m")
         && guest.contains("pde8000=0x")
         && guest.contains("pdpte3=0x")
         && gpt.contains("Iron 1a93cb8")
@@ -749,6 +754,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT WB proved")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest PT WB")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde20")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("28f42d2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_ensure_pdpt_2m")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde4000")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

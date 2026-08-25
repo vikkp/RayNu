@@ -499,6 +499,49 @@ unsafe fn identity_split_1g_pdpte(
     Ok(sec_pd)
 }
 
+/// Point PDPT[`pdpt_i`] at the SEC PD and fill 2 MiB leaves (NP or 1GiB).
+///
+/// Iron `28f42d2`: `pde20=0x20000e7` (PDPT[0] mid-gap WB) still ASSERT
+/// `callerrip=0x1d25193` `lastmsr=0x23f`. Live firmware PDPT `0x5000`
+/// gets PDPT[0]/[2]/[3] from SPLIT + hole sync; PDPT[1] (1–2GiB) can
+/// stay NP vs MTRR default WB. Do not refill PDPT[0] here (SPLIT4K
+/// 4K tables in 32 MiB RAM). Guest PT only; do not EPT-map 1–2GiB.
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+unsafe fn identity_ensure_pdpt_2m(
+    ram_hpa: u64,
+    ram_len: u64,
+    pml4: u64,
+    pdpt: u64,
+    pdpt_i: u64,
+) -> Result<u64, IdentityMapError> {
+    if pdpt_i > 3 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if pml4 != IDENTITY_HV_PML4 && pdpt != pml4 + 0x1000 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) != 0 && (e3 & LARGE) == 0 {
+        let pd = e3 & ADDR_MASK;
+        if pd >= ram_len {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        identity_refill_low4g_pd(ram_hpa, ram_len, pd, pdpt_i)?;
+        return Ok(pd);
+    }
+    let sec_pd = pml4 + 0x2000 + pdpt_i * 0x1000;
+    if sec_pd.saturating_add(0x1000) > ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    if !write_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i, sec_pd | LEAF_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    identity_refill_low4g_pd(ram_hpa, ram_len, sec_pd, pdpt_i)?;
+    Ok(sec_pd)
+}
+
 /// Split firmware 1 GiB PDPT[2] and PDPT[3] (MTRR UC 2–4 GiB) back to SEC PDs.
 ///
 /// Iron COM2 after sibling-on-xAPIC: `#PF` `pdpte2=0xc0400083` then
@@ -533,6 +576,8 @@ pub unsafe fn identity_split_mtrr_uc_hole(
 pub const IDENTITY_FW_PDPT_GPA: u64 = 0x5000;
 /// PDPT[3] / first 2 MiB of 3 GiB (dump `pdpte3=`).
 pub const IDENTITY_MTRR_UC_3G: u64 = 0xC000_0000;
+/// PDPT[1] / first 2 MiB of 1 GiB (dump `pde4000=` / `pdpte1=`).
+pub const IDENTITY_WB_1G: u64 = 0x4000_0000;
 
 fn identity_2m_is_wb_not_uc(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) != 0 && (e & (PCD | PWT)) != (PCD | PWT)
@@ -577,6 +622,9 @@ unsafe fn identity_sync_one_pdpt(
     pdpt: u64,
 ) -> u32 {
     let mut n = identity_split_mtrr_uc_hole(ram_hpa, ram_len, pml4, pdpt);
+    if identity_ensure_pdpt_2m(ram_hpa, ram_len, pml4, pdpt, 1).is_ok() {
+        n += 1;
+    }
     for i in 2..=3u64 {
         let Some(e) = read_entry_ram(ram_hpa, ram_len, pdpt, i) else {
             continue;
@@ -1215,6 +1263,12 @@ mod guest_pt_test {
             assert_eq!((pdpt2 & LARGE), 0);
             let hole2 = read_entry_ram(ram_hpa, ram_len, pdpt2 & !0xFFF, 0).unwrap();
             assert_eq!(hole2, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            let pdpt1 = read_entry_ram(ram_hpa, ram_len, 0x5000, 1).unwrap();
+            assert_eq!(pdpt1, 0x203000 | LEAF_FLAGS, "live PDPT[1] NP vs MTRR WB");
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, IDENTITY_WB_1G, ram_hpa, ram_len),
+                IDENTITY_WB_1G | LARGE_2M_FLAGS
+            );
             let r = identity_fix_ram_wp(IDENTITY_HV_PML4, 0x1D1_ABB8, ram_hpa, ram_len);
             assert!(
                 matches!(
