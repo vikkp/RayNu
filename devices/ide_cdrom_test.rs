@@ -1,9 +1,9 @@
 use super::{
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, host_identify_word0, host_read10,
-    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_scsi, pci_addr_selects_cd, pci_bdf,
-    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present, present_placeholder,
-    reset, sectors_read, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, ISO_SECTOR,
-    M7_E5_OVMF_CDROM_OK_MARKER,
+    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_scsi, pci_addr_selects_cd,
+    pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present,
+    present_placeholder, reset, sectors_read, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR,
+    ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
 
 #[test]
@@ -131,6 +131,25 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(is_bmide_port(0xC400));
     assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
     assert!(!is_bmide_port(0x1F0));
+    reset();
+}
+
+#[test]
+fn set_features_succeeds_then_packet_read10() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(host_identify_word0(), Some(0x85C0));
+    // Nested Intel 48c598a: OUT 0xEF then IN EAX,DX; ABRT never PACKET.
+    let _ = ata_io(0x01F1, false, 1, 0x03);
+    let _ = ata_io(0x01F7, false, 1, 0xEF);
+    assert_eq!(last_ata_cmd(), 0xEF);
+    let st = ata_io(0x01F7, true, 1, 0) as u8;
+    assert_eq!(st & 0x01, 0, "SET FEATURES must not ABRT");
+    assert_ne!(st & 0x40, 0, "DRDY");
+    let pvd = host_read10(16).expect("READ(10) after SET FEATURES");
+    assert_eq!(&pvd[1..6], b"CD001");
+    assert_eq!(last_scsi(), 0x28);
+    assert!(sectors_read() >= 1);
     reset();
 }
 

@@ -95,7 +95,10 @@
 //! zero 2MiB for hole RO; never RO-sink onto HPET. Nested Intel
 //! `f93caee` BOTH-OK then `0xA1`×4 `ataio=408` `packet=0` (IDENTIFY
 //! word 0 was `0x8500`; slave was a second CD). Word 0 is `0x85C0`;
-//! slave absent. Nested Intel `c19b91f` BOTH-OK then n=32768
+//! slave absent. Nested Intel `48c598a` BOTH-OK then `ataio=1308`
+//! `packet=0` (`insn=ef` then `edc9c3` IN EAX,DX poll) because SET
+//! FEATURES `0xEF` ABRT'd. SET FEATURES succeeds with DRDY.
+//! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
 //! VT-x `8e55abf`: BOTH-OK then n=2048 `ata=0x0` `unh=0`
@@ -144,6 +147,14 @@ pub fn prop_atapi_signature_and_read10() -> bool {
     let mid = ide_cdrom::ata_io(0x01F4, true, 1, 0) as u8;
     let high = ide_cdrom::ata_io(0x01F5, true, 1, 0) as u8;
     if mid != 0x14 || high != 0xEB {
+        ide_cdrom::reset();
+        return false;
+    }
+    // Nested Intel 48c598a: firmware OUT 0xEF then polls IN EAX,DX.
+    let _ = ide_cdrom::ata_io(0x01F1, false, 1, 0x03);
+    let _ = ide_cdrom::ata_io(0x01F7, false, 1, 0xEF);
+    let st = ide_cdrom::ata_io(0x01F7, true, 1, 0) as u8;
+    if (st & 0x01) != 0 || (st & 0x40) == 0 || ide_cdrom::last_ata_cmd() != 0xEF {
         ide_cdrom::reset();
         return false;
     }
@@ -384,6 +395,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
+        && guest.contains("48c598a")
+        && guest.contains("SET FEATURES")
+        && guest.contains("ataio=1308")
+        && ide.contains("ATA_CMD_SET_FEATURES")
         && guest.contains("HOLE_ZERO_HPA")
         && guest.contains("GUEST_UEFI_IRON_EPT_QUAL_AD_WALK")
         && ide.contains("0x85C0")
@@ -659,6 +674,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr1=0x3fff80000800")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1bdd7d3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC PCD+PWT")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("48c598a")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ataio=1308")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SET FEATURES")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("edc9c3")
         && GUEST_UEFI_IRON_HOLE_X_RIP == 0x27E_22D5
         && GUEST_UEFI_IRON_ZERO_FILL_RIP == 0x3ED0_0001
         && guest_uefi_rip_is_hole_execute(GUEST_UEFI_IRON_HOLE_X_RIP)

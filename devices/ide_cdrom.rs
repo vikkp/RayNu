@@ -12,6 +12,9 @@
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
 //! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
 //! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
+//! SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
+//! Intel `48c598a`: BOTH-OK `ataio=1308` `packet=0` (`insn=ef` then
+//! `edc9c3` IN EAX,DX poll) because ABRT never reached PACKET `0xA0`.
 //! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
 //! (nested Intel `f93caee`: `0xA1`×4 `ataio=408` `packet=0`).
 //! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
@@ -52,6 +55,7 @@ const ATA_CMD_DIAGNOSTIC: u8 = 0x90;
 const ATA_CMD_IDENTIFY: u8 = 0xEC;
 const ATA_CMD_IDENTIFY_PACKET: u8 = 0xA1;
 const ATA_CMD_PACKET: u8 = 0xA0;
+const ATA_CMD_SET_FEATURES: u8 = 0xEF;
 const ATA_DEVCTL_SRST: u8 = 0x04;
 /// ATAPI interrupt reason (sector-count): CDB write.
 const ATAPI_INT_CD: u8 = 0x01;
@@ -829,6 +833,13 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
                             m.ata_lba = ATAPI_SIG_LBA;
                             m.ata_count = 0x01;
+                            m.xfer = AtaXfer::Idle;
+                        }
+                        // Nested Intel 48c598a: OUT 0xEF then IN EAX,DX poll.
+                        // Default arm ABRT'd (ERR=0x04); firmware never PACKET.
+                        ATA_CMD_SET_FEATURES => {
+                            m.ata_err = 0;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
                             m.xfer = AtaXfer::Idle;
                         }
                         _ => {
