@@ -109,6 +109,8 @@
 //! `pde=0xfee000ff` still ASSERT — split PDPT[2]+[3] on RAM SPLIT too.
 //! Iron COM2 `8df2793`: `pdpte2=0x204067` (PD) then ASSERT — NP vs MTRR
 //! UC. PAT-UC 2–4GiB hole at 4G. Dump `pde8000`.
+//! Iron COM2 `d7bfb23`: `pde8000=0x800000ff` still ASSERT — firmware
+//! PDPT `0x5000`; sync live+`0x5000`; dump `pdpte3`.
 //! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
@@ -406,9 +408,13 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("identity_mtrr_uc_sibling_pdpt")
         && gpt.contains("identity_split_mtrr_uc_hole")
         && gpt.contains("identity_pdpte_is_1g")
+        && gpt.contains("identity_sync_live_mtrr_uc_hole")
+        && gpt.contains("IDENTITY_FW_PDPT_GPA")
         && gpt.contains("PAT-UC PCD+PWT")
         && gpt.contains("8df2793")
+        && gpt.contains("d7bfb23")
         && guest.contains("pde8000=0x")
+        && guest.contains("pdpte3=0x")
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
@@ -708,6 +714,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8df2793")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde8000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC 2-4GiB hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d7bfb23")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_sync_live_mtrr_uc_hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte3")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

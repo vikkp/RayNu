@@ -519,6 +519,97 @@ pub unsafe fn identity_split_mtrr_uc_hole(
     n
 }
 
+/// Firmware PDPT GPA on iron after 4G (`pml4e=0x5a6d` / `0x5a6f`).
+pub const IDENTITY_FW_PDPT_GPA: u64 = 0x5000;
+/// PDPT[3] / first 2 MiB of 3 GiB (dump `pdpte3=`).
+pub const IDENTITY_MTRR_UC_3G: u64 = 0xC000_0000;
+
+fn identity_2m_is_wb_not_uc(e: u64) -> bool {
+    (e & PRESENT) != 0 && (e & LARGE) != 0 && (e & (PCD | PWT)) != (PCD | PWT)
+}
+
+/// Restore PAT-UC 2 MiB in a hole PD. Leaves 4K tables alone (EPT scratch
+/// PT stores). NP / poison / WB 2 MiB become PAT-UC.
+///
+/// SAFETY: `pd_gpa` is a 4 KiB table in `[0, ram_len)`.
+unsafe fn identity_refresh_mtrr_uc_pd(
+    ram_hpa: u64,
+    ram_len: u64,
+    pd_gpa: u64,
+    pdpt_i: u64,
+) -> u32 {
+    let mut n = 0u32;
+    if pdpt_i < 2 || pdpt_i > 3 {
+        return 0;
+    }
+    for i in 0..512u64 {
+        let gpa = (pdpt_i * 512 + i) * TWO_MIB;
+        let want = identity_leaf_flags(gpa, ram_len);
+        if want == 0 {
+            continue;
+        }
+        let Some(e) = read_entry_ram(ram_hpa, ram_len, pd_gpa, i) else {
+            continue;
+        };
+        if identity_pde_is_poison(e) || e == 0 || identity_2m_is_wb_not_uc(e) {
+            if write_entry_ram(ram_hpa, ram_len, pd_gpa, i, want) {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
+unsafe fn identity_sync_one_pdpt(
+    ram_hpa: u64,
+    ram_len: u64,
+    pml4: u64,
+    pdpt: u64,
+) -> u32 {
+    let mut n = identity_split_mtrr_uc_hole(ram_hpa, ram_len, pml4, pdpt);
+    for i in 2..=3u64 {
+        let Some(e) = read_entry_ram(ram_hpa, ram_len, pdpt, i) else {
+            continue;
+        };
+        if (e & PRESENT) == 0 || (e & LARGE) != 0 {
+            continue;
+        }
+        n += identity_refresh_mtrr_uc_pd(ram_hpa, ram_len, e & ADDR_MASK, i);
+    }
+    n
+}
+
+/// Split 1 GiB and restore PAT-UC on the PDPT PML4[0] actually walks.
+///
+/// Iron `d7bfb23`: 4G `pde8000=0x800000ff` then SPLIT4K `pml4e=0x5a6d`
+/// `pdpte2=0x204067` (PD) still ASSERT `callerrip=0x1d25193`. 4G filled
+/// `pml4+0x1000`; CpuDxe software-walks the retargeted PDPT at `0x5000`
+/// ([`IDENTITY_FW_PDPT_GPA`]). PDPT[3] can stay 1 GiB WB over 3–4 GiB
+/// with no extra `#PF`. Do **not** treat GPA `0x5000` as a PDPT until
+/// PML4[0] points there (low RAM may still be firmware data).
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+pub unsafe fn identity_sync_live_mtrr_uc_hole(
+    ram_hpa: u64,
+    ram_len: u64,
+    cr3: u64,
+) -> u32 {
+    if ram_hpa == 0 {
+        return 0;
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 >= ram_len {
+        return 0;
+    }
+    let Some(e4) = read_entry_ram(ram_hpa, ram_len, pml4, 0) else {
+        return 0;
+    };
+    if (e4 & PRESENT) == 0 {
+        return 0;
+    }
+    identity_sync_one_pdpt(ram_hpa, ram_len, pml4, e4 & ADDR_MASK)
+}
+
 /// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout plus
 /// 3 high-half pages).
 ///
@@ -665,7 +756,8 @@ pub unsafe fn identity_map_mmio_2m(
     // Iron COM2: pdpte2=0xc0400083 at RAM SPLIT n=2 and at xAPIC #PF.
     // Sibling-of-current only ran when pdpt_i was 2 or 3, so the 0x1e9000
     // split left 2–3GiB as a 1GiB WB page. CpuDxe software-walks it.
-    let _ = identity_split_mtrr_uc_hole(ram_hpa, ram_len, pml4, pdpt);
+    // Iron d7bfb23: 4G PAT-UC then firmware PDPT 0x5000; sync live PDPT.
+    let _ = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, cr3);
     e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     let pd = if (e3 & LARGE) != 0 {
@@ -738,6 +830,7 @@ pub unsafe fn identity_fix_ram_wp(
     if pml4 >= ram_len {
         return Err(IdentityMapError::TableOutOfRam);
     }
+    let _ = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, cr3);
     let idx4 = (gva >> 39) & 0x1ff;
     let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, idx4)
         .ok_or(IdentityMapError::TableOutOfRam)?;
@@ -1077,6 +1170,63 @@ mod guest_pt_test {
             );
             let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
             assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
+        }
+    }
+
+    #[test]
+    fn identity_sync_live_mtrr_uc_hole_splits_fw_pdpt3() {
+        // Iron d7bfb23: 4G pde8000=0x800000ff then firmware pml4e=0x5a6d
+        // PDPT at 0x5000. PDPT[2] can already be a table while PDPT[3] is
+        // still 1GiB WB (CpuDxe software-walk, no extra #PF).
+        let mut ram = vec![0u8; 0x220000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x202000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 2, 0xC040_0083);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
+            let n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
+            assert!(n >= 2, "split both hole 1GiB PDPTEs, n={n}");
+            let pdpt3 = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
+            assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
+            assert_eq!((pdpt3 & LARGE), 0);
+            let pde3 = read_entry_ram(ram_hpa, ram_len, pdpt3 & !0xFFF, 0).unwrap();
+            assert_eq!(pde3, IDENTITY_MTRR_UC_3G | LARGE_2M_UC_FLAGS);
+            let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x5000, 2).unwrap();
+            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
+            assert_eq!((pdpt2 & LARGE), 0);
+            let hole2 = read_entry_ram(ram_hpa, ram_len, pdpt2 & !0xFFF, 0).unwrap();
+            assert_eq!(hole2, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            let r = identity_fix_ram_wp(IDENTITY_HV_PML4, 0x1D1_ABB8, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Split4K) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
+            let pdpt3b = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
+            assert_eq!((pdpt3b & LARGE), 0);
+        }
+    }
+
+    #[test]
+    fn identity_sync_skips_gpa_5000_until_pml4_retarget() {
+        // Do not treat low-RAM 0x5000 as a PDPT while PML4[0] still walks
+        // pml4+0x1000 (iron 4G window before CpuDxe retarget).
+        let mut ram = vec![0u8; 0x220000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_FW_PDPT_GPA, 3, 0xC060_0083);
+            let _n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
+            let planted = read_entry_ram(ram_hpa, ram_len, IDENTITY_FW_PDPT_GPA, 3).unwrap();
+            assert_eq!(planted, 0xC060_0083);
         }
     }
 

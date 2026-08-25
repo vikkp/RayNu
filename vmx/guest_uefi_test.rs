@@ -470,6 +470,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8df2793"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde8000"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC 2-4GiB hole"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d7bfb23"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_sync_live_mtrr_uc_hole"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte3"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);
