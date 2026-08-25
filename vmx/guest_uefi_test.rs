@@ -480,6 +480,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pat=0x0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x0007040600070406"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HOST_IA32_PAT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1a93cb8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("OSFXSR+OSXMMEXCPT"));
     assert_eq!(IA32_PAT_RESET, 0x0007_0406_0007_0406);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 0), 6);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 3), 0);

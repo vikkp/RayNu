@@ -15,6 +15,10 @@ pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
 /// CPUID.1:ECX bit 31 — hypervisor present (KVM sets this; bare metal does not).
 pub const CPUID_ECX_HYPERVISOR: u32 = 1 << 31;
 
+/// CR4 bit 9 — OSFXSR (FXSAVE/FXRSTOR / SSE).
+pub const CR4_OSFXSR: u64 = 1 << 9;
+/// CR4 bit 10 — OSXMMEXCPT (unmasked SIMD FP exceptions).
+pub const CR4_OSXMMEXCPT: u64 = 1 << 10;
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
@@ -462,6 +466,8 @@ mod cpu_test {
         assert_eq!(IA32_FEATURE_CONTROL, 0x3A);
         assert_eq!(IA32_VMX_BASIC, 0x480);
         assert_eq!(IA32_VMX_EPT_VPID_CAP, 0x48C);
+        assert_eq!(CR4_OSFXSR, 1 << 9);
+        assert_eq!(CR4_OSXMMEXCPT, 1 << 10);
         assert_eq!(CR4_VMXE, 1 << 13);
         assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);

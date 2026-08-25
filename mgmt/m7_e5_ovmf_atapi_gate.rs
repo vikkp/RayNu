@@ -234,6 +234,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let adr = include_str!("../docs/adr/ADR-014.md");
     let qemu = include_str!("../tools/qemu-boot-test.sh");
     let guest = include_str!("../vmx/guest_uefi.rs");
+    let launch = include_str!("../vmx/launch.rs");
     let gpt = include_str!("../vmx/guest_pt.rs");
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plat = include_str!("../devices/guest_platform.rs");
@@ -417,6 +418,13 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("8df2793")
         && gpt.contains("d7bfb23")
         && gpt.contains("1de9389")
+        && guest.contains("1de9389")
+        && guest.contains("44c56db")
+        && guest.contains("IA32_PAT_RESET")
+        && guest.contains("1a93cb8")
+        && launch.contains("E4_LINUX_CR4_HOST_OWNED")
+        && launch.contains("e4_linux_guest_cr4")
+        && launch.contains("Linux CR4.VMXE+OSFXSR host-owned")
         && guest.contains("pde8000=0x")
         && guest.contains("pdpte3=0x")
         && guest.contains("pdefee=0x")
@@ -726,6 +734,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1de9389")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x205067")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("44c56db")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pat=0x0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1a93cb8")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("OSFXSR+OSXMMEXCPT")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
