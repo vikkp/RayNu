@@ -15,11 +15,11 @@ use super::{
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
     guest_uefi_phys_bits, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
-    GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IO_STRING_CAP, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
+    GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IO_STRING_CAP, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
     GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN,
@@ -391,6 +391,26 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("54a8708"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x219067"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("already-RW"));
+    assert_eq!(GUEST_UEFI_IRON_HOLE_X_RIP, 0x27E_22D5);
+    assert_eq!(GUEST_UEFI_IRON_ZERO_FILL_RIP, 0x3ED0_0001);
+    assert!(guest_uefi_rip_is_hole_execute(GUEST_UEFI_IRON_HOLE_X_RIP));
+    assert!(guest_uefi_rip_is_hole_execute(GUEST_UEFI_IRON_ZERO_FILL_RIP));
+    assert!(!guest_uefi_rip_is_hole_execute(0x1DF1B7));
+    assert!(!guest_uefi_ept_hole_ro_allows_execute());
+    assert!(guest_uefi_ept_qual_is_fetch(GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK));
+    assert!(guest_uefi_ept_hole_ro_on_qual(GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK));
+    assert!(!guest_uefi_ept_hole_ro_on_qual(4));
+    assert!(guest_uefi_ept_hole_ro_on_qual(1));
+    assert!(!guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_HOLE_X_RIP));
+    assert!(!guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_ZERO_FILL_RIP));
+    assert!(!guest_uefi_pf_should_map_mmio(0, 0x3EE0_0000));
+    assert!(guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA));
+    assert!(guest_uefi_pf_should_map_mmio(0xb, GUEST_UEFI_IRON_PF_MTRR_UC_CR2));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("19b0c11"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x27e22d5"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3ed00001"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("R only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preemption while RIP"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);
