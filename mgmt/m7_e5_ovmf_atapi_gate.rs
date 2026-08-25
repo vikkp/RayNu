@@ -375,6 +375,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_hole_ro_uses_dedicated_zero")
         && guest.contains("guest_uefi_ept_hole_ro_allows_execute")
         && guest.contains("guest_uefi_rip_is_hole_execute")
+        && guest.contains("pml4e=0x")
+        && guest.contains("pdpte=0x")
         && guest.contains("HOLE_ZERO_HPA")
         && guest.contains("GUEST_UEFI_IRON_EPT_QUAL_AD_WALK")
         && ide.contains("0x85C0")
@@ -386,6 +388,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_pde_is_poison")
         && gpt.contains("identity_refill_low4g_pd")
         && gpt.contains("IDENTITY_POISON_PTE")
+        && gpt.contains("identity_walk_is_writable")
+        && gpt.contains("identity_walk_pml4e")
         && guest.contains("17449e2")
         && guest.contains("uniprocessor")
         && guest.contains("pause CpuDeadLoop")
@@ -616,6 +620,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3ed00001")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("R only")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preemption while RIP")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("89c3731")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x219027")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("walk R/W")
         && GUEST_UEFI_IRON_HOLE_X_RIP == 0x27E_22D5
         && GUEST_UEFI_IRON_ZERO_FILL_RIP == 0x3ED0_0001
         && guest_uefi_rip_is_hole_execute(GUEST_UEFI_IRON_HOLE_X_RIP)

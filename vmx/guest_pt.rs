@@ -250,6 +250,54 @@ pub unsafe fn identity_walk_pde(
     read_entry_ram(ram_hpa, ram_len, pd, (gva >> 21) & 0x1ff).unwrap_or(0)
 }
 
+/// PML4E for `gva`, or 0 if the table cannot be read.
+pub unsafe fn identity_walk_pml4e(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> u64 {
+    if ram_hpa == 0 {
+        return 0;
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff).unwrap_or(0)
+}
+
+/// PDPTE for `gva`, or 0 if the walk cannot read it.
+pub unsafe fn identity_walk_pdpte(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> u64 {
+    let e4 = identity_walk_pml4e(cr3, gva, ram_hpa, ram_len);
+    if (e4 & PRESENT) == 0 {
+        return 0;
+    }
+    read_entry_ram(ram_hpa, ram_len, e4 & ADDR_MASK, (gva >> 30) & 0x1ff).unwrap_or(0)
+}
+
+/// CR0.WP write is allowed only if every present entry in the walk has R/W.
+pub fn identity_walk_is_writable(pml4e: u64, pdpte: u64, pde: u64, pte: u64) -> bool {
+    if (pml4e & PRESENT) == 0 || (pml4e & RW) == 0 {
+        return false;
+    }
+    if (pdpte & PRESENT) == 0 || (pdpte & RW) == 0 {
+        return false;
+    }
+    if (pdpte & LARGE) != 0 {
+        return true;
+    }
+    if (pde & PRESENT) == 0 || (pde & RW) == 0 {
+        return false;
+    }
+    if (pde & LARGE) != 0 {
+        return true;
+    }
+    (pte & PRESENT) != 0 && (pte & RW) != 0
+}
+
 /// 4 KiB PTE for `gva`, or 0 if the walk is still a 2 MiB leaf / unreadable.
 ///
 /// Iron `54a8708`: after SPLIT4K, PDE `0x219067` (PT at `0x219000`) but
@@ -580,12 +628,13 @@ pub fn identity_split_pt_gpa(pml4: u64, gva: u64) -> u64 {
     (pml4 & ADDR_MASK) + IDENTITY_4G_BYTES + identity_split_pt_slot(gva) * 4096
 }
 
-/// Split a present 2 MiB RAM leaf to 512 4 KiB RW PTEs, or OR RW on an
-/// existing 4 KiB PTE. Do **not** rebuild 4G (`fdf07ba` ASSERT).
+/// Split a present 2 MiB RAM leaf to 512 4 KiB RW PTEs, or OR R/W on the
+/// **whole walk** (PML4/PDPT/PD/PTE). Do **not** rebuild 4G (`fdf07ba`).
 ///
 /// Iron `06b011a`: after RAM 1GiB SPLIT n=2, `#PF` `err=0x3` `cr2=0x1d1abb8`
-/// `pde=0x1c000e7` `rip=0x1de592` (`CR0.WP` stack push in the same 2 MiB
-/// as DXE). `guest_uefi_pf_should_identity_map` is NP/RSVD only.
+/// `pde=0x1c000e7` `rip=0x1de592` (`CR0.WP` stack push).
+/// Iron `89c3731`: SPLIT4K n=2 then `pte=0x1d1a067` already RW and stop.
+/// CR0.WP ANDs R/W through PML4/PDPT; a RO PML4E still #PFs a RW 4K leaf.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 /// `cr3` table frames and the SPLIT4K PT must lie in `[0, ram_len)`.
@@ -602,23 +651,44 @@ pub unsafe fn identity_fix_ram_wp(
     if pml4 >= ram_len {
         return Err(IdentityMapError::TableOutOfRam);
     }
-    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff)
+    let idx4 = (gva >> 39) & 0x1ff;
+    let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, idx4)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e4 & PRESENT) == 0 {
         return Err(IdentityMapError::NeedAlloc);
     }
+    let mut changed = false;
+    if (e4 & RW) == 0 {
+        e4 |= RW;
+        if !write_entry_ram(ram_hpa, ram_len, pml4, idx4, e4) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        changed = true;
+    }
     let pdpt = e4 & ADDR_MASK;
-    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff)
+    let idx3 = (gva >> 30) & 0x1ff;
+    let mut e3 = read_entry_ram(ram_hpa, ram_len, pdpt, idx3)
         .ok_or(IdentityMapError::TableOutOfRam)?;
     if (e3 & PRESENT) == 0 {
         return Err(IdentityMapError::NeedAlloc);
     }
+    if (e3 & RW) == 0 {
+        e3 |= RW;
+        if !write_entry_ram(ram_hpa, ram_len, pdpt, idx3, e3) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        changed = true;
+    }
     if (e3 & LARGE) != 0 {
-        return Err(IdentityMapError::NeedAlloc);
+        return if changed {
+            Ok(IdentityMapKind::Split4K)
+        } else {
+            Err(IdentityMapError::NeedAlloc)
+        };
     }
     let pd = e3 & ADDR_MASK;
     let idx2 = (gva >> 21) & 0x1ff;
-    let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    let mut e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
     if (e2 & PRESENT) == 0 {
         return Err(IdentityMapError::NeedAlloc);
     }
@@ -639,19 +709,30 @@ pub unsafe fn identity_fix_ram_wp(
         }
         return Ok(IdentityMapKind::Split4K);
     }
+    if (e2 & RW) == 0 {
+        e2 |= RW;
+        if !write_entry_ram(ram_hpa, ram_len, pd, idx2, e2) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        changed = true;
+    }
     let pt = e2 & ADDR_MASK;
     let idx1 = (gva >> 12) & 0x1ff;
     let e1 = read_entry_ram(ram_hpa, ram_len, pt, idx1).ok_or(IdentityMapError::TableOutOfRam)?;
     if (e1 & PRESENT) == 0 {
         return Err(IdentityMapError::NeedAlloc);
     }
-    if (e1 & RW) != 0 {
-        return Err(IdentityMapError::AlreadyPresent);
+    if (e1 & RW) == 0 {
+        if !write_entry_ram(ram_hpa, ram_len, pt, idx1, e1 | RW) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        changed = true;
     }
-    if !write_entry_ram(ram_hpa, ram_len, pt, idx1, e1 | RW) {
-        return Err(IdentityMapError::TableOutOfRam);
+    if changed {
+        Ok(IdentityMapKind::Split4K)
+    } else {
+        Err(IdentityMapError::AlreadyPresent)
     }
-    Ok(IdentityMapKind::Split4K)
 }
 
 #[cfg(test)]
@@ -1016,6 +1097,27 @@ mod guest_pt_test {
                 identity_fix_ram_wp(0, cr2, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
             );
+            // Iron 89c3731: leaf already RW but CR0.WP still #PF if PML4E.W=0.
+            let pml4e = identity_walk_pml4e(0, cr2, ram_hpa, ram_len);
+            assert_ne!(pml4e & RW, 0);
+            write_entry_ram(ram_hpa, ram_len, 0, 0, pml4e & !RW);
+            assert!(!identity_walk_is_writable(
+                identity_walk_pml4e(0, cr2, ram_hpa, ram_len),
+                identity_walk_pdpte(0, cr2, ram_hpa, ram_len),
+                identity_walk_pde(0, cr2, ram_hpa, ram_len),
+                identity_walk_pte(0, cr2, ram_hpa, ram_len),
+            ));
+            assert_eq!(
+                identity_fix_ram_wp(0, cr2, ram_hpa, ram_len).expect("walk RW"),
+                IdentityMapKind::Split4K
+            );
+            assert_ne!(identity_walk_pml4e(0, cr2, ram_hpa, ram_len) & RW, 0);
+            assert!(identity_walk_is_writable(
+                identity_walk_pml4e(0, cr2, ram_hpa, ram_len),
+                identity_walk_pdpte(0, cr2, ram_hpa, ram_len),
+                identity_walk_pde(0, cr2, ram_hpa, ram_len),
+                identity_walk_pte(0, cr2, ram_hpa, ram_len),
+            ));
         }
     }
 }

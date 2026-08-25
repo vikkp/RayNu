@@ -411,6 +411,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3ed00001"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("R only"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("preemption while RIP"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("89c3731"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x219027"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("walk R/W"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);
