@@ -382,7 +382,17 @@ fn identity_high_pd_off(pdpt_i: u64) -> Option<u64> {
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len {
         gpa | LARGE_2M_FLAGS
-    } else if gpa >= IDENTITY_MTRR_UC_FLOOR && gpa < 0x1_0000_0000 {
+    } else if gpa < IDENTITY_MTRR_UC_FLOOR {
+        // Iron 1a93cb8: PAT WB (`pat=0x7010600070406`) still ASSERT
+        // `callerrip=0x1d25193` `lastmsr=0x23f`. MTRR default WB
+        // (`mtrrdef=0xc06`) covers 0–2GiB; one UC pair at 2GiB
+        // (`mtrr0=0x80000000`). CpuDxe RefreshGcdMemoryAttributes
+        // software-walks NP `[ram_len, 2GiB)` vs MTRR WB. Guest PT
+        // WB 2MiB for the mid-gap. Do **not** EPT-map `[32MiB, 2GiB)`
+        // (iron `89c3731` RIP `0x27e22d5` executed hole RO zeros
+        // when that window was R+X).
+        gpa | LARGE_2M_FLAGS
+    } else if gpa < 0x1_0000_0000 {
         // Iron 32ee302: WB 2MiB xAPIC/flash sit in firmware's 2–4GiB
         // MTRR UC (`mtrr0=0x80000000` `mtrr1=0x3fff80000800`).
         // Iron 73576cc: bulk **PCD-only** (PAT UC-) reopened ASSERT
@@ -390,7 +400,7 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
         // not 1GiB WB) then ASSERT with **no** xAPIC `#PF` — CpuDxe
         // software-walks NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT (index 3)
         // matches MTRR UC. Guest PT only; EPT still sink/scratch
-        // (ADR-004). Do not map `[ram_len, 2GiB)` (iron `89c3731`).
+        // (ADR-004).
         gpa | LARGE_2M_UC_FLAGS
     } else {
         0
@@ -405,7 +415,7 @@ pub fn identity_pde_is_poison(pde: u64) -> bool {
     pde == IDENTITY_POISON_PTE
 }
 
-/// Rewrite every 2 MiB slot in a low-4G PD (RAM WB, MTRR hole PAT-UC).
+/// Rewrite every 2 MiB slot in a low-4G PD (0–2GiB WB, MTRR hole PAT-UC).
 ///
 /// Iron `d757a0a`: SPLIT restored SEC PD at `pml4+0x2000` after firmware
 /// promoted PDPT[0] to `0xc0000083` and 0xAF-filled the PD. One 2 MiB
@@ -619,7 +629,8 @@ pub unsafe fn identity_sync_live_mtrr_uc_hole(
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
 /// Iron `73576cc`: bulk **PCD-only** (PAT UC-) still ASSERTed. Iron
 /// `8df2793`: hole PD present, 2 MiB leaves NP, ASSERT with no xAPIC
-/// `#PF`. `[2GiB, 4GiB)` is PAT-UC PCD+PWT. `[ram_len, 2GiB)` stays NP.
+/// `#PF`. `[2GiB, 4GiB)` is PAT-UC PCD+PWT. Iron `1a93cb8`: `[ram_len, 2GiB)`
+/// is guest-PT WB (MTRR default WB); EPT still does not map that window.
 /// Iron `124c1a8`: PML4[511] is linked so a sign-extended 32-bit CR2 can
 /// take an on-demand 2 MiB leaf (GPA stays zero-extended; not bulk 2–4 GiB).
 /// Iron `577c9eb`: leftover-high CR2 uses overflow PDPT+PD (PML4[1]).
@@ -1055,7 +1066,9 @@ mod guest_pt_test {
             let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
             assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
-            assert_eq!(above_ram, 0);
+            assert_eq!(above_ram, ram_len | LARGE_2M_FLAGS);
+            let gib1 = read_entry_ram(ram_hpa, ram_len, 0x3000, 0).unwrap();
+            assert_eq!(gib1, 0x4000_0000 | LARGE_2M_FLAGS);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
             assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_UC_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
@@ -1337,6 +1350,8 @@ mod guest_pt_test {
             let code = identity_walk_pde(0, 0x1D1_E6CB, ram_hpa, ram_len);
             assert_eq!(code, 0x1C0_0000 | LARGE_2M_FLAGS);
             assert!(!identity_pde_is_poison(code));
+            let mid = identity_walk_pde(0, ram_len, ram_hpa, ram_len);
+            assert_eq!(mid, ram_len | LARGE_2M_FLAGS);
         }
     }
 

@@ -69,7 +69,8 @@
 //! then `#PF` `0x1e9000` 4G n=2 ASSERT `callerrip=0x1d25193` (UC- vs UC).
 //! On-demand PAT-UC 2MiB + split RSVD 1GiB. Iron `8df2793`: hole PD
 //! `pdpte2=0x204067` then ASSERT — NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT
-//! fills `[2GiB, 4GiB)` at 4G rebuild. `[32MiB, 2GiB)` stays NP.
+//! fills `[2GiB, 4GiB)` at 4G rebuild. Iron `1a93cb8`: PAT WB then
+//! NP `[32MiB, 2GiB)` vs MTRR WB — guest PT WB, not EPT. Dump `pde20`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -425,8 +426,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && launch.contains("E4_LINUX_CR4_HOST_OWNED")
         && launch.contains("e4_linux_guest_cr4")
         && launch.contains("Linux CR4.VMXE+OSFXSR host-owned")
+        && guest.contains("pde20=0x")
         && guest.contains("pde8000=0x")
         && guest.contains("pdpte3=0x")
+        && gpt.contains("Iron 1a93cb8")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
         && guest.contains("pat=0x")
@@ -738,6 +741,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pat=0x0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1a93cb8")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("OSFXSR+OSXMMEXCPT")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT WB proved")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest PT WB")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde20")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
