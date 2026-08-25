@@ -382,16 +382,17 @@ fn identity_high_pd_off(pdpt_i: u64) -> Option<u64> {
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
     if gpa < ram_len {
         gpa | LARGE_2M_FLAGS
-    } else if gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
+    } else if gpa >= IDENTITY_MTRR_UC_FLOOR && gpa < 0x1_0000_0000 {
         // Iron 32ee302: WB 2MiB xAPIC/flash sit in firmware's 2–4GiB
-        // MTRR UC (`mtrr0=0x80000000` `mtrr1=0x3fff80000800`). CpuDxe
-        // paging refresh then ASSERT `callerrip=0x1d25193` `lastmsr=0x23f`
-        // after GetApicVersion (`MMIO n=3`). PCD+PWT = UC, not UC- (73576cc).
+        // MTRR UC (`mtrr0=0x80000000` `mtrr1=0x3fff80000800`).
+        // Iron 73576cc: bulk **PCD-only** (PAT UC-) reopened ASSERT
+        // `callerrip=0x1d25193`. Iron `8df2793`: PDPT[2]=`0x204067` (PD,
+        // not 1GiB WB) then ASSERT with **no** xAPIC `#PF` — CpuDxe
+        // software-walks NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT (index 3)
+        // matches MTRR UC. Guest PT only; EPT still sink/scratch
+        // (ADR-004). Do not map `[ram_len, 2GiB)` (iron `89c3731`).
         gpa | LARGE_2M_UC_FLAGS
     } else {
-        // Iron 73576cc: bulk UC 2MiB for [0x80000000, flash) reopened
-        // fdf07ba ASSERT callerrip=0x1d25193 lastmsr=0x23f. Hole stays NP.
-        // On-demand identity_map_mmio_2m fills one PAT-UC 2MiB.
         0
     }
 }
@@ -404,7 +405,7 @@ pub fn identity_pde_is_poison(pde: u64) -> bool {
     pde == IDENTITY_POISON_PTE
 }
 
-/// Rewrite every 2 MiB slot in a low-4G PD (RAM WB, hole NP).
+/// Rewrite every 2 MiB slot in a low-4G PD (RAM WB, MTRR hole PAT-UC).
 ///
 /// Iron `d757a0a`: SPLIT restored SEC PD at `pml4+0x2000` after firmware
 /// promoted PDPT[0] to `0xc0000083` and 0xAF-filled the PD. One 2 MiB
@@ -525,9 +526,9 @@ pub unsafe fn identity_split_mtrr_uc_hole(
 /// Load this as guest CR3 so `0x80B000` / DxeCore RAM are present.
 /// Iron `fdf07ba`: filling 4 GiB of WB 2 MiB leaves made MTRR UC (2–4 GiB)
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
-/// Iron `73576cc`: bulk UC 2 MiB in that hole still ASSERTed (PAT UC- vs
-/// MTRR UC). Only `[0, ram_len)` plus flash and xAPIC are present. The
-/// MTRR hole stays NP; one PAT-UC 2 MiB is filled on sink `#PF`.
+/// Iron `73576cc`: bulk **PCD-only** (PAT UC-) still ASSERTed. Iron
+/// `8df2793`: hole PD present, 2 MiB leaves NP, ASSERT with no xAPIC
+/// `#PF`. `[2GiB, 4GiB)` is PAT-UC PCD+PWT. `[ram_len, 2GiB)` stays NP.
 /// Iron `124c1a8`: PML4[511] is linked so a sign-extended 32-bit CR2 can
 /// take an on-demand 2 MiB leaf (GPA stays zero-extended; not bulk 2–4 GiB).
 /// Iron `577c9eb`: leftover-high CR2 uses overflow PDPT+PD (PML4[1]).
@@ -955,17 +956,19 @@ mod guest_pt_test {
                 0x800000 | LARGE_2M_FLAGS
             );
             let pci = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
-            assert_eq!(pci, 0);
+            assert_eq!(pci, 0xC000_0000 | LARGE_2M_UC_FLAGS);
             let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
-            assert_eq!(mtrr_uc, 0);
+            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, 0);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
             assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_UC_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
             assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
-            let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
-            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            assert_eq!(
+                identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
+            );
             let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
             assert_eq!(uc, 0xC000_0000 | LARGE_2M_UC_FLAGS);
             assert_eq!(
@@ -989,8 +992,14 @@ mod guest_pt_test {
                 identity_walk_pde(0, 0x8000_0008, ram_hpa, ram_len),
                 0xC040_0083
             );
-            let kind = identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len).expect("split");
-            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let r = identity_map_mmio_2m(0, 0x8000_0008, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Mmio2M) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
             assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
@@ -1010,9 +1019,14 @@ mod guest_pt_test {
             assert_eq!(cr3, IDENTITY_HV_PML4);
             write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x8000 | LEAF_FLAGS);
             write_entry_ram(ram_hpa, ram_len, 0x8000, 2, 0xC040_0083);
-            let kind =
-                identity_map_mmio_2m(IDENTITY_HV_PML4, 0x8000_0008, ram_hpa, ram_len).expect("split");
-            assert_eq!(kind, IdentityMapKind::Mmio2M);
+            let r = identity_map_mmio_2m(IDENTITY_HV_PML4, 0x8000_0008, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Mmio2M) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x8000, 2).unwrap();
             assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
@@ -1056,7 +1070,11 @@ mod guest_pt_test {
             assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
             assert_eq!((pdpt2 & LARGE), 0);
             let hole2 = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
-            assert_eq!(hole2, 0, "2-3GiB stays NP; not WB 1GiB");
+            assert_eq!(
+                hole2,
+                IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS,
+                "2-3GiB PAT-UC 2MiB; not WB 1GiB and not NP"
+            );
             let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
             assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
         }
@@ -1082,8 +1100,10 @@ mod guest_pt_test {
             assert_eq!(kind, IdentityMapKind::Mmio2M);
             let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
             assert_eq!(pde, 0x9680_0000 | LARGE_2M_UC_FLAGS);
+            // Iron 8df2793: low 4G [2GiB, 4GiB) is PAT-UC at 4G rebuild so
+            // CpuDxe software-walks UC not NP. High-half is a separate PD.
             let low = identity_walk_pde(0, 0x9680_8086, ram_hpa, ram_len);
-            assert_eq!(low, 0);
+            assert_eq!(low, 0x9680_0000 | LARGE_2M_UC_FLAGS);
             assert_eq!(
                 identity_map_mmio_2m(0, cr2, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
@@ -1155,7 +1175,11 @@ mod guest_pt_test {
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x1000, 2).unwrap();
             assert_eq!((pdpt2 & LARGE), 0, "RAM split must split PDPT[2] 1GiB WB");
             let hole2 = read_entry_ram(ram_hpa, ram_len, pdpt2 & !0xFFF, 0).unwrap();
-            assert_eq!(hole2, 0, "2-3GiB stays NP; not WB 1GiB");
+            assert_eq!(
+                hole2,
+                IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS,
+                "2-3GiB PAT-UC 2MiB; not WB 1GiB and not NP"
+            );
             let pde = identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len);
             assert_eq!(pde, LARGE_2M_FLAGS);
             let code = identity_walk_pde(0, 0x1D1_E6CB, ram_hpa, ram_len);

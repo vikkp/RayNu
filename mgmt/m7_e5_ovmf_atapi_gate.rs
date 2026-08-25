@@ -67,7 +67,9 @@
 //! Iron `eb4b27d`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! (RSVD 1GiB PDPTE). Iron `73576cc`: bulk UC 2MiB for the MTRR hole
 //! then `#PF` `0x1e9000` 4G n=2 ASSERT `callerrip=0x1d25193` (UC- vs UC).
-//! On-demand PAT-UC 2MiB + split RSVD 1GiB; hole stays NP at 4G rebuild.
+//! On-demand PAT-UC 2MiB + split RSVD 1GiB. Iron `8df2793`: hole PD
+//! `pdpte2=0x204067` then ASSERT — NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT
+//! fills `[2GiB, 4GiB)` at 4G rebuild. `[32MiB, 2GiB)` stays NP.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -105,6 +107,8 @@
 //! `#DF` vec=8 (OVMF XSETBV left host XCR0). Restore host XCR0 and
 //! CR4.OSXSAVE before E4. Iron COM2: `pdpte2=0xc0400083` then MMIO
 //! `pde=0xfee000ff` still ASSERT — split PDPT[2]+[3] on RAM SPLIT too.
+//! Iron COM2 `8df2793`: `pdpte2=0x204067` (PD) then ASSERT — NP vs MTRR
+//! UC. PAT-UC 2–4GiB hole at 4G. Dump `pde8000`.
 //! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
@@ -402,6 +406,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("identity_mtrr_uc_sibling_pdpt")
         && gpt.contains("identity_split_mtrr_uc_hole")
         && gpt.contains("identity_pdpte_is_1g")
+        && gpt.contains("PAT-UC PCD+PWT")
+        && gpt.contains("8df2793")
+        && guest.contains("pde8000=0x")
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
@@ -698,6 +705,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_split_mtrr_uc_hole")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73ed589")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("restore host XCR0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8df2793")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde8000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC 2-4GiB hole")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
