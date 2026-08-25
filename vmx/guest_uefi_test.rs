@@ -15,7 +15,7 @@ use super::{
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
     guest_uefi_phys_bits, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
@@ -373,6 +373,19 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_io_string_count(0x1F00008, 256), 1);
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, false), 0x1002);
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, true), 0x0FFE);
+    assert!(guest_uefi_io_string_fills_ram(0x1F0));
+    assert!(guest_uefi_io_string_fills_ram(0x170));
+    assert!(!guest_uefi_io_string_fills_ram(0x511));
+    assert!(!guest_uefi_io_string_fills_ram(0xCF8));
+    assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, false), 0x1234);
+    assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, true), 0x1_0000_1234);
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1e0f4a7"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x511"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x205f18"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATA-only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1f21193"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1dd97d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3d2be4"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);
