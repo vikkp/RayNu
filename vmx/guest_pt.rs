@@ -502,7 +502,8 @@ pub unsafe fn build_identity_4g(
 
 /// Present a 2 MiB UC leaf for a sink GPA (PCI hole / MTRR UC). Tables exist.
 ///
-/// Splits a firmware 1 GiB PDPTE (`eb4b27d` `pde=0xc0400083`) back to the
+/// Splits a firmware 1 GiB PDPTE (`eb4b27d` `pde=0xc0400083`, iron
+/// `7413554` `pdpte=0xc0600083` over xAPIC) back to the SEC PD.
 /// SEC PD. Does **not** back the GPA with RAM (ADR-004). EPT sink-resumes.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
@@ -931,6 +932,39 @@ mod guest_pt_test {
             assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+        }
+    }
+
+    #[test]
+    fn identity_map_mmio_splits_xapic_rsvd_1g() {
+        // Iron 7413554: after SPLIT4K resumed, #PF cr2=0xfee00020 err=0x9
+        // pml4e=0x5a6f (PDPT at 0x5000) pdpte=0xc0600083 (1GiB + RSVD).
+        let mut ram = vec![0u8; 0x210000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        let cr2 = 0xFEE0_0020u64;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
+            assert_eq!(
+                identity_walk_pdpte(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len),
+                0xC060_0083
+            );
+            let r = identity_map_mmio_2m(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
+            assert!(
+                matches!(
+                    r,
+                    Ok(IdentityMapKind::Mmio2M) | Err(IdentityMapError::AlreadyPresent)
+                ),
+                "{r:?}"
+            );
+            let pdpt3 = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
+            assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
+            assert_eq!((pdpt3 & LARGE), 0);
+            let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
+            assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
         }
     }
 
