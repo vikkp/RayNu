@@ -103,7 +103,8 @@
 //! Split the sibling 1GiB in the MTRR UC hole. Dump `pdpte2`.
 //! Nested Intel `73ed589` BOTH-OK ATAPI-OK `sectors=1` then E4 Linux
 //! `#DF` vec=8 (OVMF XSETBV left host XCR0). Restore host XCR0 and
-//! CR4.OSXSAVE before E4.
+//! CR4.OSXSAVE before E4. Iron COM2: `pdpte2=0xc0400083` then MMIO
+//! `pde=0xfee000ff` still ASSERT — split PDPT[2]+[3] on RAM SPLIT too.
 //! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
@@ -399,6 +400,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("map_mmio xAPIC")
         && gpt.contains("identity_map_mmio_splits_xapic_rsvd_1g")
         && gpt.contains("identity_mtrr_uc_sibling_pdpt")
+        && gpt.contains("identity_split_mtrr_uc_hole")
+        && gpt.contains("identity_pdpte_is_1g")
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
@@ -691,6 +694,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("edc9c3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte2")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("sibling 1GiB")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0400083")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_split_mtrr_uc_hole")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73ed589")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("restore host XCR0")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
