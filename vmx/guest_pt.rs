@@ -380,8 +380,14 @@ fn identity_high_pd_off(pdpt_i: u64) -> Option<u64> {
 }
 
 fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
-    if gpa < ram_len || gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
+    if gpa < ram_len {
         gpa | LARGE_2M_FLAGS
+    } else if gpa >= IDENTITY_FLASH_FLOOR || gpa == IDENTITY_XAPIC_GPA {
+        // Iron 32ee302: WB 2MiB xAPIC/flash sit in firmware's 2–4GiB
+        // MTRR UC (`mtrr0=0x80000000` `mtrr1=0x3fff80000800`). CpuDxe
+        // paging refresh then ASSERT `callerrip=0x1d25193` `lastmsr=0x23f`
+        // after GetApicVersion (`MMIO n=3`). PCD+PWT = UC, not UC- (73576cc).
+        gpa | LARGE_2M_UC_FLAGS
     } else {
         // Iron 73576cc: bulk UC 2MiB for [0x80000000, flash) reopened
         // fdf07ba ASSERT callerrip=0x1d25193 lastmsr=0x23f. Hole stays NP.
@@ -876,9 +882,9 @@ mod guest_pt_test {
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, 0);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
-            assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_FLAGS);
+            assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_UC_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
-            assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
+            assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
             let kind = identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len).expect("mmio");
             assert_eq!(kind, IdentityMapKind::Mmio2M);
             let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
@@ -964,7 +970,7 @@ mod guest_pt_test {
             assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
             assert_eq!((pdpt3 & LARGE), 0);
             let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
-            assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
+            assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
         }
     }
 

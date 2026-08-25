@@ -439,6 +439,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xc0600083"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x5a6d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("map_mmio xAPIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("32ee302"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr1=0x3fff80000800"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1bdd7d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC PCD+PWT"));
     {
         let mut buf = [0u8; 8];
         assert_eq!(store_low_ram_at(&mut buf, 2, 0x85C0, 2), 2);
