@@ -32,6 +32,9 @@ pub enum IdentityMapKind {
     Rebuild4G,
     /// Iron `fdf07ba`: NP #PF in the PCI hole after RAM-only identity.
     Mmio2M,
+    /// Iron `06b011a` / `d757a0a`: present+write `#PF` `err=0x3` after
+    /// CR0.WP on a 2 MiB RAM leaf that covers DXE code and heap/stack.
+    Split4K,
 }
 
 /// Why [`identity_map_not_present`] refused to write a leaf.
@@ -251,6 +254,12 @@ pub unsafe fn identity_walk_pde(
 /// `cr2=0x9896808086` walks PML4[1]).
 pub const IDENTITY_4G_PAGES: u64 = 11;
 pub const IDENTITY_4G_BYTES: u64 = IDENTITY_4G_PAGES * 4096;
+/// One 4 KiB PT per 2 MiB of the 32 MiB guest-UEFI slab (`gva >> 21`).
+/// Iron `06b011a`: `#PF` `err=0x3` `cr2=0x1d1abb8` `pde=0x1c000e7`.
+pub const IDENTITY_SPLIT_PT_PAGES: u64 = 16;
+/// e820 reserved: 4G blob plus SPLIT4K PT pool. Do not zero the pool in
+/// [`build_identity_4g`] (host tests use a 0xB000 buffer for the blob).
+pub const IDENTITY_RESERVED_BYTES: u64 = IDENTITY_4G_BYTES + IDENTITY_SPLIT_PT_PAGES * 4096;
 const IDENTITY_HIGH_PDPT_OFF: u64 = 0x6000;
 const IDENTITY_HIGH_PD_8000_OFF: u64 = 0x7000;
 const IDENTITY_HIGH_PD_C000_OFF: u64 = 0x8000;
@@ -538,6 +547,90 @@ pub unsafe fn identity_map_mmio_2m(
         return Err(IdentityMapError::TableOutOfRam);
     }
     Ok(IdentityMapKind::Mmio2M)
+}
+
+/// SPLIT4K slot for a 32 MiB GPA: one PT per 2 MiB (`0x1d1abb8` → slot 14).
+pub fn identity_split_pt_slot(gva: u64) -> u64 {
+    (gva >> 21) % IDENTITY_SPLIT_PT_PAGES
+}
+
+/// GPA of the SPLIT4K PT for `gva` under HV/SEC PML4 `pml4`.
+pub fn identity_split_pt_gpa(pml4: u64, gva: u64) -> u64 {
+    (pml4 & ADDR_MASK) + IDENTITY_4G_BYTES + identity_split_pt_slot(gva) * 4096
+}
+
+/// Split a present 2 MiB RAM leaf to 512 4 KiB RW PTEs, or OR RW on an
+/// existing 4 KiB PTE. Do **not** rebuild 4G (`fdf07ba` ASSERT).
+///
+/// Iron `06b011a`: after RAM 1GiB SPLIT n=2, `#PF` `err=0x3` `cr2=0x1d1abb8`
+/// `pde=0x1c000e7` `rip=0x1de592` (`CR0.WP` stack push in the same 2 MiB
+/// as DXE). `guest_uefi_pf_should_identity_map` is NP/RSVD only.
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+/// `cr3` table frames and the SPLIT4K PT must lie in `[0, ram_len)`.
+pub unsafe fn identity_fix_ram_wp(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> Result<IdentityMapKind, IdentityMapError> {
+    if ram_hpa == 0 || gva >= ram_len {
+        return Err(IdentityMapError::OutOfRam);
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 >= ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, (gva >> 39) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e4 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pdpt = e4 & ADDR_MASK;
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, (gva >> 30) & 0x1ff)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e3 & LARGE) != 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pd = e3 & ADDR_MASK;
+    let idx2 = (gva >> 21) & 0x1ff;
+    let e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e2 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e2 & LARGE) != 0 {
+        let phys_2m = e2 & 0x000f_ffff_ffe0_0000;
+        let pt = identity_split_pt_gpa(pml4, gva);
+        if pt.saturating_add(4096) > ram_len {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        for i in 0..512u64 {
+            let leaf = phys_2m.wrapping_add(i * 4096) | LEAF_FLAGS;
+            if !write_entry_ram(ram_hpa, ram_len, pt, i, leaf) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+        }
+        if !write_entry_ram(ram_hpa, ram_len, pd, idx2, pt | LEAF_FLAGS) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+        return Ok(IdentityMapKind::Split4K);
+    }
+    let pt = e2 & ADDR_MASK;
+    let idx1 = (gva >> 12) & 0x1ff;
+    let e1 = read_entry_ram(ram_hpa, ram_len, pt, idx1).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e1 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e1 & RW) != 0 {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
+    if !write_entry_ram(ram_hpa, ram_len, pt, idx1, e1 | RW) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    Ok(IdentityMapKind::Split4K)
 }
 
 #[cfg(test)]
@@ -862,6 +955,41 @@ mod guest_pt_test {
             assert_eq!(
                 identity_walk_pde(0, 0x1E9000, ram_hpa, ram_len),
                 LARGE_2M_FLAGS
+            );
+        }
+    }
+
+    #[test]
+    fn identity_fix_ram_wp_splits_2m_to_4k() {
+        // Iron 06b011a: err=0x3 cr2=0x1d1abb8 pde=0x1c000e7 rip=0x1de592.
+        let mut ram = vec![0u8; IDENTITY_RESERVED_BYTES as usize];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        let cr2 = 0x1D1_ABB8u64;
+        assert_eq!(identity_split_pt_slot(cr2), 14);
+        assert_eq!(IDENTITY_RESERVED_BYTES, 0x1B000);
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            assert_eq!(
+                identity_walk_pde(0, cr2, ram_hpa, ram_len),
+                0x1C0_0000 | LARGE_2M_FLAGS
+            );
+            let kind = identity_fix_ram_wp(0, cr2, ram_hpa, ram_len).expect("SPLIT4K");
+            assert_eq!(kind, IdentityMapKind::Split4K);
+            let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
+            let pt = identity_split_pt_gpa(0, cr2);
+            assert_eq!(pde, pt | LEAF_FLAGS);
+            assert_eq!((pde & LARGE), 0);
+            let pte = read_entry_ram(ram_hpa, ram_len, pt, (cr2 >> 12) & 0x1ff).unwrap();
+            assert_eq!(pte, (cr2 & !0xFFF) | LEAF_FLAGS);
+            assert_ne!(pte & RW, 0);
+            let first = read_entry_ram(ram_hpa, ram_len, pt, 0).unwrap();
+            assert_eq!(first, 0x1C0_0000 | LEAF_FLAGS);
+            assert_eq!(identity_split_pt_slot(0x1DE_592), 0);
+            assert_eq!(
+                identity_fix_ram_wp(0, cr2, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
             );
         }
     }

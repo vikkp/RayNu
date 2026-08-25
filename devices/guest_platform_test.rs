@@ -93,7 +93,7 @@ fn fwcfg_e820_is_32m_ram() {
     assert_eq!(E820_RAM, 1);
     assert_eq!(E820_RESERVED, 2);
     assert_eq!(HV_IDENTITY_PML4, 0x200000);
-    assert_eq!(HV_IDENTITY_PML4_BYTES, 0xB000);
+    assert_eq!(HV_IDENTITY_PML4_BYTES, 0x1B000);
     let _ = io(0x510, false, 2, u64::from(FW_CFG_E820_SEL));
     let mut buf = [0u8; 60];
     for b in &mut buf {

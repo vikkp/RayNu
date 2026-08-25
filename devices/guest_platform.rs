@@ -9,7 +9,7 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (32 MiB RAM with 36 KiB reserved HV identity PML4), fw_cfg `etc/boot-menu-wait` 0 ms
+//! fw_cfg `etc/e820` (32 MiB RAM with 108 KiB reserved HV identity PML4 + SPLIT4K PTs), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
@@ -101,8 +101,10 @@ pub const E820_RESERVED: u32 = 2;
 /// `0x800000` so CpuDxe heap cannot clobber CR3 (iron `101b8ec` `pde=0x30646870`).
 pub const HV_IDENTITY_PML4: u64 = 0x200000;
 /// Nine 4 KiB pages became eleven: PML4 + PDPT + 4 PDs + high-half PDPT +
-/// 2 PDs + leftover-high overflow PDPT+PD. Must match `guest_pt::IDENTITY_4G_BYTES`.
-pub const HV_IDENTITY_PML4_BYTES: u64 = 11 * 4096;
+/// 2 PDs + leftover-high overflow PDPT+PD, plus 16 SPLIT4K PT pages
+/// (iron `06b011a` `err=0x3` `pde=0x1c000e7`). Must match
+/// `guest_pt::IDENTITY_RESERVED_BYTES`.
+pub const HV_IDENTITY_PML4_BYTES: u64 = 27 * 4096;
 /// Three e820 entries: RAM / reserved PML4 / RAM.
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * 3;
 
