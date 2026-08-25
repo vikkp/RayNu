@@ -584,9 +584,9 @@ unsafe fn identity_sync_one_pdpt(
 /// Iron `d7bfb23`: 4G `pde8000=0x800000ff` then SPLIT4K `pml4e=0x5a6d`
 /// `pdpte2=0x204067` (PD) still ASSERT `callerrip=0x1d25193`. 4G filled
 /// `pml4+0x1000`; CpuDxe software-walks the retargeted PDPT at `0x5000`
-/// ([`IDENTITY_FW_PDPT_GPA`]). PDPT[3] can stay 1 GiB WB over 3–4 GiB
-/// with no extra `#PF`. Do **not** treat GPA `0x5000` as a PDPT until
-/// PML4[0] points there (low RAM may still be firmware data).
+/// ([`IDENTITY_FW_PDPT_GPA`]). Iron `1de9389`: `pdpte3=0x205067` (PS
+/// clear) still ASSERTed — 1GiB PDPT[3] is **not** the remaining cause.
+/// Do **not** treat GPA `0x5000` as a PDPT until PML4[0] points there.
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
 pub unsafe fn identity_sync_live_mtrr_uc_hole(
@@ -757,6 +757,8 @@ pub unsafe fn identity_map_mmio_2m(
     // Sibling-of-current only ran when pdpt_i was 2 or 3, so the 0x1e9000
     // split left 2–3GiB as a 1GiB WB page. CpuDxe software-walks it.
     // Iron d7bfb23: 4G PAT-UC then firmware PDPT 0x5000; sync live PDPT.
+    // Iron 1de9389: do this on MMIO/SPLIT4K/4G, not on the preemption tick
+    // (CpuDxe MTRR walk at `0x1d6be4`).
     let _ = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, cr3);
     e3 = read_entry_ram(ram_hpa, ram_len, pdpt, pdpt_i)
         .ok_or(IdentityMapError::TableOutOfRam)?;

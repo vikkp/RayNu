@@ -110,7 +110,10 @@
 //! Iron COM2 `8df2793`: `pdpte2=0x204067` (PD) then ASSERT — NP vs MTRR
 //! UC. PAT-UC 2–4GiB hole at 4G. Dump `pde8000`.
 //! Iron COM2 `d7bfb23`: `pde8000=0x800000ff` still ASSERT — firmware
-//! PDPT `0x5000`; sync live+`0x5000`; dump `pdpte3`.
+//! PDPT `0x5000`; sync live PDPT; dump `pdpte3`.
+//! Iron COM2 `1de9389`: `pdpte3=0x205067` PS clear, `pde8000=0x800000ff`,
+//! still ASSERT `callerrip=0x1d25193` `lastmsr=0x23f` — 1GiB PDPT[3]
+//! disproved. Do not tick-sync (CpuDxe MTRR walk). Dump leaf PDEs at ASSERT.
 //! Nested Intel `c19b91f` BOTH-OK then n=32768
 //! `ataio=0` `acpi=14903` `port=0x64` (`KeyboardWaitForValue` Stall:
 //! 8042 status `0x10` never set OBF after `0xAA`). Nested
@@ -413,8 +416,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("PAT-UC PCD+PWT")
         && gpt.contains("8df2793")
         && gpt.contains("d7bfb23")
+        && gpt.contains("1de9389")
         && guest.contains("pde8000=0x")
         && guest.contains("pdpte3=0x")
+        && guest.contains("pdefee=0x")
+        && guest.contains("pdeffc=0x")
+        && guest.contains("pat=0x")
         && gpt.contains("LARGE_2M_UC_FLAGS")
         && guest.contains("32ee302")
         && guest.contains("PAT-UC PCD+PWT")
@@ -717,6 +724,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d7bfb23")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_sync_live_mtrr_uc_hole")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1de9389")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x205067")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
