@@ -17,6 +17,8 @@ const PWT: u64 = 1 << 3;
 const TWO_MIB: u64 = 2 * 1024 * 1024;
 /// P|RW|US|A|D — CPL0 identity data/exec (NXE is off on guest-UEFI).
 const LEAF_FLAGS: u64 = PRESENT | RW | USER | ACCESSED | DIRTY;
+/// Non-leaf PDE/PDPTE: no PS, no D (SDM ignored; iron `54a8708` used `LEAF_FLAGS`).
+const TABLE_FLAGS: u64 = PRESENT | RW | USER | ACCESSED;
 const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
 /// 2 MiB UC (PCD+PWT → PAT index 3). PCD-only is UC- (`73576cc` ASSERT).
 const LARGE_2M_UC_FLAGS: u64 = LARGE_2M_FLAGS | PCD | PWT;
@@ -246,6 +248,25 @@ pub unsafe fn identity_walk_pde(
     }
     let pd = e3 & ADDR_MASK;
     read_entry_ram(ram_hpa, ram_len, pd, (gva >> 21) & 0x1ff).unwrap_or(0)
+}
+
+/// 4 KiB PTE for `gva`, or 0 if the walk is still a 2 MiB leaf / unreadable.
+///
+/// Iron `54a8708`: after SPLIT4K, PDE `0x219067` (PT at `0x219000`) but
+/// `handle_pf` resumed `AlreadyPresent` until the identity cap. Dump the
+/// PTE so a still-faulting RW leaf is obvious.
+pub unsafe fn identity_walk_pte(
+    cr3: u64,
+    gva: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> u64 {
+    let e2 = identity_walk_pde(cr3, gva, ram_hpa, ram_len);
+    if (e2 & PRESENT) == 0 || (e2 & LARGE) != 0 {
+        return 0;
+    }
+    let pt = e2 & ADDR_MASK;
+    read_entry_ram(ram_hpa, ram_len, pt, (gva >> 12) & 0x1ff).unwrap_or(0)
 }
 
 /// OVMF 4M SEC page-table blob: PML4 + PDPT + 4 PDs, plus 3 pages for
@@ -613,7 +634,7 @@ pub unsafe fn identity_fix_ram_wp(
                 return Err(IdentityMapError::TableOutOfRam);
             }
         }
-        if !write_entry_ram(ram_hpa, ram_len, pd, idx2, pt | LEAF_FLAGS) {
+        if !write_entry_ram(ram_hpa, ram_len, pd, idx2, pt | TABLE_FLAGS) {
             return Err(IdentityMapError::TableOutOfRam);
         }
         return Ok(IdentityMapKind::Split4K);
@@ -979,8 +1000,12 @@ mod guest_pt_test {
             assert_eq!(kind, IdentityMapKind::Split4K);
             let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
             let pt = identity_split_pt_gpa(0, cr2);
-            assert_eq!(pde, pt | LEAF_FLAGS);
+            assert_eq!(pde, pt | TABLE_FLAGS);
             assert_eq!((pde & LARGE), 0);
+            assert_eq!(
+                identity_walk_pte(0, cr2, ram_hpa, ram_len),
+                (cr2 & !0xFFF) | LEAF_FLAGS
+            );
             let pte = read_entry_ram(ram_hpa, ram_len, pt, (cr2 >> 12) & 0x1ff).unwrap();
             assert_eq!(pte, (cr2 & !0xFFF) | LEAF_FLAGS);
             assert_ne!(pte & RW, 0);
