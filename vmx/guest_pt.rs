@@ -649,6 +649,10 @@ pub const IDENTITY_WB_1G: u64 = 0x4000_0000;
 pub const IDENTITY_WB_64M: u64 = 0x400_0000;
 /// CpuDxe image on iron ASSERT (`imgbase=0x6e7000`). Dump `pde6e=`.
 pub const IDENTITY_CPU_DXE_IMG: u64 = 0x6E_7000;
+/// 1 MiB fixed-MTRR / default-type boundary. Dump `pte1m=` in the GPA0 PT.
+pub const IDENTITY_FIXED_MTRR_1M: u64 = 0x10_0000;
+/// PML4[1] (leftover-high / >512GiB). Dump `pml4e1=`.
+pub const IDENTITY_PML4E1_GVA: u64 = 1 << 39;
 
 fn identity_2m_is_wb_not_uc(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) != 0 && (e & (PCD | PWT)) != (PCD | PWT)
@@ -748,16 +752,13 @@ fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
 
 /// Split the 2 MiB identity leaf at GPA 0 to 4K WB.
 ///
-/// Iron COM2 `84171aa`: GPA0 4K `pde0=0x20b027` `pte0=0x67` then
-/// ASSERT `callerrip=0x1d25193` `pde20=0x2000083` `pde40=0x4000083`.
-/// 0–4GiB guest PT already matches MTRR WB+UC except firmware 2 MiB
-/// leaves lack USER. A 2 MiB leaf at GPA 0 spans the 1 MiB fixed-MTRR
-/// (`0x606…06`) / default-type (`mtrrdef=0xc06`) boundary. Both sides
-/// are WB; EDK2 CpuDxe `RefreshGcdMemoryAttributesFromPaging` still
-/// ASSERTs when a large page crosses an MTRR range. GPA0 4K alone is
-/// not sufficient. Do **not** call
-/// [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests use a 4G-only
-/// `0xB000` buffer). Do **not** smash an existing 4K PT (SPLIT4K).
+/// Iron `5811368`: GPA0 4K `pde0=0x20b027` `pte0=0x67` plus firmware
+/// 2 MiB `pde20=0x20000e7` `pde40=0x40000e7` `pde6e=0x6000e7` still
+/// ASSERT `callerrip=0x1d25193`. USER on 2 MiB is not sufficient.
+/// Nested Intel `5811368` capped MAXPHYADDR 46→32 then GPA0 ran and
+/// BOTH-OK `ataio=0` — skip GPA0 when the host hypervisor bit is set.
+/// Do **not** call [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests
+/// use a 4G-only `0xB000` buffer). Do **not** smash an existing 4K PT.
 /// Do **not** `identity_ensure_pdpt_2m(0)` (nested `1b587dd` `ataio=0`).
 ///
 /// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
@@ -1511,6 +1512,8 @@ mod guest_pt_test {
         assert!(identity_pde_is_4k_table(0x211000 | TABLE_FLAGS));
         assert!(!identity_pde_is_4k_table(0x2000083));
         assert_eq!(IDENTITY_CPU_DXE_IMG, 0x6E_7000);
+        assert_eq!(IDENTITY_FIXED_MTRR_1M, 0x10_0000);
+        assert_eq!(IDENTITY_PML4E1_GVA, 1 << 39);
         let mut ram = vec![0u8; 0x220000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;

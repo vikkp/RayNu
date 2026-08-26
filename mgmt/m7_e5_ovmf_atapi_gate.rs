@@ -83,6 +83,9 @@
 //! Iron `84171aa`: GPA0 4K `pde0=0x20b027` `pte0=0x67` still ASSERT
 //! with firmware 2 MiB `pde20=0x2000083` (no USER). keep_4k ORs
 //! `LARGE_2M_FLAGS` (`0x83` → `0xE7`); dump `pde6e`.
+//! Iron `5811368`: `pde20=0x20000e7` `pde40=0x40000e7` `pde6e=0x6000e7`
+//! still ASSERT `callerrip=0x1d25193`. Nested Intel GPA0 on capped-32
+//! BOTH-OK `ataio=0` — skip GPA0 when host hypervisor bit is set.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -453,6 +456,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("be1b028")
         && guest.contains("GUEST_UEFI_PHYS_BITS_IRON_CAP")
         && guest.contains("guest_uefi_gpa0_fixed_mtrr_split")
+        && guest.contains("guest_uefi_gpa0_split_now")
+        && guest.contains("5811368")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
         && gpt.contains("IDENTITY_WB_64M")
         && gpt.contains("162809f")
@@ -460,10 +465,14 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("Iron 659e7de")
         && gpt.contains("84171aa")
         && gpt.contains("IDENTITY_CPU_DXE_IMG")
+        && gpt.contains("IDENTITY_FIXED_MTRR_1M")
+        && gpt.contains("IDENTITY_PML4E1_GVA")
         && guest.contains("pde40=0x")
         && guest.contains("pde6e=0x")
         && guest.contains("pde0=0x")
         && guest.contains("pte0=0x")
+        && guest.contains("pte1m=0x")
+        && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
         && guest.contains("pat=0x")
@@ -799,6 +808,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_fixed_mtrr_split")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("84171aa")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x83 to 0xE7")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_split_now")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5811368")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
