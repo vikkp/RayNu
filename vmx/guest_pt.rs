@@ -574,6 +574,8 @@ pub unsafe fn identity_split_mtrr_uc_hole(
 
 /// Firmware PDPT GPA on iron after 4G (`pml4e=0x5a6d` / `0x5a6f`).
 pub const IDENTITY_FW_PDPT_GPA: u64 = 0x5000;
+/// Iron `be1b028` ASSERT `pml4e=0x5a6f` (PWT). Hardware PAT uses the leaf.
+pub const IDENTITY_IRON_PML4E_PWT: u64 = 0x5A6F;
 /// PDPT[3] / first 2 MiB of 3 GiB (dump `pdpte3=`).
 pub const IDENTITY_MTRR_UC_3G: u64 = 0xC000_0000;
 /// PDPT[1] / first 2 MiB of 1 GiB (dump `pde4000=` / `pdpte1=`).
@@ -637,6 +639,21 @@ unsafe fn identity_sync_one_pdpt(
     n
 }
 
+/// Clear PWT/PCD on a table PML4E/PDPTE (not a 1GiB PS leaf).
+///
+/// Iron `be1b028`: 0–4GiB leaves match MTRR (`pde20=0x20000e7`
+/// `pde4000=0x400000e7` `pde8000=0x800000ff`) then ASSERT
+/// `callerrip=0x1d25193` `pml4e=0x5a6f` (bit 3 PWT). Hardware paging
+/// uses the leaf PAT; EDK2 PageTableLib software-walks may OR non-leaf
+/// PWT/PCD and see WT vs MTRR WB.
+pub fn identity_clear_table_pwt_pcd(e: u64) -> u64 {
+    if (e & PRESENT) == 0 || (e & LARGE) != 0 {
+        e
+    } else {
+        e & !(PWT | PCD)
+    }
+}
+
 /// Split 1 GiB and restore PAT-UC on the PDPT PML4[0] actually walks.
 ///
 /// Iron `d7bfb23`: 4G `pde8000=0x800000ff` then SPLIT4K `pml4e=0x5a6d`
@@ -665,7 +682,24 @@ pub unsafe fn identity_sync_live_mtrr_uc_hole(
     if (e4 & PRESENT) == 0 {
         return 0;
     }
-    identity_sync_one_pdpt(ram_hpa, ram_len, pml4, e4 & ADDR_MASK)
+    let e4c = identity_clear_table_pwt_pcd(e4);
+    if e4c != e4 && !write_entry_ram(ram_hpa, ram_len, pml4, 0, e4c) {
+        return 0;
+    }
+    let pdpt = e4c & ADDR_MASK;
+    if pdpt >= ram_len {
+        return 0;
+    }
+    for i in 0..4u64 {
+        let Some(e) = read_entry_ram(ram_hpa, ram_len, pdpt, i) else {
+            continue;
+        };
+        let c = identity_clear_table_pwt_pcd(e);
+        if c != e {
+            let _ = write_entry_ram(ram_hpa, ram_len, pdpt, i, c);
+        }
+    }
+    identity_sync_one_pdpt(ram_hpa, ram_len, pml4, pdpt)
 }
 
 /// Write a 4-level identity map at `pml4_gpa` (OVMF SEC 6-page layout plus
@@ -1279,6 +1313,28 @@ mod guest_pt_test {
             );
             let pdpt3b = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
             assert_eq!((pdpt3b & LARGE), 0);
+        }
+    }
+
+    #[test]
+    fn identity_sync_clears_iron_pml4e_pwt() {
+        // Iron be1b028 ASSERT pml4e=0x5a6f (PWT) after 0-4GiB leaves matched.
+        assert_eq!(identity_clear_table_pwt_pcd(IDENTITY_IRON_PML4E_PWT), 0x5A67);
+        assert_eq!(identity_clear_table_pwt_pcd(0xC040_0083), 0xC040_0083);
+        let mut ram = vec![0u8; 0x220000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, IDENTITY_IRON_PML4E_PWT);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x202000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 2, 0xC040_0083);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
+            let _n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
+            let pml4e = read_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0).unwrap();
+            assert_eq!(pml4e & (1 << 3), 0, "PWT cleared pml4e=0x{pml4e:x}");
+            assert_eq!(pml4e & 0xFFF_FFFF_FFFF_F000, IDENTITY_FW_PDPT_GPA);
         }
     }
 

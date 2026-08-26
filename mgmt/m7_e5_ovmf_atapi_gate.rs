@@ -44,9 +44,11 @@
 //! Iron `10cb881`: VCNT=8 power-on still ASSERT `mtrr0=0x80000000`.
 //! VCNT=32 power-on, no UC hole. Iron `5f59c86`: NXE stripped
 //! (`efer=0x500`) `imgentry` CpuDxe still ASSERT `lastmsr=0x23f`
-//! (MtrrLib GetMemoryAttributes, not XP). MAXPHYADDR clip-to-36
-//! was a mask regression vs `a9ffaa5` host width; keep NXE off and
-//! phys bits in [36, 48]. Iron `d5fceb1` unclip: ASSERT gone, then
+//! (MtrrLib GetMemoryAttributes, not XP). MAXPHYADDR clip-36
+//! left `[4GiB, 64GiB)` NP vs default WB (not a mask regression vs
+//! `a9ffaa5`); nested 36/40 stays. Iron `be1b028` proved 0–4GiB
+//! (`pde20` `pde4000` `pde8000`) then ASSERT `maxpa=46` `pml4e=0x5a6f`.
+//! Cap iron width at 32; clear non-leaf PWT/PCD. Iron `d5fceb1` unclip: ASSERT gone, then
 //! `#PF` `err=0` `mov al,[0x80B000]` (MEMFD; dump `linear=` was RIP).
 //! Identity-map NP 2M/4K in guest PT (`identity_map_not_present`). Iron
 //! `3311ff3`: `#PF` `cr3=0x0` `fail=alloc` — load SEC PML4 (`build_identity_4g`).
@@ -73,6 +75,8 @@
 //! NP `[32MiB, 2GiB)` vs MTRR WB — guest PT WB, not EPT. Dump `pde20`.
 //! Iron `28f42d2`: `pde20=0x20000e7` still ASSERT — live PDPT[1] 1–2GiB.
 //! Dump `pde4000` / `pdpte1`.
+//! Iron `be1b028`: `pde4000=0x400000e7` `pdpte1=0x203067` still ASSERT
+//! `maxpa=46` `pml4e=0x5a6f` — NP above 4GiB vs default WB; PML4E PWT.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -438,6 +442,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("pde8000=0x")
         && guest.contains("pdpte3=0x")
         && gpt.contains("Iron 1a93cb8")
+        && gpt.contains("identity_clear_table_pwt_pcd")
+        && gpt.contains("IDENTITY_IRON_PML4E_PWT")
+        && gpt.contains("be1b028")
+        && guest.contains("GUEST_UEFI_PHYS_BITS_IRON_CAP")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
         && guest.contains("pat=0x")
@@ -757,6 +765,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("28f42d2")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_ensure_pdpt_2m")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde4000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("be1b028")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_clear_table_pwt_pcd")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cap iron MAXPHYADDR 32")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
@@ -854,9 +865,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             true,
         ) & crate::vmx::guest_uefi::GUEST_UEFI_EFER_NXE
             == 0
-        && guest_uefi_phys_bits(46) == 46
+        && guest_uefi_phys_bits(46) == crate::vmx::guest_uefi::GUEST_UEFI_PHYS_BITS_IRON_CAP
         && guest_uefi_phys_bits(32) == 36
-        && guest_uefi_phys_bits(52) == 48
+        && guest_uefi_phys_bits(40) == 40
+        && guest_uefi_phys_bits(52) == crate::vmx::guest_uefi::GUEST_UEFI_PHYS_BITS_IRON_CAP
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")
