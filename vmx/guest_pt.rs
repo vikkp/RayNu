@@ -1013,6 +1013,13 @@ pub unsafe fn identity_map_mmio_2m(
         identity_refill_low4g_pd(ram_hpa, ram_len, pd, pdpt_i)?;
         e2 = read_entry_ram(ram_hpa, ram_len, pd, idx2).ok_or(IdentityMapError::TableOutOfRam)?;
     }
+    // Iron 659e7de: GPA0 SPLIT4K then `identity_map_mmio_2m(0x1E9000)`
+    // (same 2 MiB as GPA 0) wrote LARGE_2M over the 4K PT every
+    // CR3/preempt/EPT. COM2 flooded `SPLIT PDPT0` and PEI never left
+    // `0xFFFCDxxx`. Keep 4K tables (same rule as keep_4k).
+    if identity_pde_is_4k_table(e2) {
+        return Err(IdentityMapError::AlreadyPresent);
+    }
     // Iron 124c1a8 / 577c9eb: high-half or leftover-high VA, leaf GPA is
     // the zero-extended 32-bit hole so EPT scratch still applies.
     let leaf_gpa = identity_hole32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
@@ -1556,6 +1563,16 @@ mod guest_pt_test {
             assert_eq!(
                 identity_split_gpa0_fixed_mtrr(IDENTITY_HV_PML4, ram_hpa, ram_len),
                 Ok(IdentityMapKind::Page4K)
+            );
+            // Iron 659e7de: 0x1E9000 is in the GPA-0 2MiB; mmio must not
+            // restore a 2MiB leaf over the 4K PT.
+            assert_eq!(
+                identity_map_mmio_2m(IDENTITY_HV_PML4, 0x1E9000, ram_hpa, ram_len),
+                Err(IdentityMapError::AlreadyPresent)
+            );
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0, ram_hpa, ram_len),
+                pt | TABLE_FLAGS
             );
         }
     }

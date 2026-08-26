@@ -453,6 +453,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("IDENTITY_WB_64M")
         && gpt.contains("162809f")
         && gpt.contains("identity_split_gpa0_fixed_mtrr")
+        && gpt.contains("Iron 659e7de")
         && guest.contains("pde40=0x")
         && guest.contains("pde0=0x")
         && guest.contains("pte0=0x")
@@ -785,6 +786,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_split_gpa0_fixed_mtrr")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1MiB fixed-MTRR")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("TABLE_FLAGS USER")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("659e7de")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mmio 2m keeps 4K tables")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

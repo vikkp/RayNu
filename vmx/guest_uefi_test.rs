@@ -503,6 +503,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_split_gpa0_fixed_mtrr"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1MiB fixed-MTRR"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("TABLE_FLAGS USER"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("659e7de"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mmio 2m keeps 4K tables"));
     assert_eq!(IA32_PAT_RESET, 0x0007_0406_0007_0406);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 0), 6);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 3), 0);
