@@ -449,6 +449,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("IDENTITY_IRON_PML4E_PWT")
         && gpt.contains("be1b028")
         && guest.contains("GUEST_UEFI_PHYS_BITS_IRON_CAP")
+        && guest.contains("guest_uefi_gpa0_fixed_mtrr_split")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
         && gpt.contains("IDENTITY_WB_64M")
         && gpt.contains("162809f")
@@ -788,6 +789,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("TABLE_FLAGS USER")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("659e7de")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mmio 2m keeps 4K tables")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("61f84c6")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_fixed_mtrr_split")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

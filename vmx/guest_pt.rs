@@ -1072,7 +1072,6 @@ pub unsafe fn identity_fix_ram_wp(
         return Err(IdentityMapError::TableOutOfRam);
     }
     let _ = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, cr3);
-    let _ = identity_split_gpa0_fixed_mtrr(cr3, ram_hpa, ram_len);
     let idx4 = (gva >> 39) & 0x1ff;
     let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, idx4)
         .ok_or(IdentityMapError::TableOutOfRam)?;
