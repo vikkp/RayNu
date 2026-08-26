@@ -499,6 +499,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cap iron MAXPHYADDR 32"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("162809f"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_refill_low4g_pd_keep_4k"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1b587dd"));
     assert_eq!(IA32_PAT_RESET, 0x0007_0406_0007_0406);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 0), 6);
     assert_eq!(ia32_pat_memory_type(IA32_PAT_RESET, 3), 0);

@@ -446,13 +446,16 @@ pub fn identity_pde_is_4k_table(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) == 0
 }
 
-/// Fill NP / 2 MiB slots; leave SPLIT4K 4K PTs.
+/// Fill NP / poison slots; leave SPLIT4K 4K PTs and existing 2 MiB leaves.
 ///
 /// Iron `162809f`: `maxpa=32` `mtrr1=0x80000800` `pml4e=0x1a02023` (no
 /// PWT) then ASSERT `callerrip=0x1d25193` `lastmsr=0x23f` with **no**
 /// 4G n=1. Firmware PDPT at `0x1a02000`; `pde20=0x2000083` only.
 /// `[32MiB, 1GiB)` in PDPT[0] can stay NP vs MTRR WB. Do not smash
-/// 4K tables in 32 MiB RAM (`54a8708`).
+/// 4K tables in 32 MiB RAM (`54a8708`). Nested Intel `1b587dd`: BOTH-OK
+/// `ataio=0` when sync called `identity_ensure_pdpt_2m(0)` on a 1GiB
+/// PDPTE (retarget to SEC PD, drop firmware 4K). Only fill NP here;
+/// do not rewrite live 2 MiB and do not split PDPT[0] 1GiB on sync.
 ///
 /// SAFETY: `pd_gpa` is a 4 KiB table in `[0, ram_len)`.
 unsafe fn identity_refill_low4g_pd_keep_4k(
@@ -472,6 +475,9 @@ unsafe fn identity_refill_low4g_pd_keep_4k(
             continue;
         };
         if identity_pde_is_4k_table(e) {
+            continue;
+        }
+        if e != 0 && !identity_pde_is_poison(e) {
             continue;
         }
         if e != want {
@@ -674,8 +680,6 @@ unsafe fn identity_sync_one_pdpt(
             if identity_refill_low4g_pd_keep_4k(ram_hpa, ram_len, e0 & ADDR_MASK, 0).is_ok() {
                 n += 1;
             }
-        } else if identity_ensure_pdpt_2m(ram_hpa, ram_len, pml4, pdpt, 0).is_ok() {
-            n += 1;
         }
     }
     if identity_ensure_pdpt_2m(ram_hpa, ram_len, pml4, pdpt, 1).is_ok() {
@@ -1416,7 +1420,7 @@ mod guest_pt_test {
             );
             assert_eq!(
                 identity_walk_pde(IDENTITY_HV_PML4, 0x2000000, ram_hpa, ram_len),
-                0x2000000 | LARGE_2M_FLAGS
+                0x2000083
             );
             let split4k = read_entry_ram(ram_hpa, ram_len, 0x210000, 0).unwrap();
             assert_eq!(split4k, 0x211000 | TABLE_FLAGS, "SPLIT4K PT must survive");

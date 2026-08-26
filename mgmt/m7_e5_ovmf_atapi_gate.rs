@@ -777,6 +777,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cap iron MAXPHYADDR 32")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("162809f")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_refill_low4g_pd_keep_4k")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1b587dd")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ensure_pdpt_2m(0)")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
