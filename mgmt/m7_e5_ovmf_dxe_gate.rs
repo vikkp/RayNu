@@ -15,7 +15,7 @@ use super::m7_e5_ovmf_cdrom_gate::run_m7_e5_ovmf_cdrom_gate;
 use crate::devices::guest_platform::{
     cmos_above_16m_chunks, host_pci_config_addr, io, is_platform_sink_gpa,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, reset, HOST_BRIDGE_DEVICE,
-    HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
+    HOST_BRIDGE_VENDOR, PLATFORM_REPORT_RAM_BYTES,
 };
 use crate::vmx::guest_uefi::{
     dxe_or_cd_boot_evidence, exec_from_low_ram, post_dxe_should_stop,
@@ -28,11 +28,11 @@ pub const M7_E5_OVMF_DXE_GATE_MARKER: &str = M7_E5_OVMF_DXE_OK_MARKER;
 
 pub fn prop_platform_memory_honest() -> bool {
     reset();
-    if cmos_above_16m_chunks(PLATFORM_RAM_BYTES) != 0x0100 {
+    if cmos_above_16m_chunks(PLATFORM_REPORT_RAM_BYTES) != 0x7F00 {
         return false;
     }
     let _ = io(0x70, false, 1, 0x35);
-    if (io(0x71, true, 1, 0) as u8) != 0x01 {
+    if (io(0x71, true, 1, 0) as u8) != 0x7F {
         return false;
     }
     let _ = io(0x510, false, 2, 0x00);

@@ -517,6 +517,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("22e0cb2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mid-gap"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mixed MTRR disproved"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f9a08c9"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("LowMemory 2GiB"));
     assert!(guest_uefi_gpa0_fixed_mtrr_split(32));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(36));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(40));

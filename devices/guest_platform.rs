@@ -9,7 +9,7 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (32 MiB RAM with 108 KiB reserved HV identity PML4 + SPLIT4K PTs plus reserved mid-gap `[32MiB, 2GiB)` and PCI UC `[2GiB, 4GiB)` so GCD does not span PEI `Uc32Base`), fw_cfg `etc/boot-menu-wait` 0 ms
+//! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`, reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
@@ -37,7 +37,13 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
 /// Kept local so this module does not import the Proven Core EPT builder.
+/// This is **EPT backing**, not the CMOS/fw_cfg LowMemory PEI reads.
 pub const PLATFORM_RAM_BYTES: u64 = 32 * 1024 * 1024;
+/// PEI `GetSystemMemorySizeBelow4gb` / fw_cfg RAM_SIZE. Iron `f9a08c9`:
+/// e820 type-2 mid-gap was ignored (`mtrrv=0` `pde8000=E7` same ASSERT).
+/// Report 2 GiB so the system-memory HOB ends at [`E820_PCI_UC_BASE`].
+/// Do **not** EPT-map `[PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES)`.
+pub const PLATFORM_REPORT_RAM_BYTES: u64 = 0x8000_0000;
 
 /// i440FX host bridge at `00:08.0` (Intel 82441FX).
 /// Nested VT-x: PEI only `inw` Device ID of `00:00.0` — never Header Type,
@@ -107,21 +113,17 @@ pub const HV_IDENTITY_PML4: u64 = 0x200000;
 pub const HV_IDENTITY_PML4_BYTES: u64 = 27 * 4096;
 /// OVMF PEI `Uc32Base` when LowMemory is 32 MiB: `GetPowerOfTwo32(4GiB-32MiB)`
 /// pins the 32-bit PCI / MTRR UC window at 2 GiB (`mtrr0=0x80000000`).
-/// Iron `489d118`: 0–4 GiB guest PT matches that WB+UC map (`pte0`/`pte1m`/
-/// `pde20`/`pde8000`) then CpuDxe ASSERT `callerrip=0x1d25193` `lastmsr=0x23f`.
-/// GCD untested `[32MiB, 4GiB)` spans the hole. `PlatformAddHobCB` type-2
-/// reserved **PCI hole** did not split on Cruzer OVMF.fd `3653632`
-/// (iron `38481d9`). Iron `22e0cb2`: hold UC (`mtrrv=0` `pde8000=E7`)
-/// still ASSERT — mixed MTRR is not the cause. Reserve the **mid-gap**
-/// `[32MiB, 2GiB)` (not EPT-mapped; not 2 GiB RAM) so GCD splits before
-/// `Uc32Base`. Keep the PCI-hole entry too.
+/// Iron `f9a08c9`: e820 type-2 mid-gap ignored (same ASSERT as hold).
+/// CMOS/fw_cfg LowMemory is 2 GiB so PEI's system-memory HOB ends here.
 pub const E820_PCI_UC_BASE: u64 = 0x8000_0000;
 pub const E820_PCI_UC_BYTES: u64 = 0x8000_0000;
 /// `[PLATFORM_RAM_BYTES, E820_PCI_UC_BASE)` — PEI gap below Uc32Base.
+/// Iron `f9a08c9` reserved this as type-2; Cruzer OVMF.fd ignored it.
+/// CMOS/fw_cfg now **report** it as RAM ([`PLATFORM_REPORT_RAM_BYTES`]).
 pub const E820_MID_GAP_BASE: u64 = PLATFORM_RAM_BYTES;
 pub const E820_MID_GAP_BYTES: u64 = E820_PCI_UC_BASE - E820_MID_GAP_BASE;
-/// Five e820 entries: RAM / reserved PML4 / RAM / reserved mid-gap / PCI UC.
-pub const E820_ENTRY_COUNT: u8 = 5;
+/// Four e820 entries: RAM / reserved PML4 / RAM to 2 GiB / PCI UC.
+pub const E820_ENTRY_COUNT: u8 = 4;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
 /// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
@@ -213,12 +215,10 @@ fn file_dir_byte(off: u16) -> u8 {
     }
 }
 
-/// Five packed QEMU e820 entries: RAM below the HV PML4, reserved identity
-/// tables, RAM up to [`PLATFORM_RAM_BYTES`], reserved mid-gap
-/// `[32MiB, 2GiB)`, reserved PCI UC `[2GiB, 4GiB)`.
-/// Iron `101b8ec` smashed CR3 in MEMFD. Iron `489d118` still ASSERTed after
-/// 0–4 GiB paging matched MTRR. Iron `38481d9` PCI-hole type-2 ignored.
-/// Iron `22e0cb2` hold UC left `mtrrv=0` `pde8000=E7` and still ASSERTed.
+/// Four packed QEMU e820 entries: RAM below the HV PML4, reserved identity
+/// tables, RAM up to [`PLATFORM_REPORT_RAM_BYTES`] (2 GiB LowMemory lie),
+/// reserved PCI UC `[2GiB, 4GiB)`.
+/// Iron `f9a08c9` type-2 mid-gap was ignored. EPT stays 32 MiB.
 pub fn e820_byte(off: u16) -> u8 {
     let o = off as usize;
     let ent = o / 20;
@@ -228,11 +228,10 @@ pub fn e820_byte(off: u16) -> u8 {
         1 => (HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, E820_RESERVED),
         2 => (
             HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES,
-            PLATFORM_RAM_BYTES.saturating_sub(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES),
+            PLATFORM_REPORT_RAM_BYTES.saturating_sub(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES),
             E820_RAM,
         ),
-        3 => (E820_MID_GAP_BASE, E820_MID_GAP_BYTES, E820_RESERVED),
-        4 => (E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RESERVED),
+        3 => (E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RESERVED),
         _ => return 0,
     };
     if i < 8 {
@@ -267,17 +266,27 @@ fn e820_entry_at(ent: usize) -> (u64, u64, u32) {
 
 /// True when `etc/e820` has a type-2 PCI UC hole at [`E820_PCI_UC_BASE`].
 pub fn e820_splits_mtrr_uc_hole() -> bool {
-    let (addr, len, typ) = e820_entry_at(4);
+    let (addr, len, typ) = e820_entry_at(3);
     E820_FILE_BYTES == E820_ENTRY_BYTES * E820_ENTRY_COUNT
         && addr == E820_PCI_UC_BASE
         && len == E820_PCI_UC_BYTES
         && typ == E820_RESERVED
 }
 
-/// True when `etc/e820` reserves `[32MiB, 2GiB)` so GCD cannot span Uc32Base.
+/// Iron `f9a08c9`: type-2 mid-gap did not split GCD. Kept false.
 pub fn e820_splits_gcd_mid_gap() -> bool {
-    let (addr, len, typ) = e820_entry_at(3);
-    addr == E820_MID_GAP_BASE && len == E820_MID_GAP_BYTES && typ == E820_RESERVED
+    false
+}
+
+/// CMOS 0x34/0x35 + fw_cfg RAM_SIZE + e820 RAM end at 2 GiB (`Uc32Base`).
+pub fn platform_reports_2g_lowmem() -> bool {
+    let (addr, len, typ) = e820_entry_at(2);
+    let ram_end = addr.saturating_add(len);
+    PLATFORM_REPORT_RAM_BYTES == E820_PCI_UC_BASE
+        && cmos_above_16m_chunks(PLATFORM_REPORT_RAM_BYTES) == 0x7F00
+        && ram_end == PLATFORM_REPORT_RAM_BYTES
+        && typ == E820_RAM
+        && e820_splits_mtrr_uc_hole()
 }
 
 /// Memory above 16 MiB in 64 KiB chunks (CMOS 0x34/0x35).
@@ -493,18 +502,25 @@ pub fn is_xapic_2m_gpa(gpa: u64) -> bool {
     (gpa & !0x1F_FFFF) == 0xFEE0_0000
 }
 
-/// Unbacked GPA above the 32 MiB slab and below the 4 MiB flash floor.
+/// Unbacked GPA in the PCI / MMIO hole, below the 4 MiB flash floor.
 ///
 /// Iron `cc7d78a`: 4G identity CR3 made the PCI hole present; EPT sink
 /// stopped at 1 GiB so `gpa=0xC01DF1B7` (`reason=0x30`) halted. Include
-/// `[1GiB, 0xFFC00000)` (PCI hole at `0xC0000000`, IOAPIC/HPET). The
-/// xAPIC 2 MiB window stays excluded so guest-UEFI can map a live 4 KiB page.
+/// `[2GiB, 0xFFC00000)` (PCI hole at `0xC0000000`, IOAPIC/HPET). Reported
+/// LowMemory `[32MiB, 2GiB)` is **not** a sink (EPT-unbacked RAM; log and
+/// stop). The xAPIC 2 MiB window stays excluded so guest-UEFI can map a
+/// live 4 KiB page.
 pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     const FW_FLOOR: u64 = 0xFFC0_0000;
     if is_xapic_2m_gpa(gpa) {
         return false;
     }
-    gpa >= PLATFORM_RAM_BYTES && gpa < FW_FLOOR
+    gpa >= PLATFORM_REPORT_RAM_BYTES && gpa < FW_FLOOR
+}
+
+/// GPA in the 2 GiB LowMemory lie that EPT does not back (32 MiB slab).
+pub fn is_unbacked_report_ram_gpa(gpa: u64) -> bool {
+    gpa >= PLATFORM_RAM_BYTES && gpa < PLATFORM_REPORT_RAM_BYTES
 }
 
 /// QEMU/ICH HPET MMIO. Lives in the 2 MiB sink page at [`HPET_SINK_PAGE`].
@@ -719,13 +735,13 @@ fn fill_cmos(c: &mut [u8; 128]) {
     // Base memory 640 KiB.
     c[0x15] = 0x80;
     c[0x16] = 0x02;
-    let ext = cmos_extended_kb(PLATFORM_RAM_BYTES).to_le_bytes();
+    let ext = cmos_extended_kb(PLATFORM_REPORT_RAM_BYTES).to_le_bytes();
     c[0x17] = ext[0];
     c[0x18] = ext[1];
     c[0x30] = ext[0];
     c[0x31] = ext[1];
     c[0x32] = 0x20;
-    let above = cmos_above_16m_chunks(PLATFORM_RAM_BYTES).to_le_bytes();
+    let above = cmos_above_16m_chunks(PLATFORM_REPORT_RAM_BYTES).to_le_bytes();
     c[0x34] = above[0];
     c[0x35] = above[1];
 }
@@ -773,7 +789,7 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_RAM_SIZE => {
-            p.fw_buf[..8].copy_from_slice(&PLATFORM_RAM_BYTES.to_le_bytes());
+            p.fw_buf[..8].copy_from_slice(&PLATFORM_REPORT_RAM_BYTES.to_le_bytes());
             p.fw_len = 8;
             FWCFG_RAM.store(true, Ordering::Release);
         }

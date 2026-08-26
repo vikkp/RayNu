@@ -96,8 +96,9 @@
 //! — guest PT matches MTRR; stop paging paints. Hold valid UC variable
 //! MTRRs so CpuDxe RefreshGcd sees default WB (`MTRR UC held (GCD)`).
 //! Iron `22e0cb2`: hold ran (`mtrrv=0` `pde8000=E7`) still ASSERT
-//! `callerrip=0x1d25193` — mixed MTRR disproved. e820 type-2 reserved
-//! mid-gap `[32MiB, 2GiB)` so GCD splits before `Uc32Base` (P3).
+//! `callerrip=0x1d25193` — mixed MTRR disproved. Iron `f9a08c9` e820
+//! type-2 mid-gap ignored (same dump). CMOS/fw_cfg LowMemory 2 GiB
+//! so PEI HOB ends at `Uc32Base` (not EPT-map the gap).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -161,7 +162,7 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
-use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole};
+use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, platform_reports_2g_lowmem};
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
@@ -350,6 +351,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("e820_splits_mtrr_uc_hole")
         && plat.contains("e820_splits_gcd_mid_gap")
         && plat.contains("E820_MID_GAP_BASE")
+        && plat.contains("platform_reports_2g_lowmem")
+        && plat.contains("PLATFORM_REPORT_RAM_BYTES")
         && guest.contains("a9ffaa5")
         && guest.contains("GUEST_UEFI_EFER_NXE")
         && guest.contains("5f59c86")
@@ -483,6 +486,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("MTRR UC held (GCD)")
         && guest.contains("22e0cb2")
         && guest.contains("e820 mid-gap reserved (GCD)")
+        && guest.contains("CMOS LowMemory 2GiB (GCD)")
         && plat.contains("E820_MID_GAP_BYTES")
         && gpt.contains("identity_set_pat_uc_hole")
         && gpt.contains("38481d9")
@@ -847,6 +851,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("22e0cb2")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mixed MTRR disproved")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mid-gap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f9a08c9")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("LowMemory 2GiB")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
@@ -917,7 +923,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_mtrr_valid_var_pairs() == 0
         && bootorder_nul_terminated()
         && e820_splits_mtrr_uc_hole()
-        && e820_splits_gcd_mid_gap()
+        && !e820_splits_gcd_mid_gap()
+        && platform_reports_2g_lowmem()
         && guest_uefi_mtrr_write(0x200, 6)
         && guest_uefi_mtrr_read(0x200) == Some(6)
         && guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR)
