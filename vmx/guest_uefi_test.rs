@@ -13,7 +13,7 @@ use super::{
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
-    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs,
+    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live,
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
@@ -690,11 +690,19 @@ fn mtrr_shadow_is_guest_not_host() {
     assert_eq!(guest_uefi_mtrr_read(0x200), Some(6));
     assert!(guest_uefi_mtrr_write(0x201, 1 << 11));
     assert_eq!(guest_uefi_mtrr_valid_var_pairs(), 1);
+    assert!(!guest_uefi_mtrr_uc_hole_live());
+    assert!(!crate::vmx::guest_pt::identity_pat_uc_hole());
     assert!(guest_uefi_mtrr_write(0xFE, 0xFFFF));
     assert_eq!(guest_uefi_mtrr_read(0xFE), Some(GUEST_UEFI_MTRRCAP));
+    assert!(guest_uefi_mtrr_write(0x200, 0x8000_0000));
+    assert!(guest_uefi_mtrr_write(0x201, 0x8000_0800));
+    assert!(guest_uefi_mtrr_uc_hole_live());
+    assert!(crate::vmx::guest_pt::identity_pat_uc_hole());
     guest_uefi_mtrr_reset();
     assert_eq!(guest_uefi_mtrr_read(0x2FF), Some(GUEST_UEFI_MTRR_DEF_DEFAULT));
     assert!(!guest_uefi_mtrr_pci_uc_hole());
+    assert!(!guest_uefi_mtrr_uc_hole_live());
+    assert!(!crate::vmx::guest_pt::identity_pat_uc_hole());
     assert!(guest_uefi_mtrr_poweron_disabled());
     assert!(guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR));
     assert!(!guest_uefi_is_misc_enable(0xFE));

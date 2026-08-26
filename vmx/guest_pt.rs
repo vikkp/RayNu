@@ -4,6 +4,8 @@
 //! for the E4 Linux path. Guest-UEFI alias EPT maps GPA → `ram_hpa + GPA`;
 //! [`identity_map_not_present`] takes `ram_hpa` so table writes hit the slab.
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 /// Bits 51:12 of a paging-structure pointer / leaf frame.
 const ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
 const PRESENT: u64 = 1;
@@ -22,6 +24,22 @@ const TABLE_FLAGS: u64 = PRESENT | RW | USER | ACCESSED;
 const LARGE_2M_FLAGS: u64 = LEAF_FLAGS | LARGE;
 /// 2 MiB UC (PCD+PWT → PAT index 3). PCD-only is UC- (`73576cc` ASSERT).
 const LARGE_2M_UC_FLAGS: u64 = LARGE_2M_FLAGS | PCD | PWT;
+
+/// Iron `38481d9`: 4G PAT-UC `[2GiB, 4GiB)` plus mid-gap WB made one GCD
+/// untested `[32MiB, 4GiB)` mixed. `etc/e820` type-2 reserved did not split.
+/// Default **false** (WB) until firmware programs the UC pair.
+static IDENTITY_PAT_UC_HOLE: AtomicBool = AtomicBool::new(false);
+
+/// Paint `[2GiB, 4GiB)` as PAT-UC 2 MiB. Call when the live UC MTRR exists.
+/// Do **not** 4G WB while that pair is already live (`fdf07ba`). Do **not**
+/// leave 2–4GiB NP (`8df2793`).
+pub fn identity_set_pat_uc_hole(on: bool) {
+    IDENTITY_PAT_UC_HOLE.store(on, Ordering::Release);
+}
+
+pub fn identity_pat_uc_hole() -> bool {
+    IDENTITY_PAT_UC_HOLE.load(Ordering::Acquire)
+}
 
 /// How a not-present hole was filled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -399,9 +417,16 @@ fn identity_leaf_flags(gpa: u64, ram_len: u64) -> u64 {
         // `callerrip=0x1d25193`. Iron `8df2793`: PDPT[2]=`0x204067` (PD,
         // not 1GiB WB) then ASSERT with **no** xAPIC `#PF` — CpuDxe
         // software-walks NP 2–4GiB vs MTRR UC. PAT-UC PCD+PWT (index 3)
-        // matches MTRR UC. Guest PT only; EPT still sink/scratch
-        // (ADR-004).
-        gpa | LARGE_2M_UC_FLAGS
+        // matches MTRR UC **after** the UC pair is live. Iron `38481d9`:
+        // 4G PAT-UC plus mid-gap WB mixed GCD `[32MiB, 4GiB)` (e820
+        // type-2 reserved did not split). WB until
+        // [`identity_set_pat_uc_hole`]. Guest PT only; EPT still
+        // sink/scratch (ADR-004).
+        if identity_pat_uc_hole() {
+            gpa | LARGE_2M_UC_FLAGS
+        } else {
+            gpa | LARGE_2M_FLAGS
+        }
     } else {
         0
     }
@@ -758,7 +783,8 @@ fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
 /// Nested Intel `5811368` capped MAXPHYADDR 46→32 then GPA0 ran and
 /// BOTH-OK `ataio=0` — skip GPA0 when the host hypervisor bit is set.
 /// Iron COM2 `489d118`: GPA0 4K + leftover-high NP still ASSERT;
-/// 0–4 GiB PT matches MTRR. `etc/e820` reserved PCI UC splits GCD.
+/// 0–4 GiB PT matches MTRR. `etc/e820` reserved PCI UC did not split GCD
+/// (iron `38481d9`). 4G WB 2–4GiB until [`identity_set_pat_uc_hole`].
 /// Do **not** call [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests
 /// use a 4G-only `0xB000` buffer). Do **not** smash an existing 4K PT.
 /// Do **not** `identity_ensure_pdpt_2m(0)` (nested `1b587dd` `ataio=0`).
@@ -870,7 +896,8 @@ pub unsafe fn identity_sync_live_mtrr_uc_hole(
 /// look like RAM (`mtrr0=0x80000000` then ASSERT `callerrip=0x1d25193`).
 /// Iron `73576cc`: bulk **PCD-only** (PAT UC-) still ASSERTed. Iron
 /// `8df2793`: hole PD present, 2 MiB leaves NP, ASSERT with no xAPIC
-/// `#PF`. `[2GiB, 4GiB)` is PAT-UC PCD+PWT. Iron `1a93cb8`: `[ram_len, 2GiB)`
+/// `#PF`. `[2GiB, 4GiB)` is WB until [`identity_set_pat_uc_hole`], then
+/// PAT-UC PCD+PWT (iron `38481d9` mixed GCD). Iron `1a93cb8`: `[ram_len, 2GiB)`
 /// is guest-PT WB (MTRR default WB); EPT still does not map that window.
 /// Iron `124c1a8`: PML4[511] is linked so a sign-extended 32-bit CR2 can
 /// take an on-demand 2 MiB leaf (GPA stays zero-extended; not bulk 2–4 GiB).
@@ -1044,7 +1071,11 @@ pub unsafe fn identity_map_mmio_2m(
     // the zero-extended 32-bit hole so EPT scratch still applies.
     let leaf_gpa = identity_hole32_gpa(gva).unwrap_or(gva) & !(TWO_MIB - 1);
     let flags = identity_leaf_flags(leaf_gpa, ram_len);
-    let want = if flags != 0 {
+    // On-demand hole access is UC (HPET/xAPIC/signext). 4G bulk stays WB
+    // until [`identity_set_pat_uc_hole`] (iron `38481d9` mixed GCD).
+    let want = if leaf_gpa >= IDENTITY_MTRR_UC_FLOOR && leaf_gpa < 0x1_0000_0000 {
+        leaf_gpa | LARGE_2M_UC_FLAGS
+    } else if flags != 0 {
         flags
     } else {
         leaf_gpa | LARGE_2M_UC_FLAGS
@@ -1292,6 +1323,7 @@ mod guest_pt_test {
 
     #[test]
     fn build_identity_4g_maps_memfd() {
+        identity_set_pat_uc_hole(false);
         let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1310,20 +1342,20 @@ mod guest_pt_test {
                 0x800000 | LARGE_2M_FLAGS
             );
             let pci = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
-            assert_eq!(pci, 0xC000_0000 | LARGE_2M_UC_FLAGS);
+            assert_eq!(pci, 0xC000_0000 | LARGE_2M_FLAGS);
             let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
-            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_FLAGS);
             let above_ram = read_entry_ram(ram_hpa, ram_len, 0x2000, 16).unwrap();
             assert_eq!(above_ram, ram_len | LARGE_2M_FLAGS);
             let gib1 = read_entry_ram(ram_hpa, ram_len, 0x3000, 0).unwrap();
             assert_eq!(gib1, 0x4000_0000 | LARGE_2M_FLAGS);
             let flash = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1FE).unwrap();
-            assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_UC_FLAGS);
+            assert_eq!(flash, IDENTITY_FLASH_FLOOR | LARGE_2M_FLAGS);
             let xapic = read_entry_ram(ram_hpa, ram_len, 0x5000, 0x1F7).unwrap();
-            assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
+            assert_eq!(xapic, IDENTITY_XAPIC_GPA | LARGE_2M_FLAGS);
             assert_eq!(
                 identity_map_mmio_2m(0, 0xC01D_F1B7, ram_hpa, ram_len),
-                Err(IdentityMapError::AlreadyPresent)
+                Ok(IdentityMapKind::Mmio2M)
             );
             let uc = read_entry_ram(ram_hpa, ram_len, 0x5000, 0).unwrap();
             assert_eq!(uc, 0xC000_0000 | LARGE_2M_UC_FLAGS);
@@ -1335,8 +1367,30 @@ mod guest_pt_test {
     }
 
     #[test]
+    fn identity_4g_pci_hole_is_wb_until_uc_mtrr() {
+        // Iron 38481d9: 4G PAT-UC mixed GCD. WB until identity_set_pat_uc_hole.
+        identity_set_pat_uc_hole(false);
+        let mut ram = vec![0u8; 0xB000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, 0).expect("build 4G");
+            assert_eq!(cr3, 0);
+            let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
+            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_FLAGS);
+            identity_set_pat_uc_hole(true);
+            let n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, 0);
+            assert!(n >= 1, "refresh WB hole to PAT-UC, n={n}");
+            let mtrr_uc = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
+            assert_eq!(mtrr_uc, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            identity_set_pat_uc_hole(false);
+        }
+    }
+
+    #[test]
     fn identity_map_mmio_splits_rsvd_1g() {
         // Iron eb4b27d: PDPT[2] = 0xc0400083 (1GiB + reserved bit 22).
+        identity_set_pat_uc_hole(true);
         let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1360,6 +1414,7 @@ mod guest_pt_test {
             assert_eq!(pdpt2, 0x4000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x4000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            identity_set_pat_uc_hole(false);
         }
     }
 
@@ -1367,6 +1422,7 @@ mod guest_pt_test {
     fn identity_map_mmio_splits_1g_retargeted_pdpt() {
         // Iron a428202: CR3=0x200000, pde=0xc0400083, identity MMIO fail.
         // PML4[0] pointed at a PDPT that was not pml4+0x1000.
+        identity_set_pat_uc_hole(true);
         let mut ram = vec![0u8; 0x210000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1387,6 +1443,7 @@ mod guest_pt_test {
             assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
             let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
+            identity_set_pat_uc_hole(false);
         }
     }
 
@@ -1394,6 +1451,7 @@ mod guest_pt_test {
     fn identity_map_mmio_splits_xapic_rsvd_1g() {
         // Iron 7413554: after SPLIT4K resumed, #PF cr2=0xfee00020 err=0x9
         // pml4e=0x5a6f (PDPT at 0x5000) pdpte=0xc0600083 (1GiB + RSVD).
+        identity_set_pat_uc_hole(true);
         let mut ram = vec![0u8; 0x210000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1433,6 +1491,7 @@ mod guest_pt_test {
             );
             let pde = identity_walk_pde(IDENTITY_HV_PML4, cr2, ram_hpa, ram_len);
             assert_eq!(pde, IDENTITY_XAPIC_GPA | LARGE_2M_UC_FLAGS);
+            identity_set_pat_uc_hole(false);
         }
     }
 
@@ -1441,6 +1500,7 @@ mod guest_pt_test {
         // Iron d7bfb23: 4G pde8000=0x800000ff then firmware pml4e=0x5a6d
         // PDPT at 0x5000. PDPT[2] can already be a table while PDPT[3] is
         // still 1GiB WB (CpuDxe software-walk, no extra #PF).
+        identity_set_pat_uc_hole(true);
         let mut ram = vec![0u8; 0x220000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1479,6 +1539,7 @@ mod guest_pt_test {
             );
             let pdpt3b = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
             assert_eq!((pdpt3b & LARGE), 0);
+            identity_set_pat_uc_hole(false);
         }
     }
 
@@ -1627,6 +1688,7 @@ mod guest_pt_test {
     fn identity_map_mmio_signext32_high_half() {
         // Iron 124c1a8: identity MMIO n=2 then #PF cr2=0xffffffff96808086
         // err=0x2 pde=0 (PML4[511] walk; leaf must be GPA 0x96800000).
+        identity_set_pat_uc_hole(false);
         let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1643,10 +1705,10 @@ mod guest_pt_test {
             assert_eq!(kind, IdentityMapKind::Mmio2M);
             let pde = identity_walk_pde(0, cr2, ram_hpa, ram_len);
             assert_eq!(pde, 0x9680_0000 | LARGE_2M_UC_FLAGS);
-            // Iron 8df2793: low 4G [2GiB, 4GiB) is PAT-UC at 4G rebuild so
-            // CpuDxe software-walks UC not NP. High-half is a separate PD.
+            // Iron 38481d9: low 4G [2GiB, 4GiB) is WB at 4G until the UC
+            // MTRR is live. High-half is a separate PD; on-demand is PAT-UC.
             let low = identity_walk_pde(0, 0x9680_8086, ram_hpa, ram_len);
-            assert_eq!(low, 0x9680_0000 | LARGE_2M_UC_FLAGS);
+            assert_eq!(low, 0x9680_0000 | LARGE_2M_FLAGS);
             assert_eq!(
                 identity_map_mmio_2m(0, cr2, ram_hpa, ram_len),
                 Err(IdentityMapError::AlreadyPresent)
@@ -1690,6 +1752,7 @@ mod guest_pt_test {
         // Iron 471391f: PDPT[0] = 0xc0000083 covering VA 0x1e9000.
         // Iron d757a0a: firmware 0xAF-filled the SEC PD after the 1GiB
         // promote; SPLIT must refill so 0x1d1e6cb is WB not poison.
+        identity_set_pat_uc_hole(true);
         let mut ram = vec![0u8; 0xB000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1730,6 +1793,7 @@ mod guest_pt_test {
             assert!(!identity_pde_is_poison(code));
             let mid = identity_walk_pde(0, ram_len, ram_hpa, ram_len);
             assert_eq!(mid, ram_len | LARGE_2M_FLAGS);
+            identity_set_pat_uc_hole(false);
         }
     }
 

@@ -110,7 +110,8 @@ pub const HV_IDENTITY_PML4_BYTES: u64 = 27 * 4096;
 /// Iron `489d118`: 0–4 GiB guest PT matches that WB+UC map (`pte0`/`pte1m`/
 /// `pde20`/`pde8000`) then CpuDxe ASSERT `callerrip=0x1d25193` `lastmsr=0x23f`.
 /// GCD untested `[32MiB, 4GiB)` spans the hole. `PlatformAddHobCB` type-2
-/// reserved splits GCD so each descriptor is one cache type.
+/// reserved did not split on Cruzer OVMF.fd `3653632` (iron `38481d9`).
+/// Keep the e820 entry; 4G WB until UC MTRR live is the paging fix.
 pub const E820_PCI_UC_BASE: u64 = 0x8000_0000;
 pub const E820_PCI_UC_BYTES: u64 = 0x8000_0000;
 /// Four e820 entries: RAM / reserved PML4 / RAM / reserved PCI UC.

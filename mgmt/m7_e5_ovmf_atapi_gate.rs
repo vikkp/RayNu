@@ -90,7 +90,10 @@
 //! still ASSERT — 0–4 GiB PT matches MTRR; leftover-high NP. GCD
 //! untested `[32MiB, 4GiB)` spans PEI `Uc32Base` (`mtrr0=0x80000000`).
 //! `etc/e820` reserved PCI UC `[2GiB, 4GiB)` so `PlatformAddHobCB`
-//! splits GCD. Do not make 2–4GiB paging WB (`fdf07ba`) or NP (`8df2793`).
+//! splits GCD. Iron `38481d9`: e820 type-2 still ASSERT `pde8000=0x800000ff`
+//! — this OVMF.fd does not split. 4G WB 2–4GiB until UC MTRR live
+//! (`identity_set_pat_uc_hole`). Do not 4G WB while UC is already live
+//! (`fdf07ba`) or leave 2–4GiB NP (`8df2793`).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -161,7 +164,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
-    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_xapic_is_not_sink,
+    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
@@ -820,6 +823,12 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5811368")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("489d118")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("38481d9")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_set_pat_uc_hole")
+        && gpt.contains("identity_set_pat_uc_hole")
+        && gpt.contains("38481d9")
+        && guest.contains("38481d9")
+        && guest.contains("guest_uefi_mtrr_uc_hole_live")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
@@ -885,6 +894,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_mtrr_read(0xFE)
             == Some(crate::vmx::guest_uefi::GUEST_UEFI_MTRRCAP)
         && !guest_uefi_mtrr_pci_uc_hole()
+        && !guest_uefi_mtrr_uc_hole_live()
         && guest_uefi_mtrr_poweron_disabled()
         && guest_uefi_mtrr_valid_var_pairs() == 0
         && bootorder_nul_terminated()
