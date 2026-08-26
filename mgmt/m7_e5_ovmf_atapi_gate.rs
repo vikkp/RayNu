@@ -469,6 +469,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_gpa0_split_now")
         && guest.contains("5811368")
         && guest.contains("489d118")
+        && guest.contains("38481d9")
+        && guest.contains("guest_uefi_mtrr_uc_hole_live")
+        && gpt.contains("identity_set_pat_uc_hole")
+        && gpt.contains("38481d9")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
         && gpt.contains("IDENTITY_WB_64M")
         && gpt.contains("162809f")
@@ -825,10 +829,6 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("38481d9")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_set_pat_uc_hole")
-        && gpt.contains("identity_set_pat_uc_hole")
-        && gpt.contains("38481d9")
-        && guest.contains("38481d9")
-        && guest.contains("guest_uefi_mtrr_uc_hole_live")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
