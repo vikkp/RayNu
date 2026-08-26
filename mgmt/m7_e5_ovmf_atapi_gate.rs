@@ -48,7 +48,9 @@
 //! left `[4GiB, 64GiB)` NP vs default WB (not a mask regression vs
 //! `a9ffaa5`); nested 36/40 stays. Iron `be1b028` proved 0–4GiB
 //! (`pde20` `pde4000` `pde8000`) then ASSERT `maxpa=46` `pml4e=0x5a6f`.
-//! Cap iron width at 32; clear non-leaf PWT/PCD. Iron `d5fceb1` unclip: ASSERT gone, then
+//! Cap iron width at 32; clear non-leaf PWT/PCD. Iron `162809f`:
+//! `maxpa=32` `mtrr1=0x80000800` `pml4e=0x1a02023` `pde20=0x2000083`
+//! no 4G — firmware PDPT sparse; refill PDPT[0] keep 4K. Iron `d5fceb1` unclip: ASSERT gone, then
 //! `#PF` `err=0` `mov al,[0x80B000]` (MEMFD; dump `linear=` was RIP).
 //! Identity-map NP 2M/4K in guest PT (`identity_map_not_present`). Iron
 //! `3311ff3`: `#PF` `cr3=0x0` `fail=alloc` — load SEC PML4 (`build_identity_4g`).
@@ -77,6 +79,7 @@
 //! Dump `pde4000` / `pdpte1`.
 //! Iron `be1b028`: `pde4000=0x400000e7` `pdpte1=0x203067` still ASSERT
 //! `maxpa=46` `pml4e=0x5a6f` — NP above 4GiB vs default WB; PML4E PWT.
+//! Iron `162809f`: `maxpa=32` `pde20=0x2000083` no 4G — PDPT[0] mid-gap.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -446,6 +449,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("IDENTITY_IRON_PML4E_PWT")
         && gpt.contains("be1b028")
         && guest.contains("GUEST_UEFI_PHYS_BITS_IRON_CAP")
+        && gpt.contains("identity_refill_low4g_pd_keep_4k")
+        && gpt.contains("IDENTITY_WB_64M")
+        && gpt.contains("162809f")
+        && guest.contains("pde40=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
         && guest.contains("pat=0x")
@@ -768,6 +775,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("be1b028")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_clear_table_pwt_pcd")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cap iron MAXPHYADDR 32")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("162809f")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_refill_low4g_pd_keep_4k")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

@@ -441,6 +441,49 @@ unsafe fn identity_refill_low4g_pd(
     Ok(())
 }
 
+/// True when a PDE is a 4K PT (SPLIT4K). Do not overwrite with a 2 MiB leaf.
+pub fn identity_pde_is_4k_table(e: u64) -> bool {
+    (e & PRESENT) != 0 && (e & LARGE) == 0
+}
+
+/// Fill NP / 2 MiB slots; leave SPLIT4K 4K PTs.
+///
+/// Iron `162809f`: `maxpa=32` `mtrr1=0x80000800` `pml4e=0x1a02023` (no
+/// PWT) then ASSERT `callerrip=0x1d25193` `lastmsr=0x23f` with **no**
+/// 4G n=1. Firmware PDPT at `0x1a02000`; `pde20=0x2000083` only.
+/// `[32MiB, 1GiB)` in PDPT[0] can stay NP vs MTRR WB. Do not smash
+/// 4K tables in 32 MiB RAM (`54a8708`).
+///
+/// SAFETY: `pd_gpa` is a 4 KiB table in `[0, ram_len)`.
+unsafe fn identity_refill_low4g_pd_keep_4k(
+    ram_hpa: u64,
+    ram_len: u64,
+    pd_gpa: u64,
+    pdpt_i: u64,
+) -> Result<u32, IdentityMapError> {
+    if pdpt_i > 3 {
+        return Ok(0);
+    }
+    let mut n = 0u32;
+    for i in 0..512u64 {
+        let gpa = (pdpt_i * 512 + i) * TWO_MIB;
+        let want = identity_leaf_flags(gpa, ram_len);
+        let Some(e) = read_entry_ram(ram_hpa, ram_len, pd_gpa, i) else {
+            continue;
+        };
+        if identity_pde_is_4k_table(e) {
+            continue;
+        }
+        if e != want {
+            if !write_entry_ram(ram_hpa, ram_len, pd_gpa, i, want) {
+                return Err(IdentityMapError::TableOutOfRam);
+            }
+            n = n.saturating_add(1);
+        }
+    }
+    Ok(n)
+}
+
 /// Other 1 GiB PDPT index in firmware's MTRR UC hole `[2GiB, 4GiB)`.
 ///
 /// Iron PAT-UC `48c598a`/`855ba1c`: xAPIC `#PF` split PDPT[3] (`0xc0600083`)
@@ -580,6 +623,8 @@ pub const IDENTITY_IRON_PML4E_PWT: u64 = 0x5A6F;
 pub const IDENTITY_MTRR_UC_3G: u64 = 0xC000_0000;
 /// PDPT[1] / first 2 MiB of 1 GiB (dump `pde4000=` / `pdpte1=`).
 pub const IDENTITY_WB_1G: u64 = 0x4000_0000;
+/// 64 MiB in PDPT[0] mid-gap (dump `pde40=`). Iron `162809f` `pde20` only.
+pub const IDENTITY_WB_64M: u64 = 0x400_0000;
 
 fn identity_2m_is_wb_not_uc(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) != 0 && (e & (PCD | PWT)) != (PCD | PWT)
@@ -624,6 +669,15 @@ unsafe fn identity_sync_one_pdpt(
     pdpt: u64,
 ) -> u32 {
     let mut n = identity_split_mtrr_uc_hole(ram_hpa, ram_len, pml4, pdpt);
+    if let Some(e0) = read_entry_ram(ram_hpa, ram_len, pdpt, 0) {
+        if (e0 & PRESENT) != 0 && (e0 & LARGE) == 0 {
+            if identity_refill_low4g_pd_keep_4k(ram_hpa, ram_len, e0 & ADDR_MASK, 0).is_ok() {
+                n += 1;
+            }
+        } else if identity_ensure_pdpt_2m(ram_hpa, ram_len, pml4, pdpt, 0).is_ok() {
+            n += 1;
+        }
+    }
     if identity_ensure_pdpt_2m(ram_hpa, ram_len, pml4, pdpt, 1).is_ok() {
         n += 1;
     }
@@ -1335,6 +1389,39 @@ mod guest_pt_test {
             let pml4e = read_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0).unwrap();
             assert_eq!(pml4e & (1 << 3), 0, "PWT cleared pml4e=0x{pml4e:x}");
             assert_eq!(pml4e & 0xFFF_FFFF_FFFF_F000, IDENTITY_FW_PDPT_GPA);
+        }
+    }
+
+    #[test]
+    fn identity_sync_fills_pdpt0_keep_4k() {
+        // Iron 162809f: maxpa=32 pml4e=0x1a02023 pde20=0x2000083, no 4G;
+        // firmware PD sparse; SPLIT4K 4K tables must survive.
+        assert!(identity_pde_is_4k_table(0x211000 | TABLE_FLAGS));
+        assert!(!identity_pde_is_4k_table(0x2000083));
+        let mut ram = vec![0u8; 0x220000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT | RW | ACCESSED);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x210000 | PRESENT | RW);
+            write_entry_ram(ram_hpa, ram_len, 0x210000, 16, 0x2000083);
+            write_entry_ram(ram_hpa, ram_len, 0x210000, 0, 0x211000 | TABLE_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x211000, 0, 0x1000 | LEAF_FLAGS);
+            let _n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, IDENTITY_WB_64M, ram_hpa, ram_len),
+                IDENTITY_WB_64M | LARGE_2M_FLAGS
+            );
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0x2000000, ram_hpa, ram_len),
+                0x2000000 | LARGE_2M_FLAGS
+            );
+            let split4k = read_entry_ram(ram_hpa, ram_len, 0x210000, 0).unwrap();
+            assert_eq!(split4k, 0x211000 | TABLE_FLAGS, "SPLIT4K PT must survive");
+            let pte = read_entry_ram(ram_hpa, ram_len, 0x211000, 0).unwrap();
+            assert_eq!(pte, 0x1000 | LEAF_FLAGS);
         }
     }
 
