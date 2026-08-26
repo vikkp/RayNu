@@ -511,6 +511,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x83 to 0xE7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_split_now"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5811368"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("489d118"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)"));
     assert!(guest_uefi_gpa0_fixed_mtrr_split(32));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(36));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(40));

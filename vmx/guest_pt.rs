@@ -757,6 +757,8 @@ fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
 /// ASSERT `callerrip=0x1d25193`. USER on 2 MiB is not sufficient.
 /// Nested Intel `5811368` capped MAXPHYADDR 46→32 then GPA0 ran and
 /// BOTH-OK `ataio=0` — skip GPA0 when the host hypervisor bit is set.
+/// Iron COM2 `489d118`: GPA0 4K + leftover-high NP still ASSERT;
+/// 0–4 GiB PT matches MTRR. `etc/e820` reserved PCI UC splits GCD.
 /// Do **not** call [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests
 /// use a 4G-only `0xB000` buffer). Do **not** smash an existing 4K PT.
 /// Do **not** `identity_ensure_pdpt_2m(0)` (nested `1b587dd` `ataio=0`).

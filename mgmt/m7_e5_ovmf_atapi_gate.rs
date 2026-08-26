@@ -86,6 +86,11 @@
 //! Iron `5811368`: `pde20=0x20000e7` `pde40=0x40000e7` `pde6e=0x6000e7`
 //! still ASSERT `callerrip=0x1d25193`. Nested Intel GPA0 on capped-32
 //! BOTH-OK `ataio=0` — skip GPA0 when host hypervisor bit is set.
+//! Iron COM2 `489d118`: GPA0 4K `pte0=0x67` `pte1m=0x100067` `pml4e1=0x0`
+//! still ASSERT — 0–4 GiB PT matches MTRR; leftover-high NP. GCD
+//! untested `[32MiB, 4GiB)` spans PEI `Uc32Base` (`mtrr0=0x80000000`).
+//! `etc/e820` reserved PCI UC `[2GiB, 4GiB)` so `PlatformAddHobCB`
+//! splits GCD. Do not make 2–4GiB paging WB (`fdf07ba`) or NP (`8df2793`).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -149,7 +154,7 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
-use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated};
+use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated, e820_splits_mtrr_uc_hole};
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
@@ -334,6 +339,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("HV_IDENTITY_PML4")
         && plat.contains("E820_RESERVED")
         && plat.contains("E820_FILE_BYTES")
+        && plat.contains("E820_PCI_UC_BASE")
+        && plat.contains("e820_splits_mtrr_uc_hole")
         && guest.contains("a9ffaa5")
         && guest.contains("GUEST_UEFI_EFER_NXE")
         && guest.contains("5f59c86")
@@ -458,6 +465,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_gpa0_fixed_mtrr_split")
         && guest.contains("guest_uefi_gpa0_split_now")
         && guest.contains("5811368")
+        && guest.contains("489d118")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
         && gpt.contains("IDENTITY_WB_64M")
         && gpt.contains("162809f")
@@ -810,6 +818,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x83 to 0xE7")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_split_now")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5811368")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("489d118")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
@@ -878,6 +888,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_mtrr_poweron_disabled()
         && guest_uefi_mtrr_valid_var_pairs() == 0
         && bootorder_nul_terminated()
+        && e820_splits_mtrr_uc_hole()
         && guest_uefi_mtrr_write(0x200, 6)
         && guest_uefi_mtrr_read(0x200) == Some(6)
         && guest_uefi_is_misc_enable(GUEST_UEFI_MISC_ENABLE_MSR)

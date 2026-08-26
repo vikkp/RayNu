@@ -9,7 +9,7 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (32 MiB RAM with 108 KiB reserved HV identity PML4 + SPLIT4K PTs), fw_cfg `etc/boot-menu-wait` 0 ms
+//! fw_cfg `etc/e820` (32 MiB RAM with 108 KiB reserved HV identity PML4 + SPLIT4K PTs plus reserved PCI UC `[2GiB, 4GiB)` so GCD does not span PEI `Uc32Base`), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
@@ -105,8 +105,17 @@ pub const HV_IDENTITY_PML4: u64 = 0x200000;
 /// (iron `06b011a` `err=0x3` `pde=0x1c000e7`). Must match
 /// `guest_pt::IDENTITY_RESERVED_BYTES`.
 pub const HV_IDENTITY_PML4_BYTES: u64 = 27 * 4096;
-/// Three e820 entries: RAM / reserved PML4 / RAM.
-pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * 3;
+/// OVMF PEI `Uc32Base` when LowMemory is 32 MiB: `GetPowerOfTwo32(4GiB-32MiB)`
+/// pins the 32-bit PCI / MTRR UC window at 2 GiB (`mtrr0=0x80000000`).
+/// Iron `489d118`: 0–4 GiB guest PT matches that WB+UC map (`pte0`/`pte1m`/
+/// `pde20`/`pde8000`) then CpuDxe ASSERT `callerrip=0x1d25193` `lastmsr=0x23f`.
+/// GCD untested `[32MiB, 4GiB)` spans the hole. `PlatformAddHobCB` type-2
+/// reserved splits GCD so each descriptor is one cache type.
+pub const E820_PCI_UC_BASE: u64 = 0x8000_0000;
+pub const E820_PCI_UC_BYTES: u64 = 0x8000_0000;
+/// Four e820 entries: RAM / reserved PML4 / RAM / reserved PCI UC.
+pub const E820_ENTRY_COUNT: u8 = 4;
+pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
 /// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
 /// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk (`scsi@0`).
@@ -197,8 +206,10 @@ fn file_dir_byte(off: u16) -> u8 {
     }
 }
 
-/// Three packed QEMU e820 entries: RAM below the HV PML4, reserved identity
-/// tables, RAM up to [`PLATFORM_RAM_BYTES`]. Iron `101b8ec` smashed CR3 in MEMFD.
+/// Four packed QEMU e820 entries: RAM below the HV PML4, reserved identity
+/// tables, RAM up to [`PLATFORM_RAM_BYTES`], reserved PCI UC `[2GiB, 4GiB)`.
+/// Iron `101b8ec` smashed CR3 in MEMFD. Iron `489d118` still ASSERTed after
+/// 0–4 GiB paging matched MTRR — GCD had to split at [`E820_PCI_UC_BASE`].
 pub fn e820_byte(off: u16) -> u8 {
     let o = off as usize;
     let ent = o / 20;
@@ -211,6 +222,7 @@ pub fn e820_byte(off: u16) -> u8 {
             PLATFORM_RAM_BYTES.saturating_sub(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES),
             E820_RAM,
         ),
+        3 => (E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RESERVED),
         _ => return 0,
     };
     if i < 8 {
@@ -222,6 +234,24 @@ pub fn e820_byte(off: u16) -> u8 {
     } else {
         0
     }
+}
+
+/// True when `etc/e820` has a type-2 PCI UC hole at [`E820_PCI_UC_BASE`].
+pub fn e820_splits_mtrr_uc_hole() -> bool {
+    let mut addr = [0u8; 8];
+    let mut len = [0u8; 8];
+    let mut typ = [0u8; 4];
+    for i in 0..8 {
+        addr[i] = e820_byte(60 + i as u16);
+        len[i] = e820_byte(68 + i as u16);
+    }
+    for i in 0..4 {
+        typ[i] = e820_byte(76 + i as u16);
+    }
+    E820_FILE_BYTES == E820_ENTRY_BYTES * E820_ENTRY_COUNT
+        && u64::from_le_bytes(addr) == E820_PCI_UC_BASE
+        && u64::from_le_bytes(len) == E820_PCI_UC_BYTES
+        && u32::from_le_bytes(typ) == E820_RESERVED
 }
 
 /// Memory above 16 MiB in 64 KiB chunks (CMOS 0x34/0x35).
