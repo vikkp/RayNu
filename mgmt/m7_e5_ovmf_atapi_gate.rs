@@ -91,9 +91,10 @@
 //! untested `[32MiB, 4GiB)` spans PEI `Uc32Base` (`mtrr0=0x80000000`).
 //! `etc/e820` reserved PCI UC `[2GiB, 4GiB)` so `PlatformAddHobCB`
 //! splits GCD. Iron `38481d9`: e820 type-2 still ASSERT `pde8000=0x800000ff`
-//! — this OVMF.fd does not split. 4G WB 2–4GiB until UC MTRR live
-//! (`identity_set_pat_uc_hole`). Do not 4G WB while UC is already live
-//! (`fdf07ba`) or leave 2–4GiB NP (`8df2793`).
+//! — this OVMF.fd does not split. Iron `f07a597`: 4G WB then PAT-UC when
+//! UC MTRR went live still ASSERT `pde8000=0x800000ff` `mtrr0=0x80000000`
+//! — guest PT matches MTRR; stop paging paints. Hold valid UC variable
+//! MTRRs so CpuDxe RefreshGcd sees default WB (`MTRR UC held (GCD)`).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -472,6 +473,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("38481d9")
         && guest.contains("guest_uefi_mtrr_uc_hole_live")
         && guest.contains("unsafe { ops::vmread(GUEST_CR3) }")
+        && guest.contains("f07a597")
+        && guest.contains("guest_uefi_mtrr_set_admit_uc")
+        && guest.contains("MTRR UC held (GCD)")
         && gpt.contains("identity_set_pat_uc_hole")
         && gpt.contains("38481d9")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
@@ -830,6 +834,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("38481d9")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_set_pat_uc_hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f07a597")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC held (GCD)")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640
