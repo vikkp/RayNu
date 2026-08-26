@@ -507,6 +507,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mmio 2m keeps 4K tables"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("61f84c6"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_fixed_mtrr_split"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("84171aa"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x83 to 0xE7"));
     assert!(guest_uefi_gpa0_fixed_mtrr_split(32));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(36));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(40));

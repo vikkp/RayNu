@@ -80,6 +80,9 @@
 //! Iron `be1b028`: `pde4000=0x400000e7` `pdpte1=0x203067` still ASSERT
 //! `maxpa=46` `pml4e=0x5a6f` — NP above 4GiB vs default WB; PML4E PWT.
 //! Iron `162809f`: `maxpa=32` `pde20=0x2000083` no 4G — PDPT[0] mid-gap.
+//! Iron `84171aa`: GPA0 4K `pde0=0x20b027` `pte0=0x67` still ASSERT
+//! with firmware 2 MiB `pde20=0x2000083` (no USER). keep_4k ORs
+//! `LARGE_2M_FLAGS` (`0x83` → `0xE7`); dump `pde6e`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -455,7 +458,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("162809f")
         && gpt.contains("identity_split_gpa0_fixed_mtrr")
         && gpt.contains("Iron 659e7de")
+        && gpt.contains("84171aa")
+        && gpt.contains("IDENTITY_CPU_DXE_IMG")
         && guest.contains("pde40=0x")
+        && guest.contains("pde6e=0x")
         && guest.contains("pde0=0x")
         && guest.contains("pte0=0x")
         && guest.contains("pdefee=0x")
@@ -791,6 +797,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mmio 2m keeps 4K tables")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("61f84c6")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_gpa0_fixed_mtrr_split")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("84171aa")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x83 to 0xE7")
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

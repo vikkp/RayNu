@@ -446,7 +446,8 @@ pub fn identity_pde_is_4k_table(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) == 0
 }
 
-/// Fill NP / poison slots; leave SPLIT4K 4K PTs and existing 2 MiB leaves.
+/// Fill NP / poison; OR [`LARGE_2M_FLAGS`] onto firmware WB 2 MiB
+/// (`0x83` → `0xE7`); leave SPLIT4K 4K PTs and PAT-UC 2 MiB.
 ///
 /// Iron `162809f`: `maxpa=32` `mtrr1=0x80000800` `pml4e=0x1a02023` (no
 /// PWT) then ASSERT `callerrip=0x1d25193` `lastmsr=0x23f` with **no**
@@ -454,8 +455,14 @@ pub fn identity_pde_is_4k_table(e: u64) -> bool {
 /// `[32MiB, 1GiB)` in PDPT[0] can stay NP vs MTRR WB. Do not smash
 /// 4K tables in 32 MiB RAM (`54a8708`). Nested Intel `1b587dd`: BOTH-OK
 /// `ataio=0` when sync called `identity_ensure_pdpt_2m(0)` on a 1GiB
-/// PDPTE (retarget to SEC PD, drop firmware 4K). Only fill NP here;
-/// do not rewrite live 2 MiB and do not split PDPT[0] 1GiB on sync.
+/// PDPTE (retarget to SEC PD, drop firmware 4K). Do not split PDPT[0]
+/// 1GiB on sync.
+/// Iron `84171aa`: GPA0 4K `pde0=0x20b027` `pte0=0x67` `pdpte0=0x1a03027`
+/// (USER) `maxpa=32` then ASSERT `callerrip=0x1d25193` with
+/// `pde20=0x2000083` `pde40=0x4000083` (firmware 2 MiB P|RW|PS, no
+/// USER). PageTableLib ANDs U/S. Cache type is the same (PAT 0 WB);
+/// combine GPA0 4K with mid-gap `0xE7` (`28f42d2` had `0xE7` without
+/// GPA0). Do not rewrite PAT-UC PCD+PWT.
 ///
 /// SAFETY: `pd_gpa` is a 4 KiB table in `[0, ram_len)`.
 unsafe fn identity_refill_low4g_pd_keep_4k(
@@ -477,14 +484,23 @@ unsafe fn identity_refill_low4g_pd_keep_4k(
         if identity_pde_is_4k_table(e) {
             continue;
         }
-        if e != 0 && !identity_pde_is_poison(e) {
+        if identity_pde_is_poison(e) || e == 0 {
+            if e != want {
+                if !write_entry_ram(ram_hpa, ram_len, pd_gpa, i, want) {
+                    return Err(IdentityMapError::TableOutOfRam);
+                }
+                n = n.saturating_add(1);
+            }
             continue;
         }
-        if e != want {
-            if !write_entry_ram(ram_hpa, ram_len, pd_gpa, i, want) {
-                return Err(IdentityMapError::TableOutOfRam);
+        if identity_2m_is_wb_not_uc(e) {
+            let upgraded = e | LARGE_2M_FLAGS;
+            if upgraded != e {
+                if !write_entry_ram(ram_hpa, ram_len, pd_gpa, i, upgraded) {
+                    return Err(IdentityMapError::TableOutOfRam);
+                }
+                n = n.saturating_add(1);
             }
-            n = n.saturating_add(1);
         }
     }
     Ok(n)
@@ -631,6 +647,8 @@ pub const IDENTITY_MTRR_UC_3G: u64 = 0xC000_0000;
 pub const IDENTITY_WB_1G: u64 = 0x4000_0000;
 /// 64 MiB in PDPT[0] mid-gap (dump `pde40=`). Iron `162809f` `pde20` only.
 pub const IDENTITY_WB_64M: u64 = 0x400_0000;
+/// CpuDxe image on iron ASSERT (`imgbase=0x6e7000`). Dump `pde6e=`.
+pub const IDENTITY_CPU_DXE_IMG: u64 = 0x6E_7000;
 
 fn identity_2m_is_wb_not_uc(e: u64) -> bool {
     (e & PRESENT) != 0 && (e & LARGE) != 0 && (e & (PCD | PWT)) != (PCD | PWT)
@@ -730,15 +748,14 @@ fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
 
 /// Split the 2 MiB identity leaf at GPA 0 to 4K WB.
 ///
-/// Iron COM2 after keep_4k: `pde20=0x20000e7` `pde40=0x40000e7`
-/// `pde4000=0x400000e7` `pde8000=0x800000ff` `maxpa=32`
-/// `pml4e=0x1a02023` (no PWT) `mtrr1=0x80000800` then ASSERT
-/// `callerrip=0x1d25193` `lastmsr=0x23f` `imgentry=0x6e87d3`
-/// `pci_ide=0` `ataio=0`. 0–4GiB guest PT already matches MTRR WB+UC.
-/// A 2 MiB leaf at GPA 0 spans the 1 MiB fixed-MTRR (`0x606…06`) /
-/// default-type (`mtrrdef=0xc06`) boundary. Both sides are WB; EDK2
-/// CpuDxe `RefreshGcdMemoryAttributesFromPaging` still ASSERTs when a
-/// large page crosses an MTRR range. Do **not** call
+/// Iron COM2 `84171aa`: GPA0 4K `pde0=0x20b027` `pte0=0x67` then
+/// ASSERT `callerrip=0x1d25193` `pde20=0x2000083` `pde40=0x4000083`.
+/// 0–4GiB guest PT already matches MTRR WB+UC except firmware 2 MiB
+/// leaves lack USER. A 2 MiB leaf at GPA 0 spans the 1 MiB fixed-MTRR
+/// (`0x606…06`) / default-type (`mtrrdef=0xc06`) boundary. Both sides
+/// are WB; EDK2 CpuDxe `RefreshGcdMemoryAttributesFromPaging` still
+/// ASSERTs when a large page crosses an MTRR range. GPA0 4K alone is
+/// not sufficient. Do **not** call
 /// [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests use a 4G-only
 /// `0xB000` buffer). Do **not** smash an existing 4K PT (SPLIT4K).
 /// Do **not** `identity_ensure_pdpt_2m(0)` (nested `1b587dd` `ataio=0`).
@@ -1489,10 +1506,11 @@ mod guest_pt_test {
 
     #[test]
     fn identity_sync_fills_pdpt0_keep_4k() {
-        // Iron 162809f: maxpa=32 pml4e=0x1a02023 pde20=0x2000083, no 4G;
-        // firmware PD sparse; SPLIT4K 4K tables must survive.
+        // Iron 84171aa: GPA0 4K then pde20=0x2000083 still ASSERT.
+        // Upgrade firmware WB 2MiB 0x83 → 0xE7; SPLIT4K 4K tables survive.
         assert!(identity_pde_is_4k_table(0x211000 | TABLE_FLAGS));
         assert!(!identity_pde_is_4k_table(0x2000083));
+        assert_eq!(IDENTITY_CPU_DXE_IMG, 0x6E_7000);
         let mut ram = vec![0u8; 0x220000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1502,6 +1520,7 @@ mod guest_pt_test {
             write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT | RW | ACCESSED);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x210000 | PRESENT | RW);
             write_entry_ram(ram_hpa, ram_len, 0x210000, 16, 0x2000083);
+            write_entry_ram(ram_hpa, ram_len, 0x210000, 17, 0x22000FF);
             write_entry_ram(ram_hpa, ram_len, 0x210000, 0, 0x211000 | TABLE_FLAGS);
             write_entry_ram(ram_hpa, ram_len, 0x211000, 0, 0x1000 | LEAF_FLAGS);
             let _n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
@@ -1511,7 +1530,13 @@ mod guest_pt_test {
             );
             assert_eq!(
                 identity_walk_pde(IDENTITY_HV_PML4, 0x2000000, ram_hpa, ram_len),
-                0x2000083
+                0x2000083 | LARGE_2M_FLAGS,
+                "iron 84171aa firmware 2MiB 0x83 must gain USER|A|D"
+            );
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0x2200000, ram_hpa, ram_len),
+                0x22000FF,
+                "PAT-UC 2MiB must stay"
             );
             let split4k = read_entry_ram(ram_hpa, ram_len, 0x210000, 0).unwrap();
             assert_eq!(split4k, 0x211000 | TABLE_FLAGS, "SPLIT4K PT must survive");
