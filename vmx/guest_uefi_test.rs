@@ -514,6 +514,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("5811368"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("489d118"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PCI UC [2GiB,4GiB)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("22e0cb2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mid-gap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mixed MTRR disproved"));
     assert!(guest_uefi_gpa0_fixed_mtrr_split(32));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(36));
     assert!(!guest_uefi_gpa0_fixed_mtrr_split(40));
