@@ -697,19 +697,100 @@ unsafe fn identity_sync_one_pdpt(
     n
 }
 
-/// Clear PWT/PCD on a table PML4E/PDPTE (not a 1GiB PS leaf).
+/// Clear PWT/PCD on a table PML4E/PDPTE (not a 1GiB PS leaf) and set USER.
 ///
 /// Iron `be1b028`: 0–4GiB leaves match MTRR (`pde20=0x20000e7`
 /// `pde4000=0x400000e7` `pde8000=0x800000ff`) then ASSERT
 /// `callerrip=0x1d25193` `pml4e=0x5a6f` (bit 3 PWT). Hardware paging
 /// uses the leaf PAT; EDK2 PageTableLib software-walks may OR non-leaf
 /// PWT/PCD and see WT vs MTRR WB.
+/// Iron COM2 after keep_4k: `pml4e=0x1a02023` `pdpte0=0x1a03023`
+/// `pdpte1=0x1a04003` (PWT already clear, **no USER**). PageTableLib
+/// ANDs U/S through the walk. Do **not** force RW here —
+/// [`identity_fix_ram_wp`] ORs walk R/W after a RO PML4E (`89c3731`).
 pub fn identity_clear_table_pwt_pcd(e: u64) -> u64 {
     if (e & PRESENT) == 0 || (e & LARGE) != 0 {
         e
     } else {
-        e & !(PWT | PCD)
+        (e & !(PWT | PCD)) | USER
     }
+}
+
+/// SPLIT4K PT for the GPA-0 4K split. HV/SEC CR3 uses the reserved pool
+/// next to that PML4. Firmware CR3 (`0x1a01000`) uses the HV pool at
+/// `0x20B000` so we never store a PT at `firmware_cr3+0xB000`.
+fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 == 0 || pml4 == IDENTITY_HV_PML4 {
+        identity_split_pt_gpa(pml4, 0)
+    } else {
+        identity_split_pt_gpa(IDENTITY_HV_PML4, 0)
+    }
+}
+
+/// Split the 2 MiB identity leaf at GPA 0 to 4K WB.
+///
+/// Iron COM2 after keep_4k: `pde20=0x20000e7` `pde40=0x40000e7`
+/// `pde4000=0x400000e7` `pde8000=0x800000ff` `maxpa=32`
+/// `pml4e=0x1a02023` (no PWT) `mtrr1=0x80000800` then ASSERT
+/// `callerrip=0x1d25193` `lastmsr=0x23f` `imgentry=0x6e87d3`
+/// `pci_ide=0` `ataio=0`. 0–4GiB guest PT already matches MTRR WB+UC.
+/// A 2 MiB leaf at GPA 0 spans the 1 MiB fixed-MTRR (`0x606…06`) /
+/// default-type (`mtrrdef=0xc06`) boundary. Both sides are WB; EDK2
+/// CpuDxe `RefreshGcdMemoryAttributesFromPaging` still ASSERTs when a
+/// large page crosses an MTRR range. Do **not** call
+/// [`identity_sync_live_mtrr_uc_hole`] (sync/mmio tests use a 4G-only
+/// `0xB000` buffer). Do **not** smash an existing 4K PT (SPLIT4K).
+/// Do **not** `identity_ensure_pdpt_2m(0)` (nested `1b587dd` `ataio=0`).
+///
+/// SAFETY: `ram_hpa` is the exclusive guest-UEFI slab (or a test buffer).
+/// `cr3` table frames and the SPLIT4K PT must lie in `[0, ram_len)`.
+pub unsafe fn identity_split_gpa0_fixed_mtrr(
+    cr3: u64,
+    ram_hpa: u64,
+    ram_len: u64,
+) -> Result<IdentityMapKind, IdentityMapError> {
+    if ram_hpa == 0 {
+        return Err(IdentityMapError::OutOfRam);
+    }
+    let pml4 = cr3 & ADDR_MASK;
+    if pml4 >= ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    let e4 = read_entry_ram(ram_hpa, ram_len, pml4, 0)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e4 & PRESENT) == 0 || (e4 & LARGE) != 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pdpt = e4 & ADDR_MASK;
+    let e3 = read_entry_ram(ram_hpa, ram_len, pdpt, 0)
+        .ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e3 & PRESENT) == 0 || (e3 & LARGE) != 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    let pd = e3 & ADDR_MASK;
+    let e2 = read_entry_ram(ram_hpa, ram_len, pd, 0).ok_or(IdentityMapError::TableOutOfRam)?;
+    if (e2 & PRESENT) == 0 {
+        return Err(IdentityMapError::NeedAlloc);
+    }
+    if (e2 & LARGE) == 0 {
+        return Ok(IdentityMapKind::Page4K);
+    }
+    let phys_2m = e2 & 0x000f_ffff_ffe0_0000;
+    let pt = identity_gpa0_split_pt_gpa(cr3);
+    if pt.saturating_add(4096) > ram_len {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    for i in 0..512u64 {
+        let leaf = phys_2m.wrapping_add(i * 4096) | LEAF_FLAGS;
+        if !write_entry_ram(ram_hpa, ram_len, pt, i, leaf) {
+            return Err(IdentityMapError::TableOutOfRam);
+        }
+    }
+    if !write_entry_ram(ram_hpa, ram_len, pd, 0, pt | TABLE_FLAGS) {
+        return Err(IdentityMapError::TableOutOfRam);
+    }
+    Ok(IdentityMapKind::Split4K)
 }
 
 /// Split 1 GiB and restore PAT-UC on the PDPT PML4[0] actually walks.
@@ -984,6 +1065,7 @@ pub unsafe fn identity_fix_ram_wp(
         return Err(IdentityMapError::TableOutOfRam);
     }
     let _ = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, cr3);
+    let _ = identity_split_gpa0_fixed_mtrr(cr3, ram_hpa, ram_len);
     let idx4 = (gva >> 39) & 0x1ff;
     let mut e4 = read_entry_ram(ram_hpa, ram_len, pml4, idx4)
         .ok_or(IdentityMapError::TableOutOfRam)?;
@@ -1379,6 +1461,9 @@ mod guest_pt_test {
         // Iron be1b028 ASSERT pml4e=0x5a6f (PWT) after 0-4GiB leaves matched.
         assert_eq!(identity_clear_table_pwt_pcd(IDENTITY_IRON_PML4E_PWT), 0x5A67);
         assert_eq!(identity_clear_table_pwt_pcd(0xC040_0083), 0xC040_0083);
+        // Iron COM2 after keep_4k: pml4e=0x1a02023 pdpte1=0x1a04003 (no USER).
+        assert_eq!(identity_clear_table_pwt_pcd(0x1A0_2023), 0x1A0_2027);
+        assert_eq!(identity_clear_table_pwt_pcd(0x1A0_4003), 0x1A0_4007);
         let mut ram = vec![0u8; 0x220000];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
@@ -1426,6 +1511,52 @@ mod guest_pt_test {
             assert_eq!(split4k, 0x211000 | TABLE_FLAGS, "SPLIT4K PT must survive");
             let pte = read_entry_ram(ram_hpa, ram_len, 0x211000, 0).unwrap();
             assert_eq!(pte, 0x1000 | LEAF_FLAGS);
+            let pml4e = identity_walk_pml4e(IDENTITY_HV_PML4, 0, ram_hpa, ram_len);
+            assert_ne!(pml4e & USER, 0, "table PML4E must have USER pml4e=0x{pml4e:x}");
+            let pdpte0 = identity_walk_pdpte(IDENTITY_HV_PML4, 0, ram_hpa, ram_len);
+            assert_ne!(pdpte0 & USER, 0, "table PDPTE[0] must have USER pdpte0=0x{pdpte0:x}");
+        }
+    }
+
+    #[test]
+    fn identity_split_gpa0_fixed_mtrr_breaks_1m_leaf() {
+        // Iron COM2 after keep_4k: 0-4GiB PT matches MTRR WB+UC then ASSERT
+        // callerrip=0x1d25193. 2MiB at GPA 0 spans the 1MiB fixed-MTRR.
+        let mut ram = vec![0u8; 0x220000];
+        let ram_hpa = ram.as_mut_ptr() as u64;
+        let ram_len = 32 * 1024 * 1024;
+        unsafe {
+            let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
+            assert_eq!(cr3, IDENTITY_HV_PML4);
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0, ram_hpa, ram_len),
+                LARGE_2M_FLAGS
+            );
+            let kind = identity_split_gpa0_fixed_mtrr(IDENTITY_HV_PML4, ram_hpa, ram_len)
+                .expect("SPLIT GPA0");
+            assert_eq!(kind, IdentityMapKind::Split4K);
+            let pt = identity_split_pt_gpa(IDENTITY_HV_PML4, 0);
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0, ram_hpa, ram_len),
+                pt | TABLE_FLAGS
+            );
+            assert_eq!(
+                identity_walk_pte(IDENTITY_HV_PML4, 0, ram_hpa, ram_len),
+                LEAF_FLAGS
+            );
+            assert_eq!(
+                identity_walk_pte(IDENTITY_HV_PML4, 0x10_0000, ram_hpa, ram_len),
+                0x10_0000 | LEAF_FLAGS
+            );
+            assert_eq!(
+                identity_walk_pde(IDENTITY_HV_PML4, 0x2000000, ram_hpa, ram_len),
+                0x2000000 | LARGE_2M_FLAGS,
+                "do not split 32MiB 2MiB leaves"
+            );
+            assert_eq!(
+                identity_split_gpa0_fixed_mtrr(IDENTITY_HV_PML4, ram_hpa, ram_len),
+                Ok(IdentityMapKind::Page4K)
+            );
         }
     }
 
