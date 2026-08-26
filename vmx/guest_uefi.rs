@@ -1405,7 +1405,9 @@ fn guest_uefi_maybe_arm_pat_uc_hole() {
     #[cfg(target_os = "uefi")]
     {
         let ram_hpa = RAM_HPA.load(Ordering::Acquire);
-        let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+        // SAFETY: guest-UEFI VMLAUNCH path; current VMCS is loaded.
+        // identity_sync writes only the exclusive guest-UEFI slab.
+        let cr3 = unsafe { ops::vmread(GUEST_CR3) }.unwrap_or(0);
         if ram_hpa != 0 && cr3 != 0 {
             let _ = unsafe {
                 crate::vmx::guest_pt::identity_sync_live_mtrr_uc_hole(

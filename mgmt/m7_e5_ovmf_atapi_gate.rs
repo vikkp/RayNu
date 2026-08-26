@@ -471,6 +471,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("489d118")
         && guest.contains("38481d9")
         && guest.contains("guest_uefi_mtrr_uc_hole_live")
+        && guest.contains("unsafe { ops::vmread(GUEST_CR3) }")
         && gpt.contains("identity_set_pat_uc_hole")
         && gpt.contains("38481d9")
         && gpt.contains("identity_refill_low4g_pd_keep_4k")
