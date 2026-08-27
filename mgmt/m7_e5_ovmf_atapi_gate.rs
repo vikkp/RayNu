@@ -594,6 +594,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("f7620f6")
         && guest.contains("d6b012a")
         && guest.contains("guest_uefi_patch_cpu_flush_unsupported")
+        && guest.contains("guest_uefi_patch_cpu_flush_all_mapped")
         && guest.contains("GUEST_UEFI_CPU_FLUSH_UNSUPPORTED")
         && guest.contains("r9=0x")
         && guest.contains("pml4e1=0x")
