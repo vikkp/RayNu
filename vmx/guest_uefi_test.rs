@@ -667,8 +667,15 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ddbd866"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_vga_uc"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("calltgt="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("e368e86"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7f8e21a5"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr268="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("coerce only FIX 0x259"));
+    assert_eq!(guest_uefi_pt_leaf_4k_for(0xC_0000), 0xC_0000 | GUEST_UEFI_PT_LEAF_4K);
     assert!(guest_uefi_gpa_in_vga_fix_uc(0xA_0000));
-    assert!(guest_uefi_gpa_in_vga_fix_uc(0xF_0000));
+    assert!(guest_uefi_gpa_in_vga_fix_uc(0xB_F000));
+    assert!(!guest_uefi_gpa_in_vga_fix_uc(0xC_0000));
+    assert!(!guest_uefi_gpa_in_vga_fix_uc(0xF_0000));
     assert!(!guest_uefi_gpa_in_vga_fix_uc(0x9_F000));
     assert!(!guest_uefi_gpa_in_vga_fix_uc(0x10_0000));
     assert_eq!(GUEST_UEFI_IRON_PTE_A0000_WB, 0xA_0067);
@@ -777,7 +784,7 @@ fn marker_and_residual_honest() {
         );
         assert_eq!(
             guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0xC_0000),
-            0xC_0000 | GUEST_UEFI_PT_LEAF_4K_UC
+            0xC_0000 | GUEST_UEFI_PT_LEAF_4K
         );
         assert_eq!(
             guest_uefi_pt_paint_vga_uc(peek, poke, GUEST_UEFI_IRON_HIGH_CR3),
@@ -978,13 +985,14 @@ fn mtrr_shadow_is_guest_not_host() {
     assert!(guest_uefi_mtrr_write(0x250, GUEST_UEFI_MTRR_WB_PACKED));
     assert_eq!(guest_uefi_mtrr_read(0x250), Some(GUEST_UEFI_MTRR_WB_PACKED));
     assert!(guest_uefi_mtrr_fixed_is_vga_hole(0x259));
-    assert!(guest_uefi_mtrr_fixed_is_vga_hole(0x26F));
+    assert!(!guest_uefi_mtrr_fixed_is_vga_hole(0x26F));
+    assert!(!guest_uefi_mtrr_fixed_is_vga_hole(0x268));
     assert!(!guest_uefi_mtrr_fixed_is_vga_hole(0x250));
     assert!(!guest_uefi_mtrr_fixed_is_vga_hole(0x258));
     assert!(guest_uefi_mtrr_write(0x259, GUEST_UEFI_MTRR_WB_PACKED));
     assert_eq!(guest_uefi_mtrr_read(0x259), Some(GUEST_UEFI_MTRR_UC_PACKED));
     assert!(guest_uefi_mtrr_write(0x268, GUEST_UEFI_MTRR_WB_PACKED));
-    assert_eq!(guest_uefi_mtrr_read(0x268), Some(GUEST_UEFI_MTRR_UC_PACKED));
+    assert_eq!(guest_uefi_mtrr_read(0x268), Some(GUEST_UEFI_MTRR_WB_PACKED));
     assert!(guest_uefi_mtrr_write(0x258, GUEST_UEFI_MTRR_WB_PACKED));
     assert_eq!(guest_uefi_mtrr_read(0x258), Some(GUEST_UEFI_MTRR_WB_PACKED));
     assert!(guest_uefi_mtrr_write(0x2FF, 0xC00));

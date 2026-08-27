@@ -681,7 +681,8 @@ pub const IDENTITY_FIXED_MTRR_1M: u64 = 0x10_0000;
 /// also WB. Iron `ddbd866`: FIX VGA is UC (`mtrr259=0x0`) and this PTE
 /// was still WB — live CR3 PAT-UC via [`crate::vmx::guest_uefi::guest_uefi_pt_paint_vga_uc`].
 pub const IDENTITY_VGA_A0000: u64 = 0xA_0000;
-/// VGA BIOS / ROM. Dump `pte_c0000=`. Iron `d6b012a`: `0xc0067` WB identity.
+/// VGA BIOS / ROM. Dump `pte_c0000=`. Iron `e368e86`: `0xc007f` PAT-UC
+/// while firmware FIX `0x268`–`0x26F` wanted WB — leave this leaf WB.
 pub const IDENTITY_VGA_C0000: u64 = 0xC_0000;
 /// PML4[1] (leftover-high / >512GiB). Dump `pml4e1=`.
 pub const IDENTITY_PML4E1_GVA: u64 = 1 << 39;
