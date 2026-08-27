@@ -34,10 +34,12 @@ use super::{
 };
 use super::{
     guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pdpte, guest_uefi_pt_walk_pml4e,
-    guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc,
-    store_report_ram_u64,
+    guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole,
+    guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m,
+    guest_uefi_gpa0_split_pt_gpa, store_report_ram_u64,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
+    GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_TABLE,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -636,6 +638,96 @@ fn marker_and_residual_honest() {
         assert_eq!(
             guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000),
             guest_uefi_pt_pde_pat_uc(0x8000_0000)
+        );
+    }
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4ae87de"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde0=0xe3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_split_gpa0"));
+    assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
+    assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
+    assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));
+    assert_eq!(guest_uefi_gpa0_split_pt_gpa(), 0x20B000);
+    {
+        // Iron 4ae87de: live CR3 GPA0 is still 2MiB (pde0=0xE3) spanning
+        // the 1MiB fixed-MTRR boundary. Peek/poke fills HV SPLIT4K PT at
+        // 0x20B000 and points PD[0] at it.
+        use core::cell::RefCell;
+        let high = RefCell::new([0u8; 0x4000]);
+        let pt = RefCell::new([0u8; 4096]);
+        let pt_gpa = guest_uefi_gpa0_split_pt_gpa();
+        assert!(store_report_ram_u64(
+            &mut *high.borrow_mut(),
+            GUEST_UEFI_IRON_HIGH_CR3,
+            0x7FA0_2023
+        ));
+        assert!(store_report_ram_u64(
+            &mut *high.borrow_mut(),
+            0x7FA0_2000,
+            0x7FA0_3023
+        ));
+        assert!(store_report_ram_u64(
+            &mut *high.borrow_mut(),
+            0x7FA0_3000,
+            GUEST_UEFI_IRON_PDE0_2M
+        ));
+        let peek = |gpa: u64| -> u64 {
+            if gpa >= pt_gpa && gpa < pt_gpa + 4096 {
+                let off = (gpa - pt_gpa) as usize;
+                let p = pt.borrow();
+                if off.saturating_add(8) > p.len() {
+                    0
+                } else {
+                    let mut le = [0u8; 8];
+                    le.copy_from_slice(&p[off..off + 8]);
+                    u64::from_le_bytes(le)
+                }
+            } else {
+                let off = guest_uefi_report_ram_page_off(gpa) as usize;
+                let p = high.borrow();
+                if off.saturating_add(8) > p.len() {
+                    0
+                } else {
+                    let mut le = [0u8; 8];
+                    le.copy_from_slice(&p[off..off + 8]);
+                    u64::from_le_bytes(le)
+                }
+            }
+        };
+        let poke = |gpa: u64, val: u64| -> bool {
+            if gpa >= pt_gpa && gpa < pt_gpa + 4096 {
+                let off = (gpa - pt_gpa) as usize;
+                let mut p = pt.borrow_mut();
+                if off.saturating_add(8) > p.len() {
+                    false
+                } else {
+                    p[off..off + 8].copy_from_slice(&val.to_le_bytes());
+                    true
+                }
+            } else {
+                store_report_ram_u64(&mut *high.borrow_mut(), gpa, val)
+            }
+        };
+        assert_eq!(
+            guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0),
+            GUEST_UEFI_IRON_PDE0_2M
+        );
+        let n = guest_uefi_pt_split_gpa0(peek, poke, GUEST_UEFI_IRON_HIGH_CR3, pt_gpa);
+        assert_eq!(n, 513, "512 4K leaves + PD[0] table pointer, n={n}");
+        assert_eq!(
+            guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0),
+            pt_gpa | GUEST_UEFI_PT_TABLE
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0),
+            GUEST_UEFI_PT_LEAF_4K
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x10_0000),
+            0x10_0000 | GUEST_UEFI_PT_LEAF_4K
+        );
+        assert_eq!(
+            guest_uefi_pt_split_gpa0(peek, poke, GUEST_UEFI_IRON_HIGH_CR3, pt_gpa),
+            0
         );
     }
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("hide LA57"));

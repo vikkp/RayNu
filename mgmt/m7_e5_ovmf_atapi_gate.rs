@@ -110,6 +110,9 @@
 //! ASSERT `insn=ebecc9c3` — live report-RAM CR3 is WB; 32MiB
 //! `identity_sync_live_mtrr_uc_hole` missed it. Peek/poke PAT-UC on
 //! that CR3 (P5 GCD split + P2 admit; not f07a597 low-CR3 paint).
+//! Iron `4ae87de`: paint `n=1029` `pde8000=0x800000ff` still ASSERT
+//! `pde0=0xe3` `pte0=0` — 2MiB GPA0 spans 1MiB fixed-MTRR on live CR3.
+//! Peek/poke HV PT `0x20B000` into live PD[0]. Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -182,7 +185,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
-    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc,
+    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m, guest_uefi_gpa0_split_pt_gpa,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
@@ -191,7 +194,7 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
-    GUEST_UEFI_PT_LARGE_2M_UC,
+    GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -521,9 +524,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_pt_paint_live_uc_hole")
         && guest.contains("MTRR UC live PT painted")
         && guest.contains("c70768b")
-        && guest.contains("c70768b")
         && guest.contains("0x80000083")
         && guest.contains("GUEST_UEFI_IRON_PDE8000_WB")
+        && guest.contains("4ae87de")
+        && guest.contains("guest_uefi_pt_split_gpa0")
+        && guest.contains("GPA0 4K live CR3")
+        && guest.contains("GUEST_UEFI_IRON_PDE0_2M")
         && guest.contains("release_report_ram_for_e4")
         && launch.contains("E4_LINUX_CR4_FORBIDDEN")
         && plat.contains("E820_MID_GAP_BYTES")
@@ -908,6 +914,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c70768b")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000083")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_live_uc_hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4ae87de")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde0=0xe3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_split_gpa0")
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
         && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083
@@ -967,6 +976,77 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
                         ) >= 1
                         && guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000)
                             == guest_uefi_pt_pde_pat_uc(0x8000_0000)
+                }
+        }
+        && GUEST_UEFI_IRON_PDE0_2M == 0xE3
+        && guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M)
+        && guest_uefi_gpa0_split_pt_gpa() == 0x20B000
+        && {
+            use core::cell::RefCell;
+            let high = RefCell::new([0u8; 0x4000]);
+            let pt = RefCell::new([0u8; 4096]);
+            let pt_gpa = guest_uefi_gpa0_split_pt_gpa();
+            store_report_ram_u64(
+                &mut *high.borrow_mut(),
+                GUEST_UEFI_IRON_HIGH_CR3,
+                0x7FA0_2023,
+            ) && store_report_ram_u64(&mut *high.borrow_mut(), 0x7FA0_2000, 0x7FA0_3023)
+                && store_report_ram_u64(
+                    &mut *high.borrow_mut(),
+                    0x7FA0_3000,
+                    GUEST_UEFI_IRON_PDE0_2M,
+                )
+                && {
+                    let peek = |gpa: u64| {
+                        if gpa >= pt_gpa && gpa < pt_gpa + 4096 {
+                            let off = (gpa - pt_gpa) as usize;
+                            let p = pt.borrow();
+                            if off.saturating_add(8) > p.len() {
+                                0
+                            } else {
+                                let mut le = [0u8; 8];
+                                le.copy_from_slice(&p[off..off + 8]);
+                                u64::from_le_bytes(le)
+                            }
+                        } else {
+                            let off = guest_uefi_report_ram_page_off(gpa) as usize;
+                            let p = high.borrow();
+                            if off.saturating_add(8) > p.len() {
+                                0
+                            } else {
+                                let mut le = [0u8; 8];
+                                le.copy_from_slice(&p[off..off + 8]);
+                                u64::from_le_bytes(le)
+                            }
+                        }
+                    };
+                    let poke = |gpa: u64, val: u64| {
+                        if gpa >= pt_gpa && gpa < pt_gpa + 4096 {
+                            let off = (gpa - pt_gpa) as usize;
+                            let mut p = pt.borrow_mut();
+                            if off.saturating_add(8) > p.len() {
+                                false
+                            } else {
+                                let bytes = val.to_le_bytes();
+                                p[off..off + 8].copy_from_slice(&bytes);
+                                true
+                            }
+                        } else {
+                            store_report_ram_u64(&mut *high.borrow_mut(), gpa, val)
+                        }
+                    };
+                    guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0)
+                        == GUEST_UEFI_IRON_PDE0_2M
+                        && guest_uefi_pt_split_gpa0(
+                            peek,
+                            poke,
+                            GUEST_UEFI_IRON_HIGH_CR3,
+                            pt_gpa,
+                        ) >= 512
+                        && guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0)
+                            == GUEST_UEFI_PT_LEAF_4K
+                        && guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x10_0000)
+                            == 0x10_0000 | GUEST_UEFI_PT_LEAF_4K
                 }
         }
         && !guest_uefi_report_ram_should_map(0x1F0_0000)
