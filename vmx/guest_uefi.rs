@@ -4384,7 +4384,7 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
     serial::write_str(" caller=");
     dump_low_ram_insn(ret);
     {
-        let mut call = [0u8; 5];
+        let mut call = [0u8; 16];
         let nc = read_low_ram_insn(ret.wrapping_sub(5), &mut call);
         if nc >= 5 && call[0] == 0xE8 {
             let rel = i32::from_le_bytes([call[1], call[2], call[3], call[4]]);
