@@ -599,8 +599,10 @@
         <strong>Status:</strong> E2, E3, E3b + Phase F, E5 stamps, and E4 SPA
         VMLAUNCH closed on real R640 iron through 2026-08-21. Guest-UEFI
         (OVMF) chain closed on nested VT-x through 2026-08-23 (ADR-014 Stages
-        36–42). Remaining: TLS/console, a real distro installer, live Redfish,
-        R640 soak.
+        36–43) and on iron through 2026-08-27 (Stage 44 —
+        <code>OVMF-ATAPI-OK</code>, firmware READ(10) of a real CD sector).
+        Remaining: TLS/console, the El Torito CD boot, a real distro
+        installer, live Redfish, R640 soak.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-20, run r640 BCM5720 :38, E3b + Phase F)</strong><br />
@@ -637,6 +639,20 @@
         with CD-then-disk boot order (<code>OVMF-VIRTIO-OK</code>). Not a
         completed firmware CD boot; not an installer; not Everest E5.
       </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-23 → 2026-08-27, nested VT-x + R640 iron, ADR-014 Stages 43–44)</strong><br />
+        Maturity: L1 (runtime / gate) · Artifact: gate markers + iron COM2 log ·
+        <a href="https://github.com/vikkp/RayNu/pull/217">PR #217</a><br />
+        Observation: Stage 43 closed on nested VT-x
+        (<code>OVMF-BOTH-OK</code>: firmware-simultaneous virtio-blk
+        <code>00:00.0</code> + IDE <code>00:00.1</code> enumeration). Stage 44
+        closed on iron COM2 (EFI <code>bf696ca</code>, two boots):
+        <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — the guest firmware issued
+        ATAPI READ(10) (<code>scsi=0x28</code>) and read a real CD sector
+        (<code>sectors=1</code>, <code>packet=9</code>, stop n=30769).
+        Not an El Torito boot; not an installer; not Everest E5. Host tests
+        480/480.
+      </div>
 
       <h2 id="related">7. Related Work</h2>
       <p><em>[To be filled later with precise citations.]</em></p>
@@ -652,7 +668,7 @@
         <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> TLS/console, real distro installer, live Redfish, R640 soak. E2+E3+E3b+E5+P0-14 closed on iron through 2026-08-21 (<code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — SHELL stub, not a distro). LBA stamps ≠ guest rootfs. Firmware SNP/Tcp4 stay dead after EBS.</li>
+        <li><strong>Mount Everest residual:</strong> TLS/console, firmware El Torito CD boot, real distro installer, live Redfish, R640 soak. E2+E3+E3b+E5+P0-14 closed on iron through 2026-08-21 (<code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — SHELL stub, not a distro); P0-59 closed on iron 2026-08-27 (<code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — one CD sector read, not an OS boot). LBA stamps ≠ guest rootfs. Firmware SNP/Tcp4 stay dead after EBS.</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here
