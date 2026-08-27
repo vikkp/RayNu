@@ -151,8 +151,12 @@
             <code>:38</code>, 2026-08-20) — and
             <strong>P0-14</strong>
             <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (2026-08-21: private-EPT
-            SHELL guest from SPA start + shadow re-entry). Mount Everest
-            residual: TLS/console and a real distro installer. Not Everest.
+            SHELL guest from SPA start + shadow re-entry) — and
+            <strong>P0-59</strong>
+            <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> (2026-08-27: guest UEFI
+            firmware issued ATAPI READ(10) and got a real CD sector back,
+            twice, on iron). Mount Everest residual: TLS/console, the El
+            Torito CD boot, and a real distro installer. Not Everest.
           </p>
           <figure class="milestone-shot" data-reveal>
             <picture>
@@ -236,7 +240,7 @@ RAYNU-V-R640-BOOT-OK</code></pre>
           <dl class="statband" data-reveal>
             <div class="statband__item">
               <dt>Gates closed · M1.0 → E5</dt>
-              <dd>54</dd>
+              <dd>55</dd>
             </div>
             <div class="statband__item">
               <dt>Verus proofs · M6.9 external audit</dt>
@@ -244,7 +248,7 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             </div>
             <div class="statband__item">
               <dt>Iron markers · real PowerEdge R640</dt>
-              <dd>5</dd>
+              <dd>6</dd>
             </div>
           </dl>
 
@@ -672,6 +676,14 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                     >Guest-UEFI OVMF past SEC + CD/virtio-blk on private VMCS
                     (nested VT-x, 2026-08-23) →
                     <code>RAYNU-V-M7-E5-OVMF-VIRTIO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 44</span>
+                  <span class="journey__text"
+                    >Guest firmware reads the CD — ATAPI READ(10),
+                    sectors=1, on iron (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span
                   >
                 </li>
               </ol>
