@@ -4,7 +4,8 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     present, present_placeholder, reset, sectors_read, take_marker, write_eltorito_efi_pe,
-    write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok, edk2_pe_loadimage_ok,
+    write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
+    edk2_iso9660_bootx64_ok, edk2_pe_loadimage_ok, write_placeholder_iso,
     ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
@@ -235,14 +236,17 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     let dd5 = 0x98 + 0x70 + 5 * 8;
     assert_eq!(u32::from_le_bytes(pe[dd5..dd5 + 4].try_into().unwrap()), 0x2000);
     assert_eq!(u32::from_le_bytes(pe[dd5 + 4..dd5 + 8].try_into().unwrap()), 8);
-    let mut fat = [0u8; 8192];
-    assert_eq!(write_eltorito_fat12(&mut fat), 8192);
+    let mut fat = [0u8; 16384];
+    assert_eq!(write_eltorito_fat12(&mut fat), 16384);
     assert_eq!(fat[510], 0x55);
     assert_eq!(fat[511], 0xAA);
     assert_eq!(&fat[ELTORITO_BOOTX64_OFF..ELTORITO_BOOTX64_OFF + 2], b"MZ");
     assert!(edk2_pe_loadimage_ok(&pe), "DxeCore LoadImage headers");
     assert!(edk2_fat12_bootx64_ok(&fat), "FatDxe OpenDevice + BOOTX64 walk");
-    assert_eq!(edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT), 4);
+    assert_eq!(edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT), 8);
+    let mut iso_buf = [0u8; crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES];
+    write_placeholder_iso(&mut iso_buf);
+    assert!(edk2_iso9660_bootx64_ok(&iso_buf), "ISO9660 EFI/BOOT/BOOTX64");
     assert!(present_placeholder());
     assert!(!eltorito_catalog_read());
     assert!(!eltorito_boot_image_read());
@@ -264,17 +268,19 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     assert_eq!(img[511], 0xAA);
     assert!(eltorito_boot_image_read());
     assert_eq!(last_read_lba(), 22);
-    let file_sec = host_read10(23).expect("BOOTX64 ISO sector");
-    let pe_in = ELTORITO_BOOTX64_OFF - ISO_SECTOR;
-    assert_eq!(&file_sec[pe_in..pe_in + 2], b"MZ");
-    assert_eq!(&file_sec[pe_in + 0x80..pe_in + 0x84], b"PE\0\0");
+    let pe_lba = 22 + (ELTORITO_BOOTX64_OFF / ISO_SECTOR) as u32;
+    let file_sec = host_read10(pe_lba).expect("BOOTX64 ISO sector");
+    assert_eq!(&file_sec[0..2], b"MZ");
+    assert_eq!(&file_sec[0x80..0x84], b"PE\0\0");
     let mut found = false;
-    for w in file_sec[pe_in..].windows(ELTORITO_PAYLOAD_MAGIC.len()) {
+    for w in file_sec.windows(ELTORITO_PAYLOAD_MAGIC.len()) {
         if w == ELTORITO_PAYLOAD_MAGIC {
             found = true;
             break;
         }
     }
     assert!(found, "PE .text must embed RN-ELT immediates");
+    let iso_pe = host_read10(33).expect("ISO9660 BOOTX64.EFI");
+    assert_eq!(&iso_pe[0..2], b"MZ");
     reset();
 }

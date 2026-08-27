@@ -276,14 +276,14 @@ quiet except HTTP/WARN/markers.
 **First action (Stage 45 — firmware El Torito CD boot, in progress):**
 OVMF BDS loads El Torito EFI from the guest-visible ATAPI CD and runs it.
 Host package: keep the private VMCS after the first ATAPI sector; placeholder
-ISO is a checksummed El Torito catalog plus a FAT12 ESP with
+ISO is a checksummed El Torito catalog plus a 2048-byte FAT12 ESP and ISO9660
 `\EFI\BOOT\BOOTX64.EFI` (PE32+ OUTs `RN-ELT` on COM1); stop on catalog+load READ
 plus that magic, or the 131072-exit cap then 262144 (do not apply the 32768 post-ATAPI tail
 after PACKET — first sector is often LBA 0 dummy, not catalog). CD EFI PE uses
 SectionAlignment `0x1000` so DxeCore `ProtectUefiImage` can set X on `.text`.
 Iron COM2 `df7d158`: ATAPI-OK n=30769 then `eltorito-progress catalog=1 bootimg=1`
 `elt=0` stop n=131072 rip=`0x7ee8786d` port=`0x1f7` (BDS ATA PIO; 131072-exit cap;
-not `OVMF-ELTORITO-OK`; E4 LINUX-EARLY then M4.2 G1 EPT fail-soft is not Stage 45).
+512-byte BPB / empty PVD root; not `OVMF-ELTORITO-OK`; E4 LINUX-EARLY then M4.2 G1 EPT fail-soft is not Stage 45).
 Close when nested VT-x **or iron COM2**
 serial shows `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (not `sectors>0` alone).
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 → P0-60 (M4.2 G1 EPT /

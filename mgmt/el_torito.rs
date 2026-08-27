@@ -118,9 +118,10 @@ fn id_starts_with(field: &[u8], prefix: &[u8]) -> bool {
     field.len() >= prefix.len() && &field[..prefix.len()] == prefix
 }
 
-/// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + load LBA).
-/// Boot record at 17, catalog at 20, load LBA 22 with 4 FAT ISO sectors → 26.
-pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
+/// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + FAT + ISO9660).
+/// Boot record at 17, catalog at 20, load LBA 22 with 8 FAT ISO sectors, ISO9660
+/// `\EFI\BOOT` at LBA 30–33 → 36.
+pub const MOCK_EFI_ISO_BYTES: usize = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES;
 
 /// Write a minimal EFI El Torito prefix into `iso`. No allocation.
 /// Same bytes as [`crate::devices::ide_cdrom::write_placeholder_iso`].

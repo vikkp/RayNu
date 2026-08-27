@@ -30,27 +30,36 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
-/// Cap matches the host mock EFI ISO (26 × 2048) without depending on mgmt.
-pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
+/// Cap: PVD + Boot Record + catalog + 8-sector FAT ESP + ISO9660 `\EFI\BOOT`.
+pub const MOCK_EFI_ISO_BYTES: usize = 36 * ISO_SECTOR;
 /// El Torito catalog LBA in the mock / placeholder ISO.
 pub const ELTORITO_CATALOG_LBA: u32 = 20;
 /// El Torito no-emulation EFI load LBA (FAT12 ESP lives here).
 pub const ELTORITO_LOAD_LBA: u32 = 22;
-/// Catalog `SectorCount` / host ISO sectors at the load LBA. EDK2
-/// PartitionDxe no-emulation uses the CD block size (2048), so 4 means
-/// four ISO sectors — enough for the FAT12 ESP. Not 512-byte BIOS units.
-pub const ELTORITO_SECTOR_COUNT: u16 = 4;
-/// FAT12 bytes per sector inside the El Torito ESP.
-pub const ELTORITO_FAT_BPS: usize = 512;
+/// Catalog `SectorCount` in CD blocks. EDK2 PartitionDxe no-emulation sets
+/// the child `BlockIo` size to 2048, so the FAT BPB must also be 2048.
+/// Eight blocks hold reserved+FATs+root plus EFI/BOOT/BOOTX64 clusters.
+/// Iron `df7d158` 512-byte BPB on that 2048-byte child: catalog+bootimg,
+/// then VD re-reads (`readlba=17`) and no StartImage.
+pub const ELTORITO_SECTOR_COUNT: u16 = 8;
+/// FAT12 bytes per sector — matches El Torito no-emulation child BlockIo.
+pub const ELTORITO_FAT_BPS: usize = 2048;
 /// `\EFI\BOOT\BOOTX64.EFI` starts at FAT cluster 4 (data sector 6).
 pub const ELTORITO_BOOTX64_OFF: usize = 6 * ELTORITO_FAT_BPS;
+/// ISO9660 path table (type L). Type M is unused (PVD field 0).
+pub const ISO9660_PATHTABLE_LBA: u32 = 19;
+/// ISO9660 root / `EFI` / `BOOT` / `BOOTX64.EFI;1` after the FAT ESP.
+pub const ISO9660_ROOT_LBA: u32 = 30;
+pub const ISO9660_EFI_LBA: u32 = 31;
+pub const ISO9660_BOOTDIR_LBA: u32 = 32;
+pub const ISO9660_BOOTX64_LBA: u32 = 33;
 /// COM1 bytes the CD EFI writes when it actually runs. Not a sector count.
 pub const ELTORITO_PAYLOAD_MAGIC: &[u8] = b"RN-ELT";
 
 /// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
 pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 
-/// Cap matches the host mock EFI ISO (26 × 2048).
+/// Cap matches [`MOCK_EFI_ISO_BYTES`].
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
@@ -470,33 +479,225 @@ pub fn present(iso: &[u8], iso_id: u64) -> bool {
 }
 
 /// Placeholder ISO: PVD `CD001` at LBA 16 plus a checksummed EFI El Torito
-/// catalog and a FAT12 ESP at the load LBA (`\EFI\BOOT\BOOTX64.EFI`).
+/// catalog, a 2048-byte FAT12 ESP at the load LBA, and ISO9660 `\EFI\BOOT`.
 pub fn present_placeholder() -> bool {
-    let mut iso = [0u8; GUEST_CD_ISO_CAP];
-    write_placeholder_iso(&mut iso);
-    present(&iso, 1)
+    let ok = with_cd(|m| {
+        m.iso.fill(0);
+        write_placeholder_iso(&mut m.iso);
+        m.len = MOCK_EFI_ISO_BYTES;
+        m.iso_id = 1;
+        true
+    });
+    if !ok {
+        return false;
+    }
+    ISO_ID.store(1, Ordering::Release);
+    ISO_LEN.store(MOCK_EFI_ISO_BYTES as u32, Ordering::Release);
+    make_visible()
 }
 
-/// Write the mock EFI ISO prefix (PVD + Boot Record + catalog + FAT ESP).
+fn iso_both_u16(dst: &mut [u8], v: u16) {
+    if dst.len() < 4 {
+        return;
+    }
+    dst[0..2].copy_from_slice(&v.to_le_bytes());
+    dst[2..4].copy_from_slice(&v.to_be_bytes());
+}
+
+fn iso_both_u32(dst: &mut [u8], v: u32) {
+    if dst.len() < 8 {
+        return;
+    }
+    dst[0..4].copy_from_slice(&v.to_le_bytes());
+    dst[4..8].copy_from_slice(&v.to_be_bytes());
+}
+
+/// ECMA-119 directory record. Name length 1 uses 0x00 (`.`) / 0x01 (`..`).
+fn iso9660_put_dirent(
+    dst: &mut [u8],
+    off: usize,
+    lba: u32,
+    size: u32,
+    flags: u8,
+    name: &[u8],
+) -> usize {
+    let nlen = name.len();
+    if nlen == 0 || nlen > 255 {
+        return off;
+    }
+    let mut rec = 33 + nlen;
+    if rec & 1 != 0 {
+        rec += 1;
+    }
+    if off + rec > dst.len() {
+        return off;
+    }
+    dst[off] = rec as u8;
+    dst[off + 1] = 0;
+    iso_both_u32(&mut dst[off + 2..off + 10], lba);
+    iso_both_u32(&mut dst[off + 10..off + 18], size);
+    dst[off + 18] = 126;
+    dst[off + 19] = 8;
+    dst[off + 20] = 27;
+    dst[off + 25] = flags;
+    iso_both_u16(&mut dst[off + 28..off + 32], 1);
+    dst[off + 32] = nlen as u8;
+    dst[off + 33..off + 33 + nlen].copy_from_slice(name);
+    off + rec
+}
+
+fn iso9660_put_path(dst: &mut [u8], off: usize, lba: u32, parent: u16, name: &[u8]) -> usize {
+    let nlen = if name.is_empty() { 1 } else { name.len() };
+    let mut rec = 8 + nlen;
+    if rec & 1 != 0 {
+        rec += 1;
+    }
+    if off + rec > dst.len() {
+        return off;
+    }
+    dst[off] = nlen as u8;
+    dst[off + 1] = 0;
+    dst[off + 2..off + 6].copy_from_slice(&lba.to_le_bytes());
+    dst[off + 6..off + 8].copy_from_slice(&parent.to_le_bytes());
+    if name.is_empty() {
+        dst[off + 8] = 0;
+    } else {
+        dst[off + 8..off + 8 + name.len()].copy_from_slice(name);
+    }
+    off + rec
+}
+
+fn iso9660_name_eq(fname: &[u8], want: &[u8]) -> bool {
+    if fname.is_empty() || fname == [0] || fname == [1] {
+        return false;
+    }
+    let base = match fname.iter().position(|&c| c == b';') {
+        Some(i) => &fname[..i],
+        None => fname,
+    };
+    base.eq_ignore_ascii_case(want)
+}
+
+fn iso9660_find(iso: &[u8], lba: u32, size: u32, want: &[u8], is_dir: bool) -> Option<(u32, u32)> {
+    let start = (lba as usize).saturating_mul(ISO_SECTOR);
+    if start >= iso.len() {
+        return None;
+    }
+    let end = start
+        .saturating_add(size as usize)
+        .min(iso.len())
+        .min(start + ISO_SECTOR);
+    let dir = &iso[start..end];
+    let mut off = 0usize;
+    while off + 33 < dir.len() {
+        let rec = dir[off] as usize;
+        if rec < 34 {
+            break;
+        }
+        if off + rec > dir.len() {
+            return None;
+        }
+        let nlen = dir[off + 32] as usize;
+        if off + 33 + nlen > off + rec {
+            off += rec;
+            continue;
+        }
+        let fname = &dir[off + 33..off + 33 + nlen];
+        let flags = dir[off + 25];
+        if ((flags & 2) != 0) == is_dir && iso9660_name_eq(fname, want) {
+            let loc = u32::from_le_bytes([
+                dir[off + 2],
+                dir[off + 3],
+                dir[off + 4],
+                dir[off + 5],
+            ]);
+            let sz = u32::from_le_bytes([
+                dir[off + 10],
+                dir[off + 11],
+                dir[off + 12],
+                dir[off + 13],
+            ]);
+            return Some((loc, sz));
+        }
+        off += rec;
+    }
+    None
+}
+
+/// ISO9660 `\EFI\BOOT\BOOTX64.EFI;1` walk from the PVD root directory record.
+///
+/// INVARIANTS:
+/// - PVD type 1 `CD001` with a non-zero root directory record at offset 156
+/// - Directory flags bit 1 set for `EFI` and `BOOT`
+/// - File extent starts with `MZ`
+pub fn edk2_iso9660_bootx64_ok(iso: &[u8]) -> bool {
+    if iso.len() < MOCK_EFI_ISO_BYTES {
+        return false;
+    }
+    let pvd = 16 * ISO_SECTOR;
+    if iso[pvd] != 1 || &iso[pvd + 1..pvd + 6] != b"CD001" {
+        return false;
+    }
+    let rec = iso[pvd + 156] as usize;
+    if rec < 34 || pvd + 156 + rec > iso.len() {
+        return false;
+    }
+    let root_lba = u32::from_le_bytes([
+        iso[pvd + 158],
+        iso[pvd + 159],
+        iso[pvd + 160],
+        iso[pvd + 161],
+    ]);
+    let root_sz = u32::from_le_bytes([
+        iso[pvd + 166],
+        iso[pvd + 167],
+        iso[pvd + 168],
+        iso[pvd + 169],
+    ]);
+    if root_lba != ISO9660_ROOT_LBA || root_sz == 0 {
+        return false;
+    }
+    let Some((efi_lba, efi_sz)) = iso9660_find(iso, root_lba, root_sz, b"EFI", true) else {
+        return false;
+    };
+    let Some((boot_lba, boot_sz)) = iso9660_find(iso, efi_lba, efi_sz, b"BOOT", true) else {
+        return false;
+    };
+    let Some((file_lba, file_sz)) = iso9660_find(iso, boot_lba, boot_sz, b"BOOTX64.EFI", false)
+    else {
+        return false;
+    };
+    if file_sz < 0x200 {
+        return false;
+    }
+    let off = (file_lba as usize).saturating_mul(ISO_SECTOR);
+    off + 2 <= iso.len() && &iso[off..off + 2] == b"MZ"
+}
+
+/// Write the mock EFI ISO prefix (PVD + Boot Record + catalog + FAT ESP + ISO9660).
 ///
 /// INVARIANTS:
 /// - Needs [`MOCK_EFI_ISO_BYTES`]
 /// - Catalog validation entry 16-bit words sum to 0 (EDK2 PartitionDxe)
-/// - Load LBA is a FAT12 ESP with `\EFI\BOOT\BOOTX64.EFI`
+/// - Load LBA is a 2048-byte FAT12 ESP with `\EFI\BOOT\BOOTX64.EFI`
+/// - PVD root directory record + path table name ISO9660 `\EFI\BOOT\BOOTX64.EFI;1`
 pub fn write_placeholder_iso(iso: &mut [u8]) {
     if iso.len() < MOCK_EFI_ISO_BYTES {
         return;
     }
+    iso[..MOCK_EFI_ISO_BYTES].fill(0);
     let pvd = 16 * ISO_SECTOR;
     iso[pvd] = 1;
     iso[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
     iso[pvd + 6] = 1;
+    iso[pvd + 8..pvd + 40].fill(b' ');
+    iso[pvd + 40..pvd + 72].fill(b' ');
     iso[pvd + 40..pvd + 50].copy_from_slice(b"RAYNU-V-CD");
     let vol = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
-    iso[pvd + 80..pvd + 84].copy_from_slice(&vol.to_le_bytes());
-    iso[pvd + 84..pvd + 88].copy_from_slice(&vol.to_be_bytes());
-    iso[pvd + 128..pvd + 130].copy_from_slice(&(ISO_SECTOR as u16).to_le_bytes());
-    iso[pvd + 130..pvd + 132].copy_from_slice(&(ISO_SECTOR as u16).to_be_bytes());
+    iso_both_u32(&mut iso[pvd + 80..pvd + 88], vol);
+    iso_both_u16(&mut iso[pvd + 120..pvd + 124], 1);
+    iso_both_u16(&mut iso[pvd + 124..pvd + 128], 1);
+    iso_both_u16(&mut iso[pvd + 128..pvd + 132], ISO_SECTOR as u16);
     iso[pvd + 881] = 1;
     let term = 18 * ISO_SECTOR;
     iso[term] = 0xFF;
@@ -520,6 +721,121 @@ pub fn write_placeholder_iso(iso: &mut [u8]) {
     iso[cat + 40..cat + 44].copy_from_slice(&ELTORITO_LOAD_LBA.to_le_bytes());
     let load = (ELTORITO_LOAD_LBA as usize) * ISO_SECTOR;
     let _ = write_eltorito_fat12(&mut iso[load..]);
+    let bootx = (ISO9660_BOOTX64_LBA as usize) * ISO_SECTOR;
+    let pe_len = write_eltorito_efi_pe(&mut iso[bootx..]) as u32;
+    if pe_len == 0 {
+        return;
+    }
+    let dir_sz = ISO_SECTOR as u32;
+    let root = (ISO9660_ROOT_LBA as usize) * ISO_SECTOR;
+    let mut o = 0usize;
+    o = iso9660_put_dirent(
+        &mut iso[root..root + ISO_SECTOR],
+        o,
+        ISO9660_ROOT_LBA,
+        dir_sz,
+        2,
+        &[0x00],
+    );
+    o = iso9660_put_dirent(
+        &mut iso[root..root + ISO_SECTOR],
+        o,
+        ISO9660_ROOT_LBA,
+        dir_sz,
+        2,
+        &[0x01],
+    );
+    let _ = iso9660_put_dirent(
+        &mut iso[root..root + ISO_SECTOR],
+        o,
+        ISO9660_EFI_LBA,
+        dir_sz,
+        2,
+        b"EFI",
+    );
+    let efi = (ISO9660_EFI_LBA as usize) * ISO_SECTOR;
+    o = 0;
+    o = iso9660_put_dirent(
+        &mut iso[efi..efi + ISO_SECTOR],
+        o,
+        ISO9660_EFI_LBA,
+        dir_sz,
+        2,
+        &[0x00],
+    );
+    o = iso9660_put_dirent(
+        &mut iso[efi..efi + ISO_SECTOR],
+        o,
+        ISO9660_ROOT_LBA,
+        dir_sz,
+        2,
+        &[0x01],
+    );
+    let _ = iso9660_put_dirent(
+        &mut iso[efi..efi + ISO_SECTOR],
+        o,
+        ISO9660_BOOTDIR_LBA,
+        dir_sz,
+        2,
+        b"BOOT",
+    );
+    let boot = (ISO9660_BOOTDIR_LBA as usize) * ISO_SECTOR;
+    o = 0;
+    o = iso9660_put_dirent(
+        &mut iso[boot..boot + ISO_SECTOR],
+        o,
+        ISO9660_BOOTDIR_LBA,
+        dir_sz,
+        2,
+        &[0x00],
+    );
+    o = iso9660_put_dirent(
+        &mut iso[boot..boot + ISO_SECTOR],
+        o,
+        ISO9660_EFI_LBA,
+        dir_sz,
+        2,
+        &[0x01],
+    );
+    let _ = iso9660_put_dirent(
+        &mut iso[boot..boot + ISO_SECTOR],
+        o,
+        ISO9660_BOOTX64_LBA,
+        pe_len,
+        0,
+        b"BOOTX64.EFI;1",
+    );
+    let pt = (ISO9660_PATHTABLE_LBA as usize) * ISO_SECTOR;
+    let mut p = 0usize;
+    p = iso9660_put_path(
+        &mut iso[pt..pt + ISO_SECTOR],
+        p,
+        ISO9660_ROOT_LBA,
+        1,
+        &[],
+    );
+    p = iso9660_put_path(
+        &mut iso[pt..pt + ISO_SECTOR],
+        p,
+        ISO9660_EFI_LBA,
+        1,
+        b"EFI",
+    );
+    p = iso9660_put_path(
+        &mut iso[pt..pt + ISO_SECTOR],
+        p,
+        ISO9660_BOOTDIR_LBA,
+        2,
+        b"BOOT",
+    );
+    iso_both_u32(&mut iso[pvd + 132..pvd + 140], p as u32);
+    iso[pvd + 140..pvd + 144].copy_from_slice(&ISO9660_PATHTABLE_LBA.to_le_bytes());
+    let rec = iso[root] as usize;
+    if rec >= 34 && rec <= 34 {
+        let mut root_rec = [0u8; 34];
+        root_rec.copy_from_slice(&iso[root..root + 34]);
+        iso[pvd + 156..pvd + 190].copy_from_slice(&root_rec);
+    }
 }
 
 /// El Torito validation entry: 16-bit little-endian words sum to 0.
@@ -597,11 +913,11 @@ fn fat_dir_find(dir: &[u8], name11: &[u8; 11]) -> Option<(u16, u32, u8)> {
 /// FatDxe `FatOpenDevice` checks + `\EFI\BOOT\BOOTX64.EFI` 8.3 walk.
 ///
 /// INVARIANTS:
-/// - BPB BytesPerSector is 512 (DiskIo on a 2048-byte El Torito child)
+/// - BPB BytesPerSector is 2048 (matches PartitionDxe no-emulation BlockIo)
 /// - Media `0xF8` is allowed (`<= 0xF7` reject does not fire)
 /// - Cluster count is FAT12 (`< 0xFF5`)
 pub fn edk2_fat12_bootx64_ok(fat: &[u8]) -> bool {
-    if fat.len() < 16 * ELTORITO_FAT_BPS {
+    if fat.len() < ELTORITO_SECTOR_COUNT as usize * ELTORITO_FAT_BPS {
         return false;
     }
     let bps = u16::from_le_bytes([fat[11], fat[12]]) as usize;
@@ -779,12 +1095,12 @@ fn fat_dirent(dst: &mut [u8], name11: &[u8; 11], attr: u8, cluster: u16, size: u
 /// Write a FAT12 EFI System Partition with `\EFI\BOOT\BOOTX64.EFI`.
 ///
 /// INVARIANTS:
-/// - Fits in [`ELTORITO_SECTOR_COUNT`] ISO 2048-byte sectors (8192 bytes)
-/// - BPB BytesPerSector is 512 so FatDxe DiskIo can mount a 2048-byte BlockIo
+/// - Fits in [`ELTORITO_SECTOR_COUNT`] ISO 2048-byte sectors (16384 bytes)
+/// - BPB BytesPerSector is 2048 so FatDxe matches the El Torito child BlockIo
 /// - `BOOTX64.EFI` is the PE from [`write_eltorito_efi_pe`]
 /// - Does not allocate
 pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
-    const FAT_SECS: usize = 16;
+    const FAT_SECS: usize = ELTORITO_SECTOR_COUNT as usize;
     const NEED: usize = FAT_SECS * ELTORITO_FAT_BPS;
     if dst.len() < NEED {
         return 0;
@@ -819,7 +1135,8 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
         return 0;
     }
     let file_clusters = (pe_len + ELTORITO_FAT_BPS - 1) / ELTORITO_FAT_BPS;
-    if file_clusters == 0 || 3 + file_clusters > 13 {
+    // Clusters 2=EFI, 3=BOOT, 4+=file. Volume has clusters 2..5.
+    if file_clusters == 0 || 3 + file_clusters > 5 {
         return 0;
     }
     fat12_set(&mut dst[fat1..fat2], 0, 0xFF8);

@@ -43,7 +43,7 @@ pub fn prop_host_attach_mock_efi() -> bool {
         && rec.efi
         && rec.catalog_lba == 20
         && rec.load_lba == 22
-        && rec.sector_count == 4
+        && rec.sector_count == 8
         && rec.image_type == GuestImageType::LinuxIso
         && rec.state == CdromAttachState::AttachedHost
 }

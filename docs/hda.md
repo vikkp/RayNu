@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-eltorito |
-| Summary | Stage 45 El Torito: 262144-exit cap after iron `df7d158` catalog=1 bootimg=1 elt=0 hit the 131072-exit cap in ATA PIO; PE SectionAlignment 0x1000; not ELTORITO-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 45 El Torito: 2048-byte FAT + ISO9660 `\EFI\BOOT` after iron `df7d158` catalog=1 bootimg=1 elt=0 (512-byte BPB / empty PVD root) hit the 131072-exit cap; PE SectionAlignment 0x1000; 262144-exit cap; not ELTORITO-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
 | Gates touched | Stage 45 OPEN in progress. `OVMF-ATAPI-OK` stays CLOSED. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 2048-byte FAT BPB + ISO9660 EFI/BOOT/BOOTX64 after iron df7d158 512-byte BPB catalog=1 bootimg=1 elt=0 (not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 262144-exit cap after iron df7d158 catalog=1 bootimg=1 elt=0 stop n=131072 (131072-exit cap; BDS ATA PIO; not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: do not apply 32768 post-ATAPI tail after PACKET (first sector often LBA 0 dummy); EDK2 FatDxe+LoadImage host walk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: GenFw PE 0x2022 + COM1 LCR DLAB clear before RN-ELT; no short tail after catalog+load; 131072-exit cap; not installer; iron P0-14 stays 2b795a0 |

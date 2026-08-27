@@ -18,10 +18,11 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_ovmf_atapi_gate::run_m7_e5_ovmf_atapi_gate;
 use crate::devices::ide_cdrom::{
-    edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok, edk2_pe_loadimage_ok,
-    eltorito_boot_image_read, eltorito_catalog_read, eltorito_validation_checksum_ok, host_read10,
-    present_placeholder, reset, write_eltorito_efi_pe, write_eltorito_fat12, ELTORITO_BOOTX64_OFF,
-    ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT,
+    edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok, edk2_iso9660_bootx64_ok,
+    edk2_pe_loadimage_ok, eltorito_boot_image_read, eltorito_catalog_read,
+    eltorito_validation_checksum_ok, host_read10, present_placeholder, reset, write_eltorito_efi_pe,
+    write_eltorito_fat12, ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT,
+    MOCK_EFI_ISO_BYTES,
 };
 use crate::vmx::guest_uefi::{
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, post_atapi_should_stop,
@@ -64,8 +65,8 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
     if u32::from_le_bytes([pe[dd5], pe[dd5 + 1], pe[dd5 + 2], pe[dd5 + 3]]) != 0x2000 {
         return false;
     }
-    let mut fat = [0u8; 8192];
-    if write_eltorito_fat12(&mut fat) != 8192 {
+    let mut fat = [0u8; 16384];
+    if write_eltorito_fat12(&mut fat) != 16384 {
         return false;
     }
     if fat[510] != 0x55 || fat[511] != 0xAA {
@@ -77,7 +78,12 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
     if !edk2_fat12_bootx64_ok(&fat) || !edk2_pe_loadimage_ok(&pe) {
         return false;
     }
-    if edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT) != 4 {
+    if edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT) != 8 {
+        return false;
+    }
+    let mut iso = [0u8; MOCK_EFI_ISO_BYTES];
+    crate::devices::ide_cdrom::write_placeholder_iso(&mut iso);
+    if !edk2_iso9660_bootx64_ok(&iso) {
         return false;
     }
     pe.windows(ELTORITO_PAYLOAD_MAGIC.len())
@@ -127,15 +133,22 @@ pub fn prop_catalog_and_load_reads() -> bool {
         reset();
         return false;
     }
-    let file_sec = match host_read10(23) {
+    let pe_lba = 22 + (ELTORITO_BOOTX64_OFF / 2048) as u32;
+    let file_sec = match host_read10(pe_lba) {
         Some(s) => s,
         None => {
             reset();
             return false;
         }
     };
-    let pe_in = ELTORITO_BOOTX64_OFF - 2048;
-    let ok = &file_sec[pe_in..pe_in + 2] == b"MZ";
+    let iso9660 = match host_read10(33) {
+        Some(s) => s,
+        None => {
+            reset();
+            return false;
+        }
+    };
+    let ok = &file_sec[0..2] == b"MZ" && &iso9660[0..2] == b"MZ";
     reset();
     ok
 }
@@ -161,6 +174,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("does not apply the 32768 post-ATAPI tail")
         && guest.contains("first ATAPI is often LBA 0 dummy")
         && ide.contains("edk2_fat12_bootx64_ok")
+        && ide.contains("edk2_iso9660_bootx64_ok")
+        && ide.contains("ISO9660")
         && ide.contains("edk2_pe_loadimage_ok")
         && ide.contains("write_eltorito_efi_pe")
         && ide.contains("0x2022")
@@ -183,6 +198,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("df7d158")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("131072-exit cap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2048-byte FAT")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ISO9660")
 }
 
 /// Full E5 Stage 45 package. Host gate + QEMU marker. Nested VT-x or iron
