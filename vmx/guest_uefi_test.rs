@@ -97,7 +97,7 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
-    assert_eq!(GUEST_UEFI_RESUME_CAP, 131072);
+    assert_eq!(GUEST_UEFI_RESUME_CAP, 262144);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.OSXSAVE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0ca02e6"));
@@ -1186,7 +1186,7 @@ fn past_sec_predicates_are_honest() {
             true,
             false
         ),
-        "catalog+load READ must keep the VMCS until RN-ELT or the 131072-exit cap"
+        "catalog+load READ must keep the VMCS until RN-ELT or the 131072-exit cap (262144 hard resume)"
     );
     assert!(post_atapi_should_stop(
         true, 200, 115, 180, 4, true, true, true

@@ -8,7 +8,8 @@
 //! VMCS on the first sector (`n=30769` `sectors=1`). Keep running after
 //! that READ until OVMF mounts the El Torito FAT ESP, StartImages
 //! `\EFI\BOOT\BOOTX64.EFI`, and the payload writes `RN-ELT` to COM1, or
-//! the 131072-exit cap. Nested VT-x or iron COM2
+//! the 131072-exit cap (hard resume 262144 after iron `df7d158` hit that
+//! cap with catalog+bootimg still in ATA PIO). Nested VT-x or iron COM2
 //! closes the marker. Not `sectors>0` alone. Not installer. Not
 //! `ISO-INSTALL-OK`. Not P0-60 G1 EPT. Do not skip `ebecc9c3`. Do not
 //! move virtio to `00:00.0`.
@@ -156,6 +157,7 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("post_atapi_should_stop")
         && guest.contains("eltorito_boot_evidence")
         && guest.contains("131072-exit cap")
+        && guest.contains("262144")
         && guest.contains("does not apply the 32768 post-ATAPI tail")
         && guest.contains("first ATAPI is often LBA 0 dummy")
         && ide.contains("edk2_fat12_bootx64_ok")
@@ -179,6 +181,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SectionAlignment 0x1000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("df7d158")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("131072-exit cap")
 }
 
 /// Full E5 Stage 45 package. Host gate + QEMU marker. Nested VT-x or iron
@@ -195,7 +199,7 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
         && run_m7_e5_ovmf_atapi_gate()
         && prop_eltorito_payload_is_pe()
         && prop_catalog_and_load_reads()
-        && GUEST_UEFI_RESUME_CAP >= 131072
+        && GUEST_UEFI_RESUME_CAP >= 262144
         && GUEST_UEFI_POST_DXE_TAIL == 32768
         && GUEST_UEFI_POST_ATAPI_TAIL == 32768
         && post_dxe_should_stop(true, 115, 115, 1)
