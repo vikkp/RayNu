@@ -8,10 +8,17 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! and fw_cfg `bootorder` (CD then virtio disk). Not installer. Not
-//! Everest E5.
+//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
+//! fw_cfg `etc/e820` (32 MiB RAM), 8259 PIC RAZ/WI, and a
+//! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
+//! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
+//! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
+//! (no `00:00.1`). Nested VT-x `105ffbe`: live HPET + preemption hit
+//! the 2048 cap (`reason=0x34` `rip=0x6e812d` `pci_ide=0`) because
+//! `HPET_MAIN_STEP` was ~10 ms per VMEXIT. 1 s of HPET time per
+//! exit so Delay can finish without burning the cap.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// Must match [`crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES`] (32 MiB).
 /// Kept local so this module does not import the Proven Core EPT builder.
@@ -30,6 +37,16 @@ pub const HOST_BRIDGE_FN: u8 = 0;
 pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
 
+/// PIIX4 PM/ACPI at `00:01.3` (Intel 82371AB). OVMF programs PMBA here
+/// after the i440FX host-bridge switch. DID remap lets that switch match
+/// virtio `0x1042` at `00:00.0` without faking the Device ID read.
+pub const PM_BRIDGE_VENDOR: u16 = 0x8086;
+pub const PM_BRIDGE_DEVICE: u16 = 0x7113;
+pub const PM_BRIDGE_DEV: u8 = 1;
+pub const PM_BRIDGE_FN: u8 = 3;
+/// Default PIIX4 PMBA (IO bit set). Timer is at `PMBA&~1 + 8` = `0x408`.
+pub const PIIX4_PMBA_DEFAULT: u32 = 0x401;
+
 /// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
 pub const PCI_HEADER_MULTIFUNCTION: u32 = 0x0080_0000;
 
@@ -47,8 +64,14 @@ const FW_CFG_MAX_CPUS: u16 = 0x0F;
 const FW_CFG_FILE_DIR: u16 = 0x19;
 /// First named fw_cfg file selector (QEMU `FW_CFG_FILE_FIRST`).
 pub const FW_CFG_BOOTORDER_SEL: u16 = 0x20;
+/// Second named file: OVMF `PlatformScanE820` (`etc/e820`).
+pub const FW_CFG_E820_SEL: u16 = 0x21;
+/// Packed QEMU e820 entry size (`address:u64`, `length:u64`, `type:u32`).
+pub const E820_ENTRY_BYTES: u8 = 20;
+/// QEMU `E820_RAM`.
+pub const E820_RAM: u32 = 1;
 
-/// QEMU `bootorder` (OFW paths). CD (`ide@0,1`) then virtio disk (`scsi@0`).
+/// QEMU `bootorder` (OFW paths). CD (`ide@0,1` = `00:00.1`) then virtio disk (`scsi@0`).
 pub const BOOTORDER: &[u8] = b"/pci@i0cf8/ide@0,1/drive@1/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n";
 
 /// Product boot order is CD then virtio disk (ADR-014).
@@ -73,23 +96,55 @@ fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-fn file_dir_byte(off: u16) -> u8 {
-    let o = off as usize;
-    match o {
-        0..=3 => 1u32.to_be_bytes()[o],
-        4..=7 => (BOOTORDER.len() as u32).to_be_bytes()[o - 4],
-        8..=9 => FW_CFG_BOOTORDER_SEL.to_be_bytes()[o - 8],
-        10 | 11 => 0,
-        12..=67 => {
-            let name = b"bootorder";
-            let i = o - 12;
-            if i < name.len() {
-                name[i]
+fn file_entry_byte(i: usize, size: u32, sel: u16, name: &[u8]) -> u8 {
+    match i {
+        0..=3 => size.to_be_bytes()[i],
+        4..=5 => sel.to_be_bytes()[i - 4],
+        6 | 7 => 0,
+        8..=63 => {
+            let ni = i - 8;
+            if ni < name.len() {
+                name[ni]
             } else {
                 0
             }
         }
         _ => 0,
+    }
+}
+
+fn file_dir_byte(off: u16) -> u8 {
+    const ENTRY: usize = 64;
+    let o = off as usize;
+    if o < 4 {
+        return 2u32.to_be_bytes()[o];
+    }
+    let body = o - 4;
+    let ent = body / ENTRY;
+    let i = body % ENTRY;
+    match ent {
+        0 => file_entry_byte(
+            i,
+            BOOTORDER.len() as u32,
+            FW_CFG_BOOTORDER_SEL,
+            b"bootorder",
+        ),
+        1 => file_entry_byte(i, u32::from(E820_ENTRY_BYTES), FW_CFG_E820_SEL, b"etc/e820"),
+        _ => 0,
+    }
+}
+
+/// One packed QEMU e820 RAM entry covering [`PLATFORM_RAM_BYTES`].
+pub fn e820_byte(off: u16) -> u8 {
+    let o = off as usize;
+    if o < 8 {
+        0
+    } else if o < 16 {
+        PLATFORM_RAM_BYTES.to_le_bytes()[o - 8]
+    } else if o < 20 {
+        E820_RAM.to_le_bytes()[o - 16]
+    } else {
+        0
     }
 }
 
@@ -128,8 +183,67 @@ pub fn is_timer_port(port: u16) -> bool {
     (0x40..=0x43).contains(&port) || port == 0x61 || port == 0x80 || port == 0x92
 }
 
+/// 8259 PIC + ELCR. Unhandled `IN` was `0xFF` (all IRQs in service).
+pub fn is_pic_port(port: u16) -> bool {
+    matches!(port, 0x20 | 0x21 | 0xA0 | 0xA1 | 0x4D0 | 0x4D1)
+}
+
+/// OVMF `AcpiTimerLibConstructor` leaves `mAcpiTimerIoAddr=0` when `00:00.0`
+/// DID is not i440FX/Q35. PEI then `IoRead32(0)` in `InternalAcpiDelay`.
+/// PIIX4 PMBA timer is `0x408`. Q35/ICH9 default is `0xB008`.
+/// Programmed PMBA+8 is also a timer (after firmware writes `00:01.3`).
+pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
+    if acpi_pm_timer_fixed(port, size) {
+        return true;
+    }
+    with_plat(|p| acpi_pm_timer_pmba(port, p.pmba))
+}
+
+fn acpi_pm_timer_fixed(port: u16, size: u8) -> bool {
+    (port == 0 && size == 4) || (0x408..=0x40B).contains(&port) || (0xB008..=0xB00B).contains(&port)
+}
+
+fn acpi_pm_timer_pmba(port: u16, pmba: u32) -> bool {
+    let base = (pmba & !1).wrapping_add(8);
+    let p32 = u32::from(port);
+    p32 >= base && p32 < base.wrapping_add(4)
+}
+
+fn acpi_pm_timer_matches(port: u16, size: u8, pmba: u32) -> bool {
+    acpi_pm_timer_fixed(port, size) || acpi_pm_timer_pmba(port, pmba)
+}
+
+/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; other regs RAZ/WI.
+pub fn is_piix_pm_io(port: u16) -> bool {
+    with_plat(|p| is_piix_pm_io_port(port, p.pmba))
+}
+
+fn is_piix_pm_io_port(port: u16, pmba: u32) -> bool {
+    let base = pmba & !1;
+    let p32 = u32::from(port);
+    p32 >= base && p32 < base.wrapping_add(64)
+}
+
+fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
+    if port == 0 {
+        return 0;
+    }
+    let base = (pmba & !1).wrapping_add(8);
+    let p32 = u32::from(port);
+    if p32 >= base && p32 < base.wrapping_add(4) {
+        return (p32 - base) * 8;
+    }
+    if (0x408..=0x40B).contains(&port) {
+        return u32::from(port - 0x408) * 8;
+    }
+    if (0xB008..=0xB00B).contains(&port) {
+        return u32::from(port - 0xB008) * 8;
+    }
+    0
+}
+
 pub fn is_platform_io_port(port: u16) -> bool {
-    is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port)
+    is_cmos_port(port) || is_fwcfg_port(port) || is_timer_port(port) || is_pic_port(port)
 }
 
 /// High MMIO / leftover “RAM” PEI walks when CMOS is wrong, plus APIC/HPET.
@@ -142,6 +256,48 @@ pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     (gpa >= PLATFORM_RAM_BYTES && gpa < GIB)
         || (gpa >= MMIO_LO && gpa < FW_FLOOR)
         || (gpa >= IOAPIC && gpa < APIC_TOP)
+}
+
+/// QEMU/ICH HPET MMIO. Lives in the 2 MiB sink page at [`HPET_SINK_PAGE`].
+pub const HPET_GPA: u64 = 0xFED0_0000;
+pub const HPET_SINK_PAGE: u64 = 0xFEC0_0000;
+pub const HPET_SINK_OFF: usize = (HPET_GPA - HPET_SINK_PAGE) as usize;
+/// Rev 1, 3 timers, 64-bit, Intel vendor — same shape as QEMU `hpet.c`.
+pub const HPET_CAP_REV: u32 = 0x8086_A201;
+/// 10 ns period in femtoseconds.
+pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
+/// ~1 s of HPET time per VMEXIT (10 ns ticks). Nested VT-x `105ffbe`
+/// burned n=1024–2048 at `rip=0x6e812d` with 1e6 ticks (~10 ms) per
+/// exit — Delay never finished. Cap 2048 still bounds a forever-poll.
+pub const HPET_MAIN_STEP: u64 = 100_000_000;
+
+/// Stamp a live HPET into the 2 MiB platform sink (offset [`HPET_SINK_OFF`]).
+///
+/// INVARIANTS:
+/// - Writes only when `sink.len()` covers HPET config + main counter
+/// - Does not fake PCI enum
+pub fn hpet_init_sink(sink: &mut [u8]) -> bool {
+    if sink.len() < HPET_SINK_OFF + 0xF8 {
+        return false;
+    }
+    let h = HPET_SINK_OFF;
+    sink[h..h + 4].copy_from_slice(&HPET_CAP_REV.to_le_bytes());
+    sink[h + 4..h + 8].copy_from_slice(&HPET_CLK_PERIOD_FS.to_le_bytes());
+    sink[h + 0x10..h + 0x14].copy_from_slice(&1u32.to_le_bytes());
+    true
+}
+
+/// Advance HPET main counter. Call on each guest-UEFI VMEXIT.
+pub fn hpet_tick_sink(sink: &mut [u8]) -> u64 {
+    if sink.len() < HPET_SINK_OFF + 0xF8 {
+        return 0;
+    }
+    let off = HPET_SINK_OFF + 0xF0;
+    let mut cur = [0u8; 8];
+    cur.copy_from_slice(&sink[off..off + 8]);
+    let v = u64::from_le_bytes(cur).wrapping_add(HPET_MAIN_STEP);
+    sink[off..off + 8].copy_from_slice(&v.to_le_bytes());
+    v
 }
 
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
@@ -183,6 +339,18 @@ pub fn pci_addr_selects_isa(addr: u32) -> bool {
     bus == 0 && dev == 1 && fun == 0
 }
 
+pub fn pci_addr_selects_pm(addr: u32) -> bool {
+    if (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == PM_BRIDGE_DEV && fun == PM_BRIDGE_FN
+}
+
+pub fn pm_pci_config_addr() -> u32 {
+    0x8000_0000 | (u32::from(PM_BRIDGE_DEV) << 11) | (u32::from(PM_BRIDGE_FN) << 8)
+}
+
 struct Platform {
     pci_addr: u32,
     cmos_idx: u8,
@@ -193,6 +361,12 @@ struct Platform {
     fw_len: u8,
     pit: u16,
     port61: u8,
+    port92: u8,
+    pic_imr: [u8; 2],
+    pm_timer: u32,
+    pmba: u32,
+    pm_cmd: u16,
+    pm_iose: u8,
 }
 
 impl Platform {
@@ -207,6 +381,12 @@ impl Platform {
             fw_len: 0,
             pit: 0xFFFF,
             port61: 0x10,
+            port92: 0x02,
+            pic_imr: [0xFF, 0xFF],
+            pm_timer: 0,
+            pmba: PIIX4_PMBA_DEFAULT,
+            pm_cmd: 0x0001,
+            pm_iose: 0,
         }
     }
 }
@@ -224,7 +404,10 @@ static PLAT_LOCK: AtomicBool = AtomicBool::new(false);
 static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
 static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
+static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
+static ACPI_PM: AtomicU32 = AtomicU32::new(0);
+static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
 
 fn with_plat<R>(f: impl FnOnce(&mut Platform) -> R) -> R {
     while PLAT_LOCK.swap(true, Ordering::Acquire) {
@@ -296,11 +479,15 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_FILE_DIR => {
-            p.fw_len = 68;
+            p.fw_len = (4 + 64 * 2) as u8;
         }
         FW_CFG_BOOTORDER_SEL => {
             p.fw_len = BOOTORDER.len() as u8;
             FWCFG_BOOT.store(true, Ordering::Release);
+        }
+        FW_CFG_E820_SEL => {
+            p.fw_len = E820_ENTRY_BYTES;
+            FWCFG_E820.store(true, Ordering::Release);
         }
         _ => {
             p.fw_len = 0;
@@ -325,7 +512,24 @@ pub fn reset() {
     CMOS_MEM.store(false, Ordering::Release);
     FWCFG_RAM.store(false, Ordering::Release);
     FWCFG_BOOT.store(false, Ordering::Release);
+    FWCFG_E820.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
+    ACPI_PM.store(0, Ordering::Release);
+    LAST_CMOS.store(0, Ordering::Release);
+}
+
+/// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.
+pub fn acpi_pm_timer_reads() -> u32 {
+    ACPI_PM.load(Ordering::Acquire)
+}
+
+fn tick_pm_timer(p: &mut Platform) -> u32 {
+    ACPI_PM.fetch_add(1, Ordering::AcqRel);
+    let v = p.pm_timer & 0x00FF_FFFF;
+    // Bit 23 of (ticks - current) ends InternalAcpiDelay. Step 64Ki so a
+    // handful of reads complete a PEI MicroSecondDelay.
+    p.pm_timer = p.pm_timer.wrapping_add(0x0001_0000);
+    v
 }
 
 pub fn cmos_mem_served() -> bool {
@@ -340,13 +544,22 @@ pub fn fwcfg_bootorder_served() -> bool {
     FWCFG_BOOT.load(Ordering::Acquire)
 }
 
+pub fn fwcfg_e820_served() -> bool {
+    FWCFG_E820.load(Ordering::Acquire)
+}
+
+/// Last CMOS index (NMI bit stripped). Nested VT-x `5b2739a` died on `port=0x71`.
+pub fn last_cmos_index() -> u8 {
+    LAST_CMOS.load(Ordering::Acquire)
+}
+
 pub fn host_bridge_enumerated() -> bool {
     HOST_ENUM.load(Ordering::Acquire)
 }
 
-/// Honest platform-memory evidence: CMOS size or fw_cfg RAM_SIZE was read.
+/// Honest platform-memory evidence: CMOS size, fw_cfg RAM_SIZE, or etc/e820.
 pub fn platform_memory_served() -> bool {
-    cmos_mem_served() || fwcfg_ram_served()
+    cmos_mem_served() || fwcfg_ram_served() || fwcfg_e820_served()
 }
 
 /// Header Type byte (bits 23:16 of config dword `0x0C`) has the multifunction bit.
@@ -383,6 +596,18 @@ fn isa_dword(off: u8) -> u32 {
     }
 }
 
+fn pm_dword(p: &Platform, off: u8) -> u32 {
+    match off {
+        0x00 => u32::from(PM_BRIDGE_VENDOR) | (u32::from(PM_BRIDGE_DEVICE) << 16),
+        0x04 => u32::from(p.pm_cmd) | 0x0280_0000, // cap list unused; medium DEVSEL
+        0x08 => 0x0680_0000,                       // bridge / other
+        0x0C => 0x0000_0000,
+        0x40 => p.pmba,
+        0x80 => u32::from(p.pm_iose),
+        _ => 0,
+    }
+}
+
 fn shift_dword(dword: u32, off: u8, size: u8) -> u32 {
     let shift = (off & 3) * 8;
     let shifted = dword >> shift;
@@ -393,7 +618,7 @@ fn shift_dword(dword: u32, off: u8, size: u8) -> u32 {
     }
 }
 
-/// `Some` when this BDF is the host or ISA bridge.
+/// `Some` when this BDF is the host, ISA, or PIIX4 PM bridge.
 pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
     with_plat(|p| {
         let addr = p.pci_addr;
@@ -406,14 +631,36 @@ pub fn pci_read_data(port: u16, size: u8) -> Option<u32> {
             Some(shift_dword(host_dword(aligned), off, size))
         } else if pci_addr_selects_isa(addr) {
             Some(shift_dword(isa_dword(aligned), off, size))
+        } else if pci_addr_selects_pm(addr) {
+            Some(shift_dword(pm_dword(p, aligned), off, size))
         } else {
             None
         }
     })
 }
 
-pub fn pci_write_data(port: u16, _size: u8, _val: u32) {
-    let _ = port;
+pub fn pci_write_data(port: u16, size: u8, val: u32) {
+    with_plat(|p| {
+        if !pci_addr_selects_pm(p.pci_addr) {
+            return;
+        }
+        let off = pci_cfg_offset(p.pci_addr, port);
+        if off == 0x04 {
+            p.pm_cmd = val as u16;
+        } else if (0x40..0x44).contains(&off) {
+            let shift = (off & 3) * 8;
+            let mut v = p.pmba;
+            let mask = match size {
+                1 => 0xffu32,
+                2 => 0xffff,
+                _ => 0xffff_ffff,
+            };
+            v = (v & !(mask << shift)) | ((val & mask) << shift);
+            p.pmba = v | 1;
+        } else if off == 0x80 {
+            p.pm_iose = val as u8;
+        }
+    });
 }
 
 fn io_mask(size: u8) -> u64 {
@@ -434,9 +681,11 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     return (rax & !mask) | (u64::from(p.cmos_idx) & mask);
                 }
                 p.cmos_idx = (rax as u8) & 0x7F;
+                LAST_CMOS.store(p.cmos_idx, Ordering::Release);
                 return rax;
             }
             let idx = p.cmos_idx;
+            LAST_CMOS.store(idx, Ordering::Release);
             if is_in {
                 note_cmos_mem(idx);
                 let v = p.cmos[idx as usize] as u64;
@@ -463,6 +712,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                                 FW_CFG_BOOTORDER_SEL => {
                                     BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
                                 }
+                                FW_CFG_E820_SEL => e820_byte(p.fw_off),
                                 _ => p.fw_buf[p.fw_off as usize],
                             };
                             p.fw_off = p.fw_off.saturating_add(1);
@@ -482,6 +732,36 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             }
             return rax;
         }
+        if acpi_pm_timer_matches(port, size, p.pmba) {
+            if is_in {
+                let v = tick_pm_timer(p);
+                let shift = acpi_pm_timer_shift(port, p.pmba);
+                return (rax & !mask) | (u64::from(v >> shift) & mask);
+            }
+            return rax;
+        }
+        if is_piix_pm_io_port(port, p.pmba) {
+            if is_in {
+                return rax & !mask;
+            }
+            return rax;
+        }
+        if is_pic_port(port) {
+            if is_in {
+                let v = match port {
+                    0x21 => p.pic_imr[0],
+                    0xA1 => p.pic_imr[1],
+                    _ => 0,
+                };
+                return (rax & !mask) | (u64::from(v) & mask);
+            }
+            if port == 0x21 {
+                p.pic_imr[0] = rax as u8;
+            } else if port == 0xA1 {
+                p.pic_imr[1] = rax as u8;
+            }
+            return rax;
+        }
         if is_in {
             let val = match port {
                 0x61 => {
@@ -489,7 +769,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     u64::from(p.port61)
                 }
                 0x80 => 0,
-                0x92 => 0x02,
+                0x92 => u64::from(p.port92),
                 0x40 => {
                     let v = p.pit;
                     p.pit = p.pit.wrapping_sub(0x40);
@@ -502,6 +782,8 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         } else {
             if port == 0x61 {
                 p.port61 = (rax as u8 & !0x10) | (p.port61 & 0x10);
+            } else if port == 0x92 {
+                p.port92 = (rax as u8) | 0x02;
             } else if port == 0x40 {
                 p.pit = (rax as u16) | 0x00FF;
             } else if port == 0x43 {

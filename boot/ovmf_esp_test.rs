@@ -1,7 +1,7 @@
 use super::{
-    accept_real_ovmf_bytes, bytes_present, clear_retained, retain_ovmf_bytes, retained_bytes,
-    E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER, MIN_REAL_OVMF_BYTES,
-    MIN_REAL_OVMF_NONEMPTY, OVMF_ESP_CAP,
+    accept_real_ovmf_bytes, bytes_present, clear_retained, remap_i440fx_did_imm, retain_ovmf_bytes,
+    retained_bytes, E5_OVMF_RETAIN_RESIDUAL_NOTE, M7_E5_LIVE_BYTES_PRESENT_OK_MARKER,
+    MIN_REAL_OVMF_BYTES, MIN_REAL_OVMF_NONEMPTY, OVMF_ESP_CAP,
 };
 
 fn write_fvh(buf: &mut [u8]) {
@@ -53,4 +53,54 @@ fn retain_rejects_too_small_and_missing_fvh() {
     );
     assert!(E5_OVMF_RETAIN_RESIDUAL_NOTE.contains("VMLAUNCH insn not issued"));
     assert!(E5_OVMF_RETAIN_RESIDUAL_NOTE.contains("not allocated"));
+}
+
+#[test]
+fn remap_i440fx_did_imm_replaces_cmp_bx_not_lzma_noise() {
+    // OVMF 4M: `cmp bx, 0x1237` / `cmp bx, 0x29C0`. Lone 0x1237 stays.
+    let mut buf = [
+        0x66, 0x81, 0xFB, 0x37, 0x12, 0x74, 0x26, 0x66, 0x81, 0xFB, 0xC0, 0x29, 0x37, 0x12,
+    ];
+    assert_eq!(remap_i440fx_did_imm(&mut buf), 1);
+    assert_eq!(&buf[0..5], &[0x66, 0x81, 0xFB, 0x42, 0x10]);
+    assert_eq!(&buf[7..12], &[0x66, 0x81, 0xFB, 0xC0, 0x29]);
+    assert_eq!(&buf[12..14], &[0x37, 0x12]);
+    let mut none = [0x37u8, 0x12, 0x00, 0x00];
+    assert_eq!(remap_i440fx_did_imm(&mut none), 0);
+}
+
+#[test]
+fn remap_does_not_mutate_retain_buffer() {
+    clear_retained();
+    let mut realish = vec![0u8; MIN_REAL_OVMF_BYTES];
+    write_fvh(&mut realish);
+    for (i, b) in realish.iter_mut().enumerate().skip(0x38) {
+        *b = (i % 251) as u8 + 1;
+    }
+    realish[0x40..0x45].copy_from_slice(&[0x66, 0x81, 0xFB, 0x37, 0x12]);
+    assert_eq!(retain_ovmf_bytes(&realish), Ok(MIN_REAL_OVMF_BYTES));
+    let mut copy = retained_bytes().unwrap().to_vec();
+    assert_eq!(remap_i440fx_did_imm(&mut copy), 1);
+    assert_eq!(
+        &retained_bytes().unwrap()[0x40..0x45],
+        &[0x66, 0x81, 0xFB, 0x37, 0x12]
+    );
+    assert_eq!(&copy[0x40..0x45], &[0x66, 0x81, 0xFB, 0x42, 0x10]);
+    clear_retained();
+}
+
+#[test]
+fn remap_debian_ovmf_hits_one_cmp_bx() {
+    let raw = match std::fs::read("/usr/share/ovmf/OVMF.fd") {
+        Ok(b) if b.len() >= MIN_REAL_OVMF_BYTES => b,
+        _ => return,
+    };
+    let before = raw.windows(2).filter(|w| *w == [0x37, 0x12]).count();
+    let mut copy = raw;
+    let n = remap_i440fx_did_imm(&mut copy);
+    assert_eq!(n, 1, "exactly one uncompressed cmp bx, 0x1237");
+    assert!(copy.windows(5).any(|w| w == [0x66, 0x81, 0xFB, 0x42, 0x10]));
+    assert!(!copy.windows(5).any(|w| w == [0x66, 0x81, 0xFB, 0x37, 0x12]));
+    let after = copy.windows(2).filter(|w| *w == [0x37, 0x12]).count();
+    assert_eq!(after, before - 1);
 }

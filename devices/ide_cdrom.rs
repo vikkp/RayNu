@@ -4,10 +4,10 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.1` plus primary ATA PIO (`0x1F0`/`0x3F6`).
-//! PEI only probes `00:00.0` Device ID; that slot is virtio (Stage 42).
-//! Stage 41 printed CDROM-OK with IDE at `00:00.0`; this PEI will not
-//! re-enum IDE. CD stays GuestVisible.
+//! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
+//! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
+//! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
+//! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
@@ -142,7 +142,8 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
-    bus == GUEST_CD_PCI_BUS && dev == GUEST_CD_PCI_DEV && fun == GUEST_CD_PCI_FN
+    // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
+    bus == 0 && fun == 1 && (dev == 0 || dev == 1)
 }
 
 /// PCI config address for the guest IDE function (`00:00.1`).
@@ -285,7 +286,7 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
         0x08 => 0x01018000, // class IDE, prog-if 0x80
-        // Multifunction bit lives on ISA `00:01.0`. This is function 1.
+        // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
         0x10 => m.bar0,
         0x14 => 0x03F5,

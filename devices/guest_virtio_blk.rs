@@ -5,10 +5,10 @@
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
 //! Empty virtio 1.0 block function at `00:00.0` (Red Hat `1AF4:1042`).
-//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` (host
-//! `0x1237` and IDE `0x7010` both looped; never Header Type, never another
-//! BDF). The probe slot is virtio so that read can enum it. IDE is `00:00.1`
-//! (multifunction child). Boot order is CD then disk (fw_cfg `bootorder`).
+//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0`. The probe
+//! slot is virtio so that read can enum it. Header Type is multifunction so a
+//! walk finds IDE `00:00.1`. PIIX `00:01.1` is the same CD. Boot order is CD
+//! then disk (fw_cfg `bootorder`).
 //! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,
 //! not an installer.
 

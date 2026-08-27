@@ -1,12 +1,16 @@
 use super::{
-    dxe_or_cd_boot_evidence, exec_from_low_ram, guest_uefi_alive, guest_uefi_com_bytes,
+    both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence, exec_from_low_ram,
+    flash_window_gpa_and_pad, guest_uefi_alive, guest_uefi_both, guest_uefi_com_bytes,
     guest_uefi_dxe, guest_uefi_non_tf_exits, guest_uefi_past_sec, guest_uefi_vmlaunch_entered,
-    io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
-    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, post_dxe_should_stop,
-    run_retained_ovmf_vmlaunch, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA,
-    M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
+    hlt_should_resume, io_port_from_qual, is_com_uart_port, is_pci_config_port, last_exit_reason,
+    linear_left_sec_tail, live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit,
+    post_dxe_should_stop, run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip,
+    stamp_empty_ovmf_vars, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_POST_DXE_TAIL,
+    GUEST_UEFI_RESUME_CAP, GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER,
+    M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    OVMF_VARS_EMPTY_PREFIX, OVMF_VARS_FV_BYTES,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -55,25 +59,55 @@ fn marker_and_residual_honest() {
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 2048);
-    assert_eq!(GUEST_UEFI_POST_DXE_TAIL, 384);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("COM1/COM2 forwarded"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-SEC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("GuestVisible"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio Header Type is multifunction"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 2048-exit cap"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT skip so DXE can walk PCI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR-access resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM at 00:01.3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cmp bx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8259 PIC RAZ/WI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VARS gap at 0xFFC00000"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s step"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip"));
+    assert!(hlt_should_resume());
+    assert!(spin_short_jmp_should_skip(0xEB, 0xF3));
+    assert!(spin_short_jmp_should_skip(0xEB, 0xFE));
+    assert!(!spin_short_jmp_should_skip(0xEB, 0x02));
+    assert!(!spin_short_jmp_should_skip(0x74, 0xF3));
+    assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
+    assert_eq!(pci_bdf_bit(0, 0), Some((0, 1)));
+    assert_eq!(pci_bdf_bit(1, 1), Some((0, 1u64 << 9)));
+    assert_eq!(pci_bdf_bit(8, 0), Some((1, 1)));
+    assert_eq!(pci_bdf_bit(16, 0), None);
     assert_eq!(M7_E5_OVMF_CDROM_OK_MARKER, "RAYNU-V-M7-E5-OVMF-CDROM-OK");
     assert_eq!(M7_E5_OVMF_DXE_OK_MARKER, "RAYNU-V-M7-E5-OVMF-DXE-OK");
     assert_eq!(M7_E5_OVMF_VIRTIO_OK_MARKER, "RAYNU-V-M7-E5-OVMF-VIRTIO-OK");
+    assert_eq!(M7_E5_OVMF_BOTH_OK_MARKER, "RAYNU-V-M7-E5-OVMF-BOTH-OK");
     assert!(!guest_uefi_alive());
     assert!(!guest_uefi_past_sec());
     assert!(!guest_uefi_dxe());
+    assert!(!guest_uefi_both());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
     assert_eq!(guest_uefi_com_bytes(), 0);
 }
@@ -105,21 +139,29 @@ fn past_sec_predicates_are_honest() {
     assert!(!dxe_or_cd_boot_evidence(true, 0, true, false));
     assert!(dxe_or_cd_boot_evidence(true, 1, false, false));
     assert!(dxe_or_cd_boot_evidence(true, 0, true, true));
-    assert!(!post_dxe_should_stop(false, 2000, 0, true));
-    assert!(!post_dxe_should_stop(true, 115, 115, false));
-    assert!(post_dxe_should_stop(true, 115, 115, true));
+    assert!(!both_pci_evidence(true, false));
+    assert!(!both_pci_evidence(false, true));
+    assert!(both_pci_evidence(true, true));
+    assert!(!post_dxe_should_stop(false, 2000, 0, true, true));
+    assert!(!post_dxe_should_stop(true, 115, 115, false, false));
+    assert!(!post_dxe_should_stop(true, 115, 115, true, false));
+    assert!(!post_dxe_should_stop(true, 115, 115, false, true));
+    assert!(post_dxe_should_stop(true, 115, 115, true, true));
     assert!(post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL,
         115,
+        false,
         false
     ));
     assert!(!post_dxe_should_stop(
         true,
         115 + GUEST_UEFI_POST_DXE_TAIL - 1,
         115,
+        true,
         false
     ));
+    assert!(hlt_should_resume());
 }
 
 #[test]
@@ -165,5 +207,79 @@ fn host_without_presence_refuses() {
     assert_eq!(
         unsafe { run_retained_ovmf_vmlaunch(&mut alloc) },
         Err(GuestUefiLaunchError::MissingEspFirmware)
+    );
+}
+
+#[test]
+fn copy_low_ram_at_identity_window() {
+    let ram = [0u8, 1, 2, 0xEC, 0x90, 0xFA];
+    let mut out = [0u8; 2];
+    assert_eq!(copy_low_ram_at(&ram, 3, &mut out), 2);
+    assert_eq!(out, [0xEC, 0x90]);
+    assert_eq!(copy_low_ram_at(&ram, 100, &mut out), 0);
+    assert_eq!(copy_low_ram_at(&ram, 5, &mut out), 1);
+    assert_eq!(out[0], 0xFA);
+    let mut sixteen = [0u8; 16];
+    let ram16: [u8; 20] = [
+        0x8b, 0x04, 0x25, 0xf0, 0x00, 0xd0, 0xfe, 0x48, 0x3b, 0xc1, 0x72, 0xf3, 0x90, 0x90, 0x90,
+        0x90, 0xcc, 0xcc, 0xcc, 0xcc,
+    ];
+    assert_eq!(copy_low_ram_at(&ram16, 0, &mut sixteen), 16);
+    assert_eq!(&sixteen[..4], &[0x8b, 0x04, 0x25, 0xf0]);
+}
+
+#[test]
+fn flash_window_pads_code_only_image_to_4mib() {
+    assert_eq!(GUEST_UEFI_FLASH_BASE, 0xFFC0_0000);
+    assert_eq!(GUEST_UEFI_FLASH_WINDOW, 4 * 1024 * 1024);
+    assert_eq!(
+        flash_window_gpa_and_pad(3653632),
+        Some((GUEST_UEFI_FLASH_BASE, 0x84000))
+    );
+    assert_eq!(
+        flash_window_gpa_and_pad(GUEST_UEFI_FLASH_WINDOW),
+        Some((GUEST_UEFI_FLASH_BASE, 0))
+    );
+    assert_eq!(
+        flash_window_gpa_and_pad(1024 * 1024),
+        Some((GUEST_UEFI_FLASH_BASE, 3 * 1024 * 1024))
+    );
+    assert!(flash_window_gpa_and_pad(4096).is_none());
+    let (gpa, pad) = flash_window_gpa_and_pad(3653632).unwrap();
+    assert!(alias_ept_covers_reset(gpa, GUEST_UEFI_FLASH_WINDOW));
+    assert_eq!(gpa + pad, 0xFFC8_4000);
+    assert!(frames_required_firmware_alias(gpa, GUEST_UEFI_FLASH_WINDOW) <= 8);
+}
+
+#[test]
+fn stamp_empty_ovmf_vars_matches_debian_4m_template() {
+    let mut wrong = vec![0xFFu8; 4096];
+    assert!(!stamp_empty_ovmf_vars(&mut wrong));
+    let mut pad = vec![0xFFu8; OVMF_VARS_FV_BYTES];
+    assert!(stamp_empty_ovmf_vars(&mut pad));
+    assert_eq!(&pad[0x28..0x2C], b"_FVH");
+    assert_eq!(
+        u64::from_le_bytes(pad[0x20..0x28].try_into().unwrap()),
+        0x84000
+    );
+    assert_eq!(
+        &pad[..OVMF_VARS_EMPTY_PREFIX.len()],
+        &OVMF_VARS_EMPTY_PREFIX
+    );
+    assert!(pad[OVMF_VARS_EMPTY_PREFIX.len()..]
+        .iter()
+        .all(|&b| b == 0xFF));
+    let hdrlen = u16::from_le_bytes(pad[0x30..0x32].try_into().unwrap()) as usize;
+    assert_eq!(hdrlen, 0x48);
+    let mut sum: u32 = 0;
+    for i in (0..hdrlen).step_by(2) {
+        sum = sum.wrapping_add(u16::from_le_bytes([pad[i], pad[i + 1]]) as u32);
+    }
+    assert_eq!(sum & 0xffff, 0);
+    assert_eq!(pad[0x5C], 0x5A);
+    assert_eq!(pad[0x5D], 0xFE);
+    assert_eq!(
+        u32::from_le_bytes(pad[0x58..0x5C].try_into().unwrap()),
+        0x3ffb8
     );
 }

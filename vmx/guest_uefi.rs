@@ -52,7 +52,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; post-DXE resume tail then E4 fail-soft; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned so OVMF SEC mov cr4,0x640 does not #GP; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI DID probe is virtio at 00:00.0; virtio Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:00.0; fw_cfg bootorder CD then disk; ACPI PM timer (port 0 dword + PIIX 0x408) so AcpiTimerLib Delay can end when DID is 0x1042; post-DXE spends the 2048-exit cap until both PCI enums (not virtio-alone; 699c9a6 n=2048 still only 00:00.0); HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; not ATAPI sectors; not installer; not ISO-INSTALL-OK; no guest UEFI distro; VMLAUNCH insn issued only when presence is true";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -69,6 +69,10 @@ pub const M7_E5_OVMF_DXE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-DXE-OK";
 /// QEMU / serial marker when guest-UEFI sees empty virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
+/// QEMU / serial marker when firmware enumerated virtio `00:00.0` and IDE `00:00.1`
+/// on the same boot. Not ATAPI sectors. Not installer.
+pub const M7_E5_OVMF_BOTH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-BOTH-OK";
+
 /// Last 64 KiB of the 4 GiB space. OVMF 4M SEC / VTF lives here
 /// (reset vector `0xFFFF_FFF0`; Stage 38 first exits at `0xFFFF_Fxxx`).
 pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
@@ -76,23 +80,71 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// Resume cap after Stage 40's 256-exit window — enough for PEI/DXE + CD.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 2048;
 
-/// After DXE evidence, keep a short tail so virtio-blk can enumerate, then
-/// fail-soft to E4 instead of burning the remaining ~1900 I/O exits at the 2048 cap.
-pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 384;
+/// After DXE evidence, spend the rest of [`GUEST_UEFI_RESUME_CAP`] unless both
+/// PCI functions enumerated. Nested VT-x `41d0ebe`: 384 I/O exits after DXE
+/// still only DID `00:00.0` / `pci_ide=0`. Not a faked `pci_enum`.
+pub const GUEST_UEFI_POST_DXE_TAIL: u32 = GUEST_UEFI_RESUME_CAP;
 
-/// Stop the private VMCS after DXE once virtio-blk is visible or the tail is spent.
+/// Pin-based VMX-preemption timer (SDM 24.6.1 bit 6). Lets a HPET Delay
+/// that never does I/O still VMEXIT so [`hpet_tick_sink`] can move time.
+#[cfg(target_os = "uefi")]
+const PIN_BASED_VMX_PREEMPTION_TIMER: u32 = 1 << 6;
+#[cfg(target_os = "uefi")]
+const VMX_PREEMPTION_TIMER_VALUE: u64 = 0x482E;
+#[cfg(target_os = "uefi")]
+const VMX_PREEMPTION_TIMER_TICKS: u64 = 0x0010_0000;
+#[cfg(target_os = "uefi")]
+const EXIT_REASON_PREEMPTION_TIMER: u32 = 52;
+
+/// Guest-UEFI HLT must skip/resume. Stopping on HLT aborts the post-DXE
+/// PciBus walk of IDE `00:00.1`. Not a timer inject. Not ATAPI.
+pub fn hlt_should_resume() -> bool {
+    true
+}
+
+/// Unconditional short backward `jmp rel8` is CpuDeadLoop, not Delay.
+/// Nested VT-x `707a849`: 1s HPET left `rip=0x6e812d insn=ebf3…` `pci_ide=0`.
+/// Preemption resumes at the same RIP, so time never unsticks this spin.
+pub fn spin_short_jmp_should_skip(b0: u8, b1: u8) -> bool {
+    b0 == 0xEB && (b1 as i8) < 0
+}
+
+/// Stop the private VMCS after DXE once both PCI functions enumerated, or the tail is spent.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed (PEI still needs the full resume cap)
-/// - `true` as soon as DXE printed **and** the virtio-blk function enumerated
-/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print
+/// - `true` as soon as DXE printed **and** virtio `00:00.0` **and** IDE `00:00.1` enumerated
+/// - `true` after `GUEST_UEFI_POST_DXE_TAIL` exits past the DXE print (the 2048 cap)
+/// - virtio enum alone does **not** stop (Stage 42 cut DXE before fn1; 384 I/O was not a walk)
 ///
-/// Nested VT-x: PEI only `inw` DID of `00:00.0`. That slot is virtio.
-pub fn post_dxe_should_stop(dxe_printed: bool, exit_n: u32, dxe_at: u32, virtio_enum: bool) -> bool {
+/// Nested VT-x: PEI only `inw` DID of `00:00.0`. IDE is virtio fn1 `00:00.1`.
+pub fn post_dxe_should_stop(
+    dxe_printed: bool,
+    exit_n: u32,
+    dxe_at: u32,
+    virtio_enum: bool,
+    ide_enum: bool,
+) -> bool {
     if !dxe_printed {
         return false;
     }
-    virtio_enum || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+    both_pci_evidence(virtio_enum, ide_enum)
+        || exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
+}
+
+/// Firmware-simultaneous CD + disk: both PCI functions enumerated on one boot.
+/// Do not fake. GuestVisible is not `ide_enum`.
+pub fn both_pci_evidence(virtio_enum: bool, ide_enum: bool) -> bool {
+    virtio_enum && ide_enum
+}
+
+/// Bitmask slot for bus 0 `dev.fun` (devs 0–15). Used to log a CF8 select once.
+pub fn pci_bdf_bit(dev: u8, fun: u8) -> Option<(usize, u64)> {
+    if fun > 7 || dev > 15 {
+        return None;
+    }
+    let idx = u32::from(dev) * 8 + u32::from(fun);
+    Some(((idx / 64) as usize, 1u64 << (idx % 64)))
 }
 
 /// OVMF SEC on 4M CODE does `mov eax,0x640; mov cr4,eax` (clears VMXE).
@@ -145,6 +197,21 @@ pub fn dxe_or_cd_boot_evidence(
     past_sec && (sectors > 0 || (platform_mem && exec_ram))
 }
 
+/// Copy up to `out.len()` bytes of guest-UEFI low RAM at identity `linear`.
+///
+/// Used to dump the `#GP` instruction (nested VT-x `5b2739a` `rip=0x80201a`)
+/// and the stop RIP (nested VT-x `105ffbe` `rip=0x6e812d` HPET poll).
+/// PEI runs with paging off / identity, so GPA = linear.
+pub fn copy_low_ram_at(ram: &[u8], linear: u64, out: &mut [u8]) -> usize {
+    let start = linear as usize;
+    if out.is_empty() || start >= ram.len() {
+        return 0;
+    }
+    let n = out.len().min(ram.len() - start);
+    out[..n].copy_from_slice(&ram[start..start + n]);
+    n
+}
+
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
 static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
 static LAST_EXIT_REASON: AtomicU32 = AtomicU32::new(0);
@@ -164,11 +231,25 @@ static UART_LCR_COM1: AtomicU8 = AtomicU8::new(0);
 static UART_LCR_COM2: AtomicU8 = AtomicU8::new(0);
 static CONTINUE_GUEST: AtomicBool = AtomicBool::new(false);
 static DXE_PRINTED: AtomicBool = AtomicBool::new(false);
+static BOTH_PRINTED: AtomicBool = AtomicBool::new(false);
 static DXE_AT_N: AtomicU32 = AtomicU32::new(0);
 static EPT_PML4: AtomicU64 = AtomicU64::new(0);
 static SINK_HPA: AtomicU64 = AtomicU64::new(0);
 static SINK_MAPS: AtomicU32 = AtomicU32::new(0);
-static PCI_TRACE: AtomicU32 = AtomicU32::new(0);
+static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
+static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
+static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
+static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
+static CR_ACCESSES: AtomicU32 = AtomicU32::new(0);
+static PCI_BDF_SEEN0: AtomicU64 = AtomicU64::new(0);
+static PCI_BDF_SEEN1: AtomicU64 = AtomicU64::new(0);
+static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
+static LAST_CF8: AtomicU32 = AtomicU32::new(0);
+static RAM_HPA: AtomicU64 = AtomicU64::new(0);
+static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
+static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
+static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
+static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(target_os = "uefi")]
 static mut SAVED_RAX: u64 = 0;
@@ -217,6 +298,60 @@ pub fn last_exit_reason() -> u32 {
     LAST_EXIT_REASON.load(Ordering::Acquire)
 }
 
+/// QEMU/OVMF 4 MiB pflash base (`OVMF.fd` VARS at `0xFFC00000`, CODE on top).
+pub const GUEST_UEFI_FLASH_BASE: u64 = 0xFFC0_0000;
+/// Full flash window. Nested VT-x `1991a27` EPT-faulted at `gpa=0xffc00000`
+/// because a CODE-only image was top-aligned at `0xFFC84000` (VARS gap).
+pub const GUEST_UEFI_FLASH_WINDOW: u64 = 4 * 1024 * 1024;
+
+/// Map any 1–4 MiB retained image into a 4 MiB window at [`GUEST_UEFI_FLASH_BASE`].
+/// Pad is leading erased flash (`0xFF`); [`stamp_empty_ovmf_vars`] writes a
+/// VARS `_FVH` when the pad is Debian 4M sized. Reset vector stays at `0xFFFF_FFF0`.
+pub fn flash_window_gpa_and_pad(image_len: u64) -> Option<(u64, u64)> {
+    const MIN: u64 = MIN_REAL_OVMF_BYTES as u64;
+    if image_len < MIN || image_len > GUEST_UEFI_FLASH_WINDOW {
+        return None;
+    }
+    Some((GUEST_UEFI_FLASH_BASE, GUEST_UEFI_FLASH_WINDOW - image_len))
+}
+
+/// Debian/QEMU 4M VARS firmware-volume size (`OVMF_VARS_4M.fd`).
+pub const OVMF_VARS_FV_BYTES: usize = 0x84000;
+
+/// Empty NV storage prefix: `EFI_FIRMWARE_VOLUME_HEADER` + authenticated
+/// `VARIABLE_STORE_HEADER`. Byte-identical to the first 0x64 bytes of
+/// Debian `OVMF_VARS_4M.fd`. Remainder of the FV is erased NOR (`0xFF`).
+///
+/// FileSystemGuid is `EFI_SYSTEM_NV_DATA_FV_GUID`. Store signature is
+/// `gEfiAuthenticatedVariableGuid`. Format `0x5A` / State `0xFE` (healthy).
+pub const OVMF_VARS_EMPTY_PREFIX: [u8; 0x64] = [
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x8d, 0x2b, 0xf1, 0xff, 0x96, 0x76, 0x8b, 0x4c, 0xa9, 0x85, 0x27, 0x47, 0x07, 0x5b, 0x4f, 0x50,
+    0x00, 0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x46, 0x56, 0x48, 0xff, 0xfe, 0x04, 0x00,
+    0x48, 0x00, 0xaf, 0xb8, 0x00, 0x00, 0x00, 0x02, 0x84, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0x2c, 0xf3, 0xaa, 0x7b, 0x94, 0x9a, 0x43,
+    0xa1, 0x80, 0x2e, 0x14, 0x4e, 0xc3, 0x77, 0x92, 0xb8, 0xff, 0x03, 0x00, 0x5a, 0xfe, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+];
+
+/// Stamp an empty VARS firmware volume into a CODE-only 4 MiB pad.
+///
+/// INVARIANTS:
+/// - Writes only when `pad.len() == OVMF_VARS_FV_BYTES` (Debian 4M CODE-only)
+/// - Prefix is `_FVH` + empty authenticated variable store
+/// - Does not touch CODE (caller copies CODE after this)
+/// - Does not fake PCI enum
+///
+/// VERIFICATION: L1 (host tests)
+pub fn stamp_empty_ovmf_vars(pad: &mut [u8]) -> bool {
+    if pad.len() != OVMF_VARS_FV_BYTES {
+        return false;
+    }
+    let n = OVMF_VARS_EMPTY_PREFIX.len();
+    pad[..n].copy_from_slice(&OVMF_VARS_EMPTY_PREFIX);
+    true
+}
+
 /// Live alias window for a retained 1–4 MiB image: `4 GiB - len`.
 ///
 /// Stage 15 [`crate::vmx::launch::firmware_alias_gpa`] stays 4 MiB-only
@@ -256,11 +391,25 @@ pub fn reset_guest_uefi_launch() {
     UART_LCR_COM2.store(0, Ordering::Release);
     CONTINUE_GUEST.store(false, Ordering::Release);
     DXE_PRINTED.store(false, Ordering::Release);
+    BOTH_PRINTED.store(false, Ordering::Release);
     DXE_AT_N.store(0, Ordering::Release);
     EPT_PML4.store(0, Ordering::Release);
     SINK_HPA.store(0, Ordering::Release);
     SINK_MAPS.store(0, Ordering::Release);
-    PCI_TRACE.store(0, Ordering::Release);
+    PCI_DID_TRACE.store(0, Ordering::Release);
+    PCI_HT_TRACE.store(0, Ordering::Release);
+    HLT_SKIPS.store(0, Ordering::Release);
+    SPIN_JMP_SKIPS.store(0, Ordering::Release);
+    CR_ACCESSES.store(0, Ordering::Release);
+    PCI_BDF_SEEN0.store(0, Ordering::Release);
+    PCI_BDF_SEEN1.store(0, Ordering::Release);
+    LAST_IO_PORT.store(0, Ordering::Release);
+    LAST_CF8.store(0, Ordering::Release);
+    RAM_HPA.store(0, Ordering::Release);
+    RAM_REMAP_N.store(0, Ordering::Release);
+    RAM_REMAP_TRIES.store(0, Ordering::Release);
+    HPET_TICKS.store(0, Ordering::Release);
+    PREEMPT_RELOAD.store(0, Ordering::Release);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
 }
@@ -284,6 +433,10 @@ pub fn guest_uefi_com_bytes() -> u32 {
 
 pub fn guest_uefi_dxe() -> bool {
     DXE_PRINTED.load(Ordering::Acquire)
+}
+
+pub fn guest_uefi_both() -> bool {
+    BOTH_PRINTED.load(Ordering::Acquire)
 }
 
 #[cfg(target_os = "uefi")]
@@ -317,14 +470,13 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
     if bytes.len() < MIN_REAL_OVMF_BYTES || !ovmf_esp::accept_real_ovmf_bytes(bytes) {
         return Err(GuestUefiLaunchError::MissingEspFirmware);
     }
-    let fw_len = bytes.len() as u64;
-    let map_len = (fw_len + 0xfff) & !0xfff;
-    let Some(gpa) = live_firmware_alias_gpa(map_len) else {
+    let Some((gpa, _pad)) = flash_window_gpa_and_pad(bytes.len() as u64) else {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
-    if !alias_ept_covers_reset(gpa, map_len) {
+    if !alias_ept_covers_reset(gpa, GUEST_UEFI_FLASH_WINDOW) {
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     }
+    let map_len = GUEST_UEFI_FLASH_WINDOW;
 
     #[cfg(not(target_os = "uefi"))]
     {
@@ -358,8 +510,43 @@ unsafe fn launch_uefi(
         return Err(GuestUefiLaunchError::LaunchSetupFailed);
     };
     let fw_hpa = fw_frame.to_phys();
-    core::ptr::write_bytes(fw_hpa as *mut u8, 0, (pages * 4096) as usize);
-    core::ptr::copy_nonoverlapping(bytes.as_ptr(), fw_hpa as *mut u8, bytes.len());
+    let pad = (fw_len as usize).saturating_sub(bytes.len());
+    // SAFETY: exclusive 4 MiB guest-private flash copy; pad is in-range.
+    // KANI-TARGET: pad CODE-only OVMF into 4MiB window (outside Proven Core).
+    unsafe {
+        core::ptr::write_bytes(fw_hpa as *mut u8, 0xFF, (pages * 4096) as usize);
+    }
+    // Empty VARS `_FVH` at 0xFFC00000 so PEI does not parse erased NOR.
+    // Matches Debian OVMF_VARS_4M.fd prefix; remainder stays 0xFF.
+    let vars_n = if pad > 0 {
+        // SAFETY: pad bytes are the leading range of the exclusive 4 MiB copy.
+        // KANI-TARGET: stamp empty VARS into CODE-only pad (outside Proven Core).
+        let pad_slice = unsafe { core::slice::from_raw_parts_mut(fw_hpa as *mut u8, pad) };
+        u32::from(stamp_empty_ovmf_vars(pad_slice))
+    } else {
+        0
+    };
+    // SAFETY: CODE image fits after `pad` in the exclusive 4 MiB copy.
+    // KANI-TARGET: copy CODE-only OVMF after VARS pad (outside Proven Core).
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), (fw_hpa as *mut u8).add(pad), bytes.len());
+    }
+    // SAFETY: exclusive guest-private firmware copy; the retain buffer is
+    // a different range. Remap only this image so OVMF's host-bridge
+    // switch matches virtio DID `0x1042` as i440FX-class.
+    // KANI-TARGET: remap guest-private OVMF copy (outside Proven Core).
+    let remap_n = crate::boot::ovmf_esp::remap_i440fx_did_imm(unsafe {
+        core::slice::from_raw_parts_mut((fw_hpa as *mut u8).add(pad), bytes.len())
+    });
+    serial::write_str("boot: guest-UEFI 4MiB flash pad=0x");
+    write_hex(pad as u64);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: guest-UEFI empty VARS _FVH n=");
+    write_dec(vars_n as u64);
+    serial::write_byte(b'\n');
+    serial::write_str("boot: guest-UEFI ovmf remap i440FX DID->virtio n=");
+    write_dec(remap_n as u64);
+    serial::write_byte(b'\n');
 
     let ram_pages = GUEST_UEFI_LOW_RAM_BYTES / 4096;
     let Some(ram_frame) = alloc.allocate_contiguous_aligned(ram_pages, 512) else {
@@ -368,6 +555,7 @@ unsafe fn launch_uefi(
     };
     let ram_hpa = ram_frame.to_phys();
     core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    RAM_HPA.store(ram_hpa, Ordering::Release);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -408,6 +596,11 @@ unsafe fn launch_uefi(
     if let Some(sink_frame) = alloc.allocate_contiguous_aligned(512, 512) {
         let sink_hpa = sink_frame.to_phys();
         core::ptr::write_bytes(sink_hpa as *mut u8, 0, 2 * 1024 * 1024);
+        // SAFETY: exclusive 2 MiB sink; HPET sits at 0xFED00000 in this page.
+        // KANI-TARGET: live HPET in guest-UEFI sink (outside Proven Core).
+        let hpet_ok = crate::devices::guest_platform::hpet_init_sink(unsafe {
+            core::slice::from_raw_parts_mut(sink_hpa as *mut u8, 2 * 1024 * 1024)
+        });
         SINK_HPA.store(sink_hpa, Ordering::Release);
         for &mm in &[0xFCE0_0000u64, 0xFEC0_0000, 0xFED0_0000, 0xFEE0_0000] {
             if ept_map_2m_sink(mm) {
@@ -418,6 +611,8 @@ unsafe fn launch_uefi(
         write_hex(sink_hpa);
         serial::write_str(" maps=");
         write_dec(SINK_MAPS.load(Ordering::Acquire) as u64);
+        serial::write_str(" live HPET=");
+        write_dec(hpet_ok as u64);
         serial::write_byte(b'\n');
     } else {
         serial::write_line("boot: guest-UEFI no 2MiB platform sink — CMOS/fw_cfg still live");
@@ -539,7 +734,10 @@ unsafe fn setup_guest_uefi_vmcs(
         IA32_VMX_ENTRY_CTLS
     };
 
-    let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
+    let pin = adjust_vmx_controls(
+        PIN_BASED_EXTERNAL_INTERRUPT_EXITING | PIN_BASED_VMX_PREEMPTION_TIMER,
+        pin_msr,
+    );
     // Same wanted bits as E4, then drop unconditional I/O if bitmaps won
     // (SDM: the two I/O-exit controls must not both be 1).
     let mut primary = adjust_vmx_controls(
@@ -636,6 +834,11 @@ unsafe fn setup_guest_uefi_vmcs(
     }
 
     vw(PIN_BASED_VM_EXEC_CONTROL, pin as u64)?;
+    if pin & PIN_BASED_VMX_PREEMPTION_TIMER != 0 {
+        vw(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS)?;
+        PREEMPT_RELOAD.store(VMX_PREEMPTION_TIMER_TICKS as u32, Ordering::Release);
+        serial::write_line("boot: guest-UEFI VMX preemption timer for live HPET");
+    }
     vw(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, primary as u64)?;
     vw(VM_EXIT_CONTROLS, exit_ctls as u64)?;
     vw(VM_ENTRY_CONTROLS, entry_ctls as u64)?;
@@ -864,10 +1067,27 @@ unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
     leave_to_e4();
 }
 
+#[cfg(target_os = "uefi")]
+fn tick_hpet_on_exit() {
+    let sink = SINK_HPA.load(Ordering::Acquire);
+    if sink == 0 {
+        return;
+    }
+    // SAFETY: 2 MiB exclusive sink allocated at launch.
+    // KANI-TARGET: HPET tick in guest-UEFI sink (outside Proven Core).
+    let v = crate::devices::guest_platform::hpet_tick_sink(unsafe {
+        core::slice::from_raw_parts_mut(sink as *mut u8, 2 * 1024 * 1024)
+    });
+    if v != 0 {
+        HPET_TICKS.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     LAUNCH_ENTERED.store(true, Ordering::Release);
+    tick_hpet_on_exit();
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
@@ -909,6 +1129,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             write_hex(intr);
         }
         serial::write_byte(b'\n');
+    } else if n % 256 == 0 {
+        serial::write_str("boot: guest-UEFI tick n=");
+        write_dec(n as u64);
+        serial::write_str(" reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" hpet=");
+        write_dec(HPET_TICKS.load(Ordering::Acquire) as u64);
+        serial::write_byte(b'\n');
     }
 
     if !entry_fail && !fetch_fail {
@@ -945,27 +1175,66 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_HLT => {
                 maybe_print_alive(basic);
                 maybe_print_past_sec(true);
-                false
+                // Skip, do not stop: a firmware HLT would otherwise cut the
+                // post-DXE tail before PciBus walks IDE `00:00.1`.
+                if hlt_should_resume() {
+                    let k = HLT_SKIPS.fetch_add(1, Ordering::AcqRel);
+                    if k < 4 {
+                        serial::write_line("boot: guest-UEFI HLT skip");
+                    }
+                    skip_insn()
+                } else {
+                    false
+                }
             }
             EXIT_REASON_EPT_VIOLATION => handle_ept(gpa),
+            EXIT_REASON_CR_ACCESS => handle_cr(qual),
             EXIT_REASON_EXCEPTION_NMI => {
+                let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+                let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
+                let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
+                let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
+                let linear = cs_base.wrapping_add(rip);
                 serial::write_str("boot: guest-UEFI exception intr=0x");
                 write_hex(intr);
+                serial::write_str(" err=0x");
+                write_hex(err);
+                serial::write_str(" cs=0x");
+                write_hex(cs);
+                serial::write_str(" cr0=0x");
+                write_hex(cr0);
+                serial::write_str(" linear=0x");
+                write_hex(linear);
+                serial::write_str(" insn=");
+                dump_low_ram_insn(linear);
                 serial::write_byte(b'\n');
                 false
             }
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
+            EXIT_REASON_PREEMPTION_TIMER => true,
             EXIT_REASON_XSETBV => skip_insn(),
             // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
             13 | 14 | 16 | 40 | 54 => skip_insn(),
             _ => false,
         };
+        if resume {
+            // Preemption (and any other resume) is not always an instruction
+            // exit. CpuDeadLoop `eb xx` (xx negative) never does I/O; skip
+            // the jmp so firmware can fall through. Delay `jcc` stays.
+            if skip_spin_short_jmp(linear, rip) {
+                let k = SPIN_JMP_SKIPS.fetch_add(1, Ordering::AcqRel);
+                if k < 8 {
+                    serial::write_line("boot: guest-UEFI spin jmp skip");
+                }
+            }
+        }
         if resume
             && post_dxe_should_stop(
                 DXE_PRINTED.load(Ordering::Acquire),
                 n,
                 DXE_AT_N.load(Ordering::Acquire),
                 crate::devices::guest_virtio_blk::pci_enumerated(),
+                crate::devices::ide_cdrom::pci_enumerated(),
             )
         {
             resume = false;
@@ -973,6 +1242,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     if resume {
+        let reload = PREEMPT_RELOAD.load(Ordering::Acquire);
+        if reload != 0 {
+            let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, u64::from(reload));
+        }
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();
     }
@@ -1002,6 +1275,33 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(crate::devices::guest_platform::platform_memory_served() as u64);
     serial::write_str(" dxe=");
     write_dec(DXE_PRINTED.load(Ordering::Acquire) as u64);
+    serial::write_str(" cf8=0x");
+    write_hex_u32(LAST_CF8.load(Ordering::Acquire));
+    serial::write_str(" port=0x");
+    write_hex_u32(LAST_IO_PORT.load(Ordering::Acquire));
+    serial::write_str(" bdfs=");
+    write_dec(
+        u64::from(PCI_BDF_SEEN0.load(Ordering::Acquire).count_ones())
+            + u64::from(PCI_BDF_SEEN1.load(Ordering::Acquire).count_ones()),
+    );
+    serial::write_str(" hlt=");
+    write_dec(HLT_SKIPS.load(Ordering::Acquire) as u64);
+    serial::write_str(" spin=");
+    write_dec(SPIN_JMP_SKIPS.load(Ordering::Acquire) as u64);
+    serial::write_str(" cr=");
+    write_dec(CR_ACCESSES.load(Ordering::Acquire) as u64);
+    serial::write_str(" acpi=");
+    write_dec(crate::devices::guest_platform::acpi_pm_timer_reads() as u64);
+    serial::write_str(" ramr=");
+    write_dec(RAM_REMAP_N.load(Ordering::Acquire) as u64);
+    serial::write_str(" cmos=0x");
+    write_hex_u32(u32::from(crate::devices::guest_platform::last_cmos_index()));
+    serial::write_str(" hpet=");
+    write_dec(HPET_TICKS.load(Ordering::Acquire) as u64);
+    serial::write_str(" pre=");
+    dump_low_ram_insn(linear.saturating_sub(16));
+    serial::write_str(" insn=");
+    dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
     leave_to_e4();
 }
@@ -1052,6 +1352,7 @@ fn maybe_print_past_sec(guest_hlt: bool) {
     });
     maybe_print_cdrom();
     maybe_print_virtio();
+    maybe_print_both();
     maybe_print_dxe();
 }
 
@@ -1074,6 +1375,7 @@ fn maybe_print_cdrom() {
         });
     }
     maybe_print_virtio();
+    maybe_print_both();
     maybe_print_dxe();
 }
 
@@ -1093,6 +1395,32 @@ fn maybe_print_virtio() {
             pci_enum: crate::devices::guest_virtio_blk::pci_enumerated() as u64,
         });
     }
+    maybe_print_both();
+    maybe_print_dxe();
+}
+
+#[cfg(target_os = "uefi")]
+fn maybe_print_both() {
+    if !PAST_SEC_PRINTED.load(Ordering::Acquire) {
+        return;
+    }
+    if !both_pci_evidence(
+        crate::devices::guest_virtio_blk::pci_enumerated(),
+        crate::devices::ide_cdrom::pci_enumerated(),
+    ) {
+        return;
+    }
+    if BOTH_PRINTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    serial::write_line(M7_E5_OVMF_BOTH_OK_MARKER);
+    serial::write_str("boot: guest-UEFI both pci virtio=1 ide=1");
+    serial::write_byte(b'\n');
+    audit_log!(AuditEvent::OvmfGuestUefiBoth {
+        exits: NON_TF_EXITS.load(Ordering::Acquire) as u64,
+        virtio: 1,
+        ide: 1,
+    });
     maybe_print_dxe();
 }
 
@@ -1131,6 +1459,166 @@ fn maybe_print_dxe() {
 }
 
 #[cfg(target_os = "uefi")]
+fn note_pci_cf8(addr: u32) {
+    if (addr & 0x8000_0000) == 0 {
+        return;
+    }
+    let (bus, dev, fun, _) = crate::devices::guest_platform::pci_bdf(addr);
+    if bus != 0 {
+        return;
+    }
+    let Some((word, bit)) = pci_bdf_bit(dev, fun) else {
+        return;
+    };
+    let slot = if word == 0 {
+        &PCI_BDF_SEEN0
+    } else {
+        &PCI_BDF_SEEN1
+    };
+    let prev = slot.fetch_or(bit, Ordering::AcqRel);
+    if prev & bit != 0 {
+        return;
+    }
+    serial::write_str("boot: guest-UEFI pci select 00:");
+    write_hex_u8(dev);
+    serial::write_byte(b'.');
+    write_hex_u8(fun);
+    serial::write_byte(b'\n');
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex_u8(v: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    serial::write_byte(HEX[(v >> 4) as usize]);
+    serial::write_byte(HEX[(v & 0xf) as usize]);
+}
+
+/// SDM 28.2.1 CR-access: MOV to/from CR0/CR3/CR4, keep CR4.VMXE host-owned.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_cr(qual: u64) -> bool {
+    let n = CR_ACCESSES.fetch_add(1, Ordering::AcqRel);
+    if n < 4 {
+        serial::write_str("boot: guest-UEFI CR access cr=");
+        write_dec(qual & 0xf);
+        serial::write_str(" type=");
+        write_dec((qual >> 4) & 3);
+        serial::write_byte(b'\n');
+    }
+    let cr = (qual & 0xf) as u8;
+    let typ = ((qual >> 4) & 3) as u8;
+    let gpr = ((qual >> 8) & 0xf) as u8;
+    match (cr, typ) {
+        (0, 0) => {
+            let _ = ops::vmwrite(GUEST_CR0, cr_gpr(gpr));
+        }
+        (3, 0) => {
+            let _ = ops::vmwrite(GUEST_CR3, cr_gpr(gpr));
+        }
+        (4, 0) => {
+            let cur = ops::vmread(GUEST_CR4).unwrap_or(0);
+            let val = (cr_gpr(gpr) & !CR4_VMXE) | (cur & CR4_VMXE);
+            let _ = ops::vmwrite(GUEST_CR4, val);
+            let _ = ops::vmwrite(CR4_READ_SHADOW, val & !CR4_VMXE);
+        }
+        (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
+        (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
+        (4, 1) => set_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0)),
+        _ => {}
+    }
+    skip_insn()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn cr_gpr(idx: u8) -> u64 {
+    match idx {
+        0 => SAVED_RAX,
+        1 => SAVED_RCX,
+        2 => SAVED_RDX,
+        3 => SAVED_RBX,
+        4 => ops::vmread(GUEST_RSP).unwrap_or(0),
+        5 => SAVED_RBP,
+        6 => SAVED_RSI,
+        7 => SAVED_RDI,
+        8 => SAVED_R8,
+        9 => SAVED_R9,
+        10 => SAVED_R10,
+        11 => SAVED_R11,
+        12 => SAVED_R12,
+        13 => SAVED_R13,
+        14 => SAVED_R14,
+        15 => SAVED_R15,
+        _ => 0,
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn set_cr_gpr(idx: u8, val: u64) {
+    match idx {
+        0 => SAVED_RAX = val,
+        1 => SAVED_RCX = val,
+        2 => SAVED_RDX = val,
+        3 => SAVED_RBX = val,
+        4 => {
+            let _ = ops::vmwrite(GUEST_RSP, val);
+        }
+        5 => SAVED_RBP = val,
+        6 => SAVED_RSI = val,
+        7 => SAVED_RDI = val,
+        8 => SAVED_R8 = val,
+        9 => SAVED_R9 = val,
+        10 => SAVED_R10 = val,
+        11 => SAVED_R11 = val,
+        12 => SAVED_R12 = val,
+        13 => SAVED_R13 = val,
+        14 => SAVED_R14 = val,
+        15 => SAVED_R15 = val,
+        _ => {}
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn skip_spin_short_jmp(linear: u64, rip: u64) -> bool {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return false;
+    }
+    let mut buf = [0u8; 2];
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is in VMX.
+    // KANI-TARGET: CpuDeadLoop jmp skip from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    if copy_low_ram_at(ram, linear, &mut buf) < 2 {
+        return false;
+    }
+    if !spin_short_jmp_should_skip(buf[0], buf[1]) {
+        return false;
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(2)).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn dump_low_ram_insn(linear: u64) {
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 || linear >= GUEST_UEFI_LOW_RAM_BYTES {
+        return;
+    }
+    let mut buf = [0u8; 16];
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: #GP insn dump from guest RAM (outside Proven Core).
+    let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    let n = copy_low_ram_at(ram, linear, &mut buf);
+    for i in 0..n {
+        write_hex2(buf[i]);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex2(b: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    serial::write_byte(HEX[(b >> 4) as usize]);
+    serial::write_byte(HEX[(b & 0xf) as usize]);
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
@@ -1145,12 +1633,14 @@ unsafe fn handle_io(qual: u64) -> bool {
     let size = (qual & 7) + 1;
     let is_in = (qual & (1 << 3)) != 0;
     let port = io_port_from_qual(qual);
+    LAST_IO_PORT.store(u32::from(port), Ordering::Release);
     if is_pci_config_port(port) || crate::devices::ide_cdrom::is_pci_data_port(port) {
         PCI_CONFIG_SEEN.store(true, Ordering::Release);
         maybe_print_past_sec(false);
         handle_pci(port, is_in, size as u8);
         maybe_print_cdrom();
         maybe_print_virtio();
+        maybe_print_both();
         return skip_insn();
     }
     if crate::devices::ide_cdrom::is_ata_primary_port(port) {
@@ -1158,7 +1648,10 @@ unsafe fn handle_io(qual: u64) -> bool {
         maybe_print_cdrom();
         return skip_insn();
     }
-    if crate::devices::guest_platform::is_platform_io_port(port) {
+    if crate::devices::guest_platform::is_platform_io_port(port)
+        || crate::devices::guest_platform::is_acpi_pm_timer_io(port, size as u8)
+        || crate::devices::guest_platform::is_piix_pm_io(port)
+    {
         SAVED_RAX = crate::devices::guest_platform::io(port, is_in, size as u8, SAVED_RAX);
         maybe_print_dxe();
         return skip_insn();
@@ -1179,6 +1672,38 @@ unsafe fn handle_io(qual: u64) -> bool {
     skip_insn()
 }
 
+/// After PEIMs LZMA-decompress into low RAM, patch `cmp bx, 0x1237` there too.
+/// Flash remap cannot see compressed copies. Retry a few DID probes until a
+/// hit (first `inw` of `00:00.0` can race decompress). Not two-phase DID.
+#[cfg(target_os = "uefi")]
+unsafe fn maybe_remap_guest_ram() {
+    if RAM_REMAP_N.load(Ordering::Acquire) > 0 {
+        return;
+    }
+    let tries = RAM_REMAP_TRIES.fetch_add(1, Ordering::AcqRel);
+    if tries >= 8 {
+        return;
+    }
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 {
+        return;
+    }
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: remap decompressed OVMF in guest RAM (outside Proven Core).
+    let n = crate::boot::ovmf_esp::remap_i440fx_did_imm(core::slice::from_raw_parts_mut(
+        hpa as *mut u8,
+        GUEST_UEFI_LOW_RAM_BYTES as usize,
+    ));
+    if n > 0 {
+        RAM_REMAP_N.store(n, Ordering::Release);
+        serial::write_str("boot: guest-UEFI ram remap i440FX DID->virtio n=");
+        write_dec(n as u64);
+        serial::write_byte(b'\n');
+    } else if tries == 0 {
+        serial::write_line("boot: guest-UEFI ram remap i440FX DID->virtio n=0");
+    }
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
     if port == 0xCF8 {
@@ -1197,6 +1722,8 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             crate::devices::ide_cdrom::pci_write_addr(addr);
             crate::devices::guest_platform::pci_write_addr(addr);
             crate::devices::guest_virtio_blk::pci_write_addr(addr);
+            LAST_CF8.store(addr, Ordering::Release);
+            note_pci_cf8(addr);
         }
         return;
     }
@@ -1222,9 +1749,22 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             let cfg = crate::devices::ide_cdrom::pci_read_addr()
                 | u32::from(port.wrapping_sub(0xCFC) & 3);
             let off = (cfg & 0xff) as u8;
-            if off & 0xFC == 0 || off & 0xFC == 0x0C {
-                let n = PCI_TRACE.fetch_add(1, Ordering::AcqRel);
-                if n < 24 {
+            let aligned = off & 0xFC;
+            if aligned == 0
+                && crate::devices::guest_virtio_blk::pci_addr_selects_virtio(
+                    crate::devices::guest_virtio_blk::pci_read_addr(),
+                )
+            {
+                maybe_remap_guest_ram();
+            }
+            if aligned == 0 || aligned == 0x0C {
+                let n = if aligned == 0 {
+                    PCI_DID_TRACE.fetch_add(1, Ordering::AcqRel)
+                } else {
+                    PCI_HT_TRACE.fetch_add(1, Ordering::AcqRel)
+                };
+                let cap = if aligned == 0 { 16 } else { 8 };
+                if n < cap {
                     serial::write_str("boot: guest-UEFI pci cfg=0x");
                     write_hex_u32(cfg);
                     serial::write_str(" val=0x");

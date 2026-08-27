@@ -1,11 +1,15 @@
 use super::{
-    boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb, cmos_mem_served,
-    fwcfg_bootorder_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, io,
-    is_platform_io_port, is_platform_sink_gpa, pci_addr_selects_host, pci_addr_selects_isa,
-    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr,
-    platform_memory_served, reset, BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
-    HOST_BRIDGE_VENDOR, ISA_BRIDGE_DEVICE, ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION,
-    PLATFORM_RAM_BYTES,
+    acpi_pm_timer_reads, boot_order_cd_then_disk, cmos_above_16m_chunks, cmos_extended_kb,
+    cmos_mem_served, e820_byte, fwcfg_bootorder_served, fwcfg_e820_served, fwcfg_ram_served,
+    host_bridge_enumerated, host_pci_config_addr, hpet_init_sink, hpet_tick_sink, io,
+    is_acpi_pm_timer_io, is_pic_port, is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa,
+    last_cmos_index, pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm,
+    pci_cfg_offset, pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
+    platform_memory_served, pm_pci_config_addr, reset, BOOTORDER, E820_ENTRY_BYTES, E820_RAM,
+    FW_CFG_BOOTORDER_SEL, FW_CFG_E820_SEL, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
+    HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, ISA_BRIDGE_DEVICE,
+    ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PM_BRIDGE_DEVICE,
+    PM_BRIDGE_VENDOR,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -61,7 +65,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     for i in 0..4 {
         count |= (io(0x511, true, 1, 0) as u32) << (8 * (3 - i));
     }
-    assert_eq!(count, 1);
+    assert_eq!(count, 2);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
     let mut got = [0u8; 80];
@@ -72,6 +76,52 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(&got[..n], BOOTORDER);
     assert!(fwcfg_bootorder_served());
     reset();
+}
+
+#[test]
+fn fwcfg_e820_is_32m_ram() {
+    reset();
+    assert_eq!(E820_ENTRY_BYTES, 20);
+    assert_eq!(E820_RAM, 1);
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_E820_SEL));
+    let mut buf = [0u8; 20];
+    for b in &mut buf {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    for i in 0..20 {
+        assert_eq!(buf[i], e820_byte(i as u16));
+    }
+    assert_eq!(&buf[8..16], &PLATFORM_RAM_BYTES.to_le_bytes());
+    assert_eq!(&buf[16..20], &1u32.to_le_bytes());
+    assert!(fwcfg_e820_served());
+    assert!(platform_memory_served());
+    reset();
+    assert!(!fwcfg_e820_served());
+}
+
+#[test]
+fn pic_raz_not_0xff_on_command_port() {
+    reset();
+    assert!(is_pic_port(0x20));
+    assert!(is_pic_port(0xA1));
+    assert!(is_platform_io_port(0x20));
+    assert_eq!(io(0x20, true, 1, 0xFFFF) as u8, 0);
+    assert_ne!(io(0x20, true, 1, 0xFFFF) as u8, 0xFF);
+    assert_eq!(io(0x21, true, 1, 0) as u8, 0xFF);
+    let _ = io(0x21, false, 1, 0xFB);
+    assert_eq!(io(0x21, true, 1, 0) as u8, 0xFB);
+    reset();
+}
+
+#[test]
+fn cmos_index_is_latched() {
+    reset();
+    let _ = io(0x70, false, 1, 0x8F);
+    assert_eq!(last_cmos_index(), 0x0F);
+    let _ = io(0x71, true, 1, 0);
+    assert_eq!(last_cmos_index(), 0x0F);
+    reset();
+    assert_eq!(last_cmos_index(), 0);
 }
 
 #[test]
@@ -115,6 +165,7 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0xFCF8_F000));
     assert!(is_platform_sink_gpa(0xFEE0_0000));
     assert!(is_platform_sink_gpa(0xFEC0_0000));
+    assert!(is_platform_sink_gpa(0xFED0_0000));
     assert!(!is_platform_sink_gpa(0x0000_1000));
     assert!(!is_platform_sink_gpa(0xFFC0_0000));
     assert!(!is_platform_sink_gpa(0xFFFF_FFF0));
@@ -123,4 +174,82 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_io_port(0x40));
     assert!(!is_platform_io_port(0xCF8));
     assert!(!is_platform_io_port(0x3F8));
+    assert!(is_platform_io_port(0x20));
+    assert!(is_acpi_pm_timer_io(0, 4));
+    assert!(!is_acpi_pm_timer_io(0, 1));
+    assert!(is_acpi_pm_timer_io(0x408, 4));
+}
+
+#[test]
+fn acpi_pm_timer_ticks_port0_and_pmba() {
+    reset();
+    assert_eq!(acpi_pm_timer_reads(), 0);
+    let a = io(0, true, 4, 0) as u32;
+    let b = io(0, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, 0x0001_0000);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let c = io(0x408, true, 4, 0) as u32;
+    assert_eq!(c, 0x0002_0000);
+    assert_eq!(acpi_pm_timer_reads(), 3);
+    reset();
+    assert_eq!(acpi_pm_timer_reads(), 0);
+}
+
+#[test]
+fn piix4_pm_enumerates_and_pmba_write_ticks() {
+    reset();
+    assert_eq!(pm_pci_config_addr(), 0x8000_0B00);
+    pci_write_addr(pm_pci_config_addr());
+    let id = pci_read_data(0xCFC, 4).expect("pm");
+    assert_eq!(id as u16, PM_BRIDGE_VENDOR);
+    assert_eq!((id >> 16) as u16, PM_BRIDGE_DEVICE);
+    assert!(pci_addr_selects_pm(pm_pci_config_addr()));
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0x501);
+    assert!(is_acpi_pm_timer_io(0x508, 4));
+    let v = io(0x508, true, 4, 0) as u32;
+    assert_eq!(v, 0);
+    assert_ne!(v, 0xFFFF_FFFF);
+    let v2 = io(0x508, true, 4, 0) as u32;
+    assert_eq!(v2, 0x0001_0000);
+    assert!(is_piix_pm_io(0x500));
+    let sts = io(0x500, true, 4, 0xFFFF_FFFF) as u32;
+    assert_eq!(sts, 0);
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xB001);
+    assert!(is_piix_pm_io(0xB000));
+    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    let t = io(0xB008, true, 4, 0) as u32;
+    assert_ne!(t, 0xFFFF_FFFF);
+    reset();
+}
+
+#[test]
+fn hpet_lives_in_2mib_sink_and_ticks() {
+    assert_eq!(HPET_GPA, 0xFED0_0000);
+    assert_eq!(HPET_SINK_OFF, 0x10_0000);
+    let mut too_small = vec![0u8; 4096];
+    assert!(!hpet_init_sink(&mut too_small));
+    assert_eq!(hpet_tick_sink(&mut too_small), 0);
+    let mut sink = vec![0u8; 2 * 1024 * 1024];
+    assert!(hpet_init_sink(&mut sink));
+    let cap = u32::from_le_bytes(sink[HPET_SINK_OFF..HPET_SINK_OFF + 4].try_into().unwrap());
+    let period = u32::from_le_bytes(
+        sink[HPET_SINK_OFF + 4..HPET_SINK_OFF + 8]
+            .try_into()
+            .unwrap(),
+    );
+    let en = u32::from_le_bytes(
+        sink[HPET_SINK_OFF + 0x10..HPET_SINK_OFF + 0x14]
+            .try_into()
+            .unwrap(),
+    );
+    assert_eq!(cap, HPET_CAP_REV);
+    assert_eq!(period, HPET_CLK_PERIOD_FS);
+    assert_eq!(en, 1);
+    assert_eq!(HPET_MAIN_STEP, 100_000_000);
+    assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP);
+    assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP * 2);
 }

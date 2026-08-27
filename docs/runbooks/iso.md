@@ -423,4 +423,9 @@ E5 Stage 42 (host + QEMU nested VT-x, closed): empty PCI virtio-blk at
 `00:00.0` (PEI DID probe) plus fw_cfg `bootorder` (CD then disk). Serial
 `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` with `val=0x1042` pci=1, CD GuestVisible,
 `pci_ide=0` sectors=0, stop n=115 virtio=1. Not a completed firmware CD
-boot. Not installer. Next: firmware CD boot (ATAPI/El Torito).
+boot. Not installer.
+E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
++ IDE `00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). Nested VT-x `1b07692`:
+`pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
+`sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
+Next: firmware CD boot (ATAPI/El Torito, `sectors>0`).

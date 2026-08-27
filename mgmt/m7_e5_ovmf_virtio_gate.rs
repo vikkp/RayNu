@@ -6,7 +6,7 @@
 //!
 //! Guest-UEFI PCI virtio 1.0 block at `00:00.0` plus fw_cfg `bootorder`
 //! (CD then disk). This OVMF PEI only `inw` Device ID of `00:00.0`.
-//! IDE is `00:00.1` (not scanned by this PEI). Marker after past-SEC and
+//! IDE is `00:00.1` (virtio fn1). Marker after past-SEC and
 //! virtio PCI enum. Not a completed firmware CD boot. Not installer.
 //! No new `*Absent` enum. No TLS.
 
@@ -127,9 +127,10 @@ pub fn run_m7_e5_ovmf_virtio_gate() -> bool {
     let ok = ovmf_virtio_surface_present()
         && prop_virtio_pci_and_bootorder()
         && run_m7_e5_ovmf_dxe_gate()
-        && !post_dxe_should_stop(true, 115, 115, false)
-        && post_dxe_should_stop(true, 115, 115, true)
-        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false)
+        && !post_dxe_should_stop(true, 115, 115, false, false)
+        && !post_dxe_should_stop(true, 115, 115, true, false)
+        && post_dxe_should_stop(true, 115, 115, true, true)
+        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false, false)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
