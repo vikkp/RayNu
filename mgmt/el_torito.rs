@@ -119,34 +119,25 @@ fn id_starts_with(field: &[u8], prefix: &[u8]) -> bool {
 }
 
 /// Bytes needed for [`write_mock_efi_iso`] (boot record + catalog + load LBA).
-/// Boot record at 17, catalog at 20, load LBA 22 with 4 sectors → need 26.
+/// Boot record at 17, catalog at 20, load LBA 22 with 4 FAT ISO sectors → 26.
 pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
 
 /// Write a minimal EFI El Torito prefix into `iso`. No allocation.
+/// Same bytes as [`crate::devices::ide_cdrom::write_placeholder_iso`].
 pub fn write_mock_efi_iso(iso: &mut [u8]) -> Result<usize, ElToritoError> {
     if iso.len() < MOCK_EFI_ISO_BYTES {
         return Err(ElToritoError::Truncated);
     }
     iso[..MOCK_EFI_ISO_BYTES].fill(0);
-    let br = 17 * ISO_SECTOR;
-    iso[br] = 0;
-    iso[br + 1..br + 6].copy_from_slice(b"CD001");
-    iso[br + 6] = 1;
-    iso[br + 7..br + 7 + 23].copy_from_slice(b"EL TORITO SPECIFICATION");
-    iso[br + 71..br + 75].copy_from_slice(&20u32.to_le_bytes());
-    let cat = 20 * ISO_SECTOR;
-    iso[cat] = 0x01;
-    iso[cat + 1] = 0xEF;
-    iso[cat + 30] = 0x55;
-    iso[cat + 31] = 0xAA;
-    iso[cat + 32] = 0x91;
-    iso[cat + 33] = 0xEF;
-    iso[cat + 64] = 0x88;
+    crate::devices::ide_cdrom::write_placeholder_iso(iso);
     let load = 22 * ISO_SECTOR;
-    iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
-    iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
-    let n = crate::devices::ide_cdrom::write_eltorito_efi_pe(&mut iso[load..]);
-    if n == 0 {
+    if iso.len() < load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF + 2 {
+        return Err(ElToritoError::Truncated);
+    }
+    if &iso[load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF
+        ..load + crate::devices::ide_cdrom::ELTORITO_BOOTX64_OFF + 2]
+        != b"MZ"
+    {
         return Err(ElToritoError::Truncated);
     }
     Ok(MOCK_EFI_ISO_BYTES)

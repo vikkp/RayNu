@@ -34,8 +34,16 @@ pub const ISO_SECTOR: usize = 2048;
 pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
 /// El Torito catalog LBA in the mock / placeholder ISO.
 pub const ELTORITO_CATALOG_LBA: u32 = 20;
-/// El Torito no-emulation EFI load LBA (PE32+ payload lives here).
+/// El Torito no-emulation EFI load LBA (FAT12 ESP lives here).
 pub const ELTORITO_LOAD_LBA: u32 = 22;
+/// Catalog `SectorCount` / host ISO sectors at the load LBA. EDK2
+/// PartitionDxe no-emulation uses the CD block size (2048), so 4 means
+/// four ISO sectors — enough for the FAT12 ESP. Not 512-byte BIOS units.
+pub const ELTORITO_SECTOR_COUNT: u16 = 4;
+/// FAT12 bytes per sector inside the El Torito ESP.
+pub const ELTORITO_FAT_BPS: usize = 512;
+/// `\EFI\BOOT\BOOTX64.EFI` starts at FAT cluster 4 (data sector 6).
+pub const ELTORITO_BOOTX64_OFF: usize = 6 * ELTORITO_FAT_BPS;
 /// COM1 bytes the CD EFI writes when it actually runs. Not a sector count.
 pub const ELTORITO_PAYLOAD_MAGIC: &[u8] = b"RN-ELT";
 
@@ -455,43 +463,188 @@ pub fn present(iso: &[u8], iso_id: u64) -> bool {
     make_visible()
 }
 
-/// Placeholder ISO: PVD `CD001` at LBA 16 plus a minimal EFI El Torito catalog.
+/// Placeholder ISO: PVD `CD001` at LBA 16 plus a checksummed EFI El Torito
+/// catalog and a FAT12 ESP at the load LBA (`\EFI\BOOT\BOOTX64.EFI`).
 pub fn present_placeholder() -> bool {
     let mut iso = [0u8; GUEST_CD_ISO_CAP];
     write_placeholder_iso(&mut iso);
     present(&iso, 1)
 }
 
-fn write_placeholder_iso(iso: &mut [u8]) {
+/// Write the mock EFI ISO prefix (PVD + Boot Record + catalog + FAT ESP).
+///
+/// INVARIANTS:
+/// - Needs [`MOCK_EFI_ISO_BYTES`]
+/// - Catalog validation entry 16-bit words sum to 0 (EDK2 PartitionDxe)
+/// - Load LBA is a FAT12 ESP with `\EFI\BOOT\BOOTX64.EFI`
+pub fn write_placeholder_iso(iso: &mut [u8]) {
+    if iso.len() < MOCK_EFI_ISO_BYTES {
+        return;
+    }
     let pvd = 16 * ISO_SECTOR;
     iso[pvd] = 1;
     iso[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+    iso[pvd + 6] = 1;
     iso[pvd + 40..pvd + 50].copy_from_slice(b"RAYNU-V-CD");
+    let vol = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    iso[pvd + 80..pvd + 84].copy_from_slice(&vol.to_le_bytes());
+    iso[pvd + 84..pvd + 88].copy_from_slice(&vol.to_be_bytes());
+    iso[pvd + 128..pvd + 130].copy_from_slice(&(ISO_SECTOR as u16).to_le_bytes());
+    iso[pvd + 130..pvd + 132].copy_from_slice(&(ISO_SECTOR as u16).to_be_bytes());
     let br = 17 * ISO_SECTOR;
     iso[br] = 0;
     iso[br + 1..br + 6].copy_from_slice(b"CD001");
     iso[br + 6] = 1;
     iso[br + 7..br + 7 + 23].copy_from_slice(b"EL TORITO SPECIFICATION");
-    iso[br + 71..br + 75].copy_from_slice(&20u32.to_le_bytes());
-    let cat = 20 * ISO_SECTOR;
+    iso[br + 71..br + 75].copy_from_slice(&ELTORITO_CATALOG_LBA.to_le_bytes());
+    let cat = (ELTORITO_CATALOG_LBA as usize) * ISO_SECTOR;
     iso[cat] = 0x01;
     iso[cat + 1] = 0xEF;
+    iso[cat + 4..cat + 11].copy_from_slice(b"RAYNU-V");
     iso[cat + 30] = 0x55;
     iso[cat + 31] = 0xAA;
-    iso[cat + 32] = 0x91;
-    iso[cat + 33] = 0xEF;
-    iso[cat + 64] = 0x88;
-    iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
-    iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
-    let load = 22 * ISO_SECTOR;
-    let _ = write_eltorito_efi_pe(&mut iso[load..]);
+    eltorito_set_validation_checksum(&mut iso[cat..cat + 32]);
+    iso[cat + 32] = 0x88;
+    iso[cat + 38..cat + 40].copy_from_slice(&ELTORITO_SECTOR_COUNT.to_le_bytes());
+    iso[cat + 40..cat + 44].copy_from_slice(&ELTORITO_LOAD_LBA.to_le_bytes());
+    let load = (ELTORITO_LOAD_LBA as usize) * ISO_SECTOR;
+    let _ = write_eltorito_fat12(&mut iso[load..]);
+}
+
+/// El Torito validation entry: 16-bit little-endian words sum to 0.
+/// EDK2 `PartitionDxe/ElTorito.c` skips the catalog when this fails.
+pub fn eltorito_set_validation_checksum(cat: &mut [u8]) {
+    if cat.len() < 32 {
+        return;
+    }
+    cat[28] = 0;
+    cat[29] = 0;
+    let mut sum: u16 = 0;
+    for i in 0..16 {
+        sum = sum.wrapping_add(u16::from_le_bytes([cat[i * 2], cat[i * 2 + 1]]));
+    }
+    let c = 0u16.wrapping_sub(sum);
+    cat[28..30].copy_from_slice(&c.to_le_bytes());
+}
+
+pub fn eltorito_validation_checksum_ok(cat: &[u8]) -> bool {
+    if cat.len() < 32 || cat[0] != 0x01 || cat[30] != 0x55 || cat[31] != 0xAA {
+        return false;
+    }
+    let mut sum: u16 = 0;
+    for i in 0..16 {
+        sum = sum.wrapping_add(u16::from_le_bytes([cat[i * 2], cat[i * 2 + 1]]));
+    }
+    sum == 0
+}
+
+fn fat12_set(fat: &mut [u8], cluster: u16, val: u16) {
+    let i = (cluster as usize * 3) / 2;
+    if i + 1 >= fat.len() {
+        return;
+    }
+    let v = val & 0x0FFF;
+    if cluster & 1 == 0 {
+        fat[i] = v as u8;
+        fat[i + 1] = (fat[i + 1] & 0xF0) | ((v >> 8) as u8);
+    } else {
+        fat[i] = (fat[i] & 0x0F) | ((v << 4) as u8);
+        fat[i + 1] = (v >> 4) as u8;
+    }
+}
+
+fn fat_dirent(dst: &mut [u8], name11: &[u8; 11], attr: u8, cluster: u16, size: u32) {
+    if dst.len() < 32 {
+        return;
+    }
+    dst[..32].fill(0);
+    dst[..11].copy_from_slice(name11);
+    dst[11] = attr;
+    dst[26..28].copy_from_slice(&cluster.to_le_bytes());
+    dst[28..32].copy_from_slice(&size.to_le_bytes());
+}
+
+/// Write a FAT12 EFI System Partition with `\EFI\BOOT\BOOTX64.EFI`.
+///
+/// INVARIANTS:
+/// - Fits in [`ELTORITO_SECTOR_COUNT`] ISO 2048-byte sectors (8192 bytes)
+/// - BPB BytesPerSector is 512 so FatDxe DiskIo can mount a 2048-byte BlockIo
+/// - `BOOTX64.EFI` is the PE from [`write_eltorito_efi_pe`]
+/// - Does not allocate
+pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
+    const FAT_SECS: usize = 16;
+    const NEED: usize = FAT_SECS * ELTORITO_FAT_BPS;
+    if dst.len() < NEED {
+        return 0;
+    }
+    dst[..NEED].fill(0);
+    dst[0] = 0xEB;
+    dst[1] = 0x3C;
+    dst[2] = 0x90;
+    dst[3..11].copy_from_slice(b"MSWIN4.1");
+    dst[11..13].copy_from_slice(&(ELTORITO_FAT_BPS as u16).to_le_bytes());
+    dst[13] = 1;
+    dst[14..16].copy_from_slice(&1u16.to_le_bytes());
+    dst[16] = 2;
+    dst[17..19].copy_from_slice(&16u16.to_le_bytes());
+    dst[19..21].copy_from_slice(&(FAT_SECS as u16).to_le_bytes());
+    dst[21] = 0xF8;
+    dst[22..24].copy_from_slice(&1u16.to_le_bytes());
+    dst[24..26].copy_from_slice(&32u16.to_le_bytes());
+    dst[26..28].copy_from_slice(&2u16.to_le_bytes());
+    dst[36] = 0x80;
+    dst[38] = 0x29;
+    dst[39..43].copy_from_slice(&0x524E_5631u32.to_le_bytes());
+    dst[43..54].copy_from_slice(b"RAYNU-V-EFI");
+    dst[54..62].copy_from_slice(b"FAT12   ");
+    dst[510] = 0x55;
+    dst[511] = 0xAA;
+    let fat1 = ELTORITO_FAT_BPS;
+    let fat2 = fat1 + ELTORITO_FAT_BPS;
+    fat12_set(&mut dst[fat1..fat2], 0, 0xFF8);
+    fat12_set(&mut dst[fat1..fat2], 1, 0xFFF);
+    fat12_set(&mut dst[fat1..fat2], 2, 0xFFF);
+    fat12_set(&mut dst[fat1..fat2], 3, 0xFFF);
+    fat12_set(&mut dst[fat1..fat2], 4, 5);
+    fat12_set(&mut dst[fat1..fat2], 5, 0xFFF);
+    let mut fat_copy = [0u8; ELTORITO_FAT_BPS];
+    fat_copy.copy_from_slice(&dst[fat1..fat2]);
+    dst[fat2..fat2 + ELTORITO_FAT_BPS].copy_from_slice(&fat_copy);
+    let root = fat2 + ELTORITO_FAT_BPS;
+    fat_dirent(
+        &mut dst[root..],
+        b"EFI        ",
+        0x10,
+        2,
+        0,
+    );
+    let efi_dir = root + ELTORITO_FAT_BPS;
+    fat_dirent(&mut dst[efi_dir..], b".          ", 0x10, 2, 0);
+    fat_dirent(&mut dst[efi_dir + 32..], b"..         ", 0x10, 0, 0);
+    fat_dirent(&mut dst[efi_dir + 64..], b"BOOT       ", 0x10, 3, 0);
+    let boot_dir = efi_dir + ELTORITO_FAT_BPS;
+    fat_dirent(&mut dst[boot_dir..], b".          ", 0x10, 3, 0);
+    fat_dirent(&mut dst[boot_dir + 32..], b"..         ", 0x10, 2, 0);
+    let pe_off = boot_dir + ELTORITO_FAT_BPS;
+    let pe_len = write_eltorito_efi_pe(&mut dst[pe_off..]);
+    if pe_len == 0 {
+        return 0;
+    }
+    fat_dirent(
+        &mut dst[boot_dir + 64..],
+        b"BOOTX64 EFI",
+        0x20,
+        4,
+        pe_len as u32,
+    );
+    debug_assert_eq!(pe_off, ELTORITO_BOOTX64_OFF);
+    NEED
 }
 
 /// Write a PE32+ EFI application that OUTs [`ELTORITO_PAYLOAD_MAGIC`] to COM1.
 ///
 /// INVARIANTS:
-/// - Fits in one ISO 2048-byte sector (EDK2 El Torito `SectorCount=4` is
-///   512-byte units → one ISO sector of boot image)
+/// - Fits in two FAT 512-byte clusters (placed at [`ELTORITO_BOOTX64_OFF`])
 /// - Entry point ignores ImageHandle/SystemTable and returns EFI_SUCCESS
 /// - Does not allocate
 pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {

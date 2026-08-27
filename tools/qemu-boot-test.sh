@@ -42,7 +42,7 @@
 # E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
 # E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds)
 # E5.44: RAYNU-V-M7-E5-OVMF-ATAPI-OK (required when VMXON succeeds)
-# E5.45: RAYNU-V-M7-E5-OVMF-ELTORITO-OK (logged when VMXON succeeds; required to close Stage 45)
+# E5.45: RAYNU-V-M7-E5-OVMF-ELTORITO-OK (logged when VMXON succeeds; required to close Stage 45; FAT ESP BOOTX64 + RN-ELT, not sectors>0 alone)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"

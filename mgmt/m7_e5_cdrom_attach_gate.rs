@@ -54,9 +54,8 @@ pub fn prop_host_attach_rejects() -> bool {
     if write_mock_efi_iso(&mut iso).is_err() {
         return false;
     }
-    // Clear EFI platform on validation + section header.
+    // Clear EFI platform on the validation entry.
     iso[20 * super::el_torito::ISO_SECTOR + 1] = 0x00;
-    iso[20 * super::el_torito::ISO_SECTOR + 33] = 0x00;
     let parsed = match parse_el_torito(&iso) {
         Ok(i) => i,
         Err(_) => return false,

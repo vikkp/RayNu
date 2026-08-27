@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-eltorito |
-| Summary | Stage 45 El Torito host package: keep VMCS after first ATAPI sector; PE32+ CD EFI; catalog+load READ + RN-ELT. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 45 El Torito: checksummed catalog + FAT12 ESP BOOTX64 (not raw PE); keep VMCS after first ATAPI sector. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
 | Gates touched | Stage 45 OPEN in progress. `OVMF-ATAPI-OK` stays CLOSED. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN FAT12 ESP BOOTX64 + catalog checksum; keep VMCS after first ATAPI sector; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN host package: keep VMCS after first ATAPI sector; PE32+ CD EFI; catalog+load READ + RN-ELT; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | After Stage 44 named: Stage 45 El Torito then P0-60 G1 EPT (not an E5 stage) then Stage 46 ISO-INSTALL-OK; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | P0-59 CLOSED iron COM2 bf696ca ATAPI-OK sectors=1 packet=9 scsi=0x28 stop n=30769 pci_ide=1 virtio=1; BOTH-OK n=12411 virtio 00:02.0 + IDE 00:00.1; no AcpiTimerLib ASSERT; not El Torito; not installer; iron P0-14 stays 2b795a0 |

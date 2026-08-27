@@ -1,10 +1,11 @@
-use super::{
+    use super::{
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
-    eltorito_catalog_read, host_identify_word0, host_read10, is_ata_primary_port, is_bmide_port,
-    is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi, pci_addr_selects_cd, pci_bdf,
-    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present, present_placeholder,
-    reset, sectors_read, take_marker, write_eltorito_efi_pe, ELTORITO_PAYLOAD_MAGIC,
-    GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
+    eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
+    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
+    pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    present, present_placeholder, reset, sectors_read, take_marker, write_eltorito_efi_pe,
+    write_eltorito_fat12, ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, GUEST_CD_PCI_DEVICE,
+    GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
 
 #[test]
@@ -202,6 +203,11 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     assert_eq!(&pe[0..2], b"MZ");
     assert_eq!(&pe[0x80..0x84], b"PE\0\0");
     assert_eq!(pe[0x98 + 0x44], 10, "EFI_APPLICATION subsystem");
+    let mut fat = [0u8; 8192];
+    assert_eq!(write_eltorito_fat12(&mut fat), 8192);
+    assert_eq!(fat[510], 0x55);
+    assert_eq!(fat[511], 0xAA);
+    assert_eq!(&fat[ELTORITO_BOOTX64_OFF..ELTORITO_BOOTX64_OFF + 2], b"MZ");
     assert!(present_placeholder());
     assert!(!eltorito_catalog_read());
     assert!(!eltorito_boot_image_read());
@@ -213,16 +219,22 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     assert_eq!(cat[0], 0x01);
     assert_eq!(cat[30], 0x55);
     assert_eq!(cat[31], 0xAA);
+    assert!(eltorito_validation_checksum_ok(&cat[..32]));
+    assert_eq!(cat[32], 0x88);
     assert!(eltorito_catalog_read());
     assert!(!eltorito_boot_image_read());
     assert_eq!(last_read_lba(), 20);
-    let img = host_read10(22).expect("load LBA");
-    assert_eq!(&img[0..2], b"MZ");
-    assert_eq!(&img[0x80..0x84], b"PE\0\0");
+    let img = host_read10(22).expect("load LBA FAT");
+    assert_eq!(img[510], 0x55);
+    assert_eq!(img[511], 0xAA);
     assert!(eltorito_boot_image_read());
     assert_eq!(last_read_lba(), 22);
+    let file_sec = host_read10(23).expect("BOOTX64 ISO sector");
+    let pe_in = ELTORITO_BOOTX64_OFF - ISO_SECTOR;
+    assert_eq!(&file_sec[pe_in..pe_in + 2], b"MZ");
+    assert_eq!(&file_sec[pe_in + 0x80..pe_in + 0x84], b"PE\0\0");
     let mut found = false;
-    for w in img.windows(ELTORITO_PAYLOAD_MAGIC.len()) {
+    for w in file_sec[pe_in..].windows(ELTORITO_PAYLOAD_MAGIC.len()) {
         if w == ELTORITO_PAYLOAD_MAGIC {
             found = true;
             break;
