@@ -172,6 +172,11 @@
 //! default `call DebugAssert` (`ASSERT(FALSE)`, not `ASSERT_EFI_ERROR`).
 //! Dump `retcmp=` at `ret-64` plus `rbx`/`rsi`/`rdi`/`g16=`. Do not
 //! skip `ebecc9c3`. No DID flip. No new PAT-UC.
+//! Iron `2cbf9e8`: `retcmp=` `cmp ax, 0x1237` / `0x29C0` / `0x0D57`
+//! is CpuDxe `AcpiTimerLibConstructor` (`PIIX4_PMBA_VALUE` `0xB000` /
+//! `ICH9_PMBASE_VALUE` `0x0600`). `00:00.0` was virtio `0x1042` after
+//! latch (`g16=0000` `rsi=0x7f6e1042`). Keep `00:00.0` i440FX `0x1237`;
+//! latch virtio at `00:02.0`. Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -1067,6 +1072,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6f077a3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retcmp=")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ASSERT(FALSE)")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2cbf9e8")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("AcpiTimerLibConstructor")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:02.0")
         && GUEST_UEFI_ASSERT_PREHEX_BYTES == 32
         && guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP) == 0x7FD2_5173
         && guest_uefi_assert_retcmp_gpa(0x7F8E_2946) == 0x7F8E_2906

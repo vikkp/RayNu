@@ -49,10 +49,12 @@ pub const PLATFORM_REPORT_RAM_BYTES: u64 = 0x8000_0000;
 
 /// i440FX host bridge at `00:08.0` (Intel 82441FX).
 /// Nested VT-x: PEI only `inw` Device ID of `00:00.0` — never Header Type,
-/// never another BDF. Slot 0 returns i440FX `0x1237` for that probe so
-/// `HostBridgeDevId` takes the stock QEMU map (VGA IoMemory HOB). DXE
-/// latches virtio `0x1042` on the first other-BDF CF8. Host stays here
-/// (Stage 41 parking).
+/// never another BDF. Slot 0 stays i440FX `0x1237` so `HostBridgeDevId`
+/// takes the stock QEMU map (VGA IoMemory HOB) and CpuDxe
+/// `AcpiTimerLibConstructor` matches PIIX4 (`PIIX4_PMBA_VALUE` `0xB000`)
+/// instead of `ASSERT(FALSE)` on virtio `0x1042` (iron `2cbf9e8` `retcmp=`).
+/// DXE latches virtio `0x1042` at `00:02.0` on the first other-BDF CF8.
+/// Host stays here (Stage 41 parking).
 pub const HOST_BRIDGE_VENDOR: u16 = 0x8086;
 pub const HOST_BRIDGE_DEVICE: u16 = 0x1237;
 pub const HOST_BRIDGE_DEV: u8 = 8;
@@ -63,9 +65,10 @@ pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
 
 /// PIIX4 PM/ACPI at `00:01.3` (Intel 82371AB). OVMF programs PMBA here
-/// after the i440FX host-bridge switch. PEI `00:00.0` DID is i440FX
-/// `0x1237` so that switch matches without remapping `cmp bx, 0x1237`.
-/// DXE latches virtio `0x1042` after MemMapInitialization.
+/// after the i440FX host-bridge switch (`PIIX4_PMBA_VALUE` `0xB000`).
+/// PEI and DXE `00:00.0` DID stay i440FX `0x1237` so that switch matches
+/// without remapping `cmp bx, 0x1237`. DXE latches virtio `0x1042` at
+/// `00:02.0` after MemMapInitialization.
 pub const PM_BRIDGE_VENDOR: u16 = 0x8086;
 pub const PM_BRIDGE_DEVICE: u16 = 0x7113;
 pub const PM_BRIDGE_DEV: u8 = 1;
@@ -137,7 +140,7 @@ pub const E820_ENTRY_COUNT: u8 = 6;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
 /// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
-/// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk (`scsi@0`).
+/// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk at `00:02.0` (`scsi@2`).
 /// Nested VT-x BOTH-OK with `ataio=0`: ConnectDevicesFromQemu of `scsi@0`
 /// enumerated IDE fn1 as a sibling and did not Start AtaAtapiPassThru.
 /// QEMU/OVMF TranslatePciOfwNodes: `ide@1,1/drive@0/disk@0` →
@@ -145,14 +148,14 @@ pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 /// Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects the file unless the
 /// last byte is `'\0'` (`RETURN_INVALID_PARAMETER` otherwise).
 pub const BOOTORDER: &[u8] =
-    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@0/disk@0,0\n\0";
+    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
 /// Product boot order is CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
     let piix = find_bytes(BOOTORDER, b"ide@1,1/drive@0");
     let fn1 = find_bytes(BOOTORDER, b"ide@0,1/drive@0");
     let slave = find_bytes(BOOTORDER, b"drive@1");
-    let disk = find_bytes(BOOTORDER, b"scsi@0");
+    let disk = find_bytes(BOOTORDER, b"scsi@2");
     match (piix, fn1, slave, disk) {
         (Some(p), Some(f), None, Some(d)) => p < f && f < d,
         _ => false,
@@ -471,10 +474,12 @@ pub fn is_pic_port(port: u16) -> bool {
     matches!(port, 0x20 | 0x21 | 0xA0 | 0xA1 | 0x4D0 | 0x4D1)
 }
 
-/// OVMF `AcpiTimerLibConstructor` leaves `mAcpiTimerIoAddr=0` when `00:00.0`
-/// DID is not i440FX/Q35. PEI then `IoRead32(0)` in `InternalAcpiDelay`.
-/// PIIX4 PMBA timer is `0x408`. Q35/ICH9 default is `0xB008`.
-/// Programmed PMBA+8 is also a timer (after firmware writes `00:01.3`).
+/// OVMF `AcpiTimerLibConstructor` `ASSERT(FALSE)` when `00:00.0` DID is
+/// not i440FX `0x1237` / Q35 `0x29C0` / CloudHV `0x0D57` (iron `2cbf9e8`
+/// `retcmp=`). Slot 0 stays i440FX so the constructor stores
+/// `PIIX4_PMBA_VALUE` `0xB000`. PEI `IoRead32(0)` in `InternalAcpiDelay`
+/// is the leftover port-0 path. PIIX4 PMBA timer is `0x408`. QEMU
+/// PIIX4 default is `0xB008`. Programmed PMBA+8 is also a timer.
 pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
     if acpi_pm_timer_fixed(port, size) {
         return true;

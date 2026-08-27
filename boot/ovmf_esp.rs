@@ -123,7 +123,8 @@ pub fn clear_retained() {
 /// corrupt PEIM decompress. Only the `cmp r16, imm16` encoding is
 /// rewritten. Remap is not applied while PEI captures HostBridgeDevId
 /// from i440FX `0x1237` at `00:00.0` (stock QEMU MemMap VGA HOB). DXE
-/// latches virtio `0x1042` on the first other-BDF CF8.
+/// latches virtio `0x1042` at `00:02.0` on the first other-BDF CF8.
+/// `00:00.0` stays i440FX so `AcpiTimerLibConstructor` matches.
 /// Does **not** rewrite the retain buffer.
 ///
 /// INVARIANTS:

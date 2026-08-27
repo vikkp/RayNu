@@ -135,11 +135,11 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000838"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:00.0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:02.0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("drive@0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ide@1,1"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("scsi-first skipped IDE Start"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("scsi@2 not scsi@0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("insn=ebec"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware-simultaneous PCI enum"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not virtio-alone"));
@@ -682,6 +682,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6f077a3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retcmp="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ASSERT(FALSE)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2cbf9e8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("AcpiTimerLibConstructor"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4_PMBA_VALUE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:02.0"));
     assert_eq!(GUEST_UEFI_ASSERT_PREHEX_BYTES, 32);
     assert_eq!(
         guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP),

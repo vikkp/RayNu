@@ -4,10 +4,11 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: N/A
 //!
-//! Keep virtio 1.0 at `00:00.0` (multifunction) and IDE at `00:00.1`.
+//! Keep virtio 1.0 at `00:02.0` (multifunction) and IDE at `00:00.1`.
 //! PIIX `00:01.1` is the same CD. PIIX4 PM at `00:01.3`. PEI `00:00.0`
-//! DID is i440FX `0x1237` so `PlatformMemMapInitialization` adds the VGA
-//! IoMemory HOB (stock QEMU map). DXE latches virtio `0x1042` on the first
+//! DID stays i440FX `0x1237` so `PlatformMemMapInitialization` adds the VGA
+//! IoMemory HOB (stock QEMU map) and CpuDxe `AcpiTimerLibConstructor`
+//! matches PIIX4. DXE latches virtio `0x1042` at `00:02.0` on the first
 //! other-BDF CF8 (PciBus / BOTH-OK). `remap_i440fx_did_imm` stays in-tree
 //! but is not applied while PEI captures `HostBridgeDevId`. ACPI PM
 //! timer so PEI Delay can end. 8259 PIC RAZ/WI. fw_cfg `etc/e820` 32 MiB.
@@ -113,7 +114,7 @@ pub fn prop_both_pci_on_one_boot() -> bool {
     both_pci_evidence(virtio_ok, ide_ok)
         && (host_id >> 16) as u16 == HOST_BRIDGE_DEVICE
         && pm_pci_config_addr() == 0x8000_0B00
-        && virtio_cfg() == 0x8000_0000
+        && virtio_cfg() == 0x8000_1000
         && ide_cdrom::pci_config_addr() == 0x8000_0100
 }
 
