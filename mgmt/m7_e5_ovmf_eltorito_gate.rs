@@ -17,9 +17,10 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_ovmf_atapi_gate::run_m7_e5_ovmf_atapi_gate;
 use crate::devices::ide_cdrom::{
+    edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok, edk2_pe_loadimage_ok,
     eltorito_boot_image_read, eltorito_catalog_read, eltorito_validation_checksum_ok, host_read10,
     present_placeholder, reset, write_eltorito_efi_pe, write_eltorito_fat12, ELTORITO_BOOTX64_OFF,
-    ELTORITO_PAYLOAD_MAGIC,
+    ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT,
 };
 use crate::vmx::guest_uefi::{
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, post_atapi_should_stop,
@@ -62,6 +63,12 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
         return false;
     }
     if &fat[ELTORITO_BOOTX64_OFF..ELTORITO_BOOTX64_OFF + 2] != b"MZ" {
+        return false;
+    }
+    if !edk2_fat12_bootx64_ok(&fat) || !edk2_pe_loadimage_ok(&pe) {
+        return false;
+    }
+    if edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT) != 4 {
         return false;
     }
     pe.windows(ELTORITO_PAYLOAD_MAGIC.len())
@@ -142,6 +149,9 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("eltorito_boot_evidence")
         && guest.contains("131072-exit cap")
         && guest.contains("does not apply the 32768 post-ATAPI tail")
+        && guest.contains("first ATAPI is often LBA 0 dummy")
+        && ide.contains("edk2_fat12_bootx64_ok")
+        && ide.contains("edk2_pe_loadimage_ok")
         && ide.contains("write_eltorito_efi_pe")
         && ide.contains("0x2022")
         && ide.contains("LCR")
@@ -178,8 +188,9 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
         && GUEST_UEFI_POST_DXE_TAIL == 32768
         && GUEST_UEFI_POST_ATAPI_TAIL == 32768
         && post_dxe_should_stop(true, 115, 115, 1)
+        && !post_atapi_should_stop(true, 115, 115, 0, 0, false, false, false)
         && !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false)
-        && post_atapi_should_stop(
+        && !post_atapi_should_stop(
             true,
             30769 + GUEST_UEFI_POST_ATAPI_TAIL,
             115,

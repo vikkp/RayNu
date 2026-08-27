@@ -4,7 +4,8 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     present, present_placeholder, reset, sectors_read, take_marker, write_eltorito_efi_pe,
-    write_eltorito_fat12, ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, GUEST_CD_PCI_DEVICE,
+    write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok, edk2_pe_loadimage_ok,
+    ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
 
@@ -229,6 +230,9 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     assert_eq!(fat[510], 0x55);
     assert_eq!(fat[511], 0xAA);
     assert_eq!(&fat[ELTORITO_BOOTX64_OFF..ELTORITO_BOOTX64_OFF + 2], b"MZ");
+    assert!(edk2_pe_loadimage_ok(&pe), "DxeCore LoadImage headers");
+    assert!(edk2_fat12_bootx64_ok(&fat), "FatDxe OpenDevice + BOOTX64 walk");
+    assert_eq!(edk2_eltorito_partition_blocks(ELTORITO_SECTOR_COUNT), 4);
     assert!(present_placeholder());
     assert!(!eltorito_catalog_read());
     assert!(!eltorito_boot_image_read());

@@ -549,6 +549,204 @@ pub fn eltorito_validation_checksum_ok(cat: &[u8]) -> bool {
     sum == 0
 }
 
+/// EDK2 PartitionDxe no-emulation child size in 2048-byte blocks.
+/// `(SectorCount * SubBlockSize + BlockSize - 1) / BlockSize` with
+/// `SubBlockSize = Media->BlockSize` (2048).
+pub fn edk2_eltorito_partition_blocks(sector_count: u16) -> u32 {
+    if sector_count < 2 {
+        return 0;
+    }
+    let media = ISO_SECTOR as u32;
+    let bytes = u32::from(sector_count).saturating_mul(media);
+    bytes.saturating_add(media - 1) / media
+}
+
+fn fat12_get(fat: &[u8], cluster: u16) -> u16 {
+    let i = (cluster as usize * 3) / 2;
+    if i + 1 >= fat.len() {
+        return 0;
+    }
+    if cluster & 1 == 0 {
+        u16::from(fat[i]) | ((u16::from(fat[i + 1]) & 0x0F) << 8)
+    } else {
+        (u16::from(fat[i]) >> 4) | (u16::from(fat[i + 1]) << 4)
+    }
+}
+
+fn fat_dir_find(dir: &[u8], name11: &[u8; 11]) -> Option<(u16, u32, u8)> {
+    let mut off = 0;
+    while off + 32 <= dir.len() {
+        if dir[off] == 0 {
+            break;
+        }
+        if dir[off] != 0xE5 && &dir[off..off + 11] == name11 {
+            let cl = u16::from_le_bytes([dir[off + 26], dir[off + 27]]);
+            let sz = u32::from_le_bytes([
+                dir[off + 28],
+                dir[off + 29],
+                dir[off + 30],
+                dir[off + 31],
+            ]);
+            return Some((cl, sz, dir[off + 11]));
+        }
+        off += 32;
+    }
+    None
+}
+
+/// FatDxe `FatOpenDevice` checks + `\EFI\BOOT\BOOTX64.EFI` 8.3 walk.
+///
+/// INVARIANTS:
+/// - BPB BytesPerSector is 512 (DiskIo on a 2048-byte El Torito child)
+/// - Media `0xF8` is allowed (`<= 0xF7` reject does not fire)
+/// - Cluster count is FAT12 (`< 0xFF5`)
+pub fn edk2_fat12_bootx64_ok(fat: &[u8]) -> bool {
+    if fat.len() < 16 * ELTORITO_FAT_BPS {
+        return false;
+    }
+    let bps = u16::from_le_bytes([fat[11], fat[12]]) as usize;
+    if bps != ELTORITO_FAT_BPS || bps.count_ones() != 1 {
+        return false;
+    }
+    let spc = fat[13];
+    if spc == 0 || (spc & (spc - 1)) != 0 {
+        return false;
+    }
+    let reserved = u16::from_le_bytes([fat[14], fat[15]]);
+    let num_fats = fat[16];
+    let roots = u16::from_le_bytes([fat[17], fat[18]]);
+    let sectors = u16::from_le_bytes([fat[19], fat[20]]) as usize;
+    let media = fat[21];
+    let spf = u16::from_le_bytes([fat[22], fat[23]]) as usize;
+    if reserved == 0 || num_fats == 0 || sectors == 0 || roots == 0 || spf == 0 {
+        return false;
+    }
+    if media <= 0xF7 && media != 0xF0 && media != 0x00 && media != 0x01 {
+        return false;
+    }
+    let root_secs = ((roots as usize * 32) + (bps - 1)) / bps;
+    let first_cluster = reserved as usize + num_fats as usize * spf + root_secs;
+    if sectors <= first_cluster {
+        return false;
+    }
+    let max_cluster = (sectors - first_cluster) / (spc as usize);
+    if max_cluster >= 0xFF5 {
+        return false;
+    }
+    let fat1 = reserved as usize * bps;
+    let root = first_cluster * bps - root_secs * bps;
+    let Some((efi_cl, _, efi_attr)) = fat_dir_find(&fat[root..root + bps], b"EFI        ") else {
+        return false;
+    };
+    if efi_attr & 0x10 == 0 || efi_cl < 2 {
+        return false;
+    }
+    let efi_off = first_cluster * bps + (efi_cl as usize - 2) * bps * spc as usize;
+    if efi_off + bps > fat.len() {
+        return false;
+    }
+    let Some((boot_cl, _, boot_attr)) = fat_dir_find(&fat[efi_off..efi_off + bps], b"BOOT       ")
+    else {
+        return false;
+    };
+    if boot_attr & 0x10 == 0 || boot_cl < 2 {
+        return false;
+    }
+    let boot_off = first_cluster * bps + (boot_cl as usize - 2) * bps * spc as usize;
+    if boot_off + bps > fat.len() {
+        return false;
+    }
+    let Some((file_cl, file_sz, file_attr)) =
+        fat_dir_find(&fat[boot_off..boot_off + bps], b"BOOTX64 EFI")
+    else {
+        return false;
+    };
+    if file_attr & 0x10 != 0 || file_cl < 2 || file_sz < 0x200 {
+        return false;
+    }
+    let pe_off = first_cluster * bps + (file_cl as usize - 2) * bps * spc as usize;
+    if pe_off + 2 > fat.len() || &fat[pe_off..pe_off + 2] != b"MZ" {
+        return false;
+    }
+    let clusters = (file_sz as usize + bps - 1) / bps;
+    let mut c = file_cl;
+    for i in 0..clusters {
+        if i + 1 < clusters {
+            let next = fat12_get(&fat[fat1..fat1 + spf * bps], c);
+            if next != c + 1 {
+                return false;
+            }
+            c = next;
+        } else if fat12_get(&fat[fat1..fat1 + spf * bps], c) < 0xFF8 {
+            return false;
+        }
+    }
+    true
+}
+
+/// DxeCore / BasePeCoff LoadImage header checks for the CD EFI.
+pub fn edk2_pe_loadimage_ok(pe: &[u8]) -> bool {
+    if pe.len() < 0x600 || &pe[0..2] != b"MZ" || &pe[0x80..0x84] != b"PE\0\0" {
+        return false;
+    }
+    let machine = u16::from_le_bytes([pe[0x84], pe[0x85]]);
+    let nsec = u16::from_le_bytes([pe[0x86], pe[0x87]]);
+    let opt_sz = u16::from_le_bytes([pe[0x94], pe[0x95]]);
+    let chars = u16::from_le_bytes([pe[0x96], pe[0x97]]);
+    if machine != 0x8664 || nsec == 0 || opt_sz != 0xF0 {
+        return false;
+    }
+    if (chars & 0x0001) != 0 {
+        return false;
+    }
+    let opt = 0x98;
+    if u16::from_le_bytes([pe[opt], pe[opt + 1]]) != 0x020B {
+        return false;
+    }
+    let entry = u32::from_le_bytes([pe[opt + 0x10], pe[opt + 0x11], pe[opt + 0x12], pe[opt + 0x13]]);
+    let sect_align =
+        u32::from_le_bytes([pe[opt + 0x20], pe[opt + 0x21], pe[opt + 0x22], pe[opt + 0x23]]);
+    let file_align =
+        u32::from_le_bytes([pe[opt + 0x24], pe[opt + 0x25], pe[opt + 0x26], pe[opt + 0x27]]);
+    let size_of_image =
+        u32::from_le_bytes([pe[opt + 0x38], pe[opt + 0x39], pe[opt + 0x3A], pe[opt + 0x3B]]);
+    let size_of_headers =
+        u32::from_le_bytes([pe[opt + 0x3C], pe[opt + 0x3D], pe[opt + 0x3E], pe[opt + 0x3F]]);
+    let subsystem = u16::from_le_bytes([pe[opt + 0x44], pe[opt + 0x45]]);
+    if subsystem != 10 || sect_align == 0 || file_align == 0 {
+        return false;
+    }
+    if size_of_image < size_of_headers || (size_of_image % sect_align) != 0 {
+        return false;
+    }
+    if entry < size_of_headers || entry >= size_of_image {
+        return false;
+    }
+    let sec = opt + 0xF0;
+    for i in 0..nsec as usize {
+        let s = sec + i * 40;
+        if s + 40 > pe.len() {
+            return false;
+        }
+        let vsz = u32::from_le_bytes([pe[s + 8], pe[s + 9], pe[s + 10], pe[s + 11]]);
+        let va = u32::from_le_bytes([pe[s + 12], pe[s + 13], pe[s + 14], pe[s + 15]]);
+        let raw = u32::from_le_bytes([pe[s + 16], pe[s + 17], pe[s + 18], pe[s + 19]]);
+        let ptr = u32::from_le_bytes([pe[s + 20], pe[s + 21], pe[s + 22], pe[s + 23]]);
+        if raw == 0 {
+            continue;
+        }
+        if va < size_of_headers || ptr < size_of_headers {
+            return false;
+        }
+        let last = ptr.saturating_add(raw.saturating_sub(1)) as usize;
+        if last >= pe.len() {
+            return false;
+        }
+        let _ = vsz;
+    }
+    true
+}
+
 fn fat12_set(fat: &mut [u8], cluster: u16, val: u16) {
     let i = (cluster as usize * 3) / 2;
     if i + 1 >= fat.len() {
@@ -881,7 +1079,9 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     let size = n.min(limit).max(2);
     m.xfer = AtaXfer::PacketData;
     m.xfer_off = 0;
-    m.xfer_end = n.min(XFER_CAP);
+    // Advertise and complete the same byte count (ATAPI cylinder). A larger
+    // `xfer_end` than `size` left DRQ after the guest finished the PIO.
+    m.xfer_end = size.min(XFER_CAP);
     m.ata_count = ATAPI_INT_IO;
     m.ata_lba[1] = size as u8;
     m.ata_lba[2] = (size >> 8) as u8;

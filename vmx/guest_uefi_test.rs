@@ -1151,16 +1151,19 @@ fn past_sec_predicates_are_honest() {
         !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false),
         "first ATAPI sector must not stop Stage 45"
     );
-    assert!(post_atapi_should_stop(
-        true,
-        30769 + GUEST_UEFI_POST_ATAPI_TAIL,
-        115,
-        30769,
-        1,
-        false,
-        false,
-        false
-    ));
+    assert!(
+        !post_atapi_should_stop(
+            true,
+            30769 + GUEST_UEFI_POST_ATAPI_TAIL,
+            115,
+            30769,
+            1,
+            false,
+            false,
+            false
+        ),
+        "first ATAPI is often LBA 0 dummy; do not apply the 32768 post-ATAPI tail"
+    );
     assert!(!post_atapi_should_stop(
         true,
         30769 + GUEST_UEFI_POST_ATAPI_TAIL - 1,
