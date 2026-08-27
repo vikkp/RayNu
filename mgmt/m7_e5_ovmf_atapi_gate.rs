@@ -166,6 +166,12 @@
 //! (EFI_STATUS). `retpre=` 32 bytes at CpuDxe `ret-32`. Keep PEI
 //! i440FX `0x1237` / DXE virtio `0x1042`. Keep FIX WB hold. No DID
 //! flip. No new PAT-UC. Do not skip `ebecc9c3`.
+//! Iron `6f077a3`: `prehex=` at `0x7fd25193` is DxeCore
+//! `call [rax+0x20]`; `rax=0` leftover (CpuDxe never returned).
+//! `retpre=` switch stores UINT16 `0x0600`/`0xB000` then `jmp`;
+//! default `call DebugAssert` (`ASSERT(FALSE)`, not `ASSERT_EFI_ERROR`).
+//! Dump `retcmp=` at `ret-64` plus `rbx`/`rsi`/`rdi`/`g16=`. Do not
+//! skip `ebecc9c3`. No DID flip. No new PAT-UC.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -248,6 +254,7 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_ASSERT_PREHEX_BYTES, guest_uefi_assert_prehex_gpa,
+    guest_uefi_assert_retcmp_gpa, guest_uefi_assert_retpre_word_gpa,
     GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
     GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_IRON_PTE_A0000_WB,
@@ -642,6 +649,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("retpre=")
         && guest.contains("GUEST_UEFI_ASSERT_PREHEX_BYTES")
         && guest.contains("guest_uefi_assert_prehex_gpa")
+        && guest.contains("guest_uefi_assert_retcmp_gpa")
+        && guest.contains("guest_uefi_assert_retpre_word_gpa")
+        && guest.contains("retcmp=")
+        && guest.contains("g16=")
+        && guest.contains("rbx=0x")
         && guest.contains("96ef961")
         && guest.contains("fd041bb")
         && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
@@ -1052,8 +1064,13 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("96ef961")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retpre=")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("no DID flip")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6f077a3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retcmp=")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ASSERT(FALSE)")
         && GUEST_UEFI_ASSERT_PREHEX_BYTES == 32
         && guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP) == 0x7FD2_5173
+        && guest_uefi_assert_retcmp_gpa(0x7F8E_2946) == 0x7F8E_2906
+        && guest_uefi_assert_retpre_word_gpa(0x7F8E_2946, 0x8B3) == 0x7F8E_31F2
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();

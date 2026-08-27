@@ -39,6 +39,7 @@ use super::{
     guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m,
     guest_uefi_gpa0_split_pt_gpa, store_report_ram_u64,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_ASSERT_PREHEX_BYTES, guest_uefi_assert_prehex_gpa,
+    guest_uefi_assert_retcmp_gpa, guest_uefi_assert_retpre_word_gpa,
     GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_PT_TABLE,
@@ -678,10 +679,18 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("96ef961"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retpre="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("no DID flip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6f077a3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retcmp="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ASSERT(FALSE)"));
     assert_eq!(GUEST_UEFI_ASSERT_PREHEX_BYTES, 32);
     assert_eq!(
         guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP),
         0x7FD2_5173
+    );
+    assert_eq!(guest_uefi_assert_retcmp_gpa(0x7F8E_2946), 0x7F8E_2906);
+    assert_eq!(
+        guest_uefi_assert_retpre_word_gpa(0x7F8E_2946, 0x8B3),
+        0x7F8E_31F2
     );
     assert_eq!(guest_uefi_pt_leaf_4k_for(0xC_0000), 0xC_0000 | GUEST_UEFI_PT_LEAF_4K);
     assert!(!guest_uefi_gpa_in_vga_fix_uc(0xA_0000));
