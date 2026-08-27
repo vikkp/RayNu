@@ -98,7 +98,10 @@
 //! Iron `22e0cb2`: hold ran (`mtrrv=0` `pde8000=E7`) still ASSERT
 //! `callerrip=0x1d25193` — mixed MTRR disproved. Iron `f9a08c9` e820
 //! type-2 mid-gap ignored (same dump). CMOS/fw_cfg LowMemory 2 GiB
-//! so PEI HOB ends at `Uc32Base` (not EPT-map the gap).
+//! so PEI HOB ends at `Uc32Base` (not identity-map the gap). Iron
+//! `fad19b2`: CMOS 2 GiB then `EPT unbacked report-RAM gpa=0x7bddd000`
+//! `reason=0x30` stop n=600 (`cmos=0x35`; ASSERT gone). Lazy 2 MiB WB
+//! EPT (not 2 GiB identity; not `89c3731`).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -171,11 +174,12 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
+    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_fills_ram, spin_short_jmp_should_skip, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
-    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS,
+    GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
 };
@@ -487,6 +491,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("22e0cb2")
         && guest.contains("e820 mid-gap reserved (GCD)")
         && guest.contains("CMOS LowMemory 2GiB (GCD)")
+        && guest.contains("fad19b2")
+        && guest.contains("0x7bddd000")
+        && guest.contains("EPT report-RAM")
+        && guest.contains("ept_map_2m_report_ram")
+        && guest.contains("GUEST_UEFI_IRON_REPORT_RAM_GPA")
+        && guest.contains("GUEST_UEFI_REPORT_RAM_SLOTS")
         && plat.contains("E820_MID_GAP_BYTES")
         && gpt.contains("identity_set_pat_uc_hole")
         && gpt.contains("38481d9")
@@ -853,6 +863,16 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mid-gap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f9a08c9")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("LowMemory 2GiB")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fad19b2")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7bddd000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("lazy 2MiB WB")
+        && GUEST_UEFI_REPORT_RAM_SLOTS == 32
+        && GUEST_UEFI_IRON_REPORT_RAM_GPA == 0x7BDD_D000
+        && GUEST_UEFI_EPT_MT_WB == 6
+        && guest_uefi_report_ram_should_map(GUEST_UEFI_IRON_REPORT_RAM_GPA)
+        && guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA) == 0x7BC0_0000
+        && !guest_uefi_report_ram_should_map(0x1F0_0000)
+        && !guest_uefi_report_ram_should_map(0x8000_0000)
         && e4_restore_xcr0_value(0, false, 0x7) == 1
         && e4_restore_xcr0_value(0x7, true, 0x7) == 0x7
         && e4_restore_cr4_osxsave(0x640, false) == 0x640

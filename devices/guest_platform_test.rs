@@ -261,6 +261,7 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(!is_platform_sink_gpa(0x0000_1000));
     assert!(!is_platform_sink_gpa(PLATFORM_RAM_BYTES));
     assert!(is_unbacked_report_ram_gpa(PLATFORM_RAM_BYTES));
+    assert!(is_unbacked_report_ram_gpa(0x7BDD_D000));
     assert!(!is_unbacked_report_ram_gpa(0x8000_0000));
     assert!(is_platform_sink_gpa(0xC000_0000));
     assert!(is_platform_sink_gpa(0xC01D_F1B7));

@@ -42,7 +42,9 @@ pub const PLATFORM_RAM_BYTES: u64 = 32 * 1024 * 1024;
 /// PEI `GetSystemMemorySizeBelow4gb` / fw_cfg RAM_SIZE. Iron `f9a08c9`:
 /// e820 type-2 mid-gap was ignored (`mtrrv=0` `pde8000=E7` same ASSERT).
 /// Report 2 GiB so the system-memory HOB ends at [`E820_PCI_UC_BASE`].
-/// Do **not** EPT-map `[PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES)`.
+/// Do **not** identity-map `[PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES)`
+/// (`89c3731`). Guest-UEFI lazy-maps 2 MiB WB on EPT (iron `fad19b2`
+/// `gpa=0x7bddd000`).
 pub const PLATFORM_REPORT_RAM_BYTES: u64 = 0x8000_0000;
 
 /// i440FX host bridge at `00:08.0` (Intel 82441FX).
@@ -507,8 +509,8 @@ pub fn is_xapic_2m_gpa(gpa: u64) -> bool {
 /// Iron `cc7d78a`: 4G identity CR3 made the PCI hole present; EPT sink
 /// stopped at 1 GiB so `gpa=0xC01DF1B7` (`reason=0x30`) halted. Include
 /// `[2GiB, 0xFFC00000)` (PCI hole at `0xC0000000`, IOAPIC/HPET). Reported
-/// LowMemory `[32MiB, 2GiB)` is **not** a sink (EPT-unbacked RAM; log and
-/// stop). The xAPIC 2 MiB window stays excluded so guest-UEFI can map a
+/// LowMemory `[32MiB, 2GiB)` is **not** a sink (lazy 2 MiB WB on EPT;
+/// iron `fad19b2` `gpa=0x7bddd000`). The xAPIC 2 MiB window stays excluded so guest-UEFI can map a
 /// live 4 KiB page.
 pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     const FW_FLOOR: u64 = 0xFFC0_0000;
@@ -518,7 +520,8 @@ pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     gpa >= PLATFORM_REPORT_RAM_BYTES && gpa < FW_FLOOR
 }
 
-/// GPA in the 2 GiB LowMemory lie that EPT does not back (32 MiB slab).
+/// GPA in the 2 GiB LowMemory lie that launch does not identity-map (32 MiB slab).
+/// Guest-UEFI maps 2 MiB WB on EPT (iron `fad19b2` `gpa=0x7bddd000`).
 pub fn is_unbacked_report_ram_gpa(gpa: u64) -> bool {
     gpa >= PLATFORM_RAM_BYTES && gpa < PLATFORM_REPORT_RAM_BYTES
 }
