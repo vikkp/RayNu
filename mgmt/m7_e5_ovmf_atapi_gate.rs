@@ -142,7 +142,14 @@
 //! FIX `0x06` WB. Hold variable UC after FIX WB
 //! (`MTRR UC held after FIX WB (GCD)`). Scan every report-RAM CpuFlush
 //! copy (do not return after the first slot). Dump `flushjnz=`.
-//! Do not skip `ebecc9c3`.
+//! Iron `6334704`: hold after FIX WB `mtrrv=0` `mtrr1=0x0`
+//! `pde8000=0x80000083` `flushjnz=0` still ASSERT `ebecc9c3`
+//! `callerrip=0x7fd25193`. Mixed variable-UC disproved with FIX WB.
+//! PEI i440FX VGA IoMemory HOB is GCD UC; firmware FIX `0x259–0x26f`
+//! are WB `0x06`. Hold also left Uc32Base GCD UC vs default WB.
+//! Admit variable UC (2GiB hole). Coerce FIX `0x259` and `0x268–0x26F`
+//! to packed UC (`MTRR VGA FIX UC (GCD)`). Keep `0x250`/`0x258` WB.
+//! Dump `mtrr259=`. Do not PAT-UC VGA PTEs. Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -213,7 +220,8 @@ use crate::vmx::guest_uefi::{
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
-    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
+    guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live,
+    guest_uefi_mtrr_fixed_is_vga_hole, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
     guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m, guest_uefi_gpa0_split_pt_gpa,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
@@ -608,6 +616,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("flushjnz=")
         && guest.contains("f0781bb")
         && guest.contains("MTRR UC held after FIX WB (GCD)")
+        && guest.contains("6334704")
+        && guest.contains("MTRR VGA FIX UC armed (GCD)")
+        && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
+        && guest.contains("GUEST_UEFI_MTRR_UC_PACKED")
+        && guest.contains("mtrr259=0x")
         && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
@@ -989,6 +1002,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f0781bb")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC held after FIX WB (GCD)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flushjnz=")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6334704")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX UC (GCD)")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr259=")
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();
@@ -1210,6 +1226,16 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && !guest_uefi_mtrr_uc_hole_live()
         && guest_uefi_mtrr_poweron_disabled()
         && guest_uefi_mtrr_valid_var_pairs() == 0
+        && guest_uefi_mtrr_fixed_is_vga_hole(0x259)
+        && guest_uefi_mtrr_fixed_is_vga_hole(0x26F)
+        && !guest_uefi_mtrr_fixed_is_vga_hole(0x250)
+        && !guest_uefi_mtrr_fixed_is_vga_hole(0x258)
+        && guest_uefi_mtrr_write(0x259, 0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_read(0x259) == Some(0)
+        && guest_uefi_mtrr_write(0x268, 0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_read(0x268) == Some(0)
+        && guest_uefi_mtrr_write(0x250, 0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_read(0x250) == Some(0x0606_0606_0606_0606)
         && bootorder_nul_terminated()
         && e820_splits_mtrr_uc_hole()
         && e820_splits_vga_below_1m()
