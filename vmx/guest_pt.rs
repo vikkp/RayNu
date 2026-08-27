@@ -677,8 +677,9 @@ pub const IDENTITY_CPU_DXE_IMG: u64 = 0x6E_7000;
 /// 1 MiB fixed-MTRR / default-type boundary. Dump `pte1m=` in the GPA0 PT.
 pub const IDENTITY_FIXED_MTRR_1M: u64 = 0x10_0000;
 /// Classic VGA framebuffer. Dump `pte_a0000=` at ASSERT.
-/// Iron `d6b012a`: `0xa0067` is GPA0 identity WB; firmware FIX MTRRs are
-/// `0x06` WB. Not a GCD-vs-UC-VGA signal. Do not PAT-UC this range.
+/// Iron `d6b012a`: `0xa0067` is GPA0 identity WB while firmware FIX was
+/// also WB. Iron `ddbd866`: FIX VGA is UC (`mtrr259=0x0`) and this PTE
+/// was still WB — live CR3 PAT-UC via [`crate::vmx::guest_uefi::guest_uefi_pt_paint_vga_uc`].
 pub const IDENTITY_VGA_A0000: u64 = 0xA_0000;
 /// VGA BIOS / ROM. Dump `pte_c0000=`. Iron `d6b012a`: `0xc0067` WB identity.
 pub const IDENTITY_VGA_C0000: u64 = 0xC_0000;

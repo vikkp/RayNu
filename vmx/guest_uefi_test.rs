@@ -40,9 +40,11 @@ use super::{
     guest_uefi_gpa0_split_pt_gpa, store_report_ram_u64,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
-    GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_TABLE,
+    GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_PT_TABLE,
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
+    guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
+    GUEST_UEFI_IRON_PTE_A0000_WB,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -662,6 +664,15 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6334704"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX UC (GCD)"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr259="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ddbd866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_vga_uc"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("calltgt="));
+    assert!(guest_uefi_gpa_in_vga_fix_uc(0xA_0000));
+    assert!(guest_uefi_gpa_in_vga_fix_uc(0xF_0000));
+    assert!(!guest_uefi_gpa_in_vga_fix_uc(0x9_F000));
+    assert!(!guest_uefi_gpa_in_vga_fix_uc(0x10_0000));
+    assert_eq!(GUEST_UEFI_IRON_PTE_A0000_WB, 0xA_0067);
+    assert_eq!(guest_uefi_pt_leaf_4k_for(0xA_0000), 0xA_0000 | GUEST_UEFI_PT_LEAF_4K_UC);
     {
         let mut b = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.to_vec();
         assert_eq!(guest_uefi_count_cpu_flush_jnz(&b), 1);
@@ -759,6 +770,18 @@ fn marker_and_residual_honest() {
         assert_eq!(
             guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x10_0000),
             0x10_0000 | GUEST_UEFI_PT_LEAF_4K
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0xA_0000),
+            guest_uefi_pt_leaf_4k_for(0xA_0000)
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0xC_0000),
+            0xC_0000 | GUEST_UEFI_PT_LEAF_4K_UC
+        );
+        assert_eq!(
+            guest_uefi_pt_paint_vga_uc(peek, poke, GUEST_UEFI_IRON_HIGH_CR3),
+            0
         );
         assert_eq!(
             guest_uefi_pt_split_gpa0(peek, poke, GUEST_UEFI_IRON_HIGH_CR3, pt_gpa),

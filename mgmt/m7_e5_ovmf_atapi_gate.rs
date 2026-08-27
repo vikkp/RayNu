@@ -149,7 +149,11 @@
 //! are WB `0x06`. Hold also left Uc32Base GCD UC vs default WB.
 //! Admit variable UC (2GiB hole). Coerce FIX `0x259` and `0x268–0x26F`
 //! to packed UC (`MTRR VGA FIX UC (GCD)`). Keep `0x250`/`0x258` WB.
-//! Dump `mtrr259=`. Do not PAT-UC VGA PTEs. Do not skip `ebecc9c3`.
+//! Dump `mtrr259=`. Iron `ddbd866`: admit+VGA FIX UC `mtrr259=0x0`
+//! `mtrrv=1` `pde8000=0x800000ff` still ASSERT `ebecc9c3` with
+//! `pte_a0000=0xa0067` (GPA0 WB vs coerced FIX UC). PAT-UC those 4K
+//! leaves on the live CR3 (`guest_uefi_pt_paint_vga_uc`). Dump `calltgt=`.
+//! Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -233,6 +237,8 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
+    GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_IRON_PTE_A0000_WB,
+    guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED,
     GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -621,6 +627,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
         && guest.contains("GUEST_UEFI_MTRR_UC_PACKED")
         && guest.contains("mtrr259=0x")
+        && guest.contains("ddbd866")
+        && guest.contains("guest_uefi_pt_paint_vga_uc")
+        && guest.contains("VGA 4K live PT PAT-UC")
+        && guest.contains("calltgt=")
+        && guest.contains("GUEST_UEFI_PT_LEAF_4K_UC")
+        && guest.contains("GUEST_UEFI_IRON_PTE_A0000_WB")
         && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
@@ -1005,6 +1017,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("6334704")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX UC (GCD)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr259=")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ddbd866")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_vga_uc")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("calltgt=")
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();
@@ -1154,6 +1169,13 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
                             == GUEST_UEFI_PT_LEAF_4K
                         && guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x10_0000)
                             == 0x10_0000 | GUEST_UEFI_PT_LEAF_4K
+                        && guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0xA_0000)
+                            == guest_uefi_pt_leaf_4k_for(0xA_0000)
+                        && guest_uefi_gpa_in_vga_fix_uc(0xA_0000)
+                        && !guest_uefi_gpa_in_vga_fix_uc(0x10_0000)
+                        && GUEST_UEFI_IRON_PTE_A0000_WB == 0xA_0067
+                        && GUEST_UEFI_PT_LEAF_4K_UC == GUEST_UEFI_PT_LEAF_4K | crate::vmx::guest_uefi::GUEST_UEFI_PT_PWT | crate::vmx::guest_uefi::GUEST_UEFI_PT_PCD
+                        && guest_uefi_pt_paint_vga_uc(peek, poke, GUEST_UEFI_IRON_HIGH_CR3) == 0
                 }
         }
         && !guest_uefi_report_ram_should_map(0x1F0_0000)
