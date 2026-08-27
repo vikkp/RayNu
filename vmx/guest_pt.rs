@@ -676,6 +676,12 @@ pub const IDENTITY_WB_64M: u64 = 0x400_0000;
 pub const IDENTITY_CPU_DXE_IMG: u64 = 0x6E_7000;
 /// 1 MiB fixed-MTRR / default-type boundary. Dump `pte1m=` in the GPA0 PT.
 pub const IDENTITY_FIXED_MTRR_1M: u64 = 0x10_0000;
+/// Classic VGA framebuffer. Dump `pte_a0000=` at ASSERT (WB `0x67` vs PAT-UC).
+/// Iron `f7620f6`: PEI DID `0x1237` + latch `00:01.3` still ASSERT; this PTE
+/// tells whether GCD punched `[0xA0000, 1MiB)` or still treats VGA as RAM.
+pub const IDENTITY_VGA_A0000: u64 = 0xA_0000;
+/// VGA BIOS / ROM in the same fixed-MTRR UC hole. Dump `pte_c0000=`.
+pub const IDENTITY_VGA_C0000: u64 = 0xC_0000;
 /// PML4[1] (leftover-high / >512GiB). Dump `pml4e1=`.
 pub const IDENTITY_PML4E1_GVA: u64 = 1 << 39;
 
@@ -1579,6 +1585,8 @@ mod guest_pt_test {
         assert!(!identity_pde_is_4k_table(0x2000083));
         assert_eq!(IDENTITY_CPU_DXE_IMG, 0x6E_7000);
         assert_eq!(IDENTITY_FIXED_MTRR_1M, 0x10_0000);
+        assert_eq!(IDENTITY_VGA_A0000, 0xA_0000);
+        assert_eq!(IDENTITY_VGA_C0000, 0xC_0000);
         assert_eq!(IDENTITY_PML4E1_GVA, 1 << 39);
         let mut ram = vec![0u8; 0x220000];
         let ram_hpa = ram.as_mut_ptr() as u64;

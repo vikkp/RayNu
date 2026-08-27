@@ -127,6 +127,12 @@
 //! DID is i440FX; DXE latches virtio on other-BDF CF8. Do not remap
 //! `cmp bx, 0x1237` while PEI captures `HostBridgeDevId`. Dump `e820=`
 //! `fwdir=` `pei_did=`.
+//! Iron `f7620f6`: PEI `pci cfg=0x80000002 val=0x1237` `pei_did=1`, DXE
+//! latch `00:01.03`, then virtio `0x1042` VIRTIO-OK DXE-OK `sectors=0`
+//! `e820=0` `fwdir=0` still ASSERT `ebecc9c3` `callerrip=0x7fd25193`
+//! `pte0=0x67` `pte1m=0x100067`. DID fork closed; VGA IoMemory HOB did
+//! not end RefreshGcd. Dump `pte_a0000=` `pte_c0000=` (WB `0x67` = GCD
+//! still RAM; PAT-UC = hole landed). Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -575,6 +581,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("pde0=0x")
         && guest.contains("pte0=0x")
         && guest.contains("pte1m=0x")
+        && guest.contains("pte_a0000=0x")
+        && guest.contains("pte_c0000=0x")
+        && gpt.contains("IDENTITY_VGA_A0000")
+        && gpt.contains("IDENTITY_VGA_C0000")
+        && guest.contains("f7620f6")
         && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
@@ -947,6 +958,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c1476d3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PlatformMemMapInitialization")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI never opened")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f7620f6")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pte_a0000")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:01.03")
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
         && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083
