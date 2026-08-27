@@ -156,7 +156,9 @@
 //! leaves on the live CR3 (`guest_uefi_pt_paint_vga_uc`). Dump `calltgt=`.
 //! Iron `e368e86`: `pte_a0000=0xa007f` `pte_c0000=0xc007f` `mtrr259=0x0`
 //! still ASSERT `calltgt=0x7f8e21a5` (DebugAssert). PAT-UC only
-//! `[0xA0000, 0xC0000)`. Do not skip `ebecc9c3`.
+//! `[0xA0000, 0xC0000)`. Iron `fd041bb`: `n=32` `pte_c0000=0xc0067`
+//! then CpuDxe UC'd `mtrr268=0x0` still ASSERT. Hold FIX WB
+//! (`MTRR VGA FIX WB held (GCD)`). Dump `prehex=`. Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -626,7 +628,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("f0781bb")
         && guest.contains("MTRR UC held after FIX WB (GCD)")
         && guest.contains("6334704")
-        && guest.contains("MTRR VGA FIX UC armed (GCD)")
+        && guest.contains("MTRR VGA FIX WB hold armed (GCD)")
+        && guest.contains("MTRR VGA FIX WB held (GCD)")
+        && guest.contains("prehex=")
+        && guest.contains("fd041bb")
         && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
         && guest.contains("GUEST_UEFI_MTRR_UC_PACKED")
         && guest.contains("mtrr259=0x")
@@ -1029,6 +1034,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("e368e86")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("mtrr268=")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("coerce only FIX 0x259")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fd041bb")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX WB held")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("prehex=")
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();
@@ -1180,9 +1188,11 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
                             == 0x10_0000 | GUEST_UEFI_PT_LEAF_4K
                         && guest_uefi_pt_walk_pte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0xA_0000)
                             == guest_uefi_pt_leaf_4k_for(0xA_0000)
+                        && guest_uefi_pt_leaf_4k_for(0xA_0000)
+                            == 0xA_0000 | GUEST_UEFI_PT_LEAF_4K
                         && guest_uefi_pt_leaf_4k_for(0xC_0000)
                             == 0xC_0000 | GUEST_UEFI_PT_LEAF_4K
-                        && guest_uefi_gpa_in_vga_fix_uc(0xA_0000)
+                        && guest_uefi_gpa_in_vga_fix_uc(0xA_0000) == false
                         && !guest_uefi_gpa_in_vga_fix_uc(0xC_0000)
                         && !guest_uefi_gpa_in_vga_fix_uc(0x10_0000)
                         && GUEST_UEFI_IRON_PTE_A0000_WB == 0xA_0067
@@ -1261,13 +1271,17 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_mtrr_poweron_disabled()
         && guest_uefi_mtrr_valid_var_pairs() == 0
         && guest_uefi_mtrr_fixed_is_vga_hole(0x259)
-        && !guest_uefi_mtrr_fixed_is_vga_hole(0x26F)
-        && !guest_uefi_mtrr_fixed_is_vga_hole(0x268)
+        && guest_uefi_mtrr_fixed_is_vga_hole(0x26F)
+        && guest_uefi_mtrr_fixed_is_vga_hole(0x268)
         && !guest_uefi_mtrr_fixed_is_vga_hole(0x250)
         && !guest_uefi_mtrr_fixed_is_vga_hole(0x258)
         && guest_uefi_mtrr_write(0x259, 0x0606_0606_0606_0606)
-        && guest_uefi_mtrr_read(0x259) == Some(0)
+        && guest_uefi_mtrr_read(0x259) == Some(0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_write(0x259, 0)
+        && guest_uefi_mtrr_read(0x259) == Some(0x0606_0606_0606_0606)
         && guest_uefi_mtrr_write(0x268, 0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_read(0x268) == Some(0x0606_0606_0606_0606)
+        && guest_uefi_mtrr_write(0x268, 0)
         && guest_uefi_mtrr_read(0x268) == Some(0x0606_0606_0606_0606)
         && guest_uefi_mtrr_write(0x250, 0x0606_0606_0606_0606)
         && guest_uefi_mtrr_read(0x250) == Some(0x0606_0606_0606_0606)
