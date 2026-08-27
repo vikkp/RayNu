@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RayNu-V for CIOs — Keep the iron. Raise the isolation bar.</title>
+    <meta
+      name="description"
+      content="RayNu-V helps CIOs extend the productive life of Dell PowerEdge R640/R650/R660 fleets with a single-binary Type-1 hypervisor designed from day one for formal verification."
+    />
+    <meta property="og:title" content="RayNu-V · For CIOs & Directors" />
+    <meta
+      property="og:description"
+      content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://raynuv.com/ciospeak.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/hero.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1347" />
+    <meta
+      property="og:image:alt"
+      content="A lone climber with a headlamp ascending a snow ridge at dusk — the RayNu-V Mount Everest"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="RayNu-V · For CIOs & Directors"
+    />
+    <meta
+      name="twitter:description"
+      content="Your PowerEdge fleet has years left. Extend it with a clean-slate Type-1 hypervisor designed for machine-checked isolation."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
+    <link rel="canonical" href="https://raynuv.com/ciospeak.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* CIOSpeak — executive rhythm */
+      .page-cio {
+        background:
+          radial-gradient(1100px 520px at 8% -8%, #c8d8e0 0%, transparent 55%),
+          radial-gradient(800px 480px at 100% 12%, #d4dee6 0%, transparent 48%),
+          linear-gradient(180deg, #eef2f4 0%, #e2e9ee 100%);
+      }
+
+      .cio-mast {
+        padding: clamp(2.75rem, 8vh, 4.75rem) 0 clamp(2rem, 4.5vh, 2.75rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          linear-gradient(135deg, rgba(26, 58, 74, 0.14) 0%, transparent 52%),
+          linear-gradient(180deg, rgba(15, 110, 106, 0.1) 0%, transparent 68%);
+      }
+
+      .cio-mast__inner {
+        width: min(100% - 2.5rem, 48rem);
+        margin: 0 auto;
+      }
+
+      .cio-mast__nav {
+        margin: 0 0 1.15rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .cio-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+
+      .cio-mast__nav a:hover {
+        color: var(--steel);
+      }
+
+      .cio-kicker {
+        margin: 0 0 0.75rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+        font-weight: 500;
+      }
+
+      .cio-mast__title {
+        margin: 0 0 0.9rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(2rem, 1.25rem + 2.6vw, 3.1rem);
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        color: var(--steel);
+        max-width: 18ch;
+      }
+
+      .cio-mast__lede {
+        margin: 0 0 1.5rem;
+        max-width: 40rem;
+        font-size: clamp(1.1rem, 1rem + 0.35vw, 1.25rem);
+        line-height: 1.45;
+        color: var(--ink-soft);
+      }
+
+      .cio-status-strip {
+        margin: 0 0 1.5rem;
+        padding: 0.7rem 0.95rem;
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 1rem;
+        align-items: center;
+        background: rgba(26, 58, 74, 0.08);
+        border-left: 3px solid var(--teal);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+        color: var(--steel);
+      }
+
+      .cio-status-strip strong {
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      .cio-cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+        align-items: center;
+      }
+
+      .cio-cta .cta__primary {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.85rem 1.25rem;
+        background: var(--copper);
+        color: #fffaf5;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 0.95rem;
+        text-decoration: none;
+        border: 1px solid transparent;
+        transition: background 180ms ease, transform 180ms ease;
+      }
+
+      .cio-cta .cta__primary:hover {
+        background: #9a5526;
+        color: #fffaf5;
+        transform: translateY(-1px);
+      }
+
+      .cio-cta .cta__outline {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.8rem 1.2rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--steel);
+        text-decoration: none;
+        border: 1px solid rgba(26, 58, 74, 0.35);
+        background: rgba(255, 255, 255, 0.45);
+        transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+      }
+
+      .cio-cta .cta__outline:hover {
+        border-color: var(--steel);
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--ink);
+      }
+
+      .cio-body {
+        width: min(100% - 2.5rem, 48rem);
+        margin: 0 auto;
+        padding: clamp(2rem, 4.5vh, 3rem) 0 4rem;
+      }
+
+      /* Stat band */
+      .cio-stats {
+        margin: 0 0 2.75rem;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.85rem;
+      }
+
+      @media (min-width: 560px) {
+        .cio-stats {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
+        }
+      }
+
+      .cio-stat {
+        padding: 1.15rem 1.2rem;
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(16, 24, 32, 0.1);
+        text-align: left;
+      }
+
+      .cio-stat__num {
+        margin: 0 0 0.25rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(1.65rem, 1.3rem + 1.2vw, 2.1rem);
+        letter-spacing: -0.03em;
+        color: var(--steel);
+        line-height: 1;
+      }
+
+      .cio-stat__label {
+        margin: 0;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .cio-section {
+        margin: 0 0 clamp(2.5rem, 5.5vh, 3.5rem);
+      }
+
+      .cio-section h2 {
+        margin: 0 0 0.85rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.4rem, 1.1rem + 1vw, 1.85rem);
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        color: var(--steel);
+      }
+
+      .cio-section p {
+        margin: 0 0 1.05rem;
+        color: var(--ink-soft);
+        max-width: 54ch;
+      }
+
+      .cio-section p:last-child {
+        margin-bottom: 0;
+      }
+
+      .cio-section strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .cio-callout {
+        margin: 1.35rem 0;
+        padding: 1.1rem 1.2rem;
+        background: rgba(26, 58, 74, 0.07);
+        border-left: 3px solid var(--teal);
+      }
+
+      .cio-callout p {
+        margin: 0;
+        color: var(--ink);
+        font-size: 1.05rem;
+        line-height: 1.45;
+        max-width: none;
+      }
+
+      /* Comparison table */
+      .cio-table-wrap {
+        margin: 1.35rem 0 0;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border: 1px solid rgba(16, 24, 32, 0.12);
+        background: rgba(255, 255, 255, 0.55);
+      }
+
+      .cio-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+        min-width: 36rem;
+      }
+
+      .cio-table th,
+      .cio-table td {
+        padding: 0.85rem 1rem;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+      }
+
+      .cio-table th {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        background: rgba(26, 58, 74, 0.06);
+      }
+
+      .cio-table th:first-child {
+        color: var(--steel);
+      }
+
+      .cio-table td:first-child {
+        font-family: var(--font-brand);
+        font-weight: 700;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      .cio-table td {
+        color: var(--ink-soft);
+        line-height: 1.4;
+      }
+
+      .cio-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .cio-table .highlight {
+        background: rgba(15, 110, 106, 0.07);
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      /* Milestone tracker */
+      .cio-milestones {
+        margin: 1.35rem 0 0;
+        display: grid;
+        gap: 0.65rem;
+      }
+
+      .cio-ms {
+        display: grid;
+        grid-template-columns: 4.5rem 1fr auto;
+        gap: 0.75rem;
+        align-items: baseline;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+      }
+
+      .cio-ms:first-child {
+        border-top: 1px solid rgba(16, 24, 32, 0.12);
+      }
+
+      .cio-ms__gate {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--steel);
+      }
+
+      .cio-ms__text {
+        font-size: 0.98rem;
+        color: var(--ink-soft);
+        line-height: 1.35;
+      }
+
+      .cio-ms__badge {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--teal);
+        white-space: nowrap;
+      }
+
+      .cio-ms__badge--open {
+        color: var(--copper);
+      }
+
+      .cio-ms-note {
+        margin: 1rem 0 0;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      /* Value cards */
+      .cio-grid {
+        margin: 1.35rem 0 0;
+        display: grid;
+        gap: 1rem;
+      }
+
+      @media (min-width: 640px) {
+        .cio-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 1.1rem 1.35rem;
+        }
+      }
+
+      .cio-card {
+        padding: 1.15rem 1.2rem;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(16, 24, 32, 0.1);
+      }
+
+      .cio-card__label {
+        margin: 0 0 0.35rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--teal);
+      }
+
+      .cio-card__title {
+        margin: 0 0 0.4rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--ink);
+      }
+
+      .cio-card p {
+        margin: 0;
+        font-size: 0.96rem;
+        color: var(--ink-soft);
+        max-width: none;
+      }
+
+      /* Trial path */
+      .cio-trial {
+        margin: 1.35rem 0 0;
+        padding: 1.35rem 1.35rem 1.2rem;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(16, 24, 32, 0.12);
+      }
+
+      .cio-trial ol {
+        margin: 0;
+        padding: 0 0 0 1.15rem;
+        color: var(--ink-soft);
+      }
+
+      .cio-trial li {
+        margin: 0 0 0.75rem;
+        padding-left: 0.25rem;
+        line-height: 1.4;
+      }
+
+      .cio-trial li:last-child {
+        margin-bottom: 0;
+      }
+
+      .cio-trial strong {
+        color: var(--ink);
+      }
+
+      /* FAQ */
+      .cio-faq {
+        margin: 1.25rem 0 0;
+        border-top: 1px solid rgba(16, 24, 32, 0.12);
+      }
+
+      .cio-faq details {
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        padding: 0.9rem 0;
+      }
+
+      .cio-faq summary {
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--ink);
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+      }
+
+      .cio-faq summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .cio-faq summary::after {
+        content: "+";
+        font-family: var(--font-mono);
+        font-weight: 500;
+        color: var(--teal);
+        font-size: 1.1rem;
+      }
+
+      .cio-faq details[open] summary::after {
+        content: "−";
+      }
+
+      .cio-faq p {
+        margin: 0.65rem 0 0;
+        color: var(--ink-soft);
+        max-width: 52ch;
+      }
+
+      /* CTA block */
+      .cio-cta-block {
+        margin-top: 2.25rem;
+        padding: 1.75rem 1.5rem;
+        background: linear-gradient(135deg, var(--steel) 0%, #0f2a36 60%, #0a3d3a 100%);
+        color: var(--hero-ink);
+      }
+
+      .cio-cta-block h2 {
+        margin: 0 0 0.7rem;
+        color: var(--hero-ink);
+      }
+
+      .cio-cta-block p {
+        margin: 0 0 1.25rem;
+        color: rgba(243, 246, 248, 0.88);
+        max-width: 42ch;
+      }
+
+      .cio-cta-block .cta__primary {
+        background: var(--copper);
+      }
+
+      .cio-cta-block .cta__outline {
+        color: var(--hero-ink);
+        border-color: rgba(243, 246, 248, 0.4);
+        background: transparent;
+      }
+
+      .cio-cta-block .cta__outline:hover {
+        color: #fff;
+        border-color: #fff;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .cio-fine {
+        margin: 1.75rem 0 0;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      .cio-fine a {
+        color: var(--teal);
+      }
+
+      .cio-evidence {
+        margin: 1.5rem 0 0;
+        max-width: 36rem;
+      }
+
+      .cio-evidence img {
+        width: 100%;
+        height: auto;
+        border: 1px solid rgba(16, 24, 32, 0.12);
+      }
+
+      .cio-evidence figcaption {
+        margin-top: 0.55rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+        letter-spacing: 0.02em;
+      }
+    </style>
+  </head>
+  <body class="page-cio">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html" aria-current="page">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+    <header class="cio-mast">
+      <div class="cio-mast__inner">
+        <p class="cio-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>CIO View</span>
+        </p>
+        <p class="cio-kicker">For CIOs · Senior Directors · Infrastructure Owners</p>
+        <h1 class="cio-mast__title">Your PowerEdge fleet has years left. Your hypervisor license says otherwise.</h1>
+        <p class="cio-mast__lede">
+          RayNu-V is a clean-slate, single-binary Type-1 hypervisor built so you can
+          keep productive Dell PowerEdge servers in service — with isolation designed
+          from the first line to be machine-checked, not merely re-tested every release.
+        </p>
+        <p class="cio-status-strip">
+          <strong>Early · Evidence-first</strong>
+          <span aria-hidden="true">·</span>
+          <span>Design partnerships open</span>
+          <span aria-hidden="true">·</span>
+          <span>R640 iron markers closed</span>
+        </p>
+        <div class="cio-cta">
+          <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
+            >Talk to the team</a
+          >
+          <a class="cta__outline" href="#trial">See what a trial looks like</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="cio-body">
+      <!-- Stat band -->
+      <div class="cio-stats" aria-label="Key facts">
+        <div class="cio-stat">
+          <p class="cio-stat__num">1</p>
+          <p class="cio-stat__label">Binary · no host OS</p>
+        </div>
+        <div class="cio-stat">
+          <p class="cio-stat__num">0</p>
+          <p class="cio-stat__label">Host packages to patch</p>
+        </div>
+        <div class="cio-stat">
+          <p class="cio-stat__num">3</p>
+          <p class="cio-stat__label">Server models · R640 / R650 / R660</p>
+        </div>
+      </div>
+
+      <!-- Comparison -->
+      <section class="cio-section">
+        <h2>How the options actually differ</h2>
+        <p>
+          Most organizations evaluating a path off the incumbent are comparing
+          license economics, attack surface, and whether existing iron stays useful.
+          Here is the practical comparison.
+        </p>
+        <div class="cio-table-wrap">
+          <table class="cio-table">
+            <thead>
+              <tr>
+                <th scope="col">Dimension</th>
+                <th scope="col">Incumbent path</th>
+                <th scope="col">Typical alternatives</th>
+                <th scope="col" class="highlight">RayNu-V</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>License model</td>
+                <td>Subscription / renewed economics under Broadcom</td>
+                <td>Varies; often still subscription or support-tied</td>
+                <td class="highlight">Designed to keep existing iron productive without the same treadmill</td>
+              </tr>
+              <tr>
+                <td>Host OS / attack surface</td>
+                <td>Mature, large surface</td>
+                <td>Often includes a host OS or larger control plane</td>
+                <td class="highlight">Single EFI binary · no host OS</td>
+              </tr>
+              <tr>
+                <td>Isolation assurance</td>
+                <td>Testing + process + track record</td>
+                <td>Testing + process</td>
+                <td class="highlight">Designed for formal verification; living paper tracks proved vs open</td>
+              </tr>
+              <tr>
+                <td>Hardware re-use</td>
+                <td>Pressure toward refresh to stay current</td>
+                <td>Often assumes newer platforms</td>
+                <td class="highlight">Optimized for PowerEdge R640 / R650 / R660 you already own</td>
+              </tr>
+              <tr>
+                <td>Audit evidence</td>
+                <td>Vendor reports + operational logs</td>
+                <td>Varies widely</td>
+                <td class="highlight">Immutable audit trail + living verification paper</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Momentum / milestones -->
+      <section class="cio-section">
+        <h2>Where the work stands</h2>
+        <p>
+          Early does not mean opaque. Lab gates through M6 are closed on Latitude +
+          QEMU. Real PowerEdge R640 has closed boot, UEFI-HTTP, native host-NIC
+          HTTP beside VMX, and E4 SPA VMLAUNCH (SHELL stub). Residual work is
+          explicit: TLS/console and a real distro installer.
+        </p>
+        <div class="cio-milestones">
+          <div class="cio-ms">
+            <span class="cio-ms__gate">M1–M6</span>
+            <span class="cio-ms__text">Lab production bar closed (Latitude + QEMU nested KVM)</span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E2</span>
+            <span class="cio-ms__text">Real iron boot — <code>RAYNU-V-R640-BOOT-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E3</span>
+            <span class="cio-ms__text">UEFI-HTTP management on host NIC — <code>RAYNU-V-M7-UEFI-HTTP-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E3b</span>
+            <span class="cio-ms__text">Host-owned BCM5720 HTTP beside VMX — <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E4</span>
+            <span class="cio-ms__text">SPA private-EPT VMLAUNCH (SHELL stub) — <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">R640 E5</span>
+            <span class="cio-ms__text">Guest firmware reads the CD (ATAPI READ(10), sectors=1) — <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span>
+            <span class="cio-ms__badge">Closed</span>
+          </div>
+          <div class="cio-ms">
+            <span class="cio-ms__gate">Residual</span>
+            <span class="cio-ms__text">TLS/console polish, El Torito CD boot, real distro installer</span>
+            <span class="cio-ms__badge cio-ms__badge--open">Open</span>
+          </div>
+        </div>
+        <p class="cio-ms-note">
+          Full tracker and living verification paper are public. Claims never run ahead of evidence.
+        </p>
+        <figure class="cio-evidence">
+          <picture>
+            <source
+              type="image/webp"
+              srcset="
+                assets/r640-boot-ok-com2-800.webp   800w,
+                assets/r640-boot-ok-com2-1556.webp 1556w
+              "
+              sizes="(max-width: 700px) 100vw, 36rem"
+            />
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="Terminal showing RAYNU-V-R640-BOOT-OK on real PowerEdge R640 via iDRAC SOL"
+              width="1556"
+              height="926"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>Real PowerEdge R640 · iDRAC SOL · RAYNU-V-R640-BOOT-OK</figcaption>
+        </figure>
+      </section>
+
+      <!-- Value props -->
+      <section class="cio-section">
+        <h2>What changes for the business</h2>
+        <div class="cio-grid">
+          <div class="cio-card">
+            <p class="cio-card__label">Capital &amp; budget</p>
+            <p class="cio-card__title">Defer the forced refresh</p>
+            <p>
+              Keep existing PowerEdge fleets productive instead of writing them
+              off early to chase a vendor’s support calendar or licensing terms.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Security posture</p>
+            <p class="cio-card__title">Isolation designed to be proved</p>
+            <p>
+              Isolation is treated as a property that should ultimately be
+              machine-checked. That design choice is the long-term advantage.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Operational model</p>
+            <p class="cio-card__title">One binary, clear surface</p>
+            <p>
+              Deploy and operate on iron you already manage through iDRAC.
+              No mystery appliance stack. No host OS to harden and patch.
+            </p>
+          </div>
+          <div class="cio-card">
+            <p class="cio-card__label">Audit &amp; compliance</p>
+            <p class="cio-card__title">Evidence, not slides</p>
+            <p>
+              A living verification paper and immutable audit trail turn
+              hypervisor events into something a security team or auditor can examine.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Formal verification — lead with truth, then qualify -->
+      <section class="cio-section">
+        <h2>The isolation property we are building toward</h2>
+        <p>
+          Most hypervisors ask you to trust testing, process, and historical track
+          record. That is necessary — and incomplete. RayNu-V treats the isolation
+          boundary as something that should ultimately be machine-checked.
+        </p>
+        <div class="cio-callout">
+          <p>
+            For every valid guest-to-host memory mapping, that physical frame is
+            owned by exactly one guest — and belongs to neither the hypervisor
+            nor any other guest.
+          </p>
+        </div>
+        <p>
+          That property is pursued with Verus and Kani on a deliberately small
+          Proven Core. Full formal verification will take time; we do not claim it
+          is finished. What is true today: the architecture is designed from the
+          first line for this standard, maturity is published in a living paper that
+          tracks proved versus open work, and this is already closer to a
+          machine-checked isolation story than commercial hypervisors currently
+          running on the same PowerEdge R640-class iron.
+        </p>
+      </section>
+
+      <!-- Concrete trial -->
+      <section class="cio-section" id="trial">
+        <h2>What a design partnership looks like</h2>
+        <p>
+          Early should mean opportunity, not opacity. A design partnership is a
+          concrete, reversible evaluation on hardware you already own.
+        </p>
+        <div class="cio-trial">
+          <ol>
+            <li>
+              <strong>Lab first.</strong> We deploy RayNu-V on one of your R640s
+              (or equivalent) alongside your existing stack — no production cutover.
+            </li>
+            <li>
+              <strong>You inspect everything.</strong> Living verification paper,
+              audit trail, architecture, and iron evidence are open for your
+              security and platform teams.
+            </li>
+            <li>
+              <strong>Side-by-side, not big-bang.</strong> Evaluate guest behavior,
+              management surface, and operational fit without replacing the incumbent.
+            </li>
+            <li>
+              <strong>Exit is always available.</strong> If it does not meet your bar,
+              you remain on your current path. There is no lock-in from a lab evaluation.
+            </li>
+          </ol>
+        </div>
+        <p style="margin-top: 1.1rem">
+          Design partners also get direct access to the engineering team and influence
+          on the near-term roadmap. That is the advantage of being early.
+        </p>
+      </section>
+
+      <!-- FAQ -->
+      <section class="cio-section">
+        <h2>Questions CIOs usually ask next</h2>
+        <div class="cio-faq">
+          <details>
+            <summary>What happens to my VMs on day one?</summary>
+            <p>
+              Nothing disruptive in a design partnership. Evaluation runs in the lab
+              beside your existing environment. There is no forced migration and no
+              requirement to move production workloads until you decide the path is sound.
+            </p>
+          </details>
+          <details>
+            <summary>Can we go back if RayNu-V does not fit?</summary>
+            <p>
+              Yes. A lab evaluation leaves your incumbent stack untouched. Rollback is
+              simply continuing to run what you already run. We design the trial so the
+              downside is time and attention, not irreversible change.
+            </p>
+          </details>
+          <details>
+            <summary>Is formal verification finished?</summary>
+            <p>
+              No. Full machine-checked isolation of the core property will take time.
+              We publish a living verification paper that tracks what is proved versus
+              what remains open. The honest claim today is design-from-day-one plus
+              measurable progress — not a finished proof.
+            </p>
+          </details>
+          <details>
+            <summary>Why R640 / R650 / R660 specifically?</summary>
+            <p>
+              That is the iron many organizations still have in volume and still find
+              productive. RayNu-V is optimized for those platforms first so you can
+              extend useful life instead of accepting a forced refresh cycle.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <!-- Close -->
+      <section class="cio-cta-block">
+        <h2>See it on your hardware</h2>
+        <p>
+          If you own or influence a Dell PowerEdge estate and want a serious,
+          inspectable path to extending its productive life, reach out. Design-partner
+          conversations are open.
+        </p>
+        <div class="cio-cta">
+          <a class="cta__primary" href="mailto:namaskaar@raynuv.com"
+            >Email namaskaar@raynuv.com</a
+          >
+          <a class="cta__outline" href="paper.html">Read the verification paper</a>
+        </div>
+      </section>
+
+      <p class="cio-fine">
+        Technical journey and iron evidence live on the
+        <a href="index.html">main site</a>.
+        Architecture and ADRs are on
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>.
+        Progress tracker:
+        <a href="hda.html">distance to production readiness</a>.
+      </p>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · CIO View
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Engineering view</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="hda.html">Progress tracker</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+        ·
+        <a href="mailto:namaskaar@raynuv.com">namaskaar@raynuv.com</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>
