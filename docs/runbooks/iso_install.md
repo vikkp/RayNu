@@ -231,5 +231,6 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). `sectors=1` `packet=9` `scsi=0x28`
    stop n=30769 `pci_ide=1 virtio=1`. Not El Torito boot. Not installer.
    Not Everest E5.
-   Next: Stage 45 firmware El Torito CD boot, then P0-60 G1 EPT
+   Next: Stage 45 firmware El Torito CD boot (host package in progress;
+   close on nested VT-x or iron COM2 `OVMF-ELTORITO-OK`), then P0-60 G1 EPT
    (not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.

@@ -1,10 +1,11 @@
 use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
-    exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
-    guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_non_tf_exits,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
+    guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
-    live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_dxe_should_stop,
+    live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_atapi_should_stop,
+    post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
     preempt_deadloop_guarded_assert_skip_len, guest_uefi_assert_caller_is_dxe_ram,
@@ -27,10 +28,11 @@ use super::{
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
-    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
-    M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
+    M7_E5_OVMF_ELTORITO_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
+    M7_E5_OVMF_VMLAUNCH_OK_MARKER,
     OVMF_VARS_EMPTY_PREFIX, OVMF_VARS_FV_BYTES,
 };
 use super::{
@@ -94,7 +96,7 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
-    assert_eq!(GUEST_UEFI_RESUME_CAP, 32768);
+    assert_eq!(GUEST_UEFI_RESUME_CAP, 65536);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.OSXSAVE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0ca02e6"));
@@ -903,7 +905,9 @@ fn marker_and_residual_honest() {
     assert!(ud_is_ud2(&[0x0F, 0x0B]));
     assert!(!ud_is_ud2(&[0x0F, 0xAE, 0x20]));
     assert!(!ud_xsave_family(&[0x0F, 0x0B]));
-    assert_eq!(GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP);
+    assert_eq!(GUEST_UEFI_POST_DXE_TAIL, 32768);
+    assert_eq!(GUEST_UEFI_POST_ATAPI_TAIL, 32768);
+    assert!(GUEST_UEFI_RESUME_CAP >= GUEST_UEFI_POST_DXE_TAIL + GUEST_UEFI_POST_ATAPI_TAIL);
     assert!(guest_uefi_xapic_is_not_sink());
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ad78f12"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("xAPIC 4K"));
@@ -982,11 +986,16 @@ fn marker_and_residual_honest() {
     assert_eq!(M7_E5_OVMF_VIRTIO_OK_MARKER, "RAYNU-V-M7-E5-OVMF-VIRTIO-OK");
     assert_eq!(M7_E5_OVMF_BOTH_OK_MARKER, "RAYNU-V-M7-E5-OVMF-BOTH-OK");
     assert_eq!(M7_E5_OVMF_ATAPI_OK_MARKER, "RAYNU-V-M7-E5-OVMF-ATAPI-OK");
+    assert_eq!(
+        M7_E5_OVMF_ELTORITO_OK_MARKER,
+        "RAYNU-V-M7-E5-OVMF-ELTORITO-OK"
+    );
     assert!(!guest_uefi_alive());
     assert!(!guest_uefi_past_sec());
     assert!(!guest_uefi_dxe());
     assert!(!guest_uefi_both());
     assert!(!guest_uefi_atapi());
+    assert!(!guest_uefi_eltorito());
     assert_eq!(guest_uefi_non_tf_exits(), 0);
     assert_eq!(guest_uefi_com_bytes(), 0);
 }
@@ -1114,6 +1123,39 @@ fn past_sec_predicates_are_honest() {
         115,
         0
     ));
+    assert!(!eltorito_boot_evidence(true, true, false));
+    assert!(!eltorito_boot_evidence(true, false, true));
+    assert!(!eltorito_boot_evidence(false, true, true));
+    assert!(eltorito_boot_evidence(true, true, true));
+    let mut m = 0u8;
+    for &b in b"RN-ELT" {
+        m = eltorito_com_match_step(m, b);
+    }
+    assert!(eltorito_payload_ran(m));
+    assert!(!eltorito_payload_ran(0));
+    assert!(!post_atapi_should_stop(false, 2000, 0, 0, 1, false));
+    assert!(!post_atapi_should_stop(true, 115, 115, 0, 0, false));
+    assert!(
+        !post_atapi_should_stop(true, 30769, 115, 30769, 1, false),
+        "first ATAPI sector must not stop Stage 45"
+    );
+    assert!(post_atapi_should_stop(
+        true,
+        30769 + GUEST_UEFI_POST_ATAPI_TAIL,
+        115,
+        30769,
+        1,
+        false
+    ));
+    assert!(!post_atapi_should_stop(
+        true,
+        30769 + GUEST_UEFI_POST_ATAPI_TAIL - 1,
+        115,
+        30769,
+        1,
+        false
+    ));
+    assert!(post_atapi_should_stop(true, 200, 115, 180, 4, true));
     assert!(hlt_should_resume());
 }
 

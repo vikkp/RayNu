@@ -142,8 +142,13 @@ pub fn write_mock_efi_iso(iso: &mut [u8]) -> Result<usize, ElToritoError> {
     iso[cat + 32] = 0x91;
     iso[cat + 33] = 0xEF;
     iso[cat + 64] = 0x88;
+    let load = 22 * ISO_SECTOR;
     iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
     iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
+    let n = crate::devices::ide_cdrom::write_eltorito_efi_pe(&mut iso[load..]);
+    if n == 0 {
+        return Err(ElToritoError::Truncated);
+    }
     Ok(MOCK_EFI_ISO_BYTES)
 }
 

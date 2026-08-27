@@ -1,9 +1,10 @@
 use super::{
-    ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, host_identify_word0, host_read10,
-    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_scsi, pci_addr_selects_cd,
-    pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present,
-    present_placeholder, reset, sectors_read, take_marker, GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR,
-    ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
+    ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
+    eltorito_catalog_read, host_identify_word0, host_read10, is_ata_primary_port, is_bmide_port,
+    is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi, pci_addr_selects_cd, pci_bdf,
+    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data, present, present_placeholder,
+    reset, sectors_read, take_marker, write_eltorito_efi_pe, ELTORITO_PAYLOAD_MAGIC,
+    GUEST_CD_PCI_DEVICE, GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
 };
 
 #[test]
@@ -190,5 +191,43 @@ fn unpresented_pci_is_empty() {
     assert!(present(&[0u8; ISO_SECTOR], 2));
     pci_write_addr(0x8000_0800);
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    reset();
+}
+
+#[test]
+fn placeholder_eltorito_pe_and_catalog_load_reads() {
+    reset();
+    let mut pe = [0u8; 0x400];
+    assert!(write_eltorito_efi_pe(&mut pe) > 0);
+    assert_eq!(&pe[0..2], b"MZ");
+    assert_eq!(&pe[0x80..0x84], b"PE\0\0");
+    assert_eq!(pe[0x98 + 0x44], 10, "EFI_APPLICATION subsystem");
+    assert!(present_placeholder());
+    assert!(!eltorito_catalog_read());
+    assert!(!eltorito_boot_image_read());
+    let pvd = host_read10(16).expect("PVD");
+    assert_eq!(&pvd[1..6], b"CD001");
+    assert!(!eltorito_catalog_read());
+    assert!(!eltorito_boot_image_read());
+    let cat = host_read10(20).expect("catalog");
+    assert_eq!(cat[0], 0x01);
+    assert_eq!(cat[30], 0x55);
+    assert_eq!(cat[31], 0xAA);
+    assert!(eltorito_catalog_read());
+    assert!(!eltorito_boot_image_read());
+    assert_eq!(last_read_lba(), 20);
+    let img = host_read10(22).expect("load LBA");
+    assert_eq!(&img[0..2], b"MZ");
+    assert_eq!(&img[0x80..0x84], b"PE\0\0");
+    assert!(eltorito_boot_image_read());
+    assert_eq!(last_read_lba(), 22);
+    let mut found = false;
+    for w in img.windows(ELTORITO_PAYLOAD_MAGIC.len()) {
+        if w == ELTORITO_PAYLOAD_MAGIC {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "PE .text must embed RN-ELT immediates");
     reset();
 }

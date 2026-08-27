@@ -8,6 +8,8 @@ fn parses_mock_efi_catalog() {
     assert_eq!(img.load_lba, 22);
     assert_eq!(img.sector_count, 4);
     assert!(img.efi);
+    assert_eq!(&iso[22 * ISO_SECTOR..22 * ISO_SECTOR + 2], b"MZ");
+    assert_eq!(&iso[22 * ISO_SECTOR + 0x80..22 * ISO_SECTOR + 0x84], b"PE\0\0");
 }
 
 #[test]

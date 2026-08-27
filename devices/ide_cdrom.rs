@@ -32,6 +32,12 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 pub const ISO_SECTOR: usize = 2048;
 /// Cap matches the host mock EFI ISO (26 × 2048) without depending on mgmt.
 pub const MOCK_EFI_ISO_BYTES: usize = 26 * ISO_SECTOR;
+/// El Torito catalog LBA in the mock / placeholder ISO.
+pub const ELTORITO_CATALOG_LBA: u32 = 20;
+/// El Torito no-emulation EFI load LBA (PE32+ payload lives here).
+pub const ELTORITO_LOAD_LBA: u32 = 22;
+/// COM1 bytes the CD EFI writes when it actually runs. Not a sector count.
+pub const ELTORITO_PAYLOAD_MAGIC: &[u8] = b"RN-ELT";
 
 /// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
 pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
@@ -94,6 +100,9 @@ struct CdMedia {
     visible: bool,
     pci_enum: bool,
     sectors_read: u32,
+    catalog_read: bool,
+    boot_image_read: bool,
+    last_read_lba: u32,
     pci_addr: u32,
     pci_cmd: u16,
     bar0: u32,
@@ -128,6 +137,9 @@ impl CdMedia {
             visible: false,
             pci_enum: false,
             sectors_read: 0,
+            catalog_read: false,
+            boot_image_read: false,
+            last_read_lba: 0,
             pci_addr: 0,
             pci_cmd: 0x0005,
             bar0: 0x1F1,
@@ -188,6 +200,9 @@ static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+static CATALOG_READ: AtomicBool = AtomicBool::new(false);
+static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
+static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
 
 /// Decode PCI config address (mechanism #1).
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
@@ -311,6 +326,21 @@ pub fn sectors_read() -> u32 {
     SECTORS.load(Ordering::Acquire)
 }
 
+/// Firmware READ covered the El Torito catalog LBA. Not a completed CD boot.
+pub fn eltorito_catalog_read() -> bool {
+    CATALOG_READ.load(Ordering::Acquire)
+}
+
+/// Firmware READ covered the El Torito load LBA (EFI image). Not StartImage.
+pub fn eltorito_boot_image_read() -> bool {
+    BOOT_IMAGE_READ.load(Ordering::Acquire)
+}
+
+/// Last SCSI READ(10/12) LBA. 0 until the first data READ.
+pub fn last_read_lba() -> u32 {
+    LAST_READ_LBA.load(Ordering::Acquire)
+}
+
 pub fn retained_iso_id() -> u64 {
     ISO_ID.load(Ordering::Acquire)
 }
@@ -340,6 +370,9 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    CATALOG_READ.store(false, Ordering::Release);
+    BOOT_IMAGE_READ.store(false, Ordering::Release);
+    LAST_READ_LBA.store(0, Ordering::Release);
 }
 
 /// PACKET commands issued since last reset (firmware ATAPI activity).
@@ -396,6 +429,9 @@ pub fn make_visible() -> bool {
         m.visible = true;
         m.pci_enum = false;
         m.sectors_read = 0;
+        m.catalog_read = false;
+        m.boot_image_read = false;
+        m.last_read_lba = 0;
         apply_atapi_signature(m);
         true
     });
@@ -404,6 +440,9 @@ pub fn make_visible() -> bool {
         PCI_ENUM.store(false, Ordering::Release);
         SECTORS.store(0, Ordering::Release);
         MARKER.store(false, Ordering::Release);
+        CATALOG_READ.store(false, Ordering::Release);
+        BOOT_IMAGE_READ.store(false, Ordering::Release);
+        LAST_READ_LBA.store(0, Ordering::Release);
     }
     ok
 }
@@ -445,8 +484,69 @@ fn write_placeholder_iso(iso: &mut [u8]) {
     iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
     iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
     let load = 22 * ISO_SECTOR;
-    iso[load] = b'M';
-    iso[load + 1] = b'Z';
+    let _ = write_eltorito_efi_pe(&mut iso[load..]);
+}
+
+/// Write a PE32+ EFI application that OUTs [`ELTORITO_PAYLOAD_MAGIC`] to COM1.
+///
+/// INVARIANTS:
+/// - Fits in one ISO 2048-byte sector (EDK2 El Torito `SectorCount=4` is
+///   512-byte units → one ISO sector of boot image)
+/// - Entry point ignores ImageHandle/SystemTable and returns EFI_SUCCESS
+/// - Does not allocate
+pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
+    const HDR: usize = 0x200;
+    const CODE: usize = 0x20;
+    const NEED: usize = HDR + CODE;
+    if dst.len() < NEED {
+        return 0;
+    }
+    dst[..NEED].fill(0);
+    dst[0] = b'M';
+    dst[1] = b'Z';
+    dst[0x3C..0x40].copy_from_slice(&0x80u32.to_le_bytes());
+    dst[0x40..0x40 + ELTORITO_PAYLOAD_MAGIC.len()].copy_from_slice(ELTORITO_PAYLOAD_MAGIC);
+    dst[0x80..0x84].copy_from_slice(b"PE\0\0");
+    dst[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes());
+    dst[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+    dst[0x94..0x96].copy_from_slice(&0x00F0u16.to_le_bytes());
+    dst[0x96..0x98].copy_from_slice(&0x0022u16.to_le_bytes());
+    let opt = 0x98;
+    dst[opt..opt + 2].copy_from_slice(&0x020Bu16.to_le_bytes());
+    dst[opt + 2] = 14;
+    dst[opt + 4..opt + 8].copy_from_slice(&(CODE as u32).to_le_bytes());
+    dst[opt + 0x10..opt + 0x14].copy_from_slice(&(HDR as u32).to_le_bytes());
+    dst[opt + 0x14..opt + 0x18].copy_from_slice(&(HDR as u32).to_le_bytes());
+    dst[opt + 0x20..opt + 0x24].copy_from_slice(&0x200u32.to_le_bytes());
+    dst[opt + 0x24..opt + 0x28].copy_from_slice(&0x200u32.to_le_bytes());
+    dst[opt + 0x38..opt + 0x3C].copy_from_slice(&((HDR + 0x200) as u32).to_le_bytes());
+    dst[opt + 0x3C..opt + 0x40].copy_from_slice(&(HDR as u32).to_le_bytes());
+    dst[opt + 0x44..opt + 0x46].copy_from_slice(&10u16.to_le_bytes());
+    dst[opt + 0x6C..opt + 0x70].copy_from_slice(&16u32.to_le_bytes());
+    let sec = opt + 0xF0;
+    dst[sec..sec + 5].copy_from_slice(b".text");
+    dst[sec + 8..sec + 12].copy_from_slice(&(CODE as u32).to_le_bytes());
+    dst[sec + 12..sec + 16].copy_from_slice(&(HDR as u32).to_le_bytes());
+    dst[sec + 16..sec + 20].copy_from_slice(&0x200u32.to_le_bytes());
+    dst[sec + 20..sec + 24].copy_from_slice(&(HDR as u32).to_le_bytes());
+    dst[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes());
+    // mov dx, 0x3F8 ; OUT each magic byte ; xor eax,eax ; ret
+    let mut i = HDR;
+    dst[i] = 0x66;
+    dst[i + 1] = 0xBA;
+    dst[i + 2] = 0xF8;
+    dst[i + 3] = 0x03;
+    i += 4;
+    for &b in ELTORITO_PAYLOAD_MAGIC {
+        dst[i] = 0xB0;
+        dst[i + 1] = b;
+        dst[i + 2] = 0xEE;
+        i += 3;
+    }
+    dst[i] = 0x31;
+    dst[i + 1] = 0xC0;
+    dst[i + 2] = 0xC3;
+    NEED
 }
 
 /// QEMU launch path: present a CD if the operator has not attached one.
@@ -620,6 +720,17 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
     m.data[..bytes].copy_from_slice(&m.iso[start..end]);
     m.sectors_read = m.sectors_read.saturating_add(nsec as u32);
     SECTORS.store(m.sectors_read, Ordering::Release);
+    m.last_read_lba = lba;
+    LAST_READ_LBA.store(lba, Ordering::Release);
+    let end_lba = lba.saturating_add(nsec as u32);
+    if lba <= ELTORITO_CATALOG_LBA && ELTORITO_CATALOG_LBA < end_lba {
+        m.catalog_read = true;
+        CATALOG_READ.store(true, Ordering::Release);
+    }
+    if lba <= ELTORITO_LOAD_LBA && ELTORITO_LOAD_LBA < end_lba {
+        m.boot_image_read = true;
+        BOOT_IMAGE_READ.store(true, Ordering::Release);
+    }
     begin_packet_data(m, bytes);
     true
 }

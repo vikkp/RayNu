@@ -378,6 +378,7 @@ pub mod m7_e5_ovmf_dxe_gate;
 pub mod m7_e5_ovmf_virtio_gate;
 pub mod m7_e5_ovmf_both_gate;
 pub mod m7_e5_ovmf_atapi_gate;
+pub mod m7_e5_ovmf_eltorito_gate;
 pub mod m7_e5_fw_bind_gate;
 pub mod m7_e5_fw_edk2_gate;
 pub mod m7_e5_fw_floor_gate;
@@ -518,6 +519,7 @@ pub use m7_e5_ovmf_dxe_gate::{run_m7_e5_ovmf_dxe_gate, M7_E5_OVMF_DXE_GATE_MARKE
 pub use m7_e5_ovmf_virtio_gate::{run_m7_e5_ovmf_virtio_gate, M7_E5_OVMF_VIRTIO_GATE_MARKER};
 pub use m7_e5_ovmf_both_gate::{run_m7_e5_ovmf_both_gate, M7_E5_OVMF_BOTH_GATE_MARKER};
 pub use m7_e5_ovmf_atapi_gate::{run_m7_e5_ovmf_atapi_gate, M7_E5_OVMF_ATAPI_GATE_MARKER};
+pub use m7_e5_ovmf_eltorito_gate::{run_m7_e5_ovmf_eltorito_gate, M7_E5_OVMF_ELTORITO_GATE_MARKER};
 pub use m7_e5_fw_bind_gate::{run_m7_e5_fw_bind_gate, M7_E5_FW_BIND_OK_MARKER};
 pub use m7_e5_fw_edk2_gate::{run_m7_e5_fw_edk2_gate, M7_E5_FW_EDK2_OK_MARKER};
 pub use m7_e5_fw_floor_gate::{run_m7_e5_fw_floor_gate, M7_E5_FW_FLOOR_OK_MARKER};

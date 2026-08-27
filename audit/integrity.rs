@@ -378,6 +378,13 @@ pub enum AuditEvent {
         exits: u64,
         sectors: u64,
     },
+    /// Guest UEFI loaded and ran the El Torito CD EFI.
+    /// Not installer / not `ISO-INSTALL-OK`.
+    OvmfGuestUefiEltorito {
+        exits: u64,
+        catalog: u64,
+        boot_image: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -592,6 +599,7 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiVirtio { .. } => 70,
         AuditEvent::OvmfGuestUefiBoth { .. } => 71,
         AuditEvent::OvmfGuestUefiAtapi { .. } => 72,
+        AuditEvent::OvmfGuestUefiEltorito { .. } => 73,
     }
 }
 
@@ -1089,6 +1097,19 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(exits);
             serial::write_str(" sectors=");
             write_u64(sectors);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiEltorito {
+            exits,
+            catalog,
+            boot_image,
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiEltorito exits=");
+            write_u64(exits);
+            serial::write_str(" catalog=");
+            write_u64(catalog);
+            serial::write_str(" bootimg=");
+            write_u64(boot_image);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

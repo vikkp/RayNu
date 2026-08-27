@@ -94,8 +94,8 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
     let ok = ovmf_dxe_surface_present()
         && prop_platform_memory_honest()
         && run_m7_e5_ovmf_cdrom_gate()
-        && GUEST_UEFI_RESUME_CAP >= 2048
-        && GUEST_UEFI_POST_DXE_TAIL == GUEST_UEFI_RESUME_CAP
+        && GUEST_UEFI_RESUME_CAP >= 65536
+        && GUEST_UEFI_POST_DXE_TAIL == 32768
         && dxe_or_cd_boot_evidence(true, 1, false, false)
         && dxe_or_cd_boot_evidence(true, 0, true, true)
         && !dxe_or_cd_boot_evidence(true, 0, true, false)
