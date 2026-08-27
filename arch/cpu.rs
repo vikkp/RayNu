@@ -12,9 +12,20 @@ pub const CPUID_EDX_APIC: u32 = 1 << 9;
 pub const CPUID_ECX_X2APIC: u32 = 1 << 21;
 /// CPUID.1:ECX bit 24 — TSC deadline mode (cleared; classic APIC timer only).
 pub const CPUID_ECX_TSC_DEADLINE: u32 = 1 << 24;
+/// CPUID.1:ECX bit 31 — hypervisor present (KVM sets this; bare metal does not).
+pub const CPUID_ECX_HYPERVISOR: u32 = 1 << 31;
 
+/// CR4 bit 9 — OSFXSR (FXSAVE/FXRSTOR / SSE).
+pub const CR4_OSFXSR: u64 = 1 << 9;
+/// CR4 bit 10 — OSXMMEXCPT (unmasked SIMD FP exceptions).
+pub const CR4_OSXMMEXCPT: u64 = 1 << 10;
+/// CR4 bit 12 — LA57 (5-level paging). E4 guest PT/EPT are 4-level.
+pub const CR4_LA57: u64 = 1 << 12;
 /// CR4 bit 13 — VMXE (VMX enable).
 pub const CR4_VMXE: u64 = 1 << 13;
+/// CPUID.7.0:ECX bit 16 — LA57. Nested Intel `957e0ad` ATAPI-OK then
+/// `#DF` `rip=0x9e036` (compressed `paging_prepare` trampoline).
+pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
 pub const CR4_OSXSAVE: u64 = 1 << 18;
 
@@ -460,7 +471,12 @@ mod cpu_test {
         assert_eq!(IA32_FEATURE_CONTROL, 0x3A);
         assert_eq!(IA32_VMX_BASIC, 0x480);
         assert_eq!(IA32_VMX_EPT_VPID_CAP, 0x48C);
+        assert_eq!(CR4_OSFXSR, 1 << 9);
+        assert_eq!(CR4_OSXMMEXCPT, 1 << 10);
+        assert_eq!(CR4_LA57, 1 << 12);
         assert_eq!(CR4_VMXE, 1 << 13);
+        assert_eq!(CPUID_LEAF7_ECX_LA57, 1 << 16);
+        assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }
 }

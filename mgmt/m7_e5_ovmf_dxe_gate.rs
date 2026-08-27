@@ -15,7 +15,7 @@ use super::m7_e5_ovmf_cdrom_gate::run_m7_e5_ovmf_cdrom_gate;
 use crate::devices::guest_platform::{
     cmos_above_16m_chunks, host_pci_config_addr, io, is_platform_sink_gpa,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, reset, HOST_BRIDGE_DEVICE,
-    HOST_BRIDGE_VENDOR, PLATFORM_RAM_BYTES,
+    HOST_BRIDGE_VENDOR, PLATFORM_REPORT_RAM_BYTES,
 };
 use crate::vmx::guest_uefi::{
     dxe_or_cd_boot_evidence, exec_from_low_ram, post_dxe_should_stop,
@@ -28,11 +28,11 @@ pub const M7_E5_OVMF_DXE_GATE_MARKER: &str = M7_E5_OVMF_DXE_OK_MARKER;
 
 pub fn prop_platform_memory_honest() -> bool {
     reset();
-    if cmos_above_16m_chunks(PLATFORM_RAM_BYTES) != 0x0100 {
+    if cmos_above_16m_chunks(PLATFORM_REPORT_RAM_BYTES) != 0x7F00 {
         return false;
     }
     let _ = io(0x70, false, 1, 0x35);
-    if (io(0x71, true, 1, 0) as u8) != 0x01 {
+    if (io(0x71, true, 1, 0) as u8) != 0x7F {
         return false;
     }
     let _ = io(0x510, false, 2, 0x00);
@@ -94,22 +94,23 @@ pub fn run_m7_e5_ovmf_dxe_gate() -> bool {
     let ok = ovmf_dxe_surface_present()
         && prop_platform_memory_honest()
         && run_m7_e5_ovmf_cdrom_gate()
-        && GUEST_UEFI_RESUME_CAP == 2048
-        && GUEST_UEFI_POST_DXE_TAIL == 384
+        && GUEST_UEFI_RESUME_CAP >= 2048
+        && GUEST_UEFI_POST_DXE_TAIL == GUEST_UEFI_RESUME_CAP
         && dxe_or_cd_boot_evidence(true, 1, false, false)
         && dxe_or_cd_boot_evidence(true, 0, true, true)
         && !dxe_or_cd_boot_evidence(true, 0, true, false)
-        && !post_dxe_should_stop(false, 2000, 0, true)
-        && !post_dxe_should_stop(true, 115, 115, false)
-        && post_dxe_should_stop(true, 115, 115, true)
-        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, false)
+        && !post_dxe_should_stop(false, 2000, 0, 1)
+        && !post_dxe_should_stop(true, 115, 115, 0)
+        && post_dxe_should_stop(true, 115, 115, 1)
+        && post_dxe_should_stop(true, 115 + GUEST_UEFI_POST_DXE_TAIL, 115, 0)
         && exec_from_low_ram(0x0010_0000)
         && !exec_from_low_ram(0xFFFD_3759)
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CMOS/fw_cfg/i440fx")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IDE at 00:00.1")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX host at 00:08.0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CF8|CFC byte offset")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE resume tail")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 32768-exit cap")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI PM timer")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_DXE_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-DXE-OK";

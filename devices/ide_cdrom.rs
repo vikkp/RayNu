@@ -4,16 +4,29 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.1` plus primary ATA PIO (`0x1F0`/`0x3F6`).
-//! PEI only probes `00:00.0` Device ID; that slot is virtio (Stage 42).
-//! Stage 41 printed CDROM-OK with IDE at `00:00.0`; this PEI will not
-//! re-enum IDE. CD stays GuestVisible.
+//! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
+//! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
+//! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
+//! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
+//! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
+//! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
+//! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
+//! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
+//! SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
+//! Intel `48c598a`: BOTH-OK `ataio=1308` `packet=0` (`insn=ef` then
+//! `edc9c3` IN EAX,DX poll) because ABRT never reached PACKET `0xA0`.
+//! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
+//! (nested Intel `f93caee`: `0xA1`×4 `ataio=408` `packet=0`).
+//! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
+//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
+//! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
+//! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet).
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
@@ -32,14 +45,39 @@ pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
 
-const ATA_STATUS_DRDY: u8 = 0x40;
+const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
+const ATA_STATUS_SEEK: u8 = 0x10;
+const ATA_STATUS_DRDY: u8 = 0x40;
+const ATA_STATUS_BSY: u8 = 0x80;
+const ATA_CMD_DEVICE_RESET: u8 = 0x08;
+const ATA_CMD_DIAGNOSTIC: u8 = 0x90;
+const ATA_CMD_IDENTIFY: u8 = 0xEC;
 const ATA_CMD_IDENTIFY_PACKET: u8 = 0xA1;
 const ATA_CMD_PACKET: u8 = 0xA0;
-const SCSI_READ10: u8 = 0x28;
-const SCSI_INQUIRY: u8 = 0x12;
+const ATA_CMD_SET_FEATURES: u8 = 0xEF;
+const ATA_DEVCTL_SRST: u8 = 0x04;
+/// ATAPI interrupt reason (sector-count): CDB write.
+const ATAPI_INT_CD: u8 = 0x01;
+/// ATAPI interrupt reason: data-in to host.
+const ATAPI_INT_IO: u8 = 0x02;
+const ATAPI_SIG_LBA: [u8; 3] = [0x01, 0x14, 0xEB];
 const SCSI_TEST_UNIT: u8 = 0x00;
+const SCSI_REQUEST_SENSE: u8 = 0x03;
+const SCSI_INQUIRY: u8 = 0x12;
+const SCSI_MODE_SENSE6: u8 = 0x1A;
+const SCSI_START_STOP: u8 = 0x1B;
+const SCSI_PREVENT: u8 = 0x1E;
 const SCSI_READ_CAPACITY: u8 = 0x25;
+const SCSI_READ10: u8 = 0x28;
+const SCSI_READ_TOC: u8 = 0x43;
+const SCSI_GET_CONFIG: u8 = 0x46;
+const SCSI_GET_EVENT: u8 = 0x4A;
+const SCSI_MODE_SENSE10: u8 = 0x5A;
+const SCSI_READ12: u8 = 0xA8;
+const SCSI_SENSE_ILLEGAL: u8 = 0x05;
+const SCSI_ASC_INVALID_OPCODE: u8 = 0x20;
+const XFER_CAP: usize = 4 * ISO_SECTOR;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AtaXfer {
@@ -59,17 +97,26 @@ struct CdMedia {
     pci_addr: u32,
     pci_cmd: u16,
     bar0: u32,
+    bar1: u32,
+    bar2: u32,
+    bar3: u32,
+    bar4: u32,
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
     ata_dev: u8,
+    ata_err: u8,
     ata_status: u8,
+    ata_devctl: u8,
+    byte_limit: u16,
+    sense_key: u8,
+    sense_asc: u8,
     xfer: AtaXfer,
     xfer_off: usize,
     xfer_end: usize,
     cdb: [u8; 12],
     cdb_got: usize,
-    data: [u8; 2048],
+    data: [u8; XFER_CAP],
 }
 
 impl CdMedia {
@@ -82,19 +129,28 @@ impl CdMedia {
             pci_enum: false,
             sectors_read: 0,
             pci_addr: 0,
-            pci_cmd: 0x0001,
+            pci_cmd: 0x0005,
             bar0: 0x1F1,
+            bar1: 0x03F5,
+            bar2: 0x0171,
+            bar3: 0x0375,
+            bar4: 1,
             ata_feat: 0,
-            ata_count: 0,
-            ata_lba: [0; 3],
+            ata_count: 0x01,
+            ata_lba: ATAPI_SIG_LBA,
             ata_dev: 0,
-            ata_status: ATA_STATUS_DRDY,
+            ata_err: 0x01,
+            ata_status: ATA_STATUS_DRDY | ATA_STATUS_SEEK,
+            ata_devctl: 0,
+            byte_limit: 0,
+            sense_key: 0,
+            sense_asc: 0,
             xfer: AtaXfer::Idle,
             xfer_off: 0,
             xfer_end: 0,
             cdb: [0; 12],
             cdb_got: 0,
-            data: [0; 2048],
+            data: [0; XFER_CAP],
         }
     }
 }
@@ -127,6 +183,11 @@ static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU32 = AtomicU32::new(0);
 static MARKER: AtomicBool = AtomicBool::new(false);
+static PACKET_N: AtomicU32 = AtomicU32::new(0);
+static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
+static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
+static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
+static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 
 /// Decode PCI config address (mechanism #1).
 pub fn pci_bdf(addr: u32) -> (u8, u8, u8, u8) {
@@ -142,7 +203,8 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
-    bus == GUEST_CD_PCI_BUS && dev == GUEST_CD_PCI_DEV && fun == GUEST_CD_PCI_FN
+    // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
+    bus == 0 && fun == 1 && (dev == 0 || dev == 1)
 }
 
 /// PCI config address for the guest IDE function (`00:00.1`).
@@ -154,7 +216,77 @@ pub fn pci_config_addr() -> u32 {
 }
 
 pub fn is_ata_primary_port(port: u16) -> bool {
-    (0x01F0..=0x01F7).contains(&port) || port == 0x03F6
+    with_cd(|m| ata_reg(m, port).is_some())
+}
+
+fn ata_is_slave(m: &CdMedia) -> bool {
+    (m.ata_dev & 0x10) != 0
+}
+
+fn ata_absent_status() -> u8 {
+    0
+}
+
+fn apply_no_device(m: &mut CdMedia) {
+    m.xfer = AtaXfer::Idle;
+    m.ata_err = 0x04;
+    m.ata_status = ATA_STATUS_ERR;
+    m.ata_count = 0;
+    m.ata_lba = [0, 0, 0];
+}
+
+/// Map an I/O port onto the ATA command block (0–7) or control port.
+fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
+    // Compatibility mode keeps ISA ports even after PciBus relocates BARs.
+    if (0x01F0..=0x01F7).contains(&port) {
+        return Some((port - 0x01F0) as u8);
+    }
+    if (0x0170..=0x0177).contains(&port) {
+        return Some((port - 0x0170) as u8);
+    }
+    if port == 0x03F6 || port == 0x0376 {
+        return Some(8);
+    }
+    let cmd = (m.bar0 & !7) as u16;
+    if port.wrapping_sub(cmd) < 8 {
+        return Some((port - cmd) as u8);
+    }
+    let cmd2 = (m.bar2 & !7) as u16;
+    if port.wrapping_sub(cmd2) < 8 {
+        return Some((port - cmd2) as u8);
+    }
+    let ctl = (m.bar1 & !3) as u16;
+    if port == ctl.wrapping_add(2) {
+        return Some(8);
+    }
+    let ctl2 = (m.bar3 & !3) as u16;
+    if port == ctl2.wrapping_add(2) {
+        return Some(8);
+    }
+    None
+}
+
+fn bmide_base(m: &CdMedia) -> u16 {
+    (m.bar4 & !0xF) as u16
+}
+
+/// Bus-master IDE (BAR4, 16-byte I/O). Address 0 is unprogrammed — do not
+/// steal the PIC/PIT range.
+pub fn is_bmide_port(port: u16) -> bool {
+    with_cd(|m| {
+        let base = bmide_base(m);
+        base != 0 && port.wrapping_sub(base) < 16
+    })
+}
+
+/// RAZ/WI BMIDE. Unhandled `IN` was `0xFF` (looks busy/error).
+pub fn bmide_io(_port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
+    if is_in {
+        let mask = io_mask(size);
+        rax & !mask
+    } else {
+        rax
+    }
 }
 
 pub fn is_pci_data_port(port: u16) -> bool {
@@ -203,6 +335,37 @@ pub fn reset() {
     ISO_ID.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
     MARKER.store(false, Ordering::Release);
+    PACKET_N.store(0, Ordering::Release);
+    LAST_SCSI.store(0, Ordering::Release);
+    ATA_CMD_N.store(0, Ordering::Release);
+    LAST_ATA_CMD.store(0, Ordering::Release);
+    ATA_IO_N.store(0, Ordering::Release);
+}
+
+/// PACKET commands issued since last reset (firmware ATAPI activity).
+pub fn packet_commands() -> u32 {
+    PACKET_N.load(Ordering::Acquire)
+}
+
+/// Last SCSI opcode from a completed 12-byte CDB.
+pub fn last_scsi() -> u8 {
+    LAST_SCSI.load(Ordering::Acquire)
+}
+
+/// ATA commands written to 0x1F7 since last reset.
+pub fn ata_commands() -> u32 {
+    ATA_CMD_N.load(Ordering::Acquire)
+}
+
+/// Last byte written to the ATA command register.
+pub fn last_ata_cmd() -> u8 {
+    LAST_ATA_CMD.load(Ordering::Acquire)
+}
+
+/// ATA PIO accesses (status polls and commands). Nested VT-x `8e55abf`
+/// `ata=0x0` only counted command-register writes.
+pub fn ata_io_accesses() -> u32 {
+    ATA_IO_N.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -233,8 +396,7 @@ pub fn make_visible() -> bool {
         m.visible = true;
         m.pci_enum = false;
         m.sectors_read = 0;
-        m.ata_status = ATA_STATUS_DRDY;
-        m.xfer = AtaXfer::Idle;
+        apply_atapi_signature(m);
         true
     });
     if ok {
@@ -254,14 +416,37 @@ pub fn present(iso: &[u8], iso_id: u64) -> bool {
     make_visible()
 }
 
-/// Placeholder ISO: `CD001` at LBA 16 so ATAPI READ is distinguishable.
+/// Placeholder ISO: PVD `CD001` at LBA 16 plus a minimal EFI El Torito catalog.
 pub fn present_placeholder() -> bool {
     let mut iso = [0u8; GUEST_CD_ISO_CAP];
+    write_placeholder_iso(&mut iso);
+    present(&iso, 1)
+}
+
+fn write_placeholder_iso(iso: &mut [u8]) {
     let pvd = 16 * ISO_SECTOR;
     iso[pvd] = 1;
     iso[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
     iso[pvd + 40..pvd + 50].copy_from_slice(b"RAYNU-V-CD");
-    present(&iso, 1)
+    let br = 17 * ISO_SECTOR;
+    iso[br] = 0;
+    iso[br + 1..br + 6].copy_from_slice(b"CD001");
+    iso[br + 6] = 1;
+    iso[br + 7..br + 7 + 23].copy_from_slice(b"EL TORITO SPECIFICATION");
+    iso[br + 71..br + 75].copy_from_slice(&20u32.to_le_bytes());
+    let cat = 20 * ISO_SECTOR;
+    iso[cat] = 0x01;
+    iso[cat + 1] = 0xEF;
+    iso[cat + 30] = 0x55;
+    iso[cat + 31] = 0xAA;
+    iso[cat + 32] = 0x91;
+    iso[cat + 33] = 0xEF;
+    iso[cat + 64] = 0x88;
+    iso[cat + 70..cat + 72].copy_from_slice(&4u16.to_le_bytes());
+    iso[cat + 72..cat + 76].copy_from_slice(&22u32.to_le_bytes());
+    let load = 22 * ISO_SECTOR;
+    iso[load] = b'M';
+    iso[load + 1] = b'Z';
 }
 
 /// QEMU launch path: present a CD if the operator has not attached one.
@@ -285,12 +470,13 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
         0x08 => 0x01018000, // class IDE, prog-if 0x80
-        // Multifunction bit lives on ISA `00:01.0`. This is function 1.
+        // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
         0x10 => m.bar0,
-        0x14 => 0x03F5,
-        0x18 => 0x0171,
-        0x1C => 0x0375,
+        0x14 => m.bar1,
+        0x18 => m.bar2,
+        0x1C => m.bar3,
+        0x20 => m.bar4,
         0x2C => 0x0000_0000,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
@@ -323,25 +509,81 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
     })
 }
 
-pub fn pci_write_data(port: u16, size: u8, val: u32) {
+pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
         let off = pci_cfg_offset(m.pci_addr, port);
+        let aligned = off & 0xFC;
         if off == 0x04 {
             m.pci_cmd = (val as u16) | 0x0001;
-        } else if off == 0x10 {
-            let mask = if size >= 4 { 0xFFFF_FFFC } else { 0xFFFF };
-            m.bar0 = (val & mask) | 1;
+        } else if aligned == 0x10 {
+            // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
+            m.bar0 = (val & 0xFFFF_FFF8) | 1;
+        } else if aligned == 0x14 {
+            m.bar1 = (val & 0xFFFF_FFFC) | 1;
+        } else if aligned == 0x18 {
+            m.bar2 = (val & 0xFFFF_FFF8) | 1;
+        } else if aligned == 0x1C {
+            m.bar3 = (val & 0xFFFF_FFFC) | 1;
+        } else if aligned == 0x20 {
+            // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
+            m.bar4 = (val & 0xFFFF_FFF0) | 1;
         }
     });
 }
 
+fn apply_atapi_signature(m: &mut CdMedia) {
+    m.ata_err = 0x01;
+    m.ata_count = 0x01;
+    m.ata_lba = ATAPI_SIG_LBA;
+    m.ata_dev = m.ata_dev & 0x10;
+    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+    m.xfer = AtaXfer::Idle;
+    m.xfer_off = 0;
+    m.xfer_end = 0;
+    m.cdb_got = 0;
+}
+
+fn packet_ok(m: &mut CdMedia) {
+    m.xfer = AtaXfer::Idle;
+    m.ata_err = 0;
+    m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
+    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+}
+
+fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
+    m.sense_key = sense;
+    m.sense_asc = asc;
+    m.xfer = AtaXfer::Idle;
+    m.ata_err = sense << 4;
+    m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
+    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+}
+
+fn begin_packet_data(m: &mut CdMedia, n: usize) {
+    let n = n.min(XFER_CAP);
+    let mut limit = m.byte_limit as usize;
+    if limit == 0 || limit == 0xffff {
+        limit = n;
+    }
+    let size = n.min(limit).max(2);
+    m.xfer = AtaXfer::PacketData;
+    m.xfer_off = 0;
+    m.xfer_end = n.min(XFER_CAP);
+    m.ata_count = ATAPI_INT_IO;
+    m.ata_lba[1] = size as u8;
+    m.ata_lba[2] = (size >> 8) as u8;
+    m.ata_err = 0;
+    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+}
+
 fn start_identify(m: &mut CdMedia) {
     m.data.fill(0);
-    // Word 0: ATAPI CD-ROM, packet size 12.
-    m.data[0] = 0x00;
+    // Word 0: ATAPI CD-ROM, removable, 12-byte packet (QEMU 0x85C0).
+    // Nested Intel f93caee: 0x8500 (no RMB) then 0xA1×4 packet=0.
+    m.data[0] = 0xC0;
     m.data[1] = 0x85;
     let model = b"RAYNU-V CD                          ";
     for (i, &b) in model.iter().enumerate() {
@@ -358,32 +600,54 @@ fn start_identify(m: &mut CdMedia) {
     m.xfer = AtaXfer::Identify;
     m.xfer_off = 0;
     m.xfer_end = 512;
-    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_DRQ;
+    m.ata_err = 0;
+    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
 }
 
-fn load_sector(m: &mut CdMedia, lba: u32) -> bool {
+fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
+    if count == 0 {
+        packet_ok(m);
+        return true;
+    }
+    let nsec = (count as usize).min(XFER_CAP / ISO_SECTOR).max(1);
     let start = (lba as usize).saturating_mul(ISO_SECTOR);
-    let end = start.saturating_add(ISO_SECTOR);
+    let bytes = nsec.saturating_mul(ISO_SECTOR);
+    let end = start.saturating_add(bytes);
     if end > m.len {
+        packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
         return false;
     }
-    m.data[..ISO_SECTOR].copy_from_slice(&m.iso[start..end]);
-    m.xfer = AtaXfer::PacketData;
-    m.xfer_off = 0;
-    m.xfer_end = ISO_SECTOR;
-    m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_DRQ;
-    m.sectors_read = m.sectors_read.saturating_add(1);
+    m.data[..bytes].copy_from_slice(&m.iso[start..end]);
+    m.sectors_read = m.sectors_read.saturating_add(nsec as u32);
     SECTORS.store(m.sectors_read, Ordering::Release);
+    begin_packet_data(m, bytes);
     true
 }
 
+fn alloc_len(cdb: &[u8; 12], off: usize, wide: bool) -> usize {
+    if wide {
+        u32::from_be_bytes([cdb[off], cdb[off + 1], cdb[off + 2], cdb[off + 3]]) as usize
+    } else {
+        u16::from_be_bytes([cdb[off], cdb[off + 1]]) as usize
+    }
+}
+
 fn finish_packet(m: &mut CdMedia) {
-    match m.cdb[0] {
-        SCSI_TEST_UNIT => {
-            m.xfer = AtaXfer::Idle;
-            m.ata_status = ATA_STATUS_DRDY;
+    let op = m.cdb[0];
+    LAST_SCSI.store(op, Ordering::Release);
+    match op {
+        SCSI_TEST_UNIT | SCSI_START_STOP | SCSI_PREVENT => packet_ok(m),
+        SCSI_REQUEST_SENSE => {
+            let n = m.cdb[4] as usize;
+            m.data.fill(0);
+            m.data[0] = 0x70;
+            m.data[2] = m.sense_key;
+            m.data[7] = 10;
+            m.data[12] = m.sense_asc;
+            begin_packet_data(m, n.min(18).max(8));
         }
         SCSI_INQUIRY => {
+            let n = m.cdb[4] as usize;
             m.data.fill(0);
             m.data[0] = 0x05; // CD/DVD
             m.data[1] = 0x80; // RMB
@@ -392,10 +656,7 @@ fn finish_packet(m: &mut CdMedia) {
             m.data[4] = 31;
             m.data[8..16].copy_from_slice(b"RAYNU-V ");
             m.data[16..32].copy_from_slice(b"GUEST CD        ");
-            m.xfer = AtaXfer::PacketData;
-            m.xfer_off = 0;
-            m.xfer_end = 36;
-            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_DRQ;
+            begin_packet_data(m, n.min(36).max(5));
         }
         SCSI_READ_CAPACITY => {
             let last = if m.len >= ISO_SECTOR {
@@ -406,22 +667,77 @@ fn finish_packet(m: &mut CdMedia) {
             m.data.fill(0);
             m.data[0..4].copy_from_slice(&last.to_be_bytes());
             m.data[4..8].copy_from_slice(&(ISO_SECTOR as u32).to_be_bytes());
-            m.xfer = AtaXfer::PacketData;
-            m.xfer_off = 0;
-            m.xfer_end = 8;
-            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_DRQ;
+            begin_packet_data(m, 8);
         }
         SCSI_READ10 => {
             let lba = u32::from_be_bytes([m.cdb[2], m.cdb[3], m.cdb[4], m.cdb[5]]);
-            if !load_sector(m, lba) {
-                m.xfer = AtaXfer::Idle;
-                m.ata_status = ATA_STATUS_DRDY | 0x01;
-            }
+            let count = u16::from_be_bytes([m.cdb[7], m.cdb[8]]) as u32;
+            let _ = load_sectors(m, lba, count);
         }
-        _ => {
-            m.xfer = AtaXfer::Idle;
-            m.ata_status = ATA_STATUS_DRDY;
+        SCSI_READ12 => {
+            let lba = u32::from_be_bytes([m.cdb[2], m.cdb[3], m.cdb[4], m.cdb[5]]);
+            let count = u32::from_be_bytes([m.cdb[6], m.cdb[7], m.cdb[8], m.cdb[9]]);
+            let _ = load_sectors(m, lba, count);
         }
+        SCSI_READ_TOC => {
+            let last = if m.len >= ISO_SECTOR {
+                (m.len / ISO_SECTOR) as u32
+            } else {
+                1
+            };
+            m.data.fill(0);
+            // TOC: first/last track 1, track 1 at LBA 0, lead-out at last.
+            m.data[0] = 0;
+            m.data[1] = 18;
+            m.data[2] = 1;
+            m.data[3] = 1;
+            m.data[4] = 0x01;
+            m.data[5] = 0x14;
+            m.data[6] = 1;
+            m.data[8..12].copy_from_slice(&0u32.to_be_bytes());
+            m.data[12] = 0x01;
+            m.data[13] = 0x14;
+            m.data[14] = 0xAA;
+            m.data[16..20].copy_from_slice(&last.to_be_bytes());
+            let n = alloc_len(&m.cdb, 7, false);
+            begin_packet_data(m, n.min(20).max(4));
+        }
+        SCSI_GET_CONFIG => {
+            m.data.fill(0);
+            m.data[0..4].copy_from_slice(&8u32.to_be_bytes());
+            m.data[6] = 0x00;
+            m.data[7] = 0x08; // CD-ROM profile
+            let n = alloc_len(&m.cdb, 7, false);
+            begin_packet_data(m, n.min(16).max(8));
+        }
+        SCSI_GET_EVENT => {
+            m.data.fill(0);
+            m.data[0] = 0;
+            m.data[1] = 6;
+            m.data[2] = 0x04; // media class
+            m.data[4] = 0x04; // media present
+            let n = alloc_len(&m.cdb, 7, false);
+            begin_packet_data(m, n.min(8).max(4));
+        }
+        SCSI_MODE_SENSE6 => {
+            let n = m.cdb[4] as usize;
+            m.data.fill(0);
+            m.data[0] = 11;
+            m.data[3] = 8;
+            m.data[9] = 0x08;
+            m.data[10] = 0x00;
+            begin_packet_data(m, n.min(12).max(4));
+        }
+        SCSI_MODE_SENSE10 => {
+            let n = alloc_len(&m.cdb, 7, false);
+            m.data.fill(0);
+            m.data[1] = 18;
+            m.data[7] = 8;
+            m.data[13] = 0x08;
+            m.data[14] = 0x00;
+            begin_packet_data(m, n.min(20).max(8));
+        }
+        _ => packet_error(m, SCSI_SENSE_ILLEGAL, SCSI_ASC_INVALID_OPCODE),
     }
 }
 
@@ -431,41 +747,117 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
         }
+        let Some(reg) = ata_reg(m, port) else {
+            return if is_in { rax | 0xff } else { rax };
+        };
+        ATA_IO_N.fetch_add(1, Ordering::AcqRel);
         if is_in {
-            let val = match port {
-                0x01F0 => read_data(m, size),
-                0x01F1 => 0,
-                0x01F2 => u64::from(m.ata_count),
-                0x01F3 => u64::from(m.ata_lba[0]),
-                0x01F4 => u64::from(m.ata_lba[1]),
-                0x01F5 => u64::from(m.ata_lba[2]),
-                0x01F6 => u64::from(m.ata_dev),
-                0x01F7 | 0x03F6 => u64::from(m.ata_status),
-                _ => 0,
+            // Nested Intel f93caee: IDENTIFY PACKET 0xA1 x4 (2 channels x 2
+            // devices). Slave is absent: status 0x00, no DRQ identify.
+            let val = if ata_is_slave(m) {
+                match reg {
+                    6 => u64::from(m.ata_dev),
+                    7 | 8 => u64::from(ata_absent_status()),
+                    _ => 0,
+                }
+            } else {
+                match reg {
+                    0 => read_data(m, size),
+                    1 => u64::from(m.ata_err),
+                    2 => u64::from(m.ata_count),
+                    3 => u64::from(m.ata_lba[0]),
+                    4 => u64::from(m.ata_lba[1]),
+                    5 => u64::from(m.ata_lba[2]),
+                    6 => u64::from(m.ata_dev),
+                    _ => u64::from(m.ata_status),
+                }
             };
             let mask = io_mask(size);
             (rax & !mask) | (val & mask)
         } else {
             let v = rax as u8;
-            match port {
-                0x01F0 => write_data(m, size, rax),
-                0x01F1 => m.ata_feat = v,
-                0x01F2 => m.ata_count = v,
-                0x01F3 => m.ata_lba[0] = v,
-                0x01F4 => m.ata_lba[1] = v,
-                0x01F5 => m.ata_lba[2] = v,
-                0x01F6 => m.ata_dev = v,
-                0x01F7 => match v {
-                    ATA_CMD_IDENTIFY_PACKET => start_identify(m),
-                    ATA_CMD_PACKET => {
-                        m.xfer = AtaXfer::PacketCdb;
-                        m.cdb_got = 0;
-                        m.cdb.fill(0);
-                        m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_DRQ;
+            match reg {
+                0 => {
+                    if !ata_is_slave(m) {
+                        write_data(m, size, rax);
                     }
-                    _ => m.ata_status = ATA_STATUS_DRDY,
-                },
-                0x03F6 => {}
+                }
+                1 => {
+                    if !ata_is_slave(m) {
+                        m.ata_feat = v;
+                    }
+                }
+                2 => {
+                    if !ata_is_slave(m) {
+                        m.ata_count = v;
+                    }
+                }
+                3 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[0] = v;
+                    }
+                }
+                4 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[1] = v;
+                    }
+                }
+                5 => {
+                    if !ata_is_slave(m) {
+                        m.ata_lba[2] = v;
+                    }
+                }
+                6 => m.ata_dev = v,
+                7 => {
+                    LAST_ATA_CMD.store(v, Ordering::Release);
+                    ATA_CMD_N.fetch_add(1, Ordering::AcqRel);
+                    if ata_is_slave(m) {
+                        apply_no_device(m);
+                        return rax;
+                    }
+                    match v {
+                        ATA_CMD_IDENTIFY_PACKET => start_identify(m),
+                        ATA_CMD_PACKET => {
+                            PACKET_N.fetch_add(1, Ordering::AcqRel);
+                            m.xfer = AtaXfer::PacketCdb;
+                            m.cdb_got = 0;
+                            m.cdb.fill(0);
+                            m.byte_limit = u16::from(m.ata_lba[1]) | (u16::from(m.ata_lba[2]) << 8);
+                            m.ata_err = 0;
+                            m.ata_count = ATAPI_INT_CD;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+                        }
+                        ATA_CMD_DEVICE_RESET | ATA_CMD_DIAGNOSTIC => apply_atapi_signature(m),
+                        ATA_CMD_IDENTIFY => {
+                            m.ata_err = 0x04;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+                            m.ata_lba = ATAPI_SIG_LBA;
+                            m.ata_count = 0x01;
+                            m.xfer = AtaXfer::Idle;
+                        }
+                        // Nested Intel 48c598a: OUT 0xEF then IN EAX,DX poll.
+                        // Default arm ABRT'd (ERR=0x04); firmware never PACKET.
+                        ATA_CMD_SET_FEATURES => {
+                            m.ata_err = 0;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+                            m.xfer = AtaXfer::Idle;
+                        }
+                        _ => {
+                            m.ata_err = 0x04;
+                            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+                        }
+                    }
+                }
+                8 => {
+                    let prev = m.ata_devctl;
+                    m.ata_devctl = v;
+                    if (v & ATA_DEVCTL_SRST) != 0 {
+                        m.ata_status = ATA_STATUS_BSY;
+                        m.xfer = AtaXfer::Idle;
+                    } else if (prev & ATA_DEVCTL_SRST) != 0 {
+                        apply_atapi_signature(m);
+                    }
+                }
                 _ => {}
             }
             rax
@@ -494,8 +886,12 @@ fn read_data(m: &mut CdMedia, size: u8) -> u64 {
         }
     }
     if m.xfer_off >= m.xfer_end {
-        m.xfer = AtaXfer::Idle;
-        m.ata_status = ATA_STATUS_DRDY;
+        if m.xfer == AtaXfer::PacketData {
+            packet_ok(m);
+        } else {
+            m.xfer = AtaXfer::Idle;
+            m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+        }
     }
     v
 }

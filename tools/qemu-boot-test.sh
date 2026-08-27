@@ -40,6 +40,8 @@
 # E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
 # E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds)
 # E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
+# E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds)
+# E5.44: RAYNU-V-M7-E5-OVMF-ATAPI-OK (required when VMXON succeeds)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -84,6 +86,8 @@ MARKER_OVMF_PAST_SEC="${MARKER_OVMF_PAST_SEC:-RAYNU-V-M7-E5-OVMF-PAST-SEC-OK}"
 MARKER_OVMF_CDROM="${MARKER_OVMF_CDROM:-RAYNU-V-M7-E5-OVMF-CDROM-OK}"
 MARKER_OVMF_DXE="${MARKER_OVMF_DXE:-RAYNU-V-M7-E5-OVMF-DXE-OK}"
 MARKER_OVMF_VIRTIO="${MARKER_OVMF_VIRTIO:-RAYNU-V-M7-E5-OVMF-VIRTIO-OK}"
+MARKER_OVMF_BOTH="${MARKER_OVMF_BOTH:-RAYNU-V-M7-E5-OVMF-BOTH-OK}"
+MARKER_OVMF_ATAPI="${MARKER_OVMF_ATAPI:-RAYNU-V-M7-E5-OVMF-ATAPI-OK}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/m0-serial.log}"
 ESP="${ESP:-$ROOT/target/m0-esp}"
@@ -210,7 +214,7 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   if grep -qF "$MARKER_OVMF_CDROM" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI CD visible (PCI IDE/ATAPI or sector read)"
   elif grep -qF "boot: guest-UEFI CD GuestVisible" "$SERIAL_LOG"; then
-    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot is virtio; Stage 40 pci_ide closed on prior EFI)"
+    echo "==> E5 guest-UEFI CD GuestVisible (PEI DID slot stays i440FX; Stage 40 pci_ide closed on prior EFI)"
   else
     echo "error: marker '$MARKER_OVMF_CDROM' not found and CD not GuestVisible after VMXON" >&2
     fail=1
@@ -225,6 +229,18 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI virtio-blk + boot order CD then disk"
   else
     echo "error: marker '$MARKER_OVMF_VIRTIO' not found after VMXON (virtio-blk not visible to this guest)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_BOTH" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI simultaneous virtio 00:02.0 + IDE 00:00.1"
+  else
+    echo "error: marker '$MARKER_OVMF_BOTH' not found after VMXON (firmware did not enum both PCI functions on this boot)" >&2
+    fail=1
+  fi
+  if grep -qF "$MARKER_OVMF_ATAPI" "$SERIAL_LOG"; then
+    echo "==> E5 guest-UEFI ATAPI sector read (sectors>0)"
+  else
+    echo "error: marker '$MARKER_OVMF_ATAPI' not found after VMXON (firmware did not READ ATAPI sectors)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then

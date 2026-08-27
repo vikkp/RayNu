@@ -26,7 +26,11 @@
 //! M3.19: drop ISA IRQ4 COM1 TX inject; SHELL via CPUID; no `console=ttyS0`.
 //! IRQ0 retained only until SHELL (APIC calibrate jiffies). → `RAYNU-V-M3-NOIRQ-OK`.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
-//! guest-visible CR4 without #GP.
+//! guest-visible CR4 without #GP. Also host-own OSFXSR+OSXMMEXCPT so
+//! `cr4 &= 0x1060` cannot drop SSE (nested Intel `1a93cb8` `#DF` `cr4=0x2060`)
+//! or keep LA57 (nested Intel `957e0ad` `#DF` trampoline `rip=0x9e036`).
+//! Nested Intel `ab25682`: host-own OSFXSR then `ERROR unexpected CR-access`
+//! `rip=0x8400276` `qual=0x4` — emulate MOV CR4 and keep the host-owned bits.
 //! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL/NOIRQ (real).
 //! M4.0: after G0 SHELL+APIC, VMLAUNCH G1 under private EPT → `RAYNU-V-M4-2VM-OK`.
 //! M4.1: credit scheduler time-slices G0↔G1 → `RAYNU-V-M4-SCHED-OK`.
@@ -165,6 +169,36 @@ pub fn set_real_linux(real: bool) {
 
 /// COM1 marker when the first guest HLT produces a VMEXIT (M1.2 gate).
 pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
+
+/// CR4 bits E4 Linux must keep. `startup_64` does `cr4 &= 0x1060` then
+/// `mov %rax,%cr4`, which clears VMXE (need host-own or #GP) and OSFXSR
+/// (nested Intel ATAPI-OK then `#DF` vec=8 `rip=0x9e036` `cr4=0x2060`).
+/// `0x1060` also keeps LA57; strip it (4-level EPT/PT only).
+pub const E4_LINUX_CR4_HOST_OWNED: u64 =
+    cpu::CR4_VMXE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT;
+
+/// CR4 bits E4 Linux must not set. Nested Intel `957e0ad` trampoline `#DF`.
+pub const E4_LINUX_CR4_FORBIDDEN: u64 = cpu::CR4_LA57;
+
+/// Guest CR4 for real Linux: keep VMXE+SSE on in the VMCS; LA57 off.
+pub fn e4_linux_guest_cr4(cr4: u64) -> u64 {
+    e4_linux_apply_cr4_write(cr4)
+}
+
+/// Apply a guest MOV-to-CR4: keep VMXE+OSFXSR+OSXMMEXCPT set; clear LA57.
+pub fn e4_linux_apply_cr4_write(requested: u64) -> u64 {
+    ((requested & !E4_LINUX_CR4_HOST_OWNED) | E4_LINUX_CR4_HOST_OWNED) & !E4_LINUX_CR4_FORBIDDEN
+}
+
+/// Read-shadow: Linux sees VMXE=0 (required) and OSFXSR=1 (matches hardware).
+pub fn e4_linux_cr4_read_shadow(cr4: u64) -> u64 {
+    e4_linux_guest_cr4(cr4) & !cpu::CR4_VMXE
+}
+
+/// SDM 28.2.1: CR# in bits 3:0, access type in 5:4 (0=MOV to, 1=MOV from).
+pub fn e4_linux_cr_access_is_cr4_mov(qual: u64) -> bool {
+    (qual & 0xf) == 4 && ((qual >> 4) & 3) <= 1
+}
 
 /// Exit-control bits for IA32_PAT load/save (SDM Vol. 3).
 const VM_EXIT_SAVE_IA32_PAT: u32 = 1 << 18;
@@ -4088,6 +4122,87 @@ unsafe fn handle_xsetbv_and_resume(guest_rip: u64) -> ! {
     vmresume_with_gprs();
 }
 
+unsafe fn linux_cr_gpr(idx: u8) -> u64 {
+    match idx {
+        0 => SAVED_GUEST_RAX,
+        1 => SAVED_GUEST_RCX,
+        2 => SAVED_GUEST_RDX,
+        3 => SAVED_GUEST_RBX,
+        4 => ops::vmread(GUEST_RSP).unwrap_or(0),
+        5 => SAVED_GUEST_RBP,
+        6 => SAVED_GUEST_RSI,
+        7 => SAVED_GUEST_RDI,
+        8 => SAVED_GUEST_R8,
+        9 => SAVED_GUEST_R9,
+        10 => SAVED_GUEST_R10,
+        11 => SAVED_GUEST_R11,
+        12 => SAVED_GUEST_R12,
+        13 => SAVED_GUEST_R13,
+        14 => SAVED_GUEST_R14,
+        15 => SAVED_GUEST_R15,
+        _ => 0,
+    }
+}
+
+unsafe fn set_linux_cr_gpr(idx: u8, val: u64) {
+    match idx {
+        0 => SAVED_GUEST_RAX = val,
+        1 => SAVED_GUEST_RCX = val,
+        2 => SAVED_GUEST_RDX = val,
+        3 => SAVED_GUEST_RBX = val,
+        4 => {
+            let _ = ops::vmwrite(GUEST_RSP, val);
+        }
+        5 => SAVED_GUEST_RBP = val,
+        6 => SAVED_GUEST_RSI = val,
+        7 => SAVED_GUEST_RDI = val,
+        8 => SAVED_GUEST_R8 = val,
+        9 => SAVED_GUEST_R9 = val,
+        10 => SAVED_GUEST_R10 = val,
+        11 => SAVED_GUEST_R11 = val,
+        12 => SAVED_GUEST_R12 = val,
+        13 => SAVED_GUEST_R13 = val,
+        14 => SAVED_GUEST_R14 = val,
+        15 => SAVED_GUEST_R15 = val,
+        _ => {}
+    }
+}
+
+/// Nested Intel `ab25682`: host-own OSFXSR makes `startup_64` `mov cr4`
+/// VMEXIT (`qual=0x4` `rip=0x8400276`). Apply the write, keep host-owned
+/// bits, skip the insn. Other CR accesses stay fatal.
+unsafe fn handle_linux_cr_and_resume() -> ! {
+    let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
+    if !e4_linux_cr_access_is_cr4_mov(qual) {
+        serial::write_line("boot: ERROR — unexpected CR-access exit");
+        dump_linux_guest_state();
+        finish_boot(false);
+    }
+    let typ = ((qual >> 4) & 3) as u8;
+    let gpr = ((qual >> 8) & 0xf) as u8;
+    if typ == 0 {
+        let val = e4_linux_apply_cr4_write(linux_cr_gpr(gpr));
+        let _ = ops::vmwrite(GUEST_CR4, val);
+        let _ = ops::vmwrite(CR4_READ_SHADOW, e4_linux_cr4_read_shadow(val));
+        static mut LINUX_CR4_LOGGED: bool = false;
+        if !LINUX_CR4_LOGGED {
+            LINUX_CR4_LOGGED = true;
+            serial::write_line("boot: Linux CR4 write emulated (keep OSFXSR)");
+        }
+    } else {
+        set_linux_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0));
+    }
+    let guest_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(3);
+    if insn_len == 0 || insn_len > 15 {
+        serial::write_line("boot: ERROR — CR-access bad insn len");
+        finish_boot(false);
+    }
+    let _ = ops::vmwrite(GUEST_RIP, guest_rip.wrapping_add(insn_len));
+    let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+    vmresume_with_gprs();
+}
+
 unsafe fn handle_cpuid_and_resume(guest_rip: u64) -> ! {
     let leaf = SAVED_GUEST_RAX as u32;
     let subleaf = SAVED_GUEST_RCX as u32;
@@ -4444,19 +4559,21 @@ unsafe fn enter_proto_kernel() -> ! {
         }
         serial::write_line("boot: Linux exception bitmap armed");
 
-        // Host-own CR4.VMXE. `startup_64` does `cr4 &= 0x1060` then `mov %rax,%cr4`,
-        // which clears VMXE. Under VMX that write is #GP(0). Keep VMXE set in the
-        // VMCS guest CR4 and hide it via mask + read-shadow (guest sees VMXE=0).
-        let guest_cr4 = ops::vmread(GUEST_CR4).unwrap_or(0) | cpu::CR4_VMXE;
-        let shadow = guest_cr4 & !cpu::CR4_VMXE;
+        // Host-own CR4.VMXE + OSFXSR + OSXMMEXCPT. `startup_64` does
+        // `cr4 &= 0x1060` then `mov %rax,%cr4`, which clears VMXE (#GP
+        // under VMX) and OSFXSR (nested Intel `1a93cb8` `#DF` vec=8
+        // `cr4=0x2060` after ATAPI-OK). Keep those bits in GUEST_CR4;
+        // hide VMXE via the read-shadow (guest sees VMXE=0).
+        let guest_cr4 = e4_linux_guest_cr4(ops::vmread(GUEST_CR4).unwrap_or(0));
+        let shadow = e4_linux_cr4_read_shadow(guest_cr4);
         if ops::vmwrite(GUEST_CR4, guest_cr4).is_err()
-            || ops::vmwrite(CR4_GUEST_HOST_MASK, cpu::CR4_VMXE).is_err()
+            || ops::vmwrite(CR4_GUEST_HOST_MASK, E4_LINUX_CR4_HOST_OWNED).is_err()
             || ops::vmwrite(CR4_READ_SHADOW, shadow).is_err()
         {
             serial::write_line("boot: ERROR — CR4.VMXE mask VMWRITE failed");
             finish_boot(false);
         }
-        serial::write_line("boot: Linux CR4.VMXE host-owned");
+        serial::write_line("boot: Linux CR4.VMXE+OSFXSR host-owned");
     }
     let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
     let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
@@ -4639,11 +4756,7 @@ unsafe fn phase4_linux_early(basic: u32) -> ! {
         }
         EXIT_REASON_MSR_READ | EXIT_REASON_MSR_WRITE => handle_msr_and_resume(basic),
         EXIT_REASON_XSETBV => handle_xsetbv_and_resume(ops::vmread(GUEST_RIP).unwrap_or(0)),
-        EXIT_REASON_CR_ACCESS => {
-            serial::write_line("boot: ERROR — unexpected CR-access exit");
-            dump_linux_guest_state();
-            finish_boot(false);
-        }
+        EXIT_REASON_CR_ACCESS => handle_linux_cr_and_resume(),
         _ => {
             let full = ops::vmread(EXIT_REASON).unwrap_or(basic as u64) as u32;
             serial::write_str("boot: linux unhandled exit reason=0x");
@@ -5194,6 +5307,35 @@ mod launch_test {
     #[test]
     fn marker_stable() {
         assert_eq!(M1_VMEXIT_OK_MARKER, "RAYNU-V-M1-VMEXIT-OK");
+        assert_eq!(
+            E4_LINUX_CR4_HOST_OWNED,
+            crate::arch::cpu::CR4_VMXE
+                | crate::arch::cpu::CR4_OSFXSR
+                | crate::arch::cpu::CR4_OSXMMEXCPT
+        );
+        let dumped = 0x2060u64;
+        assert_eq!(dumped & crate::arch::cpu::CR4_OSFXSR, 0);
+        let linux_cr4 = e4_linux_guest_cr4(dumped);
+        assert_eq!(
+            e4_linux_apply_cr4_write(0x1060) & crate::arch::cpu::CR4_OSFXSR,
+            crate::arch::cpu::CR4_OSFXSR
+        );
+        assert_eq!(
+            e4_linux_apply_cr4_write(0x1060) & crate::arch::cpu::CR4_LA57,
+            0
+        );
+        assert_eq!(E4_LINUX_CR4_FORBIDDEN, crate::arch::cpu::CR4_LA57);
+        assert!(e4_linux_cr_access_is_cr4_mov(0x4));
+        assert!(!e4_linux_cr_access_is_cr4_mov(0));
+        assert_eq!(linux_cr4 & crate::arch::cpu::CR4_OSFXSR, crate::arch::cpu::CR4_OSFXSR);
+        assert_eq!(
+            linux_cr4 & crate::arch::cpu::CR4_OSXMMEXCPT,
+            crate::arch::cpu::CR4_OSXMMEXCPT
+        );
+        assert_eq!(linux_cr4 & crate::arch::cpu::CR4_VMXE, crate::arch::cpu::CR4_VMXE);
+        let shadow = e4_linux_cr4_read_shadow(dumped);
+        assert_eq!(shadow & crate::arch::cpu::CR4_VMXE, 0);
+        assert_eq!(shadow & crate::arch::cpu::CR4_OSFXSR, crate::arch::cpu::CR4_OSFXSR);
         assert_eq!(M2_EPT_OK_MARKER, "RAYNU-V-M2-EPT-OK");
         assert_eq!(M2_GUEST_OK_MARKER, "RAYNU-V-M2-GUEST-OK");
         assert_eq!(M2_OWN_OK_MARKER, "RAYNU-V-M2-OWN-OK");

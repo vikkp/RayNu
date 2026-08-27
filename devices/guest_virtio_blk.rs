@@ -4,16 +4,26 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
-//! Empty virtio 1.0 block function at `00:00.0` (Red Hat `1AF4:1042`).
-//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` (host
-//! `0x1237` and IDE `0x7010` both looped; never Header Type, never another
-//! BDF). The probe slot is virtio so that read can enum it. IDE is `00:00.1`
-//! (multifunction child). Boot order is CD then disk (fw_cfg `bootorder`).
+//! Empty virtio 1.0 block function at `00:02.0` (Red Hat `1AF4:1042`).
+//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` into
+//! `HostBridgeDevId`. Iron `c1476d3` served virtio `0x1042` there, so PEI
+//! skipped the stock QEMU map (`PlatformMemMapInitialization` IoMemory HOB
+//! at `0xA0000–1MiB`) and left GCD as a merged `[0, LowMemory)` SystemMemory
+//! range covering VGA UC. PEI therefore sees i440FX `8086:1237` at `00:00.0`.
+//! Iron `2cbf9e8` `retcmp=` is CpuDxe `AcpiTimerLibConstructor`:
+//! `cmp ax, 0x1237` / `0x29C0` / `0x0D57` then store PIIX4 `0xB000` /
+//! ICH9 `0x0600`; default `ASSERT(FALSE)`. Latch used to rewrite `00:00.0`
+//! to virtio `0x1042`, so DXE `PciRead16(OVMF_HOSTBRIDGE_DID)` missed the
+//! switch. `00:00.0` stays i440FX; latch reveals virtio at `00:02.0`.
+//! Header Type on slot 0 stays multifunction so a walk finds IDE fn1.
+//! PIIX `00:01.1` is the same CD. Boot order is CD then disk (fw_cfg
+//! `bootorder`).
 //! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,
 //! not an installer.
 
 use crate::devices::guest_platform::{
-    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, PCI_HEADER_MULTIFUNCTION,
+    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
+    PCI_HEADER_MULTIFUNCTION,
 };
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -21,8 +31,13 @@ use core::sync::atomic::{AtomicBool, Ordering};
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
 
 pub const GUEST_VIRTIO_PCI_BUS: u8 = 0;
-pub const GUEST_VIRTIO_PCI_DEV: u8 = 0;
+/// QEMU-compatible slot. Not `00:00.0` — that DID is the host bridge
+/// (`OVMF_HOSTBRIDGE_DID`) for `AcpiTimerLibConstructor`.
+pub const GUEST_VIRTIO_PCI_DEV: u8 = 2;
 pub const GUEST_VIRTIO_PCI_FN: u8 = 0;
+/// Slot 0 is always the i440FX host-bridge DID PEI/DXE probe.
+pub const GUEST_SLOT0_PCI_DEV: u8 = 0;
+pub const GUEST_SLOT0_PCI_FN: u8 = 0;
 /// Virtio 1.0 PCI vendor (Red Hat).
 pub const GUEST_VIRTIO_PCI_VENDOR: u16 = 0x1AF4;
 /// Virtio 1.0 block device id.
@@ -62,6 +77,27 @@ static VIRTIO_LOCK: AtomicBool = AtomicBool::new(false);
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static MARKER: AtomicBool = AtomicBool::new(false);
+/// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
+/// Sticky-false after [`latch_dxe_virtio_did`] (virtio appears at `00:02.0`).
+static PEI_I440FX_DID: AtomicBool = AtomicBool::new(true);
+
+/// True until DXE / MiscInitialization has selected a BDF other than `00:00.0`.
+///
+/// INVARIANTS:
+/// - PEI `InitializePlatform` stores `00:00.0` DID as `HostBridgeDevId`
+/// - `00:00.0` VID/DID stays i440FX `8086:1237` after latch (AcpiTimerLib)
+/// - After [`latch_dxe_virtio_did`], virtio `1AF4:1042` is at `00:02.0`
+pub fn pei_host_bridge_did() -> bool {
+    PEI_I440FX_DID.load(Ordering::Acquire)
+}
+
+/// DXE / MiscInitialization: first CF8 of a BDF other than `00:00.0`.
+///
+/// Returns true when this call performed the latch. Reveals virtio at
+/// `00:02.0`. Does **not** rewrite `00:00.0` DID.
+pub fn latch_dxe_virtio_did() -> bool {
+    PEI_I440FX_DID.swap(false, Ordering::AcqRel)
+}
 
 fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
     while VIRTIO_LOCK.swap(true, Ordering::Acquire) {
@@ -74,6 +110,14 @@ fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
     out
 }
 
+pub fn pci_addr_selects_slot0(addr: u32) -> bool {
+    if (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_SLOT0_PCI_DEV && fun == GUEST_SLOT0_PCI_FN
+}
+
 pub fn pci_addr_selects_virtio(addr: u32) -> bool {
     if (addr & 0x8000_0000) == 0 {
         return false;
@@ -82,12 +126,25 @@ pub fn pci_addr_selects_virtio(addr: u32) -> bool {
     bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_VIRTIO_PCI_DEV && fun == GUEST_VIRTIO_PCI_FN
 }
 
-/// PCI config address for the guest virtio-blk function (`00:00.0`).
+/// Slot 0 host-bridge DID or latched virtio `00:02.0`.
+pub fn pci_addr_selects_owned(addr: u32) -> bool {
+    pci_addr_selects_slot0(addr) || pci_addr_selects_virtio(addr)
+}
+
+/// PCI config address for the guest virtio-blk function (`00:02.0`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
         | (u32::from(GUEST_VIRTIO_PCI_DEV) << 11)
         | (u32::from(GUEST_VIRTIO_PCI_FN) << 8)
+}
+
+/// PCI config address for slot 0 (`00:00.0`, i440FX host-bridge DID).
+pub fn pci_config_addr_slot0() -> u32 {
+    0x8000_0000
+        | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
+        | (u32::from(GUEST_SLOT0_PCI_DEV) << 11)
+        | (u32::from(GUEST_SLOT0_PCI_FN) << 8)
 }
 
 /// Honest evidence: empty virtio-blk is live, firmware enumerated it, and
@@ -113,6 +170,7 @@ pub fn reset() {
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
+    PEI_I440FX_DID.store(true, Ordering::Release);
 }
 
 /// Mark the empty virtio-blk function live on the private guest-UEFI VMCS.
@@ -125,6 +183,7 @@ pub fn present() -> bool {
     VISIBLE.store(true, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
+    PEI_I440FX_DID.store(true, Ordering::Release);
     true
 }
 
@@ -136,7 +195,17 @@ pub fn pci_read_addr() -> u32 {
     with_virtio(|v| v.pci_addr)
 }
 
-fn config_dword(v: &VirtioPci, off: u8) -> u32 {
+fn slot0_dword(off: u8) -> u32 {
+    match off {
+        0x00 => u32::from(HOST_BRIDGE_VENDOR) | (u32::from(HOST_BRIDGE_DEVICE) << 16),
+        0x04 => 0x0000_0006,
+        0x08 => 0x0600_0000, // host bridge (not virtio SCSI class)
+        0x0C => PCI_HEADER_MULTIFUNCTION,
+        _ => 0,
+    }
+}
+
+fn virtio_dword(v: &VirtioPci, off: u8) -> u32 {
     match off {
         0x00 => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_DEVICE) << 16),
         0x04 => u32::from(v.pci_cmd) | 0x0010_0000, // CapList
@@ -152,35 +221,44 @@ fn config_dword(v: &VirtioPci, off: u8) -> u32 {
     }
 }
 
+fn shift_cfg(dword: u32, off: u8, size: u8) -> u32 {
+    let shift = (off & 3) * 8;
+    let shifted = dword >> shift;
+    match size {
+        1 => shifted & 0xff,
+        2 => shifted & 0xffff,
+        _ => shifted,
+    }
+}
+
 pub fn pci_read_data(port: u16, size: u8) -> u32 {
     with_virtio(|v| {
         if !v.visible {
             return 0xFFFF_FFFF;
         }
         let addr = v.pci_addr;
+        let off = pci_cfg_offset(addr, port);
+        let aligned = off & 0xFC;
+        if pci_addr_selects_slot0(addr) {
+            return shift_cfg(slot0_dword(aligned), off, size);
+        }
         if !pci_addr_selects_virtio(addr) {
             return 0xFFFF_FFFF;
         }
-        let off = pci_cfg_offset(addr, port);
-        let aligned = off & 0xFC;
+        if pei_host_bridge_did() {
+            return 0xFFFF_FFFF;
+        }
         if aligned == 0 {
             v.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }
-        let dword = config_dword(v, aligned);
-        let shift = (off & 3) * 8;
-        let shifted = dword >> shift;
-        match size {
-            1 => shifted & 0xff,
-            2 => shifted & 0xffff,
-            _ => shifted,
-        }
+        shift_cfg(virtio_dword(v, aligned), off, size)
     })
 }
 
 pub fn pci_write_data(port: u16, size: u8, val: u32) {
     with_virtio(|v| {
-        if !v.visible || !pci_addr_selects_virtio(v.pci_addr) {
+        if !v.visible || !pci_addr_selects_virtio(v.pci_addr) || pei_host_bridge_did() {
             return;
         }
         let off = pci_cfg_offset(v.pci_addr, port);

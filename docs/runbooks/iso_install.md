@@ -222,4 +222,14 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    `00:00.0` (PEI DID `0x1042`). CD GuestVisible. `pci_ide=0` sectors=0.
    Stop n=115 virtio=1. Not a completed firmware CD boot.
    Not installer. Not Everest E5.
-   Next: firmware CD boot (ATAPI/El Torito).
+   **Stage 43 (host + QEMU nested VT-x, closed):** simultaneous virtio
+   `00:00.0` + IDE `00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). Nested VT-x
+   `1b07692`: `pci select 00:00.01` `val=0x70108086`, stop n=1111
+   `pci_ide=1 virtio=1` `sectors=0` `spin=1`. Not a completed firmware
+   CD boot. Not installer. Not Everest E5.
+   **Stage 44 (iron COM2 `bf696ca`, closed):** firmware ATAPI READ
+   (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). `sectors=1` `packet=9` `scsi=0x28`
+   stop n=30769 `pci_ide=1 virtio=1`. Not El Torito boot. Not installer.
+   Not Everest E5.
+   Next: Stage 45 firmware El Torito CD boot, then P0-60 G1 EPT
+   (not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.
