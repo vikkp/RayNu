@@ -42,7 +42,7 @@
 # E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
 # E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds)
 # E5.44: RAYNU-V-M7-E5-OVMF-ATAPI-OK (required when VMXON succeeds)
-# E5.45: RAYNU-V-M7-E5-OVMF-ELTORITO-OK (logged when VMXON succeeds; required to close Stage 45; FAT ESP BOOTX64 + RN-ELT, not sectors>0 alone)
+# E5.45: RAYNU-V-M7-E5-OVMF-ELTORITO-OK (CLOSED iron COM2 0be7283 RN-ELT n=197992; logged when VMXON succeeds — nested qemu may timeout; iron is the close; FAT ESP BOOTX64 + RN-ELT, not sectors>0 alone)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -250,7 +250,7 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   if grep -qF "$MARKER_OVMF_ELTORITO" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI El Torito CD EFI ran"
   else
-    echo "==> E5 guest-UEFI El Torito CD EFI not yet (Stage 45 OPEN; ATAPI/BOTH/LINUX-EARLY still required)"
+    echo "==> E5 guest-UEFI El Torito CD EFI not in this serial (Stage 45 CLOSED iron COM2 0be7283; nested qemu may miss StartImage; ATAPI/BOTH/LINUX-EARLY still required)"
   fi
   if grep -qF "$MARKER_VMEXIT" "$SERIAL_LOG"; then
     echo "==> M1.2 VMEXIT marker found"

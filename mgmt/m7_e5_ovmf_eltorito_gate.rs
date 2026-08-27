@@ -4,15 +4,15 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: N/A
 //!
-//! Stage 44 closed ATAPI-OK on iron COM2 `bf696ca` then stopped the private
-//! VMCS on the first sector (`n=30769` `sectors=1`). Keep running after
-//! that READ until OVMF mounts the El Torito FAT ESP, StartImages
-//! `\EFI\BOOT\BOOTX64.EFI`, and the payload writes `RN-ELT` to COM1, or
-//! the 131072-exit cap (hard resume 262144 after iron `df7d158` hit that
-//! cap with catalog+bootimg still in ATA PIO). Nested VT-x or iron COM2
-//! closes the marker. Not `sectors>0` alone. Not installer. Not
-//! `ISO-INSTALL-OK`. Not P0-60 G1 EPT. Do not skip `ebecc9c3`. Do not
-//! move virtio to `00:00.0`.
+//! Stage 45 closed on iron COM2 `0be7283`: OVMF BDS StartImaged the
+//! El Torito CD EFI; payload wrote `RN-ELT` on COM1; marker
+//! `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` at n=197992 (catalog=1 bootimg=1
+//! magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8). Stage 44
+//! closed ATAPI-OK on iron COM2 `bf696ca`. Keep VMCS after first ATAPI
+//! until catalog+load READ plus `RN-ELT`, or the 262144-exit cap (iron
+//! `df7d158` hit 131072 still in ATA PIO). Not `sectors>0` alone. Not
+//! installer. Not `ISO-INSTALL-OK`. Not P0-60 G1 EPT. Do not skip
+//! `ebecc9c3`. Do not move virtio to `00:00.0`.
 
 use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
@@ -200,10 +200,13 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("131072-exit cap")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2048-byte FAT")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ISO9660")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0be7283")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("n=197992")
+        && plan.contains("n=197992")
 }
 
-/// Full E5 Stage 45 package. Host gate + QEMU marker. Nested VT-x or iron
-/// COM2 closes `OVMF-ELTORITO-OK`. Not installer. Not Everest E5.
+/// Full E5 Stage 45 package. Host gate + QEMU marker. Closed on iron COM2
+/// `0be7283` (`OVMF-ELTORITO-OK` / `RN-ELT`). Not installer. Not Everest E5.
 pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
     reset_guest_fw();
     reset_host_cdrom();

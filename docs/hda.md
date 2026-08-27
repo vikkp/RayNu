@@ -8,7 +8,7 @@ mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy 
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
 velocity_commits_30d: 368
-velocity_gates_30d: 60
+velocity_gates_30d: 61
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -143,9 +143,9 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (guest-visible CD) | Catalog parse + host attach + FirmwareArmed + GuestVisible PCI IDE/ATAPI; not DXE boot / not installer |
-| CD-ROM attach | PARTIAL (guest-visible) | `attach_cdrom_uefi` → GuestVisible + PCI IDE/ATAPI; firmware does not yet boot the CD |
-| Guest UEFI firmware blob | PARTIAL (ESP retained + past SEC) | Real ESP OVMF.fd retained; private VMCS past SEC on QEMU/VMX; not full DXE / not installer / not Everest E5 |
+| ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
+| CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
+| Guest UEFI firmware blob | PARTIAL (ESP retained + El Torito) | Real ESP OVMF.fd retained; private VMCS ran CD EFI on iron; not distro installer / not Everest E5 |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -298,6 +298,8 @@ Ordered for critical path (parallelize B with D design):
 - **P0-52 / E5 Stage 37 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`. Private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP `OVMF.fd`. Not E4 SHELL. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-53 / E5 Stage 38 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-ALIVE-OK`. OVMF SEC `mov cr4, 0x640` no longer triple-faults (CR4.VMXE host-owned). Not full OVMF boot. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-54 / E5 Stage 39 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`. Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Iron P0-14 remains `2b795a0`.
+- **P0-59 / E5 Stage 44 closed (iron COM2 `bf696ca`):** `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. `sectors=1` `packet=9` `scsi=0x28`. Not El Torito. Iron P0-14 remains `2b795a0`.
+- **P0-61 / E5 Stage 45 closed (iron COM2 `0be7283`):** `RAYNU-V-M7-E5-OVMF-ELTORITO-OK`. `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1. Not installer. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -348,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-eltorito |
-| Summary | Stage 45 El Torito: 2048-byte FAT + ISO9660 `\EFI\BOOT` after iron `df7d158` catalog=1 bootimg=1 elt=0 (512-byte BPB / empty PVD root) hit the 131072-exit cap; PE SectionAlignment 0x1000; 262144-exit cap; not ELTORITO-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 45 El Torito CLOSED iron COM2 `0be7283`: `RN-ELT` + `OVMF-ELTORITO-OK` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. E4 LINUX-EARLY then G1 EPT fail-soft is not Stage 45. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 45 OPEN in progress. `OVMF-ATAPI-OK` stays CLOSED. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Gates touched | Stage 45 / P0-61 CLOSED. Next P0-60 G1 EPT. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito host package in progress then P0-60 G1 EPT (not an E5 stage) then Stage 46 `ISO-INSTALL-OK`; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283` (`OVMF-ELTORITO-OK`); next P0-60 G1 EPT (not an E5 stage) then Stage 46 `ISO-INSTALL-OK`; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 CLOSED iron COM2 0be7283 OVMF-ELTORITO-OK RN-ELT n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8; E4 LINUX-EARLY then G1 EPT fail-soft not Stage 45; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 2048-byte FAT BPB + ISO9660 EFI/BOOT/BOOTX64 after iron df7d158 512-byte BPB catalog=1 bootimg=1 elt=0 (not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 262144-exit cap after iron df7d158 catalog=1 bootimg=1 elt=0 stop n=131072 (131072-exit cap; BDS ATA PIO; not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: do not apply 32768 post-ATAPI tail after PACKET (first sector often LBA 0 dummy); EDK2 FatDxe+LoadImage host walk; not installer; iron P0-14 stays 2b795a0 |

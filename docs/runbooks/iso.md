@@ -432,6 +432,7 @@ E5 Stage 44 (iron COM2 `bf696ca`, closed): firmware ATAPI READ
 (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). `sectors=1` `packet=9` `scsi=0x28`
 stop n=30769 `pci_ide=1 virtio=1`. Not a completed firmware CD boot.
 Not installer.
-Next: Stage 45 firmware El Torito CD boot (host package in progress;
-close on nested VT-x or iron COM2 `OVMF-ELTORITO-OK`), then P0-60 G1 EPT
-(not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.
+E5 Stage 45 (iron COM2 `0be7283`, closed): firmware El Torito CD EFI
+(`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
+magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
+Next: P0-60 G1 EPT (not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.
