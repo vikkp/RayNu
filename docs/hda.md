@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-eltorito |
-| Summary | Stage 45 El Torito: no 32768 post-ATAPI tail after PACKET (LBA 0 dummy); EDK2 FatDxe/LoadImage host walk; 131072-exit cap. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 45 El Torito: PE SectionAlignment 0x1000 for DxeCore ProtectUefiImage; iron COM2 ATAPI-OK n=30769 then catalog=1 (not ELTORITO-OK); 131072-exit cap. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
 | Gates touched | Stage 45 OPEN in progress. `OVMF-ATAPI-OK` stays CLOSED. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: PE SectionAlignment 0x1000 so DxeCore ProtectUefiImage can set X; iron COM2 ATAPI-OK n=30769 then catalog=1 bootimg=0 (kept VMCS; not ELTORITO-OK); not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: do not apply 32768 post-ATAPI tail after PACKET (first sector often LBA 0 dummy); EDK2 FatDxe+LoadImage host walk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: GenFw PE 0x2022 + COM1 LCR DLAB clear before RN-ELT; no short tail after catalog+load; 131072-exit cap; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: no short tail after catalog+load READ; 131072-exit cap; BAR ATA data-port rep insw fills RAM; not installer; iron P0-14 stays 2b795a0 |

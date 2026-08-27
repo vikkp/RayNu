@@ -51,8 +51,16 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
     if u16::from_le_bytes([pe[0x86], pe[0x87]]) != 2 {
         return false;
     }
+    if u32::from_le_bytes([pe[0x98 + 0x20], pe[0x98 + 0x21], pe[0x98 + 0x22], pe[0x98 + 0x23]])
+        != 0x1000
+    {
+        return false;
+    }
+    if u16::from_le_bytes([pe[0x98 + 0x46], pe[0x98 + 0x47]]) != 0x0160 {
+        return false;
+    }
     let dd5 = 0x98 + 0x70 + 5 * 8;
-    if u32::from_le_bytes([pe[dd5], pe[dd5 + 1], pe[dd5 + 2], pe[dd5 + 3]]) != 0x400 {
+    if u32::from_le_bytes([pe[dd5], pe[dd5 + 1], pe[dd5 + 2], pe[dd5 + 3]]) != 0x2000 {
         return false;
     }
     let mut fat = [0u8; 8192];
@@ -154,6 +162,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && ide.contains("edk2_pe_loadimage_ok")
         && ide.contains("write_eltorito_efi_pe")
         && ide.contains("0x2022")
+        && ide.contains("SectionAlignment 0x1000")
+        && ide.contains("ProtectUefiImage")
         && ide.contains("LCR")
         && ide.contains("write_eltorito_fat12")
         && ide.contains("BOOTX64")
@@ -166,6 +176,7 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not firmware El Torito boot")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("catalog+load READ")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("RN-ELT")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SectionAlignment 0x1000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ebecc9c3")
 }

@@ -222,8 +222,18 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
         "entry clears COM1 LCR.DLAB before THR"
     );
     assert_eq!(u16::from_le_bytes([pe[0x86], pe[0x87]]), 2, ".text + .reloc");
+    assert_eq!(
+        u32::from_le_bytes(pe[0x98 + 0x20..0x98 + 0x24].try_into().unwrap()),
+        0x1000,
+        "SectionAlignment 0x1000 for ProtectUefiImage"
+    );
+    assert_eq!(
+        u16::from_le_bytes(pe[0x98 + 0x46..0x98 + 0x48].try_into().unwrap()),
+        0x0160,
+        "NX_COMPAT | DYNAMIC_BASE | HIGH_ENTROPY_VA"
+    );
     let dd5 = 0x98 + 0x70 + 5 * 8;
-    assert_eq!(u32::from_le_bytes(pe[dd5..dd5 + 4].try_into().unwrap()), 0x400);
+    assert_eq!(u32::from_le_bytes(pe[dd5..dd5 + 4].try_into().unwrap()), 0x2000);
     assert_eq!(u32::from_le_bytes(pe[dd5 + 4..dd5 + 8].try_into().unwrap()), 8);
     let mut fat = [0u8; 8192];
     assert_eq!(write_eltorito_fat12(&mut fat), 8192);

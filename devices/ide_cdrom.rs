@@ -713,7 +713,10 @@ pub fn edk2_pe_loadimage_ok(pe: &[u8]) -> bool {
     let size_of_headers =
         u32::from_le_bytes([pe[opt + 0x3C], pe[opt + 0x3D], pe[opt + 0x3E], pe[opt + 0x3F]]);
     let subsystem = u16::from_le_bytes([pe[opt + 0x44], pe[opt + 0x45]]);
-    if subsystem != 10 || sect_align == 0 || file_align == 0 {
+    if subsystem != 10 || sect_align < 0x1000 || file_align == 0 {
+        return false;
+    }
+    if (sect_align & (sect_align - 1)) != 0 || (file_align & (file_align - 1)) != 0 {
         return false;
     }
     if size_of_image < size_of_headers || (size_of_image % sect_align) != 0 {
@@ -869,6 +872,9 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
 ///   can `AllocateAnyPages` in the 32MiB guest (ImageBase 0)
 /// - Characteristics `0x2022` match EDK2 GenFw EFI applications
 ///   (`EXECUTABLE | LARGE_ADDRESS_AWARE | DLL`)
+/// - SectionAlignment 0x1000 so DxeCore ProtectUefiImage can set X on
+///   `.text` (nested `8881cdd`: catalog+bootimg, `elt=0`; 0x200 `.text`+`.reloc`
+///   share one NX LoaderCode page when NX policy skips sub-page protect)
 /// - `.text` VirtualSize is the file-aligned size so LoadImage copies the
 ///   UART setup, not only the first 0x20 bytes
 /// - Entry clears COM1 LCR.DLAB then OUTs magic (THR is 0x3F8 only when DLAB=0)
@@ -876,11 +882,15 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
 /// - Does not allocate
 pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     const HDR: usize = 0x200;
-    const ALIGN: usize = 0x200;
-    const CODE: usize = ALIGN;
-    const RELOC_RVA: usize = HDR + ALIGN;
+    const FILE_ALIGN: usize = 0x200;
+    const SECT_ALIGN: usize = 0x1000;
+    const CODE: usize = FILE_ALIGN;
+    const TEXT_RVA: usize = SECT_ALIGN;
+    const RELOC_RVA: usize = SECT_ALIGN * 2;
+    const RELOC_FILE: usize = HDR + FILE_ALIGN;
     const RELOC_DIR: u32 = 8;
-    const NEED: usize = RELOC_RVA + ALIGN;
+    const SIZE_OF_IMAGE: usize = SECT_ALIGN * 3;
+    const NEED: usize = RELOC_FILE + FILE_ALIGN;
     if dst.len() < NEED {
         return 0;
     }
@@ -899,14 +909,16 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     dst[opt..opt + 2].copy_from_slice(&0x020Bu16.to_le_bytes());
     dst[opt + 2] = 14;
     dst[opt + 4..opt + 8].copy_from_slice(&(CODE as u32).to_le_bytes());
-    dst[opt + 8..opt + 12].copy_from_slice(&(ALIGN as u32).to_le_bytes());
-    dst[opt + 0x10..opt + 0x14].copy_from_slice(&(HDR as u32).to_le_bytes());
-    dst[opt + 0x14..opt + 0x18].copy_from_slice(&(HDR as u32).to_le_bytes());
-    dst[opt + 0x20..opt + 0x24].copy_from_slice(&(ALIGN as u32).to_le_bytes());
-    dst[opt + 0x24..opt + 0x28].copy_from_slice(&(ALIGN as u32).to_le_bytes());
-    dst[opt + 0x38..opt + 0x3C].copy_from_slice(&(NEED as u32).to_le_bytes());
+    dst[opt + 8..opt + 12].copy_from_slice(&(FILE_ALIGN as u32).to_le_bytes());
+    dst[opt + 0x10..opt + 0x14].copy_from_slice(&(TEXT_RVA as u32).to_le_bytes());
+    dst[opt + 0x14..opt + 0x18].copy_from_slice(&(TEXT_RVA as u32).to_le_bytes());
+    dst[opt + 0x20..opt + 0x24].copy_from_slice(&(SECT_ALIGN as u32).to_le_bytes());
+    dst[opt + 0x24..opt + 0x28].copy_from_slice(&(FILE_ALIGN as u32).to_le_bytes());
+    dst[opt + 0x38..opt + 0x3C].copy_from_slice(&(SIZE_OF_IMAGE as u32).to_le_bytes());
     dst[opt + 0x3C..opt + 0x40].copy_from_slice(&(HDR as u32).to_le_bytes());
     dst[opt + 0x44..opt + 0x46].copy_from_slice(&10u16.to_le_bytes());
+    // HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT (ProtectUefiImage)
+    dst[opt + 0x46..opt + 0x48].copy_from_slice(&0x0160u16.to_le_bytes());
     dst[opt + 0x6C..opt + 0x70].copy_from_slice(&16u32.to_le_bytes());
     let dd5 = opt + 0x70 + 5 * 8;
     dst[dd5..dd5 + 4].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
@@ -914,18 +926,18 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     let sec = opt + 0xF0;
     dst[sec..sec + 5].copy_from_slice(b".text");
     dst[sec + 8..sec + 12].copy_from_slice(&(CODE as u32).to_le_bytes());
-    dst[sec + 12..sec + 16].copy_from_slice(&(HDR as u32).to_le_bytes());
-    dst[sec + 16..sec + 20].copy_from_slice(&(ALIGN as u32).to_le_bytes());
+    dst[sec + 12..sec + 16].copy_from_slice(&(TEXT_RVA as u32).to_le_bytes());
+    dst[sec + 16..sec + 20].copy_from_slice(&(FILE_ALIGN as u32).to_le_bytes());
     dst[sec + 20..sec + 24].copy_from_slice(&(HDR as u32).to_le_bytes());
     dst[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes());
     let rel = sec + 40;
     dst[rel..rel + 6].copy_from_slice(b".reloc");
     dst[rel + 8..rel + 12].copy_from_slice(&RELOC_DIR.to_le_bytes());
     dst[rel + 12..rel + 16].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
-    dst[rel + 16..rel + 20].copy_from_slice(&(ALIGN as u32).to_le_bytes());
-    dst[rel + 20..rel + 24].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
+    dst[rel + 16..rel + 20].copy_from_slice(&(FILE_ALIGN as u32).to_le_bytes());
+    dst[rel + 20..rel + 24].copy_from_slice(&(RELOC_FILE as u32).to_le_bytes());
     dst[rel + 36..rel + 40].copy_from_slice(&0x4200_0040u32.to_le_bytes());
-    dst[RELOC_RVA + 4..RELOC_RVA + 8].copy_from_slice(&RELOC_DIR.to_le_bytes());
+    dst[RELOC_FILE + 4..RELOC_FILE + 8].copy_from_slice(&RELOC_DIR.to_le_bytes());
     // mov edx, 0x3FB ; mov al, 3 ; out dx, al  (LCR: 8N1, DLAB=0)
     // mov edx, 0x3F8 ; OUT each magic byte ; xor eax,eax ; ret
     let mut i = HDR;

@@ -86,6 +86,7 @@ fn marker_and_residual_honest() {
         E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VMLAUNCH insn issued only when presence is true")
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SectionAlignment 0x1000"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UnsupportedOnFirmware"));
     assert!(!guest_uefi_vmlaunch_entered());
     assert_eq!(last_exit_reason(), 0);
