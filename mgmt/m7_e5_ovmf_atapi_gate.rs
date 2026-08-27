@@ -136,6 +136,12 @@
 //! Do not PAT-UC VGA. P1 hold (`22e0cb2`) already disproved mixed MTRR.
 //! `filehex` is CpuFlush: `test r9d; jnz; wbinvd; mov rax, EFI_UNSUPPORTED`.
 //! Nop that `jnz` in live report-RAM so every FlushType WBINVD. Dump `r9=`.
+//! Iron `f0781bb`: CpuFlush `n=2` `filehex` `9090` `r9=0x21` still ASSERT
+//! `ebecc9c3` `callerrip=0x7fd25193`. CpuFlush is leftover File dump.
+//! P1 hold (`22e0cb2`) ran while FIX was power-on 0 (UC). Firmware now
+//! FIX `0x06` WB. Hold variable UC after FIX WB
+//! (`MTRR UC held after FIX WB (GCD)`). Scan every report-RAM CpuFlush
+//! copy (do not return after the first slot). Dump `flushjnz=`.
 //! Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
@@ -219,7 +225,8 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
-    guest_uefi_patch_cpu_flush_unsupported, GUEST_UEFI_CPU_FLUSH_UNSUPPORTED,
+    guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
+    GUEST_UEFI_CPU_FLUSH_UNSUPPORTED,
     GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
 };
 
@@ -595,8 +602,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("d6b012a")
         && guest.contains("guest_uefi_patch_cpu_flush_unsupported")
         && guest.contains("guest_uefi_patch_cpu_flush_all_mapped")
+        && guest.contains("guest_uefi_count_cpu_flush_jnz")
         && guest.contains("GUEST_UEFI_CPU_FLUSH_UNSUPPORTED")
         && guest.contains("r9=0x")
+        && guest.contains("flushjnz=")
+        && guest.contains("f0781bb")
+        && guest.contains("MTRR UC held after FIX WB (GCD)")
         && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
@@ -975,6 +986,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d6b012a")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xa0067")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CpuFlush")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f0781bb")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC held after FIX WB (GCD)")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flushjnz=")
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();
@@ -982,6 +996,16 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             guest_uefi_patch_cpu_flush_unsupported(&mut b[..n]) == 1
                 && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF] == 0x90
                 && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF + 1] == 0x90
+        }
+        && {
+            let pat = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED;
+            let mut two = [0u8; 64];
+            let n = pat.len();
+            two[..n].copy_from_slice(pat);
+            two[32..32 + n].copy_from_slice(pat);
+            guest_uefi_count_cpu_flush_jnz(&two) == 2
+                && guest_uefi_patch_cpu_flush_unsupported(&mut two) == 2
+                && guest_uefi_count_cpu_flush_jnz(&two) == 0
         }
         && GUEST_UEFI_IRON_CPU_FLUSH_GPA == 0x7EE6_8FA0
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
