@@ -34,8 +34,10 @@ use super::{
 };
 use super::{
     guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pdpte, guest_uefi_pt_walk_pml4e,
+    guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc,
+    store_report_ram_u64,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
-    GUEST_UEFI_PT_PRESENT,
+    GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -583,6 +585,59 @@ fn marker_and_residual_honest() {
     }
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7fd25193"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC admitted"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c70768b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000083"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_live_uc_hole"));
+    assert_eq!(GUEST_UEFI_IRON_PDE8000_WB, 0x8000_0083);
+    assert!(guest_uefi_pt_pde_is_wb_hole(GUEST_UEFI_IRON_PDE8000_WB));
+    assert_eq!(guest_uefi_pt_pde_pat_uc(0x8000_0000), 0x8000_0000 | GUEST_UEFI_PT_LARGE_2M_UC);
+    assert!(!guest_uefi_pt_pde_is_wb_hole(guest_uefi_pt_pde_pat_uc(0x8000_0000)));
+    {
+        use core::cell::RefCell;
+        let page = RefCell::new([0u8; 0x7000]);
+        assert!(store_report_ram_u64(
+            &mut *page.borrow_mut(),
+            GUEST_UEFI_IRON_HIGH_CR3,
+            0x7FA0_2023
+        ));
+        assert!(store_report_ram_u64(
+            &mut *page.borrow_mut(),
+            0x7FA0_2010,
+            0x7FA0_5003
+        ));
+        assert!(store_report_ram_u64(
+            &mut *page.borrow_mut(),
+            0x7FA0_2018,
+            0x7FA0_6023
+        ));
+        assert!(store_report_ram_u64(
+            &mut *page.borrow_mut(),
+            0x7FA0_5000,
+            GUEST_UEFI_IRON_PDE8000_WB
+        ));
+        let peek = |gpa: u64| {
+            let p = page.borrow();
+            let off = guest_uefi_report_ram_page_off(gpa) as usize;
+            if off.saturating_add(8) > p.len() {
+                0
+            } else {
+                let mut le = [0u8; 8];
+                le.copy_from_slice(&p[off..off + 8]);
+                u64::from_le_bytes(le)
+            }
+        };
+        let poke = |gpa: u64, val: u64| store_report_ram_u64(&mut *page.borrow_mut(), gpa, val);
+        assert_eq!(
+            guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000),
+            GUEST_UEFI_IRON_PDE8000_WB
+        );
+        let n = guest_uefi_pt_paint_live_uc_hole(peek, poke, GUEST_UEFI_IRON_HIGH_CR3);
+        assert!(n >= 1, "paint WB pde8000, n={n}");
+        assert_eq!(
+            guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000),
+            guest_uefi_pt_pde_pat_uc(0x8000_0000)
+        );
+    }
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("hide LA57"));
     {
         let mut page = [0u8; 0x20];

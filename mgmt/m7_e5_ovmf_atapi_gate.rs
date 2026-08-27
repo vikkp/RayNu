@@ -105,6 +105,11 @@
 //! (`gpa=0x7bddd000` `hpa=0x7c00000`) then `rip=0x7f8e21ca` `reason=0x34`
 //! `same=376` `lastmsr=0x23f` `insn=` empty (32 MiB peek). Peek report-RAM
 //! HPA for skip/ASSERT dump. Do not skip `ebecc9c3`.
+//! Iron `c70768b`: `MTRR UC admitted` `mtrrv=1` `mtrr0=0x80000000`
+//! `pde8000=0x80000083` `cr3=0x7fa01000` `pml4e=0x7fa02023` still
+//! ASSERT `insn=ebecc9c3` — live report-RAM CR3 is WB; 32MiB
+//! `identity_sync_live_mtrr_uc_hole` missed it. Peek/poke PAT-UC on
+//! that CR3 (P5 GCD split + P2 admit; not f07a597 low-CR3 paint).
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -177,7 +182,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
-    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e,
+    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
@@ -185,7 +190,8 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
-    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3,
+    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
+    GUEST_UEFI_PT_LARGE_2M_UC,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -458,6 +464,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("identity_split_mtrr_uc_hole")
         && gpt.contains("identity_pdpte_is_1g")
         && gpt.contains("identity_sync_live_mtrr_uc_hole")
+        && gpt.contains("c70768b")
         && gpt.contains("IDENTITY_FW_PDPT_GPA")
         && gpt.contains("PAT-UC PCD+PWT")
         && gpt.contains("8df2793")
@@ -511,6 +518,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("GUEST_UEFI_IRON_ASSERT_CALLER_RIP")
         && guest.contains("dump_walk_pde")
         && guest.contains("MTRR UC admitted (GCD)")
+        && guest.contains("guest_uefi_pt_paint_live_uc_hole")
+        && guest.contains("MTRR UC live PT painted")
+        && guest.contains("c70768b")
+        && guest.contains("c70768b")
+        && guest.contains("0x80000083")
+        && guest.contains("GUEST_UEFI_IRON_PDE8000_WB")
         && guest.contains("release_report_ram_for_e4")
         && launch.contains("E4_LINUX_CR4_FORBIDDEN")
         && plat.contains("E820_MID_GAP_BYTES")
@@ -835,6 +848,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PAT-UC 2-4GiB hole")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d7bfb23")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("identity_sync_live_mtrr_uc_hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c70768b")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pdpte3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1de9389")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x205067")
@@ -891,8 +905,15 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("peek report-RAM")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7fd25193")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC admitted")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c70768b")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000083")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_paint_live_uc_hole")
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
+        && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083
+        && guest_uefi_pt_pde_is_wb_hole(GUEST_UEFI_IRON_PDE8000_WB)
+        && !guest_uefi_pt_pde_is_wb_hole(guest_uefi_pt_pde_pat_uc(0x8000_0000))
+        && guest_uefi_pt_pde_pat_uc(0x8000_0000) == 0x8000_0000 | GUEST_UEFI_PT_LARGE_2M_UC
         && guest_uefi_pt_pml4e_gpa(GUEST_UEFI_IRON_HIGH_CR3, 0) == GUEST_UEFI_IRON_HIGH_CR3
         && guest_uefi_pt_walk_pml4e(|_| 0x7FA0_2003, GUEST_UEFI_IRON_HIGH_CR3, 0) == 0x7FA0_2003
         && GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP == 0x7F8E_21CA
@@ -907,6 +928,46 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
                 && out == [0xEB, 0xF3]
                 && store_report_ram_at(&mut page, 0x7BC0_0010, 0xC3C9, 2) == 2
                 && load_report_ram_at(&page, 0x7BC0_0010, 2) == Some(0xC3C9)
+        }
+        && {
+            use core::cell::RefCell;
+            let page = RefCell::new([0u8; 0x7000]);
+            store_report_ram_u64(
+                &mut *page.borrow_mut(),
+                GUEST_UEFI_IRON_HIGH_CR3,
+                0x7FA0_2023,
+            ) && store_report_ram_u64(&mut *page.borrow_mut(), 0x7FA0_2010, 0x7FA0_5003)
+                && store_report_ram_u64(&mut *page.borrow_mut(), 0x7FA0_2018, 0x7FA0_6023)
+                && store_report_ram_u64(
+                    &mut *page.borrow_mut(),
+                    0x7FA0_5000,
+                    GUEST_UEFI_IRON_PDE8000_WB,
+                )
+                && {
+                    let peek = |gpa: u64| {
+                        let p = page.borrow();
+                        let off = guest_uefi_report_ram_page_off(gpa) as usize;
+                        if off.saturating_add(8) > p.len() {
+                            0
+                        } else {
+                            let mut le = [0u8; 8];
+                            le.copy_from_slice(&p[off..off + 8]);
+                            u64::from_le_bytes(le)
+                        }
+                    };
+                    let poke = |gpa: u64, val: u64| {
+                        store_report_ram_u64(&mut *page.borrow_mut(), gpa, val)
+                    };
+                    guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000)
+                        == GUEST_UEFI_IRON_PDE8000_WB
+                        && guest_uefi_pt_paint_live_uc_hole(
+                            peek,
+                            poke,
+                            GUEST_UEFI_IRON_HIGH_CR3,
+                        ) >= 1
+                        && guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0x8000_0000)
+                            == guest_uefi_pt_pde_pat_uc(0x8000_0000)
+                }
         }
         && !guest_uefi_report_ram_should_map(0x1F0_0000)
         && !guest_uefi_report_ram_should_map(0x8000_0000)

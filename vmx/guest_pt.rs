@@ -858,6 +858,8 @@ pub unsafe fn identity_sync_live_mtrr_uc_hole(
         return 0;
     }
     let pml4 = cr3 & ADDR_MASK;
+    // Iron `c70768b`: firmware CR3 `0x7fa01000` is report-RAM. This 32 MiB
+    // slab walk returns 0; peek/poke `guest_uefi_pt_paint_live_uc_hole`.
     if pml4 >= ram_len {
         return 0;
     }
