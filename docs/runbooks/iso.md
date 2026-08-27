@@ -428,16 +428,8 @@ E5 Stage 43 (host + QEMU nested VT-x, closed): simultaneous virtio `00:00.0`
 + IDE `00:00.1` (`RAYNU-V-M7-E5-OVMF-BOTH-OK`). Nested VT-x `1b07692`:
 `pci select 00:00.01` `val=0x70108086`, stop n=1111 `pci_ide=1 virtio=1`
 `sectors=0` `spin=1`. Not a completed firmware CD boot. Not installer.
-E5 Stage 44 (host, open): firmware ATAPI READ (`RAYNU-V-M7-E5-OVMF-ATAPI-OK`).
-Stop on `sectors>0`, not both-enum-alone. Iron `3f417ca` xAPIC 4K mapped,
-  still ASSERT after MTRR walk `0xFE`/`0x2FF`/`0x250`. Guest MTRR shadow
-  (not host passthrough). Iron `408788c` MTRR walk completed, still ASSERT
-  after CPUID `0x1cf11b5`. Guest-UEFI hypervisor CPUID + `KVMKVMKVM`.
-  Iron `8700cbb`: still ASSERT `callerrip=0x1d25193` after WRMSR/RDMSR.
-  MTRR VCNT=32 + PCI UC hole. fw_cfg `bootorder` trailing NUL.
-  Iron `0b7d647`: VCNT=32 still ASSERT `lastmsr=EFER`. EFER.LMA = LME &&
-  CR0.PG; IA-32e entry matches LMA; debugcon `0x402`.
-  Guest-UEFI CPUID uniprocessor, FEATURE_CONTROL locked.
-CD bootorder PIIX `ide@1,1` then virtio-fn1 master `drive@0`.
-fw_cfg `etc/boot-menu-wait` 0 ms (skip BdsWait).
+E5 Stage 44 (iron COM2 `bf696ca`, closed): firmware ATAPI READ
+(`RAYNU-V-M7-E5-OVMF-ATAPI-OK`). `sectors=1` `packet=9` `scsi=0x28`
+stop n=30769 `pci_ide=1 virtio=1`. Not a completed firmware CD boot.
+Not installer.
 Next: firmware El Torito CD boot.

@@ -21,7 +21,8 @@
 //! so a leftover HPET poll is readable. Nested VT-x `707a849`: 1s HPET left
 //! `rip=0x6e812d insn=ebf3` (CpuDeadLoop); skip backward `jmp rel8` so
 //! firmware can fall through to PciBus. Marker after past-SEC and both
-//! PCI enums. Stage 44 stop is ATAPI `sectors>0` (not both-enum-alone).
+//! PCI enums. Stage 44 closed on iron COM2 `bf696ca` ATAPI `sectors>0`
+//! (not both-enum-alone).
 //! Not installer. No new `*Absent` enum. No TLS.
 
 use super::guest_fw::reset_guest_fw;

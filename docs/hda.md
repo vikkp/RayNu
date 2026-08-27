@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-23
+last_updated: 2026-08-27
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -8,7 +8,7 @@ mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy 
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
 velocity_commits_30d: 368
-velocity_gates_30d: 59
+velocity_gates_30d: 60
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -348,9 +348,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-atapi |
-| Summary | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT mtrr0=0x80000000. VCNT=32 power-on no hole. Not installer. Iron P0-14 stays 2b795a0. |
+| Summary | P0-59 CLOSED iron COM2 bf696ca ATAPI-OK sectors=1 packet=9 scsi=0x28 stop n=30769. Not El Torito. Not installer. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. ATAPI READ ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **OPEN** host. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Gates touched | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` **CLOSED** iron COM2 `bf696ca`. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +361,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum closed (P0-58); ATAPI `sectors>0` host-open (P0-59); iron COM2 2026-08-23 skipped guest-UEFI (no ESP `OVMF.fd`); nested VT-x `8e55abf` `cf8=0x80000838` ISA programming; firmware El Torito boot not completed; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | Simultaneous virtio+IDE enum closed (P0-58); ATAPI `sectors>0` closed iron COM2 `bf696ca` (P0-59); firmware El Torito boot not completed; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | P0-59 CLOSED iron COM2 bf696ca ATAPI-OK sectors=1 packet=9 scsi=0x28 stop n=30769 pci_ide=1 virtio=1; BOTH-OK n=12411 virtio 00:02.0 + IDE 00:00.1; no AcpiTimerLib ASSERT; not El Torito; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000; VCNT=32 power-on no hole; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron aee545f DXE assert skip then #UD 0x109d stop n=5364; revert skip; MTRR power-on E=0 VCNT=8 no UC hole; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron c40f4a8 pcdsig=1 after 32-pair MTRR still ASSERT callerrip=0x1d25193; guarded DXE ebec skip when RIP/caller in [1MiB,32MiB); not installer; iron P0-14 stays 2b795a0 |

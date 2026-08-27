@@ -686,6 +686,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("AcpiTimerLibConstructor"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4_PMBA_VALUE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:02.0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("bf696ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("scsi=0x28"));
     assert_eq!(GUEST_UEFI_ASSERT_PREHEX_BYTES, 32);
     assert_eq!(
         guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP),

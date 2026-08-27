@@ -177,6 +177,11 @@
 //! `ICH9_PMBASE_VALUE` `0x0600`). `00:00.0` was virtio `0x1042` after
 //! latch (`g16=0000` `rsi=0x7f6e1042`). Keep `00:00.0` i440FX `0x1237`;
 //! latch virtio at `00:02.0`. Do not skip `ebecc9c3`.
+//! Iron `bf696ca` COM2 **CLOSED** Stage 44: `OVMF-ATAPI-OK` `sectors=1`
+//! `packet=9` `scsi=0x28` `ata=0xa0` `ataio=982` stop n=30769
+//! `pci_ide=1 virtio=1`; BOTH-OK n=12411 virtio `00:02.0` + IDE
+//! `00:00.1`; no AcpiTimerLib ASSERT. Not El Torito. Not installer.
+//! E4 SHELL then M4.2 G1 EPT `GPA=0x10403000` fail-soft is not Stage 44.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -659,6 +664,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("retcmp=")
         && guest.contains("g16=")
         && guest.contains("rbx=0x")
+        && guest.contains("2cbf9e8")
+        && guest.contains("bf696ca")
+        && guest.contains("scsi=0x28")
         && guest.contains("96ef961")
         && guest.contains("fd041bb")
         && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
@@ -725,7 +733,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && e4_shell_launch_no_cdrom()
 }
 
-/// Full E5 Stage 44 package. Host gate + QEMU marker — not iron, not Everest E5.
+/// Full E5 Stage 44 package. Host gate + QEMU marker. Iron COM2 `bf696ca`
+/// closed Stage 44 (`OVMF-ATAPI-OK` `sectors=1`). Not El Torito. Not Everest E5.
 pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
     reset_guest_fw();
     reset_host_cdrom();
@@ -1075,6 +1084,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("2cbf9e8")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("AcpiTimerLibConstructor")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:02.0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("bf696ca")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("scsi=0x28")
         && GUEST_UEFI_ASSERT_PREHEX_BYTES == 32
         && guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP) == 0x7FD2_5173
         && guest_uefi_assert_retcmp_gpa(0x7F8E_2946) == 0x7F8E_2906
