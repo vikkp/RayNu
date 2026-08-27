@@ -159,6 +159,13 @@
 //! `[0xA0000, 0xC0000)`. Iron `fd041bb`: `n=32` `pte_c0000=0xc0067`
 //! then CpuDxe UC'd `mtrr268=0x0` still ASSERT. Hold FIX WB
 //! (`MTRR VGA FIX WB held (GCD)`). Dump `prehex=`. Do not skip `ebecc9c3`.
+//! Iron `96ef961`: hold landed `mtrr259=0x606…6` `mtrr268=0x606…6`
+//! `pte_a0000=0xa0067` still ASSERT `ebecc9c3` `callerrip=0x7fd25193`
+//! `prehex=66c705…` (`mov word, 6` / `jmp` / `call DebugAssert`).
+//! Dump 32-byte `prehex=` immediately before `0x7fd25193` plus `rax`
+//! (EFI_STATUS). `retpre=` 32 bytes at CpuDxe `ret-32`. Keep PEI
+//! i440FX `0x1237` / DXE virtio `0x1042`. Keep FIX WB hold. No DID
+//! flip. No new PAT-UC. Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -240,7 +247,8 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
-    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
+    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_ASSERT_PREHEX_BYTES, guest_uefi_assert_prehex_gpa,
+    GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
     GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_IRON_PTE_A0000_WB,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
@@ -631,6 +639,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("MTRR VGA FIX WB hold armed (GCD)")
         && guest.contains("MTRR VGA FIX WB held (GCD)")
         && guest.contains("prehex=")
+        && guest.contains("retpre=")
+        && guest.contains("GUEST_UEFI_ASSERT_PREHEX_BYTES")
+        && guest.contains("guest_uefi_assert_prehex_gpa")
+        && guest.contains("96ef961")
         && guest.contains("fd041bb")
         && guest.contains("guest_uefi_mtrr_fixed_is_vga_hole")
         && guest.contains("GUEST_UEFI_MTRR_UC_PACKED")
@@ -1037,6 +1049,11 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fd041bb")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX WB held")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("prehex=")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("96ef961")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retpre=")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("no DID flip")
+        && GUEST_UEFI_ASSERT_PREHEX_BYTES == 32
+        && guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP) == 0x7FD2_5173
         && {
             let mut b = [0u8; 24];
             let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();

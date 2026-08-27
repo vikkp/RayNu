@@ -38,7 +38,8 @@ use super::{
     guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole,
     guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m,
     guest_uefi_gpa0_split_pt_gpa, store_report_ram_u64,
-    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
+    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_ASSERT_PREHEX_BYTES, guest_uefi_assert_prehex_gpa,
+    GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_PT_TABLE,
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
@@ -674,6 +675,14 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fd041bb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR VGA FIX WB held"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("prehex="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("96ef961"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("retpre="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("no DID flip"));
+    assert_eq!(GUEST_UEFI_ASSERT_PREHEX_BYTES, 32);
+    assert_eq!(
+        guest_uefi_assert_prehex_gpa(GUEST_UEFI_IRON_ASSERT_CALLER_RIP),
+        0x7FD2_5173
+    );
     assert_eq!(guest_uefi_pt_leaf_4k_for(0xC_0000), 0xC_0000 | GUEST_UEFI_PT_LEAF_4K);
     assert!(!guest_uefi_gpa_in_vga_fix_uc(0xA_0000));
     assert!(!guest_uefi_gpa_in_vga_fix_uc(0xB_F000));
@@ -1155,6 +1164,14 @@ fn copy_low_ram_at_identity_window() {
     ];
     assert_eq!(copy_low_ram_at(&ram16, 0, &mut sixteen), 16);
     assert_eq!(&sixteen[..4], &[0x8b, 0x04, 0x25, 0xf0]);
+    let mut thirty_two = [0u8; 32];
+    let mut ram32 = [0u8; 40];
+    for (i, b) in ram32.iter_mut().enumerate() {
+        *b = i as u8;
+    }
+    assert_eq!(copy_low_ram_at(&ram32, 0, &mut thirty_two), 32);
+    assert_eq!(thirty_two[0], 0);
+    assert_eq!(thirty_two[31], 31);
 }
 
 #[test]
