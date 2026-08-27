@@ -365,6 +365,26 @@ pub enum AuditEvent {
         exits: u64,
         pci_enum: u64,
     },
+    /// Guest UEFI enumerated virtio `00:00.0` and IDE `00:00.1` on one boot.
+    /// Not ATAPI sectors / not installer.
+    OvmfGuestUefiBoth {
+        exits: u64,
+        virtio: u64,
+        ide: u64,
+    },
+    /// Guest UEFI issued ATAPI READ and `sectors>0`.
+    /// Not a completed El Torito CD boot / not installer.
+    OvmfGuestUefiAtapi {
+        exits: u64,
+        sectors: u64,
+    },
+    /// Guest UEFI loaded and ran the El Torito CD EFI.
+    /// Not installer / not `ISO-INSTALL-OK`.
+    OvmfGuestUefiEltorito {
+        exits: u64,
+        catalog: u64,
+        boot_image: u64,
+    },
 }
 
 /// One sealed audit record in the hash chain.
@@ -577,6 +597,9 @@ fn event_discriminant(event: AuditEvent) -> u64 {
         AuditEvent::OvmfGuestUefiCdrom { .. } => 68,
         AuditEvent::OvmfGuestUefiDxe { .. } => 69,
         AuditEvent::OvmfGuestUefiVirtio { .. } => 70,
+        AuditEvent::OvmfGuestUefiBoth { .. } => 71,
+        AuditEvent::OvmfGuestUefiAtapi { .. } => 72,
+        AuditEvent::OvmfGuestUefiEltorito { .. } => 73,
     }
 }
 
@@ -1058,6 +1081,35 @@ fn mirror_audit_to_com1(event: AuditEvent) {
             write_u64(exits);
             serial::write_str(" pci=");
             write_u64(pci_enum);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiBoth { exits, virtio, ide } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiBoth exits=");
+            write_u64(exits);
+            serial::write_str(" virtio=");
+            write_u64(virtio);
+            serial::write_str(" ide=");
+            write_u64(ide);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiAtapi { exits, sectors } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiAtapi exits=");
+            write_u64(exits);
+            serial::write_str(" sectors=");
+            write_u64(sectors);
+            serial::write_byte(b'\n');
+        }
+        AuditEvent::OvmfGuestUefiEltorito {
+            exits,
+            catalog,
+            boot_image,
+        } => {
+            serial::write_str("RAYNU-V-AUDIT: OvmfGuestUefiEltorito exits=");
+            write_u64(exits);
+            serial::write_str(" catalog=");
+            write_u64(catalog);
+            serial::write_str(" bootimg=");
+            write_u64(boot_image);
             serial::write_byte(b'\n');
         }
         AuditEvent::FrameAllocated { .. } | AuditEvent::FrameFreed { .. } => {}

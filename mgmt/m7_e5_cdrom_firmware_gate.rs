@@ -50,7 +50,7 @@ pub fn prop_firmware_arm_from_host() -> bool {
         Ok(b) => b,
         Err(_) => return false,
     };
-    if boot.load_lba != 22 || boot.sector_count != 4 || !boot.efi {
+    if boot.load_lba != 22 || boot.sector_count != 8 || !boot.efi {
         return false;
     }
     cdrom_read_sector(&iso, boot.load_lba).is_ok()

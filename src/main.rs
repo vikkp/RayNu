@@ -210,11 +210,23 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
                 boot::serial::write_line("boot: guest-UEFI VMLAUNCH skipped");
             }
         }
+    } else {
+        boot::serial::write_line("boot: guest-UEFI skipped (no retained OVMF.fd)");
     }
     run_m2_ept_launch_e4(alloc, life);
 }
 
 fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLifecycle) {
+    // Nested Intel 73ed589: OVMF XSETBV left host XCR0; restore before E4.
+    unsafe {
+        vmx::guest_uefi::restore_host_xsave_after_guest_uefi();
+    }
+    let released = vmx::guest_uefi::release_report_ram_for_e4(alloc);
+    if released != 0 {
+        boot::serial::write_str("boot: guest-UEFI report-RAM released slots=");
+        write_dec(released as u64);
+        boot::serial::write_byte(b'\n');
+    }
     boot::serial::write_line("boot: M1.1 complete — entering M2 EPT + guest");
 
     // M3.20: tight precise path always uses 2M leaves (sub-GiB window).

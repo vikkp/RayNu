@@ -7,6 +7,7 @@
 
 use crate::arch::cpu::{
     self, CPUID_ECX_TSC_DEADLINE, CPUID_ECX_VMX, CPUID_ECX_X2APIC, CPUID_EDX_APIC,
+    CPUID_LEAF7_ECX_LA57,
 };
 
 /// COM1 marker when guest CPUID leaf 1 is filtered (M3.1 gate).
@@ -208,8 +209,16 @@ pub fn msr_firewall_ok() -> bool {
 
 /// Emulate guest CPUID: host result, then policy filters.
 ///
+/// INVARIANTS:
+/// - Leaf 1: ECX.VMX is clear (guest cannot see nested VT-x)
+/// - Leaf 7.0: ECX.LA57 is clear (E4 is 4-level; trampoline `#DF` at `0x9e036`)
+///
 /// M3.1 policy: leaf 1 clears ECX.VMX so the guest cannot see nested VT-x.
 /// M3.11: show EDX.APIC + ECX.X2APIC — guest APIC is virtual (EPT hole / MSRs).
+/// Nested Intel `957e0ad`: ATAPI-OK then `#DF` `rip=0x9e036` `cr4=0x2660`
+/// because `startup_64` `paging_prepare` copied a LA57 trampoline below EBDA.
+///
+/// VERIFICATION: L1 (host tests)
 pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     // SAFETY: CPUID is architecturally defined for these leaves.
     let r = unsafe { cpu::cpuid(leaf, subleaf) };
@@ -225,6 +234,9 @@ pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
         out.ecx |= CPUID_ECX_X2APIC;
         out.edx |= CPUID_EDX_APIC;
         note_leaf1_filtered(out.ecx);
+    }
+    if leaf == 7 && subleaf == 0 {
+        out.ecx &= !CPUID_LEAF7_ECX_LA57;
     }
     out
 }

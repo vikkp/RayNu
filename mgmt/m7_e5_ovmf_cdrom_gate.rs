@@ -64,7 +64,7 @@ pub fn prop_uefi_attach_after_firmware() -> bool {
     if id as u16 != GUEST_CD_PCI_VENDOR || (id >> 16) as u16 != GUEST_CD_PCI_DEVICE {
         return false;
     }
-    if host_identify_word0() != Some(0x8500) {
+    if host_identify_word0() != Some(0x85C0) {
         return false;
     }
     let pvd = match host_read10(16) {

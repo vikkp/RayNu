@@ -31,6 +31,7 @@ pub fn ovmf_alive_surface_present() -> bool {
         && qemu.contains("RAYNU-V-M7-E5-OVMF-ALIVE-OK")
         && guest.contains("CR4_GUEST_HOST_MASK")
         && guest.contains("CR4_VMXE")
+        && guest.contains("GUEST_UEFI_CR4_OSXSAVE")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -40,6 +41,7 @@ pub fn run_m7_e5_ovmf_alive_gate() -> bool {
         && run_m7_e5_ovmf_vmlaunch_gate()
         && E5_OVMF_SEC_CR4_VALUE == 0x640
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.OSXSAVE host-owned")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
         && M7_E5_OVMF_ALIVE_GATE_MARKER == "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
     reset_guest_fw();

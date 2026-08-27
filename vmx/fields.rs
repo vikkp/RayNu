@@ -170,8 +170,14 @@ pub const VM_EXIT_HOST_ADDR_SPACE_SIZE: u32 = 1 << 9;
 pub const VM_EXIT_ACK_INTERRUPT_ON_EXIT: u32 = 1 << 15;
 pub const VM_EXIT_SAVE_IA32_EFER: u32 = 1 << 20;
 pub const VM_EXIT_LOAD_IA32_EFER: u32 = 1 << 21;
+/// Exit-control: save IA32_PAT (often forced in allowed1 on Xeon).
+pub const VM_EXIT_SAVE_IA32_PAT: u32 = 1 << 18;
+/// Exit-control: load IA32_PAT into host (must pair with HOST_IA32_PAT).
+pub const VM_EXIT_LOAD_IA32_PAT: u32 = 1 << 19;
 pub const VM_ENTRY_IA32E_MODE: u32 = 1 << 9;
 pub const VM_ENTRY_LOAD_IA32_EFER: u32 = 1 << 15;
+/// Entry-control: load IA32_PAT from GUEST_IA32_PAT (often forced in allowed1).
+pub const VM_ENTRY_LOAD_IA32_PAT: u32 = 1 << 14;
 
 /// Basic exit reason: exception or NMI.
 pub const EXIT_REASON_EXCEPTION_NMI: u32 = 0;

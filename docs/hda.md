@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-23
+last_updated: 2026-08-27
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -8,7 +8,7 @@ mount_everest_target: "Ship EFI on real R640 + network vSphere-like UI + deploy 
 months_to_everest: 0.5
 months_to_everest_prev: 0.5
 velocity_commits_30d: 368
-velocity_gates_30d: 59
+velocity_gates_30d: 61
 overall_pct: 95
 confidence: high
 baseline_date: 2026-07-20
@@ -143,9 +143,9 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (guest-visible CD) | Catalog parse + host attach + FirmwareArmed + GuestVisible PCI IDE/ATAPI; not DXE boot / not installer |
-| CD-ROM attach | PARTIAL (guest-visible) | `attach_cdrom_uefi` → GuestVisible + PCI IDE/ATAPI; firmware does not yet boot the CD |
-| Guest UEFI firmware blob | PARTIAL (ESP retained + past SEC) | Real ESP OVMF.fd retained; private VMCS past SEC on QEMU/VMX; not full DXE / not installer / not Everest E5 |
+| ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
+| CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
+| Guest UEFI firmware blob | PARTIAL (ESP retained + El Torito) | Real ESP OVMF.fd retained; private VMCS ran CD EFI on iron; not distro installer / not Everest E5 |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -298,6 +298,8 @@ Ordered for critical path (parallelize B with D design):
 - **P0-52 / E5 Stage 37 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`. Private guest-UEFI VMCS + EPT + VMLAUNCH of retained ESP `OVMF.fd`. Not E4 SHELL. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-53 / E5 Stage 38 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-ALIVE-OK`. OVMF SEC `mov cr4, 0x640` no longer triple-faults (CR4.VMXE host-owned). Not full OVMF boot. Not installer. Iron P0-14 remains `2b795a0`.
 - **P0-54 / E5 Stage 39 closed (host + QEMU):** `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`. Left SEC tail + PEI PCI / firmware COM / HLT. COM1/COM2 forwarded. Not full DXE. Not installer. Iron P0-14 remains `2b795a0`.
+- **P0-59 / E5 Stage 44 closed (iron COM2 `bf696ca`):** `RAYNU-V-M7-E5-OVMF-ATAPI-OK`. `sectors=1` `packet=9` `scsi=0x28`. Not El Torito. Iron P0-14 remains `2b795a0`.
+- **P0-61 / E5 Stage 45 closed (iron COM2 `0be7283`):** `RAYNU-V-M7-E5-OVMF-ELTORITO-OK`. `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1. Not installer. Iron P0-14 remains `2b795a0`.
 - **Checkpoint release:** `v0.1.0-e4-spa-launch` — #169 on `main` (`b6578f5`); CI EFI `832ea32` / SHA `00443957…`. Iron P0-14 remains `2b795a0`.
 
 ---
@@ -347,10 +349,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-virtio |
-| Summary | P0-57 CLOSED nested VT-x: OVMF-VIRTIO-OK val=0x1042 pci=1 virtio=1. CD GuestVisible. pci_ide=0 sectors=0. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | e5-ovmf-eltorito |
+| Summary | Stage 45 El Torito CLOSED iron COM2 `0be7283`: `RN-ELT` + `OVMF-ELTORITO-OK` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. E4 LINUX-EARLY then G1 EPT fail-soft is not Stage 45. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
+| Gates touched | Stage 45 / P0-61 CLOSED. Next P0-60 G1 EPT. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Virtio-blk + CD→disk order presented (P0-57); firmware CD boot not completed; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283` (`OVMF-ELTORITO-OK`); next P0-60 G1 EPT (not an E5 stage) then Stage 46 `ISO-INSTALL-OK`; extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -372,6 +374,49 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 CLOSED iron COM2 0be7283 OVMF-ELTORITO-OK RN-ELT n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8; E4 LINUX-EARLY then G1 EPT fail-soft not Stage 45; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 2048-byte FAT BPB + ISO9660 EFI/BOOT/BOOTX64 after iron df7d158 512-byte BPB catalog=1 bootimg=1 elt=0 (not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: 262144-exit cap after iron df7d158 catalog=1 bootimg=1 elt=0 stop n=131072 (131072-exit cap; BDS ATA PIO; not ELTORITO-OK; not installer); iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: do not apply 32768 post-ATAPI tail after PACKET (first sector often LBA 0 dummy); EDK2 FatDxe+LoadImage host walk; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: GenFw PE 0x2022 + COM1 LCR DLAB clear before RN-ELT; no short tail after catalog+load; 131072-exit cap; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: no short tail after catalog+load READ; 131072-exit cap; BAR ATA data-port rep insw fills RAM; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN PE .reloc + ISO terminator; FAT12 ESP BOOTX64 + catalog checksum; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN host package: keep VMCS after first ATAPI sector; PE32+ CD EFI; catalog+load READ + RN-ELT; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | After Stage 44 named: Stage 45 El Torito then P0-60 G1 EPT (not an E5 stage) then Stage 46 ISO-INSTALL-OK; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-27 | e5-ovmf-atapi | 0.5 | 95 | P0-59 CLOSED iron COM2 bf696ca ATAPI-OK sectors=1 packet=9 scsi=0x28 stop n=30769 pci_ide=1 virtio=1; BOTH-OK n=12411 virtio 00:02.0 + IDE 00:00.1; no AcpiTimerLib ASSERT; not El Torito; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000; VCNT=32 power-on no hole; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron aee545f DXE assert skip then #UD 0x109d stop n=5364; revert skip; MTRR power-on E=0 VCNT=8 no UC hole; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron c40f4a8 pcdsig=1 after 32-pair MTRR still ASSERT callerrip=0x1d25193; guarded DXE ebec skip when RIP/caller in [1MiB,32MiB); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron b4b4847 EFER.LMA efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193; r8 is gPcdDataBaseSignatureGuid; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 0b7d647 VCNT=32 still ASSERT callerrip=0x1d25193 lastmsr=EFER; QEMU BOTH skipped ebf3; EFER.LMA=LME&&CR0.PG + IA-32e entry + debugcon 0x402; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193; MTRR VCNT=32 + PCI UC hole + bootorder NUL; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 408788c MTRR walk done still ASSERT after CPUID 0x1cf11b5; guest-UEFI hypervisor CPUID + KVMKVMKVM; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR 0xFE/0x2FF/0x250; guest MTRR shadow; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron 891eb5b skipped ebecc9c3 leave;ret then #UD 0x109D; do not skip ASSERT epilogue; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron e2af81e insn=ebec jmp -20; fw_cfg CD master drive@0 (not slave); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 rip=0x6e81ca; e2af81e missed GCC eb fc / 0F 84; preempt eb/jcc32 skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 n=8192 reason=0x34 rip=0x6e81ca pause CpuDeadLoop; preempt pause/jcc skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron d5f9431 #UD gone; DXE then tick n=1280 reason=0x34 rip=0x6e81ca (no stop n=); not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN fw_cfg etc/boot-menu-wait 0ms skip BdsWait; guest-UEFI XSETBV executes XCR0; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 #UD RIP 0x109D pci_ide=0 com=15515; guest-UEFI INVPCID/RDTSCP/XSAVES; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 2674629 n=32768 ataio=0 acpi=16612 port=0; ACPI PM 1s step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN nested VT-x 5d9e346 n=8192 ataio=0 port=0xcf8; HPET 1s on preemption only; 8042; 32768 cap; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN iron COM2 skipped guest-UEFI (Cruzer lacked EFI/RayNu/OVMF.fd); flash stages host OVMF; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-atapi | 0.5 | 95 | P0-59 OPEN PIIX3 ISA PIRQ after nested VT-x 8e55abf cf8=0x80000838 ISA 00:01.0:0x38; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 CLOSED nested VT-x 1b07692 OVMF-BOTH-OK pci select 00:00.01 val=0x70108086 pci_ide=1 virtio=1 sectors=0 spin=1; E4 #DF fail-soft; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN 3dbafb7 spin-jmp skip SKIP-only on push+PR; nested VT-x 707a849 insn=ebf3 still required; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 707a849 n=2048 rip=0x6e812d insn=ebf3 pci_ide=0 (CpuDeadLoop); spin-jmp skip; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN stop RIP insn dump after fd88785 SKIP-only; nested VT-x 105ffbe n=2048 rip=0x6e812d pci_ide=0; 1s HPET step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 105ffbe n=2048 reason=0x34 rip=0x6e812d pci_ide=0 (10ms HPET); 1s step; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 20763e4 VARS mapped alias_gpa=0xffc00000 then 300s kill no 00:00.1; live HPET; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN empty VARS _FVH in 4MiB flash pad after 1991a27 EPT 0xffc00000; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN nested VT-x 1991a27 dxe=1 acpi=13 then EPT gpa=0xffc00000 VARS gap; 4MiB flash window; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK cmp bx i440FX DID remap (not LZMA 37 12) + RAM remap after decompress; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK PIIX4 PM 00:01.3 + guest-private i440FX DID remap; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK ACPI PM timer after 699c9a6 n=2048 pci_ide=0; virtio 00:00.0 + IDE 00:00.1; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1; HLT skip so DXE can walk PCI; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK virtio 00:00.0 + PIIX IDE 00:01.1 (ISA multifunction walk); virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
+| 2026-08-23 | e5-ovmf-both | 0.5 | 95 | P0-58 OPEN host BOTH-OK simultaneous virtio 00:00.0 + IDE 00:00.1; virtio-alone no longer stops DXE; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
