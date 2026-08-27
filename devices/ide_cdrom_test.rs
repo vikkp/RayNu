@@ -210,6 +210,16 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     assert_eq!(&pe[0..2], b"MZ");
     assert_eq!(&pe[0x80..0x84], b"PE\0\0");
     assert_eq!(pe[0x98 + 0x44], 10, "EFI_APPLICATION subsystem");
+    assert_eq!(
+        u16::from_le_bytes([pe[0x96], pe[0x97]]),
+        0x2022,
+        "GenFw EFI app characteristics"
+    );
+    assert_eq!(
+        &pe[0x200..0x200 + 8],
+        &[0xBA, 0xFB, 0x03, 0x00, 0x00, 0xB0, 0x03, 0xEE],
+        "entry clears COM1 LCR.DLAB before THR"
+    );
     assert_eq!(u16::from_le_bytes([pe[0x86], pe[0x87]]), 2, ".text + .reloc");
     let dd5 = 0x98 + 0x70 + 5 * 8;
     assert_eq!(u32::from_le_bytes(pe[dd5..dd5 + 4].try_into().unwrap()), 0x400);

@@ -669,12 +669,17 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
 /// INVARIANTS:
 /// - Relocatable: no `RELOCS_STRIPPED`; empty `.reloc` so DxeCore LoadImage
 ///   can `AllocateAnyPages` in the 32MiB guest (ImageBase 0)
+/// - Characteristics `0x2022` match EDK2 GenFw EFI applications
+///   (`EXECUTABLE | LARGE_ADDRESS_AWARE | DLL`)
+/// - `.text` VirtualSize is the file-aligned size so LoadImage copies the
+///   UART setup, not only the first 0x20 bytes
+/// - Entry clears COM1 LCR.DLAB then OUTs magic (THR is 0x3F8 only when DLAB=0)
 /// - Entry point ignores ImageHandle/SystemTable and returns EFI_SUCCESS
 /// - Does not allocate
 pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     const HDR: usize = 0x200;
-    const CODE: usize = 0x20;
     const ALIGN: usize = 0x200;
+    const CODE: usize = ALIGN;
     const RELOC_RVA: usize = HDR + ALIGN;
     const RELOC_DIR: u32 = 8;
     const NEED: usize = RELOC_RVA + ALIGN;
@@ -690,7 +695,8 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     dst[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes());
     dst[0x86..0x88].copy_from_slice(&2u16.to_le_bytes());
     dst[0x94..0x96].copy_from_slice(&0x00F0u16.to_le_bytes());
-    dst[0x96..0x98].copy_from_slice(&0x0022u16.to_le_bytes());
+    // IMAGE_FILE_EXECUTABLE_IMAGE | LARGE_ADDRESS_AWARE | DLL (GenFw EFI app)
+    dst[0x96..0x98].copy_from_slice(&0x2022u16.to_le_bytes());
     let opt = 0x98;
     dst[opt..opt + 2].copy_from_slice(&0x020Bu16.to_le_bytes());
     dst[opt + 2] = 14;
@@ -722,13 +728,24 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     dst[rel + 20..rel + 24].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
     dst[rel + 36..rel + 40].copy_from_slice(&0x4200_0040u32.to_le_bytes());
     dst[RELOC_RVA + 4..RELOC_RVA + 8].copy_from_slice(&RELOC_DIR.to_le_bytes());
-    // mov dx, 0x3F8 ; OUT each magic byte ; xor eax,eax ; ret
+    // mov edx, 0x3FB ; mov al, 3 ; out dx, al  (LCR: 8N1, DLAB=0)
+    // mov edx, 0x3F8 ; OUT each magic byte ; xor eax,eax ; ret
     let mut i = HDR;
-    dst[i] = 0x66;
-    dst[i + 1] = 0xBA;
-    dst[i + 2] = 0xF8;
-    dst[i + 3] = 0x03;
-    i += 4;
+    dst[i] = 0xBA;
+    dst[i + 1] = 0xFB;
+    dst[i + 2] = 0x03;
+    dst[i + 3] = 0x00;
+    dst[i + 4] = 0x00;
+    dst[i + 5] = 0xB0;
+    dst[i + 6] = 0x03;
+    dst[i + 7] = 0xEE;
+    i += 8;
+    dst[i] = 0xBA;
+    dst[i + 1] = 0xF8;
+    dst[i + 2] = 0x03;
+    dst[i + 3] = 0x00;
+    dst[i + 4] = 0x00;
+    i += 5;
     for &b in ELTORITO_PAYLOAD_MAGIC {
         dst[i] = 0xB0;
         dst[i + 1] = b;
@@ -738,6 +755,7 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     dst[i] = 0x31;
     dst[i + 1] = 0xC0;
     dst[i + 2] = 0xC3;
+    debug_assert!(i + 3 - HDR <= CODE);
     NEED
 }
 

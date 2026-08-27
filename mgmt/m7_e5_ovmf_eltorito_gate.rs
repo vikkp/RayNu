@@ -41,6 +41,12 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
     if pe[0x98 + 0x44] != 10 {
         return false;
     }
+    if u16::from_le_bytes([pe[0x96], pe[0x97]]) != 0x2022 {
+        return false;
+    }
+    if &pe[0x200..0x200 + 8] != [0xBA, 0xFB, 0x03, 0x00, 0x00, 0xB0, 0x03, 0xEE] {
+        return false;
+    }
     if u16::from_le_bytes([pe[0x86], pe[0x87]]) != 2 {
         return false;
     }
@@ -137,6 +143,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("131072-exit cap")
         && guest.contains("does not apply the 32768 post-ATAPI tail")
         && ide.contains("write_eltorito_efi_pe")
+        && ide.contains("0x2022")
+        && ide.contains("LCR")
         && ide.contains("write_eltorito_fat12")
         && ide.contains("BOOTX64")
         && ide.contains(".reloc")

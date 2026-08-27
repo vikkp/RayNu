@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-ovmf-eltorito |
-| Summary | Stage 45 El Torito: no short tail after catalog+load READ; 131072-exit cap; BAR ATA data-port `rep insw` fills RAM. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 45 El Torito: GenFw PE characteristics + COM1 LCR DLAB clear; no short tail after catalog+load; 131072-exit cap. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
 | Gates touched | Stage 45 OPEN in progress. `OVMF-ATAPI-OK` stays CLOSED. Not Everest E5 / not `ISO-INSTALL-OK`. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: GenFw PE 0x2022 + COM1 LCR DLAB clear before RN-ELT; no short tail after catalog+load; 131072-exit cap; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN: no short tail after catalog+load READ; 131072-exit cap; BAR ATA data-port rep insw fills RAM; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN PE .reloc + ISO terminator; FAT12 ESP BOOTX64 + catalog checksum; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-27 | e5-ovmf-eltorito | 0.5 | 95 | Stage 45 OPEN host package: keep VMCS after first ATAPI sector; PE32+ CD EFI; catalog+load READ + RN-ELT; not installer; iron P0-14 stays 2b795a0 |
