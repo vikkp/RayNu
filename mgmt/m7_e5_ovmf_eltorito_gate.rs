@@ -31,7 +31,7 @@ use crate::vmx::guest_uefi::{
 pub const M7_E5_OVMF_ELTORITO_GATE_MARKER: &str = M7_E5_OVMF_ELTORITO_OK_MARKER;
 
 pub fn prop_eltorito_payload_is_pe() -> bool {
-    let mut pe = [0u8; 0x400];
+    let mut pe = [0u8; 0x800];
     if write_eltorito_efi_pe(&mut pe) == 0 {
         return false;
     }
@@ -39,6 +39,13 @@ pub fn prop_eltorito_payload_is_pe() -> bool {
         return false;
     }
     if pe[0x98 + 0x44] != 10 {
+        return false;
+    }
+    if u16::from_le_bytes([pe[0x86], pe[0x87]]) != 2 {
+        return false;
+    }
+    let dd5 = 0x98 + 0x70 + 5 * 8;
+    if u32::from_le_bytes([pe[dd5], pe[dd5 + 1], pe[dd5 + 2], pe[dd5 + 3]]) != 0x400 {
         return false;
     }
     let mut fat = [0u8; 8192];
@@ -131,6 +138,7 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && ide.contains("write_eltorito_efi_pe")
         && ide.contains("write_eltorito_fat12")
         && ide.contains("BOOTX64")
+        && ide.contains(".reloc")
         && ide.contains("eltorito_set_validation_checksum")
         && ide.contains("ELTORITO_PAYLOAD_MAGIC")
         && guest.contains("eltorito-progress")

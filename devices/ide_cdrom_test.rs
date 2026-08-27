@@ -198,11 +198,15 @@ fn unpresented_pci_is_empty() {
 #[test]
 fn placeholder_eltorito_pe_and_catalog_load_reads() {
     reset();
-    let mut pe = [0u8; 0x400];
+    let mut pe = [0u8; 0x800];
     assert!(write_eltorito_efi_pe(&mut pe) > 0);
     assert_eq!(&pe[0..2], b"MZ");
     assert_eq!(&pe[0x80..0x84], b"PE\0\0");
     assert_eq!(pe[0x98 + 0x44], 10, "EFI_APPLICATION subsystem");
+    assert_eq!(u16::from_le_bytes([pe[0x86], pe[0x87]]), 2, ".text + .reloc");
+    let dd5 = 0x98 + 0x70 + 5 * 8;
+    assert_eq!(u32::from_le_bytes(pe[dd5..dd5 + 4].try_into().unwrap()), 0x400);
+    assert_eq!(u32::from_le_bytes(pe[dd5 + 4..dd5 + 8].try_into().unwrap()), 8);
     let mut fat = [0u8; 8192];
     assert_eq!(write_eltorito_fat12(&mut fat), 8192);
     assert_eq!(fat[510], 0x55);

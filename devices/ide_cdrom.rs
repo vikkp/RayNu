@@ -491,6 +491,11 @@ pub fn write_placeholder_iso(iso: &mut [u8]) {
     iso[pvd + 84..pvd + 88].copy_from_slice(&vol.to_be_bytes());
     iso[pvd + 128..pvd + 130].copy_from_slice(&(ISO_SECTOR as u16).to_le_bytes());
     iso[pvd + 130..pvd + 132].copy_from_slice(&(ISO_SECTOR as u16).to_be_bytes());
+    iso[pvd + 881] = 1;
+    let term = 18 * ISO_SECTOR;
+    iso[term] = 0xFF;
+    iso[term + 1..term + 6].copy_from_slice(b"CD001");
+    iso[term + 6] = 1;
     let br = 17 * ISO_SECTOR;
     iso[br] = 0;
     iso[br + 1..br + 6].copy_from_slice(b"CD001");
@@ -601,12 +606,29 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
     dst[511] = 0xAA;
     let fat1 = ELTORITO_FAT_BPS;
     let fat2 = fat1 + ELTORITO_FAT_BPS;
+    let pe_off = ELTORITO_BOOTX64_OFF;
+    let pe_len = write_eltorito_efi_pe(&mut dst[pe_off..]);
+    if pe_len == 0 {
+        return 0;
+    }
+    let file_clusters = (pe_len + ELTORITO_FAT_BPS - 1) / ELTORITO_FAT_BPS;
+    if file_clusters == 0 || 3 + file_clusters > 13 {
+        return 0;
+    }
     fat12_set(&mut dst[fat1..fat2], 0, 0xFF8);
     fat12_set(&mut dst[fat1..fat2], 1, 0xFFF);
     fat12_set(&mut dst[fat1..fat2], 2, 0xFFF);
     fat12_set(&mut dst[fat1..fat2], 3, 0xFFF);
-    fat12_set(&mut dst[fat1..fat2], 4, 5);
-    fat12_set(&mut dst[fat1..fat2], 5, 0xFFF);
+    let first = 4u16;
+    for i in 0..file_clusters.saturating_sub(1) {
+        let c = first + i as u16;
+        fat12_set(&mut dst[fat1..fat2], c, c + 1);
+    }
+    fat12_set(
+        &mut dst[fat1..fat2],
+        first + (file_clusters as u16) - 1,
+        0xFFF,
+    );
     let mut fat_copy = [0u8; ELTORITO_FAT_BPS];
     fat_copy.copy_from_slice(&dst[fat1..fat2]);
     dst[fat2..fat2 + ELTORITO_FAT_BPS].copy_from_slice(&fat_copy);
@@ -625,11 +647,6 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
     let boot_dir = efi_dir + ELTORITO_FAT_BPS;
     fat_dirent(&mut dst[boot_dir..], b".          ", 0x10, 3, 0);
     fat_dirent(&mut dst[boot_dir + 32..], b"..         ", 0x10, 2, 0);
-    let pe_off = boot_dir + ELTORITO_FAT_BPS;
-    let pe_len = write_eltorito_efi_pe(&mut dst[pe_off..]);
-    if pe_len == 0 {
-        return 0;
-    }
     fat_dirent(
         &mut dst[boot_dir + 64..],
         b"BOOTX64 EFI",
@@ -644,13 +661,17 @@ pub fn write_eltorito_fat12(dst: &mut [u8]) -> usize {
 /// Write a PE32+ EFI application that OUTs [`ELTORITO_PAYLOAD_MAGIC`] to COM1.
 ///
 /// INVARIANTS:
-/// - Fits in two FAT 512-byte clusters (placed at [`ELTORITO_BOOTX64_OFF`])
+/// - Relocatable: no `RELOCS_STRIPPED`; empty `.reloc` so DxeCore LoadImage
+///   can `AllocateAnyPages` in the 32MiB guest (ImageBase 0)
 /// - Entry point ignores ImageHandle/SystemTable and returns EFI_SUCCESS
 /// - Does not allocate
 pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     const HDR: usize = 0x200;
     const CODE: usize = 0x20;
-    const NEED: usize = HDR + CODE;
+    const ALIGN: usize = 0x200;
+    const RELOC_RVA: usize = HDR + ALIGN;
+    const RELOC_DIR: u32 = 8;
+    const NEED: usize = RELOC_RVA + ALIGN;
     if dst.len() < NEED {
         return 0;
     }
@@ -661,28 +682,40 @@ pub fn write_eltorito_efi_pe(dst: &mut [u8]) -> usize {
     dst[0x40..0x40 + ELTORITO_PAYLOAD_MAGIC.len()].copy_from_slice(ELTORITO_PAYLOAD_MAGIC);
     dst[0x80..0x84].copy_from_slice(b"PE\0\0");
     dst[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes());
-    dst[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+    dst[0x86..0x88].copy_from_slice(&2u16.to_le_bytes());
     dst[0x94..0x96].copy_from_slice(&0x00F0u16.to_le_bytes());
     dst[0x96..0x98].copy_from_slice(&0x0022u16.to_le_bytes());
     let opt = 0x98;
     dst[opt..opt + 2].copy_from_slice(&0x020Bu16.to_le_bytes());
     dst[opt + 2] = 14;
     dst[opt + 4..opt + 8].copy_from_slice(&(CODE as u32).to_le_bytes());
+    dst[opt + 8..opt + 12].copy_from_slice(&(ALIGN as u32).to_le_bytes());
     dst[opt + 0x10..opt + 0x14].copy_from_slice(&(HDR as u32).to_le_bytes());
     dst[opt + 0x14..opt + 0x18].copy_from_slice(&(HDR as u32).to_le_bytes());
-    dst[opt + 0x20..opt + 0x24].copy_from_slice(&0x200u32.to_le_bytes());
-    dst[opt + 0x24..opt + 0x28].copy_from_slice(&0x200u32.to_le_bytes());
-    dst[opt + 0x38..opt + 0x3C].copy_from_slice(&((HDR + 0x200) as u32).to_le_bytes());
+    dst[opt + 0x20..opt + 0x24].copy_from_slice(&(ALIGN as u32).to_le_bytes());
+    dst[opt + 0x24..opt + 0x28].copy_from_slice(&(ALIGN as u32).to_le_bytes());
+    dst[opt + 0x38..opt + 0x3C].copy_from_slice(&(NEED as u32).to_le_bytes());
     dst[opt + 0x3C..opt + 0x40].copy_from_slice(&(HDR as u32).to_le_bytes());
     dst[opt + 0x44..opt + 0x46].copy_from_slice(&10u16.to_le_bytes());
     dst[opt + 0x6C..opt + 0x70].copy_from_slice(&16u32.to_le_bytes());
+    let dd5 = opt + 0x70 + 5 * 8;
+    dst[dd5..dd5 + 4].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
+    dst[dd5 + 4..dd5 + 8].copy_from_slice(&RELOC_DIR.to_le_bytes());
     let sec = opt + 0xF0;
     dst[sec..sec + 5].copy_from_slice(b".text");
     dst[sec + 8..sec + 12].copy_from_slice(&(CODE as u32).to_le_bytes());
     dst[sec + 12..sec + 16].copy_from_slice(&(HDR as u32).to_le_bytes());
-    dst[sec + 16..sec + 20].copy_from_slice(&0x200u32.to_le_bytes());
+    dst[sec + 16..sec + 20].copy_from_slice(&(ALIGN as u32).to_le_bytes());
     dst[sec + 20..sec + 24].copy_from_slice(&(HDR as u32).to_le_bytes());
     dst[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes());
+    let rel = sec + 40;
+    dst[rel..rel + 6].copy_from_slice(b".reloc");
+    dst[rel + 8..rel + 12].copy_from_slice(&RELOC_DIR.to_le_bytes());
+    dst[rel + 12..rel + 16].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
+    dst[rel + 16..rel + 20].copy_from_slice(&(ALIGN as u32).to_le_bytes());
+    dst[rel + 20..rel + 24].copy_from_slice(&(RELOC_RVA as u32).to_le_bytes());
+    dst[rel + 36..rel + 40].copy_from_slice(&0x4200_0040u32.to_le_bytes());
+    dst[RELOC_RVA + 4..RELOC_RVA + 8].copy_from_slice(&RELOC_DIR.to_le_bytes());
     // mov dx, 0x3F8 ; OUT each magic byte ; xor eax,eax ; ret
     let mut i = HDR;
     dst[i] = 0x66;
