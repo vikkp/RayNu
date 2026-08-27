@@ -278,7 +278,8 @@ OVMF BDS loads El Torito EFI from the guest-visible ATAPI CD and runs it.
 Host package: keep the private VMCS after the first ATAPI sector; placeholder
 ISO is a checksummed El Torito catalog plus a FAT12 ESP with
 `\EFI\BOOT\BOOTX64.EFI` (PE32+ OUTs `RN-ELT` on COM1); stop on catalog+load READ
-plus that magic, or the 65536-exit cap. Close when nested VT-x **or iron COM2**
+plus that magic, or the 131072-exit cap (do not apply the 32768 post-ATAPI tail
+after catalog+load READ). Close when nested VT-x **or iron COM2**
 serial shows `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (not `sectors>0` alone).
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 → P0-60 (M4.2 G1 EPT /
 fail-soft, not an E5 stage) → Stage 46 `ISO-INSTALL-OK`. Do not number G1 as

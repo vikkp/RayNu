@@ -242,6 +242,12 @@ pub fn is_ata_primary_port(port: u16) -> bool {
     with_cd(|m| ata_reg(m, port).is_some())
 }
 
+/// ATA data register (command-block offset 0): legacy `0x1F0`/`0x170` or a
+/// BAR-relocated command block. `rep insw` IDENTIFY/PACKET FIFOs land here.
+pub fn is_ata_data_port(port: u16) -> bool {
+    with_cd(|m| ata_reg(m, port) == Some(0))
+}
+
 fn ata_is_slave(m: &CdMedia) -> bool {
     (m.ata_dev & 0x10) != 0
 }

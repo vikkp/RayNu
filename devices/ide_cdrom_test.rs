@@ -1,7 +1,7 @@
     use super::{
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
-    is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
+    is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     present, present_placeholder, reset, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, GUEST_CD_PCI_DEVICE,
@@ -20,8 +20,11 @@ fn pci_bdf_and_ports() {
     assert!(!pci_addr_selects_cd(0x8000_0800)); // 00:01.0 ISA
     assert!(!pci_addr_selects_cd(0x8000_4000)); // 00:08.0 host
     assert!(is_ata_primary_port(0x1F0));
+    assert!(is_ata_data_port(0x1F0));
     assert!(is_ata_primary_port(0x1F7));
+    assert!(!is_ata_data_port(0x1F7));
     assert!(is_ata_primary_port(0x3F6));
+    assert!(!is_ata_data_port(0x3F6));
     assert!(is_ata_primary_port(0x170));
     assert!(is_ata_primary_port(0x177));
     assert!(is_ata_primary_port(0x376));
@@ -116,6 +119,10 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     pci_write_data(0xCFC, 4, 0xC000);
     assert_eq!(pci_read_data(0xCFC, 4) & 0xFFF8, 0xC000);
     assert!(is_ata_primary_port(0xC000));
+    assert!(is_ata_data_port(0xC000));
+    assert!(is_ata_data_port(0x1F0), "legacy 1F0 stays a data FIFO");
+    assert!(!is_ata_data_port(0xC007));
+    assert!(!is_ata_data_port(0x1F7));
     assert!(is_ata_primary_port(0x1F0), "legacy 1F0 stays decoded");
     let _ = ata_io(0xC006, false, 1, 0xA0);
     let _ = ata_io(0xC007, false, 1, 0xA0);

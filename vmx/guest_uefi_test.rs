@@ -96,7 +96,7 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(E5_OVMF_SEC_CR4_VALUE, 0x640);
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
-    assert_eq!(GUEST_UEFI_RESUME_CAP, 65536);
+    assert_eq!(GUEST_UEFI_RESUME_CAP, 131072);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.VMXE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CR4.OSXSAVE host-owned"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0ca02e6"));
@@ -413,8 +413,16 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, true), 0x0FFE);
     assert!(guest_uefi_io_string_fills_ram(0x1F0));
     assert!(guest_uefi_io_string_fills_ram(0x170));
+    assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     assert!(!guest_uefi_io_string_fills_ram(0x511));
     assert!(!guest_uefi_io_string_fills_ram(0xCF8));
+    crate::devices::ide_cdrom::reset();
+    assert!(crate::devices::ide_cdrom::present_placeholder());
+    crate::devices::ide_cdrom::pci_write_addr(crate::devices::ide_cdrom::pci_config_addr() | 0x10);
+    crate::devices::ide_cdrom::pci_write_data(0xCFC, 4, 0xC000);
+    assert!(guest_uefi_io_string_fills_ram(0xC000));
+    assert!(!guest_uefi_io_string_fills_ram(0xC007));
+    crate::devices::ide_cdrom::reset();
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, false), 0x1234);
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, true), 0x1_0000_1234);
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("1e0f4a7"));
@@ -1133,10 +1141,14 @@ fn past_sec_predicates_are_honest() {
     }
     assert!(eltorito_payload_ran(m));
     assert!(!eltorito_payload_ran(0));
-    assert!(!post_atapi_should_stop(false, 2000, 0, 0, 1, false));
-    assert!(!post_atapi_should_stop(true, 115, 115, 0, 0, false));
+    assert!(!post_atapi_should_stop(
+        false, 2000, 0, 0, 1, false, false, false
+    ));
+    assert!(!post_atapi_should_stop(
+        true, 115, 115, 0, 0, false, false, false
+    ));
     assert!(
-        !post_atapi_should_stop(true, 30769, 115, 30769, 1, false),
+        !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false),
         "first ATAPI sector must not stop Stage 45"
     );
     assert!(post_atapi_should_stop(
@@ -1145,6 +1157,8 @@ fn past_sec_predicates_are_honest() {
         115,
         30769,
         1,
+        false,
+        false,
         false
     ));
     assert!(!post_atapi_should_stop(
@@ -1153,9 +1167,26 @@ fn past_sec_predicates_are_honest() {
         115,
         30769,
         1,
+        false,
+        false,
         false
     ));
-    assert!(post_atapi_should_stop(true, 200, 115, 180, 4, true));
+    assert!(
+        !post_atapi_should_stop(
+            true,
+            30769 + GUEST_UEFI_POST_ATAPI_TAIL,
+            115,
+            30769,
+            4,
+            true,
+            true,
+            false
+        ),
+        "catalog+load READ must keep the VMCS until RN-ELT or the 131072-exit cap"
+    );
+    assert!(post_atapi_should_stop(
+        true, 200, 115, 180, 4, true, true, true
+    ));
     assert!(hlt_should_resume());
 }
 

@@ -125,7 +125,7 @@ Lived status for closed gates. Roadmap weeks stay in [CLAUDE.md](../CLAUDE.md); 
 | E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED** nested VT-x: PEI DID `00:00.0` `val=0x1042`; `OVMF-VIRTIO-OK` pci=1; CD GuestVisible; `pci_ide=0` sectors=0; stop n=115 virtio=1; not installer (2026-08-23). |
 | E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **CLOSED** nested VT-x `1b07692`: `pci select 00:00.01` `val=0x70108086`; `OVMF-BOTH-OK`; stop n=1111 `pci_ide=1 virtio=1` `sectors=0` `spin=1`; E4 #DF fail-soft; not installer (2026-08-23). |
 | E5 Stage 44 | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` | **CLOSED** iron COM2 `bf696ca`: `sectors=1` `packet=9` `scsi=0x28` stop n=30769 `pci_ide=1 virtio=1`. Not El Torito. Not installer (2026-08-27). |
-| E5 Stage 45 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` | **OPEN** (in progress). Host package: keep VMCS after first ATAPI sector; checksummed catalog; FAT12 ESP `\EFI\BOOT\BOOTX64.EFI`; catalog+load READ + `RN-ELT` COM magic. Nested VT-x or iron COM2 to close. Not installer (2026-08-27). |
+| E5 Stage 45 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` | **OPEN** (in progress). Host package: keep VMCS after first ATAPI sector; checksummed catalog; FAT12 ESP `\EFI\BOOT\BOOTX64.EFI`; catalog+load READ + `RN-ELT`; no short tail after catalog+load; 131072-exit cap. Nested VT-x or iron COM2 to close. Not installer (2026-08-27). |
 
 ## Verification checkpoint (as of M7.5 iron closed)
 
@@ -296,7 +296,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-57 / E5 Stage 42 | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` | **CLOSED (host + QEMU nested VT-x).** Empty PCI virtio-blk at `00:00.0` (PEI DID `0x1042`). `OVMF-VIRTIO-OK` pci=1. CD GuestVisible. `pci_ide=0` sectors=0. Stop n=115 virtio=1. Not a completed firmware CD boot. Not installer. Not Everest E5. |
 | P0-58 / E5 Stage 43 | `RAYNU-V-M7-E5-OVMF-BOTH-OK` | **CLOSED (host + QEMU nested VT-x).** Firmware-simultaneous virtio `00:00.0` + IDE `00:00.1`. Nested VT-x `1b07692`: `val=0x70108086` `OVMF-BOTH-OK` stop n=1111 `pci_ide=1 virtio=1` `sectors=0`. Not a completed firmware CD boot. Not installer. Not Everest E5. |
 | P0-59 / E5 Stage 44 | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` | **CLOSED (iron COM2 `bf696ca`).** `sectors=1` `packet=9` `scsi=0x28` stop n=30769 `pci_ide=1 virtio=1`. Not El Torito boot. Not installer. Not Everest E5. |
-| P0-61 / E5 Stage 45 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` | **OPEN (in progress).** Host package: do not stop on first ATAPI sector; checksummed catalog; FAT12 ESP `\EFI\BOOT\BOOTX64.EFI`; catalog+load READ + `RN-ELT`. Nested VT-x or iron COM2 to close. Not installer. Not Everest E5. Work order: 45 → P0-60 → 46. |
+| P0-61 / E5 Stage 45 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` | **OPEN (in progress).** Host package: do not stop on first ATAPI sector; checksummed catalog; FAT12 ESP `\EFI\BOOT\BOOTX64.EFI`; catalog+load READ + `RN-ELT`; no short tail after catalog+load; 131072-exit cap. Nested VT-x or iron COM2 to close. Not installer. Not Everest E5. Work order: 45 → P0-60 → 46. |
 | P0-60 | M4.2 G1 shell EPT / fail-soft | **OPEN (not an E5 stage).** After guest-UEFI, G1 `GPA=0x10403000` must not `boot gate failed`. Not Stage 46. |
 | P0-62 / E5 Stage 46 | `ISO-INSTALL-OK` | **OPEN.** Linux ISO install to virtio-blk. Everest E5. Waits on Stage 45 + P0-60. |
 | Everest residual | TLS/console + Windows later | After Stage 46. Product ISO: [ADR-014](adr/ADR-014.md). |

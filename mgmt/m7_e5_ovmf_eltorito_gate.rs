@@ -8,7 +8,7 @@
 //! VMCS on the first sector (`n=30769` `sectors=1`). Keep running after
 //! that READ until OVMF mounts the El Torito FAT ESP, StartImages
 //! `\EFI\BOOT\BOOTX64.EFI`, and the payload writes `RN-ELT` to COM1, or
-//! the 65536-exit cap. Nested VT-x or iron COM2
+//! the 131072-exit cap. Nested VT-x or iron COM2
 //! closes the marker. Not `sectors>0` alone. Not installer. Not
 //! `ISO-INSTALL-OK`. Not P0-60 G1 EPT. Do not skip `ebecc9c3`. Do not
 //! move virtio to `00:00.0`.
@@ -134,13 +134,15 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("maybe_print_eltorito")
         && guest.contains("post_atapi_should_stop")
         && guest.contains("eltorito_boot_evidence")
-        && guest.contains("65536-exit cap")
+        && guest.contains("131072-exit cap")
+        && guest.contains("does not apply the 32768 post-ATAPI tail")
         && ide.contains("write_eltorito_efi_pe")
         && ide.contains("write_eltorito_fat12")
         && ide.contains("BOOTX64")
         && ide.contains(".reloc")
         && ide.contains("eltorito_set_validation_checksum")
         && ide.contains("ELTORITO_PAYLOAD_MAGIC")
+        && ide.contains("is_ata_data_port")
         && guest.contains("eltorito-progress")
         && plan.contains("OVMF-ELTORITO-OK")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not firmware El Torito boot")
@@ -164,11 +166,11 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
         && run_m7_e5_ovmf_atapi_gate()
         && prop_eltorito_payload_is_pe()
         && prop_catalog_and_load_reads()
-        && GUEST_UEFI_RESUME_CAP >= 65536
+        && GUEST_UEFI_RESUME_CAP >= 131072
         && GUEST_UEFI_POST_DXE_TAIL == 32768
         && GUEST_UEFI_POST_ATAPI_TAIL == 32768
         && post_dxe_should_stop(true, 115, 115, 1)
-        && !post_atapi_should_stop(true, 30769, 115, 30769, 1, false)
+        && !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false)
         && post_atapi_should_stop(
             true,
             30769 + GUEST_UEFI_POST_ATAPI_TAIL,
@@ -176,8 +178,20 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
             30769,
             1,
             false,
+            false,
+            false,
         )
-        && post_atapi_should_stop(true, 200, 115, 180, 4, true)
+        && !post_atapi_should_stop(
+            true,
+            30769 + GUEST_UEFI_POST_ATAPI_TAIL,
+            115,
+            30769,
+            4,
+            true,
+            true,
+            false,
+        )
+        && post_atapi_should_stop(true, 200, 115, 180, 4, true, true, true)
         && !eltorito_boot_evidence(true, true, false)
         && eltorito_boot_evidence(true, true, true)
         && eltorito_payload_ran(magic)
