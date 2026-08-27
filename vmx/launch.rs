@@ -27,7 +27,8 @@
 //! IRQ0 retained only until SHELL (APIC calibrate jiffies). → `RAYNU-V-M3-NOIRQ-OK`.
 //! At Linux entry, host-own CR4.VMXE (mask + shadow) so `startup_64` can clear
 //! guest-visible CR4 without #GP. Also host-own OSFXSR+OSXMMEXCPT so
-//! `cr4 &= 0x1060` cannot drop SSE (nested Intel `1a93cb8` `#DF` `cr4=0x2060`).
+//! `cr4 &= 0x1060` cannot drop SSE (nested Intel `1a93cb8` `#DF` `cr4=0x2060`)
+//! or keep LA57 (nested Intel `957e0ad` `#DF` trampoline `rip=0x9e036`).
 //! Nested Intel `ab25682`: host-own OSFXSR then `ERROR unexpected CR-access`
 //! `rip=0x8400276` `qual=0x4` — emulate MOV CR4 and keep the host-owned bits.
 //! Markers: …/BZIMAGE/LINUX-EARLY/GTIMER2/GTIMER3/APIC/SHELL/NOIRQ (real).
@@ -172,17 +173,21 @@ pub const M1_VMEXIT_OK_MARKER: &str = "RAYNU-V-M1-VMEXIT-OK";
 /// CR4 bits E4 Linux must keep. `startup_64` does `cr4 &= 0x1060` then
 /// `mov %rax,%cr4`, which clears VMXE (need host-own or #GP) and OSFXSR
 /// (nested Intel ATAPI-OK then `#DF` vec=8 `rip=0x9e036` `cr4=0x2060`).
+/// `0x1060` also keeps LA57; strip it (4-level EPT/PT only).
 pub const E4_LINUX_CR4_HOST_OWNED: u64 =
     cpu::CR4_VMXE | cpu::CR4_OSFXSR | cpu::CR4_OSXMMEXCPT;
 
-/// Guest CR4 for real Linux: keep VMXE+SSE on in the VMCS.
+/// CR4 bits E4 Linux must not set. Nested Intel `957e0ad` trampoline `#DF`.
+pub const E4_LINUX_CR4_FORBIDDEN: u64 = cpu::CR4_LA57;
+
+/// Guest CR4 for real Linux: keep VMXE+SSE on in the VMCS; LA57 off.
 pub fn e4_linux_guest_cr4(cr4: u64) -> u64 {
     e4_linux_apply_cr4_write(cr4)
 }
 
-/// Apply a guest MOV-to-CR4: keep VMXE+OSFXSR+OSXMMEXCPT set.
+/// Apply a guest MOV-to-CR4: keep VMXE+OSFXSR+OSXMMEXCPT set; clear LA57.
 pub fn e4_linux_apply_cr4_write(requested: u64) -> u64 {
-    (requested & !E4_LINUX_CR4_HOST_OWNED) | E4_LINUX_CR4_HOST_OWNED
+    ((requested & !E4_LINUX_CR4_HOST_OWNED) | E4_LINUX_CR4_HOST_OWNED) & !E4_LINUX_CR4_FORBIDDEN
 }
 
 /// Read-shadow: Linux sees VMXE=0 (required) and OSFXSR=1 (matches hardware).
@@ -5315,6 +5320,11 @@ mod launch_test {
             e4_linux_apply_cr4_write(0x1060) & crate::arch::cpu::CR4_OSFXSR,
             crate::arch::cpu::CR4_OSFXSR
         );
+        assert_eq!(
+            e4_linux_apply_cr4_write(0x1060) & crate::arch::cpu::CR4_LA57,
+            0
+        );
+        assert_eq!(E4_LINUX_CR4_FORBIDDEN, crate::arch::cpu::CR4_LA57);
         assert!(e4_linux_cr_access_is_cr4_mov(0x4));
         assert!(!e4_linux_cr_access_is_cr4_mov(0));
         assert_eq!(linux_cr4 & crate::arch::cpu::CR4_OSFXSR, crate::arch::cpu::CR4_OSFXSR);

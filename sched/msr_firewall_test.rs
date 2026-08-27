@@ -81,3 +81,9 @@ fn filter_leaf0_passthrough_vendor() {
     // Host vendor string non-empty (GenuineIntel / AuthenticAMD / …).
     assert!(r.ebx != 0 || r.ecx != 0 || r.edx != 0);
 }
+
+#[test]
+fn filter_leaf7_hides_la57() {
+    let r = filter_cpuid(7, 0);
+    assert_eq!(r.ecx & crate::arch::cpu::CPUID_LEAF7_ECX_LA57, 0);
+}

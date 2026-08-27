@@ -32,6 +32,11 @@ use super::{
     M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER, M7_E5_OVMF_VMLAUNCH_OK_MARKER,
     OVMF_VARS_EMPTY_PREFIX, OVMF_VARS_FV_BYTES,
 };
+use super::{
+    guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pdpte, guest_uefi_pt_walk_pml4e,
+    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
+    GUEST_UEFI_PT_PRESENT,
+};
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
 };
@@ -540,6 +545,45 @@ fn marker_and_residual_honest() {
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7f8e21ca"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("peek report-RAM"));
+    assert_eq!(GUEST_UEFI_IRON_ASSERT_CALLER_RIP, 0x7FD2_5193);
+    assert_eq!(GUEST_UEFI_IRON_HIGH_CR3, 0x7FA0_1000);
+    assert_eq!(
+        guest_uefi_pt_pml4e_gpa(GUEST_UEFI_IRON_HIGH_CR3, 0),
+        GUEST_UEFI_IRON_HIGH_CR3
+    );
+    assert_eq!(
+        GUEST_UEFI_IRON_ASSERT_CALLER_RIP.wrapping_sub(0x1D2_5193),
+        0x7E00_0000
+    );
+    {
+        let pml4e = 0x7FA0_2003u64;
+        let peek = |gpa: u64| {
+            if gpa == GUEST_UEFI_IRON_HIGH_CR3 {
+                pml4e
+            } else if gpa == (pml4e & GUEST_UEFI_PT_ADDR_MASK) {
+                0x7FA0_3003
+            } else if gpa == 0x7FA0_3000 {
+                0x7FA0_00E7
+            } else {
+                0
+            }
+        };
+        assert_eq!(
+            guest_uefi_pt_walk_pml4e(peek, GUEST_UEFI_IRON_HIGH_CR3, 0),
+            pml4e
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pdpte(peek, GUEST_UEFI_IRON_HIGH_CR3, 0) & GUEST_UEFI_PT_PRESENT,
+            GUEST_UEFI_PT_PRESENT
+        );
+        assert_eq!(
+            guest_uefi_pt_walk_pde(peek, GUEST_UEFI_IRON_HIGH_CR3, 0),
+            0x7FA0_00E7
+        );
+    }
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7fd25193"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC admitted"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("hide LA57"));
     {
         let mut page = [0u8; 0x20];
         page[0x10] = 0xEB;

@@ -177,7 +177,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
-    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at,
+    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
@@ -185,6 +185,7 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_HV_PML4, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP,
     GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
+    GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -275,6 +276,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plat = include_str!("../devices/guest_platform.rs");
     let flash = include_str!("../tools/flash-cruzer-esp.sh");
+    let msr = include_str!("../sched/msr_firewall.rs");
+    let main = include_str!("../src/main.rs");
     attach_cdrom_uefi(1) == Err(IsoError::UnsupportedOnFirmware)
         && !spa.contains("Launch OVMF")
         && !spa.contains("btn-vl")
@@ -464,7 +467,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("44c56db")
         && guest.contains("IA32_PAT_RESET")
         && guest.contains("1a93cb8")
-        && launch.contains("E4_LINUX_CR4_HOST_OWNED")
+        && launch.contains("E4_LINUX_CR4_FORBIDDEN")
+        && msr.contains("CPUID_LEAF7_ECX_LA57")
+        && main.contains("release_report_ram_for_e4")
         && launch.contains("e4_linux_guest_cr4")
         && launch.contains("Linux CR4.VMXE+OSFXSR host-owned")
         && launch.contains("e4_linux_apply_cr4_write")
@@ -503,6 +508,11 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("copy_guest_identity_bytes")
         && guest.contains("0x7f8e21ca")
         && guest.contains("GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP")
+        && guest.contains("GUEST_UEFI_IRON_ASSERT_CALLER_RIP")
+        && guest.contains("dump_walk_pde")
+        && guest.contains("MTRR UC admitted (GCD)")
+        && guest.contains("release_report_ram_for_e4")
+        && launch.contains("E4_LINUX_CR4_FORBIDDEN")
         && plat.contains("E820_MID_GAP_BYTES")
         && gpt.contains("identity_set_pat_uc_hole")
         && gpt.contains("38481d9")
@@ -879,6 +889,12 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA) == 0x7BC0_0000
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7f8e21ca")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("peek report-RAM")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7fd25193")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR UC admitted")
+        && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
+        && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
+        && guest_uefi_pt_pml4e_gpa(GUEST_UEFI_IRON_HIGH_CR3, 0) == GUEST_UEFI_IRON_HIGH_CR3
+        && guest_uefi_pt_walk_pml4e(|_| 0x7FA0_2003, GUEST_UEFI_IRON_HIGH_CR3, 0) == 0x7FA0_2003
         && GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP == 0x7F8E_21CA
         && guest_uefi_report_ram_should_map(GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP)
         && guest_uefi_report_ram_page_off(GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP) == 0xE21CA
