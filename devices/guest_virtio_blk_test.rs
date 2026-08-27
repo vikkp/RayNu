@@ -1,9 +1,11 @@
 use super::{
-    pci_addr_selects_virtio, pci_config_addr, pci_read_data, pci_write_addr, present, reset,
-    take_marker, virtio_disk_evidence, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
-    M7_E5_OVMF_VIRTIO_OK_MARKER,
+    latch_dxe_virtio_did, pci_addr_selects_virtio, pci_config_addr, pci_enumerated, pci_read_data,
+    pci_write_addr, pei_host_bridge_did, present, reset, take_marker, virtio_disk_evidence,
+    GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
 };
-use crate::devices::guest_platform::{boot_order_cd_then_disk, pci_bdf};
+use crate::devices::guest_platform::{
+    boot_order_cd_then_disk, pci_bdf, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
+};
 use crate::devices::ide_cdrom;
 
 #[test]
@@ -28,15 +30,23 @@ fn present_enumerates_virtio_and_cd_then_disk() {
     assert!(!virtio_disk_evidence(true, true, false));
     assert!(present());
     pci_write_addr(pci_config_addr());
-    let id = pci_read_data(0xCFC, 4);
-    assert_eq!(id as u16, GUEST_VIRTIO_PCI_VENDOR);
-    assert_eq!((id >> 16) as u16, GUEST_VIRTIO_PCI_DEVICE);
-    // PEI DID probe: CF8=0x80000002 + inw(CFC) at 00:00.0.
+    let pei_id = pci_read_data(0xCFC, 4);
+    assert!(pei_host_bridge_did());
+    assert_eq!(pei_id as u16, HOST_BRIDGE_VENDOR);
+    assert_eq!((pei_id >> 16) as u16, HOST_BRIDGE_DEVICE);
+    // PEI DID probe: CF8=0x80000002 + inw(CFC) at 00:00.0 — i440FX HostBridgeDevId.
     pci_write_addr(0x8000_0002);
     assert_eq!(
         pci_read_data(0xCFC, 2) & 0xffff,
-        u32::from(GUEST_VIRTIO_PCI_DEVICE)
+        u32::from(HOST_BRIDGE_DEVICE)
     );
+    assert!(!pci_enumerated(), "PEI i440FX DID is not virtio enum");
+    assert!(latch_dxe_virtio_did());
+    assert!(!pei_host_bridge_did());
+    pci_write_addr(pci_config_addr());
+    let id = pci_read_data(0xCFC, 4);
+    assert_eq!(id as u16, GUEST_VIRTIO_PCI_VENDOR);
+    assert_eq!((id >> 16) as u16, GUEST_VIRTIO_PCI_DEVICE);
     assert!(virtio_disk_evidence(true, true, true));
     assert!(take_marker());
     assert!(!take_marker());

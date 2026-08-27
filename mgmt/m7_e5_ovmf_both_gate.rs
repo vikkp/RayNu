@@ -5,9 +5,11 @@
 //! VERIFICATION: N/A
 //!
 //! Keep virtio 1.0 at `00:00.0` (multifunction) and IDE at `00:00.1`.
-//! PIIX `00:01.1` is the same CD. PIIX4 PM at `00:01.3`. Guest-private
-//! OVMF remap of i440FX DID immediates so `AcpiTimerLib` matches virtio
-//! `0x1042` (hardware DID stays virtio; not two-phase DID). ACPI PM
+//! PIIX `00:01.1` is the same CD. PIIX4 PM at `00:01.3`. PEI `00:00.0`
+//! DID is i440FX `0x1237` so `PlatformMemMapInitialization` adds the VGA
+//! IoMemory HOB (stock QEMU map). DXE latches virtio `0x1042` on the first
+//! other-BDF CF8 (PciBus / BOTH-OK). `remap_i440fx_did_imm` stays in-tree
+//! but is not applied while PEI captures `HostBridgeDevId`. ACPI PM
 //! timer so PEI Delay can end. 8259 PIC RAZ/WI. fw_cfg `etc/e820` 32 MiB.
 //! Exception insn dump on `#GP`. 4 MiB flash window so CODE-only ESP
 //! images still cover VARS GPA `0xFFC00000`. Empty VARS `_FVH` (Debian
@@ -31,9 +33,9 @@ use crate::devices::guest_platform::{
     reset as reset_plat, HOST_BRIDGE_DEVICE, PM_BRIDGE_DEVICE, PM_BRIDGE_VENDOR,
 };
 use crate::devices::guest_virtio_blk::{
-    pci_config_addr as virtio_cfg, pci_read_data as virtio_read, pci_write_addr as virtio_write,
-    present as present_virtio, reset as reset_virtio, GUEST_VIRTIO_PCI_DEVICE,
-    GUEST_VIRTIO_PCI_VENDOR,
+    latch_dxe_virtio_did, pci_config_addr as virtio_cfg, pci_read_data as virtio_read,
+    pci_write_addr as virtio_write, pei_host_bridge_did, present as present_virtio,
+    reset as reset_virtio, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
 };
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
@@ -52,6 +54,13 @@ pub fn prop_both_pci_on_one_boot() -> bool {
         return false;
     }
     if !present_virtio() || !ide_cdrom::present_placeholder() {
+        return false;
+    }
+    virtio_write(0x8000_0002);
+    if (virtio_read(0xCFC, 2) & 0xffff) != u32::from(HOST_BRIDGE_DEVICE) || !pei_host_bridge_did() {
+        return false;
+    }
+    if !latch_dxe_virtio_did() {
         return false;
     }
     virtio_write(virtio_cfg());

@@ -49,8 +49,10 @@ pub const PLATFORM_REPORT_RAM_BYTES: u64 = 0x8000_0000;
 
 /// i440FX host bridge at `00:08.0` (Intel 82441FX).
 /// Nested VT-x: PEI only `inw` Device ID of `00:00.0` — never Header Type,
-/// never another BDF. Slot 0 is virtio-blk so that probe can enum it.
-/// Host stays here (Stage 41 parking).
+/// never another BDF. Slot 0 returns i440FX `0x1237` for that probe so
+/// `HostBridgeDevId` takes the stock QEMU map (VGA IoMemory HOB). DXE
+/// latches virtio `0x1042` on the first other-BDF CF8. Host stays here
+/// (Stage 41 parking).
 pub const HOST_BRIDGE_VENDOR: u16 = 0x8086;
 pub const HOST_BRIDGE_DEVICE: u16 = 0x1237;
 pub const HOST_BRIDGE_DEV: u8 = 8;
@@ -61,8 +63,9 @@ pub const ISA_BRIDGE_VENDOR: u16 = 0x8086;
 pub const ISA_BRIDGE_DEVICE: u16 = 0x7000;
 
 /// PIIX4 PM/ACPI at `00:01.3` (Intel 82371AB). OVMF programs PMBA here
-/// after the i440FX host-bridge switch. DID remap lets that switch match
-/// virtio `0x1042` at `00:00.0` without faking the Device ID read.
+/// after the i440FX host-bridge switch. PEI `00:00.0` DID is i440FX
+/// `0x1237` so that switch matches without remapping `cmp bx, 0x1237`.
+/// DXE latches virtio `0x1042` after MemMapInitialization.
 pub const PM_BRIDGE_VENDOR: u16 = 0x8086;
 pub const PM_BRIDGE_DEVICE: u16 = 0x7113;
 pub const PM_BRIDGE_DEV: u8 = 1;
@@ -730,6 +733,7 @@ static CMOS_MEM: AtomicBool = AtomicBool::new(false);
 static FWCFG_RAM: AtomicBool = AtomicBool::new(false);
 static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
 static FWCFG_E820: AtomicBool = AtomicBool::new(false);
+static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
 static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
@@ -838,6 +842,7 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
         }
         FW_CFG_FILE_DIR => {
             p.fw_len = (4 + 64 * FW_CFG_NAMED_FILE_COUNT as usize) as u8;
+            FWCFG_DIR.store(true, Ordering::Release);
         }
         FW_CFG_BOOT_MENU => {
             p.fw_buf[..2].copy_from_slice(&1u16.to_le_bytes());
@@ -881,6 +886,7 @@ pub fn reset() {
     FWCFG_RAM.store(false, Ordering::Release);
     FWCFG_BOOT.store(false, Ordering::Release);
     FWCFG_E820.store(false, Ordering::Release);
+    FWCFG_DIR.store(false, Ordering::Release);
     FWCFG_WAIT.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
@@ -920,6 +926,11 @@ pub fn fwcfg_bootorder_served() -> bool {
 
 pub fn fwcfg_e820_served() -> bool {
     FWCFG_E820.load(Ordering::Acquire)
+}
+
+/// True when PEI selected fw_cfg file directory (`QemuFwCfgFindFile`).
+pub fn fwcfg_file_dir_served() -> bool {
+    FWCFG_DIR.load(Ordering::Acquire)
 }
 
 pub fn fwcfg_boot_wait_served() -> bool {

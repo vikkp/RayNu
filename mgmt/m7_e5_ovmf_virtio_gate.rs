@@ -21,9 +21,9 @@ use crate::devices::guest_platform::{
     reset as reset_plat, BOOTORDER, FW_CFG_BOOTORDER_SEL, HOST_BRIDGE_DEVICE,
 };
 use crate::devices::guest_virtio_blk::{
-    pci_config_addr, pci_read_data, pci_write_addr, present, reset as reset_virtio,
-    virtio_disk_evidence, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
-    M7_E5_OVMF_VIRTIO_OK_MARKER,
+    latch_dxe_virtio_did, pci_config_addr, pci_read_data, pci_write_addr, pei_host_bridge_did,
+    present, reset as reset_virtio, virtio_disk_evidence, GUEST_VIRTIO_PCI_DEVICE,
+    GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
 };
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
@@ -48,6 +48,14 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
         return false;
     }
     if !present() {
+        return false;
+    }
+    pci_write_addr(0x8000_0002);
+    if (pci_read_data(0xCFC, 2) & 0xffff) != u32::from(HOST_BRIDGE_DEVICE) || !pei_host_bridge_did()
+    {
+        return false;
+    }
+    if !latch_dxe_virtio_did() {
         return false;
     }
     pci_write_addr(pci_config_addr());

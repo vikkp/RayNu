@@ -121,11 +121,14 @@ pub fn clear_retained() {
 /// (`66 81 fb 37 12` then `66 81 fb c0 29` for Q35). Blind `37 12`
 /// replace also hits LZMA payload in FV1 (~20 coincidences) and would
 /// corrupt PEIM decompress. Only the `cmp r16, imm16` encoding is
-/// rewritten. Hardware DID at `00:00.0` stays virtio (not two-phase DID).
+/// rewritten. Remap is not applied while PEI captures HostBridgeDevId
+/// from i440FX `0x1237` at `00:00.0` (stock QEMU MemMap VGA HOB). DXE
+/// latches virtio `0x1042` on the first other-BDF CF8.
 /// Does **not** rewrite the retain buffer.
 ///
 /// INVARIANTS:
-/// - Hardware DID at `00:00.0` stays `0x1042`
+/// - Function still rewrites `cmp r16, 0x1237` when called
+/// - Guest-UEFI launch does not call it (PEI DID is i440FX `0x1237`)
 /// - Retain buffer is not this slice
 /// - Lone `37 12` in compressed FVs is left alone
 /// - Returns the number of `cmp r16, 0x1237` sites replaced

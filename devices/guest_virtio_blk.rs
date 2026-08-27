@@ -5,15 +5,21 @@
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
 //! Empty virtio 1.0 block function at `00:00.0` (Red Hat `1AF4:1042`).
-//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0`. The probe
-//! slot is virtio so that read can enum it. Header Type is multifunction so a
-//! walk finds IDE `00:00.1`. PIIX `00:01.1` is the same CD. Boot order is CD
-//! then disk (fw_cfg `bootorder`).
+//! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` into
+//! `HostBridgeDevId`. Iron `c1476d3` served virtio `0x1042` there, so PEI
+//! skipped the stock QEMU map (`PlatformMemMapInitialization` IoMemory HOB
+//! at `0xA0000–1MiB`) and left GCD as a merged `[0, LowMemory)` SystemMemory
+//! range covering VGA UC. PEI therefore sees i440FX `8086:1237` until the
+//! first CF8 of another BDF (MiscInitialization / PciBus); DXE then latches
+//! virtio so BOTH-OK still enums `00:00.0` + IDE fn1. Header Type stays
+//! multifunction. PIIX `00:01.1` is the same CD. Boot order is CD then disk
+//! (fw_cfg `bootorder`).
 //! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,
 //! not an installer.
 
 use crate::devices::guest_platform::{
-    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, PCI_HEADER_MULTIFUNCTION,
+    boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
+    PCI_HEADER_MULTIFUNCTION,
 };
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -62,6 +68,33 @@ static VIRTIO_LOCK: AtomicBool = AtomicBool::new(false);
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static MARKER: AtomicBool = AtomicBool::new(false);
+/// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
+/// Sticky-false after [`latch_dxe_virtio_did`].
+static PEI_I440FX_DID: AtomicBool = AtomicBool::new(true);
+
+/// True while `00:00.0` VID/DID is i440FX (`8086:1237`).
+///
+/// INVARIANTS:
+/// - PEI `InitializePlatform` stores this as `HostBridgeDevId`
+/// - After [`latch_dxe_virtio_did`], VID/DID is virtio `1AF4:1042`
+pub fn pei_host_bridge_did() -> bool {
+    PEI_I440FX_DID.load(Ordering::Acquire)
+}
+
+/// DXE / MiscInitialization: first CF8 of a BDF other than `00:00.0`.
+///
+/// Returns true when this call performed the latch.
+pub fn latch_dxe_virtio_did() -> bool {
+    PEI_I440FX_DID.swap(false, Ordering::AcqRel)
+}
+
+fn slot0_vid_did() -> (u16, u16) {
+    if pei_host_bridge_did() {
+        (HOST_BRIDGE_VENDOR, HOST_BRIDGE_DEVICE)
+    } else {
+        (GUEST_VIRTIO_PCI_VENDOR, GUEST_VIRTIO_PCI_DEVICE)
+    }
+}
 
 fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
     while VIRTIO_LOCK.swap(true, Ordering::Acquire) {
@@ -113,6 +146,7 @@ pub fn reset() {
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
+    PEI_I440FX_DID.store(true, Ordering::Release);
 }
 
 /// Mark the empty virtio-blk function live on the private guest-UEFI VMCS.
@@ -125,6 +159,7 @@ pub fn present() -> bool {
     VISIBLE.store(true, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
+    PEI_I440FX_DID.store(true, Ordering::Release);
     true
 }
 
@@ -137,8 +172,9 @@ pub fn pci_read_addr() -> u32 {
 }
 
 fn config_dword(v: &VirtioPci, off: u8) -> u32 {
+    let (vid, did) = slot0_vid_did();
     match off {
-        0x00 => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_DEVICE) << 16),
+        0x00 => u32::from(vid) | (u32::from(did) << 16),
         0x04 => u32::from(v.pci_cmd) | 0x0010_0000, // CapList
         0x08 => 0x0100_0001,                        // SCSI mass-storage, rev 1
         0x0C => PCI_HEADER_MULTIFUNCTION,
@@ -163,7 +199,8 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
         }
         let off = pci_cfg_offset(addr, port);
         let aligned = off & 0xFC;
-        if aligned == 0 {
+        // PEI DID `inw` is i440FX, not virtio enum (BOTH-OK / VIRTIO-OK).
+        if aligned == 0 && !pei_host_bridge_did() {
             v.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }

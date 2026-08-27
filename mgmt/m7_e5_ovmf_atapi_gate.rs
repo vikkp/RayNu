@@ -119,6 +119,14 @@
 //! `[0, 2MiB)` covered VGA UC. Do not lower CMOS (32MiB already
 //! ASSERTed). Do not retry P3 mid-gap type-2. Classic VGA hole
 //! `[640KiB, 1MiB)` not RAM. Keep 2GiB LowMemory.
+//! Iron `c1476d3`: hypervisor `etc/e820` VGA hole logged; same ASSERT
+//! `insn=ebecc9c3` `callerrip=0x7fd25193`. PEI uses CMOS size → HOBs →
+//! GCD, not `QemuFwCfgFindFile("etc/e820")`. Host-bridge DID at PEI
+//! `00:00.0` is the fork: i440FX `0x1237` → stock QEMU map including
+//! VGA IoMemory HOB; virtio `0x1042` → merged `[0, LowMemory)`. PEI
+//! DID is i440FX; DXE latches virtio on other-BDF CF8. Do not remap
+//! `cmp bx, 0x1237` while PEI captures `HostBridgeDevId`. Dump `e820=`
+//! `fwdir=` `pei_did=`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -290,6 +298,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let gpt = include_str!("../vmx/guest_pt.rs");
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plat = include_str!("../devices/guest_platform.rs");
+    let virt = include_str!("../devices/guest_virtio_blk.rs");
     let flash = include_str!("../tools/flash-cruzer-esp.sh");
     let msr = include_str!("../sched/msr_firewall.rs");
     let main = include_str!("../src/main.rs");
@@ -541,7 +550,12 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("7e5d70f")
         && plat.contains("e820_splits_vga_below_1m")
         && plat.contains("E820_VGA_BASE")
-        && guest.contains("e820 VGA hole 640K-1M (GCD)")
+        && guest.contains("fw_cfg etc/e820 offered (PEI FindFile or CMOS HOBs)")
+        && guest.contains("PEI 00:00.0 DID i440FX 0x1237 (MemMap VGA HOB)")
+        && guest.contains("c1476d3")
+        && guest.contains("latch_dxe_virtio_did")
+        && guest.contains("fwcfg_file_dir_served")
+        && virt.contains("pei_host_bridge_did")
         && guest.contains("release_report_ram_for_e4")
         && launch.contains("E4_LINUX_CR4_FORBIDDEN")
         && plat.contains("E820_MID_GAP_BYTES")
@@ -930,7 +944,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde0=0xe3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_split_gpa0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("7e5d70f")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("e820 VGA hole")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c1476d3")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PlatformMemMapInitialization")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI never opened")
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
         && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083

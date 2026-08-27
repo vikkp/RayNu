@@ -2,7 +2,7 @@ use super::{
     acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
-    fwcfg_e820_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
+    fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
     is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
@@ -112,6 +112,9 @@ fn fwcfg_e820_is_32m_ram() {
     assert!(e820_splits_vga_below_1m());
     assert!(e820_splits_mtrr_uc_hole());
     assert!(platform_reports_2g_lowmem());
+    assert!(!fwcfg_file_dir_served());
+    let _ = io(0x510, false, 2, 0x19);
+    assert!(fwcfg_file_dir_served(), "PEI QemuFwCfgFindFile reads file dir");
     let _ = io(0x510, false, 2, u64::from(FW_CFG_E820_SEL));
     let mut buf = [0u8; 120];
     for b in &mut buf {
@@ -149,6 +152,7 @@ fn fwcfg_e820_is_32m_ram() {
     assert!(platform_memory_served());
     reset();
     assert!(!fwcfg_e820_served());
+    assert!(!fwcfg_file_dir_served());
 }
 
 #[test]

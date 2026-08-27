@@ -644,7 +644,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde0=0xe3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_split_gpa0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("7e5d70f"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("e820 VGA hole"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c1476d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PlatformMemMapInitialization"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI never opened"));
     assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
     assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
     assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));
