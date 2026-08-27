@@ -1,6 +1,6 @@
 use super::{
     acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
-    cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, fwcfg_boot_wait_served,
+    cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
@@ -9,7 +9,7 @@ use super::{
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
     E820_ENTRY_BYTES, E820_ENTRY_COUNT, E820_FILE_BYTES, E820_MID_GAP_BASE, E820_MID_GAP_BYTES,
-    E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RAM,
+    E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RAM, E820_VGA_BASE, E820_VGA_BYTES, E820_LOW_1M,
     E820_RESERVED, FW_CFG_BOOTORDER_SEL, FW_CFG_BOOT_MENU, FW_CFG_BOOT_WAIT_SEL,
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_MAIN_STEP, HPET_SINK_OFF, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE,
@@ -95,40 +95,56 @@ fn fwcfg_bootorder_is_cd_then_disk() {
 fn fwcfg_e820_is_32m_ram() {
     reset();
     assert_eq!(E820_ENTRY_BYTES, 20);
-    assert_eq!(E820_ENTRY_COUNT, 4);
-    assert_eq!(E820_FILE_BYTES, 80);
+    assert_eq!(E820_ENTRY_COUNT, 6);
+    assert_eq!(E820_FILE_BYTES, 120);
     assert_eq!(E820_RAM, 1);
     assert_eq!(E820_RESERVED, 2);
     assert_eq!(HV_IDENTITY_PML4, 0x200000);
     assert_eq!(HV_IDENTITY_PML4_BYTES, 0x1B000);
+    assert_eq!(E820_VGA_BASE, 0xA0000);
+    assert_eq!(E820_VGA_BYTES, 0x60000);
+    assert_eq!(E820_LOW_1M, 0x100000);
     assert_eq!(E820_MID_GAP_BASE, 32 * 1024 * 1024);
     assert_eq!(E820_MID_GAP_BYTES, 0x8000_0000 - 32 * 1024 * 1024);
     assert_eq!(E820_PCI_UC_BASE, 0x8000_0000);
     assert_eq!(E820_PCI_UC_BYTES, 0x8000_0000);
     assert!(!e820_splits_gcd_mid_gap());
+    assert!(e820_splits_vga_below_1m());
     assert!(e820_splits_mtrr_uc_hole());
     assert!(platform_reports_2g_lowmem());
     let _ = io(0x510, false, 2, u64::from(FW_CFG_E820_SEL));
-    let mut buf = [0u8; 80];
+    let mut buf = [0u8; 120];
     for b in &mut buf {
         *b = io(0x511, true, 1, 0) as u8;
     }
-    for i in 0..80 {
+    for i in 0..120 {
         assert_eq!(buf[i], e820_byte(i as u16));
     }
     assert_eq!(&buf[0..8], &0u64.to_le_bytes());
-    assert_eq!(&buf[8..16], &HV_IDENTITY_PML4.to_le_bytes());
+    assert_eq!(&buf[8..16], &E820_VGA_BASE.to_le_bytes());
     assert_eq!(&buf[16..20], &E820_RAM.to_le_bytes());
-    assert_eq!(&buf[20..28], &HV_IDENTITY_PML4.to_le_bytes());
-    assert_eq!(&buf[28..36], &HV_IDENTITY_PML4_BYTES.to_le_bytes());
+    assert_eq!(&buf[20..28], &E820_VGA_BASE.to_le_bytes());
+    assert_eq!(&buf[28..36], &E820_VGA_BYTES.to_le_bytes());
     assert_eq!(&buf[36..40], &E820_RESERVED.to_le_bytes());
-    let rest = PLATFORM_REPORT_RAM_BYTES - HV_IDENTITY_PML4 - HV_IDENTITY_PML4_BYTES;
-    assert_eq!(&buf[40..48], &(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES).to_le_bytes());
-    assert_eq!(&buf[48..56], &rest.to_le_bytes());
+    assert_eq!(&buf[40..48], &E820_LOW_1M.to_le_bytes());
+    assert_eq!(
+        &buf[48..56],
+        &(HV_IDENTITY_PML4 - E820_LOW_1M).to_le_bytes()
+    );
     assert_eq!(&buf[56..60], &E820_RAM.to_le_bytes());
-    assert_eq!(&buf[60..68], &E820_PCI_UC_BASE.to_le_bytes());
-    assert_eq!(&buf[68..76], &E820_PCI_UC_BYTES.to_le_bytes());
+    assert_eq!(&buf[60..68], &HV_IDENTITY_PML4.to_le_bytes());
+    assert_eq!(&buf[68..76], &HV_IDENTITY_PML4_BYTES.to_le_bytes());
     assert_eq!(&buf[76..80], &E820_RESERVED.to_le_bytes());
+    let rest = PLATFORM_REPORT_RAM_BYTES - HV_IDENTITY_PML4 - HV_IDENTITY_PML4_BYTES;
+    assert_eq!(
+        &buf[80..88],
+        &(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES).to_le_bytes()
+    );
+    assert_eq!(&buf[88..96], &rest.to_le_bytes());
+    assert_eq!(&buf[96..100], &E820_RAM.to_le_bytes());
+    assert_eq!(&buf[100..108], &E820_PCI_UC_BASE.to_le_bytes());
+    assert_eq!(&buf[108..116], &E820_PCI_UC_BYTES.to_le_bytes());
+    assert_eq!(&buf[116..120], &E820_RESERVED.to_le_bytes());
     assert!(fwcfg_e820_served());
     assert!(platform_memory_served());
     reset();

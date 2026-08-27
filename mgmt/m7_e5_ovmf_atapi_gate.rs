@@ -113,6 +113,12 @@
 //! Iron `4ae87de`: paint `n=1029` `pde8000=0x800000ff` still ASSERT
 //! `pde0=0xe3` `pte0=0` — 2MiB GPA0 spans 1MiB fixed-MTRR on live CR3.
 //! Peek/poke HV PT `0x20B000` into live PD[0]. Do not skip `ebecc9c3`.
+//! Iron `7e5d70f`: `GPA0 4K live CR3 n=513` `pde0=0x20b027` `pte0=0x67`
+//! `pte1m=0x100067` `pde8000=0x800000ff` still ASSERT `ebecc9c3`
+//! `callerrip=0x7fd25193` — stop PT peek/poke. GCD/HOB: e820 type-1
+//! `[0, 2MiB)` covered VGA UC. Do not lower CMOS (32MiB already
+//! ASSERTed). Do not retry P3 mid-gap type-2. Classic VGA hole
+//! `[640KiB, 1MiB)` not RAM. Keep 2GiB LowMemory.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -176,7 +182,7 @@ use super::guest_fw::reset_guest_fw;
 use super::iso::{attach_cdrom_uefi, reset_host_cdrom, IsoError};
 use super::m7_e5_cdrom_attach_gate::e4_shell_launch_no_cdrom;
 use super::m7_e5_ovmf_both_gate::run_m7_e5_ovmf_both_gate;
-use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, platform_reports_2g_lowmem};
+use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_terminated, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, platform_reports_2g_lowmem};
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
@@ -370,6 +376,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && plat.contains("e820_splits_mtrr_uc_hole")
         && plat.contains("e820_splits_gcd_mid_gap")
         && plat.contains("E820_MID_GAP_BASE")
+        && plat.contains("e820_splits_vga_below_1m")
+        && plat.contains("E820_VGA_BASE")
         && plat.contains("platform_reports_2g_lowmem")
         && plat.contains("PLATFORM_REPORT_RAM_BYTES")
         && guest.contains("a9ffaa5")
@@ -530,6 +538,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_pt_split_gpa0")
         && guest.contains("GPA0 4K live CR3")
         && guest.contains("GUEST_UEFI_IRON_PDE0_2M")
+        && guest.contains("7e5d70f")
+        && plat.contains("e820_splits_vga_below_1m")
+        && plat.contains("E820_VGA_BASE")
+        && guest.contains("e820 VGA hole 640K-1M (GCD)")
         && guest.contains("release_report_ram_for_e4")
         && launch.contains("E4_LINUX_CR4_FORBIDDEN")
         && plat.contains("E820_MID_GAP_BYTES")
@@ -917,6 +929,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4ae87de")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pde0=0xe3")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest_uefi_pt_split_gpa0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("7e5d70f")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("e820 VGA hole")
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
         && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083
@@ -1121,6 +1135,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_mtrr_valid_var_pairs() == 0
         && bootorder_nul_terminated()
         && e820_splits_mtrr_uc_hole()
+        && e820_splits_vga_below_1m()
         && !e820_splits_gcd_mid_gap()
         && platform_reports_2g_lowmem()
         && guest_uefi_mtrr_write(0x200, 6)

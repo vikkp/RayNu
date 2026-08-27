@@ -9,7 +9,7 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
-//! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`, reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored), fw_cfg `etc/boot-menu-wait` 0 ms
+//! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI, and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
@@ -124,8 +124,13 @@ pub const E820_PCI_UC_BYTES: u64 = 0x8000_0000;
 /// CMOS/fw_cfg now **report** it as RAM ([`PLATFORM_REPORT_RAM_BYTES`]).
 pub const E820_MID_GAP_BASE: u64 = PLATFORM_RAM_BYTES;
 pub const E820_MID_GAP_BYTES: u64 = E820_PCI_UC_BASE - E820_MID_GAP_BASE;
-/// Four e820 entries: RAM / reserved PML4 / RAM to 2 GiB / PCI UC.
-pub const E820_ENTRY_COUNT: u8 = 4;
+/// ISA VGA/ROM. Fixed MTRR UC. Must not be e820 type-1 (iron `7e5d70f`).
+pub const E820_VGA_BASE: u64 = 0xA0000;
+pub const E820_VGA_BYTES: u64 = 0x60000;
+pub const E820_LOW_1M: u64 = 0x100000;
+/// Six e820 entries: 640 KiB RAM / VGA reserved / RAM to PML4 / reserved
+/// PML4 / RAM to 2 GiB / PCI UC. Do **not** type-1 `[0, 2MiB)` (covers VGA).
+pub const E820_ENTRY_COUNT: u8 = 6;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
 /// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
@@ -217,23 +222,33 @@ fn file_dir_byte(off: u16) -> u8 {
     }
 }
 
-/// Four packed QEMU e820 entries: RAM below the HV PML4, reserved identity
-/// tables, RAM up to [`PLATFORM_REPORT_RAM_BYTES`] (2 GiB LowMemory lie),
-/// reserved PCI UC `[2GiB, 4GiB)`.
-/// Iron `f9a08c9` type-2 mid-gap was ignored. EPT stays 32 MiB.
+/// Six packed QEMU e820 entries: 640 KiB RAM, VGA reserved, RAM to HV PML4,
+/// reserved identity tables, RAM up to [`PLATFORM_REPORT_RAM_BYTES`]
+/// (2 GiB LowMemory lie), reserved PCI UC `[2GiB, 4GiB)`.
+/// Iron `7e5d70f`: type-1 `[0, 2MiB)` covered VGA UC; CpuDxe RefreshGcd
+/// `SetMemorySpaceAttributes(WB)` on that GCD range returns UNSUPPORTED.
+/// Do **not** lower CMOS (32 MiB LowMemory already ASSERTed). Do **not**
+/// retry P3 mid-gap type-2. EPT stays 32 MiB.
 pub fn e820_byte(off: u16) -> u8 {
     let o = off as usize;
     let ent = o / 20;
     let i = o % 20;
+    let ram_after_hv = HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES;
     let (addr, len, typ) = match ent {
-        0 => (0u64, HV_IDENTITY_PML4, E820_RAM),
-        1 => (HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, E820_RESERVED),
+        0 => (0u64, E820_VGA_BASE, E820_RAM),
+        1 => (E820_VGA_BASE, E820_VGA_BYTES, E820_RESERVED),
         2 => (
-            HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES,
-            PLATFORM_REPORT_RAM_BYTES.saturating_sub(HV_IDENTITY_PML4 + HV_IDENTITY_PML4_BYTES),
+            E820_LOW_1M,
+            HV_IDENTITY_PML4.saturating_sub(E820_LOW_1M),
             E820_RAM,
         ),
-        3 => (E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RESERVED),
+        3 => (HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, E820_RESERVED),
+        4 => (
+            ram_after_hv,
+            PLATFORM_REPORT_RAM_BYTES.saturating_sub(ram_after_hv),
+            E820_RAM,
+        ),
+        5 => (E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RESERVED),
         _ => return 0,
     };
     if i < 8 {
@@ -268,7 +283,7 @@ fn e820_entry_at(ent: usize) -> (u64, u64, u32) {
 
 /// True when `etc/e820` has a type-2 PCI UC hole at [`E820_PCI_UC_BASE`].
 pub fn e820_splits_mtrr_uc_hole() -> bool {
-    let (addr, len, typ) = e820_entry_at(3);
+    let (addr, len, typ) = e820_entry_at(5);
     E820_FILE_BYTES == E820_ENTRY_BYTES * E820_ENTRY_COUNT
         && addr == E820_PCI_UC_BASE
         && len == E820_PCI_UC_BYTES
@@ -280,15 +295,32 @@ pub fn e820_splits_gcd_mid_gap() -> bool {
     false
 }
 
+/// True when e820 does not claim VGA `[0xA0000, 1MiB)` as type-1 RAM.
+///
+/// Iron `7e5d70f`: live GPA0 4K matched MTRR (`pde0=0x20b027`) then the
+/// same CpuDxe ASSERT. Stop PT peek/poke. First RAM entry was `[0, 2MiB)`.
+pub fn e820_splits_vga_below_1m() -> bool {
+    let (a0, l0, t0) = e820_entry_at(0);
+    let (a1, l1, t1) = e820_entry_at(1);
+    a0 == 0
+        && l0 == E820_VGA_BASE
+        && t0 == E820_RAM
+        && a1 == E820_VGA_BASE
+        && l1 == E820_VGA_BYTES
+        && t1 == E820_RESERVED
+        && a0.saturating_add(l0) == E820_VGA_BASE
+}
+
 /// CMOS 0x34/0x35 + fw_cfg RAM_SIZE + e820 RAM end at 2 GiB (`Uc32Base`).
 pub fn platform_reports_2g_lowmem() -> bool {
-    let (addr, len, typ) = e820_entry_at(2);
+    let (addr, len, typ) = e820_entry_at(4);
     let ram_end = addr.saturating_add(len);
     PLATFORM_REPORT_RAM_BYTES == E820_PCI_UC_BASE
         && cmos_above_16m_chunks(PLATFORM_REPORT_RAM_BYTES) == 0x7F00
         && ram_end == PLATFORM_REPORT_RAM_BYTES
         && typ == E820_RAM
         && e820_splits_mtrr_uc_hole()
+        && e820_splits_vga_below_1m()
 }
 
 /// Memory above 16 MiB in 64 KiB chunks (CMOS 0x34/0x35).
