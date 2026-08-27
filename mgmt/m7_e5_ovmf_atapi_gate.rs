@@ -976,8 +976,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xa0067")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CpuFlush")
         && {
-            let mut b = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.to_vec();
-            guest_uefi_patch_cpu_flush_unsupported(&mut b) == 1
+            let mut b = [0u8; 24];
+            let n = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.len();
+            b[..n].copy_from_slice(GUEST_UEFI_CPU_FLUSH_UNSUPPORTED);
+            guest_uefi_patch_cpu_flush_unsupported(&mut b[..n]) == 1
                 && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF] == 0x90
                 && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF + 1] == 0x90
         }
