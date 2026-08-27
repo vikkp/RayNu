@@ -40,6 +40,8 @@ use super::{
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_PT_ADDR_MASK,
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_TABLE,
+    guest_uefi_patch_cpu_flush_unsupported, GUEST_UEFI_CPU_FLUSH_UNSUPPORTED,
+    GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
 };
 use crate::boot::ovmf_esp::{
     accept_real_ovmf_bytes, clear_retained, retain_ovmf_bytes, MIN_REAL_OVMF_BYTES,
@@ -650,6 +652,16 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f7620f6"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pte_a0000"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:01.03"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d6b012a"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xa0067"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CpuFlush"));
+    {
+        let mut b = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.to_vec();
+        assert_eq!(guest_uefi_patch_cpu_flush_unsupported(&mut b), 1);
+        assert_eq!(b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF], 0x90);
+        assert_eq!(guest_uefi_patch_cpu_flush_unsupported(&mut b), 0);
+        assert_eq!(GUEST_UEFI_IRON_CPU_FLUSH_GPA, 0x7EE6_8FA0);
+    }
     assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
     assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
     assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));

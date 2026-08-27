@@ -130,9 +130,13 @@
 //! Iron `f7620f6`: PEI `pci cfg=0x80000002 val=0x1237` `pei_did=1`, DXE
 //! latch `00:01.03`, then virtio `0x1042` VIRTIO-OK DXE-OK `sectors=0`
 //! `e820=0` `fwdir=0` still ASSERT `ebecc9c3` `callerrip=0x7fd25193`
-//! `pte0=0x67` `pte1m=0x100067`. DID fork closed; VGA IoMemory HOB did
-//! not end RefreshGcd. Dump `pte_a0000=` `pte_c0000=` (WB `0x67` = GCD
-//! still RAM; PAT-UC = hole landed). Do not skip `ebecc9c3`.
+//! `pte0=0x67` `pte1m=0x100067`. DID fork closed.
+//! Iron `d6b012a`: `pte_a0000=0xa0067` `pte_c0000=0xc0067` — GPA0 identity
+//! WB, firmware FIX `0x250–0x26f` are `0x06` WB. Not a GCD VGA punch.
+//! Do not PAT-UC VGA. P1 hold (`22e0cb2`) already disproved mixed MTRR.
+//! `filehex` is CpuFlush: `test r9d; jnz; wbinvd; mov rax, EFI_UNSUPPORTED`.
+//! Nop that `jnz` in live report-RAM so every FlushType WBINVD. Dump `r9=`.
+//! Do not skip `ebecc9c3`.
 //! Iron `a428202`: `#PF` `cr2=0x80000008` `err=0xb` `pde=0xc0400083`
 //! then `identity MMIO fail` (1GiB PDPTE after retargeted PDPT).
 //! Iron `124c1a8`: identity MMIO n=2 then `#PF` `cr2=0xffffffff96808086`
@@ -215,6 +219,8 @@ use crate::vmx::guest_uefi::{
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_POST_DXE_TAIL, M7_E5_OVMF_ATAPI_OK_MARKER,
     GUEST_UEFI_IRON_ASSERT_CALLER_RIP, GUEST_UEFI_IRON_HIGH_CR3, GUEST_UEFI_IRON_PDE8000_WB,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LARGE_2M_UC, GUEST_UEFI_PT_LEAF_4K,
+    guest_uefi_patch_cpu_flush_unsupported, GUEST_UEFI_CPU_FLUSH_UNSUPPORTED,
+    GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
 };
 
 /// Host / CI / QEMU marker when firmware read an ATAPI sector.
@@ -586,6 +592,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && gpt.contains("IDENTITY_VGA_A0000")
         && gpt.contains("IDENTITY_VGA_C0000")
         && guest.contains("f7620f6")
+        && guest.contains("d6b012a")
+        && guest.contains("guest_uefi_patch_cpu_flush_unsupported")
+        && guest.contains("GUEST_UEFI_CPU_FLUSH_UNSUPPORTED")
+        && guest.contains("r9=0x")
         && guest.contains("pml4e1=0x")
         && guest.contains("pdefee=0x")
         && guest.contains("pdeffc=0x")
@@ -961,6 +971,16 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("f7620f6")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("pte_a0000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("00:01.03")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("d6b012a")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xa0067")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("CpuFlush")
+        && {
+            let mut b = GUEST_UEFI_CPU_FLUSH_UNSUPPORTED.to_vec();
+            guest_uefi_patch_cpu_flush_unsupported(&mut b) == 1
+                && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF] == 0x90
+                && b[GUEST_UEFI_CPU_FLUSH_JNZ_OFF + 1] == 0x90
+        }
+        && GUEST_UEFI_IRON_CPU_FLUSH_GPA == 0x7EE6_8FA0
         && GUEST_UEFI_IRON_ASSERT_CALLER_RIP == 0x7FD2_5193
         && GUEST_UEFI_IRON_HIGH_CR3 == 0x7FA0_1000
         && GUEST_UEFI_IRON_PDE8000_WB == 0x8000_0083

@@ -13,7 +13,8 @@
 //! first CF8 of another BDF (MiscInitialization / PciBus); DXE then latches
 //! virtio so BOTH-OK still enums `00:00.0` + IDE fn1. Iron `f7620f6`: PEI
 //! DID `0x1237` then latch `00:01.3` then virtio `0x1042` — VIRTIO-OK
-//! DXE-OK, same CpuDxe ASSERT (`ebecc9c3`). Dump VGA PTEs next.
+//! DXE-OK, same CpuDxe ASSERT (`ebecc9c3`). Iron `d6b012a` VGA PTEs are
+//! GPA0 identity WB (`0xa0067`); firmware FIX MTRRs are WB. CpuFlush next.
 //! Header Type stays multifunction. PIIX `00:01.1` is the same CD. Boot
 //! order is CD then disk (fw_cfg `bootorder`).
 //! This is not the M4.3 virtio-mmio probe, not a completed firmware CD boot,

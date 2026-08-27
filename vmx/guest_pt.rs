@@ -676,11 +676,11 @@ pub const IDENTITY_WB_64M: u64 = 0x400_0000;
 pub const IDENTITY_CPU_DXE_IMG: u64 = 0x6E_7000;
 /// 1 MiB fixed-MTRR / default-type boundary. Dump `pte1m=` in the GPA0 PT.
 pub const IDENTITY_FIXED_MTRR_1M: u64 = 0x10_0000;
-/// Classic VGA framebuffer. Dump `pte_a0000=` at ASSERT (WB `0x67` vs PAT-UC).
-/// Iron `f7620f6`: PEI DID `0x1237` + latch `00:01.3` still ASSERT; this PTE
-/// tells whether GCD punched `[0xA0000, 1MiB)` or still treats VGA as RAM.
+/// Classic VGA framebuffer. Dump `pte_a0000=` at ASSERT.
+/// Iron `d6b012a`: `0xa0067` is GPA0 identity WB; firmware FIX MTRRs are
+/// `0x06` WB. Not a GCD-vs-UC-VGA signal. Do not PAT-UC this range.
 pub const IDENTITY_VGA_A0000: u64 = 0xA_0000;
-/// VGA BIOS / ROM in the same fixed-MTRR UC hole. Dump `pte_c0000=`.
+/// VGA BIOS / ROM. Dump `pte_c0000=`. Iron `d6b012a`: `0xc0067` WB identity.
 pub const IDENTITY_VGA_C0000: u64 = 0xC_0000;
 /// PML4[1] (leftover-high / >512GiB). Dump `pml4e1=`.
 pub const IDENTITY_PML4E1_GVA: u64 = 1 << 39;
