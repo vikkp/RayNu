@@ -1,12 +1,11 @@
 use super::{
     blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
-    mmio_insn_bytes_this_page,
-    latch_dxe_virtio_did, mmio_read, mmio_read_iso, mmio_write, pci_addr_selects_owned,
-    pci_addr_selects_slot0,
-    pci_addr_selects_virtio, pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso,
-    pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr, pci_write_data,
-    pei_host_bridge_did, present, process_blk_queue_in, process_iso_queue_in, queues_armed, reset,
-    take_marker, virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
+    latch_dxe_virtio_did, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
+    pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
+    pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
+    pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
+    process_blk_queue_in, process_iso_queue_in, queues_armed, reset, take_marker,
+    virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
     GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
     M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
     VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
@@ -38,8 +37,8 @@ fn pci_bdf_is_probe_slot_not_ide() {
 #[test]
 fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     use crate::devices::ide_cdrom::{
-        present as present_iso, reset as reset_cd, write_placeholder_iso, MOCK_EFI_ISO_BYTES,
-        ISO_SECTOR,
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
     };
     reset();
     reset_cd();
@@ -76,7 +75,9 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
         pci_read_data(0xCFC, 1) as u8,
         crate::devices::guest_irq::VIRTIO_PIC_IRQ
     );
-    assert!(is_virtio_bar_2m_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT) + 0x1000));
+    assert!(is_virtio_bar_2m_gpa(
+        u64::from(GUEST_VIRTIO_BAR0_DEFAULT) + 0x1000
+    ));
     assert!(iso_visible());
     assert!(pci_addr_selects_virtio_iso(pci_config_addr_iso()));
     pci_write_addr(pci_config_addr_iso());
@@ -86,10 +87,7 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_ISO_BAR0_DEFAULT)));
     assert_eq!(mmio_read(0x10, 2), 0xFFFF, "msix_config 16-bit");
     assert_eq!(mmio_read(0x10, 4), 0x0001_FFFF, "packed num_queues=1");
-    assert_eq!(
-        mmio_read_iso(0x04, 4) & VIRTIO_BLK_F_RO,
-        VIRTIO_BLK_F_RO
-    );
+    assert_eq!(mmio_read_iso(0x04, 4) & VIRTIO_BLK_F_RO, VIRTIO_BLK_F_RO);
     let cap = mmio_read_iso(0x200, 8);
     assert_eq!(cap, (extra / 512) as u64);
     assert!(!crate::devices::guest_platform::is_platform_sink_gpa(
@@ -106,11 +104,20 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
 fn blk_sector_rw_roundtrip_and_queue_out() {
     let mut disk = vec![0u8; 4096];
     let mut buf = [0xABu8; 512];
-    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_OUT, 0, &mut buf), VIRTIO_BLK_S_OK);
+    assert_eq!(
+        blk_sector_rw(&mut disk, VIRTIO_BLK_T_OUT, 0, &mut buf),
+        VIRTIO_BLK_S_OK
+    );
     let mut back = [0u8; 512];
-    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_IN, 0, &mut back), VIRTIO_BLK_S_OK);
+    assert_eq!(
+        blk_sector_rw(&mut disk, VIRTIO_BLK_T_IN, 0, &mut back),
+        VIRTIO_BLK_S_OK
+    );
     assert_eq!(back, buf);
-    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_FLUSH, 0, &mut buf), VIRTIO_BLK_S_OK);
+    assert_eq!(
+        blk_sector_rw(&mut disk, VIRTIO_BLK_T_FLUSH, 0, &mut buf),
+        VIRTIO_BLK_S_OK
+    );
 
     // Split virtqueue: header + data + status in a flat GPA image.
     let mut guest = vec![0u8; 4096];
@@ -215,7 +222,10 @@ fn blk_queue_out_writes_split_data_descriptors() {
     let mut last = 0u16;
     let mut disk = vec![0u8; 4096];
     let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
-    assert_eq!(n, 1024, "installer OUT must not drop later bio_vec descriptors");
+    assert_eq!(
+        n, 1024,
+        "installer OUT must not drop later bio_vec descriptors"
+    );
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
     assert_eq!(disk[0], 0x5A);
     assert_eq!(disk[511], 0x5A);
@@ -316,9 +326,25 @@ fn decode_mmio_mov_encodings() {
     assert!(notb.alu == super::MMIO_ALU_NOT && notb.is_write && !notb.has_imm);
     let negl = decode_mmio_insn(&[0xF7, 0x18], 2).unwrap();
     assert!(negl.alu == super::MMIO_ALU_NEG && negl.is_write && negl.size == 4);
+    let btimm = decode_mmio_insn(&[0x0F, 0xBA, 0x20, 0x05], 4).unwrap();
+    assert!(btimm.bt == super::MMIO_BT && btimm.has_imm && btimm.imm == 5 && !btimm.is_write);
+    let btsr = decode_mmio_insn(&[0x0F, 0xAB, 0x01], 3).unwrap();
+    assert!(btsr.bt == super::MMIO_BTS && btsr.is_write && btsr.reg == 0 && !btsr.has_imm);
+    let (new, was) = super::mmio_bt_apply(0x10, 4, 4, super::MMIO_BTS);
+    assert!(was && new == 0x10);
+    let (new2, was2) = super::mmio_bt_apply(0, 0, 4, super::MMIO_BTS);
+    assert!(!was2 && new2 == 1);
+    assert_eq!(super::mmio_bt_rflags(2, true) & 1, 1);
+    assert_eq!(super::mmio_bt_rflags(3, false) & 1, 0);
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);
-    assert_eq!(super::mmio_alu_apply(0, 0, super::MMIO_ALU_NOT) & 0xff, 0xff);
-    assert_eq!(super::mmio_alu_apply(1, 0, super::MMIO_ALU_NEG) & 0xff, 0xff);
+    assert_eq!(
+        super::mmio_alu_apply(0, 0, super::MMIO_ALU_NOT) & 0xff,
+        0xff
+    );
+    assert_eq!(
+        super::mmio_alu_apply(1, 0, super::MMIO_ALU_NEG) & 0xff,
+        0xff
+    );
     assert_eq!(super::mmio_test_rflags(2, 0, 1) & (1 << 6), 1 << 6);
     assert_eq!(super::mmio_test_rflags(2, 1, 1) & (1 << 6), 0);
     assert_eq!(super::mmio_cmp_rflags(2, 1, 2, 1) & 1, 1);
@@ -327,10 +353,7 @@ fn decode_mmio_mov_encodings() {
         super::mmio_alu_rflags(2, 1, 2, 3, super::MMIO_ALU_ADD, 1) & (1 << 6),
         0
     );
-    assert_eq!(
-        super::mmio_alu_apply(0xF0, 0x0F, super::MMIO_ALU_AND),
-        0x00
-    );
+    assert_eq!(super::mmio_alu_apply(0xF0, 0x0F, super::MMIO_ALU_AND), 0x00);
     assert_eq!(super::mmio_alu_apply(1, 2, super::MMIO_ALU_ADD), 3);
     assert_eq!(mmio_insn_bytes_this_page(0x1000, 16), 16);
     assert_eq!(mmio_insn_bytes_this_page(0x1FFC, 16), 4);
@@ -339,8 +362,8 @@ fn decode_mmio_mov_encodings() {
 #[test]
 fn mmio_write_queue_desc_keeps_high_half_on_writeq() {
     use crate::devices::ide_cdrom::{
-        present as present_iso, reset as reset_cd, write_placeholder_iso, MOCK_EFI_ISO_BYTES,
-        ISO_SECTOR,
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
     };
     reset();
     reset_cd();
@@ -382,7 +405,11 @@ fn present_enumerates_virtio_and_cd_then_disk() {
     );
     assert!(!pci_enumerated(), "PEI i440FX DID is not virtio enum");
     pci_write_addr(pci_config_addr());
-    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF, "virtio hidden until latch");
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "virtio hidden until latch"
+    );
     assert!(latch_dxe_virtio_did());
     assert!(!pei_host_bridge_did());
     // CpuDxe AcpiTimerLib still reads OVMF_HOSTBRIDGE_DID at 00:00.0.

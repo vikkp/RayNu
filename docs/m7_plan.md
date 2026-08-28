@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-ninth slice (this EFI): product ISO IOAPIC vectors latch into
+Thirtieth slice (this EFI): MMIO BT/BTS/BTR/BTC (`0F BA` /4–7 imm8 and
+`0F A3`/`AB`/`B3`/`BB`) so Linux `lock bts` on virtio/IOAPIC/xAPIC does
+not spin; CF = old bit. Twenty-ninth slice (this EFI): product ISO IOAPIC vectors latch into
 `lapic_virt` IRR and inject IRR→ISR so Linux `ack_APIC_irq` EOI matches
 (M3.12: bare VM-entry inject with empty ISR is `Fatal exception in
 interrupt`); remote IRR + level-triggered retry after EOI while the line
