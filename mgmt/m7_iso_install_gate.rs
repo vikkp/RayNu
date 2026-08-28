@@ -64,6 +64,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_irq.rs").contains("PIT_IRQ")
         && include_str!("../devices/guest_platform.rs").contains("fn pit_tick(")
         && include_str!("../devices/guest_platform.rs").contains("fn pit_write_data(")
+        && include_str!("../devices/guest_platform.rs").contains("pit_access")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("pub rex:")
         && include_str!("../vmx/guest_uefi.rs").contains("try_inject_guest_irq")
         && include_str!("../vmx/guest_uefi.rs").contains("raise_pit()")
         && include_str!("../vmx/guest_uefi.rs").contains("ept_install_ioapic_trap")

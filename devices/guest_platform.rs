@@ -687,8 +687,12 @@ struct Platform {
     fw_len: u8,
     pit: u16,
     pit_reload: u16,
-    /// Next 0x40 data access is the high byte (16-bit lo/hi).
+    /// Next 0x40 data write is the high byte (16-bit lo/hi).
     pit_hi: bool,
+    /// Next unlatched 0x40 read is the high byte (Linux lo/hi access).
+    pit_rd_hi: bool,
+    /// i8253 access: 1=lo, 2=hi, 3=lo/hi. 0 = not programmed (OVMF IN 0x40).
+    pit_access: u8,
     pit_latch: u16,
     /// Remaining latched bytes to return (2 = lo next, 1 = hi next).
     pit_latch_n: u8,
@@ -722,6 +726,8 @@ impl Platform {
             pit: 0xFFFF,
             pit_reload: 0xFFFF,
             pit_hi: false,
+            pit_rd_hi: false,
+            pit_access: 0,
             pit_latch: 0,
             pit_latch_n: 0,
             port61: 0x10,
@@ -948,11 +954,31 @@ fn pit_write_cmd(p: &mut Platform, val: u8) {
         return;
     }
     p.pit_hi = false;
+    p.pit_rd_hi = false;
+    p.pit_access = access;
     p.pit_latch_n = 0;
     p.pit = 0xFFFF;
 }
 
 fn pit_write_data(p: &mut Platform, val: u8) {
+    if p.pit_access == 1 {
+        p.pit_reload = (p.pit_reload & 0xFF00) | u16::from(val);
+        p.pit = if p.pit_reload == 0 {
+            0xFFFF
+        } else {
+            p.pit_reload
+        };
+        return;
+    }
+    if p.pit_access == 2 {
+        p.pit_reload = (p.pit_reload & 0x00FF) | (u16::from(val) << 8);
+        p.pit = if p.pit_reload == 0 {
+            0xFFFF
+        } else {
+            p.pit_reload
+        };
+        return;
+    }
     if !p.pit_hi {
         p.pit_reload = (p.pit_reload & 0xFF00) | u16::from(val);
         p.pit_hi = true;
@@ -975,6 +1001,16 @@ fn pit_read_data(p: &mut Platform) -> u8 {
     if p.pit_latch_n == 1 {
         p.pit_latch_n = 0;
         return (p.pit_latch >> 8) as u8;
+    }
+    if p.pit_access == 3 {
+        if !p.pit_rd_hi {
+            p.pit_rd_hi = true;
+            return p.pit as u8;
+        }
+        p.pit_rd_hi = false;
+        let v = (p.pit >> 8) as u8;
+        pit_tick_locked(p);
+        return v;
     }
     let v = p.pit as u8;
     pit_tick_locked(p);

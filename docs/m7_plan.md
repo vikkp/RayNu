@@ -274,6 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Twenty-fourth slice (this EFI): i8253 lo/hi access (`0x34`) returns lo then hi
+on unlatched `inb 0x40`; 8-bit MMIO without REX uses AH/CH/DH/BH not SPL.
 Twenty-third slice (this EFI): virtio/IOAPIC MMIO decode adds group-1
 AND/OR/XOR (`80/81/83`) so a RMW does not spin on decode-fail. Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
 and moffs (decode-fail spins virtio); GRUB `insmod all_video` → `serial`

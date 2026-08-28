@@ -329,6 +329,13 @@ fn pit_channel0_16bit_latch_roundtrip() {
     let hi2 = io(0x40, true, 1, 0) as u8;
     let next = u16::from(lo2) | (u16::from(hi2) << 8);
     assert!(next < 0x1000, "pit_tick must lower the latched count");
+    reset();
+    let _ = io(0x43, false, 1, 0x34);
+    let _ = io(0x40, false, 1, 0x00);
+    let _ = io(0x40, false, 1, 0x10);
+    let ulo = io(0x40, true, 1, 0) as u8;
+    let uhi = io(0x40, true, 1, 0) as u8;
+    assert_eq!(u16::from(ulo) | (u16::from(uhi) << 8), 0x1000);
 }
 
 #[test]

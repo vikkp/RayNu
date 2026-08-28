@@ -4576,6 +4576,29 @@ unsafe fn set_cr_gpr(idx: u8, val: u64) {
 }
 
 #[cfg(target_os = "uefi")]
+unsafe fn mmio_gpr_in(op: crate::devices::guest_virtio_blk::MmioInsn) -> u64 {
+    if op.size == 1 && !op.rex && (4..8).contains(&op.reg) {
+        (cr_gpr(op.reg - 4) >> 8) & 0xff
+    } else {
+        cr_gpr(op.reg)
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_gpr_out(op: crate::devices::guest_virtio_blk::MmioInsn, val: u64) {
+    if op.size == 1 && !op.rex && (4..8).contains(&op.reg) {
+        let g = op.reg - 4;
+        let old = cr_gpr(g);
+        set_cr_gpr(g, (old & !0xFF00) | ((val & 0xff) << 8));
+        return;
+    }
+    set_cr_gpr(
+        op.reg,
+        merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
+    );
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn skip_rel8_if(linear: u64, rip: u64, pred: fn(u8, u8) -> bool) -> bool {
     let mut buf = [0u8; 2];
     if copy_guest_identity_bytes(linear, &mut buf) < 2 {
@@ -5522,13 +5545,10 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         return false;
     };
     if op.xchg {
-        let oldr = cr_gpr(op.reg);
+        let oldr = mmio_gpr_in(op);
         let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, oldr);
-        set_cr_gpr(
-            op.reg,
-            merge_mmio_gpr(oldr, oldm, op.size, op.zero_ext, op.sign_ext),
-        );
+        mmio_gpr_out(op, oldm);
         let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
         if wrote != 0 {
             serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
@@ -5556,13 +5576,13 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             let rhs = if op.has_imm {
                 op.imm
             } else {
-                cr_gpr(op.reg)
+                mmio_gpr_in(op)
             };
             crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
         } else if op.has_imm {
             op.imm
         } else {
-            cr_gpr(op.reg)
+            mmio_gpr_in(op)
         };
         crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
         let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
@@ -5583,10 +5603,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
     } else {
         let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
-        set_cr_gpr(
-            op.reg,
-            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
-        );
+        mmio_gpr_out(op, val);
     }
     skip_insn()
 }
@@ -5608,13 +5625,10 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         return skip_insn();
     };
     if op.xchg {
-        let oldr = cr_gpr(op.reg);
+        let oldr = mmio_gpr_in(op);
         let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
         crate::devices::guest_irq::ioapic_write(off, oldr as u32);
-        set_cr_gpr(
-            op.reg,
-            merge_mmio_gpr(oldr, oldm, op.size, op.zero_ext, op.sign_ext),
-        );
+        mmio_gpr_out(op, oldm);
         return skip_insn();
     }
     if op.is_write != is_write {
@@ -5623,20 +5637,17 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     if is_write {
         let val = if op.alu != 0 {
             let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
-            let rhs = if op.has_imm { op.imm } else { cr_gpr(op.reg) };
+            let rhs = if op.has_imm { op.imm } else { mmio_gpr_in(op) };
             crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
         } else if op.has_imm {
             op.imm
         } else {
-            cr_gpr(op.reg)
+            mmio_gpr_in(op)
         };
         crate::devices::guest_irq::ioapic_write(off, val as u32);
     } else {
         let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
-        set_cr_gpr(
-            op.reg,
-            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
-        );
+        mmio_gpr_out(op, val);
     }
     skip_insn()
 }
