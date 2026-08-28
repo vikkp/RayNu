@@ -90,3 +90,27 @@ fn latch_irr_device_vector_then_eoi() {
     assert!(wrmsr(0x80B, 0).is_some());
     assert!(!has_deliverable_irr());
 }
+
+#[test]
+fn cr8_maps_to_tpr_class() {
+    set_cr8(0);
+    assert_eq!(cr8(), 0);
+    assert_eq!(tpr() & 0xF0, 0);
+    set_cr8(15);
+    assert_eq!(cr8(), 15);
+    assert_eq!(tpr(), 0xF0);
+    set_tpr(0x20);
+    assert_eq!(cr8(), 2);
+    set_cr8(0);
+    while take_deliverable_vector().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    latch_irr(0x31);
+    assert!(has_deliverable_irr());
+    set_cr8(3);
+    assert!(!has_deliverable_irr());
+    set_cr8(0);
+    let v = take_deliverable_vector().expect("unmasked IRR");
+    assert_eq!(v, 0x31);
+    assert!(wrmsr(0x80B, 0).is_some());
+}

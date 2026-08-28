@@ -147,6 +147,28 @@ fn set_irr(vec: u8) {
     bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
 }
 
+/// APIC TPR (8-bit). CR8 is bits 7:4.
+pub fn tpr() -> u32 {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe { APIC_TPR & 0xFF }
+}
+
+pub fn set_tpr(val: u32) {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        APIC_TPR = val & 0xFF;
+    }
+}
+
+/// Guest CR8 (TPR class 0..15). Linux `write_cr8` / `read_cr8`.
+pub fn cr8() -> u64 {
+    u64::from((tpr() >> 4) & 0xF)
+}
+
+pub fn set_cr8(val: u64) {
+    set_tpr(((val as u32) & 0xF) << 4);
+}
+
 /// Latch a device IRQ (IOAPIC vector) into IRR. Stage 46 product ISO uses
 /// this so Linux `ack_APIC_irq` EOI matches; bare VM-entry inject of the
 /// same vector is the M3.12 `Fatal exception in interrupt` path.

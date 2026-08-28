@@ -7,6 +7,7 @@ use super::{
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_atapi_should_stop,
     post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
+    cr_access_is_cr8,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
     preempt_deadloop_guarded_assert_skip_len, guest_uefi_assert_caller_is_dxe_ram,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
@@ -1388,4 +1389,12 @@ fn rep_insw_fills_identify_word0() {
     assert_eq!(addr, 512);
     assert_eq!(load_low_ram_at(&buf, 0, 2), Some(0x85C0));
     crate::devices::ide_cdrom::reset();
+}
+
+#[test]
+fn cr_access_qual_cr8() {
+    assert!(cr_access_is_cr8(8));
+    assert!(cr_access_is_cr8(8 | (1 << 4)));
+    assert!(!cr_access_is_cr8(4));
+    assert!(!cr_access_is_cr8(0));
 }

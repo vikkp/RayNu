@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Thirty-first slice (this EFI): MMIO CMPXCHG (`0F B0`/`B1`) and XADD
+Thirty-second slice (this EFI): guest-UEFI CR8-load/store exiting so
+Linux `mov cr8` (TPR) syncs `lapic_virt` after `nolapic` was dropped.
+No VMCS GUEST_CR8; store writes `APIC_TPR = (val & 0xF) << 4`. E4 SHELL
+VMCS does not request CR8 exiting. Thirty-first slice (this EFI): MMIO CMPXCHG (`0F B0`/`B1`) and XADD
 (`0F C0`/`C1`) so Linux `lock cmpxchg` on virtio/IOAPIC/xAPIC does not
 spin. Thirtieth slice (this EFI): MMIO BT/BTS/BTR/BTC (`0F BA` /4–7 imm8 and
 `0F A3`/`AB`/`B3`/`BB`) so Linux `lock bts` on virtio/IOAPIC/xAPIC does

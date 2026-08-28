@@ -1902,6 +1902,7 @@ unsafe fn setup_vmcs(frames: &LaunchFrames) -> Result<(), LaunchError> {
     // Prefer I/O bitmaps (COM1 only): unconditional I/O makes every Linux
     // `io_delay` (port 0x80) a VMEXIT and stalls mid mem-init.
     // Do not set bit 21 (Use TPR shadow) — it needs a Virtual-APIC page.
+    // Do not set bits 19/20 (CR8 load/store exiting) — E4 SHELL is not Linux TPR.
     let pin = adjust_vmx_controls(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, pin_msr);
     let primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
@@ -5622,6 +5623,8 @@ mod launch_test {
         assert_eq!(PIN_BASED_EXTERNAL_INTERRUPT_EXITING, 1);
         assert_eq!(VM_EXIT_ACK_INTERRUPT_ON_EXIT, 1 << 15);
         assert_eq!(CPU_BASED_USE_TPR_SHADOW, 1 << 21);
+        assert_eq!(CPU_BASED_CR8_LOAD_EXITING, 1 << 19);
+        assert_eq!(CPU_BASED_CR8_STORE_EXITING, 1 << 20);
         assert_eq!(CPU_BASED_UNCONDITIONAL_IO, 1 << 24);
         assert_eq!(GUEST_UEFI_OVMF_ESP_PATH, "\\EFI\\RayNu\\OVMF.fd");
         assert_eq!(MIN_LIVE_ESP_OVMF_BYTES, 2 * 1024 * 1024);

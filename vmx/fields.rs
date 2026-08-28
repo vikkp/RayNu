@@ -143,6 +143,12 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 /// Interrupt-window exiting (inject when guest IF becomes 1).
 pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
+/// CR8-load exiting (MOV from CR8). Guest-UEFI only; reads lapic_virt TPR class.
+/// Do not OR into the E4 SHELL VMCS in `launch.rs`.
+pub const CPU_BASED_CR8_LOAD_EXITING: u32 = 1 << 19;
+/// CR8-store exiting (MOV to CR8). Guest-UEFI only; writes lapic_virt TPR.
+/// Do not OR into the E4 SHELL VMCS in `launch.rs`.
+pub const CPU_BASED_CR8_STORE_EXITING: u32 = 1 << 20;
 /// Use TPR shadow (primary bit 21). Not CPUID — CPUID always exits in VMX.
 /// Kept named for the bit position only; do not set unless Virtual-APIC is armed.
 pub const CPU_BASED_USE_TPR_SHADOW: u32 = 1 << 21;

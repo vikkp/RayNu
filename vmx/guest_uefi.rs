@@ -156,6 +156,11 @@ pub fn hlt_should_resume() -> bool {
     true
 }
 
+/// Exit qualification for `MOV CR8` (SDM: CR number in bits 3:0).
+pub fn cr_access_is_cr8(qual: u64) -> bool {
+    (qual & 0xf) == 8
+}
+
 /// DebugLib `CpuDeadLoop` is `jmp rel8` −13 (`eb f3`) or `jmp $` (`eb fe`).
 /// Nested VT-x `707a849`: 1s HPET left `rip=0x6e812d insn=ebf3…` `pci_ide=0`.
 /// Do **not** skip every backward `jmp rel8` on I/O exits — iron COM2
@@ -2802,10 +2807,14 @@ unsafe fn setup_guest_uefi_vmcs(
         PIN_BASED_EXTERNAL_INTERRUPT_EXITING | PIN_BASED_VMX_PREEMPTION_TIMER,
         pin_msr,
     );
-    // Same wanted bits as E4, then drop unconditional I/O if bitmaps won
-    // (SDM: the two I/O-exit controls must not both be 1).
+    // Same wanted bits as E4, plus CR8 load/store exiting so Linux
+    // `write_cr8`/`read_cr8` syncs `lapic_virt` TPR (no VMCS GUEST_CR8).
+    // Do not OR CR8 bits into the E4 SHELL VMCS. Then drop unconditional
+    // I/O if bitmaps won (SDM: the two I/O-exit controls must not both be 1).
     let mut primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
+            | CPU_BASED_CR8_LOAD_EXITING
+            | CPU_BASED_CR8_STORE_EXITING
             | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
             | CPU_BASED_USE_MSR_BITMAPS
@@ -2816,7 +2825,12 @@ unsafe fn setup_guest_uefi_vmcs(
         primary &= !CPU_BASED_UNCONDITIONAL_IO;
     }
     if primary & CPU_BASED_USE_TPR_SHADOW != 0 {
-        serial::write_line("boot: guest-UEFI WARN — TPR shadow forced (no virt-APIC)");
+        serial::write_line("boot: guest-UEFI WARN — TPR shadow forced (no virt-APIC; CR8 may not exit)");
+    }
+    if primary & CPU_BASED_CR8_LOAD_EXITING == 0
+        || primary & CPU_BASED_CR8_STORE_EXITING == 0
+    {
+        serial::write_line("boot: guest-UEFI WARN — CR8 load/store exiting not allowed");
     }
     if primary & CPU_BASED_ACTIVATE_SECONDARY == 0 {
         serial::write_line("boot: guest-UEFI secondary controls not allowed");
@@ -4530,6 +4544,9 @@ unsafe fn handle_cr(qual: u64) -> bool {
         (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
         (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
         (4, 1) => set_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0)),
+        // CR8 is emulated (no VMCS GUEST_CR8). Store: APIC_TPR = (val&0xF)<<4.
+        (8, 0) => crate::devices::lapic_virt::set_cr8(cr_gpr(gpr)),
+        (8, 1) => set_cr_gpr(gpr, crate::devices::lapic_virt::cr8()),
         _ => {}
     }
     skip_insn()
