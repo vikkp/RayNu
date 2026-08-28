@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN fifty-seventh slice: prune Cruzer ESP leftover/partial ISOs then df-check before alpine-virt linux.iso. Lab 73728 stub nested stays 65536. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN fifty-eighth slice: remount + fsck.vfat -a to reclaim stale FAT32 FSInfo after ENOSPC (not format) before alpine-virt linux.iso. Lab 73728 stub nested stays 65536. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (Cruzer ESP ISO prune + df check). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (Cruzer FAT32 FSInfo reclaim). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-eighth slice: remount + fsck.vfat -a reclaim stale FAT32 FSInfo after ENOSPC (not format); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-seventh slice: prune Cruzer ESP leftover/partial ISOs then df-check before alpine-virt linux.iso; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-sixth slice: wait for /dev/vda then mdev so setup-disk opens a node; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-fifth slice: modprobe isofs + mount -t iso9660 so apk sees virtio-iso; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -174,6 +174,8 @@ self_test() {
   grep -q 'EFI/RayNu/linux.iso' "$ESP"
   grep -q 'pruning leftover ESP ISOs' "$ESP"
   grep -q 'ESP free=' "$ESP"
+  grep -q 'fsck.vfat -a' "$ESP"
+  grep -q 'not format' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \

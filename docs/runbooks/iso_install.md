@@ -152,7 +152,9 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The 977.5 MiB Cruzer needs ~64 MiB free; a failed `cp` leaves a partial
-`EFI/RayNu/linux.iso`. Flash prunes ESP `*.iso` then checks `df`. Keep
+`EFI/RayNu/linux.iso` and can leave FAT32 FSInfo stale (`df` much smaller
+than `977 MiB - du`). Flash prunes ESP `*.iso`, remounts, and `fsck.vfat -a`
+(not format) if `df` is still short. Keep
 `installdisk.bin` and `auth.token`. Operator flash:
 
 ```bash

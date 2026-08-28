@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Fifty-eighth slice (this EFI): Cruzer flash remounts and `fsck.vfat -a`
+to reclaim stale FAT32 FSInfo / orphaned clusters after ENOSPC (`df`
+showed 54 MiB free while `du` was 8.4 MiB on a 977.5 MiB stick). Never
+`mkfs` / format. Keep `installdisk.bin` / `auth.token`.
 Fifty-seventh slice (this EFI): Cruzer ESP flash prunes leftover/partial
 `*.iso` then `df`-checks before staging alpine-virt `linux.iso` (~63 MiB
 on the 977.5 MiB RAYNUV stick). Keep `installdisk.bin` / `auth.token`.

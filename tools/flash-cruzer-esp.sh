@@ -23,6 +23,8 @@
 # Stage 46: alpine-virt linux.iso is ~63 MiB. The 977.5 MiB Cruzer has
 # room if leftover/partial ISOs are pruned first (keep installdisk.bin
 # and auth.token). --linux-iso unlinks ESP *.iso then checks df.
+# ENOSPC can leave FAT32 FSInfo stale (df << 977 MiB minus du). Remount
+# and fsck.vfat -a reclaim orphaned clusters. Never mkfs / format.
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
@@ -120,6 +122,58 @@ self_test() {
   fi
   rm -f "$tmp"
   echo "RAYNU-V-CRUZER-FLASH-SELFTEST-OK"
+}
+
+esp_avail_bytes() {
+  df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' '
+}
+
+remount_cruzer_vfat() {
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+}
+
+# Reclaim leaked FAT clusters / stale FSInfo after ENOSPC. Never mkfs.
+reclaim_fat_free_if_needed() {
+  local need="$1"
+  local avail
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need"
+    return 0
+  fi
+  echo "==> ESP free=${avail:-?} need=$need — remount to flush FAT32 FSInfo (not format)"
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need (after remount)"
+    return 0
+  fi
+  if ! command -v fsck.vfat >/dev/null; then
+    echo "error: fsck.vfat missing (apt install dosfstools); not formatting" >&2
+    return 1
+  fi
+  echo "==> fsck.vfat -a $RAW to reclaim orphaned clusters (not format)"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  set +e
+  sudo fsck.vfat -a "$RAW"
+  fsck_rc=$?
+  set -e
+  if (( fsck_rc > 1 )); then
+    echo "error: fsck.vfat rc=$fsck_rc (not format)" >&2
+    return 1
+  fi
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  echo "==> ESP free=${avail:-?} need=$need (after fsck.vfat)"
+  if [[ ! "$avail" =~ ^[0-9]+$ ]] || (( avail < need )); then
+    return 1
+  fi
+  return 0
 }
 
 while [[ $# -gt 0 ]]; do
@@ -343,12 +397,12 @@ elif [[ -n "$LINUX_ISO" ]]; then
   # Failed cp leaves a partial linux.iso that consumes the last free clusters.
   echo "==> pruning leftover ESP ISOs (partial ENOSPC + extras) before linux.iso"
   sudo find "$MNT" -iname '*.iso' -print -delete || true
-  AVAIL="$(df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' ')"
+  sudo sync -f "$MNT" 2>/dev/null || sudo sync
   NEED=$((LINUX_BYTES + 1048576))
-  echo "==> ESP free=$AVAIL need=$NEED (linux.iso $LINUX_BYTES + 1MiB slack)"
-  if [[ ! "$AVAIL" =~ ^[0-9]+$ ]] || (( AVAIL < NEED )); then
-    echo "error: Cruzer ESP has ${AVAIL:-?} bytes free; need $NEED for linux.iso" >&2
+  if ! reclaim_fat_free_if_needed "$NEED"; then
+    echo "error: Cruzer ESP has $(esp_avail_bytes) bytes free; need $NEED for linux.iso" >&2
     echo "       keep EFI/BOOT/BOOTX64.EFI EFI/RayNu/OVMF.fd EFI/RayNu/installdisk.bin EFI/RayNu/auth.token" >&2
+    echo "       stale FAT32 FSInfo after ENOSPC: fsck.vfat -a (not format), then retry" >&2
     sudo du -ah "$MNT" | sort -h | tail -20 >&2 || true
     exit 1
   fi
