@@ -118,6 +118,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../boot/handoff.rs").contains("nested product-ISO HOLDS")
         && include_str!("../tools/run-qemu.sh").contains("QEMU_MEM")
         && include_str!("../tools/run-qemu.sh").contains("2560M")
+        && include_str!("../tools/e5-product-iso-qemu-serial.sh").contains("RAYNU-V-M1-VMXON-SKIP")
+        && include_str!("../tools/e5-product-iso-qemu-serial.sh").contains("report-RAM extra hpa=")
         && include_str!("../boot/handoff.rs").contains("conventional above PRECISE pages=")
         && include_str!("../boot/handoff.rs").contains("REPORT_RAM_EXTRA_WANT_PAGES")
         && include_str!("../vmx/guest_uefi.rs").contains("no-zero")

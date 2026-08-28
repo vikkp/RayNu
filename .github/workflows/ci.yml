@@ -155,6 +155,7 @@ jobs:
           if [[ -e /dev/kvm ]]; then
             sudo chmod a+rw /dev/kvm || true
             echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
+            echo 1 | sudo tee /sys/module/kvm_amd/parameters/nested 2>/dev/null || true
           fi
           TIMEOUT_SECS=480 ./tools/e5-product-iso-qemu-serial.sh
       - name: Upload product ISO serial
