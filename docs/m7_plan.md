@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighth slice (this EFI): ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
+Ninth slice (this EFI): ATAPI PIO DRQ is 31 CD sectors so Linux `sr` READ(10)
+is not completed short at 4; IDENTIFY is PIO-only; nIEN masks IRQ 14.
+Eighth slice: ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
 (squashfs stays in initramfs), GRUB `gfxterm` → `serial` when present, BusyBox
 `/ # ` auto-answer, 64-bit virtqueue GPA writes keep the high half. Seventh slice: virtio-blk OUT copies the full request (not a 4 KiB
 cap), ISO patch loads `sr-mod` + `console=ttyS0` and zeros GRUB timeout, virtio

@@ -12,7 +12,10 @@
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
 //! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
 //! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
-//! SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
+//! Product ISO IDENTIFY is PIO-only (LBA + PIO3/4, no MWDMA/UDMA) so Linux
+//! `ata_piix` does not start BMIDE. PACKET DRQ is up to 31 CD sectors
+//! (16-bit ATAPI byte count); 4-sector DRQ completed Linux READ(10) short.
+//! nIEN (device-control bit 1) suppresses IRQ 14. SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
 //! Intel `48c598a`: BOTH-OK `ataio=1308` `packet=0` (`insn=ef` then
 //! `edc9c3` IN EAX,DX poll) because ABRT never reached PACKET `0xA0`.
 //! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
@@ -82,6 +85,8 @@ const ATA_CMD_IDENTIFY_PACKET: u8 = 0xA1;
 const ATA_CMD_PACKET: u8 = 0xA0;
 const ATA_CMD_SET_FEATURES: u8 = 0xEF;
 const ATA_DEVCTL_SRST: u8 = 0x04;
+/// Device Control bit 1: nIEN — 1 = do not assert IRQ.
+const ATA_DEVCTL_NIEN: u8 = 0x02;
 /// ATAPI interrupt reason (sector-count): CDB write.
 const ATAPI_INT_CD: u8 = 0x01;
 /// ATAPI interrupt reason: data-in to host.
@@ -102,7 +107,9 @@ const SCSI_MODE_SENSE10: u8 = 0x5A;
 const SCSI_READ12: u8 = 0xA8;
 const SCSI_SENSE_ILLEGAL: u8 = 0x05;
 const SCSI_ASC_INVALID_OPCODE: u8 = 0x20;
-const XFER_CAP: usize = 4 * ISO_SECTOR;
+/// ATAPI cylinder is 16-bit, so one DRQ is at most 31 × 2048 = 63488 bytes.
+/// Linux `sr` READ(10) is typically 32 KiB–64 KiB; 4 sectors completed short.
+const XFER_CAP: usize = 31 * ISO_SECTOR;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AtaXfer {
@@ -1427,8 +1434,8 @@ fn apply_atapi_signature(m: &mut CdMedia) {
     m.cdb_got = 0;
 }
 
-fn raise_ata_irq() {
-    if product_iso_window_armed() {
+fn raise_ata_irq(m: &CdMedia) {
+    if product_iso_window_armed() && (m.ata_devctl & ATA_DEVCTL_NIEN) == 0 {
         crate::devices::guest_irq::raise_ata();
     }
 }
@@ -1444,7 +1451,7 @@ fn packet_ok(m: &mut CdMedia) {
     m.ata_err = 0;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
-    raise_ata_irq();
+    raise_ata_irq(m);
 }
 
 fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
@@ -1454,7 +1461,7 @@ fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
     m.ata_err = sense << 4;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
-    raise_ata_irq();
+    raise_ata_irq(m);
 }
 
 fn begin_packet_data(m: &mut CdMedia, n: usize) {
@@ -1463,7 +1470,7 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     if limit == 0 || limit == 0xffff {
         limit = n;
     }
-    let size = n.min(limit).max(2);
+    let size = n.min(limit).max(2).min(XFER_CAP).min(0xFFFE);
     m.xfer = AtaXfer::PacketData;
     m.xfer_off = 0;
     // Advertise and complete the same byte count (ATAPI cylinder). A larger
@@ -1474,7 +1481,7 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     m.ata_lba[2] = (size >> 8) as u8;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
-    raise_ata_irq();
+    raise_ata_irq(m);
 }
 
 fn start_identify(m: &mut CdMedia) {
@@ -1495,12 +1502,18 @@ fn start_identify(m: &mut CdMedia) {
             m.data[word * 2] = b;
         }
     }
+    // Word 49: LBA (bit 9). No DMA (bit 8) — BMIDE stays RAZ/WI.
+    m.data[49 * 2] = 0x00;
+    m.data[49 * 2 + 1] = 0x02;
+    // Word 53: words 64–70 valid. Word 64: PIO3 + PIO4.
+    m.data[53 * 2] = 0x02;
+    m.data[64 * 2] = 0x03;
     m.xfer = AtaXfer::Identify;
     m.xfer_off = 0;
     m.xfer_end = 512;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
-    raise_ata_irq();
+    raise_ata_irq(m);
 }
 
 fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
@@ -1760,7 +1773,7 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             m.ata_err = 0;
                             m.ata_count = ATAPI_INT_CD;
                             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
-                            raise_ata_irq();
+                            raise_ata_irq(m);
                         }
                         ATA_CMD_DEVICE_RESET | ATA_CMD_DIAGNOSTIC => apply_atapi_signature(m),
                         ATA_CMD_IDENTIFY => {
@@ -1826,7 +1839,7 @@ fn read_data(m: &mut CdMedia, size: u8) -> u64 {
         } else {
             m.xfer = AtaXfer::Idle;
             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
-            raise_ata_irq();
+            raise_ata_irq(m);
         }
     }
     v

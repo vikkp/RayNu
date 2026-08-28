@@ -316,3 +316,91 @@ fn product_iso_window_does_not_truncate_and_is_not_lab_stub() {
     assert!(!product_iso_window_armed());
     assert!(is_lab_eltorito_media());
 }
+
+fn host_read10_n(lba: u32, nsec: u8) -> Vec<u8> {
+    let _ = ata_io(0x01F7, false, 1, 0xA0);
+    let cdb = [
+        0x28u8,
+        0,
+        (lba >> 24) as u8,
+        (lba >> 16) as u8,
+        (lba >> 8) as u8,
+        lba as u8,
+        0,
+        0,
+        nsec,
+        0,
+        0,
+        0,
+    ];
+    for chunk in cdb.chunks(2) {
+        let w = u64::from(chunk[0]) | (u64::from(chunk.get(1).copied().unwrap_or(0)) << 8);
+        let _ = ata_io(0x01F0, false, 2, w);
+    }
+    let bytes = nsec as usize * ISO_SECTOR;
+    let mut out = vec![0u8; bytes];
+    for i in 0..bytes / 2 {
+        let w = ata_io(0x01F0, true, 2, 0);
+        out[i * 2] = w as u8;
+        out[i * 2 + 1] = (w >> 8) as u8;
+    }
+    out
+}
+
+#[test]
+fn product_iso_read10_eight_sectors_is_not_short() {
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + 8 * ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    for i in 0..8 {
+        iso[MOCK_EFI_ISO_BYTES + i * ISO_SECTOR] = 0xA0 + i as u8;
+    }
+    assert!(present(&iso, 9));
+    assert!(product_iso_window_armed());
+    let lba = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    let buf = host_read10_n(lba, 8);
+    assert_eq!(buf.len(), 8 * ISO_SECTOR);
+    for i in 0..8 {
+        assert_eq!(buf[i * ISO_SECTOR], 0xA0 + i as u8, "sector {i}");
+    }
+    reset();
+}
+
+#[test]
+fn product_iso_identify_is_pio_only_and_nien_masks_irq() {
+    use crate::devices::guest_irq::{self, ioapic_write, take_inject_vector, ATA_GSI};
+    use crate::devices::guest_platform;
+    reset();
+    guest_irq::reset();
+    guest_platform::reset();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present(&iso, 9));
+    let w0 = host_identify_word0().expect("IDENTIFY");
+    assert_eq!(w0, 0x85C0);
+    let mut w49 = 0u16;
+    for n in 1..50 {
+        let w = ata_io(0x01F0, true, 2, 0) as u16;
+        if n == 49 {
+            w49 = w;
+        }
+    }
+    assert_eq!(w49, 0x0200, "IDENTIFY word 49 LBA, no DMA");
+    guest_irq::reset();
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x40);
+    let _ = ata_io(0x03F6, false, 1, 0x02);
+    let _ = ata_io(0x01F7, false, 1, 0xA0);
+    assert!(
+        take_inject_vector().is_none(),
+        "nIEN must suppress ATA IRQ 14"
+    );
+    let _ = ata_io(0x03F6, false, 1, 0x00);
+    let _ = ata_io(0x01F7, false, 1, 0xA0);
+    assert_eq!(take_inject_vector(), Some(0x40));
+    reset();
+    guest_irq::reset();
+    guest_platform::reset();
+}
