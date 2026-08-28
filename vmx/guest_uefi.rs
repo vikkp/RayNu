@@ -569,11 +569,12 @@ pub const GUEST_UEFI_MMIO_SCRATCH_SLOTS: usize = 32;
 /// identity-map. Iron `fad19b2`: PEI used the 2 GiB lie, then EPT-stopped
 /// at `gpa=0x7bddd000` (`reason=0x30` `n=600`; ASSERT `0x1d25193` gone).
 /// 32 slots = 64 MiB. Do **not** identity-map `[32MiB, 2GiB)` (`89c3731`).
-/// Product ISO retains extra 2 MiB WB slots (installer RAM); lab/nested stay 32.
+/// Product ISO retains extra 2 MiB WB slots (installer RAM); `iso=0` stays 32.
 pub const GUEST_UEFI_REPORT_RAM_SLOTS: usize = 32;
 /// Extra report-RAM slots when PRE-EBS retained a window-sized ISO.
-/// `[32MiB, 2GiB)` is 1008×2 MiB; lab/nested still allocate only 32.
-/// Iron fills the rest from leftover DRAM above PRECISE (not invented HPA).
+/// `[32MiB, 2GiB)` is 1008×2 MiB; `iso=0` still allocates only 32.
+/// Iron and nested product-ISO fill extras from leftover DRAM above PRECISE
+/// (not invented HPA). Nested `iso=0` does not seed leftover (E4 SHELL).
 pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 976;
 const REPORT_RAM_ARRAY: usize =
     GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
