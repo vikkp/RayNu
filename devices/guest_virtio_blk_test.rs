@@ -406,3 +406,30 @@ fn iso_queue_in_copies_and_rejects_out() {
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_IOERR);
     assert_eq!(iso[0], 0xAB, "read-only ISO must not take OUT");
 }
+
+#[test]
+fn virtio_gpa_copy_stops_at_4k_so_report_ram_slots_do_not_bleed() {
+    let mut lo = [0u8; 4096];
+    let mut hi = [0u8; 4096];
+    lo[4090..].fill(0x11);
+    hi[..6].fill(0x22);
+    let lo_p = lo.as_mut_ptr() as u64;
+    let hi_p = hi.as_mut_ptr() as u64;
+    let translate = |gpa: u64| {
+        if gpa < 4096 {
+            Some(lo_p + gpa)
+        } else if gpa < 8192 {
+            Some(hi_p + (gpa - 4096))
+        } else {
+            None
+        }
+    };
+    let mut dst = [0u8; 12];
+    assert!(super::read_bytes(&translate, 4090, &mut dst));
+    assert_eq!(&dst[..6], &[0x11; 6]);
+    assert_eq!(&dst[6..], &[0x22; 6]);
+    let src = [0xABu8; 12];
+    assert!(super::write_bytes(&translate, 4090, &src));
+    assert_eq!(&lo[4090..], &[0xAB; 6]);
+    assert_eq!(&hi[..6], &[0xAB; 6]);
+}

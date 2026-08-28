@@ -159,7 +159,8 @@ strips leftovers so the boot gate does not HOLD). PRE-EBS copies the ISO into
 `LOADER_DATA`. Guest OVMF boots that CD, virtio-pci queues target an empty
 install disk at `00:02.0` (`/dev/vda`; 1 GiB on iron, 1 MiB nested) and a
 read-only virtio-blk at `00:03.0` (`/dev/vdb`) serving the same ISO bytes
-(alpine-virt finds ISO9660 without `ata_piix`), product ISO PIC/IOAPIC injects
+(alpine-virt finds ISO9660 without `ata_piix`), virtio GPA copies stop at
+4 KiB so report-RAM 2 MiB slots are not overrun, product ISO PIC/IOAPIC injects
 ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered

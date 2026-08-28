@@ -74,6 +74,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("DATA_SEGS")
         && include_str!("../devices/guest_virtio_blk.rs").contains("GUEST_VIRTIO_ISO_PCI_DEV")
         && include_str!("../devices/guest_virtio_blk.rs").contains("VIRTIO_BLK_F_RO")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("fn page_left(")
         && include_str!("../devices/guest_serial_answer.rs").contains("fn note_tx(")
         && include_str!("../devices/guest_serial_answer.rs").contains("/ # ")
         && include_str!("../devices/guest_serial_answer.rs").contains("setup-disk -m sys /dev/vda")

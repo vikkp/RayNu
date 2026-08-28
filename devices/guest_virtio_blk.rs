@@ -24,7 +24,9 @@
 //! Lab stub: vendor cap `0x0001_0010` (enum only, not queues); slot 3 empty.
 //! Product ISO window: virtio-pci caps type 1/2/3/4 + trap-and-emulate BAR
 //! MMIO + split virtqueue IN/OUT/FLUSH (every data descriptor in the chain,
-//! not only the first). Not the M4.3 virtio-mmio probe. Not ISO-INSTALL-OK.
+//! not only the first). GPA copies stop at 4 KiB so report-RAM 2 MiB slots
+//! (non-contiguous HPA) are not overrun. Not the M4.3 virtio-mmio probe.
+//! Not ISO-INSTALL-OK.
 
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -938,24 +940,53 @@ pub fn process_iso_queue_in(
     )
 }
 
+fn page_left(gpa: u64) -> usize {
+    (0x1000 - (gpa & 0xfff)) as usize
+}
+
 fn read_bytes(translate: &impl Fn(u64) -> Option<u64>, gpa: u64, dst: &mut [u8]) -> bool {
-    let Some(hpa) = translate(gpa) else {
-        return false;
-    };
-    // SAFETY: translate returned a host pointer covering `dst.len()`.
-    unsafe {
-        core::ptr::copy_nonoverlapping(hpa as *const u8, dst.as_mut_ptr(), dst.len());
+    let mut done = 0usize;
+    while done < dst.len() {
+        let g = gpa.wrapping_add(done as u64);
+        let Some(hpa) = translate(g) else {
+            return false;
+        };
+        let take = (dst.len() - done).min(page_left(g));
+        if take == 0 {
+            return false;
+        }
+        // SAFETY: translate returned a host pointer covering this 4 KiB page.
+        // Report-RAM 2 MiB slots are not contiguous in HPA; do not copy past
+        // the page. KANI-TARGET: virtio GPA read (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                hpa as *const u8,
+                dst[done..].as_mut_ptr(),
+                take,
+            );
+        }
+        done = done.saturating_add(take);
     }
     true
 }
 
 fn write_bytes(translate: &impl Fn(u64) -> Option<u64>, gpa: u64, src: &[u8]) -> bool {
-    let Some(hpa) = translate(gpa) else {
-        return false;
-    };
-    // SAFETY: translate returned a writable host pointer covering `src.len()`.
-    unsafe {
-        core::ptr::copy_nonoverlapping(src.as_ptr(), hpa as *mut u8, src.len());
+    let mut done = 0usize;
+    while done < src.len() {
+        let g = gpa.wrapping_add(done as u64);
+        let Some(hpa) = translate(g) else {
+            return false;
+        };
+        let take = (src.len() - done).min(page_left(g));
+        if take == 0 {
+            return false;
+        }
+        // SAFETY: translate returned a writable host pointer covering this
+        // 4 KiB page. KANI-TARGET: virtio GPA write (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(src[done..].as_ptr(), hpa as *mut u8, take);
+        }
+        done = done.saturating_add(take);
     }
     true
 }

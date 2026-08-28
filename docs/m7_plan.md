@@ -274,7 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eleventh slice (this EFI): product ISO window reveals a read-only virtio-blk
+Twelfth slice (this EFI): virtio GPA copies stop at 4 KiB so lazy report-RAM
+2 MiB slots (non-contiguous HPA) are not overrun. Eleventh slice: product ISO window reveals a read-only virtio-blk
 at `00:03.0` (`/dev/vdb`) backed by the ISO bytes so alpine-virt (virtio
 initramfs, often without `ata_piix`) can find ISO9660 media; packed
 common-cfg 32-bit read at `0x10` includes `num_queues`; slot-3 INTA is GSI 18.
