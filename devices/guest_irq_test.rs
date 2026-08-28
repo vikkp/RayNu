@@ -94,6 +94,22 @@ fn product_iso_virtio_gsi_and_pic_fallback() {
     guest_platform::reset();
 }
 
+#[test]
+fn product_iso_virtio_raises_pci_line_ioapic_pin() {
+    arm_product_iso();
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_PIC_IRQ));
+    ioapic_write(0x10, 0x53);
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x53),
+        "Linux uses PCI interrupt line 11 as IOAPIC pin 11 without _PRT"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
 fn raise_pic_for_test() {
     raise_gsi(VIRTIO_PIC_IRQ);
 }

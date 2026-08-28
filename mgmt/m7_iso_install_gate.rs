@@ -59,6 +59,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_irq.rs").contains("fn take_inject_vector(")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_GSI")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_ISO_GSI")
+        && include_str!("../devices/guest_irq.rs").contains("raise_gsi(VIRTIO_PIC_IRQ)")
         && include_str!("../vmx/guest_uefi.rs").contains("try_inject_guest_irq")
         && include_str!("../vmx/guest_uefi.rs").contains("ept_install_ioapic_trap")
         && include_str!("../vmx/guest_uefi.rs").contains("handle_uart_product")

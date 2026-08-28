@@ -6,8 +6,9 @@
 //!
 //! Lab El Torito keeps 8259 RAZ/WI. A real distro installer (Linux virtio_blk
 //! / libata) waits on interrupts: virtio INTx (i440FX slot 2 INTA → GSI 17,
-//! slot 3 INTA → GSI 18) and ATA IRQ 14. This module is live only while the
-//! product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
+//! slot 3 INTA → GSI 18, plus PCI interrupt line 11 as IOAPIC pin 11 when
+//! the guest has no ACPI `_PRT`) and ATA IRQ 14. This module is live only
+//! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -137,22 +138,24 @@ pub fn lower_ata() {
 
 pub fn raise_virtio() {
     raise_gsi(VIRTIO_GSI);
-    raise_pic_irq(VIRTIO_PIC_IRQ);
+    // PCI interrupt line is IRQ 11. Without ACPI `_PRT`, Linux unmasks
+    // IOAPIC pin 11 (ISA identity), not pin 17.
+    raise_gsi(VIRTIO_PIC_IRQ);
 }
 
 pub fn lower_virtio() {
     lower_gsi(VIRTIO_GSI);
-    lower_pic_irq(VIRTIO_PIC_IRQ);
+    lower_gsi(VIRTIO_PIC_IRQ);
 }
 
 pub fn raise_virtio_iso() {
     raise_gsi(VIRTIO_ISO_GSI);
-    raise_pic_irq(VIRTIO_PIC_IRQ);
+    raise_gsi(VIRTIO_PIC_IRQ);
 }
 
 pub fn lower_virtio_iso() {
     lower_gsi(VIRTIO_ISO_GSI);
-    lower_pic_irq(VIRTIO_PIC_IRQ);
+    lower_gsi(VIRTIO_PIC_IRQ);
 }
 
 pub fn raise_gsi(gsi: u8) {
@@ -178,20 +181,6 @@ pub fn lower_gsi(gsi: u8) {
             lower_pic_locked(c, gsi);
         }
     });
-}
-
-fn raise_pic_irq(irq: u8) {
-    if !product_live() || irq >= 16 {
-        return;
-    }
-    with_irq(|c| raise_pic_locked(c, irq));
-}
-
-fn lower_pic_irq(irq: u8) {
-    if irq >= 16 {
-        return;
-    }
-    with_irq(|c| lower_pic_locked(c, irq));
 }
 
 fn raise_pic_locked(c: &mut IrqChip, irq: u8) {
