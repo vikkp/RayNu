@@ -775,6 +775,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && !spin_short_jmp_should_skip(0xEB, 0xEC)
         && !preempt_deadloop_should_skip(0x74, 0x02)
         && preempt_deadloop_skip_len(&[0xF3, 0x90]) == 2
+        && preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB]) == 5
+        && preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8]) == 0
         && preempt_deadloop_skip_len(&[0x0F, 0x84, 0xE8, 0xFF, 0xFF, 0xFF]) == 6
         && preempt_deadloop_skip_len(&[0x0F, 0x84, 0x10, 0, 0, 0]) == 0
         && boot_menu_wait_skips_bds()
