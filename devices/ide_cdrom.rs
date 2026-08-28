@@ -14,7 +14,10 @@
 //! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
 //! Product ISO IDENTIFY is PIO-only (LBA + PIO3/4, no MWDMA/UDMA) so Linux
 //! `ata_piix` does not start BMIDE. PACKET DRQ is up to 31 CD sectors
-//! (16-bit ATAPI byte count); 4-sector DRQ completed Linux READ(10) short.
+//! (16-bit ATAPI byte count) **per DRQ**, not per CDB. READ(10)/READ(12)
+//! continues DRQs until the CDB count is complete (QEMU-style). A 4-sector
+//! DRQ used to complete Linux READ(10) short; a 31-sector cap without
+//! continuation still dropped sector 32 of a 64 KiB `sr`/GRUB BlockIo.
 //! nIEN (device-control bit 1) suppresses IRQ 14. SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
 //! Intel `48c598a`: BOTH-OK `ataio=1308` `packet=0` (`insn=ef` then
 //! `edc9c3` IN EAX,DX poll) because ABRT never reached PACKET `0xA0`.
@@ -108,8 +111,9 @@ const SCSI_READ12: u8 = 0xA8;
 const SCSI_SENSE_ILLEGAL: u8 = 0x05;
 const SCSI_ASC_INVALID_OPCODE: u8 = 0x20;
 /// ATAPI cylinder is 16-bit, so one DRQ is at most 31 × 2048 = 63488 bytes.
-/// Linux `sr` READ(10) is typically 32 KiB–64 KiB; 4 sectors completed short.
+/// Linux `sr` READ(10) is typically 32 KiB–64 KiB (32 CD sectors = two DRQs).
 const XFER_CAP: usize = 31 * ISO_SECTOR;
+const XFER_SEC: usize = XFER_CAP / ISO_SECTOR;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AtaXfer {
@@ -154,6 +158,10 @@ struct CdMedia {
     xfer_end: usize,
     cdb: [u8; 12],
     cdb_got: usize,
+    /// Remaining READ(10)/READ(12) LBA after the current DRQ is filled.
+    pkt_lba: u32,
+    /// Remaining CD sectors for this CDB. Zero when the packet is not a READ.
+    pkt_left: u32,
     data: [u8; XFER_CAP],
 }
 
@@ -193,6 +201,8 @@ impl CdMedia {
             xfer_end: 0,
             cdb: [0; 12],
             cdb_got: 0,
+            pkt_lba: 0,
+            pkt_left: 0,
             data: [0; XFER_CAP],
         }
     }
@@ -1448,6 +1458,8 @@ fn apply_atapi_signature(m: &mut CdMedia) {
     m.xfer_off = 0;
     m.xfer_end = 0;
     m.cdb_got = 0;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
 }
 
 fn raise_ata_irq(m: &CdMedia) {
@@ -1464,6 +1476,8 @@ fn lower_ata_irq() {
 
 fn packet_ok(m: &mut CdMedia) {
     m.xfer = AtaXfer::Idle;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
     m.ata_err = 0;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
@@ -1474,6 +1488,8 @@ fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
     m.sense_key = sense;
     m.sense_asc = asc;
     m.xfer = AtaXfer::Idle;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
     m.ata_err = sense << 4;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
@@ -1537,13 +1553,42 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
         packet_ok(m);
         return true;
     }
-    let nsec = (count as usize).min(XFER_CAP / ISO_SECTOR).max(1);
+    let start = (lba as usize).saturating_mul(ISO_SECTOR);
+    let total = (count as usize).saturating_mul(ISO_SECTOR);
+    if start.saturating_add(total) > m.len {
+        packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
+        return false;
+    }
+    m.pkt_lba = lba;
+    m.pkt_left = count;
+    fill_read_drq(m);
+    true
+}
+
+/// Fill the next ATAPI data-in DRQ from `pkt_lba` / `pkt_left`.
+///
+/// INVARIANTS:
+/// - One DRQ is at most [`XFER_SEC`] CD sectors (16-bit cylinder)
+/// - `pkt_left` after return is the CDB remainder, not silently truncated
+/// - Guest cylinder `byte_limit` (0 / 0xFFFF = full DRQ) caps this DRQ only
+fn fill_read_drq(m: &mut CdMedia) {
+    if m.pkt_left == 0 {
+        packet_ok(m);
+        return;
+    }
+    let mut max_bytes = m.byte_limit as usize;
+    if max_bytes == 0 || max_bytes == 0xffff {
+        max_bytes = XFER_CAP;
+    }
+    let max_sec = (max_bytes / ISO_SECTOR).clamp(1, XFER_SEC);
+    let nsec = (m.pkt_left as usize).min(max_sec);
+    let lba = m.pkt_lba;
     let start = (lba as usize).saturating_mul(ISO_SECTOR);
     let bytes = nsec.saturating_mul(ISO_SECTOR);
     let end = start.saturating_add(bytes);
     if end > m.len {
         packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
-        return false;
+        return;
     }
     let ext_ptr = m.ext_ptr;
     let ext_len = m.ext_len;
@@ -1565,8 +1610,14 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
         m.boot_image_read = true;
         BOOT_IMAGE_READ.store(true, Ordering::Release);
     }
+    m.pkt_lba = end_lba;
+    m.pkt_left = m.pkt_left.saturating_sub(nsec as u32);
+    // Advertise this DRQ's sector count. Temporarily clear cylinder so
+    // `begin_packet_data` does not trim below a full-sector multiple.
+    let prev_limit = m.byte_limit;
+    m.byte_limit = 0;
     begin_packet_data(m, bytes);
-    true
+    m.byte_limit = prev_limit;
 }
 
 /// Copy `bytes` from the product ISO window into `dst`.
@@ -1785,6 +1836,8 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             m.xfer = AtaXfer::PacketCdb;
                             m.cdb_got = 0;
                             m.cdb.fill(0);
+                            m.pkt_lba = 0;
+                            m.pkt_left = 0;
                             m.byte_limit = u16::from(m.ata_lba[1]) | (u16::from(m.ata_lba[2]) << 8);
                             m.ata_err = 0;
                             m.ata_count = ATAPI_INT_CD;
@@ -1851,7 +1904,11 @@ fn read_data(m: &mut CdMedia, size: u8) -> u64 {
     }
     if m.xfer_off >= m.xfer_end {
         if m.xfer == AtaXfer::PacketData {
-            packet_ok(m);
+            if m.pkt_left > 0 {
+                fill_read_drq(m);
+            } else {
+                packet_ok(m);
+            }
         } else {
             m.xfer = AtaXfer::Idle;
             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;

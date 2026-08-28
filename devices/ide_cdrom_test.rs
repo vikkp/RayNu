@@ -318,6 +318,14 @@ fn product_iso_window_does_not_truncate_and_is_not_lab_stub() {
 }
 
 fn host_read10_n(lba: u32, nsec: u8) -> Vec<u8> {
+    host_read10_count(lba, u16::from(nsec), 0)
+}
+
+/// PACKET READ(10) of `nsec` CD sectors. `cyl` is the ATAPI byte-count
+/// written to LBA mid/high before PACKET (0 / 0xFFFF = full 31-sector DRQ).
+fn host_read10_count(lba: u32, nsec: u16, cyl: u16) -> Vec<u8> {
+    let _ = ata_io(0x01F4, false, 1, u64::from(cyl as u8));
+    let _ = ata_io(0x01F5, false, 1, u64::from((cyl >> 8) as u8));
     let _ = ata_io(0x01F7, false, 1, 0xA0);
     let cdb = [
         0x28u8,
@@ -327,8 +335,8 @@ fn host_read10_n(lba: u32, nsec: u8) -> Vec<u8> {
         (lba >> 8) as u8,
         lba as u8,
         0,
-        0,
-        nsec,
+        (nsec >> 8) as u8,
+        nsec as u8,
         0,
         0,
         0,
@@ -363,6 +371,72 @@ fn product_iso_read10_eight_sectors_is_not_short() {
     assert_eq!(buf.len(), 8 * ISO_SECTOR);
     for i in 0..8 {
         assert_eq!(buf[i * ISO_SECTOR], 0xA0 + i as u8, "sector {i}");
+    }
+    reset();
+}
+
+#[test]
+fn product_iso_read10_thirty_two_sectors_is_not_short() {
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + 32 * ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    for i in 0..32 {
+        iso[MOCK_EFI_ISO_BYTES + i * ISO_SECTOR] = 0xB0 + i as u8;
+        iso[MOCK_EFI_ISO_BYTES + i * ISO_SECTOR + ISO_SECTOR - 1] = 0x40 + i as u8;
+    }
+    assert!(present(&iso, 9));
+    assert!(product_iso_window_armed());
+    let lba = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    // OVMF IdeMode MaxBlock = 0xFFFF/2048 = 31; cylinder 0xFFFF.
+    let buf = host_read10_count(lba, 32, 0xFFFF);
+    assert_eq!(buf.len(), 32 * ISO_SECTOR);
+    for i in 0..32 {
+        assert_eq!(buf[i * ISO_SECTOR], 0xB0 + i as u8, "sector {i} first");
+        assert_eq!(
+            buf[i * ISO_SECTOR + ISO_SECTOR - 1],
+            0x40 + i as u8,
+            "sector {i} last"
+        );
+    }
+    reset();
+}
+
+#[test]
+fn product_iso_read10_forty_sectors_two_drqs() {
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + 40 * ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    for i in 0..40 {
+        iso[MOCK_EFI_ISO_BYTES + i * ISO_SECTOR] = 0xC0 + i as u8;
+    }
+    assert!(present(&iso, 9));
+    let lba = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    let buf = host_read10_count(lba, 40, 0xFFFF);
+    assert_eq!(buf.len(), 40 * ISO_SECTOR);
+    for i in 0..40 {
+        assert_eq!(buf[i * ISO_SECTOR], 0xC0 + i as u8, "sector {i}");
+    }
+    reset();
+}
+
+#[test]
+fn product_iso_read10_eight_sectors_four_sector_drq() {
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + 8 * ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    for i in 0..8 {
+        iso[MOCK_EFI_ISO_BYTES + i * ISO_SECTOR] = 0xD0 + i as u8;
+    }
+    assert!(present(&iso, 9));
+    let lba = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    // Old 4-sector DRQ completed the CDB short; continue until count=8.
+    let buf = host_read10_count(lba, 8, (4 * ISO_SECTOR) as u16);
+    assert_eq!(buf.len(), 8 * ISO_SECTOR);
+    for i in 0..8 {
+        assert_eq!(buf[i * ISO_SECTOR], 0xD0 + i as u8, "sector {i}");
     }
     reset();
 }

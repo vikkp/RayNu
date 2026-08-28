@@ -206,6 +206,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub xchg:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_AND")
         && include_str!("../devices/ide_cdrom.rs").contains("31 * ISO_SECTOR")
+        && include_str!("../devices/ide_cdrom.rs").contains("fn fill_read_drq")
+        && include_str!("../devices/ide_cdrom.rs").contains("pkt_left")
         && include_str!("../devices/ide_cdrom.rs").contains("ATA_DEVCTL_NIEN")
         && include_str!("../devices/guest_virtio_blk.rs").contains("DATA_SEGS")
         && include_str!("../devices/guest_virtio_blk.rs").contains("GUEST_VIRTIO_ISO_PCI_DEV")
