@@ -340,6 +340,19 @@ fn decode_mmio_mov_encodings() {
     assert!(cx.atomic == super::MMIO_CMPXCHG && cx.is_write && cx.reg == 0 && cx.size == 4);
     let xa = decode_mmio_insn(&[0x0F, 0xC1, 0x01], 3).unwrap();
     assert!(xa.atomic == super::MMIO_XADD && xa.is_write && xa.zero_ext);
+    let c8 = decode_mmio_insn(&[0x0F, 0xC7, 0x09], 3).unwrap();
+    assert!(
+        c8.atomic == super::MMIO_CMPXCHG8B && c8.is_write && c8.size == 8 && c8.reg == 0
+    );
+    let c8l = decode_mmio_insn(&[0xF0, 0x0F, 0xC7, 0x09], 4).unwrap();
+    assert!(c8l.atomic == super::MMIO_CMPXCHG8B && c8l.size == 8);
+    assert!(decode_mmio_insn(&[0x48, 0x0F, 0xC7, 0x09], 4).is_none());
+    assert!(decode_mmio_insn(&[0x0F, 0xC7, 0x31], 3).is_none());
+    assert!(decode_mmio_insn(&[0x0F, 0xC7, 0x28], 3).is_none());
+    let (m, hit) = super::mmio_cmpxchg8b_apply(1, 1, 2);
+    assert!(hit && m == 2);
+    let (m2, hit2) = super::mmio_cmpxchg8b_apply(1, 0, 2);
+    assert!(!hit2 && m2 == 1);
     let adcl = decode_mmio_insn(&[0x11, 0x01], 2).unwrap();
     assert!(adcl.alu == super::MMIO_ALU_ADC && adcl.is_write && !adcl.alu_reg_left);
     let adc_rm = decode_mmio_insn(&[0x13, 0x01], 2).unwrap();

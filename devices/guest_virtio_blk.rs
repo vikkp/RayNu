@@ -1267,7 +1267,7 @@ pub struct MmioInsn {
     pub alu_reg_left: bool,
     /// BT family: 0=none, 1=BT, 2=BTS, 3=BTR, 4=BTC. CF = old bit.
     pub bt: u8,
-    /// 0=none, 1=CMPXCHG, 2=XADD.
+    /// 0=none, 1=CMPXCHG, 2=XADD, 3=CMPXCHG8B (`0F C7 /1`, m64).
     pub atomic: u8,
     /// 0=none; `0x40..=0x4F` CMOVcc r, r/m; `0x90..=0x9F` SETcc r/m8.
     pub cc: u8,
@@ -1275,6 +1275,8 @@ pub struct MmioInsn {
 
 pub const MMIO_CMPXCHG: u8 = 1;
 pub const MMIO_XADD: u8 = 2;
+/// CMPXCHG8B m64 (`0F C7 /1`). Not CMPXCHG16B (REX.W).
+pub const MMIO_CMPXCHG8B: u8 = 3;
 
 pub const MMIO_BT: u8 = 1;
 pub const MMIO_BTS: u8 = 2;
@@ -1817,6 +1819,15 @@ pub fn mmio_double_shift_rflags(
     f
 }
 
+/// CMPXCHG8B: match stores `ecx_ebx`, else mem is unchanged. Returns (mem_out, matched).
+pub fn mmio_cmpxchg8b_apply(mem: u64, edx_eax: u64, ecx_ebx: u64) -> (u64, bool) {
+    if mem == edx_eax {
+        (ecx_ebx, true)
+    } else {
+        (mem, false)
+    }
+}
+
 /// BT family: `bit` indexes `cur` of `size` bytes. Returns (new_value, old_bit).
 pub fn mmio_bt_apply(cur: u64, bit: u64, size: u8, bt: u8) -> (u64, bool) {
     let width = u64::from(size) * 8;
@@ -2104,7 +2115,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2402,6 +2413,35 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 } else {
                     MMIO_CMPXCHG
                 },
+                cc: 0,
+            });
+        }
+        // CMPXCHG8B m64 (`0F C7 /1`). REX.W is CMPXCHG16B (not emulated).
+        if op2 == 0xC7 {
+            if rex_w || i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            if ((m >> 3) & 7) != 1 {
+                return None;
+            }
+            return Some(MmioInsn {
+                is_write: true,
+                size: 8,
+                reg: 0,
+                has_imm: false,
+                imm: 0,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu: 0,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: MMIO_CMPXCHG8B,
                 cc: 0,
             });
         }

@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Forty-second slice (this EFI): MMIO SHLD/SHRD (`0F A4`/`A5`/`AC`/`AD`)
+Forty-third slice (this EFI): MMIO CMPXCHG8B (`0F C7 /1`) compares
+EDX:EAX to the 64-bit BAR and stores ECX:EBX on match so Linux
+`cmpxchg8b` of virtio/IOAPIC/xAPIC does not spin. CMPXCHG16B (REX.W)
+is not emulated. Forty-second slice (this EFI): MMIO SHLD/SHRD (`0F A4`/`A5`/`AC`/`AD`)
 writes the double-precision shift into the BAR (fill from the GPR, count
 imm8 or CL) so Linux `shld`/`shrd` of virtio/IOAPIC/xAPIC does not spin.
 Forty-first slice (this EFI): an armed product ISO uses the 16 777 216

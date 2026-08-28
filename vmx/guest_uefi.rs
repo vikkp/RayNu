@@ -4822,7 +4822,7 @@ unsafe fn mmio_apply_bt(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64
     new
 }
 
-/// CMPXCHG / XADD. Returns `Some(new_mem)` when MMIO must be stored.
+/// CMPXCHG / XADD / CMPXCHG8B. Returns `Some(new_mem)` when MMIO must be stored.
 #[cfg(target_os = "uefi")]
 unsafe fn mmio_apply_atomic(
     op: crate::devices::guest_virtio_blk::MmioInsn,
@@ -4862,6 +4862,36 @@ unsafe fn mmio_apply_atomic(
         let _ = ops::vmwrite(GUEST_RFLAGS, newf);
         mmio_gpr_out(op, cur);
         Some(sum)
+    } else if op.atomic == crate::devices::guest_virtio_blk::MMIO_CMPXCHG8B {
+        let mut half = op;
+        half.size = 4;
+        half.zero_ext = true;
+        half.rex = true;
+        half.reg = 0;
+        let eax = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 2;
+        let edx = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 3;
+        let ebx = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 1;
+        let ecx = mmio_gpr_in(half) & 0xffff_ffff;
+        let acc = (edx << 32) | eax;
+        let desired = (ecx << 32) | ebx;
+        let (out, matched) =
+            crate::devices::guest_virtio_blk::mmio_cmpxchg8b_apply(cur, acc, desired);
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let newf =
+            crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, acc, cur, 8);
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        if matched {
+            Some(out)
+        } else {
+            half.reg = 0;
+            mmio_gpr_out(half, cur);
+            half.reg = 2;
+            mmio_gpr_out(half, cur >> 32);
+            None
+        }
     } else {
         None
     }
