@@ -766,6 +766,19 @@ pub fn guest_uefi_report_ram_should_map(gpa: u64) -> bool {
     crate::devices::guest_platform::is_unbacked_report_ram_gpa(gpa)
 }
 
+/// `rep insw` / string INS into reported LowMemory that is not the 32 MiB
+/// identity slab. The guest never EPT-walks that GPA; the emulator writes
+/// host-side. An unmapped slot used to drop the FIFO bytes (zeros → EFI
+/// stub `uncompression error`). Virtqueue already lazy-maps via
+/// [`guest_uefi_gpa_to_hpa`]; string I/O must do the same.
+///
+/// INVARIANTS:
+/// - Iron `fad19b2` `0x7bddd000` is true
+/// - Low 32 MiB identity is false (already backed)
+pub fn guest_uefi_string_ins_needs_report_ram_map(linear: u64) -> bool {
+    linear >= GUEST_UEFI_LOW_RAM_BYTES && guest_uefi_report_ram_should_map(linear)
+}
+
 /// 2 MiB-align a report-RAM GPA. Iron `fad19b2`: `0x7bddd000` → `0x7BC00000`.
 pub fn guest_uefi_report_ram_gpa_2m(gpa: u64) -> u64 {
     gpa & !(GUEST_UEFI_REPORT_RAM_PAGE - 1)
@@ -3492,6 +3505,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         write_dec(SPIN_JMP_SKIPS.load(Ordering::Acquire) as u64);
         serial::write_str(" same=");
         write_dec(PREEMPT_SAME_RIP.load(Ordering::Acquire) as u64);
+        serial::write_str(" ram=");
+        write_dec(REPORT_RAM_MAPS.load(Ordering::Acquire) as u64);
         serial::write_str(" msr=0x");
         write_hex(u64::from(LAST_GUEST_MSR.load(Ordering::Acquire)));
         serial::write_str(" insn=");
@@ -6051,9 +6066,27 @@ unsafe fn store_guest_io(linear: u64, size: u8, val: u64) -> bool {
     if !guest_uefi_report_ram_should_map(linear) {
         return false;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let mut hpa = report_ram_hpa_lookup(linear);
     if hpa == 0 {
-        return false;
+        // Iron COM2: GRUB `rep insw` into GCD heap never EPT-walks, so an
+        // unmapped report-RAM GPA silently dropped ATAPI bytes (EFI stub
+        // gzip Z_DATA_ERROR with a full-looking PIO). Same lazy map as
+        // virtqueue [`guest_uefi_gpa_to_hpa`]. Do not invent HPA (ADR-004).
+        if !ept_map_2m_report_ram(linear) {
+            return false;
+        }
+        hpa = report_ram_hpa_lookup(linear);
+        if hpa == 0 {
+            return false;
+        }
+        let n = REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
+        if n < 8 {
+            serial::write_str("boot: guest-UEFI string report-RAM gpa=0x");
+            write_hex(linear);
+            serial::write_str(" hpa=0x");
+            write_hex(hpa);
+            serial::write_byte(b'\n');
+        }
     }
     // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
     // KANI-TARGET: string INS store to report-RAM (outside Proven Core).
@@ -6077,9 +6110,16 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     if !guest_uefi_report_ram_should_map(linear) {
         return None;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let mut hpa = report_ram_hpa_lookup(linear);
     if hpa == 0 {
-        return None;
+        if !ept_map_2m_report_ram(linear) {
+            return None;
+        }
+        hpa = report_ram_hpa_lookup(linear);
+        if hpa == 0 {
+            return None;
+        }
+        REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
     }
     // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
     // KANI-TARGET: string OUTS load from report-RAM (outside Proven Core).
@@ -6197,7 +6237,14 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
         }
         emulate_io_port(port, is_in, u64::from(size));
         if is_in {
-            let _ = store_guest_io(addr, size, SAVED_RAX);
+            if !store_guest_io(addr, size, SAVED_RAX) {
+                static DROP: AtomicBool = AtomicBool::new(false);
+                if !DROP.swap(true, Ordering::AcqRel) {
+                    serial::write_str("boot: guest-UEFI string INS drop gpa=0x");
+                    write_hex(addr);
+                    serial::write_byte(b'\n');
+                }
+            }
         }
         addr = guest_uefi_io_string_advance(addr, size, df);
     }

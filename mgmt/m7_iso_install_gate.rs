@@ -229,6 +229,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("[ -b /dev/vda ]")
         && include_str!("../devices/guest_serial_answer.rs").contains("|| mount -t iso9660 /dev/sr0")
         && include_str!("../vmx/guest_uefi.rs").contains("Lazy 2MiB WB map")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_string_ins_needs_report_ram_map")
+        && include_str!("../vmx/guest_uefi.rs").contains("GRUB `rep insw` into GCD heap never EPT-walks")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_near_xfer(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_CALL")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_JMP")

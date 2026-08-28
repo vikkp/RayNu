@@ -255,7 +255,7 @@ use crate::vmx::guest_uefi::{
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live,
     guest_uefi_mtrr_fixed_is_vga_hole, guest_uefi_xapic_is_not_sink,
     guest_uefi_pci_hole_is_sink, hlt_should_resume,
-    guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m, guest_uefi_gpa0_split_pt_gpa,
+    guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, store_report_ram_u64, load_report_ram_at, guest_uefi_pt_pml4e_gpa, guest_uefi_pt_walk_pml4e, guest_uefi_pt_walk_pde, guest_uefi_pt_walk_pte, guest_uefi_pt_paint_live_uc_hole, guest_uefi_pt_pde_is_wb_hole, guest_uefi_pt_pde_pat_uc, guest_uefi_pt_split_gpa0, guest_uefi_pt_pde0_is_2m, guest_uefi_gpa0_split_pt_gpa,
     post_dxe_should_stop, preempt_deadloop_is_assert_epilogue, preempt_deadloop_should_skip,
     preempt_deadloop_skip_len, preempt_deadloop_guarded_assert_skip_len,
     guest_uefi_assert_caller_is_dxe_ram, guest_uefi_efer_with_lma, guest_uefi_phys_bits,
@@ -717,6 +717,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("tick n=")
         && guest.contains("PIIX3 ISA PIRQ")
         && guest.contains("ataio=")
+        && guest.contains(" ram=")
+        && guest.contains("GRUB `rep insw` into GCD heap never EPT-walks")
         && guest.contains("0x80000838")
         && ide.contains("ATAPI_INT_CD")
         && ide.contains("ATAPI_SIG_LBA")
@@ -1039,6 +1041,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && GUEST_UEFI_IRON_REPORT_RAM_GPA == 0x7BDD_D000
         && GUEST_UEFI_EPT_MT_WB == 6
         && guest_uefi_report_ram_should_map(GUEST_UEFI_IRON_REPORT_RAM_GPA)
+        && guest_uefi_string_ins_needs_report_ram_map(GUEST_UEFI_IRON_REPORT_RAM_GPA)
+        && !guest_uefi_string_ins_needs_report_ram_map(0x1000)
         && guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA) == 0x7BC0_0000
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x7f8e21ca")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("peek report-RAM")
