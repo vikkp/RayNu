@@ -552,8 +552,10 @@ pub const GUEST_UEFI_MMIO_SCRATCH_SLOTS: usize = 32;
 /// 32 slots = 64 MiB. Do **not** identity-map `[32MiB, 2GiB)` (`89c3731`).
 /// Product ISO retains extra 2 MiB WB slots (installer RAM); lab/nested stay 32.
 pub const GUEST_UEFI_REPORT_RAM_SLOTS: usize = 32;
-/// Extra report-RAM slots when PRE-EBS retained a window-sized ISO (~448 MiB).
-pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 224;
+/// Extra report-RAM slots when PRE-EBS retained a window-sized ISO.
+/// `[32MiB, 2GiB)` is 1008×2 MiB; lab/nested still allocate only 32.
+/// Iron fills the rest from leftover DRAM above PRECISE (not invented HPA).
+pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 976;
 const REPORT_RAM_ARRAY: usize =
     GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
 
@@ -565,6 +567,12 @@ fn report_ram_slots_alloc() -> usize {
     }
 }
 pub const GUEST_UEFI_REPORT_RAM_PAGE: u64 = 0x20_0000;
+const _: () = assert!(
+    (GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA) as u64
+        * GUEST_UEFI_REPORT_RAM_PAGE
+        == crate::devices::guest_platform::PLATFORM_REPORT_RAM_BYTES
+            - crate::devices::guest_platform::PLATFORM_RAM_BYTES
+);
 /// Iron `fad19b2` first unbacked report-RAM GPA (top of 2 GiB LowMemory).
 pub const GUEST_UEFI_IRON_REPORT_RAM_GPA: u64 = 0x7BDD_D000;
 /// Iron `32e7d46`: after lazy WB map, CpuDeadLoop at top of LowMemory
@@ -2746,21 +2754,30 @@ unsafe fn launch_uefi(
         // Preallocate 2MiB WB frames; map on EPT. GPA need not equal HPA
         // (ADR-004). Separate from UC scratch. Do not identity-map 2GiB.
         let mut report_n = 0u64;
+        let mut extra_n = 0u64;
         let report_slots = report_ram_slots_alloc();
         for i in 0..report_slots {
-            if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512) {
-                let report_hpa = report_frame.to_phys();
-                core::ptr::write_bytes(report_hpa as *mut u8, 0, 2 * 1024 * 1024);
-                REPORT_RAM_HPA[i].store(report_hpa, Ordering::Release);
-                REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
-                report_n += 1;
+            let report_hpa = if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512)
+            {
+                report_frame.to_phys()
+            } else if let Some(h) = crate::boot::handoff::take_report_ram_extra_2m() {
+                extra_n += 1;
+                h
             } else {
                 break;
-            }
+            };
+            core::ptr::write_bytes(report_hpa as *mut u8, 0, 2 * 1024 * 1024);
+            REPORT_RAM_HPA[i].store(report_hpa, Ordering::Release);
+            REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
+            report_n += 1;
         }
         if report_n != 0 {
             serial::write_str("boot: guest-UEFI report-RAM pool=");
             write_dec(report_n);
+            if extra_n != 0 {
+                serial::write_str(" extra=");
+                write_dec(extra_n);
+            }
             serial::write_byte(b'\n');
         }
         // Do not 2MiB-sink 0xFEE00000: OVMF GetApicVersion() reads 0 and
@@ -7684,7 +7701,7 @@ pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator, return_to_e4: bool)
                 core::ptr::write_bytes(hpa as *mut u8, 0, GUEST_UEFI_REPORT_RAM_PAGE as usize);
             }
         }
-        if return_to_e4 {
+        if return_to_e4 && alloc.owns_phys_range(hpa, GUEST_UEFI_REPORT_RAM_PAGE) {
             let mut off = 0u64;
             while off < GUEST_UEFI_REPORT_RAM_PAGE {
                 let _ = alloc.free_frame(PhysFrame::from_phys(hpa + off));

@@ -152,15 +152,18 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-third-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-seventh-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). ISO serial patches allow ISO9660 NUL padding on
+`git checkout` a SHA). Leftover DRAM above PRECISE backs the 2 GiB CMOS
+lie (`report-RAM extra hpa=` / `pool=` near 1008 with `extra=`; `iso=0`
+/ nested stay 32). ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
 gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
 starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm
-product ISO before disk attach. Last iron COM2 after Boot0002 `Linux virt`:
-EFI stub `uncompression error` (256 MiB disk / `report-RAM pool=66`).
-Do not flash `8a71596`. Never PERC.
+product ISO before disk attach. Last iron COM2 on `faeaf38` after Boot0002
+`Linux virt`: EFI stub gzip + `Loaded initrd` (`install disk bytes=67108864`
+`report-RAM pool=162` `ram=` 59; not `uncompression error`). Not
+`ISO-INSTALL-OK`. Do not flash `8a71596`. Never PERC.
 Never `sda`/`sdb`. `--no-linux-iso` still strips leftovers so `iso=0` E4 SHELL
 stays valid.
 

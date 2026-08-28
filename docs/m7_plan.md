@@ -274,7 +274,16 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventy-third slice (this EFI): alpine-virt `grub.cfg` starts after
+Seventy-seventh slice (this EFI): leftover conventional DRAM above
+PRECISE backs the 2 GiB CMOS lie (1008×2 MiB report-RAM extra; not an
+expanded precise window; not invented HPA). Iron COM2 `faeaf38` reached
+EFI stub gzip + `Loaded initrd` with `pool=162` (~324 MiB) — that is
+not enough for `[32MiB, 2GiB)`. Nested / `iso=0` stay 32 slots and do
+not seed extra. Want COM2 `report-RAM extra hpa=` and `pool=` near 1008
+with `extra=`, then `Linux version` / installer / `ISO-INSTALL-OK`.
+Pin this HEAD until CI is green, then `--wait --branch
+cursor/e5-stage46-iso-a623` (do not `git checkout` a SHA).
+Seventy-third slice: alpine-virt `grub.cfg` starts after
 ISO9660 NULs, so `set timeout=1` had a NUL prefix and slice 72 skipped
 it. Neighborhood now allows NUL padding on either side when some
 printable cfg text sits next to the needle. `flashcruzer.sh` infers

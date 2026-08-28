@@ -9,6 +9,7 @@
 //! OVMF identity maps remain valid for QEMU bring-up.
 
 use crate::boot::mem;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(target_os = "uefi")]
 use crate::boot::serial;
@@ -19,6 +20,55 @@ use uefi::mem::memory_map::{MemoryMap, MemoryType};
 
 /// Distinctive M1.0 gate marker — must appear on COM1 *after* ExitBootServices.
 pub const M1_EBS_OK_MARKER: &str = "RAYNU-V-M1-EBS-OK";
+
+/// Cap leftover DRAM taken for guest-UEFI report-RAM (2 GiB CMOS lie).
+/// Does not expand [`crate::memory::PRECISE_BYTES`]. Not invented HPA (ADR-004).
+pub const REPORT_RAM_EXTRA_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const REPORT_RAM_EXTRA_2M: u64 = 2 * 1024 * 1024;
+
+static REPORT_RAM_EXTRA_NEXT: AtomicU64 = AtomicU64::new(0);
+static REPORT_RAM_EXTRA_END: AtomicU64 = AtomicU64::new(0);
+
+/// Seed a 2 MiB-aligned bump from unused conventional DRAM above PRECISE.
+///
+/// Host CR3 is still the UEFI identity map, so these HPAs are reachable
+/// without expanding the 512 MiB precise window. Nested / `iso=0` leave
+/// this empty.
+/// Returns the 2 MiB-aligned HPA, or 0 if the span cannot yield a frame.
+pub fn seed_report_ram_extra(start: u64, bytes: u64) -> u64 {
+    let aligned = start.saturating_add(REPORT_RAM_EXTRA_2M - 1) & !(REPORT_RAM_EXTRA_2M - 1);
+    let end = start.saturating_add(bytes);
+    let cap_end = aligned.saturating_add(REPORT_RAM_EXTRA_MAX_BYTES);
+    let use_end = core::cmp::min(end, cap_end);
+    if aligned == 0 || aligned.saturating_add(REPORT_RAM_EXTRA_2M) > use_end {
+        REPORT_RAM_EXTRA_NEXT.store(0, Ordering::Release);
+        REPORT_RAM_EXTRA_END.store(0, Ordering::Release);
+        return 0;
+    }
+    REPORT_RAM_EXTRA_NEXT.store(aligned, Ordering::Release);
+    REPORT_RAM_EXTRA_END.store(use_end, Ordering::Release);
+    aligned
+}
+
+/// Take one exclusive 2 MiB HPA from the leftover-DRAM bump, or `None`.
+pub fn take_report_ram_extra_2m() -> Option<u64> {
+    loop {
+        let n = REPORT_RAM_EXTRA_NEXT.load(Ordering::Acquire);
+        let end = REPORT_RAM_EXTRA_END.load(Ordering::Acquire);
+        if n == 0 || n.saturating_add(REPORT_RAM_EXTRA_2M) > end {
+            return None;
+        }
+        match REPORT_RAM_EXTRA_NEXT.compare_exchange(
+            n,
+            n + REPORT_RAM_EXTRA_2M,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return Some(n),
+            Err(_) => core::hint::spin_loop(),
+        }
+    }
+}
 
 /// Result of leaving UEFI boot services.
 pub struct Handoff {
@@ -136,6 +186,24 @@ pub unsafe fn leave_firmware() -> Handoff {
         mem::FrameBump::new(0, 0)
     };
 
+    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some()
+        && !crate::arch::cpu::host_hypervisor_present()
+    {
+        if let Some((hs, hp)) =
+            mem::pick_conventional_region_above(&regions[..region_count], 512, precise_end)
+        {
+            let bytes = hp.saturating_mul(mem::PAGE_SIZE);
+            let extra_hpa = seed_report_ram_extra(hs, bytes);
+            if extra_hpa != 0 {
+                serial::write_str("boot: report-RAM extra hpa=0x");
+                write_u64_hex(extra_hpa);
+                serial::write_str(" bytes=");
+                write_u64(bytes.min(REPORT_RAM_EXTRA_MAX_BYTES));
+                serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+            }
+        }
+    }
+
     // Prove COM1 works with boot services gone (M1.0 gate).
     serial::write_line(M1_EBS_OK_MARKER);
 
@@ -198,5 +266,22 @@ mod handoff_test {
     #[test]
     fn marker_stable() {
         assert_eq!(M1_EBS_OK_MARKER, "RAYNU-V-M1-EBS-OK");
+    }
+
+    #[test]
+    fn extra_2m_bump_aligns_and_exhausts() {
+        assert_eq!(
+            seed_report_ram_extra(0x2000_1000, 8 * 1024 * 1024),
+            0x2020_0000
+        );
+        let a = take_report_ram_extra_2m().expect("first");
+        assert_eq!(a, 0x2020_0000);
+        let b = take_report_ram_extra_2m().expect("second");
+        assert_eq!(b, 0x2040_0000);
+        let c = take_report_ram_extra_2m().expect("third");
+        assert_eq!(c, 0x2060_0000);
+        assert!(take_report_ram_extra_2m().is_none());
+        seed_report_ram_extra(0, 0);
+        assert!(take_report_ram_extra_2m().is_none());
     }
 }

@@ -81,3 +81,17 @@ fn pick_prefer_precise_allows_512mib_when_asked() {
     assert_eq!(p0, start);
     assert_eq!(p0 + p_pages * PAGE_SIZE, prefer);
 }
+
+#[test]
+fn pick_above_takes_dram_past_precise() {
+    let regions = [
+        (0x100000u64, 0x1F000u64),        // [1MiB, 512MiB)
+        (0x140110000u64, 16_000_000u64), // ~61 GiB high
+    ];
+    let (start, pages) =
+        pick_conventional_region_above(&regions, 512, 512 * 1024 * 1024).expect("high dram");
+    assert_eq!(start, 0x140110000);
+    assert_eq!(pages, 16_000_000);
+    assert!(pick_conventional_region_above(&regions, 512, 0x140110000u64 + 16_000_000 * PAGE_SIZE)
+        .is_none());
+}
