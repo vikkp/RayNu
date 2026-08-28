@@ -99,6 +99,13 @@ pub fn vmx_supported() -> bool {
     (r.ecx & CPUID_ECX_VMX) != 0
 }
 
+/// True if CPUID.1:ECX.hypervisor is set (KVM nested). Bare-metal iron is clear.
+pub fn host_hypervisor_present() -> bool {
+    // SAFETY: CPUID leaf 1 is architecturally defined.
+    let r = unsafe { cpuid(1, 0) };
+    (r.ecx & CPUID_ECX_HYPERVISOR) != 0
+}
+
 #[inline]
 pub unsafe fn read_cr0() -> u64 {
     let v: u64;

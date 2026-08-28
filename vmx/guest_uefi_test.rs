@@ -1,6 +1,7 @@
 use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
+    guest_uefi_insn_linear,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
@@ -1350,6 +1351,13 @@ fn xapic_fetch_miss_eax_fallback_only_when_empty_and_len_valid() {
 }
 
 #[test]
+fn insn_linear_adds_cs_base_unless_long_mode() {
+    assert_eq!(guest_uefi_insn_linear(0x3c_fc86, 0xFFC0_0000, false), 0xfffc_fc86);
+    assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0, false), 0xfffc_fc86);
+    assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0xFFFF_0000, true), 0xfffc_fc86);
+}
+
+#[test]
 fn greedy_report_ram_leaves_only_1mib_for_disk() {
     // Iron leftover after fw+ram+sink+zero+scratch in [1MiB,256MiB).
     const PAGES: u64 = (151 * 1024 * 1024) / 4096;
@@ -1378,6 +1386,17 @@ fn try_alloc_product_iso_install_disk_reserves_64mib() {
     let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
     assert_eq!(bytes, 64 * 1024 * 1024);
     assert!(alloc.allocate_contiguous_aligned(512, 512).is_some());
+}
+
+#[test]
+fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
+    const PAGES: u64 = (400 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 2048];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
 }
 
 #[test]

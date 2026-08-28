@@ -254,12 +254,24 @@ pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
     }
 }
 
+/// HV frame-pool cap. `iso=0` / nested stay `[1MiB,256MiB)` so E4 BAR/shell
+/// stays free. Iron product-ISO **holds** (no E4 SHELL), so the pool can use
+/// the precise 512 MiB identity window and a 256 MiB virtio-blk fits.
+pub fn product_iso_frame_pool_prefer_end(product_iso: bool, host_hypervisor: bool) -> u64 {
+    if product_iso && !host_hypervisor {
+        crate::memory::PRECISE_BYTES
+    } else {
+        crate::guest::linux_boot::GUEST_RAM_BYTES
+    }
+}
+
 /// Contiguous sizes to try for the product-ISO virtio-blk, largest first.
 ///
 /// Iron COM2: 1 GiB / 256 MiB / 64 MiB all failed after greedy 2 MiB
 /// report-RAM ate the `[1MiB,256MiB)` pool; only 1 MiB landed. Alpine
 /// sys-mode cannot write a usable GPT on 1 MiB. Guest-UEFI must reserve
 /// this disk **before** report-RAM so 64 MiB (the REST default) fits.
+/// Iron product-ISO also raises the pool to 512 MiB so 256 MiB can win.
 pub fn product_iso_install_disk_try_sizes(host_hypervisor: bool) -> &'static [usize] {
     if host_hypervisor {
         &[LAB_INSTALL_DISK_BYTES as usize]

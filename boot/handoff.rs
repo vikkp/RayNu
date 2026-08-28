@@ -76,10 +76,16 @@ pub unsafe fn leave_firmware() -> Handoff {
     // holes + shell slabs need free 2MiB leaves in [GUEST_RAM, PRECISE) that the
     // FrameAllocator does **not** own. Cap the HV pool at GUEST_RAM so that
     // window stays free (R640 previously filled pool to 512MiB → no BAR hole).
+    // Stage 46 iron product-ISO holds (no E4 SHELL): prefer PRECISE so a
+    // 256 MiB virtio-blk plus report-RAM fit. Nested / iso=0 stay GUEST_RAM.
     const MIN_PREF_PAGES: u64 = 256; // 1 MiB
     const MIN_POOL_PAGES: u64 = 16;
-    let prefer_end = crate::guest::linux_boot::GUEST_RAM_BYTES;
+    let prefer_end = crate::mgmt::iso_install::product_iso_frame_pool_prefer_end(
+        crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
+        crate::arch::cpu::host_hypervisor_present(),
+    );
     let precise_end = crate::memory::PRECISE_BYTES;
+    let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
     let (pool_start, pool_pages, in_window) = if let Some(p) =
         mem::pick_conventional_region_prefer(&regions[..region_count], MIN_PREF_PAGES, prefer_end)
     {
@@ -102,7 +108,11 @@ pub unsafe fn leave_firmware() -> Handoff {
 
     let frames = if pool_pages > 0 {
         let pool_end = pool_start.saturating_add(pool_pages.saturating_mul(mem::PAGE_SIZE));
-        if in_window && pool_end <= prefer_end {
+        if in_window && pool_end <= prefer_end && prefer_end > guest_ram {
+            serial::write_line(
+                "boot: frame pool product-ISO iron [1MiB,512MiB); Stage 46 hold (not E4 BAR/shell)",
+            );
+        } else if in_window && pool_end <= prefer_end {
             serial::write_line(
                 "boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free",
             );

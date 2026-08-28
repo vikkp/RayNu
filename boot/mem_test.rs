@@ -68,3 +68,16 @@ fn pick_prefer_guest_ram_leaves_bar_window() {
     // BAR/shell window [256MiB, 512MiB) must remain outside the pool.
     assert!(p0 + p_pages * PAGE_SIZE <= 256 * 1024 * 1024);
 }
+
+#[test]
+fn pick_prefer_precise_allows_512mib_when_asked() {
+    let start = 16 * 1024 * 1024u64;
+    let end = 512 * 1024 * 1024u64;
+    let pages = (end - start) / PAGE_SIZE;
+    let regions = [(start, pages)];
+    let prefer = 512 * 1024 * 1024u64;
+    let (p0, p_pages) =
+        pick_conventional_region_prefer(&regions, 256, prefer).expect("precise pool");
+    assert_eq!(p0, start);
+    assert_eq!(p0 + p_pages * PAGE_SIZE, prefer);
+}

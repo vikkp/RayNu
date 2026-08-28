@@ -1623,6 +1623,17 @@ pub fn xapic_fetch_miss_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
     fetched_n == 0 && insn_len >= 1 && insn_len <= 15
 }
 
+/// Linear address of the instruction to emulate. 64-bit CS ignores CS.base
+/// (SDM); 16/32-bit CS uses `CS.base + RIP`. MMIO handlers must not peek
+/// raw `GUEST_RIP` while the exit log uses `cs_base + rip`.
+pub fn guest_uefi_insn_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64 {
+    if cs_long {
+        rip
+    } else {
+        cs_base.wrapping_add(rip)
+    }
+}
+
 /// Allocate a contiguous install-disk run. Largest size that fits wins.
 ///
 /// INVARIANTS:
@@ -2603,6 +2614,10 @@ unsafe fn launch_uefi(
         } else {
             serial::write_line("boot: guest-UEFI WARN — no hole-zero frame (will not RO-sink onto HPET)");
         }
+        // Iron COM2: greedy 2 MiB scratch then leftover 1 MiB virtio-blk.
+        // Reserve the install disk first (before scratch *and* report-RAM).
+        // Do not invent HPA on GPA miss (ADR-004).
+        attach_product_iso_install_disk(alloc, false);
         let mut scratch_n = 0u64;
         let mut scratch0 = 0u64;
         for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
@@ -2626,10 +2641,6 @@ unsafe fn launch_uefi(
             write_dec(scratch_n);
             serial::write_byte(b'\n');
         }
-        // Iron COM2: greedy report-RAM then leftover 1MiB virtio-blk.
-        // Reserve the install disk first; leftover 2MiB slots still back
-        // CMOS 2GiB. Do not invent HPA on GPA miss (ADR-004).
-        attach_product_iso_install_disk(alloc, false);
         // Iron fad19b2: CMOS 2GiB then EPT unbacked report-RAM gpa=0x7bddd000.
         // Preallocate 2MiB WB frames; map on EPT. GPA need not equal HPA
         // (ADR-004). Separate from UC scratch. Do not identity-map 2GiB.
@@ -5934,6 +5945,18 @@ unsafe fn skip_insn() -> bool {
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
+/// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
+#[cfg(target_os = "uefi")]
+unsafe fn copy_mmio_insn(buf: &mut [u8]) -> (usize, u64) {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
+    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
+    let linear = guest_uefi_insn_linear(rip, cs_base, guest_uefi_cs_ar_is_long(ar));
+    let n = copy_guest_linear_bytes(linear, buf);
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    (n, insn_len)
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn store_guest_io(linear: u64, size: u8, val: u64) -> bool {
     if linear < GUEST_UEFI_LOW_RAM_BYTES {
@@ -6268,10 +6291,8 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     let Some(_bar) = crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa) else {
         return false;
     };
-    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
     let mut buf = [0u8; 16];
-    let n = copy_guest_linear_bytes(rip, &mut buf);
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
     else {
         static FAIL_N: AtomicU32 = AtomicU32::new(0);
@@ -6285,6 +6306,10 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
                 write_hex_u8(buf[i]);
                 i += 1;
             }
+            serial::write_str(" n=");
+            write_dec(n as u64);
+            serial::write_str(" len=");
+            write_dec(insn_len);
             serial::write_byte(b'\n');
         }
         return false;
@@ -6557,14 +6582,16 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
 unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     let is_write = (qual & 2) != 0;
     let off = (gpa.wrapping_sub(crate::devices::guest_irq::IOAPIC_GPA)) as u16;
-    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
     let mut buf = [0u8; 16];
-    let n = copy_guest_linear_bytes(rip, &mut buf);
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
     else {
         serial::write_str("boot: guest-UEFI IOAPIC decode fail gpa=0x");
         write_hex(gpa);
+        serial::write_str(" n=");
+        write_dec(n as u64);
+        serial::write_str(" len=");
+        write_dec(insn_len);
         serial::write_byte(b'\n');
         return skip_insn();
     };
@@ -6703,10 +6730,8 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         return false;
     }
     let is_write = (qual & 2) != 0;
-    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
     let mut buf = [0u8; 16];
-    let n = copy_guest_linear_bytes(rip, &mut buf);
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
     let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
     else {
         static FAIL_N: AtomicU32 = AtomicU32::new(0);

@@ -274,12 +274,18 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-fourth slice (this EFI): iron COM2 xAPIC SVR `insn=` empty. If flash
+Sixty-fifth slice (this EFI): iron product-ISO raises the HV frame pool to
+512 MiB (`PRECISE`) so a 256 MiB virtio-blk fits; `iso=0` / nested stay
+256 MiB (E4 BAR/shell free). Reserve the install disk before greedy 2 MiB
+scratch as well as report-RAM. MMIO insn fetch uses `CS.base+RIP` unless
+64-bit CS (raw `GUEST_RIP` missed a non-flat CS). EAX fallback + flash-RIP
+peek still in this EFI. FAT already fills Cruzer; no `--refat-cruzer`.
+Pin this HEAD until CI is green, then flash.
+Sixty-fourth slice: iron COM2 xAPIC SVR `insn=` empty. If flash
 peek still returns 0 bytes but VMCS `insn_len` is 1–15, complete a 32-bit
 EAX MOV and skip (LocalApicLib `mov [svr], eax`). Do not guess when bytes
-were fetched. Pin `2f662c9` until this CI is green. FAT already fills Cruzer;
-no `--refat-cruzer`.
-CI green on `2f662c9` (empty retrigger of `6d4535b`). `ba3face` docs CI hit
+were fetched.
+CI green on `6d94682` (EAX fallback). `ba3face` docs CI hit
 the nested-KVM `/init` flake.
 Sixty-third slice (this EFI): iron COM2 `virtio-blk install disk bytes=1048576`
 because greedy 2 MiB report-RAM ate the `[1MiB,256MiB)` pool. Reserve the

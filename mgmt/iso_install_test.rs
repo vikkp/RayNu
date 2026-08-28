@@ -60,6 +60,18 @@ fn markers_stable() {
         product_iso_install_disk_try_sizes(true),
         &[LAB_INSTALL_DISK_BYTES as usize]
     );
+    assert_eq!(
+        product_iso_frame_pool_prefer_end(false, false),
+        crate::guest::linux_boot::GUEST_RAM_BYTES
+    );
+    assert_eq!(
+        product_iso_frame_pool_prefer_end(true, true),
+        crate::guest::linux_boot::GUEST_RAM_BYTES
+    );
+    assert_eq!(
+        product_iso_frame_pool_prefer_end(true, false),
+        crate::memory::PRECISE_BYTES
+    );
     let win = crate::mgmt::guest_image::GuestBootSpec::product_iso(
         crate::mgmt::guest_image::GuestImageType::WindowsIso,
         1,
