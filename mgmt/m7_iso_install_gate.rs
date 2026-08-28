@@ -65,6 +65,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_uart.rs").contains("fn poll_host_rx(")
         && include_str!("../boot/serial.rs").contains("fn try_read_byte(")
         && include_str!("iso_install.rs").contains("fn patch_iso_linux_serial_console(")
+        && include_str!("../devices/guest_serial_answer.rs").contains("fn note_tx(")
+        && include_str!("../devices/guest_serial_answer.rs").contains("setup-disk -m sys /dev/vda")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }

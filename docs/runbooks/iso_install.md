@@ -159,7 +159,8 @@ strips leftovers so the boot gate does not HOLD). PRE-EBS copies the ISO into
 install disk (1 GiB on iron, 1 MiB nested), product ISO PIC/IOAPIC injects
 ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
-guest COM1 RBR, the ISO cmdline is patched to
+guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
+with `setup-disk` to `/dev/vda` (not ISO-INSTALL-OK), the ISO cmdline is patched to
 `console=ttyS0` when it contains `sd-mod,usb-storage quiet` (keeps `modules=`
 valid), and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the

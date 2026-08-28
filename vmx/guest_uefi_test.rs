@@ -175,6 +175,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO PIC/IOAPIC inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO 16550 + ttyS0 cmdline"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO SOL RX to guest COM1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO Alpine serial auto-answer"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));

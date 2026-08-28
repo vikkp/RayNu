@@ -274,7 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fifth slice (this EFI): host COM2 (iDRAC SOL) then COM1 RX is copied into
+Sixth slice (this EFI): Alpine serial auto-answer — `login:` → `root`, `~# `
+→ `setup-disk -m sys /dev/vda` (with virtio modprobe). Fifth slice: host COM2 (iDRAC SOL) then COM1 RX is copied into
 guest COM1 RBR so the installer can take serial input. 16550 loopback so
 Linux 8250 autoconfig can bind. Fourth slice: product ISO 16550 (scratch/FIFO, COM1 GSI 4) so
 Linux 8250 can bind `ttyS0`, plus a same-length ISO cmdline patch

@@ -94,3 +94,19 @@ fn host_rx_raises_irq4_and_iir_is_c4() {
     reset();
     crate::devices::guest_irq::reset();
 }
+
+#[test]
+fn autoanswer_login_fills_rbr() {
+    reset();
+    let _ = pio(0x03FB, false, 0x00);
+    for &b in b"login:" {
+        let _ = pio(0x03F8, false, b);
+    }
+    let mut got = Vec::new();
+    for _ in 0..crate::devices::guest_serial_answer::ROOT.len() {
+        let (c, _, _) = pio(0x03F8, true, 0);
+        got.push(c);
+    }
+    assert_eq!(got, crate::devices::guest_serial_answer::ROOT);
+    reset();
+}

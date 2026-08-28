@@ -80,6 +80,7 @@ pub fn reset() {
         com1: Uart::empty(),
         com2: Uart::empty(),
     });
+    crate::devices::guest_serial_answer::reset();
 }
 
 fn port_uart(u: &mut Uarts, com1: bool) -> &mut Uart {
@@ -150,6 +151,10 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
     });
     if com1 {
         sync_com1_irq(irq);
+        if let Some(b) = thr {
+            crate::devices::guest_serial_answer::note_tx(b);
+        }
+        drain_answers();
     }
     (out, thr, irq)
 }
@@ -183,6 +188,20 @@ pub fn poll_host_rx() {
         if !push_host_rx(b) {
             break;
         }
+    }
+    drain_answers();
+}
+
+fn rx_free() -> usize {
+    with_uart(|u| RX_CAP.saturating_sub(u.com1.rx_len as usize))
+}
+
+fn drain_answers() {
+    while rx_free() > 0 {
+        let Some(b) = crate::devices::guest_serial_answer::take_rx() else {
+            break;
+        };
+        let _ = push_host_rx(b);
     }
 }
 

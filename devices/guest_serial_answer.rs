@@ -1,0 +1,157 @@
+//! Product-ISO Alpine serial auto-answer (outside Proven Core).
+//!
+//! Pillar: [Z]
+//! Proven Core: **outside** (ADR-002 / ADR-014)
+//! VERIFICATION: L1 (runtime + host tests)
+//!
+//! Watches guest COM1 TX for Alpine installer prompts and queues replies
+//! into RBR. Lab UART stub never calls this. Host/CI never prints
+//! `ISO-INSTALL-OK`.
+
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+
+const WIN: usize = 24;
+const QCAP: usize = 96;
+const YES_MAX: u8 = 4;
+
+const LOGIN: &[u8] = b"login:";
+const SHELL: &[u8] = b"~# ";
+const YESN: &[u8] = b"(y/n)";
+const YESN_UP: &[u8] = b"(y/N)";
+
+pub(crate) const ROOT: &[u8] = b"root\r";
+pub(crate) const SETUP: &[u8] =
+    b"modprobe virtio_pci; modprobe virtio_blk; ERASE_DISKS=/dev/vda setup-disk -m sys /dev/vda\r";
+pub(crate) const YES: &[u8] = b"y\r";
+
+const PHASE_LOGIN: u8 = 0;
+const PHASE_SHELL: u8 = 1;
+const PHASE_CONFIRM: u8 = 2;
+const PHASE_DONE: u8 = 3;
+
+struct Answer {
+    win: [u8; WIN],
+    wlen: usize,
+    q: [u8; QCAP],
+    qh: usize,
+    qn: usize,
+}
+
+impl Answer {
+    const fn empty() -> Self {
+        Self {
+            win: [0; WIN],
+            wlen: 0,
+            q: [0; QCAP],
+            qh: 0,
+            qn: 0,
+        }
+    }
+}
+
+struct Box(core::cell::UnsafeCell<Answer>);
+// SAFETY: exclusive access is enforced by `LOCK`.
+// KANI-TARGET: guest-UEFI serial auto-answer mutex (outside Proven Core).
+unsafe impl Sync for Box {}
+
+static STATE: Box = Box(core::cell::UnsafeCell::new(Answer::empty()));
+static LOCK: AtomicBool = AtomicBool::new(false);
+static PHASE: AtomicU8 = AtomicU8::new(PHASE_LOGIN);
+static YES_LEFT: AtomicU8 = AtomicU8::new(YES_MAX);
+
+fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
+    while LOCK.swap(true, Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    // SAFETY: lock held; exclusive mutable access.
+    // KANI-TARGET: guest-UEFI serial auto-answer mutex (outside Proven Core).
+    let out = unsafe { f(&mut *STATE.0.get()) };
+    LOCK.store(false, Ordering::Release);
+    out
+}
+
+pub fn reset() {
+    with(|a| *a = Answer::empty());
+    PHASE.store(PHASE_LOGIN, Ordering::Release);
+    YES_LEFT.store(YES_MAX, Ordering::Release);
+}
+
+fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
+    if needle.is_empty() || wlen < needle.len() {
+        return false;
+    }
+    &win[wlen - needle.len()..wlen] == needle
+}
+
+fn enqueue(a: &mut Answer, bytes: &[u8]) {
+    for &b in bytes {
+        if a.qn >= QCAP {
+            break;
+        }
+        let i = (a.qh + a.qn) % QCAP;
+        a.q[i] = b;
+        a.qn += 1;
+    }
+}
+
+/// Observe one guest COM1 THR byte. May queue a reply for RBR.
+pub fn note_tx(b: u8) {
+    let phase = PHASE.load(Ordering::Acquire);
+    if phase == PHASE_DONE {
+        return;
+    }
+    with(|a| {
+        if a.wlen < WIN {
+            a.win[a.wlen] = b;
+            a.wlen += 1;
+        } else {
+            a.win.copy_within(1..WIN, 0);
+            a.win[WIN - 1] = b;
+        }
+        match phase {
+            PHASE_LOGIN if ends_with(&a.win, a.wlen, LOGIN) => {
+                enqueue(a, ROOT);
+                PHASE.store(PHASE_SHELL, Ordering::Release);
+            }
+            PHASE_SHELL if ends_with(&a.win, a.wlen, SHELL) => {
+                enqueue(a, SETUP);
+                PHASE.store(PHASE_CONFIRM, Ordering::Release);
+            }
+            PHASE_CONFIRM
+                if ends_with(&a.win, a.wlen, YESN) || ends_with(&a.win, a.wlen, YESN_UP) =>
+            {
+                let left = YES_LEFT.load(Ordering::Acquire);
+                if left > 0 {
+                    enqueue(a, YES);
+                    YES_LEFT.store(left - 1, Ordering::Release);
+                }
+                if left <= 1 {
+                    PHASE.store(PHASE_DONE, Ordering::Release);
+                }
+            }
+            _ => {}
+        }
+    });
+}
+
+/// Pop one queued reply byte.
+pub fn take_rx() -> Option<u8> {
+    with(|a| {
+        if a.qn == 0 {
+            return None;
+        }
+        let b = a.q[a.qh];
+        a.qh = (a.qh + 1) % QCAP;
+        a.qn -= 1;
+        Some(b)
+    })
+}
+
+/// Host tests / gate: queued reply length.
+pub fn queued() -> usize {
+    with(|a| a.qn)
+}
+
+#[cfg(test)]
+#[path = "guest_serial_answer_test.rs"]
+mod guest_serial_answer_test;
