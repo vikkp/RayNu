@@ -93,6 +93,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_flash_at(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_flash_off(")
         && include_str!("../vmx/guest_uefi.rs").contains("FLASH_HPA")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn xapic_fetch_miss_eax_fallback(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn try_alloc_product_iso_install_disk(")
         && include_str!("../vmx/guest_uefi.rs").contains("Reserve the install disk first")
         && include_str!("iso_install.rs").contains("fn product_iso_install_disk_try_sizes(")

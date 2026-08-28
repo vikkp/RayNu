@@ -1,5 +1,6 @@
 use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
+    xapic_fetch_miss_eax_fallback,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
@@ -1336,6 +1337,16 @@ fn copy_flash_at_firmware_rip() {
     assert_eq!(copy_flash_at(&flash, 0xfee0_00f0, &mut out), 0);
     assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE + 100, &mut out), 0);
     assert!(guest_uefi_gpa_to_hpa(0xfffc_fc86).is_none());
+}
+
+#[test]
+fn xapic_fetch_miss_eax_fallback_only_when_empty_and_len_valid() {
+    assert!(xapic_fetch_miss_eax_fallback(0, 6));
+    assert!(xapic_fetch_miss_eax_fallback(0, 1));
+    assert!(xapic_fetch_miss_eax_fallback(0, 15));
+    assert!(!xapic_fetch_miss_eax_fallback(0, 0));
+    assert!(!xapic_fetch_miss_eax_fallback(0, 16));
+    assert!(!xapic_fetch_miss_eax_fallback(4, 6));
 }
 
 #[test]

@@ -274,9 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-CI green on `2f662c9` (empty retrigger of `6d4535b`; QEMU boot gate recovered
-from the nested-KVM `/init` flake). Flash this EFI. FAT already fills Cruzer;
-no `--refat-cruzer`. Stick last COM2 is still `e3f56aa`.
+Sixty-fourth slice (this EFI): iron COM2 xAPIC SVR `insn=` empty. If flash
+peek still returns 0 bytes but VMCS `insn_len` is 1–15, complete a 32-bit
+EAX MOV and skip (LocalApicLib `mov [svr], eax`). Do not guess when bytes
+were fetched. Pin `2f662c9` until this CI is green. FAT already fills Cruzer;
+no `--refat-cruzer`.
+CI green on `2f662c9` (empty retrigger of `6d4535b`). `ba3face` docs CI hit
+the nested-KVM `/init` flake.
 Sixty-third slice (this EFI): iron COM2 `virtio-blk install disk bytes=1048576`
 because greedy 2 MiB report-RAM ate the `[1MiB,256MiB)` pool. Reserve the
 install disk **before** report-RAM so 64 MiB (REST default) fits; leftover

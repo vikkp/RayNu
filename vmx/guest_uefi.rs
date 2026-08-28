@@ -1614,6 +1614,15 @@ pub fn copy_flash_at(flash: &[u8], gpa: u64, out: &mut [u8]) -> usize {
     n
 }
 
+/// When flash/RAM peek fetched 0 bytes, still finish a 32-bit EAX MOV if
+/// VMCS instruction length is valid (EPT data access). LocalApicLib is
+/// `mov [svr], eax` / `mov eax, [svr]`. Do not guess when bytes were fetched.
+///
+/// Iron COM2 `e3f56aa`: `gpa=0xfee000f0 insn=` empty at `rip=0xfffcfc86`.
+pub fn xapic_fetch_miss_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
+    fetched_n == 0 && insn_len >= 1 && insn_len <= 15
+}
+
 /// Allocate a contiguous install-disk run. Largest size that fits wins.
 ///
 /// INVARIANTS:
@@ -6711,7 +6720,26 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
                 write_hex_u8(buf[i]);
                 i += 1;
             }
+            serial::write_str(" n=");
+            write_dec(n as u64);
+            serial::write_str(" len=");
+            write_dec(insn_len);
             serial::write_byte(b'\n');
+        }
+        if xapic_fetch_miss_eax_fallback(n, insn_len) {
+            if is_write {
+                let val = cr_gpr(0) as u32;
+                let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val);
+            } else {
+                let mem = crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                    .and_then(|v| v)
+                    .unwrap_or(0);
+                set_cr_gpr(0, u64::from(mem));
+            }
+            if FAIL_N.load(Ordering::Acquire) <= 8 {
+                serial::write_line("boot: guest-UEFI xAPIC MMIO eax fallback (not ISO-INSTALL-OK)");
+            }
+            return skip_insn();
         }
         return false;
     };
