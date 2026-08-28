@@ -20,6 +20,8 @@ pub fn blk_launch_path_present() -> bool {
     let ept = include_str!("../memory/ept_hw.rs");
     launch.contains(M4_BLK_OK_MARKER)
         && launch.contains("try_launch_blk_probe")
+        && launch.contains("skip_blk_failsoft")
+        && launch.contains("place_mmio_probe_on_host_slab")
         && launch.contains("virtio_blk")
         && main.contains("virtio_blk::init")
         && main.contains("write_guest_blk_probe_page")

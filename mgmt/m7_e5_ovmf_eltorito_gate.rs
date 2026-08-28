@@ -25,8 +25,9 @@ use crate::devices::ide_cdrom::{
     MOCK_EFI_ISO_BYTES,
 };
 use crate::vmx::guest_uefi::{
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, post_atapi_should_stop,
-    post_dxe_should_stop, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_ATAPI_TAIL,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_resume_cap,
+    post_atapi_should_stop, post_dxe_should_stop, report_ram_return_to_e4,
+    E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_POST_ATAPI_TAIL,
     GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, M7_E5_OVMF_ELTORITO_OK_MARKER,
 };
 
@@ -158,6 +159,7 @@ pub fn ovmf_eltorito_surface_present() -> bool {
     let adr = include_str!("../docs/adr/ADR-014.md");
     let qemu = include_str!("../tools/qemu-boot-test.sh");
     let guest = include_str!("../vmx/guest_uefi.rs");
+    let main = include_str!("../src/main.rs");
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plan = include_str!("../docs/m7_plan.md");
     attach_cdrom_uefi(1) == Err(IsoError::UnsupportedOnFirmware)
@@ -171,6 +173,8 @@ pub fn ovmf_eltorito_surface_present() -> bool {
         && guest.contains("eltorito_boot_evidence")
         && guest.contains("131072-exit cap")
         && guest.contains("262144")
+        && guest.contains("report_ram_return_to_e4")
+        && main.contains("report-RAM withheld")
         && guest.contains("does not apply the 32768 post-ATAPI tail")
         && guest.contains("first ATAPI is often LBA 0 dummy")
         && ide.contains("edk2_fat12_bootx64_ok")
@@ -220,6 +224,11 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
         && prop_eltorito_payload_is_pe()
         && prop_catalog_and_load_reads()
         && GUEST_UEFI_RESUME_CAP >= 262144
+        && guest_uefi_resume_cap(false) == GUEST_UEFI_RESUME_CAP
+        && guest_uefi_resume_cap(true) == GUEST_UEFI_NESTED_RESUME_CAP
+        && !report_ram_return_to_e4(true)
+        && report_ram_return_to_e4(false)
+        && GUEST_UEFI_NESTED_RESUME_CAP >= 32768
         && GUEST_UEFI_POST_DXE_TAIL == 32768
         && GUEST_UEFI_POST_ATAPI_TAIL == 32768
         && post_dxe_should_stop(true, 115, 115, 1)

@@ -54,6 +54,31 @@ fn selftest_ok() {
     assert_eq!(a.allocated_count(), 0);
 }
 
+/// Nested `4225b4d`: free-then-contiguous reused firmware-scratched
+/// report-RAM as `load kernel=0x8200000`. Withhold keeps the run allocated.
+#[test]
+fn withheld_run_not_reused_by_contiguous() {
+    let mut words = [0u64; 64];
+    let mut a = unsafe { tiny_alloc(16, &mut words) };
+    let report = a.allocate_contiguous(4).unwrap();
+    let kernel = a.allocate_contiguous(4).unwrap();
+    assert_ne!(kernel, report);
+    assert_eq!(kernel.to_phys(), report.to_phys() + 4 * 4096);
+}
+
+#[test]
+fn freed_run_is_reused_by_contiguous() {
+    let mut words = [0u64; 64];
+    let mut a = unsafe { tiny_alloc(16, &mut words) };
+    let report = a.allocate_contiguous(4).unwrap();
+    for i in 0..4 {
+        a.free_frame(PhysFrame::from_phys(report.to_phys() + i * 4096))
+            .unwrap();
+    }
+    let kernel = a.allocate_contiguous(4).unwrap();
+    assert_eq!(kernel, report);
+}
+
 #[test]
 fn marker_and_geometry() {
     assert_eq!(M2_ALLOC_OK_MARKER, "RAYNU-V-M2-ALLOC-OK");

@@ -103,6 +103,23 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// 262144 keeps the private VMCS until `RN-ELT` or the hard cap. Stage 45
 /// does not apply the 32768 post-ATAPI tail after PACKET.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
+/// Nested KVM only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
+/// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
+/// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
+/// Cap alone is not enough: nested `4225b4d` still mapped 32 report-RAM
+/// slots, freed them, then `load kernel=0x8200000`. See
+/// [`report_ram_return_to_e4`]. Iron bit-31 clear still uses
+/// [`GUEST_UEFI_RESUME_CAP`].
+pub const GUEST_UEFI_NESTED_RESUME_CAP: u32 = 65536;
+
+/// Resume cap: iron 262144 (Stage 45 El Torito); nested KVM 65536 (CI SHELL).
+pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
+    if host_hypervisor {
+        GUEST_UEFI_NESTED_RESUME_CAP
+    } else {
+        GUEST_UEFI_RESUME_CAP
+    }
+}
 
 /// After DXE evidence, spend this many exits unless firmware read an ATAPI
 /// sector. Nested VT-x `1b07692`: BOTH-OK at n=1111 then the private VMCS
@@ -3195,7 +3212,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     let mut resume = false;
-    if !entry_fail && !tf && !fetch_fail && n < GUEST_UEFI_RESUME_CAP {
+    if !entry_fail && !tf && !fetch_fail && n < guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()) {
         resume = match basic {
             EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
             EXIT_REASON_CPUID => handle_cpuid(),
@@ -5628,11 +5645,28 @@ fn report_ram_hpa_for(gpa: u64) -> u64 {
     0
 }
 
-/// Return guest-UEFI report-RAM 2 MiB frames to the E4 allocator.
+/// Nested KVM must not return firmware-scratched report-RAM to E4.
+///
+/// Nested `4225b4d`: freed slots became `load kernel=0x8200000` then
+/// `/init` SIGSEGV CR2 `0x8a00000` (direct-map of a report-RAM HPA).
+/// Nested `957e0ad` withhold loaded at `0xc400000` then `#DF` `rip=0x9e036`
+/// (LA57 trampoline; now stripped by `E4_LINUX_CR4_FORBIDDEN`). Iron still
+/// returns the frames (pool starts lower; SHELL at `0x7c00000`).
+pub fn report_ram_return_to_e4(host_hypervisor: bool) -> bool {
+    !host_hypervisor
+}
+
+/// Finish guest-UEFI report-RAM: zero each 2 MiB HPA, then free to E4
+/// (iron) or withhold (nested KVM).
+///
+/// INVARIANTS:
+/// - Slot tracking is cleared either way
+/// - Nested: allocator bits stay allocated so bzImage cannot land on them
+/// - Iron: frames return to the pool after zero
 ///
 /// Nested Intel `957e0ad`: pool=32 stole 64 MiB so Linux loaded at
 /// `0xc400000` then `#DF` `rip=0x9e036`. Guest-UEFI has finished.
-pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator) -> u32 {
+pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator, return_to_e4: bool) -> u32 {
     let mut n = 0u32;
     for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
         let hpa = REPORT_RAM_HPA[i].swap(0, Ordering::AcqRel);
@@ -5640,10 +5674,20 @@ pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator) -> u32 {
         if hpa == 0 {
             continue;
         }
-        let mut off = 0u64;
-        while off < GUEST_UEFI_REPORT_RAM_PAGE {
-            let _ = alloc.free_frame(PhysFrame::from_phys(hpa + off));
-            off += 4096;
+        #[cfg(target_os = "uefi")]
+        {
+            // SAFETY: exclusive 2 MiB report-RAM HPA; guest-UEFI VMCS halted.
+            // KANI-TARGET: zero report-RAM before E4 (outside Proven Core).
+            unsafe {
+                core::ptr::write_bytes(hpa as *mut u8, 0, GUEST_UEFI_REPORT_RAM_PAGE as usize);
+            }
+        }
+        if return_to_e4 {
+            let mut off = 0u64;
+            while off < GUEST_UEFI_REPORT_RAM_PAGE {
+                let _ = alloc.free_frame(PhysFrame::from_phys(hpa + off));
+                off += 4096;
+            }
         }
         n = n.saturating_add(1);
     }

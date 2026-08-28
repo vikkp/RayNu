@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–45 closed**. Stage 44 / P0-59 ATAPI closed on iron COM2 `bf696ca` (`OVMF-ATAPI-OK` `sectors=1` `packet=9` `scsi=0x28` stop n=30769). Stage 45 / P0-61 El Torito **CLOSED** on iron COM2 `0be7283` (`OVMF-ELTORITO-OK` `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-59** and **P0-61** are closed. Residual: P0-60 G1 EPT (not an E5 stage) → Stage 46 `ISO-INSTALL-OK`, plus TLS/console. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–45 closed**. Stage 44 / P0-59 ATAPI closed on iron COM2 `bf696ca`. Stage 45 / P0-61 El Torito **CLOSED** on iron COM2 `0be7283` (`OVMF-ELTORITO-OK` `RN-ELT` n=197992). P0-60 G1 EPT **CLOSED** on iron COM2 after `5147222`. G0 VMCS relocate **CLOSED** (`E4 G0 VMCS relocated HPA=0x10a00000`; `M4-NVM-OK`). M4.3 virtio-blk host-slab **CLOSED** on iron COM2 after `22e28d0` (`M4-BLK-OK` `guest_code=0x10c00000`; then `M4-NET-OK` / `M4-SMP-OK` / `R640-BOOT-OK` / Phase F coexist). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-61** are closed. Residual: Stage 46 `ISO-INSTALL-OK`, plus TLS/console. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,17 +273,15 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (P0-60 — M4.2 G1 shell EPT / fail-soft, not an E5 stage):**
-After guest-UEFI + G0 SHELL, G1 must not `VMXOFF` / `boot gate failed` on
-`GPA=0x10403000`. Slab-local 2 MiB EPT (SPA path). Not Stage 46.
-Stage 45 closed on iron COM2 `0be7283`: OVMF BDS StartImaged the El Torito
-CD EFI; `RN-ELT` + `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` n=197992 catalog=1
-bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6.
-2048-byte FAT12 ESP + ISO9660 `\EFI\BOOT\BOOTX64.EFI`; PE SectionAlignment
-`0x1000`; 262144-exit cap (iron `df7d158` hit 131072 still in ATA PIO).
-E4 LINUX-EARLY then M4.2 G1 EPT fail-soft is not Stage 45.
+**First action (Stage 46 `ISO-INSTALL-OK` — Everest E5):**
+M4.3 host-slab closed on iron COM2 after `22e28d0`: `M4.3 blk probe host
+slab HPA=0x10c00000`; `guest_code=0x10c00000`; `RAYNU-V-M4-BLK-OK`; then
+`M4-NET-OK` / `M4-SMP-OK` / `R640-BOOT-OK` / Phase F coexist on
+`10.99.99.126:8443`. `ISO-BOOTED-FROM-DISK` on that paste is persist-detect
+(M7.7 LBA stamp), not a distro installer. Stage 45, P0-60, and G0 relocate
+stay CLOSED. Next is Stage 46: Linux ISO install to virtio-blk.
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 (closed) → P0-60
-(M4.2 G1 EPT / fail-soft, not an E5 stage) → Stage 46 `ISO-INSTALL-OK`.
+(closed) → G0 VMCS relocate (closed) → M4.3 blk host-slab (closed) → Stage 46 `ISO-INSTALL-OK`.
 Do not number G1 as Stage 46.
 Stage 44 closed on iron COM2 `bf696ca`: `RAYNU-V-M7-E5-OVMF-ATAPI-OK`
 `sectors=1` `packet=9` `scsi=0x28` `ata=0xa0` `ataio=982` stop n=30769
@@ -326,7 +324,7 @@ Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (**closed** iron COM2 `0be7283`:
 `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533
 scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
-**Next after Stage 45:** P0-60 G1 EPT (not an E5 stage), then Stage 46
+**Next after Stage 45 + P0-60 + G0 relocate + M4.3:** Stage 46
 `ISO-INSTALL-OK` (not `sectors>0` alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip

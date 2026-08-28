@@ -235,4 +235,4 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
    magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
    Not Everest E5.
-   Next: P0-60 G1 EPT (not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.
+   Next: Stage 46 `ISO-INSTALL-OK`. M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
