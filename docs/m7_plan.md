@@ -274,7 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fifty-third slice (this EFI): Alpine auto-answer `mount /dev/vdb ... || mount /dev/sr0`
+Fifty-fourth slice (this EFI): Alpine auto-answer `modprobe sr_mod` so `/dev/sr0`
+exists when the live image booted from virtio-iso. Fifty-third slice (this EFI): Alpine auto-answer `mount /dev/vdb ... || mount /dev/sr0`
 so apk still sees ISO9660 when virtio-iso is not ready. Fifty-second slice (this EFI): MMIO CMPS/SCAS (`A6`/`A7`/`AE`/`AF`, F3 REPE /
 F2 REPNE) so memcmp/memchr of virtio/IOAPIC/xAPIC sets RFLAGS instead of
 decode-fail spinning. RAM GPA miss does not invent HPA. Fifty-first slice (this EFI): Alpine auto-answer `sleep 1` after `mdev -s` so a

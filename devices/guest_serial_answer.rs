@@ -50,8 +50,9 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// `No disks available` exits after we answer n). `sleep 1` after `mdev`
 /// so a slow virtio probe is visible before `find_disks`. If virtio-iso
 /// `/dev/vdb` is not ready, mount ATAPI `/dev/sr0` so apk still sees ISO9660.
+/// `sr_mod` so `/dev/sr0` exists when the live image booted from virtio-iso.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; mdev -s; sleep 1; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom || mount /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; mdev -s; sleep 1; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom || mount /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";

@@ -41,6 +41,7 @@ fn login_queues_root_then_setup_disk() {
     assert!(SETUP.len() <= 320);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe virtio_pci"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe sr_mod"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mdev -s"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sleep 1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
