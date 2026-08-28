@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Forty-ninth slice (this EFI): Alpine auto-answer **overwrites** `/etc/apk/repositories`
+Fiftieth slice (this EFI): Alpine auto-answer `modprobe virtio_pci` and
+`mdev -s` before `setup-disk` so `find_disks` sees `/sys/block/vda` (otherwise
+`No disks available` answers n and the installer exits). Forty-ninth slice (this EFI): Alpine auto-answer **overwrites** `/etc/apk/repositories`
 with `/media/cdrom/apks` (does not append) so `apk update` does not hang on
 network mirrors, and answers `sys` on `How would you like` (not the shorter
 `like to use`, which also matches `Which disk(s) would you like to use?`).

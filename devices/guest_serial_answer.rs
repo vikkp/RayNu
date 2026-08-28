@@ -11,7 +11,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 const WIN: usize = 24;
-const QCAP: usize = 224;
+const QCAP: usize = 256;
 const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
@@ -45,9 +45,11 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
 /// distro packages. Overwrite `/etc/apk/repositories` with `/media/cdrom/apks`
 /// (do not append) so `apk update` / `apk add grub` does not block on a
-/// network mirror (live ISO has no DHCP yet).
+/// network mirror (live ISO has no DHCP yet). `virtio_pci` + `mdev -s` so
+/// `/sys/block/vda` exists before `setup-disk` `find_disks` (otherwise
+/// `No disks available` exits after we answer n).
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; mdev -s; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";

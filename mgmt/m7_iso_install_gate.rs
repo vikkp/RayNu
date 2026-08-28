@@ -179,6 +179,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("/media/cdrom/apks")
         && include_str!("../devices/guest_serial_answer.rs").contains("> /etc/apk/repositories")
         && include_str!("../devices/guest_serial_answer.rs").contains("How would you like")
+        && include_str!("../devices/guest_serial_answer.rs").contains("modprobe virtio_pci")
+        && include_str!("../devices/guest_serial_answer.rs").contains("mdev -s")
         && include_str!("../vmx/guest_uefi.rs").contains("Lazy 2MiB WB map")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_near_xfer(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_CALL")

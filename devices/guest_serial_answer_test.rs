@@ -38,8 +38,10 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, SETUP);
-    assert!(SETUP.len() <= 224);
+    assert!(SETUP.len() <= 256);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe virtio_pci"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("mdev -s"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
