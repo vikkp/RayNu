@@ -336,6 +336,12 @@ fn decode_mmio_mov_encodings() {
     assert!(!was2 && new2 == 1);
     assert_eq!(super::mmio_bt_rflags(2, true) & 1, 1);
     assert_eq!(super::mmio_bt_rflags(3, false) & 1, 0);
+    let cx = decode_mmio_insn(&[0x0F, 0xB1, 0x01], 3).unwrap();
+    assert!(cx.atomic == super::MMIO_CMPXCHG && cx.is_write && cx.reg == 0 && cx.size == 4);
+    let xa = decode_mmio_insn(&[0x0F, 0xC1, 0x01], 3).unwrap();
+    assert!(xa.atomic == super::MMIO_XADD && xa.is_write && xa.zero_ext);
+    assert!(super::mmio_eq(0x100, 0, 1));
+    assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);
     assert_eq!(
         super::mmio_alu_apply(0, 0, super::MMIO_ALU_NOT) & 0xff,

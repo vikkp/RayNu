@@ -103,6 +103,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub bt:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_bt_apply(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_apply_bt(")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_CMPXCHG")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_apply_atomic(")
         && include_str!("../devices/guest_serial_answer.rs").contains("mount /dev/vdb")
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub test:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_test_rflags(")
