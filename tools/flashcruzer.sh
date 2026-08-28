@@ -172,6 +172,8 @@ self_test() {
   grep -q -- '--linux-iso' "$ESP"
   grep -q -- '--no-linux-iso' "$ESP"
   grep -q 'EFI/RayNu/linux.iso' "$ESP"
+  grep -q 'pruning leftover ESP ISOs' "$ESP"
+  grep -q 'ESP free=' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \

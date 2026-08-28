@@ -56,6 +56,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../tools/run-qemu.sh").contains("PRODUCT_ISO")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("--linux-iso")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("--no-linux-iso")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("pruning leftover ESP ISOs")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("ESP free=")
         && include_str!("../devices/guest_irq.rs").contains("fn take_inject_vector(")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_GSI")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_ISO_GSI")

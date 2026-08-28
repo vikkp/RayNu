@@ -147,10 +147,28 @@ Not extract-boot bzImage.
 Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
 (fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
 bytes. Prefer `alpine-virt-*-x86_64.iso` (virtio + serial); standard also
-works if ATAPI `sr-mod` is on the cmdline. Operator flash:
+works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
+`flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
+from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
+`~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
+The 977.5 MiB Cruzer needs ~64 MiB free; a failed `cp` leaves a partial
+`EFI/RayNu/linux.iso`. Flash prunes ESP `*.iso` then checks `df`. Keep
+`installdisk.bin` and `auth.token`. Operator flash:
 
 ```bash
-~/projects/raynuv/flashcruzer.sh --wait --linux-iso /path/to/alpine-virt-x86_64.iso
+ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
+  wget -O /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
+    https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso
+cd ~/projects/raynu
+git fetch origin cursor/e5-stage46-iso-a623
+git checkout cursor/e5-stage46-iso-a623
+git pull --ff-only origin cursor/e5-stage46-iso-a623
+./tools/flashcruzer.sh --install-launcher
+./tools/flashcruzer.sh \
+  --branch cursor/e5-stage46-iso-a623 \
+  --wait \
+  --require-head \
+  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`

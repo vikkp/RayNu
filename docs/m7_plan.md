@@ -274,6 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Fifty-seventh slice (this EFI): Cruzer ESP flash prunes leftover/partial
+`*.iso` then `df`-checks before staging alpine-virt `linux.iso` (~63 MiB
+on the 977.5 MiB RAYNUV stick). Keep `installdisk.bin` / `auth.token`.
 Fifty-sixth slice (this EFI): Alpine auto-answer waits for `/dev/vda`
 (`mdev -s` each second, up to 5s) so a slow virtio probe is a block
 device before `setup-disk` opens it. `mdev -s` then `sleep 1` left the

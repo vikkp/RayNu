@@ -20,6 +20,10 @@
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
 #
+# Stage 46: alpine-virt linux.iso is ~63 MiB. The 977.5 MiB Cruzer has
+# room if leftover/partial ISOs are pruned first (keep installdisk.bin
+# and auth.token). --linux-iso unlinks ESP *.iso then checks df.
+#
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
 set -euo pipefail
@@ -330,6 +334,22 @@ elif [[ -n "$LINUX_ISO" ]]; then
   LINUX_BYTES="$(wc -c <"$LINUX_ABS" | tr -d ' ')"
   if (( LINUX_BYTES <= 73728 )); then
     echo "error: --linux-iso is lab-stub sized ($LINUX_BYTES); need >73728" >&2
+    exit 1
+  fi
+  if [[ "$LINUX_ABS" == /mnt/usb/* || "$LINUX_ABS" == "$RAW"* || "$LINUX_ABS" == "$MNT"* ]]; then
+    echo "error: --linux-iso must not live on the Cruzer itself" >&2
+    exit 1
+  fi
+  # Failed cp leaves a partial linux.iso that consumes the last free clusters.
+  echo "==> pruning leftover ESP ISOs (partial ENOSPC + extras) before linux.iso"
+  sudo find "$MNT" -iname '*.iso' -print -delete || true
+  AVAIL="$(df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' ')"
+  NEED=$((LINUX_BYTES + 1048576))
+  echo "==> ESP free=$AVAIL need=$NEED (linux.iso $LINUX_BYTES + 1MiB slack)"
+  if [[ ! "$AVAIL" =~ ^[0-9]+$ ]] || (( AVAIL < NEED )); then
+    echo "error: Cruzer ESP has ${AVAIL:-?} bytes free; need $NEED for linux.iso" >&2
+    echo "       keep EFI/BOOT/BOOTX64.EFI EFI/RayNu/OVMF.fd EFI/RayNu/installdisk.bin EFI/RayNu/auth.token" >&2
+    sudo du -ah "$MNT" | sort -h | tail -20 >&2 || true
     exit 1
   fi
   echo "==> staging EFI/RayNu/linux.iso ($LINUX_BYTES bytes) from $LINUX_ABS"
