@@ -41,6 +41,7 @@ fn login_queues_root_then_setup_disk() {
     assert!(SETUP.len() <= 96);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
     reset();
     assert_eq!(queued(), 0);
 }

@@ -25,8 +25,10 @@ const YESN_UP: &[u8] = b"(y/N)";
 const BOOTLOADER_Q: &[u8] = b"bootloader?";
 
 pub(crate) const ROOT: &[u8] = b"root\r";
+/// Alpine UEFI `setup-disk` needs `USE_EFI=1` (wiki / alpine-conf) or it
+/// tries syslinux/MBR and can stall before a GPT write.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; ERASE_DISKS=/dev/vda BOOTLOADER=grub setup-disk -m sys /dev/vda\r";
+    b"modprobe virtio_blk; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";

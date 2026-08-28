@@ -166,12 +166,12 @@ lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
 advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
-with `BOOTLOADER=grub setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
+with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
 appears; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `squashfs console=ttyS0 nolapic` (`modules=loop,squashfs` stays valid so Alpine
 can mount the live root; `console=` / `nolapic` are kernel params; PIT IRQ 0; no
 LAPIC timer on the static xAPIC page; optional `console=tty0` → `noapic`; GRUB
-`timeout=10` → `timeout=0`; `gfxterm` → `serial` when present;
+`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; `gfxterm` / `efi_gop` / `efi_uga` → `serial` when present;
 `alpine_dev=cdrom` → `alpine_dev=vdb` when present) when it
 contains `squashfs,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the

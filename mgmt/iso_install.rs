@@ -114,6 +114,11 @@ const _: () = assert!(ISO_TTY0_FROM.len() == ISO_TTY0_TO.len());
 pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
 pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
 const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
+/// Modern alpine-virt GRUB is `set timeout=1`, not `timeout=10`.
+/// Apply **after** `timeout=10` so `set timeout=10` does not become `set timeout=00`.
+pub const ISO_GRUB_TIMEOUT1_FROM: &[u8] = b"set timeout=1";
+pub const ISO_GRUB_TIMEOUT1_TO: &[u8] = b"set timeout=0";
+const _: () = assert!(ISO_GRUB_TIMEOUT1_FROM.len() == ISO_GRUB_TIMEOUT1_TO.len());
 /// After an sr-mod swap (other ISOs): load PIIX IDE so `/dev/sr0` can attach.
 /// 0 hits on alpine-virt after the `noapic` swap — that path uses virtio-iso.
 pub const ISO_ATA_PIIX_FROM: &[u8] = b"loop,squashfs,sr-mod";
@@ -127,6 +132,14 @@ const _: () = assert!(ISO_GRUB_GFXTERM_FROM.len() == ISO_GRUB_GFXTERM_TO.len());
 pub const ISO_GRUB_INSMOD_GFX_FROM: &[u8] = b"insmod gfxterm";
 pub const ISO_GRUB_INSMOD_GFX_TO: &[u8] = b"insmod serial ";
 const _: () = assert!(ISO_GRUB_INSMOD_GFX_FROM.len() == ISO_GRUB_INSMOD_GFX_TO.len());
+/// GRUB EFI `load_video` pulls GOP/UGA. Guest-UEFI has no GOP; insmod can stall.
+/// 0 hits is fine. Same length as `insmod gfxterm`.
+pub const ISO_GRUB_INSMOD_GOP_FROM: &[u8] = b"insmod efi_gop";
+pub const ISO_GRUB_INSMOD_GOP_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_GOP_FROM.len() == ISO_GRUB_INSMOD_GOP_TO.len());
+pub const ISO_GRUB_INSMOD_UGA_FROM: &[u8] = b"insmod efi_uga";
+pub const ISO_GRUB_INSMOD_UGA_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_UGA_FROM.len() == ISO_GRUB_INSMOD_UGA_TO.len());
 /// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
 /// ISO `/dev/vdb`. 0 hits is fine when the string is absent.
 pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
@@ -142,8 +155,11 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
     patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO)
         .saturating_add(patch_same(bytes, ISO_ATA_PIIX_FROM, ISO_ATA_PIIX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT1_FROM, ISO_GRUB_TIMEOUT1_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GOP_FROM, ISO_GRUB_INSMOD_GOP_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_UGA_FROM, ISO_GRUB_INSMOD_UGA_TO))
         .saturating_add(patch_same(bytes, ISO_ALPINE_DEV_FROM, ISO_ALPINE_DEV_TO))
         .saturating_add(patch_same(bytes, ISO_TTY0_FROM, ISO_TTY0_TO))
 }
