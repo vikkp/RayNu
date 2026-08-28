@@ -158,6 +158,8 @@ const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());
 ///
 /// INVARIANTS:
 /// - Replacements are the same length as the originals
+/// - Hits must sit in an ASCII neighborhood (do not rewrite gzip in vmlinuz).
+///   Prefix is printable text; suffix may be text or ISO9660 NUL padding.
 /// - Returns the number of replacements (0 = nothing patched)
 pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
     patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO)
@@ -178,6 +180,32 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
         .saturating_add(patch_same(bytes, ISO_TTY0_FROM, ISO_TTY0_TO))
 }
 
+fn iso_text_byte(b: u8) -> bool {
+    b == b'\t' || b == b'\n' || b == b'\r' || (0x20..=0x7e).contains(&b)
+}
+
+/// True when `from` sits in an ASCII neighborhood (GRUB/syslinux cfg).
+/// Whole-ISO search otherwise rewrites gzip inside `vmlinuz` and the EFI
+/// stub fails with `Decompression failed: uncompression error` (iron COM2
+/// after BdsDxe Start Boot0002 / `Linux virt`).
+///
+/// Prefix must be printable ASCII (gzip high bytes / NULs skip). Suffix
+/// may be ASCII or ISO9660 sector NUL padding at the end of a cfg file.
+fn iso_text_context(bytes: &[u8], start: usize, len: usize) -> bool {
+    if start >= bytes.len() || start.saturating_add(len) > bytes.len() {
+        return false;
+    }
+    let lo = start.saturating_sub(16);
+    let hi = start.saturating_add(len).saturating_add(16).min(bytes.len());
+    let prefix = &bytes[lo..start];
+    let suffix = &bytes[start + len..hi];
+    prefix.iter().copied().all(iso_text_byte)
+        && suffix
+            .iter()
+            .copied()
+            .all(|b| iso_text_byte(b) || b == 0)
+}
+
 fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {
     if from.len() != to.len() || from.is_empty() {
         return 0;
@@ -185,7 +213,7 @@ fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {
     let mut n = 0u32;
     let mut i = 0usize;
     while i + from.len() <= bytes.len() {
-        if bytes[i..i + from.len()] == *from {
+        if bytes[i..i + from.len()] == *from && iso_text_context(bytes, i, from.len()) {
             bytes[i..i + to.len()].copy_from_slice(to);
             n = n.saturating_add(1);
             i = i.saturating_add(to.len());

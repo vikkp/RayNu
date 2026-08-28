@@ -274,7 +274,16 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventy-first slice (this EFI): skip a 256 MiB virtio-blk when leftover
+Seventy-second slice (this EFI): iron COM2 after BdsDxe Start Boot0002
+booted `Linux virt` then EFI stub `Decompression failed: uncompression
+error` (`start_image` `0x8000000000000001`). That stick was 256 MiB
+disk / `report-RAM pool=66`. Whole-ISO same-length swaps now require an
+ASCII neighborhood so gzip inside `vmlinuz` is not rewritten. 64 MiB
+disk leave + TMR2_OUT still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not
+flash `8a71596` / `eddae01` after this lands — 256 MiB starved GCD;
+whole-ISO patch can corrupt gzip).
+Seventy-first slice: skip a 256 MiB virtio-blk when leftover
 would starve OVMF report-RAM (iron `pool=194` ~388 MiB). 64 MiB still
 fits Alpine GPT (`BOOT_SIZE=48`). TMR2_OUT (`0x61` bit 5) + arm ISO
 before disk attach still in this EFI. FAT already fills Cruzer; no

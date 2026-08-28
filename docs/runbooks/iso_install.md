@@ -152,12 +152,13 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-first-slice
-CI is green (skip 256 MiB disk when leftover would starve OVMF report-RAM;
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-second-slice
+CI is green (ISO serial patches only in ASCII cfg so gzip `vmlinuz` is not
+rewritten; skip 256 MiB disk when leftover would starve OVMF report-RAM;
 64 MiB still GPT; port `0x61` TMR2_OUT; arm product ISO before disk attach;
 peek RIP when CS.base+RIP misses flash; EAX n>0 fallback; `BOOT_SIZE=48`).
-Last iron COM2 after the 512 MiB pool started Boot0002 then spun on
-`rip=0x7e149fb9` (`insn=e461a82074fa`, disk 1 MiB). Never PERC.
+Last iron COM2 after Boot0002 `Linux virt`: EFI stub `uncompression error`
+(256 MiB disk / `report-RAM pool=66`). Do not flash `8a71596`. Never PERC.
 Never `sda`/`sdb`. `--no-linux-iso` still strips leftovers so `iso=0` E4 SHELL
 stays valid.
 

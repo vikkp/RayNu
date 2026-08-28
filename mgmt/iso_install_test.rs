@@ -232,4 +232,23 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(t.contains("noapic"));
     assert!(t.contains("squashfs,virtio_blk console=ttyS0"));
     assert!(!t.contains("console=tty0"));
+    // Iron COM2: EFI stub `uncompression error` after `Linux virt`. A needle
+    // inside gzip (0xFF neighborhood) must not be rewritten.
+    let mut gz = vec![0xFFu8; 96];
+    let needle = ISO_GRUB_TIMEOUT1_FROM;
+    gz[32..32 + needle.len()].copy_from_slice(needle);
+    assert_eq!(patch_iso_linux_serial_console(&mut gz), 0);
+    assert_eq!(&gz[32..32 + needle.len()], needle);
+    // ISO9660 pads the last sector with NULs; still patch cfg text.
+    let mut pad = vec![b' '; 32];
+    pad.extend_from_slice(needle);
+    pad.extend_from_slice(&[0u8; 32]);
+    assert_eq!(patch_iso_linux_serial_console(&mut pad), 1);
+    assert_eq!(&pad[32..32 + needle.len()], ISO_GRUB_TIMEOUT1_TO);
+    // Needle in a sea of NULs is not cfg (do not rewrite stored gzip).
+    let mut z = vec![0u8; 32];
+    z.extend_from_slice(needle);
+    z.extend_from_slice(b"                ");
+    assert_eq!(patch_iso_linux_serial_console(&mut z), 0);
+    assert_eq!(&z[32..32 + needle.len()], needle);
 }
