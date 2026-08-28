@@ -20,7 +20,8 @@
 //! `bootorder`).
 //! Lab stub: vendor cap `0x0001_0010` (enum only, not queues). Product ISO
 //! window: virtio-pci caps type 1/2/3/4 + trap-and-emulate BAR MMIO + split
-//! virtqueue IN/OUT/FLUSH. Not the M4.3 virtio-mmio probe. Not ISO-INSTALL-OK.
+//! virtqueue IN/OUT/FLUSH (every data descriptor in the chain, not only the
+//! first). Not the M4.3 virtio-mmio probe. Not ISO-INSTALL-OK.
 
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -76,6 +77,8 @@ const QUEUE_MAX: u16 = 128;
 const SECTOR: usize = 512;
 const VRING_DESC_F_NEXT: u16 = 1;
 const VRING_DESC_F_WRITE: u16 = 2;
+/// Linux blk-mq maps each bio_vec as a descriptor. Cap the chain.
+const DATA_SEGS: usize = 16;
 
 struct VirtioPci {
     visible: bool,
@@ -736,6 +739,47 @@ fn write_u16(translate: &impl Fn(u64) -> Option<u64>, gpa: u64, val: u16) -> boo
     write_bytes(translate, gpa, &val.to_le_bytes())
 }
 
+fn xfer_data_seg(
+    disk: &mut [u8],
+    translate: &impl Fn(u64) -> Option<u64>,
+    ty: u32,
+    sector: u64,
+    byte_off: usize,
+    gpa: u64,
+    len: u32,
+    device_write: bool,
+) -> (u8, u32) {
+    let n = len as usize;
+    let mut buf = [0u8; 4096];
+    let mut done = 0usize;
+    let mut wrote = 0u32;
+    while done < n {
+        let take = core::cmp::min(n - done, buf.len());
+        let sec = sector.saturating_add(((byte_off + done) / SECTOR) as u64);
+        if device_write {
+            let status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+            if status != VIRTIO_BLK_S_OK {
+                return (status, wrote);
+            }
+            if !write_bytes(translate, gpa + done as u64, &buf[..take]) {
+                return (VIRTIO_BLK_S_IOERR, wrote);
+            }
+        } else if read_bytes(translate, gpa + done as u64, &mut buf[..take]) {
+            let status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+            if status != VIRTIO_BLK_S_OK {
+                return (status, wrote);
+            }
+            if ty == VIRTIO_BLK_T_OUT {
+                wrote = wrote.saturating_add(take as u32);
+            }
+        } else {
+            return (VIRTIO_BLK_S_IOERR, wrote);
+        }
+        done = done.saturating_add(take);
+    }
+    (VIRTIO_BLK_S_OK, wrote)
+}
+
 fn process_blk_queue(
     qsize: u16,
     last_avail: &mut u16,
@@ -759,9 +803,8 @@ fn process_blk_queue(
         };
         let mut desc = head;
         let mut hdr = [0u8; 16];
-        let mut data_gpa = 0u64;
-        let mut data_len = 0u32;
-        let mut data_write = false;
+        let mut segs = [(0u64, 0u32, false); DATA_SEGS];
+        let mut nseg = 0usize;
         let mut status_gpa = 0u64;
         let mut chain = 0u16;
         let mut got_hdr = false;
@@ -785,10 +828,9 @@ fn process_blk_queue(
                 got_hdr = true;
             } else if (flags & VRING_DESC_F_WRITE) != 0 && len == 1 && status_gpa == 0 {
                 status_gpa = addr;
-            } else if data_gpa == 0 && len > 1 {
-                data_gpa = addr;
-                data_len = len;
-                data_write = (flags & VRING_DESC_F_WRITE) != 0;
+            } else if len > 0 && nseg < DATA_SEGS {
+                segs[nseg] = (addr, len, (flags & VRING_DESC_F_WRITE) != 0);
+                nseg += 1;
             }
             if (flags & VRING_DESC_F_NEXT) == 0 {
                 break;
@@ -799,39 +841,31 @@ fn process_blk_queue(
         let ty = u32::from_le_bytes(hdr[0..4].try_into().unwrap_or([0; 4]));
         let sector = u64::from_le_bytes(hdr[8..16].try_into().unwrap_or([0; 8]));
         let mut status = VIRTIO_BLK_S_IOERR;
+        let mut req_bytes = 0u32;
         if ty == VIRTIO_BLK_T_FLUSH {
             status = VIRTIO_BLK_S_OK;
-        } else if data_gpa != 0 && data_len > 0 {
-            let n = data_len as usize;
-            let mut buf = [0u8; 4096];
-            let mut done = 0usize;
+        } else if nseg > 0 {
+            let mut byte_off = 0usize;
             status = VIRTIO_BLK_S_OK;
-            while done < n {
-                let take = core::cmp::min(n - done, buf.len());
-                let sec = sector.saturating_add((done / SECTOR) as u64);
-                if data_write {
-                    status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
-                    if status != VIRTIO_BLK_S_OK {
-                        break;
-                    }
-                    if !write_bytes(translate, data_gpa + done as u64, &buf[..take]) {
-                        status = VIRTIO_BLK_S_IOERR;
-                        break;
-                    }
-                } else if read_bytes(translate, data_gpa + done as u64, &mut buf[..take]) {
-                    status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
-                    if status != VIRTIO_BLK_S_OK {
-                        break;
-                    }
-                    if ty == VIRTIO_BLK_T_OUT {
-                        written = written.saturating_add(take as u32);
-                    }
-                } else {
-                    status = VIRTIO_BLK_S_IOERR;
+            for &(gpa, len, device_write) in segs[..nseg].iter() {
+                let (st, w) = xfer_data_seg(
+                    disk,
+                    translate,
+                    ty,
+                    sector,
+                    byte_off,
+                    gpa,
+                    len,
+                    device_write,
+                );
+                status = st;
+                req_bytes = req_bytes.saturating_add(w);
+                if status != VIRTIO_BLK_S_OK {
                     break;
                 }
-                done = done.saturating_add(take);
+                byte_off = byte_off.saturating_add(len as usize);
             }
+            written = written.saturating_add(req_bytes);
         }
         if status_gpa != 0 {
             let _ = write_bytes(translate, status_gpa, &[status]);

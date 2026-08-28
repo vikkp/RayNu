@@ -161,6 +161,46 @@ fn blk_queue_out_writes_full_8k() {
 }
 
 #[test]
+fn blk_queue_out_writes_split_data_descriptors() {
+    let mut guest = vec![0u8; 4096];
+    let qsize = 8u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    guest[hdr_gpa as usize + 8..hdr_gpa as usize + 16].copy_from_slice(&0u64.to_le_bytes());
+    let d0 = 0x400u64;
+    let d1 = 0x600u64;
+    guest[d0 as usize..d0 as usize + 512].fill(0x5A);
+    guest[d1 as usize..d1 as usize + 512].fill(0xA5);
+    let st_gpa = 0x800u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, d0, 512, 1, 2);
+    put_desc(&mut guest, 2, d1, 512, 1, 3);
+    put_desc(&mut guest, 3, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; 4096];
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 1024, "installer OUT must not drop later bio_vec descriptors");
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(disk[0], 0x5A);
+    assert_eq!(disk[511], 0x5A);
+    assert_eq!(disk[512], 0xA5);
+    assert_eq!(disk[1023], 0xA5);
+}
+
+#[test]
 fn install_disk_partition_table_gpt_and_mbr() {
     use super::install_disk_has_partition_table;
     let mut z = vec![0u8; 4096];

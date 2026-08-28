@@ -274,7 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Ninth slice (this EFI): ATAPI PIO DRQ is 31 CD sectors so Linux `sr` READ(10)
+Tenth slice (this EFI): virtio-blk OUT walks every data descriptor in the
+chain (Linux blk-mq bio_vec), not only the first. Ninth slice: ATAPI PIO DRQ is 31 CD sectors so Linux `sr` READ(10)
 is not completed short at 4; IDENTIFY is PIO-only; nIEN masks IRQ 14.
 Eighth slice: ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
 (squashfs stays in initramfs), GRUB `gfxterm` → `serial` when present, BusyBox

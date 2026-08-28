@@ -70,6 +70,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("terminal_output serial ")
         && include_str!("../devices/ide_cdrom.rs").contains("31 * ISO_SECTOR")
         && include_str!("../devices/ide_cdrom.rs").contains("ATA_DEVCTL_NIEN")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("DATA_SEGS")
         && include_str!("../devices/guest_serial_answer.rs").contains("fn note_tx(")
         && include_str!("../devices/guest_serial_answer.rs").contains("/ # ")
         && include_str!("../devices/guest_serial_answer.rs").contains("setup-disk -m sys /dev/vda")
