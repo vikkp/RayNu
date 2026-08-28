@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Nested QEMU serial capture of Stage 46 product ISO (alpine-virt).
 #
-# Not ISO-INSTALL-OK. Nested skips leftover DRAM (report-RAM extra skip nested).
-# Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
+# Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
+# above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
+# and does not seed. Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
 # Iron close stays Cruzer flash of cursor/e5-stage46-iso-a623.
 set -euo pipefail
 

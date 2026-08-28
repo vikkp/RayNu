@@ -121,8 +121,9 @@ jobs:
           if-no-files-found: ignore
 
   # Nested product-ISO serial (Stage 46). Not ISO-INSTALL-OK. Does not
-  # replace Cruzer flash of cursor/e5-stage46-iso-a623. Nested skips
-  # leftover DRAM. Fail only if VMLAUNCH is missing or iron OK leaks.
+  # replace Cruzer flash of cursor/e5-stage46-iso-a623. Nested product-ISO
+  # seeds leftover DRAM (QEMU_MEM=2560M). Fail only if VMLAUNCH is missing
+  # or iron OK leaks.
   e5-product-iso-serial:
     name: E5 product ISO nested serial
     needs: build-uefi
