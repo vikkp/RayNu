@@ -120,6 +120,53 @@ jobs:
             target/m0-qemu-stderr.log
           if-no-files-found: ignore
 
+  # Nested product-ISO serial (Stage 46). Not ISO-INSTALL-OK. Does not
+  # replace Cruzer flash of cursor/e5-stage46-iso-a623. Nested skips
+  # leftover DRAM. Fail only if VMLAUNCH is missing or iron OK leaks.
+  e5-product-iso-serial:
+    name: E5 product ISO nested serial
+    needs: build-uefi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
+          targets: x86_64-unknown-uefi
+      - name: Install QEMU + OVMF + curl
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 ovmf curl
+      - name: Download EFI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: r640-hypervisor.efi
+          path: target/x86_64-unknown-uefi/release/
+      - name: Cache alpine-virt ISO
+        uses: actions/cache@v4
+        with:
+          path: target/alpine-virt-3.21.3-x86_64.iso
+          key: alpine-virt-3.21.3-x86_64
+      - name: Nested product ISO serial capture
+        run: |
+          chmod +x ./tools/e5-product-iso-qemu-serial.sh ./tools/run-qemu.sh ./tools/build.sh ./tools/enable-nested-kvm.sh
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod a+rw /dev/kvm || true
+            echo 1 | sudo tee /sys/module/kvm_intel/parameters/nested 2>/dev/null || true
+          fi
+          TIMEOUT_SECS=480 ./tools/e5-product-iso-qemu-serial.sh
+      - name: Upload product ISO serial
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e5-iso-serial-log
+          path: |
+            target/e5-iso-serial.log
+            target/e5-iso-qemu-stdout.log
+            target/e5-iso-qemu-stderr.log
+          if-no-files-found: ignore
+
   # ADR-011: paperverbose.txt on ESP → evidence mode serial markers.
   # Independent of nested VT-x; TCG is enough (flag probe is pre-EBS).
   evidence-mode:
