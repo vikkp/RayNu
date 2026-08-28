@@ -1412,6 +1412,28 @@ pub fn eltorito_payload_ran(matched: u8) -> bool {
     (matched as usize) >= crate::devices::ide_cdrom::ELTORITO_PAYLOAD_MAGIC.len()
 }
 
+/// When to print a guest-UEFI tick on COM2.
+///
+/// Dense through BOTH/ATAPI (`n<=16384`), then every 4096 so RN-ELT stays
+/// readable. After El Torito bootimg, every 1024 so EFI stub / kernel
+/// ExitBootServices is not a 4096-exit blind spot (iron COM2 `Loaded initrd`
+/// with no further tick). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_tick_should_print(n: u32, bootimg: bool) -> bool {
+    if n == 0 || n % 256 != 0 {
+        return false;
+    }
+    n <= 16384 || n % 4096 == 0 || (bootimg && n % 1024 == 0)
+}
+
+/// First non-I/O VM-exit after the El Torito boot image was read.
+///
+/// Iron COM2 after gzip: last line was EFI stub `Loaded initrd` (often the
+/// last ConOut before ExitBootServices). A CR/CPUID/EPT/HLT after that is
+/// kernel/stub past PIO. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_post_cd_non_io(bootimg: bool, already: bool, io_exit: bool) -> bool {
+    bootimg && !already && !io_exit
+}
+
 /// True when El Torito evidence should stop the private guest-UEFI VMCS.
 ///
 /// Stage 45 lab stub (72 KiB RN-ELT) stops so E4 `LINUX-EARLY` still runs.
@@ -1843,6 +1865,7 @@ static ATAPI_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_CATALOG_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_BOOTIMG_PRINTED: AtomicBool = AtomicBool::new(false);
+static POST_CD_NON_IO: AtomicBool = AtomicBool::new(false);
 static ELTORITO_COM_MATCH: AtomicU8 = AtomicU8::new(0);
 #[cfg(target_os = "uefi")]
 static GPA0_SPLIT_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -2397,6 +2420,7 @@ pub fn reset_guest_uefi_launch() {
     ELTORITO_PRINTED.store(false, Ordering::Release);
     ELTORITO_CATALOG_PRINTED.store(false, Ordering::Release);
     ELTORITO_BOOTIMG_PRINTED.store(false, Ordering::Release);
+    POST_CD_NON_IO.store(false, Ordering::Release);
     ELTORITO_COM_MATCH.store(0, Ordering::Release);
     DXE_AT_N.store(0, Ordering::Release);
     ATAPI_AT_N.store(0, Ordering::Release);
@@ -3484,10 +3508,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             write_hex(intr);
         }
         serial::write_byte(b'\n');
-    } else if n % 256 == 0 && (n <= 16384 || n % 4096 == 0) {
+    } else if guest_uefi_tick_should_print(
+        n,
+        crate::devices::ide_cdrom::eltorito_boot_image_read(),
+    ) {
         // Iron COM2 0be7283 flooded SOL with a tick every 256 I/O exits
         // (same=1 PCI/ATA poll). Keep dense ticks through BOTH/ATAPI, then
-        // every 4096 so RN-ELT / ELTORITO-OK stay readable. Do not skip
+        // every 4096 so RN-ELT / ELTORITO-OK stay readable. After bootimg
+        // every 1024 (iron Loaded initrd had no further tick). Do not skip
         // ebecc9c3.
         serial::write_str("boot: guest-UEFI tick n=");
         write_dec(n as u64);
@@ -3513,6 +3541,23 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         dump_low_ram_insn(linear);
         serial::write_byte(b'\n');
         guest_uefi_patch_cpu_flush_all_mapped();
+    }
+
+    if guest_uefi_post_cd_non_io(
+        crate::devices::ide_cdrom::eltorito_boot_image_read(),
+        POST_CD_NON_IO.load(Ordering::Acquire),
+        basic == EXIT_REASON_IO_INSTRUCTION,
+    ) && !POST_CD_NON_IO.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str("boot: guest-UEFI post-CD non-io n=");
+        write_dec(n as u64);
+        serial::write_str(" reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" ram=");
+        write_dec(REPORT_RAM_MAPS.load(Ordering::Acquire) as u64);
+        serial::write_byte(b'\n');
     }
 
     if !entry_fail && !fetch_fail {
@@ -4078,7 +4123,7 @@ unsafe fn copy_guest_identity_bytes(linear: u64, buf: &mut [u8]) -> usize {
     if !guest_uefi_report_ram_should_map(linear) {
         return 0;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return 0;
     }
@@ -4159,7 +4204,7 @@ unsafe fn write_guest_identity_bytes(linear: u64, buf: &[u8]) -> usize {
     if !guest_uefi_report_ram_should_map(linear) {
         return 0;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return 0;
     }
@@ -5489,7 +5534,7 @@ unsafe fn poke_guest_u64(linear: u64, val: u64) -> bool {
     if !guest_uefi_report_ram_should_map(linear) {
         return false;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return false;
     }
@@ -6066,27 +6111,13 @@ unsafe fn store_guest_io(linear: u64, size: u8, val: u64) -> bool {
     if !guest_uefi_report_ram_should_map(linear) {
         return false;
     }
-    let mut hpa = report_ram_hpa_lookup(linear);
+    // Iron COM2: GRUB `rep insw` into GCD heap never EPT-walks, so an
+    // unmapped report-RAM GPA silently dropped ATAPI bytes (EFI stub
+    // gzip Z_DATA_ERROR with a full-looking PIO). PUSH/POP / virtqueue
+    // share [`report_ram_hpa_lookup_or_map`]. Do not invent HPA (ADR-004).
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
-        // Iron COM2: GRUB `rep insw` into GCD heap never EPT-walks, so an
-        // unmapped report-RAM GPA silently dropped ATAPI bytes (EFI stub
-        // gzip Z_DATA_ERROR with a full-looking PIO). Same lazy map as
-        // virtqueue [`guest_uefi_gpa_to_hpa`]. Do not invent HPA (ADR-004).
-        if !ept_map_2m_report_ram(linear) {
-            return false;
-        }
-        hpa = report_ram_hpa_lookup(linear);
-        if hpa == 0 {
-            return false;
-        }
-        let n = REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
-        if n < 8 {
-            serial::write_str("boot: guest-UEFI string report-RAM gpa=0x");
-            write_hex(linear);
-            serial::write_str(" hpa=0x");
-            write_hex(hpa);
-            serial::write_byte(b'\n');
-        }
+        return false;
     }
     // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
     // KANI-TARGET: string INS store to report-RAM (outside Proven Core).
@@ -6110,16 +6141,9 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     if !guest_uefi_report_ram_should_map(linear) {
         return None;
     }
-    let mut hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
-        if !ept_map_2m_report_ram(linear) {
-            return None;
-        }
-        hpa = report_ram_hpa_lookup(linear);
-        if hpa == 0 {
-            return None;
-        }
-        REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
+        return None;
     }
     // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
     // KANI-TARGET: string OUTS load from report-RAM (outside Proven Core).
@@ -7545,6 +7569,38 @@ fn report_ram_hpa_lookup(gpa: u64) -> u64 {
     0
 }
 
+/// Resolve a report-RAM HPA. Lazy 2MiB WB map like an EPT miss.
+///
+/// String INS, PUSH/POP, insn peek, and virtqueue do not EPT-walk the GPA.
+/// A lookup miss used to drop bytes (iron EFI stub gzip zeros). Do not
+/// invent HPA (ADR-004).
+fn report_ram_hpa_lookup_or_map(gpa: u64) -> u64 {
+    let existing = report_ram_hpa_lookup(gpa);
+    if existing != 0 {
+        return existing;
+    }
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: exclusive report-RAM pool; guest is VM-exited.
+        // KANI-TARGET: lazy report-RAM for string/PUSH/virtqueue (outside Proven Core).
+        if unsafe { ept_map_2m_report_ram(gpa) } {
+            let hpa = report_ram_hpa_lookup(gpa);
+            if hpa != 0 {
+                let n = REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
+                if n < 8 {
+                    serial::write_str("boot: guest-UEFI lazy report-RAM gpa=0x");
+                    write_hex(gpa);
+                    serial::write_str(" hpa=0x");
+                    write_hex(hpa);
+                    serial::write_byte(b'\n');
+                }
+                return hpa;
+            }
+        }
+    }
+    0
+}
+
 /// GPA → HPA for guest-UEFI low RAM, OVMF flash, and mapped report-RAM.
 pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
     if gpa < GUEST_UEFI_LOW_RAM_BYTES {
@@ -7563,22 +7619,9 @@ pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
         return Some(hpa + off);
     }
     if guest_uefi_report_ram_should_map(gpa) {
-        let base = report_ram_hpa_lookup(gpa);
+        let base = report_ram_hpa_lookup_or_map(gpa);
         if base != 0 {
             return Some(base + guest_uefi_report_ram_page_off(gpa));
-        }
-        // Lazy 2MiB WB map (same as an EPT miss). Virtqueue / stack / MOVS
-        // in the reported LowMemory lie must not invent a non-pool HPA.
-        #[cfg(target_os = "uefi")]
-        {
-            // SAFETY: exclusive report-RAM pool; guest is VM-exited.
-            // KANI-TARGET: virtqueue GPA lazy report-RAM (outside Proven Core).
-            if unsafe { ept_map_2m_report_ram(gpa) } {
-                let base = report_ram_hpa_lookup(gpa);
-                if base != 0 {
-                    return Some(base + guest_uefi_report_ram_page_off(gpa));
-                }
-            }
         }
         return None;
     }

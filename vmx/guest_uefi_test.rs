@@ -4,7 +4,7 @@ use super::{
     guest_uefi_insn_linear,
     guest_uefi_mmio_peek_linear,
     guest_uefi_mmio_skip_len,
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
@@ -583,6 +583,16 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_string_ins_needs_report_ram_map(GUEST_UEFI_IRON_REPORT_RAM_GPA));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1000));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1F0_0000));
+    assert!(guest_uefi_tick_should_print(256, false));
+    assert!(guest_uefi_tick_should_print(16384, false));
+    assert!(!guest_uefi_tick_should_print(16640, false));
+    assert!(!guest_uefi_tick_should_print(17408, false));
+    assert!(guest_uefi_tick_should_print(17408, true));
+    assert!(guest_uefi_tick_should_print(20480, false));
+    assert!(guest_uefi_post_cd_non_io(true, false, false));
+    assert!(!guest_uefi_post_cd_non_io(true, false, true));
+    assert!(!guest_uefi_post_cd_non_io(false, false, false));
+    assert!(!guest_uefi_post_cd_non_io(true, true, false));
     assert_eq!(
         guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
         0x7BC0_0000

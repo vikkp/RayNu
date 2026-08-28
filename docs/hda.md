@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN seventy-third slice: alpine-virt grub.cfg NUL-prefix timeout patch + flashcruzer detached HEAD infers origin branch. 64MiB leave still in this EFI. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN seventy-sixth slice: lazy-map report-RAM on all HV GPA accessors + denser ticks after El Torito bootimg. Iron COM2 faeaf38 gzip+Loaded initrd (not ISO-INSTALL-OK). M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (NUL-prefix ISO patch + flashcruzer). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (lookup-or-map report-RAM + post-CD ticks). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-sixth slice: lazy-map report-RAM on string/PUSH/virtqueue + denser post-CD ticks after iron Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-fifth slice: lazy-map report-RAM on string INS (EFI stub gzip); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-fourth slice: ATAPI multi-DRQ so READ(10) >31 sectors is not short; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-third slice: alpine-virt grub.cfg NUL-prefix timeout + flashcruzer detached HEAD; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-second slice: ISO patches ASCII-only after iron EFI stub uncompression error; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-first slice: skip 256MiB disk when leftover starves OVMF report-RAM; 64MiB GPT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
