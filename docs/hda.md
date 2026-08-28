@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN eighty-seventh slice: skip-decode INVLPG `0F 01 /7` after Linux #PF; empty fetch does not guess. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN eighty-ninth slice: force high-half CPUID skip if GUEST_RIP stuck after leftover+#PF `err=0x0`; heartbeat leaf logs. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (INVLPG skip-decode). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (Linux CPUID force-skip if RIP stuck). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-ninth slice: force high-half CPUID skip if GUEST_RIP stuck after leftover+#PF err=0x0; heartbeat leaf logs; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-seventh slice: INVLPG 0F 01 /7 skip-decode after Linux #PF; empty fetch does not guess; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-sixth slice: hide CLFLUSHOPT/CLWB in guest CPUID after nested G0 clwb #UD; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-fifth slice: high-half HLT skip-1 after CPUID/RDTSC; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -1230,6 +1230,8 @@ pub fn guest_uefi_pf_error_is_reserved(err: u64) -> bool {
 /// fixup does not apply. Not `ISO-INSTALL-OK`.
 pub const GUEST_UEFI_IRON_LINUX_PF_CR2: u64 = 0xffff_8880_7e2a_3000;
 pub const GUEST_UEFI_IRON_LINUX_PF_RIP: u64 = 0xffff_ffff_bee1_9755;
+/// Iron COM2 after `#PF linux deliver` `err=0x0`: `native_cpuid` helper.
+pub const GUEST_UEFI_IRON_LINUX_CPUID_RIP: u64 = 0xffff_ffff_8408_1783;
 /// Linux 4-level `PAGE_OFFSET` direct map. Not a sign-extended 32-bit hole.
 pub const GUEST_UEFI_LINUX_DIRECT_MAP: u64 = 0xffff_8880_0000_0000;
 pub const GUEST_UEFI_LINUX_DIRECT_MAP_MASK: u64 = 0xffff_fff0_0000_0000;
@@ -1890,6 +1892,26 @@ pub fn guest_uefi_linux_cpuid_msr_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) ->
     } else {
         0
     }
+}
+
+/// Iron COM2 after leftover DRAM + `#PF linux deliver` `err=0x0`: ticks
+/// `n=437248`/`437504` `reason=0xa` `rip=0xffffffff84081783`
+/// `insn=0fa24189…` (Linux `native_cpuid`). Same helper RIP is expected
+/// while skip advances; if GUEST_RIP is still the exit RIP after
+/// [`guest_uefi_linux_cpuid_msr_skip`], force +2. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_force_skip(rip_before: u64, rip_after: u64) -> u64 {
+    if guest_uefi_pf_should_deliver_to_guest(rip_before) && rip_after == rip_before {
+        2
+    } else {
+        0
+    }
+}
+
+/// Log the first 8 Linux CPUIDs, then powers of two and every 256 so a
+/// short COM2 paste shows whether leaves are changing. `n` is 1-based.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_should_log(n: u32) -> bool {
+    n > 0 && (n <= 8 || n.is_power_of_two() || n % 256 == 0)
 }
 
 /// Fallback skip after HLT. One byte (`F4`). High-half + `insn_len` 0
@@ -3899,6 +3921,10 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 false
             } else if basic == EXIT_REASON_PREEMPTION_TIMER {
                 skip_preempt_deadloop(linear, rip)
+            } else if guest_uefi_pf_should_deliver_to_guest(rip) {
+                // Identity peek of high-half is empty or leftover DRAM.
+                // Do not let firmware `eb f3` skip rewrite Linux RIP.
+                false
             } else {
                 skip_spin_short_jmp(linear, rip)
             };
@@ -6416,23 +6442,36 @@ unsafe fn skip_insn() -> bool {
 /// CPUID / RDMSR / WRMSR / RDTSC / INVD / WBINVD / PAUSE.
 #[cfg(target_os = "uefi")]
 unsafe fn skip_cpuid_msr() -> bool {
-    if skip_insn() {
-        return true;
-    }
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let extra = guest_uefi_linux_cpuid_msr_skip(rip, 0, &[]);
-    if extra == 0 {
-        return false;
+    let mut skipped = skip_insn();
+    if !skipped {
+        let extra = guest_uefi_linux_cpuid_msr_skip(rip, 0, &[]);
+        if extra != 0 {
+            let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+            if k < 8 {
+                serial::write_str("boot: guest-UEFI linux skip-2 n=");
+                write_dec(u64::from(k) + 1);
+                serial::write_str(" rip=0x");
+                write_hex(rip);
+                serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+            }
+            skipped = ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok();
+        }
     }
-    let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
-    if k < 8 {
-        serial::write_str("boot: guest-UEFI linux skip-2 n=");
-        write_dec(u64::from(k) + 1);
-        serial::write_str(" rip=0x");
-        write_hex(rip);
-        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    let after = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let force = guest_uefi_linux_cpuid_force_skip(rip, after);
+    if force != 0 {
+        let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+        if k < 8 {
+            serial::write_str("boot: guest-UEFI linux skip-2 force n=");
+            write_dec(u64::from(k) + 1);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+        return ops::vmwrite(GUEST_RIP, rip.wrapping_add(force)).is_ok();
     }
-    ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok()
+    skipped
 }
 
 /// HLT: skip VMCS len, else `F4`, else high-half +1.
@@ -8210,13 +8249,16 @@ unsafe fn handle_cpuid() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     if guest_uefi_pf_should_deliver_to_guest(rip) {
         let k = LINUX_CPUID.fetch_add(1, Ordering::AcqRel);
-        if k < 8 {
+        let n = k.saturating_add(1);
+        if guest_uefi_linux_cpuid_should_log(n) {
             serial::write_str("boot: guest-UEFI linux cpuid n=");
-            write_dec(u64::from(k) + 1);
+            write_dec(u64::from(n));
             serial::write_str(" leaf=0x");
             write_hex(u64::from(leaf));
             serial::write_str(" sub=0x");
             write_hex(u64::from(sub));
+            serial::write_str(" rip=0x");
+            write_hex(rip);
             serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
         }
     }
