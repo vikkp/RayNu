@@ -380,6 +380,13 @@ fn decode_mmio_mov_encodings() {
         super::mmio_shift_apply(0, 1, super::MMIO_ALU_RCL, 1, true) & 0xff,
         1
     );
+    let cmovz = decode_mmio_insn(&[0x0F, 0x44, 0x01], 3).unwrap();
+    assert!(cmovz.cc == 5 && !cmovz.is_write && cmovz.reg == 0 && cmovz.size == 4);
+    let setnz = decode_mmio_insn(&[0x0F, 0x95, 0x01], 3).unwrap();
+    assert!(setnz.cc == 6 && setnz.is_write && setnz.size == 1);
+    assert!(super::mmio_cc_taken(5, 1 << 6));
+    assert!(!super::mmio_cc_taken(6, 1 << 6));
+    assert!(super::mmio_cc_taken(6, 2));
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

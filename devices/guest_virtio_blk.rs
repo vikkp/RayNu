@@ -1266,6 +1266,8 @@ pub struct MmioInsn {
     pub bt: u8,
     /// 0=none, 1=CMPXCHG, 2=XADD.
     pub atomic: u8,
+    /// 0=none; `0x40..=0x4F` CMOVcc r, r/m; `0x90..=0x9F` SETcc r/m8.
+    pub cc: u8,
 }
 
 pub const MMIO_CMPXCHG: u8 = 1;
@@ -1321,6 +1323,37 @@ pub fn mmio_alu_apply_cf(cur: u64, rhs: u64, alu: u8, cf: bool) -> u64 {
 pub fn mmio_eq(a: u64, b: u64, size: u8) -> bool {
     let m = mmio_size_mask(size);
     (a & m) == (b & m)
+}
+
+/// CMOVcc / SETcc: `cc` is 1..=16 for opcodes `0x40..=0x4F` / `0x90..=0x9F`.
+pub fn mmio_cc_taken(cc: u8, flags: u64) -> bool {
+    if cc == 0 || cc > 16 {
+        return false;
+    }
+    let n = cc - 1;
+    let cf = (flags & 1) != 0;
+    let pf = (flags & (1 << 2)) != 0;
+    let zf = (flags & (1 << 6)) != 0;
+    let sf = (flags & (1 << 7)) != 0;
+    let of = (flags & (1 << 11)) != 0;
+    match n {
+        0 => of,
+        1 => !of,
+        2 => cf,
+        3 => !cf,
+        4 => zf,
+        5 => !zf,
+        6 => cf || zf,
+        7 => !cf && !zf,
+        8 => sf,
+        9 => !sf,
+        10 => pf,
+        11 => !pf,
+        12 => sf != of,
+        13 => sf == of,
+        14 => zf || sf != of,
+        _ => !zf && sf == of,
+    }
 }
 
 fn mmio_size_mask(size: u8) -> u64 {
@@ -1713,6 +1746,7 @@ fn mmio_mov(
         alu_reg_left: false,
         bt: 0,
         atomic: 0,
+        cc: 0,
     }
 }
 
@@ -1759,6 +1793,42 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
         }
         let op2 = bytes[i];
         i += 1;
+        if (0x40..=0x4F).contains(&op2) || (0x90..=0x9F).contains(&op2) {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let setcc = op2 >= 0x90;
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if setcc {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            return Some(MmioInsn {
+                is_write: setcc,
+                size,
+                reg,
+                has_imm: false,
+                imm: 0,
+                zero_ext: !setcc && size == 4,
+                sign_ext: false,
+                xchg: false,
+                alu: 0,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+                cc: (op2 & 0xf) + 1,
+            });
+        }
         if op2 == 0xB6 || op2 == 0xB7 || op2 == 0xBE || op2 == 0xBF {
             if i >= insn_len {
                 return None;
@@ -1784,6 +1854,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             });
         }
         if op2 == 0xB0 || op2 == 0xB1 || op2 == 0xC0 || op2 == 0xC1 {
@@ -1822,6 +1893,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 } else {
                     MMIO_CMPXCHG
                 },
+                cc: 0,
             });
         }
         let size = if rex_w {
@@ -1873,6 +1945,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt,
                 atomic: 0,
+                cc: 0,
             });
         }
         if i >= insn_len {
@@ -1897,6 +1970,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             alu_reg_left: false,
             bt,
             atomic: 0,
+            cc: 0,
         });
     }
     if i >= insn_len && op != 0xC6 && op != 0xC7 {
@@ -1957,6 +2031,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0x84 | 0x85 => {
@@ -1991,6 +2066,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0x38 | 0x39 => {
@@ -2025,6 +2101,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0x3A | 0x3B => {
@@ -2059,6 +2136,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0xA0 | 0xA1 | 0xA2 | 0xA3 => {
@@ -2146,6 +2224,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: dest_reg,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0x80 | 0x81 | 0x83 => {
@@ -2212,6 +2291,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0xF6 | 0xF7 => {
@@ -2256,6 +2336,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                         alu_reg_left: false,
                         bt: 0,
                         atomic: 0,
+                        cc: 0,
                     })
                 }
                 2 | 3 => Some(MmioInsn {
@@ -2275,6 +2356,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                     alu_reg_left: false,
                     bt: 0,
                     atomic: 0,
+                    cc: 0,
                 }),
                 _ => None,
             }
@@ -2316,6 +2398,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         0xC0 | 0xC1 | 0xD0 | 0xD1 | 0xD2 | 0xD3 => {
@@ -2369,6 +2452,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 alu_reg_left: false,
                 bt: 0,
                 atomic: 0,
+                cc: 0,
             })
         }
         _ => None,

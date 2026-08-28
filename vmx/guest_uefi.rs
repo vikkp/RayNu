@@ -4751,6 +4751,21 @@ unsafe fn mmio_apply_atomic(
     }
 }
 
+/// CMOVcc: GPR = mem if taken. SETcc: Some(0/1) to store.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_cc(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> Option<u64> {
+    let flags = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let taken = crate::devices::guest_virtio_blk::mmio_cc_taken(op.cc, flags);
+    if op.is_write {
+        Some(if taken { 1 } else { 0 })
+    } else {
+        if taken {
+            mmio_gpr_out(op, cur);
+        }
+        None
+    }
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn skip_rel8_if(linear: u64, rip: u64, pred: fn(u8, u8) -> bool) -> bool {
     let mut buf = [0u8; 2];
@@ -5743,6 +5758,29 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if op.cc != 0 {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if let Some(val) = mmio_apply_cc(op, cur) {
+            crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        }
+        return skip_insn();
+    }
     if op.test || op.cmp {
         let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         if mmio_apply_test_cmp(op, cur) {
@@ -5845,6 +5883,13 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if op.cc != 0 {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if let Some(val) = mmio_apply_cc(op, cur) {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
     if op.test || op.cmp {
         let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
         if mmio_apply_test_cmp(op, cur) {
@@ -5929,6 +5974,17 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
                 .unwrap_or(0),
         );
         if let Some(val) = mmio_apply_atomic(op, cur) {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.cc != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if let Some(val) = mmio_apply_cc(op, cur) {
             let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
         }
         return skip_insn();

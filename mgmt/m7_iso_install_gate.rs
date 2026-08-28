@@ -103,6 +103,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_SHL")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_shift_apply(")
         && include_str!("../vmx/guest_uefi.rs").contains("mmio_alu_is_shift(")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_cc_taken(")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_apply_cc(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_alu_apply_cf(")
         && include_str!("../vmx/guest_uefi.rs").contains("mmio_alu_apply_cf(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_alu_rflags(")

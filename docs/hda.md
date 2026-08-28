@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN thirty-fourth slice: MMIO group-2 shifts. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN thirty-fifth slice: MMIO CMOV/SETCC. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (MMIO group-2 shifts). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (MMIO CMOV/SETCC). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -363,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer `BOOTLOADER=grub` `USE_EFI=1` `[y/N]` still hears `bootloader?` + `squashfs,virtio_blk console=ttyS0` + xAPIC 4K trap/`lapic_virt` + IOAPIC→LAPIC IRR/ISR + guest-UEFI CR8 TPR exiting + `alpine_dev=vdb` + PIT IRQ 0 + i8253 16-bit + GRUB `set timeout=1` / efi_gop / all_video / `terminal_output console` serial + MMIO XCHG/MOVSX/moffs + group-1 AND/OR/XOR/ADD/ADC/SBB/SUB + group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR + register-form ALU (mem and dest-reg) + TEST/CMP/ALU RFLAGS + INC/DEC/NOT/NEG + BT/BTS/BTR/BTC + CMPXCHG/XADD + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + MMIO fetch across pages + hold when armed; lab stub still E4); extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer `BOOTLOADER=grub` `USE_EFI=1` `[y/N]` still hears `bootloader?` + `squashfs,virtio_blk console=ttyS0` + xAPIC 4K trap/`lapic_virt` + IOAPIC→LAPIC IRR/ISR + guest-UEFI CR8 TPR exiting + `alpine_dev=vdb` + PIT IRQ 0 + i8253 16-bit + GRUB `set timeout=1` / efi_gop / all_video / `terminal_output console` serial + MMIO XCHG/MOVSX/moffs + group-1 AND/OR/XOR/ADD/ADC/SBB/SUB + group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR + CMOV/SETCC + register-form ALU (mem and dest-reg) + TEST/CMP/ALU RFLAGS + INC/DEC/NOT/NEG + BT/BTS/BTR/BTC + CMPXCHG/XADD + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + MMIO fetch across pages + hold when armed; lab stub still E4); extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-fifth slice: MMIO CMOVcc/SETcc (0F 40-4F / 0F 90-9F); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-fourth slice: MMIO group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR (C0/C1/D0/D1/D2/D3); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-third slice: MMIO ADC/SBB (10/11/12/13, 18/19/1A/1B, group-1 /2 /3) with RFLAGS.CF; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-second slice: guest-UEFI CR8-load/store exiting syncs Linux TPR to lapic_virt (E4 VMCS does not request CR8); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
