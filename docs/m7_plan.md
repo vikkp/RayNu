@@ -273,13 +273,17 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (Stage 46 `ISO-INSTALL-OK` — Everest E5):**
+**First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+First slice (this EFI): product ISO window so ATAPI READ does not truncate
+a distro image into the 72 KiB lab RN-ELT stub; guest-UEFI stops after
+El Torito **only** for that lab stub (`iso=0` / 73728-byte CD still
+fail-soft to E4 `LINUX-EARLY`). Product CD (`len > 72 KiB`) continues
+past RN-ELT (1 048 576-exit cap on iron). Not `ISO-INSTALL-OK`. Keep
+`windows_iso` / `generic_uefi`. `ISO-BOOTED-FROM-DISK` is persist-detect.
 M4.3 host-slab closed on iron COM2 after `22e28d0`: `M4.3 blk probe host
 slab HPA=0x10c00000`; `guest_code=0x10c00000`; `RAYNU-V-M4-BLK-OK`; then
 `M4-NET-OK` / `M4-SMP-OK` / `R640-BOOT-OK` / Phase F coexist on
-`10.99.99.126:8443`. `ISO-BOOTED-FROM-DISK` on that paste is persist-detect
-(M7.7 LBA stamp), not a distro installer. Stage 45, P0-60, and G0 relocate
-stay CLOSED. Next is Stage 46: Linux ISO install to virtio-blk.
+`10.99.99.126:8443`. Stage 45, P0-60, and G0 relocate stay CLOSED.
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 (closed) → P0-60
 (closed) → G0 VMCS relocate (closed) → M4.3 blk host-slab (closed) → Stage 46 `ISO-INSTALL-OK`.
 Do not number G1 as Stage 46.
@@ -325,7 +329,8 @@ Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (**closed** iron COM2 `0be7283`:
 scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
 **Next after Stage 45 + P0-60 + G0 relocate + M4.3:** Stage 46
-`ISO-INSTALL-OK` (not `sectors>0` alone; G1 is not Stage 46).
+`ISO-INSTALL-OK` (OPEN; first slice is product CD window + continue past
+lab El Torito stop; not `sectors>0` alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

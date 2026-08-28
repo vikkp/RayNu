@@ -103,6 +103,9 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// 262144 keeps the private VMCS until `RN-ELT` or the hard cap. Stage 45
 /// does not apply the 32768 post-ATAPI tail after PACKET.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
+/// Product ISO (Stage 46): stay in guest-UEFI past the lab RN-ELT stop.
+/// Nested KVM still uses [`GUEST_UEFI_NESTED_RESUME_CAP`]. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_PRODUCT_ISO_RESUME_CAP: u32 = 1_048_576;
 /// Nested KVM only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
 /// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
 /// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
@@ -112,10 +115,14 @@ pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
 /// [`GUEST_UEFI_RESUME_CAP`].
 pub const GUEST_UEFI_NESTED_RESUME_CAP: u32 = 65536;
 
-/// Resume cap: iron 262144 (Stage 45 El Torito); nested KVM 65536 (CI SHELL).
+/// Resume cap: iron 262144 (Stage 45 El Torito lab stub); nested KVM 65536
+/// (CI SHELL); product ISO window on iron uses
+/// [`GUEST_UEFI_PRODUCT_ISO_RESUME_CAP`].
 pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
     if host_hypervisor {
         GUEST_UEFI_NESTED_RESUME_CAP
+    } else if crate::devices::ide_cdrom::product_iso_window_armed() {
+        GUEST_UEFI_PRODUCT_ISO_RESUME_CAP
     } else {
         GUEST_UEFI_RESUME_CAP
     }
@@ -1372,12 +1379,21 @@ pub fn eltorito_payload_ran(matched: u8) -> bool {
     (matched as usize) >= crate::devices::ide_cdrom::ELTORITO_PAYLOAD_MAGIC.len()
 }
 
+/// True when El Torito evidence should stop the private guest-UEFI VMCS.
+///
+/// Stage 45 lab stub (72 KiB RN-ELT) stops so E4 `LINUX-EARLY` still runs.
+/// Stage 46 product ISO (`len > GUEST_CD_ISO_CAP`) continues. Not installer.
+pub fn eltorito_stops_guest_uefi(eltorito: bool) -> bool {
+    eltorito && crate::devices::ide_cdrom::is_lab_eltorito_media()
+}
+
 /// Stage 45 live stop: El Torito boot, or post-ATAPI tail, or post-DXE tail if no PACKET.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed
 /// - first ATAPI sector does **not** stop (Stage 44 did)
-/// - `true` when [`eltorito_boot_evidence`] holds
+/// - `true` when [`eltorito_boot_evidence`] holds **and** the CD is the lab stub
+/// - product ISO does not stop on El Torito evidence (Stage 46)
 /// - after PACKET, does **not** apply the 32768 post-ATAPI tail (first
 ///   sector is often LBA 0 dummy; BDS catalog/FatDxe/StartImage still
 ///   needs the 131072-exit cap, then 262144 after iron `df7d158` hit
@@ -1398,7 +1414,7 @@ pub fn post_atapi_should_stop(
     if !dxe_printed {
         return false;
     }
-    if eltorito {
+    if eltorito_stops_guest_uefi(eltorito) {
         return true;
     }
     if atapi_read_evidence(sectors) {
@@ -2603,6 +2619,11 @@ unsafe fn launch_uefi(
         serial::write_str(" bytes=");
         write_dec(crate::devices::ide_cdrom::retained_len() as u64);
         serial::write_byte(b'\n');
+        if crate::devices::ide_cdrom::product_iso_window_armed() {
+            serial::write_line(
+                "boot: guest-UEFI product ISO window (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
     }
     if crate::devices::guest_virtio_blk::present() {
         serial::write_line("boot: guest-UEFI virtio-blk empty CD→disk order");

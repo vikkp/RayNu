@@ -39,6 +39,22 @@ pub const ISO_INSTALL_MVP_NOTE: &str =
 pub const ISO_INSTALL_HOST_LIMIT_NOTE: &str =
     "Latitude/QEMU host smoke cannot close RAYNU-V-M7-ISO-INSTALL-OK; real install proof required";
 
+/// Stage 46 first slice: El Torito on a product CD continues; not install-OK.
+///
+/// INVARIANTS:
+/// - `true` only when El Torito evidence ran **and** the CD is not the lab stub
+/// - Never implies [`M7_ISO_INSTALL_OK_MARKER`]
+pub fn product_iso_continues_past_eltorito(lab_stub: bool, eltorito_ran: bool) -> bool {
+    eltorito_ran && !lab_stub
+}
+
+/// Host/CI must never print the iron Everest E5 marker.
+pub fn stage46_host_never_prints_iso_install_ok() -> bool {
+    M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M7_ISO_INSTALL_SCAFFOLD_MARKER != M7_ISO_INSTALL_OK_MARKER
+        && M7_ISO_BOOTED_FROM_DISK_MARKER != M7_ISO_INSTALL_OK_MARKER
+}
+
 /// Phases toward E5 close (management-plane bookkeeping).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallPhase {

@@ -349,10 +349,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | p0-60-g1-ept |
-| Summary | M4.3 host-slab CLOSED iron COM2 after 22e28d0: M4-BLK-OK guest_code=0x10c00000; M4-NET-OK; M4-SMP-OK; R640-BOOT-OK; Phase F coexist. Stage 45+P0-60+G0 relocate held. ISO-BOOTED-FROM-DISK is persist-detect, not installer. Next Stage 46. Iron P0-14 stays 2b795a0. |
+| Commit | e5-stage46-iso |
+| Summary | Stage 46 OPEN first slice: product ISO window (ATAPI does not truncate past 72KiB) + guest-UEFI continues past El Torito when armed. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | M4.3 CLOSED. Next Stage 46 `ISO-INSTALL-OK`. Not Everest E5. |
+| Gates touched | Stage 46 OPEN (first slice). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -363,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); next Stage 46 `ISO-INSTALL-OK`; extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (product CD window + continue past lab El Torito); extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN first slice: product ISO window + continue past lab El Torito; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | M4.3 host-slab CLOSED iron after 22e28d0 M4-BLK-OK 0x10c00000 NET-OK SMP-OK BOOT-OK; ISO-BOOTED-FROM-DISK is persist-detect not installer; Stage 46 next; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | G0 VMCS relocate CLOSED iron after b7259c1/10e7984 M4-NVM-OK SLICE-G0 HPA=0x10a00000; M4.3 blk triple-fault 0x02 at 0xfc0f000 residual; Stage 45+P0-60 held; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | p0-60-g1-ept | 0.5 | 95 | P0-60 CLOSED iron after 5147222 M4-SHELL-G1 M4-2VM-OK no GPA=0x10403000; G0 VMCS sched error 11 residual; Stage 45 held; not installer; iron P0-14 stays 2b795a0 |

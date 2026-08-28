@@ -22,7 +22,9 @@
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
-//! on QEMU if the operator has not called [`present`] yet).
+//! on QEMU if the operator has not called [`present`] yet). Bytes larger than
+//! [`GUEST_CD_ISO_CAP`] stay in a product ISO window (pointer + length) so
+//! ATAPI READ does not truncate a distro image into the 72 KiB lab stub.
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
@@ -59,7 +61,7 @@ pub const ELTORITO_PAYLOAD_MAGIC: &[u8] = b"RN-ELT";
 /// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
 pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 
-/// Cap matches [`MOCK_EFI_ISO_BYTES`].
+/// Cap of the in-BSS lab stub. Product ISO bytes use [`retain`]'s window.
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
@@ -113,6 +115,9 @@ enum AtaXfer {
 struct CdMedia {
     iso: [u8; GUEST_CD_ISO_CAP],
     len: usize,
+    /// Product ISO bytes when `len > GUEST_CD_ISO_CAP`. Null for the lab stub.
+    ext_ptr: *const u8,
+    ext_len: usize,
     iso_id: u64,
     visible: bool,
     pci_enum: bool,
@@ -150,6 +155,8 @@ impl CdMedia {
         Self {
             iso: [0u8; GUEST_CD_ISO_CAP],
             len: 0,
+            ext_ptr: core::ptr::null(),
+            ext_len: 0,
             iso_id: 0,
             visible: false,
             pci_enum: false,
@@ -210,7 +217,7 @@ static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
-static ISO_LEN: AtomicU32 = AtomicU32::new(0);
+static ISO_LEN: AtomicU64 = AtomicU64::new(0);
 static MARKER: AtomicBool = AtomicBool::new(false);
 static PACKET_N: AtomicU32 = AtomicU32::new(0);
 static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
@@ -372,6 +379,26 @@ pub fn retained_len() -> usize {
     ISO_LEN.load(Ordering::Acquire) as usize
 }
 
+/// True when ATAPI media is larger than the 72 KiB lab El Torito stub.
+///
+/// INVARIANTS:
+/// - `false` for idle CD and for [`present_placeholder`]
+/// - `true` only after [`retain`] / [`present`] of `len > GUEST_CD_ISO_CAP`
+/// - Does not imply a distro installer or `ISO-INSTALL-OK`
+pub fn product_iso_window_armed() -> bool {
+    retained_len() > GUEST_CD_ISO_CAP
+}
+
+/// Lab 72 KiB RN-ELT CD (Stage 45). Product ISO continues past El Torito.
+pub fn is_lab_eltorito_media() -> bool {
+    !product_iso_window_armed()
+}
+
+/// Pure size check used by host tests and the Stage 46 stop policy.
+pub fn is_lab_eltorito_stub_len(cd_len: usize) -> bool {
+    cd_len == MOCK_EFI_ISO_BYTES || cd_len == 0
+}
+
 pub fn is_retained_for(iso_id: u64) -> bool {
     iso_id != 0 && retained_iso_id() == iso_id && retained_len() >= ISO_SECTOR
 }
@@ -425,21 +452,35 @@ pub fn ata_io_accesses() -> u32 {
 }
 
 /// Retain ISO bytes without making the PCI device live.
+///
+/// INVARIANTS:
+/// - `iso.len() <= GUEST_CD_ISO_CAP`: copy into the BSS stub (lab)
+/// - `iso.len() > GUEST_CD_ISO_CAP`: prefix copy + product window on `iso`
+///   (caller keeps the slice alive for the guest-UEFI CD life)
+/// - Advertised ATAPI size is `iso.len()`, not truncated to 72 KiB
 pub fn retain(iso: &[u8], iso_id: u64) -> bool {
     if iso_id == 0 || iso.len() < ISO_SECTOR {
         return false;
     }
-    let n = core::cmp::min(iso.len(), GUEST_CD_ISO_CAP);
+    let n = iso.len();
     with_cd(|m| {
-        m.iso[..n].copy_from_slice(&iso[..n]);
-        if n < GUEST_CD_ISO_CAP {
-            m.iso[n..].fill(0);
+        let copy_n = core::cmp::min(n, GUEST_CD_ISO_CAP);
+        m.iso[..copy_n].copy_from_slice(&iso[..copy_n]);
+        if copy_n < GUEST_CD_ISO_CAP {
+            m.iso[copy_n..].fill(0);
+        }
+        if n > GUEST_CD_ISO_CAP {
+            m.ext_ptr = iso.as_ptr();
+            m.ext_len = n;
+        } else {
+            m.ext_ptr = core::ptr::null();
+            m.ext_len = 0;
         }
         m.len = n;
         m.iso_id = iso_id;
     });
     ISO_ID.store(iso_id, Ordering::Release);
-    ISO_LEN.store(n as u32, Ordering::Release);
+    ISO_LEN.store(n as u64, Ordering::Release);
     true
 }
 
@@ -484,6 +525,8 @@ pub fn present_placeholder() -> bool {
     let ok = with_cd(|m| {
         m.iso.fill(0);
         write_placeholder_iso(&mut m.iso);
+        m.ext_ptr = core::ptr::null();
+        m.ext_len = 0;
         m.len = MOCK_EFI_ISO_BYTES;
         m.iso_id = 1;
         true
@@ -492,7 +535,7 @@ pub fn present_placeholder() -> bool {
         return false;
     }
     ISO_ID.store(1, Ordering::Release);
-    ISO_LEN.store(MOCK_EFI_ISO_BYTES as u32, Ordering::Release);
+    ISO_LEN.store(MOCK_EFI_ISO_BYTES as u64, Ordering::Release);
     make_visible()
 }
 
@@ -1456,7 +1499,13 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
         packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
         return false;
     }
-    m.data[..bytes].copy_from_slice(&m.iso[start..end]);
+    let ext_ptr = m.ext_ptr;
+    let ext_len = m.ext_len;
+    if ext_len > GUEST_CD_ISO_CAP && !ext_ptr.is_null() {
+        copy_product_iso_range(ext_ptr, start, bytes, &mut m.data[..bytes]);
+    } else {
+        m.data[..bytes].copy_from_slice(&m.iso[start..start + bytes]);
+    }
     m.sectors_read = m.sectors_read.saturating_add(nsec as u32);
     SECTORS.store(m.sectors_read, Ordering::Release);
     m.last_read_lba = lba;
@@ -1472,6 +1521,21 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
     }
     begin_packet_data(m, bytes);
     true
+}
+
+/// Copy `bytes` from the product ISO window into `dst`.
+fn copy_product_iso_range(ext_ptr: *const u8, start: usize, bytes: usize, dst: &mut [u8]) {
+    if bytes == 0 {
+        return;
+    }
+    // SAFETY: product ISO window is the retained operator/host slice;
+    // host tests keep that Vec until [`reset`]. Guest-UEFI CD life is
+    // single-threaded after EBS.
+    // KANI-TARGET: ATAPI READ from product ISO window (outside Proven Core).
+    unsafe {
+        let src = core::slice::from_raw_parts(ext_ptr.add(start), bytes);
+        dst[..bytes].copy_from_slice(src);
+    }
 }
 
 fn alloc_len(cdb: &[u8; 12], off: usize, wide: bool) -> usize {

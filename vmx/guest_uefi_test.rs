@@ -28,7 +28,7 @@ use super::{
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
-    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4, eltorito_stops_guest_uefi,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_ELTORITO_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
@@ -99,6 +99,7 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 262144);
     assert_eq!(GUEST_UEFI_NESTED_RESUME_CAP, 65536);
+    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 1_048_576);
     assert_eq!(guest_uefi_resume_cap(false), 262144);
     assert_eq!(guest_uefi_resume_cap(true), 65536);
     assert!(GUEST_UEFI_NESTED_RESUME_CAP > 30769);
@@ -1203,6 +1204,29 @@ fn past_sec_predicates_are_honest() {
     assert!(post_atapi_should_stop(
         true, 200, 115, 180, 4, true, true, true
     ));
+    assert!(eltorito_stops_guest_uefi(true));
+    assert!(!eltorito_stops_guest_uefi(false));
+    {
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        assert!(
+            !eltorito_stops_guest_uefi(true),
+            "product ISO must not stop on RN-ELT"
+        );
+        assert!(
+            !post_atapi_should_stop(true, 200, 115, 180, 4, true, true, true),
+            "Stage 46 product CD continues past El Torito"
+        );
+        assert_eq!(guest_uefi_resume_cap(false), GUEST_UEFI_PRODUCT_ISO_RESUME_CAP);
+        assert_eq!(guest_uefi_resume_cap(true), GUEST_UEFI_NESTED_RESUME_CAP);
+        crate::devices::ide_cdrom::reset();
+    }
+    assert!(eltorito_stops_guest_uefi(true));
     assert!(hlt_should_resume());
 }
 

@@ -25,6 +25,21 @@ fn markers_stable() {
     );
     assert!(ISO_INSTALL_GAP_NOTE.contains("CLOSED M7.7"));
     assert!(ISO_INSTALL_HOST_LIMIT_NOTE.contains("cannot close"));
+    assert!(stage46_host_never_prints_iso_install_ok());
+    assert!(!product_iso_continues_past_eltorito(true, true));
+    assert!(product_iso_continues_past_eltorito(false, true));
+    assert!(!product_iso_continues_past_eltorito(false, false));
+    let win = crate::mgmt::guest_image::GuestBootSpec::product_iso(
+        crate::mgmt::guest_image::GuestImageType::WindowsIso,
+        1,
+        64,
+    );
+    let gen = crate::mgmt::guest_image::GuestBootSpec::product_iso(
+        crate::mgmt::guest_image::GuestImageType::GenericUefi,
+        2,
+        64,
+    );
+    assert!(win.is_some() && gen.is_some());
 }
 
 #[test]

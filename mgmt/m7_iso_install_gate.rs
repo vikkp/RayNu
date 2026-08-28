@@ -36,6 +36,8 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn mark_reboot_pending(")
         && s.contains("fn mark_booted_from_disk(")
         && s.contains("fn dispatch_iso_install_rest(")
+        && s.contains("fn product_iso_continues_past_eltorito(")
+        && s.contains("fn stage46_host_never_prints_iso_install_ok(")
         && s.contains(M7_ISO_INSTALL_OK_MARKER)
         && s.contains(M7_ISO_INSTALL_SCAFFOLD_MARKER)
         && s.contains(ISO_INSTALL_GAP_NOTE)
@@ -55,6 +57,9 @@ pub fn iso_install_honesty_holds() -> bool {
         && ISO_INSTALL_MVP_NOTE.contains("reboot-to-disk")
         && M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
         && M7_ISO_INSTALL_SCAFFOLD_MARKER == "RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK"
+        && crate::mgmt::iso_install::stage46_host_never_prints_iso_install_ok()
+        && crate::mgmt::iso_install::product_iso_continues_past_eltorito(false, true)
+        && !crate::mgmt::iso_install::product_iso_continues_past_eltorito(true, true)
         && install_launch_surfaces_present()
 }
 

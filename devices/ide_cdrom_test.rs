@@ -3,11 +3,13 @@
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
-    present, present_placeholder, reset, sectors_read, take_marker, write_eltorito_efi_pe,
+    present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
+    is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
     edk2_iso9660_bootx64_ok, edk2_pe_loadimage_ok, write_placeholder_iso,
-    ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_PCI_DEVICE,
-    GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER,
+    ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_ISO_CAP,
+    GUEST_CD_PCI_DEVICE,
+    GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
 };
 
 #[test]
@@ -283,4 +285,34 @@ fn placeholder_eltorito_pe_and_catalog_load_reads() {
     let iso_pe = host_read10(33).expect("ISO9660 BOOTX64.EFI");
     assert_eq!(&iso_pe[0..2], b"MZ");
     reset();
+}
+
+#[test]
+fn product_iso_window_does_not_truncate_and_is_not_lab_stub() {
+    reset();
+    assert!(is_lab_eltorito_stub_len(0));
+    assert!(is_lab_eltorito_stub_len(MOCK_EFI_ISO_BYTES));
+    assert!(!is_lab_eltorito_stub_len(MOCK_EFI_ISO_BYTES + ISO_SECTOR));
+    assert!(present_placeholder());
+    assert_eq!(retained_len(), MOCK_EFI_ISO_BYTES);
+    assert_eq!(GUEST_CD_ISO_CAP, MOCK_EFI_ISO_BYTES);
+    assert!(!product_iso_window_armed());
+    assert!(is_lab_eltorito_media());
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    iso[MOCK_EFI_ISO_BYTES] = 0x5A;
+    iso[extra - 1] = 0xA5;
+    assert!(present(&iso, 9));
+    assert_eq!(retained_len(), extra);
+    assert!(product_iso_window_armed());
+    assert!(!is_lab_eltorito_media());
+    let last_lba = (MOCK_EFI_ISO_BYTES / ISO_SECTOR) as u32;
+    let last = host_read10(last_lba).expect("product window last sector");
+    assert_eq!(last[0], 0x5A);
+    assert_eq!(last[ISO_SECTOR - 1], 0xA5);
+    reset();
+    assert!(!product_iso_window_armed());
+    assert!(is_lab_eltorito_media());
 }
