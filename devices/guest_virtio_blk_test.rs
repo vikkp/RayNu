@@ -506,6 +506,36 @@ fn decode_mmio_mov_encodings() {
     assert!(super::mmio_alu_is_stos(super::MMIO_ALU_STOS));
     assert!(super::mmio_alu_is_lods(super::MMIO_ALU_LODS));
     assert!(!super::mmio_alu_is_string(super::MMIO_ALU_PUSH));
+    let movups = decode_mmio_insn(&[0x0F, 0x10, 0x01], 3).unwrap();
+    assert!(
+        movups.alu == super::MMIO_ALU_SSE
+            && !movups.is_write
+            && movups.size == 16
+            && movups.reg == 0
+    );
+    let movups_st = decode_mmio_insn(&[0x0F, 0x11, 0x01], 3).unwrap();
+    assert!(movups_st.is_write && movups_st.alu == super::MMIO_ALU_SSE && movups_st.size == 16);
+    let movdqu = decode_mmio_insn(&[0xF3, 0x0F, 0x6F, 0x01], 4).unwrap();
+    assert!(movdqu.alu == super::MMIO_ALU_SSE && !movdqu.is_write && movdqu.size == 16);
+    let movdqa_st = decode_mmio_insn(&[0x66, 0x0F, 0x7F, 0x01], 4).unwrap();
+    assert!(movdqa_st.is_write && movdqa_st.size == 16 && movdqa_st.alu == super::MMIO_ALU_SSE);
+    let movaps = decode_mmio_insn(&[0x0F, 0x28, 0x01], 3).unwrap();
+    assert!(movaps.alu == super::MMIO_ALU_SSE && movaps.size == 16 && !movaps.is_write);
+    let movss = decode_mmio_insn(&[0xF3, 0x0F, 0x10, 0x01], 4).unwrap();
+    assert!(movss.alu == super::MMIO_ALU_SSE && movss.size == 4 && !movss.is_write);
+    let movsd = decode_mmio_insn(&[0xF2, 0x0F, 0x10, 0x01], 4).unwrap();
+    assert!(movsd.alu == super::MMIO_ALU_SSE && movsd.size == 8);
+    let xmm8 = decode_mmio_insn(&[0x44, 0x0F, 0x10, 0x01], 4).unwrap();
+    assert!(xmm8.reg == 8 && xmm8.alu == super::MMIO_ALU_SSE);
+    assert!(decode_mmio_insn(&[0x0F, 0x6F, 0x01], 3).is_none());
+    assert_eq!(super::mmio_sse_from_mem(0x1111_2222_3333_4444, 4), 0x3333_4444);
+    assert_eq!(
+        super::mmio_sse_from_mem(0xaaaa_bbbb_cccc_dddd_1111_2222_3333_4444, 8),
+        0x1111_2222_3333_4444
+    );
+    assert!(super::mmio_alu_is_sse(super::MMIO_ALU_SSE));
+    assert!(!super::mmio_alu_is_sse(super::MMIO_ALU_MOVS));
+    assert!(!super::mmio_alu_is_string(super::MMIO_ALU_SSE));
     let shld_ok = decode_mmio_insn(&[0x0F, 0xA4, 0x01, 0x08], 4).unwrap();
     assert!(shld_ok.alu == super::MMIO_ALU_SHLD);
     assert!(decode_mmio_insn(&[0x0F, 0xB8, 0x01], 3).is_none());

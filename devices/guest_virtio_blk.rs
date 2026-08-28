@@ -1256,6 +1256,7 @@ pub struct MmioInsn {
     /// 32=MOVS, 33=STOS, 34=LODS (`has_imm` is F3 REP), 35=CALL r/m (`FF /2`),
     /// 36=JMP r/m (`FF /4`). Far CALLF/JMPF (`/3` `/5`) stay decode-fail.
     /// 37=CMPS, 38=SCAS (`has_imm` is REP; `imm!=0` is F2 REPNE).
+    /// 39=SSE MOVUPS/MOVUPD/MOVSS/MOVSD/MOVDQU/MOVDQA/MOVAPS/MOVAPD (`reg` is xmm).
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1408,6 +1409,47 @@ pub fn mmio_alu_is_cmps(alu: u8) -> bool {
 
 pub fn mmio_alu_is_scas(alu: u8) -> bool {
     alu == MMIO_ALU_SCAS
+}
+
+/// SSE packed/scalar move targeting MMIO. `reg` is xmm0–15, not a GPR.
+pub const MMIO_ALU_SSE: u8 = 39;
+
+pub fn mmio_alu_is_sse(alu: u8) -> bool {
+    alu == MMIO_ALU_SSE
+}
+
+/// MOVSS/MOVSD from mem zero the rest of the XMM. Packed 16-byte keeps all bits.
+pub fn mmio_sse_from_mem(mem: u128, size: u8) -> u128 {
+    match size {
+        4 => mem & 0xffff_ffff,
+        8 => mem & u128::from(u64::MAX),
+        _ => mem,
+    }
+}
+
+/// Read 4/8/16 bytes of virtio BAR MMIO as an XMM payload.
+pub fn mmio_read_sse_at(gpa: u64, size: u8) -> u128 {
+    match size {
+        4 => u128::from(mmio_read_at(gpa, 4)),
+        8 => u128::from(mmio_read_at(gpa, 8)),
+        _ => {
+            let lo = u128::from(mmio_read_at(gpa, 8));
+            let hi = u128::from(mmio_read_at(gpa.wrapping_add(8), 8));
+            lo | (hi << 64)
+        }
+    }
+}
+
+/// Write the low 4/8/16 bytes of an XMM payload into virtio BAR MMIO.
+pub fn mmio_write_sse_at(gpa: u64, val: u128, size: u8) {
+    match size {
+        4 => mmio_write_at(gpa, 4, val as u64),
+        8 => mmio_write_at(gpa, 8, val as u64),
+        _ => {
+            mmio_write_at(gpa, 8, val as u64);
+            mmio_write_at(gpa.wrapping_add(8), 8, (val >> 64) as u64);
+        }
+    }
 }
 
 /// PUSH/POP width: 66h → 16-bit; long mode → 64-bit; else 32-bit.
@@ -2222,6 +2264,73 @@ fn mmio_hint() -> MmioInsn {
     }
 }
 
+/// MOVUPS (`0F 10`/`11`), MOVSS (`F3 0F 10`/`11`), MOVSD (`F2 0F 10`/`11`),
+/// MOVDQU (`F3 0F 6F`/`7F`), MOVDQA (`66 0F 6F`/`7F`), MOVAPS (`0F 28`/`29`).
+fn mmio_sse_op(
+    op2: u8,
+    f2: bool,
+    f3: bool,
+    operand16: bool,
+    rex: bool,
+    rex_r: u8,
+    bytes: &[u8],
+    i: usize,
+    insn_len: usize,
+) -> Option<MmioInsn> {
+    if f2 && f3 {
+        return None;
+    }
+    let (is_write, size) = match op2 {
+        0x10 | 0x11 => {
+            let size = if f2 {
+                8
+            } else if f3 {
+                4
+            } else {
+                16
+            };
+            (op2 == 0x11, size)
+        }
+        0x6F | 0x7F => {
+            if f2 || (!f3 && !operand16) {
+                return None;
+            }
+            (op2 == 0x7F, 16)
+        }
+        0x28 | 0x29 => {
+            if f2 || f3 {
+                return None;
+            }
+            (op2 == 0x29, 16)
+        }
+        _ => return None,
+    };
+    if i >= insn_len {
+        return None;
+    }
+    let m = bytes[i];
+    let xmm = ((m >> 3) & 7) | rex_r;
+    Some(MmioInsn {
+        is_write,
+        size,
+        reg: xmm,
+        has_imm: false,
+        imm: 0,
+        zero_ext: false,
+        sign_ext: false,
+        xchg: false,
+        alu: MMIO_ALU_SSE,
+        rex,
+        test: false,
+        cmp: false,
+        cmp_reg_left: false,
+        alu_reg_left: false,
+        bt: 0,
+        atomic: 0,
+        cc: 0,
+    })
+}
+
 fn mmio_mov(
     is_write: bool,
     size: u8,
@@ -2257,7 +2366,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/CMPS/SCAS/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/CMPS/SCAS/MOVUPS/MOVDQU/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2304,6 +2413,9 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
         }
         let op2 = bytes[i];
         i += 1;
+        if let Some(sse) = mmio_sse_op(op2, f2, f3, operand16, rex, rex_r, bytes, i, insn_len) {
+            return Some(sse);
+        }
         if (0x40..=0x4F).contains(&op2) || (0x90..=0x9F).contains(&op2) {
             if i >= insn_len {
                 return None;

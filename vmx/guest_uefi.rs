@@ -1812,6 +1812,14 @@ static mut SAVED_R14: u64 = 0;
 #[cfg(target_os = "uefi")]
 static mut SAVED_R15: u64 = 0;
 
+/// 16-byte-aligned XMM0–15 snapshot. Host trampoline `movdqu` after GPRs.
+#[cfg(target_os = "uefi")]
+#[repr(align(16))]
+struct SavedXmm([u8; 256]);
+
+#[cfg(target_os = "uefi")]
+static mut SAVED_XMM: SavedXmm = SavedXmm([0; 256]);
+
 static mut SAVED_VMCS: u64 = 0;
 static mut E4_ALLOC: *mut FrameAllocator = core::ptr::null_mut();
 static mut E4_LIFE: *mut crate::vmx::lifecycle::VmxLifecycle = core::ptr::null_mut();
@@ -3127,6 +3135,26 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         "mov [rip + {slot_r13}], r13",
         "mov [rip + {slot_r14}], r14",
         "mov [rip + {slot_r15}], r15",
+        "mov rax, cr4",
+        "or rax, {osfxsr}",
+        "mov cr4, rax",
+        "lea rax, [rip + {xmm}]",
+        "movdqu [rax], xmm0",
+        "movdqu [rax + 16], xmm1",
+        "movdqu [rax + 32], xmm2",
+        "movdqu [rax + 48], xmm3",
+        "movdqu [rax + 64], xmm4",
+        "movdqu [rax + 80], xmm5",
+        "movdqu [rax + 96], xmm6",
+        "movdqu [rax + 112], xmm7",
+        "movdqu [rax + 128], xmm8",
+        "movdqu [rax + 144], xmm9",
+        "movdqu [rax + 160], xmm10",
+        "movdqu [rax + 176], xmm11",
+        "movdqu [rax + 192], xmm12",
+        "movdqu [rax + 208], xmm13",
+        "movdqu [rax + 224], xmm14",
+        "movdqu [rax + 240], xmm15",
         "jmp {cont}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -3143,6 +3171,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         slot_r13 = sym SAVED_R13,
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
+        xmm = sym SAVED_XMM,
+        osfxsr = const crate::arch::cpu::CR4_OSFXSR,
         cont = sym guest_uefi_vmexit,
     );
 }
@@ -3151,6 +3181,23 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
 #[unsafe(naked)]
 unsafe extern "C" fn guest_uefi_vmresume() -> ! {
     core::arch::naked_asm!(
+        "lea rax, [rip + {xmm}]",
+        "movdqu xmm0, [rax]",
+        "movdqu xmm1, [rax + 16]",
+        "movdqu xmm2, [rax + 32]",
+        "movdqu xmm3, [rax + 48]",
+        "movdqu xmm4, [rax + 64]",
+        "movdqu xmm5, [rax + 80]",
+        "movdqu xmm6, [rax + 96]",
+        "movdqu xmm7, [rax + 112]",
+        "movdqu xmm8, [rax + 128]",
+        "movdqu xmm9, [rax + 144]",
+        "movdqu xmm10, [rax + 160]",
+        "movdqu xmm11, [rax + 176]",
+        "movdqu xmm12, [rax + 192]",
+        "movdqu xmm13, [rax + 208]",
+        "movdqu xmm14, [rax + 224]",
+        "movdqu xmm15, [rax + 240]",
         "mov rax, [rip + {slot_rax}]",
         "mov rbx, [rip + {slot_rbx}]",
         "mov rcx, [rip + {slot_rcx}]",
@@ -3183,6 +3230,7 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         slot_r13 = sym SAVED_R13,
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
+        xmm = sym SAVED_XMM,
         fail = sym guest_uefi_resume_failed,
     );
 }
@@ -4898,6 +4946,22 @@ unsafe fn mmio_gpr_out(op: crate::devices::guest_virtio_blk::MmioInsn, val: u64)
     );
 }
 
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_xmm_in(reg: u8) -> u128 {
+    let i = (reg as usize) & 15;
+    // SAFETY: SAVED_XMM is 16-byte aligned; VMX-root exclusive after trampoline.
+    // KANI-TARGET: guest-UEFI XMM snapshot (outside Proven Core).
+    core::ptr::read(SAVED_XMM.0.as_ptr().cast::<u128>().add(i))
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_xmm_out(reg: u8, val: u128) {
+    let i = (reg as usize) & 15;
+    // SAFETY: SAVED_XMM is 16-byte aligned; VMX-root exclusive before resume.
+    // KANI-TARGET: guest-UEFI XMM snapshot (outside Proven Core).
+    core::ptr::write(SAVED_XMM.0.as_mut_ptr().cast::<u128>().add(i), val);
+}
+
 /// TEST/CMP: update GUEST_RFLAGS, do not store. Returns true when handled.
 #[cfg(target_os = "uefi")]
 unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> bool {
@@ -6155,6 +6219,34 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            crate::devices::guest_virtio_blk::mmio_write_sse_at(gpa, mmio_xmm_in(op.reg), op.size);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        } else {
+            let mem = crate::devices::guest_virtio_blk::mmio_read_sse_at(gpa, op.size);
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size),
+            );
+        }
+        return skip_insn();
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {
         let ept_write = is_write;
         let Some(done) = mmio_string_step(
@@ -6406,6 +6498,18 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            crate::devices::guest_irq::ioapic_write(off, mmio_xmm_in(op.reg) as u32);
+        } else {
+            let mem = u128::from(crate::devices::guest_irq::ioapic_read(off));
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size.min(4)),
+            );
+        }
+        return skip_insn();
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {
         let Some(done) = mmio_string_step(
             op,
@@ -6548,6 +6652,22 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         return false;
     };
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, mmio_xmm_in(op.reg) as u32);
+        } else {
+            let mem = u128::from(
+                crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                    .and_then(|v| v)
+                    .unwrap_or(0),
+            );
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size.min(4)),
+            );
+        }
         return skip_insn();
     }
     if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {

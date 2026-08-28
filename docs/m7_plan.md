@@ -274,6 +274,11 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Sixty-first slice (this EFI): guest-UEFI trampoline `movdqu` saves XMM0–15
+into 16-byte-aligned `SAVED_XMM`; MMIO decode covers MOVUPS/MOVUPD/MOVSS/MOVSD
+(`0F 10`/`11`), MOVDQU (`F3 0F 6F`/`7F`), MOVDQA (`66 0F 6F`/`7F`),
+MOVAPS/MOVAPD (`0F 28`/`29`). Do not hide SSE2. Iron stick already has
+`e3f56aa`; this is the next EFI after COM2 or CI.
 Sixtieth slice (this EFI): iron `fsck.vfat` proved the 64 MiB FAT is
 healthy (`131072` sectors, `26 files`, `17063/129022` clusters). Retry
 without `--refat-cruzer` still fails (`free=57323008 need=67108864`).
