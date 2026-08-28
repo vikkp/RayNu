@@ -8,7 +8,8 @@
 //! / libata) waits on interrupts: virtio INTx (i440FX slot 2 INTA → GSI 17,
 //! slot 3 INTA → GSI 18, plus PCI interrupt line 11 as IOAPIC pin 11 when
 //! the guest has no ACPI `_PRT`), ATA IRQ 14, and PIT IRQ 0 (jiffies under
-//! `noapic`). This module is live only
+//! `noapic`). IOAPIC delivery latches `lapic_virt` IRR (product ISO
+//! `try_inject_guest_irq`) so Linux EOI matches. This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -31,6 +32,10 @@ pub const VIRTIO_PIC_IRQ: u8 = 11;
 pub const PIT_IRQ: u8 = 0;
 
 const RTE_MASK: u64 = 1 << 16;
+/// IOAPIC RTE bit 15: 1 = level, 0 = edge.
+const RTE_TRIG_LEVEL: u64 = 1 << 15;
+/// IOAPIC RTE bit 14: remote IRR (in-service, wait for LAPIC EOI).
+const RTE_REMOTE_IRR: u64 = 1 << 14;
 const PIC_SLAVE_IRQ: u8 = 2;
 
 struct Pic {
@@ -236,10 +241,51 @@ fn peek_vector(c: &IrqChip) -> Option<u8> {
 
 fn take_vector(c: &mut IrqChip) -> Option<u8> {
     if let Some((pin, vec)) = ioapic_peek_pin(c) {
-        c.ioapic.irr &= !(1 << pin);
+        ioapic_accept(c, pin);
         return Some(vec);
     }
     pic_take(c)
+}
+
+/// Accept an IOAPIC pin: set remote IRR. Edge clears pin IRR; level keeps
+/// it until `lower_gsi` so a lost inject can retry after LAPIC EOI.
+fn ioapic_accept(c: &mut IrqChip, pin: u8) {
+    let i = pin as usize;
+    let mut rte = c.ioapic.redir[i];
+    rte |= RTE_REMOTE_IRR;
+    c.ioapic.redir[i] = rte;
+    if rte & RTE_TRIG_LEVEL == 0 {
+        c.ioapic.irr &= !(1 << pin);
+    }
+}
+
+/// Consume one unmasked IOAPIC pin. Does not touch PIC. Stage 46 product
+/// ISO latches this vector into `lapic_virt` IRR so Linux EOI matches.
+pub fn take_ioapic_vector() -> Option<u8> {
+    if !product_live() {
+        return None;
+    }
+    with_irq(|c| {
+        let (pin, vec) = ioapic_peek_pin(c)?;
+        ioapic_accept(c, pin);
+        Some(vec)
+    })
+}
+
+/// LAPIC EOI: drop remote IRR on RTEs that match `vec`. Level pins with
+/// the line still high become deliverable again.
+pub fn ioapic_eoi(vec: u8) {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| {
+        for pin in 0..IOAPIC_PINS {
+            let rte = c.ioapic.redir[pin];
+            if (rte & 0xff) as u8 == vec && rte & RTE_REMOTE_IRR != 0 {
+                c.ioapic.redir[pin] = rte & !RTE_REMOTE_IRR;
+            }
+        }
+    });
 }
 
 fn ioapic_peek(c: &IrqChip) -> Option<u8> {
@@ -253,6 +299,9 @@ fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
         }
         let rte = c.ioapic.redir[pin];
         if rte & RTE_MASK != 0 {
+            continue;
+        }
+        if rte & RTE_REMOTE_IRR != 0 {
             continue;
         }
         let vec = (rte & 0xff) as u8;

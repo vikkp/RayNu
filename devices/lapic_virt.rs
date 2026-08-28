@@ -147,6 +147,15 @@ fn set_irr(vec: u8) {
     bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
 }
 
+/// Latch a device IRQ (IOAPIC vector) into IRR. Stage 46 product ISO uses
+/// this so Linux `ack_APIC_irq` EOI matches; bare VM-entry inject of the
+/// same vector is the M3.12 `Fatal exception in interrupt` path.
+pub fn latch_irr(vec: u8) {
+    if vec >= 16 {
+        set_irr(vec);
+    }
+}
+
 fn processor_priority() -> u32 {
     // SAFETY: VMEXIT path.
     unsafe {
@@ -228,6 +237,7 @@ fn current_count_raw() -> u32 {
 fn handle_eoi() {
     if let Some(v) = highest_bit(core::ptr::addr_of!(APIC_ISR)) {
         bit_clear(core::ptr::addr_of_mut!(APIC_ISR), v);
+        crate::devices::guest_irq::ioapic_eoi(v);
     }
 }
 

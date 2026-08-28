@@ -187,3 +187,30 @@ fn lab_stub_raise_pit_does_not_inject() {
     assert!(!has_deliverable());
     reset();
 }
+
+#[test]
+fn ioapic_level_keeps_irr_until_eoi_then_retries() {
+    arm_product_iso();
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_PIC_IRQ));
+    ioapic_write(0x10, 0x53 | (1 << 15));
+    raise_virtio();
+    assert_eq!(take_inject_vector(), Some(0x53));
+    assert!(
+        take_inject_vector().is_none(),
+        "remote IRR blocks re-inject until EOI"
+    );
+    crate::devices::guest_irq::ioapic_eoi(0x53);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x53),
+        "level + line still high retries after EOI"
+    );
+    crate::devices::guest_irq::ioapic_eoi(0x53);
+    crate::devices::guest_irq::lower_virtio();
+    crate::devices::guest_irq::ioapic_eoi(0x53);
+    assert!(take_inject_vector().is_none());
+    assert_eq!(crate::devices::guest_irq::take_ioapic_vector(), None);
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}

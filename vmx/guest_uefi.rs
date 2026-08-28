@@ -5816,6 +5816,12 @@ unsafe fn try_inject_guest_irq() {
     }
     crate::devices::guest_uart::poll_host_rx();
     crate::devices::guest_uart::reassert_irq();
+    // IOAPIC → LAPIC IRR (APIC ack/EOI). PIC stays a direct inject for
+    // noapic / early 8259. M3.12: do not VM-entry inject an IOAPIC vector
+    // while APIC ISR is empty.
+    if let Some(vec) = crate::devices::guest_irq::take_ioapic_vector() {
+        crate::devices::lapic_virt::latch_irr(vec);
+    }
     let pic = crate::devices::guest_irq::has_deliverable();
     let lapic = crate::devices::lapic_virt::has_deliverable_irr();
     if !pic && !lapic {
@@ -5828,10 +5834,10 @@ unsafe fn try_inject_guest_irq() {
         let _ = set_guest_uefi_interrupt_window(true);
         return;
     }
-    let Some(vec) = (if pic {
-        crate::devices::guest_irq::take_inject_vector().map(u32::from)
-    } else {
+    let Some(vec) = (if lapic {
         crate::devices::lapic_virt::take_deliverable_vector()
+    } else {
+        crate::devices::guest_irq::take_inject_vector().map(u32::from)
     }) else {
         let _ = set_guest_uefi_interrupt_window(false);
         return;

@@ -274,6 +274,11 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Twenty-ninth slice (this EFI): product ISO IOAPIC vectors latch into
+`lapic_virt` IRR and inject IRR→ISR so Linux `ack_APIC_irq` EOI matches
+(M3.12: bare VM-entry inject with empty ISR is `Fatal exception in
+interrupt`); remote IRR + level-triggered retry after EOI while the line
+is still high. PIC stays a direct inject for noapic/early 8259.
 Twenty-eighth slice (this EFI): MMIO dest-reg ALU (`02`/`03` ADD r, r/m,
 `0A`/`0B` OR, `22`/`23` AND, `2A`/`2B` SUB, `32`/`33` XOR) writes the GPR
 and updates RFLAGS; INC/DEC (`FE`/`FF`) and NOT/NEG (`F6`/`F7` /2 /3)

@@ -80,3 +80,13 @@ fn poll_timer_expiry_latches_irr() {
     assert!(poll_timer_expiry());
     assert!(has_deliverable_irr());
 }
+
+#[test]
+fn latch_irr_device_vector_then_eoi() {
+    latch_irr(0x31);
+    assert!(has_deliverable_irr());
+    let v = take_deliverable_vector().expect("device IRR→ISR");
+    assert_eq!(v, 0x31);
+    assert!(wrmsr(0x80B, 0).is_some());
+    assert!(!has_deliverable_irr());
+}
