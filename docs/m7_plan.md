@@ -274,7 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-fifth slice (this EFI): iron product-ISO raises the HV frame pool to
+Sixty-sixth slice (this EFI): when flash peek returns bytes (`n>0`) but VMCS
+`insn_len` is 0, decode and skip use the length from those bytes. Do not skip
+the 16-byte peek. Prefer a valid VMCS 1–15 (EAX fallback still works when
+`n=0`). Iron 512 MiB pool + disk-before-scratch + CS.base+RIP fetch still in
+this EFI. FAT already fills Cruzer; no `--refat-cruzer`. Pin this HEAD until
+CI is green, then flash (do not flash `9446a6c` after this lands).
+Sixty-fifth slice: iron product-ISO raises the HV frame pool to
 512 MiB (`PRECISE`) so a 256 MiB virtio-blk fits; `iso=0` / nested stay
 256 MiB (E4 BAR/shell free). Reserve the install disk before greedy 2 MiB
 scratch as well as report-RAM. MMIO insn fetch uses `CS.base+RIP` unless

@@ -1623,6 +1623,21 @@ pub fn xapic_fetch_miss_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
     fetched_n == 0 && insn_len >= 1 && insn_len <= 15
 }
 
+/// RIP skip length after MMIO emulate. Prefer a valid VMCS 1–15; else the
+/// length decoded from fetched bytes. Never skip a 16-byte peek (`fetched_n`).
+///
+/// Iron COM2 may fetch flash bytes (`n>0`) while VMCS `insn_len` is 0, so
+/// decode and skip both need the decoded length.
+pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        vmcs_len
+    } else if fetched_len >= 1 && fetched_len <= 15 {
+        fetched_len
+    } else {
+        0
+    }
+}
+
 /// Linear address of the instruction to emulate. 64-bit CS ignores CS.base
 /// (SDM); 16/32-bit CS uses `CS.base + RIP`. MMIO handlers must not peek
 /// raw `GUEST_RIP` while the exit log uses `cs_base + rip`.
@@ -1752,6 +1767,10 @@ static LAST_GUEST_RIP: AtomicU64 = AtomicU64::new(0);
 static LAST_LINEAR: AtomicU64 = AtomicU64::new(0);
 static LAST_GUEST_PHYS: AtomicU64 = AtomicU64::new(0);
 static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
+/// Decoded MMIO instruction length for this exit. Zeroed at each
+/// [`guest_uefi_vmexit`] so HLT/INVD cannot skip a stale length.
+#[cfg(target_os = "uefi")]
+static MMIO_INSN_LEN: AtomicU64 = AtomicU64::new(0);
 static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
 static NON_TF_EXITS: AtomicU32 = AtomicU32::new(0);
 static ALIVE_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -3355,6 +3374,7 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     LAUNCH_ENTERED.store(true, Ordering::Release);
+    MMIO_INSN_LEN.store(0, Ordering::Relaxed);
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
@@ -5938,23 +5958,33 @@ fn write_hex2(b: u8) {
 #[cfg(target_os = "uefi")]
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-    if len == 0 || len > 15 {
+    let vmcs = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let len = guest_uefi_mmio_skip_len(vmcs, MMIO_INSN_LEN.load(Ordering::Relaxed));
+    if len == 0 {
         return false;
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
 /// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
+/// Returns `(fetched_n, effective_len)` where `effective_len` is VMCS 1–15
+/// or the length decoded from those bytes when VMCS `insn_len` is 0.
 #[cfg(target_os = "uefi")]
 unsafe fn copy_mmio_insn(buf: &mut [u8]) -> (usize, u64) {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
-    let linear = guest_uefi_insn_linear(rip, cs_base, guest_uefi_cs_ar_is_long(ar));
+    let long64 = guest_uefi_cs_ar_is_long(ar);
+    let linear = guest_uefi_insn_linear(rip, cs_base, long64);
     let n = copy_guest_linear_bytes(linear, buf);
-    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-    (n, insn_len)
+    let vmcs_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let effective = crate::devices::guest_virtio_blk::mmio_effective_len(
+        &buf[..n],
+        vmcs_len,
+        long64,
+    );
+    MMIO_INSN_LEN.store(effective, Ordering::Relaxed);
+    (n, effective)
 }
 
 #[cfg(target_os = "uefi")]

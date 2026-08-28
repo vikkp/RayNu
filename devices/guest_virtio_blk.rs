@@ -2366,6 +2366,165 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
+/// ModR/M + optional SIB + displacement. Not the opcode.
+pub fn mmio_modrm_span(rest: &[u8], addr16: bool) -> Option<usize> {
+    if rest.is_empty() {
+        return None;
+    }
+    let m = rest[0];
+    let md = m >> 6;
+    let rm = m & 7;
+    if addr16 {
+        let disp = match (md, rm) {
+            (3, _) => 0,
+            (0, 6) => 2,
+            (1, _) => 1,
+            (2, _) => 2,
+            (0, _) => 0,
+            _ => return None,
+        };
+        let n = 1 + disp;
+        return (rest.len() >= n).then_some(n);
+    }
+    let sib = md != 3 && rm == 4;
+    if sib && rest.len() < 2 {
+        return None;
+    }
+    let disp = match md {
+        3 => 0,
+        1 => 1,
+        2 => 4,
+        0 => {
+            if rm == 5 || (sib && (rest[1] & 7) == 5) {
+                4
+            } else {
+                0
+            }
+        }
+        _ => return None,
+    };
+    let n = 1 + if sib { 1 } else { 0 } + disp;
+    (rest.len() >= n).then_some(n)
+}
+
+fn mmio_len_after_modrm(rest: &[u8], addr16: bool, imm: usize) -> Option<usize> {
+    let n = mmio_modrm_span(rest, addr16)?;
+    let total = n.checked_add(imm)?;
+    (rest.len() >= total).then_some(total)
+}
+
+/// Instruction length from fetched bytes when VMCS `insn_len` is 0.
+///
+/// Iron COM2 may fetch flash bytes at `rip=0xfffcfc86` while the VMCS length
+/// field is undefined. Do not skip `fetched_n` (that is a 16-byte peek).
+pub fn mmio_decoded_len(bytes: &[u8], long64: bool) -> Option<usize> {
+    let max = bytes.len().min(15);
+    if max == 0 {
+        return None;
+    }
+    let b = &bytes[..max];
+    let mut i = 0usize;
+    let mut operand16 = false;
+    let mut addr16 = false;
+    let mut rex_w = false;
+    while i < max {
+        match b[i] {
+            0x66 => {
+                operand16 = true;
+                i += 1;
+            }
+            0x67 => {
+                addr16 = !long64;
+                i += 1;
+            }
+            0xF2 | 0xF3 | 0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0xF0 => i += 1,
+            r if long64 && (0x40..=0x4F).contains(&r) => {
+                rex_w = (r & 8) != 0;
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+    if i >= max {
+        return None;
+    }
+    let op = b[i];
+    i += 1;
+    let opsz = if rex_w {
+        4
+    } else if operand16 {
+        2
+    } else {
+        4
+    };
+    let moffs = if long64 && !addr16 {
+        8
+    } else if addr16 {
+        2
+    } else {
+        4
+    };
+    let rest = &b[i..];
+    let body = if op == 0x0F {
+        if rest.is_empty() {
+            return None;
+        }
+        let op2 = rest[0];
+        let after = &rest[1..];
+        let extra = match op2 {
+            0xA4 | 0xAC | 0xBA => 1,
+            _ => 0,
+        };
+        1 + mmio_len_after_modrm(after, addr16, extra)?
+    } else {
+        match op {
+            0xA4 | 0xA5 | 0xA6 | 0xA7 | 0xAA | 0xAB | 0xAC | 0xAD | 0xAE | 0xAF => 0,
+            0xA0 | 0xA1 | 0xA2 | 0xA3 => {
+                if rest.len() < moffs {
+                    return None;
+                }
+                moffs
+            }
+            0xC6 => mmio_len_after_modrm(rest, addr16, 1)?,
+            0xC7 => mmio_len_after_modrm(rest, addr16, opsz)?,
+            0x80 | 0x82 | 0x83 | 0xC0 | 0xC1 | 0x6B => mmio_len_after_modrm(rest, addr16, 1)?,
+            0x81 | 0x69 => mmio_len_after_modrm(rest, addr16, opsz)?,
+            0xF6 => {
+                if rest.is_empty() {
+                    return None;
+                }
+                let ext = (rest[0] >> 3) & 7;
+                mmio_len_after_modrm(rest, addr16, if ext <= 1 { 1 } else { 0 })?
+            }
+            0xF7 => {
+                if rest.is_empty() {
+                    return None;
+                }
+                let ext = (rest[0] >> 3) & 7;
+                mmio_len_after_modrm(rest, addr16, if ext <= 1 { opsz } else { 0 })?
+            }
+            0x88 | 0x89 | 0x8A | 0x8B | 0x86 | 0x87 | 0x84 | 0x85 | 0x8F | 0xFE | 0xFF
+            | 0x00 | 0x01 | 0x02 | 0x03 | 0x08 | 0x09 | 0x0A | 0x0B | 0x10 | 0x11 | 0x12
+            | 0x13 | 0x18 | 0x19 | 0x1A | 0x1B | 0x20 | 0x21 | 0x22 | 0x23 | 0x28 | 0x29
+            | 0x2A | 0x2B | 0x30 | 0x31 | 0x32 | 0x33 | 0x38 | 0x39 | 0x3A | 0x3B
+            | 0xD0 | 0xD1 | 0xD2 | 0xD3 => mmio_len_after_modrm(rest, addr16, 0)?,
+            _ => return None,
+        }
+    };
+    let n = i.checked_add(body)?;
+    (n >= 1 && n <= 15).then_some(n)
+}
+
+/// VMCS length when it is a valid 1–15, else length decoded from fetched bytes.
+/// Do not use `fetched_n` (that is a 16-byte peek).
+pub fn mmio_effective_len(bytes: &[u8], vmcs_len: u64, long64: bool) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        vmcs_len
+    } else {
+        mmio_decoded_len(bytes, long64).unwrap_or(0) as u64
+    }
+}
+
 /// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/CMPS/SCAS/MOVUPS/MOVDQU/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {

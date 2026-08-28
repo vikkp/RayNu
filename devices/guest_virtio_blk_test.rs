@@ -1,6 +1,7 @@
 use super::{
     blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
-    latch_dxe_virtio_did, mmio_insn_bytes_this_page, mmio_read, mmio_read_iso, mmio_write,
+    latch_dxe_virtio_did, mmio_decoded_len, mmio_effective_len, mmio_insn_bytes_this_page,
+    mmio_read, mmio_read_iso, mmio_write,
     pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
     pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
@@ -856,4 +857,33 @@ fn virtio_gpa_copy_stops_at_4k_so_report_ram_slots_do_not_bleed() {
     assert!(super::write_bytes(&translate, 4090, &src));
     assert_eq!(&lo[4090..], &[0xAB; 6]);
     assert_eq!(&hi[..6], &[0xAB; 6]);
+}
+
+#[test]
+fn mmio_decoded_len_from_bytes_when_vmcs_len_is_zero() {
+    // Iron hole: flash peek n>0 while VMCS insn_len is 0. decode_mmio_insn
+    // used to refuse insn_len==0 even with a complete MOV [disp32], EAX.
+    let mov_disp32 = [0x89u8, 0x05, 0, 0, 0, 0];
+    assert!(decode_mmio_insn(&mov_disp32, 0).is_none());
+    assert_eq!(mmio_decoded_len(&mov_disp32, false), Some(6));
+    assert!(decode_mmio_insn(&mov_disp32, 6).unwrap().is_write);
+    assert_eq!(mmio_decoded_len(&[0x8B, 0x00], false), Some(2));
+    let moffs32 = [0xA3u8, 0xF0, 0x00, 0xE0, 0xFE];
+    assert_eq!(mmio_decoded_len(&moffs32, false), Some(5));
+    let imm32 = [0xC7u8, 0x01, 0x78, 0x56, 0x34, 0x12];
+    assert_eq!(mmio_decoded_len(&imm32, false), Some(6));
+    assert_eq!(mmio_effective_len(&mov_disp32, 6, false), 6);
+    assert_eq!(mmio_effective_len(&mov_disp32, 0, false), 6);
+    assert_eq!(mmio_effective_len(&mov_disp32, 99, false), 6);
+    assert_eq!(mmio_effective_len(&mov_disp32, 2, false), 2, "prefer valid VMCS");
+    assert_eq!(mmio_effective_len(&[], 5, false), 5, "EAX fallback keeps VMCS len");
+    // 32-bit INC EAX is not REX; do not swallow it into the following MOV.
+    assert_eq!(
+        mmio_decoded_len(&[0x40, 0x89, 0x05, 0, 0, 0, 0], false),
+        None
+    );
+    assert_eq!(
+        mmio_decoded_len(&[0x40, 0x89, 0x05, 0, 0, 0, 0], true),
+        Some(7)
+    );
 }
