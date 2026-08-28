@@ -387,6 +387,27 @@ fn decode_mmio_mov_encodings() {
     assert!(super::mmio_cc_taken(5, 1 << 6));
     assert!(!super::mmio_cc_taken(6, 1 << 6));
     assert!(super::mmio_cc_taken(6, 2));
+    let pref = decode_mmio_insn(&[0x0F, 0x18, 0x00], 3).unwrap();
+    assert!(pref.alu == super::MMIO_ALU_HINT && !pref.is_write);
+    let clflush = decode_mmio_insn(&[0x0F, 0xAE, 0x38], 3).unwrap();
+    assert!(clflush.alu == super::MMIO_ALU_HINT);
+    assert!(decode_mmio_insn(&[0x0F, 0xAE, 0x10], 3).is_none());
+    let bsf = decode_mmio_insn(&[0x0F, 0xBC, 0x01], 3).unwrap();
+    assert!(
+        bsf.alu == super::MMIO_ALU_BSF && bsf.alu_reg_left && !bsf.is_write && bsf.size == 4
+    );
+    let bsr = decode_mmio_insn(&[0x48, 0x0F, 0xBD, 0x01], 4).unwrap();
+    assert!(bsr.alu == super::MMIO_ALU_BSR && bsr.size == 8);
+    let (idx, z) = super::mmio_scan_apply(0x10, 4, false);
+    assert!(!z && idx == 4);
+    let (idx2, z2) = super::mmio_scan_apply(0, 4, false);
+    assert!(z2 && idx2 == 0);
+    let (idx3, z3) = super::mmio_scan_apply(0x80, 1, true);
+    assert!(!z3 && idx3 == 7);
+    assert_eq!(super::mmio_scan_rflags(2, true) & (1 << 6), 1 << 6);
+    assert_eq!(super::mmio_scan_rflags(2 | (1 << 6), false) & (1 << 6), 0);
+    assert!(super::mmio_alu_is_hint(super::MMIO_ALU_HINT));
+    assert!(super::mmio_alu_is_scan(super::MMIO_ALU_BSF));
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

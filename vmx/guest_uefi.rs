@@ -4654,6 +4654,21 @@ unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cu
 unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u64) -> u64 {
     let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
     let cf = (oldf & 1) != 0;
+    if crate::devices::guest_virtio_blk::mmio_alu_is_scan(op.alu) {
+        let (idx, src_zero) = crate::devices::guest_virtio_blk::mmio_scan_apply(
+            mem,
+            op.size,
+            op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_BSR,
+        );
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_scan_rflags(oldf, src_zero),
+        );
+        if src_zero {
+            return mmio_gpr_in(op);
+        }
+        return idx;
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_shift(op.alu) {
         let count = if op.has_imm {
             op.imm
@@ -5712,6 +5727,9 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return false;
     };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
@@ -5869,6 +5887,9 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         serial::write_byte(b'\n');
         return skip_insn();
     };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
@@ -5958,6 +5979,9 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         }
         return false;
     };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op) as u32;
         let oldm = crate::devices::lapic_virt::mmio_access(gpa, false, 0)

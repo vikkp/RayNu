@@ -1249,7 +1249,8 @@ pub struct MmioInsn {
     /// XCHG: swap GPR with MMIO (EPT may be read or write).
     pub xchg: bool,
     /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB,
-    /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR.
+    /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
+    /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR).
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1294,9 +1295,21 @@ pub const MMIO_ALU_RCR: u8 = 13;
 pub const MMIO_ALU_SHL: u8 = 14;
 pub const MMIO_ALU_SHR: u8 = 15;
 pub const MMIO_ALU_SAR: u8 = 16;
+pub const MMIO_ALU_BSF: u8 = 17;
+pub const MMIO_ALU_BSR: u8 = 18;
+/// PREFETCH / multi-byte NOP / CLFLUSH: skip the insn, do not access MMIO.
+pub const MMIO_ALU_HINT: u8 = 19;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
+}
+
+pub fn mmio_alu_is_scan(alu: u8) -> bool {
+    alu == MMIO_ALU_BSF || alu == MMIO_ALU_BSR
+}
+
+pub fn mmio_alu_is_hint(alu: u8) -> bool {
+    alu == MMIO_ALU_HINT
 }
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
@@ -1721,6 +1734,53 @@ pub fn mmio_bt_rflags(old: u64, was_set: bool) -> u64 {
     }
 }
 
+/// BSF/BSR of `src`. Returns (bit_index, src_was_zero). Dest is unchanged when
+/// `src_was_zero` (AMD; Intel dest undefined — Linux only inspects ZF).
+pub fn mmio_scan_apply(src: u64, size: u8, bsr: bool) -> (u64, bool) {
+    let v = src & mmio_size_mask(size);
+    if v == 0 {
+        return (0, true);
+    }
+    let idx = if bsr {
+        63u32.saturating_sub(v.leading_zeros())
+    } else {
+        v.trailing_zeros()
+    };
+    (u64::from(idx), false)
+}
+
+/// BSF/BSR: ZF = (src == 0). Other status flags undefined — leave them.
+pub fn mmio_scan_rflags(old: u64, src_zero: bool) -> u64 {
+    const ZF: u64 = 1 << 6;
+    if src_zero {
+        old | ZF
+    } else {
+        old & !ZF
+    }
+}
+
+fn mmio_hint() -> MmioInsn {
+    MmioInsn {
+        is_write: false,
+        size: 1,
+        reg: 0,
+        has_imm: false,
+        imm: 0,
+        zero_ext: false,
+        sign_ext: false,
+        xchg: false,
+        alu: MMIO_ALU_HINT,
+        rex: false,
+        test: false,
+        cmp: false,
+        cmp_reg_left: false,
+        alu_reg_left: false,
+        bt: 0,
+        atomic: 0,
+        cc: 0,
+    }
+}
+
 fn mmio_mov(
     is_write: bool,
     size: u8,
@@ -1756,7 +1816,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -1827,6 +1887,59 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 bt: 0,
                 atomic: 0,
                 cc: (op2 & 0xf) + 1,
+            });
+        }
+        if op2 == 0x18 || op2 == 0x0D || op2 == 0x1F || op2 == 0x19 {
+            if i >= insn_len {
+                return None;
+            }
+            return Some(mmio_hint());
+        }
+        if op2 == 0xAE {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            if ((m >> 3) & 7) == 7 {
+                return Some(mmio_hint());
+            }
+            return None;
+        }
+        if op2 == 0xBC || op2 == 0xBD {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            return Some(MmioInsn {
+                is_write: false,
+                size,
+                reg,
+                has_imm: false,
+                imm: 0,
+                zero_ext: size == 4,
+                sign_ext: false,
+                xchg: false,
+                alu: if op2 == 0xBD {
+                    MMIO_ALU_BSR
+                } else {
+                    MMIO_ALU_BSF
+                },
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: true,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
             });
         }
         if op2 == 0xB6 || op2 == 0xB7 || op2 == 0xBE || op2 == 0xBF {

@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Thirty-sixth slice (this EFI): MMIO PREFETCH (`0F 18`/`0F 0D`), multi-byte
+NOP (`0F 1F`/`0F 19`), and CLFLUSH (`0F AE` /7) skip without touching the
+BAR so a compiler hint on virtio/IOAPIC/xAPIC does not spin; BSF/BSR
+(`0F BC`/`0F BD`) write the bit index into the GPR and set ZF.
 Thirty-fifth slice (this EFI): MMIO CMOVcc (`0F 40`–`4F`) and SETcc
 (`0F 90`–`9F`) so Linux conditional moves/sets on virtio/IOAPIC/xAPIC
 do not spin. Thirty-fourth slice (this EFI): MMIO group-2 shifts (`C0`/`C1` imm8,
