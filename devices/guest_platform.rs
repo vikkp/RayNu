@@ -686,6 +686,12 @@ struct Platform {
     fw_buf: [u8; 16],
     fw_len: u8,
     pit: u16,
+    pit_reload: u16,
+    /// Next 0x40 data access is the high byte (16-bit lo/hi).
+    pit_hi: bool,
+    pit_latch: u16,
+    /// Remaining latched bytes to return (2 = lo next, 1 = hi next).
+    pit_latch_n: u8,
     port61: u8,
     port92: u8,
     pic_imr: [u8; 2],
@@ -714,6 +720,10 @@ impl Platform {
             fw_buf: [0u8; 16],
             fw_len: 0,
             pit: 0xFFFF,
+            pit_reload: 0xFFFF,
+            pit_hi: false,
+            pit_latch: 0,
+            pit_latch_n: 0,
             port61: 0x10,
             port92: 0x02,
             pic_imr: [0xFF, 0xFF],
@@ -905,6 +915,70 @@ pub fn reset() {
     LAST_CMOS.store(0, Ordering::Release);
     crate::devices::guest_irq::reset();
     crate::devices::guest_uart::reset();
+}
+
+/// Step the i8253 channel-0 counter. Linux `nolapic` `clockevent_i8253`
+/// latches this 16-bit value; the old stub wrote `val | 0x00FF` and never
+/// returned a high byte.
+pub fn pit_tick() {
+    with_plat(pit_tick_locked);
+}
+
+fn pit_tick_locked(p: &mut Platform) {
+    let step = 0x40u16;
+    if p.pit <= step {
+        p.pit = if p.pit_reload == 0 {
+            0xFFFF
+        } else {
+            p.pit_reload
+        };
+    } else {
+        p.pit = p.pit.wrapping_sub(step);
+    }
+}
+
+fn pit_write_cmd(p: &mut Platform, val: u8) {
+    if (val >> 6) & 3 != 0 {
+        return;
+    }
+    let access = (val >> 4) & 3;
+    if access == 0 {
+        p.pit_latch = p.pit;
+        p.pit_latch_n = 2;
+        return;
+    }
+    p.pit_hi = false;
+    p.pit_latch_n = 0;
+    p.pit = 0xFFFF;
+}
+
+fn pit_write_data(p: &mut Platform, val: u8) {
+    if !p.pit_hi {
+        p.pit_reload = (p.pit_reload & 0xFF00) | u16::from(val);
+        p.pit_hi = true;
+    } else {
+        p.pit_reload = (p.pit_reload & 0x00FF) | (u16::from(val) << 8);
+        p.pit = if p.pit_reload == 0 {
+            0xFFFF
+        } else {
+            p.pit_reload
+        };
+        p.pit_hi = false;
+    }
+}
+
+fn pit_read_data(p: &mut Platform) -> u8 {
+    if p.pit_latch_n == 2 {
+        p.pit_latch_n = 1;
+        return p.pit_latch as u8;
+    }
+    if p.pit_latch_n == 1 {
+        p.pit_latch_n = 0;
+        return (p.pit_latch >> 8) as u8;
+    }
+    let v = p.pit as u8;
+    pit_tick_locked(p);
+    v
 }
 
 /// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.
@@ -1216,11 +1290,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                 }
                 0x80 => 0,
                 0x92 => u64::from(p.port92),
-                0x40 => {
-                    let v = p.pit;
-                    p.pit = p.pit.wrapping_sub(0x40);
-                    u64::from(v as u8)
-                }
+                0x40 => u64::from(pit_read_data(p)),
                 0x41..=0x43 => 0,
                 _ => mask,
             };
@@ -1231,9 +1301,9 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             } else if port == 0x92 {
                 p.port92 = (rax as u8) | 0x02;
             } else if port == 0x40 {
-                p.pit = (rax as u16) | 0x00FF;
+                pit_write_data(p, rax as u8);
             } else if port == 0x43 {
-                p.pit = 0xFFFF;
+                pit_write_cmd(p, rax as u8);
             }
             rax
         }

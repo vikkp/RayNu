@@ -162,7 +162,9 @@ pub fn lower_virtio_iso() {
 }
 
 /// PIT IRQ 0. Latches IRR; PIC injects only after ICW2 ≥ 16 and unmask.
+/// Also steps the i8253 channel-0 count so Linux `inb 0x40` sees time pass.
 pub fn raise_pit() {
+    crate::devices::guest_platform::pit_tick();
     raise_gsi(PIT_IRQ);
 }
 

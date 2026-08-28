@@ -309,6 +309,29 @@ fn sink_gpa_covers_stage40_fault() {
 }
 
 #[test]
+fn pit_channel0_16bit_latch_roundtrip() {
+    reset();
+    let a = io(0x40, true, 1, 0) as u8;
+    let b = io(0x40, true, 1, 0) as u8;
+    assert_ne!(a, b, "OVMF delay loops need a moving 0x40 count");
+    reset();
+    // Mode 2, lo/hi, channel 0 (Linux i8253).
+    let _ = io(0x43, false, 1, 0x34);
+    let _ = io(0x40, false, 1, 0x00);
+    let _ = io(0x40, false, 1, 0x10);
+    let _ = io(0x43, false, 1, 0x00);
+    let lo = io(0x40, true, 1, 0) as u8;
+    let hi = io(0x40, true, 1, 0) as u8;
+    assert_eq!(u16::from(lo) | (u16::from(hi) << 8), 0x1000);
+    crate::devices::guest_platform::pit_tick();
+    let _ = io(0x43, false, 1, 0x00);
+    let lo2 = io(0x40, true, 1, 0) as u8;
+    let hi2 = io(0x40, true, 1, 0) as u8;
+    let next = u16::from(lo2) | (u16::from(hi2) << 8);
+    assert!(next < 0x1000, "pit_tick must lower the latched count");
+}
+
+#[test]
 fn acpi_pm_timer_ticks_port0_and_pmba() {
     reset();
     assert_eq!(acpi_pm_timer_reads(), 0);

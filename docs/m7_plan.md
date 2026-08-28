@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighteenth slice (this EFI): same-length ISO patch keeps `squashfs` in
+Nineteenth slice (this EFI): i8253 channel 0 is a 16-bit lo/hi + latch
+counter so Linux `nolapic` `inb 0x40` sees a real count; `raise_pit` steps it.
+The old stub wrote `val | 0x00FF` and never returned a high byte. Eighteenth slice: same-length ISO patch keeps `squashfs` in
 `modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `)
 so Alpine mkinitfs can mount the live root; optional `console=tty0` → `noapic`;
 MMIO insn fetch loops across 4 KiB pages; decode skips segment prefixes and

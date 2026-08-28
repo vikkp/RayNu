@@ -163,7 +163,7 @@ read-only virtio-blk at `00:03.0` (`/dev/vdb`) serving the same ISO bytes
 4 KiB so report-RAM 2 MiB slots are not overrun, product ISO PIC/IOAPIC injects
 ATA IRQ 14 and virtio INTx (GSI 17/18 plus PCI line 11 as IOAPIC pin 11;
 lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
-advance, product ISO COM1 is a
+advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
 with `BOOTLOADER=grub setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
