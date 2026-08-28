@@ -20,6 +20,7 @@ use super::{
     guest_uefi_mtrr_fixed_is_vga_hole, GUEST_UEFI_MTRR_UC_PACKED,
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
     guest_uefi_flash_off, guest_uefi_gpa_to_hpa,
+    try_alloc_product_iso_install_disk,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
@@ -1335,6 +1336,37 @@ fn copy_flash_at_firmware_rip() {
     assert_eq!(copy_flash_at(&flash, 0xfee0_00f0, &mut out), 0);
     assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE + 100, &mut out), 0);
     assert!(guest_uefi_gpa_to_hpa(0xfffc_fc86).is_none());
+}
+
+#[test]
+fn greedy_report_ram_leaves_only_1mib_for_disk() {
+    // Iron leftover after fw+ram+sink+zero+scratch in [1MiB,256MiB).
+    const PAGES: u64 = (151 * 1024 * 1024) / 4096;
+    let mut words = [0u64; 1024];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let mut slots = 0u64;
+    while alloc.allocate_contiguous_aligned(512, 512).is_some() {
+        slots += 1;
+    }
+    assert!(slots >= 32);
+    assert!(alloc
+        .allocate_contiguous((64 * 1024 * 1024) / 4096)
+        .is_none());
+    assert!(alloc.allocate_contiguous((1024 * 1024) / 4096).is_some());
+}
+
+#[test]
+fn try_alloc_product_iso_install_disk_reserves_64mib() {
+    const PAGES: u64 = (151 * 1024 * 1024) / 4096;
+    let mut words = [0u64; 1024];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 64 * 1024 * 1024);
+    assert!(alloc.allocate_contiguous_aligned(512, 512).is_some());
 }
 
 #[test]

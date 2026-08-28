@@ -1614,6 +1614,29 @@ pub fn copy_flash_at(flash: &[u8], gpa: u64, out: &mut [u8]) -> usize {
     n
 }
 
+/// Allocate a contiguous install-disk run. Largest size that fits wins.
+///
+/// INVARIANTS:
+/// - Does not invent an HPA; only [`FrameAllocator::allocate_contiguous`]
+/// - Nested stays 1 MiB; iron tries 1 GiB then 256/64/32/16/1 MiB
+///
+/// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
+pub fn try_alloc_product_iso_install_disk(
+    alloc: &mut FrameAllocator,
+    nested: bool,
+) -> Option<(PhysFrame, usize)> {
+    for &want in crate::mgmt::iso_install::product_iso_install_disk_try_sizes(nested) {
+        let pages = (want / 4096) as u64;
+        if pages == 0 {
+            continue;
+        }
+        if let Some(frame) = alloc.allocate_contiguous(pages) {
+            return Some((frame, want));
+        }
+    }
+    None
+}
+
 /// Store a little-endian PTE into a 2 MiB report-RAM window (8 bytes).
 pub fn store_report_ram_u64(page: &mut [u8], gpa: u64, val: u64) -> bool {
     let start = guest_uefi_report_ram_page_off(gpa) as usize;
@@ -2415,6 +2438,31 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
     }
 }
 
+/// Product-ISO virtio-blk backing. No-op when the window is idle or a disk
+/// is already attached. `warn` prints only when this call is the last chance.
+#[cfg(target_os = "uefi")]
+unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool) {
+    if !crate::devices::ide_cdrom::product_iso_window_armed() {
+        return;
+    }
+    if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
+        return;
+    }
+    let nested = guest_uefi_host_hypervisor_present();
+    let Some((frame, disk_bytes)) = try_alloc_product_iso_install_disk(alloc, nested) else {
+        if warn {
+            serial::write_line("boot: WARN — Stage 46 virtio-blk install disk alloc failed");
+        }
+        return;
+    };
+    // SAFETY: exclusive FrameAllocator pages; guest-UEFI owns them until stop.
+    // KANI-TARGET: product ISO virtio-blk attach (outside Proven Core).
+    let _ = crate::devices::guest_virtio_blk::attach_disk(frame.to_phys(), disk_bytes);
+    serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
+    write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn launch_uefi(
     alloc: &mut FrameAllocator,
@@ -2569,6 +2617,10 @@ unsafe fn launch_uefi(
             write_dec(scratch_n);
             serial::write_byte(b'\n');
         }
+        // Iron COM2: greedy report-RAM then leftover 1MiB virtio-blk.
+        // Reserve the install disk first; leftover 2MiB slots still back
+        // CMOS 2GiB. Do not invent HPA on GPA miss (ADR-004).
+        attach_product_iso_install_disk(alloc, false);
         // Iron fad19b2: CMOS 2GiB then EPT unbacked report-RAM gpa=0x7bddd000.
         // Preallocate 2MiB WB frames; map on EPT. GPA need not equal HPA
         // (ADR-004). Separate from UC scratch. Do not identity-map 2GiB.
@@ -2713,41 +2765,7 @@ unsafe fn launch_uefi(
             );
         }
     }
-    if crate::devices::ide_cdrom::product_iso_window_armed() {
-        let nested = guest_uefi_host_hypervisor_present();
-        let mut disk_bytes =
-            crate::mgmt::iso_install::product_iso_install_disk_bytes(nested);
-        let fallbacks: &[usize] = if nested {
-            &[1024 * 1024]
-        } else {
-            &[
-                crate::mgmt::iso_install::PRODUCT_ISO_INSTALL_DISK_IRON_BYTES,
-                256 * 1024 * 1024,
-                64 * 1024 * 1024,
-                1024 * 1024,
-            ]
-        };
-        let mut frame = None;
-        for &want in fallbacks {
-            disk_bytes = want;
-            let pages = (disk_bytes / 4096) as u64;
-            frame = alloc.allocate_contiguous(pages);
-            if frame.is_some() {
-                break;
-            }
-        }
-        if let Some(frame) = frame {
-            // SAFETY: exclusive FrameAllocator pages; guest-UEFI owns them until stop.
-            let _ = unsafe {
-                crate::devices::guest_virtio_blk::attach_disk(frame.to_phys(), disk_bytes)
-            };
-            serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
-            write_dec(crate::devices::guest_virtio_blk::disk_bytes());
-            serial::write_line(" (not ISO-INSTALL-OK)");
-        } else {
-            serial::write_line("boot: WARN — Stage 46 virtio-blk install disk alloc failed");
-        }
-    }
+    attach_product_iso_install_disk(alloc, true);
     if crate::devices::guest_virtio_blk::present() {
         if crate::devices::guest_virtio_blk::queues_armed() {
             serial::write_line(

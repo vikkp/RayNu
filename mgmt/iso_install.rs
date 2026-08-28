@@ -254,6 +254,27 @@ pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
     }
 }
 
+/// Contiguous sizes to try for the product-ISO virtio-blk, largest first.
+///
+/// Iron COM2: 1 GiB / 256 MiB / 64 MiB all failed after greedy 2 MiB
+/// report-RAM ate the `[1MiB,256MiB)` pool; only 1 MiB landed. Alpine
+/// sys-mode cannot write a usable GPT on 1 MiB. Guest-UEFI must reserve
+/// this disk **before** report-RAM so 64 MiB (the REST default) fits.
+pub fn product_iso_install_disk_try_sizes(host_hypervisor: bool) -> &'static [usize] {
+    if host_hypervisor {
+        &[LAB_INSTALL_DISK_BYTES as usize]
+    } else {
+        &[
+            PRODUCT_ISO_INSTALL_DISK_IRON_BYTES,
+            256 * 1024 * 1024,
+            DEFAULT_INSTALL_DISK_BYTES as usize,
+            32 * 1024 * 1024,
+            16 * 1024 * 1024,
+            LAB_INSTALL_DISK_BYTES as usize,
+        ]
+    }
+}
+
 /// Phases toward E5 close (management-plane bookkeeping).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallPhase {

@@ -44,6 +44,22 @@ fn markers_stable() {
         PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
     );
     assert!(PRODUCT_ISO_INSTALL_DISK_IRON_BYTES > DEFAULT_INSTALL_DISK_BYTES as usize);
+    let iron_sizes = product_iso_install_disk_try_sizes(false);
+    assert_eq!(iron_sizes[0], PRODUCT_ISO_INSTALL_DISK_IRON_BYTES);
+    assert!(iron_sizes.contains(&(DEFAULT_INSTALL_DISK_BYTES as usize)));
+    let i64 = iron_sizes
+        .iter()
+        .position(|&b| b == DEFAULT_INSTALL_DISK_BYTES as usize)
+        .unwrap();
+    let i1 = iron_sizes
+        .iter()
+        .position(|&b| b == LAB_INSTALL_DISK_BYTES as usize)
+        .unwrap();
+    assert!(i64 < i1);
+    assert_eq!(
+        product_iso_install_disk_try_sizes(true),
+        &[LAB_INSTALL_DISK_BYTES as usize]
+    );
     let win = crate::mgmt::guest_image::GuestBootSpec::product_iso(
         crate::mgmt::guest_image::GuestImageType::WindowsIso,
         1,
