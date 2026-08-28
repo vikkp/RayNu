@@ -24,6 +24,8 @@ pub const M1_EBS_OK_MARKER: &str = "RAYNU-V-M1-EBS-OK";
 /// Cap leftover DRAM taken for guest-UEFI report-RAM (2 GiB CMOS lie).
 /// Does not expand [`crate::memory::PRECISE_BYTES`]. Not invented HPA (ADR-004).
 pub const REPORT_RAM_EXTRA_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// 1008×2 MiB = `[32MiB, 2GiB)`. Prefer a span this large just above PRECISE.
+pub const REPORT_RAM_EXTRA_WANT_PAGES: u64 = 1008 * 512;
 const REPORT_RAM_EXTRA_2M: u64 = 2 * 1024 * 1024;
 
 static REPORT_RAM_EXTRA_NEXT: AtomicU64 = AtomicU64::new(0);
@@ -196,8 +198,12 @@ pub unsafe fn leave_firmware() -> Handoff {
             serial::write_line(
                 "boot: report-RAM extra skip nested (Stage 46; not ISO-INSTALL-OK)",
             );
-        } else if let Some((hs, hp)) =
-            mem::pick_conventional_region_above(&regions[..region_count], 512, precise_end)
+        } else if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
+            &regions[..region_count],
+            REPORT_RAM_EXTRA_WANT_PAGES,
+            512,
+            precise_end,
+        )
         {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
             let extra_hpa = seed_report_ram_extra(hs, bytes);

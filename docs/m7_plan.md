@@ -274,6 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Seventy-ninth slice (this EFI): prefer leftover conventional just
+above PRECISE when it can hold 1008×2 MiB (not the 4 GiB+ 61 GiB
+region). Extra frames are not eager-zeroed (host CR3 identity `#PF`
+risk). Skip logs still print. Do not flash `4a62e06` again. Flash this
+HEAD after CI is green. Want COM2 `extra hpa=` below 4 GiB if the map
+allows, `pool=` near 1008 with `extra=` `no-zero`, then `Linux version`
+/ installer / `ISO-INSTALL-OK`.
 Seventy-eighth slice (this EFI): iron COM2 after `4a62e06` reached
 `post-CD non-io` + gzip + `Loaded initrd` with `pool=162` and **no**
 `report-RAM extra hpa=` (that EFI predates leftover DRAM). Extra seed

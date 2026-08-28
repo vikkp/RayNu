@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN seventy-eighth slice: extra-DRAM skip logs after iron 4a62e06 Loaded initrd still pool=162. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN seventy-ninth slice: prefer leftover DRAM just above PRECISE; extra frames not eager-zeroed. Iron 4a62e06 still pool=162. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (extra skip nested/none/align + pages above PRECISE). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (prefer-low extra + extra no-zero). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-ninth slice: prefer leftover DRAM just above PRECISE + extra no-zero; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-eighth slice: extra-DRAM skip logs after iron 4a62e06 pool=162 Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-seventh slice: leftover DRAM above PRECISE backs 2GiB CMOS lie after iron Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN seventy-sixth slice: lazy-map report-RAM on string/PUSH/virtqueue + denser post-CD ticks after iron Loaded initrd; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

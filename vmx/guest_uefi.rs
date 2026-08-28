@@ -2757,16 +2757,18 @@ unsafe fn launch_uefi(
         let mut extra_n = 0u64;
         let report_slots = report_ram_slots_alloc();
         for i in 0..report_slots {
-            let report_hpa = if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512)
-            {
-                report_frame.to_phys()
-            } else if let Some(h) = crate::boot::handoff::take_report_ram_extra_2m() {
-                extra_n += 1;
-                h
-            } else {
-                break;
-            };
-            core::ptr::write_bytes(report_hpa as *mut u8, 0, 2 * 1024 * 1024);
+            let (report_hpa, extra) =
+                if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512) {
+                    (report_frame.to_phys(), false)
+                } else if let Some(h) = crate::boot::handoff::take_report_ram_extra_2m() {
+                    extra_n += 1;
+                    (h, true)
+                } else {
+                    break;
+                };
+            if !extra {
+                core::ptr::write_bytes(report_hpa as *mut u8, 0, 2 * 1024 * 1024);
+            }
             REPORT_RAM_HPA[i].store(report_hpa, Ordering::Release);
             REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
             report_n += 1;
@@ -2777,6 +2779,7 @@ unsafe fn launch_uefi(
             if extra_n != 0 {
                 serial::write_str(" extra=");
                 write_dec(extra_n);
+                serial::write_str(" no-zero");
             }
             serial::write_byte(b'\n');
         }

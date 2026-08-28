@@ -112,3 +112,23 @@ fn pick_above_clips_spanning_region_at_precise() {
     assert_eq!(s + p * PAGE_SIZE, end);
     assert_eq!(conventional_pages_above(&regions, floor), p);
 }
+
+#[test]
+fn pick_above_prefer_lowest_span_that_fits_want() {
+    let floor = 512 * 1024 * 1024u64;
+    let low_pages = 600_000u64; // ~2.3 GiB leftover above PRECISE
+    let regions = [
+        (floor, low_pages),
+        (0x140110000u64, 16_000_000u64),
+    ];
+    let want = 1008 * 512;
+    let (start, pages) =
+        pick_conventional_region_above_prefer(&regions, want, 512, floor).expect("low");
+    assert_eq!(start, floor);
+    assert_eq!(pages, low_pages);
+    let tiny = [(floor, 1024u64), (0x140110000u64, 16_000_000u64)];
+    let (hi, hi_pages) =
+        pick_conventional_region_above_prefer(&tiny, want, 512, floor).expect("high fallback");
+    assert_eq!(hi, 0x140110000);
+    assert_eq!(hi_pages, 16_000_000);
+}
