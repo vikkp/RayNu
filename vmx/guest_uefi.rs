@@ -1586,6 +1586,34 @@ pub fn copy_report_ram_at(page: &[u8], gpa: u64, out: &mut [u8]) -> usize {
     n
 }
 
+/// Offset into the 4 MiB pflash window, or `None` if `gpa` is not flash.
+///
+/// Iron COM2: xAPIC SVR `gpa=0xfee000f0` `rip=0xfffcfc86` `insn=` empty —
+/// identity peek only covered 32 MiB RAM, so firmware RIP fetched 0 bytes.
+pub fn guest_uefi_flash_off(gpa: u64) -> Option<u64> {
+    if gpa >= GUEST_UEFI_FLASH_BASE
+        && gpa < GUEST_UEFI_FLASH_BASE + GUEST_UEFI_FLASH_WINDOW
+    {
+        Some(gpa - GUEST_UEFI_FLASH_BASE)
+    } else {
+        None
+    }
+}
+
+/// Copy instruction bytes from the guest-private OVMF flash HPA.
+pub fn copy_flash_at(flash: &[u8], gpa: u64, out: &mut [u8]) -> usize {
+    let Some(start) = guest_uefi_flash_off(gpa) else {
+        return 0;
+    };
+    let start = start as usize;
+    if out.is_empty() || start >= flash.len() {
+        return 0;
+    }
+    let n = out.len().min(flash.len() - start);
+    out[..n].copy_from_slice(&flash[start..start + n]);
+    n
+}
+
 /// Store a little-endian PTE into a 2 MiB report-RAM window (8 bytes).
 pub fn store_report_ram_u64(page: &mut [u8], gpa: u64, val: u64) -> bool {
     let start = guest_uefi_report_ram_page_off(gpa) as usize;
@@ -1737,6 +1765,9 @@ static PCI_BDF_SEEN3: AtomicU64 = AtomicU64::new(0);
 static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
 static LAST_CF8: AtomicU32 = AtomicU32::new(0);
 static RAM_HPA: AtomicU64 = AtomicU64::new(0);
+/// Exclusive 4 MiB guest-private OVMF copy (`alias_gpa=0xFFC00000`).
+static FLASH_HPA: AtomicU64 = AtomicU64::new(0);
+static FLASH_LEN: AtomicU64 = AtomicU64::new(0);
 static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
 static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
 static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
@@ -2281,6 +2312,8 @@ pub fn reset_guest_uefi_launch() {
     LAST_IO_PORT.store(0, Ordering::Release);
     LAST_CF8.store(0, Ordering::Release);
     RAM_HPA.store(0, Ordering::Release);
+    FLASH_HPA.store(0, Ordering::Release);
+    FLASH_LEN.store(0, Ordering::Release);
     RAM_REMAP_N.store(0, Ordering::Release);
     RAM_REMAP_TRIES.store(0, Ordering::Release);
     HPET_TICKS.store(0, Ordering::Release);
@@ -2451,6 +2484,8 @@ unsafe fn launch_uefi(
     let ram_hpa = ram_frame.to_phys();
     core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
     RAM_HPA.store(ram_hpa, Ordering::Release);
+    FLASH_HPA.store(fw_hpa, Ordering::Release);
+    FLASH_LEN.store(fw_len, Ordering::Release);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -3910,6 +3945,17 @@ unsafe fn copy_guest_identity_bytes(linear: u64, buf: &mut [u8]) -> usize {
         // KANI-TARGET: identity peek low RAM (outside Proven Core).
         let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
         return copy_low_ram_at(ram, linear, buf);
+    }
+    if guest_uefi_flash_off(linear).is_some() {
+        let hpa = FLASH_HPA.load(Ordering::Acquire);
+        let len = FLASH_LEN.load(Ordering::Acquire) as usize;
+        if hpa == 0 || len == 0 {
+            return 0;
+        }
+        // SAFETY: exclusive 4 MiB guest-private OVMF copy; VMX-root peek.
+        // KANI-TARGET: identity peek flash (outside Proven Core).
+        let flash = core::slice::from_raw_parts(hpa as *const u8, len);
+        return copy_flash_at(flash, linear, buf);
     }
     if !guest_uefi_report_ram_should_map(linear) {
         return 0;
@@ -7302,7 +7348,7 @@ fn report_ram_hpa_lookup(gpa: u64) -> u64 {
     0
 }
 
-/// GPA → HPA for guest-UEFI low RAM and mapped report-RAM (virtio-pci queues).
+/// GPA → HPA for guest-UEFI low RAM, OVMF flash, and mapped report-RAM.
 pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
     if gpa < GUEST_UEFI_LOW_RAM_BYTES {
         let hpa = RAM_HPA.load(Ordering::Acquire);
@@ -7310,6 +7356,14 @@ pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
             return None;
         }
         return Some(hpa + gpa);
+    }
+    if let Some(off) = guest_uefi_flash_off(gpa) {
+        let hpa = FLASH_HPA.load(Ordering::Acquire);
+        let len = FLASH_LEN.load(Ordering::Acquire);
+        if hpa == 0 || off >= len {
+            return None;
+        }
+        return Some(hpa + off);
     }
     if guest_uefi_report_ram_should_map(gpa) {
         let base = report_ram_hpa_lookup(gpa);

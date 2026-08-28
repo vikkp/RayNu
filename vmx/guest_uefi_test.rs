@@ -1,5 +1,5 @@
 use super::{
-    apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
+    apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
@@ -19,6 +19,7 @@ use super::{
     guest_uefi_mtrr_set_admit_uc, guest_uefi_mtrr_uc_held,
     guest_uefi_mtrr_fixed_is_vga_hole, GUEST_UEFI_MTRR_UC_PACKED,
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
+    guest_uefi_flash_off, guest_uefi_gpa_to_hpa,
     guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
@@ -1312,6 +1313,28 @@ fn copy_low_ram_at_identity_window() {
     assert_eq!(copy_low_ram_at(&ram32, 0, &mut thirty_two), 32);
     assert_eq!(thirty_two[0], 0);
     assert_eq!(thirty_two[31], 31);
+}
+
+#[test]
+fn copy_flash_at_firmware_rip() {
+    assert_eq!(guest_uefi_flash_off(0xfffc_fc86), Some(0x3c_fc86));
+    assert_eq!(guest_uefi_flash_off(0xfee0_00f0), None);
+    assert_eq!(guest_uefi_flash_off(GUEST_UEFI_FLASH_BASE), Some(0));
+    assert_eq!(
+        guest_uefi_flash_off(GUEST_UEFI_FLASH_BASE + GUEST_UEFI_FLASH_WINDOW),
+        None
+    );
+    let mut flash = [0u8; 32];
+    flash[0] = 0x8b;
+    flash[1] = 0x04;
+    flash[2] = 0x25;
+    flash[3] = 0xf0;
+    let mut out = [0u8; 4];
+    assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE, &mut out), 4);
+    assert_eq!(out, [0x8b, 0x04, 0x25, 0xf0]);
+    assert_eq!(copy_flash_at(&flash, 0xfee0_00f0, &mut out), 0);
+    assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE + 100, &mut out), 0);
+    assert!(guest_uefi_gpa_to_hpa(0xfffc_fc86).is_none());
 }
 
 #[test]

@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Sixty-second slice (this EFI): iron COM2 `xAPIC MMIO decode fail
+gpa=0xfee000f0 insn=` at `rip=0xfffcfc86` (OVMF flash). Identity peek
+only covered 32 MiB RAM; copy instruction bytes from the private flash
+HPA. Product ISO hold, not E4 SHELL. SSE MOVUPS still in this EFI.
 Sixty-first slice (this EFI): guest-UEFI trampoline `movdqu` saves XMM0–15
 into 16-byte-aligned `SAVED_XMM`; MMIO decode covers MOVUPS/MOVUPD/MOVSS/MOVSD
 (`0F 10`/`11`), MOVDQU (`F3 0F 6F`/`7F`), MOVDQA (`66 0F 6F`/`7F`),

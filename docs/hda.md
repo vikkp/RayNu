@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN sixty-first slice: guest-UEFI SSE MOVUPS/MOVDQU MMIO + XMM0-15 trampoline save (movdqu into 16-byte-aligned SAVED_XMM). Do not hide SSE2. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN sixty-second slice: copy OVMF flash HPA for MMIO insn fetch (iron xAPIC SVR gpa=0xfee000f0 rip=0xfffcfc86 insn= empty). Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (SSE MOVUPS/MOVDQU + XMM trampoline). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash-RIP insn fetch for xAPIC SVR). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-second slice: copy OVMF flash HPA for MMIO insn fetch (iron xAPIC SVR insn= empty); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-first slice: SSE MOVUPS/MOVDQU MMIO + XMM trampoline save; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixtieth slice: iron fsck proved 64MiB FAT healthy; skip remount/fsck when FAT size < need; mkfs.vfat -I; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-ninth slice: --refat-cruzer mkfs.vfat 64MiB FAT on 977.5MiB Cruzer so alpine-virt fits; keep installdisk.bin; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
