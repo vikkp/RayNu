@@ -274,12 +274,14 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighty-first slice (this EFI): iron COM2 after leftover DRAM (`e40bee0`)
-reached `Loaded initrd` then long-mode `#PF` `cr2=0xffff88807e2a3000`.
-Drop `#PF` exiting, restore CR2, and **VM-entry inject** vector 14 so
-PIC/LAPIC cannot steal the entry or clobber CR2. Not `ISO-INSTALL-OK`.
-Flash this HEAD after CI is green. Want COM2 `#PF linux deliver` then
-`Linux version` / installer / `ISO-INSTALL-OK`.
+Eighty-second slice (this EFI): on high-half `#PF` switch to G0
+`LINUX_EXCEPTION_BITMAP` (drop `#UD`/`#GP` intercept; M3.10 skipped
+`ud2` / alternatives) then VM-entry inject vector 14. PIC/LAPIC waits.
+Not `ISO-INSTALL-OK`. Flash this HEAD after CI is green. Want COM2
+`#PF linux deliver` then `Linux version` / installer /
+`ISO-INSTALL-OK`.
+Eighty-first slice: Drop `#PF` exiting, restore CR2, and **VM-entry inject**
+vector 14 so PIC/LAPIC cannot steal the entry or clobber CR2.
 Eightieth slice: deliver high-half `#PF` to the guest IDT and stop
 intercepting `#PF` so `early_make_pgtable` can run. Not
 `ISO-INSTALL-OK`. Want COM2

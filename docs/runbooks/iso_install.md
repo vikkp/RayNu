@@ -152,12 +152,12 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-first-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-second-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Do not flash `d0735bd`, `4a62e06`, or `e40bee0` again
-(`d0735bd` resumes the Linux `#PF` without VM-entry inject, so PIC/LAPIC
-can steal CR2). Leftover DRAM `pool=1008 extra=846 no-zero` is proven;
-high-half `#PF` is VM-entry injected after `#PF` exiting drops. Want
+`git checkout` a SHA). Do not flash `40f1ada`, `d0735bd`, `4a62e06`, or
+`e40bee0` again (`40f1ada` still intercepts Linux `#UD`/`#GP`). Leftover DRAM
+`pool=1008 extra=846 no-zero` is proven; high-half `#PF` is VM-entry injected
+and the exception bitmap becomes G0's (no `#PF`/`#UD`/`#GP`). Want
 `report-RAM extra hpa=` / `pool=` near 1008 with
 `extra=` `no-zero` then `#PF linux deliver` then `Linux version`. ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
