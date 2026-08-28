@@ -236,6 +236,11 @@ pub fn preempt_deadloop_guarded_assert_skip_len(bytes: &[u8], rip: u64, caller: 
 /// Bytes to advance guest RIP on a preemption CpuDeadLoop match.
 /// 2: `pause` / backward `jmp rel8` / backward `jcc rel8` (including QEMU
 ///    `eb f3` + `leave; ret`).
+/// 5: Linux `delay_loop` `REX.W DEC rax; JNZ -5` (`48 FF C8 75 FB`).
+///    Nested `f1afc27` after leftover DRAM: `rip=0xffffffffb7ae5940`
+///    `insn=48ffc875fb` `preempt noskip` (identity peek empty on high-half).
+///    Skip 5 to fall through to `3: dec`. Do not skip DEC alone (RAX
+///    unchanged → infinite `jnz`).
 /// 6: near `jcc` (`0F 8x` rel32) with a small backward displacement.
 /// 0: unknown, or iron `eb ec` + `leave; ret` without the DXE-RAM guard
 ///    ([`preempt_deadloop_guarded_assert_skip_len`]).
@@ -245,6 +250,15 @@ pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
     }
     if preempt_deadloop_is_assert_epilogue(bytes) {
         return 0;
+    }
+    if bytes.len() >= 5
+        && bytes[0] == 0x48
+        && bytes[1] == 0xFF
+        && bytes[2] == 0xC8
+        && bytes[3] == 0x75
+        && bytes[4] == 0xFB
+    {
+        return 5;
     }
     if preempt_deadloop_should_skip(bytes[0], bytes[1]) {
         return 2;
@@ -6282,8 +6296,10 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
-    let mut buf = [0u8; 8];
-    let n = copy_guest_identity_bytes(linear, &mut buf);
+    let mut buf = [0u8; 16];
+    // High-half Linux RIP is not identity (nested f1afc27 delay_loop).
+    // Walk guest CR3 the same as the tick insn dump.
+    let n = copy_guest_linear_bytes(linear, &mut buf);
     if n == 0 {
         return false;
     }

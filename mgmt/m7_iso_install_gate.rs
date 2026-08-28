@@ -268,6 +268,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux skip-1")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_invlpg_len(")
         && include_str!("../vmx/guest_uefi.rs").contains("linux invlpg miss")
+        && include_str!("../vmx/guest_uefi.rs").contains("Linux `delay_loop`")
+        && include_str!("../vmx/guest_uefi.rs").contains("48 FF C8 75 FB")
         && include_str!("../vmx/fields.rs").contains("CPU_BASED_INVLPG_EXITING")
         && include_str!("../sched/msr_firewall.rs").contains("CPUID_LEAF7_EBX_CLWB")
         && include_str!("../vmx/guest_uefi.rs").contains("CPUID_LEAF7_EBX_CLWB")

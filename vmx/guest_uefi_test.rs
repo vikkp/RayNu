@@ -217,6 +217,12 @@ fn marker_and_residual_honest() {
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xFC]), 2);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]), 0);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xF3, 0xC9, 0xC3]), 2);
+    assert_eq!(
+        preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB, 0x48, 0xFF, 0xC8]),
+        5
+    );
+    assert_eq!(preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8]), 0);
+    assert_eq!(preempt_deadloop_skip_len(&[0x75, 0xFB]), 2);
     assert_eq!(GUEST_UEFI_DXE_RAM_FLOOR, 0x10_0000);
     assert!(guest_uefi_assert_caller_is_dxe_ram(0x6e81ca));
     assert!(guest_uefi_assert_caller_is_dxe_ram(0x1d25193));
