@@ -1272,6 +1272,21 @@ pub struct MmioInsn {
     pub sign_ext: bool,
     /// XCHG: swap GPR with MMIO (EPT may be read or write).
     pub xchg: bool,
+    /// Group-1 RMW: 0=none, 1=AND, 2=OR, 3=XOR.
+    pub alu: u8,
+}
+
+pub const MMIO_ALU_AND: u8 = 1;
+pub const MMIO_ALU_OR: u8 = 2;
+pub const MMIO_ALU_XOR: u8 = 3;
+
+pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
+    match alu {
+        MMIO_ALU_AND => cur & rhs,
+        MMIO_ALU_OR => cur | rhs,
+        MMIO_ALU_XOR => cur ^ rhs,
+        _ => rhs,
+    }
 }
 
 fn mmio_mov(
@@ -1291,6 +1306,7 @@ fn mmio_mov(
         zero_ext,
         sign_ext: false,
         xchg: false,
+        alu: 0,
     }
 }
 
@@ -1300,7 +1316,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/group-1 AND/OR/XOR that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -1354,6 +1370,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             zero_ext: !sign_ext,
             sign_ext,
             xchg: false,
+            alu: 0,
         });
     }
     if i >= insn_len && op != 0xC6 && op != 0xC7 {
@@ -1402,6 +1419,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 zero_ext: size == 4,
                 sign_ext: false,
                 xchg: true,
+                alu: 0,
             })
         }
         0xA0 | 0xA1 | 0xA2 | 0xA3 => {
@@ -1436,6 +1454,55 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 k += 1;
             }
             Some(mmio_mov(true, size, 0, true, imm, false))
+        }
+        0x80 | 0x81 | 0x83 => {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let alu = match (m >> 3) & 7 {
+                1 => MMIO_ALU_OR,
+                4 => MMIO_ALU_AND,
+                6 => MMIO_ALU_XOR,
+                _ => return None,
+            };
+            let size = if op == 0x80 {
+                1
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            let imm_sz = if op == 0x83 { 1 } else { size };
+            if insn_len < imm_sz as usize {
+                return None;
+            }
+            let imm_off = insn_len - imm_sz as usize;
+            let mut imm = 0u64;
+            let mut k = 0u32;
+            while k < u32::from(imm_sz) {
+                imm |= u64::from(bytes[imm_off + k as usize]) << (8 * k);
+                k += 1;
+            }
+            if op == 0x83 {
+                let s = imm as i8 as i64;
+                imm = match size {
+                    1 => (s as u8) as u64,
+                    2 => (s as i16 as u16) as u64,
+                    _ => (s as i32 as u32) as u64,
+                };
+            }
+            Some(MmioInsn {
+                is_write: true,
+                size,
+                reg: 0,
+                has_imm: true,
+                imm,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu,
+            })
         }
         _ => None,
     }

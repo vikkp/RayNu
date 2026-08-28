@@ -274,7 +274,8 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
+Twenty-third slice (this EFI): virtio/IOAPIC MMIO decode adds group-1
+AND/OR/XOR (`80/81/83`) so a RMW does not spin on decode-fail. Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
 and moffs (decode-fail spins virtio); GRUB `insmod all_video` → `serial`
 when present. Twenty-first slice: serial auto-answer matches alpine-conf
 `confirm_erase` `[y/N]: ` (not only `(y/n)`), so an ISO that does not skip

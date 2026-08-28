@@ -5551,7 +5551,15 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         return false;
     }
     if is_write {
-        let val = if op.has_imm {
+        let val = if op.alu != 0 {
+            let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+            let rhs = if op.has_imm {
+                op.imm
+            } else {
+                cr_gpr(op.reg)
+            };
+            crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
+        } else if op.has_imm {
             op.imm
         } else {
             cr_gpr(op.reg)
@@ -5613,7 +5621,15 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         return skip_insn();
     }
     if is_write {
-        let val = if op.has_imm { op.imm } else { cr_gpr(op.reg) };
+        let val = if op.alu != 0 {
+            let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+            let rhs = if op.has_imm { op.imm } else { cr_gpr(op.reg) };
+            crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
+        } else if op.has_imm {
+            op.imm
+        } else {
+            cr_gpr(op.reg)
+        };
         crate::devices::guest_irq::ioapic_write(off, val as u32);
     } else {
         let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
