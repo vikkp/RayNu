@@ -8,8 +8,10 @@
 #
 # Run on raynuvsrv1 (Ubuntu on the R640 PERC), with the Cruzer left in
 # front USB 2. Identifies the stick by FAT label RAYNUV + USB + Cruzer
-# model. Never uses a hardcoded /dev/sdc. Never dd, never format, never
-# touches PERC volumes (sda/sdb).
+# model. Never uses a hardcoded /dev/sdc. Never dd. Never format PERC.
+# Cruzer --refat-cruzer is opt-in after RAYNUV+serial+Cruzer identity:
+# copy installdisk.bin/auth.token off, mkfs.vfat -F 32 -n RAYNUV, restore.
+# Never touches PERC volumes (sda/sdb).
 #
 # Usage:
 #   ./tools/flash-cruzer-esp.sh --self-test
@@ -18,13 +20,13 @@
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --ovmf /path/to/OVMF.fd
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-ovmf
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso --refat-cruzer
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
 #
-# Stage 46: alpine-virt linux.iso is ~63 MiB. The 977.5 MiB Cruzer has
-# room if leftover/partial ISOs are pruned first (keep installdisk.bin
-# and auth.token). --linux-iso unlinks ESP *.iso then checks df.
-# ENOSPC can leave FAT32 FSInfo stale (df << 977 MiB minus du). Remount
-# and fsck.vfat -a reclaim orphaned clusters. Never mkfs / format.
+# Stage 46: alpine-virt linux.iso is ~63 MiB. The Cruzer media is 977.5 MiB
+# but the FAT may be a 64 MiB image (131072 sectors) that cannot hold ISO+
+# EFI+OVMF. Pass --refat-cruzer to mkfs.vfat -F 32 -n RAYNUV on that
+# identified stick after copying installdisk.bin/auth.token off. Never PERC.
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
@@ -41,11 +43,12 @@ OVMF_SRC=""
 NO_OVMF=0
 LINUX_ISO=""
 NO_LINUX_ISO=0
+REFAT=0
 SELFTEST=0
 DRY=0
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -171,9 +174,43 @@ reclaim_fat_free_if_needed() {
   avail="$(esp_avail_bytes)"
   echo "==> ESP free=${avail:-?} need=$need (after fsck.vfat)"
   if [[ ! "$avail" =~ ^[0-9]+$ ]] || (( avail < need )); then
+    local fs_size
+    fs_size="$(df -B1 --output=size "$MNT" | tail -n1 | tr -d ' ')"
+    echo "error: Cruzer FAT size=${fs_size:-?} free=${avail:-?} need=$need disk=$SIZE_BYTES" >&2
+    echo "       64MiB FAT on 977.5MiB Cruzer cannot hold alpine-virt linux.iso" >&2
+    echo "       re-run with --refat-cruzer (mkfs.vfat -F 32 -n RAYNUV on this identified stick)" >&2
     return 1
   fi
   return 0
+}
+
+# Opt-in: identified RAYNUV Cruzer only. 64MiB FAT on 977.5MiB media cannot
+# hold alpine-virt (~63MiB) plus EFI+OVMF. Copy keep files, mkfs.vfat the
+# whole stick, restore installdisk.bin/auth.token. Never PERC.
+refat_identified_cruzer() {
+  local keep token
+  keep="$(mktemp -d /tmp/raynuv-refat.XXXXXX)"
+  sudo cp "$MNT/EFI/RayNu/installdisk.bin" "$keep/installdisk.bin"
+  token=0
+  if [[ -f "$MNT/EFI/RayNu/auth.token" ]]; then
+    sudo cp "$MNT/EFI/RayNu/auth.token" "$keep/auth.token"
+    token=1
+  fi
+  echo "==> --refat-cruzer: keep installdisk.bin bytes=$(wc -c <"$keep/installdisk.bin" | tr -d ' ') auth.token=$token"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  echo "==> --refat-cruzer: mkfs.vfat -F 32 -n $LABEL $RAW (identified Cruzer; not PERC)"
+  sudo mkfs.vfat -F 32 -n "$LABEL" "$RAW"
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+  sudo mkdir -p "$MNT/EFI/BOOT" "$MNT/EFI/RayNu"
+  sudo cp "$keep/installdisk.bin" "$MNT/EFI/RayNu/installdisk.bin"
+  if [[ "$token" -eq 1 ]]; then
+    sudo cp "$keep/auth.token" "$MNT/EFI/RayNu/auth.token"
+  fi
+  rm -rf "$keep"
+  echo "==> --refat-cruzer: FAT now fills the Cruzer (not ISO-INSTALL-OK)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -187,6 +224,7 @@ while [[ $# -gt 0 ]]; do
     --no-ovmf) NO_OVMF=1; shift ;;
     --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
     --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --refat-cruzer) REFAT=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
       echo "error: unknown arg: $1" >&2
@@ -337,6 +375,11 @@ if [[ ! -f "$MNT/EFI/RayNu/installdisk.bin" ]]; then
   exit 1
 fi
 INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
+
+if [[ "$REFAT" -eq 1 ]]; then
+  refat_identified_cruzer
+  INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
+fi
 
 echo "==> installdisk.bin bytes=$INSTALL_BEFORE (unchanged)"
 echo "==> copying $EFI_ABS ($EFI_BYTES bytes, sha256=$GOT_SHA)"

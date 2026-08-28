@@ -60,6 +60,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../tools/flash-cruzer-esp.sh").contains("ESP free=")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("fsck.vfat -a")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("not format")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("--refat-cruzer")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("mkfs.vfat -F 32 -n")
         && include_str!("../devices/guest_irq.rs").contains("fn take_inject_vector(")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_GSI")
         && include_str!("../devices/guest_irq.rs").contains("VIRTIO_ISO_GSI")

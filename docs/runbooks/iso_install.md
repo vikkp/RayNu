@@ -151,11 +151,10 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 `flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
-The 977.5 MiB Cruzer needs ~64 MiB free; a failed `cp` leaves a partial
-`EFI/RayNu/linux.iso` and can leave FAT32 FSInfo stale (`df` much smaller
-than `977 MiB - du`). Flash prunes ESP `*.iso`, remounts, and `fsck.vfat -a`
-(not format) if `df` is still short. Keep
-`installdisk.bin` and `auth.token`. Operator flash:
+The Cruzer media is 977.5 MiB but the FAT may be a 64 MiB image
+(`131072` sectors) that cannot hold alpine-virt (63 MiB) plus EFI+OVMF.
+Pass `--refat-cruzer` (copies `installdisk.bin`/`auth.token` off, then
+`mkfs.vfat -F 32 -n RAYNUV` on that identified stick). Never PERC.
 
 ```bash
 ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
@@ -166,11 +165,11 @@ git fetch origin cursor/e5-stage46-iso-a623
 git checkout cursor/e5-stage46-iso-a623
 git pull --ff-only origin cursor/e5-stage46-iso-a623
 ./tools/flashcruzer.sh --install-launcher
-./tools/flashcruzer.sh \
-  --branch cursor/e5-stage46-iso-a623 \
-  --wait \
-  --require-head \
-  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
+sudo ./tools/flash-cruzer-esp.sh \
+  --efi /home/vikkp/r640-hypervisor.efi \
+  --sha256 0b858bde559faeadfcd965a7ce1dae0f118e4a57e5433e178a084c8ad4ff84de \
+  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
+  --refat-cruzer
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`

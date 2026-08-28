@@ -66,6 +66,7 @@ NO_OVMF=0
 OVMF_PATH=""
 LINUX_ISO=""
 NO_LINUX_ISO=0
+REFAT=0
 
 usage() {
   cat <<'EOF'
@@ -87,6 +88,7 @@ Options:
   --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
   --linux-iso PATH    stage EFI/RayNu/linux.iso (Stage 46; size must exceed 73728)
   --no-linux-iso      remove leftover product ISO so E4 LINUX-EARLY still runs
+  --refat-cruzer      mkfs.vfat -F 32 -n RAYNUV on identified Cruzer (64MiB FAT)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -115,6 +117,7 @@ while [[ $# -gt 0 ]]; do
     --no-ovmf) NO_OVMF=1; shift ;;
     --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
     --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --refat-cruzer) REFAT=1; shift ;;
     --ovmf) OVMF_PATH="${2:-}"; shift 2 ;;
     --no-git) NO_GIT=1; shift ;;
     *) echo "error: unknown arg: $1" >&2; usage; exit 2 ;;
@@ -176,6 +179,8 @@ self_test() {
   grep -q 'ESP free=' "$ESP"
   grep -q 'fsck.vfat -a' "$ESP"
   grep -q 'not format' "$ESP"
+  grep -q -- '--refat-cruzer' "$ESP"
+  grep -q 'mkfs.vfat -F 32 -n' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -440,6 +445,9 @@ if [[ "$NO_LINUX_ISO" -eq 1 ]]; then
   ESP_ARGS+=(--no-linux-iso)
 elif [[ -n "$LINUX_ISO" ]]; then
   ESP_ARGS+=(--linux-iso "$LINUX_ISO")
+fi
+if [[ "$REFAT" -eq 1 ]]; then
+  ESP_ARGS+=(--refat-cruzer)
 fi
 if [[ "$(id -u)" -eq 0 ]]; then
   "$ESP" "${ESP_ARGS[@]}"
