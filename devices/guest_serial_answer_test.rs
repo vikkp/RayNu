@@ -1,4 +1,4 @@
-use super::{note_tx, queued, reset, take_rx, BOOTLOADER, GRUB_ENTER, ROOT, SETUP, YES};
+use super::{note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, NO, ROOT, SETUP, YES};
 
 #[test]
 fn login_queues_root_then_setup_disk() {
@@ -44,6 +44,7 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("-s 0"));
     reset();
     assert_eq!(queued(), 0);
 }
@@ -136,6 +137,50 @@ fn confirm_bracket_yn_queues_yes() {
     assert_eq!(take_rx(), Some(b'y'));
     assert_eq!(take_rx(), Some(b'\r'));
     assert_eq!(queued(), 0);
+    reset();
+}
+
+#[test]
+fn which_disk_queues_vda() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Which disk" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, DISK);
+    reset();
+}
+
+#[test]
+fn no_disks_available_answers_n_not_y() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"No disks available. Try boot media? (y/n)" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, NO);
     reset();
 }
 

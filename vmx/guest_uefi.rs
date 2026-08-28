@@ -7066,10 +7066,23 @@ pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
     }
     if guest_uefi_report_ram_should_map(gpa) {
         let base = report_ram_hpa_lookup(gpa);
-        if base == 0 {
-            return None;
+        if base != 0 {
+            return Some(base + guest_uefi_report_ram_page_off(gpa));
         }
-        return Some(base + guest_uefi_report_ram_page_off(gpa));
+        // Lazy 2MiB WB map (same as an EPT miss). Virtqueue / stack / MOVS
+        // in the reported LowMemory lie must not invent a non-pool HPA.
+        #[cfg(target_os = "uefi")]
+        {
+            // SAFETY: exclusive report-RAM pool; guest is VM-exited.
+            // KANI-TARGET: virtqueue GPA lazy report-RAM (outside Proven Core).
+            if unsafe { ept_map_2m_report_ram(gpa) } {
+                let base = report_ram_hpa_lookup(gpa);
+                if base != 0 {
+                    return Some(base + guest_uefi_report_ram_page_off(gpa));
+                }
+            }
+        }
+        return None;
     }
     None
 }

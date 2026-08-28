@@ -274,7 +274,11 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Forty-sixth slice (this EFI): MMIO MOVS/STOS/LODS (`A4`/`A5`/`AA`/`AB`/`AC`/`AD`,
+Forty-seventh slice (this EFI): Alpine auto-answer `setup-disk -s 0` (no swap),
+`Which disk` → `/dev/vda`, and `No disks available` answers `n` to the
+following boot-media `(y/n)` instead of `y`. Virtqueue/stack/MOVS GPA
+translate lazy-maps report-RAM 2 MiB (same pool as an EPT miss; does not
+invent a non-pool HPA). Forty-sixth slice (this EFI): MMIO MOVS/STOS/LODS (`A4`/`A5`/`AA`/`AB`/`AC`/`AD`,
 optional F3 REP) so memcpy/memset of virtio/IOAPIC/xAPIC writes one
 element per EPT (RAM GPA miss does not invent HPA; REP with RCX left
 keeps RIP). CMPS/SCAS stay decode-fail. Forty-fifth slice (this EFI): MMIO PUSH/POP r/m (`FF /6`, `8F /0`) so a BAR

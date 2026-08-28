@@ -28,17 +28,24 @@ const YESN_BRACK_YN: &[u8] = b"[Y/n]";
 const YESN_BRACK_YY: &[u8] = b"[Y/N]";
 /// Alpine `setup-disk` bootloader picker when `BOOTLOADER` is unset.
 const BOOTLOADER_Q: &[u8] = b"bootloader?";
+/// `ask_disk` when `-m sys /dev/vda` did not stick (no virtio yet).
+const DISK_Q: &[u8] = b"Which disk";
+/// alpine-conf when virtio-blk is not visible; next `(y/n)` is boot-media.
+const NODISK: &[u8] = b"No disks available";
 
 pub(crate) const ROOT: &[u8] = b"root\r";
 /// Alpine UEFI `setup-disk` needs `USE_EFI=1` (wiki / alpine-conf) or it
-/// tries syslinux/MBR and can stall before a GPT write. `mkdir -p` the
+/// tries syslinux/MBR and can stall before a GPT write. `-s 0` skips swap
+/// so the first write is ESP+Linux FS (partition-table detect). `mkdir -p` the
 /// mountpoint (nlplug may not have created `/media/cdrom` when the ISO is
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
 /// distro packages.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda\r";
+    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
+pub(crate) const NO: &[u8] = b"n\r";
+pub(crate) const DISK: &[u8] = b"/dev/vda\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";
 pub(crate) const BOOTLOADER: &[u8] = b"grub\r";
 
@@ -77,6 +84,8 @@ static LOCK: AtomicBool = AtomicBool::new(false);
 static PHASE: AtomicU8 = AtomicU8::new(PHASE_LOGIN);
 static YES_LEFT: AtomicU8 = AtomicU8::new(YES_MAX);
 static GRUB_SENT: AtomicBool = AtomicBool::new(false);
+/// Next `(y/n)` is "Try boot media?" after `No disks available` — answer n.
+static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -94,6 +103,7 @@ pub fn reset() {
     PHASE.store(PHASE_LOGIN, Ordering::Release);
     YES_LEFT.store(YES_MAX, Ordering::Release);
     GRUB_SENT.store(false, Ordering::Release);
+    NEXT_YES_IS_NO.store(false, Ordering::Release);
 }
 
 fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
@@ -152,13 +162,23 @@ pub fn note_tx(b: u8) {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }
+            PHASE_CONFIRM if ends_with(&a.win, a.wlen, NODISK) => {
+                NEXT_YES_IS_NO.store(true, Ordering::Release);
+            }
             PHASE_CONFIRM if is_yes_prompt(&a.win, a.wlen) => {
-                let left = YES_LEFT.load(Ordering::Acquire);
-                if left > 0 {
-                    enqueue(a, YES);
-                    YES_LEFT.store(left - 1, Ordering::Release);
+                if NEXT_YES_IS_NO.swap(false, Ordering::AcqRel) {
+                    enqueue(a, NO);
+                } else {
+                    let left = YES_LEFT.load(Ordering::Acquire);
+                    if left > 0 {
+                        enqueue(a, YES);
+                        YES_LEFT.store(left - 1, Ordering::Release);
+                    }
                 }
                 // Stay in CONFIRM so a later `bootloader?` still matches.
+            }
+            PHASE_CONFIRM if ends_with(&a.win, a.wlen, DISK_Q) => {
+                enqueue(a, DISK);
             }
             PHASE_CONFIRM if ends_with(&a.win, a.wlen, BOOTLOADER_Q) => {
                 enqueue(a, BOOTLOADER);
