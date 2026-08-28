@@ -34,8 +34,11 @@ static REPORT_RAM_EXTRA_END: AtomicU64 = AtomicU64::new(0);
 /// Seed a 2 MiB-aligned bump from unused conventional DRAM above PRECISE.
 ///
 /// Host CR3 is still the UEFI identity map, so these HPAs are reachable
-/// without expanding the 512 MiB precise window. Nested / `iso=0` leave
-/// this empty.
+/// without expanding the 512 MiB precise window. Product ISO HOLDS
+/// (iron and nested; no E4 SHELL), so leftover is safe to seed.
+/// Nested `4225b4d` SIGSEGV was leftover returned to E4; product ISO
+/// never fail-softs, and nested still withholds leftover HPA from E4.
+/// `iso=0` does not retain a window ISO, so this stays empty.
 /// Returns the 2 MiB-aligned HPA, or 0 if the span cannot yield a frame.
 pub fn seed_report_ram_extra(start: u64, bytes: u64) -> u64 {
     let aligned = start.saturating_add(REPORT_RAM_EXTRA_2M - 1) & !(REPORT_RAM_EXTRA_2M - 1);
@@ -194,11 +197,12 @@ pub unsafe fn leave_firmware() -> Handoff {
         serial::write_str("boot: conventional above PRECISE pages=");
         write_u64(above_pages);
         serial::write_byte(b'\n');
-        if crate::arch::cpu::host_hypervisor_present() {
-            serial::write_line(
-                "boot: report-RAM extra skip nested (Stage 46; not ISO-INSTALL-OK)",
-            );
-        } else if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
+        // Nested product-ISO HOLDS (no E4 SHELL). Seed leftover DRAM the
+        // same as iron so QEMU `PRODUCT_ISO=` can walk the 2 GiB CMOS lie.
+        // `iso=0` never enters this block. Nested `-m 512M` has no
+        // conventional above PRECISE (`skip none`); product-ISO QEMU uses
+        // 2560 MiB so leftover exists.
+        if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
             &regions[..region_count],
             REPORT_RAM_EXTRA_WANT_PAGES,
             512,
@@ -304,5 +308,14 @@ mod handoff_test {
         assert!(take_report_ram_extra_2m().is_none());
         seed_report_ram_extra(0, 0);
         assert!(take_report_ram_extra_2m().is_none());
+    }
+
+    #[test]
+    fn nested_product_iso_may_seed_leftover() {
+        let src = include_str!("handoff.rs");
+        assert!(src.contains("nested product-ISO HOLDS"));
+        assert!(src.contains("report-RAM extra skip none"));
+        assert!(src.contains("report-RAM extra skip align"));
+        assert!(src.contains("2560"));
     }
 }
