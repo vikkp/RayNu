@@ -361,6 +361,25 @@ fn decode_mmio_mov_encodings() {
     );
     assert_eq!(super::mmio_sbb_rflags(3, 1, 1, 1) & 1, 1);
     assert_eq!(super::mmio_adc_rflags(2, 1, 1, 1) & 1, 0);
+    let shl = decode_mmio_insn(&[0xC1, 0x21, 0x01], 3).unwrap();
+    assert!(shl.alu == super::MMIO_ALU_SHL && shl.has_imm && shl.imm == 1 && shl.is_write);
+    let shr1 = decode_mmio_insn(&[0xD0, 0x29], 2).unwrap();
+    assert!(shr1.alu == super::MMIO_ALU_SHR && shr1.has_imm && shr1.imm == 1 && shr1.size == 1);
+    let sarcl = decode_mmio_insn(&[0xD3, 0x39], 2).unwrap();
+    assert!(sarcl.alu == super::MMIO_ALU_SAR && !sarcl.has_imm);
+    assert_eq!(
+        super::mmio_shift_apply(1, 1, super::MMIO_ALU_SHL, 1, false) & 0xff,
+        2
+    );
+    assert_eq!(
+        super::mmio_shift_apply(0x80, 1, super::MMIO_ALU_SAR, 1, false) & 0xff,
+        0xc0
+    );
+    assert_eq!(super::mmio_shift_rflags(2, 0x80, 1, 0, super::MMIO_ALU_SHL, 1) & 1, 1);
+    assert_eq!(
+        super::mmio_shift_apply(0, 1, super::MMIO_ALU_RCL, 1, true) & 0xff,
+        1
+    );
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

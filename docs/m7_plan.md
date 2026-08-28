@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Thirty-third slice (this EFI): MMIO ADC (`10`/`11`/`12`/`13`, group-1 `/2`)
+Thirty-fourth slice (this EFI): MMIO group-2 shifts (`C0`/`C1` imm8,
+`D0`/`D1` 1, `D2`/`D3` CL) — SHL/SHR/SAR/ROL/ROR/RCL/RCR — so Linux
+bitfield ops on virtio/IOAPIC/xAPIC do not spin. Thirty-third slice (this EFI): MMIO ADC (`10`/`11`/`12`/`13`, group-1 `/2`)
 and SBB (`18`/`19`/`1A`/`1B`, group-1 `/3`) consume RFLAGS.CF so Linux
 `adc`/`sbb` on virtio/IOAPIC/xAPIC does not spin. Thirty-second slice (this EFI): guest-UEFI CR8-load/store exiting so
 Linux `mov cr8` (TPR) syncs `lapic_virt` after `nolapic` was dropped.

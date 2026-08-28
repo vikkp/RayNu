@@ -1248,7 +1248,8 @@ pub struct MmioInsn {
     pub sign_ext: bool,
     /// XCHG: swap GPR with MMIO (EPT may be read or write).
     pub xchg: bool,
-    /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB.
+    /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB,
+    /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1284,6 +1285,17 @@ pub const MMIO_ALU_NOT: u8 = 6;
 pub const MMIO_ALU_NEG: u8 = 7;
 pub const MMIO_ALU_ADC: u8 = 8;
 pub const MMIO_ALU_SBB: u8 = 9;
+pub const MMIO_ALU_ROL: u8 = 10;
+pub const MMIO_ALU_ROR: u8 = 11;
+pub const MMIO_ALU_RCL: u8 = 12;
+pub const MMIO_ALU_RCR: u8 = 13;
+pub const MMIO_ALU_SHL: u8 = 14;
+pub const MMIO_ALU_SHR: u8 = 15;
+pub const MMIO_ALU_SAR: u8 = 16;
+
+pub fn mmio_alu_is_shift(alu: u8) -> bool {
+    (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
+}
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
     mmio_alu_apply_cf(cur, rhs, alu, false)
@@ -1455,8 +1467,198 @@ pub fn mmio_alu_rflags(old: u64, left: u64, right: u64, result: u64, alu: u8, si
         MMIO_ALU_SUB => mmio_cmp_rflags(old, left, right, size),
         MMIO_ALU_SBB => mmio_sbb_rflags(old, left, right, size),
         MMIO_ALU_NEG => mmio_cmp_rflags(old, 0, left, size),
+        a if mmio_alu_is_shift(a) => mmio_shift_rflags(old, left, right, result, alu, size),
         _ => old,
     }
+}
+
+fn mmio_bit_width(size: u8) -> u32 {
+    match size {
+        1 => 8,
+        2 => 16,
+        4 => 32,
+        _ => 64,
+    }
+}
+
+fn mmio_shift_amt(count: u64, size: u8) -> u32 {
+    let m = if size == 8 { 0x3f } else { 0x1f };
+    (count as u32) & m
+}
+
+/// Group-2 shift/rotate. `count` is imm8 or CL; masked to 5/6 bits.
+pub fn mmio_shift_apply(cur: u64, count: u64, alu: u8, size: u8, cf: bool) -> u64 {
+    let mask = mmio_size_mask(size);
+    let a = cur & mask;
+    let n = mmio_shift_amt(count, size);
+    if n == 0 {
+        return a;
+    }
+    let w = mmio_bit_width(size);
+    match alu {
+        MMIO_ALU_SHL => {
+            if n >= w {
+                0
+            } else {
+                (a << n) & mask
+            }
+        }
+        MMIO_ALU_SHR => {
+            if n >= w {
+                0
+            } else {
+                a >> n
+            }
+        }
+        MMIO_ALU_SAR => {
+            let s = mmio_as_signed(a, size);
+            (s >> n.min(127)) as u64 & mask
+        }
+        MMIO_ALU_ROL => {
+            let k = n % w;
+            if k == 0 {
+                a
+            } else {
+                ((a << k) | (a >> (w - k))) & mask
+            }
+        }
+        MMIO_ALU_ROR => {
+            let k = n % w;
+            if k == 0 {
+                a
+            } else {
+                ((a >> k) | (a << (w - k))) & mask
+            }
+        }
+        MMIO_ALU_RCL => {
+            let m = w + 1;
+            let k = n % m;
+            if k == 0 {
+                a
+            } else {
+                let val = u128::from(a) | ((if cf { 1u128 } else { 0 }) << w);
+                let rot = (val << k) | (val >> (m - k));
+                (rot as u64) & mask
+            }
+        }
+        MMIO_ALU_RCR => {
+            let m = w + 1;
+            let k = n % m;
+            if k == 0 {
+                a
+            } else {
+                let val = u128::from(a) | ((if cf { 1u128 } else { 0 }) << w);
+                let rot = (val >> k) | (val << (m - k));
+                (rot as u64) & mask
+            }
+        }
+        _ => a,
+    }
+}
+
+/// Group-2 RFLAGS. Count 0 leaves flags. OF defined only for count==1.
+pub fn mmio_shift_rflags(
+    old: u64,
+    cur: u64,
+    count: u64,
+    result: u64,
+    alu: u8,
+    size: u8,
+) -> u64 {
+    let n = mmio_shift_amt(count, size);
+    if n == 0 {
+        return old;
+    }
+    let mask = mmio_size_mask(size);
+    let a = cur & mask;
+    let r = result & mask;
+    let w = mmio_bit_width(size);
+    let old_cf = (old & 1) != 0;
+    let cf = match alu {
+        MMIO_ALU_SHL => {
+            if n > w {
+                false
+            } else if n == w {
+                (a & 1) != 0
+            } else {
+                ((a >> (w - n)) & 1) != 0
+            }
+        }
+        MMIO_ALU_SHR | MMIO_ALU_SAR => {
+            if n > w {
+                alu == MMIO_ALU_SAR && (a & mmio_sign_bit(size)) != 0
+            } else {
+                ((a >> (n - 1)) & 1) != 0
+            }
+        }
+        MMIO_ALU_ROL => {
+            let k = n % w;
+            if k == 0 {
+                (a & 1) != 0
+            } else {
+                (r & 1) != 0
+            }
+        }
+        MMIO_ALU_ROR => {
+            let k = n % w;
+            if k == 0 {
+                (a & mmio_sign_bit(size)) != 0
+            } else {
+                (r & mmio_sign_bit(size)) != 0
+            }
+        }
+        MMIO_ALU_RCL => {
+            let m = w + 1;
+            let k = n % m;
+            if k == 0 {
+                old_cf
+            } else {
+                let val = u128::from(a) | ((if old_cf { 1u128 } else { 0 }) << w);
+                let rot = (val << k) | (val >> (m - k));
+                ((rot >> w) & 1) != 0
+            }
+        }
+        MMIO_ALU_RCR => {
+            let m = w + 1;
+            let k = n % m;
+            if k == 0 {
+                old_cf
+            } else {
+                let val = u128::from(a) | ((if old_cf { 1u128 } else { 0 }) << w);
+                let rot = (val >> k) | (val << (m - k));
+                ((rot >> w) & 1) != 0
+            }
+        }
+        _ => old_cf,
+    };
+    let mut f = match alu {
+        MMIO_ALU_SHL | MMIO_ALU_SHR | MMIO_ALU_SAR => mmio_test_rflags(old, r, size),
+        _ => (old | 2) & !(1 << 0),
+    };
+    if cf {
+        f |= 1 << 0;
+    } else {
+        f &= !1;
+    }
+    if n == 1 {
+        let of = match alu {
+            MMIO_ALU_SHL | MMIO_ALU_ROL | MMIO_ALU_RCL => {
+                ((r & mmio_sign_bit(size)) != 0) != cf
+            }
+            MMIO_ALU_SHR => (a & mmio_sign_bit(size)) != 0,
+            MMIO_ALU_SAR => false,
+            MMIO_ALU_ROR | MMIO_ALU_RCR => {
+                let s = mmio_sign_bit(size);
+                ((r & s) != 0) != ((r & (s >> 1)) != 0)
+            }
+            _ => false,
+        };
+        f &= !(1 << 11);
+        if of {
+            f |= 1 << 11;
+        }
+    }
+    f
 }
 
 /// BT family: `bit` indexes `cur` of `size` bytes. Returns (new_value, old_bit).
@@ -2103,6 +2305,59 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 reg: 0,
                 has_imm: true,
                 imm: 1,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+            })
+        }
+        0xC0 | 0xC1 | 0xD0 | 0xD1 | 0xD2 | 0xD3 => {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let ext = (m >> 3) & 7;
+            let alu = match ext {
+                0 => MMIO_ALU_ROL,
+                1 => MMIO_ALU_ROR,
+                2 => MMIO_ALU_RCL,
+                3 => MMIO_ALU_RCR,
+                4 | 6 => MMIO_ALU_SHL,
+                5 => MMIO_ALU_SHR,
+                _ => MMIO_ALU_SAR,
+            };
+            let size = if op == 0xC0 || op == 0xD0 || op == 0xD2 {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            let (has_imm, imm) = match op {
+                0xD0 | 0xD1 => (true, 1u64),
+                0xD2 | 0xD3 => (false, 0u64),
+                _ => {
+                    if insn_len < i + 2 {
+                        return None;
+                    }
+                    (true, u64::from(bytes[insn_len - 1]))
+                }
+            };
+            Some(MmioInsn {
+                is_write: true,
+                size,
+                reg: 1,
+                has_imm,
+                imm,
                 zero_ext: false,
                 sign_ext: false,
                 xchg: false,

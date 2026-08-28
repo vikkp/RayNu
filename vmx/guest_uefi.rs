@@ -4652,6 +4652,23 @@ unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cu
 /// ALU RMW: dest is MMIO (`left = mem`) or GPR (`alu_reg_left`). Updates RFLAGS.
 #[cfg(target_os = "uefi")]
 unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u64) -> u64 {
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let cf = (oldf & 1) != 0;
+    if crate::devices::guest_virtio_blk::mmio_alu_is_shift(op.alu) {
+        let count = if op.has_imm {
+            op.imm
+        } else {
+            cr_gpr(1) & 0xff
+        };
+        let result = crate::devices::guest_virtio_blk::mmio_shift_apply(
+            mem, count, op.alu, op.size, cf,
+        );
+        let newf = crate::devices::guest_virtio_blk::mmio_shift_rflags(
+            oldf, mem, count, result, op.alu, op.size,
+        );
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        return result;
+    }
     let other = if op.has_imm {
         op.imm
     } else {
@@ -4662,8 +4679,6 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
     } else {
         (mem, other)
     };
-    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
-    let cf = (oldf & 1) != 0;
     let result =
         crate::devices::guest_virtio_blk::mmio_alu_apply_cf(left, right, op.alu, cf);
     let newf = crate::devices::guest_virtio_blk::mmio_alu_rflags(
