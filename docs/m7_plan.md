@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Forty-fifth slice (this EFI): MMIO PUSH/POP r/m (`FF /6`, `8F /0`) so a BAR
+`push`/`pop` writes the stack (long mode defaults to 64-bit even without
+REX.W; 66h is 16-bit) instead of decode-fail spinning. Stack GPA miss
+does not invent HPA (virtio/xAPIC retry the EPT; IOAPIC skips).
 Forty-fourth slice (this EFI): MMIO TZCNT/LZCNT/POPCNT (`F3 0F BC`/`BD`/`B8`)
 so BMI1 `tzcnt`/`lzcnt` and `popcnt` of virtio/IOAPIC/xAPIC write the
 count into the GPR (src 0 writes bitwidth and CF for TZCNT/LZCNT) instead

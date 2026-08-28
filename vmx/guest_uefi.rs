@@ -3923,6 +3923,130 @@ unsafe fn copy_guest_gpa_bytes(gpa: u64, buf: &mut [u8]) -> usize {
 }
 
 #[cfg(target_os = "uefi")]
+unsafe fn write_guest_identity_bytes(linear: u64, buf: &[u8]) -> usize {
+    let page_left = (0x1000 - (linear & 0xfff)) as usize;
+    let want = buf.len().min(page_left);
+    if want == 0 {
+        return 0;
+    }
+    if linear < GUEST_UEFI_LOW_RAM_BYTES {
+        let hpa = RAM_HPA.load(Ordering::Acquire);
+        if hpa == 0 {
+            return 0;
+        }
+        let start = linear as usize;
+        if start >= GUEST_UEFI_LOW_RAM_BYTES as usize {
+            return 0;
+        }
+        let n = want.min(GUEST_UEFI_LOW_RAM_BYTES as usize - start);
+        // SAFETY: exclusive guest-UEFI 32 MiB slab; firmware is VMX-halted.
+        // KANI-TARGET: identity poke low RAM for PUSH/POP (outside Proven Core).
+        core::ptr::copy_nonoverlapping(buf.as_ptr(), (hpa as *mut u8).add(start), n);
+        return n;
+    }
+    if !guest_uefi_report_ram_should_map(linear) {
+        return 0;
+    }
+    let hpa = report_ram_hpa_lookup(linear);
+    if hpa == 0 {
+        return 0;
+    }
+    let off = guest_uefi_report_ram_page_off(linear) as usize;
+    let n = want.min(GUEST_UEFI_REPORT_RAM_PAGE as usize - off);
+    if n == 0 {
+        return 0;
+    }
+    // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
+    // KANI-TARGET: identity poke report-RAM for PUSH/POP (outside Proven Core).
+    core::ptr::copy_nonoverlapping(buf.as_ptr(), (hpa as *mut u8).add(off), n);
+    n
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_gpa_bytes(gpa: u64, buf: &[u8]) -> usize {
+    let Some(hpa) = guest_uefi_gpa_to_hpa(gpa) else {
+        return 0;
+    };
+    let off = (gpa & 0xfff) as usize;
+    let n = buf.len().min(4096 - off);
+    if n == 0 {
+        return 0;
+    }
+    // SAFETY: translate returned a host pointer in guest-UEFI RAM / report-RAM.
+    // KANI-TARGET: MMIO PUSH/POP store to GPA (outside Proven Core).
+    core::ptr::copy_nonoverlapping(buf.as_ptr(), hpa as *mut u8, n);
+    n
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_linear_one_page(linear: u64, buf: &[u8]) -> usize {
+    let n = write_guest_identity_bytes(linear, buf);
+    if n != 0 {
+        return n;
+    }
+    let Some(gpa) = guest_linear_to_gpa(linear) else {
+        return 0;
+    };
+    write_guest_gpa_bytes(gpa, buf)
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_linear_bytes(linear: u64, buf: &[u8]) -> bool {
+    let mut done = 0usize;
+    while done < buf.len() {
+        let n = write_guest_linear_one_page(linear.wrapping_add(done as u64), &buf[done..]);
+        if n == 0 {
+            return false;
+        }
+        done = done.saturating_add(n);
+    }
+    true
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_op_size(op: crate::devices::guest_virtio_blk::MmioInsn) -> u8 {
+    crate::devices::guest_virtio_blk::mmio_stack_width(
+        op.size,
+        guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0)),
+    )
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_push(val: u64, size: u8) -> bool {
+    let n = usize::from(size);
+    if n == 0 || n > 8 {
+        return false;
+    }
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let new_rsp = rsp.wrapping_sub(n as u64);
+    let bytes = val.to_le_bytes();
+    if !write_guest_linear_bytes(new_rsp, &bytes[..n]) {
+        return false;
+    }
+    ops::vmwrite(GUEST_RSP, new_rsp).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_pop(size: u8) -> Option<u64> {
+    let n = usize::from(size);
+    if n == 0 || n > 8 {
+        return None;
+    }
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let mut buf = [0u8; 8];
+    if copy_guest_linear_bytes(rsp, &mut buf[..n]) < n {
+        return None;
+    }
+    let mut tmp = [0u8; 8];
+    tmp[..n].copy_from_slice(&buf[..n]);
+    let val = u64::from_le_bytes(tmp);
+    if ops::vmwrite(GUEST_RSP, rsp.wrapping_add(n as u64)).is_err() {
+        return None;
+    }
+    Some(val)
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn read_guest_pte(gpa: u64) -> Option<u64> {
     let hpa = guest_uefi_gpa_to_hpa(gpa)?;
     // SAFETY: 8-byte PTE in guest-UEFI RAM / report-RAM.
@@ -5882,6 +6006,38 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, size);
+        if !mmio_stack_push(val, size) {
+            return false;
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let Some(val) = mmio_stack_pop(size) else {
+            return false;
+        };
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, size, val);
+        let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+        if wrote != 0 {
+            serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+            write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if !guest_uefi_host_hypervisor_present()
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
+        return skip_insn();
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
@@ -6051,6 +6207,21 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if !mmio_stack_push(val, size) {
+            return skip_insn();
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        if let Some(val) = mmio_stack_pop(size) {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
@@ -6150,6 +6321,26 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         return false;
     };
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if !mmio_stack_push(val, size) {
+            return false;
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let Some(val) = mmio_stack_pop(size) else {
+            return false;
+        };
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
         return skip_insn();
     }
     if op.xchg {

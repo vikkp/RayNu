@@ -1252,7 +1252,7 @@ pub struct MmioInsn {
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
     /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV,
-    /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT.
+    /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT, 30=PUSH r/m, 31=POP r/m.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1323,6 +1323,10 @@ pub const MMIO_ALU_TZCNT: u8 = 27;
 pub const MMIO_ALU_LZCNT: u8 = 28;
 /// POPCNT r, r/m (`F3 0F B8`). Dest is the GPR.
 pub const MMIO_ALU_POPCNT: u8 = 29;
+/// PUSH r/m (`FF /6`). Reads MMIO, pushes onto the guest stack.
+pub const MMIO_ALU_PUSH: u8 = 30;
+/// POP r/m (`8F /0`). Pops the guest stack into MMIO.
+pub const MMIO_ALU_POP: u8 = 31;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
@@ -1342,6 +1346,25 @@ pub fn mmio_alu_is_count_zero(alu: u8) -> bool {
 
 pub fn mmio_alu_is_popcnt(alu: u8) -> bool {
     alu == MMIO_ALU_POPCNT
+}
+
+pub fn mmio_alu_is_push(alu: u8) -> bool {
+    alu == MMIO_ALU_PUSH
+}
+
+pub fn mmio_alu_is_pop(alu: u8) -> bool {
+    alu == MMIO_ALU_POP
+}
+
+/// PUSH/POP width: 66h → 16-bit; long mode → 64-bit; else 32-bit.
+pub fn mmio_stack_width(decoded_size: u8, long: bool) -> u8 {
+    if decoded_size == 2 {
+        2
+    } else if long {
+        8
+    } else {
+        4
+    }
 }
 
 pub fn mmio_alu_is_hint(alu: u8) -> bool {
@@ -2180,7 +2203,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -3102,12 +3125,75 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 _ => None,
             }
         }
+        0x8F => {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            if ((m >> 3) & 7) != 0 {
+                return None;
+            }
+            let size = if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            Some(MmioInsn {
+                is_write: true,
+                size,
+                reg: 0,
+                has_imm: false,
+                imm: 0,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu: MMIO_ALU_POP,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
+            })
+        }
         0xFE | 0xFF => {
             if i >= insn_len {
                 return None;
             }
             let m = bytes[i];
             let ext = (m >> 3) & 7;
+            if op == 0xFF && ext == 6 {
+                let size = if rex_w {
+                    8
+                } else if operand16 {
+                    2
+                } else {
+                    4
+                };
+                return Some(MmioInsn {
+                    is_write: false,
+                    size,
+                    reg: 0,
+                    has_imm: false,
+                    imm: 0,
+                    zero_ext: false,
+                    sign_ext: false,
+                    xchg: false,
+                    alu: MMIO_ALU_PUSH,
+                    rex,
+                    test: false,
+                    cmp: false,
+                    cmp_reg_left: false,
+                    alu_reg_left: false,
+                    bt: 0,
+                    atomic: 0,
+                    cc: 0,
+                });
+            }
             let alu = match ext {
                 0 => MMIO_ALU_ADD,
                 1 => MMIO_ALU_SUB,
