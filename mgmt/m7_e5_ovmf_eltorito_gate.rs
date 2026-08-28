@@ -25,9 +25,10 @@ use crate::devices::ide_cdrom::{
     MOCK_EFI_ISO_BYTES,
 };
 use crate::vmx::guest_uefi::{
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, post_atapi_should_stop,
-    post_dxe_should_stop, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_POST_ATAPI_TAIL,
-    GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, M7_E5_OVMF_ELTORITO_OK_MARKER,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_resume_cap,
+    post_atapi_should_stop, post_dxe_should_stop, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE,
+    GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL,
+    GUEST_UEFI_RESUME_CAP, M7_E5_OVMF_ELTORITO_OK_MARKER,
 };
 
 /// Host / CI / QEMU marker when firmware ran the El Torito CD EFI.
@@ -220,6 +221,9 @@ pub fn run_m7_e5_ovmf_eltorito_gate() -> bool {
         && prop_eltorito_payload_is_pe()
         && prop_catalog_and_load_reads()
         && GUEST_UEFI_RESUME_CAP >= 262144
+        && guest_uefi_resume_cap(false) == GUEST_UEFI_RESUME_CAP
+        && guest_uefi_resume_cap(true) == GUEST_UEFI_NESTED_RESUME_CAP
+        && GUEST_UEFI_NESTED_RESUME_CAP >= 32768
         && GUEST_UEFI_POST_DXE_TAIL == 32768
         && GUEST_UEFI_POST_ATAPI_TAIL == 32768
         && post_dxe_should_stop(true, 115, 115, 1)

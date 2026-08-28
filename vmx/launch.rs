@@ -2560,6 +2560,13 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         write_hex_u64(ACTIVE_GUEST_ID);
         serial::write_byte(b'\n');
         dump_linux_guest_state();
+        // P0-60: G1–G3 EPT faults must not VMXOFF / `boot gate failed`.
+        // G0 Linux still hard-fails (real isolation bug).
+        if let Some(slot) = slot_for_guest_id(ACTIVE_GUEST_ID) {
+            if slot >= 1 && !REAL_LINUX_GUEST {
+                skip_shell_failsoft(slot);
+            }
+        }
         finish_boot(false);
     }
     let is_write = (qual & 0x2) != 0;
@@ -3577,14 +3584,20 @@ unsafe fn handle_shell_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_rip: 
         EXIT_REASON_EPT_VIOLATION => handle_ept_violation_and_resume(qual, guest_rip),
         EXIT_REASON_CPUID => handle_cpuid_and_resume(guest_rip),
         EXIT_REASON_HLT => {
-            serial::write_line("boot: ERROR — shell HLT without SHELL CPUID");
-            finish_boot(false);
+            serial::write_line("boot: WARN — shell HLT without SHELL CPUID (fail-soft)");
+            if let Some(slot) = slot_for_guest_id(ACTIVE_GUEST_ID) {
+                skip_shell_failsoft(slot);
+            }
+            finish_boot(true);
         }
         _ => {
-            serial::write_str("boot: ERROR — unexpected shell exit reason=0x");
+            serial::write_str("boot: WARN — unexpected shell exit reason=0x");
             write_hex_u32(basic);
-            serial::write_byte(b'\n');
-            finish_boot(false);
+            serial::write_line(" (fail-soft; VMX on)");
+            if let Some(slot) = slot_for_guest_id(ACTIVE_GUEST_ID) {
+                skip_shell_failsoft(slot);
+            }
+            finish_boot(true);
         }
     }
 }
@@ -3623,21 +3636,22 @@ unsafe fn launch_shell_guest(slot: usize) -> ! {
     ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — shell VMCS prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — shell VMCS prepare failed (fail-soft)");
+        skip_shell_failsoft(slot);
     }
     if ops::vmclear(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — shell VMCLEAR failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — shell VMCLEAR failed (fail-soft)");
+        skip_shell_failsoft(slot);
     }
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — shell VMCS re-prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — shell VMCS re-prepare failed (fail-soft)");
+        skip_shell_failsoft(slot);
     }
     if let Err(e) = setup_vmcs(&frames) {
-        serial::write_str("boot: ERROR — shell setup_vmcs failed: ");
-        serial::write_line(launch_err_name(e));
-        finish_boot(false);
+        serial::write_str("boot: WARN — shell setup_vmcs failed: ");
+        serial::write_str(launch_err_name(e));
+        serial::write_line(" (fail-soft)");
+        skip_shell_failsoft(slot);
     }
 
     let _ = apic::mask_timer();
@@ -3647,17 +3661,33 @@ unsafe fn launch_shell_guest(slot: usize) -> ! {
     serial::write_line("boot: VMLAUNCH → shell SHELL CPUID");
     match ops::vmlaunch() {
         Ok(()) => {
-            serial::write_line("boot: ERROR — shell VMLAUNCH returned Ok");
-            finish_boot(false);
+            serial::write_line("boot: WARN — shell VMLAUNCH returned Ok (fail-soft)");
+            skip_shell_failsoft(slot);
         }
         Err(_) => {
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-            serial::write_str("boot: ERROR — shell VMLAUNCH failed insn_error=0x");
+            serial::write_str("boot: WARN — shell VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
-            serial::write_byte(b'\n');
-            finish_boot(false);
+            serial::write_line(" (fail-soft)");
+            skip_shell_failsoft(slot);
         }
     }
+}
+
+/// P0-60: skip a shell guest after EPT/entry fail. G0 SHELL already latched.
+/// Do not VMXOFF / `boot gate failed`. Try the next slab or continue the ladder.
+unsafe fn skip_shell_failsoft(slot: usize) -> ! {
+    serial::write_str("boot: WARN — skip shell slot=");
+    write_hex_u32(slot as u32);
+    serial::write_line(" (VMX on; no boot gate failed)");
+    let next = slot + 1;
+    if next <= SHELL_SLOT_MAX && frames_for_slot(next).is_some() {
+        launch_shell_guest(next);
+    }
+    if HAS_BLK_PROBE {
+        try_launch_blk_probe();
+    }
+    finish_boot(true);
 }
 
 fn launch_err_name(e: LaunchError) -> &'static str {

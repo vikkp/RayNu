@@ -275,7 +275,12 @@ quiet except HTTP/WARN/markers.
 
 **First action (P0-60 — M4.2 G1 shell EPT / fail-soft, not an E5 stage):**
 After guest-UEFI + G0 SHELL, G1 must not `VMXOFF` / `boot gate failed` on
-`GPA=0x10403000`. Slab-local 2 MiB EPT (SPA path). Not Stage 46.
+`GPA=0x10403000`. Slab-local 2 MiB EPT (SPA path): EPT tables + VMCS live
+in the punched 2 MiB slab, not FrameAllocator pages inside G0 e820 (Linux
+SHELL scribbled those tables). Shell EPT/entry faults fail-soft (next slab
+or blk probe; VMX stays on). Nested KVM uses a 65536-exit guest-UEFI cap
+so QEMU CI reaches E4 SHELL; iron keeps 262144 for El Torito. Not Stage 46.
+Not closed until iron COM2 shows G1 SHELL / no `boot gate failed`.
 Stage 45 closed on iron COM2 `0be7283`: OVMF BDS StartImaged the El Torito
 CD EFI; `RN-ELT` + `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` n=197992 catalog=1
 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6.

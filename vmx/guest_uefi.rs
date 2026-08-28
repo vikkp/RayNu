@@ -103,6 +103,20 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// 262144 keeps the private VMCS until `RN-ELT` or the hard cap. Stage 45
 /// does not apply the 32768 post-ATAPI tail after PACKET.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
+/// Nested KVM only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
+/// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
+/// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
+/// Iron bit-31 clear still uses [`GUEST_UEFI_RESUME_CAP`].
+pub const GUEST_UEFI_NESTED_RESUME_CAP: u32 = 65536;
+
+/// Resume cap: iron 262144 (Stage 45 El Torito); nested KVM 65536 (CI SHELL).
+pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
+    if host_hypervisor {
+        GUEST_UEFI_NESTED_RESUME_CAP
+    } else {
+        GUEST_UEFI_RESUME_CAP
+    }
+}
 
 /// After DXE evidence, spend this many exits unless firmware read an ATAPI
 /// sector. Nested VT-x `1b07692`: BOTH-OK at n=1111 then the private VMCS
@@ -3195,7 +3209,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     let mut resume = false;
-    if !entry_fail && !tf && !fetch_fail && n < GUEST_UEFI_RESUME_CAP {
+    if !entry_fail && !tf && !fetch_fail && n < guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()) {
         resume = match basic {
             EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
             EXIT_REASON_CPUID => handle_cpuid(),

@@ -625,28 +625,21 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
             core::ptr::write_bytes(g_base as *mut u8, 0, memory::ept_hw::TWO_MIB as usize);
         }
 
-        let ept_need = memory::ept_hw::frames_required_precise();
-        let mut ept_frames = [0u64; 8];
-        if ept_need > ept_frames.len() {
-            boot::serial::write_line("boot: ERROR — shell EPT frame budget too small");
-            let _ = life.disable();
-            return;
-        }
-        for fslot in ept_frames.iter_mut().take(ept_need) {
-            let Some(f) = alloc_phys(alloc) else {
-                boot::serial::write_line("boot: ERROR — no frame for shell EPT");
-                let _ = life.disable();
-                return;
-            };
-            *fslot = f;
-        }
-        // SAFETY: exclusive EPT frames for this shell guest.
+        // P0-60: EPT + VMCS + host state live in the punched slab (SPA path).
+        // Allocator frames sit in G0 e820; Linux SHELL then scribbles them so
+        // G1 EPT-walks GPA=slab+0x3000 (guest CR3) and `boot gate failed`.
+        let mut ept_frames = [
+            g_base + memory::ept_hw::G1_SLAB_OFF_EPT_PML4,
+            g_base + memory::ept_hw::G1_SLAB_OFF_EPT_PDPT,
+            g_base + memory::ept_hw::G1_SLAB_OFF_EPT_PD,
+        ];
+        // SAFETY: EPT tables are exclusive bytes inside this guest's 2 MiB slab.
         let guest_eptp = match unsafe {
-            memory::ept_hw::build_precise_identity(&mut ept_frames[..ept_need])
+            memory::ept_hw::build_single_2m_identity(g_base, &mut ept_frames)
         } {
             Ok(v) => v,
             Err(_) => {
-                boot::serial::write_line("boot: ERROR — shell EPT build failed");
+                boot::serial::write_line("boot: ERROR — shell 2M EPT build failed");
                 let _ = life.disable();
                 return;
             }
@@ -666,70 +659,32 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
         }
         audit::integrity::record_event(audit::AuditEvent::EptMapped {
             guest_id,
-            gpa: g_code,
-            hpa: g_code,
+            gpa: g_base,
+            hpa: g_base,
         });
 
-        let Some(g_vmcs) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for shell VMCS");
-            let _ = life.disable();
-            return;
+        let frames = vmx::LaunchFrames {
+            vmcs_phys: g_base + memory::ept_hw::G1_SLAB_OFF_VMCS,
+            guest_stack_phys: g_stack,
+            host_stack_phys: g_base + memory::ept_hw::G1_SLAB_OFF_HOST_STACK,
+            tss_phys: g_base + memory::ept_hw::G1_SLAB_OFF_TSS,
+            gdt_phys: g_base + memory::ept_hw::G1_SLAB_OFF_GDT,
+            eptp: guest_eptp,
+            guest_code_phys: g_code,
+            guest_idt_phys: g_idt,
+            guest_cr3_phys: Some(shell_cr3),
+            msr_bitmap_phys: Some(g_base + memory::ept_hw::G1_SLAB_OFF_MSR_BITMAP),
+            io_bitmap_a_phys: Some(g_base + memory::ept_hw::G1_SLAB_OFF_IO_A),
+            io_bitmap_b_phys: Some(g_base + memory::ept_hw::G1_SLAB_OFF_IO_B),
         };
-        let Some(g_host_stack) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for shell host stack");
-            let _ = life.disable();
-            return;
-        };
-        let Some(g_tss) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for shell TSS");
-            let _ = life.disable();
-            return;
-        };
-        let Some(g_gdt) = alloc_phys(alloc) else {
-            boot::serial::write_line("boot: ERROR — no frame for shell GDT");
-            let _ = life.disable();
-            return;
-        };
-        let g_msr = alloc_phys(alloc);
-        let g_io_a = alloc_phys(alloc);
-        let g_io_b = alloc_phys(alloc);
         if slot == 1 {
-            vmx::launch::set_second_guest(vmx::LaunchFrames {
-                vmcs_phys: g_vmcs,
-                guest_stack_phys: g_stack,
-                host_stack_phys: g_host_stack,
-                tss_phys: g_tss,
-                gdt_phys: g_gdt,
-                eptp: guest_eptp,
-                guest_code_phys: g_code,
-                guest_idt_phys: g_idt,
-                guest_cr3_phys: Some(shell_cr3),
-                msr_bitmap_phys: g_msr,
-                io_bitmap_a_phys: g_io_a,
-                io_bitmap_b_phys: g_io_b,
-            });
+            vmx::launch::set_second_guest(frames);
         } else {
-            vmx::launch::set_shell_guest(
-                slot,
-                vmx::LaunchFrames {
-                    vmcs_phys: g_vmcs,
-                    guest_stack_phys: g_stack,
-                    host_stack_phys: g_host_stack,
-                    tss_phys: g_tss,
-                    gdt_phys: g_gdt,
-                    eptp: guest_eptp,
-                    guest_code_phys: g_code,
-                    guest_idt_phys: g_idt,
-                    guest_cr3_phys: Some(shell_cr3),
-                    msr_bitmap_phys: g_msr,
-                    io_bitmap_a_phys: g_io_a,
-                    io_bitmap_b_phys: g_io_b,
-                },
-            );
+            vmx::launch::set_shell_guest(slot, frames);
         }
     }
     boot::serial::write_line(
-        "boot: M4.2 G1–G3 prepared (precise EPT + host CR3 + SHELL CPUID in slabs)",
+        "boot: M4.2 G1–G3 prepared (slab 2M EPT + slab CR3 + SHELL CPUID)",
     );
 
     // M4.3: bare-metal probe guest reuses G0 EPTP (BAR already punched) + host CR3.

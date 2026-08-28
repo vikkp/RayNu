@@ -22,8 +22,10 @@ pub fn nvm_launch_present() -> bool {
         && launch.contains(M4_NVM_OK_MARKER)
         && launch.contains("set_shell_guest")
         && launch.contains("launch_shell_guest")
+        && launch.contains("skip_shell_failsoft")
         && main.contains("set_shell_guest")
         && main.contains("claim_precise_with_shell_holes")
+        && main.contains("build_single_2m_identity")
         && main.contains("pick_shell_slab_hpa")
 }
 
