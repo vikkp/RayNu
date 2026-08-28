@@ -4741,6 +4741,51 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
     result
 }
 
+/// DIV/IDIV into AX or DX:AX. Returns false when the guest must take #DE.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_div_pair_commit(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    mem: u64,
+) -> bool {
+    let mut ax_src = op;
+    ax_src.reg = 0;
+    let ax = mmio_gpr_in(ax_src);
+    let dx = if op.size > 1 {
+        let mut dx_src = op;
+        dx_src.reg = 2;
+        mmio_gpr_in(dx_src)
+    } else {
+        0
+    };
+    let signed = op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_IDIV;
+    let Some((lo, hi)) =
+        crate::devices::guest_virtio_blk::mmio_div_apply(ax, dx, mem, op.size, signed)
+    else {
+        return false;
+    };
+    let mut dest = op;
+    dest.reg = 0;
+    dest.size = if op.size == 1 { 2 } else { op.size };
+    dest.zero_ext = dest.size == 4;
+    dest.rex = true;
+    mmio_gpr_out(dest, lo);
+    if op.size > 1 {
+        dest.reg = 2;
+        mmio_gpr_out(dest, hi);
+    }
+    true
+}
+
+/// Inject #DE at the faulting RIP. Do not skip the insn (SDM: #DE has no error code).
+#[cfg(target_os = "uefi")]
+unsafe fn inject_mmio_div_de() -> bool {
+    let _ = ops::vmwrite(
+        VM_ENTRY_INTERRUPTION_INFO,
+        crate::devices::guest_virtio_blk::MMIO_DIV_DE_INTR_INFO,
+    );
+    true
+}
+
 /// BT/BTS/BTR/BTC: CF = old bit; store for all but BT. Returns new mem value.
 #[cfg(target_os = "uefi")]
 unsafe fn mmio_apply_bt(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> u64 {
@@ -5867,6 +5912,13 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
+    }
     if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
         let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         let val = mmio_alu_result(op, cur);
@@ -5964,6 +6016,13 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
             crate::devices::guest_irq::ioapic_write(off, val as u32);
         }
         return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
     }
     if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
         let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
@@ -6076,6 +6135,17 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
             let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
         }
         return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
     }
     if op.alu != 0 {
         let cur = u64::from(

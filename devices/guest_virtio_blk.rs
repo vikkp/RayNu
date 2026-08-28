@@ -1251,7 +1251,7 @@ pub struct MmioInsn {
     /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB,
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
-    /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX.
+    /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1306,6 +1306,10 @@ pub const MMIO_ALU_IMUL: u8 = 20;
 pub const MMIO_ALU_MUL: u8 = 21;
 /// F6/F7 /5 IMUL r/m (one-operand): product in AX or DX:AX.
 pub const MMIO_ALU_IMUL1: u8 = 22;
+/// F6/F7 /6 DIV r/m: quotient AX, remainder DX (byte: AH:AL).
+pub const MMIO_ALU_DIV: u8 = 23;
+/// F6/F7 /7 IDIV r/m.
+pub const MMIO_ALU_IDIV: u8 = 24;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
@@ -1325,6 +1329,10 @@ pub fn mmio_alu_is_imul(alu: u8) -> bool {
 
 pub fn mmio_alu_is_mul_pair(alu: u8) -> bool {
     alu == MMIO_ALU_MUL || alu == MMIO_ALU_IMUL1
+}
+
+pub fn mmio_alu_is_div_pair(alu: u8) -> bool {
+    alu == MMIO_ALU_DIV || alu == MMIO_ALU_IDIV
 }
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
@@ -1826,6 +1834,132 @@ pub fn mmio_mul_pair_apply(ax: u64, mem: u64, size: u8, signed: bool) -> (u64, u
     }
 }
 
+/// Unsigned DIV or signed IDIV. `None` = #DE (divisor 0 or quotient overflow).
+/// Byte: dividend AX, quot AL, rem AH packed in `lo`. Wider: dividend DX:AX.
+pub fn mmio_div_apply(
+    ax: u64,
+    dx: u64,
+    mem: u64,
+    size: u8,
+    signed: bool,
+) -> Option<(u64, u64)> {
+    match size {
+        1 => {
+            let dividend = ax & 0xffff;
+            let divisor = mem & 0xff;
+            if divisor == 0 {
+                return None;
+            }
+            if signed {
+                let d = divisor as i8 as i16;
+                let n = dividend as i16;
+                if d == -1 && n == i16::MIN {
+                    return None;
+                }
+                let q = n / d;
+                let r = n % d;
+                if q < i8::MIN as i16 || q > i8::MAX as i16 {
+                    return None;
+                }
+                Some(((q as u8 as u64) | ((r as u8 as u64) << 8), 0))
+            } else {
+                let q = dividend / divisor;
+                let r = dividend % divisor;
+                if q > 0xff {
+                    return None;
+                }
+                Some((q | (r << 8), 0))
+            }
+        }
+        2 => {
+            let dividend = ((dx & 0xffff) << 16) | (ax & 0xffff);
+            let divisor = mem & 0xffff;
+            if divisor == 0 {
+                return None;
+            }
+            if signed {
+                let d = divisor as i16 as i32;
+                let n = dividend as i32;
+                if d == -1 && n == i32::MIN {
+                    return None;
+                }
+                let q = n / d;
+                let r = n % d;
+                if q < i16::MIN as i32 || q > i16::MAX as i32 {
+                    return None;
+                }
+                Some((q as u16 as u64, r as u16 as u64))
+            } else {
+                let q = dividend / divisor;
+                let r = dividend % divisor;
+                if q > 0xffff {
+                    return None;
+                }
+                Some((q, r))
+            }
+        }
+        4 => {
+            let dividend = ((dx & 0xffff_ffff) << 32) | (ax & 0xffff_ffff);
+            let divisor = mem & 0xffff_ffff;
+            if divisor == 0 {
+                return None;
+            }
+            if signed {
+                let d = divisor as i32 as i64;
+                let n = dividend as i64;
+                if d == -1 && n == i64::MIN {
+                    return None;
+                }
+                let q = n / d;
+                let r = n % d;
+                if q < i32::MIN as i64 || q > i32::MAX as i64 {
+                    return None;
+                }
+                Some((q as u32 as u64, r as u32 as u64))
+            } else {
+                let q = dividend / divisor;
+                let r = dividend % divisor;
+                if q > 0xffff_ffff {
+                    return None;
+                }
+                Some((q, r))
+            }
+        }
+        8 => {
+            if mem == 0 {
+                return None;
+            }
+            if signed {
+                if mem as i64 == -1 && dx == 0x8000_0000_0000_0000 && ax == 0 {
+                    return None;
+                }
+                let n = (i128::from(dx as i64) << 64) | i128::from(ax as u64);
+                let d = i128::from(mem as i64);
+                let q = n / d;
+                let r = n % d;
+                if q < i64::MIN as i128 || q > i64::MAX as i128 {
+                    return None;
+                }
+                Some((q as u64, r as u64))
+            } else {
+                let n = (u128::from(dx) << 64) | u128::from(ax);
+                let d = u128::from(mem);
+                let q = n / d;
+                let r = n % d;
+                if q > u64::MAX as u128 {
+                    return None;
+                }
+                Some((q as u64, r as u64))
+            }
+        }
+        _ => None,
+    }
+}
+
+/// #DE VM-entry interruption info: vector 0, type 3 (hw exception), valid bit 31.
+/// No error code (bit 11 = 0). SDM Vol. 3C 24.8.3.
+pub const MMIO_DIV_DE_INTR_INFO: u64 = 0 | (3 << 8) | (1 << 31);
+
 fn mmio_hint() -> MmioInsn {
     MmioInsn {
         is_write: false,
@@ -1883,7 +2017,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2058,6 +2192,34 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 imm: 0,
                 zero_ext: !sign_ext,
                 sign_ext,
+                xchg: false,
+                alu: 0,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
+            });
+        }
+        // MOVNTI m32/m64, r32/r64 (`0F C3`). No 16-bit form (ignore 66h).
+        if op2 == 0xC3 {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if rex_w { 8 } else { 4 };
+            return Some(MmioInsn {
+                is_write: true,
+                size,
+                reg,
+                has_imm: false,
+                imm: 0,
+                zero_ext: size == 4,
+                sign_ext: false,
                 xchg: false,
                 alu: 0,
                 rex,
@@ -2630,7 +2792,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                     atomic: 0,
                     cc: 0,
                 }),
-                4 | 5 => Some(MmioInsn {
+                4 | 5 | 6 | 7 => Some(MmioInsn {
                     is_write: false,
                     size,
                     reg: 0,
@@ -2639,10 +2801,11 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                     zero_ext: size == 4,
                     sign_ext: false,
                     xchg: false,
-                    alu: if ext == 5 {
-                        MMIO_ALU_IMUL1
-                    } else {
-                        MMIO_ALU_MUL
+                    alu: match ext {
+                        4 => MMIO_ALU_MUL,
+                        5 => MMIO_ALU_IMUL1,
+                        6 => MMIO_ALU_DIV,
+                        _ => MMIO_ALU_IDIV,
                     },
                     rex,
                     test: false,

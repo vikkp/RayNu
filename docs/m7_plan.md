@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Fortieth slice (this EFI): MMIO DIV/IDIV (`F6`/`F7` /6 /7) writes AX or
+DX:AX so Linux `div`/`idiv` of virtio/IOAPIC/xAPIC does not spin; divisor 0
+or quotient overflow injects #DE at the faulting RIP (no skip). MOVNTI
+(`0F C3`) stores 32/64-bit GPR to the BAR (no 16-bit form).
 Thirty-ninth slice (this EFI): MMIO one-operand MUL/IMUL (`F6`/`F7` /4 /5)
 writes AX or DX:AX so Linux `mul`/`imul` of virtio/IOAPIC/xAPIC does not
 spin. Thirty-eighth slice (this EFI): MMIO IMUL (`0F AF` r, r/m and `69`/`6B`
