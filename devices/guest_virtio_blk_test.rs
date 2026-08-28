@@ -340,6 +340,27 @@ fn decode_mmio_mov_encodings() {
     assert!(cx.atomic == super::MMIO_CMPXCHG && cx.is_write && cx.reg == 0 && cx.size == 4);
     let xa = decode_mmio_insn(&[0x0F, 0xC1, 0x01], 3).unwrap();
     assert!(xa.atomic == super::MMIO_XADD && xa.is_write && xa.zero_ext);
+    let adcl = decode_mmio_insn(&[0x11, 0x01], 2).unwrap();
+    assert!(adcl.alu == super::MMIO_ALU_ADC && adcl.is_write && !adcl.alu_reg_left);
+    let adc_rm = decode_mmio_insn(&[0x13, 0x01], 2).unwrap();
+    assert!(
+        adc_rm.alu == super::MMIO_ALU_ADC && adc_rm.alu_reg_left && !adc_rm.is_write
+    );
+    let sbbi = decode_mmio_insn(&[0x83, 0x19, 0x01], 3).unwrap();
+    assert!(sbbi.alu == super::MMIO_ALU_SBB && sbbi.has_imm && sbbi.imm == 1);
+    let adci = decode_mmio_insn(&[0x80, 0x10, 0x01], 3).unwrap();
+    assert!(adci.alu == super::MMIO_ALU_ADC && adci.has_imm && adci.is_write);
+    assert_eq!(
+        super::mmio_alu_apply_cf(0xff, 0, super::MMIO_ALU_ADC, true) & 0xff,
+        0
+    );
+    assert_eq!(super::mmio_adc_rflags(3, 0xff, 0, 1) & 1, 1);
+    assert_eq!(
+        super::mmio_alu_apply_cf(1, 1, super::MMIO_ALU_SBB, true) & 0xff,
+        0xff
+    );
+    assert_eq!(super::mmio_sbb_rflags(3, 1, 1, 1) & 1, 1);
+    assert_eq!(super::mmio_adc_rflags(2, 1, 1, 1) & 1, 0);
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

@@ -1248,7 +1248,7 @@ pub struct MmioInsn {
     pub sign_ext: bool,
     /// XCHG: swap GPR with MMIO (EPT may be read or write).
     pub xchg: bool,
-    /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG.
+    /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1258,8 +1258,8 @@ pub struct MmioInsn {
     pub cmp: bool,
     /// CMP r, r/m (`3A`/`3B`): flags are `reg - mem`, not `mem - reg`.
     pub cmp_reg_left: bool,
-    /// ALU r, r/m (`02`/`03` ADD, `0A`/`0B` OR, `22`/`23` AND, `2A`/`2B` SUB,
-    /// `32`/`33` XOR): dest is the GPR, not MMIO.
+    /// ALU r, r/m (`02`/`03` ADD, `12`/`13` ADC, `0A`/`0B` OR, `1A`/`1B` SBB,
+    /// `22`/`23` AND, `2A`/`2B` SUB, `32`/`33` XOR): dest is the GPR, not MMIO.
     pub alu_reg_left: bool,
     /// BT family: 0=none, 1=BT, 2=BTS, 3=BTR, 4=BTC. CF = old bit.
     pub bt: u8,
@@ -1282,14 +1282,24 @@ pub const MMIO_ALU_ADD: u8 = 4;
 pub const MMIO_ALU_SUB: u8 = 5;
 pub const MMIO_ALU_NOT: u8 = 6;
 pub const MMIO_ALU_NEG: u8 = 7;
+pub const MMIO_ALU_ADC: u8 = 8;
+pub const MMIO_ALU_SBB: u8 = 9;
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
+    mmio_alu_apply_cf(cur, rhs, alu, false)
+}
+
+/// ADC/SBB use `cf` (RFLAGS.CF). Other ops ignore it.
+pub fn mmio_alu_apply_cf(cur: u64, rhs: u64, alu: u8, cf: bool) -> u64 {
+    let c = if cf { 1 } else { 0 };
     match alu {
         MMIO_ALU_AND => cur & rhs,
         MMIO_ALU_OR => cur | rhs,
         MMIO_ALU_XOR => cur ^ rhs,
         MMIO_ALU_ADD => cur.wrapping_add(rhs),
+        MMIO_ALU_ADC => cur.wrapping_add(rhs).wrapping_add(c),
         MMIO_ALU_SUB => cur.wrapping_sub(rhs),
+        MMIO_ALU_SBB => cur.wrapping_sub(rhs).wrapping_sub(c),
         MMIO_ALU_NOT => !cur,
         MMIO_ALU_NEG => 0u64.wrapping_sub(cur),
         _ => rhs,
@@ -1386,13 +1396,64 @@ pub fn mmio_add_rflags(old: u64, left: u64, right: u64, size: u8) -> u64 {
     f
 }
 
+fn mmio_as_signed(v: u64, size: u8) -> i128 {
+    match size {
+        1 => i128::from(v as u8 as i8),
+        2 => i128::from(v as u16 as i16),
+        4 => i128::from(v as u32 as i32),
+        _ => i128::from(v as i64),
+    }
+}
+
+/// ADC: flags from `left + right + CF` (unsigned CF, signed OF).
+pub fn mmio_adc_rflags(old: u64, left: u64, right: u64, size: u8) -> u64 {
+    let mask = mmio_size_mask(size);
+    let a = left & mask;
+    let b = right & mask;
+    let c = old & 1;
+    let sum = u128::from(a) + u128::from(b) + u128::from(c);
+    let r = (sum as u64) & mask;
+    let mut f = mmio_test_rflags(old, r, size);
+    if sum > u128::from(mask) {
+        f |= 1 << 0;
+    }
+    if mmio_as_signed(a, size) + mmio_as_signed(b, size) + i128::from(c)
+        != mmio_as_signed(r, size)
+    {
+        f |= 1 << 11;
+    }
+    f
+}
+
+/// SBB: flags from `left - right - CF` (unsigned CF, signed OF).
+pub fn mmio_sbb_rflags(old: u64, left: u64, right: u64, size: u8) -> u64 {
+    let mask = mmio_size_mask(size);
+    let a = left & mask;
+    let b = right & mask;
+    let c = old & 1;
+    let r = a.wrapping_sub(b).wrapping_sub(c) & mask;
+    let mut f = mmio_test_rflags(old, r, size);
+    if u128::from(a) < u128::from(b) + u128::from(c) {
+        f |= 1 << 0;
+    }
+    if mmio_as_signed(a, size) - mmio_as_signed(b, size) - i128::from(c)
+        != mmio_as_signed(r, size)
+    {
+        f |= 1 << 11;
+    }
+    f
+}
+
 /// ALU into RFLAGS. NOT leaves flags; NEG is `0 - src`; AND/OR/XOR like TEST.
+/// ADC/SBB consume CF from `old`.
 pub fn mmio_alu_rflags(old: u64, left: u64, right: u64, result: u64, alu: u8, size: u8) -> u64 {
     match alu {
         MMIO_ALU_NOT => old,
         MMIO_ALU_AND | MMIO_ALU_OR | MMIO_ALU_XOR => mmio_test_rflags(old, result, size),
         MMIO_ALU_ADD => mmio_add_rflags(old, left, right, size),
+        MMIO_ALU_ADC => mmio_adc_rflags(old, left, right, size),
         MMIO_ALU_SUB => mmio_cmp_rflags(old, left, right, size),
+        MMIO_ALU_SBB => mmio_sbb_rflags(old, left, right, size),
         MMIO_ALU_NEG => mmio_cmp_rflags(old, 0, left, size),
         _ => old,
     }
@@ -1839,8 +1900,9 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 o
             })
         }
-        0x00 | 0x01 | 0x02 | 0x03 | 0x08 | 0x09 | 0x0A | 0x0B | 0x20 | 0x21 | 0x22 | 0x23
-        | 0x28 | 0x29 | 0x2A | 0x2B | 0x30 | 0x31 | 0x32 | 0x33 => {
+        0x00 | 0x01 | 0x02 | 0x03 | 0x08 | 0x09 | 0x0A | 0x0B | 0x10 | 0x11 | 0x12 | 0x13
+        | 0x18 | 0x19 | 0x1A | 0x1B | 0x20 | 0x21 | 0x22 | 0x23 | 0x28 | 0x29 | 0x2A | 0x2B
+        | 0x30 | 0x31 | 0x32 | 0x33 => {
             if i >= insn_len {
                 return None;
             }
@@ -1848,6 +1910,8 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             let alu = match op & 0x38 {
                 0x20 => MMIO_ALU_AND,
                 0x08 => MMIO_ALU_OR,
+                0x10 => MMIO_ALU_ADC,
+                0x18 => MMIO_ALU_SBB,
                 0x28 => MMIO_ALU_SUB,
                 0x30 => MMIO_ALU_XOR,
                 _ => MMIO_ALU_ADD,
@@ -1895,6 +1959,8 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 match ext {
                     0 => MMIO_ALU_ADD,
                     1 => MMIO_ALU_OR,
+                    2 => MMIO_ALU_ADC,
+                    3 => MMIO_ALU_SBB,
                     4 => MMIO_ALU_AND,
                     5 => MMIO_ALU_SUB,
                     6 => MMIO_ALU_XOR,

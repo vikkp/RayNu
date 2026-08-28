@@ -4662,8 +4662,10 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
     } else {
         (mem, other)
     };
-    let result = crate::devices::guest_virtio_blk::mmio_alu_apply(left, right, op.alu);
     let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let cf = (oldf & 1) != 0;
+    let result =
+        crate::devices::guest_virtio_blk::mmio_alu_apply_cf(left, right, op.alu, cf);
     let newf = crate::devices::guest_virtio_blk::mmio_alu_rflags(
         oldf, left, right, result, op.alu, op.size,
     );
