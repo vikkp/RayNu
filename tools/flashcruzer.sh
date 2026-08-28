@@ -182,6 +182,7 @@ self_test() {
   grep -q -- '--refat-cruzer' "$ESP"
   grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
   grep -q 'fat_bytes_too_small' "$ESP"
+  grep -q 'do not git checkout a SHA' "$SCRIPT_PATH"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -224,6 +225,21 @@ fi
 
 cd "$ROOT"
 
+# When the operator `git checkout <sha>`, HEAD is detached. Infer the origin
+# branch that *points at* this commit and stay there (do not pull the tip).
+infer_detached_branch() {
+  local infer
+  infer="$(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
+    --points-at HEAD 2>/dev/null | sed 's|^origin/||' | grep -v '^HEAD$' | head -1 || true)"
+  if [[ -z "$infer" ]]; then
+    echo "error: detached HEAD; pass --branch (do not git checkout a SHA)" >&2
+    echo "example: ./tools/flashcruzer.sh --wait --branch <branch> --linux-iso /path/to.iso" >&2
+    exit 1
+  fi
+  echo "==> detached HEAD $(git rev-parse --short=8 HEAD); CI branch origin/$infer (no checkout)"
+  BRANCH="$infer"
+}
+
 if [[ "$NO_GIT" -eq 0 ]]; then
   git fetch origin
   if [[ -n "$BRANCH" ]]; then
@@ -232,13 +248,16 @@ if [[ "$NO_GIT" -eq 0 ]]; then
   else
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     if [[ "$BRANCH" == "HEAD" ]]; then
-      echo "error: detached HEAD; pass --branch" >&2
-      exit 1
+      infer_detached_branch
+    else
+      git pull --ff-only origin "$BRANCH"
     fi
-    git pull --ff-only origin "$BRANCH"
   fi
 else
   BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$BRANCH" == "HEAD" ]]; then
+    infer_detached_branch
+  fi
 fi
 
 HEAD="$(git rev-parse HEAD)"

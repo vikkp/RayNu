@@ -274,7 +274,15 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventy-second slice (this EFI): iron COM2 after BdsDxe Start Boot0002
+Seventy-third slice (this EFI): alpine-virt `grub.cfg` starts after
+ISO9660 NULs, so `set timeout=1` had a NUL prefix and slice 72 skipped
+it. Neighborhood now allows NUL padding on either side when some
+printable cfg text sits next to the needle. `flashcruzer.sh` infers
+the origin branch from a detached SHA (do not `git checkout` a SHA;
+`--branch` still works). 64 MiB leave + ASCII gzip skip still in this
+EFI. If a `46a1f43` flash already started, let it finish. Else pin this
+HEAD until CI is green, then `--wait --branch cursor/e5-stage46-iso-a623`.
+Seventy-second slice: iron COM2 after BdsDxe Start Boot0002
 booted `Linux virt` then EFI stub `Decompression failed: uncompression
 error` (`start_image` `0x8000000000000001`). That stick was 256 MiB
 disk / `report-RAM pool=66`. Whole-ISO same-length swaps now require an

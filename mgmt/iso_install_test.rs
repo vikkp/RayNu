@@ -245,10 +245,15 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     pad.extend_from_slice(&[0u8; 32]);
     assert_eq!(patch_iso_linux_serial_console(&mut pad), 1);
     assert_eq!(&pad[32..32 + needle.len()], ISO_GRUB_TIMEOUT1_TO);
+    // alpine-virt grub.cfg starts after sector NULs (`set timeout=1` first).
+    let mut start = vec![0u8; 32];
+    start.extend_from_slice(b"set timeout=1\n\nmenuentry \"Linux virt\" {\n");
+    assert_eq!(patch_iso_linux_serial_console(&mut start), 1);
+    assert_eq!(&start[32..32 + needle.len()], ISO_GRUB_TIMEOUT1_TO);
     // Needle in a sea of NULs is not cfg (do not rewrite stored gzip).
     let mut z = vec![0u8; 32];
     z.extend_from_slice(needle);
-    z.extend_from_slice(b"                ");
+    z.extend_from_slice(&[0u8; 32]);
     assert_eq!(patch_iso_linux_serial_console(&mut z), 0);
     assert_eq!(&z[32..32 + needle.len()], needle);
 }

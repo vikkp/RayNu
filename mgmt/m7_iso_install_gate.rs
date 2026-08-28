@@ -110,7 +110,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("fn product_iso_frame_pool_prefer_end(")
         && include_str!("iso_install.rs").contains("fn iso_text_context(")
         && include_str!("iso_install.rs").contains("uncompression error")
-        && include_str!("iso_install.rs").contains("ISO9660 sector NUL padding")
+        && include_str!("iso_install.rs").contains("alpine-virt `grub.cfg`")
         && include_str!("../boot/handoff.rs").contains("frame pool product-ISO iron")
         && include_str!("../arch/cpu.rs").contains("fn host_hypervisor_present(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_insn_bytes_this_page(")

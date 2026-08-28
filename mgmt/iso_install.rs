@@ -159,7 +159,8 @@ const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());
 /// INVARIANTS:
 /// - Replacements are the same length as the originals
 /// - Hits must sit in an ASCII neighborhood (do not rewrite gzip in vmlinuz).
-///   Prefix is printable text; suffix may be text or ISO9660 NUL padding.
+///   ISO9660 NUL padding is allowed on either side; some printable cfg text
+///   must sit next to the needle.
 /// - Returns the number of replacements (0 = nothing patched)
 pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
     patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO)
@@ -189,8 +190,10 @@ fn iso_text_byte(b: u8) -> bool {
 /// stub fails with `Decompression failed: uncompression error` (iron COM2
 /// after BdsDxe Start Boot0002 / `Linux virt`).
 ///
-/// Prefix must be printable ASCII (gzip high bytes / NULs skip). Suffix
-/// may be ASCII or ISO9660 sector NUL padding at the end of a cfg file.
+/// ISO9660 NUL padding may sit on **either** side (alpine-virt `grub.cfg`
+/// starts at a sector boundary after NULs, so `set timeout=1` has a NUL
+/// prefix). Non-NUL bytes must be printable ASCII. At least one printable
+/// byte must sit outside the needle so a hit in a sea of NULs is skipped.
 fn iso_text_context(bytes: &[u8], start: usize, len: usize) -> bool {
     if start >= bytes.len() || start.saturating_add(len) > bytes.len() {
         return false;
@@ -199,11 +202,17 @@ fn iso_text_context(bytes: &[u8], start: usize, len: usize) -> bool {
     let hi = start.saturating_add(len).saturating_add(16).min(bytes.len());
     let prefix = &bytes[lo..start];
     let suffix = &bytes[start + len..hi];
-    prefix.iter().copied().all(iso_text_byte)
-        && suffix
-            .iter()
-            .copied()
-            .all(|b| iso_text_byte(b) || b == 0)
+    let neigh_ok = prefix
+        .iter()
+        .chain(suffix.iter())
+        .copied()
+        .all(|b| iso_text_byte(b) || b == 0);
+    let has_text = prefix
+        .iter()
+        .chain(suffix.iter())
+        .copied()
+        .any(iso_text_byte);
+    neigh_ok && has_text
 }
 
 fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {

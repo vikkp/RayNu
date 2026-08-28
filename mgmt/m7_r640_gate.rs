@@ -76,6 +76,7 @@ pub fn r640_scripts_present() -> bool {
         && include_str!("../tools/flash-cruzer-esp.sh").contains("EFI/RayNu/OVMF.fd")
         && include_str!("../tools/flashcruzer.sh").contains("RAYNU-V-FLASHCRUZER-SELFTEST-OK")
         && include_str!("../tools/flashcruzer.sh").contains("~/projects/raynuv/flashcruzer.sh")
+        && include_str!("../tools/flashcruzer.sh").contains("do not git checkout a SHA")
 }
 
 /// True when CLOSED GAP and host-limit honesty hold.

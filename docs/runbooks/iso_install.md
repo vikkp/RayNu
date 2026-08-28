@@ -152,13 +152,15 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-second-slice
-CI is green (ISO serial patches only in ASCII cfg so gzip `vmlinuz` is not
-rewritten; skip 256 MiB disk when leftover would starve OVMF report-RAM;
-64 MiB still GPT; port `0x61` TMR2_OUT; arm product ISO before disk attach;
-peek RIP when CS.base+RIP misses flash; EAX n>0 fallback; `BOOT_SIZE=48`).
-Last iron COM2 after Boot0002 `Linux virt`: EFI stub `uncompression error`
-(256 MiB disk / `report-RAM pool=66`). Do not flash `8a71596`. Never PERC.
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-third-slice
+CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
+`git checkout` a SHA). ISO serial patches allow ISO9660 NUL padding on
+either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
+gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
+starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm
+product ISO before disk attach. Last iron COM2 after Boot0002 `Linux virt`:
+EFI stub `uncompression error` (256 MiB disk / `report-RAM pool=66`).
+Do not flash `8a71596`. Never PERC.
 Never `sda`/`sdb`. `--no-linux-iso` still strips leftovers so `iso=0` E4 SHELL
 stays valid.
 
@@ -168,9 +170,8 @@ ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
     https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso
 cd ~/projects/raynu
 git fetch origin cursor/e5-stage46-iso-a623
-git checkout cursor/e5-stage46-iso-a623
-git pull --ff-only origin cursor/e5-stage46-iso-a623
 ./tools/flashcruzer.sh --wait \
+  --branch cursor/e5-stage46-iso-a623 \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 ```
 
