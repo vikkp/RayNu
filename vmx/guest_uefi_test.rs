@@ -5,6 +5,7 @@ use super::{
     guest_uefi_mmio_peek_linear,
     guest_uefi_mmio_skip_len,
     guest_uefi_linux_fixed_skip_len,
+    guest_uefi_linux_invlpg_len,
     guest_uefi_linux_cpuid_msr_skip,
     guest_uefi_linux_hlt_skip,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
@@ -642,7 +643,21 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x09]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF3, 0x90]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x01]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x01, 0x38]), 3);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x90]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x38]), 3);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3F]), 3);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3C, 0x24]), 4);
+    assert_eq!(
+        guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3D, 0, 0, 0, 0]),
+        7
+    );
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x41, 0x0F, 0x01, 0x38]), 4);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x78, 0x10]), 4);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0xF8]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x10]), 0);
     assert_eq!(
         guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[]),
         2

@@ -274,13 +274,18 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighty-sixth slice (this EFI): hide CLFLUSHOPT/CLWB in guest CPUID
+Eighty-seventh slice (this EFI): skip-decode INVLPG `0F 01 /7`
+(prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux
+`#PF` deliver. Empty fetch does not guess a length (COM2
+`linux invlpg miss`). Do not clear primary INVLPG-exiting (Xeon
+allowed0=1). Keep CLFLUSHOPT/CLWB hidden and high-half skip-2/skip-1.
+Flash this HEAD after CI 49/49 (do not flash `34b5767`). Want COM2
+`#PF linux deliver` `err=` `linux skip-2` / `linux skip-1` then
+`Linux version` / installer / `ISO-INSTALL-OK`.
+Eighty-sixth slice: hide CLFLUSHOPT/CLWB in guest CPUID
 (leaf 7 EBX) so nested/G0 Linux does not `clwb` into `#UD` (CI `34b5767`
 Oops `66 0F AE F1` then kill-init; `flashcruzer --wait` will not flash
-that SHA). Keep high-half HLT skip-1. Flash this HEAD after CI 49/49
-(do not flash `34b5767`). Want COM2 `#PF linux deliver` `err=`
-`linux skip-2` / `linux skip-1` then `Linux version` / installer /
-`ISO-INSTALL-OK`.
+that SHA). Keep high-half HLT skip-1.
 Eighty-fourth slice: RDTSC/INVD/WBINVD/PAUSE skip 2 on high-half.
 Eighty-third slice: iron COM2 after `d0735bd` (no `err=` on
 the deliver line) reached `#PF linux deliver n=1` then high-half CPUID

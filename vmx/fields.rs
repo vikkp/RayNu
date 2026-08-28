@@ -143,6 +143,9 @@ pub const PIN_BASED_EXTERNAL_INTERRUPT_EXITING: u32 = 1 << 0;
 /// Interrupt-window exiting (inject when guest IF becomes 1).
 pub const CPU_BASED_INTERRUPT_WINDOW_EXITING: u32 = 1 << 2;
 pub const CPU_BASED_HLT_EXITING: u32 = 1 << 7;
+/// INVLPG exiting (primary bit 9). Often allowed0=1 (cannot clear). Linux
+/// INVLPG is then skip-decoded; do not use stale MMIO `insn_len`.
+pub const CPU_BASED_INVLPG_EXITING: u32 = 1 << 9;
 /// CR8-load exiting (MOV from CR8). Guest-UEFI only; reads lapic_virt TPR class.
 /// Do not OR into the E4 SHELL VMCS in `launch.rs`.
 pub const CPU_BASED_CR8_LOAD_EXITING: u32 = 1 << 19;
@@ -354,6 +357,7 @@ mod fields_test {
         assert_eq!(SECONDARY_ENABLE_XSAVES, 1 << 20);
         assert_eq!(SECONDARY_ENABLE_UNRESTRICTED_GUEST, 1 << 7);
         assert_eq!(CPU_BASED_INTERRUPT_WINDOW_EXITING, 1 << 2);
+        assert_eq!(CPU_BASED_INVLPG_EXITING, 1 << 9);
         assert_eq!(EXIT_REASON_INTERRUPT_WINDOW, 7);
     }
 

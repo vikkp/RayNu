@@ -1765,7 +1765,7 @@ pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
 /// High-half Linux: VMCS `insn_len` can be 0 while identity peek is empty.
 /// Two-byte exits: CPUID `0F A2`, WRMSR `0F 30`, RDTSC `0F 31`, RDMSR
 /// `0F 32`, INVD `0F 08`, WBINVD `0F 09`. PAUSE `F3 90`. HLT `F4` is one
-/// byte.
+/// byte. INVLPG `0F 01 /7` is variable (ModRM/SIB/disp); empty fetch stays 0.
 ///
 /// Iron `d0735bd` after `#PF linux deliver`: tick `reason=0xa`
 /// `rip=0xffffffffb8081783` `insn=` empty. Not `ISO-INSTALL-OK`.
@@ -1776,6 +1776,10 @@ pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
     if bytes.len() >= 2 && bytes[0] == 0xF3 && bytes[1] == 0x90 {
         return 2;
     }
+    let invlpg = guest_uefi_linux_invlpg_len(bytes);
+    if invlpg != 0 {
+        return invlpg;
+    }
     if bytes.len() >= 2
         && bytes[0] == 0x0F
         && matches!(bytes[1], 0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09)
@@ -1783,6 +1787,73 @@ pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
         2
     } else {
         0
+    }
+}
+
+/// INVLPG `0F 01 /7` memory operand (SDM). Not `SWAPGS` (`0F 01 F8`).
+///
+/// Variable length: prefixes + 0F 01 + ModRM [+ SIB] [+ disp]. Empty
+/// fetch stays 0 (do not guess). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_invlpg_len(bytes: &[u8]) -> u64 {
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if (0x40..=0x4F).contains(&b)
+            || matches!(
+                b,
+                0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x66 | 0x67 | 0xF0 | 0xF2 | 0xF3
+            )
+        {
+            i += 1;
+            continue;
+        }
+        break;
+    }
+    if bytes.len().saturating_sub(i) < 3 {
+        return 0;
+    }
+    if bytes[i] != 0x0F || bytes[i + 1] != 0x01 {
+        return 0;
+    }
+    let modrm = bytes[i + 2];
+    if (modrm >> 3) & 7 != 7 {
+        return 0;
+    }
+    let mod_ = modrm >> 6;
+    let rm = modrm & 7;
+    if mod_ == 3 {
+        return 0;
+    }
+    let mut n = i + 3;
+    let sib = rm == 4;
+    if sib {
+        if n >= bytes.len() {
+            return 0;
+        }
+        n += 1;
+    }
+    let disp = match mod_ {
+        0 => {
+            if rm == 5
+                || (sib && {
+                    let sib_b = bytes[n - 1];
+                    (sib_b & 7) == 5
+                })
+            {
+                4
+            } else {
+                0
+            }
+        }
+        1 => 1,
+        2 => 4,
+        _ => 0,
+    };
+    n += disp;
+    if n > bytes.len() {
+        0
+    } else {
+        n as u64
     }
 }
 
@@ -2084,6 +2155,8 @@ static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
 static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static LINUX_SKIP2: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_INVLPG_MISS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static SEC_IDENTITY_REBUILT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
@@ -3793,9 +3866,11 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 true
             }
             EXIT_REASON_XSETBV => handle_xsetbv(),
-            // INVD / RDTSC / PAUSE / WBINVD — 2 bytes. INVLPG is longer.
+            // INVD / RDTSC / PAUSE / WBINVD — 2 bytes. INVLPG is skip-decoded
+            // (variable length); empty fetch does not guess. Do not clear
+            // CPU_BASED_INVLPG_EXITING (Xeon allowed0=1).
             13 | 16 | 40 | 54 => skip_cpuid_msr(),
-            14 => skip_insn(),
+            14 => skip_invlpg(),
             _ => false,
         };
         if resume {
@@ -6306,6 +6381,9 @@ fn write_hex2(b: u8) {
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let vmcs = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    // Prefer VMCS 1-15, then this-exit MMIO scratch (zeroed at vmexit so
+    // CPUID/HLT/INVLPG cannot consume a prior BAR length). High-half
+    // virtio MMIO still skips via that scratch when copy_mmio_insn ran.
     let mut len = guest_uefi_mmio_skip_len(vmcs, MMIO_INSN_LEN.load(Ordering::Relaxed));
     if len == 0 && guest_uefi_pf_should_deliver_to_guest(rip) {
         let mut buf = [0u8; 16];
@@ -6361,6 +6439,24 @@ unsafe fn skip_hlt() -> bool {
         serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok()
+}
+
+/// INVLPG: VMCS len, else decode `0F 01 /7`. Empty fetch does not guess.
+#[cfg(target_os = "uefi")]
+unsafe fn skip_invlpg() -> bool {
+    if skip_insn() {
+        return true;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let k = LINUX_INVLPG_MISS.fetch_add(1, Ordering::AcqRel);
+    if k < 8 {
+        serial::write_str("boot: guest-UEFI linux invlpg miss n=");
+        write_dec(u64::from(k) + 1);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    false
 }
 
 /// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
