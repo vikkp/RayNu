@@ -265,7 +265,13 @@ fn decode_mmio_mov_encodings() {
     let gs = decode_mmio_insn(&[0x65, 0x8B, 0x01], 3).unwrap();
     assert!(!gs.is_write && gs.reg == 0 && gs.size == 4);
     let zx = decode_mmio_insn(&[0x0F, 0xB6, 0x01], 3).unwrap();
-    assert!(!zx.is_write && zx.size == 1 && zx.zero_ext);
+    assert!(!zx.is_write && zx.size == 1 && zx.zero_ext && !zx.sign_ext && !zx.xchg);
+    let sx = decode_mmio_insn(&[0x0F, 0xBE, 0x01], 3).unwrap();
+    assert!(!sx.is_write && sx.size == 1 && sx.sign_ext && !sx.zero_ext);
+    let xchg = decode_mmio_insn(&[0x87, 0x01], 2).unwrap();
+    assert!(xchg.xchg && xchg.is_write && xchg.size == 4 && xchg.reg == 0);
+    let moffs = decode_mmio_insn(&[0xA1, 0, 0, 0, 0, 0, 0, 0, 0], 9).unwrap();
+    assert!(!moffs.is_write && moffs.reg == 0 && moffs.size == 4 && moffs.zero_ext);
     assert_eq!(mmio_insn_bytes_this_page(0x1000, 16), 16);
     assert_eq!(mmio_insn_bytes_this_page(0x1FFC, 16), 4);
 }

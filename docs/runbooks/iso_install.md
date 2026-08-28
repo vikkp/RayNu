@@ -171,7 +171,7 @@ appears, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO
 `squashfs console=ttyS0 nolapic` (`modules=loop,squashfs` stays valid so Alpine
 can mount the live root; `console=` / `nolapic` are kernel params; PIT IRQ 0; no
 LAPIC timer on the static xAPIC page; optional `console=tty0` → `noapic`; GRUB
-`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; `gfxterm` / `efi_gop` / `efi_uga` → `serial` when present;
+`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; `gfxterm` / `efi_gop` / `efi_uga` / `all_video` → `serial` when present;
 `alpine_dev=cdrom` → `alpine_dev=vdb` when present) when it
 contains `squashfs,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the

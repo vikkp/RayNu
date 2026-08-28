@@ -1268,6 +1268,30 @@ pub struct MmioInsn {
     pub imm: u64,
     /// MOVZX / 32-bit MOV dest: do not keep high bits of the old GPR.
     pub zero_ext: bool,
+    /// MOVSX: sign-extend into the dest GPR.
+    pub sign_ext: bool,
+    /// XCHG: swap GPR with MMIO (EPT may be read or write).
+    pub xchg: bool,
+}
+
+fn mmio_mov(
+    is_write: bool,
+    size: u8,
+    reg: u8,
+    has_imm: bool,
+    imm: u64,
+    zero_ext: bool,
+) -> MmioInsn {
+    MmioInsn {
+        is_write,
+        size,
+        reg,
+        has_imm,
+        imm,
+        zero_ext,
+        sign_ext: false,
+        xchg: false,
+    }
 }
 
 /// Bytes fetchable from `gpa` without crossing a 4 KiB page. MMIO emulate
@@ -1276,7 +1300,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode a MOV/MOVZX that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -1311,7 +1335,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
         }
         let op2 = bytes[i];
         i += 1;
-        if op2 != 0xB6 && op2 != 0xB7 {
+        if op2 != 0xB6 && op2 != 0xB7 && op2 != 0xBE && op2 != 0xBF {
             return None;
         }
         if i >= insn_len {
@@ -1319,14 +1343,17 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
         }
         let m = bytes[i];
         let reg = ((m >> 3) & 7) | rex_r;
-        let size = if op2 == 0xB6 { 1 } else { 2 };
+        let size = if op2 == 0xB6 || op2 == 0xBE { 1 } else { 2 };
+        let sign_ext = op2 == 0xBE || op2 == 0xBF;
         return Some(MmioInsn {
             is_write: false,
             size,
             reg,
             has_imm: false,
             imm: 0,
-            zero_ext: true,
+            zero_ext: !sign_ext,
+            sign_ext,
+            xchg: false,
         });
     }
     if i >= insn_len && op != 0xC6 && op != 0xC7 {
@@ -1349,14 +1376,46 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             } else {
                 4
             };
+            Some(mmio_mov(is_write, size, reg, false, 0, size == 4))
+        }
+        0x86 | 0x87 => {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if op == 0x86 {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
             Some(MmioInsn {
-                is_write,
+                is_write: true,
                 size,
                 reg,
                 has_imm: false,
                 imm: 0,
                 zero_ext: size == 4,
+                sign_ext: false,
+                xchg: true,
             })
+        }
+        0xA0 | 0xA1 | 0xA2 | 0xA3 => {
+            let is_write = op == 0xA2 || op == 0xA3;
+            let size = if op == 0xA0 || op == 0xA2 {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            Some(mmio_mov(is_write, size, 0, false, 0, size == 4 && !is_write))
         }
         0xC6 | 0xC7 => {
             let size = if op == 0xC6 {
@@ -1376,14 +1435,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 imm |= u64::from(bytes[imm_off + k as usize]) << (8 * k);
                 k += 1;
             }
-            Some(MmioInsn {
-                is_write: true,
-                size,
-                reg: 0,
-                has_imm: true,
-                imm,
-                zero_ext: false,
-            })
+            Some(mmio_mov(true, size, 0, true, imm, false))
         }
         _ => None,
     }

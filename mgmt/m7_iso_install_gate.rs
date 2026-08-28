@@ -81,6 +81,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("terminal_output serial ")
         && include_str!("iso_install.rs").contains("set timeout=1")
         && include_str!("iso_install.rs").contains("insmod efi_gop")
+        && include_str!("iso_install.rs").contains("insmod all_video")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("pub xchg:")
         && include_str!("../devices/ide_cdrom.rs").contains("31 * ISO_SECTOR")
         && include_str!("../devices/ide_cdrom.rs").contains("ATA_DEVCTL_NIEN")
         && include_str!("../devices/guest_virtio_blk.rs").contains("DATA_SEGS")

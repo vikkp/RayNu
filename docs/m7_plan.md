@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-first slice (this EFI): serial auto-answer matches alpine-conf
+Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
+and moffs (decode-fail spins virtio); GRUB `insmod all_video` → `serial`
+when present. Twenty-first slice: serial auto-answer matches alpine-conf
 `confirm_erase` `[y/N]: ` (not only `(y/n)`), so an ISO that does not skip
 via `ERASE_DISKS` still gets `y`. Twentieth slice: Alpine auto-answer exports `USE_EFI=1` with
 `BOOTLOADER=grub` so UEFI `setup-disk` does not try syslinux/MBR; same-length

@@ -140,6 +140,10 @@ const _: () = assert!(ISO_GRUB_INSMOD_GOP_FROM.len() == ISO_GRUB_INSMOD_GOP_TO.l
 pub const ISO_GRUB_INSMOD_UGA_FROM: &[u8] = b"insmod efi_uga";
 pub const ISO_GRUB_INSMOD_UGA_TO: &[u8] = b"insmod serial ";
 const _: () = assert!(ISO_GRUB_INSMOD_UGA_FROM.len() == ISO_GRUB_INSMOD_UGA_TO.len());
+/// GRUB `load_video` may `insmod all_video` instead of efi_gop. 0 hits OK.
+pub const ISO_GRUB_INSMOD_ALLVID_FROM: &[u8] = b"insmod all_video";
+pub const ISO_GRUB_INSMOD_ALLVID_TO: &[u8] = b"insmod serial   ";
+const _: () = assert!(ISO_GRUB_INSMOD_ALLVID_FROM.len() == ISO_GRUB_INSMOD_ALLVID_TO.len());
 /// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
 /// ISO `/dev/vdb`. 0 hits is fine when the string is absent.
 pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
@@ -160,6 +164,7 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GOP_FROM, ISO_GRUB_INSMOD_GOP_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_UGA_FROM, ISO_GRUB_INSMOD_UGA_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_ALLVID_FROM, ISO_GRUB_INSMOD_ALLVID_TO))
         .saturating_add(patch_same(bytes, ISO_ALPINE_DEV_FROM, ISO_ALPINE_DEV_TO))
         .saturating_add(patch_same(bytes, ISO_TTY0_FROM, ISO_TTY0_TO))
 }

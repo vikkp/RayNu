@@ -172,8 +172,9 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
     assert_eq!(ISO_GRUB_INSMOD_GOP_FROM.len(), ISO_GRUB_INSMOD_GOP_TO.len());
     assert_eq!(ISO_GRUB_INSMOD_UGA_FROM.len(), ISO_GRUB_INSMOD_UGA_TO.len());
-    let mut buf = b"insmod gfxterm terminal_output gfxterm insmod efi_gop insmod efi_uga linux modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom initrd set timeout=10 set timeout=1".to_vec();
-    assert_eq!(patch_iso_linux_serial_console(&mut buf), 8);
+    assert_eq!(ISO_GRUB_INSMOD_ALLVID_FROM.len(), ISO_GRUB_INSMOD_ALLVID_TO.len());
+    let mut buf = b"insmod gfxterm terminal_output gfxterm insmod efi_gop insmod efi_uga insmod all_video linux modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom initrd set timeout=10 set timeout=1".to_vec();
+    assert_eq!(patch_iso_linux_serial_console(&mut buf), 9);
     let s = core::str::from_utf8(&buf).unwrap();
     assert!(s.contains("console=ttyS0"));
     assert!(s.contains("nolapic"));
@@ -183,6 +184,7 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!s.contains("timeout=00"));
     assert!(!s.contains("efi_gop"));
     assert!(!s.contains("efi_uga"));
+    assert!(!s.contains("all_video"));
     assert!(s.contains("alpine_dev=vdb"));
     assert!(s.contains("terminal_output serial "));
     assert!(s.contains("insmod serial "));

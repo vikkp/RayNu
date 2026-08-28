@@ -5468,7 +5468,15 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
 }
 
 #[cfg(target_os = "uefi")]
-fn merge_mmio_gpr(old: u64, val: u64, size: u8, zero_ext: bool) -> u64 {
+fn merge_mmio_gpr(old: u64, val: u64, size: u8, zero_ext: bool, sign_ext: bool) -> u64 {
+    if sign_ext {
+        return match size {
+            1 => val as i8 as i64 as u64,
+            2 => val as i16 as i64 as u64,
+            4 => val as i32 as i64 as u64,
+            _ => val,
+        };
+    }
     if zero_ext {
         return match size {
             1 => val & 0xff,
@@ -5513,6 +5521,32 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return false;
     };
+    if op.xchg {
+        let oldr = cr_gpr(op.reg);
+        let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, oldr);
+        set_cr_gpr(
+            op.reg,
+            merge_mmio_gpr(oldr, oldm, op.size, op.zero_ext, op.sign_ext),
+        );
+        let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+        if wrote != 0 {
+            serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+            write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if !guest_uefi_host_hypervisor_present()
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
+        return skip_insn();
+    }
     if op.is_write != is_write {
         return false;
     }
@@ -5543,7 +5577,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         set_cr_gpr(
             op.reg,
-            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext),
+            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
         );
     }
     skip_insn()
@@ -5565,6 +5599,16 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         serial::write_byte(b'\n');
         return skip_insn();
     };
+    if op.xchg {
+        let oldr = cr_gpr(op.reg);
+        let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        crate::devices::guest_irq::ioapic_write(off, oldr as u32);
+        set_cr_gpr(
+            op.reg,
+            merge_mmio_gpr(oldr, oldm, op.size, op.zero_ext, op.sign_ext),
+        );
+        return skip_insn();
+    }
     if op.is_write != is_write {
         return skip_insn();
     }
@@ -5575,7 +5619,7 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
         set_cr_gpr(
             op.reg,
-            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext),
+            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
         );
     }
     skip_insn()
