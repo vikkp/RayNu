@@ -104,6 +104,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn try_alloc_product_iso_install_disk(")
         && include_str!("../vmx/guest_uefi.rs").contains("Reserve the install disk first")
         && include_str!("../vmx/guest_uefi.rs").contains("Arm the product ISO window")
+        && include_str!("../vmx/guest_uefi.rs").contains("PRODUCT_ISO_DISK_LEAVE_2M_SLOTS")
         && include_str!("../devices/guest_platform.rs").contains("TMR2_OUT")
         && include_str!("iso_install.rs").contains("fn product_iso_install_disk_try_sizes(")
         && include_str!("iso_install.rs").contains("fn product_iso_frame_pool_prefer_end(")

@@ -1665,7 +1665,20 @@ pub fn guest_uefi_mmio_peek_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64
     }
 }
 
-/// Allocate a contiguous install-disk run. Largest size that fits wins.
+/// 2 MiB slots to leave after a disk larger than 64 MiB (32 scratch +
+/// 96 report-RAM). Iron COM2 with a 1 MiB disk had report-RAM pool=194
+/// (~388 MiB). A 256 MiB disk first on the 512 MiB pool leaves ~160 MiB
+/// and can starve OVMF GCD before BdsDxe. 64 MiB is enough for
+/// `ISO-INSTALL-OK` (`BOOT_SIZE=48`). Do not invent HPA (ADR-004).
+pub const PRODUCT_ISO_DISK_LEAVE_2M_SLOTS: usize = GUEST_UEFI_MMIO_SCRATCH_SLOTS + 96;
+
+pub fn product_iso_disk_leave_pages() -> u64 {
+    (PRODUCT_ISO_DISK_LEAVE_2M_SLOTS as u64) * (GUEST_UEFI_REPORT_RAM_PAGE / 4096)
+}
+
+/// Allocate a contiguous install-disk run. Largest size that still leaves
+/// scratch + report-RAM floor wins. Sizes ≤64 MiB skip the floor so a
+/// tight pool still gets a GPT-capable disk.
 ///
 /// INVARIANTS:
 /// - Does not invent an HPA; only [`FrameAllocator::allocate_contiguous`]
@@ -1676,9 +1689,22 @@ pub fn try_alloc_product_iso_install_disk(
     alloc: &mut FrameAllocator,
     nested: bool,
 ) -> Option<(PhysFrame, usize)> {
+    let leave = if nested {
+        0
+    } else {
+        product_iso_disk_leave_pages()
+    };
+    let keep = crate::mgmt::iso::DEFAULT_INSTALL_DISK_BYTES as usize;
     for &want in crate::mgmt::iso_install::product_iso_install_disk_try_sizes(nested) {
         let pages = (want / 4096) as u64;
         if pages == 0 {
+            continue;
+        }
+        let remaining = alloc.capacity().saturating_sub(alloc.allocated_count());
+        if remaining < pages {
+            continue;
+        }
+        if want > keep && remaining - pages < leave {
             continue;
         }
         if let Some(frame) = alloc.allocate_contiguous(pages) {

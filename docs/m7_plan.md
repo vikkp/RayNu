@@ -274,7 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventieth slice (this EFI): iron COM2 after BdsDxe Start `UEFI RAYNU-V CD`
+Seventy-first slice (this EFI): skip a 256 MiB virtio-blk when leftover
+would starve OVMF report-RAM (iron `pool=194` ~388 MiB). 64 MiB still
+fits Alpine GPT (`BOOT_SIZE=48`). TMR2_OUT (`0x61` bit 5) + arm ISO
+before disk attach still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not
+flash `8a71596` after this lands — 256 MiB-first can starve GCD).
+Seventieth slice: iron COM2 after BdsDxe Start `UEFI RAYNU-V CD`
 spins on `in al,0x61; test al,0x20; jz` (`rip=0x7e149fb9`, HPET frozen).
 Port `0x61` now toggles TMR2_OUT (bit 5) as well as refresh (bit 4).
 Also arm the product-ISO window *before* the early disk attach so the

@@ -152,9 +152,9 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventieth-slice
-CI is green (port `0x61` TMR2_OUT so OVMF delay after BdsDxe Start CD exits;
-arm product ISO before disk attach so iron gets 256 MiB not 1 MiB;
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-first-slice
+CI is green (skip 256 MiB disk when leftover would starve OVMF report-RAM;
+64 MiB still GPT; port `0x61` TMR2_OUT; arm product ISO before disk attach;
 peek RIP when CS.base+RIP misses flash; EAX n>0 fallback; `BOOT_SIZE=48`).
 Last iron COM2 after the 512 MiB pool started Boot0002 then spun on
 `rip=0x7e149fb9` (`insn=e461a82074fa`, disk 1 MiB). Never PERC.
