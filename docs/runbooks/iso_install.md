@@ -153,8 +153,11 @@ from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer media is 977.5 MiB but the FAT may be a 64 MiB image
 (`131072` sectors) that cannot hold alpine-virt (63 MiB) plus EFI+OVMF.
-Pass `--refat-cruzer` (copies `installdisk.bin`/`auth.token` off, then
-`mkfs.vfat -F 32 -n RAYNUV` on that identified stick). Never PERC.
+`fsck.vfat` on iron confirmed a healthy 64 MiB volume (`26 files,
+17063/129022 clusters`) — remount/fsck cannot grow it. Pass
+`--refat-cruzer` (copies `installdisk.bin`/`auth.token` off, then
+`mkfs.vfat -I -F 32 -n RAYNUV` on that identified whole-disk stick).
+Never PERC. Never `sda`/`sdb`. Skip a retry that omits `--refat-cruzer`.
 
 ```bash
 ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \

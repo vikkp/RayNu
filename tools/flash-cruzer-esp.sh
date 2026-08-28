@@ -10,7 +10,7 @@
 # front USB 2. Identifies the stick by FAT label RAYNUV + USB + Cruzer
 # model. Never uses a hardcoded /dev/sdc. Never dd. Never format PERC.
 # Cruzer --refat-cruzer is opt-in after RAYNUV+serial+Cruzer identity:
-# copy installdisk.bin/auth.token off, mkfs.vfat -F 32 -n RAYNUV, restore.
+# copy installdisk.bin/auth.token off, mkfs.vfat -I -F 32 -n RAYNUV, restore.
 # Never touches PERC volumes (sda/sdb).
 #
 # Usage:
@@ -25,8 +25,9 @@
 #
 # Stage 46: alpine-virt linux.iso is ~63 MiB. The Cruzer media is 977.5 MiB
 # but the FAT may be a 64 MiB image (131072 sectors) that cannot hold ISO+
-# EFI+OVMF. Pass --refat-cruzer to mkfs.vfat -F 32 -n RAYNUV on that
-# identified stick after copying installdisk.bin/auth.token off. Never PERC.
+# EFI+OVMF. Pass --refat-cruzer to mkfs.vfat -I -F 32 -n RAYNUV on that
+# identified whole-disk stick after copying installdisk.bin/auth.token off.
+# Never PERC. fsck.vfat cannot grow a 64 MiB volume.
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
@@ -124,11 +125,23 @@ self_test() {
     return 1
   fi
   rm -f "$tmp"
+  fat_bytes_too_small 66059264 67108864 || return 1
+  fat_bytes_too_small 1024966656 67108864 && return 1
   echo "RAYNU-V-CRUZER-FLASH-SELFTEST-OK"
 }
 
 esp_avail_bytes() {
   df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' '
+}
+
+esp_size_bytes() {
+  df -B1 --output=size "$MNT" | tail -n1 | tr -d ' '
+}
+
+# Host-testable: 64MiB FAT (66059264) cannot hold alpine-virt need (67108864).
+fat_bytes_too_small() {
+  local fs_size="$1" need="$2"
+  [[ "$fs_size" =~ ^[0-9]+$ && "$need" =~ ^[0-9]+$ ]] && (( fs_size < need ))
 }
 
 remount_cruzer_vfat() {
@@ -140,13 +153,21 @@ remount_cruzer_vfat() {
 }
 
 # Reclaim leaked FAT clusters / stale FSInfo after ENOSPC. Never mkfs.
+# If the FAT volume itself is smaller than need (64MiB image on 977.5MiB
+# media), skip remount/fsck — those cannot grow the volume.
 reclaim_fat_free_if_needed() {
   local need="$1"
-  local avail
+  local avail fs_size
   avail="$(esp_avail_bytes)"
   if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
     echo "==> ESP free=$avail need=$need"
     return 0
+  fi
+  fs_size="$(esp_size_bytes)"
+  if fat_bytes_too_small "$fs_size" "$need"; then
+    echo "==> ESP FAT size=$fs_size free=${avail:-?} need=$need disk=${SIZE_BYTES:-?} — volume too small (not FSInfo)"
+    echo "error: 64MiB FAT cannot hold alpine-virt linux.iso; re-run with --refat-cruzer" >&2
+    return 1
   fi
   echo "==> ESP free=${avail:-?} need=$need — remount to flush FAT32 FSInfo (not format)"
   remount_cruzer_vfat
@@ -178,7 +199,7 @@ reclaim_fat_free_if_needed() {
     fs_size="$(df -B1 --output=size "$MNT" | tail -n1 | tr -d ' ')"
     echo "error: Cruzer FAT size=${fs_size:-?} free=${avail:-?} need=$need disk=$SIZE_BYTES" >&2
     echo "       64MiB FAT on 977.5MiB Cruzer cannot hold alpine-virt linux.iso" >&2
-    echo "       re-run with --refat-cruzer (mkfs.vfat -F 32 -n RAYNUV on this identified stick)" >&2
+    echo "       re-run with --refat-cruzer (mkfs.vfat -I -F 32 -n RAYNUV on this identified stick)" >&2
     return 1
   fi
   return 0
@@ -199,8 +220,8 @@ refat_identified_cruzer() {
   echo "==> --refat-cruzer: keep installdisk.bin bytes=$(wc -c <"$keep/installdisk.bin" | tr -d ' ') auth.token=$token"
   sudo umount "$MNT" || true
   DID_MOUNT=0
-  echo "==> --refat-cruzer: mkfs.vfat -F 32 -n $LABEL $RAW (identified Cruzer; not PERC)"
-  sudo mkfs.vfat -F 32 -n "$LABEL" "$RAW"
+  echo "==> --refat-cruzer: mkfs.vfat -I -F 32 -n $LABEL $RAW (identified whole-disk Cruzer; not PERC)"
+  sudo mkfs.vfat -I -F 32 -n "$LABEL" "$RAW"
   sudo mkdir -p "$MNT"
   sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
   DID_MOUNT=1
@@ -445,7 +466,7 @@ elif [[ -n "$LINUX_ISO" ]]; then
   if ! reclaim_fat_free_if_needed "$NEED"; then
     echo "error: Cruzer ESP has $(esp_avail_bytes) bytes free; need $NEED for linux.iso" >&2
     echo "       keep EFI/BOOT/BOOTX64.EFI EFI/RayNu/OVMF.fd EFI/RayNu/installdisk.bin EFI/RayNu/auth.token" >&2
-    echo "       stale FAT32 FSInfo after ENOSPC: fsck.vfat -a (not format), then retry" >&2
+    echo "       64MiB FAT cannot grow via fsck; re-run with --refat-cruzer" >&2
     sudo du -ah "$MNT" | sort -h | tail -20 >&2 || true
     exit 1
   fi

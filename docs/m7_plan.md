@@ -274,10 +274,14 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Sixtieth slice (this EFI): iron `fsck.vfat` proved the 64 MiB FAT is
+healthy (`131072` sectors, `26 files`, `17063/129022` clusters). Retry
+without `--refat-cruzer` still fails (`free=57323008 need=67108864`).
+Skip remount/fsck when FAT size < need. Whole-disk `mkfs.vfat -I`.
 Fifty-ninth slice (this EFI): Cruzer FAT is a 64 MiB image (`131072`
 sectors) on 977.5 MiB media, so alpine-virt `linux.iso` (63 MiB) cannot
 fit with EFI+OVMF. `--refat-cruzer` copies `installdisk.bin`/`auth.token`
-off, `mkfs.vfat -F 32 -n RAYNUV` on the identified stick, restores keep
+off, `mkfs.vfat -I -F 32 -n RAYNUV` on the identified stick, restores keep
 files. Never PERC. Never `sda`/`sdb`.
 Fifty-eighth slice (this EFI): Cruzer flash remounts and `fsck.vfat -a`
 to reclaim stale FAT32 FSInfo / orphaned clusters after ENOSPC (`df`

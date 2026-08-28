@@ -88,7 +88,7 @@ Options:
   --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
   --linux-iso PATH    stage EFI/RayNu/linux.iso (Stage 46; size must exceed 73728)
   --no-linux-iso      remove leftover product ISO so E4 LINUX-EARLY still runs
-  --refat-cruzer      mkfs.vfat -F 32 -n RAYNUV on identified Cruzer (64MiB FAT)
+  --refat-cruzer      mkfs.vfat -I -F 32 -n RAYNUV on identified whole-disk Cruzer (64MiB FAT)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -180,7 +180,8 @@ self_test() {
   grep -q 'fsck.vfat -a' "$ESP"
   grep -q 'not format' "$ESP"
   grep -q -- '--refat-cruzer' "$ESP"
-  grep -q 'mkfs.vfat -F 32 -n' "$ESP"
+  grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
+  grep -q 'fat_bytes_too_small' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
