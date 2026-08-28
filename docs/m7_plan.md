@@ -274,10 +274,12 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fifteenth slice (this EFI): product ISO PIT IRQ 0 on HLT/preemption so
+Sixteenth slice (this EFI): ISO patch also sets `nolapic` so Linux does not
+program the guest-UEFI static xAPIC page (CUR_COUNT never moves) and then
+disable PIT. Fifteenth slice: product ISO PIT IRQ 0 on HLT/preemption so
 Linux `noapic` jiffies advance and HLT wakes; UART/virtio PIC still beat
-the timer. Fourteenth slice: same-length ISO patch `,sd-mod,usb-storage quiet`
-→ ` console=ttyS0 noapic` so `modules=loop,squashfs` stays valid and Linux
+the timer. Fourteenth slice: same-length ISO patch `squashfs,sd-mod,usb-storage quiet`
+→ `loop console=ttyS0 noapic nolapic` so `modules=loop,loop` stays valid and Linux
 uses PIC IRQ 11 (PCI interrupt line) instead of ACPI `_PRT` IOAPIC pins;
 `alpine_dev=cdrom` → `alpine_dev=vdb` when present so alpine-virt
 `nlplug-findfs` looks at virtio-iso `/dev/vdb` (0 hits OK).

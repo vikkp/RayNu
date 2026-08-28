@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN fifteenth slice: product ISO PIT IRQ 0 on HLT/preempt so Linux noapic jiffies advance; UART/virtio still beat the timer. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN sixteenth slice: ISO patch nolapic so Linux uses PIT IRQ 0 instead of the static xAPIC page (CUR_COUNT never moves). Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (PIT IRQ 0). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nolapic ISO patch). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -363,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer + `console=ttyS0 noapic` + `alpine_dev=vdb` + PIT IRQ 0 + GRUB serial + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + hold when armed; lab stub still E4); extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer + `console=ttyS0 noapic nolapic` + `alpine_dev=vdb` + PIT IRQ 0 + GRUB serial + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + hold when armed; lab stub still E4); extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixteenth slice: ISO patch nolapic so Linux uses PIT not static xAPIC; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifteenth slice: PIT IRQ 0 on HLT/preempt (UART/virtio beat timer); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fourteenth slice: ISO patch console=ttyS0 noapic + alpine_dev=vdb (virtio-iso media, PIC IRQ 11); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirteenth slice: virtio INTx raises IOAPIC pin 11 (PCI interrupt line) so Linux without _PRT can complete I/O; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -167,10 +167,11 @@ advance, product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
 with `setup-disk` to `/dev/vda` (not ISO-INSTALL-OK), the ISO cmdline is patched to
-`console=ttyS0 noapic` (`modules=loop,squashfs` stays valid so those are kernel
-params, not module names; PIC IRQ 11 instead of ACPI `_PRT` IOAPIC; GRUB `timeout=10` → `timeout=0`;
+`console=ttyS0 noapic nolapic` (`modules=loop,loop` stays valid so those are kernel
+params, not module names; PIC IRQ 11 and PIT IRQ 0; no LAPIC timer on the static
+xAPIC page; GRUB `timeout=10` → `timeout=0`;
 `gfxterm` → `serial` when present; `alpine_dev=cdrom` → `alpine_dev=vdb` when present) when it
-contains `,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), and guest-UEFI **holds**
+contains `squashfs,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
 installer writes a partition table. Host/CI never prints that marker. `iso=0`
 / lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron

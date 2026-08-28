@@ -70,7 +70,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_uart.rs").contains("fn poll_host_rx(")
         && include_str!("../boot/serial.rs").contains("fn try_read_byte(")
         && include_str!("iso_install.rs").contains("fn patch_iso_linux_serial_console(")
-        && include_str!("iso_install.rs").contains("console=ttyS0 noapic")
+        && include_str!("iso_install.rs").contains("console=ttyS0 noapic nolapic")
         && include_str!("iso_install.rs").contains("ata_piix,loop,sr-mod")
         && include_str!("iso_install.rs").contains("alpine_dev=vdb")
         && include_str!("iso_install.rs").contains("terminal_output serial ")

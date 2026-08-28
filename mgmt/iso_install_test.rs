@@ -173,7 +173,8 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     let s = core::str::from_utf8(&buf).unwrap();
     assert!(s.contains("console=ttyS0"));
     assert!(s.contains("noapic"));
-    assert!(s.contains("modules=loop,squashfs console=ttyS0 noapic"));
+    assert!(s.contains("nolapic"));
+    assert!(s.contains("modules=loop,loop console=ttyS0 noapic nolapic"));
     assert!(s.contains("timeout=0 "));
     assert!(s.contains("alpine_dev=vdb"));
     assert!(s.contains("terminal_output serial "));

@@ -94,16 +94,16 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
-/// Same-length swap so Alpine/GRUB gets serial + PIC virtio IRQs.
-/// `,sd-mod,usb-storage quiet` → ` console=ttyS0 noapic    `
-/// The leading comma is consumed so `modules=loop,squashfs` stays a valid
-/// list and `console=` / `noapic` are kernel params, not module names.
-/// `noapic` forces PIC IRQ 11 (PCI interrupt line) instead of ACPI `_PRT`
-/// IOAPIC pins that may not match i440FX PIRQ GSI 17/18. alpine-virt
-/// initramfs already has virtio; media is `/dev/vdb` (read-only ISO).
+/// Same-length swap so Alpine/GRUB gets serial + PIC-only IRQs.
+/// `squashfs,sd-mod,usb-storage quiet` → `loop console=ttyS0 noapic nolapic`
+/// `modules=loop,loop` stays a valid list; `console=` / `noapic` / `nolapic`
+/// are kernel params. `noapic` skips IOAPIC `_PRT`; `nolapic` skips the
+/// guest-UEFI static xAPIC page (CUR_COUNT never moves, so Linux would
+/// program a LAPIC timer that never fires and then disable PIT).
+/// alpine-virt initramfs already has virtio + squashfs; media is `/dev/vdb`.
 /// Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
-pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b",sd-mod,usb-storage quiet";
-pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b" console=ttyS0 noapic    ";
+pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"squashfs,sd-mod,usb-storage quiet";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"loop console=ttyS0 noapic nolapic";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
 pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
 pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
