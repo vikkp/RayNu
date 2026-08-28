@@ -1252,7 +1252,7 @@ pub struct MmioInsn {
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
     /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV,
-    /// 25=SHLD, 26=SHRD.
+    /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1317,6 +1317,12 @@ pub const MMIO_ALU_IDIV: u8 = 24;
 pub const MMIO_ALU_SHLD: u8 = 25;
 /// SHRD r/m, r, imm8/CL (`0F AC`/`AD`). Dest is MMIO.
 pub const MMIO_ALU_SHRD: u8 = 26;
+/// TZCNT r, r/m (`F3 0F BC`). Dest is the GPR. Src 0 writes bitwidth, CF=1.
+pub const MMIO_ALU_TZCNT: u8 = 27;
+/// LZCNT r, r/m (`F3 0F BD`). Dest is the GPR. Src 0 writes bitwidth, CF=1.
+pub const MMIO_ALU_LZCNT: u8 = 28;
+/// POPCNT r, r/m (`F3 0F B8`). Dest is the GPR.
+pub const MMIO_ALU_POPCNT: u8 = 29;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
@@ -1328,6 +1334,14 @@ pub fn mmio_alu_is_double_shift(alu: u8) -> bool {
 
 pub fn mmio_alu_is_scan(alu: u8) -> bool {
     alu == MMIO_ALU_BSF || alu == MMIO_ALU_BSR
+}
+
+pub fn mmio_alu_is_count_zero(alu: u8) -> bool {
+    alu == MMIO_ALU_TZCNT || alu == MMIO_ALU_LZCNT
+}
+
+pub fn mmio_alu_is_popcnt(alu: u8) -> bool {
+    alu == MMIO_ALU_POPCNT
 }
 
 pub fn mmio_alu_is_hint(alu: u8) -> bool {
@@ -1870,6 +1884,57 @@ pub fn mmio_scan_apply(src: u64, size: u8, bsr: bool) -> (u64, bool) {
     (u64::from(idx), false)
 }
 
+/// TZCNT: trailing zeros, or operand bitwidth when `src` is 0.
+pub fn mmio_tzcnt_apply(src: u64, size: u8) -> (u64, bool) {
+    let w = mmio_bit_width(size);
+    let v = src & mmio_size_mask(size);
+    if v == 0 {
+        (u64::from(w), true)
+    } else {
+        (u64::from(v.trailing_zeros()), false)
+    }
+}
+
+/// LZCNT: leading zeros in the operand width, or bitwidth when `src` is 0.
+pub fn mmio_lzcnt_apply(src: u64, size: u8) -> (u64, bool) {
+    let w = mmio_bit_width(size);
+    let v = src & mmio_size_mask(size);
+    if v == 0 {
+        (u64::from(w), true)
+    } else {
+        (u64::from(v.leading_zeros() - (64u32 - w)), false)
+    }
+}
+
+/// TZCNT/LZCNT: CF = (src == 0), ZF = (result == 0). Other flags undefined.
+pub fn mmio_tzcnt_rflags(old: u64, result: u64, src_zero: bool) -> u64 {
+    const CF: u64 = 1;
+    const ZF: u64 = 1 << 6;
+    let mut f = (old | 2) & !(CF | ZF);
+    if src_zero {
+        f |= CF;
+    }
+    if result == 0 {
+        f |= ZF;
+    }
+    f
+}
+
+/// POPCNT of `src` truncated to `size`.
+pub fn mmio_popcnt_apply(src: u64, size: u8) -> u64 {
+    u64::from((src & mmio_size_mask(size)).count_ones())
+}
+
+/// POPCNT: ZF = (src == 0). Other flags undefined — leave them.
+pub fn mmio_popcnt_rflags(old: u64, src_zero: bool) -> u64 {
+    const ZF: u64 = 1 << 6;
+    if src_zero {
+        old | ZF
+    } else {
+        old & !ZF
+    }
+}
+
 /// BSF/BSR: ZF = (src == 0). Other status flags undefined — leave them.
 pub fn mmio_scan_rflags(old: u64, src_zero: bool) -> u64 {
     const ZF: u64 = 1 << 6;
@@ -2115,7 +2180,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2125,13 +2190,18 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     let mut rex_w = false;
     let mut rex_r = 0u8;
     let mut rex = false;
+    let mut f3 = false;
     while i < insn_len {
         match bytes[i] {
             0x66 => {
                 operand16 = true;
                 i += 1;
             }
-            0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x67 | 0xF0 | 0xF2 | 0xF3 => i += 1,
+            0xF3 => {
+                f3 = true;
+                i += 1;
+            }
+            0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x67 | 0xF0 | 0xF2 => i += 1,
             r if (0x40..=0x4F).contains(&r) => {
                 rex = true;
                 rex_w = (r & 0x8) != 0;
@@ -2226,11 +2296,50 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 zero_ext: size == 4,
                 sign_ext: false,
                 xchg: false,
-                alu: if op2 == 0xBD {
+                alu: if f3 {
+                    if op2 == 0xBD {
+                        MMIO_ALU_LZCNT
+                    } else {
+                        MMIO_ALU_TZCNT
+                    }
+                } else if op2 == 0xBD {
                     MMIO_ALU_BSR
                 } else {
                     MMIO_ALU_BSF
                 },
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: true,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
+            });
+        }
+        if f3 && op2 == 0xB8 {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            return Some(MmioInsn {
+                is_write: false,
+                size,
+                reg,
+                has_imm: false,
+                imm: 0,
+                zero_ext: size == 4,
+                sign_ext: false,
+                xchg: false,
+                alu: MMIO_ALU_POPCNT,
                 rex,
                 test: false,
                 cmp: false,

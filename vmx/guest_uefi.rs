@@ -4671,6 +4671,27 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
         }
         return idx;
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_count_zero(op.alu) {
+        let (idx, src_zero) = if op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_TZCNT {
+            crate::devices::guest_virtio_blk::mmio_tzcnt_apply(mem, op.size)
+        } else {
+            crate::devices::guest_virtio_blk::mmio_lzcnt_apply(mem, op.size)
+        };
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_tzcnt_rflags(oldf, idx, src_zero),
+        );
+        return idx;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_popcnt(op.alu) {
+        let result = crate::devices::guest_virtio_blk::mmio_popcnt_apply(mem, op.size);
+        let src_zero = crate::devices::guest_virtio_blk::mmio_eq(mem, 0, op.size);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_popcnt_rflags(oldf, src_zero),
+        );
+        return result;
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_shift(op.alu) {
         let count = if op.has_imm {
             op.imm

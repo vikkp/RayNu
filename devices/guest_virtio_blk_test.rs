@@ -421,6 +421,34 @@ fn decode_mmio_mov_encodings() {
     assert_eq!(super::mmio_scan_rflags(2 | (1 << 6), false) & (1 << 6), 0);
     assert!(super::mmio_alu_is_hint(super::MMIO_ALU_HINT));
     assert!(super::mmio_alu_is_scan(super::MMIO_ALU_BSF));
+    let tz = decode_mmio_insn(&[0xF3, 0x0F, 0xBC, 0x01], 4).unwrap();
+    assert!(
+        tz.alu == super::MMIO_ALU_TZCNT && tz.alu_reg_left && !tz.is_write && tz.size == 4
+    );
+    let lz = decode_mmio_insn(&[0xF3, 0x0F, 0xBD, 0x01], 4).unwrap();
+    assert!(lz.alu == super::MMIO_ALU_LZCNT && lz.size == 4);
+    let pc = decode_mmio_insn(&[0xF3, 0x0F, 0xB8, 0x01], 4).unwrap();
+    assert!(pc.alu == super::MMIO_ALU_POPCNT && pc.alu_reg_left && pc.size == 4);
+    let pcq = decode_mmio_insn(&[0xF3, 0x48, 0x0F, 0xB8, 0x01], 5).unwrap();
+    assert!(pcq.size == 8 && pcq.alu == super::MMIO_ALU_POPCNT);
+    assert!(decode_mmio_insn(&[0x0F, 0xB8, 0x01], 3).is_none());
+    let (t0, z0) = super::mmio_tzcnt_apply(0, 4);
+    assert!(z0 && t0 == 32);
+    let (t1, z1) = super::mmio_tzcnt_apply(0x10, 4);
+    assert!(!z1 && t1 == 4);
+    let (l0, lz0) = super::mmio_lzcnt_apply(0, 4);
+    assert!(lz0 && l0 == 32);
+    let (l1, lz1) = super::mmio_lzcnt_apply(1, 4);
+    assert!(!lz1 && l1 == 31);
+    let (l2, lz2) = super::mmio_lzcnt_apply(0x8000_0000, 4);
+    assert!(!lz2 && l2 == 0);
+    assert_eq!(super::mmio_popcnt_apply(0xF0, 1), 4);
+    assert_eq!(super::mmio_tzcnt_rflags(2, 32, true) & 1, 1);
+    assert_eq!(super::mmio_tzcnt_rflags(2, 0, false) & (1 << 6), 1 << 6);
+    assert_eq!(super::mmio_popcnt_rflags(2, true) & (1 << 6), 1 << 6);
+    assert!(super::mmio_alu_is_count_zero(super::MMIO_ALU_TZCNT));
+    assert!(super::mmio_alu_is_popcnt(super::MMIO_ALU_POPCNT));
+    assert!(!super::mmio_alu_is_scan(super::MMIO_ALU_TZCNT));
     let imul = decode_mmio_insn(&[0x0F, 0xAF, 0x01], 3).unwrap();
     assert!(
         imul.alu == super::MMIO_ALU_IMUL && imul.alu_reg_left && !imul.has_imm && imul.size == 4

@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Forty-third slice (this EFI): MMIO CMPXCHG8B (`0F C7 /1`) compares
+Forty-fourth slice (this EFI): MMIO TZCNT/LZCNT/POPCNT (`F3 0F BC`/`BD`/`B8`)
+so BMI1 `tzcnt`/`lzcnt` and `popcnt` of virtio/IOAPIC/xAPIC write the
+count into the GPR (src 0 writes bitwidth and CF for TZCNT/LZCNT) instead
+of decoding as BSF/BSR. Forty-third slice (this EFI): MMIO CMPXCHG8B (`0F C7 /1`) compares
 EDX:EAX to the 64-bit BAR and stores ECX:EBX on match so Linux
 `cmpxchg8b` of virtio/IOAPIC/xAPIC does not spin. CMPXCHG16B (REX.W)
 is not emulated. Forty-second slice (this EFI): MMIO SHLD/SHRD (`0F A4`/`A5`/`AC`/`AD`)
