@@ -634,7 +634,11 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x30]), 2);
-    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x31]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x31]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x08]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x09]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF3, 0x90]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x01]), 0);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x90]), 0);
     assert_eq!(
         guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[]),

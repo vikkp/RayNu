@@ -1758,12 +1758,18 @@ pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
 }
 
 /// High-half Linux: VMCS `insn_len` can be 0 while identity peek is empty.
-/// CPUID `0F A2` / RDMSR `0F 32` / WRMSR `0F 30` are two bytes.
+/// Two-byte exits: CPUID `0F A2`, WRMSR `0F 30`, RDTSC `0F 31`, RDMSR
+/// `0F 32`, INVD `0F 08`, WBINVD `0F 09`. PAUSE `F3 90`.
 ///
 /// Iron `d0735bd` after `#PF linux deliver`: tick `reason=0xa`
 /// `rip=0xffffffffb8081783` `insn=` empty. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
-    if bytes.len() >= 2 && bytes[0] == 0x0F && (bytes[1] == 0xA2 || bytes[1] == 0x30 || bytes[1] == 0x32)
+    if bytes.len() >= 2 && bytes[0] == 0xF3 && bytes[1] == 0x90 {
+        return 2;
+    }
+    if bytes.len() >= 2
+        && bytes[0] == 0x0F
+        && matches!(bytes[1], 0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09)
     {
         2
     } else {
@@ -1771,11 +1777,12 @@ pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
     }
 }
 
-/// Fallback skip after CPUID / RDMSR / WRMSR emulate.
+/// Fallback skip after a 2-byte intercept (CPUID / RDMSR / WRMSR / RDTSC /
+/// INVD / WBINVD / PAUSE).
 ///
-/// Prefer VMCS 1–15 (caller already skipped). Else decode `0F A2/30/32`.
+/// Prefer VMCS 1–15 (caller already skipped). Else decode those opcodes.
 /// Else high-half RIP + `insn_len` 0 still skip 2 (iron `d0735bd` fetch
-/// miss / CR3 in extra DRAM). Not `ISO-INSTALL-OK`.
+/// miss / extra-DRAM CR3). Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_cpuid_msr_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) -> u64 {
     if vmcs_len >= 1 && vmcs_len <= 15 {
         return 0;
@@ -3761,8 +3768,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 true
             }
             EXIT_REASON_XSETBV => handle_xsetbv(),
-            // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
-            13 | 14 | 16 | 40 | 54 => skip_insn(),
+            // INVD / RDTSC / PAUSE / WBINVD — 2 bytes. INVLPG is longer.
+            13 | 16 | 40 | 54 => skip_cpuid_msr(),
+            14 => skip_insn(),
             _ => false,
         };
         if resume {
@@ -6285,7 +6293,8 @@ unsafe fn skip_insn() -> bool {
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
-/// CPUID / RDMSR / WRMSR: skip VMCS len, else decode, else high-half +2.
+/// 2-byte intercept skip: VMCS len, else decode, else high-half +2.
+/// CPUID / RDMSR / WRMSR / RDTSC / INVD / WBINVD / PAUSE.
 #[cfg(target_os = "uefi")]
 unsafe fn skip_cpuid_msr() -> bool {
     if skip_insn() {

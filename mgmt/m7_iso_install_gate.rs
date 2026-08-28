@@ -257,6 +257,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_msr_skip(")
         && include_str!("../vmx/guest_uefi.rs").contains("linux cpuid")
         && include_str!("../vmx/guest_uefi.rs").contains("linux skip-2")
+        && include_str!("../vmx/guest_uefi.rs").contains("0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_post_cd_non_io")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_near_xfer(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_CALL")
