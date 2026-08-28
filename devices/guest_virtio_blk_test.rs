@@ -286,6 +286,15 @@ fn decode_mmio_mov_encodings() {
     assert!(orb.is_write && orb.alu == super::MMIO_ALU_OR && orb.size == 1 && !orb.has_imm);
     let addl = decode_mmio_insn(&[0x81, 0x01, 0x01, 0, 0, 0], 6).unwrap();
     assert!(addl.alu == super::MMIO_ALU_ADD && addl.has_imm && addl.imm == 1);
+    let testb = decode_mmio_insn(&[0xF6, 0x00, 0x01], 3).unwrap();
+    assert!(testb.test && testb.has_imm && testb.imm == 1 && !testb.is_write && !testb.cmp);
+    let testr = decode_mmio_insn(&[0x84, 0x01], 2).unwrap();
+    assert!(testr.test && testr.reg == 0 && testr.size == 1);
+    let cmpb = decode_mmio_insn(&[0x80, 0x38, 0x00], 3).unwrap();
+    assert!(cmpb.cmp && cmpb.has_imm && !cmpb.is_write && !cmpb.test);
+    assert_eq!(super::mmio_test_rflags(2, 0, 1) & (1 << 6), 1 << 6);
+    assert_eq!(super::mmio_test_rflags(2, 1, 1) & (1 << 6), 0);
+    assert_eq!(super::mmio_cmp_rflags(2, 1, 2, 1) & 1, 1);
     assert_eq!(
         super::mmio_alu_apply(0xF0, 0x0F, super::MMIO_ALU_AND),
         0x00

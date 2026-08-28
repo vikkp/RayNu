@@ -155,12 +155,11 @@ pub fn note_tx(b: u8) {
                     enqueue(a, YES);
                     YES_LEFT.store(left - 1, Ordering::Release);
                 }
-                if left <= 1 {
-                    PHASE.store(PHASE_DONE, Ordering::Release);
-                }
+                // Stay in CONFIRM so a later `bootloader?` still matches.
             }
             PHASE_CONFIRM if ends_with(&a.win, a.wlen, BOOTLOADER_Q) => {
                 enqueue(a, BOOTLOADER);
+                PHASE.store(PHASE_DONE, Ordering::Release);
             }
             _ => {}
         }

@@ -84,6 +84,14 @@ fn confirm_queues_yes_then_stops() {
     }
     assert_eq!(n, 4);
     assert_eq!(queued(), 0);
+    for &b in b"Which bootloader?" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, BOOTLOADER);
     reset();
 }
 

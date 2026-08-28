@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-fifth slice (this EFI): product ISO xAPIC 4 KiB EPT trap + `lapic_virt`
+Twenty-sixth slice (this EFI): MMIO TEST/CMP update RFLAGS (virtio ISR poll
+does not spin); serial auto-answer stays in CONFIRM after `[y/N]` so a later
+`bootloader?` still gets `grub`. Twenty-fifth slice (this EFI): product ISO xAPIC 4 KiB EPT trap + `lapic_virt`
 CUR_COUNT/EOI (IRR inject on preempt/HLT); same-length ISO patch puts
 `virtio_blk` in `modules=` (`squashfs,sd-mod,usb-storage quiet` →
 `squashfs,virtio_blk console=ttyS0`) and drops `nolapic` now that CUR_COUNT

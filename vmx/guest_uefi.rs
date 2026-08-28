@@ -4606,6 +4606,27 @@ unsafe fn mmio_gpr_out(op: crate::devices::guest_virtio_blk::MmioInsn, val: u64)
     );
 }
 
+/// TEST/CMP: update GUEST_RFLAGS, do not store. Returns true when handled.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> bool {
+    if !op.test && !op.cmp {
+        return false;
+    }
+    let rhs = if op.has_imm {
+        op.imm
+    } else {
+        mmio_gpr_in(op)
+    };
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let newf = if op.cmp {
+        crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, cur, rhs, op.size)
+    } else {
+        crate::devices::guest_virtio_blk::mmio_test_rflags(oldf, cur & rhs, op.size)
+    };
+    let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+    true
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn skip_rel8_if(linear: u64, rip: u64, pred: fn(u8, u8) -> bool) -> bool {
     let mut buf = [0u8; 2];
@@ -5575,6 +5596,12 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if op.test || op.cmp {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
+    }
     if op.is_write != is_write {
         return false;
     }
@@ -5639,6 +5666,12 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         mmio_gpr_out(op, oldm);
         return skip_insn();
     }
+    if op.test || op.cmp {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
+    }
     if op.is_write != is_write {
         return skip_insn();
     }
@@ -5696,6 +5729,16 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         let _ = crate::devices::lapic_virt::mmio_access(gpa, true, oldr);
         mmio_gpr_out(op, u64::from(oldm));
         return skip_insn();
+    }
+    if op.test || op.cmp {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
     }
     if op.alu != 0 {
         let cur = u64::from(
