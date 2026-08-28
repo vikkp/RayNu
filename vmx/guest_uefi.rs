@@ -313,6 +313,12 @@ pub const GUEST_UEFI_FEATURE_CONTROL_VALUE: u64 = 1;
 /// CPUID.1:EDX bit 28 — HTT / multi-thread package.
 pub const CPUID_EDX_HTT: u32 = 1 << 28;
 
+/// Linux `cpuid_count(4, i)` terminator. Subleaf >= this returns type 0.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_CPUID_LEAF4_LAST_SUB: u32 = 4;
+/// Cap CPUID.0 EAX so identify_cpu cannot walk a bogus max-leaf.
+pub const GUEST_UEFI_CPUID_LEAF0_MAX: u32 = 0x1F;
+
 /// KVM hypervisor CPUID leaf. Nested `-cpu host` exposes this; iron does not.
 pub const GUEST_UEFI_KVM_CPUID_LEAF: u32 = 0x4000_0000;
 /// `KVMK` in little-endian register bytes.
@@ -400,11 +406,49 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
             r.edx &= !CPUID_EDX_HTT;
             r.ecx |= CPUID_ECX_HYPERVISOR;
         }
-        4 => r.eax &= !(0x3F << 26),
+        // Linux `intel_cacheinfo` loops `cpuid_count(4, i)` until EAX[4:0]=0.
+        // If ECX is stale (MSR leftover `0xc0000101` on n=1) every probe
+        // returns a live cache type and identify_cpu never leaves native_cpuid.
+        // Iron COM2 a8b3547: ticks 437248/437504 reason=0xa same helper.
+        4 => {
+            let stale = subleaf >= GUEST_UEFI_CPUID_LEAF4_LAST_SUB;
+            #[cfg(target_os = "uefi")]
+            let too_many = PF_LINUX_DELIVER.load(Ordering::Acquire) != 0
+                && LINUX_LEAF4.fetch_add(1, Ordering::AcqRel) >= GUEST_UEFI_CPUID_LEAF4_LAST_SUB;
+            #[cfg(not(target_os = "uefi"))]
+            let too_many = false;
+            if stale || too_many {
+                r.eax = 0;
+                r.ebx = 0;
+                r.ecx = 0;
+                r.edx = 0;
+            } else {
+                r.eax &= !(0x3F << 26);
+            }
+        }
         7 if subleaf == 0 => {
+            if r.eax > 1 {
+                r.eax = 1;
+            }
             r.ebx &= !((1 << 2) | (1 << 12) | (1 << 15));
             r.ebx &= !(CPUID_LEAF7_EBX_CLFLUSHOPT | CPUID_LEAF7_EBX_CLWB);
             r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57);
+        }
+        7 if subleaf > 1 => {
+            r.eax = 0;
+            r.ebx = 0;
+            r.ecx = 0;
+            r.edx = 0;
+        }
+        0 => {
+            if r.eax > GUEST_UEFI_CPUID_LEAF0_MAX {
+                r.eax = GUEST_UEFI_CPUID_LEAF0_MAX;
+            }
+        }
+        0x8000_0000 => {
+            if r.eax > 0x8000_0008 {
+                r.eax = 0x8000_0008;
+            }
         }
         0x8000_0001 => {
             r.edx &= !(CPUID_80000001_EDX_NX | CPUID_80000001_EDX_PAGE1GB);
@@ -1908,6 +1952,17 @@ pub fn guest_uefi_linux_cpuid_force_skip(rip_before: u64, rip_after: u64) -> u64
     }
 }
 
+/// Linux `native_cpuid` is `0F A2` (2 bytes, no prefix on iron COM2).
+/// Always skip 2 on high-half; do not fail-closed if VMCS `insn_len` is 0.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_exit_skip(rip: u64) -> u64 {
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        2
+    } else {
+        0
+    }
+}
+
 /// Log the first 8 Linux CPUIDs, then powers of two and every 256 so a
 /// short COM2 paste shows whether leaves are changing. `n` is 1-based.
 /// Not `ISO-INSTALL-OK`.
@@ -2190,6 +2245,8 @@ static PF_LINUX_CR2: AtomicU64 = AtomicU64::new(0);
 static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_LEAF4: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static LINUX_SKIP2: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8275,6 +8332,11 @@ unsafe fn handle_cpuid() -> bool {
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
     SAVED_RDX = r.edx as u64;
+    let extra = guest_uefi_linux_cpuid_exit_skip(rip);
+    if extra != 0 {
+        let _ = ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra));
+        return true;
+    }
     skip_cpuid_msr()
 }
 

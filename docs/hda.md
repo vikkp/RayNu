@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN ninetieth slice: nested product-ISO seeds leftover DRAM (`QEMU_MEM=2560M`) so QEMU can walk the 2GiB CMOS lie like iron. `iso=0` stays 512M / no leftover. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN ninety-first slice: always skip Linux CPUID by 2 (never fail-closed); terminate leaf-4 cache probes. Iron COM2 a8b3547 stuck at native_cpuid ticks 437248/437504. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested product-ISO leftover DRAM). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (Linux CPUID always-skip-2 + leaf-4 terminator). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninety-first slice: always skip Linux CPUID by 2; terminate leaf-4 cache probes after a8b3547 native_cpuid livelock; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN ninetieth slice: nested product-ISO leftover DRAM + QEMU_MEM=2560M; iso=0 stays 512M; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-ninth slice: force high-half CPUID skip if GUEST_RIP stuck after leftover+#PF err=0x0; heartbeat leaf logs; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN eighty-seventh slice: INVLPG 0F 01 /7 skip-decode after Linux #PF; empty fetch does not guess; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -262,6 +262,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_fixed_skip_len(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_msr_skip(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_force_skip(")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_exit_skip(")
+        && include_str!("../vmx/guest_uefi.rs").contains("GUEST_UEFI_CPUID_LEAF4_LAST_SUB")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_should_log(")
         && include_str!("../vmx/guest_uefi.rs").contains("linux skip-2 force")
         && include_str!("../vmx/guest_uefi.rs").contains("GUEST_UEFI_IRON_LINUX_CPUID_RIP")

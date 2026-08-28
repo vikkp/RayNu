@@ -8,6 +8,7 @@ use super::{
     guest_uefi_linux_invlpg_len,
     guest_uefi_linux_cpuid_msr_skip,
     guest_uefi_linux_cpuid_force_skip,
+    guest_uefi_linux_cpuid_exit_skip,
     guest_uefi_linux_cpuid_should_log,
     guest_uefi_linux_hlt_skip,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
@@ -40,6 +41,7 @@ use super::{
     GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
     CPUID_LEAF7_EBX_CLFLUSHOPT, CPUID_LEAF7_EBX_CLWB,
+    GUEST_UEFI_CPUID_LEAF4_LAST_SUB, GUEST_UEFI_CPUID_LEAF0_MAX,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
     GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4, eltorito_stops_guest_uefi,
@@ -693,6 +695,15 @@ fn marker_and_residual_honest() {
         0
     );
     assert_eq!(guest_uefi_linux_cpuid_force_skip(0x7ee8_7e18, 0x7ee8_7e18), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_exit_skip(GUEST_UEFI_IRON_LINUX_CPUID_RIP),
+        2
+    );
+    assert_eq!(guest_uefi_linux_cpuid_exit_skip(0x7ee8_7e18), 0);
+    assert_eq!(GUEST_UEFI_CPUID_LEAF4_LAST_SUB, 4);
+    assert_eq!(guest_uefi_filter_cpuid(4, GUEST_UEFI_CPUID_LEAF4_LAST_SUB).eax, 0);
+    assert_eq!(guest_uefi_filter_cpuid(4, 0xc000_0101).eax, 0);
+    assert!(guest_uefi_filter_cpuid(0, 0).eax <= GUEST_UEFI_CPUID_LEAF0_MAX);
     assert!(guest_uefi_linux_cpuid_should_log(1));
     assert!(guest_uefi_linux_cpuid_should_log(8));
     assert!(!guest_uefi_linux_cpuid_should_log(9));

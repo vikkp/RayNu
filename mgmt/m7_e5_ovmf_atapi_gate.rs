@@ -1375,6 +1375,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_filter_cpuid(7, 0).ecx & crate::vmx::guest_uefi::CPUID_LEAF7_ECX_LA57 == 0
         && guest_uefi_filter_cpuid(7, 0).ebx & crate::vmx::guest_uefi::CPUID_LEAF7_EBX_CLFLUSHOPT == 0
         && guest_uefi_filter_cpuid(7, 0).ebx & crate::vmx::guest_uefi::CPUID_LEAF7_EBX_CLWB == 0
+        && guest_uefi_filter_cpuid(4, crate::vmx::guest_uefi::GUEST_UEFI_CPUID_LEAF4_LAST_SUB).eax
+            == 0
         && guest_uefi_efer_with_lma(
             crate::vmx::guest_uefi::GUEST_UEFI_EFER_LME
                 | crate::vmx::guest_uefi::GUEST_UEFI_EFER_NXE,
