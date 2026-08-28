@@ -94,17 +94,22 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
-/// Same-length swap so Alpine/GRUB loads ATAPI `sr-mod` and a serial console.
-/// `sd-mod,usb-storage quiet` → `sr-mod console=ttyS0` (install disk is virtio).
+/// Same-length swap so Alpine/GRUB gets serial + PIC virtio IRQs.
+/// `,sd-mod,usb-storage quiet` → ` console=ttyS0 noapic    `
+/// The leading comma is consumed so `modules=loop,squashfs` stays a valid
+/// list and `console=` / `noapic` are kernel params, not module names.
+/// `noapic` forces PIC IRQ 11 (PCI interrupt line) instead of ACPI `_PRT`
+/// IOAPIC pins that may not match i440FX PIRQ GSI 17/18. alpine-virt
+/// initramfs already has virtio; media is `/dev/vdb` (read-only ISO).
 /// Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
-pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"sd-mod,usb-storage quiet";
-pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"sr-mod console=ttyS0    ";
+pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b",sd-mod,usb-storage quiet";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b" console=ttyS0 noapic    ";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
 pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
 pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
 const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
-/// After the sr-mod swap: load PIIX IDE so `/dev/sr0` can attach.
-/// `squashfs` stays in the ISO initramfs; cmdline space is used for `ata_piix`.
+/// After an sr-mod swap (other ISOs): load PIIX IDE so `/dev/sr0` can attach.
+/// 0 hits on alpine-virt after the `noapic` swap — that path uses virtio-iso.
 pub const ISO_ATA_PIIX_FROM: &[u8] = b"loop,squashfs,sr-mod";
 pub const ISO_ATA_PIIX_TO: &[u8] = b"ata_piix,loop,sr-mod";
 const _: () = assert!(ISO_ATA_PIIX_FROM.len() == ISO_ATA_PIIX_TO.len());
@@ -116,8 +121,13 @@ const _: () = assert!(ISO_GRUB_GFXTERM_FROM.len() == ISO_GRUB_GFXTERM_TO.len());
 pub const ISO_GRUB_INSMOD_GFX_FROM: &[u8] = b"insmod gfxterm";
 pub const ISO_GRUB_INSMOD_GFX_TO: &[u8] = b"insmod serial ";
 const _: () = assert!(ISO_GRUB_INSMOD_GFX_FROM.len() == ISO_GRUB_INSMOD_GFX_TO.len());
+/// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
+/// ISO `/dev/vdb`. 0 hits is fine when the string is absent.
+pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
+pub const ISO_ALPINE_DEV_TO: &[u8] = b"alpine_dev=vdb  ";
+const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());
 
-/// Patch a product ISO so the installer kernel uses `console=ttyS0` and sees the CD.
+/// Patch a product ISO so the installer kernel uses `console=ttyS0`, PIC, and virtio media.
 ///
 /// INVARIANTS:
 /// - Replacements are the same length as the originals
@@ -128,6 +138,7 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
+        .saturating_add(patch_same(bytes, ISO_ALPINE_DEV_FROM, ISO_ALPINE_DEV_TO))
 }
 
 fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {

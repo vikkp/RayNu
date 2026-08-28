@@ -274,7 +274,12 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Thirteenth slice (this EFI): virtio INTx also raises IOAPIC pin 11 (PCI
+Fourteenth slice (this EFI): same-length ISO patch `,sd-mod,usb-storage quiet`
+→ ` console=ttyS0 noapic` so `modules=loop,squashfs` stays valid and Linux
+uses PIC IRQ 11 (PCI interrupt line) instead of ACPI `_PRT` IOAPIC pins;
+`alpine_dev=cdrom` → `alpine_dev=vdb` when present so alpine-virt
+`nlplug-findfs` looks at virtio-iso `/dev/vdb` (0 hits OK).
+Thirteenth slice: virtio INTx also raises IOAPIC pin 11 (PCI
 interrupt line) so Linux without ACPI `_PRT` can complete virtio-blk.
 Twelfth slice: virtio GPA copies stop at 4 KiB so lazy report-RAM
 2 MiB slots (non-contiguous HPA) are not overrun. Eleventh slice: product ISO window reveals a read-only virtio-blk
