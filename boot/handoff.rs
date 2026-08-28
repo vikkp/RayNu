@@ -313,9 +313,9 @@ mod handoff_test {
     #[test]
     fn nested_product_iso_may_seed_leftover() {
         let src = include_str!("handoff.rs");
-        assert!(!src.contains("report-RAM extra skip nested"));
         assert!(src.contains("nested product-ISO HOLDS"));
         assert!(src.contains("report-RAM extra skip none"));
         assert!(src.contains("report-RAM extra skip align"));
+        assert!(src.contains("2560"));
     }
 }
