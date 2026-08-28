@@ -1205,6 +1205,29 @@ pub fn guest_uefi_pf_error_is_reserved(err: u64) -> bool {
     (err & GUEST_UEFI_PF_ERR_RSVD) != 0
 }
 
+/// Iron `e40bee0`: extra DRAM `pool=1008 extra=846 no-zero` then
+/// `Loaded initrd` then long-mode `#PF` `rip=0xffffffffbee19755`
+/// `cr2=0xffff88807e2a3000` `err=0` `cr3=0xdeee000`. OVMF identity
+/// fixup does not apply. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_IRON_LINUX_PF_CR2: u64 = 0xffff_8880_7e2a_3000;
+pub const GUEST_UEFI_IRON_LINUX_PF_RIP: u64 = 0xffff_ffff_bee1_9755;
+/// Linux 4-level `PAGE_OFFSET` direct map. Not a sign-extended 32-bit hole.
+pub const GUEST_UEFI_LINUX_DIRECT_MAP: u64 = 0xffff_8880_0000_0000;
+pub const GUEST_UEFI_LINUX_DIRECT_MAP_MASK: u64 = 0xffff_fff0_0000_0000;
+
+/// Linux 4-level direct-map CR2 (`0xffff8880_…`).
+pub fn guest_uefi_pf_is_linux_direct_map(cr2: u64) -> bool {
+    (cr2 & GUEST_UEFI_LINUX_DIRECT_MAP_MASK) == GUEST_UEFI_LINUX_DIRECT_MAP
+}
+
+/// High-half RIP: Linux kernel, not OVMF identity (`0x7ee…` / `0x3xxxxx`).
+///
+/// Deliver `#PF` to the guest IDT (`early_make_pgtable`) instead of
+/// stopping or rebuilding SEC page tables.
+pub fn guest_uefi_pf_should_deliver_to_guest(rip: u64) -> bool {
+    (rip & (1u64 << 63)) != 0
+}
+
 /// Identity-map a not-present or reserved-bit #PF in guest-UEFI low RAM.
 ///
 /// INVARIANTS:
@@ -1935,6 +1958,10 @@ static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
 static ASSERT_DEADLOOP_DUMP: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static PF_FIXUPS: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static PF_LINUX_DELIVER: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static PF_LINUX_CR2: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "uefi")]
 static SEC_IDENTITY_REBUILT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
@@ -3707,6 +3734,12 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         if reload != 0 {
             let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, u64::from(reload));
         }
+        let linux_cr2 = PF_LINUX_CR2.swap(0, Ordering::AcqRel);
+        if linux_cr2 != 0 {
+            // SAFETY: VMX-root; restore guest #PF linear after any host walk.
+            // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
+            cpu::write_cr2(linux_cr2);
+        }
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();
     }
@@ -4747,6 +4780,28 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        // Iron e40bee0: long-mode Linux #PF on the direct map after extra
+        // DRAM + Loaded initrd. Do not rebuild OVMF identity tables.
+        // VMCS does not save CR2; restore EXIT_QUALIFICATION then drop
+        // the #PF intercept so early_make_pgtable stays in the guest.
+        // SAFETY: VMX-root; cr2 is the guest #PF linear (canonical).
+        // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
+        cpu::write_cr2(cr2);
+        PF_LINUX_CR2.store(cr2, Ordering::Release);
+        if let Ok(bmp) = ops::vmread(EXCEPTION_BITMAP) {
+            let _ = ops::vmwrite(EXCEPTION_BITMAP, bmp & !(1u64 << 14));
+        }
+        let n = PF_LINUX_DELIVER.fetch_add(1, Ordering::AcqRel);
+        if n < 4 {
+            serial::write_str("boot: guest-UEFI #PF linux deliver n=");
+            write_dec(u64::from(n) + 1);
+            serial::write_str(" cr2=0x");
+            write_hex(cr2);
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+        return true;
+    }
     if ram_hpa == 0 {
         return false;
     }

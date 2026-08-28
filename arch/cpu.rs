@@ -253,6 +253,17 @@ pub unsafe fn read_cr2() -> u64 {
     v
 }
 
+/// Restore guest CR2 before VM-entry. VMCS does not save CR2; a `#PF`
+/// exit keeps the linear in `EXIT_QUALIFICATION` (CR2 may be stale after
+/// a host walk). Linux `early_make_pgtable` reads CR2.
+///
+/// SAFETY: VMX-root; `v` is a canonical linear when the guest has paging.
+/// KANI-TARGET: guest-UEFI write CR2 (outside Proven Core).
+#[inline]
+pub unsafe fn write_cr2(v: u64) {
+    core::arch::asm!("mov cr2, {}", in(reg) v, options(nostack, preserves_flags));
+}
+
 pub unsafe fn read_cr3() -> u64 {
     let v: u64;
     core::arch::asm!("mov {}, cr3", out(reg) v, options(nomem, nostack, preserves_flags));
