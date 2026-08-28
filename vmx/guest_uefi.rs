@@ -1496,12 +1496,14 @@ pub fn eltorito_payload_ran(matched: u8) -> bool {
 /// Dense through BOTH/ATAPI (`n<=16384`), then every 4096 so RN-ELT stays
 /// readable. After El Torito bootimg, every 1024 so EFI stub / kernel
 /// ExitBootServices is not a 4096-exit blind spot (iron COM2 `Loaded initrd`
-/// with no further tick). Not `ISO-INSTALL-OK`.
-pub fn guest_uefi_tick_should_print(n: u32, bootimg: bool) -> bool {
+/// with no further tick). After Linux high-half `#PF` deliver, every 256
+/// (iron `d0735bd` ended at CPUID tick `n=437248` `insn=` empty). Not
+/// `ISO-INSTALL-OK`.
+pub fn guest_uefi_tick_should_print(n: u32, bootimg: bool, linux: bool) -> bool {
     if n == 0 || n % 256 != 0 {
         return false;
     }
-    n <= 16384 || n % 4096 == 0 || (bootimg && n % 1024 == 0)
+    linux || n <= 16384 || n % 4096 == 0 || (bootimg && n % 1024 == 0)
 }
 
 /// First non-I/O VM-exit after the El Torito boot image was read.
@@ -1750,6 +1752,40 @@ pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
         vmcs_len
     } else if fetched_len >= 1 && fetched_len <= 15 {
         fetched_len
+    } else {
+        0
+    }
+}
+
+/// High-half Linux: VMCS `insn_len` can be 0 while identity peek is empty.
+/// CPUID `0F A2` / RDMSR `0F 32` / WRMSR `0F 30` are two bytes.
+///
+/// Iron `d0735bd` after `#PF linux deliver`: tick `reason=0xa`
+/// `rip=0xffffffffb8081783` `insn=` empty. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
+    if bytes.len() >= 2 && bytes[0] == 0x0F && (bytes[1] == 0xA2 || bytes[1] == 0x30 || bytes[1] == 0x32)
+    {
+        2
+    } else {
+        0
+    }
+}
+
+/// Fallback skip after CPUID / RDMSR / WRMSR emulate.
+///
+/// Prefer VMCS 1–15 (caller already skipped). Else decode `0F A2/30/32`.
+/// Else high-half RIP + `insn_len` 0 still skip 2 (iron `d0735bd` fetch
+/// miss / CR3 in extra DRAM). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_msr_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        return 0;
+    }
+    let decoded = guest_uefi_linux_fixed_skip_len(bytes);
+    if decoded != 0 {
+        return decoded;
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        2
     } else {
         0
     }
@@ -2012,6 +2048,10 @@ static PF_LINUX_DELIVER: AtomicU32 = AtomicU32::new(0);
 static PF_LINUX_CR2: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "uefi")]
 static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_SKIP2: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static SEC_IDENTITY_REBUILT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
@@ -3608,6 +3648,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     } else if guest_uefi_tick_should_print(
         n,
         crate::devices::ide_cdrom::eltorito_boot_image_read(),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
     ) {
         // Iron COM2 0be7283 flooded SOL with a tick every 256 I/O exits
         // (same=1 PCI/ATA poll). Keep dense ticks through BOTH/ATAPI, then
@@ -6151,7 +6192,7 @@ unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
 #[cfg(target_os = "uefi")]
 unsafe fn dump_low_ram_insn(linear: u64) {
     let mut buf = [0u8; 16];
-    let n = copy_guest_identity_bytes(linear, &mut buf);
+    let n = copy_guest_linear_bytes(linear, &mut buf);
     for i in 0..n {
         write_hex2(buf[i]);
     }
@@ -6232,11 +6273,38 @@ fn write_hex2(b: u8) {
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let vmcs = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-    let len = guest_uefi_mmio_skip_len(vmcs, MMIO_INSN_LEN.load(Ordering::Relaxed));
+    let mut len = guest_uefi_mmio_skip_len(vmcs, MMIO_INSN_LEN.load(Ordering::Relaxed));
+    if len == 0 && guest_uefi_pf_should_deliver_to_guest(rip) {
+        let mut buf = [0u8; 16];
+        let n = copy_guest_linear_bytes(rip, &mut buf);
+        len = guest_uefi_linux_fixed_skip_len(&buf[..n]);
+    }
     if len == 0 {
         return false;
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
+}
+
+/// CPUID / RDMSR / WRMSR: skip VMCS len, else decode, else high-half +2.
+#[cfg(target_os = "uefi")]
+unsafe fn skip_cpuid_msr() -> bool {
+    if skip_insn() {
+        return true;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let extra = guest_uefi_linux_cpuid_msr_skip(rip, 0, &[]);
+    if extra == 0 {
+        return false;
+    }
+    let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+    if k < 8 {
+        serial::write_str("boot: guest-UEFI linux skip-2 n=");
+        write_dec(u64::from(k) + 1);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok()
 }
 
 /// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
@@ -7971,6 +8039,19 @@ unsafe fn emit_guest_uart_byte(b: u8) {
 unsafe fn handle_cpuid() -> bool {
     let leaf = SAVED_RAX as u32;
     let sub = SAVED_RCX as u32;
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        let k = LINUX_CPUID.fetch_add(1, Ordering::AcqRel);
+        if k < 8 {
+            serial::write_str("boot: guest-UEFI linux cpuid n=");
+            write_dec(u64::from(k) + 1);
+            serial::write_str(" leaf=0x");
+            write_hex(u64::from(leaf));
+            serial::write_str(" sub=0x");
+            write_hex(u64::from(sub));
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+    }
     if note_unique_cpuid(leaf, sub) {
         serial::write_str("boot: guest-UEFI CPUID leaf=0x");
         write_hex(u64::from(leaf));
@@ -7983,7 +8064,7 @@ unsafe fn handle_cpuid() -> bool {
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
     SAVED_RDX = r.edx as u64;
-    skip_insn()
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]
@@ -8216,7 +8297,7 @@ unsafe fn handle_rdmsr() -> bool {
     }
     SAVED_RAX = v as u32 as u64;
     SAVED_RDX = (v >> 32) as u32 as u64;
-    skip_insn()
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]
@@ -8305,13 +8386,13 @@ unsafe fn handle_wrmsr() -> bool {
         serial::write_byte(b'\n');
     }
     if crate::devices::lapic_virt::wrmsr(msr, v).is_some() {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     if guest_uefi_misc_enable_write(msr, v) {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     if guest_uefi_mtrr_write(msr, v) {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     match msr_firewall::classify_msr(msr, msr_firewall::MsrAccess::Write) {
         msr_firewall::MsrAction::VmcsEfer => {
@@ -8339,7 +8420,7 @@ unsafe fn handle_wrmsr() -> bool {
         msr_firewall::MsrAction::Shadow => msr_firewall::shadow_write(msr, v),
         _ => {}
     }
-    skip_insn()
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]

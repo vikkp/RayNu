@@ -4,6 +4,8 @@ use super::{
     guest_uefi_insn_linear,
     guest_uefi_mmio_peek_linear,
     guest_uefi_mmio_skip_len,
+    guest_uefi_linux_fixed_skip_len,
+    guest_uefi_linux_cpuid_msr_skip,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
@@ -621,12 +623,32 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_string_ins_needs_report_ram_map(GUEST_UEFI_IRON_REPORT_RAM_GPA));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1000));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1F0_0000));
-    assert!(guest_uefi_tick_should_print(256, false));
-    assert!(guest_uefi_tick_should_print(16384, false));
-    assert!(!guest_uefi_tick_should_print(16640, false));
-    assert!(!guest_uefi_tick_should_print(17408, false));
-    assert!(guest_uefi_tick_should_print(17408, true));
-    assert!(guest_uefi_tick_should_print(20480, false));
+    assert!(guest_uefi_tick_should_print(256, false, false));
+    assert!(guest_uefi_tick_should_print(16384, false, false));
+    assert!(!guest_uefi_tick_should_print(16640, false, false));
+    assert!(!guest_uefi_tick_should_print(17408, false, false));
+    assert!(guest_uefi_tick_should_print(17408, true, false));
+    assert!(guest_uefi_tick_should_print(20480, false, false));
+    assert!(guest_uefi_tick_should_print(437248, true, true));
+    assert!(guest_uefi_tick_should_print(16640, false, true));
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x30]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x31]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x90]), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[]),
+        2
+    );
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 2, &[]),
+        0
+    );
+    assert_eq!(guest_uefi_linux_cpuid_msr_skip(0x7ee8_7e18, 0, &[]), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[0x0F, 0xA2]),
+        2
+    );
     assert!(guest_uefi_post_cd_non_io(true, false, false));
     assert!(!guest_uefi_post_cd_non_io(true, false, true));
     assert!(!guest_uefi_post_cd_non_io(false, false, false));

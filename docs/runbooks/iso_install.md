@@ -152,14 +152,16 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-second-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-third-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Do not flash `40f1ada`, `d0735bd`, `4a62e06`, or
-`e40bee0` again (`40f1ada` still intercepts Linux `#UD`/`#GP`). Leftover DRAM
-`pool=1008 extra=846 no-zero` is proven; high-half `#PF` is VM-entry injected
-and the exception bitmap becomes G0's (no `#PF`/`#UD`/`#GP`). Want
+`git checkout` a SHA). Iron COM2 after `d0735bd` (deliver line has no `err=`)
+reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
+empty — that is not `ISO-INSTALL-OK`. Do not flash `d0735bd`, `40f1ada`,
+`4a62e06`, or `e40bee0` again. Leftover DRAM
+`pool=1008 extra=846 no-zero` and `#PF linux deliver` are proven. Want
 `report-RAM extra hpa=` / `pool=` near 1008 with
-`extra=` `no-zero` then `#PF linux deliver` then `Linux version`. ISO serial patches allow ISO9660 NUL padding on
+`extra=` `no-zero` then `#PF linux deliver` `err=` `linux cpuid` /
+`linux skip-2` then `Linux version`. ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
 gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
 starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm

@@ -274,12 +274,19 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighty-second slice (this EFI): on high-half `#PF` switch to G0
+Eighty-third slice (this EFI): iron COM2 after `d0735bd` (no `err=` on
+the deliver line) reached `#PF linux deliver n=1` then high-half CPUID
+`rip=0xffffffffb8081783` `insn=` empty. Walk guest CR3 for insn dump,
+skip CPUID/RDMSR/WRMSR by 2 if VMCS `insn_len` is 0 (still skip 2 on
+fetch miss / extra-DRAM CR3), tick every 256 after deliver. Keep G0
+Linux exception bitmap + VM-entry `#PF` inject. Not `ISO-INSTALL-OK`.
+If that SOL is still live, paste the rest before reflashing. Else flash
+this HEAD after CI is green. Want COM2 `#PF linux deliver` with `err=`
+then `linux cpuid` / `linux skip-2` then `Linux version` / installer /
+`ISO-INSTALL-OK`.
+Eighty-second slice: on high-half `#PF` switch to G0
 `LINUX_EXCEPTION_BITMAP` (drop `#UD`/`#GP` intercept; M3.10 skipped
 `ud2` / alternatives) then VM-entry inject vector 14. PIC/LAPIC waits.
-Not `ISO-INSTALL-OK`. Flash this HEAD after CI is green. Want COM2
-`#PF linux deliver` then `Linux version` / installer /
-`ISO-INSTALL-OK`.
 Eighty-first slice: Drop `#PF` exiting, restore CR2, and **VM-entry inject**
 vector 14 so PIC/LAPIC cannot steal the entry or clobber CR2.
 Eightieth slice: deliver high-half `#PF` to the guest IDT and stop
