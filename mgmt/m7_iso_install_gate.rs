@@ -53,6 +53,9 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
         && include_str!("../src/main.rs").contains("probe_product_linux_iso")
         && include_str!("../src/main.rs").contains("stage46_hold_e4_shell")
+        && include_str!("../tools/run-qemu.sh").contains("PRODUCT_ISO")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("--linux-iso")
+        && include_str!("../tools/flash-cruzer-esp.sh").contains("--no-linux-iso")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }

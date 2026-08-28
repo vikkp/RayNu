@@ -146,13 +146,21 @@ Not extract-boot bzImage.
 
 Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
 (fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
-bytes. PRE-EBS copies it into `LOADER_DATA`. Guest OVMF boots that CD, virtio-pci
-queues target an empty install disk (1 GiB on iron, 1 MiB nested), and guest-UEFI
-**holds** (does not fail-soft to E4). Iron COM2 close is
-`RAYNU-V-M7-ISO-INSTALL-OK` after the installer writes a partition table.
-Host/CI never prints that marker. `iso=0` / lab stub still E4 `LINUX-EARLY`.
-Keep `windows_iso` / `generic_uefi`. Iron P0-14 `last_commit` stays `2b795a0`
-until this gate actually closes.
+bytes. Operator flash:
+
+```bash
+~/projects/raynuv/flashcruzer.sh --wait --linux-iso /path/to/alpine-standard-x86_64.iso
+```
+
+`--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
+still runs. QEMU: `PRODUCT_ISO=/path/to.iso ./tools/run-qemu.sh` (default ESP
+strips leftovers so the boot gate does not HOLD). PRE-EBS copies the ISO into
+`LOADER_DATA`. Guest OVMF boots that CD, virtio-pci queues target an empty
+install disk (1 GiB on iron, 1 MiB nested), and guest-UEFI **holds** (does not
+fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
+installer writes a partition table. Host/CI never prints that marker. `iso=0`
+/ lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron
+P0-14 `last_commit` stays `2b795a0` until this gate actually closes.
 
 ## Next
 

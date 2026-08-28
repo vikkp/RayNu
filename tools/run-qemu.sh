@@ -5,6 +5,7 @@
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 # ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
 # E5 ISO install lab: ISO_INSTALL_LAB=1 stages isoinstall.txt (1MiB virtio disk).
+# Stage 46: PRODUCT_ISO=/path/to/distro.iso stages EFI/RayNu/linux.iso (not default).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -116,6 +117,25 @@ if [[ "$EVIDENCE_MODE" == "1" ]]; then
   mkdir -p "$ESP/EFI/RayNu"
   : >"$ESP/EFI/RayNu/paperverbose.txt"
   echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
+fi
+
+# Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
+rm -f "$ESP/linux.iso" "$ESP/install.iso" \
+  "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true
+PRODUCT_ISO="${PRODUCT_ISO:-}"
+if [[ -n "$PRODUCT_ISO" ]]; then
+  if [[ ! -f "$PRODUCT_ISO" ]]; then
+    echo "error: PRODUCT_ISO not found: $PRODUCT_ISO" >&2
+    exit 1
+  fi
+  psz=$(wc -c <"$PRODUCT_ISO" | tr -d ' ')
+  if (( psz <= 73728 )); then
+    echo "error: PRODUCT_ISO is lab-stub sized ($psz); need >73728" >&2
+    exit 1
+  fi
+  mkdir -p "$ESP/EFI/RayNu"
+  cp "$PRODUCT_ISO" "$ESP/EFI/RayNu/linux.iso"
+  echo "==> Stage 46 product ISO: $ESP/EFI/RayNu/linux.iso ($psz bytes) (not ISO-INSTALL-OK)"
 fi
 
 # E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).

@@ -64,6 +64,8 @@ PIN_RUN=""
 PIN_SHA=""
 NO_OVMF=0
 OVMF_PATH=""
+LINUX_ISO=""
+NO_LINUX_ISO=0
 
 usage() {
   cat <<'EOF'
@@ -83,6 +85,8 @@ Options:
   --dry-run           pick the CI run; do not download or flash
   --ovmf PATH         stage this 1-4 MiB _FVH OVMF.fd onto EFI/RayNu/OVMF.fd
   --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
+  --linux-iso PATH    stage EFI/RayNu/linux.iso (Stage 46; size must exceed 73728)
+  --no-linux-iso      remove leftover product ISO so E4 LINUX-EARLY still runs
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -109,11 +113,17 @@ while [[ $# -gt 0 ]]; do
     --allow-uefi-only) ALLOW_UEFI_ONLY=1; shift ;;
     --allow-rejected) ALLOW_REJECTED=1; shift ;;
     --no-ovmf) NO_OVMF=1; shift ;;
+    --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
+    --no-linux-iso) NO_LINUX_ISO=1; shift ;;
     --ovmf) OVMF_PATH="${2:-}"; shift 2 ;;
     --no-git) NO_GIT=1; shift ;;
     *) echo "error: unknown arg: $1" >&2; usage; exit 2 ;;
   esac
 done
+
+if [[ -z "$LINUX_ISO" && -n "${PRODUCT_ISO:-}" ]]; then
+  LINUX_ISO="$PRODUCT_ISO"
+fi
 
 install_launcher() {
   mkdir -p "$(dirname "$LAUNCHER")"
@@ -159,6 +169,9 @@ self_test() {
   grep -q 'EFI/RayNu/OVMF.fd' "$ESP"
   grep -q 'ovmf_has_fvh' "$ESP"
   grep -q -- '--no-ovmf' "$ESP"
+  grep -q -- '--linux-iso' "$ESP"
+  grep -q -- '--no-linux-iso' "$ESP"
+  grep -q 'EFI/RayNu/linux.iso' "$ESP"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -410,10 +423,19 @@ if [[ "$NO_OVMF" -eq 1 && -n "$OVMF_PATH" ]]; then
   echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
   exit 1
 fi
+if [[ "$NO_LINUX_ISO" -eq 1 && -n "$LINUX_ISO" ]]; then
+  echo "error: --linux-iso and --no-linux-iso are mutually exclusive" >&2
+  exit 1
+fi
 if [[ "$NO_OVMF" -eq 1 ]]; then
   ESP_ARGS+=(--no-ovmf)
 elif [[ -n "$OVMF_PATH" ]]; then
   ESP_ARGS+=(--ovmf "$OVMF_PATH")
+fi
+if [[ "$NO_LINUX_ISO" -eq 1 ]]; then
+  ESP_ARGS+=(--no-linux-iso)
+elif [[ -n "$LINUX_ISO" ]]; then
+  ESP_ARGS+=(--linux-iso "$LINUX_ISO")
 fi
 if [[ "$(id -u)" -eq 0 ]]; then
   "$ESP" "${ESP_ARGS[@]}"

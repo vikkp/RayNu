@@ -17,6 +17,8 @@
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --sha256 <hex>
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --ovmf /path/to/OVMF.fd
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-ovmf
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
@@ -31,6 +33,8 @@ EFI_PATH=""
 EXPECT_SHA=""
 OVMF_SRC=""
 NO_OVMF=0
+LINUX_ISO=""
+NO_LINUX_ISO=0
 SELFTEST=0
 DRY=0
 
@@ -123,6 +127,8 @@ while [[ $# -gt 0 ]]; do
     --sha256) EXPECT_SHA="${2:-}"; shift 2 ;;
     --ovmf) OVMF_SRC="${2:-}"; shift 2 ;;
     --no-ovmf) NO_OVMF=1; shift ;;
+    --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
+    --no-linux-iso) NO_LINUX_ISO=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
       echo "error: unknown arg: $1" >&2
@@ -138,6 +144,10 @@ fi
 
 if [[ "$NO_OVMF" == "1" && -n "$OVMF_SRC" ]]; then
   echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$NO_LINUX_ISO" == "1" && -n "$LINUX_ISO" ]]; then
+  echo "error: --linux-iso and --no-linux-iso are mutually exclusive" >&2
   exit 1
 fi
 
@@ -306,6 +316,32 @@ else
     exit 1
   fi
   echo "==> OVMF.fd bytes=$DEST_OVMF_BYTES _FVH=ok"
+fi
+
+if [[ "$NO_LINUX_ISO" == "1" ]]; then
+  sudo rm -f "$MNT/linux.iso" "$MNT/EFI/RayNu/linux.iso" "$MNT/EFI/RayNu/install.iso"
+  echo "==> --no-linux-iso: removed product ISO (E4 LINUX-EARLY)"
+elif [[ -n "$LINUX_ISO" ]]; then
+  if [[ ! -f "$LINUX_ISO" ]]; then
+    echo "error: --linux-iso not found: $LINUX_ISO" >&2
+    exit 1
+  fi
+  LINUX_ABS="$(readlink -f "$LINUX_ISO")"
+  LINUX_BYTES="$(wc -c <"$LINUX_ABS" | tr -d ' ')"
+  if (( LINUX_BYTES <= 73728 )); then
+    echo "error: --linux-iso is lab-stub sized ($LINUX_BYTES); need >73728" >&2
+    exit 1
+  fi
+  echo "==> staging EFI/RayNu/linux.iso ($LINUX_BYTES bytes) from $LINUX_ABS"
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo cp --remove-destination "$LINUX_ABS" "$MNT/EFI/RayNu/linux.iso"
+  sudo sync -f "$MNT/EFI/RayNu/linux.iso" 2>/dev/null || sudo sync
+  DEST_LINUX_BYTES="$(wc -c <"$MNT/EFI/RayNu/linux.iso" | tr -d ' ')"
+  if [[ "$DEST_LINUX_BYTES" != "$LINUX_BYTES" ]]; then
+    echo "error: staged linux.iso size $DEST_LINUX_BYTES != $LINUX_BYTES" >&2
+    exit 1
+  fi
+  echo "==> linux.iso bytes=$DEST_LINUX_BYTES (Stage 46; not ISO-INSTALL-OK)"
 fi
 
 INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
