@@ -167,7 +167,7 @@ advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
 with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
-appears; not ISO-INSTALL-OK), the ISO cmdline is patched to
+appears, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `squashfs console=ttyS0 nolapic` (`modules=loop,squashfs` stays valid so Alpine
 can mount the live root; `console=` / `nolapic` are kernel params; PIT IRQ 0; no
 LAPIC timer on the static xAPIC page; optional `console=tty0` → `noapic`; GRUB

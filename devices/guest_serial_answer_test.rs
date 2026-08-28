@@ -110,6 +110,26 @@ fn bootloader_prompt_queues_grub() {
 }
 
 #[test]
+fn confirm_bracket_yn_queues_yes() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"WARNING: Erase the above disk(s) and continue? [y/N]: " {
+        note_tx(b);
+    }
+    assert_eq!(take_rx(), Some(b'y'));
+    assert_eq!(take_rx(), Some(b'\r'));
+    assert_eq!(queued(), 0);
+    reset();
+}
+
+#[test]
 fn never_prints_iso_install_ok() {
     let s = include_str!("guest_serial_answer.rs");
     assert!(!s.contains("RAYNU-V-M7-ISO-INSTALL-OK"));

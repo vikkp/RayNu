@@ -21,6 +21,11 @@ const SHELL_ROOT: &[u8] = b"/ # ";
 const GRUB: &[u8] = b"GNU GRUB";
 const YESN: &[u8] = b"(y/n)";
 const YESN_UP: &[u8] = b"(y/N)";
+/// alpine-conf `confirm_erase` (older ISOs): `[y/N]: ` not `(y/n)`.
+const YESN_BRACK: &[u8] = b"[y/N]";
+const YESN_BRACK_LOW: &[u8] = b"[y/n]";
+const YESN_BRACK_YN: &[u8] = b"[Y/n]";
+const YESN_BRACK_YY: &[u8] = b"[Y/N]";
 /// Alpine `setup-disk` bootloader picker when `BOOTLOADER` is unset.
 const BOOTLOADER_Q: &[u8] = b"bootloader?";
 
@@ -95,6 +100,15 @@ fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
     &win[wlen - needle.len()..wlen] == needle
 }
 
+fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
+    ends_with(win, wlen, YESN)
+        || ends_with(win, wlen, YESN_UP)
+        || ends_with(win, wlen, YESN_BRACK)
+        || ends_with(win, wlen, YESN_BRACK_LOW)
+        || ends_with(win, wlen, YESN_BRACK_YN)
+        || ends_with(win, wlen, YESN_BRACK_YY)
+}
+
 fn enqueue(a: &mut Answer, bytes: &[u8]) {
     for &b in bytes {
         if a.qn >= QCAP {
@@ -135,9 +149,7 @@ pub fn note_tx(b: u8) {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }
-            PHASE_CONFIRM
-                if ends_with(&a.win, a.wlen, YESN) || ends_with(&a.win, a.wlen, YESN_UP) =>
-            {
+            PHASE_CONFIRM if is_yes_prompt(&a.win, a.wlen) => {
                 let left = YES_LEFT.load(Ordering::Acquire);
                 if left > 0 {
                     enqueue(a, YES);
