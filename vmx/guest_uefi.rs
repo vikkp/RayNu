@@ -4684,6 +4684,29 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
         let _ = ops::vmwrite(GUEST_RFLAGS, newf);
         return result;
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+        let mut ax_src = op;
+        ax_src.reg = 0;
+        let ax = mmio_gpr_in(ax_src);
+        let signed = op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_IMUL1;
+        let (lo, hi, overflow) =
+            crate::devices::guest_virtio_blk::mmio_mul_pair_apply(ax, mem, op.size, signed);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_imul_rflags(oldf, overflow),
+        );
+        let mut dest = op;
+        dest.reg = 0;
+        dest.size = if op.size == 1 { 2 } else { op.size };
+        dest.zero_ext = dest.size == 4;
+        dest.rex = true;
+        mmio_gpr_out(dest, lo);
+        if op.size > 1 {
+            dest.reg = 2;
+            mmio_gpr_out(dest, hi);
+        }
+        return lo;
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_imul(op.alu) {
         let gpr = mmio_gpr_in(op);
         let (left, right) = if op.has_imm {
@@ -5847,7 +5870,9 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
         let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         let val = mmio_alu_result(op, cur);
-        mmio_gpr_out(op, val);
+        if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+            mmio_gpr_out(op, val);
+        }
         return skip_insn();
     }
     if op.is_write != is_write {
@@ -5943,7 +5968,9 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
         let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
         let val = mmio_alu_result(op, cur);
-        mmio_gpr_out(op, val);
+        if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+            mmio_gpr_out(op, val);
+        }
         return skip_insn();
     }
     if op.is_write != is_write {
@@ -6058,7 +6085,9 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         );
         let val = mmio_alu_result(op, cur);
         if op.alu_reg_left || !op.is_write {
-            mmio_gpr_out(op, val);
+            if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+                mmio_gpr_out(op, val);
+            }
         } else {
             let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
         }

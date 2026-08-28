@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Thirty-eighth slice (this EFI): MMIO IMUL (`0F AF` r, r/m and `69`/`6B`
+Thirty-ninth slice (this EFI): MMIO one-operand MUL/IMUL (`F6`/`F7` /4 /5)
+writes AX or DX:AX so Linux `mul`/`imul` of virtio/IOAPIC/xAPIC does not
+spin. Thirty-eighth slice (this EFI): MMIO IMUL (`0F AF` r, r/m and `69`/`6B`
 r, r/m, imm) so Linux signed multiply of virtio/IOAPIC/xAPIC does not
 spin. Thirty-seventh slice (this EFI): Alpine auto-answer `mkdir -p /media/cdrom`
 before `mount /dev/vdb` so apk still sees ISO9660 when nlplug never created

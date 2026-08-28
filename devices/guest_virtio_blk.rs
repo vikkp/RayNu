@@ -1250,7 +1250,8 @@ pub struct MmioInsn {
     pub xchg: bool,
     /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB,
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
-    /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL.
+    /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
+    /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1301,6 +1302,10 @@ pub const MMIO_ALU_BSR: u8 = 18;
 pub const MMIO_ALU_HINT: u8 = 19;
 /// IMUL r, r/m (`0F AF`) or IMUL r, r/m, imm (`69`/`6B`). Dest is the GPR.
 pub const MMIO_ALU_IMUL: u8 = 20;
+/// F6/F7 /4 MUL r/m: product in AX (byte) or DX:AX.
+pub const MMIO_ALU_MUL: u8 = 21;
+/// F6/F7 /5 IMUL r/m (one-operand): product in AX or DX:AX.
+pub const MMIO_ALU_IMUL1: u8 = 22;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
@@ -1316,6 +1321,10 @@ pub fn mmio_alu_is_hint(alu: u8) -> bool {
 
 pub fn mmio_alu_is_imul(alu: u8) -> bool {
     alu == MMIO_ALU_IMUL
+}
+
+pub fn mmio_alu_is_mul_pair(alu: u8) -> bool {
+    alu == MMIO_ALU_MUL || alu == MMIO_ALU_IMUL1
 }
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
@@ -1784,6 +1793,39 @@ pub fn mmio_imul_rflags(old: u64, overflow: bool) -> u64 {
     f
 }
 
+/// One-operand MUL/IMUL. Returns (lo AX, hi DX, overflow). Byte form uses only `lo` as AX.
+pub fn mmio_mul_pair_apply(ax: u64, mem: u64, size: u8, signed: bool) -> (u64, u64, bool) {
+    let mask = mmio_size_mask(size);
+    let a = ax & mask;
+    let b = mem & mask;
+    if size == 1 {
+        if signed {
+            let prod = i16::from(a as u8 as i8).wrapping_mul(i16::from(b as u8 as i8));
+            let lo = prod as u16 as u64;
+            let ah = (lo >> 8) & 0xff;
+            let sign = if (lo & 0x80) != 0 { 0xff } else { 0 };
+            (lo, 0, ah != sign)
+        } else {
+            let prod = a.wrapping_mul(b);
+            (prod & 0xffff, 0, prod > 0xff)
+        }
+    } else {
+        let width = u32::from(size) * 8;
+        if signed {
+            let prod = mmio_as_signed(a, size) * mmio_as_signed(b, size);
+            let raw = prod as u128;
+            let lo = (raw as u64) & mask;
+            let hi = ((raw >> width) as u64) & mask;
+            (lo, hi, mmio_as_signed(lo, size) != prod)
+        } else {
+            let prod = u128::from(a) * u128::from(b);
+            let lo = (prod as u64) & mask;
+            let hi = ((prod >> width) as u64) & mask;
+            (lo, hi, hi != 0)
+        }
+    }
+}
+
 fn mmio_hint() -> MmioInsn {
     MmioInsn {
         is_write: false,
@@ -1841,7 +1883,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2530,6 +2572,8 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             let ext = (m >> 3) & 7;
             let size = if op == 0xF6 {
                 1
+            } else if rex_w {
+                8
             } else if operand16 {
                 2
             } else {
@@ -2582,6 +2626,29 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                     cmp: false,
                     cmp_reg_left: false,
                     alu_reg_left: false,
+                    bt: 0,
+                    atomic: 0,
+                    cc: 0,
+                }),
+                4 | 5 => Some(MmioInsn {
+                    is_write: false,
+                    size,
+                    reg: 0,
+                    has_imm: false,
+                    imm: 0,
+                    zero_ext: size == 4,
+                    sign_ext: false,
+                    xchg: false,
+                    alu: if ext == 5 {
+                        MMIO_ALU_IMUL1
+                    } else {
+                        MMIO_ALU_MUL
+                    },
+                    rex,
+                    test: false,
+                    cmp: false,
+                    cmp_reg_left: false,
+                    alu_reg_left: true,
                     bt: 0,
                     atomic: 0,
                     cc: 0,

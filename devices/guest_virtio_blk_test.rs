@@ -420,6 +420,17 @@ fn decode_mmio_mov_encodings() {
     assert!(ov2 && p2 == 0xffff_fffe);
     assert_eq!(super::mmio_imul_rflags(2, true) & 1, 1);
     assert!(super::mmio_alu_is_imul(super::MMIO_ALU_IMUL));
+    let mulb = decode_mmio_insn(&[0xF6, 0x20], 2).unwrap();
+    assert!(mulb.alu == super::MMIO_ALU_MUL && mulb.size == 1 && mulb.alu_reg_left);
+    let imul1 = decode_mmio_insn(&[0xF7, 0x29], 2).unwrap();
+    assert!(imul1.alu == super::MMIO_ALU_IMUL1 && imul1.size == 4);
+    let (lo, hi, ov) = super::mmio_mul_pair_apply(2, 3, 4, false);
+    assert!(!ov && lo == 6 && hi == 0);
+    let (lo2, hi2, ov2) = super::mmio_mul_pair_apply(0x8000_0000, 2, 4, false);
+    assert!(ov2 && lo2 == 0 && hi2 == 1);
+    let (lo3, _, ov3) = super::mmio_mul_pair_apply(0x80, 2, 1, false);
+    assert!(ov3 && lo3 == 0x100);
+    assert!(super::mmio_alu_is_mul_pair(super::MMIO_ALU_MUL));
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

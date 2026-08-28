@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN thirty-eighth slice: MMIO IMUL. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN thirty-ninth slice: MMIO MUL/IMUL DX:AX. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (MMIO IMUL). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (MMIO MUL/IMUL DX:AX). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-ninth slice: MMIO F6/F7 MUL/IMUL into AX or DX:AX; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-eighth slice: MMIO IMUL (0F AF dest-reg, 69/6B imm); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-seventh slice: auto-answer mkdir -p /media/cdrom before mount (nlplug may skip virtio-iso); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN thirty-sixth slice: MMIO PREFETCH/NOP/CLFLUSH skip (no BAR access) + BSF/BSR (0F BC/BD); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
