@@ -94,45 +94,42 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
-/// Same-length swap so Alpine/GRUB keeps `modules=` valid and adds a serial console.
-/// `sd-mod,usb-storage quiet` → `sd-mod console=ttyS0` (usb-storage is CD-only here).
+/// Same-length swap so Alpine/GRUB loads ATAPI `sr-mod` and a serial console.
+/// `sd-mod,usb-storage quiet` → `sr-mod console=ttyS0` (install disk is virtio).
 /// Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
 pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"sd-mod,usb-storage quiet";
-pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"sd-mod console=ttyS0    ";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"sr-mod console=ttyS0    ";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
+pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
+pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
+const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
 
-/// Patch a product ISO so the installer kernel uses `console=ttyS0`.
+/// Patch a product ISO so the installer kernel uses `console=ttyS0` and sees the CD.
 ///
 /// INVARIANTS:
-/// - Replacement is the same length as [`ISO_SERIAL_CONSOLE_FROM`]
-/// - Already-present `console=ttyS0` is left alone
+/// - Replacements are the same length as the originals
 /// - Returns the number of replacements (0 = nothing patched)
 pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
-    if ISO_SERIAL_CONSOLE_FROM.len() != ISO_SERIAL_CONSOLE_TO.len() {
-        return 0;
-    }
-    if find_bytes(bytes, b"console=ttyS0").is_some() {
+    patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO)
+        .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
+}
+
+fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {
+    if from.len() != to.len() || from.is_empty() {
         return 0;
     }
     let mut n = 0u32;
     let mut i = 0usize;
-    while i + ISO_SERIAL_CONSOLE_FROM.len() <= bytes.len() {
-        if bytes[i..i + ISO_SERIAL_CONSOLE_FROM.len()] == *ISO_SERIAL_CONSOLE_FROM {
-            bytes[i..i + ISO_SERIAL_CONSOLE_TO.len()].copy_from_slice(ISO_SERIAL_CONSOLE_TO);
+    while i + from.len() <= bytes.len() {
+        if bytes[i..i + from.len()] == *from {
+            bytes[i..i + to.len()].copy_from_slice(to);
             n = n.saturating_add(1);
-            i = i.saturating_add(ISO_SERIAL_CONSOLE_TO.len());
+            i = i.saturating_add(to.len());
         } else {
             i = i.saturating_add(1);
         }
     }
     n
-}
-
-fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || hay.len() < needle.len() {
-        return None;
-    }
-    hay.windows(needle.len()).position(|w| w == needle)
 }
 
 /// Remember a window-sized ISO. Caller keeps `bytes` alive across EBS.

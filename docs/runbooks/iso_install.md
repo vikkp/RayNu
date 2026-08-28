@@ -146,10 +146,11 @@ Not extract-boot bzImage.
 
 Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
 (fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
-bytes. Operator flash:
+bytes. Prefer `alpine-virt-*-x86_64.iso` (virtio + serial); standard also
+works if ATAPI `sr-mod` is on the cmdline. Operator flash:
 
 ```bash
-~/projects/raynuv/flashcruzer.sh --wait --linux-iso /path/to/alpine-standard-x86_64.iso
+~/projects/raynuv/flashcruzer.sh --wait --linux-iso /path/to/alpine-virt-x86_64.iso
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
@@ -161,8 +162,8 @@ ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
 with `setup-disk` to `/dev/vda` (not ISO-INSTALL-OK), the ISO cmdline is patched to
-`console=ttyS0` when it contains `sd-mod,usb-storage quiet` (keeps `modules=`
-valid), and guest-UEFI **holds**
+`sr-mod console=ttyS0` (ATAPI CD + serial; GRUB `timeout=10` → `timeout=0`) when it
+contains `sd-mod,usb-storage quiet`, and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
 installer writes a partition table. Host/CI never prints that marker. `iso=0`
 / lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron

@@ -16,6 +16,7 @@ const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
 const SHELL: &[u8] = b"~# ";
+const GRUB: &[u8] = b"GNU GRUB";
 const YESN: &[u8] = b"(y/n)";
 const YESN_UP: &[u8] = b"(y/N)";
 
@@ -23,6 +24,7 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 pub(crate) const SETUP: &[u8] =
     b"modprobe virtio_pci; modprobe virtio_blk; ERASE_DISKS=/dev/vda setup-disk -m sys /dev/vda\r";
 pub(crate) const YES: &[u8] = b"y\r";
+pub(crate) const GRUB_ENTER: &[u8] = b"\r";
 
 const PHASE_LOGIN: u8 = 0;
 const PHASE_SHELL: u8 = 1;
@@ -58,6 +60,7 @@ static STATE: Box = Box(core::cell::UnsafeCell::new(Answer::empty()));
 static LOCK: AtomicBool = AtomicBool::new(false);
 static PHASE: AtomicU8 = AtomicU8::new(PHASE_LOGIN);
 static YES_LEFT: AtomicU8 = AtomicU8::new(YES_MAX);
+static GRUB_SENT: AtomicBool = AtomicBool::new(false);
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -74,6 +77,7 @@ pub fn reset() {
     with(|a| *a = Answer::empty());
     PHASE.store(PHASE_LOGIN, Ordering::Release);
     YES_LEFT.store(YES_MAX, Ordering::Release);
+    GRUB_SENT.store(false, Ordering::Release);
 }
 
 fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
@@ -109,6 +113,10 @@ pub fn note_tx(b: u8) {
             a.win[WIN - 1] = b;
         }
         match phase {
+            PHASE_LOGIN if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) => {
+                enqueue(a, GRUB_ENTER);
+                GRUB_SENT.store(true, Ordering::Release);
+            }
             PHASE_LOGIN if ends_with(&a.win, a.wlen, LOGIN) => {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);

@@ -64,6 +64,11 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert_eq!(sz, GUEST_VIRTIO_BAR0_SIZE_MASK);
     pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+    pci_write_addr(pci_config_addr() | 0x3C);
+    assert_eq!(
+        pci_read_data(0xCFC, 1) as u8,
+        crate::devices::guest_irq::VIRTIO_PIC_IRQ
+    );
     assert!(is_virtio_bar_2m_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT) + 0x1000));
     assert!(!crate::devices::guest_platform::is_platform_sink_gpa(
         u64::from(GUEST_VIRTIO_BAR0_DEFAULT)
@@ -118,6 +123,41 @@ fn blk_sector_rw_roundtrip_and_queue_out() {
     assert_eq!(n, 512);
     assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
     assert_eq!(disk2[0], 0x5A);
+}
+
+#[test]
+fn blk_queue_out_writes_full_8k() {
+    let mut guest = vec![0u8; 0x3200];
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    guest[hdr_gpa as usize + 8..hdr_gpa as usize + 16].copy_from_slice(&0u64.to_le_bytes());
+    let data_gpa = 0x1000u64;
+    guest[data_gpa as usize..data_gpa as usize + 8192].fill(0x3C);
+    let st_gpa = 0x3100u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, 8192, 1, 2);
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; 16384];
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 8192, "installer OUT must not truncate at 4KiB");
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(disk[0], 0x3C);
+    assert_eq!(disk[8191], 0x3C);
 }
 
 #[test]

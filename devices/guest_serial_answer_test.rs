@@ -1,4 +1,4 @@
-use super::{note_tx, queued, reset, take_rx, ROOT, SETUP, YES};
+use super::{note_tx, queued, reset, take_rx, GRUB_ENTER, ROOT, SETUP, YES};
 
 #[test]
 fn login_queues_root_then_setup_disk() {
@@ -24,6 +24,21 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     reset();
     assert_eq!(queued(), 0);
+}
+
+#[test]
+fn gnu_grub_queues_enter_once() {
+    reset();
+    for &b in b"GNU GRUB" {
+        note_tx(b);
+    }
+    assert_eq!(take_rx(), Some(GRUB_ENTER[0]));
+    assert_eq!(queued(), 0);
+    for &b in b"GNU GRUB" {
+        note_tx(b);
+    }
+    assert_eq!(take_rx(), None);
+    reset();
 }
 
 #[test]

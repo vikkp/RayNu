@@ -328,7 +328,7 @@ fn virtio_dword(v: &VirtioPci, off: u8) -> u32 {
         0x10 => bar0_read(v),
         0x2C => u32::from(GUEST_VIRTIO_PCI_VENDOR) | (u32::from(GUEST_VIRTIO_PCI_SUBSYS) << 16),
         0x34 => 0x0000_0040, // cap pointer
-        0x3C => 0x0000_0100,
+        0x3C => u32::from(crate::devices::guest_irq::VIRTIO_PIC_IRQ) | 0x0000_0100,
         off if v.queues_armed => modern_cap_dword(off),
         // Vendor cap: virtio-pci common cfg (type 1) — enough for enum, not queues.
         0x40 => 0x0001_0010,
@@ -791,20 +791,33 @@ fn process_blk_queue(
         } else if data_gpa != 0 && data_len > 0 {
             let n = data_len as usize;
             let mut buf = [0u8; 4096];
-            let take = core::cmp::min(n, buf.len());
-            if data_write {
-                // IN: device writes guest buffer
-                status = blk_sector_rw(disk, ty, sector, &mut buf[..take]);
-                if status == VIRTIO_BLK_S_OK {
-                    let _ = write_bytes(translate, data_gpa, &buf[..take]);
-                }
-            } else {
-                if read_bytes(translate, data_gpa, &mut buf[..take]) {
-                    status = blk_sector_rw(disk, ty, sector, &mut buf[..take]);
-                    if status == VIRTIO_BLK_S_OK && ty == VIRTIO_BLK_T_OUT {
+            let mut done = 0usize;
+            status = VIRTIO_BLK_S_OK;
+            while done < n {
+                let take = core::cmp::min(n - done, buf.len());
+                let sec = sector.saturating_add((done / SECTOR) as u64);
+                if data_write {
+                    status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+                    if status != VIRTIO_BLK_S_OK {
+                        break;
+                    }
+                    if !write_bytes(translate, data_gpa + done as u64, &buf[..take]) {
+                        status = VIRTIO_BLK_S_IOERR;
+                        break;
+                    }
+                } else if read_bytes(translate, data_gpa + done as u64, &mut buf[..take]) {
+                    status = blk_sector_rw(disk, ty, sec, &mut buf[..take]);
+                    if status != VIRTIO_BLK_S_OK {
+                        break;
+                    }
+                    if ty == VIRTIO_BLK_T_OUT {
                         written = written.saturating_add(take as u32);
                     }
+                } else {
+                    status = VIRTIO_BLK_S_IOERR;
+                    break;
                 }
+                done = done.saturating_add(take);
             }
         }
         if status_gpa != 0 {
