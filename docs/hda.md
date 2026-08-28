@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN sixty-third slice: reserve virtio-blk install disk before greedy 2MiB report-RAM (iron COM2 leftover 1MiB). Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN: CI green on 2f662c9 (flash-RIP fetch + 64MiB disk reserve). Flash this EFI. Stick still e3f56aa. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (install disk before report-RAM). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (CI green; flash 2f662c9). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN: CI green on 2f662c9 (disk reserve + flash-RIP fetch); flash this EFI; stick still e3f56aa; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-third slice: reserve virtio-blk before greedy report-RAM so Alpine gets ≥64MiB; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-second slice: copy OVMF flash HPA for MMIO insn fetch (iron xAPIC SVR insn= empty); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN sixty-first slice: SSE MOVUPS/MOVDQU MMIO + XMM trampoline save; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

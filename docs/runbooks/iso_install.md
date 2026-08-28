@@ -151,13 +151,12 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 `flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
-The Cruzer media is 977.5 MiB but the FAT may be a 64 MiB image
-(`131072` sectors) that cannot hold alpine-virt (63 MiB) plus EFI+OVMF.
-`fsck.vfat` on iron confirmed a healthy 64 MiB volume (`26 files,
-17063/129022 clusters`) — remount/fsck cannot grow it. Pass
-`--refat-cruzer` (copies `installdisk.bin`/`auth.token` off, then
-`mkfs.vfat -I -F 32 -n RAYNUV` on that identified whole-disk stick).
-Never PERC. Never `sda`/`sdb`. Skip a retry that omits `--refat-cruzer`.
+The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
+`--refat-cruzer` (do **not** pass it again). Flash HEAD `2f662c9`
+(CI green: flash-RIP insn fetch + 64 MiB disk reserved before greedy
+report-RAM). Last iron COM2 is still `e3f56aa` (`insn=` empty, disk
+1 MiB). Never PERC. Never `sda`/`sdb`. `--no-linux-iso` still strips
+leftovers so `iso=0` E4 SHELL stays valid.
 
 ```bash
 ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
@@ -167,12 +166,8 @@ cd ~/projects/raynu
 git fetch origin cursor/e5-stage46-iso-a623
 git checkout cursor/e5-stage46-iso-a623
 git pull --ff-only origin cursor/e5-stage46-iso-a623
-./tools/flashcruzer.sh --install-launcher
-sudo ./tools/flash-cruzer-esp.sh \
-  --efi /home/vikkp/r640-hypervisor.efi \
-  --sha256 0b858bde559faeadfcd965a7ce1dae0f118e4a57e5433e178a084c8ad4ff84de \
-  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
-  --refat-cruzer
+./tools/flashcruzer.sh --wait \
+  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
