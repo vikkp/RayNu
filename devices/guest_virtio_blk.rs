@@ -5,6 +5,9 @@
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the enum gate)
 //!
 //! Empty virtio 1.0 block function at `00:02.0` (Red Hat `1AF4:1042`).
+//! Product ISO window also reveals a **read-only** virtio-blk at `00:03.0`
+//! backed by the same ISO bytes (alpine-virt initramfs has virtio, not
+//! `ata_piix`; `/dev/vdb` is ISO9660 so `nlplug-findfs` can find media).
 //! Nested VT-x: this OVMF PEI only `inw` Device ID of `00:00.0` into
 //! `HostBridgeDevId`. Iron `c1476d3` served virtio `0x1042` there, so PEI
 //! skipped the stock QEMU map (`PlatformMemMapInitialization` IoMemory HOB
@@ -17,11 +20,11 @@
 //! switch. `00:00.0` stays i440FX; latch reveals virtio at `00:02.0`.
 //! Header Type on slot 0 stays multifunction so a walk finds IDE fn1.
 //! PIIX `00:01.1` is the same CD. Boot order is CD then disk (fw_cfg
-//! `bootorder`).
-//! Lab stub: vendor cap `0x0001_0010` (enum only, not queues). Product ISO
-//! window: virtio-pci caps type 1/2/3/4 + trap-and-emulate BAR MMIO + split
-//! virtqueue IN/OUT/FLUSH (every data descriptor in the chain, not only the
-//! first). Not the M4.3 virtio-mmio probe. Not ISO-INSTALL-OK.
+//! `bootorder`). Do **not** move virtio to `00:00.0`.
+//! Lab stub: vendor cap `0x0001_0010` (enum only, not queues); slot 3 empty.
+//! Product ISO window: virtio-pci caps type 1/2/3/4 + trap-and-emulate BAR
+//! MMIO + split virtqueue IN/OUT/FLUSH (every data descriptor in the chain,
+//! not only the first). Not the M4.3 virtio-mmio probe. Not ISO-INSTALL-OK.
 
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -37,6 +40,9 @@ pub const GUEST_VIRTIO_PCI_BUS: u8 = 0;
 /// (`OVMF_HOSTBRIDGE_DID`) for `AcpiTimerLibConstructor`.
 pub const GUEST_VIRTIO_PCI_DEV: u8 = 2;
 pub const GUEST_VIRTIO_PCI_FN: u8 = 0;
+/// Read-only product ISO virtio-blk. Not `00:00.0`. Not slot 2 (install disk).
+pub const GUEST_VIRTIO_ISO_PCI_DEV: u8 = 3;
+pub const GUEST_VIRTIO_ISO_PCI_FN: u8 = 0;
 /// Slot 0 is always the i440FX host-bridge DID PEI/DXE probe.
 pub const GUEST_SLOT0_PCI_DEV: u8 = 0;
 pub const GUEST_SLOT0_PCI_FN: u8 = 0;
@@ -49,6 +55,8 @@ pub const GUEST_VIRTIO_PCI_SUBSYS: u16 = 0x0002;
 
 /// Default BAR0 (4 KiB MMIO) when the product ISO window arms queues.
 pub const GUEST_VIRTIO_BAR0_DEFAULT: u32 = 0xFE00_0000;
+/// Slot 3 ISO BAR — same 2 MiB trap page as [`GUEST_VIRTIO_BAR0_DEFAULT`].
+pub const GUEST_VIRTIO_ISO_BAR0_DEFAULT: u32 = 0xFE00_1000;
 pub const GUEST_VIRTIO_BAR0_SIZE: u32 = 0x1000;
 /// PCI BAR size probe result for a 4 KiB memory BAR.
 pub const GUEST_VIRTIO_BAR0_SIZE_MASK: u32 = 0xFFFF_F000;
@@ -61,7 +69,10 @@ pub const VIRTIO_PCI_CAP_DEVICE: u8 = 4;
 
 pub const VIRTIO_F_VERSION_1: u64 = 1 << 32;
 pub const VIRTIO_BLK_F_FLUSH: u64 = 1 << 9;
+pub const VIRTIO_BLK_F_RO: u64 = 1 << 5;
 pub const VIRTIO_BLK_DEVICE_FEATURES: u64 = VIRTIO_F_VERSION_1 | VIRTIO_BLK_F_FLUSH;
+pub const VIRTIO_BLK_ISO_FEATURES: u64 =
+    VIRTIO_F_VERSION_1 | VIRTIO_BLK_F_FLUSH | VIRTIO_BLK_F_RO;
 
 pub const VIRTIO_BLK_T_IN: u32 = 0;
 pub const VIRTIO_BLK_T_OUT: u32 = 1;
@@ -101,6 +112,7 @@ struct VirtioPci {
     last_avail: u16,
     isr: u8,
     notify_pending: bool,
+    readonly: bool,
 }
 
 impl VirtioPci {
@@ -126,18 +138,35 @@ impl VirtioPci {
             last_avail: 0,
             isr: 0,
             notify_pending: false,
+            readonly: false,
+        }
+    }
+}
+
+struct VirtioBox {
+    pci_addr: u32,
+    disk: VirtioPci,
+    iso: VirtioPci,
+}
+
+impl VirtioBox {
+    const fn empty() -> Self {
+        Self {
+            pci_addr: 0,
+            disk: VirtioPci::empty(),
+            iso: VirtioPci::empty(),
         }
     }
 }
 
 // JUSTIFICATION: one guest-UEFI virtio-blk; firmware is single-threaded after EBS.
-struct GuestVirtio(core::cell::UnsafeCell<VirtioPci>);
+struct GuestVirtio(core::cell::UnsafeCell<VirtioBox>);
 
 // SAFETY: exclusive access is enforced by `VIRTIO_LOCK`.
 // KANI-TARGET: guest-UEFI virtio-blk mutex (outside Proven Core).
 unsafe impl Sync for GuestVirtio {}
 
-static VIRTIO: GuestVirtio = GuestVirtio(core::cell::UnsafeCell::new(VirtioPci::empty()));
+static VIRTIO: GuestVirtio = GuestVirtio(core::cell::UnsafeCell::new(VirtioBox::empty()));
 static VIRTIO_LOCK: AtomicBool = AtomicBool::new(false);
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
@@ -146,6 +175,10 @@ static QUEUES: AtomicBool = AtomicBool::new(false);
 static DISK_HPA: AtomicU64 = AtomicU64::new(0);
 static DISK_LEN: AtomicU64 = AtomicU64::new(0);
 static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
+static ISO_PTR: AtomicU64 = AtomicU64::new(0);
+static ISO_LEN: AtomicU64 = AtomicU64::new(0);
+static ISO_READ: AtomicU64 = AtomicU64::new(0);
+static ISO_VISIBLE: AtomicBool = AtomicBool::new(false);
 static ISO_OK: AtomicBool = AtomicBool::new(false);
 /// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
 /// Sticky-false after [`latch_dxe_virtio_did`] (virtio appears at `00:02.0`).
@@ -169,7 +202,7 @@ pub fn latch_dxe_virtio_did() -> bool {
     PEI_I440FX_DID.swap(false, Ordering::AcqRel)
 }
 
-fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
+fn with_box<R>(f: impl FnOnce(&mut VirtioBox) -> R) -> R {
     while VIRTIO_LOCK.swap(true, Ordering::Acquire) {
         core::hint::spin_loop();
     }
@@ -178,6 +211,14 @@ fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
     let out = unsafe { f(&mut *VIRTIO.0.get()) };
     VIRTIO_LOCK.store(false, Ordering::Release);
     out
+}
+
+fn with_virtio<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
+    with_box(|b| f(&mut b.disk))
+}
+
+fn with_iso<R>(f: impl FnOnce(&mut VirtioPci) -> R) -> R {
+    with_box(|b| f(&mut b.iso))
 }
 
 pub fn pci_addr_selects_slot0(addr: u32) -> bool {
@@ -196,9 +237,21 @@ pub fn pci_addr_selects_virtio(addr: u32) -> bool {
     bus == GUEST_VIRTIO_PCI_BUS && dev == GUEST_VIRTIO_PCI_DEV && fun == GUEST_VIRTIO_PCI_FN
 }
 
-/// Slot 0 host-bridge DID or latched virtio `00:02.0`.
+pub fn pci_addr_selects_virtio_iso(addr: u32) -> bool {
+    if (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == GUEST_VIRTIO_PCI_BUS
+        && dev == GUEST_VIRTIO_ISO_PCI_DEV
+        && fun == GUEST_VIRTIO_ISO_PCI_FN
+}
+
+/// Slot 0 host-bridge DID or latched virtio `00:02.0` / `00:03.0`.
 pub fn pci_addr_selects_owned(addr: u32) -> bool {
-    pci_addr_selects_slot0(addr) || pci_addr_selects_virtio(addr)
+    pci_addr_selects_slot0(addr)
+        || pci_addr_selects_virtio(addr)
+        || pci_addr_selects_virtio_iso(addr)
 }
 
 /// PCI config address for the guest virtio-blk function (`00:02.0`).
@@ -209,7 +262,13 @@ pub fn pci_config_addr() -> u32 {
         | (u32::from(GUEST_VIRTIO_PCI_FN) << 8)
 }
 
-/// PCI config address for slot 0 (`00:00.0`, i440FX host-bridge DID).
+/// PCI config address for the read-only ISO virtio-blk (`00:03.0`).
+pub fn pci_config_addr_iso() -> u32 {
+    0x8000_0000
+        | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
+        | (u32::from(GUEST_VIRTIO_ISO_PCI_DEV) << 11)
+        | (u32::from(GUEST_VIRTIO_ISO_PCI_FN) << 8)
+}
 pub fn pci_config_addr_slot0() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_VIRTIO_PCI_BUS) << 16)
@@ -241,7 +300,7 @@ pub fn queues_armed() -> bool {
 }
 
 pub fn reset() {
-    with_virtio(|v| *v = VirtioPci::empty());
+    with_box(|b| *b = VirtioBox::empty());
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
@@ -249,6 +308,10 @@ pub fn reset() {
     DISK_HPA.store(0, Ordering::Release);
     DISK_LEN.store(0, Ordering::Release);
     BYTES_WRITTEN.store(0, Ordering::Release);
+    ISO_PTR.store(0, Ordering::Release);
+    ISO_LEN.store(0, Ordering::Release);
+    ISO_READ.store(0, Ordering::Release);
+    ISO_VISIBLE.store(false, Ordering::Release);
     ISO_OK.store(false, Ordering::Release);
     PEI_I440FX_DID.store(true, Ordering::Release);
 }
@@ -259,19 +322,41 @@ pub fn reset() {
 /// is already live. Lab 72 KiB stub stays enum-only (`0x0001_0010`).
 pub fn present() -> bool {
     let queues = crate::devices::ide_cdrom::product_iso_window_armed();
-    with_virtio(|v| {
-        *v = VirtioPci::empty();
-        v.visible = true;
-        v.bar0 = GUEST_VIRTIO_BAR0_DEFAULT;
-        v.queues_armed = queues;
-        v.queue_size = QUEUE_MAX;
+    let iso_win = crate::devices::ide_cdrom::product_iso_window_ptr();
+    let iso_on = with_box(|b| {
+        *b = VirtioBox::empty();
+        b.disk.visible = true;
+        b.disk.bar0 = GUEST_VIRTIO_BAR0_DEFAULT;
+        b.disk.queues_armed = queues;
+        b.disk.queue_size = QUEUE_MAX;
+        if queues {
+            if let Some((ptr, len)) = iso_win {
+                let n = len & !(SECTOR - 1);
+                if n >= SECTOR && !ptr.is_null() {
+                    ISO_PTR.store(ptr as u64, Ordering::Release);
+                    ISO_LEN.store(n as u64, Ordering::Release);
+                    b.iso.visible = true;
+                    b.iso.bar0 = GUEST_VIRTIO_ISO_BAR0_DEFAULT;
+                    b.iso.queues_armed = true;
+                    b.iso.queue_size = QUEUE_MAX;
+                    b.iso.readonly = true;
+                }
+            }
+        }
+        b.iso.visible
     });
     VISIBLE.store(true, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
     MARKER.store(false, Ordering::Release);
     QUEUES.store(queues, Ordering::Release);
+    ISO_VISIBLE.store(iso_on, Ordering::Release);
     PEI_I440FX_DID.store(true, Ordering::Release);
     true
+}
+
+/// True when the product window revealed read-only ISO virtio at `00:03.0`.
+pub fn iso_visible() -> bool {
+    ISO_VISIBLE.load(Ordering::Acquire)
 }
 
 /// Host-owned install disk for the guest-UEFI virtio-pci backend.
@@ -297,11 +382,11 @@ pub fn disk_bytes_written() -> u64 {
 }
 
 pub fn pci_write_addr(addr: u32) {
-    with_virtio(|v| v.pci_addr = addr);
+    with_box(|b| b.pci_addr = addr);
 }
 
 pub fn pci_read_addr() -> u32 {
-    with_virtio(|v| v.pci_addr)
+    with_box(|b| b.pci_addr)
 }
 
 fn slot0_dword(off: u8) -> u32 {
@@ -374,15 +459,21 @@ fn shift_cfg(dword: u32, off: u8, size: u8) -> u32 {
 }
 
 pub fn pci_read_data(port: u16, size: u8) -> u32 {
-    with_virtio(|v| {
-        if !v.visible {
+    with_box(|b| {
+        if !b.disk.visible {
             return 0xFFFF_FFFF;
         }
-        let addr = v.pci_addr;
+        let addr = b.pci_addr;
         let off = pci_cfg_offset(addr, port);
         let aligned = off & 0xFC;
         if pci_addr_selects_slot0(addr) {
             return shift_cfg(slot0_dword(aligned), off, size);
+        }
+        if pci_addr_selects_virtio_iso(addr) {
+            if !b.iso.visible || pei_host_bridge_did() {
+                return 0xFFFF_FFFF;
+            }
+            return shift_cfg(virtio_dword(&b.iso, aligned), off, size);
         }
         if !pci_addr_selects_virtio(addr) {
             return 0xFFFF_FFFF;
@@ -391,29 +482,44 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             return 0xFFFF_FFFF;
         }
         if aligned == 0 {
-            v.pci_enum = true;
+            b.disk.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }
-        shift_cfg(virtio_dword(v, aligned), off, size)
+        shift_cfg(virtio_dword(&b.disk, aligned), off, size)
     })
 }
 
+fn apply_bar_write(v: &mut VirtioPci, default_bar: u32, size: u8, val: u32) {
+    if v.queues_armed && val == 0xFFFF_FFFF {
+        v.bar_sizing = true;
+    } else {
+        v.bar_sizing = false;
+        let mask = if size >= 4 { 0xFFFF_F000 } else { 0xFFFF };
+        let next = val & mask;
+        v.bar0 = if next == 0 { default_bar } else { next };
+    }
+}
+
 pub fn pci_write_data(port: u16, size: u8, val: u32) {
-    with_virtio(|v| {
-        if !v.visible || !pci_addr_selects_virtio(v.pci_addr) || pei_host_bridge_did() {
+    with_box(|b| {
+        if !b.disk.visible || pei_host_bridge_did() {
             return;
         }
-        let off = pci_cfg_offset(v.pci_addr, port);
-        if off == 0x04 {
-            v.pci_cmd = (val as u16) | 0x0002;
-        } else if off == 0x10 {
-            if v.queues_armed && val == 0xFFFF_FFFF {
-                v.bar_sizing = true;
-            } else {
-                v.bar_sizing = false;
-                let mask = if size >= 4 { 0xFFFF_F000 } else { 0xFFFF };
-                let next = val & mask;
-                v.bar0 = if next == 0 { GUEST_VIRTIO_BAR0_DEFAULT } else { next };
+        let addr = b.pci_addr;
+        let off = pci_cfg_offset(addr, port);
+        if pci_addr_selects_virtio(addr) {
+            if off == 0x04 {
+                b.disk.pci_cmd = (val as u16) | 0x0002;
+            } else if off == 0x10 {
+                apply_bar_write(&mut b.disk, GUEST_VIRTIO_BAR0_DEFAULT, size, val);
+            }
+            return;
+        }
+        if pci_addr_selects_virtio_iso(addr) && b.iso.visible {
+            if off == 0x04 {
+                b.iso.pci_cmd = (val as u16) | 0x0002;
+            } else if off == 0x10 {
+                apply_bar_write(&mut b.iso, GUEST_VIRTIO_ISO_BAR0_DEFAULT, size, val);
             }
         }
     });
@@ -426,71 +532,136 @@ pub fn take_marker() -> bool {
     !MARKER.swap(true, Ordering::AcqRel)
 }
 
-fn mmio_bar_base_locked(v: &mut VirtioPci) -> u64 {
+fn mmio_bar_base_locked(v: &VirtioPci) -> u64 {
     if !v.queues_armed {
         return 0;
     }
+    let default = if v.readonly {
+        GUEST_VIRTIO_ISO_BAR0_DEFAULT
+    } else {
+        GUEST_VIRTIO_BAR0_DEFAULT
+    };
     let b = v.bar0 & GUEST_VIRTIO_BAR0_SIZE_MASK;
     if v.bar_sizing || b == 0 || b == GUEST_VIRTIO_BAR0_SIZE_MASK {
-        u64::from(GUEST_VIRTIO_BAR0_DEFAULT)
+        u64::from(default)
     } else {
         u64::from(b)
     }
 }
 
-/// Programmed (or default) BAR0 when queues are armed.
+/// Programmed (or default) install-disk BAR0 when queues are armed.
 pub fn mmio_bar_base() -> u64 {
-    with_virtio(mmio_bar_base_locked)
+    with_virtio(|v| mmio_bar_base_locked(v))
 }
 
-/// GPA in the 4 KiB virtio BAR. False for the lab enum stub.
-pub fn is_virtio_bar_gpa(gpa: u64) -> bool {
-    if !queues_armed() {
-        return false;
-    }
-    let bar = mmio_bar_base();
+fn mmio_iso_bar_base() -> u64 {
+    with_iso(|v| mmio_bar_base_locked(v))
+}
+
+fn bar_covers(bar: u64, gpa: u64) -> bool {
     bar != 0 && gpa >= bar && gpa < bar + u64::from(GUEST_VIRTIO_BAR0_SIZE)
 }
 
-/// 2 MiB page containing the virtio BAR — must not be an EPT zero sink.
+/// BAR base that contains `gpa`, if any.
+pub fn mmio_bar_base_for_gpa(gpa: u64) -> Option<u64> {
+    let disk = mmio_bar_base();
+    if bar_covers(disk, gpa) {
+        return Some(disk);
+    }
+    let iso = mmio_iso_bar_base();
+    if bar_covers(iso, gpa) {
+        return Some(iso);
+    }
+    None
+}
+
+pub fn is_virtio_iso_bar_gpa(gpa: u64) -> bool {
+    bar_covers(mmio_iso_bar_base(), gpa)
+}
+
+/// GPA in a 4 KiB virtio BAR. False for the lab enum stub.
+pub fn is_virtio_bar_gpa(gpa: u64) -> bool {
+    mmio_bar_base_for_gpa(gpa).is_some()
+}
+
+/// 2 MiB page containing a virtio BAR — must not be an EPT zero sink.
 pub fn is_virtio_bar_2m_gpa(gpa: u64) -> bool {
     if !queues_armed() {
         return false;
     }
-    let bar = mmio_bar_base();
-    bar != 0 && (gpa & !0x1F_FFFF) == (bar & !0x1F_FFFF)
+    let page = gpa & !0x1F_FFFF;
+    let disk = mmio_bar_base();
+    if disk != 0 && page == (disk & !0x1F_FFFF) {
+        return true;
+    }
+    let iso = mmio_iso_bar_base();
+    iso != 0 && page == (iso & !0x1F_FFFF)
 }
 
-fn features_for_select(sel: u32) -> u32 {
+fn features_for(v: &VirtioPci, sel: u32) -> u32 {
+    let feat = if v.readonly {
+        VIRTIO_BLK_ISO_FEATURES
+    } else {
+        VIRTIO_BLK_DEVICE_FEATURES
+    };
     if sel == 0 {
-        VIRTIO_BLK_DEVICE_FEATURES as u32
+        feat as u32
     } else if sel == 1 {
-        (VIRTIO_BLK_DEVICE_FEATURES >> 32) as u32
+        (feat >> 32) as u32
     } else {
         0
     }
 }
 
-fn capacity_sectors() -> u64 {
-    DISK_LEN.load(Ordering::Acquire) / SECTOR as u64
+fn capacity_sectors_for(v: &VirtioPci) -> u64 {
+    if v.readonly {
+        ISO_LEN.load(Ordering::Acquire) / SECTOR as u64
+    } else {
+        DISK_LEN.load(Ordering::Acquire) / SECTOR as u64
+    }
 }
 
-/// Read virtio-pci BAR MMIO (common / ISR / device / notify).
+/// Read virtio-pci BAR MMIO (install disk).
 pub fn mmio_read(off: u16, size: u8) -> u64 {
-    let val = with_virtio(|v| mmio_read_locked(v, off, size));
+    mmio_read_dev(false, off, size)
+}
+
+pub fn mmio_read_iso(off: u16, size: u8) -> u64 {
+    mmio_read_dev(true, off, size)
+}
+
+fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
+    let val = if iso {
+        with_iso(|v| mmio_read_locked(v, off, size))
+    } else {
+        with_virtio(|v| mmio_read_locked(v, off, size))
+    };
     if off == OFF_ISR {
-        crate::devices::guest_irq::lower_virtio();
+        if iso {
+            crate::devices::guest_irq::lower_virtio_iso();
+        } else {
+            crate::devices::guest_irq::lower_virtio();
+        }
     }
     val
+}
+
+pub fn mmio_read_at(gpa: u64, size: u8) -> u64 {
+    let Some(bar) = mmio_bar_base_for_gpa(gpa) else {
+        return 0;
+    };
+    let off = (gpa.wrapping_sub(bar)) as u16;
+    mmio_read_dev(is_virtio_iso_bar_gpa(gpa), off, size)
 }
 
 fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
     if !v.queues_armed {
         return 0;
     }
+    let cap = capacity_sectors_for(v);
     let val = match off {
         0x00 => v.feat_sel as u64,
-        0x04 => features_for_select(v.feat_sel) as u64,
+        0x04 => features_for(v, v.feat_sel) as u64,
         0x08 => v.drv_feat_sel as u64,
         0x0C => {
             if v.drv_feat_sel == 0 {
@@ -499,8 +670,9 @@ fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
                 (v.drv_feat >> 32) as u64
             }
         }
-        0x10 => 0xFFFF, // msix_config = no MSI-X
-        0x12 => 1,      // num_queues
+        // Packed 32-bit: msix_config=0xFFFF, num_queues=1 in the high half.
+        0x10 => 0x0001_FFFF,
+        0x12 => 1,
         0x14 => u64::from(v.status),
         0x15 => 0,
         0x16 => u64::from(v.queue_sel),
@@ -525,8 +697,8 @@ fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
             v.isr = 0;
             u64::from(isr)
         }
-        x if x == OFF_DEVICE => capacity_sectors(),
-        x if x == OFF_DEVICE + 4 => capacity_sectors() >> 32,
+        x if x == OFF_DEVICE => cap,
+        x if x == OFF_DEVICE + 4 => cap >> 32,
         x if x == OFF_NOTIFY => 0,
         _ => 0,
     };
@@ -553,48 +725,70 @@ fn write_queue_ptr(field: &mut u64, rel: u16, size: u8, val: u64) {
 
 /// Write virtio-pci BAR MMIO. Notify sets a pending bit; call [`drain_queue`].
 pub fn mmio_write(off: u16, size: u8, val: u64) {
-    with_virtio(|v| {
-        if !v.queues_armed {
-            return;
+    mmio_write_dev(false, off, size, val);
+}
+
+pub fn mmio_write_iso(off: u16, size: u8, val: u64) {
+    mmio_write_dev(true, off, size, val);
+}
+
+pub fn mmio_write_at(gpa: u64, size: u8, val: u64) {
+    let Some(bar) = mmio_bar_base_for_gpa(gpa) else {
+        return;
+    };
+    let off = (gpa.wrapping_sub(bar)) as u16;
+    mmio_write_dev(is_virtio_iso_bar_gpa(gpa), off, size, val);
+}
+
+fn mmio_write_dev(iso: bool, off: u16, size: u8, val: u64) {
+    if iso {
+        with_iso(|v| mmio_write_locked(v, off, size, val));
+    } else {
+        with_virtio(|v| mmio_write_locked(v, off, size, val));
+    }
+}
+
+fn mmio_write_locked(v: &mut VirtioPci, off: u16, size: u8, val: u64) {
+    if !v.queues_armed {
+        return;
+    }
+    match off {
+        0x00 => v.feat_sel = val as u32,
+        0x08 => v.drv_feat_sel = val as u32,
+        0x0C => {
+            if v.drv_feat_sel == 0 {
+                v.drv_feat = (v.drv_feat & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF);
+            } else {
+                v.drv_feat = (v.drv_feat & 0xFFFF_FFFF) | (val << 32);
+            }
         }
-        match off {
-            0x00 => v.feat_sel = val as u32,
-            0x08 => v.drv_feat_sel = val as u32,
-            0x0C => {
-                if v.drv_feat_sel == 0 {
-                    v.drv_feat = (v.drv_feat & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF);
-                } else {
-                    v.drv_feat = (v.drv_feat & 0xFFFF_FFFF) | (val << 32);
-                }
+        0x14 => {
+            v.status = val as u8;
+            if v.status == 0 {
+                v.queue_enable = 0;
+                v.last_avail = 0;
+                v.notify_pending = false;
             }
-            0x14 => {
-                v.status = val as u8;
-                if v.status == 0 {
-                    v.queue_enable = 0;
-                    v.last_avail = 0;
-                    v.notify_pending = false;
-                }
-            }
-            0x16 => v.queue_sel = val as u16,
-            0x18 => {
-                if v.queue_sel == 0 {
-                    let n = val as u16;
-                    if n > 0 && n <= QUEUE_MAX {
-                        v.queue_size = n;
-                    }
-                }
-            }
-            0x1C => v.queue_enable = val as u16,
-            0x20 => write_queue_ptr(&mut v.queue_desc, 0, size, val),
-            0x24 => write_queue_ptr(&mut v.queue_desc, 4, size, val),
-            0x28 => write_queue_ptr(&mut v.queue_driver, 0, size, val),
-            0x2C => write_queue_ptr(&mut v.queue_driver, 4, size, val),
-            0x30 => write_queue_ptr(&mut v.queue_device, 0, size, val),
-            0x34 => write_queue_ptr(&mut v.queue_device, 4, size, val),
-            x if x == OFF_NOTIFY => v.notify_pending = true,
-            _ => {}
         }
-    });
+        0x16 => v.queue_sel = val as u16,
+        0x18 => {
+            if v.queue_sel == 0 {
+                let n = val as u16;
+                if n > 0 && n <= QUEUE_MAX {
+                    v.queue_size = n;
+                }
+            }
+        }
+        0x1C => v.queue_enable = val as u16,
+        0x20 => write_queue_ptr(&mut v.queue_desc, 0, size, val),
+        0x24 => write_queue_ptr(&mut v.queue_desc, 4, size, val),
+        0x28 => write_queue_ptr(&mut v.queue_driver, 0, size, val),
+        0x2C => write_queue_ptr(&mut v.queue_driver, 4, size, val),
+        0x30 => write_queue_ptr(&mut v.queue_device, 0, size, val),
+        0x34 => write_queue_ptr(&mut v.queue_device, 4, size, val),
+        x if x == OFF_NOTIFY => v.notify_pending = true,
+        _ => {}
+    }
 }
 
 /// Apply a virtio-blk sector request to `disk`. Host-testable.
@@ -701,7 +895,47 @@ pub fn process_blk_queue_in(
             None
         }
     };
-    process_blk_queue(qsize, last_avail, desc_gpa, avail_gpa, used_gpa, disk, &translate)
+    process_blk_queue(
+        qsize,
+        last_avail,
+        desc_gpa,
+        avail_gpa,
+        used_gpa,
+        disk,
+        &translate,
+        false,
+    )
+}
+
+/// Walk a split virtqueue against a read-only backing (product ISO `/dev/vdb`).
+pub fn process_iso_queue_in(
+    guest_mem: &mut [u8],
+    disk: &mut [u8],
+    qsize: u16,
+    last_avail: &mut u16,
+    desc_gpa: u64,
+    avail_gpa: u64,
+    used_gpa: u64,
+) -> u32 {
+    let base = guest_mem.as_mut_ptr() as u64;
+    let len = guest_mem.len() as u64;
+    let translate = |gpa: u64| {
+        if gpa < len {
+            Some(base + gpa)
+        } else {
+            None
+        }
+    };
+    process_blk_queue(
+        qsize,
+        last_avail,
+        desc_gpa,
+        avail_gpa,
+        used_gpa,
+        disk,
+        &translate,
+        true,
+    )
 }
 
 fn read_bytes(translate: &impl Fn(u64) -> Option<u64>, gpa: u64, dst: &mut [u8]) -> bool {
@@ -788,6 +1022,7 @@ fn process_blk_queue(
     used_gpa: u64,
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
+    readonly: bool,
 ) -> u32 {
     if qsize == 0 {
         return 0;
@@ -844,6 +1079,8 @@ fn process_blk_queue(
         let mut req_bytes = 0u32;
         if ty == VIRTIO_BLK_T_FLUSH {
             status = VIRTIO_BLK_S_OK;
+        } else if readonly && ty == VIRTIO_BLK_T_OUT {
+            status = VIRTIO_BLK_S_IOERR;
         } else if nseg > 0 {
             let mut byte_off = 0usize;
             status = VIRTIO_BLK_S_OK;
@@ -865,7 +1102,11 @@ fn process_blk_queue(
                 }
                 byte_off = byte_off.saturating_add(len as usize);
             }
-            written = written.saturating_add(req_bytes);
+            if readonly && ty == VIRTIO_BLK_T_IN && status == VIRTIO_BLK_S_OK {
+                written = written.saturating_add(byte_off as u32);
+            } else {
+                written = written.saturating_add(req_bytes);
+            }
         }
         if status_gpa != 0 {
             let _ = write_bytes(translate, status_gpa, &[status]);
@@ -882,24 +1123,46 @@ fn process_blk_queue(
     written
 }
 
-/// Drain a pending notify using `translate` (GPA → HPA).
+/// Bytes the guest read from the ISO virtio since last take (iron serial).
+pub fn take_iso_read_note() -> Option<u64> {
+    let n = ISO_READ.swap(0, Ordering::AcqRel);
+    if n == 0 {
+        None
+    } else {
+        Some(n)
+    }
+}
+
+fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
+    let p = v.notify_pending;
+    v.notify_pending = false;
+    if p {
+        v.isr = 1;
+    }
+    (
+        p,
+        p && v.queue_enable != 0,
+        v.queue_size,
+        v.last_avail,
+        v.queue_desc,
+        v.queue_driver,
+        v.queue_device,
+    )
+}
+
+/// Drain pending notifies using `translate` (GPA → HPA).
+///
+/// Returns install-disk OUT bytes. ISO IN is counted separately
+/// ([`take_iso_read_note`]).
 pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
-    let (notified, pending, qsize, last, desc, avail, used) = with_virtio(|v| {
-        let p = v.notify_pending;
-        v.notify_pending = false;
-        if p {
-            v.isr = 1;
-        }
-        (
-            p,
-            p && v.queue_enable != 0,
-            v.queue_size,
-            v.last_avail,
-            v.queue_desc,
-            v.queue_driver,
-            v.queue_device,
-        )
-    });
+    let disk_n = drain_disk(translate);
+    drain_iso(translate);
+    disk_n
+}
+
+fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
+    let (notified, pending, qsize, last, desc, avail, used) =
+        with_virtio(|v| take_notify(v));
     if notified {
         crate::devices::guest_irq::raise_virtio();
     }
@@ -914,12 +1177,54 @@ pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
     // SAFETY: attach_disk installed exclusive disk frames.
     let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
     let mut last_avail = last;
-    let n = process_blk_queue(qsize, &mut last_avail, desc, avail, used, disk, &translate);
+    let n = process_blk_queue(
+        qsize,
+        &mut last_avail,
+        desc,
+        avail,
+        used,
+        disk,
+        &translate,
+        false,
+    );
     with_virtio(|v| v.last_avail = last_avail);
     if n > 0 {
         BYTES_WRITTEN.fetch_add(u64::from(n), Ordering::AcqRel);
     }
     n
+}
+
+fn drain_iso(translate: fn(u64) -> Option<u64>) {
+    let (notified, pending, qsize, last, desc, avail, used) = with_iso(|v| take_notify(v));
+    if notified {
+        crate::devices::guest_irq::raise_virtio_iso();
+    }
+    if !pending {
+        return;
+    }
+    let ptr = ISO_PTR.load(Ordering::Acquire);
+    let ilen = ISO_LEN.load(Ordering::Acquire) as usize;
+    if ptr == 0 || ilen == 0 {
+        return;
+    }
+    // SAFETY: product ISO window is retained until reset; readonly rejects OUT.
+    // KANI-TARGET: virtio-iso IN from product window (outside Proven Core).
+    let disk = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, ilen) };
+    let mut last_avail = last;
+    let n = process_blk_queue(
+        qsize,
+        &mut last_avail,
+        desc,
+        avail,
+        used,
+        disk,
+        &translate,
+        true,
+    );
+    with_iso(|v| v.last_avail = last_avail);
+    if n > 0 {
+        ISO_READ.fetch_add(u64::from(n), Ordering::AcqRel);
+    }
 }
 
 /// Decoded guest MOV targeting BAR MMIO. GPA comes from the EPT violation.

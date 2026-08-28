@@ -274,7 +274,11 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Tenth slice (this EFI): virtio-blk OUT walks every data descriptor in the
+Eleventh slice (this EFI): product ISO window reveals a read-only virtio-blk
+at `00:03.0` (`/dev/vdb`) backed by the ISO bytes so alpine-virt (virtio
+initramfs, often without `ata_piix`) can find ISO9660 media; packed
+common-cfg 32-bit read at `0x10` includes `num_queues`; slot-3 INTA is GSI 18.
+Tenth slice: virtio-blk OUT walks every data descriptor in the
 chain (Linux blk-mq bio_vec), not only the first. Ninth slice: ATAPI PIO DRQ is 31 CD sectors so Linux `sr` READ(10)
 is not completed short at 4; IDENTIFY is PIO-only; nIEN masks IRQ 14.
 Eighth slice: ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
@@ -347,7 +351,8 @@ scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
 **Next after Stage 45 + P0-60 + G0 relocate + M4.3:** Stage 46
 `ISO-INSTALL-OK` (OPEN; PIC/IOAPIC inject + ESP retain + virtio-pci queues +
-hold when the product window is armed; lab stub still E4; not `sectors>0`
+read-only ISO virtio at `00:03.0` + hold when the product window is armed;
+lab stub still E4; not `sectors>0`
 alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip

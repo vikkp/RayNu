@@ -1,7 +1,7 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_io, raise_ata, raise_gsi, raise_virtio, reset, take_inject_vector, ATA_GSI, IOAPIC_GPA,
-    IOAPIC_VERSION, VIRTIO_GSI, VIRTIO_PIC_IRQ,
+    IOAPIC_VERSION, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -69,6 +69,11 @@ fn product_iso_virtio_gsi_and_pic_fallback() {
     ioapic_write(0x10, 0x51);
     raise_virtio();
     assert_eq!(take_inject_vector(), Some(0x51));
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_ISO_GSI));
+    ioapic_write(0x10, 0x52);
+    crate::devices::guest_irq::raise_virtio_iso();
+    assert_eq!(take_inject_vector(), Some(0x52));
+    assert_eq!(VIRTIO_ISO_GSI, 18);
     // IOAPIC consumed; PIC IRQ 11 still pending until ICW2 remaps ≥16.
     assert!(take_inject_vector().is_none());
     // Remap PIC: ICW1, ICW2=0x20, ICW3, ICW4; unmask IRQ 11.

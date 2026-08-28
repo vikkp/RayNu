@@ -2696,6 +2696,11 @@ unsafe fn launch_uefi(
             serial::write_line(
                 "boot: guest-UEFI virtio-pci queues (Stage 46; not ISO-INSTALL-OK)",
             );
+            if crate::devices::guest_virtio_blk::iso_visible() {
+                serial::write_line(
+                    "boot: Stage 46 virtio-iso 00:03.0 read-only (not ISO-INSTALL-OK)",
+                );
+            }
         } else {
             serial::write_line("boot: guest-UEFI virtio-blk empty CD→disk order");
         }
@@ -5455,8 +5460,9 @@ fn merge_mmio_gpr(old: u64, val: u64, size: u8) -> u64 {
 #[cfg(target_os = "uefi")]
 unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     let is_write = (qual & 2) != 0;
-    let bar = crate::devices::guest_virtio_blk::mmio_bar_base();
-    let off = (gpa.wrapping_sub(bar)) as u16;
+    let Some(_bar) = crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa) else {
+        return false;
+    };
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
     let mut buf = [0u8; 16];
@@ -5477,11 +5483,16 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         } else {
             cr_gpr(op.reg)
         };
-        crate::devices::guest_virtio_blk::mmio_write(off, op.size, val);
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
         let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
         if wrote != 0 {
             serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
             write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
             serial::write_line(" (not ISO-INSTALL-OK)");
         }
         if !guest_uefi_host_hypervisor_present()
@@ -5490,7 +5501,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             serial::write_line(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
         }
     } else {
-        let val = crate::devices::guest_virtio_blk::mmio_read(off, op.size);
+        let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
         set_cr_gpr(op.reg, merge_mmio_gpr(cr_gpr(op.reg), val, op.size));
     }
     skip_insn()

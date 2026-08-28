@@ -1,11 +1,14 @@
 use super::{
-    blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, latch_dxe_virtio_did,
-    mmio_read, mmio_write, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
-    pci_config_addr, pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr,
-    pci_write_data, pei_host_bridge_did, present, process_blk_queue_in, queues_armed, reset,
+    blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
+    latch_dxe_virtio_did, mmio_read, mmio_read_iso, mmio_write, pci_addr_selects_owned,
+    pci_addr_selects_slot0,
+    pci_addr_selects_virtio, pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso,
+    pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr, pci_write_data,
+    pei_host_bridge_did, present, process_blk_queue_in, process_iso_queue_in, queues_armed, reset,
     take_marker, virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
-    GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
-    VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
+    GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
+    M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
+    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
     VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
 };
 use crate::devices::guest_platform::{
@@ -26,6 +29,9 @@ fn pci_bdf_is_probe_slot_not_ide() {
     assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 IDE
     assert!(!pci_addr_selects_virtio(0x8000_4000)); // 00:08.0 host
     assert!(!pci_addr_selects_virtio(0x8000_0800)); // 00:01.0 ISA
+    assert_eq!(pci_bdf(pci_config_addr_iso()), (0, 3, 0, 0));
+    assert!(pci_addr_selects_virtio_iso(pci_config_addr_iso()));
+    assert!(pci_addr_selects_owned(pci_config_addr_iso()));
 }
 
 #[test]
@@ -70,12 +76,28 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
         crate::devices::guest_irq::VIRTIO_PIC_IRQ
     );
     assert!(is_virtio_bar_2m_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT) + 0x1000));
+    assert!(iso_visible());
+    assert!(pci_addr_selects_virtio_iso(pci_config_addr_iso()));
+    pci_write_addr(pci_config_addr_iso());
+    let iso_id = pci_read_data(0xCFC, 4);
+    assert_eq!(iso_id as u16, GUEST_VIRTIO_PCI_VENDOR);
+    assert_eq!((iso_id >> 16) as u16, GUEST_VIRTIO_PCI_DEVICE);
+    assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_ISO_BAR0_DEFAULT)));
+    assert_eq!(mmio_read(0x10, 2), 0xFFFF, "msix_config 16-bit");
+    assert_eq!(mmio_read(0x10, 4), 0x0001_FFFF, "packed num_queues=1");
+    assert_eq!(
+        mmio_read_iso(0x04, 4) & VIRTIO_BLK_F_RO,
+        VIRTIO_BLK_F_RO
+    );
+    let cap = mmio_read_iso(0x200, 8);
+    assert_eq!(cap, (extra / 512) as u64);
     assert!(!crate::devices::guest_platform::is_platform_sink_gpa(
         u64::from(GUEST_VIRTIO_BAR0_DEFAULT)
     ));
     reset();
     reset_cd();
     assert!(!queues_armed());
+    assert!(!iso_visible());
     assert!(!is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
 }
 
@@ -325,5 +347,62 @@ fn unpresented_pci_is_empty() {
     reset();
     pci_write_addr(pci_config_addr());
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    pci_write_addr(pci_config_addr_iso());
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     reset();
+}
+
+#[test]
+fn lab_stub_hides_iso_slot3() {
+    reset();
+    ide_cdrom::reset();
+    assert!(present());
+    assert!(latch_dxe_virtio_did());
+    assert!(!iso_visible());
+    pci_write_addr(pci_config_addr_iso());
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    reset();
+}
+
+#[test]
+fn iso_queue_in_copies_and_rejects_out() {
+    let mut guest = vec![0u8; 4096];
+    let mut iso = vec![0u8; 2048];
+    iso[..512].fill(0xAB);
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_IN.to_le_bytes());
+    let data_gpa = 0x400u64;
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, 512, 3, 2); // NEXT | WRITE (device fills guest)
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let n = process_iso_queue_in(&mut guest, &mut iso, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 512);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(guest[data_gpa as usize], 0xAB);
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    put_desc(&mut guest, 1, data_gpa, 512, 1, 2); // NEXT, guest-to-device
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&2u16.to_le_bytes());
+    guest[avail as usize + 6..avail as usize + 8].copy_from_slice(&0u16.to_le_bytes());
+    guest[st_gpa as usize] = 0xFF;
+    iso[0] = 0xAB;
+    let n2 = process_iso_queue_in(&mut guest, &mut iso, qsize, &mut last, desc, avail, used);
+    assert_eq!(n2, 0);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_IOERR);
+    assert_eq!(iso[0], 0xAB, "read-only ISO must not take OUT");
 }

@@ -5,9 +5,9 @@
 //! VERIFICATION: L1 (runtime + host tests)
 //!
 //! Lab El Torito keeps 8259 RAZ/WI. A real distro installer (Linux virtio_blk
-//! / libata) waits on interrupts: virtio INTx (i440FX slot 2 INTA → GSI 17)
-//! and ATA IRQ 14. This module is live only while the product ISO window is
-//! armed. Host/CI never prints `ISO-INSTALL-OK`.
+//! / libata) waits on interrupts: virtio INTx (i440FX slot 2 INTA → GSI 17,
+//! slot 3 INTA → GSI 18) and ATA IRQ 14. This module is live only while the
+//! product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -21,6 +21,8 @@ pub const IOAPIC_VERSION: u32 = 0x0017_0011;
 pub const ATA_GSI: u8 = 14;
 /// i440FX slot 2 INTA: `pirq = (pin + slot - 1) & 3` → PIRQB → GSI 16+1.
 pub const VIRTIO_GSI: u8 = 17;
+/// i440FX slot 3 INTA: `(0 + 3 - 1) & 3` → PIRQC → GSI 16+2.
+pub const VIRTIO_ISO_GSI: u8 = 18;
 /// PIC fallback for PCI INTx when the guest has not remapped via IOAPIC.
 pub const VIRTIO_PIC_IRQ: u8 = 11;
 
@@ -140,6 +142,16 @@ pub fn raise_virtio() {
 
 pub fn lower_virtio() {
     lower_gsi(VIRTIO_GSI);
+    lower_pic_irq(VIRTIO_PIC_IRQ);
+}
+
+pub fn raise_virtio_iso() {
+    raise_gsi(VIRTIO_ISO_GSI);
+    raise_pic_irq(VIRTIO_PIC_IRQ);
+}
+
+pub fn lower_virtio_iso() {
+    lower_gsi(VIRTIO_ISO_GSI);
     lower_pic_irq(VIRTIO_PIC_IRQ);
 }
 

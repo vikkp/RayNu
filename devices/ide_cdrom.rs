@@ -396,6 +396,22 @@ pub fn product_iso_window_armed() -> bool {
     retained_len() > GUEST_CD_ISO_CAP
 }
 
+/// Product ISO window pointer (not the 72 KiB lab stub).
+///
+/// INVARIANTS:
+/// - `None` when idle or lab El Torito
+/// - Pointer stays valid until [`reset`]
+/// - Does not imply `ISO-INSTALL-OK`
+pub fn product_iso_window_ptr() -> Option<(*const u8, usize)> {
+    with_cd(|m| {
+        if m.ext_len > GUEST_CD_ISO_CAP && !m.ext_ptr.is_null() {
+            Some((m.ext_ptr, m.ext_len))
+        } else {
+            None
+        }
+    })
+}
+
 /// Lab 72 KiB RN-ELT CD (Stage 45). Product ISO continues past El Torito.
 pub fn is_lab_eltorito_media() -> bool {
     !product_iso_window_armed()
