@@ -2567,6 +2567,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
                 skip_shell_failsoft(slot);
             }
         }
+        failsoft_mmio_probe();
         finish_boot(false);
     }
     let is_write = (qual & 0x2) != 0;
@@ -2582,6 +2583,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         write_hex_u64(guest_rip);
         serial::write_byte(b'\n');
         dump_linux_guest_state();
+        failsoft_mmio_probe();
         finish_boot(false);
     }
     let Some(mov) = mmio_decode::decode_mov_mmio(&insn) else {
@@ -2596,6 +2598,7 @@ unsafe fn handle_ept_violation_and_resume(qual: u64, guest_rip: u64) -> ! {
         }
         serial::write_byte(b'\n');
         dump_linux_guest_state();
+        failsoft_mmio_probe();
         finish_boot(false);
     };
     if mov.is_write != is_write {
@@ -3740,13 +3743,177 @@ unsafe fn try_launch_second_guest() -> ! {
     launch_shell_guest(1);
 }
 
-/// M4.3: after NVM-OK, VMLAUNCH the virtio-blk probe guest (G0 EPTP + host CR3).
+/// Which MMIO/SMP probe to rewrite onto a host-only 2 MiB slab.
+#[derive(Clone, Copy)]
+enum ProbeKind {
+    Blk,
+    Net,
+    SmpBsp,
+    SmpAp,
+}
+
+unsafe fn push_slab(bases: &mut [u64; 8], n: &mut usize, hpa: u64) {
+    if *n >= 8 {
+        return;
+    }
+    let b = hpa & !(ept_hw::TWO_MIB - 1);
+    if b == 0 {
+        return;
+    }
+    let mut i = 0usize;
+    while i < *n {
+        if bases[i] == b {
+            return;
+        }
+        i += 1;
+    }
+    bases[*n] = b;
+    *n += 1;
+}
+
+/// Next 2 MiB after G1-G3, the relocated G0 VMCS slab, and any probe already
+/// parked above G0 e820. Used so blk/net/smp do not collide with each other.
+unsafe fn next_host_probe_slab() -> Option<u64> {
+    let mut bases = [0u64; 8];
+    let mut n = 0usize;
+    for s in 1..M4_NVM_GUEST_SLOTS {
+        if let Some(f) = frames_for_slot(s) {
+            push_slab(&mut bases, &mut n, f.guest_code_phys);
+        }
+    }
+    if G0_VMCS_RELOCATED {
+        if let Some(f) = frames_for_slot(0) {
+            push_slab(&mut bases, &mut n, f.vmcs_phys);
+        }
+    }
+    let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
+    if let Some(f) = core::ptr::addr_of!(BLK_PROBE_FRAMES).read() {
+        if f.guest_code_phys >= guest_ram {
+            push_slab(&mut bases, &mut n, f.guest_code_phys);
+        }
+    }
+    if let Some(f) = core::ptr::addr_of!(NET_PROBE_FRAMES).read() {
+        if f.guest_code_phys >= guest_ram {
+            push_slab(&mut bases, &mut n, f.guest_code_phys);
+        }
+    }
+    if let Some(f) = core::ptr::addr_of!(SMP_BSP_FRAMES).read() {
+        if f.guest_code_phys >= guest_ram {
+            push_slab(&mut bases, &mut n, f.guest_code_phys);
+        }
+    }
+    if let Some(f) = core::ptr::addr_of!(SMP_AP_FRAMES).read() {
+        if f.guest_code_phys >= guest_ram {
+            push_slab(&mut bases, &mut n, f.guest_code_phys);
+        }
+    }
+    ept_hw::host_only_slab_after_shells(&bases[..n])
+}
+
+/// Rewrite a probe onto a host-only slab (code + VMCS + precise guest CR3).
+///
+/// Iron after `M4-NVM-OK`: FrameAllocator pages inside G0 e820
+/// (`guest_code=0xfc0f000`) were scribbled by Linux SHELL → triple fault 0x02.
+/// Keep G0 EPTP so the virtio BAR hole still exits. Do not punch this slab
+/// (the probe must fetch). Guest CR3 identity-maps `[0, PRECISE)` so
+/// `mov [BAR+0x70]` page-walks then EPT-violates.
+unsafe fn place_mmio_probe_on_host_slab(eptp: u64, kind: ProbeKind) -> Option<LaunchFrames> {
+    let Some(slab) = next_host_probe_slab() else {
+        serial::write_line("boot: WARN — no host slab for MMIO probe");
+        return None;
+    };
+    // SAFETY: slab is UEFI-identity RAM in [GUEST_RAM, PRECISE), same class as
+    // G1-G3 / G0 VMCS. Not punched from G0 EPT so the probe can execute.
+    // KANI-TARGET
+    core::ptr::write_bytes(slab as *mut u8, 0, ept_hw::TWO_MIB as usize);
+    let code = slab + ept_hw::G1_SLAB_OFF_CODE;
+    match kind {
+        ProbeKind::Blk => ept_hw::write_guest_blk_probe_page(code, virtio_blk::bar_gpa()),
+        ProbeKind::Net => {
+            ept_hw::write_guest_net_probe_page(code, virtio_net::bar0(), virtio_net::bar1())
+        }
+        ProbeKind::SmpBsp => ept_hw::write_guest_smp_bsp_page(code, smp_probe::flag_phys()),
+        ProbeKind::SmpAp => ept_hw::write_guest_smp_ap_page(code, smp_probe::flag_phys()),
+    }
+    if !cpu::clear_nx_identity(code) {
+        serial::write_line("boot: WARN — NX clear failed on probe host slab");
+        return None;
+    }
+    let cr3 = ept_hw::write_guest_identity_precise_tables(
+        slab + ept_hw::G1_SLAB_OFF_PML4,
+        slab + ept_hw::G1_SLAB_OFF_PDPT,
+        slab + ept_hw::G1_SLAB_OFF_PD,
+    );
+    Some(LaunchFrames {
+        vmcs_phys: slab + ept_hw::G1_SLAB_OFF_VMCS,
+        guest_stack_phys: slab + ept_hw::G1_SLAB_OFF_STACK,
+        host_stack_phys: slab + ept_hw::G1_SLAB_OFF_HOST_STACK,
+        tss_phys: slab + ept_hw::G1_SLAB_OFF_TSS,
+        gdt_phys: slab + ept_hw::G1_SLAB_OFF_GDT,
+        eptp,
+        guest_code_phys: code,
+        guest_idt_phys: slab + ept_hw::G1_SLAB_OFF_IDT,
+        guest_cr3_phys: Some(cr3),
+        msr_bitmap_phys: Some(slab + ept_hw::G1_SLAB_OFF_MSR_BITMAP),
+        io_bitmap_a_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_A),
+        io_bitmap_b_phys: Some(slab + ept_hw::G1_SLAB_OFF_IO_B),
+    })
+}
+
+/// After NVM-OK: keep VMX on if a blk/net/smp probe faults.
+unsafe fn failsoft_mmio_probe() {
+    if BLK_PROBE_MODE {
+        skip_blk_failsoft();
+    }
+    if NET_PROBE_MODE {
+        skip_net_failsoft();
+    }
+    if SMP_PROBE_MODE {
+        skip_smp_failsoft();
+    }
+}
+
+unsafe fn skip_blk_failsoft() -> ! {
+    serial::write_line("boot: WARN — skip blk probe (VMX on; no boot gate failed)");
+    BLK_PROBE_MODE = false;
+    if HAS_NET_PROBE {
+        try_launch_net_probe();
+    }
+    finish_boot(true);
+}
+
+unsafe fn skip_net_failsoft() -> ! {
+    serial::write_line("boot: WARN — skip net probe (VMX on; no boot gate failed)");
+    NET_PROBE_MODE = false;
+    if HAS_SMP_PROBE {
+        try_launch_smp_probe();
+    }
+    finish_boot(true);
+}
+
+unsafe fn skip_smp_failsoft() -> ! {
+    serial::write_line("boot: WARN — skip smp probe (VMX on; no boot gate failed)");
+    SMP_PROBE_MODE = false;
+    finish_boot(true);
+}
+
+/// M4.3: after NVM-OK, VMLAUNCH the virtio-blk probe guest (G0 EPTP + host slab).
 unsafe fn try_launch_blk_probe() -> ! {
-    let frames = match core::ptr::addr_of!(BLK_PROBE_FRAMES).read() {
-        Some(f) => f,
+    let Some(old) = core::ptr::addr_of!(BLK_PROBE_FRAMES).read() else {
+        serial::write_line("boot: WARN — blk probe frames missing");
+        skip_blk_failsoft();
+    };
+    let frames = match place_mmio_probe_on_host_slab(old.eptp, ProbeKind::Blk) {
+        Some(f) => {
+            BLK_PROBE_FRAMES = Some(f);
+            serial::write_str("boot: M4.3 blk probe host slab HPA=0x");
+            write_hex_u64(f.guest_code_phys);
+            serial::write_line(" (G0 EPTP; guest CR3 in slab)");
+            f
+        }
         None => {
-            serial::write_line("boot: ERROR — blk probe frames missing");
-            finish_boot(false);
+            serial::write_line("boot: WARN — blk probe host slab unavailable");
+            skip_blk_failsoft();
         }
     };
     SCHED_MODE = false;
@@ -3766,21 +3933,21 @@ unsafe fn try_launch_blk_probe() -> ! {
     ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — blk probe VMCS prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — blk probe VMCS prepare failed");
+        skip_blk_failsoft();
     }
     if ops::vmclear(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — blk probe VMCLEAR failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — blk probe VMCLEAR failed");
+        skip_blk_failsoft();
     }
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — blk probe VMCS re-prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — blk probe VMCS re-prepare failed");
+        skip_blk_failsoft();
     }
     if let Err(e) = setup_vmcs(&frames) {
-        serial::write_str("boot: ERROR — blk probe setup_vmcs failed: ");
+        serial::write_str("boot: WARN — blk probe setup_vmcs failed: ");
         serial::write_line(launch_err_name(e));
-        finish_boot(false);
+        skip_blk_failsoft();
     }
 
     let _ = apic::mask_timer();
@@ -3790,15 +3957,15 @@ unsafe fn try_launch_blk_probe() -> ! {
     serial::write_line("boot: VMLAUNCH → virtio-blk status probe");
     match ops::vmlaunch() {
         Ok(()) => {
-            serial::write_line("boot: ERROR — blk probe VMLAUNCH returned Ok");
-            finish_boot(false);
+            serial::write_line("boot: WARN — blk probe VMLAUNCH returned Ok");
+            skip_blk_failsoft();
         }
         Err(_) => {
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-            serial::write_str("boot: ERROR — blk probe VMLAUNCH failed insn_error=0x");
+            serial::write_str("boot: WARN — blk probe VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_blk_failsoft();
         }
     }
 }
@@ -3841,25 +4008,35 @@ unsafe fn handle_blk_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 }
                 finish_boot(true);
             }
-            serial::write_line("boot: ERROR — blk probe HLT without DRIVER_OK readback");
-            finish_boot(false);
+            serial::write_line("boot: WARN — blk probe HLT without DRIVER_OK readback");
+            skip_blk_failsoft();
         }
         _ => {
-            serial::write_str("boot: ERROR — blk probe unhandled exit reason=0x");
+            serial::write_str("boot: WARN — blk probe unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_blk_failsoft();
         }
     }
 }
 
 /// M4.4: after BLK-OK, VMLAUNCH the virtio-net dual-port probe guest.
 unsafe fn try_launch_net_probe() -> ! {
-    let frames = match core::ptr::addr_of!(NET_PROBE_FRAMES).read() {
-        Some(f) => f,
+    let Some(old) = core::ptr::addr_of!(NET_PROBE_FRAMES).read() else {
+        serial::write_line("boot: WARN — net probe frames missing");
+        skip_net_failsoft();
+    };
+    let frames = match place_mmio_probe_on_host_slab(old.eptp, ProbeKind::Net) {
+        Some(f) => {
+            NET_PROBE_FRAMES = Some(f);
+            serial::write_str("boot: M4.4 net probe host slab HPA=0x");
+            write_hex_u64(f.guest_code_phys);
+            serial::write_line(" (G0 EPTP; guest CR3 in slab)");
+            f
+        }
         None => {
-            serial::write_line("boot: ERROR — net probe frames missing");
-            finish_boot(false);
+            serial::write_line("boot: WARN — net probe host slab unavailable");
+            skip_net_failsoft();
         }
     };
     SCHED_MODE = false;
@@ -3880,21 +4057,21 @@ unsafe fn try_launch_net_probe() -> ! {
     ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — net probe VMCS prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — net probe VMCS prepare failed");
+        skip_net_failsoft();
     }
     if ops::vmclear(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — net probe VMCLEAR failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — net probe VMCLEAR failed");
+        skip_net_failsoft();
     }
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — net probe VMCS re-prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — net probe VMCS re-prepare failed");
+        skip_net_failsoft();
     }
     if let Err(e) = setup_vmcs(&frames) {
-        serial::write_str("boot: ERROR — net probe setup_vmcs failed: ");
+        serial::write_str("boot: WARN — net probe setup_vmcs failed: ");
         serial::write_line(launch_err_name(e));
-        finish_boot(false);
+        skip_net_failsoft();
     }
 
     let _ = apic::mask_timer();
@@ -3904,15 +4081,15 @@ unsafe fn try_launch_net_probe() -> ! {
     serial::write_line("boot: VMLAUNCH → virtio-net dual-port probe");
     match ops::vmlaunch() {
         Ok(()) => {
-            serial::write_line("boot: ERROR — net probe VMLAUNCH returned Ok");
-            finish_boot(false);
+            serial::write_line("boot: WARN — net probe VMLAUNCH returned Ok");
+            skip_net_failsoft();
         }
         Err(_) => {
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-            serial::write_str("boot: ERROR — net probe VMLAUNCH failed insn_error=0x");
+            serial::write_str("boot: WARN — net probe VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_net_failsoft();
         }
     }
 }
@@ -3940,27 +4117,51 @@ unsafe fn handle_net_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 }
                 finish_boot(true);
             }
-            serial::write_line("boot: ERROR — net probe HLT without port exchange");
-            finish_boot(false);
+            serial::write_line("boot: WARN — net probe HLT without port exchange");
+            skip_net_failsoft();
         }
         _ => {
-            serial::write_str("boot: ERROR — net probe unhandled exit reason=0x");
+            serial::write_str("boot: WARN — net probe unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_net_failsoft();
         }
     }
 }
 
 /// M4.5: after NET-OK, VMLAUNCH the SMP BSP (AP follows on BSP HLT).
 unsafe fn try_launch_smp_probe() -> ! {
-    let frames = match core::ptr::addr_of!(SMP_BSP_FRAMES).read() {
-        Some(f) => f,
+    let Some(old) = core::ptr::addr_of!(SMP_BSP_FRAMES).read() else {
+        serial::write_line("boot: WARN — SMP BSP frames missing");
+        skip_smp_failsoft();
+    };
+    let frames = match place_mmio_probe_on_host_slab(old.eptp, ProbeKind::SmpBsp) {
+        Some(f) => {
+            SMP_BSP_FRAMES = Some(f);
+            serial::write_str("boot: M4.5 SMP BSP host slab HPA=0x");
+            write_hex_u64(f.guest_code_phys);
+            serial::write_line(" (G0 EPTP; guest CR3 in slab)");
+            f
+        }
         None => {
-            serial::write_line("boot: ERROR — SMP BSP frames missing");
-            finish_boot(false);
+            serial::write_line("boot: WARN — SMP BSP host slab unavailable");
+            skip_smp_failsoft();
         }
     };
+    if let Some(ap_old) = core::ptr::addr_of!(SMP_AP_FRAMES).read() {
+        match place_mmio_probe_on_host_slab(ap_old.eptp, ProbeKind::SmpAp) {
+            Some(ap) => {
+                SMP_AP_FRAMES = Some(ap);
+                serial::write_str("boot: M4.5 SMP AP host slab HPA=0x");
+                write_hex_u64(ap.guest_code_phys);
+                serial::write_line(" (G0 EPTP; guest CR3 in slab)");
+            }
+            None => {
+                serial::write_line("boot: WARN — SMP AP host slab unavailable");
+                skip_smp_failsoft();
+            }
+        }
+    }
     SCHED_MODE = false;
     BLK_PROBE_MODE = false;
     NET_PROBE_MODE = false;
@@ -3981,21 +4182,21 @@ unsafe fn try_launch_smp_probe() -> ! {
     ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP BSP VMCS prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP BSP VMCS prepare failed");
+        skip_smp_failsoft();
     }
     if ops::vmclear(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP BSP VMCLEAR failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP BSP VMCLEAR failed");
+        skip_smp_failsoft();
     }
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP BSP VMCS re-prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP BSP VMCS re-prepare failed");
+        skip_smp_failsoft();
     }
     if let Err(e) = setup_vmcs(&frames) {
-        serial::write_str("boot: ERROR — SMP BSP setup_vmcs failed: ");
+        serial::write_str("boot: WARN — SMP BSP setup_vmcs failed: ");
         serial::write_line(launch_err_name(e));
-        finish_boot(false);
+        skip_smp_failsoft();
     }
 
     let _ = apic::mask_timer();
@@ -4005,15 +4206,15 @@ unsafe fn try_launch_smp_probe() -> ! {
     serial::write_line("boot: VMLAUNCH → SMP BSP ready-flag store");
     match ops::vmlaunch() {
         Ok(()) => {
-            serial::write_line("boot: ERROR — SMP BSP VMLAUNCH returned Ok");
-            finish_boot(false);
+            serial::write_line("boot: WARN — SMP BSP VMLAUNCH returned Ok");
+            skip_smp_failsoft();
         }
         Err(_) => {
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-            serial::write_str("boot: ERROR — SMP BSP VMLAUNCH failed insn_error=0x");
+            serial::write_str("boot: WARN — SMP BSP VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_smp_failsoft();
         }
     }
 }
@@ -4023,8 +4224,8 @@ unsafe fn launch_smp_ap() -> ! {
     let frames = match core::ptr::addr_of!(SMP_AP_FRAMES).read() {
         Some(f) => f,
         None => {
-            serial::write_line("boot: ERROR — SMP AP frames missing");
-            finish_boot(false);
+            serial::write_line("boot: WARN — SMP AP frames missing");
+            skip_smp_failsoft();
         }
     };
     SMP_AP_LAUNCHED = true;
@@ -4037,21 +4238,21 @@ unsafe fn launch_smp_ap() -> ! {
     ept_hw::invept_global();
 
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP AP VMCS prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP AP VMCS prepare failed");
+        skip_smp_failsoft();
     }
     if ops::vmclear(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP AP VMCLEAR failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP AP VMCLEAR failed");
+        skip_smp_failsoft();
     }
     if prepare_vmcs_region(frames.vmcs_phys).is_err() {
-        serial::write_line("boot: ERROR — SMP AP VMCS re-prepare failed");
-        finish_boot(false);
+        serial::write_line("boot: WARN — SMP AP VMCS re-prepare failed");
+        skip_smp_failsoft();
     }
     if let Err(e) = setup_vmcs(&frames) {
-        serial::write_str("boot: ERROR — SMP AP setup_vmcs failed: ");
+        serial::write_str("boot: WARN — SMP AP setup_vmcs failed: ");
         serial::write_line(launch_err_name(e));
-        finish_boot(false);
+        skip_smp_failsoft();
     }
 
     let _ = apic::mask_timer();
@@ -4061,15 +4262,15 @@ unsafe fn launch_smp_ap() -> ! {
     serial::write_line("boot: VMLAUNCH → SMP AP ready-flag store");
     match ops::vmlaunch() {
         Ok(()) => {
-            serial::write_line("boot: ERROR — SMP AP VMLAUNCH returned Ok");
-            finish_boot(false);
+            serial::write_line("boot: WARN — SMP AP VMLAUNCH returned Ok");
+            skip_smp_failsoft();
         }
         Err(_) => {
             let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
-            serial::write_str("boot: ERROR — SMP AP VMLAUNCH failed insn_error=0x");
+            serial::write_str("boot: WARN — SMP AP VMLAUNCH failed insn_error=0x");
             write_hex_u32(ierr);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_smp_failsoft();
         }
     }
 }
@@ -4088,15 +4289,15 @@ unsafe fn handle_smp_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
         EXIT_REASON_HLT => {
             if !SMP_AP_LAUNCHED {
                 if !smp_probe::note_bsp_ready() {
-                    serial::write_line("boot: ERROR — SMP BSP HLT without ready flag");
-                    finish_boot(false);
+                    serial::write_line("boot: WARN — SMP BSP HLT without ready flag");
+                    skip_smp_failsoft();
                 }
                 serial::write_line("boot: M4.5 BSP ready — waking AP");
                 launch_smp_ap();
             }
             if !smp_probe::note_ap_ready() {
-                serial::write_line("boot: ERROR — SMP AP HLT without ready flag");
-                finish_boot(false);
+                serial::write_line("boot: WARN — SMP AP HLT without ready flag");
+                skip_smp_failsoft();
             }
             if smp_probe::smp_ok() {
                 if smp_probe::take_smp_ok_latch() {
@@ -4105,14 +4306,14 @@ unsafe fn handle_smp_probe_vmexit(basic: u32, qual: u64, guest_rax: u64, guest_r
                 serial::write_line("boot: M4.5 complete — dual-vCPU BSP+AP under shared EPT");
                 finish_boot(true);
             }
-            serial::write_line("boot: ERROR — SMP AP HLT but smp_ok not latched");
-            finish_boot(false);
+            serial::write_line("boot: WARN — SMP AP HLT but smp_ok not latched");
+            skip_smp_failsoft();
         }
         _ => {
-            serial::write_str("boot: ERROR — SMP probe unhandled exit reason=0x");
+            serial::write_str("boot: WARN — SMP probe unhandled exit reason=0x");
             write_hex_u32(basic);
             serial::write_byte(b'\n');
-            finish_boot(false);
+            skip_smp_failsoft();
         }
     }
 }

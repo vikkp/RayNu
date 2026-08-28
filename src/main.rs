@@ -694,8 +694,10 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
         "boot: M4.2 G1–G3 prepared (slab 2M EPT + slab CR3 + SHELL CPUID)",
     );
 
-    // M4.3: bare-metal probe guest reuses G0 EPTP (BAR already punched) + host CR3.
-    // Code/stack/IDT frames come from the host allocator (not guest-exclusive slabs).
+    // M4.3: virtio-blk BAR is an EPT hole. Probe code/VMCS/guest CR3 are rewritten
+    // onto a host-only slab at VMLAUNCH (Linux SHELL scribbles e820 allocator
+    // frames; iron triple-faulted at guest_code=0xfc0f000). Prep still fills
+    // placeholder frames so set_blk_probe stays armed if the slab picker fails.
     let Some(blk_code) = alloc_phys(alloc) else {
         boot::serial::write_line("boot: ERROR — no frame for blk probe code");
         let _ = life.disable();
@@ -758,7 +760,9 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
         io_bitmap_a_phys: blk_io_a,
         io_bitmap_b_phys: blk_io_b,
     });
-    boot::serial::write_line("boot: M4.3 virtio-blk probe guest prepared (G0 EPTP + host CR3)");
+    boot::serial::write_line(
+        "boot: M4.3 virtio-blk probe guest prepared (G0 EPTP; launch relocates to host slab)",
+    );
 
     // M4.4: net probe guest — dual BAR handshake then host vSwitch exchange.
     let Some(net_code) = alloc_phys(alloc) else {
@@ -823,7 +827,9 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
         io_bitmap_a_phys: net_io_a,
         io_bitmap_b_phys: net_io_b,
     });
-    boot::serial::write_line("boot: M4.4 virtio-net probe guest prepared (G0 EPTP + host CR3)");
+    boot::serial::write_line(
+        "boot: M4.4 virtio-net probe guest prepared (G0 EPTP; launch relocates to host slab)",
+    );
 
     // M4.5: dual-vCPU probe — same guest id, shared G0 EPTP; host wakes AP after BSP.
     let Some(smp_flag) = alloc_phys(alloc) else {
