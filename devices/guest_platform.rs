@@ -10,7 +10,8 @@
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
-//! (skip BdsWait), 8259 PIC RAZ/WI, and a
+//! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
+//! uses a real PIC + IOAPIC in `guest_irq`), and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
 //! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
@@ -560,6 +561,9 @@ pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     if crate::devices::guest_virtio_blk::is_virtio_bar_2m_gpa(gpa) {
         return false;
     }
+    if crate::devices::guest_irq::is_hpet_split_2m_gpa(gpa) {
+        return false;
+    }
     gpa >= PLATFORM_REPORT_RAM_BYTES && gpa < FW_FLOOR
 }
 
@@ -899,6 +903,7 @@ pub fn reset() {
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
+    crate::devices::guest_irq::reset();
 }
 
 /// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.
@@ -1094,6 +1099,9 @@ fn io_mask(size: u8) -> u64 {
 /// Platform PIO. Returns the value to merge into RAX.
 pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     let mask = io_mask(size);
+    if is_pic_port(port) && crate::devices::ide_cdrom::product_iso_window_armed() {
+        return crate::devices::guest_irq::pic_io(port, is_in, size, rax);
+    }
     with_plat(|p| {
         if is_cmos_port(port) {
             if port == CMOS_INDEX_PORT {

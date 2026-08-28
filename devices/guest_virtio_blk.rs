@@ -474,7 +474,11 @@ fn capacity_sectors() -> u64 {
 
 /// Read virtio-pci BAR MMIO (common / ISR / device / notify).
 pub fn mmio_read(off: u16, size: u8) -> u64 {
-    with_virtio(|v| mmio_read_locked(v, off, size))
+    let val = with_virtio(|v| mmio_read_locked(v, off, size));
+    if off == OFF_ISR {
+        crate::devices::guest_irq::lower_virtio();
+    }
+    val
 }
 
 fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
@@ -820,13 +824,14 @@ fn process_blk_queue(
 
 /// Drain a pending notify using `translate` (GPA → HPA).
 pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
-    let (pending, qsize, last, desc, avail, used) = with_virtio(|v| {
+    let (notified, pending, qsize, last, desc, avail, used) = with_virtio(|v| {
         let p = v.notify_pending;
         v.notify_pending = false;
         if p {
             v.isr = 1;
         }
         (
+            p,
             p && v.queue_enable != 0,
             v.queue_size,
             v.last_avail,
@@ -835,6 +840,9 @@ pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
             v.queue_device,
         )
     });
+    if notified {
+        crate::devices::guest_irq::raise_virtio();
+    }
     if !pending {
         return 0;
     }

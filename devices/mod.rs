@@ -4,6 +4,7 @@
 //! Proven Core: **outside** (ADR-002)
 //! VERIFICATION: N/A
 
+pub mod guest_irq;
 pub mod guest_platform;
 pub mod guest_virtio_blk;
 pub mod ide_cdrom;

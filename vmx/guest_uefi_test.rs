@@ -172,6 +172,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cmp bx"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8259 PIC RAZ/WI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO PIC/IOAPIC inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));

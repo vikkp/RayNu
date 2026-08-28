@@ -423,6 +423,7 @@ pub fn reset() {
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
+    crate::devices::guest_irq::reset();
 }
 
 /// PACKET commands issued since last reset (firmware ATAPI activity).
@@ -1426,11 +1427,24 @@ fn apply_atapi_signature(m: &mut CdMedia) {
     m.cdb_got = 0;
 }
 
+fn raise_ata_irq() {
+    if product_iso_window_armed() {
+        crate::devices::guest_irq::raise_ata();
+    }
+}
+
+fn lower_ata_irq() {
+    if product_iso_window_armed() {
+        crate::devices::guest_irq::lower_ata();
+    }
+}
+
 fn packet_ok(m: &mut CdMedia) {
     m.xfer = AtaXfer::Idle;
     m.ata_err = 0;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+    raise_ata_irq();
 }
 
 fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
@@ -1440,6 +1454,7 @@ fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
     m.ata_err = sense << 4;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+    raise_ata_irq();
 }
 
 fn begin_packet_data(m: &mut CdMedia, n: usize) {
@@ -1459,6 +1474,7 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     m.ata_lba[2] = (size >> 8) as u8;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+    raise_ata_irq();
 }
 
 fn start_identify(m: &mut CdMedia) {
@@ -1484,6 +1500,7 @@ fn start_identify(m: &mut CdMedia) {
     m.xfer_end = 512;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+    raise_ata_irq();
 }
 
 fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
@@ -1686,6 +1703,9 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     _ => u64::from(m.ata_status),
                 }
             };
+            if !ata_is_slave(m) && reg == 7 {
+                lower_ata_irq();
+            }
             let mask = io_mask(size);
             (rax & !mask) | (val & mask)
         } else {
@@ -1740,6 +1760,7 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             m.ata_err = 0;
                             m.ata_count = ATAPI_INT_CD;
                             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+                            raise_ata_irq();
                         }
                         ATA_CMD_DEVICE_RESET | ATA_CMD_DIAGNOSTIC => apply_atapi_signature(m),
                         ATA_CMD_IDENTIFY => {
@@ -1805,6 +1826,7 @@ fn read_data(m: &mut CdMedia, size: u8) -> u64 {
         } else {
             m.xfer = AtaXfer::Idle;
             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+            raise_ata_irq();
         }
     }
     v

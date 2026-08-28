@@ -56,6 +56,10 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../tools/run-qemu.sh").contains("PRODUCT_ISO")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("--linux-iso")
         && include_str!("../tools/flash-cruzer-esp.sh").contains("--no-linux-iso")
+        && include_str!("../devices/guest_irq.rs").contains("fn take_inject_vector(")
+        && include_str!("../devices/guest_irq.rs").contains("VIRTIO_GSI")
+        && include_str!("../vmx/guest_uefi.rs").contains("try_inject_guest_irq")
+        && include_str!("../vmx/guest_uefi.rs").contains("ept_install_ioapic_trap")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }
