@@ -1,6 +1,6 @@
 # M7 Plan — Mount Everest (shippable single-host)
 
-**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–45 closed**. Stage 44 / P0-59 ATAPI closed on iron COM2 `bf696ca` (`OVMF-ATAPI-OK` `sectors=1` `packet=9` `scsi=0x28` stop n=30769). Stage 45 / P0-61 El Torito **CLOSED** on iron COM2 `0be7283` (`OVMF-ELTORITO-OK` `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-59** and **P0-61** are closed. Residual: P0-60 G1 EPT (not an E5 stage) → Stage 46 `ISO-INSTALL-OK`, plus TLS/console. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
+**Status:** **M7.5 + M7.6 + M7.7 stamp-persist + M7.8 / E3b + ADR-013 Stage 1 (Phases 0–G) + E4 SPA VMLAUNCH (P0-14) + E5 Stage 0–45 closed**. Stage 44 / P0-59 ATAPI closed on iron COM2 `bf696ca` (`OVMF-ATAPI-OK` `sectors=1` `packet=9` `scsi=0x28` stop n=30769). Stage 45 / P0-61 El Torito **CLOSED** on iron COM2 `0be7283` (`OVMF-ELTORITO-OK` `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8). P0-60 G1 EPT **CLOSED** on iron COM2 after `5147222` (`M4-SHELL-G1` / `M4-2VM-OK`; no `GPA=0x10403000`). Phase G is the accepted-risk note (shared LOM). **P0-15**–**P0-61** are closed. Residual: G0 VMCS relocate (sched error 11) → Stage 46 `ISO-INSTALL-OK`, plus TLS/console. Optional: `VMRESUME` instead of VMLAUNCH-every-quantum.  
 **Prior:** M7.4 closed on Latitude (`RAYNU-V-M7-UI-OK`); M7.3–M7.0 closed; M6 closed.  
 **Parent roadmap:** [CLAUDE.md](../CLAUDE.md) (M7 row) · ADR: [adr/ADR-009.md](adr/ADR-009.md) · E3 listen: [adr/ADR-012.md](adr/ADR-012.md) · E3b: [adr/ADR-013.md](adr/ADR-013.md) · ISO types: [adr/ADR-014.md](adr/ADR-014.md) · HDA: [hda.md](hda.md) · lived: [progress.md](progress.md)  
 **Prior track:** [m6_plan.md](m6_plan.md)
@@ -273,24 +273,18 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (P0-60 — M4.2 G1 shell EPT / fail-soft, not an E5 stage):**
-After guest-UEFI + G0 SHELL, G1 must not `VMXOFF` / `boot gate failed` on
-`GPA=0x10403000`. Slab-local 2 MiB EPT (SPA path): EPT tables + VMCS live
-in the punched 2 MiB slab, not FrameAllocator pages inside G0 e820 (Linux
-SHELL scribbled those tables). Shell EPT/entry faults fail-soft (next slab
-or blk probe; VMX stays on). Nested KVM uses a 65536-exit guest-UEFI cap
-and withholds report-RAM from E4 (do not reuse as bzImage; nested
-`4225b4d` `load kernel=0x8200000` then `/init` SIGSEGV). Iron keeps
-262144 for El Torito and still returns zeroed frames. Not Stage 46.
-Not closed until iron COM2 shows G1 SHELL / no `boot gate failed`.
-Stage 45 closed on iron COM2 `0be7283`: OVMF BDS StartImaged the El Torito
-CD EFI; `RN-ELT` + `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` n=197992 catalog=1
-bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6.
-2048-byte FAT12 ESP + ISO9660 `\EFI\BOOT\BOOTX64.EFI`; PE SectionAlignment
-`0x1000`; 262144-exit cap (iron `df7d158` hit 131072 still in ATA PIO).
-E4 LINUX-EARLY then M4.2 G1 EPT fail-soft is not Stage 45.
+**First action (G0 VMCS relocate — not an E5 stage, not Stage 46):**
+P0-60 closed on iron COM2 after `5147222`: G1 `M4-SHELL-G1` / `M4-2VM-OK`
+(`EPTP=0x1040601e` CPUID `rip=0x1040000a`); G2/G3 latched; no
+`GPA=0x10403000`. Stage 45 El Torito held (`RN-ELT` n=197992). After G3
+SHELL the credit scheduler `VMPTRLD` G0 at `0xfc38000` `rev=0` error 11
+(Linux scribbled identity-pool VMCS). Relocate G0 VMCS to the host-only
+slab (E4 SPA path) **before** launching G1, while G0 is still current.
+Ladder VMPTRLD fail-soft resumes the live shell (no VMXOFF). Not closed
+until iron COM2 shows `M4-NVM-OK` / no `boot gate failed`.
+Not Stage 46. Stage 45 stays CLOSED.
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 (closed) → P0-60
-(M4.2 G1 EPT / fail-soft, not an E5 stage) → Stage 46 `ISO-INSTALL-OK`.
+(closed) → G0 VMCS relocate → Stage 46 `ISO-INSTALL-OK`.
 Do not number G1 as Stage 46.
 Stage 44 closed on iron COM2 `bf696ca`: `RAYNU-V-M7-E5-OVMF-ATAPI-OK`
 `sectors=1` `packet=9` `scsi=0x28` `ata=0xa0` `ataio=982` stop n=30769
@@ -333,7 +327,7 @@ Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (**closed** iron COM2 `0be7283`:
 `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533
 scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
-**Next after Stage 45:** P0-60 G1 EPT (not an E5 stage), then Stage 46
+**Next after Stage 45 + P0-60:** G0 VMCS relocate (sched error 11), then Stage 46
 `ISO-INSTALL-OK` (not `sectors>0` alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip

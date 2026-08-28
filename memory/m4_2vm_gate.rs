@@ -42,6 +42,7 @@ pub fn second_guest_launch_present() -> bool {
         && main.contains("pick_shell_slab_hpa")
         && launch.contains("skip_shell_failsoft")
         && launch.contains("no boot gate failed")
+        && launch.contains("relocate_g0_vmcs_to_host_slab")
 }
 
 /// True when the QEMU boot gate requires M4.0.

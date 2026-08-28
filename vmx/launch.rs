@@ -2718,6 +2718,10 @@ unsafe fn maybe_finish_m312() {
         }
         if HAS_SECOND_GUEST && !SECOND_GUEST_STARTED {
             save_live_gprs_to_slot(0);
+            // Iron `5147222`: G1 SHELL-OK then sched VMPTRLD G0 at
+            // `0xfc38000` `rev=0` error 11 (Linux scribbled identity VMCS).
+            // Clone to the host-only slab while G0 is still current.
+            let _ = relocate_g0_vmcs_to_host_slab();
             launch_shell_guest(1);
         }
         if !HAS_SECOND_GUEST {
@@ -2915,6 +2919,8 @@ unsafe fn switch_to_sched_slot(slot: usize) -> ! {
         // Iron 2026-08-21: G0 identity-pool VMCS was scribbled; memcpy of a
         // VMCLEAR'd region is not VMPTRLD-safe. VMfailValid leaves the
         // current-VMCS pointer unchanged — resume the live slot. Never VMXOFF.
+        // Iron `5147222` M4.2 ladder: same G0 scribble before SPA; fail-soft
+        // must not `finish_boot(false)` / `boot gate failed`.
         failsoft_sched_or_finish();
     }
     SCHED_SLOT_CUR = slot;
@@ -2998,6 +3004,26 @@ unsafe fn failsoft_sched_or_finish() -> ! {
         serial::write_line("boot: WARN — VMPTRLD fail-soft idle (VMX on; coexist)");
         coexist_failsoft_idle();
     }
+    // M4.2 ladder (P0-60 iron `5147222`): G1–G3 SHELL already latched; G0
+    // identity VMCS `rev=0`. Resume the live shell. Do not VMXOFF.
+    let resume = SCHED_SLOT_CUR;
+    if resume != 0 {
+        if let Some(cur_f) = frames_for_slot(resume) {
+            if ops::vmptrld(cur_f.vmcs_phys).is_ok() {
+                load_live_gprs_from_slot(resume);
+                ACTIVE_GUEST_ID = guest_id_for_slot(resume);
+                REAL_LINUX_GUEST = false;
+                BRINGUP_GUEST_CODE_PHYS = cur_f.guest_code_phys;
+                let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0);
+                arm_sched_slice();
+                vmresume_with_gprs();
+            }
+        }
+    }
+    if TWO_VM_LATCHED {
+        serial::write_line("boot: WARN — G0 VMPTRLD fail-soft after 2VM-OK (VMX on)");
+        finish_boot(true);
+    }
     finish_boot(false);
 }
 
@@ -3030,6 +3056,9 @@ unsafe fn enter_sched_mode_from_shell(from_slot: usize) -> ! {
             finish_boot(false);
         }
     };
+    if next == 0 && G0_VMPTRLD_FAILED {
+        switch_to_sched_slot(from_slot);
+    }
     switch_to_sched_slot(next);
 }
 
@@ -3264,7 +3293,8 @@ unsafe fn clone_current_vmcs_to(src: u64, dst: u64) -> Option<u64> {
 /// Flush G0's cached VMCS out of Linux-writable identity RAM.
 ///
 /// INVARIANTS:
-/// - Caller is [`launch_spa_private_ept`] while G0 is still current (or active)
+/// - Caller is [`maybe_finish_m312`] (G0 still current after SHELL) or
+///   [`launch_spa_private_ept`]
 /// - Clone via [`clone_current_vmcs_to`] (SDM: VMCS format is implementation-specific)
 /// - After `VMCLEAR` the G0 VMCS is **clear**; first re-entry is `VMLAUNCH`
 /// - On clone failure, leave `G0_VMCS_RELOCATED` false so the scheduler parks slot 0
@@ -3503,6 +3533,9 @@ unsafe fn schedule_preempt() -> ! {
     }
     // Iron 2026-08-21: do not VMPTRLD G0 until the VMREAD/VMWRITE clone
     // verified, and never retry slot 0 after the first VMPTRLD failure.
+    if next == 0 && G0_VMPTRLD_FAILED {
+        next = if cur == 0 { 1 } else { cur };
+    }
     if M4_LADDER_DONE
         && next == 0
         && SPA_LAUNCHED

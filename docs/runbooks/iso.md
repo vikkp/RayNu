@@ -435,4 +435,4 @@ Not installer.
 E5 Stage 45 (iron COM2 `0be7283`, closed): firmware El Torito CD EFI
 (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
-Next: P0-60 G1 EPT (not an E5 stage), then Stage 46 `ISO-INSTALL-OK`.
+Next: G0 VMCS relocate (sched error 11), then Stage 46 `ISO-INSTALL-OK`.
