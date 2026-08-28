@@ -186,6 +186,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("modprobe isofs")
         && include_str!("../devices/guest_serial_answer.rs").contains("mdev -s")
         && include_str!("../devices/guest_serial_answer.rs").contains("sleep 1")
+        && include_str!("../devices/guest_serial_answer.rs").contains("[ -b /dev/vda ]")
         && include_str!("../devices/guest_serial_answer.rs").contains("|| mount -t iso9660 /dev/sr0")
         && include_str!("../vmx/guest_uefi.rs").contains("Lazy 2MiB WB map")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_near_xfer(")

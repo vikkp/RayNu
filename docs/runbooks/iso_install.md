@@ -166,7 +166,7 @@ lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
 advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
-with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda` after `modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; mdev -s; sleep 1; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update` (and `grub` if `bootloader?`
+with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda` after `modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update` (and `grub` if `bootloader?`
 appears, `/dev/vda` if `Which disk`, `sys` if `How would you like`, `n` if `No disks available` then `(y/n)`, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `squashfs,virtio_blk console=ttyS0` (`modules=loop,squashfs,virtio_blk` stays valid so Alpine
 can mount the live root and load virtio-blk; `console=` is a kernel param; product ISO xAPIC is

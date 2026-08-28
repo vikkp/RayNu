@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fifty-fifth slice (this EFI): Alpine auto-answer `modprobe isofs` and
+Fifty-sixth slice (this EFI): Alpine auto-answer waits for `/dev/vda`
+(`mdev -s` each second, up to 5s) so a slow virtio probe is a block
+device before `setup-disk` opens it. `mdev -s` then `sleep 1` left the
+node missing if the driver bound during the sleep. Fifty-fifth slice (this EFI): Alpine auto-answer `modprobe isofs` and
 `mount -t iso9660` so BusyBox mounts ISO9660 on virtio-blk `/dev/vdb` (and
 ATAPI `/dev/sr0`) instead of probing a disk without `iso9660` in
 `/proc/filesystems`. Fifty-fourth slice (this EFI): Alpine auto-answer `modprobe sr_mod` so `/dev/sr0`
