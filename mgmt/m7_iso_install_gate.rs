@@ -96,6 +96,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn xapic_fetch_miss_eax_fallback(")
         && include_str!("../vmx/guest_uefi.rs").contains("skip-len is 1–15 even if peek got bytes")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_insn_linear(")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_mmio_peek_linear(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_mmio_insn(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_mmio_skip_len(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_decoded_len(")

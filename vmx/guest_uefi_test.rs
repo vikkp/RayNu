@@ -2,6 +2,7 @@ use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
     guest_uefi_insn_linear,
+    guest_uefi_mmio_peek_linear,
     guest_uefi_mmio_skip_len,
     eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
@@ -1361,6 +1362,29 @@ fn insn_linear_adds_cs_base_unless_long_mode() {
     assert_eq!(guest_uefi_insn_linear(0x3c_fc86, 0xFFC0_0000, false), 0xfffc_fc86);
     assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0, false), 0xfffc_fc86);
     assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0xFFFF_0000, true), 0xfffc_fc86);
+}
+
+#[test]
+fn mmio_peek_uses_flash_rip_when_cs_base_plus_rip_misses_window() {
+    // Leftover real-mode CS.base: GUEST_RIP is already the flash linear
+    // (iron e3f56aa rip=0xfffcfc86). CS.base+RIP wraps out of the 4MiB window.
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0xFFFF_0000, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0x3c_fc86, 0xFFC0_0000, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0xFFFF_0000, true),
+        0xfffc_fc86
+    );
+    assert_eq!(guest_uefi_mmio_peek_linear(0x1000, 0, false), 0x1000);
 }
 
 #[test]

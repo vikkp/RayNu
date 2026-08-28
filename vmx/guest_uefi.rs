@@ -1652,6 +1652,19 @@ pub fn guest_uefi_insn_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64 {
     }
 }
 
+/// Peek GPA for MMIO insn fetch. Prefer CS.base+RIP (or RIP in 64-bit).
+/// If that is outside the 4 MiB flash window but `GUEST_RIP` is inside
+/// (iron `e3f56aa` `rip=0xfffcfc86` with leftover real-mode CS.base),
+/// peek RIP so xAPIC SVR is not `insn=` empty.
+pub fn guest_uefi_mmio_peek_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64 {
+    let linear = guest_uefi_insn_linear(rip, cs_base, cs_long);
+    if guest_uefi_flash_off(linear).is_some() || guest_uefi_flash_off(rip).is_none() {
+        linear
+    } else {
+        rip
+    }
+}
+
 /// Allocate a contiguous install-disk run. Largest size that fits wins.
 ///
 /// INVARIANTS:
@@ -5970,6 +5983,7 @@ unsafe fn skip_insn() -> bool {
 }
 
 /// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
+/// If that miss is outside flash but GUEST_RIP is inside, peek RIP.
 /// Returns `(fetched_n, effective_len)` where `effective_len` is VMCS 1–15
 /// or the length decoded from those bytes when VMCS `insn_len` is 0.
 #[cfg(target_os = "uefi")]
@@ -5978,8 +5992,11 @@ unsafe fn copy_mmio_insn(buf: &mut [u8]) -> (usize, u64) {
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
     let long64 = guest_uefi_cs_ar_is_long(ar);
-    let linear = guest_uefi_insn_linear(rip, cs_base, long64);
-    let n = copy_guest_linear_bytes(linear, buf);
+    let peek = guest_uefi_mmio_peek_linear(rip, cs_base, long64);
+    let mut n = copy_guest_linear_bytes(peek, buf);
+    if n == 0 && rip != peek {
+        n = copy_guest_linear_bytes(rip, buf);
+    }
     let vmcs_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
     let effective = crate::devices::guest_virtio_blk::mmio_effective_len(
         &buf[..n],

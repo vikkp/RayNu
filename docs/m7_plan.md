@@ -274,7 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-eighth slice (this EFI): xAPIC decode-fail still does a 32-bit EAX MOV
+Sixty-ninth slice (this EFI): MMIO insn fetch peeks `GUEST_RIP` when
+`CS.base+RIP` is outside the 4 MiB flash window but RIP is inside
+(leftover real-mode `CS.base`; iron `rip=0xfffcfc86`). EAX n>0 fallback +
+`BOOT_SIZE=48` + skip-len still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not flash
+`65ff115` after this lands).
+Sixty-eighth slice: xAPIC decode-fail still does a 32-bit EAX MOV
 when skip-len is 1–15, even if flash peek returned bytes (`n>0`). Slice 64
 required `n==0`; LocalApicLib is still `mov [svr], eax`. Do not skip a
 16-byte peek. `BOOT_SIZE=48` + skip-len + 512 MiB pool still in this EFI.
