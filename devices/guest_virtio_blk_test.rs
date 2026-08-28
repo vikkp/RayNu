@@ -408,6 +408,18 @@ fn decode_mmio_mov_encodings() {
     assert_eq!(super::mmio_scan_rflags(2 | (1 << 6), false) & (1 << 6), 0);
     assert!(super::mmio_alu_is_hint(super::MMIO_ALU_HINT));
     assert!(super::mmio_alu_is_scan(super::MMIO_ALU_BSF));
+    let imul = decode_mmio_insn(&[0x0F, 0xAF, 0x01], 3).unwrap();
+    assert!(
+        imul.alu == super::MMIO_ALU_IMUL && imul.alu_reg_left && !imul.has_imm && imul.size == 4
+    );
+    let imuli = decode_mmio_insn(&[0x6B, 0x01, 0x03], 3).unwrap();
+    assert!(imuli.alu == super::MMIO_ALU_IMUL && imuli.has_imm && imuli.imm == 3);
+    let (p, ov) = super::mmio_imul_apply(4, 5, 4);
+    assert!(!ov && p == 20);
+    let (p2, ov2) = super::mmio_imul_apply(0x7fff_ffff, 2, 4);
+    assert!(ov2 && p2 == 0xffff_fffe);
+    assert_eq!(super::mmio_imul_rflags(2, true) & 1, 1);
+    assert!(super::mmio_alu_is_imul(super::MMIO_ALU_IMUL));
     assert!(super::mmio_eq(0x100, 0, 1));
     assert!(!super::mmio_eq(1, 0, 1));
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);

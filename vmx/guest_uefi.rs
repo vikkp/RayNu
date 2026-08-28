@@ -4684,6 +4684,21 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
         let _ = ops::vmwrite(GUEST_RFLAGS, newf);
         return result;
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_imul(op.alu) {
+        let gpr = mmio_gpr_in(op);
+        let (left, right) = if op.has_imm {
+            (mem, op.imm)
+        } else {
+            (gpr, mem)
+        };
+        let (result, overflow) =
+            crate::devices::guest_virtio_blk::mmio_imul_apply(left, right, op.size);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_imul_rflags(oldf, overflow),
+        );
+        return result;
+    }
     let other = if op.has_imm {
         op.imm
     } else {

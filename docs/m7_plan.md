@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Thirty-seventh slice (this EFI): Alpine auto-answer `mkdir -p /media/cdrom`
+Thirty-eighth slice (this EFI): MMIO IMUL (`0F AF` r, r/m and `69`/`6B`
+r, r/m, imm) so Linux signed multiply of virtio/IOAPIC/xAPIC does not
+spin. Thirty-seventh slice (this EFI): Alpine auto-answer `mkdir -p /media/cdrom`
 before `mount /dev/vdb` so apk still sees ISO9660 when nlplug never created
 the mountpoint (virtio-iso, not ATAPI). Reply queue is 160 bytes.
 Thirty-sixth slice (this EFI): MMIO PREFETCH (`0F 18`/`0F 0D`), multi-byte
