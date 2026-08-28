@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Forty-first slice (this EFI): an armed product ISO uses the 16 777 216
+resume cap on nested KVM too (`PRODUCT_ISO=` QEMU can pass OVMF
+StartImage). Lab 72 KiB / `iso=0` nested stays 65536 so CI E4 SHELL
+is unchanged. Nested still never prints `ISO-INSTALL-OK`.
 Fortieth slice (this EFI): MMIO DIV/IDIV (`F6`/`F7` /6 /7) writes AX or
 DX:AX so Linux `div`/`idiv` of virtio/IOAPIC/xAPIC does not spin; divisor 0
 or quotient overflow injects #DE at the faulting RIP (no skip). MOVNTI
@@ -374,8 +378,8 @@ INTA GSI 17) and VM-entry inject so a Linux installer can complete virtio-blk
 window-sized ISO into `LOADER_DATA`. Guest-UEFI presents that ISO, arms
 virtio-pci queues only when the window is armed, and **holds** instead of
 packed-bzImage E4. Lab 72 KiB stub / `iso=0` still enum-only and fail-softs
-to E4 `LINUX-EARLY`. Product resume cap on iron is 16 777 216 (nested still
-65536). Not `ISO-INSTALL-OK`. Keep
+to E4 `LINUX-EARLY`. Product resume cap is 16 777 216 on iron **and** nested
+when the window is armed (lab-stub nested still 65536). Not `ISO-INSTALL-OK`. Keep
 `windows_iso` / `generic_uefi`. `ISO-BOOTED-FROM-DISK` is persist-detect.
 M4.3 host-slab closed on iron COM2 after `22e28d0`: `M4.3 blk probe host
 slab HPA=0x10c00000`; `guest_code=0x10c00000`; `RAYNU-V-M4-BLK-OK`; then

@@ -104,25 +104,27 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// does not apply the 32768 post-ATAPI tail after PACKET.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
 /// Product ISO (Stage 46): stay in guest-UEFI past the lab RN-ELT stop.
-/// Nested KVM still uses [`GUEST_UEFI_NESTED_RESUME_CAP`]. Not `ISO-INSTALL-OK`.
+/// Used whenever the window is armed (iron **and** nested QEMU `PRODUCT_ISO=`).
+/// Lab-stub nested still uses [`GUEST_UEFI_NESTED_RESUME_CAP`]. Not `ISO-INSTALL-OK`.
 pub const GUEST_UEFI_PRODUCT_ISO_RESUME_CAP: u32 = 16_777_216;
-/// Nested KVM only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
+/// Nested KVM **lab stub** only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
 /// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
 /// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
 /// Cap alone is not enough: nested `4225b4d` still mapped 32 report-RAM
 /// slots, freed them, then `load kernel=0x8200000`. See
 /// [`report_ram_return_to_e4`]. Iron bit-31 clear still uses
-/// [`GUEST_UEFI_RESUME_CAP`].
+/// [`GUEST_UEFI_RESUME_CAP`]. Armed product ISO does **not** use this cap.
 pub const GUEST_UEFI_NESTED_RESUME_CAP: u32 = 65536;
 
-/// Resume cap: iron 262144 (Stage 45 El Torito lab stub); nested KVM 65536
-/// (CI SHELL); product ISO window on iron uses
-/// [`GUEST_UEFI_PRODUCT_ISO_RESUME_CAP`].
+/// Resume cap: iron lab stub 262144; nested lab stub 65536 (CI SHELL);
+/// armed product ISO uses [`GUEST_UEFI_PRODUCT_ISO_RESUME_CAP`] on iron and
+/// nested so QEMU `PRODUCT_ISO=` can pass OVMF StartImage. Lab `iso=0`
+/// nested stays 65536.
 pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
-    if host_hypervisor {
-        GUEST_UEFI_NESTED_RESUME_CAP
-    } else if crate::devices::ide_cdrom::product_iso_window_armed() {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
         GUEST_UEFI_PRODUCT_ISO_RESUME_CAP
+    } else if host_hypervisor {
+        GUEST_UEFI_NESTED_RESUME_CAP
     } else {
         GUEST_UEFI_RESUME_CAP
     }

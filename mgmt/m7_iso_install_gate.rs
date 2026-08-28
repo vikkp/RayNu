@@ -126,6 +126,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("mmio_alu_apply_cf(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_alu_rflags(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_alu_result(")
+        && include_str!("../vmx/guest_uefi.rs").contains("armed product ISO uses")
+        && include_str!("../vmx/guest_uefi.rs").contains("QEMU `PRODUCT_ISO=` can pass OVMF StartImage")
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub bt:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_bt_apply(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_apply_bt(")

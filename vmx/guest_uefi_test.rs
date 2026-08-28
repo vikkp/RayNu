@@ -1231,7 +1231,11 @@ fn past_sec_predicates_are_honest() {
             "Stage 46 product CD continues past El Torito"
         );
         assert_eq!(guest_uefi_resume_cap(false), GUEST_UEFI_PRODUCT_ISO_RESUME_CAP);
-        assert_eq!(guest_uefi_resume_cap(true), GUEST_UEFI_NESTED_RESUME_CAP);
+        assert_eq!(
+            guest_uefi_resume_cap(true),
+            GUEST_UEFI_PRODUCT_ISO_RESUME_CAP,
+            "armed product ISO uses the product cap on nested too (QEMU PRODUCT_ISO=)"
+        );
         crate::devices::ide_cdrom::reset();
     }
     assert!(eltorito_stops_guest_uefi(true));
