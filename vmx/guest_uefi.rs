@@ -4082,7 +4082,8 @@ unsafe fn mmio_set_addr_gpr(idx: u8, val: u64, long: bool) {
     }
 }
 
-/// One MOVS/STOS/LODS element. `op.has_imm` is F3 REP.
+/// One MOVS/STOS/LODS/CMPS/SCAS element. `op.has_imm` is REP.
+/// CMPS/SCAS: `op.imm != 0` is F2 REPNE; else F3 REPE. Stop on ZF.
 /// None = RAM GPA miss (do not invent HPA).
 /// Some(true) = insn done (skip). Some(false) = REP remaining (keep RIP).
 #[cfg(target_os = "uefi")]
@@ -4091,6 +4092,7 @@ unsafe fn mmio_string_step(
     ept_write: bool,
     read_bar: impl FnOnce() -> u64,
     write_bar: impl FnOnce(u64),
+    gpa: u64,
 ) -> Option<bool> {
     let size = op.size;
     if size == 0 || size > 8 {
@@ -4105,6 +4107,7 @@ unsafe fn mmio_string_step(
     let df = (ops::vmread(GUEST_RFLAGS).unwrap_or(0x2) & (1 << 10)) != 0;
     let rsi = guest_uefi_io_addr_reg(cr_gpr(6), long);
     let rdi = guest_uefi_io_addr_reg(cr_gpr(7), long);
+    let mut newf: Option<u64> = None;
     if crate::devices::guest_virtio_blk::mmio_alu_is_movs(op.alu) {
         if ept_write {
             let mut buf = [0u8; 8];
@@ -4129,13 +4132,63 @@ unsafe fn mmio_string_step(
     } else if crate::devices::guest_virtio_blk::mmio_alu_is_lods(op.alu) {
         mmio_gpr_out(op, read_bar());
         mmio_set_addr_gpr(6, guest_uefi_io_string_advance(rsi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_cmps(op.alu) {
+        let rsi_g = guest_linear_to_gpa(rsi);
+        let rdi_g = guest_linear_to_gpa(rdi);
+        let rsi_bar = rsi_g == Some(gpa);
+        let rdi_bar = rdi_g == Some(gpa);
+        let (left, right) = if rsi_bar || (!rdi_bar && !ept_write) {
+            let mut buf = [0u8; 8];
+            if copy_guest_linear_bytes(rdi, &mut buf[..n]) < n {
+                return None;
+            }
+            let mut tmp = [0u8; 8];
+            tmp[..n].copy_from_slice(&buf[..n]);
+            (read_bar(), u64::from_le_bytes(tmp))
+        } else {
+            let mut buf = [0u8; 8];
+            if copy_guest_linear_bytes(rsi, &mut buf[..n]) < n {
+                return None;
+            }
+            let mut tmp = [0u8; 8];
+            tmp[..n].copy_from_slice(&buf[..n]);
+            (u64::from_le_bytes(tmp), read_bar())
+        };
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let f = crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, size);
+        let _ = ops::vmwrite(GUEST_RFLAGS, f);
+        newf = Some(f);
+        mmio_set_addr_gpr(6, guest_uefi_io_string_advance(rsi, size, df), long);
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_scas(op.alu) {
+        let left = mmio_gpr_in(op);
+        let right = read_bar();
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let f = crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, size);
+        let _ = ops::vmwrite(GUEST_RFLAGS, f);
+        newf = Some(f);
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
     } else {
         return None;
     }
     if op.has_imm {
         let left = rcx.saturating_sub(1);
         mmio_set_addr_gpr(1, left, long);
-        if left != 0 {
+        let keep = if left == 0 {
+            false
+        } else if crate::devices::guest_virtio_blk::mmio_alu_is_cmps(op.alu)
+            || crate::devices::guest_virtio_blk::mmio_alu_is_scas(op.alu)
+        {
+            let zf = newf.map(|f| (f & (1 << 6)) != 0).unwrap_or(false);
+            if op.imm != 0 {
+                !zf
+            } else {
+                zf
+            }
+        } else {
+            true
+        };
+        if keep {
             return Some(false);
         }
     }
@@ -6109,6 +6162,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             ept_write,
             || crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size),
             |val| crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val),
+            gpa,
         ) else {
             return false;
         };
@@ -6358,6 +6412,7 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
             is_write,
             || u64::from(crate::devices::guest_irq::ioapic_read(off)),
             |val| crate::devices::guest_irq::ioapic_write(off, val as u32),
+            gpa,
         ) else {
             return skip_insn();
         };
@@ -6509,6 +6564,7 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
             |val| {
                 let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
             },
+            gpa,
         ) else {
             return false;
         };

@@ -122,6 +122,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("mmio_alu_is_pop(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_MOVS")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_alu_is_string(")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_CMPS")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_SCAS")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_string_step(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_IMUL")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_imul_apply(")

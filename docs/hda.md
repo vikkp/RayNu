@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN fifty-first slice: sleep 1 after mdev so virtio probe wins find_disks. Lab 73728 stub nested stays 65536. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN fifty-second slice: MMIO CMPS/SCAS (A6/A7/AE/AF, F3 REPE / F2 REPNE). Lab 73728 stub nested stays 65536. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (sleep 1 after mdev so virtio probe wins find_disks). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (MMIO CMPS/SCAS REPE/REPNE). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -363,7 +363,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer `BOOTLOADER=grub` `USE_EFI=1` mkdir `/media/cdrom` `virtio_pci` `mdev -s` `sleep 1` `-s 0` `[y/N]` still hears `bootloader?` / `Which disk` / `No disks available`→n + `How would you like`→sys + apk repos overwrite + `squashfs,virtio_blk console=ttyS0` + xAPIC 4K trap/`lapic_virt` + IOAPIC→LAPIC IRR/ISR + guest-UEFI CR8 TPR exiting + `alpine_dev=vdb` + PIT IRQ 0 + i8253 16-bit + GRUB `set timeout=1` / efi_gop / all_video / `terminal_output console` serial + MMIO XCHG/MOVSX/moffs + group-1 AND/OR/XOR/ADD/ADC/SBB/SUB + group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR + CMOV/SETCC + PREFETCH/NOP/CLFLUSH + BSF/BSR + IMUL + MUL/IMUL DX:AX + DIV/IDIV + MOVNTI + SHLD/SHRD + CMPXCHG8B + TZCNT/LZCNT/POPCNT + PUSH/POP r/m + MOVS/STOS/LODS + CALL/JMP r/m + register-form ALU (mem and dest-reg) + TEST/CMP/ALU RFLAGS + INC/DEC/NOT/NEG + BT/BTS/BTR/BTC + CMPXCHG/XADD + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + MMIO fetch across pages + hold when armed; lab stub still E4; armed nested product cap 16_777_216); extract-boot is lab MVP only |
+| H3 | Guest UEFI CD not bootable | MED | ATAPI `sectors>0` closed (P0-59); Stage 45 El Torito closed on iron COM2 `0be7283`; P0-60 G1 EPT closed; G0 relocate closed (`M4-NVM-OK`); M4.3 host-slab closed (`M4-BLK-OK` `0x10c00000`); Stage 46 OPEN (ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/ttyS0 + SOL RX + Alpine auto-answer `BOOTLOADER=grub` `USE_EFI=1` mkdir `/media/cdrom` `virtio_pci` `mdev -s` `sleep 1` `-s 0` `[y/N]` still hears `bootloader?` / `Which disk` / `No disks available`→n + `How would you like`→sys + apk repos overwrite + `squashfs,virtio_blk console=ttyS0` + xAPIC 4K trap/`lapic_virt` + IOAPIC→LAPIC IRR/ISR + guest-UEFI CR8 TPR exiting + `alpine_dev=vdb` + PIT IRQ 0 + i8253 16-bit + GRUB `set timeout=1` / efi_gop / all_video / `terminal_output console` serial + MMIO XCHG/MOVSX/moffs + group-1 AND/OR/XOR/ADD/ADC/SBB/SUB + group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR + CMOV/SETCC + PREFETCH/NOP/CLFLUSH + BSF/BSR + IMUL + MUL/IMUL DX:AX + DIV/IDIV + MOVNTI + SHLD/SHRD + CMPXCHG8B + TZCNT/LZCNT/POPCNT + PUSH/POP r/m + MOVS/STOS/LODS + CALL/JMP r/m + CMPS/SCAS + register-form ALU (mem and dest-reg) + TEST/CMP/ALU RFLAGS + INC/DEC/NOT/NEG + BT/BTS/BTR/BTC + CMPXCHG/XADD + 31-sector ATAPI PIO + chained virtio OUT + read-only ISO virtio `00:03.0` + 4KiB GPA copies + virtio IOAPIC pin 11 + MMIO fetch across pages + hold when armed; lab stub still E4; armed nested product cap 16_777_216); extract-boot is lab MVP only |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
 | H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-second slice: MMIO CMPS/SCAS (A6/A7/AE/AF, F3 REPE / F2 REPNE); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fifty-first slice: sleep 1 after mdev so virtio probe wins find_disks; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN fiftieth slice: virtio_pci + mdev -s before setup-disk so find_disks sees vda; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN forty-ninth slice: apk repos overwrite (not append) + How would you like → sys (not Which disk like to use); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

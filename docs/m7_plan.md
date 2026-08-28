@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fifty-first slice (this EFI): Alpine auto-answer `sleep 1` after `mdev -s` so a
+Fifty-second slice (this EFI): MMIO CMPS/SCAS (`A6`/`A7`/`AE`/`AF`, F3 REPE /
+F2 REPNE) so memcmp/memchr of virtio/IOAPIC/xAPIC sets RFLAGS instead of
+decode-fail spinning. RAM GPA miss does not invent HPA. Fifty-first slice (this EFI): Alpine auto-answer `sleep 1` after `mdev -s` so a
 slow virtio probe is visible before `setup-disk` `find_disks`. Fiftieth slice (this EFI): Alpine auto-answer `modprobe virtio_pci` and
 `mdev -s` before `setup-disk` so `find_disks` sees `/sys/block/vda` (otherwise
 `No disks available` answers n and the installer exits). Forty-ninth slice (this EFI): Alpine auto-answer **overwrites** `/etc/apk/repositories`

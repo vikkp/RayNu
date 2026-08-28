@@ -1255,6 +1255,7 @@ pub struct MmioInsn {
     /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT, 30=PUSH r/m, 31=POP r/m,
     /// 32=MOVS, 33=STOS, 34=LODS (`has_imm` is F3 REP), 35=CALL r/m (`FF /2`),
     /// 36=JMP r/m (`FF /4`). Far CALLF/JMPF (`/3` `/5`) stay decode-fail.
+    /// 37=CMPS, 38=SCAS (`has_imm` is REP; `imm!=0` is F2 REPNE).
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1367,6 +1368,8 @@ pub const MMIO_ALU_LODS: u8 = 34;
 
 pub fn mmio_alu_is_string(alu: u8) -> bool {
     (MMIO_ALU_MOVS..=MMIO_ALU_LODS).contains(&alu)
+        || alu == MMIO_ALU_CMPS
+        || alu == MMIO_ALU_SCAS
 }
 
 pub fn mmio_alu_is_movs(alu: u8) -> bool {
@@ -1392,6 +1395,19 @@ pub fn mmio_alu_is_call(alu: u8) -> bool {
 
 pub fn mmio_alu_is_jmp(alu: u8) -> bool {
     alu == MMIO_ALU_JMP
+}
+
+/// CMPS (`A6`/`A7`). Compares [RSI] to [RDI]; one side is MMIO.
+pub const MMIO_ALU_CMPS: u8 = 37;
+/// SCAS (`AE`/`AF`). Compares AL/AX/EAX/RAX to [RDI] MMIO.
+pub const MMIO_ALU_SCAS: u8 = 38;
+
+pub fn mmio_alu_is_cmps(alu: u8) -> bool {
+    alu == MMIO_ALU_CMPS
+}
+
+pub fn mmio_alu_is_scas(alu: u8) -> bool {
+    alu == MMIO_ALU_SCAS
 }
 
 /// PUSH/POP width: 66h → 16-bit; long mode → 64-bit; else 32-bit.
@@ -2241,7 +2257,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/CMPS/SCAS/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2252,6 +2268,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     let mut rex_r = 0u8;
     let mut rex = false;
     let mut f3 = false;
+    let mut f2 = false;
     while i < insn_len {
         match bytes[i] {
             0x66 => {
@@ -2262,7 +2279,11 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 f3 = true;
                 i += 1;
             }
-            0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x67 | 0xF0 | 0xF2 => i += 1,
+            0xF2 => {
+                f2 = true;
+                i += 1;
+            }
+            0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x67 | 0xF0 => i += 1,
             r if (0x40..=0x4F).contains(&r) => {
                 rex = true;
                 rex_w = (r & 0x8) != 0;
@@ -3325,8 +3346,8 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 cc: 0,
             })
         }
-        0xA4 | 0xA5 | 0xAA | 0xAB | 0xAC | 0xAD => {
-            let size = if op == 0xA4 || op == 0xAA || op == 0xAC {
+        0xA4 | 0xA5 | 0xA6 | 0xA7 | 0xAA | 0xAB | 0xAC | 0xAD | 0xAE | 0xAF => {
+            let size = if op == 0xA4 || op == 0xAA || op == 0xAC || op == 0xA6 || op == 0xAE {
                 1
             } else if rex_w {
                 8
@@ -3338,23 +3359,30 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             let alu = match op {
                 0xA4 | 0xA5 => MMIO_ALU_MOVS,
                 0xAA | 0xAB => MMIO_ALU_STOS,
-                _ => MMIO_ALU_LODS,
+                0xAC | 0xAD => MMIO_ALU_LODS,
+                0xA6 | 0xA7 => MMIO_ALU_CMPS,
+                _ => MMIO_ALU_SCAS,
+            };
+            let rep = if alu == MMIO_ALU_CMPS || alu == MMIO_ALU_SCAS {
+                f3 || f2
+            } else {
+                f3
             };
             Some(MmioInsn {
-                is_write: alu != MMIO_ALU_LODS,
+                is_write: alu == MMIO_ALU_STOS || alu == MMIO_ALU_MOVS,
                 size,
                 reg: 0,
-                has_imm: f3,
-                imm: 0,
+                has_imm: rep,
+                imm: if f2 { 1 } else { 0 },
                 zero_ext: size == 4,
                 sign_ext: false,
                 xchg: false,
                 alu,
                 rex,
                 test: false,
-                cmp: false,
+                cmp: alu == MMIO_ALU_CMPS || alu == MMIO_ALU_SCAS,
                 cmp_reg_left: false,
-                alu_reg_left: alu == MMIO_ALU_LODS,
+                alu_reg_left: alu == MMIO_ALU_LODS || alu == MMIO_ALU_SCAS,
                 bt: 0,
                 atomic: 0,
                 cc: 0,
