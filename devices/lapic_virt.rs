@@ -78,10 +78,15 @@ fn reg_from_msr(index: u32) -> u32 {
 }
 
 fn reg_from_gpa(gpa: u64) -> Option<u32> {
-    if gpa < APIC_GPA || gpa >= APIC_GPA + 0x1000 {
+    if !is_xapic_mmio_gpa(gpa) {
         return None;
     }
     Some((gpa - APIC_GPA) as u32)
+}
+
+/// Guest-UEFI product ISO leaves this 4 KiB unmapped (trap-and-emulate).
+pub fn is_xapic_mmio_gpa(gpa: u64) -> bool {
+    gpa >= APIC_GPA && gpa < APIC_GPA + 0x1000
 }
 
 fn divide_value(dcr: u32) -> u32 {
@@ -296,6 +301,21 @@ fn write_reg(reg: u32, val: u32) {
 pub fn host_timer_armed_for_guest() -> bool {
     // SAFETY: VMEXIT path.
     unsafe { HOST_TIMER_FOR_GUEST }
+}
+
+/// Guest-UEFI has no host LAPIC one-shot. Poll CUR_COUNT on VMX preempt/HLT
+/// and latch IRR when the virtual countdown reaches zero. Does not inject.
+pub fn poll_timer_expiry() -> bool {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        if !HOST_TIMER_FOR_GUEST || !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+            return false;
+        }
+        if elapsed_counts() < APIC_INIT_COUNT as u64 {
+            return false;
+        }
+    }
+    on_host_timer_fire()
 }
 
 /// True when IRR holds a vector deliverable against the current PPR.

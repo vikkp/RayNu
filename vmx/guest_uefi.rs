@@ -2593,12 +2593,19 @@ unsafe fn launch_uefi(
             crate::devices::lapic_virt::fill_xapic_page(unsafe {
                 core::slice::from_raw_parts_mut(lapic as *mut u8, 4096)
             });
-            if ept_install_xapic_4k(pt, lapic) {
-                serial::write_str("boot: guest-UEFI xAPIC 4K hpa=0x");
-                write_hex(lapic);
-                serial::write_str(" ver=0x");
-                write_hex(u64::from(crate::devices::lapic_virt::XAPIC_VERSION));
-                serial::write_byte(b'\n');
+            let trap = crate::devices::ide_cdrom::product_iso_window_armed();
+            if ept_install_xapic_4k(pt, lapic, trap) {
+                if trap {
+                    serial::write_line(
+                        "boot: guest-UEFI xAPIC 4K trap (Stage 46; not ISO-INSTALL-OK)",
+                    );
+                } else {
+                    serial::write_str("boot: guest-UEFI xAPIC 4K hpa=0x");
+                    write_hex(lapic);
+                    serial::write_str(" ver=0x");
+                    write_hex(u64::from(crate::devices::lapic_virt::XAPIC_VERSION));
+                    serial::write_byte(b'\n');
+                }
             } else {
                 serial::write_line("boot: guest-UEFI WARN — xAPIC 4K EPT map failed");
             }
@@ -3202,6 +3209,7 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     if crate::devices::ide_cdrom::product_iso_window_armed()
         && (basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT)
     {
+        let _ = crate::devices::lapic_virt::poll_timer_expiry();
         crate::devices::guest_irq::raise_pit();
     }
 }
@@ -5652,7 +5660,80 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     skip_insn()
 }
 
-/// VM-entry inject of virtio INTx / ATA IRQ 14 when the product ISO is armed.
+/// Trap-and-emulate local APIC MMIO (product ISO 4 KiB hole).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
+    if crate::devices::lapic_virt::mmio_access(gpa, false, 0).is_none() {
+        return false;
+    }
+    let is_write = (qual & 2) != 0;
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let insn_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let mut buf = [0u8; 16];
+    let n = copy_guest_linear_bytes(rip, &mut buf);
+    let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
+    else {
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str("boot: guest-UEFI xAPIC MMIO decode fail gpa=0x");
+            write_hex(gpa);
+            serial::write_str(" insn=");
+            let show = n.min(8);
+            let mut i = 0usize;
+            while i < show {
+                write_hex_u8(buf[i]);
+                i += 1;
+            }
+            serial::write_byte(b'\n');
+        }
+        return false;
+    };
+    if op.xchg {
+        let oldr = mmio_gpr_in(op) as u32;
+        let oldm = crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+            .and_then(|v| v)
+            .unwrap_or(0);
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, oldr);
+        mmio_gpr_out(op, u64::from(oldm));
+        return skip_insn();
+    }
+    if op.alu != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        let rhs = if op.has_imm {
+            op.imm
+        } else {
+            mmio_gpr_in(op)
+        };
+        let val = crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu);
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        return skip_insn();
+    }
+    if op.is_write != is_write {
+        return false;
+    }
+    if is_write {
+        let val = if op.has_imm {
+            op.imm
+        } else {
+            mmio_gpr_in(op)
+        };
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+    } else {
+        let val = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        mmio_gpr_out(op, val);
+    }
+    skip_insn()
+}
+
+/// VM-entry inject of virtio INTx / ATA IRQ 14 / LAPIC LVT when the product ISO is armed.
 #[cfg(target_os = "uefi")]
 unsafe fn try_inject_guest_irq() {
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
@@ -5660,7 +5741,9 @@ unsafe fn try_inject_guest_irq() {
     }
     crate::devices::guest_uart::poll_host_rx();
     crate::devices::guest_uart::reassert_irq();
-    if !crate::devices::guest_irq::has_deliverable() {
+    let pic = crate::devices::guest_irq::has_deliverable();
+    let lapic = crate::devices::lapic_virt::has_deliverable_irr();
+    if !pic && !lapic {
         let _ = set_guest_uefi_interrupt_window(false);
         return;
     }
@@ -5670,11 +5753,15 @@ unsafe fn try_inject_guest_irq() {
         let _ = set_guest_uefi_interrupt_window(true);
         return;
     }
-    let Some(vec) = crate::devices::guest_irq::take_inject_vector() else {
+    let Some(vec) = (if pic {
+        crate::devices::guest_irq::take_inject_vector().map(u32::from)
+    } else {
+        crate::devices::lapic_virt::take_deliverable_vector()
+    }) else {
         let _ = set_guest_uefi_interrupt_window(false);
         return;
     };
-    if let Ok(info) = crate::sched::interrupt::prepare_external_inject(u32::from(vec)) {
+    if let Ok(info) = crate::sched::interrupt::prepare_external_inject(vec) {
         let _ = set_guest_uefi_interrupt_window(false);
         let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
         let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
@@ -5709,6 +5796,9 @@ unsafe fn handle_ept(gpa: u64, qual: u64) -> bool {
     }
     if crate::devices::guest_irq::is_ioapic_gpa(gpa) {
         return handle_ioapic_ept(gpa, qual);
+    }
+    if crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa) {
+        return handle_xapic_ept(gpa, qual);
     }
     if crate::devices::guest_platform::is_xapic_2m_gpa(gpa) {
         serial::write_str("boot: guest-UEFI EPT xAPIC gpa=0x");
@@ -5815,12 +5905,15 @@ unsafe fn handle_ept(gpa: u64, qual: u64) -> bool {
 }
 
 /// Map a 4 KiB xAPIC page at `0xFEE00000` (rest of the 2 MiB → sink zeros).
+/// Product ISO: PTE[0] stays empty so GetApicVersion / CUR_COUNT / EOI trap
+/// into [`handle_xapic_ept`]. Lab stub keeps the filled static page.
 ///
 /// INVARIANTS:
 /// - Does not clobber an existing PD leaf (2 MiB sink must not already be there)
-/// - Version register in `lapic_hpa` is [`crate::devices::lapic_virt::XAPIC_VERSION`]
+/// - Lab: version register in `lapic_hpa` is [`crate::devices::lapic_virt::XAPIC_VERSION`]
+/// - Product: 4 KiB[0] unmapped (trap); not a zero sink (iron `ad78f12`)
 #[cfg(target_os = "uefi")]
-unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64) -> bool {
+unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64, trap: bool) -> bool {
     let pml4 = EPT_PML4.load(Ordering::Acquire);
     let sink = SINK_HPA.load(Ordering::Acquire);
     let gpa = crate::devices::lapic_virt::APIC_GPA;
@@ -5848,6 +5941,9 @@ unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64) -> bool {
     let pt = pt_hpa as *mut u64;
     let zero_hpa = if sink != 0 { sink } else { lapic_hpa };
     for i in 0..512u64 {
+        if i == 0 && trap {
+            continue;
+        }
         let hpa = if i == 0 { lapic_hpa } else { zero_hpa };
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }

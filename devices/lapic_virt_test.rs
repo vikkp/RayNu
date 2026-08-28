@@ -5,6 +5,9 @@ fn marker_and_range() {
     assert_eq!(M3_GTIMER3_OK_MARKER, "RAYNU-V-M3-GTIMER3-OK");
     assert_eq!(M3_APIC_OK_MARKER, "RAYNU-V-M3-APIC-OK");
     assert_eq!(APIC_GPA, 0xFEE0_0000);
+    assert!(is_xapic_mmio_gpa(APIC_GPA));
+    assert!(is_xapic_mmio_gpa(APIC_GPA + 0x30));
+    assert!(!is_xapic_mmio_gpa(APIC_GPA + 0x1000));
     assert!(is_x2apic_msr(0x808));
     assert!(!is_x2apic_msr(0x1B));
 }
@@ -62,4 +65,18 @@ fn irr_isr_eoi_delivery() {
     assert!(wrmsr(0x80B, 0).is_some());
     let isr7b = rdmsr(0x817).unwrap() as u32;
     assert_eq!(isr7b & (1 << (0xEF % 32)), 0);
+}
+
+#[test]
+fn poll_timer_expiry_latches_irr() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x83E, 0x3).is_some()); // ÷16
+    assert!(wrmsr(0x832, 0xEF_u64).is_some());
+    assert!(wrmsr(0x838, 0x1000).unwrap());
+    let start = crate::arch::cpu::rdtsc();
+    while crate::arch::cpu::rdtsc().wrapping_sub(start) < 8_000_000 {
+        core::hint::spin_loop();
+    }
+    assert!(poll_timer_expiry());
+    assert!(has_deliverable_irr());
 }

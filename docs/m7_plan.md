@@ -274,7 +274,12 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-fourth slice (this EFI): i8253 lo/hi access (`0x34`) returns lo then hi
+Twenty-fifth slice (this EFI): product ISO xAPIC 4 KiB EPT trap + `lapic_virt`
+CUR_COUNT/EOI (IRR inject on preempt/HLT); same-length ISO patch puts
+`virtio_blk` in `modules=` (`squashfs,sd-mod,usb-storage quiet` →
+`squashfs,virtio_blk console=ttyS0`) and drops `nolapic` now that CUR_COUNT
+moves; `terminal_output console` → `serial` when present; MMIO decode adds
+register-form AND/OR/XOR/ADD and group-1 ADD. Twenty-fourth slice (this EFI): i8253 lo/hi access (`0x34`) returns lo then hi
 on unlatched `inb 0x40`; 8-bit MMIO without REX uses AH/CH/DH/BH not SPL.
 Twenty-third slice (this EFI): virtio/IOAPIC MMIO decode adds group-1
 AND/OR/XOR (`80/81/83`) so a RMW does not spin on decode-fail. Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
@@ -288,7 +293,8 @@ ISO patch `set timeout=1` → `set timeout=0` (after `timeout=10`) and
 EFI does not wait on GOP. Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
 counter so Linux `nolapic` `inb 0x40` sees a real count; `raise_pit` steps it.
 The old stub wrote `val | 0x00FF` and never returned a high byte. Eighteenth slice: same-length ISO patch keeps `squashfs` in
-`modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `)
+`modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `;
+twenty-fifth slice swapped in `virtio_blk` and dropped `nolapic` after the xAPIC trap)
 so Alpine mkinitfs can mount the live root; optional `console=tty0` → `noapic`;
 MMIO insn fetch loops across 4 KiB pages; decode skips segment prefixes and
 zero-extends MOVZX / 32-bit MOV into r8–r15. Seventeenth slice: Alpine

@@ -173,12 +173,14 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_GRUB_INSMOD_GOP_FROM.len(), ISO_GRUB_INSMOD_GOP_TO.len());
     assert_eq!(ISO_GRUB_INSMOD_UGA_FROM.len(), ISO_GRUB_INSMOD_UGA_TO.len());
     assert_eq!(ISO_GRUB_INSMOD_ALLVID_FROM.len(), ISO_GRUB_INSMOD_ALLVID_TO.len());
-    let mut buf = b"insmod gfxterm terminal_output gfxterm insmod efi_gop insmod efi_uga insmod all_video linux modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom initrd set timeout=10 set timeout=1".to_vec();
-    assert_eq!(patch_iso_linux_serial_console(&mut buf), 9);
+    assert_eq!(ISO_GRUB_TERM_CONSOLE_FROM.len(), ISO_GRUB_TERM_CONSOLE_TO.len());
+    let mut buf = b"insmod gfxterm terminal_output gfxterm terminal_output console insmod efi_gop insmod efi_uga insmod all_video linux modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom initrd set timeout=10 set timeout=1".to_vec();
+    assert_eq!(patch_iso_linux_serial_console(&mut buf), 10);
     let s = core::str::from_utf8(&buf).unwrap();
     assert!(s.contains("console=ttyS0"));
-    assert!(s.contains("nolapic"));
-    assert!(s.contains("modules=loop,squashfs console=ttyS0 nolapic"));
+    assert!(s.contains("virtio_blk"));
+    assert!(s.contains("modules=loop,squashfs,virtio_blk console=ttyS0"));
+    assert!(!s.contains("nolapic"));
     assert!(s.contains("timeout=0 "));
     assert!(s.contains("set timeout=0"));
     assert!(!s.contains("timeout=00"));
@@ -200,6 +202,6 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(patch_iso_linux_serial_console(&mut tty0), 2);
     let t = core::str::from_utf8(&tty0).unwrap();
     assert!(t.contains("noapic"));
-    assert!(t.contains("squashfs console=ttyS0 nolapic"));
+    assert!(t.contains("squashfs,virtio_blk console=ttyS0"));
     assert!(!t.contains("console=tty0"));
 }

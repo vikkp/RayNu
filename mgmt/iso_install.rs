@@ -94,18 +94,18 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
-/// Same-length swap so Alpine/GRUB gets serial + PIT, and still loads squashfs.
-/// `squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic   `
-/// `modules=loop,squashfs` stays a valid list (Alpine mkinitfs needs squashfs
-/// in `modules=` to mount the live root / modloop). `console=` / `nolapic`
-/// are kernel params. `nolapic` skips the guest-UEFI static xAPIC page
-/// (CUR_COUNT never moves, so Linux would program a LAPIC timer that never
-/// fires and then disable PIT). Device IRQs stay on IOAPIC GSI 17/18 and
-/// PCI line 11. Optional `console=tty0` → `noapic` when that string exists.
-/// alpine-virt media is `/dev/vdb`. Does not grow the ISO. Does not print
-/// [`M7_ISO_INSTALL_OK_MARKER`].
+/// Same-length swap so Alpine/GRUB gets serial + virtio-blk, and still loads squashfs.
+/// `squashfs,sd-mod,usb-storage quiet` → `squashfs,virtio_blk console=ttyS0`
+/// `modules=loop,squashfs,virtio_blk` stays a valid list (Alpine mkinitfs needs
+/// squashfs in `modules=` to mount the live root / modloop; virtio_blk so
+/// `/dev/vda` and `/dev/vdb` appear when the virt drivers are modules).
+/// `console=ttyS0` is a kernel param. Product ISO xAPIC is trap-and-emulate
+/// (`lapic_virt` CUR_COUNT + EOI), so `nolapic` is no longer required.
+/// Device IRQs stay on IOAPIC GSI 17/18 and PCI line 11. Optional
+/// `console=tty0` → `noapic` when that string exists. alpine-virt media is
+/// `/dev/vdb`. Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
 pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"squashfs,sd-mod,usb-storage quiet";
-pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"squashfs console=ttyS0 nolapic   ";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"squashfs,virtio_blk console=ttyS0";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
 /// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
 pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";
@@ -128,6 +128,10 @@ const _: () = assert!(ISO_ATA_PIIX_FROM.len() == ISO_ATA_PIIX_TO.len());
 /// Same-length swap onto `serial` when those strings exist (0 hits is fine).
 pub const ISO_GRUB_GFXTERM_FROM: &[u8] = b"terminal_output gfxterm";
 pub const ISO_GRUB_GFXTERM_TO: &[u8] = b"terminal_output serial ";
+/// Some alpine-virt GRUB cfg uses `console` rather than `gfxterm`. 0 hits OK.
+pub const ISO_GRUB_TERM_CONSOLE_FROM: &[u8] = b"terminal_output console";
+pub const ISO_GRUB_TERM_CONSOLE_TO: &[u8] = b"terminal_output serial ";
+const _: () = assert!(ISO_GRUB_TERM_CONSOLE_FROM.len() == ISO_GRUB_TERM_CONSOLE_TO.len());
 const _: () = assert!(ISO_GRUB_GFXTERM_FROM.len() == ISO_GRUB_GFXTERM_TO.len());
 pub const ISO_GRUB_INSMOD_GFX_FROM: &[u8] = b"insmod gfxterm";
 pub const ISO_GRUB_INSMOD_GFX_TO: &[u8] = b"insmod serial ";
@@ -161,6 +165,11 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT1_FROM, ISO_GRUB_TIMEOUT1_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
+        .saturating_add(patch_same(
+            bytes,
+            ISO_GRUB_TERM_CONSOLE_FROM,
+            ISO_GRUB_TERM_CONSOLE_TO,
+        ))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GOP_FROM, ISO_GRUB_INSMOD_GOP_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_UGA_FROM, ISO_GRUB_INSMOD_UGA_TO))

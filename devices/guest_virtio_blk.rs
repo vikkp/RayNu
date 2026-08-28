@@ -1272,7 +1272,7 @@ pub struct MmioInsn {
     pub sign_ext: bool,
     /// XCHG: swap GPR with MMIO (EPT may be read or write).
     pub xchg: bool,
-    /// Group-1 RMW: 0=none, 1=AND, 2=OR, 3=XOR.
+    /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1281,12 +1281,14 @@ pub struct MmioInsn {
 pub const MMIO_ALU_AND: u8 = 1;
 pub const MMIO_ALU_OR: u8 = 2;
 pub const MMIO_ALU_XOR: u8 = 3;
+pub const MMIO_ALU_ADD: u8 = 4;
 
 pub fn mmio_alu_apply(cur: u64, rhs: u64, alu: u8) -> u64 {
     match alu {
         MMIO_ALU_AND => cur & rhs,
         MMIO_ALU_OR => cur | rhs,
         MMIO_ALU_XOR => cur ^ rhs,
+        MMIO_ALU_ADD => cur.wrapping_add(rhs),
         _ => rhs,
     }
 }
@@ -1319,7 +1321,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/group-1 AND/OR/XOR that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -1474,12 +1476,47 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 o
             })
         }
+        0x00 | 0x01 | 0x08 | 0x09 | 0x20 | 0x21 | 0x30 | 0x31 => {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let alu = match op {
+                0x20 | 0x21 => MMIO_ALU_AND,
+                0x08 | 0x09 => MMIO_ALU_OR,
+                0x30 | 0x31 => MMIO_ALU_XOR,
+                _ => MMIO_ALU_ADD,
+            };
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if op == 0x00 || op == 0x08 || op == 0x20 || op == 0x30 {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            Some(MmioInsn {
+                is_write: true,
+                size,
+                reg,
+                has_imm: false,
+                imm: 0,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu,
+                rex,
+            })
+        }
         0x80 | 0x81 | 0x83 => {
             if i >= insn_len {
                 return None;
             }
             let m = bytes[i];
             let alu = match (m >> 3) & 7 {
+                0 => MMIO_ALU_ADD,
                 1 => MMIO_ALU_OR,
                 4 => MMIO_ALU_AND,
                 6 => MMIO_ALU_XOR,
