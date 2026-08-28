@@ -1228,6 +1228,32 @@ pub fn guest_uefi_pf_should_deliver_to_guest(rip: u64) -> bool {
     (rip & (1u64 << 63)) != 0
 }
 
+/// SDM 24.8.3: VM-entry interruption type = hardware exception.
+pub const GUEST_UEFI_INTR_TYPE_HW_EXCEPTION: u32 = 3;
+/// SDM 24.8.3: deliver error code with the injected exception.
+pub const GUEST_UEFI_INTR_DELIVER_CODE: u32 = 1 << 11;
+/// SDM 24.8.3: valid bit in VM-entry interruption-information.
+pub const GUEST_UEFI_INTR_INFO_VALID: u32 = 1 << 31;
+/// Packed VM-entry interruption-info for guest `#PF` (vector 14).
+///
+/// Drop exception-bitmap bit 14 **before** this inject: an injected `#PF`
+/// that is still intercepted immediately VM-exits (SDM 26.5).
+pub const GUEST_UEFI_LINUX_PF_ENTRY_INFO: u32 = 14
+    | (GUEST_UEFI_INTR_TYPE_HW_EXCEPTION << 8)
+    | GUEST_UEFI_INTR_DELIVER_CODE
+    | GUEST_UEFI_INTR_INFO_VALID;
+
+/// Pack VM-entry interruption-info for a Linux `#PF` inject.
+pub fn guest_uefi_linux_pf_entry_info() -> u32 {
+    GUEST_UEFI_LINUX_PF_ENTRY_INFO
+}
+
+/// PIC/LAPIC must not steal `VM_ENTRY_INTERRUPTION_INFO` while a Linux `#PF`
+/// inject is pending (that would clobber CR2 in the IRQ handler).
+pub fn guest_uefi_linux_pf_blocks_irq(pending_cr2: u64) -> bool {
+    pending_cr2 != 0
+}
+
 /// Identity-map a not-present or reserved-bit #PF in guest-UEFI low RAM.
 ///
 /// INVARIANTS:
@@ -4783,8 +4809,9 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
     if guest_uefi_pf_should_deliver_to_guest(rip) {
         // Iron e40bee0: long-mode Linux #PF on the direct map after extra
         // DRAM + Loaded initrd. Do not rebuild OVMF identity tables.
-        // VMCS does not save CR2; restore EXIT_QUALIFICATION then drop
-        // the #PF intercept so early_make_pgtable stays in the guest.
+        // Drop #PF intercept first (injected #PF would re-exit), restore
+        // CR2, then VM-entry inject vector 14 so PIC/LAPIC cannot steal
+        // the entry. early_make_pgtable stays in the guest after this.
         // SAFETY: VMX-root; cr2 is the guest #PF linear (canonical).
         // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
         cpu::write_cr2(cr2);
@@ -4792,12 +4819,19 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
         if let Ok(bmp) = ops::vmread(EXCEPTION_BITMAP) {
             let _ = ops::vmwrite(EXCEPTION_BITMAP, bmp & !(1u64 << 14));
         }
+        let _ = ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, err);
+        let _ = ops::vmwrite(
+            VM_ENTRY_INTERRUPTION_INFO,
+            u64::from(guest_uefi_linux_pf_entry_info()),
+        );
         let n = PF_LINUX_DELIVER.fetch_add(1, Ordering::AcqRel);
         if n < 4 {
             serial::write_str("boot: guest-UEFI #PF linux deliver n=");
             write_dec(u64::from(n) + 1);
             serial::write_str(" cr2=0x");
             write_hex(cr2);
+            serial::write_str(" err=0x");
+            write_hex(err);
             serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
         }
         return true;
@@ -7176,6 +7210,9 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
 /// VM-entry inject of virtio INTx / ATA IRQ 14 / LAPIC LVT when the product ISO is armed.
 #[cfg(target_os = "uefi")]
 unsafe fn try_inject_guest_irq() {
+    if guest_uefi_linux_pf_blocks_irq(PF_LINUX_CR2.load(Ordering::Acquire)) {
+        return;
+    }
     if !crate::devices::ide_cdrom::product_iso_window_armed() {
         return;
     }

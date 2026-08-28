@@ -152,12 +152,13 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after eightieth-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-first-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Do not flash `4a62e06` or `e40bee0` again (those
-stop on Linux direct-map `#PF` after `Loaded initrd`). Leftover DRAM
-`pool=1008 extra=846 no-zero` is proven; high-half `#PF` is delivered
-to the guest. Want `report-RAM extra hpa=` / `pool=` near 1008 with
+`git checkout` a SHA). Do not flash `d0735bd`, `4a62e06`, or `e40bee0` again
+(`d0735bd` resumes the Linux `#PF` without VM-entry inject, so PIC/LAPIC
+can steal CR2). Leftover DRAM `pool=1008 extra=846 no-zero` is proven;
+high-half `#PF` is VM-entry injected after `#PF` exiting drops. Want
+`report-RAM extra hpa=` / `pool=` near 1008 with
 `extra=` `no-zero` then `#PF linux deliver` then `Linux version`. ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
 gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
