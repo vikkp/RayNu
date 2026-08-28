@@ -221,9 +221,16 @@ fn run_m2_ept_launch_e4(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxL
     unsafe {
         vmx::guest_uefi::restore_host_xsave_after_guest_uefi();
     }
-    let released = vmx::guest_uefi::release_report_ram_for_e4(alloc);
+    let return_to_e4 = vmx::guest_uefi::report_ram_return_to_e4(
+        vmx::guest_uefi::guest_uefi_host_hypervisor_present(),
+    );
+    let released = vmx::guest_uefi::release_report_ram_for_e4(alloc, return_to_e4);
     if released != 0 {
-        boot::serial::write_str("boot: guest-UEFI report-RAM released slots=");
+        if return_to_e4 {
+            boot::serial::write_str("boot: guest-UEFI report-RAM released slots=");
+        } else {
+            boot::serial::write_str("boot: guest-UEFI report-RAM withheld slots=");
+        }
         write_dec(released as u64);
         boot::serial::write_byte(b'\n');
     }

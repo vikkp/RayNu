@@ -279,7 +279,9 @@ After guest-UEFI + G0 SHELL, G1 must not `VMXOFF` / `boot gate failed` on
 in the punched 2 MiB slab, not FrameAllocator pages inside G0 e820 (Linux
 SHELL scribbled those tables). Shell EPT/entry faults fail-soft (next slab
 or blk probe; VMX stays on). Nested KVM uses a 65536-exit guest-UEFI cap
-so QEMU CI reaches E4 SHELL; iron keeps 262144 for El Torito. Not Stage 46.
+and withholds report-RAM from E4 (do not reuse as bzImage; nested
+`4225b4d` `load kernel=0x8200000` then `/init` SIGSEGV). Iron keeps
+262144 for El Torito and still returns zeroed frames. Not Stage 46.
 Not closed until iron COM2 shows G1 SHELL / no `boot gate failed`.
 Stage 45 closed on iron COM2 `0be7283`: OVMF BDS StartImaged the El Torito
 CD EFI; `RN-ELT` + `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` n=197992 catalog=1
