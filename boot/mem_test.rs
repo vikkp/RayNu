@@ -94,4 +94,21 @@ fn pick_above_takes_dram_past_precise() {
     assert_eq!(pages, 16_000_000);
     assert!(pick_conventional_region_above(&regions, 512, 0x140110000u64 + 16_000_000 * PAGE_SIZE)
         .is_none());
+    assert_eq!(
+        conventional_pages_above(&regions, 512 * 1024 * 1024),
+        16_000_000
+    );
+}
+
+#[test]
+fn pick_above_clips_spanning_region_at_precise() {
+    let start = 0x100000u64;
+    let end = 4 * 1024 * 1024 * 1024u64;
+    let pages = (end - start) / PAGE_SIZE;
+    let regions = [(start, pages)];
+    let floor = 512 * 1024 * 1024u64;
+    let (s, p) = pick_conventional_region_above(&regions, 512, floor).expect("span");
+    assert_eq!(s, floor);
+    assert_eq!(s + p * PAGE_SIZE, end);
+    assert_eq!(conventional_pages_above(&regions, floor), p);
 }

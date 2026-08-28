@@ -274,7 +274,15 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventy-seventh slice (this EFI): leftover conventional DRAM above
+Seventy-eighth slice (this EFI): iron COM2 after `4a62e06` reached
+`post-CD non-io` + gzip + `Loaded initrd` with `pool=162` and **no**
+`report-RAM extra hpa=` (that EFI predates leftover DRAM). Extra seed
+now logs `conventional above PRECISE pages=` and skip
+`nested`/`none`/`align` so a miss cannot be silent. Flash this HEAD
+after CI is green — do not flash `4a62e06` again. Want COM2
+`report-RAM extra hpa=` and `pool=` near 1008 with `extra=`, then
+`Linux version` / installer / `ISO-INSTALL-OK`.
+Seventy-seventh slice: leftover conventional DRAM above
 PRECISE backs the 2 GiB CMOS lie (1008×2 MiB report-RAM extra; not an
 expanded precise window; not invented HPA). Iron COM2 `faeaf38` reached
 EFI stub gzip + `Loaded initrd` with `pool=162` (~324 MiB) — that is

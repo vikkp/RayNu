@@ -186,10 +186,17 @@ pub unsafe fn leave_firmware() -> Handoff {
         mem::FrameBump::new(0, 0)
     };
 
-    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some()
-        && !crate::arch::cpu::host_hypervisor_present()
-    {
-        if let Some((hs, hp)) =
+    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+        let above_pages =
+            mem::conventional_pages_above(&regions[..region_count], precise_end);
+        serial::write_str("boot: conventional above PRECISE pages=");
+        write_u64(above_pages);
+        serial::write_byte(b'\n');
+        if crate::arch::cpu::host_hypervisor_present() {
+            serial::write_line(
+                "boot: report-RAM extra skip nested (Stage 46; not ISO-INSTALL-OK)",
+            );
+        } else if let Some((hs, hp)) =
             mem::pick_conventional_region_above(&regions[..region_count], 512, precise_end)
         {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
@@ -200,7 +207,15 @@ pub unsafe fn leave_firmware() -> Handoff {
                 serial::write_str(" bytes=");
                 write_u64(bytes.min(REPORT_RAM_EXTRA_MAX_BYTES));
                 serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+            } else {
+                serial::write_line(
+                    "boot: report-RAM extra skip align (Stage 46; not ISO-INSTALL-OK)",
+                );
             }
+        } else {
+            serial::write_line(
+                "boot: report-RAM extra skip none (Stage 46; not ISO-INSTALL-OK)",
+            );
         }
     }
 

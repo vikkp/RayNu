@@ -184,6 +184,22 @@ pub fn pick_conventional_region_above(
     best
 }
 
+/// Sum of conventional pages whose usable start is at or above `above`.
+pub fn conventional_pages_above(regions: &[(u64, u64)], above: u64) -> u64 {
+    const ONE_MIB: u64 = 1024 * 1024;
+    let floor = core::cmp::max(above, ONE_MIB);
+    let mut n = 0u64;
+    for &(start, pages) in regions {
+        let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
+        let usable_start = core::cmp::max(start, floor);
+        if usable_start >= end {
+            continue;
+        }
+        n = n.saturating_add((end - usable_start) / PAGE_SIZE);
+    }
+    n
+}
+
 #[cfg(test)]
 #[path = "mem_test.rs"]
 mod mem_test;

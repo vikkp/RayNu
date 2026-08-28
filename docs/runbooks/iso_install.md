@@ -152,11 +152,13 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-seventh-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventy-eighth-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Leftover DRAM above PRECISE backs the 2 GiB CMOS
-lie (`report-RAM extra hpa=` / `pool=` near 1008 with `extra=`; `iso=0`
-/ nested stay 32). ISO serial patches allow ISO9660 NUL padding on
+`git checkout` a SHA). Do not flash `4a62e06` again — that EFI had
+`post-CD non-io` + `Loaded initrd` but `pool=162` and no leftover DRAM.
+Leftover DRAM above PRECISE backs the 2 GiB CMOS lie (`conventional above
+PRECISE pages=` / `report-RAM extra hpa=` / `pool=` near 1008 with `extra=`;
+`iso=0` / nested stay 32). ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
 gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
 starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm
