@@ -11,7 +11,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 const WIN: usize = 24;
-const QCAP: usize = 96;
+const QCAP: usize = 128;
 const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
@@ -31,9 +31,10 @@ const BOOTLOADER_Q: &[u8] = b"bootloader?";
 
 pub(crate) const ROOT: &[u8] = b"root\r";
 /// Alpine UEFI `setup-disk` needs `USE_EFI=1` (wiki / alpine-conf) or it
-/// tries syslinux/MBR and can stall before a GPT write.
+/// tries syslinux/MBR and can stall before a GPT write. Mount virtio-iso
+/// `/dev/vdb` so apk can see the distro packages if nlplug did not.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda\r";
+    b"modprobe virtio_blk; mount /dev/vdb /media/cdrom; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";

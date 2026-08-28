@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN twenty-sixth slice: MMIO TEST/CMP RFLAGS + auto-answer stays in CONFIRM after yes so bootloader? still matches. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN twenty-seventh slice: auto-answer mounts /dev/vdb + CMP 3A/3B + SUB. Lab 73728 stub still fail-softs to E4. Not ISO-INSTALL-OK. M4.3 stays CLOSED. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (TEST/CMP MMIO + bootloader after yes). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (vdb mount + CMP 3A/3B + SUB). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-seventh slice: auto-answer mounts /dev/vdb + MMIO CMP 3A/3B (reg-mem) + SUB; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-sixth slice: MMIO TEST/CMP RFLAGS + auto-answer CONFIRM after yes still answers bootloader?; lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-fifth slice: product ISO xAPIC 4K trap + lapic_virt CUR_COUNT/EOI + ISO patch virtio_blk in modules= (drop nolapic); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-28 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN twenty-fourth slice: PIT unlatched lo/hi after 0x34 + MMIO AH/CH/DH/BH (no REX); lab 72KiB stub still E4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

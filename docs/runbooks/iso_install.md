@@ -166,7 +166,7 @@ lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
 advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
-with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
+with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys /dev/vda` after `mount /dev/vdb /media/cdrom` (and `grub` if `bootloader?`
 appears, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `squashfs,virtio_blk console=ttyS0` (`modules=loop,squashfs,virtio_blk` stays valid so Alpine
 can mount the live root and load virtio-blk; `console=` is a kernel param; product ISO xAPIC is

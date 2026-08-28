@@ -4619,7 +4619,12 @@ unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cu
     };
     let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
     let newf = if op.cmp {
-        crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, cur, rhs, op.size)
+        let (left, right) = if op.cmp_reg_left {
+            (rhs, cur)
+        } else {
+            (cur, rhs)
+        };
+        crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, op.size)
     } else {
         crate::devices::guest_virtio_blk::mmio_test_rflags(oldf, cur & rhs, op.size)
     };
