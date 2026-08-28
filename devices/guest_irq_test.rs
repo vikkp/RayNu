@@ -1,7 +1,7 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_io, raise_ata, raise_gsi, raise_virtio, reset, take_inject_vector, ATA_GSI, IOAPIC_GPA,
-    IOAPIC_VERSION, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
+    pic_io, raise_ata, raise_gsi, raise_pit, raise_virtio, reset, take_inject_vector, ATA_GSI,
+    IOAPIC_GPA, IOAPIC_VERSION, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -128,4 +128,62 @@ fn pic_icw2_below_16_does_not_inject() {
     reset();
     reset_cd();
     guest_platform::reset();
+}
+
+fn pic_init_unmask_all() {
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x20);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x28);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0x00);
+    let _ = pic_io(0xA1, false, 1, 0x00);
+}
+
+#[test]
+fn product_iso_pit_irq0_injects_after_pic_ready() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    raise_pit();
+    assert_eq!(take_inject_vector(), Some(0x20 + PIT_IRQ));
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_uart_beats_pit_and_virtio_beats_pit() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "COM1 IRQ 4 must beat PIT so serial auto-answer is not starved"
+    );
+    assert_eq!(take_inject_vector(), Some(0x20 + PIT_IRQ));
+    raise_pit();
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "virtio PIC 11 (slave) must beat PIT"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn lab_stub_raise_pit_does_not_inject() {
+    reset();
+    reset_cd();
+    guest_platform::reset();
+    raise_pit();
+    assert!(!has_deliverable());
+    reset();
 }

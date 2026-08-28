@@ -7,7 +7,8 @@
 //! Lab El Torito keeps 8259 RAZ/WI. A real distro installer (Linux virtio_blk
 //! / libata) waits on interrupts: virtio INTx (i440FX slot 2 INTA → GSI 17,
 //! slot 3 INTA → GSI 18, plus PCI interrupt line 11 as IOAPIC pin 11 when
-//! the guest has no ACPI `_PRT`) and ATA IRQ 14. This module is live only
+//! the guest has no ACPI `_PRT`), ATA IRQ 14, and PIT IRQ 0 (jiffies under
+//! `noapic`). This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -26,6 +27,8 @@ pub const VIRTIO_GSI: u8 = 17;
 pub const VIRTIO_ISO_GSI: u8 = 18;
 /// PIC fallback for PCI INTx when the guest has not remapped via IOAPIC.
 pub const VIRTIO_PIC_IRQ: u8 = 11;
+/// ISA PIT. Linux `noapic` uses PIC IRQ 0 for jiffies / HLT wakeup.
+pub const PIT_IRQ: u8 = 0;
 
 const RTE_MASK: u64 = 1 << 16;
 const PIC_SLAVE_IRQ: u8 = 2;
@@ -158,6 +161,11 @@ pub fn lower_virtio_iso() {
     lower_gsi(VIRTIO_PIC_IRQ);
 }
 
+/// PIT IRQ 0. Latches IRR; PIC injects only after ICW2 ≥ 16 and unmask.
+pub fn raise_pit() {
+    raise_gsi(PIT_IRQ);
+}
+
 pub fn raise_gsi(gsi: u8) {
     if !product_live() {
         return;
@@ -267,6 +275,12 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
         if slave_req != 0 {
             return Some(8 + slave_req.trailing_zeros() as u8);
         }
+    }
+    // UART (IRQ 4) and other master devices beat PIT so timer ticks cannot
+    // starve COM1 auto-answer.
+    let master_dev = master_req & !1 & !(1 << PIC_SLAVE_IRQ);
+    if master_dev != 0 {
+        return Some(master_dev.trailing_zeros() as u8);
     }
     let irq = master_req.trailing_zeros() as u8;
     if irq == PIC_SLAVE_IRQ {

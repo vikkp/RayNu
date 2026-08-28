@@ -3199,6 +3199,11 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     if step != 0 && v != 0 {
         HPET_TICKS.fetch_add(1, Ordering::AcqRel);
     }
+    if crate::devices::ide_cdrom::product_iso_window_armed()
+        && (basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT)
+    {
+        crate::devices::guest_irq::raise_pit();
+    }
 }
 
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
