@@ -2649,7 +2649,10 @@ unsafe fn launch_uefi(
         } else {
             serial::write_line("boot: guest-UEFI WARN — no hole-zero frame (will not RO-sink onto HPET)");
         }
-        // Iron COM2: greedy 2 MiB scratch then leftover 1 MiB virtio-blk.
+        // Arm the product ISO window *before* disk attach. Iron COM2: first
+        // attach was a no-op (window idle), then report-RAM ate the 512 MiB
+        // pool and the late attach got 1 MiB.
+        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
         // Reserve the install disk first (before scratch *and* report-RAM).
         // Do not invent HPA on GPA miss (ADR-004).
         attach_product_iso_install_disk(alloc, false);

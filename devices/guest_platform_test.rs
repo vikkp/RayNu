@@ -309,6 +309,17 @@ fn sink_gpa_covers_stage40_fault() {
 }
 
 #[test]
+fn port61_tmr2_out_toggles_so_ovmf_delay_exits() {
+    reset();
+    // Iron after BdsDxe Start CD: `in al,0x61; test al,0x20; jz` at 0x7e149fb9.
+    let a = io(0x61, true, 1, 0) as u8;
+    assert_ne!(a & 0x20, 0, "first IN must set TMR2_OUT so jz does not spin");
+    let b = io(0x61, true, 1, 0) as u8;
+    assert_ne!(a & 0x20, b & 0x20, "TMR2_OUT must toggle for wait-until-change");
+    assert_ne!(a & 0x10, b & 0x10, "refresh bit 4 still toggles");
+}
+
+#[test]
 fn pit_channel0_16bit_latch_roundtrip() {
     reset();
     let a = io(0x40, true, 1, 0) as u8;

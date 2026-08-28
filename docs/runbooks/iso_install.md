@@ -152,13 +152,12 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after sixty-ninth-slice
-CI is green (peek RIP when CS.base+RIP misses the 4 MiB flash window;
-xAPIC EAX fallback when skip-len is 1–15 even if peek got bytes;
-`BOOT_SIZE=48` so Alpine ESP fits 256 MiB/64 MiB virtio-blk;
-MMIO skip-len when VMCS `insn_len` is 0; iron 512 MiB product-ISO pool;
-disk before scratch still in this EFI).
-Last iron COM2 is still `e3f56aa` (`insn=` empty, disk 1 MiB). Never PERC.
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after seventieth-slice
+CI is green (port `0x61` TMR2_OUT so OVMF delay after BdsDxe Start CD exits;
+arm product ISO before disk attach so iron gets 256 MiB not 1 MiB;
+peek RIP when CS.base+RIP misses flash; EAX n>0 fallback; `BOOT_SIZE=48`).
+Last iron COM2 after the 512 MiB pool started Boot0002 then spun on
+`rip=0x7e149fb9` (`insn=e461a82074fa`, disk 1 MiB). Never PERC.
 Never `sda`/`sdb`. `--no-linux-iso` still strips leftovers so `iso=0` E4 SHELL
 stays valid.
 

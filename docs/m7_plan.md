@@ -274,7 +274,15 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-ninth slice (this EFI): MMIO insn fetch peeks `GUEST_RIP` when
+Seventieth slice (this EFI): iron COM2 after BdsDxe Start `UEFI RAYNU-V CD`
+spins on `in al,0x61; test al,0x20; jz` (`rip=0x7e149fb9`, HPET frozen).
+Port `0x61` now toggles TMR2_OUT (bit 5) as well as refresh (bit 4).
+Also arm the product-ISO window *before* the early disk attach so the
+512 MiB pool can give 256 MiB virtio-blk (iron still logged 1 MiB because
+the first attach was a no-op). FAT already fills Cruzer; no `--refat-cruzer`.
+Pin this HEAD until CI is green, then flash (do not flash `0c67b58` after
+this lands).
+Sixty-ninth slice: MMIO insn fetch peeks `GUEST_RIP` when
 `CS.base+RIP` is outside the 4 MiB flash window but RIP is inside
 (leftover real-mode `CS.base`; iron `rip=0xfffcfc86`). EAX n>0 fallback +
 `BOOT_SIZE=48` + skip-len still in this EFI. FAT already fills Cruzer; no

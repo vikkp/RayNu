@@ -1321,7 +1321,10 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         if is_in {
             let val = match port {
                 0x61 => {
-                    p.port61 ^= 0x10;
+                    // Bit 4 = DRAM refresh (Linux io_delay). Bit 5 = TMR2_OUT
+                    // (OVMF MicroSecondDelay `in al,0x61; test al,0x20; jz`).
+                    // Iron COM2 after BdsDxe Start CD: rip=0x7e149fb9 spin.
+                    p.port61 ^= 0x30;
                     u64::from(p.port61)
                 }
                 0x80 => 0,
@@ -1333,7 +1336,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             (rax & !mask) | (val & mask)
         } else {
             if port == 0x61 {
-                p.port61 = (rax as u8 & !0x10) | (p.port61 & 0x10);
+                p.port61 = (rax as u8 & !0x30) | (p.port61 & 0x30);
             } else if port == 0x92 {
                 p.port92 = (rax as u8) | 0x02;
             } else if port == 0x40 {

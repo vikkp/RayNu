@@ -99,6 +99,7 @@ fn port61_refresh_toggles() {
     let a = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
     let b = handle_pio(&inp, 0).unwrap().unwrap() & 0xFF;
     assert_ne!(a & 0x10, b & 0x10, "refresh bit must toggle");
+    assert_ne!(a & 0x20, b & 0x20, "TMR2_OUT bit 5 must toggle");
 }
 
 #[test]
