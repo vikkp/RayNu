@@ -157,7 +157,8 @@ CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
 `git checkout` a SHA). Do not flash `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
-empty — that is not `ISO-INSTALL-OK`. Do not flash `d0735bd`, `40f1ada`,
+empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
+gate `#UD` at CLWB), `d0735bd`, `40f1ada`,
 `27de5f2`, `4a62e06`, or `e40bee0` again unless that SOL is still live. Leftover DRAM
 `pool=1008 extra=846 no-zero` and `#PF linux deliver` are proven. Want
 `report-RAM extra hpa=` / `pool=` near 1008 with

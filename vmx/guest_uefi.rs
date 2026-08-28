@@ -389,6 +389,7 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
         4 => r.eax &= !(0x3F << 26),
         7 if subleaf == 0 => {
             r.ebx &= !((1 << 2) | (1 << 12) | (1 << 15));
+            r.ebx &= !(CPUID_LEAF7_EBX_CLFLUSHOPT | CPUID_LEAF7_EBX_CLWB);
             r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57);
         }
         0x8000_0001 => {
@@ -435,6 +436,10 @@ pub const CPUID_LEAF7_ECX_TME_EN: u32 = 1 << 13;
 /// CPUID.7.0 ECX.LA57 (bit 16). Guest-UEFI is 4-level only; 5-level walks
 /// would disagree with [`crate::vmx::guest_pt::identity_map_not_present`].
 pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
+/// CPUID.7.0 EBX.CLFLUSHOPT (bit 23) / CLWB (bit 24). Nested KVM #UD at
+/// `66 0F AE F1` while host CPUID still advertises them (CI `34b5767`).
+pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
+pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
 /// i440FX / nested QEMU floor. Clip-36 (`5f59c86`) still left
 /// `[4GiB, 64GiB)` NP vs MTRR default WB.
 pub const GUEST_UEFI_PHYS_BITS_MIN: u32 = 36;

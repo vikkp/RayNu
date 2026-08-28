@@ -26,6 +26,11 @@ pub const CR4_VMXE: u64 = 1 << 13;
 /// CPUID.7.0:ECX bit 16 — LA57. Nested Intel `957e0ad` ATAPI-OK then
 /// `#DF` `rip=0x9e036` (compressed `paging_prepare` trampoline).
 pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
+/// CPUID.7.0:EBX bit 23 — CLFLUSHOPT. Nested KVM may #UD while host CPUID
+/// still sets it (CI `34b5767` Oops `66 0F AE F1`).
+pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
+/// CPUID.7.0:EBX bit 24 — CLWB. Same nested #UD; Linux then kill-init.
+pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
 pub const CR4_OSXSAVE: u64 = 1 << 18;
 
@@ -494,6 +499,8 @@ mod cpu_test {
         assert_eq!(CR4_LA57, 1 << 12);
         assert_eq!(CR4_VMXE, 1 << 13);
         assert_eq!(CPUID_LEAF7_ECX_LA57, 1 << 16);
+        assert_eq!(CPUID_LEAF7_EBX_CLFLUSHOPT, 1 << 23);
+        assert_eq!(CPUID_LEAF7_EBX_CLWB, 1 << 24);
         assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }

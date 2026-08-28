@@ -260,6 +260,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_hlt_skip(")
         && include_str!("../vmx/guest_uefi.rs").contains("linux skip-1")
+        && include_str!("../sched/msr_firewall.rs").contains("CPUID_LEAF7_EBX_CLWB")
+        && include_str!("../vmx/guest_uefi.rs").contains("CPUID_LEAF7_EBX_CLWB")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_post_cd_non_io")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_near_xfer(")
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_CALL")
