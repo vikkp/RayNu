@@ -21,12 +21,16 @@ const SHELL_ROOT: &[u8] = b"/ # ";
 const GRUB: &[u8] = b"GNU GRUB";
 const YESN: &[u8] = b"(y/n)";
 const YESN_UP: &[u8] = b"(y/N)";
+/// Alpine `setup-disk` bootloader picker when `BOOTLOADER` is unset.
+const BOOTLOADER_Q: &[u8] = b"bootloader?";
 
 pub(crate) const ROOT: &[u8] = b"root\r";
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; ERASE_DISKS=/dev/vda setup-disk -m sys /dev/vda\r";
+    b"modprobe virtio_blk; ERASE_DISKS=/dev/vda BOOTLOADER=grub setup-disk -m sys /dev/vda\r";
+const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";
+pub(crate) const BOOTLOADER: &[u8] = b"grub\r";
 
 const PHASE_LOGIN: u8 = 0;
 const PHASE_SHELL: u8 = 1;
@@ -140,6 +144,9 @@ pub fn note_tx(b: u8) {
                 if left <= 1 {
                     PHASE.store(PHASE_DONE, Ordering::Release);
                 }
+            }
+            PHASE_CONFIRM if ends_with(&a.win, a.wlen, BOOTLOADER_Q) => {
+                enqueue(a, BOOTLOADER);
             }
             _ => {}
         }

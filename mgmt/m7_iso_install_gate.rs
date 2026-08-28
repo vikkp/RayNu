@@ -83,6 +83,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("fn note_tx(")
         && include_str!("../devices/guest_serial_answer.rs").contains("/ # ")
         && include_str!("../devices/guest_serial_answer.rs").contains("setup-disk -m sys /dev/vda")
+        && include_str!("../devices/guest_serial_answer.rs").contains("BOOTLOADER=grub")
+        && include_str!("../devices/guest_serial_answer.rs").contains("bootloader?")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }

@@ -1,4 +1,4 @@
-use super::{note_tx, queued, reset, take_rx, GRUB_ENTER, ROOT, SETUP, YES};
+use super::{note_tx, queued, reset, take_rx, BOOTLOADER, GRUB_ENTER, ROOT, SETUP, YES};
 
 #[test]
 fn login_queues_root_then_setup_disk() {
@@ -40,6 +40,7 @@ fn login_queues_root_then_setup_disk() {
     assert_eq!(got, SETUP);
     assert!(SETUP.len() <= 96);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     reset();
     assert_eq!(queued(), 0);
 }
@@ -82,6 +83,28 @@ fn confirm_queues_yes_then_stops() {
     }
     assert_eq!(n, 4);
     assert_eq!(queued(), 0);
+    reset();
+}
+
+#[test]
+fn bootloader_prompt_queues_grub() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Which bootloader?" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, BOOTLOADER);
     reset();
 }
 

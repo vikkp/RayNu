@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixteenth slice (this EFI): ISO patch also sets `nolapic` so Linux does not
+Seventeenth slice (this EFI): Alpine auto-answer sets `BOOTLOADER=grub` on
+`setup-disk` and replies `grub` to a `bootloader?` prompt so the picker
+cannot stall the install. Sixteenth slice: ISO patch also sets `nolapic` so Linux does not
 program the guest-UEFI static xAPIC page (CUR_COUNT never moves) and then
 disable PIT. Fifteenth slice: product ISO PIT IRQ 0 on HLT/preemption so
 Linux `noapic` jiffies advance and HLT wakes; UART/virtio PIC still beat

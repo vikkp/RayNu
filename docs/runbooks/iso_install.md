@@ -166,7 +166,8 @@ lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
 advance, product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
-with `setup-disk` to `/dev/vda` (not ISO-INSTALL-OK), the ISO cmdline is patched to
+with `BOOTLOADER=grub setup-disk -m sys /dev/vda` (and `grub` if `bootloader?`
+appears; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `console=ttyS0 noapic nolapic` (`modules=loop,loop` stays valid so those are kernel
 params, not module names; PIC IRQ 11 and PIT IRQ 0; no LAPIC timer on the static
 xAPIC page; GRUB `timeout=10` → `timeout=0`;
