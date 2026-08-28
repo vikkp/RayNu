@@ -16,6 +16,8 @@ const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
 const SHELL: &[u8] = b"~# ";
+/// BusyBox ash when cwd is `/` (Alpine live overlay).
+const SHELL_ROOT: &[u8] = b"/ # ";
 const GRUB: &[u8] = b"GNU GRUB";
 const YESN: &[u8] = b"(y/n)";
 const YESN_UP: &[u8] = b"(y/N)";
@@ -121,7 +123,9 @@ pub fn note_tx(b: u8) {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);
             }
-            PHASE_SHELL if ends_with(&a.win, a.wlen, SHELL) => {
+            PHASE_SHELL
+                if ends_with(&a.win, a.wlen, SHELL) || ends_with(&a.win, a.wlen, SHELL_ROOT) =>
+            {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }

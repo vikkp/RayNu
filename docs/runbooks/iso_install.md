@@ -162,7 +162,8 @@ ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
 with `setup-disk` to `/dev/vda` (not ISO-INSTALL-OK), the ISO cmdline is patched to
-`sr-mod console=ttyS0` (ATAPI CD + serial; GRUB `timeout=10` → `timeout=0`) when it
+`ata_piix,loop,sr-mod console=ttyS0` (PIIX IDE + ATAPI CD + serial; GRUB `timeout=10` → `timeout=0`;
+`gfxterm` → `serial` when present) when it
 contains `sd-mod,usb-storage quiet`, and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
 installer writes a partition table. Host/CI never prints that marker. `iso=0`

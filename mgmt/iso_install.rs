@@ -103,6 +103,19 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
 pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
 const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
+/// After the sr-mod swap: load PIIX IDE so `/dev/sr0` can attach.
+/// `squashfs` stays in the ISO initramfs; cmdline space is used for `ata_piix`.
+pub const ISO_ATA_PIIX_FROM: &[u8] = b"loop,squashfs,sr-mod";
+pub const ISO_ATA_PIIX_TO: &[u8] = b"ata_piix,loop,sr-mod";
+const _: () = assert!(ISO_ATA_PIIX_FROM.len() == ISO_ATA_PIIX_TO.len());
+/// GRUB EFI often binds GOP (`gfxterm`) and never prints `GNU GRUB` on COM1.
+/// Same-length swap onto `serial` when those strings exist (0 hits is fine).
+pub const ISO_GRUB_GFXTERM_FROM: &[u8] = b"terminal_output gfxterm";
+pub const ISO_GRUB_GFXTERM_TO: &[u8] = b"terminal_output serial ";
+const _: () = assert!(ISO_GRUB_GFXTERM_FROM.len() == ISO_GRUB_GFXTERM_TO.len());
+pub const ISO_GRUB_INSMOD_GFX_FROM: &[u8] = b"insmod gfxterm";
+pub const ISO_GRUB_INSMOD_GFX_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_GFX_FROM.len() == ISO_GRUB_INSMOD_GFX_TO.len());
 
 /// Patch a product ISO so the installer kernel uses `console=ttyS0` and sees the CD.
 ///
@@ -111,7 +124,10 @@ const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
 /// - Returns the number of replacements (0 = nothing patched)
 pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
     patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO)
+        .saturating_add(patch_same(bytes, ISO_ATA_PIIX_FROM, ISO_ATA_PIIX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
 }
 
 fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {

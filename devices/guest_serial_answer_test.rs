@@ -12,6 +12,24 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, ROOT);
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"/ # " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, SETUP);
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
     for &b in b"localhost:~# " {
         note_tx(b);
     }

@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventh slice (this EFI): virtio-blk OUT copies the full request (not a 4 KiB
+Eighth slice (this EFI): ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
+(squashfs stays in initramfs), GRUB `gfxterm` → `serial` when present, BusyBox
+`/ # ` auto-answer, 64-bit virtqueue GPA writes keep the high half. Seventh slice: virtio-blk OUT copies the full request (not a 4 KiB
 cap), ISO patch loads `sr-mod` + `console=ttyS0` and zeros GRUB timeout, virtio
 PCI INTA line is IRQ 11. Sixth slice: Alpine serial auto-answer — `login:` → `root`, `~# `
 → `setup-disk -m sys /dev/vda` (with virtio modprobe). Fifth slice: host COM2 (iDRAC SOL) then COM1 RX is copied into

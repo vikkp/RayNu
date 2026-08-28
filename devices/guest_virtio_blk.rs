@@ -535,8 +535,21 @@ fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
     }
 }
 
+/// Write a virtqueue GPA. Linux `writeq` is one 8-byte store at the low half.
+fn write_queue_ptr(field: &mut u64, rel: u16, size: u8, val: u64) {
+    if size >= 8 && rel == 0 {
+        *field = val;
+        return;
+    }
+    if rel == 0 {
+        *field = (*field & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF);
+    } else if rel == 4 {
+        *field = (*field & 0xFFFF_FFFF) | ((val & 0xFFFF_FFFF) << 32);
+    }
+}
+
 /// Write virtio-pci BAR MMIO. Notify sets a pending bit; call [`drain_queue`].
-pub fn mmio_write(off: u16, _size: u8, val: u64) {
+pub fn mmio_write(off: u16, size: u8, val: u64) {
     with_virtio(|v| {
         if !v.queues_armed {
             return;
@@ -569,12 +582,12 @@ pub fn mmio_write(off: u16, _size: u8, val: u64) {
                 }
             }
             0x1C => v.queue_enable = val as u16,
-            0x20 => v.queue_desc = (v.queue_desc & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF),
-            0x24 => v.queue_desc = (v.queue_desc & 0xFFFF_FFFF) | (val << 32),
-            0x28 => v.queue_driver = (v.queue_driver & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF),
-            0x2C => v.queue_driver = (v.queue_driver & 0xFFFF_FFFF) | (val << 32),
-            0x30 => v.queue_device = (v.queue_device & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF),
-            0x34 => v.queue_device = (v.queue_device & 0xFFFF_FFFF) | (val << 32),
+            0x20 => write_queue_ptr(&mut v.queue_desc, 0, size, val),
+            0x24 => write_queue_ptr(&mut v.queue_desc, 4, size, val),
+            0x28 => write_queue_ptr(&mut v.queue_driver, 0, size, val),
+            0x2C => write_queue_ptr(&mut v.queue_driver, 4, size, val),
+            0x30 => write_queue_ptr(&mut v.queue_device, 0, size, val),
+            0x34 => write_queue_ptr(&mut v.queue_device, 4, size, val),
             x if x == OFF_NOTIFY => v.notify_pending = true,
             _ => {}
         }

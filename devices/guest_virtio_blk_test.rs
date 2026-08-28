@@ -1,9 +1,9 @@
 use super::{
     blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, latch_dxe_virtio_did,
-    pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio, pci_config_addr,
-    pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr, pci_write_data,
-    pei_host_bridge_did, present, process_blk_queue_in, queues_armed, reset, take_marker,
-    virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
+    mmio_read, mmio_write, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
+    pci_config_addr, pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr,
+    pci_write_data, pei_host_bridge_did, present, process_blk_queue_in, queues_armed, reset,
+    take_marker, virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
     GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
     VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
     VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
@@ -197,6 +197,30 @@ fn decode_mmio_mov_encodings() {
     assert!(!r64.is_write && r64.size == 8);
     let imm = decode_mmio_insn(&[0xC7, 0x01, 0x78, 0x56, 0x34, 0x12], 6).unwrap();
     assert!(imm.is_write && imm.has_imm && imm.imm == 0x1234_5678);
+}
+
+#[test]
+fn mmio_write_queue_desc_keeps_high_half_on_writeq() {
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, MOCK_EFI_ISO_BYTES,
+        ISO_SECTOR,
+    };
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    assert!(queues_armed());
+    let gpa = 0x0000_0001_2345_6000u64;
+    mmio_write(0x20, 8, gpa);
+    assert_eq!(mmio_read(0x20, 8), gpa);
+    mmio_write(0x20, 4, 0xABCD_0000);
+    mmio_write(0x24, 4, 0x0000_0002);
+    assert_eq!(mmio_read(0x20, 8), 0x0000_0002_ABCD_0000);
+    reset();
+    reset_cd();
 }
 
 #[test]
