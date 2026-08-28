@@ -126,6 +126,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("| CPU_BASED_CR8_LOAD_EXITING")
         && !include_str!("../vmx/launch.rs").contains("| CPU_BASED_CR8_LOAD_EXITING")
         && include_str!("../devices/guest_serial_answer.rs").contains("mount /dev/vdb")
+        && include_str!("../devices/guest_serial_answer.rs").contains("mkdir -p /media/cdrom")
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub test:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_test_rflags(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn mmio_apply_test_cmp(")

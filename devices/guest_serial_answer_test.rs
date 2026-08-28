@@ -38,8 +38,9 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, SETUP);
-    assert!(SETUP.len() <= 128);
+    assert!(SETUP.len() <= 160);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
