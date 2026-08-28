@@ -1,4 +1,4 @@
-use super::{note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, NO, ROOT, SETUP, YES};
+use super::{note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, NO, ROOT, SETUP, SYS, YES};
 
 #[test]
 fn login_queues_root_then_setup_disk() {
@@ -38,10 +38,12 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, SETUP);
-    assert!(SETUP.len() <= 160);
+    assert!(SETUP.len() <= 224);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("apk update"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("-s 0"));
@@ -159,6 +161,36 @@ fn which_disk_queues_vda() {
         got.push(b);
     }
     assert_eq!(got, DISK);
+    reset();
+}
+
+#[test]
+fn like_to_use_queues_sys() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"How would you like to use it? ('sys', 'data' or 'lvm')" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, SYS);
+    for &b in b"Which bootloader?" {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, BOOTLOADER);
     reset();
 }
 

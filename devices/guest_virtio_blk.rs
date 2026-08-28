@@ -1253,7 +1253,8 @@ pub struct MmioInsn {
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
     /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV,
     /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT, 30=PUSH r/m, 31=POP r/m,
-    /// 32=MOVS, 33=STOS, 34=LODS (`has_imm` is F3 REP).
+    /// 32=MOVS, 33=STOS, 34=LODS (`has_imm` is F3 REP), 35=CALL r/m (`FF /2`),
+    /// 36=JMP r/m (`FF /4`). Far CALLF/JMPF (`/3` `/5`) stay decode-fail.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1378,6 +1379,19 @@ pub fn mmio_alu_is_stos(alu: u8) -> bool {
 
 pub fn mmio_alu_is_lods(alu: u8) -> bool {
     alu == MMIO_ALU_LODS
+}
+
+/// Near CALL r/m (`FF /2`). Reads MMIO as the target; handler pushes RIP+len.
+pub const MMIO_ALU_CALL: u8 = 35;
+/// Near JMP r/m (`FF /4`). Reads MMIO as the target; handler sets RIP.
+pub const MMIO_ALU_JMP: u8 = 36;
+
+pub fn mmio_alu_is_call(alu: u8) -> bool {
+    alu == MMIO_ALU_CALL
+}
+
+pub fn mmio_alu_is_jmp(alu: u8) -> bool {
+    alu == MMIO_ALU_JMP
 }
 
 /// PUSH/POP width: 66h → 16-bit; long mode → 64-bit; else 32-bit.
@@ -3190,7 +3204,12 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             }
             let m = bytes[i];
             let ext = (m >> 3) & 7;
-            if op == 0xFF && ext == 6 {
+            if op == 0xFF && (ext == 2 || ext == 4 || ext == 6) {
+                let alu = match ext {
+                    2 => MMIO_ALU_CALL,
+                    4 => MMIO_ALU_JMP,
+                    _ => MMIO_ALU_PUSH,
+                };
                 let size = if rex_w {
                     8
                 } else if operand16 {
@@ -3207,7 +3226,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                     zero_ext: false,
                     sign_ext: false,
                     xchg: false,
-                    alu: MMIO_ALU_PUSH,
+                    alu,
                     rex,
                     test: false,
                     cmp: false,

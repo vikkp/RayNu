@@ -11,7 +11,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 const WIN: usize = 24;
-const QCAP: usize = 160;
+const QCAP: usize = 224;
 const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
@@ -30,6 +30,9 @@ const YESN_BRACK_YY: &[u8] = b"[Y/N]";
 const BOOTLOADER_Q: &[u8] = b"bootloader?";
 /// `ask_disk` when `-m sys /dev/vda` did not stick (no virtio yet).
 const DISK_Q: &[u8] = b"Which disk";
+/// alpine-conf `How would you like to use $it_them? ('sys', 'data' or 'lvm')`
+/// when `-m sys` did not stick. Needle fits WIN=24; full prompt is 25.
+const USE_Q: &[u8] = b"like to use";
 /// alpine-conf when virtio-blk is not visible; next `(y/n)` is boot-media.
 const NODISK: &[u8] = b"No disks available";
 
@@ -39,13 +42,15 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// so the first write is ESP+Linux FS (partition-table detect). `mkdir -p` the
 /// mountpoint (nlplug may not have created `/media/cdrom` when the ISO is
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
-/// distro packages.
+/// distro packages. `echo /media/cdrom/apks` so `apk add grub` does not wait
+/// on a network mirror (live ISO has no DHCP yet).
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; echo /media/cdrom/apks >> /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";
 pub(crate) const DISK: &[u8] = b"/dev/vda\r";
+pub(crate) const SYS: &[u8] = b"sys\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";
 pub(crate) const BOOTLOADER: &[u8] = b"grub\r";
 
@@ -179,6 +184,10 @@ pub fn note_tx(b: u8) {
             }
             PHASE_CONFIRM if ends_with(&a.win, a.wlen, DISK_Q) => {
                 enqueue(a, DISK);
+            }
+            PHASE_CONFIRM if ends_with(&a.win, a.wlen, USE_Q) => {
+                enqueue(a, SYS);
+                // Stay in CONFIRM so a later `bootloader?` / `Which disk` still matches.
             }
             PHASE_CONFIRM if ends_with(&a.win, a.wlen, BOOTLOADER_Q) => {
                 enqueue(a, BOOTLOADER);

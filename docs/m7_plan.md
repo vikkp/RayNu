@@ -274,7 +274,12 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Forty-seventh slice (this EFI): Alpine auto-answer `setup-disk -s 0` (no swap),
+Forty-eighth slice (this EFI): Alpine auto-answer appends `/media/cdrom/apks` to
+apk repos and `apk update` before `setup-disk`, and answers `sys` to
+`like to use` when `-m sys` did not stick. MMIO near CALL/JMP r/m (`FF /2`,
+`FF /4`) so a BAR `call`/`jmp` sets RIP (CALL pushes RIP+len; long mode
+defaults to 64-bit like PUSH; far CALLF/JMPF stay decode-fail; stack GPA
+miss does not invent HPA). Forty-seventh slice (this EFI): Alpine auto-answer `setup-disk -s 0` (no swap),
 `Which disk` → `/dev/vda`, and `No disks available` answers `n` to the
 following boot-media `(y/n)` instead of `y`. Virtqueue/stack/MOVS GPA
 translate lazy-maps report-RAM 2 MiB (same pool as an EPT miss; does not

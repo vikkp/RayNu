@@ -4046,6 +4046,33 @@ unsafe fn mmio_stack_pop(size: u8) -> Option<u64> {
     Some(val)
 }
 
+/// Near CALL (`FF /2`) or JMP (`FF /4`) through MMIO. Sets RIP to `target`.
+/// CALL pushes RIP+len first. True = RIP already written (do not skip_insn).
+/// False = stack GPA miss or VMWRITE fail (do not invent HPA).
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_near_xfer(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    target: u64,
+    is_call: bool,
+) -> bool {
+    let size = mmio_stack_op_size(op);
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if is_call {
+        let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+        if !mmio_stack_push(rip.wrapping_add(len), size) {
+            return false;
+        }
+    }
+    let new_rip = if size == 2 {
+        (rip & !0xFFFFu64) | (target & 0xFFFF)
+    } else if size == 4 {
+        target & 0xFFFF_FFFF
+    } else {
+        target
+    };
+    ops::vmwrite(GUEST_RIP, new_rip).is_ok()
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn mmio_set_addr_gpr(idx: u8, val: u64, long: bool) {
     if long {
@@ -6142,6 +6169,20 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let size = mmio_stack_op_size(op);
+        let target = crate::devices::guest_virtio_blk::mmio_read_at(gpa, size);
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return false;
+        }
+        return true;
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
@@ -6340,6 +6381,19 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         }
         return skip_insn();
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let target = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return skip_insn();
+        }
+        return true;
+    }
     if op.xchg {
         let oldr = mmio_gpr_in(op);
         let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
@@ -6482,6 +6536,23 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
         };
         let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
         return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let target = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return false;
+        }
+        return true;
     }
     if op.xchg {
         let oldr = mmio_gpr_in(op) as u32;
