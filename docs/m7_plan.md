@@ -274,15 +274,18 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Seventeenth slice (this EFI): Alpine auto-answer sets `BOOTLOADER=grub` on
-`setup-disk` and replies `grub` to a `bootloader?` prompt so the picker
-cannot stall the install. Sixteenth slice: ISO patch also sets `nolapic` so Linux does not
-program the guest-UEFI static xAPIC page (CUR_COUNT never moves) and then
-disable PIT. Fifteenth slice: product ISO PIT IRQ 0 on HLT/preemption so
-Linux `noapic` jiffies advance and HLT wakes; UART/virtio PIC still beat
-the timer. Fourteenth slice: same-length ISO patch `squashfs,sd-mod,usb-storage quiet`
-→ `loop console=ttyS0 noapic nolapic` so `modules=loop,loop` stays valid and Linux
-uses PIC IRQ 11 (PCI interrupt line) instead of ACPI `_PRT` IOAPIC pins;
+Eighteenth slice (this EFI): same-length ISO patch keeps `squashfs` in
+`modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `)
+so Alpine mkinitfs can mount the live root; optional `console=tty0` → `noapic`;
+MMIO insn fetch loops across 4 KiB pages; decode skips segment prefixes and
+zero-extends MOVZX / 32-bit MOV into r8–r15. Seventeenth slice: Alpine
+auto-answer sets `BOOTLOADER=grub` on `setup-disk` and replies `grub` to a
+`bootloader?` prompt so the picker cannot stall the install. Sixteenth slice:
+ISO patch also sets `nolapic` so Linux does not program the guest-UEFI static
+xAPIC page (CUR_COUNT never moves) and then disable PIT. Fifteenth slice:
+product ISO PIT IRQ 0 on HLT/preemption so Linux jiffies advance and HLT
+wakes; UART/virtio PIC still beat the timer. Fourteenth slice: same-length ISO
+patch added `console=ttyS0` / `noapic` (later restored squashfs in slice 18);
 `alpine_dev=cdrom` → `alpine_dev=vdb` when present so alpine-virt
 `nlplug-findfs` looks at virtio-iso `/dev/vdb` (0 hits OK).
 Thirteenth slice: virtio INTx also raises IOAPIC pin 11 (PCI

@@ -1,5 +1,6 @@
 use super::{
     blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
+    mmio_insn_bytes_this_page,
     latch_dxe_virtio_did, mmio_read, mmio_read_iso, mmio_write, pci_addr_selects_owned,
     pci_addr_selects_slot0,
     pci_addr_selects_virtio, pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso,
@@ -248,17 +249,25 @@ fn install_disk_partition_table_gpt_and_mbr() {
 #[test]
 fn decode_mmio_mov_encodings() {
     let r32 = decode_mmio_insn(&[0x8B, 0x01], 2).unwrap();
-    assert!(!r32.is_write && r32.size == 4 && r32.reg == 0);
+    assert!(!r32.is_write && r32.size == 4 && r32.reg == 0 && r32.zero_ext);
     let w32 = decode_mmio_insn(&[0x89, 0x11], 2).unwrap();
     assert!(w32.is_write && w32.size == 4 && w32.reg == 2);
     let r16 = decode_mmio_insn(&[0x66, 0x8B, 0x01], 3).unwrap();
-    assert!(!r16.is_write && r16.size == 2);
+    assert!(!r16.is_write && r16.size == 2 && !r16.zero_ext);
     let w8 = decode_mmio_insn(&[0x88, 0x01], 2).unwrap();
     assert!(w8.is_write && w8.size == 1 && w8.reg == 0);
     let r64 = decode_mmio_insn(&[0x48, 0x8B, 0x01], 3).unwrap();
-    assert!(!r64.is_write && r64.size == 8);
+    assert!(!r64.is_write && r64.size == 8 && !r64.zero_ext);
     let imm = decode_mmio_insn(&[0xC7, 0x01, 0x78, 0x56, 0x34, 0x12], 6).unwrap();
     assert!(imm.is_write && imm.has_imm && imm.imm == 0x1234_5678);
+    let r8 = decode_mmio_insn(&[0x44, 0x8B, 0x01], 3).unwrap();
+    assert!(!r8.is_write && r8.reg == 8 && r8.zero_ext);
+    let gs = decode_mmio_insn(&[0x65, 0x8B, 0x01], 3).unwrap();
+    assert!(!gs.is_write && gs.reg == 0 && gs.size == 4);
+    let zx = decode_mmio_insn(&[0x0F, 0xB6, 0x01], 3).unwrap();
+    assert!(!zx.is_write && zx.size == 1 && zx.zero_ext);
+    assert_eq!(mmio_insn_bytes_this_page(0x1000, 16), 16);
+    assert_eq!(mmio_insn_bytes_this_page(0x1FFC, 16), 4);
 }
 
 #[test]

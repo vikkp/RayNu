@@ -168,13 +168,13 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
+    assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     let mut buf = b"insmod gfxterm terminal_output gfxterm linux modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom initrd set timeout=10".to_vec();
     assert_eq!(patch_iso_linux_serial_console(&mut buf), 5);
     let s = core::str::from_utf8(&buf).unwrap();
     assert!(s.contains("console=ttyS0"));
-    assert!(s.contains("noapic"));
     assert!(s.contains("nolapic"));
-    assert!(s.contains("modules=loop,loop console=ttyS0 noapic nolapic"));
+    assert!(s.contains("modules=loop,squashfs console=ttyS0 nolapic"));
     assert!(s.contains("timeout=0 "));
     assert!(s.contains("alpine_dev=vdb"));
     assert!(s.contains("terminal_output serial "));
@@ -182,8 +182,15 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!s.contains("usb-storage"));
     assert!(!s.contains("gfxterm"));
     assert!(!s.contains("alpine_dev=cdrom"));
+    assert!(!s.contains("modules=loop,loop"));
     assert!(!buf.windows(ISO_SERIAL_CONSOLE_FROM.len()).any(|w| w == ISO_SERIAL_CONSOLE_FROM));
     assert_eq!(patch_iso_linux_serial_console(&mut buf), 0);
     let mut already = b"console=ttyS0 usb-storage quiet".to_vec();
     assert_eq!(patch_iso_linux_serial_console(&mut already), 0);
+    let mut tty0 = b"linux console=tty0 modules=loop,squashfs,sd-mod,usb-storage quiet".to_vec();
+    assert_eq!(patch_iso_linux_serial_console(&mut tty0), 2);
+    let t = core::str::from_utf8(&tty0).unwrap();
+    assert!(t.contains("noapic"));
+    assert!(t.contains("squashfs console=ttyS0 nolapic"));
+    assert!(!t.contains("console=tty0"));
 }

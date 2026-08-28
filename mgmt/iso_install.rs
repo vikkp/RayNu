@@ -94,17 +94,23 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
-/// Same-length swap so Alpine/GRUB gets serial + PIC-only IRQs.
-/// `squashfs,sd-mod,usb-storage quiet` → `loop console=ttyS0 noapic nolapic`
-/// `modules=loop,loop` stays a valid list; `console=` / `noapic` / `nolapic`
-/// are kernel params. `noapic` skips IOAPIC `_PRT`; `nolapic` skips the
-/// guest-UEFI static xAPIC page (CUR_COUNT never moves, so Linux would
-/// program a LAPIC timer that never fires and then disable PIT).
-/// alpine-virt initramfs already has virtio + squashfs; media is `/dev/vdb`.
-/// Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
+/// Same-length swap so Alpine/GRUB gets serial + PIT, and still loads squashfs.
+/// `squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic   `
+/// `modules=loop,squashfs` stays a valid list (Alpine mkinitfs needs squashfs
+/// in `modules=` to mount the live root / modloop). `console=` / `nolapic`
+/// are kernel params. `nolapic` skips the guest-UEFI static xAPIC page
+/// (CUR_COUNT never moves, so Linux would program a LAPIC timer that never
+/// fires and then disable PIT). Device IRQs stay on IOAPIC GSI 17/18 and
+/// PCI line 11. Optional `console=tty0` → `noapic` when that string exists.
+/// alpine-virt media is `/dev/vdb`. Does not grow the ISO. Does not print
+/// [`M7_ISO_INSTALL_OK_MARKER`].
 pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"squashfs,sd-mod,usb-storage quiet";
-pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"loop console=ttyS0 noapic nolapic";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"squashfs console=ttyS0 nolapic   ";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
+/// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
+pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";
+pub const ISO_TTY0_TO: &[u8] = b"noapic      ";
+const _: () = assert!(ISO_TTY0_FROM.len() == ISO_TTY0_TO.len());
 pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
 pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
 const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
@@ -139,6 +145,7 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
         .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
         .saturating_add(patch_same(bytes, ISO_ALPINE_DEV_FROM, ISO_ALPINE_DEV_TO))
+        .saturating_add(patch_same(bytes, ISO_TTY0_FROM, ISO_TTY0_TO))
 }
 
 fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {

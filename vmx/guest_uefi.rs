@@ -3852,10 +3852,10 @@ unsafe fn copy_guest_identity_bytes(linear: u64, buf: &mut [u8]) -> usize {
     copy_report_ram_at(page, linear, buf)
 }
 
-/// Instruction fetch for MMIO emulate: identity GPA, then guest CR3 walk.
+/// One page of instruction bytes: identity GPA, then guest CR3 walk.
 /// Linux virtio/IOAPIC runs with high-half RIP (not identity).
 #[cfg(target_os = "uefi")]
-unsafe fn copy_guest_linear_bytes(linear: u64, buf: &mut [u8]) -> usize {
+unsafe fn copy_guest_linear_one_page(linear: u64, buf: &mut [u8]) -> usize {
     let n = copy_guest_identity_bytes(linear, buf);
     if n != 0 {
         return n;
@@ -3864,6 +3864,22 @@ unsafe fn copy_guest_linear_bytes(linear: u64, buf: &mut [u8]) -> usize {
         return 0;
     };
     copy_guest_gpa_bytes(gpa, buf)
+}
+
+/// Instruction fetch for MMIO emulate. Loops across 4 KiB pages so a
+/// `movl` that straddles a page is not truncated (`insn_len` then fails
+/// decode and the EPT handler would spin).
+#[cfg(target_os = "uefi")]
+unsafe fn copy_guest_linear_bytes(linear: u64, buf: &mut [u8]) -> usize {
+    let mut done = 0usize;
+    while done < buf.len() {
+        let n = copy_guest_linear_one_page(linear.wrapping_add(done as u64), &mut buf[done..]);
+        if n == 0 {
+            break;
+        }
+        done = done.saturating_add(n);
+    }
+    done
 }
 
 #[cfg(target_os = "uefi")]
@@ -5452,7 +5468,15 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
 }
 
 #[cfg(target_os = "uefi")]
-fn merge_mmio_gpr(old: u64, val: u64, size: u8) -> u64 {
+fn merge_mmio_gpr(old: u64, val: u64, size: u8, zero_ext: bool) -> u64 {
+    if zero_ext {
+        return match size {
+            1 => val & 0xff,
+            2 => val & 0xffff,
+            4 => val & 0xffff_ffff,
+            _ => val,
+        };
+    }
     match size {
         1 => (old & !0xff) | (val & 0xff),
         2 => (old & !0xffff) | (val & 0xffff),
@@ -5474,9 +5498,19 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     let n = copy_guest_linear_bytes(rip, &mut buf);
     let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
     else {
-        serial::write_str("boot: guest-UEFI virtio MMIO decode fail gpa=0x");
-        write_hex(gpa);
-        serial::write_byte(b'\n');
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str("boot: guest-UEFI virtio MMIO decode fail gpa=0x");
+            write_hex(gpa);
+            serial::write_str(" insn=");
+            let show = n.min(8);
+            let mut i = 0usize;
+            while i < show {
+                write_hex_u8(buf[i]);
+                i += 1;
+            }
+            serial::write_byte(b'\n');
+        }
         return false;
     };
     if op.is_write != is_write {
@@ -5507,7 +5541,10 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
         }
     } else {
         let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
-        set_cr_gpr(op.reg, merge_mmio_gpr(cr_gpr(op.reg), val, op.size));
+        set_cr_gpr(
+            op.reg,
+            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext),
+        );
     }
     skip_insn()
 }
@@ -5536,7 +5573,10 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
         crate::devices::guest_irq::ioapic_write(off, val as u32);
     } else {
         let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
-        set_cr_gpr(op.reg, merge_mmio_gpr(cr_gpr(op.reg), val, op.size));
+        set_cr_gpr(
+            op.reg,
+            merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext),
+        );
     }
     skip_insn()
 }

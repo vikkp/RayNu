@@ -1266,9 +1266,17 @@ pub struct MmioInsn {
     pub reg: u8,
     pub has_imm: bool,
     pub imm: u64,
+    /// MOVZX / 32-bit MOV dest: do not keep high bits of the old GPR.
+    pub zero_ext: bool,
 }
 
-/// Decode a MOV/MOVZX that OVMF IoLib uses for virtio-pci BAR MMIO.
+/// Bytes fetchable from `gpa` without crossing a 4 KiB page. MMIO emulate
+/// must loop when the instruction straddles a page.
+pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
+    want.min(page_left(gpa))
+}
+
+/// Decode a MOV/MOVZX that OVMF IoLib and Linux ioread use for virtio-pci BAR MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -1283,7 +1291,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 operand16 = true;
                 i += 1;
             }
-            0x67 | 0xF0 | 0xF2 | 0xF3 => i += 1,
+            0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x67 | 0xF0 | 0xF2 | 0xF3 => i += 1,
             r if (0x40..=0x4F).contains(&r) => {
                 rex_w = (r & 0x8) != 0;
                 rex_r = (r & 0x4) << 1;
@@ -1318,6 +1326,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
             reg,
             has_imm: false,
             imm: 0,
+            zero_ext: true,
         });
     }
     if i >= insn_len && op != 0xC6 && op != 0xC7 {
@@ -1346,6 +1355,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 reg,
                 has_imm: false,
                 imm: 0,
+                zero_ext: size == 4,
             })
         }
         0xC6 | 0xC7 => {
@@ -1372,6 +1382,7 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 reg: 0,
                 has_imm: true,
                 imm,
+                zero_ext: false,
             })
         }
         _ => None,
