@@ -274,6 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+Forty-ninth slice (this EFI): Alpine auto-answer **overwrites** `/etc/apk/repositories`
+with `/media/cdrom/apks` (does not append) so `apk update` does not hang on
+network mirrors, and answers `sys` on `How would you like` (not the shorter
+`like to use`, which also matches `Which disk(s) would you like to use?`).
 Forty-eighth slice (this EFI): Alpine auto-answer appends `/media/cdrom/apks` to
 apk repos and `apk update` before `setup-disk`, and answers `sys` to
 `like to use` when `-m sys` did not stick. MMIO near CALL/JMP r/m (`FF /2`,

@@ -43,6 +43,8 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("> /etc/apk/repositories"));
+    assert!(!core::str::from_utf8(SETUP).unwrap().contains(">>"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("apk update"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
@@ -191,6 +193,28 @@ fn like_to_use_queues_sys() {
         got.push(b);
     }
     assert_eq!(got, BOOTLOADER);
+    reset();
+}
+
+#[test]
+fn which_disk_would_you_like_does_not_queue_sys() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Which disk(s) would you like to use?" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, DISK);
     reset();
 }
 

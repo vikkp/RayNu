@@ -31,8 +31,9 @@ const BOOTLOADER_Q: &[u8] = b"bootloader?";
 /// `ask_disk` when `-m sys /dev/vda` did not stick (no virtio yet).
 const DISK_Q: &[u8] = b"Which disk";
 /// alpine-conf `How would you like to use $it_them? ('sys', 'data' or 'lvm')`
-/// when `-m sys` did not stick. Needle fits WIN=24; full prompt is 25.
-const USE_Q: &[u8] = b"like to use";
+/// when `-m sys` did not stick. Must not match `Which disk(s) would you like
+/// to use?` (that one already queued `/dev/vda`).
+const USE_Q: &[u8] = b"How would you like";
 /// alpine-conf when virtio-blk is not visible; next `(y/n)` is boot-media.
 const NODISK: &[u8] = b"No disks available";
 
@@ -42,10 +43,11 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// so the first write is ESP+Linux FS (partition-table detect). `mkdir -p` the
 /// mountpoint (nlplug may not have created `/media/cdrom` when the ISO is
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
-/// distro packages. `echo /media/cdrom/apks` so `apk add grub` does not wait
-/// on a network mirror (live ISO has no DHCP yet).
+/// distro packages. Overwrite `/etc/apk/repositories` with `/media/cdrom/apks`
+/// (do not append) so `apk update` / `apk add grub` does not block on a
+/// network mirror (live ISO has no DHCP yet).
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; echo /media/cdrom/apks >> /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_blk; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";
