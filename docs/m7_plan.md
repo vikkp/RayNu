@@ -274,7 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-seventh slice (this EFI): Alpine `setup-disk` `find_efi_size` wants a
+Sixty-eighth slice (this EFI): xAPIC decode-fail still does a 32-bit EAX MOV
+when skip-len is 1–15, even if flash peek returned bytes (`n>0`). Slice 64
+required `n==0`; LocalApicLib is still `mov [svr], eax`. Do not skip a
+16-byte peek. `BOOT_SIZE=48` + skip-len + 512 MiB pool still in this EFI.
+FAT already fills Cruzer; no `--refat-cruzer`. Pin this HEAD until CI is
+green, then flash (do not flash `88abad7` after this lands).
+Sixty-seventh slice: Alpine `setup-disk` `find_efi_size` wants a
 160 MiB ESP, which does not fit a 64 MiB fallback disk and leaves ~96 MiB
 root on 256 MiB. `BOOT_SIZE=48` so GPT+ESP still land. Skip-len + 512 MiB
 pool + disk-before-scratch still in this EFI. FAT already fills Cruzer; no

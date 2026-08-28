@@ -1342,13 +1342,18 @@ fn copy_flash_at_firmware_rip() {
 }
 
 #[test]
-fn xapic_fetch_miss_eax_fallback_only_when_empty_and_len_valid() {
+fn xapic_fetch_miss_eax_fallback_when_skip_len_valid() {
     assert!(xapic_fetch_miss_eax_fallback(0, 6));
     assert!(xapic_fetch_miss_eax_fallback(0, 1));
     assert!(xapic_fetch_miss_eax_fallback(0, 15));
+    assert!(
+        xapic_fetch_miss_eax_fallback(4, 6),
+        "decode-fail with peek still EAX when skip-len is 1-15"
+    );
     assert!(!xapic_fetch_miss_eax_fallback(0, 0));
     assert!(!xapic_fetch_miss_eax_fallback(0, 16));
-    assert!(!xapic_fetch_miss_eax_fallback(4, 6));
+    assert!(!xapic_fetch_miss_eax_fallback(4, 0));
+    assert!(!xapic_fetch_miss_eax_fallback(16, 16), "do not skip 16-byte peek");
 }
 
 #[test]

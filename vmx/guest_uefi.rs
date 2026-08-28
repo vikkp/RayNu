@@ -1614,13 +1614,16 @@ pub fn copy_flash_at(flash: &[u8], gpa: u64, out: &mut [u8]) -> usize {
     n
 }
 
-/// When flash/RAM peek fetched 0 bytes, still finish a 32-bit EAX MOV if
-/// VMCS instruction length is valid (EPT data access). LocalApicLib is
-/// `mov [svr], eax` / `mov eax, [svr]`. Do not guess when bytes were fetched.
+/// When decode fails, still finish a 32-bit EAX MOV if skip-len is 1–15 even if peek got bytes.
+/// LocalApicLib is `mov [svr], eax` / `mov eax, [svr]`. Peek `n=0` is a
+/// fetch-miss; `n>0` is bytes we could not decode (VMCS or `mmio_decoded_len`
+/// still yielded a skip). Do not skip a 16-byte peek. `fetched_n` is kept
+/// for the COM2 `n=` log at the call site.
 ///
 /// Iron COM2 `e3f56aa`: `gpa=0xfee000f0 insn=` empty at `rip=0xfffcfc86`.
 pub fn xapic_fetch_miss_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
-    fetched_n == 0 && insn_len >= 1 && insn_len <= 15
+    let _ = fetched_n;
+    insn_len >= 1 && insn_len <= 15
 }
 
 /// RIP skip length after MMIO emulate. Prefer a valid VMCS 1–15; else the
