@@ -38,15 +38,16 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, SETUP);
-    assert!(SETUP.len() <= 320);
+    assert!(SETUP.len() <= 384);
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe virtio_pci"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe sr_mod"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe isofs"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mdev -s"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sleep 1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("mount /dev/vdb"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("|| mount /dev/sr0"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("mount -t iso9660 /dev/vdb"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("|| mount -t iso9660 /dev/sr0"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("> /etc/apk/repositories"));
     assert!(!core::str::from_utf8(SETUP).unwrap().contains(">>"));

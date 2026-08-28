@@ -11,7 +11,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 const WIN: usize = 24;
-const QCAP: usize = 320;
+const QCAP: usize = 384;
 const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
@@ -51,8 +51,10 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// so a slow virtio probe is visible before `find_disks`. If virtio-iso
 /// `/dev/vdb` is not ready, mount ATAPI `/dev/sr0` so apk still sees ISO9660.
 /// `sr_mod` so `/dev/sr0` exists when the live image booted from virtio-iso.
+/// `isofs` + `mount -t iso9660` so BusyBox does not probe a virtio-blk ISO as
+/// a disk (iso9660 is absent from `/proc/filesystems` until the module loads).
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; mdev -s; sleep 1; mkdir -p /media/cdrom; mount /dev/vdb /media/cdrom || mount /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; mdev -s; sleep 1; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";
