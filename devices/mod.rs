@@ -6,6 +6,7 @@
 
 pub mod guest_irq;
 pub mod guest_platform;
+pub mod guest_uart;
 pub mod guest_virtio_blk;
 pub mod ide_cdrom;
 pub mod lapic_virt;

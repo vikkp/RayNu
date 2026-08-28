@@ -163,3 +163,18 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
     clear_product_iso_retain();
     assert!(!stage46_hold_e4_shell());
 }
+
+#[test]
+fn patch_iso_linux_serial_console_same_length_and_idempotent() {
+    assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
+    let mut buf = b"linux modules=loop,squashfs,sd-mod,usb-storage quiet initrd".to_vec();
+    assert_eq!(patch_iso_linux_serial_console(&mut buf), 1);
+    let s = core::str::from_utf8(&buf).unwrap();
+    assert!(s.contains("console=ttyS0"));
+    assert!(s.contains("modules=loop,squashfs,sd-mod console=ttyS0"));
+    assert!(!s.contains("modules=loop,squashfs,sd-mod,console"));
+    assert!(!buf.windows(ISO_SERIAL_CONSOLE_FROM.len()).any(|w| w == ISO_SERIAL_CONSOLE_FROM));
+    assert_eq!(patch_iso_linux_serial_console(&mut buf), 0);
+    let mut already = b"console=ttyS0 usb-storage quiet".to_vec();
+    assert_eq!(patch_iso_linux_serial_console(&mut already), 0);
+}

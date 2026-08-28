@@ -94,6 +94,47 @@ pub const M7_STAGE46_HOLD_E4_NOTE: &str =
 static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
 static mut PRODUCT_ISO_LEN: usize = 0;
 
+/// Same-length swap so Alpine/GRUB keeps `modules=` valid and adds a serial console.
+/// `sd-mod,usb-storage quiet` → `sd-mod console=ttyS0` (usb-storage is CD-only here).
+/// Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
+pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"sd-mod,usb-storage quiet";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"sd-mod console=ttyS0    ";
+const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
+
+/// Patch a product ISO so the installer kernel uses `console=ttyS0`.
+///
+/// INVARIANTS:
+/// - Replacement is the same length as [`ISO_SERIAL_CONSOLE_FROM`]
+/// - Already-present `console=ttyS0` is left alone
+/// - Returns the number of replacements (0 = nothing patched)
+pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
+    if ISO_SERIAL_CONSOLE_FROM.len() != ISO_SERIAL_CONSOLE_TO.len() {
+        return 0;
+    }
+    if find_bytes(bytes, b"console=ttyS0").is_some() {
+        return 0;
+    }
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i + ISO_SERIAL_CONSOLE_FROM.len() <= bytes.len() {
+        if bytes[i..i + ISO_SERIAL_CONSOLE_FROM.len()] == *ISO_SERIAL_CONSOLE_FROM {
+            bytes[i..i + ISO_SERIAL_CONSOLE_TO.len()].copy_from_slice(ISO_SERIAL_CONSOLE_TO);
+            n = n.saturating_add(1);
+            i = i.saturating_add(ISO_SERIAL_CONSOLE_TO.len());
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    n
+}
+
+fn find_bytes(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    hay.windows(needle.len()).position(|w| w == needle)
+}
+
 /// Remember a window-sized ISO. Caller keeps `bytes` alive across EBS.
 ///
 /// INVARIANTS:
@@ -535,12 +576,18 @@ pub fn probe_product_linux_iso() {
         };
         // SAFETY: exclusive LOADER_DATA pages; copy then drop the Vec.
         // Conventional leak would be reclaimed at ExitBootServices.
-        let leaked: &'static [u8] = unsafe {
+        let leaked: &'static mut [u8] = unsafe {
             core::ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
-            core::slice::from_raw_parts(ptr.as_ptr(), data.len())
+            core::slice::from_raw_parts_mut(ptr.as_ptr(), data.len())
         };
+        let patched = patch_iso_linux_serial_console(leaked);
         if retain_product_iso_bytes(leaked) {
             serial::write_line(M7_STAGE46_PRODUCT_ISO_ESP_NOTE);
+            if patched != 0 {
+                serial::write_line(
+                    "boot: Stage 46 ISO serial console patched (not ISO-INSTALL-OK)",
+                );
+            }
             return;
         }
     }

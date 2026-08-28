@@ -157,7 +157,10 @@ still runs. QEMU: `PRODUCT_ISO=/path/to.iso ./tools/run-qemu.sh` (default ESP
 strips leftovers so the boot gate does not HOLD). PRE-EBS copies the ISO into
 `LOADER_DATA`. Guest OVMF boots that CD, virtio-pci queues target an empty
 install disk (1 GiB on iron, 1 MiB nested), product ISO PIC/IOAPIC injects
-ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), and guest-UEFI **holds**
+ATA IRQ 14 and virtio INTx (lab 8259 stays RAZ/WI), product ISO COM1 is a
+scratch/FIFO 16550 (lab UART stays stub), the ISO cmdline is patched to
+`console=ttyS0` when it contains `sd-mod,usb-storage quiet` (keeps `modules=`
+valid), and guest-UEFI **holds**
 (does not fail-soft to E4). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
 installer writes a partition table. Host/CI never prints that marker. `iso=0`
 / lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron
@@ -259,4 +262,4 @@ P0-14 `last_commit` stays `2b795a0` until this gate actually closes.
    (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
    magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
    Not Everest E5.
-   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + hold when armed; lab stub still E4; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
+   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/`ttyS0` + hold when armed; lab stub still E4; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.

@@ -299,7 +299,7 @@ Plan: [m7_plan.md](m7_plan.md) · HDA: [hda.md](hda.md) · ADR-013: [adr/ADR-013
 | P0-59 / E5 Stage 44 | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` | **CLOSED (iron COM2 `bf696ca`).** `sectors=1` `packet=9` `scsi=0x28` stop n=30769 `pci_ide=1 virtio=1`. Not El Torito boot. Not installer. Not Everest E5. |
 | P0-61 / E5 Stage 45 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` | **CLOSED (iron COM2 `0be7283`).** `RN-ELT` n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer. Not Everest E5. Work order: 45 → P0-60 → 46. |
 | P0-60 | M4.2 G1 shell EPT / fail-soft | **CLOSED (iron COM2 after `5147222`, not an E5 stage).** G1 `RAYNU-V-M4-SHELL-G1` / `RAYNU-V-M4-2VM-OK`. G0 relocate **CLOSED** (`M4-NVM-OK`). M4.3 host-slab **CLOSED** on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`; `M4-NET-OK`; `M4-SMP-OK`; `R640-BOOT-OK`). Not Stage 46. |
-| P0-62 / E5 Stage 46 | `ISO-INSTALL-OK` | **OPEN.** PRE-EBS ESP product ISO + virtio-pci queues + product PIC/IOAPIC inject gated on the window + hold (not E4) when armed. Lab stub still E4. Not closed. `ISO-BOOTED-FROM-DISK` is persist-detect, not this gate. Host/CI never prints the iron OK. |
+| P0-62 / E5 Stage 46 | `ISO-INSTALL-OK` | **OPEN.** PRE-EBS ESP product ISO + virtio-pci queues + product PIC/IOAPIC inject + product 16550/`ttyS0` cmdline gated on the window + hold (not E4) when armed. Lab stub still E4. Not closed. `ISO-BOOTED-FROM-DISK` is persist-detect, not this gate. Host/CI never prints the iron OK. |
 | Everest residual | TLS/console + Windows later | After Stage 46. Product ISO: [ADR-014](adr/ADR-014.md). |
 | M8 (sketch) | — | vMotion-like · DRS-like · hot-add (after M7) |
 | Optional | Dell Tier‑2 / pin upgrades | Slip-ok — see [m6_plan.md](m6_plan.md) / ADR-005 |

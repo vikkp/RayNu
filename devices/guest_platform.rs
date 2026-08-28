@@ -904,6 +904,7 @@ pub fn reset() {
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
     crate::devices::guest_irq::reset();
+    crate::devices::guest_uart::reset();
 }
 
 /// 24-bit ACPI PM timer reads (OVMF `InternalAcpiDelay`). Not PIT.

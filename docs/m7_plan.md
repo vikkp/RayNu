@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Third slice (this EFI): product ISO PIC + IOAPIC (ATA GSI 14, virtio slot-2
+Fourth slice (this EFI): product ISO 16550 (scratch/FIFO, COM1 GSI 4) so
+Linux 8250 can bind `ttyS0`, plus a same-length ISO cmdline patch
+(`sd-mod,usb-storage quiet` → `sd-mod console=ttyS0`). Lab UART stays
+stub. Third slice: product ISO PIC + IOAPIC (ATA GSI 14, virtio slot-2
 INTA GSI 17) and VM-entry inject so a Linux installer can complete virtio-blk
 / ATAPI instead of polling. Lab 8259 stays RAZ/WI. PRE-EBS ESP probe for
 `\EFI\RayNu\linux.iso` (then `\linux.iso`, `\EFI\RayNu\install.iso`) copies a
