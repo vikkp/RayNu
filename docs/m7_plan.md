@@ -274,7 +274,10 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Twenty-seventh slice (this EFI): auto-answer mounts virtio-iso `/dev/vdb` on
+Twenty-eighth slice (this EFI): MMIO dest-reg ALU (`02`/`03` ADD r, r/m,
+`0A`/`0B` OR, `22`/`23` AND, `2A`/`2B` SUB, `32`/`33` XOR) writes the GPR
+and updates RFLAGS; INC/DEC (`FE`/`FF`) and NOT/NEG (`F6`/`F7` /2 /3)
+RMW the BAR so a decode-fail does not spin. Twenty-seventh slice (this EFI): auto-answer mounts virtio-iso `/dev/vdb` on
 `/media/cdrom` before `setup-disk`; MMIO CMP `3A`/`3B` is `reg - mem`;
 group-1 / register-form SUB. Twenty-sixth slice (this EFI): MMIO TEST/CMP update RFLAGS (virtio ISR poll
 does not spin); serial auto-answer stays in CONFIRM after `[y/N]` so a later

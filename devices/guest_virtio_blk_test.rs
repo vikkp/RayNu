@@ -296,10 +296,37 @@ fn decode_mmio_mov_encodings() {
     assert!(cmpr.cmp && cmpr.cmp_reg_left && cmpr.size == 4 && !cmpr.is_write);
     let subl = decode_mmio_insn(&[0x83, 0x29, 0x01], 3).unwrap();
     assert!(subl.alu == super::MMIO_ALU_SUB && subl.is_write && subl.imm == 1);
+    let add_rm = decode_mmio_insn(&[0x03, 0x01], 2).unwrap();
+    assert!(
+        add_rm.alu == super::MMIO_ALU_ADD
+            && add_rm.alu_reg_left
+            && !add_rm.is_write
+            && add_rm.size == 4
+            && add_rm.zero_ext
+    );
+    let sub_rm = decode_mmio_insn(&[0x2B, 0x01], 2).unwrap();
+    assert!(sub_rm.alu == super::MMIO_ALU_SUB && sub_rm.alu_reg_left && !sub_rm.is_write);
+    let and_rm = decode_mmio_insn(&[0x23, 0x01], 2).unwrap();
+    assert!(and_rm.alu == super::MMIO_ALU_AND && and_rm.alu_reg_left);
+    let incb = decode_mmio_insn(&[0xFE, 0x00], 2).unwrap();
+    assert!(incb.alu == super::MMIO_ALU_ADD && incb.is_write && incb.has_imm && incb.imm == 1);
+    let decl = decode_mmio_insn(&[0xFF, 0x08], 2).unwrap();
+    assert!(decl.alu == super::MMIO_ALU_SUB && decl.is_write && decl.imm == 1 && decl.size == 4);
+    let notb = decode_mmio_insn(&[0xF6, 0x10], 2).unwrap();
+    assert!(notb.alu == super::MMIO_ALU_NOT && notb.is_write && !notb.has_imm);
+    let negl = decode_mmio_insn(&[0xF7, 0x18], 2).unwrap();
+    assert!(negl.alu == super::MMIO_ALU_NEG && negl.is_write && negl.size == 4);
     assert_eq!(super::mmio_alu_apply(5, 2, super::MMIO_ALU_SUB), 3);
+    assert_eq!(super::mmio_alu_apply(0, 0, super::MMIO_ALU_NOT) & 0xff, 0xff);
+    assert_eq!(super::mmio_alu_apply(1, 0, super::MMIO_ALU_NEG) & 0xff, 0xff);
     assert_eq!(super::mmio_test_rflags(2, 0, 1) & (1 << 6), 1 << 6);
     assert_eq!(super::mmio_test_rflags(2, 1, 1) & (1 << 6), 0);
     assert_eq!(super::mmio_cmp_rflags(2, 1, 2, 1) & 1, 1);
+    assert_eq!(super::mmio_add_rflags(2, 0xff, 1, 1) & 1, 1);
+    assert_eq!(
+        super::mmio_alu_rflags(2, 1, 2, 3, super::MMIO_ALU_ADD, 1) & (1 << 6),
+        0
+    );
     assert_eq!(
         super::mmio_alu_apply(0xF0, 0x0F, super::MMIO_ALU_AND),
         0x00

@@ -4632,6 +4632,28 @@ unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cu
     true
 }
 
+/// ALU RMW: dest is MMIO (`left = mem`) or GPR (`alu_reg_left`). Updates RFLAGS.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u64) -> u64 {
+    let other = if op.has_imm {
+        op.imm
+    } else {
+        mmio_gpr_in(op)
+    };
+    let (left, right) = if op.alu_reg_left {
+        (other, mem)
+    } else {
+        (mem, other)
+    };
+    let result = crate::devices::guest_virtio_blk::mmio_alu_apply(left, right, op.alu);
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let newf = crate::devices::guest_virtio_blk::mmio_alu_rflags(
+        oldf, left, right, result, op.alu, op.size,
+    );
+    let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+    result
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn skip_rel8_if(linear: u64, rip: u64, pred: fn(u8, u8) -> bool) -> bool {
     let mut buf = [0u8; 2];
@@ -5607,18 +5629,19 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             return skip_insn();
         }
     }
+    if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        let val = mmio_alu_result(op, cur);
+        mmio_gpr_out(op, val);
+        return skip_insn();
+    }
     if op.is_write != is_write {
         return false;
     }
     if is_write {
         let val = if op.alu != 0 {
             let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
-            let rhs = if op.has_imm {
-                op.imm
-            } else {
-                mmio_gpr_in(op)
-            };
-            crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
+            mmio_alu_result(op, cur)
         } else if op.has_imm {
             op.imm
         } else {
@@ -5677,14 +5700,19 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
             return skip_insn();
         }
     }
+    if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        let val = mmio_alu_result(op, cur);
+        mmio_gpr_out(op, val);
+        return skip_insn();
+    }
     if op.is_write != is_write {
         return skip_insn();
     }
     if is_write {
         let val = if op.alu != 0 {
             let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
-            let rhs = if op.has_imm { op.imm } else { mmio_gpr_in(op) };
-            crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu)
+            mmio_alu_result(op, cur)
         } else if op.has_imm {
             op.imm
         } else {
@@ -5751,13 +5779,12 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
                 .and_then(|v| v)
                 .unwrap_or(0),
         );
-        let rhs = if op.has_imm {
-            op.imm
+        let val = mmio_alu_result(op, cur);
+        if op.alu_reg_left || !op.is_write {
+            mmio_gpr_out(op, val);
         } else {
-            mmio_gpr_in(op)
-        };
-        let val = crate::devices::guest_virtio_blk::mmio_alu_apply(cur, rhs, op.alu);
-        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
         return skip_insn();
     }
     if op.is_write != is_write {
