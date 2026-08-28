@@ -165,6 +165,32 @@ pub fn revive_ports() {
     }
 }
 
+/// Non-blocking host UART RX. Prefers COM2 (iDRAC SOL) then COM1 (QEMU).
+///
+/// Missing UARTs often return LSR `0xFF`; those reads are ignored. Host/CI
+/// tests have no port I/O and always return `None`.
+pub fn try_read_byte() -> Option<u8> {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: port I/O to fixed legacy UART bases; no memory aliasing.
+        // KANI-TARGET: host COM1/COM2 LSR+RBR (outside Proven Core).
+        unsafe { read_port_rx(COM2).or_else(|| read_port_rx(COM1)) }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        None
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn read_port_rx(base: u16) -> Option<u8> {
+    let lsr = inb(base + 5);
+    if lsr == 0xFF || lsr & 1 == 0 {
+        return None;
+    }
+    Some(inb(base))
+}
+
 /// Print the M0 identity banner and gate marker (COM1+COM2).
 pub fn print_m0_banner(banner: &str) {
     write_line(banner);
@@ -245,5 +271,10 @@ mod serial_test {
         assert_eq!(&buf[..6], b"E4-LOG");
         serial_log_clear();
         assert_eq!(serial_log_len(), 0);
+    }
+
+    #[test]
+    fn host_try_read_byte_is_none() {
+        assert!(try_read_byte().is_none());
     }
 }

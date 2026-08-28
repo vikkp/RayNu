@@ -274,7 +274,9 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Fourth slice (this EFI): product ISO 16550 (scratch/FIFO, COM1 GSI 4) so
+Fifth slice (this EFI): host COM2 (iDRAC SOL) then COM1 RX is copied into
+guest COM1 RBR so the installer can take serial input. 16550 loopback so
+Linux 8250 autoconfig can bind. Fourth slice: product ISO 16550 (scratch/FIFO, COM1 GSI 4) so
 Linux 8250 can bind `ttyS0`, plus a same-length ISO cmdline patch
 (`sd-mod,usb-storage quiet` → `sd-mod console=ttyS0`). Lab UART stays
 stub. Third slice: product ISO PIC + IOAPIC (ATA GSI 14, virtio slot-2

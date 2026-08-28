@@ -5,13 +5,15 @@
 //! VERIFICATION: L1 (runtime + host tests)
 //!
 //! Lab El Torito keeps the guest-UEFI stub UART (LSR 0x60, IIR 0x01). Linux
-//! 8250 autoconfig needs a scratch register and FIFO IIR. COM1 IRQ is ISA
-//! GSI 4. Host/CI never prints `ISO-INSTALL-OK`.
+//! 8250 autoconfig needs a scratch register, FIFO IIR, and MCR loopback.
+//! COM1 IRQ is ISA GSI 4. Host COM2 (iDRAC SOL) RX feeds guest COM1 RBR so
+//! the installer can take serial input. Host/CI never prints `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
 /// ISA COM1.
 pub const COM1_IRQ: u8 = 4;
+const RX_CAP: usize = 16;
 
 struct Uart {
     lcr: u8,
@@ -22,6 +24,9 @@ struct Uart {
     dlm: u8,
     fcr: u8,
     thre_irq: bool,
+    rx: [u8; RX_CAP],
+    rx_head: u8,
+    rx_len: u8,
 }
 
 impl Uart {
@@ -35,6 +40,9 @@ impl Uart {
             dlm: 0,
             fcr: 0,
             thre_irq: false,
+            rx: [0; RX_CAP],
+            rx_head: 0,
+            rx_len: 0,
         }
     }
 }
@@ -82,6 +90,50 @@ fn port_uart(u: &mut Uarts, com1: bool) -> &mut Uart {
     }
 }
 
+fn loopback(u: &Uart) -> bool {
+    u.mcr & 0x10 != 0
+}
+
+fn irq_pending(u: &Uart) -> bool {
+    (u.rx_len > 0 && u.ier & 1 != 0) || (u.thre_irq && u.ier & 2 != 0)
+}
+
+fn rx_push(u: &mut Uart, b: u8) -> bool {
+    if u.rx_len as usize >= RX_CAP {
+        return false;
+    }
+    let i = (u.rx_head.wrapping_add(u.rx_len) as usize) % RX_CAP;
+    u.rx[i] = b;
+    u.rx_len = u.rx_len.saturating_add(1);
+    true
+}
+
+fn rx_pop(u: &mut Uart) -> u8 {
+    if u.rx_len == 0 {
+        return 0;
+    }
+    let b = u.rx[u.rx_head as usize];
+    u.rx_head = ((u.rx_head as usize + 1) % RX_CAP) as u8;
+    u.rx_len = u.rx_len.saturating_sub(1);
+    b
+}
+
+fn iir_bits(id: u8, fifo: bool) -> u8 {
+    if fifo {
+        0xC0 | id
+    } else {
+        id
+    }
+}
+
+fn sync_com1_irq(pending: bool) {
+    if pending {
+        crate::devices::guest_irq::raise_gsi(COM1_IRQ);
+    } else {
+        crate::devices::guest_irq::lower_gsi(COM1_IRQ);
+    }
+}
+
 /// Product-ISO 16550 PIO. `thr` is a THR byte to emit on the host serial.
 pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
     let com1 = (0x03F8..=0x03FF).contains(&port);
@@ -89,27 +141,48 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
     let (out, thr, irq) = with_uart(|u| {
         let uart = port_uart(u, com1);
         if is_in {
-            (uart_read(uart, off), None, uart.thre_irq)
+            let out = uart_read(uart, off);
+            (out, None, irq_pending(uart))
         } else {
             let thr = uart_write(uart, off, val);
-            (val, thr, uart.thre_irq)
+            (val, thr, irq_pending(uart))
         }
     });
     if com1 {
-        if irq {
-            crate::devices::guest_irq::raise_gsi(COM1_IRQ);
-        } else {
-            crate::devices::guest_irq::lower_gsi(COM1_IRQ);
-        }
+        sync_com1_irq(irq);
     }
     (out, thr, irq)
 }
 
-/// Re-assert COM1 THRE if Linux left IER.ETBEI set (edge inject consumed IRR).
+/// Re-assert COM1 RX/THRE if Linux left IER set (edge inject consumed IRR).
 pub fn reassert_irq() {
-    let pending = with_uart(|u| u.com1.thre_irq);
+    let pending = with_uart(|u| irq_pending(&u.com1));
     if pending {
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
+    }
+}
+
+/// Host SOL / QEMU stdio byte into guest COM1 RBR. Returns false if the FIFO is full.
+pub fn push_host_rx(b: u8) -> bool {
+    let (ok, pending) = with_uart(|u| {
+        let ok = rx_push(&mut u.com1, b);
+        (ok, irq_pending(&u.com1))
+    });
+    if pending {
+        crate::devices::guest_irq::raise_gsi(COM1_IRQ);
+    }
+    ok
+}
+
+/// Drain host COM2 (iDRAC SOL) then COM1 into guest COM1. Product ISO only.
+pub fn poll_host_rx() {
+    for _ in 0..RX_CAP {
+        let Some(b) = crate::boot::serial::try_read_byte() else {
+            break;
+        };
+        if !push_host_rx(b) {
+            break;
+        }
     }
 }
 
@@ -120,23 +193,48 @@ fn dlab(u: &Uart) -> bool {
 fn uart_read(u: &mut Uart, off: u8) -> u8 {
     match off {
         0 if dlab(u) => u.dll,
-        0 => 0,
+        0 => rx_pop(u),
         1 if dlab(u) => u.dlm,
         1 => u.ier,
         2 => {
-            if u.thre_irq && u.ier & 2 != 0 {
+            if u.rx_len > 0 && u.ier & 1 != 0 {
+                iir_bits(0x04, u.fcr & 1 != 0)
+            } else if u.thre_irq && u.ier & 2 != 0 {
                 u.thre_irq = false;
-                0xC2
-            } else if u.fcr & 1 != 0 {
-                0xC1
+                iir_bits(0x02, u.fcr & 1 != 0)
             } else {
-                0x01
+                iir_bits(0x01, u.fcr & 1 != 0)
             }
         }
         3 => u.lcr,
         4 => u.mcr,
-        5 => 0x60,
-        6 => 0xB0,
+        5 => {
+            if u.rx_len > 0 {
+                0x61
+            } else {
+                0x60
+            }
+        }
+        6 => {
+            if loopback(u) {
+                let mut m = 0u8;
+                if u.mcr & 0x02 != 0 {
+                    m |= 0x10;
+                }
+                if u.mcr & 0x01 != 0 {
+                    m |= 0x20;
+                }
+                if u.mcr & 0x04 != 0 {
+                    m |= 0x40;
+                }
+                if u.mcr & 0x08 != 0 {
+                    m |= 0x80;
+                }
+                m
+            } else {
+                0xB0
+            }
+        }
         7 => u.scr,
         _ => 0,
     }
@@ -149,10 +247,15 @@ fn uart_write(u: &mut Uart, off: u8, val: u8) -> Option<u8> {
             None
         }
         0 => {
-            if u.ier & 2 != 0 {
-                u.thre_irq = true;
+            if loopback(u) {
+                let _ = rx_push(u, val);
+                None
+            } else {
+                if u.ier & 2 != 0 {
+                    u.thre_irq = true;
+                }
+                Some(val)
             }
-            Some(val)
         }
         1 if dlab(u) => {
             u.dlm = val;
@@ -165,6 +268,10 @@ fn uart_write(u: &mut Uart, off: u8, val: u8) -> Option<u8> {
         }
         2 => {
             u.fcr = val;
+            if val & 2 != 0 {
+                u.rx_len = 0;
+                u.rx_head = 0;
+            }
             None
         }
         3 => {
