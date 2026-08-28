@@ -451,6 +451,57 @@ fn decode_mmio_mov_encodings() {
     assert!(super::mmio_div_apply(0x8000, 0, 0xFF, 1, true).is_none());
     assert_eq!(super::MMIO_DIV_DE_INTR_INFO, 0x8000_0300);
     assert!(super::mmio_alu_is_div_pair(super::MMIO_ALU_DIV));
+    let shld = decode_mmio_insn(&[0x0F, 0xA4, 0x01, 0x08], 4).unwrap();
+    assert!(
+        shld.alu == super::MMIO_ALU_SHLD
+            && shld.is_write
+            && shld.has_imm
+            && shld.imm == 8
+            && shld.size == 4
+            && shld.reg == 0
+    );
+    let shrdcl = decode_mmio_insn(&[0x0F, 0xAD, 0x01], 3).unwrap();
+    assert!(
+        shrdcl.alu == super::MMIO_ALU_SHRD && shrdcl.is_write && !shrdcl.has_imm && shrdcl.size == 4
+    );
+    let shldq = decode_mmio_insn(&[0x48, 0x0F, 0xA4, 0x01, 0x04], 5).unwrap();
+    assert!(shldq.size == 8 && shldq.alu == super::MMIO_ALU_SHLD && shldq.imm == 4);
+    let shldw = decode_mmio_insn(&[0x66, 0x0F, 0xAC, 0x01, 0x01], 5).unwrap();
+    assert!(shldw.size == 2 && shldw.alu == super::MMIO_ALU_SHRD && shldw.has_imm);
+    let shldr = decode_mmio_insn(&[0x44, 0x0F, 0xA4, 0x01, 0x04], 5).unwrap();
+    assert!(shldr.reg == 8 && shldr.alu == super::MMIO_ALU_SHLD);
+    assert_eq!(
+        super::mmio_double_shift_apply(0x1234_5678, 0xABCD_EF00, 8, super::MMIO_ALU_SHLD, 4),
+        0x3456_78AB
+    );
+    assert_eq!(
+        super::mmio_double_shift_apply(0x1234_5678, 0xABCD_EF9A, 8, super::MMIO_ALU_SHRD, 4),
+        0x9A12_3456
+    );
+    assert_eq!(
+        super::mmio_double_shift_apply(0x11, 0x22, 0, super::MMIO_ALU_SHLD, 4),
+        0x11
+    );
+    assert_eq!(
+        super::mmio_double_shift_apply(0xABCD, 0x1234, 8, super::MMIO_ALU_SHLD, 2),
+        0xCD12
+    );
+    assert_eq!(
+        super::mmio_double_shift_apply(0xABCD, 0x1234, 16, super::MMIO_ALU_SHLD, 2),
+        0x1234
+    );
+    assert_eq!(
+        super::mmio_double_shift_rflags(2, 0x8000_0000, 0, 1, 0, super::MMIO_ALU_SHLD, 4) & 1,
+        1
+    );
+    assert_eq!(
+        super::mmio_double_shift_rflags(2, 1, 0, 1, 0, super::MMIO_ALU_SHRD, 4) & 1,
+        1
+    );
+    let bt_a3 = decode_mmio_insn(&[0x0F, 0xA3, 0x01], 3).unwrap();
+    assert!(bt_a3.bt == super::MMIO_BT && bt_a3.alu == 0);
+    assert!(super::mmio_alu_is_double_shift(super::MMIO_ALU_SHLD));
+    assert!(!super::mmio_alu_is_shift(super::MMIO_ALU_SHLD));
     let nt = decode_mmio_insn(&[0x0F, 0xC3, 0x01], 3).unwrap();
     assert!(nt.is_write && nt.size == 4 && nt.reg == 0 && nt.alu == 0);
     let ntq = decode_mmio_insn(&[0x48, 0x0F, 0xC3, 0x01], 4).unwrap();

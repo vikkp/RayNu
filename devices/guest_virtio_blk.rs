@@ -1251,7 +1251,8 @@ pub struct MmioInsn {
     /// RMW: 0=none, 1=AND, 2=OR, 3=XOR, 4=ADD, 5=SUB, 6=NOT, 7=NEG, 8=ADC, 9=SBB,
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
-    /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV.
+    /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV,
+    /// 25=SHLD, 26=SHRD.
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1310,9 +1311,17 @@ pub const MMIO_ALU_IMUL1: u8 = 22;
 pub const MMIO_ALU_DIV: u8 = 23;
 /// F6/F7 /7 IDIV r/m.
 pub const MMIO_ALU_IDIV: u8 = 24;
+/// SHLD r/m, r, imm8/CL (`0F A4`/`A5`). Dest is MMIO.
+pub const MMIO_ALU_SHLD: u8 = 25;
+/// SHRD r/m, r, imm8/CL (`0F AC`/`AD`). Dest is MMIO.
+pub const MMIO_ALU_SHRD: u8 = 26;
 
 pub fn mmio_alu_is_shift(alu: u8) -> bool {
     (MMIO_ALU_ROL..=MMIO_ALU_SAR).contains(&alu)
+}
+
+pub fn mmio_alu_is_double_shift(alu: u8) -> bool {
+    alu == MMIO_ALU_SHLD || alu == MMIO_ALU_SHRD
 }
 
 pub fn mmio_alu_is_scan(alu: u8) -> bool {
@@ -1730,6 +1739,84 @@ pub fn mmio_shift_rflags(
     f
 }
 
+/// SHLD/SHRD: dest is MMIO, `src` fills vacated bits, `count` is imm8 or CL.
+pub fn mmio_double_shift_apply(dest: u64, src: u64, count: u64, alu: u8, size: u8) -> u64 {
+    let mask = mmio_size_mask(size);
+    let a = dest & mask;
+    let s = src & mask;
+    let n = mmio_shift_amt(count, size);
+    if n == 0 {
+        return a;
+    }
+    let w = mmio_bit_width(size);
+    let concat = if alu == MMIO_ALU_SHLD {
+        (u128::from(a) << w) | u128::from(s)
+    } else {
+        (u128::from(s) << w) | u128::from(a)
+    };
+    let shifted = if alu == MMIO_ALU_SHLD {
+        concat << n
+    } else {
+        concat >> n
+    };
+    let result = if alu == MMIO_ALU_SHLD {
+        (shifted >> w) as u64
+    } else {
+        shifted as u64
+    };
+    result & mask
+}
+
+/// SHLD/SHRD RFLAGS. Count 0 leaves flags. OF defined only for count==1.
+pub fn mmio_double_shift_rflags(
+    old: u64,
+    dest: u64,
+    src: u64,
+    count: u64,
+    result: u64,
+    alu: u8,
+    size: u8,
+) -> u64 {
+    let n = mmio_shift_amt(count, size);
+    if n == 0 {
+        return old;
+    }
+    let mask = mmio_size_mask(size);
+    let a = dest & mask;
+    let s = src & mask;
+    let r = result & mask;
+    let w = mmio_bit_width(size);
+    let concat = if alu == MMIO_ALU_SHLD {
+        (u128::from(a) << w) | u128::from(s)
+    } else {
+        (u128::from(s) << w) | u128::from(a)
+    };
+    let cf = if alu == MMIO_ALU_SHLD {
+        ((concat >> (2 * w - n)) & 1) != 0
+    } else {
+        ((concat >> (n - 1)) & 1) != 0
+    };
+    let mut f = mmio_test_rflags(old, r, size);
+    if cf {
+        f |= 1 << 0;
+    } else {
+        f &= !1;
+    }
+    if n == 1 {
+        let sign = mmio_sign_bit(size);
+        let of = if alu == MMIO_ALU_SHLD {
+            ((r & sign) != 0) != cf
+        } else {
+            ((a & sign) != 0) != ((r & sign) != 0)
+        };
+        f &= !(1 << 11);
+        if of {
+            f |= 1 << 11;
+        }
+    }
+    f
+}
+
 /// BT family: `bit` indexes `cur` of `size` bytes. Returns (new_value, old_bit).
 pub fn mmio_bt_apply(cur: u64, bit: u64, size: u8, bt: u8) -> (u64, bool) {
     let width = u64::from(size) * 8;
@@ -2017,7 +2104,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMOV/SETCC/BSF/BSR/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -2194,6 +2281,53 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 sign_ext,
                 xchg: false,
                 alu: 0,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
+            });
+        }
+        // SHLD/SHRD r/m, r, imm8 or CL (`0F A4`/`A5`/`AC`/`AD`). Dest is r/m.
+        if op2 == 0xA4 || op2 == 0xA5 || op2 == 0xAC || op2 == 0xAD {
+            if i >= insn_len {
+                return None;
+            }
+            let m = bytes[i];
+            let reg = ((m >> 3) & 7) | rex_r;
+            let size = if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            let has_imm = op2 == 0xA4 || op2 == 0xAC;
+            let imm = if has_imm {
+                if i + 1 >= insn_len {
+                    return None;
+                }
+                u64::from(bytes[insn_len - 1])
+            } else {
+                0
+            };
+            return Some(MmioInsn {
+                is_write: true,
+                size,
+                reg,
+                has_imm,
+                imm,
+                zero_ext: false,
+                sign_ext: false,
+                xchg: false,
+                alu: if op2 == 0xA4 || op2 == 0xA5 {
+                    MMIO_ALU_SHLD
+                } else {
+                    MMIO_ALU_SHRD
+                },
                 rex,
                 test: false,
                 cmp: false,

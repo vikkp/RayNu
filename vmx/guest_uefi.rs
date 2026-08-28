@@ -4686,6 +4686,22 @@ unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u
         let _ = ops::vmwrite(GUEST_RFLAGS, newf);
         return result;
     }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_double_shift(op.alu) {
+        let count = if op.has_imm {
+            op.imm
+        } else {
+            cr_gpr(1) & 0xff
+        };
+        let src = mmio_gpr_in(op);
+        let result = crate::devices::guest_virtio_blk::mmio_double_shift_apply(
+            mem, src, count, op.alu, op.size,
+        );
+        let newf = crate::devices::guest_virtio_blk::mmio_double_shift_rflags(
+            oldf, mem, src, count, result, op.alu, op.size,
+        );
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        return result;
+    }
     if crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
         let mut ax_src = op;
         ax_src.reg = 0;
