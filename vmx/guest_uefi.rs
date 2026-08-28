@@ -1759,11 +1759,15 @@ pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
 
 /// High-half Linux: VMCS `insn_len` can be 0 while identity peek is empty.
 /// Two-byte exits: CPUID `0F A2`, WRMSR `0F 30`, RDTSC `0F 31`, RDMSR
-/// `0F 32`, INVD `0F 08`, WBINVD `0F 09`. PAUSE `F3 90`.
+/// `0F 32`, INVD `0F 08`, WBINVD `0F 09`. PAUSE `F3 90`. HLT `F4` is one
+/// byte.
 ///
 /// Iron `d0735bd` after `#PF linux deliver`: tick `reason=0xa`
 /// `rip=0xffffffffb8081783` `insn=` empty. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
+    if !bytes.is_empty() && bytes[0] == 0xF4 {
+        return 1;
+    }
     if bytes.len() >= 2 && bytes[0] == 0xF3 && bytes[1] == 0x90 {
         return 2;
     }
@@ -1793,6 +1797,22 @@ pub fn guest_uefi_linux_cpuid_msr_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) ->
     }
     if guest_uefi_pf_should_deliver_to_guest(rip) {
         2
+    } else {
+        0
+    }
+}
+
+/// Fallback skip after HLT. One byte (`F4`). High-half + `insn_len` 0
+/// still skip 1 (iron `d0735bd` fetch miss). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_hlt_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        return 0;
+    }
+    if !bytes.is_empty() && bytes[0] == 0xF4 {
+        return 1;
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        1
     } else {
         0
     }
@@ -3746,7 +3766,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                     if k < 4 {
                         serial::write_line("boot: guest-UEFI HLT skip");
                     }
-                    skip_insn()
+                    skip_hlt()
                 } else {
                     false
                 }
@@ -6308,6 +6328,28 @@ unsafe fn skip_cpuid_msr() -> bool {
     let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
     if k < 8 {
         serial::write_str("boot: guest-UEFI linux skip-2 n=");
+        write_dec(u64::from(k) + 1);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok()
+}
+
+/// HLT: skip VMCS len, else `F4`, else high-half +1.
+#[cfg(target_os = "uefi")]
+unsafe fn skip_hlt() -> bool {
+    if skip_insn() {
+        return true;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let extra = guest_uefi_linux_hlt_skip(rip, 0, &[]);
+    if extra == 0 {
+        return false;
+    }
+    let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+    if k < 8 {
+        serial::write_str("boot: guest-UEFI linux skip-1 n=");
         write_dec(u64::from(k) + 1);
         serial::write_str(" rip=0x");
         write_hex(rip);

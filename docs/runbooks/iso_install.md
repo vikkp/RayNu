@@ -152,9 +152,10 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-fourth-slice
+`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-fifth-slice
 CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Iron COM2 after `d0735bd` (deliver line has no `err=`)
+`git checkout` a SHA). Do not flash `3c95261` / `27de5f2` / `d0735bd` again
+unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `d0735bd`, `40f1ada`,
 `27de5f2`, `4a62e06`, or `e40bee0` again unless that SOL is still live. Leftover DRAM

@@ -274,13 +274,12 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighty-fourth slice (this EFI): after iron `d0735bd` `#PF linux deliver`
-then CPUID, early Linux also intercepts RDTSC/INVD/WBINVD/PAUSE as
-2-byte exits. Decode those opcodes and still skip 2 on high-half when
-VMCS `insn_len` is 0 (INVLPG stays variable). Flash this HEAD after CI
-(do not flash `27de5f2` / `d0735bd` again unless that SOL is still
-live). Want COM2 `#PF linux deliver` `err=` `linux cpuid` / `linux skip-2`
+Eighty-fifth slice (this EFI): high-half HLT (`F4`) skip 1 when VMCS
+`insn_len` is 0 (Linux idle/early halt after CPUID/RDTSC). Flash this
+HEAD after CI (do not flash `3c95261` again unless that SOL is still
+live). Want COM2 `#PF linux deliver` `err=` `linux skip-2` / `linux skip-1`
 then `Linux version` / installer / `ISO-INSTALL-OK`.
+Eighty-fourth slice: RDTSC/INVD/WBINVD/PAUSE skip 2 on high-half.
 Eighty-third slice: iron COM2 after `d0735bd` (no `err=` on
 the deliver line) reached `#PF linux deliver n=1` then high-half CPUID
 `rip=0xffffffffb8081783` `insn=` empty. Walk guest CR3 for insn dump,
