@@ -1252,7 +1252,8 @@ pub struct MmioInsn {
     /// 10=ROL, 11=ROR, 12=RCL, 13=RCR, 14=SHL, 15=SHR, 16=SAR, 17=BSF, 18=BSR,
     /// 19=hint (PREFETCH/NOP/CLFLUSH: skip, do not touch the BAR), 20=IMUL
     /// dest-reg, 21=MUL DX:AX, 22=one-operand IMUL DX:AX, 23=DIV, 24=IDIV,
-    /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT, 30=PUSH r/m, 31=POP r/m.
+    /// 25=SHLD, 26=SHRD, 27=TZCNT, 28=LZCNT, 29=POPCNT, 30=PUSH r/m, 31=POP r/m,
+    /// 32=MOVS, 33=STOS, 34=LODS (`has_imm` is F3 REP).
     pub alu: u8,
     /// Any REX prefix: 8-bit reg 4–7 are SPL/BPL/SIL/DIL, not AH/CH/DH/BH.
     pub rex: bool,
@@ -1354,6 +1355,29 @@ pub fn mmio_alu_is_push(alu: u8) -> bool {
 
 pub fn mmio_alu_is_pop(alu: u8) -> bool {
     alu == MMIO_ALU_POP
+}
+
+/// MOVS (`A4`/`A5`). Src [RSI] or dest [RDI] is MMIO; EPT qual says which.
+pub const MMIO_ALU_MOVS: u8 = 32;
+/// STOS (`AA`/`AB`). Stores AL/AX/EAX/RAX to [RDI] MMIO.
+pub const MMIO_ALU_STOS: u8 = 33;
+/// LODS (`AC`/`AD`). Loads MMIO [RSI] into AL/AX/EAX/RAX.
+pub const MMIO_ALU_LODS: u8 = 34;
+
+pub fn mmio_alu_is_string(alu: u8) -> bool {
+    (MMIO_ALU_MOVS..=MMIO_ALU_LODS).contains(&alu)
+}
+
+pub fn mmio_alu_is_movs(alu: u8) -> bool {
+    alu == MMIO_ALU_MOVS
+}
+
+pub fn mmio_alu_is_stos(alu: u8) -> bool {
+    alu == MMIO_ALU_STOS
+}
+
+pub fn mmio_alu_is_lods(alu: u8) -> bool {
+    alu == MMIO_ALU_LODS
 }
 
 /// PUSH/POP width: 66h → 16-bit; long mode → 64-bit; else 32-bit.
@@ -2203,7 +2227,7 @@ pub fn mmio_insn_bytes_this_page(gpa: u64, want: usize) -> usize {
     want.min(page_left(gpa))
 }
 
-/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
+/// Decode MOV/MOVZX/MOVSX/XCHG/ALU RMW (mem or dest-reg)/TEST/CMP/INC/DEC/NOT/NEG/BT family/CMPXCHG/XADD/CMPXCHG8B/CMOV/SETCC/BSF/BSR/TZCNT/LZCNT/POPCNT/IMUL/MUL/DIV/IDIV/MOVNTI/SHLD/SHRD/PUSH/POP/MOVS/STOS/LODS/PREFETCH/NOP/CLFLUSH that OVMF IoLib and Linux ioread use for virtio-pci BAR and xAPIC MMIO.
 pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
     if bytes.is_empty() || insn_len == 0 || insn_len > bytes.len() || insn_len > 15 {
         return None;
@@ -3277,6 +3301,41 @@ pub fn decode_mmio_insn(bytes: &[u8], insn_len: usize) -> Option<MmioInsn> {
                 cmp: false,
                 cmp_reg_left: false,
                 alu_reg_left: false,
+                bt: 0,
+                atomic: 0,
+                cc: 0,
+            })
+        }
+        0xA4 | 0xA5 | 0xAA | 0xAB | 0xAC | 0xAD => {
+            let size = if op == 0xA4 || op == 0xAA || op == 0xAC {
+                1
+            } else if rex_w {
+                8
+            } else if operand16 {
+                2
+            } else {
+                4
+            };
+            let alu = match op {
+                0xA4 | 0xA5 => MMIO_ALU_MOVS,
+                0xAA | 0xAB => MMIO_ALU_STOS,
+                _ => MMIO_ALU_LODS,
+            };
+            Some(MmioInsn {
+                is_write: alu != MMIO_ALU_LODS,
+                size,
+                reg: 0,
+                has_imm: f3,
+                imm: 0,
+                zero_ext: size == 4,
+                sign_ext: false,
+                xchg: false,
+                alu,
+                rex,
+                test: false,
+                cmp: false,
+                cmp_reg_left: false,
+                alu_reg_left: alu == MMIO_ALU_LODS,
                 bt: 0,
                 atomic: 0,
                 cc: 0,
