@@ -274,7 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Sixty-sixth slice (this EFI): when flash peek returns bytes (`n>0`) but VMCS
+Sixty-seventh slice (this EFI): Alpine `setup-disk` `find_efi_size` wants a
+160 MiB ESP, which does not fit a 64 MiB fallback disk and leaves ~96 MiB
+root on 256 MiB. `BOOT_SIZE=48` so GPT+ESP still land. Skip-len + 512 MiB
+pool + disk-before-scratch still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not flash
+`12859ff` after this lands).
+Sixty-sixth slice: when flash peek returns bytes (`n>0`) but VMCS
 `insn_len` is 0, decode and skip use the length from those bytes. Do not skip
 the 16-byte peek. Prefer a valid VMCS 1–15 (EAX fallback still works when
 `n=0`). Iron 512 MiB pool + disk-before-scratch + CS.base+RIP fetch still in

@@ -224,6 +224,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("MMIO_ALU_JMP")
         && include_str!("../devices/guest_serial_answer.rs").contains("BOOTLOADER=grub")
         && include_str!("../devices/guest_serial_answer.rs").contains("USE_EFI=1")
+        && include_str!("../devices/guest_serial_answer.rs").contains("BOOT_SIZE=48")
         && include_str!("../devices/guest_serial_answer.rs").contains("bootloader?")
         && include_str!("../devices/guest_serial_answer.rs").contains("[y/N]")
         && include_str!("../devices/guest_serial_answer.rs").contains("fn is_yes_prompt(")

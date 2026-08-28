@@ -55,8 +55,13 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// `sr_mod` so `/dev/sr0` exists when the live image booted from virtio-iso.
 /// `isofs` + `mount -t iso9660` so BusyBox does not probe a virtio-blk ISO as
 /// a disk (iso9660 is absent from `/proc/filesystems` until the module loads).
+/// alpine-conf `find_efi_size` defaults ESP to 160 MiB (512-byte FAT32 min
+/// ~34 MiB). That is larger than a 64 MiB fallback disk and leaves ~96 MiB
+/// root on the 256 MiB iron disk. `BOOT_SIZE=48` is above the FAT32 floor
+/// so GPT+ESP still land (ISO-INSTALL-OK is the partition table, not a
+/// finished apk root).
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";
