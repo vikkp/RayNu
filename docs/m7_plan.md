@@ -274,11 +274,14 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-First slice (this EFI): product ISO window so ATAPI READ does not truncate
-a distro image into the 72 KiB lab RN-ELT stub; guest-UEFI stops after
-El Torito **only** for that lab stub (`iso=0` / 73728-byte CD still
-fail-soft to E4 `LINUX-EARLY`). Product CD (`len > 72 KiB`) continues
-past RN-ELT (1 048 576-exit cap on iron). Not `ISO-INSTALL-OK`. Keep
+Second slice (this EFI): PRE-EBS ESP probe for `\EFI\RayNu\linux.iso` (then
+`\linux.iso`, `\EFI\RayNu\install.iso`) copies a window-sized ISO into
+`LOADER_DATA` so ATAPI can serve a real distro image. Guest-UEFI presents
+that ISO, arms virtio-pci queues (vendor caps type 1/2/3/4, trap-and-emulate
+BAR, split virtqueue IN/OUT/FLUSH) only when the window is armed, and
+**holds** instead of packed-bzImage E4. Lab 72 KiB stub / `iso=0` still
+enum-only and fail-softs to E4 `LINUX-EARLY`. Product resume cap on iron is
+16 777 216 (nested still 65536). Not `ISO-INSTALL-OK`. Keep
 `windows_iso` / `generic_uefi`. `ISO-BOOTED-FROM-DISK` is persist-detect.
 M4.3 host-slab closed on iron COM2 after `22e28d0`: `M4.3 blk probe host
 slab HPA=0x10c00000`; `guest_code=0x10c00000`; `RAYNU-V-M4-BLK-OK`; then
@@ -329,8 +332,8 @@ Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (**closed** iron COM2 `0be7283`:
 scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
 **Next after Stage 45 + P0-60 + G0 relocate + M4.3:** Stage 46
-`ISO-INSTALL-OK` (OPEN; first slice is product CD window + continue past
-lab El Torito stop; not `sectors>0` alone; G1 is not Stage 46).
+`ISO-INSTALL-OK` (OPEN; second slice is ESP retain + virtio-pci queues + hold
+when the product window is armed; lab stub still E4; not `sectors>0` alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

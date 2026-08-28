@@ -288,6 +288,7 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0x8000_0000));
     assert!(!is_platform_sink_gpa(0xFFC0_0000));
     assert!(!is_platform_sink_gpa(0xFFFF_FFF0));
+    assert!(is_platform_sink_gpa(0xFE00_0000), "lab stub: virtio BAR stays sink");
     assert!(is_platform_io_port(0x70));
     assert!(is_platform_io_port(0x510));
     assert!(is_platform_io_port(0x40));

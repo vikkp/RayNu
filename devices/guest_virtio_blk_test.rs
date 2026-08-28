@@ -1,8 +1,12 @@
 use super::{
-    latch_dxe_virtio_did, pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
-    pci_config_addr, pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr,
-    pei_host_bridge_did, present, reset, take_marker, virtio_disk_evidence, GUEST_VIRTIO_PCI_DEVICE,
-    GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
+    blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, latch_dxe_virtio_did,
+    pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio, pci_config_addr,
+    pci_config_addr_slot0, pci_enumerated, pci_read_data, pci_write_addr, pci_write_data,
+    pei_host_bridge_did, present, process_blk_queue_in, queues_armed, reset, take_marker,
+    virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
+    GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER,
+    VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
+    VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
 };
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -22,6 +26,137 @@ fn pci_bdf_is_probe_slot_not_ide() {
     assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 IDE
     assert!(!pci_addr_selects_virtio(0x8000_4000)); // 00:08.0 host
     assert!(!pci_addr_selects_virtio(0x8000_0800)); // 00:01.0 ISA
+}
+
+#[test]
+fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, MOCK_EFI_ISO_BYTES,
+        ISO_SECTOR,
+    };
+    reset();
+    reset_cd();
+    assert!(present());
+    assert!(latch_dxe_virtio_did());
+    pci_write_addr(pci_config_addr() | 0x40);
+    assert_eq!(pci_read_data(0xCFC, 4), 0x0001_0010, "lab enum stub cap");
+    assert!(!queues_armed());
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    assert!(queues_armed());
+    assert!(latch_dxe_virtio_did());
+    pci_write_addr(pci_config_addr() | 0x40);
+    let cap0 = pci_read_data(0xCFC, 4);
+    assert_eq!(cap0 as u8, VIRTIO_PCI_CAP_VNDR);
+    assert_eq!((cap0 >> 24) as u8, VIRTIO_PCI_CAP_COMMON);
+    pci_write_addr(pci_config_addr() | 0x50);
+    let cap1 = pci_read_data(0xCFC, 4);
+    assert_eq!(cap1 as u8, VIRTIO_PCI_CAP_VNDR);
+    assert_eq!((cap1 >> 24) as u8, VIRTIO_PCI_CAP_NOTIFY);
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    let sz = pci_read_data(0xCFC, 4);
+    assert_eq!(sz, GUEST_VIRTIO_BAR0_SIZE_MASK);
+    pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
+    assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+    assert!(is_virtio_bar_2m_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT) + 0x1000));
+    assert!(!crate::devices::guest_platform::is_platform_sink_gpa(
+        u64::from(GUEST_VIRTIO_BAR0_DEFAULT)
+    ));
+    reset();
+    reset_cd();
+    assert!(!queues_armed());
+    assert!(!is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+}
+
+#[test]
+fn blk_sector_rw_roundtrip_and_queue_out() {
+    let mut disk = vec![0u8; 4096];
+    let mut buf = [0xABu8; 512];
+    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_OUT, 0, &mut buf), VIRTIO_BLK_S_OK);
+    let mut back = [0u8; 512];
+    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_IN, 0, &mut back), VIRTIO_BLK_S_OK);
+    assert_eq!(back, buf);
+    assert_eq!(blk_sector_rw(&mut disk, VIRTIO_BLK_T_FLUSH, 0, &mut buf), VIRTIO_BLK_S_OK);
+
+    // Split virtqueue: header + data + status in a flat GPA image.
+    let mut guest = vec![0u8; 4096];
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    // desc0 header at GPA 0x300
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_OUT.to_le_bytes());
+    guest[hdr_gpa as usize + 8..hdr_gpa as usize + 16].copy_from_slice(&0u64.to_le_bytes());
+    // desc1 data at 0x400
+    let data_gpa = 0x400u64;
+    guest[data_gpa as usize..data_gpa as usize + 512].fill(0x5A);
+    // desc2 status at 0x700
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, data_gpa, 512, 1, 2);
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk2 = vec![0u8; 4096];
+    let n = process_blk_queue_in(&mut guest, &mut disk2, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 512);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    assert_eq!(disk2[0], 0x5A);
+}
+
+#[test]
+fn install_disk_partition_table_gpt_and_mbr() {
+    use super::install_disk_has_partition_table;
+    let mut z = vec![0u8; 4096];
+    assert!(!install_disk_has_partition_table(&z));
+    z[510] = 0x55;
+    z[511] = 0xAA;
+    z[0x1BE + 4] = 0x83;
+    assert!(install_disk_has_partition_table(&z));
+    let mut gpt = vec![0u8; 4096];
+    gpt[512..520].copy_from_slice(b"EFI PART");
+    assert!(install_disk_has_partition_table(&gpt));
+    let mut esp = vec![0u8; 4096];
+    esp[512..520].copy_from_slice(b"EFI PART");
+    esp[1024..1040].copy_from_slice(&[
+        0x28, 0x73, 0x2A, 0xC1, 0x1F, 0xF8, 0xD2, 0x11, 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9,
+        0x3B,
+    ]);
+    assert!(install_disk_has_partition_table(&esp));
+    reset();
+    assert!(!super::take_iso_install_ok());
+}
+
+#[test]
+fn decode_mmio_mov_encodings() {
+    let r32 = decode_mmio_insn(&[0x8B, 0x01], 2).unwrap();
+    assert!(!r32.is_write && r32.size == 4 && r32.reg == 0);
+    let w32 = decode_mmio_insn(&[0x89, 0x11], 2).unwrap();
+    assert!(w32.is_write && w32.size == 4 && w32.reg == 2);
+    let r16 = decode_mmio_insn(&[0x66, 0x8B, 0x01], 3).unwrap();
+    assert!(!r16.is_write && r16.size == 2);
+    let w8 = decode_mmio_insn(&[0x88, 0x01], 2).unwrap();
+    assert!(w8.is_write && w8.size == 1 && w8.reg == 0);
+    let r64 = decode_mmio_insn(&[0x48, 0x8B, 0x01], 3).unwrap();
+    assert!(!r64.is_write && r64.size == 8);
+    let imm = decode_mmio_insn(&[0xC7, 0x01, 0x78, 0x56, 0x34, 0x12], 6).unwrap();
+    assert!(imm.is_write && imm.has_imm && imm.imm == 0x1234_5678);
 }
 
 #[test]

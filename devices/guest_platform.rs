@@ -557,6 +557,9 @@ pub fn is_platform_sink_gpa(gpa: u64) -> bool {
     if is_xapic_2m_gpa(gpa) {
         return false;
     }
+    if crate::devices::guest_virtio_blk::is_virtio_bar_2m_gpa(gpa) {
+        return false;
+    }
     gpa >= PLATFORM_REPORT_RAM_BYTES && gpa < FW_FLOOR
 }
 

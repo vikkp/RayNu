@@ -99,7 +99,9 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 262144);
     assert_eq!(GUEST_UEFI_NESTED_RESUME_CAP, 65536);
-    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 1_048_576);
+    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 16_777_216);
+    assert_eq!(GUEST_UEFI_REPORT_RAM_SLOTS, 32);
+    assert_eq!(super::GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA, 224);
     assert_eq!(guest_uefi_resume_cap(false), 262144);
     assert_eq!(guest_uefi_resume_cap(true), 65536);
     assert!(GUEST_UEFI_NESTED_RESUME_CAP > 30769);
@@ -152,6 +154,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000838"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:02.0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO virtio-pci queues gated on window"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("drive@0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ide@1,1"));

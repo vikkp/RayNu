@@ -29,6 +29,10 @@ pub fn iso_install_surface_present() -> bool {
         && s.contains("fn probe_iso_install_lab_flag(")
         && s.contains("fn probe_iso_reboot_lab_flag(")
         && s.contains("fn probe_iso_persist_reboot(")
+        && s.contains("fn probe_product_linux_iso(")
+        && s.contains("fn present_product_iso_if_retained(")
+        && s.contains("fn stage46_hold_e4_shell(")
+        && s.contains("fn retain_product_iso_bytes(")
         && s.contains("fn persist_armed_install_to_esp(")
         && s.contains("fn fill_persist_image(")
         && s.contains("fn prop_iso_reboot_lab_package(")
@@ -47,6 +51,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../src/main.rs").contains("E5 install-sized virtio-blk")
         && include_str!("../src/main.rs").contains("probe_iso_install_lab_flag")
         && include_str!("../src/main.rs").contains("probe_iso_reboot_lab_flag")
+        && include_str!("../src/main.rs").contains("probe_product_linux_iso")
+        && include_str!("../src/main.rs").contains("stage46_hold_e4_shell")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }
@@ -60,6 +66,12 @@ pub fn iso_install_honesty_holds() -> bool {
         && crate::mgmt::iso_install::stage46_host_never_prints_iso_install_ok()
         && crate::mgmt::iso_install::product_iso_continues_past_eltorito(false, true)
         && !crate::mgmt::iso_install::product_iso_continues_past_eltorito(true, true)
+        && !crate::mgmt::iso_install::product_iso_len_is_window(
+            crate::devices::ide_cdrom::GUEST_CD_ISO_CAP,
+        )
+        && crate::mgmt::iso_install::product_iso_len_is_window(
+            crate::devices::ide_cdrom::GUEST_CD_ISO_CAP + 2048,
+        )
         && install_launch_surfaces_present()
 }
 

@@ -85,6 +85,7 @@ fn main() -> Status {
     r640_hypervisor::mgmt::probe_iso_install_lab_flag();
     r640_hypervisor::mgmt::probe_iso_reboot_lab_flag();
     r640_hypervisor::mgmt::probe_iso_persist_reboot();
+    r640_hypervisor::mgmt::probe_product_linux_iso();
     r640_hypervisor::mgmt::probe_host_nic_lab_flag();
     let _ = r640_hypervisor::mgmt::run_pre_ebs_mgmt_listen();
 
@@ -177,6 +178,12 @@ fn run_m1_vmx(alloc: &mut memory::FrameAllocator) {
 }
 
 extern "C" fn resume_e4_shell() -> ! {
+    if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
+        loop {
+            core::hint::spin_loop();
+        }
+    }
     let alloc = vmx::guest_uefi::e4_alloc();
     let life = vmx::guest_uefi::e4_life();
     if !alloc.is_null() && !life.is_null() {
@@ -212,6 +219,12 @@ fn run_m2_ept_launch(alloc: &mut memory::FrameAllocator, life: &mut vmx::VmxLife
         }
     } else {
         boot::serial::write_line("boot: guest-UEFI skipped (no retained OVMF.fd)");
+    }
+    if r640_hypervisor::mgmt::stage46_hold_e4_shell() {
+        boot::serial::write_line(r640_hypervisor::mgmt::M7_STAGE46_HOLD_E4_NOTE);
+        loop {
+            core::hint::spin_loop();
+        }
     }
     run_m2_ept_launch_e4(alloc, life);
 }

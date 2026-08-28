@@ -29,6 +29,21 @@ fn markers_stable() {
     assert!(!product_iso_continues_past_eltorito(true, true));
     assert!(product_iso_continues_past_eltorito(false, true));
     assert!(!product_iso_continues_past_eltorito(false, false));
+    assert!(!product_iso_len_is_window(0));
+    assert!(!product_iso_len_is_window(crate::devices::ide_cdrom::GUEST_CD_ISO_CAP));
+    assert!(product_iso_len_is_window(
+        crate::devices::ide_cdrom::GUEST_CD_ISO_CAP + 2048
+    ));
+    assert!(!product_iso_len_is_window(PRODUCT_ISO_MAX_BYTES + 1));
+    assert_eq!(PRODUCT_ISO_ESP_PATHS[0], "\\EFI\\RayNu\\linux.iso");
+    assert!(PRODUCT_ISO_ESP_PATHS.contains(&"\\linux.iso"));
+    assert!(PRODUCT_ISO_ESP_PATHS.contains(&"\\EFI\\RayNu\\install.iso"));
+    assert_eq!(product_iso_install_disk_bytes(true), LAB_INSTALL_DISK_BYTES as usize);
+    assert_eq!(
+        product_iso_install_disk_bytes(false),
+        PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
+    );
+    assert!(PRODUCT_ISO_INSTALL_DISK_IRON_BYTES > DEFAULT_INSTALL_DISK_BYTES as usize);
     let win = crate::mgmt::guest_image::GuestBootSpec::product_iso(
         crate::mgmt::guest_image::GuestImageType::WindowsIso,
         1,
@@ -125,4 +140,26 @@ fn persist_image_is_marker_only_for_iron_size() {
     );
     assert_eq!(parse_decimal_u64(b"67108864\n"), Some(67108864));
     assert_eq!(parse_decimal_u64(b"1048576"), Some(1048576));
+}
+
+#[test]
+fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
+    let _g = iso_install_host_test_lock();
+    clear_product_iso_retain();
+    crate::devices::ide_cdrom::reset();
+    let lab = vec![0u8; crate::devices::ide_cdrom::GUEST_CD_ISO_CAP];
+    assert!(!retain_product_iso_bytes(&lab));
+    assert!(product_iso_retained_bytes().is_none());
+    assert!(!stage46_hold_e4_shell());
+    let extra = crate::devices::ide_cdrom::GUEST_CD_ISO_CAP + 2048;
+    let iso = vec![0x5Au8; extra];
+    let leaked: &'static [u8] = Box::leak(iso.into_boxed_slice());
+    assert!(retain_product_iso_bytes(leaked));
+    assert_eq!(product_iso_retained_bytes().map(|b| b.len()), Some(extra));
+    assert!(present_product_iso_if_retained());
+    assert!(crate::devices::ide_cdrom::product_iso_window_armed());
+    assert!(stage46_hold_e4_shell());
+    crate::devices::ide_cdrom::reset();
+    clear_product_iso_retain();
+    assert!(!stage46_hold_e4_shell());
 }

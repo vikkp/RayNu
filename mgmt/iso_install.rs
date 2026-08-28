@@ -39,7 +39,7 @@ pub const ISO_INSTALL_MVP_NOTE: &str =
 pub const ISO_INSTALL_HOST_LIMIT_NOTE: &str =
     "Latitude/QEMU host smoke cannot close RAYNU-V-M7-ISO-INSTALL-OK; real install proof required";
 
-/// Stage 46 first slice: El Torito on a product CD continues; not install-OK.
+/// Stage 46: El Torito on a product CD continues; not install-OK.
 ///
 /// INVARIANTS:
 /// - `true` only when El Torito evidence ran **and** the CD is not the lab stub
@@ -53,6 +53,103 @@ pub fn stage46_host_never_prints_iso_install_ok() -> bool {
     M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
         && M7_ISO_INSTALL_SCAFFOLD_MARKER != M7_ISO_INSTALL_OK_MARKER
         && M7_ISO_BOOTED_FROM_DISK_MARKER != M7_ISO_INSTALL_OK_MARKER
+}
+
+/// True when `len` arms the product ISO ATAPI window (not the 72 KiB lab stub).
+pub fn product_iso_len_is_window(len: usize) -> bool {
+    len > crate::devices::ide_cdrom::GUEST_CD_ISO_CAP && len <= PRODUCT_ISO_MAX_BYTES
+}
+
+/// After guest-UEFI, stay there instead of packed-bzImage E4.
+///
+/// INVARIANTS:
+/// - `true` only when the product ISO window is armed
+/// - Lab 73728 stub / `iso=0` stays `false` (E4 `LINUX-EARLY` still runs)
+pub fn stage46_hold_e4_shell() -> bool {
+    crate::devices::ide_cdrom::product_iso_window_armed()
+}
+
+/// ESP paths probed PRE-EBS for a distro ISO (not the 1 KiB persist stamp).
+pub const PRODUCT_ISO_ESP_PATHS: &[&str] = &[
+    "\\EFI\\RayNu\\linux.iso",
+    "\\linux.iso",
+    "\\EFI\\RayNu\\install.iso",
+];
+
+/// Cap a product ISO so PRE-EBS AllocatePages cannot consume the map.
+pub const PRODUCT_ISO_MAX_BYTES: usize = 0x8000_0000;
+
+/// Serial when ESP retained a window-sized ISO. Not `ISO-INSTALL-OK`.
+pub const M7_STAGE46_PRODUCT_ISO_ESP_NOTE: &str =
+    "boot: Stage 46 product ISO retained from ESP (not ISO-INSTALL-OK)";
+
+/// Serial when ESP has no window-sized ISO — lab El Torito stub.
+pub const M7_STAGE46_PRODUCT_ISO_MISSING_NOTE: &str =
+    "boot: Stage 46 no product ISO on ESP — lab El Torito stub";
+
+/// Serial when product ISO is armed and E4 SHELL is not entered.
+pub const M7_STAGE46_HOLD_E4_NOTE: &str =
+    "boot: Stage 46 product ISO hold (not ISO-INSTALL-OK); not E4 SHELL";
+
+static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
+static mut PRODUCT_ISO_LEN: usize = 0;
+
+/// Remember a window-sized ISO. Caller keeps `bytes` alive across EBS.
+///
+/// INVARIANTS:
+/// - Rejects lab stub size (`<= GUEST_CD_ISO_CAP`) and oversize
+/// - Does not print [`M7_ISO_INSTALL_OK_MARKER`]
+pub fn retain_product_iso_bytes(bytes: &[u8]) -> bool {
+    if !product_iso_len_is_window(bytes.len()) {
+        return false;
+    }
+    // SAFETY: single-threaded boot / host-test lock.
+    unsafe {
+        PRODUCT_ISO_PTR = bytes.as_ptr();
+        PRODUCT_ISO_LEN = bytes.len();
+    }
+    true
+}
+
+/// Bytes retained by [`retain_product_iso_bytes`] / PRE-EBS ESP probe.
+pub fn product_iso_retained_bytes() -> Option<&'static [u8]> {
+    // SAFETY: single-threaded boot / host-test lock; written once PRE-EBS.
+    unsafe {
+        if PRODUCT_ISO_LEN == 0 || PRODUCT_ISO_PTR.is_null() {
+            None
+        } else {
+            Some(core::slice::from_raw_parts(PRODUCT_ISO_PTR, PRODUCT_ISO_LEN))
+        }
+    }
+}
+
+/// Clear ESP retain (host tests).
+pub fn clear_product_iso_retain() {
+    // SAFETY: single-threaded boot / host-test lock.
+    unsafe {
+        PRODUCT_ISO_PTR = core::ptr::null();
+        PRODUCT_ISO_LEN = 0;
+    }
+}
+
+/// Present retained product ISO on the guest ATAPI function (no placeholder).
+pub fn present_product_iso_if_retained() -> bool {
+    let Some(bytes) = product_iso_retained_bytes() else {
+        return false;
+    };
+    crate::devices::ide_cdrom::present(bytes, 1)
+}
+
+/// Iron product-ISO virtio-blk (1 GiB). Nested stays [`LAB_INSTALL_DISK_BYTES`].
+pub const PRODUCT_ISO_INSTALL_DISK_IRON_BYTES: usize = 1024 * 1024 * 1024;
+
+/// Install-disk size for the guest-UEFI virtio-pci backend when the window is armed.
+pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
+    if host_hypervisor {
+        LAB_INSTALL_DISK_BYTES as usize
+    } else {
+        PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
+    }
 }
 
 /// Phases toward E5 close (management-plane bookkeeping).
@@ -401,6 +498,57 @@ pub fn probe_iso_install_lab_flag() {
         serial::write_line(M7_ISO_INSTALL_LAB_ARM_NOTE);
     }
 }
+
+/// Probe ESP for a window-sized Linux/distro ISO (PRE-EBS).
+///
+/// Paths: [`PRODUCT_ISO_ESP_PATHS`]. Rejects the 72 KiB lab stub.
+/// Copies into `LOADER_DATA` so the bytes survive ExitBootServices
+/// (handoff takes CONVENTIONAL; LoaderData is not in the FrameAllocator pool).
+#[cfg(target_os = "uefi")]
+pub fn probe_product_linux_iso() {
+    use crate::boot::serial;
+    use uefi::boot::{self, AllocateType, MemoryType};
+    use uefi::fs::FileSystem;
+    use uefi::CString16;
+
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        serial::write_line(M7_STAGE46_PRODUCT_ISO_MISSING_NOTE);
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    for path in PRODUCT_ISO_ESP_PATHS {
+        let Ok(p) = CString16::try_from(*path) else {
+            continue;
+        };
+        let Ok(data) = fs.read(p.as_ref()) else {
+            continue;
+        };
+        if !product_iso_len_is_window(data.len()) {
+            continue;
+        }
+        let pages = data.len().div_ceil(4096);
+        let Ok(ptr) =
+            boot::allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, pages)
+        else {
+            continue;
+        };
+        // SAFETY: exclusive LOADER_DATA pages; copy then drop the Vec.
+        // Conventional leak would be reclaimed at ExitBootServices.
+        let leaked: &'static [u8] = unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
+            core::slice::from_raw_parts(ptr.as_ptr(), data.len())
+        };
+        if retain_product_iso_bytes(leaked) {
+            serial::write_line(M7_STAGE46_PRODUCT_ISO_ESP_NOTE);
+            return;
+        }
+    }
+    serial::write_line(M7_STAGE46_PRODUCT_ISO_MISSING_NOTE);
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_product_linux_iso() {}
 
 /// Second boot without `isoreboot.txt`: `installdisk.bin` and no write-flag.
 #[cfg(target_os = "uefi")]

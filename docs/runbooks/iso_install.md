@@ -139,6 +139,21 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   installer is UEFI guest firmware + virtio ([ADR-014](../adr/ADR-014.md)), not
   another bzImage extract. Windows ISO is later; do not paint a Linux-only corner.
 
+## Stage 46 product ISO (OPEN — Everest E5)
+
+Not persist-detect `ISO-BOOTED-FROM-DISK`. Not the 72 KiB lab El Torito stub.
+Not extract-boot bzImage.
+
+Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
+(fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
+bytes. PRE-EBS copies it into `LOADER_DATA`. Guest OVMF boots that CD, virtio-pci
+queues target an empty install disk (1 GiB on iron, 1 MiB nested), and guest-UEFI
+**holds** (does not fail-soft to E4). Iron COM2 close is
+`RAYNU-V-M7-ISO-INSTALL-OK` after the installer writes a partition table.
+Host/CI never prints that marker. `iso=0` / lab stub still E4 `LINUX-EARLY`.
+Keep `windows_iso` / `generic_uefi`. Iron P0-14 `last_commit` stays `2b795a0`
+until this gate actually closes.
+
 ## Next
 
 1. ~~Wire `InstallLaunchContract` → guest launch (extract-boot + install-sized virtio-blk).~~
@@ -235,4 +250,4 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
    magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
    Not Everest E5.
-   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; product CD window + continue past lab El Torito; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
+   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + hold when armed; lab stub still E4; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
