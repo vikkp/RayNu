@@ -11,7 +11,7 @@ use super::{
     guest_uefi_linux_cpuid_exit_skip,
     guest_uefi_linux_cpuid_should_log,
     guest_uefi_linux_hlt_skip,
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_linux_earlycon_drain, guest_uefi_linux_earlycon_share_on_linux_deliver, guest_uefi_linux_earlycon_share_on_vmexit, guest_uefi_poll_iso_install_ok, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_linux_earlycon_drain, guest_uefi_linux_earlycon_share_on_linux_deliver, guest_uefi_linux_earlycon_share_on_vmexit, guest_uefi_linux_earlycon_share_on_bootimg, guest_uefi_poll_iso_install_ok, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
@@ -164,6 +164,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush on tick cadence even when share"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first CPUID"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first high-half"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first bootimg"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip exc deliver"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poll ISO-INSTALL-OK every resume"));
@@ -805,6 +806,12 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0xfffc_f000, true));
     assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0xffff_8880_7e2a_3000, false));
     assert!(guest_uefi_linux_earlycon_share_on_vmexit(0xffff_8880_7e2a_3000, true));
+    // linux earlycon share first bootimg: identity-map `[` (iron b983ef8
+    // OVMF RIP 0x7ee5dbe4) is not bit 63; iso=0 still must not latch.
+    assert!(!guest_uefi_linux_earlycon_share_on_bootimg(true, false));
+    assert!(!guest_uefi_linux_earlycon_share_on_bootimg(false, true));
+    assert!(guest_uefi_linux_earlycon_share_on_bootimg(true, true));
+    assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0x7ee5_dbe4, true));
     // linux earlycon skip #PF dump: same predicate.
     // linux earlycon skip exc deliver: same predicate.
     // poll ISO-INSTALL-OK every resume: iron only.
