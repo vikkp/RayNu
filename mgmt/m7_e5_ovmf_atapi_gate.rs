@@ -249,7 +249,8 @@ use crate::devices::guest_platform::{boot_menu_wait_skips_bds, bootorder_nul_ter
 use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
-    guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_filter_cpuid, guest_uefi_is_misc_enable,
+    guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_cpuid_leaf_is_hypervisor_scan,
+    guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live,
@@ -412,6 +413,10 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("ebecc9c3")
         && guest.contains("ebf3c9c3")
         && guest.contains("guest_uefi_filter_cpuid")
+        && guest.contains("fn guest_uefi_filter_cpuid_for_linux")
+        && guest.contains("fn guest_uefi_cpuid_leaf_is_hypervisor_scan")
+        && guest.contains("0x40003d00")
+        && guest.contains("0x4000bd00")
         && guest.contains("GUEST_UEFI_FEATURE_CONTROL_VALUE")
         && guest.contains("ad78f12")
         && guest.contains("xAPIC 4K")
@@ -821,6 +826,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MTRR shadow")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("408788c")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KVMKVMKVM")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x40003d00")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x4000bd00")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("callerrip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8700cbb")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("VCNT=32")
@@ -1371,6 +1378,18 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
             let k = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
             guest_uefi_cpuid_is_kvm(k.ebx, k.ecx, k.edx)
         }
+        && {
+            let r = guest_uefi_filter_cpuid_for_linux(1, 0);
+            !guest_uefi_cpuid_has_hypervisor(r.ecx)
+                && guest_uefi_cpuid_leaf1_is_uniprocessor(r.ebx, r.edx)
+        }
+        && {
+            let k = guest_uefi_filter_cpuid_for_linux(GUEST_UEFI_KVM_CPUID_LEAF, 0);
+            k.eax == 0 && k.ebx == 0 && k.ecx == 0 && k.edx == 0
+        }
+        && guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_3d00)
+        && guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_bd00)
+        && !guest_uefi_cpuid_leaf_is_hypervisor_scan(1)
         && {
             let ext = guest_uefi_filter_cpuid(0x8000_0001, 0);
             ext.edx & crate::vmx::guest_uefi::CPUID_80000001_EDX_NX == 0

@@ -23,7 +23,8 @@ use super::{
     preempt_deadloop_delay_loop_skip_len, preempt_deadloop_delay_loop_sets_rax_one,
     preempt_deadloop_guarded_assert_skip_len, guest_uefi_assert_caller_is_dxe_ram,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
-    guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_filter_cpuid,
+    guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_cpuid_leaf_is_hypervisor_scan,
+    guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux,
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
@@ -297,6 +298,8 @@ fn marker_and_residual_honest() {
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73ed589"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("restore host XCR0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x40003d00"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x4000bd00"));
     assert_eq!(GUEST_UEFI_FEATURE_CONTROL_VALUE, 1);
     let leaf1 = guest_uefi_filter_cpuid(1, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
@@ -306,6 +309,22 @@ fn marker_and_residual_honest() {
     let kvm = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
     assert!(guest_uefi_cpuid_is_kvm(kvm.ebx, kvm.ecx, kvm.edx));
     assert_eq!(kvm.eax, GUEST_UEFI_KVM_CPUID_LEAF + 1);
+    let linux1 = guest_uefi_filter_cpuid_for_linux(1, 0);
+    assert!(!guest_uefi_cpuid_has_hypervisor(linux1.ecx));
+    assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(linux1.ebx, linux1.edx));
+    let linux_kvm = guest_uefi_filter_cpuid_for_linux(GUEST_UEFI_KVM_CPUID_LEAF, 0);
+    assert_eq!(linux_kvm.eax, 0);
+    assert_eq!(linux_kvm.ebx, 0);
+    assert_eq!(linux_kvm.ecx, 0);
+    assert_eq!(linux_kvm.edx, 0);
+    assert!(!guest_uefi_cpuid_is_kvm(linux_kvm.ebx, linux_kvm.ecx, linux_kvm.edx));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_3d00));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_bd00));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(GUEST_UEFI_KVM_CPUID_LEAF));
+    assert!(!guest_uefi_cpuid_leaf_is_hypervisor_scan(1));
+    assert!(!guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4001_0000));
+    let linux_scan = guest_uefi_filter_cpuid_for_linux(0x4000_3d00, 0);
+    assert_eq!(linux_scan.eax | linux_scan.ebx | linux_scan.ecx | linux_scan.edx, 0);
     let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);
     let pa = phys.eax & 0xFF;
     assert!(pa >= GUEST_UEFI_PHYS_BITS_IRON_CAP && pa <= GUEST_UEFI_PHYS_BITS_MAX);
