@@ -278,6 +278,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon share product ISO")
         && include_str!("../vmx/guest_uefi.rs").contains("cpu_flush on tick cadence even when share")
         && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon share first CPUID")
+        && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon share first high-half")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_earlycon_share_on_vmexit")
         && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon skip #PF dump")
         && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon skip exc deliver")
         && include_str!("../vmx/guest_uefi.rs").contains("poll ISO-INSTALL-OK every resume")
