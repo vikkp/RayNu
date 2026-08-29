@@ -304,6 +304,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("restore host XCR0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x40003d00"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x4000bd00"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("push rbx RSP slot"));
     assert_eq!(GUEST_UEFI_FEATURE_CONTROL_VALUE, 1);
     let leaf1 = guest_uefi_filter_cpuid(1, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
@@ -335,9 +336,10 @@ fn marker_and_residual_honest() {
         u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
     );
     assert_eq!(
-        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_bd00, 0xffff_ffff_4000_bd00),
-        0xffff_ffff_4000_ff00
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_bd00, 0x4000_bd00),
+        u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
     );
+    // alpine-virt native_cpuid: push %rbx with base in EBX (not R12).
     assert_eq!(
         guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7fff_ffff_8abc_def0),
         0x7fff_ffff_8abc_def0

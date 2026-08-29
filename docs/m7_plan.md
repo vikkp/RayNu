@@ -531,7 +531,9 @@ bumps PVD + Joliet `grub.cfg` Data Length 143→208 (a 143-byte read hid
 `initrd`/`}` and dropped to rescue `grub>` on iron COM2 after El Torito
 `bootimg=1`). Linux `hypervisor_cpuid_base` callee-saved GPR bump to
 `0x4000FF00` so each vendor is one CPUID (iron COM2 `90c85d5` still
-walked `n=256 leaf=0x4000bd00` after `Loaded initrd`). Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
+walked `n=256 leaf=0x4000bd00` after `Loaded initrd`). alpine-virt 6.12.13
+keeps that `base` in EBX; `native_cpuid` `push %rbx` before CPUID so the
+loop copy is the 8-byte RSP slot (not R12). Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
 counter so Linux `nolapic` `inb 0x40` sees a real count; `raise_pit` steps it.
 The old stub wrote `val | 0x00FF` and never returned a high byte. Eighteenth slice: same-length ISO patch keeps `squashfs` in
 `modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `;
