@@ -857,6 +857,9 @@ pub fn install_disk_has_partition_table(disk: &[u8]) -> bool {
 /// Caller prints [`crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER`].
 /// Host/CI / nested must not call this print path.
 pub fn take_iso_install_ok() -> bool {
+    if ISO_OK.load(Ordering::Acquire) {
+        return false;
+    }
     if !queues_armed() || disk_bytes_written() < 16 * 1024 {
         return false;
     }
