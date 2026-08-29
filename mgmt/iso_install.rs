@@ -426,8 +426,9 @@ pub fn product_iso_frame_pool_prefer_end(product_iso: bool, host_hypervisor: boo
 /// report-RAM ate the `[1MiB,256MiB)` pool; only 1 MiB landed. Alpine
 /// sys-mode cannot write a usable GPT on 1 MiB. Guest-UEFI must reserve
 /// this disk **before** report-RAM so 64 MiB (the REST default) fits.
-/// Iron product-ISO raises the pool to 512 MiB; a 256 MiB disk still
-/// skips when leftover would starve OVMF report-RAM (iron pool=194).
+/// Iron product-ISO raises the pool to 512 MiB. A 256 MiB disk lands when
+/// leftover DRAM backs report-RAM (scratch-only leave); a tighter precise
+/// pool still falls to 64 MiB. Nested stays 1 MiB. iso=0 does not use this.
 pub fn product_iso_install_disk_try_sizes(host_hypervisor: bool) -> &'static [usize] {
     if host_hypervisor {
         &[LAB_INSTALL_DISK_BYTES as usize]

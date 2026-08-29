@@ -167,6 +167,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip exc deliver"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poll ISO-INSTALL-OK every resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("256MiB disk leftover report-RAM"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -1754,7 +1755,7 @@ fn try_alloc_product_iso_install_disk_reserves_64mib() {
 
 #[test]
 fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
-    // 256 MiB disk + 256 MiB leave (32 scratch + 96 report-RAM).
+    // 256 MiB disk + 64 MiB scratch leave (leftover DRAM fills report-RAM).
     const PAGES: u64 = (512 * 1024 * 1024) / 4096;
     let mut words = vec![0u64; 4096];
     let mut alloc = unsafe {
@@ -1765,18 +1766,31 @@ fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
 }
 
 #[test]
-fn try_alloc_skips_256mib_when_report_ram_would_starve() {
-    // Iron after fw/sink/hole is ~480 MiB. 256 MiB disk would leave ~224 MiB
-    // (< 256 MiB leave) and starve OVMF GCD. 64 MiB still fits Alpine GPT.
+fn try_alloc_256mib_when_leftover_backs_report_ram() {
+    // Iron after fw/sink/hole is ~480 MiB. Scratch-only leave (64 MiB)
+    // lets 256 MiB land; leftover DRAM extra=846 fills report-RAM.
     const PAGES: u64 = (480 * 1024 * 1024) / 4096;
     let mut words = vec![0u64; 4096];
     let mut alloc = unsafe {
         FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
     };
     let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
+    assert_eq!(super::PRODUCT_ISO_DISK_LEAVE_2M_SLOTS, 32);
+    assert_eq!(super::product_iso_disk_leave_pages(), 32 * 512);
+}
+
+#[test]
+fn try_alloc_skips_256mib_when_scratch_would_starve() {
+    // ~280 MiB precise pool: 256 MiB disk would leave ~24 MiB (< 64 MiB
+    // scratch). 64 MiB still fits Alpine GPT. Do not steal leftover.
+    const PAGES: u64 = (280 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
     assert_eq!(bytes, 64 * 1024 * 1024);
-    assert_eq!(super::PRODUCT_ISO_DISK_LEAVE_2M_SLOTS, 32 + 96);
-    assert_eq!(super::product_iso_disk_leave_pages(), (32 + 96) * 512);
 }
 
 #[test]

@@ -220,6 +220,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip exc deliver")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poll ISO-INSTALL-OK every resume")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("256MiB disk leftover report-RAM")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
