@@ -19,10 +19,17 @@ const COM1: u16 = 0x3F8;
 const COM2: u16 = 0x2F8;
 
 /// Spins waiting for THR empty on host diagnostic writes (ticks, banners).
-/// Guest THR tees use [`write_byte_nowait`] (one LSR poll) so a flooded iDRAC
-/// SOL cannot stall the VM-exit path. Timeout must **not** clear liveness —
-/// iron `115e5ee` froze COM2 at PAT `n=441600` after a guest `out` waited THRE.
+/// Guest THR tees use [`write_byte_nowait`] (enqueue + drain) so a flooded
+/// iDRAC SOL cannot stall the VM-exit path. Timeout must **not** clear
+/// liveness — iron `115e5ee` froze COM2 at PAT `n=441600` after a guest
+/// `out` waited THRE. Iron `f423d03`: nowait *dropped* Linux printk when HV
+/// ticks held THRE (`GenuineIntEl` / PAT shredded). Queue, then drain.
 const THR_WAIT_SPINS: u32 = 200_000;
+/// Guest UART TX ring. Drops oldest when full so a late `ISO-INSTALL-OK`
+/// still reaches SOL. Not blocking. Not `ISO-INSTALL-OK` by itself.
+pub const GUEST_TX_CAP: usize = 2048;
+/// Bytes to push toward SOL per VM-exit / guest `out` (keep the exit short).
+pub const GUEST_TX_DRAIN_CHUNK: usize = 64;
 
 /// Per-port liveness; cleared on THR timeout so a missing UART cannot stall boot.
 static mut COM1_LIVE: bool = true;
@@ -33,6 +40,9 @@ pub const SERIAL_LOG_CAP: usize = 4096;
 static mut LOG_BUF: [u8; SERIAL_LOG_CAP] = [0; SERIAL_LOG_CAP];
 static mut LOG_HEAD: usize = 0;
 static mut LOG_LEN: usize = 0;
+static mut GUEST_TX: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
+static mut GUEST_TX_HEAD: usize = 0;
+static mut GUEST_TX_LEN: usize = 0;
 
 fn log_push(byte: u8) {
     // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
@@ -70,6 +80,95 @@ pub fn serial_log_clear() {
         LOG_HEAD = 0;
         LOG_LEN = 0;
     }
+}
+
+fn guest_tx_push(byte: u8) {
+    // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
+    unsafe {
+        if GUEST_TX_LEN == GUEST_TX_CAP {
+            GUEST_TX_HEAD = (GUEST_TX_HEAD + 1) % GUEST_TX_CAP;
+            GUEST_TX_LEN -= 1;
+        }
+        let idx = (GUEST_TX_HEAD + GUEST_TX_LEN) % GUEST_TX_CAP;
+        GUEST_TX[idx] = byte;
+        GUEST_TX_LEN += 1;
+    }
+}
+
+/// Bytes waiting in the guest UART TX ring.
+pub fn guest_tx_len() -> usize {
+    unsafe { GUEST_TX_LEN }
+}
+
+/// Drop queued guest UART bytes (tests / guest-UEFI reset).
+pub fn guest_tx_clear() {
+    unsafe {
+        GUEST_TX_HEAD = 0;
+        GUEST_TX_LEN = 0;
+    }
+}
+
+fn guest_tx_ports_ready() -> bool {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: port I/O to fixed legacy UART bases; one LSR poll.
+        unsafe {
+            let c1 = !COM1_LIVE || (inb(COM1 + 5) & 0x20) != 0;
+            let c2 = !COM2_LIVE || (inb(COM2 + 5) & 0x20) != 0;
+            c1 && c2
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        true
+    }
+}
+
+fn guest_tx_write_ports(byte: u8) {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: both live ports reported THRE; one THR write each.
+        // KANI-TARGET: guest UART TX ring drain (outside Proven Core).
+        unsafe {
+            if COM1_LIVE {
+                outb(COM1, byte);
+            }
+            if COM2_LIVE {
+                outb(COM2, byte);
+            }
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = byte;
+    }
+}
+
+/// Write queued guest UART bytes while host THRE is set. Never spins.
+///
+/// INVARIANTS:
+/// - At most `max` bytes leave the ring
+/// - Does not wait [`THR_WAIT_SPINS`] and does not clear COM1/COM2 liveness
+///
+/// VERIFICATION: L1 (host tests)
+pub fn drain_guest_tx(max: usize) -> usize {
+    let mut n = 0usize;
+    while n < max {
+        let empty = unsafe { GUEST_TX_LEN == 0 };
+        if empty || !guest_tx_ports_ready() {
+            break;
+        }
+        // SAFETY: single-threaded HV; LEN>0 and HEAD in range after the empty check.
+        let byte = unsafe {
+            let b = GUEST_TX[GUEST_TX_HEAD];
+            GUEST_TX_HEAD = (GUEST_TX_HEAD + 1) % GUEST_TX_CAP;
+            GUEST_TX_LEN -= 1;
+            b
+        };
+        guest_tx_write_ports(byte);
+        n += 1;
+    }
+    n
 }
 
 /// Initialize COM1 + COM2 to 115200 8N1.
@@ -112,18 +211,22 @@ pub fn write_byte(byte: u8) {
     log_push(byte);
 }
 
-/// Guest firmware/Linux THR tee. One LSR poll; drop if THRE is clear.
+/// Guest firmware/Linux THR tee. Enqueue, then drain while THRE is set.
 ///
 /// Always records the byte in the host serial ring. Never waits
 /// [`THR_WAIT_SPINS`] and never clears COM1/COM2 liveness.
 /// Iron `115e5ee`: blocking guest `out` after a tick line left SOL on PAT.
+/// Iron `f423d03`: one LSR poll *dropped* Linux printk (`0ce20ps` / PAT
+/// fragments) while HV `write_byte` ticks held THRE. Guest UART TX ring
+/// drain retries on later exits. Not `ISO-INSTALL-OK`.
 pub fn write_byte_nowait(byte: u8) {
     if byte == b'\n' {
-        write_raw_nowait(b'\r');
+        guest_tx_push(b'\r');
         log_push(b'\r');
     }
-    write_raw_nowait(byte);
+    guest_tx_push(byte);
     log_push(byte);
+    let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
 }
 
 fn write_raw(byte: u8) {
@@ -138,21 +241,6 @@ fn write_raw(byte: u8) {
     #[cfg(not(target_os = "uefi"))]
     {
         let _ = byte; // host/unit-test: no port I/O; log ring still records
-    }
-}
-
-fn write_raw_nowait(byte: u8) {
-    #[cfg(target_os = "uefi")]
-    {
-        // SAFETY: single-threaded boot / post-EBS HV; one LSR poll, no LIVE clear.
-        unsafe {
-            write_raw_port_nowait(COM1, byte);
-            write_raw_port_nowait(COM2, byte);
-        }
-    }
-    #[cfg(not(target_os = "uefi"))]
-    {
-        let _ = byte;
     }
 }
 
@@ -171,14 +259,6 @@ unsafe fn write_raw_port(base: u16, byte: u8, live: bool) {
     }
     // Drop this byte. Keep the port live so later ticks / ISO-INSTALL-OK
     // still reach iDRAC SOL (iron 115e5ee n=441600 PAT freeze).
-}
-
-unsafe fn write_raw_port_nowait(base: u16, byte: u8) {
-    // SAFETY: port I/O to fixed legacy UART bases; one LSR poll, no LIVE clear.
-    // KANI-TARGET: host COM1/COM2 nowait THR (outside Proven Core).
-    if inb(base + 5) & 0x20 != 0 {
-        outb(base, byte);
-    }
 }
 
 /// Write a UTF-8 string (bytes as-is) to diagnostic UARTs.
@@ -316,19 +396,37 @@ mod serial_test {
     }
 
     #[test]
+    fn guest_tx_ring_queues_then_drains() {
+        guest_tx_clear();
+        for i in 0..(GUEST_TX_CAP + 8) {
+            guest_tx_push(i as u8);
+        }
+        assert_eq!(guest_tx_len(), GUEST_TX_CAP);
+        let n = drain_guest_tx(GUEST_TX_CAP);
+        assert_eq!(n, GUEST_TX_CAP);
+        assert_eq!(guest_tx_len(), 0);
+        guest_tx_clear();
+    }
+
+    #[test]
     fn write_byte_nowait_logs_without_clearing_live() {
         serial_log_clear();
+        guest_tx_clear();
         write_byte_nowait(b'G');
         write_byte_nowait(b'\n');
         let mut buf = [0u8; 8];
         let n = serial_log_snapshot(&mut buf);
         assert!(n >= 2);
         assert_eq!(buf[0], b'G');
+        assert_eq!(guest_tx_len(), 0);
         let s = include_str!("serial.rs");
         assert!(s.contains("fn write_byte_nowait"));
+        assert!(s.contains("fn drain_guest_tx"));
         assert!(s.contains("Keep the port live"));
         assert!(s.contains("guest UART nowait; do not clear COM2_LIVE"));
+        assert!(s.contains("guest UART TX ring drain"));
         serial_log_clear();
+        guest_tx_clear();
     }
 
     #[test]
