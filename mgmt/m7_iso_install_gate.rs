@@ -96,6 +96,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("tsc=reliable")
         && include_str!("iso_install.rs").contains("clocksource=tsc")
         && include_str!("iso_install.rs").contains("idle=poll")
+        && include_str!("iso_install.rs").contains("earlycon=uart8250,io,0x3f8")
         && include_str!("iso_install.rs").contains("console=tty0")
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_guest_linear_one_page(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_flash_at(")
