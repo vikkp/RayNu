@@ -11,7 +11,7 @@ use super::{
     guest_uefi_linux_cpuid_exit_skip,
     guest_uefi_linux_cpuid_should_log,
     guest_uefi_linux_hlt_skip,
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_linux_earlycon_drain, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
@@ -158,6 +158,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share TX ring"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon quiet ticks"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon drain CHUNK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -771,18 +773,23 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_string_ins_needs_report_ram_map(GUEST_UEFI_IRON_REPORT_RAM_GPA));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1000));
     assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1F0_0000));
-    assert!(guest_uefi_tick_should_print(256, false, false));
-    assert!(guest_uefi_tick_should_print(16384, false, false));
-    assert!(!guest_uefi_tick_should_print(16640, false, false));
-    assert!(!guest_uefi_tick_should_print(17408, false, false));
-    assert!(guest_uefi_tick_should_print(17408, true, false));
-    assert!(guest_uefi_tick_should_print(20480, false, false));
+    assert!(guest_uefi_tick_should_print(256, false, false, false));
+    assert!(guest_uefi_tick_should_print(16384, false, false, false));
+    assert!(!guest_uefi_tick_should_print(16640, false, false, false));
+    assert!(!guest_uefi_tick_should_print(17408, false, false, false));
+    assert!(guest_uefi_tick_should_print(17408, true, false, false));
+    assert!(guest_uefi_tick_should_print(20480, false, false, false));
     // Iron 115e5ee: linux=true used to print every 256 and split printk.
-    assert!(!guest_uefi_tick_should_print(437248, true, true));
-    assert!(!guest_uefi_tick_should_print(16640, false, true));
-    assert!(!guest_uefi_tick_should_print(256, false, true));
-    assert!(guest_uefi_tick_should_print(4096, false, true));
-    assert!(guest_uefi_tick_should_print(438272, true, true));
+    assert!(!guest_uefi_tick_should_print(437248, true, true, false));
+    assert!(!guest_uefi_tick_should_print(16640, false, true, false));
+    assert!(!guest_uefi_tick_should_print(256, false, true, false));
+    assert!(guest_uefi_tick_should_print(4096, false, true, false));
+    assert!(guest_uefi_tick_should_print(438272, true, true, false));
+    // linux earlycon quiet ticks: share suppresses every-4096 Linux ticks.
+    assert!(!guest_uefi_tick_should_print(4096, false, true, true));
+    assert!(!guest_uefi_tick_should_print(438272, true, true, true));
+    assert_eq!(guest_uefi_linux_earlycon_drain(false), 4);
+    assert_eq!(guest_uefi_linux_earlycon_drain(true), 64);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);
