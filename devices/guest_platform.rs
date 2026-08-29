@@ -586,6 +586,13 @@ pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
 /// 1e6 ticks (~10 ms) per exit — Delay never finished. Do **not**
 /// apply this on PCI config I/O (`5d9e346` n=8192 `ataio=0`).
 pub const HPET_MAIN_STEP: u64 = 100_000_000;
+/// ~1 ms of HPET time (10 ns ticks) on CPUID / RDMSR / WRMSR.
+/// Iron COM2 after leftover+#PF: CPUID exits restart the preemption timer
+/// so [`HPET_MAIN_STEP`] never fires and the counter looks frozen
+/// (`hpet=22896` through n=256 `leaf=0x4000bd00`). Do **not** use
+/// [`HPET_MAIN_STEP`] here — 1 s per CPUID would jump hours during firmware
+/// CPUID. Not `ISO-INSTALL-OK`.
+pub const HPET_INSN_STEP: u64 = 100_000;
 
 /// HPET GPA in the sink page (for EPT-exit classification).
 pub fn is_hpet_gpa(gpa: u64) -> bool {

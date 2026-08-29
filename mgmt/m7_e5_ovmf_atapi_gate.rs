@@ -383,6 +383,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("8192-exit cap")
         && guest.contains("32768-exit cap")
         && guest.contains("hpet_tick_sink_by")
+        && guest.contains("fn guest_uefi_hpet_step_for_exit(")
         && plat.contains("is_kbc_port")
         && plat.contains("KeyboardWaitForValue")
         && plat.contains("kbc_push")

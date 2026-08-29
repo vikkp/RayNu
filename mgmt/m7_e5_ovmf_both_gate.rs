@@ -160,6 +160,7 @@ pub fn ovmf_both_surface_present() -> bool {
         && guest.contains("spin jmp skip")
         && guest.contains("skip_spin_short_jmp")
         && plat.contains("HPET_MAIN_STEP: u64 = 100_000_000")
+        && plat.contains("HPET_INSN_STEP: u64 = 100_000")
         && e4_shell_launch_no_cdrom()
 }
 
@@ -201,6 +202,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty VARS _FVH")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s step")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
