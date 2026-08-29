@@ -108,15 +108,18 @@ pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"squashfs,sd-mod,usb-storage quiet";
 pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"squashfs,virtio_blk console=ttyS0";
 const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
 /// alpine-virt GRUB `"Linux virt"` stanza. Grow the linux line into the
-/// ISO9660 NUL pad after `}\n` so E4 `lpj=4194304 no_timer_check` fits.
-/// Same-length 33-byte swap cannot add `lpj=` without dropping `loop` or
+/// ISO9660 NUL pad after `}\n` so the E4 timer skip fits:
+/// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`.
+/// Same-length 33-byte swap cannot add those without dropping `loop` or
 /// `virtio_blk`. Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron
 /// COM2 after leftover+#PF froze HPET during the 0x4000 CPUID walk, so a
-/// preemption skip may never fire. Not `ISO-INSTALL-OK`.
+/// preemption skip may never fire and `time_init` / TSC vs HPET calibrate
+/// would hang even after hypervisor-hide. alpine-virt 3.21.3 has ~1905
+/// NULs after this `}\n`. Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check\ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll\ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 /// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
 pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";

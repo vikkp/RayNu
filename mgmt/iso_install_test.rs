@@ -196,7 +196,7 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 144);
+    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 183);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -258,7 +258,8 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     z.extend_from_slice(&[0u8; 32]);
     assert_eq!(patch_iso_linux_serial_console(&mut z), 0);
     assert_eq!(&z[32..32 + needle.len()], needle);
-    // alpine-virt GRUB stanza + ISO9660 NUL pad: lpj= so delay_loop does not run.
+    // alpine-virt GRUB stanza + ISO9660 NUL pad: E4 timer skip so delay_loop
+    // / TSC vs frozen HPET calibrate do not run.
     let mut grub = b"menuentry ".to_vec();
     grub.extend_from_slice(ISO_GRUB_LINUX_FROM);
     grub.extend_from_slice(&[0u8; 8]);
@@ -266,6 +267,9 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     let g = core::str::from_utf8(&grub[..10 + ISO_GRUB_LINUX_TO.len()]).unwrap();
     assert!(g.contains("lpj=4194304"));
     assert!(g.contains("no_timer_check"));
+    assert!(g.contains("tsc=reliable"));
+    assert!(g.contains("clocksource=tsc"));
+    assert!(g.contains("idle=poll"));
     assert!(g.contains("virtio_blk"));
     assert!(g.contains("console=ttyS0"));
     assert!(g.contains("modules=loop,squashfs,virtio_blk"));
