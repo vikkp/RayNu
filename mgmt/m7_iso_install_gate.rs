@@ -296,6 +296,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../boot/serial.rs").contains("fn write_byte_nowait")
         && include_str!("../boot/serial.rs").contains("fn drain_guest_tx")
         && include_str!("../boot/serial.rs").contains("GUEST_TX_DRAIN_EXIT")
+        && include_str!("../boot/serial.rs").contains("guest UART TX drain COM2 independent")
+        && include_str!("../boot/serial.rs").contains("fn guest_tx_sol_ready")
         && include_str!("../boot/serial.rs").contains("fn set_linux_earlycon_share")
         && include_str!("../vmx/guest_uefi.rs").contains("crate::boot::serial::guest_tx_clear()")
         && include_str!("../tools/qemu-boot-test.sh").contains("Kernel panic - not syncing")

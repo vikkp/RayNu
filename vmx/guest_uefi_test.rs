@@ -165,6 +165,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first CPUID"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first high-half"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first bootimg"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX drain COM2 independent"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip exc deliver"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poll ISO-INSTALL-OK every resume"));

@@ -36,7 +36,7 @@ pub const GUEST_TX_DRAIN_CHUNK: usize = 64;
 /// 64 host THR bytes on every preemption/HLT exit while THRE stayed set,
 /// then E4 `/init` SIGSEGV hung until the 480s timeout (3/3). Iron SOL
 /// still drains the ring: UART `out` uses [`GUEST_TX_DRAIN_CHUNK`]; later
-/// exits leak a few bytes whenever both ports show THRE.
+/// exits leak a few bytes whenever COM2 (iDRAC SOL) shows THRE.
 pub const GUEST_TX_DRAIN_EXIT: usize = 4;
 
 /// Per-port liveness; cleared on THR timeout so a missing UART cannot stall boot.
@@ -136,15 +136,30 @@ pub fn guest_tx_clear() {
     }
 }
 
-fn guest_tx_ports_ready() -> bool {
+fn guest_tx_port_thre(live: bool, base: u16) -> bool {
     #[cfg(target_os = "uefi")]
     {
-        // SAFETY: port I/O to fixed legacy UART bases; one LSR poll.
-        unsafe {
-            let c1 = !COM1_LIVE || (inb(COM1 + 5) & 0x20) != 0;
-            let c2 = !COM2_LIVE || (inb(COM2 + 5) & 0x20) != 0;
-            c1 && c2
-        }
+        // SAFETY: port I/O to a fixed legacy UART base; one LSR poll.
+        unsafe { !live || (inb(base + 5) & 0x20) != 0 }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = (live, base);
+        true
+    }
+}
+
+/// iDRAC SOL is COM2. Do not stall the TX ring on COM1 THRE.
+///
+/// Iron `b983ef8`: readable `Linux version` / two e820 lines then COM2
+/// froze. Drain used to wait until **both** ports showed THRE, so a wedged
+/// COM1 (rear serial, no reader) stopped SOL. guest UART TX drain COM2
+/// independent. Not `ISO-INSTALL-OK`.
+fn guest_tx_sol_ready() -> bool {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: COM2_LIVE is HV-owned; one LSR poll.
+        unsafe { guest_tx_port_thre(COM2_LIVE, COM2) }
     }
     #[cfg(not(target_os = "uefi"))]
     {
@@ -155,14 +170,14 @@ fn guest_tx_ports_ready() -> bool {
 fn guest_tx_write_ports(byte: u8) {
     #[cfg(target_os = "uefi")]
     {
-        // SAFETY: both live ports reported THRE; one THR write each.
+        // SAFETY: COM2 THRE was true; COM1 is opportunistic.
         // KANI-TARGET: guest UART TX ring drain (outside Proven Core).
         unsafe {
-            if COM1_LIVE {
-                outb(COM1, byte);
-            }
             if COM2_LIVE {
                 outb(COM2, byte);
+            }
+            if COM1_LIVE && guest_tx_port_thre(true, COM1) {
+                outb(COM1, byte);
             }
         }
     }
@@ -172,18 +187,19 @@ fn guest_tx_write_ports(byte: u8) {
     }
 }
 
-/// Write queued guest UART bytes while host THRE is set. Never spins.
+/// Write queued guest UART bytes while COM2 THRE is set. Never spins.
 ///
 /// INVARIANTS:
 /// - At most `max` bytes leave the ring
 /// - Does not wait [`THR_WAIT_SPINS`] and does not clear COM1/COM2 liveness
+/// - COM1 not ready does not block COM2 (guest UART TX drain COM2 independent)
 ///
 /// VERIFICATION: L1 (host tests)
 pub fn drain_guest_tx(max: usize) -> usize {
     let mut n = 0usize;
     while n < max {
         let empty = unsafe { GUEST_TX_LEN == 0 };
-        if empty || !guest_tx_ports_ready() {
+        if empty || !guest_tx_sol_ready() {
             break;
         }
         // SAFETY: single-threaded HV; LEN>0 and HEAD in range after the empty check.
@@ -473,6 +489,8 @@ mod serial_test {
         assert!(s.contains("guest UART TX ring drain"));
         assert!(s.contains("GUEST_TX_DRAIN_EXIT"));
         assert_eq!(GUEST_TX_DRAIN_EXIT, 4);
+        assert!(s.contains("guest UART TX drain COM2 independent"));
+        assert!(s.contains("fn guest_tx_sol_ready"));
         serial_log_clear();
         guest_tx_clear();
     }
