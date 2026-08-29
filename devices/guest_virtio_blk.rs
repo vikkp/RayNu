@@ -853,14 +853,19 @@ pub fn install_disk_has_partition_table(disk: &[u8]) -> bool {
     mbr && disk[0x1BE + 4] != 0
 }
 
-/// Iron-only: product queues + partition table + enough OUT bytes.
+/// One virtio-blk sector of OUT. The gate is a GPT/MBR write, not a 16KiB
+/// floor: Alpine `setup-disk` with `BOOT_SIZE=48` on a 64MiB disk can write
+/// the table then fail apk before 16KiB OUT. ISO-INSTALL-OK on GPT not 16KiB.
+pub const ISO_INSTALL_OK_MIN_OUT: u64 = 512;
+
+/// Iron-only: product queues + partition table + at least one sector OUT.
 /// Caller prints [`crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER`].
 /// Host/CI / nested must not call this print path.
 pub fn take_iso_install_ok() -> bool {
     if ISO_OK.load(Ordering::Acquire) {
         return false;
     }
-    if !queues_armed() || disk_bytes_written() < 16 * 1024 {
+    if !queues_armed() || disk_bytes_written() < ISO_INSTALL_OK_MIN_OUT {
         return false;
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);

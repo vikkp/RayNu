@@ -348,6 +348,9 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("bootloader?")
         && include_str!("../devices/guest_serial_answer.rs").contains("[y/N]")
         && include_str!("../devices/guest_serial_answer.rs").contains("fn is_yes_prompt(")
+        && include_str!("../devices/guest_serial_answer.rs").contains("setup-disk before apk update")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("ISO-INSTALL-OK on GPT not 16KiB")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("ISO_INSTALL_OK_MIN_OUT")
         && prop_iso_install_lab_package()
         && prop_iso_reboot_lab_package()
 }

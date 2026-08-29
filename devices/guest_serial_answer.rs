@@ -44,7 +44,7 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// mountpoint (nlplug may not have created `/media/cdrom` when the ISO is
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
 /// distro packages. Overwrite `/etc/apk/repositories` with `/media/cdrom/apks`
-/// (do not append) so `apk update` / `apk add grub` does not block on a
+/// (do not append) so `apk add grub` does not block on a
 /// network mirror (live ISO has no DHCP yet). `virtio_pci` + `mdev -s` so
 /// `/sys/block/vda` exists before `setup-disk` `find_disks` (otherwise
 /// `No disks available` exits after we answer n). Wait until `/dev/vda`
@@ -59,9 +59,10 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// ~34 MiB). That is larger than a 64 MiB fallback disk and leaves ~96 MiB
 /// root on the 256 MiB iron disk. `BOOT_SIZE=48` is above the FAT32 floor
 /// so GPT+ESP still land (ISO-INSTALL-OK is the partition table, not a
-/// finished apk root).
+/// finished apk root). Do not `apk update` first — that can hang on a
+/// missing index and never reach `setup-disk`. setup-disk before apk update.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; apk update; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";

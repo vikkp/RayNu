@@ -255,6 +255,8 @@ fn install_disk_partition_table_gpt_and_mbr() {
     assert!(install_disk_has_partition_table(&esp));
     reset();
     assert!(!super::take_iso_install_ok());
+    assert_eq!(super::ISO_INSTALL_OK_MIN_OUT, 512);
+    assert!(super::ISO_INSTALL_OK_MIN_OUT < 16 * 1024);
 }
 
 #[test]

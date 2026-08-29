@@ -52,7 +52,10 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("> /etc/apk/repositories"));
     assert!(!core::str::from_utf8(SETUP).unwrap().contains(">>"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("apk update"));
+    assert!(
+        !core::str::from_utf8(SETUP).unwrap().contains("apk update"),
+        "setup-disk before apk update"
+    );
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOTLOADER=grub"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("USE_EFI=1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("BOOT_SIZE=48"));
