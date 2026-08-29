@@ -344,6 +344,11 @@ fn marker_and_residual_honest() {
         guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7fff_ffff_8abc_def0),
         0x7fff_ffff_8abc_def0
     );
+    // Iron 73c2cab: do not snap a direct-map pointer at GPA 0x40000000.
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_0000, 0xffff_8880_4000_0000),
+        0xffff_8880_4000_0000
+    );
     assert_eq!(guest_uefi_linux_hypervisor_scan_bump_gpr(1, 1), 1);
     let mut gprs = [0x4000_0000u64, 0x7, 0x4000_0000];
     assert!(guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut gprs));

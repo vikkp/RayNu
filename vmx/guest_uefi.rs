@@ -520,18 +520,23 @@ pub const GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST: u32 =
 ///
 /// alpine-virt 6.12.13 `hypervisor_cpuid_base.constprop.0` keeps `base` in
 /// **EBX** and `native_cpuid` `push %rbx` before `0F A2` (iron RIP
-/// `0xffffffffbd081783` = KASLR of `ffffffff81081783`). The live RBX at
+/// `0xffffffffba081783` = KASLR of `ffffffff81081783`). The live RBX at
 /// CPUID is the CPUID output (must stay 0); the loop copy is the 8-byte
 /// slot at RSP. [`guest_uefi_linux_hypervisor_scan_bump_gpr`] also applies
-/// to that stack word. Not `ISO-INSTALL-OK`.
+/// to that stack word.
+///
+/// Match the **zero-extended** `u32` leaf only. Iron `73c2cab` logged
+/// `hypervisor-scan bump leaf=0x40000000` then COM2 ended — a high-half
+/// direct-map pointer `0xffff_8880_4000_0000` (GPA 1GiB) must not become
+/// `0xffff_8880_4000_ff00`. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_hypervisor_scan_bump_gpr(leaf: u32, gpr: u64) -> u64 {
     if !guest_uefi_cpuid_leaf_is_hypervisor_scan(leaf) {
         return gpr;
     }
-    if gpr as u32 != leaf {
+    if gpr != u64::from(leaf) {
         return gpr;
     }
-    (gpr & !0xffff_ffffu64) | u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+    u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
 }
 
 /// Apply [`guest_uefi_linux_hypervisor_scan_bump_gpr`] to callee-saved GPRs.
@@ -2346,6 +2351,8 @@ static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
 static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static LINUX_HV_SCAN_BUMP: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_DELAY_LOOP_SKIP: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static LINUX_LEAF4: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -6519,6 +6526,14 @@ unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
     // and falls through to ret. Skip-10 already lands on ret.
     if preempt_deadloop_delay_loop_sets_rax_one(&buf[..n]) {
         SAVED_RAX = 1;
+        if LINUX_DELAY_LOOP_SKIP
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            serial::write_line(
+                "boot: guest-UEFI linux delay_loop skip (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
@@ -8455,6 +8470,10 @@ unsafe fn linux_hypervisor_scan_bump_callee_gprs(leaf: u32) -> bool {
     {
         serial::write_str("boot: guest-UEFI linux hypervisor-scan bump leaf=0x");
         write_hex(u64::from(leaf));
+        serial::write_str(" gpr=");
+        write_dec(gpr_hit as u64);
+        serial::write_str(" stack=");
+        write_dec(stack_hit as u64);
         serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
     }
     true

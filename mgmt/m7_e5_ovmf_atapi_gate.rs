@@ -422,6 +422,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("hypervisor-scan bump")
         && guest.contains("fn linux_hypervisor_scan_bump_native_cpuid_rbx_slot")
         && guest.contains("push %rbx")
+        && guest.contains("zero-extended")
+        && guest.contains("linux delay_loop skip")
         && guest.contains("0x40003d00")
         && guest.contains("0x4000bd00")
         && guest.contains("GUEST_UEFI_FEATURE_CONTROL_VALUE")
@@ -1402,6 +1404,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x4000_3d00)
             == u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
         && guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7) == 0x7
+        && guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_0000, 0xffff_8880_4000_0000)
+            == 0xffff_8880_4000_0000
         && {
             let ext = guest_uefi_filter_cpuid(0x8000_0001, 0);
             ext.edx & crate::vmx::guest_uefi::CPUID_80000001_EDX_NX == 0
