@@ -163,6 +163,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share product ISO"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush on tick cadence even when share"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first CPUID"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -796,6 +797,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_earlycon_share_on_linux_deliver(false, true));
     assert!(guest_uefi_linux_earlycon_share_on_linux_deliver(true, true));
     // linux earlycon share first CPUID: iso=0 still must not latch.
+    // linux earlycon skip #PF dump: same predicate.
     assert_eq!(guest_uefi_linux_earlycon_drain(false), 4);
     assert_eq!(guest_uefi_linux_earlycon_drain(true), 4);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
