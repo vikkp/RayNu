@@ -586,15 +586,35 @@ pub const HPET_CLK_PERIOD_FS: u32 = 10_000_000;
 /// 1e6 ticks (~10 ms) per exit — Delay never finished. Do **not**
 /// apply this on PCI config I/O (`5d9e346` n=8192 `ataio=0`).
 pub const HPET_MAIN_STEP: u64 = 100_000_000;
-/// ~1 ms of HPET time (10 ns ticks) on CPUID / RDMSR / WRMSR / non-HPET EPT
-/// / UART COM I/O. Iron COM2 after leftover+#PF: CPUID exits restart the
-/// preemption timer so [`HPET_MAIN_STEP`] never fires and the counter looks
-/// frozen (`hpet=22896` through n=256 `leaf=0x4000bd00`). The same restart
-/// happens on leftover-DRAM / MMIO EPT storms after `identify_cpu`, and on
-/// Linux earlycon `in al,dx` (iron `6e5c84a` `hpet=40191` while printk
-/// ran). Do **not** use [`HPET_MAIN_STEP`] here — 1 s per exit would jump
-/// hours. PCI config and ATA I/O stay 0 (`5d9e346`). Not `ISO-INSTALL-OK`.
+/// ~1 ms of HPET time (10 ns ticks) on CPUID / RDMSR / WRMSR / non-HPET EPT.
+/// Iron COM2 after leftover+#PF: CPUID exits restart the preemption timer
+/// so [`HPET_MAIN_STEP`] never fires and the counter looks frozen
+/// (`hpet=22896` through n=256 `leaf=0x4000bd00`). The same restart happens
+/// on leftover-DRAM / MMIO EPT storms after `identify_cpu`. Do **not** use
+/// [`HPET_MAIN_STEP`] here — 1 s per exit would jump hours. PCI config and
+/// ATA I/O stay 0 (`5d9e346`). UART COM I/O uses [`hpet_ticks_from_tsc_delta`]
+/// (not this 1 ms quantum). Not `ISO-INSTALL-OK`.
 pub const HPET_INSN_STEP: u64 = 100_000;
+/// Max HPET ticks injected on one UART COM I/O exit. 10 ns × 400 = 4 µs.
+/// Iron `6e5c84a`: earlycon `in al,dx` storm froze `hpet=40191`. A fixed
+/// 1 ms (`HPET_INSN_STEP`) per character I/O would jump jiffies. Cap so one
+/// exit cannot inject more than a few microseconds. Not PCI/ATA.
+pub const HPET_UART_IO_STEP_CAP: u64 = 400;
+/// Host TSC ticks per 10 ns HPET tick. Xeon Silver 4110 TSC ≈ 2.1 GHz → 21.
+/// Overestimate undercounts guest time (safer than 1 ms/byte).
+pub const TSC_PER_HPET_TICK: u64 = 21;
+
+/// Convert host TSC delta to HPET main-counter ticks, capped.
+///
+/// INVARIANTS:
+/// - Returns 0 when `tsc_delta` is below one HPET tick
+/// - Never returns more than [`HPET_UART_IO_STEP_CAP`]
+pub fn hpet_ticks_from_tsc_delta(tsc_delta: u64) -> u64 {
+    if TSC_PER_HPET_TICK == 0 {
+        return 0;
+    }
+    core::cmp::min(tsc_delta / TSC_PER_HPET_TICK, HPET_UART_IO_STEP_CAP)
+}
 
 /// HPET GPA in the sink page (for EPT-exit classification).
 pub fn is_hpet_gpa(gpa: u64) -> bool {

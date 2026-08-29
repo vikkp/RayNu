@@ -3,7 +3,7 @@ use super::{
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
-    hpet_tick_sink, hpet_tick_sink_by, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
+    hpet_tick_sink, hpet_tick_sink_by, hpet_ticks_from_tsc_delta, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
     is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
@@ -12,7 +12,7 @@ use super::{
     E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RAM, E820_VGA_BASE, E820_VGA_BYTES, E820_LOW_1M,
     E820_RESERVED, FW_CFG_BOOTORDER_SEL, FW_CFG_BOOT_MENU, FW_CFG_BOOT_WAIT_SEL,
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
-    HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE,
+    HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
     PM_BRIDGE_VENDOR,
 };
@@ -423,6 +423,16 @@ fn hpet_lives_in_2mib_sink_and_ticks() {
     assert_eq!(HPET_MAIN_STEP, 100_000_000);
     assert_eq!(HPET_INSN_STEP, 100_000);
     assert!(HPET_INSN_STEP < HPET_MAIN_STEP);
+    assert_eq!(HPET_UART_IO_STEP_CAP, 400);
+    assert!(HPET_UART_IO_STEP_CAP < HPET_INSN_STEP);
+    assert_eq!(TSC_PER_HPET_TICK, 21);
+    assert_eq!(hpet_ticks_from_tsc_delta(0), 0);
+    assert_eq!(hpet_ticks_from_tsc_delta(TSC_PER_HPET_TICK), 1);
+    assert_eq!(
+        hpet_ticks_from_tsc_delta(TSC_PER_HPET_TICK * HPET_UART_IO_STEP_CAP + 1),
+        HPET_UART_IO_STEP_CAP
+    );
+    assert_eq!(hpet_ticks_from_tsc_delta(u64::MAX), HPET_UART_IO_STEP_CAP);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP);
     assert_eq!(hpet_tick_sink(&mut sink), HPET_MAIN_STEP * 2);
     assert_eq!(hpet_tick_sink_by(&mut sink, 0), HPET_MAIN_STEP * 2);

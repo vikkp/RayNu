@@ -27,7 +27,7 @@ use super::{
     guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux,
     guest_uefi_linux_hypervisor_scan_bump_gpr, guest_uefi_linux_hypervisor_scan_bump_gprs,
     GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST,
-    guest_uefi_hpet_step_for_exit,
+    guest_uefi_hpet_step_for_exit, guest_uefi_hpet_uart_tsc_step,
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
@@ -150,7 +150,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap ended on CF8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s on preemption/HLT not PCI I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR/EPT"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on UART COM I/O"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET TSC-delta on UART COM I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -360,36 +360,52 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut none));
     assert_eq!(none, [0x10, 0x20]);
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(10, false, false, false),
+        guest_uefi_hpet_step_for_exit(10, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(31, false, false, false),
+        guest_uefi_hpet_step_for_exit(31, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(32, false, false, false),
+        guest_uefi_hpet_step_for_exit(32, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(12, false, false, false),
+        guest_uefi_hpet_step_for_exit(12, false, false),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
-    assert_eq!(guest_uefi_hpet_step_for_exit(30, false, false, false), 0);
+    assert_eq!(guest_uefi_hpet_step_for_exit(30, false, false), 0);
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(30, false, true, false),
+        guest_uefi_hpet_step_for_exit(30, false, true),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
+    assert_eq!(guest_uefi_hpet_uart_tsc_step(0), 0);
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(30, false, false, true),
+        guest_uefi_hpet_uart_tsc_step(crate::devices::guest_platform::TSC_PER_HPET_TICK),
+        1
+    );
+    assert_eq!(
+        guest_uefi_hpet_uart_tsc_step(
+            crate::devices::guest_platform::TSC_PER_HPET_TICK
+                * crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+        ),
+        crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+    );
+    assert_eq!(
+        guest_uefi_hpet_uart_tsc_step(u64::MAX),
+        crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+    );
+    assert!(
+        guest_uefi_hpet_uart_tsc_step(u64::MAX)
+            < crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(48, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(48, false, false, false),
-        crate::devices::guest_platform::HPET_INSN_STEP
-    );
-    assert_eq!(
-        guest_uefi_hpet_step_for_exit(48, true, false, false),
+        guest_uefi_hpet_step_for_exit(48, true, false),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
     let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);
