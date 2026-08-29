@@ -151,6 +151,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s on preemption/HLT not PCI I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR/EPT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET TSC-delta on UART COM I/O"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux printk ticks every 4096"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -760,8 +761,12 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_tick_should_print(17408, false, false));
     assert!(guest_uefi_tick_should_print(17408, true, false));
     assert!(guest_uefi_tick_should_print(20480, false, false));
-    assert!(guest_uefi_tick_should_print(437248, true, true));
-    assert!(guest_uefi_tick_should_print(16640, false, true));
+    // Iron 115e5ee: linux=true used to print every 256 and split printk.
+    assert!(!guest_uefi_tick_should_print(437248, true, true));
+    assert!(!guest_uefi_tick_should_print(16640, false, true));
+    assert!(!guest_uefi_tick_should_print(256, false, true));
+    assert!(guest_uefi_tick_should_print(4096, false, true));
+    assert!(guest_uefi_tick_should_print(438272, true, true));
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);
