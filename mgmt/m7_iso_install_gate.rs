@@ -89,6 +89,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("fn patch_iso_linux_serial_console(")
         && include_str!("iso_install.rs").contains("squashfs,virtio_blk console=ttyS0")
         && include_str!("iso_install.rs").contains("ISO_GRUB_LINUX_FROM")
+        && include_str!("iso_install.rs").contains("fn bump_iso9660_grub_cfg_size(")
+        && include_str!("iso_install.rs").contains("ISO_GRUB_CFG_PATCHED_SIZE")
         && include_str!("iso_install.rs").contains("lpj=4194304")
         && include_str!("iso_install.rs").contains("no_timer_check")
         && include_str!("iso_install.rs").contains("tsc=reliable")

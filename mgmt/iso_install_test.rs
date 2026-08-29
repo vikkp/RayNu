@@ -277,3 +277,121 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!grub.windows(ISO_GRUB_LINUX_FROM.len()).any(|w| w == ISO_GRUB_LINUX_FROM));
     assert_eq!(patch_iso_linux_serial_console(&mut grub), 0);
 }
+
+fn write_iso9660_dir_record(buf: &mut [u8], rec: usize, name: &[u8], lba: u32, size: u32) {
+    let mut rec_len = 33 + name.len();
+    if rec_len % 2 == 1 {
+        rec_len += 1;
+    }
+    buf[rec] = rec_len as u8;
+    buf[rec + 2..rec + 6].copy_from_slice(&lba.to_le_bytes());
+    buf[rec + 6..rec + 10].copy_from_slice(&lba.to_be_bytes());
+    buf[rec + 10..rec + 14].copy_from_slice(&size.to_le_bytes());
+    buf[rec + 14..rec + 18].copy_from_slice(&size.to_be_bytes());
+    buf[rec + 28..rec + 30].copy_from_slice(&1u16.to_le_bytes());
+    buf[rec + 30..rec + 32].copy_from_slice(&1u16.to_be_bytes());
+    buf[rec + 32] = name.len() as u8;
+    buf[rec + 33..rec + 33 + name.len()].copy_from_slice(name);
+}
+
+fn iso_dir_size_le(buf: &[u8], rec: usize) -> u32 {
+    u32::from_le_bytes(buf[rec + 10..rec + 14].try_into().unwrap())
+}
+
+fn iso_dir_size_be(buf: &[u8], rec: usize) -> u32 {
+    u32::from_be_bytes(buf[rec + 14..rec + 18].try_into().unwrap())
+}
+
+#[test]
+fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
+    assert_eq!(ISO_GRUB_CFG_ALPINE_VIRT.len(), ISO_GRUB_CFG_ORIG_SIZE as usize);
+    assert!(ISO_GRUB_CFG_PATCHED_SIZE > ISO_GRUB_CFG_ORIG_SIZE);
+    let lba = 2u32;
+    let data = (lba as usize) * 2048;
+    let mut iso = vec![0u8; data + 2048];
+    iso[data..data + ISO_GRUB_CFG_ALPINE_VIRT.len()].copy_from_slice(ISO_GRUB_CFG_ALPINE_VIRT);
+    let pvd = 64usize;
+    let joliet = 128usize;
+    write_iso9660_dir_record(
+        &mut iso,
+        pvd,
+        ISO_GRUB_CFG_ISO9660_NAME,
+        lba,
+        ISO_GRUB_CFG_ORIG_SIZE,
+    );
+    write_iso9660_dir_record(
+        &mut iso,
+        joliet,
+        ISO_GRUB_CFG_JOLIET_NAME,
+        lba,
+        ISO_GRUB_CFG_ORIG_SIZE,
+    );
+    // linux grow (1) + PVD bump (1) + Joliet bump (1) + set timeout=1 (1)
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 4);
+    assert_eq!(iso_dir_size_le(&iso, pvd), ISO_GRUB_CFG_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, pvd), ISO_GRUB_CFG_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_le(&iso, joliet), ISO_GRUB_CFG_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, joliet), ISO_GRUB_CFG_PATCHED_SIZE);
+    let orig_win = &iso[data..data + ISO_GRUB_CFG_ORIG_SIZE as usize];
+    assert!(core::str::from_utf8(orig_win).unwrap().contains("tsc="));
+    assert!(!orig_win.contains(&b'}'));
+    assert!(!core::str::from_utf8(orig_win).unwrap().contains("initrd"));
+    let patched = &iso[data..data + ISO_GRUB_CFG_PATCHED_SIZE as usize];
+    let s = core::str::from_utf8(patched).unwrap();
+    assert!(s.contains("lpj=4194304"));
+    assert!(s.contains("tsc=reliable"));
+    assert!(s.contains("initrd\t/boot/initramfs-virt"));
+    assert!(s.ends_with("}\n"));
+    assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
+    assert_eq!(s.bytes().filter(|b| *b == b'}').count(), 1);
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 0);
+}
+
+#[test]
+fn bump_iso9660_grub_cfg_size_skips_gzip_false_positive() {
+    let mut buf = vec![0xFFu8; 256];
+    write_iso9660_dir_record(
+        &mut buf,
+        32,
+        ISO_GRUB_CFG_ISO9660_NAME,
+        0,
+        ISO_GRUB_CFG_ORIG_SIZE,
+    );
+    // LBA 0 is not `set timeout=` (0xFF fill).
+    let before = iso_dir_size_le(&buf, 32);
+    assert_eq!(patch_iso_linux_serial_console(&mut buf), 0);
+    assert_eq!(iso_dir_size_le(&buf, 32), before);
+}
+
+#[test]
+fn patch_in_tree_alpine_virt_iso_grub_cfg_size_if_present() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/alpine-virt-3.21.3-x86_64.iso"
+    );
+    let Ok(mut iso) = std::fs::read(path) else {
+        return;
+    };
+    if iso.len() < 2048 {
+        return;
+    }
+    let n = patch_iso_linux_serial_console(&mut iso);
+    assert!(n >= 4, "expected linux grow + 2 dir bumps + timeout, got {n}");
+    let mut found = 0u32;
+    let mut i = 0usize;
+    while i + 34 <= iso.len() {
+        if iso[i + 32] as usize == ISO_GRUB_CFG_ISO9660_NAME.len()
+            && iso[i + 33..i + 33 + ISO_GRUB_CFG_ISO9660_NAME.len()] == *ISO_GRUB_CFG_ISO9660_NAME
+        {
+            assert_eq!(iso_dir_size_le(&iso, i), ISO_GRUB_CFG_PATCHED_SIZE);
+            assert_eq!(iso_dir_size_be(&iso, i), ISO_GRUB_CFG_PATCHED_SIZE);
+            found += 1;
+        }
+        i += 1;
+    }
+    assert!(found >= 1);
+    let cfg_off = 8121usize * 2048;
+    let s = core::str::from_utf8(&iso[cfg_off..cfg_off + ISO_GRUB_CFG_PATCHED_SIZE as usize]).unwrap();
+    assert!(s.contains("initrd\t/boot/initramfs-virt"));
+    assert!(s.ends_with("}\n"));
+}

@@ -526,7 +526,10 @@ via `ERASE_DISKS` still gets `y`. Twentieth slice: Alpine auto-answer exports `U
 `BOOTLOADER=grub` so UEFI `setup-disk` does not try syslinux/MBR; same-length
 ISO patch `set timeout=1` → `set timeout=0` (after `timeout=10`) and
 `insmod efi_gop` / `insmod efi_uga` → `insmod serial` when present so GRUB
-EFI does not wait on GOP. Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
+EFI does not wait on GOP. The linux-line grow into ISO9660 NUL pad also
+bumps PVD + Joliet `grub.cfg` Data Length 143→208 (a 143-byte read hid
+`initrd`/`}` and dropped to rescue `grub>` on iron COM2 after El Torito
+`bootimg=1`). Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
 counter so Linux `nolapic` `inb 0x40` sees a real count; `raise_pit` steps it.
 The old stub wrote `val | 0x00FF` and never returned a high byte. Eighteenth slice: same-length ISO patch keeps `squashfs` in
 `modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `;

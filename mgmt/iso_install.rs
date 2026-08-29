@@ -114,13 +114,50 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// `virtio_blk`. Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron
 /// COM2 after leftover+#PF froze HPET during the 0x4000 CPUID walk, so a
 /// preemption skip may never fire and `time_init` / TSC vs HPET calibrate
-/// would hang even after hypervisor-hide. alpine-virt 3.21.3 has ~1905
-/// NULs after this `}\n`. Not `ISO-INSTALL-OK`.
+/// would hang even after hypervisor-hide. alpine-virt 3.21.3 `grub.cfg`
+/// ISO9660 Data Length is 143; the sector has ~1905 NULs after `}\n`.
+/// Growing into that pad without bumping Data Length truncates GRUB's
+/// read at `tsc=` (unclosed `{`, no `initrd`) → `out of memory` /
+/// `syntax error` / rescue `grub>` (iron COM2 after El Torito
+/// `bootimg=1`). [`bump_iso9660_grub_cfg_size`] raises PVD + Joliet
+/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll\ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
+const fn trailing_zero_count(s: &[u8]) -> usize {
+    let mut n = 0usize;
+    let mut i = s.len();
+    while i > 0 {
+        i -= 1;
+        if s[i] == 0 {
+            n += 1;
+        } else {
+            break;
+        }
+    }
+    n
+}
+/// alpine-virt 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
+pub const ISO_GRUB_CFG_ORIG_SIZE: u32 = 143;
+/// After the linux-line grow consumes the NUL pad past the original `}\n`.
+pub const ISO_GRUB_CFG_PATCHED_SIZE: u32 =
+    ISO_GRUB_CFG_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_FROM) as u32;
+/// `set timeout=1\n\nmenuentry ` (same length as `set timeout=0\n\nmenuentry `).
+const ISO_GRUB_CFG_PREFIX_LEN: usize = 25;
+const _: () = assert!(ISO_GRUB_LINUX_TO[ISO_GRUB_LINUX_TO.len() - 1] == b'\n');
+const _: () = assert!(ISO_GRUB_CFG_PATCHED_SIZE > ISO_GRUB_CFG_ORIG_SIZE);
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_TO.len() == ISO_GRUB_CFG_PATCHED_SIZE as usize
+);
+pub const ISO_GRUB_CFG_ISO9660_NAME: &[u8] = b"GRUB.CFG;1";
+/// Joliet UTF-16BE `grub.cfg` (no `;1` on this alpine-virt).
+pub const ISO_GRUB_CFG_JOLIET_NAME: &[u8] = b"\x00g\x00r\x00u\x00b\x00.\x00c\x00f\x00g";
+/// Exact alpine-virt 3.21.3 `grub.cfg` (ISO9660 Data Length 143).
+pub const ISO_GRUB_CFG_ALPINE_VIRT: &[u8] =
+    b"set timeout=1\n\nmenuentry \"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n";
+const _: () = assert!(ISO_GRUB_CFG_ALPINE_VIRT.len() == ISO_GRUB_CFG_ORIG_SIZE as usize);
 /// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
 pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";
 pub const ISO_TTY0_TO: &[u8] = b"noapic      ";
@@ -177,7 +214,14 @@ const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());
 ///   must sit next to the needle.
 /// - Returns the number of replacements (0 = nothing patched)
 pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
-    patch_same(bytes, ISO_GRUB_LINUX_FROM, ISO_GRUB_LINUX_TO)
+    let grown = patch_same(bytes, ISO_GRUB_LINUX_FROM, ISO_GRUB_LINUX_TO);
+    let bumped = if grown > 0 {
+        bump_iso9660_grub_cfg_size(bytes)
+    } else {
+        0
+    };
+    grown
+        .saturating_add(bumped)
         .saturating_add(patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO))
         .saturating_add(patch_same(bytes, ISO_ATA_PIIX_FROM, ISO_ATA_PIIX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
@@ -241,6 +285,62 @@ fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {
             bytes[i..i + to.len()].copy_from_slice(to);
             n = n.saturating_add(1);
             i = i.saturating_add(to.len());
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    n
+}
+
+fn iso_dir_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
+    let b = bytes.get(off..off.saturating_add(4))?;
+    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+fn iso_dir_record_points_at_grub_cfg(bytes: &[u8], rec: usize) -> bool {
+    let Some(lba) = iso_dir_u32_le(bytes, rec.saturating_add(2)) else {
+        return false;
+    };
+    let off = (lba as usize).saturating_mul(2048);
+    let Some(head) = bytes.get(off..off.saturating_add(13)) else {
+        return false;
+    };
+    head == b"set timeout=1" || head == b"set timeout=0"
+}
+
+/// Raise alpine-virt `grub.cfg` ISO9660 + Joliet Data Length after the linux
+/// line grew into the sector NUL pad. GRUB reads `Data Length` bytes, not
+/// the whole sector, so a 143-byte record hides `initrd` / `}` and drops
+/// to rescue `grub>`.
+///
+/// INVARIANTS:
+/// - Only records named [`ISO_GRUB_CFG_ISO9660_NAME`] / Joliet
+///   [`ISO_GRUB_CFG_JOLIET_NAME`] whose size is [`ISO_GRUB_CFG_ORIG_SIZE`]
+///   and whose LBA starts with `set timeout=`
+/// - Writes both little-endian and big-endian size fields
+/// - Does not print [`M7_ISO_INSTALL_OK_MARKER`]
+fn bump_iso9660_grub_cfg_size(bytes: &mut [u8]) -> u32 {
+    let names: [&[u8]; 2] = [ISO_GRUB_CFG_ISO9660_NAME, ISO_GRUB_CFG_JOLIET_NAME];
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i.saturating_add(34) <= bytes.len() {
+        let namelen = bytes[i + 32] as usize;
+        let rec_len = bytes[i] as usize;
+        let name_off = i.saturating_add(33);
+        let matched = namelen > 0
+            && rec_len >= 33usize.saturating_add(namelen)
+            && i.saturating_add(rec_len) <= bytes.len()
+            && name_off.saturating_add(namelen) <= bytes.len()
+            && names.iter().any(|nm| *nm == &bytes[name_off..name_off + namelen])
+            && iso_dir_u32_le(bytes, i.saturating_add(10)) == Some(ISO_GRUB_CFG_ORIG_SIZE)
+            && iso_dir_record_points_at_grub_cfg(bytes, i);
+        if matched {
+            let new = ISO_GRUB_CFG_PATCHED_SIZE.to_le_bytes();
+            let new_be = ISO_GRUB_CFG_PATCHED_SIZE.to_be_bytes();
+            bytes[i + 10..i + 14].copy_from_slice(&new);
+            bytes[i + 14..i + 18].copy_from_slice(&new_be);
+            n = n.saturating_add(1);
+            i = i.saturating_add(rec_len.max(1));
         } else {
             i = i.saturating_add(1);
         }

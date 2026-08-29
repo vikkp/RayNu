@@ -167,7 +167,10 @@ gate `#UD` at CLWB), `d0735bd`, `40f1ada`,
 skip-decoded; empty fetch logs `linux invlpg miss` and does not guess.
 ISO serial patches allow ISO9660 NUL padding on
 either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
-gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
+the linux-line grow into that pad also bumps ISO9660 + Joliet Data
+Length 143→208 so GRUB sees `initrd` / `}` (a 143-byte read truncated
+at `tsc=` and dropped to rescue `grub>` on iron COM2 after El Torito
+`bootimg=1`); gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
 starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm
 product ISO before disk attach. Last iron COM2 on `faeaf38` after Boot0002
 `Linux virt`: EFI stub gzip + `Loaded initrd` (`install disk bytes=67108864`
@@ -205,7 +208,7 @@ appears, `/dev/vda` if `Which disk`, `sys` if `How would you like`, `n` if `No d
 `squashfs,virtio_blk console=ttyS0` (`modules=loop,squashfs,virtio_blk` stays valid so Alpine
 can mount the live root and load virtio-blk; `console=` is a kernel param; product ISO xAPIC is
 trap-and-emulate so CUR_COUNT/EOI move and `nolapic` is not required; optional `console=tty0` → `noapic`; GRUB
-`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; `gfxterm` / `efi_gop` / `efi_uga` / `all_video` / `terminal_output console` → `serial` when present;
+`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; linux-line NUL-pad grow also bumps ISO9660 + Joliet `grub.cfg` Data Length 143→208 so GRUB sees `initrd`/`}` (do not leave Data Length at 143); `gfxterm` / `efi_gop` / `efi_uga` / `all_video` / `terminal_output console` → `serial` when present;
 `alpine_dev=cdrom` → `alpine_dev=vdb` when present) when it
 contains `squashfs,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), dest-reg ALU (`02`/`03` ADD r, r/m through `32`/`33` XOR) plus INC/DEC/NOT/NEG update RFLAGS so virtio/xAPIC RMW does not spin, BT/BTS/BTR/BTC so `lock bts` on a BAR does not spin, CMPXCHG/XADD so `lock cmpxchg` does not spin, guest-UEFI CR8-load/store exiting so Linux `mov cr8` syncs `lapic_virt` TPR (E4 SHELL does not request CR8 exiting), ADC/SBB so `adc`/`sbb` on a BAR consume CF, group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR so bitfield ops on a BAR do not spin, CMOVcc/SETcc so conditional moves/sets on a BAR do not spin, PREFETCH/NOP/CLFLUSH so compiler hints on a BAR skip without access, BSF/BSR so bit-scan on a BAR does not spin, IMUL so signed multiply of a BAR does not spin, F6/F7 MUL/IMUL so DX:AX product of a BAR does not spin, F6/F7 DIV/IDIV so DX:AX quotient of a BAR does not spin (#DE on 0/overflow), MOVNTI so a non-temporal store to a BAR does not spin, SHLD/SHRD so a double-precision shift of a BAR does not spin, CMPXCHG8B so `lock cmpxchg8b` on a BAR does not spin, TZCNT/LZCNT/POPCNT so BMI1 `tzcnt`/`lzcnt`/`popcnt` of a BAR does not decode as BSF/BSR, PUSH/POP r/m so `push`/`pop` of a BAR does not decode-fail, MOVS/STOS/LODS so memcpy/memset of a BAR does not decode-fail, CALL/JMP r/m so `call`/`jmp` of a BAR does not decode-fail, CMPS/SCAS so memcmp/memchr of a BAR does not decode-fail, MOVUPS/MOVDQU so SSE memcpy of a BAR does not decode-fail, firmware-RIP insn fetch from the OVMF flash HPA so xAPIC SVR (`0xFEE000F0`) at `rip=0xFFFCFxxx` is not `insn=` empty, install disk reserved before greedy scratch and report-RAM, iron product-ISO frame pool 512 MiB so Alpine can get a 256 MiB disk (`iso=0`/nested stay 256 MiB BAR/shell), MMIO fetch uses CS.base+RIP unless 64-bit CS, virtqueue GPA lazy-maps report-RAM, IOAPIC vectors latch LAPIC IRR (remote IRR / level EOI retry; not a bare VM-entry inject), and guest-UEFI **holds**
 (does not fail-soft to E4). Armed product ISO uses the 16 777 216 resume cap
