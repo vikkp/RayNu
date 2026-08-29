@@ -230,12 +230,13 @@ fn init_port(base: u16) {
 
 /// Write a byte to live diagnostic UARTs (COM1 + COM2), waiting for THR.
 ///
-/// During Linux earlycon share, enqueue + drain instead of [`THR_WAIT_SPINS`]
-/// so HV ticks / hypervisor-scan bump do not stall guest printk (iron
-/// `202312f` e820 cut). linux earlycon share TX ring. Not `ISO-INSTALL-OK`.
+/// During Linux earlycon share, **drop** HV diagnostics. Guest printk uses
+/// [`write_byte_nowait`]; mixing HV `write_byte` into the same FIFO shredded
+/// `Linux version` on iron `9a3cbfa` (`linux cpuid n=2`/`n=3` then
+/// `ogtFixune` / cmdline fragments). `ISO-INSTALL-OK` must use
+/// [`write_line_nowait`]. linux earlycon hush HV. Not `ISO-INSTALL-OK`.
 pub fn write_byte(byte: u8) {
     if linux_earlycon_share() {
-        write_byte_nowait(byte);
         return;
     }
     // Translate `\n` → `\r\n` for typical serial terminals.
@@ -308,6 +309,15 @@ pub fn write_str(s: &str) {
 pub fn write_line(s: &str) {
     write_str(s);
     write_byte(b'\n');
+}
+
+/// Guest-visible line during Linux earlycon share (does not go through
+/// [`write_byte`], which hushes HV). Used for `RAYNU-V-M7-ISO-INSTALL-OK`.
+pub fn write_line_nowait(s: &str) {
+    for &b in s.as_bytes() {
+        write_byte_nowait(b);
+    }
+    write_byte_nowait(b'\n');
 }
 
 /// Revive diagnostic UART liveness without reprogramming baud/FIFO.
@@ -477,13 +487,17 @@ mod serial_test {
         assert!(linux_earlycon_share());
         write_byte(b'E');
         write_str("820");
+        assert_eq!(serial_log_len(), 0);
+        write_byte_nowait(b'G');
+        write_line_nowait("OK");
         let mut buf = [0u8; 8];
         let n = serial_log_snapshot(&mut buf);
         assert!(n >= 4);
-        assert_eq!(buf[0], b'E');
-        assert_eq!(&buf[1..4], b"820");
+        assert_eq!(buf[0], b'G');
         let s = include_str!("serial.rs");
         assert!(s.contains("linux earlycon share TX ring"));
+        assert!(s.contains("linux earlycon hush HV"));
+        assert!(s.contains("fn write_line_nowait"));
         assert!(s.contains("fn set_linux_earlycon_share"));
         set_linux_earlycon_share(false);
         serial_log_clear();

@@ -159,7 +159,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share TX ring"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon quiet ticks"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon drain CHUNK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon hush HV"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -789,7 +789,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_tick_should_print(4096, false, true, true));
     assert!(!guest_uefi_tick_should_print(438272, true, true, true));
     assert_eq!(guest_uefi_linux_earlycon_drain(false), 4);
-    assert_eq!(guest_uefi_linux_earlycon_drain(true), 64);
+    assert_eq!(guest_uefi_linux_earlycon_drain(true), 4);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);

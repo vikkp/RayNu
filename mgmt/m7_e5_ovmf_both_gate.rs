@@ -212,7 +212,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share TX ring")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon quiet ticks")
-        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon drain CHUNK")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon hush HV")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")
