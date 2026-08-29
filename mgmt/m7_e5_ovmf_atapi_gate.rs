@@ -250,7 +250,8 @@ use crate::devices::ide_cdrom;
 use crate::vmx::guest_uefi::{
     atapi_read_evidence, guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm,
     guest_uefi_cpuid_leaf1_is_uniprocessor, guest_uefi_cpuid_leaf_is_hypervisor_scan,
-    guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux, guest_uefi_is_misc_enable,
+    guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux,
+    guest_uefi_linux_hypervisor_scan_bump_gpr, GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST, guest_uefi_is_misc_enable,
     guest_uefi_is_mtrr_msr, guest_uefi_misc_enable_read, guest_uefi_mtrr_read,
     guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
     guest_uefi_mtrr_poweron_disabled, guest_uefi_mtrr_valid_var_pairs, guest_uefi_mtrr_uc_hole_live,
@@ -416,6 +417,9 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("guest_uefi_filter_cpuid")
         && guest.contains("fn guest_uefi_filter_cpuid_for_linux")
         && guest.contains("fn guest_uefi_cpuid_leaf_is_hypervisor_scan")
+        && guest.contains("fn guest_uefi_linux_hypervisor_scan_bump_gpr")
+        && guest.contains("GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST")
+        && guest.contains("hypervisor-scan bump")
         && guest.contains("0x40003d00")
         && guest.contains("0x4000bd00")
         && guest.contains("GUEST_UEFI_FEATURE_CONTROL_VALUE")
@@ -1391,6 +1395,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_3d00)
         && guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_bd00)
         && !guest_uefi_cpuid_leaf_is_hypervisor_scan(1)
+        && GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST == 0x4000_ff00
+        && guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x4000_3d00)
+            == u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+        && guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7) == 0x7
         && {
             let ext = guest_uefi_filter_cpuid(0x8000_0001, 0);
             ext.edx & crate::vmx::guest_uefi::CPUID_80000001_EDX_NX == 0

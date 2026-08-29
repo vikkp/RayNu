@@ -25,6 +25,8 @@ use super::{
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
     guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_cpuid_leaf_is_hypervisor_scan,
     guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux,
+    guest_uefi_linux_hypervisor_scan_bump_gpr, guest_uefi_linux_hypervisor_scan_bump_gprs,
+    GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST,
     guest_uefi_hpet_step_for_exit,
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
@@ -327,6 +329,28 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4001_0000));
     let linux_scan = guest_uefi_filter_cpuid_for_linux(0x4000_3d00, 0);
     assert_eq!(linux_scan.eax | linux_scan.ebx | linux_scan.ecx | linux_scan.edx, 0);
+    assert_eq!(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST, 0x4000_ff00);
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x4000_3d00),
+        u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+    );
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_bd00, 0xffff_ffff_4000_bd00),
+        0xffff_ffff_4000_ff00
+    );
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7fff_ffff_8abc_def0),
+        0x7fff_ffff_8abc_def0
+    );
+    assert_eq!(guest_uefi_linux_hypervisor_scan_bump_gpr(1, 1), 1);
+    let mut gprs = [0x4000_0000u64, 0x7, 0x4000_0000];
+    assert!(guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut gprs));
+    assert_eq!(gprs[0], u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST));
+    assert_eq!(gprs[1], 0x7);
+    assert_eq!(gprs[2], u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST));
+    let mut none = [0x10u64, 0x20];
+    assert!(!guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut none));
+    assert_eq!(none, [0x10, 0x20]);
     assert_eq!(
         guest_uefi_hpet_step_for_exit(10, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
