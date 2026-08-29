@@ -1,4 +1,7 @@
 use super::{pio, poll_host_rx, push_host_rx, reassert_irq, reset};
+use crate::boot::serial::{
+    guest_tx_clear, set_guest_tx_test_sol_not_ready, set_linux_earlycon_share,
+};
 
 #[test]
 fn scratch_roundtrip_and_fifo_iir() {
@@ -92,7 +95,23 @@ fn host_rx_raises_irq4_and_iir_is_c4() {
     assert!(crate::devices::guest_irq::take_inject_vector().is_none());
     crate::devices::ide_cdrom::reset();
     reset();
-    crate::devices::guest_irq::reset();
+    crate::devices::guest_irq::    reset();
+}
+
+#[test]
+fn linux_earlycon_lsr_thre_follows_sol() {
+    reset();
+    guest_tx_clear();
+    set_linux_earlycon_share(true);
+    set_guest_tx_test_sol_not_ready(true);
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x60, 0, "THRE/TEMT clear while SOL not ready");
+    set_guest_tx_test_sol_not_ready(false);
+    let (lsr2, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr2 & 0x60, 0x60);
+    set_linux_earlycon_share(false);
+    guest_tx_clear();
+    reset();
 }
 
 #[test]

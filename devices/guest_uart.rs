@@ -6,6 +6,8 @@
 //!
 //! Lab El Torito keeps the guest-UEFI stub UART (LSR 0x60, IIR 0x01). Linux
 //! 8250 autoconfig needs a scratch register, FIFO IIR, and MCR loopback.
+//! After product-ISO El Torito bootimg, linux earlycon pace LSR THRE so
+//! printk cannot outrun iDRAC SOL (iron hush-on-bootimg still cut at e820).
 //! COM1 IRQ is ISA GSI 4. Host COM2 (iDRAC SOL) RX feeds guest COM1 RBR so
 //! the installer can take serial input. Host/CI never prints `ISO-INSTALL-OK`.
 
@@ -228,11 +230,15 @@ fn uart_read(u: &mut Uart, off: u8) -> u8 {
         3 => u.lcr,
         4 => u.mcr,
         5 => {
-            if u.rx_len > 0 {
-                0x61
-            } else {
-                0x60
+            // linux earlycon pace LSR THRE (THRE|TEMT follow host COM2).
+            let mut m = 0u8;
+            if crate::boot::serial::guest_tx_guest_lsr_thre() {
+                m |= 0x60;
             }
+            if u.rx_len > 0 {
+                m |= 0x01;
+            }
+            m
         }
         6 => {
             if loopback(u) {

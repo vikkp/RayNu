@@ -167,6 +167,46 @@ fn guest_tx_sol_ready() -> bool {
     }
 }
 
+#[cfg(test)]
+static GUEST_TX_TEST_SOL_NOT_READY: AtomicBool = AtomicBool::new(false);
+
+/// Host-test hook: pretend iDRAC SOL THRE is clear.
+#[cfg(test)]
+pub fn set_guest_tx_test_sol_not_ready(on: bool) {
+    GUEST_TX_TEST_SOL_NOT_READY.store(on, Ordering::Relaxed);
+}
+
+/// Guest 16550 LSR THRE/TEMT during Linux earlycon share.
+///
+/// Linux `serial8250_putc` polls LSR bit 5. Always-1 THRE lets printk
+/// `out` faster than iDRAC SOL can accept, then COM2 looks frozen mid-e820
+/// (iron `029ac8f` / `3dc7d11` hush-on-bootimg still cut at `[`). When
+/// share is on, THRE follows COM2 and an empty TX ring so earlycon cannot
+/// outrun SOL. Drain leftovers on the LSR poll. linux earlycon pace LSR
+/// THRE. Not `ISO-INSTALL-OK`.
+///
+/// INVARIANTS:
+/// - `false` only while `linux_earlycon_share` is on and COM2 cannot take
+///   another byte (or the TX ring still holds a byte)
+/// - Share off keeps LSR `0x60` (OVMF firmware serial / nested iso=0)
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_tx_guest_lsr_thre() -> bool {
+    if !linux_earlycon_share() {
+        return true;
+    }
+    #[cfg(test)]
+    {
+        if GUEST_TX_TEST_SOL_NOT_READY.load(Ordering::Relaxed) {
+            return false;
+        }
+    }
+    if guest_tx_sol_ready() {
+        let _ = drain_guest_tx(GUEST_TX_DRAIN_CHUNK);
+    }
+    guest_tx_sol_ready() && guest_tx_len() == 0
+}
+
 fn guest_tx_write_ports(byte: u8) {
     #[cfg(target_os = "uefi")]
     {
@@ -491,6 +531,8 @@ mod serial_test {
         assert_eq!(GUEST_TX_DRAIN_EXIT, 4);
         assert!(s.contains("guest UART TX drain COM2 independent"));
         assert!(s.contains("fn guest_tx_sol_ready"));
+        assert!(s.contains("fn guest_tx_guest_lsr_thre"));
+        assert!(s.contains("linux earlycon pace LSR THRE"));
         serial_log_clear();
         guest_tx_clear();
     }
