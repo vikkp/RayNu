@@ -157,6 +157,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux CPUID GenuineIntel + NX"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share TX ring"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));

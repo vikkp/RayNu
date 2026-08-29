@@ -12,6 +12,8 @@
 //! redirect. Post-M0 HV progress is port-I/O; without COM2 mirror, SOL stays
 //! frozen at M0 after ExitBootServices tears down ConOut.
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 /// Distinctive M0 gate marker — CI greps for this exact string on the serial log.
 pub const M0_BOOT_OK_MARKER: &str = "RAYNU-V-M0-BOOT-OK";
 
@@ -49,6 +51,26 @@ static mut LOG_LEN: usize = 0;
 static mut GUEST_TX: [u8; GUEST_TX_CAP] = [0; GUEST_TX_CAP];
 static mut GUEST_TX_HEAD: usize = 0;
 static mut GUEST_TX_LEN: usize = 0;
+/// Iron `202312f`: TX ring made `Linux version` readable, then a blocking HV
+/// `write_byte` (hypervisor-scan bump) interleaved e820 and COM2 cut mid-word.
+/// After Linux `#PF` deliver, HV diagnostics share the guest TX ring.
+static LINUX_EARLYCON_SHARE: AtomicBool = AtomicBool::new(false);
+
+/// Route HV `write_byte` through the guest TX ring during Linux earlycon.
+///
+/// INVARIANTS:
+/// - `true` after first Linux `#PF` deliver; `false` on guest-UEFI reset / E4
+/// - Does not by itself print `ISO-INSTALL-OK`
+///
+/// VERIFICATION: L1 (host tests)
+pub fn set_linux_earlycon_share(on: bool) {
+    LINUX_EARLYCON_SHARE.store(on, Ordering::Release);
+}
+
+/// Whether HV diagnostics currently share the guest UART TX ring.
+pub fn linux_earlycon_share() -> bool {
+    LINUX_EARLYCON_SHARE.load(Ordering::Acquire)
+}
 
 fn log_push(byte: u8) {
     // SAFETY: single-threaded boot / HV; ring only touched from serial writers.
@@ -207,7 +229,15 @@ fn init_port(base: u16) {
 }
 
 /// Write a byte to live diagnostic UARTs (COM1 + COM2), waiting for THR.
+///
+/// During Linux earlycon share, enqueue + drain instead of [`THR_WAIT_SPINS`]
+/// so HV ticks / hypervisor-scan bump do not stall guest printk (iron
+/// `202312f` e820 cut). linux earlycon share TX ring. Not `ISO-INSTALL-OK`.
 pub fn write_byte(byte: u8) {
+    if linux_earlycon_share() {
+        write_byte_nowait(byte);
+        return;
+    }
     // Translate `\n` → `\r\n` for typical serial terminals.
     if byte == b'\n' {
         write_raw(b'\r');
@@ -433,6 +463,29 @@ mod serial_test {
         assert!(s.contains("guest UART TX ring drain"));
         assert!(s.contains("GUEST_TX_DRAIN_EXIT"));
         assert_eq!(GUEST_TX_DRAIN_EXIT, 4);
+        serial_log_clear();
+        guest_tx_clear();
+    }
+
+    #[test]
+    fn linux_earlycon_share_routes_write_byte_to_ring() {
+        serial_log_clear();
+        guest_tx_clear();
+        set_linux_earlycon_share(false);
+        assert!(!linux_earlycon_share());
+        set_linux_earlycon_share(true);
+        assert!(linux_earlycon_share());
+        write_byte(b'E');
+        write_str("820");
+        let mut buf = [0u8; 8];
+        let n = serial_log_snapshot(&mut buf);
+        assert!(n >= 4);
+        assert_eq!(buf[0], b'E');
+        assert_eq!(&buf[1..4], b"820");
+        let s = include_str!("serial.rs");
+        assert!(s.contains("linux earlycon share TX ring"));
+        assert!(s.contains("fn set_linux_earlycon_share"));
+        set_linux_earlycon_share(false);
         serial_log_clear();
         guest_tx_clear();
     }
