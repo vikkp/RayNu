@@ -150,6 +150,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap ended on CF8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s on preemption/HLT not PCI I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR/EPT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on UART COM I/O"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -359,32 +360,36 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut none));
     assert_eq!(none, [0x10, 0x20]);
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(10, false, false),
+        guest_uefi_hpet_step_for_exit(10, false, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(31, false, false),
+        guest_uefi_hpet_step_for_exit(31, false, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(32, false, false),
+        guest_uefi_hpet_step_for_exit(32, false, false, false),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(12, false, false),
+        guest_uefi_hpet_step_for_exit(12, false, false, false),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
-    assert_eq!(guest_uefi_hpet_step_for_exit(30, false, false), 0);
+    assert_eq!(guest_uefi_hpet_step_for_exit(30, false, false, false), 0);
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(30, false, true),
+        guest_uefi_hpet_step_for_exit(30, false, true, false),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(48, false, false),
+        guest_uefi_hpet_step_for_exit(30, false, false, true),
         crate::devices::guest_platform::HPET_INSN_STEP
     );
     assert_eq!(
-        guest_uefi_hpet_step_for_exit(48, true, false),
+        guest_uefi_hpet_step_for_exit(48, false, false, false),
+        crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(48, true, false, false),
         crate::devices::guest_platform::HPET_MAIN_STEP
     );
     let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);

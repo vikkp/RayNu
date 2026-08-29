@@ -203,6 +203,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("live HPET")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s step")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR/EPT")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on UART COM I/O")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")

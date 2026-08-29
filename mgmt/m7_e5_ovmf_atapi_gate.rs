@@ -385,6 +385,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("32768-exit cap")
         && guest.contains("hpet_tick_sink_by")
         && guest.contains("fn guest_uefi_hpet_step_for_exit(")
+        && guest.contains("uart_io")
+        && guest.contains("HPET 1ms on UART COM I/O")
         && plat.contains("is_kbc_port")
         && plat.contains("KeyboardWaitForValue")
         && plat.contains("kbc_push")
@@ -1427,6 +1429,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_phys_bits(32) == 36
         && guest_uefi_phys_bits(40) == 40
         && guest_uefi_phys_bits(52) == crate::vmx::guest_uefi::GUEST_UEFI_PHYS_BITS_IRON_CAP
+        && crate::vmx::guest_uefi::guest_uefi_hpet_step_for_exit(30, false, false, true)
+            == crate::devices::guest_platform::HPET_INSN_STEP
+        && crate::vmx::guest_uefi::guest_uefi_hpet_step_for_exit(30, false, false, false) == 0
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on UART COM I/O")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")

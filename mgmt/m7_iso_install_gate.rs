@@ -274,6 +274,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_cpuid_exit_skip(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_filter_cpuid_for_linux(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_hpet_step_for_exit(")
+        && include_str!("../vmx/guest_uefi.rs").contains("uart_io")
+        && include_str!("../vmx/guest_uefi.rs").contains("HPET 1ms on UART COM I/O")
         && include_str!("../vmx/guest_uefi.rs").contains("HPET 1ms on CPUID/MSR/EPT")
         && include_str!("../devices/guest_platform.rs").contains("HPET_INSN_STEP")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_cpuid_leaf_is_hypervisor_scan(")
