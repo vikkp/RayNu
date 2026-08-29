@@ -209,6 +209,7 @@ pub fn run_m7_e5_ovmf_both_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux printk ticks every 4096")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART nowait (do not clear COM2_LIVE)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("stop RIP insn dump")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("spin jmp skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("not ISO-INSTALL-OK")

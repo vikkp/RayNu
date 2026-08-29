@@ -28,8 +28,14 @@ const THR_WAIT_SPINS: u32 = 200_000;
 /// Guest UART TX ring. Drops oldest when full so a late `ISO-INSTALL-OK`
 /// still reaches SOL. Not blocking. Not `ISO-INSTALL-OK` by itself.
 pub const GUEST_TX_CAP: usize = 2048;
-/// Bytes to push toward SOL per VM-exit / guest `out` (keep the exit short).
+/// Bytes to push toward SOL per guest `out` (keep the UART exit short).
 pub const GUEST_TX_DRAIN_CHUNK: usize = 64;
+/// Bytes to push on a non-UART VM-exit. Nested QEMU CI `be0f1cd` blasted
+/// 64 host THR bytes on every preemption/HLT exit while THRE stayed set,
+/// then E4 `/init` SIGSEGV hung until the 480s timeout (3/3). Iron SOL
+/// still drains the ring: UART `out` uses [`GUEST_TX_DRAIN_CHUNK`]; later
+/// exits leak a few bytes whenever both ports show THRE.
+pub const GUEST_TX_DRAIN_EXIT: usize = 4;
 
 /// Per-port liveness; cleared on THR timeout so a missing UART cannot stall boot.
 static mut COM1_LIVE: bool = true;
@@ -425,6 +431,8 @@ mod serial_test {
         assert!(s.contains("Keep the port live"));
         assert!(s.contains("guest UART nowait; do not clear COM2_LIVE"));
         assert!(s.contains("guest UART TX ring drain"));
+        assert!(s.contains("GUEST_TX_DRAIN_EXIT"));
+        assert_eq!(GUEST_TX_DRAIN_EXIT, 4);
         serial_log_clear();
         guest_tx_clear();
     }

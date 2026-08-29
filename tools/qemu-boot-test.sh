@@ -154,7 +154,18 @@ set +e
 timeout --signal=KILL "$TIMEOUT_SECS" \
   env ESP="$ESP" SERIAL_CHARDEV="file:$SERIAL_LOG" \
   "$ROOT/tools/run-qemu.sh" \
-  >"$ROOT/target/m0-qemu-stdout.log" 2>"$ROOT/target/m0-qemu-stderr.log"
+  >"$ROOT/target/m0-qemu-stdout.log" 2>"$ROOT/target/m0-qemu-stderr.log" &
+QEMU_WRAP=$!
+while kill -0 "$QEMU_WRAP" 2>/dev/null; do
+  if grep -qF "Kernel panic - not syncing" "$SERIAL_LOG" 2>/dev/null; then
+    echo "error: kernel panic on serial — killing QEMU (do not wait ${TIMEOUT_SECS}s)" >&2
+    kill -KILL "$QEMU_WRAP" 2>/dev/null || true
+    pkill -KILL -P "$QEMU_WRAP" 2>/dev/null || true
+    break
+  fi
+  sleep 1
+done
+wait "$QEMU_WRAP"
 QEMU_STATUS=$?
 set -e
 
