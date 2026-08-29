@@ -388,6 +388,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_hpet_uart_tsc_step")
         && guest.contains("HPET TSC-delta on UART COM I/O")
         && guest.contains("Linux printk ticks every 4096")
+        && guest.contains("guest UART nowait (do not clear COM2_LIVE)")
         && plat.contains("is_kbc_port")
         && plat.contains("KeyboardWaitForValue")
         && plat.contains("kbc_push")
@@ -1436,6 +1437,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && crate::vmx::guest_uefi::guest_uefi_hpet_step_for_exit(30, false, false) == 0
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET TSC-delta on UART COM I/O")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux printk ticks every 4096")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART nowait (do not clear COM2_LIVE)")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8e55abf")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA PIRQ")

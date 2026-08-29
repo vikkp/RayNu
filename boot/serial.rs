@@ -18,7 +18,10 @@ pub const M0_BOOT_OK_MARKER: &str = "RAYNU-V-M0-BOOT-OK";
 const COM1: u16 = 0x3F8;
 const COM2: u16 = 0x2F8;
 
-/// Spins waiting for THR empty before declaring a UART dead (avoid infinite hang).
+/// Spins waiting for THR empty on host diagnostic writes (ticks, banners).
+/// Guest THR tees use [`write_byte_nowait`] (one LSR poll) so a flooded iDRAC
+/// SOL cannot stall the VM-exit path. Timeout must **not** clear liveness —
+/// iron `115e5ee` froze COM2 at PAT `n=441600` after a guest `out` waited THRE.
 const THR_WAIT_SPINS: u32 = 200_000;
 
 /// Per-port liveness; cleared on THR timeout so a missing UART cannot stall boot.
@@ -109,13 +112,27 @@ pub fn write_byte(byte: u8) {
     log_push(byte);
 }
 
+/// Guest firmware/Linux THR tee. One LSR poll; drop if THRE is clear.
+///
+/// Always records the byte in the host serial ring. Never waits
+/// [`THR_WAIT_SPINS`] and never clears COM1/COM2 liveness.
+/// Iron `115e5ee`: blocking guest `out` after a tick line left SOL on PAT.
+pub fn write_byte_nowait(byte: u8) {
+    if byte == b'\n' {
+        write_raw_nowait(b'\r');
+        log_push(b'\r');
+    }
+    write_raw_nowait(byte);
+    log_push(byte);
+}
+
 fn write_raw(byte: u8) {
     #[cfg(target_os = "uefi")]
     {
-        // SAFETY: single-threaded boot / post-EBS HV; flags only cleared here.
+        // SAFETY: single-threaded boot / post-EBS HV; THR wait, no LIVE clear.
         unsafe {
-            write_raw_port(COM1, byte, &mut COM1_LIVE);
-            write_raw_port(COM2, byte, &mut COM2_LIVE);
+            write_raw_port(COM1, byte, COM1_LIVE);
+            write_raw_port(COM2, byte, COM2_LIVE);
         }
     }
     #[cfg(not(target_os = "uefi"))]
@@ -124,10 +141,27 @@ fn write_raw(byte: u8) {
     }
 }
 
-unsafe fn write_raw_port(base: u16, byte: u8, live: &mut bool) {
-    if !*live {
+fn write_raw_nowait(byte: u8) {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: single-threaded boot / post-EBS HV; one LSR poll, no LIVE clear.
+        unsafe {
+            write_raw_port_nowait(COM1, byte);
+            write_raw_port_nowait(COM2, byte);
+        }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        let _ = byte;
+    }
+}
+
+unsafe fn write_raw_port(base: u16, byte: u8, live: bool) {
+    if !live {
         return;
     }
+    // SAFETY: port I/O to fixed legacy UART bases; bounded THR wait.
+    // KANI-TARGET: host COM1/COM2 THR wait (outside Proven Core).
     for _ in 0..THR_WAIT_SPINS {
         if inb(base + 5) & 0x20 != 0 {
             outb(base, byte);
@@ -135,8 +169,16 @@ unsafe fn write_raw_port(base: u16, byte: u8, live: &mut bool) {
         }
         core::hint::spin_loop();
     }
-    // Dead / missing UART — stop spinning on later bytes.
-    *live = false;
+    // Drop this byte. Keep the port live so later ticks / ISO-INSTALL-OK
+    // still reach iDRAC SOL (iron 115e5ee n=441600 PAT freeze).
+}
+
+unsafe fn write_raw_port_nowait(base: u16, byte: u8) {
+    // SAFETY: port I/O to fixed legacy UART bases; one LSR poll, no LIVE clear.
+    // KANI-TARGET: host COM1/COM2 nowait THR (outside Proven Core).
+    if inb(base + 5) & 0x20 != 0 {
+        outb(base, byte);
+    }
 }
 
 /// Write a UTF-8 string (bytes as-is) to diagnostic UARTs.
@@ -154,9 +196,9 @@ pub fn write_line(s: &str) {
 
 /// Revive diagnostic UART liveness without reprogramming baud/FIFO.
 ///
-/// After a THR timeout, [`write_raw_port`] clears COM2_LIVE and later bytes
-/// silently skip COM2 (iDRAC SOL). Full [`init`] can glitch SOL mid-session;
-/// this only re-enables writes to already-programmed ports.
+/// Re-enable writes if a port was marked dead. [`write_raw_port`] no longer
+/// clears liveness on THR timeout (guest UART nowait; do not clear COM2_LIVE).
+/// Full [`init`] can glitch SOL mid-session; this only flips the flags.
 pub fn revive_ports() {
     // SAFETY: single-threaded boot / post-EBS HV.
     unsafe {
@@ -271,6 +313,22 @@ mod serial_test {
         assert_eq!(&buf[..6], b"E4-LOG");
         serial_log_clear();
         assert_eq!(serial_log_len(), 0);
+    }
+
+    #[test]
+    fn write_byte_nowait_logs_without_clearing_live() {
+        serial_log_clear();
+        write_byte_nowait(b'G');
+        write_byte_nowait(b'\n');
+        let mut buf = [0u8; 8];
+        let n = serial_log_snapshot(&mut buf);
+        assert!(n >= 2);
+        assert_eq!(buf[0], b'G');
+        let s = include_str!("serial.rs");
+        assert!(s.contains("fn write_byte_nowait"));
+        assert!(s.contains("Keep the port live"));
+        assert!(s.contains("guest UART nowait; do not clear COM2_LIVE"));
+        serial_log_clear();
     }
 
     #[test]
