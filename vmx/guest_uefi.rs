@@ -236,11 +236,15 @@ pub fn preempt_deadloop_guarded_assert_skip_len(bytes: &[u8], rip: u64, caller: 
 /// Bytes to advance guest RIP on a preemption CpuDeadLoop match.
 /// 2: `pause` / backward `jmp rel8` / backward `jcc rel8` (including QEMU
 ///    `eb f3` + `leave; ret`).
-/// 5: Linux `delay_loop` `REX.W DEC rax; JNZ -5` (`48 FF C8 75 FB`).
-///    Nested `f1afc27` after leftover DRAM: `rip=0xffffffffb7ae5940`
-///    `insn=48ffc875fb` `preempt noskip` (identity peek empty on high-half).
-///    Skip 5 to fall through to `3: dec`. Do not skip DEC alone (RAX
-///    unchanged → infinite `jnz`).
+/// 5: Linux `delay_loop` inner or outer `REX.W DEC rax; JNZ rel8`
+///    (`48 FF C8 75 xx`, rel8 < 0). Nested `f1afc27` after leftover DRAM:
+///    `rip=0xffffffffb7ae5940` `insn=48ffc875fb` `preempt noskip` (identity
+///    peek empty on high-half). Skip-5 alone lands on `3: dec; jnz 1b`,
+///    which re-enters the inner loop. Pair with
+///    [`preempt_deadloop_delay_loop_sets_rax_one`] so `3:` falls through.
+/// 10: inner `75 FB` plus outer `48 FF C8 75 xx` in one fetch — skip to the
+///     compiler `ret`. Do not skip DEC alone (RAX unchanged → infinite
+///     `jnz`).
 /// 6: near `jcc` (`0F 8x` rel32) with a small backward displacement.
 /// 0: unknown, or iron `eb ec` + `leave; ret` without the DXE-RAM guard
 ///    ([`preempt_deadloop_guarded_assert_skip_len`]).
@@ -251,14 +255,8 @@ pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
     if preempt_deadloop_is_assert_epilogue(bytes) {
         return 0;
     }
-    if bytes.len() >= 5
-        && bytes[0] == 0x48
-        && bytes[1] == 0xFF
-        && bytes[2] == 0xC8
-        && bytes[3] == 0x75
-        && bytes[4] == 0xFB
-    {
-        return 5;
+    if let Some(n) = preempt_deadloop_delay_loop_skip_len(bytes) {
+        return n;
     }
     if preempt_deadloop_should_skip(bytes[0], bytes[1]) {
         return 2;
@@ -270,6 +268,37 @@ pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
         }
     }
     0
+}
+
+/// Linux `arch/x86/lib/delay.c` `delay_loop`: inner `2: dec %rax; jnz 2b`
+/// (`48 FF C8 75 FB`) then outer `3: dec %rax; jnz 1b`. Not `ISO-INSTALL-OK`.
+pub fn preempt_deadloop_delay_loop_skip_len(bytes: &[u8]) -> Option<u8> {
+    if bytes.len() < 5
+        || bytes[0] != 0x48
+        || bytes[1] != 0xFF
+        || bytes[2] != 0xC8
+        || bytes[3] != 0x75
+        || (bytes[4] as i8) >= 0
+    {
+        return None;
+    }
+    if bytes.len() >= 10
+        && bytes[4] == 0xFB
+        && bytes[5] == 0x48
+        && bytes[6] == 0xFF
+        && bytes[7] == 0xC8
+        && bytes[8] == 0x75
+        && (bytes[9] as i8) < 0
+    {
+        return Some(10);
+    }
+    Some(5)
+}
+
+/// True when a delay_loop skip must leave `RAX=1` so `3: dec; jnz` falls
+/// through instead of re-entering the inner loop. Not `ISO-INSTALL-OK`.
+pub fn preempt_deadloop_delay_loop_sets_rax_one(bytes: &[u8]) -> bool {
+    preempt_deadloop_delay_loop_skip_len(bytes).is_some()
 }
 
 /// XSETBV only accepts XCR0. Other XCRs would #GP; we skip those.
@@ -6393,6 +6422,11 @@ unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
     let len = u64::from(preempt_deadloop_skip_len(&buf[..n]));
     if len == 0 {
         return false;
+    }
+    // Inner skip-5 lands on `3: dec %rax; jnz 1b`. RAX=1 → 3: becomes 0
+    // and falls through to ret. Skip-10 already lands on ret.
+    if preempt_deadloop_delay_loop_sets_rax_one(&buf[..n]) {
+        SAVED_RAX = 1;
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }

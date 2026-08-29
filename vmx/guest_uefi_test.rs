@@ -20,6 +20,7 @@ use super::{
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
     cr_access_is_cr8,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
+    preempt_deadloop_delay_loop_skip_len, preempt_deadloop_delay_loop_sets_rax_one,
     preempt_deadloop_guarded_assert_skip_len, guest_uefi_assert_caller_is_dxe_ram,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
     guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_filter_cpuid,
@@ -225,6 +226,19 @@ fn marker_and_residual_honest() {
         preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB, 0x48, 0xFF, 0xC8]),
         5
     );
+    assert_eq!(
+        preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB, 0x48, 0xFF, 0xC8, 0x75, 0xE0]),
+        10
+    );
+    assert_eq!(preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xE0]), 5);
+    assert_eq!(
+        preempt_deadloop_delay_loop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB]),
+        Some(5)
+    );
+    assert!(preempt_deadloop_delay_loop_sets_rax_one(&[
+        0x48, 0xFF, 0xC8, 0x75, 0xFB
+    ]));
+    assert!(!preempt_deadloop_delay_loop_sets_rax_one(&[0x48, 0xFF, 0xC8]));
     assert_eq!(preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8]), 0);
     assert_eq!(preempt_deadloop_skip_len(&[0x75, 0xFB]), 2);
     assert_eq!(GUEST_UEFI_DXE_RAM_FLOOR, 0x10_0000);
