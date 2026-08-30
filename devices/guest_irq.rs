@@ -136,6 +136,13 @@ pub fn prefer_pit_once() {
     PREFER_PIT.store(true, Ordering::Release);
 }
 
+/// Prefer PIT over UART while virtio probe still needs kworker. Clear
+/// after both functions reach DRIVER_OK so COM1 auto-answer is not starved.
+/// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
+pub fn prefer_pit_until_driver_ok(need: bool) {
+    PREFER_PIT.store(need, Ordering::Release);
+}
+
 /// True when GPA is the product-ISO IOAPIC 4 KiB window (not the HPET sink).
 pub fn is_ioapic_gpa(gpa: u64) -> bool {
     product_live() && gpa >= IOAPIC_GPA && gpa < IOAPIC_GPA.wrapping_add(IOAPIC_SIZE)

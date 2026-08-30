@@ -1,16 +1,16 @@
 use super::{
     blk_sector_rw, decode_mmio_insn, is_virtio_bar_2m_gpa, is_virtio_bar_gpa, iso_visible,
     latch_dxe_virtio_did, mmio_decoded_len, mmio_effective_len, mmio_insn_bytes_this_page,
-    mmio_read, mmio_read_iso, mmio_write,
+    mmio_read, mmio_read_iso, mmio_write, mmio_write_iso,
     pci_addr_selects_owned, pci_addr_selects_slot0, pci_addr_selects_virtio,
     pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
     process_blk_queue_in, process_iso_queue_in, queues_armed, reset, take_marker,
-    virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
-    GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
-    M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
-    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1, VIRTIO_PCI_CAP_COMMON,
-    VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
+    virtio_disk_evidence, virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT,
+    GUEST_VIRTIO_BAR0_SIZE_MASK, GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE,
+    GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR,
+    VIRTIO_BLK_S_OK, VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1,
+    VIRTIO_PCI_CAP_COMMON, VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
 };
 use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
@@ -48,6 +48,10 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     pci_write_addr(pci_config_addr() | 0x40);
     assert_eq!(pci_read_data(0xCFC, 4), 0x0001_0010, "lab enum stub cap");
     assert!(!queues_armed());
+    assert!(
+        !virtio_needs_pit_over_uart(),
+        "iso=0 queues off does not prefer PIT over UART"
+    );
     reset();
     reset_cd();
     let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
@@ -132,6 +136,10 @@ fn linux_virtio_pci_modern_probe_reaches_capacity() {
     assert!(present_iso(&iso, 9));
     assert!(present());
     assert!(queues_armed());
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "linux PIT prefer until DRIVER_OK"
+    );
 
     mmio_write(0x14, 1, 0);
     assert_eq!(mmio_read(0x14, 1), 0, "vp_reset status byte");
@@ -174,6 +182,15 @@ fn linux_virtio_pci_modern_probe_reaches_capacity() {
     assert_eq!(
         mmio_read(0x14, 1),
         u64::from(ACK | DRIVER | FEATURES_OK | DRIVER_OK)
+    );
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "ISO 00:03.0 still pending DRIVER_OK"
+    );
+    mmio_write_iso(0x14, 1, u64::from(ACK | DRIVER | FEATURES_OK | DRIVER_OK));
+    assert!(
+        !virtio_needs_pit_over_uart(),
+        "linux PIT prefer until DRIVER_OK"
     );
     assert_eq!(mmio_read(0x200, 8), 0, "host test has no install HPA");
     let iso_cap = mmio_read_iso(0x200, 8);

@@ -1,8 +1,8 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_io, prefer_pit_once, raise_ata, raise_gsi, raise_pit, raise_virtio, reset,
-    take_inject_vector, ATA_GSI,
-    IOAPIC_GPA, IOAPIC_VERSION, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
+    pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi, raise_pit,
+    raise_virtio, reset, take_inject_vector, ATA_GSI, IOAPIC_GPA, IOAPIC_VERSION, PIT_IRQ,
+    VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -200,6 +200,49 @@ fn product_iso_linux_pit_prefer_once_beats_uart() {
     );
     reset();
     reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_pit_prefer_until_driver_ok_then_uart() {
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "linux PIT prefer until DRIVER_OK"
+    );
+    pic_init_unmask_all();
+    raise_pit();
+    prefer_pit_until_driver_ok(virtio_needs_pit_over_uart());
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "prefer beats UART before DRIVER_OK"
+    );
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "ISO 00:03.0 still pending DRIVER_OK"
+    );
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    raise_pit();
+    prefer_pit_until_driver_ok(virtio_needs_pit_over_uart());
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "COM1 IRQ 4 must beat PIT after both DRIVER_OK"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
     guest_platform::reset();
 }
 

@@ -298,6 +298,23 @@ pub fn queues_armed() -> bool {
     QUEUES.load(Ordering::Acquire)
 }
 
+/// Virtio 1.0 DEVICE_STATUS DRIVER_OK (bit 2 / value 4).
+pub const VIRTIO_STATUS_DRIVER_OK: u8 = 4;
+
+/// Linux kworker / `msleep` need PIT to beat UART until both product-ISO
+/// virtio-blk functions (`00:02.0` install disk, `00:03.0` ISO) reach
+/// DRIVER_OK. After that, UART must beat PIT so ttyS0 TX and Alpine
+/// serial auto-answer work. Lab / iso=0 (queues off) is false.
+/// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
+pub fn virtio_needs_pit_over_uart() -> bool {
+    with_box(|b| {
+        fn pending(v: &VirtioPci) -> bool {
+            v.queues_armed && (v.status & VIRTIO_STATUS_DRIVER_OK) == 0
+        }
+        pending(&b.disk) || pending(&b.iso)
+    })
+}
+
 pub fn reset() {
     with_box(|b| *b = VirtioBox::empty());
     VISIBLE.store(false, Ordering::Release);
