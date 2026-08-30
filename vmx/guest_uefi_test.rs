@@ -688,6 +688,51 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 17, false));
     assert!(!guest_uefi_fwcfg_identity_overlay(0x1F0, overlay_dest, 4, false));
     assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false));
+    assert!(
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN)
+            > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP
+    );
+    assert!(!guest_uefi_fwcfg_identity_overlay(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    {
+        // Nested 1e0f4a7 dest is now ordinary RAM. Overlay cannot hold
+        // etc/acpi/tables; dest_ok fill must. PEI dest holds ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x205f18usize;
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        assert_eq!(
+            ram[dest],
+            crate::devices::guest_acpi::acpi_tables_byte(0)
+        );
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
     assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x100000, 4, false));
     {
         let mut ram = vec![0u8; (GUEST_UEFI_HV_PML4
@@ -736,6 +781,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg string skip HV identity dest="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI dest holds ACPI tables"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));
