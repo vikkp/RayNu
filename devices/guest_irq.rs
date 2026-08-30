@@ -188,11 +188,21 @@ pub fn lower_virtio_iso() {
 /// PIT IRQ 0. Latches IRR; PIC injects only after ICW2 ≥ 16 and unmask.
 /// Also steps the i8253 channel-0 count so Linux `inb 0x40` sees time pass.
 /// IOAPIC pin 2 is the MADT IRQ0 ISO (not PIC cascade IRQ 2).
+/// Do not latch IOAPIC pin 0: OVMF leftover RTE + `raise_gsi(0)` stole GSI 2
+/// after Linux masked the PIC (ACPI `rest_init`). PIT skips IOAPIC pin 0.
 /// MADT IRQ0 ISO GSI 2. Not `ISO-INSTALL-OK`.
 pub fn raise_pit() {
     crate::devices::guest_platform::pit_tick();
-    raise_gsi(PIT_IRQ);
+    raise_pic_irq(PIT_IRQ);
     raise_ioapic_gsi(PIT_IOAPIC_GSI);
+}
+
+/// Latch 8259 IRR only. PIT uses this so IOAPIC pin 0 stays clear.
+fn raise_pic_irq(irq: u8) {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| raise_pic_locked(c, irq));
 }
 
 /// Latch an IOAPIC pin without touching the 8259 (GSI 2 is the cascade).

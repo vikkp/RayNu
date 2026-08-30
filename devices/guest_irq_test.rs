@@ -168,10 +168,9 @@ fn product_iso_pic_deliverable_while_ovmf_ioapic_unmasked() {
         Some(0x20 + PIT_IRQ),
         "virtual-wire PIT is PIC IRQ 0 even if OVMF left pin 0 unmasked"
     );
-    assert_eq!(
-        take_inject_vector(),
-        Some(0x30),
-        "IOAPIC pin 0 still pending for ACPI / take_inject_vector"
+    assert!(
+        take_inject_vector().is_none(),
+        "PIT skips IOAPIC pin 0"
     );
     reset();
     reset_cd();
@@ -190,6 +189,27 @@ fn product_iso_pit_ioapic_gsi2_without_pic() {
         Some(0x30),
         "MADT IRQ0 ISO GSI 2"
     );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_pit_skips_ioapic_pin0() {
+    arm_product_iso();
+    // OVMF leftover: pin 0 unmasked (vector 0x30).
+    ioapic_write(0, 0x10);
+    ioapic_write(0x10, 0x30);
+    // Linux MADT ISO: pin 2 unmasked (vector 0x31).
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    ioapic_write(0x10, 0x31);
+    raise_pit();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x31),
+        "PIT skips IOAPIC pin 0"
+    );
+    assert!(take_inject_vector().is_none());
     reset();
     reset_cd();
     guest_platform::reset();
