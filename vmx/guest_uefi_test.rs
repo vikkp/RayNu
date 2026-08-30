@@ -474,7 +474,7 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_PHYS_BITS_MIN, 36);
     assert_eq!(GUEST_UEFI_IRON_PF_CR2, 0x80B000);
     assert_eq!(GUEST_UEFI_MEMFD_BASE, 0x800000);
-    assert_eq!(GUEST_UEFI_HV_PML4, 0x200000);
+    assert_eq!(GUEST_UEFI_HV_PML4, 0x400000);
     assert_eq!(
         GUEST_UEFI_HV_PML4,
         crate::devices::guest_platform::HV_IDENTITY_PML4
@@ -677,37 +677,43 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_io_string_fills_ram(0x511));
     assert!(guest_uefi_fwcfg_string_fills_ram(0x511));
     assert!(!guest_uefi_fwcfg_string_fills_ram(0x510));
-    assert!(!guest_uefi_io_string_dest_ok(0x205f18));
+    assert!(guest_uefi_io_string_dest_ok(0x205f18));
     assert!(GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX.contains("fw_cfg string skip HV identity dest="));
     assert!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX.contains("fw_cfg identity overlay dest="));
     assert_eq!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, 16);
-    assert!(guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false));
-    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, true));
-    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 17, false));
-    assert!(!guest_uefi_fwcfg_identity_overlay(0x1F0, 0x205f18, 4, false));
+    let overlay_dest = GUEST_UEFI_HV_PML4 + 0x5f18;
+    assert!(!guest_uefi_io_string_dest_ok(overlay_dest));
+    assert!(guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, true));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 17, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x1F0, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false));
     assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x100000, 4, false));
     {
-        let mut ram = vec![0u8; 0x210000];
-        ram[0x205f18] = 0xAA;
-        ram[0x205f19] = 0xBB;
-        ram[0x205f1a] = 0xCC;
-        ram[0x205f1b] = 0xDD;
+        let mut ram = vec![0u8; (GUEST_UEFI_HV_PML4
+            + crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES)
+            as usize];
+        let d = overlay_dest as usize;
+        ram[d] = 0xAA;
+        ram[d + 1] = 0xBB;
+        ram[d + 2] = 0xCC;
+        ram[d + 3] = 0xDD;
         let mut saved = [0u8; 4];
         assert!(guest_uefi_fwcfg_identity_overlay_apply(
             &mut ram,
-            0x205f18,
+            overlay_dest,
             b"QEMU",
             &mut saved
         ));
         assert_eq!(&saved, &[0xAA, 0xBB, 0xCC, 0xDD]);
-        assert_eq!(&ram[0x205f18..0x205f1c], b"QEMU");
+        assert_eq!(&ram[d..d + 4], b"QEMU");
         assert!(guest_uefi_fwcfg_identity_overlay_restore(
-            &mut ram, 0x205f18, &saved
+            &mut ram, overlay_dest, &saved
         ));
-        assert_eq!(&ram[0x205f18..0x205f1c], &[0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(&ram[d..d + 4], &[0xAA, 0xBB, 0xCC, 0xDD]);
         let mut tmp = [0u8; 4];
-        assert!(copy_low_ram_bytes(&ram, 0x205f18, &mut tmp));
-        assert!(write_low_ram_bytes(&mut ram, 0x205f18, b"QEMU"));
+        assert!(copy_low_ram_bytes(&ram, overlay_dest, &mut tmp));
+        assert!(write_low_ram_bytes(&mut ram, overlay_dest, b"QEMU"));
     }
     assert!(guest_uefi_io_string_dest_ok(0x100000));
     assert!(guest_uefi_io_string_dest_ok(0x7bddd000));
@@ -729,6 +735,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip HV identity PML4 dest"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg string skip HV identity dest="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));

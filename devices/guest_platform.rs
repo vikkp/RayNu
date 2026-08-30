@@ -123,9 +123,12 @@ pub const E820_ENTRY_BYTES: u8 = 20;
 pub const E820_RAM: u32 = 1;
 /// QEMU `E820_RESERVED`. Host-owned 4 GiB identity PML4 (not OVMF MEMFD).
 pub const E820_RESERVED: u32 = 2;
-/// GPA of the hypervisor 4 GiB identity PML4 (2 MiB). Below OVMF MEMFD
+/// GPA of the hypervisor 4 GiB identity PML4 (4 MiB). Below OVMF MEMFD
 /// `0x800000` so CpuDxe heap cannot clobber CR3 (iron `101b8ec` `pde=0x30646870`).
-pub const HV_IDENTITY_PML4: u64 = 0x200000;
+/// Was `0x200000` (iron `cc7d78a` / nested `1e0f4a7` PEI stack dest `0x205f18`).
+/// HV identity PML4 0x400000 (not 0x200000 PEI stack) so fw_cfg IoReadFifo8
+/// can fill the QEMU signature and ACPI blobs without overlay/skip.
+pub const HV_IDENTITY_PML4: u64 = 0x400000;
 /// Nine 4 KiB pages became eleven: PML4 + PDPT + 4 PDs + high-half PDPT +
 /// 2 PDs + leftover-high overflow PDPT+PD, plus 16 SPLIT4K PT pages
 /// (iron `06b011a` `err=0x3` `pde=0x1c000e7`). Must match
@@ -148,6 +151,7 @@ pub const E820_VGA_BYTES: u64 = 0x60000;
 pub const E820_LOW_1M: u64 = 0x100000;
 /// Six e820 entries: 640 KiB RAM / VGA reserved / RAM to PML4 / reserved
 /// PML4 / RAM to 2 GiB / PCI UC. Do **not** type-1 `[0, 2MiB)` (covers VGA).
+/// Entry 2 RAM is `[1MiB, 4MiB)` so PEI stack dest `0x205f18` is ordinary RAM.
 pub const E820_ENTRY_COUNT: u8 = 6;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 

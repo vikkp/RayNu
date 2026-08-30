@@ -121,6 +121,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fw_cfg string skip HV identity dest=")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_fwcfg_identity_overlay")
         && include_str!("../vmx/guest_uefi.rs").contains("fw_cfg identity overlay")
+        && include_str!("../vmx/guest_uefi.rs").contains("HV identity PML4 0x400000")
         && include_str!("../devices/guest_platform.rs").contains("fn is_fwcfg_data_port")
         && include_str!("../devices/guest_platform.rs").contains("fn is_acpi_pm1_io")
         && include_str!("../devices/guest_platform.rs").contains("PIIX4 PM1 SCI_EN")

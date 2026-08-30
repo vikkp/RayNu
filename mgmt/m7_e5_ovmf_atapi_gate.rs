@@ -60,7 +60,7 @@
 //! CR3 load: `#PF` `err=0x9` `cr2=0xa027c8` (P+RSVD; NX-in-PTE with NXE=0).
 //! Rebuild 4G on reserved-bit #PF. Iron `101b8ec`: 4G n=1 n=2 then
 //! `fail=present` `cr2=0x1ae7078` `pde=0x30646870` (MEMFD heap clobber).
-//! HV identity PML4 at `0x200000`, e820 reserved 36KiB, always rebuild.
+//! HV identity PML4 at `0x400000` (was `0x200000` PEI stack), e820 reserved 36KiB, always rebuild.
 //! Iron `cc7d78a`: 4G n=1 `cr3=0x200000` then `EPT violation gpa=0xc01df1b7`
 //! `reason=0x30` (PCI hole; sink range had stopped at 1GiB). Sink-resume
 //! `[32MiB, flash)`. Iron `fdf07ba`: EPT sink `maps=4` then `#PF` `err=0x2`
@@ -482,6 +482,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fw_cfg string skip HV identity dest=")
         && guest.contains("fn guest_uefi_fwcfg_identity_overlay")
         && guest.contains("fw_cfg identity overlay")
+        && guest.contains("HV identity PML4 0x400000")
         && include_str!("../devices/guest_platform.rs").contains("fn is_fwcfg_data_port")
         && include_str!("../devices/guest_platform.rs").contains("fn is_acpi_pm1_io")
         && include_str!("../devices/guest_platform.rs").contains("PIIX4 PM1 SCI_EN")
@@ -1082,10 +1083,13 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && guest_uefi_io_string_fills_ram(0x511)
         && guest_uefi_fwcfg_string_fills_ram(0x511)
         && !guest_uefi_fwcfg_string_fills_ram(0x510)
-        && !guest_uefi_io_string_dest_ok(0x205f18)
+        && guest_uefi_io_string_dest_ok(0x205f18)
         && guest_uefi_io_string_dest_ok(0x100000)
-        && guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false)
-        && !guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 17, false)
+        && !guest_uefi_io_string_dest_ok(GUEST_UEFI_HV_PML4 + 0x5f18)
+        && guest_uefi_fwcfg_identity_overlay(0x511, GUEST_UEFI_HV_PML4 + 0x5f18, 4, false)
+        && !guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false)
+        && !guest_uefi_fwcfg_identity_overlay(0x511, GUEST_UEFI_HV_PML4 + 0x5f18, 17, false)
+        && GUEST_UEFI_HV_PML4 == 0x400000
         && GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP == 16
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("06b011a")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("SPLIT4K")
@@ -1631,6 +1635,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip HV identity PML4 dest")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg string skip HV identity dest=")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS")

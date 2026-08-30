@@ -100,7 +100,7 @@ fn fwcfg_e820_is_32m_ram() {
     assert_eq!(E820_FILE_BYTES, 120);
     assert_eq!(E820_RAM, 1);
     assert_eq!(E820_RESERVED, 2);
-    assert_eq!(HV_IDENTITY_PML4, 0x200000);
+    assert_eq!(HV_IDENTITY_PML4, 0x400000);
     assert_eq!(HV_IDENTITY_PML4_BYTES, 0x1B000);
     assert_eq!(E820_VGA_BASE, 0xA0000);
     assert_eq!(E820_VGA_BYTES, 0x60000);
