@@ -36,7 +36,7 @@ fn tables_contain_madt_with_pcat_compat() {
     assert_eq!(acpi_tables_byte(madt + 65), 10);
     assert_eq!(acpi_tables_byte(madt + 67), 0, "ISA IRQ 0");
     assert_eq!(acpi_tables_byte(madt + 68), 2, "GSI 2");
-    assert_eq!(ACPI_TABLES_LEN, 0x1F1);
+    assert_eq!(ACPI_TABLES_LEN, 0x240);
 }
 
 #[test]
@@ -57,6 +57,16 @@ fn facp_points_at_dsdt_offset_until_linker() {
     assert_eq!(acpi_tables_byte(0x111), b'S');
     assert_eq!(acpi_tables_byte(0x112), b'D');
     assert_eq!(acpi_tables_byte(0x113), b'T');
+    let facs = u32::from(0x200u16).to_le_bytes();
+    for i in 0..4 {
+        assert_eq!(acpi_tables_byte(facp + 36 + i as u16), facs[i], "FADT FACS");
+    }
+    assert_eq!(acpi_tables_byte(0x200), b'F');
+    assert_eq!(acpi_tables_byte(0x201), b'A');
+    assert_eq!(acpi_tables_byte(0x202), b'C');
+    assert_eq!(acpi_tables_byte(0x203), b'S');
+    assert_eq!(acpi_tables_byte(0x204), 64, "FACS length 64");
+    assert_eq!(acpi_tables_byte(0x1F1), 0, "pad before 64-byte FACS");
 }
 
 #[test]
@@ -94,8 +104,8 @@ fn dsdt_pci0_prt_virtio_gsi() {
 
 #[test]
 fn loader_allocate_then_add_pointer_qemu_layout() {
-    assert_eq!(ACPI_LOADER_ENTRIES, 11);
-    assert_eq!(ACPI_LOADER_LEN, 11 * 128);
+    assert_eq!(ACPI_LOADER_ENTRIES, 12);
+    assert_eq!(ACPI_LOADER_LEN, 12 * 128);
     assert_eq!(acpi_loader_byte(0), 1, "ALLOCATE");
     let mut name = [0u8; 16];
     for i in 0..16 {
@@ -119,6 +129,14 @@ fn loader_allocate_then_add_pointer_qemu_layout() {
         | u32::from(acpi_loader_byte((e2 + 119) as u16)) << 24;
     assert_eq!(off, 16, "RSDP RsdtAddress");
     assert_eq!(acpi_loader_byte((e2 + 120) as u16), 4);
+    let e6 = 6 * 128;
+    assert_eq!(acpi_loader_byte(e6 as u16), 2, "FADT FACS ADD_POINTER before CKSUM");
+    let facs_off = u32::from(acpi_loader_byte((e6 + 116) as u16))
+        | u32::from(acpi_loader_byte((e6 + 117) as u16)) << 8
+        | u32::from(acpi_loader_byte((e6 + 118) as u16)) << 16
+        | u32::from(acpi_loader_byte((e6 + 119) as u16)) << 24;
+    assert_eq!(facs_off, 0x40 + 36, "FACP FIRMWARE_CTRL");
+    assert_eq!(acpi_loader_byte((e6 + 120) as u16), 4);
 }
 
 #[test]

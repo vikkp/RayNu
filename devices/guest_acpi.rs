@@ -10,7 +10,9 @@
 //! DSDT PCI0 _PRT (slot 2 INTA GSI 17, slot 3 INTA GSI 18) so Linux ACPI
 //! IRQ routing finds virtio after tables install. DSDT PCI0 _CRS (bus 0,
 //! CF8/IO, VGA, PCI MMIO `0xC0000000..0xFEBFFFFF`) so ACPI-on BAR assign
-//! misses the 2 GiB UC scratch at `0x80000000`. Not `ISO-INSTALL-OK`.
+//! misses the 2 GiB UC scratch at `0x80000000`. FADT FACS (`FIRMWARE_CTRL`)
+//! so Linux `acpi_tb_setup_fadt_registers` finds a FACS after tables
+//! install (`SMI_CMD` is 0; already ACPI). Not `ISO-INSTALL-OK`.
 
 /// QEMU `FW_CFG_FILE_FIRST` + 3. `etc/table-loader`.
 pub const FW_CFG_ACPI_LOADER_SEL: u16 = 0x23;
@@ -22,9 +24,9 @@ pub const FW_CFG_ACPI_RSDP_SEL: u16 = 0x25;
 /// Extra named files when the product ISO window is armed.
 pub const FW_CFG_NAMED_FILE_COUNT_ACPI: u32 = 3;
 
-pub const ACPI_TABLES_LEN: u16 = DSDT_OFF + DSDT_LEN;
+pub const ACPI_TABLES_LEN: u16 = FACS_OFF + FACS_LEN;
 pub const ACPI_RSDP_LEN: u16 = 20;
-pub const ACPI_LOADER_ENTRIES: usize = 11;
+pub const ACPI_LOADER_ENTRIES: usize = 12;
 pub const ACPI_LOADER_LEN: u16 = (ACPI_LOADER_ENTRIES * 128) as u16;
 
 const RSDT_OFF: u16 = 0;
@@ -37,6 +39,10 @@ const DSDT_OFF: u16 = 0x110;
 /// iasl AML: PCI0 PNP0A03 + _PRT + _CRS. DSDT PCI0 _PRT. DSDT PCI0 _CRS.
 /// Not `ISO-INSTALL-OK`.
 const DSDT_LEN: u16 = 225;
+/// ACPI 1.0 FACS (no SDT checksum). FADT FACS. FACP FIRMWARE_CTRL.
+/// 64-byte aligned after DSDT (ACPI 1.0 FACS alignment). Pad is zeros.
+const FACS_OFF: u16 = ((DSDT_OFF + DSDT_LEN + 63) / 64) * 64;
+const FACS_LEN: u16 = 64;
 
 const CMD_ALLOC: u32 = 1;
 const CMD_ADD_PTR: u32 = 2;
@@ -53,6 +59,9 @@ const ZONE_FSEG: u8 = 2;
 pub fn acpi_tables_byte(off: u16) -> u8 {
     if off >= ACPI_TABLES_LEN {
         return 0;
+    }
+    if off >= FACS_OFF {
+        return facs_byte(off - FACS_OFF);
     }
     if off >= DSDT_OFF {
         return dsdt_byte(off - DSDT_OFF);
@@ -116,6 +125,7 @@ fn facp_byte(off: u16) -> u8 {
         return b;
     }
     match off {
+        36..=39 => u32::from(FACS_OFF).to_le_bytes()[off as usize - 36],
         40..=43 => u32::from(DSDT_OFF).to_le_bytes()[off as usize - 40],
         44 => 1, // dual 8259
         46 => 9, // SCI
@@ -170,6 +180,16 @@ fn dsdt_byte(off: u16) -> u8 {
     DSDT_AML.get(off as usize).copied().unwrap_or(0)
 }
 
+/// ACPI 1.0 FACS. No SDT checksum (offset 8 is hardware_signature).
+/// FADT FACS. Not `ISO-INSTALL-OK`.
+fn facs_byte(off: u16) -> u8 {
+    match off {
+        0..=3 => b"FACS"[off as usize],
+        4..=7 => u32::from(FACS_LEN).to_le_bytes()[off as usize - 4],
+        _ => 0,
+    }
+}
+
 /// DSDT PCI0 _PRT. Slot 2 INTA → GSI 17, slot 3 INTA → GSI 18.
 /// DSDT PCI0 _CRS. PCI MMIO producer `0xC0000000..0xFEBFFFFF` (not
 /// `0x80000000` scratch). `iasl` of `PNP0A03` PCI0 (no `_ADR`).
@@ -200,23 +220,31 @@ fn loader_entry_byte(ent: usize, i: usize) -> u8 {
         3 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", 36, 4),
         4 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", 40, 4),
         5 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", u32::from(FACP_OFF) + 40, 4),
-        6 => cksum_byte(i, b"etc/acpi/rsdp", 8, 0, u32::from(ACPI_RSDP_LEN)),
-        7 => cksum_byte(i, b"etc/acpi/tables", 9, 0, u32::from(RSDT_LEN)),
-        8 => cksum_byte(
+        // FADT FACS ADD_POINTER before FACP CKSUM (FIRMWARE_CTRL is in the FACP range).
+        6 => add_ptr_byte(
+            i,
+            b"etc/acpi/tables",
+            b"etc/acpi/tables",
+            u32::from(FACP_OFF) + 36,
+            4,
+        ),
+        7 => cksum_byte(i, b"etc/acpi/rsdp", 8, 0, u32::from(ACPI_RSDP_LEN)),
+        8 => cksum_byte(i, b"etc/acpi/tables", 9, 0, u32::from(RSDT_LEN)),
+        9 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(FACP_OFF) + 9,
             u32::from(FACP_OFF),
             u32::from(FACP_LEN),
         ),
-        9 => cksum_byte(
+        10 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(MADT_OFF) + 9,
             u32::from(MADT_OFF),
             u32::from(MADT_LEN),
         ),
-        10 => cksum_byte(
+        11 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(DSDT_OFF) + 9,

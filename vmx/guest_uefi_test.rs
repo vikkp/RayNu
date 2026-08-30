@@ -871,6 +871,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FSEG dest holds ACPI tables"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line ata_piix blacklist"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line piix_init blacklist"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FADT FACS"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));

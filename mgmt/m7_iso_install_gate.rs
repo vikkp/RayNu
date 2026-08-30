@@ -134,6 +134,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("ACPI tables ZONE_FSEG")
         && include_str!("../vmx/guest_uefi.rs").contains("FSEG dest holds ACPI tables")
         && include_str!("../vmx/guest_uefi.rs").contains("linux-line ata_piix blacklist")
+        && include_str!("../devices/guest_acpi.rs").contains("FADT FACS")
+        && include_str!("../vmx/guest_uefi.rs").contains("FADT FACS")
         && include_str!("../devices/guest_platform.rs").contains("fn is_fwcfg_data_port")
         && include_str!("../devices/guest_platform.rs").contains("fn is_acpi_pm1_io")
         && include_str!("../devices/guest_platform.rs").contains("PIIX4 PM1 SCI_EN")
