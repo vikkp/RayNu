@@ -1,4 +1,8 @@
 use super::{
+    guest_uefi_report_ram_premap_gpa, guest_uefi_report_ram_should_premap,
+    GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
+};
+use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
     guest_uefi_insn_linear,
@@ -897,6 +901,21 @@ fn marker_and_residual_honest() {
     assert_eq!(
         guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
         0x7BC0_0000
+    );
+    // report-RAM EPT pre-map: [32MiB, 2GiB) is 1008×2MiB (iron 113a08a PAT then quiet).
+    let pre_n = GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
+    assert_eq!(pre_n, 1008);
+    assert_eq!(guest_uefi_report_ram_premap_gpa(0, pre_n), Some(0x0200_0000));
+    assert_eq!(
+        guest_uefi_report_ram_premap_gpa(pre_n - 1, pre_n),
+        Some(0x7FE0_0000)
+    );
+    assert!(guest_uefi_report_ram_premap_gpa(pre_n, pre_n).is_none());
+    assert!(guest_uefi_report_ram_should_premap(true));
+    assert!(!guest_uefi_report_ram_should_premap(false));
+    assert_eq!(
+        guest_uefi_report_ram_premap_gpa(0, GUEST_UEFI_REPORT_RAM_SLOTS),
+        Some(0x0200_0000)
     );
     assert!(!guest_uefi_report_ram_should_map(0x1F0_0000));
     assert!(!guest_uefi_report_ram_should_map(0x8000_0000));
