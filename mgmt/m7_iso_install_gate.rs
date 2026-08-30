@@ -137,6 +137,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("earlycon=uart8250,io,0x3f8")
         && include_str!("iso_install.rs").contains("earlycon=uart8250,io,0x3f8 alpine_dev=vdb")
         && include_str!("iso_install.rs").contains("linux-line alpine_dev=vdb")
+        && include_str!("iso_install.rs").contains("linux-line virtio_pci")
+        && include_str!("iso_install.rs").contains("modules=loop,squashfs,virtio_pci,virtio_blk")
         && include_str!("iso_install.rs").contains("console=tty0")
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_guest_linear_one_page(")
         && include_str!("../vmx/guest_uefi.rs").contains("fn copy_flash_at(")

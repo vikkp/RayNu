@@ -196,7 +196,7 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 225);
+    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 236);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -272,9 +272,10 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(g.contains("idle=poll"));
     assert!(g.contains("earlycon=uart8250,io,0x3f8"));
     assert!(g.contains("alpine_dev=vdb"));
+    assert!(g.contains("virtio_pci"));
     assert!(g.contains("virtio_blk"));
     assert!(g.contains("console=ttyS0"));
-    assert!(g.contains("modules=loop,squashfs,virtio_blk"));
+    assert!(g.contains("modules=loop,squashfs,virtio_pci,virtio_blk"));
     assert!(!g.contains("usb-storage"));
     assert!(!grub.windows(ISO_GRUB_LINUX_FROM.len()).any(|w| w == ISO_GRUB_LINUX_FROM));
     assert_eq!(patch_iso_linux_serial_console(&mut grub), 0);
@@ -335,15 +336,21 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
     assert_eq!(iso_dir_size_le(&iso, joliet), ISO_GRUB_CFG_PATCHED_SIZE);
     assert_eq!(iso_dir_size_be(&iso, joliet), ISO_GRUB_CFG_PATCHED_SIZE);
     let orig_win = &iso[data..data + ISO_GRUB_CFG_ORIG_SIZE as usize];
-    assert!(core::str::from_utf8(orig_win).unwrap().contains("tsc="));
+    let orig_s = core::str::from_utf8(orig_win).unwrap();
+    // 143-byte GRUB read still truncates: virtio_pci pushed tsc=/alpine_dev/
+    // initrd/} past the original Data Length (iron COM2 rescue grub>).
+    assert!(orig_s.contains("virtio_pci"));
+    assert!(!orig_s.contains("tsc="));
+    assert!(!orig_s.contains("alpine_dev"));
     assert!(!orig_win.contains(&b'}'));
-    assert!(!core::str::from_utf8(orig_win).unwrap().contains("initrd"));
+    assert!(!orig_s.contains("initrd"));
     let patched = &iso[data..data + ISO_GRUB_CFG_PATCHED_SIZE as usize];
     let s = core::str::from_utf8(patched).unwrap();
     assert!(s.contains("lpj=4194304"));
     assert!(s.contains("tsc=reliable"));
     assert!(s.contains("earlycon=uart8250,io,0x3f8"));
     assert!(s.contains("alpine_dev=vdb"));
+    assert!(s.contains("virtio_pci,virtio_blk"));
     assert!(s.contains("initrd\t/boot/initramfs-virt"));
     assert!(s.ends_with("}\n"));
     assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
