@@ -741,19 +741,6 @@ fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
     }
 }
 
-/// Write a virtqueue GPA. Linux `writeq` is one 8-byte store at the low half.
-fn write_queue_ptr(field: &mut u64, rel: u16, size: u8, val: u64) {
-    if size >= 8 && rel == 0 {
-        *field = val;
-        return;
-    }
-    if rel == 0 {
-        *field = (*field & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF);
-    } else if rel == 4 {
-        *field = (*field & 0xFFFF_FFFF) | ((val & 0xFFFF_FFFF) << 32);
-    }
-}
-
 /// Write virtio-pci BAR MMIO. Notify sets a pending bit; call [`drain_queue`].
 pub fn mmio_write(off: u16, size: u8, val: u64) {
     mmio_write_dev(false, off, size, val);
@@ -779,46 +766,95 @@ fn mmio_write_dev(iso: bool, off: u16, size: u8, val: u64) {
     }
 }
 
-fn mmio_write_locked(v: &mut VirtioPci, off: u16, size: u8, val: u64) {
-    if !v.queues_armed {
-        return;
-    }
+/// One little-endian byte of a virtio-pci common-cfg store (QEMU packed).
+///
+/// Iron `deefa7c`: Linux iowrite after BAR trap. A 32-bit store at 0x14
+/// used to match only `device_status` and drop `queue_select`; a 1-byte
+/// store at 0x00 zeroed `device_feature_select` high bytes. Packed writes
+/// RMW each field. packed virtio common cfg write. Not `ISO-INSTALL-OK`.
+fn common_cfg_write_byte(v: &mut VirtioPci, off: u16, b: u8) {
     match off {
-        0x00 => v.feat_sel = val as u32,
-        0x08 => v.drv_feat_sel = val as u32,
-        0x0C => {
+        0x00..=0x03 => {
+            let sh = 8 * (off - 0x00);
+            v.feat_sel = (v.feat_sel & !(0xffu32 << sh)) | (u32::from(b) << sh);
+        }
+        0x08..=0x0B => {
+            let sh = 8 * (off - 0x08);
+            v.drv_feat_sel = (v.drv_feat_sel & !(0xffu32 << sh)) | (u32::from(b) << sh);
+        }
+        0x0C..=0x0F => {
+            let sh = 8 * (off - 0x0C);
             if v.drv_feat_sel == 0 {
-                v.drv_feat = (v.drv_feat & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF);
+                let lo = (v.drv_feat as u32 & !(0xffu32 << sh)) | (u32::from(b) << sh);
+                v.drv_feat = (v.drv_feat & !0xFFFF_FFFF) | u64::from(lo);
             } else {
-                v.drv_feat = (v.drv_feat & 0xFFFF_FFFF) | (val << 32);
+                let hi = ((v.drv_feat >> 32) as u32 & !(0xffu32 << sh)) | (u32::from(b) << sh);
+                v.drv_feat = (v.drv_feat & 0xFFFF_FFFF) | (u64::from(hi) << 32);
             }
         }
         0x14 => {
-            v.status = val as u8;
+            v.status = b;
             if v.status == 0 {
                 v.queue_enable = 0;
                 v.last_avail = 0;
                 v.notify_pending = false;
+                v.isr = 0;
             }
         }
-        0x16 => v.queue_sel = val as u16,
-        0x18 => {
+        0x16 | 0x17 => {
+            let sh = 8 * (off - 0x16);
+            v.queue_sel = (v.queue_sel & !(0xffu16 << sh)) | (u16::from(b) << sh);
+        }
+        0x18 | 0x19 => {
             if v.queue_sel == 0 {
-                let n = val as u16;
+                let sh = 8 * (off - 0x18);
+                let n = (v.queue_size & !(0xffu16 << sh)) | (u16::from(b) << sh);
                 if n > 0 && n <= QUEUE_MAX {
                     v.queue_size = n;
                 }
             }
         }
-        0x1C => v.queue_enable = val as u16,
-        0x20 => write_queue_ptr(&mut v.queue_desc, 0, size, val),
-        0x24 => write_queue_ptr(&mut v.queue_desc, 4, size, val),
-        0x28 => write_queue_ptr(&mut v.queue_driver, 0, size, val),
-        0x2C => write_queue_ptr(&mut v.queue_driver, 4, size, val),
-        0x30 => write_queue_ptr(&mut v.queue_device, 0, size, val),
-        0x34 => write_queue_ptr(&mut v.queue_device, 4, size, val),
-        x if x == OFF_NOTIFY => v.notify_pending = true,
+        0x1C | 0x1D => {
+            let sh = 8 * (off - 0x1C);
+            v.queue_enable = (v.queue_enable & !(0xffu16 << sh)) | (u16::from(b) << sh);
+        }
+        0x20..=0x27 => {
+            let sh = 8 * (off - 0x20);
+            v.queue_desc = (v.queue_desc & !(0xffu64 << sh)) | (u64::from(b) << sh);
+        }
+        0x28..=0x2F => {
+            let sh = 8 * (off - 0x28);
+            v.queue_driver = (v.queue_driver & !(0xffu64 << sh)) | (u64::from(b) << sh);
+        }
+        0x30..=0x37 => {
+            let sh = 8 * (off - 0x30);
+            v.queue_device = (v.queue_device & !(0xffu64 << sh)) | (u64::from(b) << sh);
+        }
         _ => {}
+    }
+}
+
+fn mmio_write_locked(v: &mut VirtioPci, off: u16, size: u8, val: u64) {
+    if !v.queues_armed {
+        return;
+    }
+    if off < 0x38 {
+        let n = match size {
+            1 => 1u16,
+            2 => 2,
+            4 => 4,
+            8 => 8,
+            _ => 4,
+        };
+        let mut i = 0u16;
+        while i < n {
+            common_cfg_write_byte(v, off.wrapping_add(i), (val >> (8 * i)) as u8);
+            i += 1;
+        }
+        return;
+    }
+    if off == OFF_NOTIFY {
+        v.notify_pending = true;
     }
 }
 

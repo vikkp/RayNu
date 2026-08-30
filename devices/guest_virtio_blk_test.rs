@@ -9,7 +9,7 @@ use super::{
     virtio_disk_evidence, GUEST_VIRTIO_BAR0_DEFAULT, GUEST_VIRTIO_BAR0_SIZE_MASK,
     GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE, GUEST_VIRTIO_PCI_VENDOR,
     M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR, VIRTIO_BLK_S_OK,
-    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_PCI_CAP_COMMON,
+    VIRTIO_BLK_T_FLUSH, VIRTIO_BLK_T_IN, VIRTIO_BLK_T_OUT, VIRTIO_F_VERSION_1, VIRTIO_PCI_CAP_COMMON,
     VIRTIO_PCI_CAP_NOTIFY, VIRTIO_PCI_CAP_VNDR,
 };
 use crate::devices::guest_platform::{
@@ -110,6 +110,106 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert!(!queues_armed());
     assert!(!iso_visible());
     assert!(!is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+}
+
+/// Linux 6.12 `virtio_pci_modern` probe: reset, ACK/DRIVER, VERSION_1
+/// features, FEATURES_OK, queue enable, DRIVER_OK, capacity.
+#[test]
+fn linux_virtio_pci_modern_probe_reaches_capacity() {
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
+    };
+    const ACK: u8 = 1;
+    const DRIVER: u8 = 2;
+    const DRIVER_OK: u8 = 4;
+    const FEATURES_OK: u8 = 8;
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    assert!(queues_armed());
+
+    mmio_write(0x14, 1, 0);
+    assert_eq!(mmio_read(0x14, 1), 0, "vp_reset status byte");
+    assert_eq!(mmio_read(0x14, 4) & 0xff, 0, "vp_reset packed 32-bit");
+
+    mmio_write(0x14, 1, u64::from(ACK));
+    mmio_write(0x14, 1, u64::from(ACK | DRIVER));
+    assert_eq!(mmio_read(0x14, 1), u64::from(ACK | DRIVER));
+
+    mmio_write(0x00, 4, 0);
+    let lo = mmio_read(0x04, 4);
+    mmio_write(0x00, 4, 1);
+    let hi = mmio_read(0x04, 4);
+    let feat = lo | (hi << 32);
+    assert_eq!(feat & VIRTIO_F_VERSION_1, VIRTIO_F_VERSION_1);
+    mmio_write(0x08, 4, 0);
+    mmio_write(0x0C, 4, lo);
+    mmio_write(0x08, 4, 1);
+    mmio_write(0x0C, 4, hi);
+    mmio_write(0x14, 1, u64::from(ACK | DRIVER | FEATURES_OK));
+    assert_eq!(
+        mmio_read(0x14, 1) & u64::from(FEATURES_OK),
+        u64::from(FEATURES_OK),
+        "FEATURES_OK sticks"
+    );
+
+    mmio_write(0x16, 2, 0);
+    let qsz = mmio_read(0x18, 2);
+    assert!(qsz >= 1 && qsz <= 128);
+    assert_eq!(mmio_read(0x18, 4) >> 16, 0xFFFF, "queue_msix packed");
+    mmio_write(0x1A, 2, 0xFFFF);
+    assert_eq!(mmio_read(0x1A, 2), 0xFFFF);
+    mmio_write(0x20, 8, 0x1000);
+    mmio_write(0x28, 8, 0x2000);
+    mmio_write(0x30, 8, 0x3000);
+    mmio_write(0x1C, 2, 1);
+    assert_eq!(mmio_read(0x1C, 2), 1, "queue_enable");
+
+    mmio_write(0x14, 1, u64::from(ACK | DRIVER | FEATURES_OK | DRIVER_OK));
+    assert_eq!(
+        mmio_read(0x14, 1),
+        u64::from(ACK | DRIVER | FEATURES_OK | DRIVER_OK)
+    );
+    assert_eq!(mmio_read(0x200, 8), 0, "host test has no install HPA");
+    let iso_cap = mmio_read_iso(0x200, 8);
+    assert!(iso_cap > 0, "ISO virtio capacity");
+    assert_eq!(iso_cap, (extra / 512) as u64);
+
+    reset();
+    reset_cd();
+}
+
+#[test]
+fn packed_common_cfg_write_rmw_bytes() {
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
+    };
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    mmio_write(0x00, 4, 0x0102_0304);
+    mmio_write(0x00, 1, 0xAA);
+    assert_eq!(
+        mmio_read(0x00, 4),
+        0x0102_03AA,
+        "packed virtio common cfg write"
+    );
+    mmio_write(0x16, 2, 1);
+    mmio_write(0x14, 1, 3);
+    assert_eq!(mmio_read(0x14, 1), 3);
+    assert_eq!(mmio_read(0x16, 2), 1, "byte status store keeps queue_select");
+    reset();
+    reset_cd();
 }
 
 #[test]
