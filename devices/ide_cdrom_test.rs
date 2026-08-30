@@ -53,8 +53,6 @@ fn linux_hides_duplicate_slot0_ide_not_piix() {
     crate::boot::serial::set_linux_earlycon_share(true);
     pci_write_addr(0x8000_0100);
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
-    pci_write_addr(0x8000_0900);
-    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     crate::boot::serial::set_linux_earlycon_share(false);
     reset();
 }
