@@ -75,7 +75,9 @@ use super::{
     guest_uefi_cpu_flush_skip_mapped,
     guest_uefi_cpu_flush_tick_scans_mapped,
     guest_uefi_linux_guest_active, guest_uefi_linux_unhandled_should_skip,
-    guest_uefi_linux_exc_error_code,
+    guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
+    guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback,
+    GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
     GUEST_UEFI_CPU_FLUSH_HEAP_GPA, GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK,
@@ -507,6 +509,12 @@ fn marker_and_residual_honest() {
     assert_ne!(guest_uefi_linux_exception_bitmap() & (1 << 8), 0);
     assert_eq!(guest_uefi_hw_exception_entry_info(6, false), 0x8000_0306);
     assert_eq!(guest_uefi_hw_exception_entry_info(13, true), 0x8000_0B0D);
+    assert_eq!(GUEST_UEFI_INTR_TYPE_NMI, 2);
+    assert_eq!(guest_uefi_nmi_entry_info(), 0x8000_0202);
+    assert_ne!(guest_uefi_nmi_entry_info(), guest_uefi_hw_exception_entry_info(2, false));
+    assert!(guest_uefi_linux_nmi_should_inject(true, 2));
+    assert!(!guest_uefi_linux_nmi_should_inject(false, 2));
+    assert!(!guest_uefi_linux_nmi_should_inject(true, 8));
     assert!(!guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_LINUX_PF_CR2));
     assert!(guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2));
     assert_eq!(guest_uefi_pf_sec_cr3(), GUEST_UEFI_HV_PML4);
@@ -954,6 +962,9 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 0));
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 16));
     assert!(guest_uefi_linux_unhandled_should_skip(true, 3));
+    assert!(virtio_mmio_eax_fallback(0, 3));
+    assert!(virtio_mmio_eax_fallback(4, 6));
+    assert!(!virtio_mmio_eax_fallback(0, 0));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
