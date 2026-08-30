@@ -112,7 +112,7 @@
 //! that CR3 (P5 GCD split + P2 admit; not f07a597 low-CR3 paint).
 //! Iron `4ae87de`: paint `n=1029` `pde8000=0x800000ff` still ASSERT
 //! `pde0=0xe3` `pte0=0` — 2MiB GPA0 spans 1MiB fixed-MTRR on live CR3.
-//! Peek/poke HV PT `0x20B000` into live PD[0]. Do not skip `ebecc9c3`.
+//! Peek/poke HV PT `0x40B000` into live PD[0] (was `0x20B000`). Do not skip `ebecc9c3`.
 //! Iron `7e5d70f`: `GPA0 4K live CR3 n=513` `pde0=0x20b027` `pte0=0x67`
 //! `pte1m=0x100067` `pde8000=0x800000ff` still ASSERT `ebecc9c3`
 //! `callerrip=0x7fd25193` — stop PT peek/poke. GCD/HOB: e820 type-1
@@ -1343,7 +1343,7 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         }
         && GUEST_UEFI_IRON_PDE0_2M == 0xE3
         && guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M)
-        && guest_uefi_gpa0_split_pt_gpa() == 0x20B000
+        && guest_uefi_gpa0_split_pt_gpa() == GUEST_UEFI_HV_PML4 + crate::vmx::guest_pt::IDENTITY_4G_BYTES
         && {
             use core::cell::RefCell;
             let high = RefCell::new([0u8; 0x4000]);

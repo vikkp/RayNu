@@ -1291,11 +1291,14 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
     assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
     assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));
-    assert_eq!(guest_uefi_gpa0_split_pt_gpa(), 0x20B000);
+    assert_eq!(
+        guest_uefi_gpa0_split_pt_gpa(),
+        GUEST_UEFI_HV_PML4 + crate::vmx::guest_pt::IDENTITY_4G_BYTES
+    );
     {
         // Iron 4ae87de: live CR3 GPA0 is still 2MiB (pde0=0xE3) spanning
         // the 1MiB fixed-MTRR boundary. Peek/poke fills HV SPLIT4K PT at
-        // 0x20B000 and points PD[0] at it.
+        // GUEST_UEFI_HV_PML4+0xB000 and points PD[0] at it.
         use core::cell::RefCell;
         let high = RefCell::new([0u8; 0x4000]);
         let pt = RefCell::new([0u8; 4096]);

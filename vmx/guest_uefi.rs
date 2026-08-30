@@ -1296,7 +1296,8 @@ where
     n
 }
 
-/// HV SPLIT4K PT for GPA 0 (`0x20B000`). Live high CR3 points PD[0] here.
+/// HV SPLIT4K PT for GPA 0 (`GUEST_UEFI_HV_PML4+IDENTITY_4G_BYTES`, `0x40B000`).
+/// Live high CR3 points PD[0] here. Was `0x20B000` when identity lived at 2 MiB.
 pub fn guest_uefi_gpa0_split_pt_gpa() -> u64 {
     crate::vmx::guest_pt::identity_split_pt_gpa(GUEST_UEFI_HV_PML4, 0)
 }
