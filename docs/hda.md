@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-seventieth slice: auto-answer / # without login (3.21 emergency shell has no getty). F11 pin stays 8663f56. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-seventy-first slice: iron COM2 2d6b109 pde0=0x20b027 (F11 of dest-skip Cruzer; stop n=33297 sectors=0). F11 pin stays 8663f56. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (auto-answer / # without login). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (iron COM2 2d6b109 pde0=0x20b027). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-first slice: iron COM2 2d6b109 pde0=0x20b027 (identity 0x200000; no dest_ok fill; DXE n=529 stop n=33297 sectors=0 catalog=0 ataio=0 POST_DXE_TAIL; not 8663f56); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventieth slice: auto-answer / # without login (alpine-virt 3.21 /init emergency shell is already root; no getty login:; F11 pin stays 8663f56 run 33333506987); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-ninth slice: flashcruzer reject 2d6b109 dest skip (EFI prefix 6fc742b0 / run 33321642509 FLASHCRUZER-OK is not F11; pin 8663f56 run 33333506987); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-eighth slice: flash 8663f56 (CI 49/49; 2d6b109 IoReadFifo8 still skips dest 0x205f18 inside identity 0x200000 so ACPI cannot install; identity 0x400000 + FSEG + FACS); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -159,7 +159,7 @@ writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `FLASHCRUZER-OK` for `2d6b109` / run `33321642509` / EFI prefix `6fc742b0`
 (checkout `cursor/e5-stage46-iso-a623`) is **not** F11. `2d6b109` IoReadFifo8 still
 skips dest `0x205f18` inside identity `0x200000` (iron COM2 `3d6eba0`); that
-SHA cannot install ACPI. flashcruzer reject 2d6b109 dest skip. auto-answer / # without login (next slice after 8663f56 COM2 `/init`; F11 pin stays 8663f56). Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+SHA cannot install ACPI. Iron COM2 after F11 of that Cruzer is **`2d6b109`**: `pde0=0x20b027` (HV PT still `0x20B000`, identity `0x200000`), no `dest_ok fill`, `io string port=0x511 n=4 (rep insw)` only, DXE n=529 then `stop n=33297` `reason=0xc` `sectors=0` `catalog=0` `ataio=0` (POST_DXE_TAIL 32768, never PACKET). HPET froze at 11800 while `IN AL,DX` at `rip=0x7f020492`. That is not `8663f56` (`pde0` would be `0x40b027` plus `dest_ok fill`). flashcruzer reject 2d6b109 dest skip. auto-answer / # without login (next slice after 8663f56 COM2 `/init`; F11 pin stays 8663f56). Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
