@@ -273,7 +273,8 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(g.contains("idle=poll"));
     assert!(g.contains("earlycon=uart8250,io,0x3f8"));
     assert!(g.contains("alpine_dev=vdb"));
-    assert!(g.contains("initcall_blacklist=ata_piix_init"));
+    assert!(g.contains("initcall_blacklist=piix_init"));
+    assert!(!g.contains("ata_piix_init"));
     assert!(g.contains("virtio_pci"));
     assert!(g.contains("virtio_blk"));
     assert!(g.contains("console=ttyS0"));
@@ -352,7 +353,8 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
     assert!(s.contains("tsc=reliable"));
     assert!(s.contains("earlycon=uart8250,io,0x3f8"));
     assert!(s.contains("alpine_dev=vdb"));
-    assert!(s.contains("initcall_blacklist=ata_piix_init"));
+    assert!(s.contains("initcall_blacklist=piix_init"));
+    assert!(!s.contains("ata_piix_init"));
     assert!(s.contains("virtio_pci,virtio_blk"));
     assert!(s.contains("initrd\t/boot/initramfs-virt"));
     assert!(s.ends_with("}\n"));
