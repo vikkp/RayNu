@@ -370,12 +370,18 @@ pub fn write_line(s: &str) {
     write_byte(b'\n');
 }
 
-/// Guest-visible line during Linux earlycon share (does not go through
-/// [`write_byte`], which hushes HV). Used for `RAYNU-V-M7-ISO-INSTALL-OK`.
-pub fn write_line_nowait(s: &str) {
+/// Guest-visible string during Linux earlycon share (does not go through
+/// [`write_byte`], which hushes HV). linux unhandled nowait stop.
+pub fn write_str_nowait(s: &str) {
     for &b in s.as_bytes() {
         write_byte_nowait(b);
     }
+}
+
+/// Guest-visible line during Linux earlycon share (does not go through
+/// [`write_byte`], which hushes HV). Used for `RAYNU-V-M7-ISO-INSTALL-OK`.
+pub fn write_line_nowait(s: &str) {
+    write_str_nowait(s);
     write_byte_nowait(b'\n');
 }
 
@@ -552,6 +558,7 @@ mod serial_test {
         write_str("820");
         assert_eq!(serial_log_len(), 0);
         write_byte_nowait(b'G');
+        write_str_nowait("N");
         write_line_nowait("OK");
         let mut buf = [0u8; 8];
         let n = serial_log_snapshot(&mut buf);
@@ -560,6 +567,7 @@ mod serial_test {
         let s = include_str!("serial.rs");
         assert!(s.contains("linux earlycon share TX ring"));
         assert!(s.contains("linux earlycon hush HV"));
+        assert!(s.contains("fn write_str_nowait"));
         assert!(s.contains("fn write_line_nowait"));
         assert!(s.contains("fn set_linux_earlycon_share"));
         set_linux_earlycon_share(false);

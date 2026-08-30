@@ -74,6 +74,8 @@ use super::{
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
     guest_uefi_cpu_flush_skip_mapped,
     guest_uefi_cpu_flush_tick_scans_mapped,
+    guest_uefi_linux_guest_active, guest_uefi_linux_unhandled_should_skip,
+    guest_uefi_linux_exc_error_code,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
     GUEST_UEFI_CPU_FLUSH_HEAP_GPA, GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK,
@@ -181,6 +183,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("report-RAM EPT pre-map"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush skip leftover pre-map"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush leftover per walk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux unhandled nowait stop"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -942,6 +945,19 @@ fn marker_and_residual_honest() {
     ));
     assert!(guest_uefi_cpu_flush_tick_scans_mapped(32));
     assert!(!guest_uefi_cpu_flush_tick_scans_mapped(1008));
+    // linux unhandled nowait stop (iron 1a2544d Freeing initrd then xcr0 restore).
+    assert!(!guest_uefi_linux_guest_active(false, false, false));
+    assert!(guest_uefi_linux_guest_active(true, false, false));
+    assert!(guest_uefi_linux_guest_active(false, true, false));
+    assert!(guest_uefi_linux_guest_active(false, false, true));
+    assert!(!guest_uefi_linux_unhandled_should_skip(false, 3));
+    assert!(!guest_uefi_linux_unhandled_should_skip(true, 0));
+    assert!(!guest_uefi_linux_unhandled_should_skip(true, 16));
+    assert!(guest_uefi_linux_unhandled_should_skip(true, 3));
+    assert!(guest_uefi_linux_exc_error_code(8));
+    assert!(guest_uefi_linux_exc_error_code(14));
+    assert!(!guest_uefi_linux_exc_error_code(6));
+    assert!(!guest_uefi_linux_exc_error_code(0));
     assert!(!guest_uefi_report_ram_should_map(0x1F0_0000));
     assert!(!guest_uefi_report_ram_should_map(0x8000_0000));
     assert_eq!(GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, 0x7F8E_21CA);
