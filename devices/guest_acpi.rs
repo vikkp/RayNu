@@ -7,7 +7,8 @@
 //! Iron `bc6fb70`: `efi:` had no `ACPI=` then `APIC: ACPI MADT or MP tables
 //! are not detected`. Without MADT Linux `disable_ioapic_support()` and
 //! never programs GSI 17/18. product ISO fw_cfg ACPI MADT (iso=0 named files stay 3).
-//! Not `ISO-INSTALL-OK`.
+//! DSDT PCI0 _PRT (slot 2 INTA GSI 17, slot 3 INTA GSI 18) so Linux ACPI
+//! IRQ routing finds virtio after tables install. Not `ISO-INSTALL-OK`.
 
 /// QEMU `FW_CFG_FILE_FIRST` + 3. `etc/table-loader`.
 pub const FW_CFG_ACPI_LOADER_SEL: u16 = 0x23;
@@ -19,7 +20,7 @@ pub const FW_CFG_ACPI_RSDP_SEL: u16 = 0x25;
 /// Extra named files when the product ISO window is armed.
 pub const FW_CFG_NAMED_FILE_COUNT_ACPI: u32 = 3;
 
-pub const ACPI_TABLES_LEN: u16 = 0x134;
+pub const ACPI_TABLES_LEN: u16 = DSDT_OFF + DSDT_LEN;
 pub const ACPI_RSDP_LEN: u16 = 20;
 pub const ACPI_LOADER_ENTRIES: usize = 11;
 pub const ACPI_LOADER_LEN: u16 = (ACPI_LOADER_ENTRIES * 128) as u16;
@@ -31,7 +32,8 @@ const FACP_LEN: u16 = 116;
 const MADT_OFF: u16 = 0xC0;
 const MADT_LEN: u16 = 74;
 const DSDT_OFF: u16 = 0x110;
-const DSDT_LEN: u16 = 36;
+/// iasl AML: PCI0 PNP0A03 + _PRT. DSDT PCI0 _PRT. Not `ISO-INSTALL-OK`.
+const DSDT_LEN: u16 = 104;
 
 const CMD_ALLOC: u32 = 1;
 const CMD_ADD_PTR: u32 = 2;
@@ -156,8 +158,20 @@ fn madt_byte(off: u16) -> u8 {
 }
 
 fn dsdt_byte(off: u16) -> u8 {
-    hdr_byte(off, b"DSDT", DSDT_LEN, 2).unwrap_or(0)
+    DSDT_AML.get(off as usize).copied().unwrap_or(0)
 }
+
+/// DSDT PCI0 _PRT. Slot 2 INTA → GSI 17, slot 3 INTA → GSI 18.
+/// `iasl` of `PNP0A03` PCI0 (no `_ADR`). Not `ISO-INSTALL-OK`.
+const DSDT_AML: [u8; DSDT_LEN as usize] = [
+    0x44, 0x53, 0x44, 0x54, 0x68, 0x00, 0x00, 0x00, 0x02, 0x21, 0x52, 0x41, 0x59, 0x4E, 0x55, 0x56,
+    0x52, 0x41, 0x59, 0x4E, 0x55, 0x56, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x49, 0x4E, 0x54, 0x4C,
+    0x28, 0x06, 0x23, 0x20, 0x10, 0x43, 0x04, 0x5F, 0x53, 0x42, 0x5F, 0x5B, 0x82, 0x3B, 0x50, 0x43,
+    0x49, 0x30, 0x08, 0x5F, 0x48, 0x49, 0x44, 0x0C, 0x41, 0xD0, 0x0A, 0x03, 0x08, 0x5F, 0x55, 0x49,
+    0x44, 0x00, 0x08, 0x5F, 0x42, 0x42, 0x4E, 0x00, 0x08, 0x5F, 0x50, 0x52, 0x54, 0x12, 0x1A, 0x02,
+    0x12, 0x0B, 0x04, 0x0C, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x11, 0x12, 0x0B, 0x04, 0x0C,
+    0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00, 0x0A, 0x12,
+];
 
 fn loader_entry_byte(ent: usize, i: usize) -> u8 {
     match ent {
