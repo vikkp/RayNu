@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-thirty-seventh slice: UART reassert RX not THRE so PIT can inject. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-thirty-eighth slice: virtio drain every resume + DRIVER_OK COM2 log. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (UART reassert RX not THRE). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (virtio drain every resume). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-eighth slice: virtio drain every resume + COM2 `linux virtio DRIVER_OK`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-seventh slice: UART reassert RX not THRE (THRE reassert every resume kept IRQ 4 ahead of PIT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-sixth slice: linux PIT prefer until DRIVER_OK (keep raising PIT; UART beats PIT after both virtio functions DRIVER_OK); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-fifth slice: PIT on every Linux non-UART exit + COM2 `linux I/O raises PIT` log; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

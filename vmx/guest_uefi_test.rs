@@ -82,6 +82,7 @@ use super::{
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
+    guest_uefi_virtio_drain_every_resume,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -845,6 +846,8 @@ fn marker_and_residual_honest() {
     // poll ISO-INSTALL-OK every resume: iron only.
     assert!(guest_uefi_poll_iso_install_ok(false));
     assert!(!guest_uefi_poll_iso_install_ok(true));
+    assert!(guest_uefi_virtio_drain_every_resume(true), "virtio drain every resume");
+    assert!(!guest_uefi_virtio_drain_every_resume(false), "iso=0 no virtio drain");
     assert_eq!(guest_uefi_linux_earlycon_drain(false), 4);
     assert_eq!(guest_uefi_linux_earlycon_drain(true), 4);
     assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
@@ -1029,6 +1032,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART reassert RX not THRE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain every resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio DRIVER_OK"));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
