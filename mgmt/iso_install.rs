@@ -110,24 +110,31 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// alpine-virt GRUB `"Linux virt"` stanza. Grow the linux line into the
 /// ISO9660 NUL pad after `}\n` so the E4 timer skip fits:
 /// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`
-/// plus `earlycon=uart8250,io,0x3f8`. Same-length 33-byte swap cannot add
-/// those without dropping `loop` or `virtio_blk`. Nested `f1afc27` sat in
-/// `delay_loop` (`48ffc875fb`); iron COM2 after leftover+#PF froze HPET
-/// during the 0x4000 CPUID walk, so a preemption skip may never fire and
-/// `time_init` / TSC vs HPET calibrate would hang even after
-/// hypervisor-hide. Iron `73c2cab` logged `hypervisor-scan bump` then
-/// COM2 ended with no `Linux version` — `console=ttyS0` is late; earlycon
-/// prints through the 16550 from `start_kernel`. alpine-virt 3.21.3
+/// plus `earlycon=uart8250,io,0x3f8` plus `alpine_dev=vdb`. Same-length
+/// 33-byte swap cannot add those without dropping `loop` or `virtio_blk`.
+/// Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron COM2 after
+/// leftover+#PF froze HPET during the 0x4000 CPUID walk, so a preemption
+/// skip may never fire and `time_init` / TSC vs HPET calibrate would hang
+/// even after hypervisor-hide. Iron `73c2cab` logged `hypervisor-scan bump`
+/// then COM2 ended with no `Linux version` — `console=ttyS0` is late;
+/// earlycon prints through the 16550 from `start_kernel`. alpine-virt 3.21.3
 /// `grub.cfg` ISO9660 Data Length is 143; the sector has ~1905 NULs after
 /// `}\n`. Growing into that pad without bumping Data Length truncates
 /// GRUB's read at `tsc=` (unclosed `{`, no `initrd`) → `out of memory` /
 /// `syntax error` / rescue `grub>` (iron COM2 after El Torito
 /// `bootimg=1`). [`bump_iso9660_grub_cfg_size`] raises PVD + Joliet
-/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. Not `ISO-INSTALL-OK`.
+/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. linux-line alpine_dev=vdb.
+/// Iron COM2 cmdline after
+/// El Torito had `modules=loop,squashfs,virtio_blk console=ttyS0 lpj=`
+/// `earlycon=` and **no** `alpine_dev=` — alpine-virt `grub.cfg` never
+/// contains `alpine_dev=cdrom` so that 16-byte swap is 0 hits. After
+/// linux high-half hides PIIX, `nlplug-findfs` without `-b vdb` can wait
+/// on ATAPI/`sr0`. Put `alpine_dev=vdb` on the grown linux line. Media is
+/// virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8\ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 alpine_dev=vdb\ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;
@@ -203,7 +210,9 @@ pub const ISO_GRUB_INSMOD_ALLVID_FROM: &[u8] = b"insmod all_video";
 pub const ISO_GRUB_INSMOD_ALLVID_TO: &[u8] = b"insmod serial   ";
 const _: () = assert!(ISO_GRUB_INSMOD_ALLVID_FROM.len() == ISO_GRUB_INSMOD_ALLVID_TO.len());
 /// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
-/// ISO `/dev/vdb`. 0 hits is fine when the string is absent.
+/// ISO `/dev/vdb` when that string exists on other ISOs. alpine-virt 3.21.3
+/// `grub.cfg` has no `alpine_dev=cdrom` (0 hits); the grown linux line
+/// carries `alpine_dev=vdb` instead. Not `ISO-INSTALL-OK`.
 pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
 pub const ISO_ALPINE_DEV_TO: &[u8] = b"alpine_dev=vdb  ";
 const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());

@@ -196,7 +196,7 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 210);
+    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 225);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -271,6 +271,7 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(g.contains("clocksource=tsc"));
     assert!(g.contains("idle=poll"));
     assert!(g.contains("earlycon=uart8250,io,0x3f8"));
+    assert!(g.contains("alpine_dev=vdb"));
     assert!(g.contains("virtio_blk"));
     assert!(g.contains("console=ttyS0"));
     assert!(g.contains("modules=loop,squashfs,virtio_blk"));
@@ -342,6 +343,7 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
     assert!(s.contains("lpj=4194304"));
     assert!(s.contains("tsc=reliable"));
     assert!(s.contains("earlycon=uart8250,io,0x3f8"));
+    assert!(s.contains("alpine_dev=vdb"));
     assert!(s.contains("initrd\t/boot/initramfs-virt"));
     assert!(s.ends_with("}\n"));
     assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
