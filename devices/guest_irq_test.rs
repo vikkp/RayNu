@@ -1,6 +1,7 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_io, raise_ata, raise_gsi, raise_pit, raise_virtio, reset, take_inject_vector, ATA_GSI,
+    pic_io, prefer_pit_once, raise_ata, raise_gsi, raise_pit, raise_virtio, reset,
+    take_inject_vector, ATA_GSI,
     IOAPIC_GPA, IOAPIC_VERSION, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
@@ -172,6 +173,30 @@ fn product_iso_uart_beats_pit_and_virtio_beats_pit() {
         take_inject_vector(),
         Some(0x20 + VIRTIO_PIC_IRQ),
         "virtio PIC 11 (slave) must beat PIT"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_pit_prefer_once_beats_uart() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    raise_pit();
+    prefer_pit_once();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIT prefer once beats UART"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "COM1 IRQ 4 must beat PIT after prefer-once is consumed"
     );
     reset();
     reset_cd();

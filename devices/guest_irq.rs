@@ -122,8 +122,18 @@ fn product_live() -> bool {
     crate::devices::ide_cdrom::product_iso_window_armed()
 }
 
+static PREFER_PIT: AtomicBool = AtomicBool::new(false);
+
 pub fn reset() {
+    PREFER_PIT.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
+}
+
+/// Linux product-ISO I/O: deliver PIT once even if UART IRR is also set.
+/// UART still beats PIT after this inject so auto-answer is not starved.
+/// linux PIT prefer once. Not `ISO-INSTALL-OK`.
+pub fn prefer_pit_once() {
+    PREFER_PIT.store(true, Ordering::Release);
 }
 
 /// True when GPA is the product-ISO IOAPIC 4 KiB window (not the HPET sink).
@@ -328,7 +338,11 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
         }
     }
     // UART (IRQ 4) and other master devices beat PIT so timer ticks cannot
-    // starve COM1 auto-answer.
+    // starve COM1 auto-answer. Linux I/O may latch prefer-once so jiffies
+    // still move while THRE IRR is stuck.
+    if PREFER_PIT.load(Ordering::Acquire) && (master_req & 1) != 0 {
+        return Some(0);
+    }
     let master_dev = master_req & !1 & !(1 << PIC_SLAVE_IRQ);
     if master_dev != 0 {
         return Some(master_dev.trailing_zeros() as u8);
@@ -352,6 +366,9 @@ fn pic_peek(c: &IrqChip) -> Option<u8> {
 
 fn pic_take(c: &mut IrqChip) -> Option<u8> {
     let irq = pic_pending_irq(c)?;
+    if irq == 0 {
+        PREFER_PIT.store(false, Ordering::Release);
+    }
     if irq < 8 {
         c.master.irr &= !(1 << irq);
         c.master.isr |= 1 << irq;

@@ -81,6 +81,7 @@ use super::{
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
+    guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -1002,6 +1003,18 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_virtio_mmio_polls_lapic(true, true), "virtio MMIO polls lapic");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(false, true), "iso=0 firmware no extra lapic poll");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(true, false));
+    assert!(guest_uefi_linux_io_raises_pit(true, true), "linux I/O raises PIT");
+    assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
+    assert!(!guest_uefi_linux_io_raises_pit(true, false));
+    assert!(
+        guest_uefi_linux_preempt_deadloop_noskip(true, true),
+        "linux preempt deadloop noskip"
+    );
+    assert!(
+        !guest_uefi_linux_preempt_deadloop_noskip(false, true),
+        "iso=0 firmware still skips CpuDeadLoop"
+    );
+    assert!(!guest_uefi_linux_preempt_deadloop_noskip(true, false));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio BAR trap over scratch"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA BAR RAZ"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg"));
@@ -1010,6 +1023,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO eax fallback size"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg write"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO polls lapic"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux I/O raises PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
