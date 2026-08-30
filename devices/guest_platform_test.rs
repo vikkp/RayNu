@@ -4,7 +4,7 @@ use super::{
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, hpet_ticks_from_tsc_delta, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
-    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
+    is_piix_pm_io, is_acpi_pm1_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
@@ -14,7 +14,7 @@ use super::{
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
-    PM_BRIDGE_VENDOR,
+    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -471,6 +471,27 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     let t = io(0xB008, true, 4, 0) as u32;
     assert_ne!(t, 0xFFFF_FFFF);
     reset();
+}
+
+#[test]
+fn piix4_pm1_sci_en_sticky_on_fadt() {
+    reset();
+    assert!(is_acpi_pm1_io(0xB000));
+    assert!(is_acpi_pm1_io(0xB004));
+    assert!(!is_acpi_pm1_io(0xB008));
+    assert!(is_platform_io_port(0xB004));
+    assert_eq!(io(0xB004, true, 2, 0xFFFF) as u16, 0);
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN) | (1 << 13));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xB001);
+    assert!(is_acpi_pm1_io(0xB004));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
+    assert_eq!(io(0xB004, true, 2, 0) as u16, 0);
 }
 
 #[test]

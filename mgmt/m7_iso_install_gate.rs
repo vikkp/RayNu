@@ -109,6 +109,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fw_cfg IoReadFifo8")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_io_string_dest_ok")
         && include_str!("../devices/guest_platform.rs").contains("fn is_fwcfg_data_port")
+        && include_str!("../devices/guest_platform.rs").contains("fn is_acpi_pm1_io")
+        && include_str!("../devices/guest_platform.rs").contains("PIIX4 PM1 SCI_EN")
         && include_str!("../devices/guest_irq.rs").contains("fn raise_ioapic_gsi")
         && include_str!("../devices/guest_irq.rs").contains("fn pic_has_deliverable")
         && include_str!("../devices/guest_irq.rs").contains("fn take_pic_vector")

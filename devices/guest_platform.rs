@@ -537,9 +537,92 @@ fn acpi_pm_timer_matches(port: u16, size: u8, pmba: u32) -> bool {
     acpi_pm_timer_fixed(port, size) || acpi_pm_timer_pmba(port, pmba)
 }
 
-/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; other regs RAZ/WI.
+/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; PM1 at +0..+7;
+/// other regs RAZ/WI.
 pub fn is_piix_pm_io(port: u16) -> bool {
     with_plat(|p| is_piix_pm_io_port(port, p.pmba))
+}
+
+/// FADT PM1a (`0xB000` EVT / `0xB004` CNT) plus programmed PMBA +0..+7.
+/// PIIX4 PM1 SCI_EN. Not `ISO-INSTALL-OK`.
+pub fn is_acpi_pm1_io(port: u16) -> bool {
+    if (0xB000..=0xB007).contains(&port) {
+        return true;
+    }
+    with_plat(|p| pm1_block_off(port, p.pmba).is_some())
+}
+
+/// ACPI 1.0 / PIIX4 `PM1_CNT` bit 0. Linux `acpi_enable` writes this and
+/// reads it back; RAZ/WI made ACPI mode fail after tables install.
+pub const PM1_CNT_SCI_EN: u16 = 1;
+/// Sleep enable. Ignore so a guest SLP_EN write does not halt the HV.
+const PM1_CNT_SLP_EN: u16 = 1 << 13;
+
+fn pm1_block_off(port: u16, pmba: u32) -> Option<u16> {
+    if (0xB000..=0xB007).contains(&port) {
+        return Some(port - 0xB000);
+    }
+    let base = (pmba & !1) as u16;
+    if port >= base && port < base.wrapping_add(8) {
+        Some(port - base)
+    } else {
+        None
+    }
+}
+
+fn pm1_read(p: &Platform, off: u16, size: u8) -> u64 {
+    let mut blk = [0u8; 8];
+    blk[0..2].copy_from_slice(&p.pm1_sts.to_le_bytes());
+    blk[2..4].copy_from_slice(&p.pm1_en.to_le_bytes());
+    blk[4..6].copy_from_slice(&p.pm1_cnt.to_le_bytes());
+    let o = off as usize;
+    let n = usize::from(size).min(8);
+    let mut v = 0u64;
+    for i in 0..n {
+        if o + i < 8 {
+            v |= u64::from(blk[o + i]) << (8 * i);
+        }
+    }
+    v
+}
+
+fn pm1_write(p: &mut Platform, off: u16, size: u8, val: u64) {
+    let o = off as usize;
+    let n = usize::from(size).min(8);
+    let mut touched_cnt = false;
+    for i in 0..n {
+        let b = ((val >> (8 * i)) & 0xff) as u8;
+        match o + i {
+            0 => p.pm1_sts &= !u16::from(b),
+            1 => p.pm1_sts &= !(u16::from(b) << 8),
+            2 => p.pm1_en = (p.pm1_en & 0xFF00) | u16::from(b),
+            3 => p.pm1_en = (p.pm1_en & 0x00FF) | (u16::from(b) << 8),
+            4 => {
+                p.pm1_cnt = (p.pm1_cnt & 0xFF00) | u16::from(b);
+                touched_cnt = true;
+            }
+            5 => {
+                p.pm1_cnt = (p.pm1_cnt & 0x00FF) | (u16::from(b) << 8);
+                touched_cnt = true;
+            }
+            _ => {}
+        }
+    }
+    if touched_cnt {
+        p.pm1_cnt &= !PM1_CNT_SLP_EN;
+        note_pm1_sci(p.pm1_cnt);
+    }
+}
+
+fn note_pm1_sci(cnt: u16) {
+    if (cnt & PM1_CNT_SCI_EN) == 0 {
+        return;
+    }
+    if !PM1_SCI.swap(true, Ordering::Release) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI PIIX4 PM1 SCI_EN (not ISO-INSTALL-OK)",
+        );
+    }
 }
 
 fn is_piix_pm_io_port(port: u16, pmba: u32) -> bool {
@@ -572,6 +655,7 @@ pub fn is_platform_io_port(port: u16) -> bool {
         || is_timer_port(port)
         || is_pic_port(port)
         || is_kbc_port(port)
+        || (0xB000..=0xB007).contains(&port)
 }
 
 /// Local APIC 2 MiB window (`0xFEE00000`). Not a zero sink — version 0
@@ -768,6 +852,12 @@ struct Platform {
     pmba: u32,
     pm_cmd: u16,
     pm_iose: u8,
+    /// PIIX4 PM1a_STS (write-1-to-clear).
+    pm1_sts: u16,
+    /// PIIX4 PM1a_EN.
+    pm1_en: u16,
+    /// PIIX4 PM1a_CNT. Bit 0 is SCI_EN (sticky for Linux acpi_enable).
+    pm1_cnt: u16,
     /// PIIX3 ISA config (QEMU `piix3_reset`). PIRQ at `0x60–0x63`.
     isa_cfg: [u8; 256],
     /// 8042 output queue (`0x60` reads). Not keystrokes.
@@ -802,6 +892,9 @@ impl Platform {
             pmba: PIIX4_PMBA_DEFAULT,
             pm_cmd: 0x0001,
             pm_iose: 0,
+            pm1_sts: 0,
+            pm1_en: 0,
+            pm1_cnt: 0,
             isa_cfg: [0u8; 256],
             kbc_q: [0u8; KBC_QCAP],
             kbc_n: 0,
@@ -829,6 +922,7 @@ static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
 static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
 static FWCFG_ACPI: AtomicBool = AtomicBool::new(false);
+static PM1_SCI: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
 static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
@@ -1009,6 +1103,7 @@ pub fn reset() {
     FWCFG_DIR.store(false, Ordering::Release);
     FWCFG_WAIT.store(false, Ordering::Release);
     FWCFG_ACPI.store(false, Ordering::Release);
+    PM1_SCI.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
@@ -1403,6 +1498,14 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                 let shift = acpi_pm_timer_shift(port, p.pmba);
                 return (rax & !mask) | (u64::from(v >> shift) & mask);
             }
+            return rax;
+        }
+        if let Some(off) = pm1_block_off(port, p.pmba) {
+            if is_in {
+                let v = pm1_read(p, off, size);
+                return (rax & !mask) | (v & mask);
+            }
+            pm1_write(p, off, size, rax);
             return rax;
         }
         if is_piix_pm_io_port(port, p.pmba) {
