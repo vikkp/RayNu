@@ -36,7 +36,7 @@ fn tables_contain_madt_with_pcat_compat() {
     assert_eq!(acpi_tables_byte(madt + 65), 10);
     assert_eq!(acpi_tables_byte(madt + 67), 0, "ISA IRQ 0");
     assert_eq!(acpi_tables_byte(madt + 68), 2, "GSI 2");
-    assert_eq!(ACPI_TABLES_LEN, 0x178);
+    assert_eq!(ACPI_TABLES_LEN, 0x1F1);
 }
 
 #[test]
@@ -58,14 +58,15 @@ fn facp_points_at_dsdt_offset_until_linker() {
 
 #[test]
 fn dsdt_pci0_prt_virtio_gsi() {
-    let mut body = [0u8; 104];
-    for i in 0..104u16 {
+    let mut body = [0u8; 225];
+    for i in 0..225u16 {
         body[i as usize] = acpi_tables_byte(0x110 + i);
     }
     assert_eq!(&body[0..4], b"DSDT");
-    assert_eq!(u32::from_le_bytes(body[4..8].try_into().unwrap()), 104);
+    assert_eq!(u32::from_le_bytes(body[4..8].try_into().unwrap()), 225);
     assert!(body.windows(4).any(|w| w == b"PCI0"));
     assert!(body.windows(4).any(|w| w == b"_PRT"));
+    assert!(body.windows(4).any(|w| w == b"_CRS"), "DSDT PCI0 _CRS");
     assert!(
         body.windows(4).any(|w| w == [0xFF, 0xFF, 0x02, 0x00]),
         "slot 2 INTA"
@@ -78,6 +79,14 @@ fn dsdt_pci0_prt_virtio_gsi() {
     assert_eq!(body[s2 + 7], 17, "GSI 17");
     let s3 = body.windows(4).position(|w| w == [0xFF, 0xFF, 0x03, 0x00]).unwrap();
     assert_eq!(body[s3 + 7], 18, "GSI 18");
+    assert!(
+        body.windows(4).any(|w| w == [0x00, 0x00, 0x00, 0xC0]),
+        "PCI MMIO 0xC0000000"
+    );
+    assert!(
+        body.windows(4).any(|w| w == [0xFF, 0xFF, 0xBF, 0xFE]),
+        "PCI MMIO 0xFEBFFFFF"
+    );
 }
 
 #[test]
