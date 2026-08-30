@@ -30,6 +30,8 @@ pub const VIRTIO_ISO_GSI: u8 = 18;
 pub const VIRTIO_PIC_IRQ: u8 = 11;
 /// ISA PIT. Linux `noapic` uses PIC IRQ 0 for jiffies / HLT wakeup.
 pub const PIT_IRQ: u8 = 0;
+/// MADT IRQ0 ISO GSI 2 (8259 cascade pin). Do not raise PIC IRQ 2.
+pub const PIT_IOAPIC_GSI: u8 = 2;
 
 const RTE_MASK: u64 = 1 << 16;
 /// IOAPIC RTE bit 15: 1 = level, 0 = edge.
@@ -185,9 +187,24 @@ pub fn lower_virtio_iso() {
 
 /// PIT IRQ 0. Latches IRR; PIC injects only after ICW2 ≥ 16 and unmask.
 /// Also steps the i8253 channel-0 count so Linux `inb 0x40` sees time pass.
+/// IOAPIC pin 2 is the MADT IRQ0 ISO (not PIC cascade IRQ 2).
+/// MADT IRQ0 ISO GSI 2. Not `ISO-INSTALL-OK`.
 pub fn raise_pit() {
     crate::devices::guest_platform::pit_tick();
     raise_gsi(PIT_IRQ);
+    raise_ioapic_gsi(PIT_IOAPIC_GSI);
+}
+
+/// Latch an IOAPIC pin without touching the 8259 (GSI 2 is the cascade).
+pub fn raise_ioapic_gsi(gsi: u8) {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| {
+        if (gsi as usize) < IOAPIC_PINS {
+            c.ioapic.irr |= 1 << gsi;
+        }
+    });
 }
 
 pub fn raise_gsi(gsi: u8) {

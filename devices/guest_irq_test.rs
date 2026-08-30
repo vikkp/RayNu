@@ -2,7 +2,7 @@ use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_pic_vector, ATA_GSI, IOAPIC_GPA,
-    IOAPIC_VERSION, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
+    IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -172,6 +172,23 @@ fn product_iso_pic_deliverable_while_ovmf_ioapic_unmasked() {
         take_inject_vector(),
         Some(0x30),
         "IOAPIC pin 0 still pending for ACPI / take_inject_vector"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_pit_ioapic_gsi2_without_pic() {
+    arm_product_iso();
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    ioapic_write(0x10, 0x30);
+    raise_pit();
+    assert_eq!(PIT_IOAPIC_GSI, 2);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x30),
+        "MADT IRQ0 ISO GSI 2"
     );
     reset();
     reset_cd();

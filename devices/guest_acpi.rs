@@ -19,7 +19,7 @@ pub const FW_CFG_ACPI_RSDP_SEL: u16 = 0x25;
 /// Extra named files when the product ISO window is armed.
 pub const FW_CFG_NAMED_FILE_COUNT_ACPI: u32 = 3;
 
-pub const ACPI_TABLES_LEN: u16 = 0x124;
+pub const ACPI_TABLES_LEN: u16 = 0x134;
 pub const ACPI_RSDP_LEN: u16 = 20;
 pub const ACPI_LOADER_ENTRIES: usize = 11;
 pub const ACPI_LOADER_LEN: u16 = (ACPI_LOADER_ENTRIES * 128) as u16;
@@ -29,8 +29,8 @@ const RSDT_LEN: u16 = 44;
 const FACP_OFF: u16 = 0x40;
 const FACP_LEN: u16 = 116;
 const MADT_OFF: u16 = 0xC0;
-const MADT_LEN: u16 = 64;
-const DSDT_OFF: u16 = 0x100;
+const MADT_LEN: u16 = 74;
+const DSDT_OFF: u16 = 0x110;
 const DSDT_LEN: u16 = 36;
 
 const CMD_ALLOC: u32 = 1;
@@ -143,6 +143,14 @@ fn madt_byte(off: u16) -> u8 {
         55 => 0,
         56..=59 => 0xFEC0_0000u32.to_le_bytes()[off as usize - 56],
         60..=63 => 0,
+        // Interrupt Source Override: ISA IRQ 0 → GSI 2 (QEMU/PCAT).
+        // MADT IRQ0 ISO GSI 2. Not `ISO-INSTALL-OK`.
+        64 => 2,
+        65 => 10,
+        66 => 0,
+        67 => 0,
+        68..=71 => 2u32.to_le_bytes()[off as usize - 68],
+        72..=73 => 0,
         _ => 0,
     }
 }

@@ -32,7 +32,11 @@ fn tables_contain_madt_with_pcat_compat() {
     for i in 0..4 {
         assert_eq!(acpi_tables_byte(madt + 56 + i as u16), ioapic[i]);
     }
-    assert_eq!(ACPI_TABLES_LEN, 0x124);
+    assert_eq!(acpi_tables_byte(madt + 64), 2, "MADT IRQ0 ISO GSI 2 type");
+    assert_eq!(acpi_tables_byte(madt + 65), 10);
+    assert_eq!(acpi_tables_byte(madt + 67), 0, "ISA IRQ 0");
+    assert_eq!(acpi_tables_byte(madt + 68), 2, "GSI 2");
+    assert_eq!(ACPI_TABLES_LEN, 0x134);
 }
 
 #[test]
@@ -42,14 +46,14 @@ fn facp_points_at_dsdt_offset_until_linker() {
     assert_eq!(acpi_tables_byte(facp + 1), b'A');
     assert_eq!(acpi_tables_byte(facp + 2), b'C');
     assert_eq!(acpi_tables_byte(facp + 3), b'P');
-    let dsdt = u32::from(0x100u16).to_le_bytes();
+    let dsdt = u32::from(0x110u16).to_le_bytes();
     for i in 0..4 {
         assert_eq!(acpi_tables_byte(facp + 40 + i as u16), dsdt[i]);
     }
-    assert_eq!(acpi_tables_byte(0x100), b'D');
-    assert_eq!(acpi_tables_byte(0x101), b'S');
-    assert_eq!(acpi_tables_byte(0x102), b'D');
-    assert_eq!(acpi_tables_byte(0x103), b'T');
+    assert_eq!(acpi_tables_byte(0x110), b'D');
+    assert_eq!(acpi_tables_byte(0x111), b'S');
+    assert_eq!(acpi_tables_byte(0x112), b'D');
+    assert_eq!(acpi_tables_byte(0x113), b'T');
 }
 
 #[test]
