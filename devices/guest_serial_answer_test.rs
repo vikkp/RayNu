@@ -65,6 +65,29 @@ fn login_queues_root_then_setup_disk() {
 }
 
 #[test]
+fn emergency_shell_without_login_queues_setup() {
+    reset();
+    for &b in b"/ # " {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, SETUP);
+    reset();
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, SETUP);
+    reset();
+}
+
+#[test]
 fn gnu_grub_queues_enter_once() {
     reset();
     for &b in b"GNU GRUB" {

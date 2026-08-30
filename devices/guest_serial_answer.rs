@@ -55,6 +55,7 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// `sr_mod` so `/dev/sr0` exists when the live image booted from virtio-iso.
 /// `isofs` + `mount -t iso9660` so BusyBox does not probe a virtio-blk ISO as
 /// a disk (iso9660 is absent from `/proc/filesystems` until the module loads).
+/// auto-answer / # without login (3.21 emergency shell has no getty).
 /// alpine-conf `find_efi_size` defaults ESP to 160 MiB (512-byte FAT32 min
 /// ~34 MiB). That is larger than a 64 MiB fallback disk and leaves ~96 MiB
 /// root on the 256 MiB iron disk. `BOOT_SIZE=48` is above the FAT32 floor
@@ -144,6 +145,14 @@ fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
         || ends_with(win, wlen, YESN_BRACK_YY)
 }
 
+/// alpine-virt 3.21 `/init` `recovery_shell` is already root (`/ # ` / `~# `)
+/// with no getty `login:`. mkinitfs `nlplug-findfs -b` is the repositories
+/// file, so `alpine_dev=vdb` does not skip the 5s media wait. auto-answer
+/// `/ # ` without login queues SETUP so `setup-disk` still writes GPT.
+fn is_shell_prompt(win: &[u8], wlen: usize) -> bool {
+    ends_with(win, wlen, SHELL) || ends_with(win, wlen, SHELL_ROOT)
+}
+
 fn enqueue(a: &mut Answer, bytes: &[u8]) {
     for &b in bytes {
         if a.qn >= QCAP {
@@ -178,9 +187,11 @@ pub fn note_tx(b: u8) {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);
             }
-            PHASE_SHELL
-                if ends_with(&a.win, a.wlen, SHELL) || ends_with(&a.win, a.wlen, SHELL_ROOT) =>
-            {
+            PHASE_LOGIN if is_shell_prompt(&a.win, a.wlen) => {
+                enqueue(a, SETUP);
+                PHASE.store(PHASE_CONFIRM, Ordering::Release);
+            }
+            PHASE_SHELL if is_shell_prompt(&a.win, a.wlen) => {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }
