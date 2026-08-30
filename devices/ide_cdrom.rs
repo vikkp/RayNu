@@ -9,9 +9,10 @@
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
 //! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
 //! conflict `00:00.1`/`00:01.1`; `ata_piix` secondary `-22`). linux hides
-//! PIIX IDE after earlycon so built-in `ata_piix` does not SRST-`msleep`
-//! past `Freeing initrd` (iron COM2 silence). Firmware still enumerates
-//! PIIX; media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+//! PIIX IDE after Linux high-half so built-in `ata_piix` does not
+//! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
+//! share is too early: GRUB still needs PIIX ATAPI. Firmware still
+//! enumerates PIIX; media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
@@ -282,10 +283,11 @@ pub fn linux_hides_duplicate_slot0_ide(linux: bool, addr: u32) -> bool {
 
 /// Firmware already booted the El Torito CD. Built-in alpine-virt `ata_piix`
 /// is a device_initcall after `Freeing initrd` and `ata_msleep`s on SRST
-/// (iron COM2 then silent). linux hides PIIX IDE. Media is virtio-iso
-/// `00:03.0`. Not `ISO-INSTALL-OK`.
-pub fn linux_hides_piix_ide(linux: bool, addr: u32) -> bool {
-    if !linux || (addr & 0x8000_0000) == 0 {
+/// (iron COM2 then silent). Do **not** use earlycon share (bootimg): GRUB
+/// still reads the kernel from PIIX ATAPI. linux hides PIIX IDE after
+/// Linux high-half. Media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
+    if !linux_high_half || (addr & 0x8000_0000) == 0 {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
@@ -1455,7 +1457,7 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             note_hide_slot0();
             return 0xFFFF_FFFF;
         }
-        if linux_hides_piix_ide(linux, addr) {
+        if linux_hides_piix_ide(crate::boot::serial::linux_high_half(), addr) {
             note_hide_piix();
             return 0xFFFF_FFFF;
         }
@@ -1483,7 +1485,7 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
         let linux = crate::boot::serial::linux_earlycon_share();
         if linux_hides_duplicate_slot0_ide(linux, m.pci_addr)
-            || linux_hides_piix_ide(linux, m.pci_addr)
+            || linux_hides_piix_ide(crate::boot::serial::linux_high_half(), m.pci_addr)
         {
             return;
         }

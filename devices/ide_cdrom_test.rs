@@ -58,20 +58,27 @@ fn linux_hides_duplicate_slot0_ide_not_piix() {
 }
 
 #[test]
-fn linux_hides_piix_ide_after_earlycon() {
+fn linux_hides_piix_ide_after_high_half() {
     reset();
     crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
     assert!(!linux_hides_piix_ide(false, 0x8000_0900));
     assert!(linux_hides_piix_ide(true, 0x8000_0900));
     assert!(!linux_hides_piix_ide(true, 0x8000_0100));
     assert!(!linux_hides_piix_ide(true, 0x8000_0800));
     assert!(present_placeholder());
     pci_write_addr(0x8000_0900);
-    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     crate::boot::serial::set_linux_earlycon_share(true);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "bootimg share must not hide PIIX (GRUB ATAPI)"
+    );
+    crate::boot::serial::set_linux_high_half(true);
     pci_write_addr(0x8000_0900);
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
     reset();
 }
 

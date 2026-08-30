@@ -55,6 +55,9 @@ static mut GUEST_TX_LEN: usize = 0;
 /// `write_byte` (hypervisor-scan bump) interleaved e820 and COM2 cut mid-word.
 /// After Linux `#PF` deliver, HV diagnostics share the guest TX ring.
 static LINUX_EARLYCON_SHARE: AtomicBool = AtomicBool::new(false);
+/// Product-ISO Linux high-half RIP (bit 63). Distinct from earlycon share,
+/// which latches at El Torito bootimg while GRUB still needs PIIX ATAPI.
+static LINUX_HIGH_HALF: AtomicBool = AtomicBool::new(false);
 
 /// Route HV `write_byte` through the guest TX ring during Linux earlycon.
 ///
@@ -70,6 +73,22 @@ pub fn set_linux_earlycon_share(on: bool) {
 /// Whether HV diagnostics currently share the guest UART TX ring.
 pub fn linux_earlycon_share() -> bool {
     LINUX_EARLYCON_SHARE.load(Ordering::Acquire)
+}
+
+/// Product-ISO Linux kernel is on a high-half RIP (not GRUB/OVMF identity).
+///
+/// INVARIANTS:
+/// - `true` after first product-ISO VM-exit with RIP bit 63
+/// - `false` on guest-UEFI reset / E4
+///
+/// VERIFICATION: L1 (host tests)
+pub fn set_linux_high_half(on: bool) {
+    LINUX_HIGH_HALF.store(on, Ordering::Release);
+}
+
+/// linux high-half. Used so linux hides PIIX IDE after GRUB finished ATAPI.
+pub fn linux_high_half() -> bool {
+    LINUX_HIGH_HALF.load(Ordering::Acquire)
 }
 
 fn log_push(byte: u8) {
