@@ -317,6 +317,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux MMIO decode retry")
         && include_str!("../vmx/guest_uefi.rs").contains("fn virtio_mmio_eax_fallback_len")
         && include_str!("../vmx/guest_uefi.rs").contains("linux EAX fallback skip 3")
+        && include_str!("../vmx/guest_uefi.rs").contains("fn virtio_mmio_eax_fallback_size")
+        && include_str!("../vmx/guest_uefi.rs").contains("virtio MMIO eax fallback size")
         && include_str!("../vmx/guest_uefi.rs").contains("IOAPIC decode fail nowait")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_mov_dr_len")
         && include_str!("../vmx/guest_uefi.rs").contains("linux MOV DR skip")

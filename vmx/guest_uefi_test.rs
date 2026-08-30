@@ -77,6 +77,7 @@ use super::{
     guest_uefi_linux_guest_active, guest_uefi_linux_unhandled_should_skip,
     guest_uefi_linux_unhandled_try_skip, guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
     guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback, virtio_mmio_eax_fallback_len,
+    virtio_mmio_eax_fallback_size,
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit,
@@ -982,6 +983,9 @@ fn marker_and_residual_honest() {
     assert_eq!(virtio_mmio_eax_fallback_len(true, 0, 6), 6);
     assert_eq!(virtio_mmio_eax_fallback_len(true, 4, 0), 4);
     assert_eq!(virtio_mmio_eax_fallback_len(true, 16, 0), 0, "do not skip 16-byte peek");
+    assert_eq!(virtio_mmio_eax_fallback_size(0x14), 1, "virtio MMIO eax fallback size");
+    assert_eq!(virtio_mmio_eax_fallback_size(0x18), 2);
+    assert_eq!(virtio_mmio_eax_fallback_size(0x00), 4);
     assert!(virtio_mmio_eax_fallback(true, 0, 3));
     assert!(virtio_mmio_eax_fallback(true, 4, 6));
     assert!(virtio_mmio_eax_fallback(true, 0, 0), "linux EAX fallback skip 3");
@@ -1000,6 +1004,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO raises PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO off="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO eax fallback size"));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
