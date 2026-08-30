@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-seventy-sixth slice: 0xB000 dword timer (Delay after SCI_EN may be IoRead32 of PMBA+0; word STS stays PM1). F11 pin stays 084430f / 33337287432. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-seventy-seventh slice: firmware PIC before GSI 2 + HLT stall quiet tick (iron COM2 084430f Delay via 0xB008 then HLT rip=0x7f0680d0 ataio=0; do not F11 c08a13d). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (0xB000 dword timer; F11 stays 084430f). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (firmware PIC before GSI 2; HLT stall quiet tick). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-seventh slice: firmware PIC before GSI 2 + HLT stall quiet tick (iron 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-sixth slice: 0xB000 dword timer (iron 8663f56 unh=4 then handled Delay not 0xB008; F11 pin stays 084430f); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-fifth slice: flash 084430f pin 33337287432 (0xAF00 PM timer CI 49/49; do not F11 8663f56 / run 33333506987 dest_ok then Delay); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-fourth slice: 0xAF00 PM timer (iron COM2 8663f56 dest_ok pde0=0x40b027 then unhandled 0xAF00/0xAF05 + IN EAX,DX Delay stop n=33297 sectors=0) + tick port=; do not F11 8663f56 again; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

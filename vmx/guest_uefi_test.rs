@@ -83,7 +83,8 @@ use super::{
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
-    guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_irq0_vec,
+    guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
     guest_uefi_virtio_drain_every_resume,
@@ -882,6 +883,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("tick port="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 084430f"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xB000 dword timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIC before GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c08a13d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
@@ -1252,6 +1256,14 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_pic_before_lapic(true, false));
     assert!(!guest_uefi_linux_pic_before_lapic(true, true));
     assert!(!guest_uefi_linux_pic_before_lapic(false, false));
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    assert!(!guest_uefi_pic_before_lapic(true, true, true));
+    assert!(!guest_uefi_pic_before_lapic(false, false, false));
+    assert!(guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16384, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, false, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 1));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 0x1e, true, 0));
     assert!(guest_uefi_linux_pic_irq0_vec(0x20));
     assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
     assert!(guest_uefi_linux_exc_error_code(8));
