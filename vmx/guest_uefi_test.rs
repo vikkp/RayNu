@@ -73,9 +73,10 @@ use super::{
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_PT_TABLE,
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
     guest_uefi_cpu_flush_skip_mapped,
+    guest_uefi_cpu_flush_tick_scans_mapped,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
-    GUEST_UEFI_CPU_FLUSH_HEAP_GPA,
+    GUEST_UEFI_CPU_FLUSH_HEAP_GPA, GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK,
     GUEST_UEFI_IRON_PTE_A0000_WB,
 };
 use crate::boot::ovmf_esp::{
@@ -179,6 +180,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("256MiB disk leftover report-RAM"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("report-RAM EPT pre-map"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush skip leftover pre-map"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush leftover per walk"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -921,9 +923,10 @@ fn marker_and_residual_honest() {
         guest_uefi_report_ram_premap_gpa(0, GUEST_UEFI_REPORT_RAM_SLOTS),
         Some(0x0200_0000)
     );
-    // cpu_flush skip leftover pre-map (iron f0eb84e tick n=256 ram=1008).
+    // cpu_flush leftover per walk (iron abfb008 skip n=944 then 64 heap slots hung).
     assert_eq!(GUEST_UEFI_CPU_FLUSH_HEAP_GPA, 0x7800_0000);
-    assert!(guest_uefi_cpu_flush_skip_mapped(0x0200_0000, false));
+    assert_eq!(GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK, 2);
+    assert!(!guest_uefi_cpu_flush_skip_mapped(0x0200_0000, false));
     assert!(guest_uefi_cpu_flush_skip_mapped(0x0200_0000, true));
     assert!(!guest_uefi_cpu_flush_skip_mapped(0x1000, false));
     let flush_gpa = guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_CPU_FLUSH_GPA);
@@ -937,6 +940,8 @@ fn marker_and_residual_honest() {
         guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
         true,
     ));
+    assert!(guest_uefi_cpu_flush_tick_scans_mapped(32));
+    assert!(!guest_uefi_cpu_flush_tick_scans_mapped(1008));
     assert!(!guest_uefi_report_ram_should_map(0x1F0_0000));
     assert!(!guest_uefi_report_ram_should_map(0x8000_0000));
     assert_eq!(GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, 0x7F8E_21CA);
