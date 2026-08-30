@@ -874,6 +874,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FADT FACS"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flashcruzer reject 2d6b109 dest skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("auto-answer / # without login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO POST_DXE_TAIL skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("emergency mount+exit"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
@@ -1865,6 +1867,19 @@ fn past_sec_predicates_are_honest() {
         true, 115, 115, 0, 0, false, false, false
     ));
     assert!(
+        post_atapi_should_stop(
+            true,
+            115 + GUEST_UEFI_POST_DXE_TAIL,
+            115,
+            0,
+            0,
+            false,
+            false,
+            false
+        ),
+        "lab stub still applies POST_DXE_TAIL when sectors==0"
+    );
+    assert!(
         !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false),
         "first ATAPI sector must not stop Stage 45"
     );
@@ -1924,6 +1939,19 @@ fn past_sec_predicates_are_honest() {
         assert!(
             !post_atapi_should_stop(true, 200, 115, 180, 4, true, true, true),
             "Stage 46 product CD continues past El Torito"
+        );
+        assert!(
+            !post_atapi_should_stop(
+                true,
+                115 + GUEST_UEFI_POST_DXE_TAIL,
+                115,
+                0,
+                0,
+                false,
+                false,
+                false
+            ),
+            "product ISO POST_DXE_TAIL skip (iron 2d6b109 stop n=33297 sectors=0)"
         );
         assert_eq!(guest_uefi_resume_cap(false), GUEST_UEFI_PRODUCT_ISO_RESUME_CAP);
         assert_eq!(

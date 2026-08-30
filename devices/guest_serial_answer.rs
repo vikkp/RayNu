@@ -65,6 +65,13 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 pub(crate) const SETUP: &[u8] =
     b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
+/// alpine-virt 3.21 `/init` emergency shell has busybox + modprobe, **no**
+/// `setup-disk`. Mount ISO at `/media/cdrom` then `exit` so `/init`
+/// `find_boot_repositories` can switch_root to live alpine (getty `login:`
+/// then SETUP). emergency mount+exit.
+pub(crate) const MOUNT_EXIT: &[u8] =
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; mdev -s; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; exit\r";
+const _: () = assert!(MOUNT_EXIT.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";
 pub(crate) const DISK: &[u8] = b"/dev/vda\r";
@@ -109,6 +116,8 @@ static YES_LEFT: AtomicU8 = AtomicU8::new(YES_MAX);
 static GRUB_SENT: AtomicBool = AtomicBool::new(false);
 /// Next `(y/n)` is "Try boot media?" after `No disks available` — answer n.
 static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
+/// Initramfs `/ # ` already queued [`MOUNT_EXIT`]. Stay PHASE_LOGIN.
+static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -127,6 +136,7 @@ pub fn reset() {
     YES_LEFT.store(YES_MAX, Ordering::Release);
     GRUB_SENT.store(false, Ordering::Release);
     NEXT_YES_IS_NO.store(false, Ordering::Release);
+    MOUNT_SENT.store(false, Ordering::Release);
 }
 
 fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
@@ -145,10 +155,11 @@ fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
         || ends_with(win, wlen, YESN_BRACK_YY)
 }
 
-/// alpine-virt 3.21 `/init` `recovery_shell` is already root (`/ # ` / `~# `)
-/// with no getty `login:`. mkinitfs `nlplug-findfs -b` is the repositories
-/// file, so `alpine_dev=vdb` does not skip the 5s media wait. auto-answer
-/// `/ # ` without login queues SETUP so `setup-disk` still writes GPT.
+/// alpine-virt 3.21 `/init` `recovery_shell` is already root (`/ # `)
+/// with no getty `login:`. mkinitfs has no `setup-disk`. auto-answer
+/// `/ # ` without login queues [`MOUNT_EXIT`] and stays PHASE_LOGIN so
+/// later getty `login:` still matches. `~# ` without login is live overlay
+/// (SETUP). emergency mount+exit.
 fn is_shell_prompt(win: &[u8], wlen: usize) -> bool {
     ends_with(win, wlen, SHELL) || ends_with(win, wlen, SHELL_ROOT)
 }
@@ -187,7 +198,13 @@ pub fn note_tx(b: u8) {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);
             }
-            PHASE_LOGIN if is_shell_prompt(&a.win, a.wlen) => {
+            PHASE_LOGIN if ends_with(&a.win, a.wlen, SHELL_ROOT) => {
+                if !MOUNT_SENT.swap(true, Ordering::AcqRel) {
+                    enqueue(a, MOUNT_EXIT);
+                }
+                // Stay PHASE_LOGIN so later getty `login:` still matches.
+            }
+            PHASE_LOGIN if ends_with(&a.win, a.wlen, SHELL) => {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }

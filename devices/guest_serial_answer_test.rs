@@ -1,4 +1,7 @@
-use super::{note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, NO, ROOT, SETUP, SYS, YES};
+use super::{
+    note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, ROOT, SETUP,
+    SYS, YES,
+};
 
 #[test]
 fn login_queues_root_then_setup_disk() {
@@ -65,12 +68,37 @@ fn login_queues_root_then_setup_disk() {
 }
 
 #[test]
-fn emergency_shell_without_login_queues_setup() {
+fn emergency_shell_without_login_queues_mount_exit() {
     reset();
     for &b in b"/ # " {
         note_tx(b);
     }
     let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, MOUNT_EXIT);
+    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("exit"));
+    assert!(
+        !core::str::from_utf8(MOUNT_EXIT).unwrap().contains("setup-disk"),
+        "emergency mount+exit: initramfs has no setup-disk"
+    );
+    for &b in b"/ # " {
+        note_tx(b);
+    }
+    assert_eq!(take_rx(), None, "MOUNT_EXIT once");
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, ROOT);
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    got.clear();
     while let Some(b) = take_rx() {
         got.push(b);
     }
