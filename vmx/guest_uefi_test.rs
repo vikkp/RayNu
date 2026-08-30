@@ -1036,6 +1036,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART reassert RX not THRE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain every resume"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg ACPI MADT (iso=0 named files stay 3)"));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));

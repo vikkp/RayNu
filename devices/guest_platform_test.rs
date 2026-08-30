@@ -2,7 +2,7 @@ use super::{
     acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
-    fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
+    fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, hpet_ticks_from_tsc_delta, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
     is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
@@ -66,6 +66,7 @@ fn fwcfg_signature_and_ram_size() {
 
 #[test]
 fn fwcfg_bootorder_is_cd_then_disk() {
+    crate::devices::ide_cdrom::reset();
     reset();
     assert!(boot_order_cd_then_disk());
     assert!(bootorder_nul_terminated());
@@ -161,6 +162,7 @@ fn fwcfg_boot_menu_wait_is_zero_ms() {
     assert!(boot_menu_wait_skips_bds());
     assert_eq!(BOOT_MENU_WAIT, [0, 0]);
     assert_eq!(FW_CFG_NAMED_FILE_COUNT, 3);
+    assert_eq!(fwcfg_named_file_count(), 3, "iso=0 named files stay 3");
     assert_eq!(FW_CFG_BOOT_MENU, 0x0E);
     assert_eq!(FW_CFG_BOOT_WAIT_SEL, 0x22);
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOT_MENU));
@@ -186,6 +188,53 @@ fn fwcfg_boot_menu_wait_is_zero_ms() {
     assert_eq!(&name[..end], b"etc/boot-menu-wait");
     reset();
     assert!(!fwcfg_boot_wait_served());
+}
+
+#[test]
+fn product_iso_fwcfg_acpi_dir_has_six_files() {
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert_eq!(fwcfg_named_file_count(), 3, "iso=0 named files stay 3");
+    assert!(!fwcfg_acpi_served());
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    crate::devices::ide_cdrom::write_placeholder_iso(
+        &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+    );
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(crate::devices::ide_cdrom::product_iso_window_armed());
+    assert_eq!(fwcfg_named_file_count(), 6);
+    let _ = io(0x510, false, 2, 0x19);
+    let mut count = 0u32;
+    for i in 0..4 {
+        count |= (io(0x511, true, 1, 0) as u32) << (8 * (3 - i));
+    }
+    assert_eq!(count, 6);
+    let mut name = [0u8; 56];
+    for _ in 0..(64 * 3 + 8) {
+        let _ = io(0x511, true, 1, 0);
+    }
+    for b in &mut name {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
+    assert_eq!(&name[..end], b"etc/table-loader");
+    let _ = io(
+        0x510,
+        false,
+        2,
+        u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+    );
+    let mut sig = [0u8; 4];
+    for b in &mut sig {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    assert_eq!(&sig, b"RSDT");
+    assert!(fwcfg_acpi_served());
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert_eq!(fwcfg_named_file_count(), 3);
+    assert!(!fwcfg_acpi_served());
 }
 
 #[test]

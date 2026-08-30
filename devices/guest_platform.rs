@@ -103,7 +103,18 @@ pub const FW_CFG_E820_SEL: u16 = 0x21;
 /// Third named file: OVMF splash-time (UINT16 LE milliseconds).
 pub const FW_CFG_BOOT_WAIT_SEL: u16 = 0x22;
 /// Named files in the fw_cfg directory (`bootorder`, `etc/e820`, `etc/boot-menu-wait`).
+/// Product ISO adds `etc/table-loader`, `etc/acpi/tables`, `etc/acpi/rsdp`.
+/// iso=0 named files stay 3.
 pub const FW_CFG_NAMED_FILE_COUNT: u32 = 3;
+
+/// Live fw_cfg directory count. Product ISO fw_cfg ACPI MADT adds 3 files.
+pub fn fwcfg_named_file_count() -> u32 {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        FW_CFG_NAMED_FILE_COUNT + crate::devices::guest_acpi::FW_CFG_NAMED_FILE_COUNT_ACPI
+    } else {
+        FW_CFG_NAMED_FILE_COUNT
+    }
+}
 /// QEMU `-boot menu=on,splash-time=0`. `(0+999)/1000` → 0 s FrontPage wait.
 pub const BOOT_MENU_WAIT: [u8; 2] = [0, 0];
 /// Packed QEMU e820 entry size (`address:u64`, `length:u64`, `type:u32`).
@@ -206,11 +217,12 @@ fn file_dir_byte(off: u16) -> u8 {
     const ENTRY: usize = 64;
     let o = off as usize;
     if o < 4 {
-        return FW_CFG_NAMED_FILE_COUNT.to_be_bytes()[o];
+        return fwcfg_named_file_count().to_be_bytes()[o];
     }
     let body = o - 4;
     let ent = body / ENTRY;
     let i = body % ENTRY;
+    let acpi = crate::devices::ide_cdrom::product_iso_window_armed();
     match ent {
         0 => file_entry_byte(
             i,
@@ -224,6 +236,24 @@ fn file_dir_byte(off: u16) -> u8 {
             BOOT_MENU_WAIT.len() as u32,
             FW_CFG_BOOT_WAIT_SEL,
             b"etc/boot-menu-wait",
+        ),
+        3 if acpi => file_entry_byte(
+            i,
+            u32::from(crate::devices::guest_acpi::ACPI_LOADER_LEN),
+            crate::devices::guest_acpi::FW_CFG_ACPI_LOADER_SEL,
+            b"etc/table-loader",
+        ),
+        4 if acpi => file_entry_byte(
+            i,
+            u32::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+            crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL,
+            b"etc/acpi/tables",
+        ),
+        5 if acpi => file_entry_byte(
+            i,
+            u32::from(crate::devices::guest_acpi::ACPI_RSDP_LEN),
+            crate::devices::guest_acpi::FW_CFG_ACPI_RSDP_SEL,
+            b"etc/acpi/rsdp",
         ),
         _ => 0,
     }
@@ -713,7 +743,8 @@ struct Platform {
     fw_sel: u16,
     fw_off: u16,
     fw_buf: [u8; 16],
-    fw_len: u8,
+    /// u16: product ISO ACPI file dir is 4+64*6=388 and table-loader is 1408.
+    fw_len: u16,
     pit: u16,
     pit_reload: u16,
     /// Next 0x40 data write is the high byte (16-bit lo/hi).
@@ -792,6 +823,7 @@ static FWCFG_BOOT: AtomicBool = AtomicBool::new(false);
 static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
 static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
+static FWCFG_ACPI: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
 static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
@@ -898,7 +930,7 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 4;
         }
         FW_CFG_FILE_DIR => {
-            p.fw_len = (4 + 64 * FW_CFG_NAMED_FILE_COUNT as usize) as u8;
+            p.fw_len = (4 + 64 * fwcfg_named_file_count() as usize) as u16;
             FWCFG_DIR.store(true, Ordering::Release);
         }
         FW_CFG_BOOT_MENU => {
@@ -906,11 +938,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 2;
         }
         FW_CFG_BOOTORDER_SEL => {
-            p.fw_len = BOOTORDER.len() as u8;
+            p.fw_len = BOOTORDER.len() as u16;
             FWCFG_BOOT.store(true, Ordering::Release);
         }
         FW_CFG_E820_SEL => {
-            p.fw_len = E820_FILE_BYTES;
+            p.fw_len = u16::from(E820_FILE_BYTES);
             FWCFG_E820.store(true, Ordering::Release);
         }
         FW_CFG_BOOT_WAIT_SEL => {
@@ -918,9 +950,35 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 2;
             FWCFG_WAIT.store(true, Ordering::Release);
         }
+        crate::devices::guest_acpi::FW_CFG_ACPI_LOADER_SEL
+            if crate::devices::ide_cdrom::product_iso_window_armed() =>
+        {
+            p.fw_len = crate::devices::guest_acpi::ACPI_LOADER_LEN;
+            note_fwcfg_acpi();
+        }
+        crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL
+            if crate::devices::ide_cdrom::product_iso_window_armed() =>
+        {
+            p.fw_len = crate::devices::guest_acpi::ACPI_TABLES_LEN;
+            note_fwcfg_acpi();
+        }
+        crate::devices::guest_acpi::FW_CFG_ACPI_RSDP_SEL
+            if crate::devices::ide_cdrom::product_iso_window_armed() =>
+        {
+            p.fw_len = crate::devices::guest_acpi::ACPI_RSDP_LEN;
+            note_fwcfg_acpi();
+        }
         _ => {
             p.fw_len = 0;
         }
+    }
+}
+
+fn note_fwcfg_acpi() {
+    if !FWCFG_ACPI.swap(true, Ordering::Release) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO fw_cfg ACPI MADT (not ISO-INSTALL-OK)",
+        );
     }
 }
 
@@ -945,6 +1003,7 @@ pub fn reset() {
     FWCFG_E820.store(false, Ordering::Release);
     FWCFG_DIR.store(false, Ordering::Release);
     FWCFG_WAIT.store(false, Ordering::Release);
+    FWCFG_ACPI.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
@@ -1088,6 +1147,11 @@ pub fn fwcfg_file_dir_served() -> bool {
 
 pub fn fwcfg_boot_wait_served() -> bool {
     FWCFG_WAIT.load(Ordering::Acquire)
+}
+
+/// Product ISO `etc/table-loader` / MADT served. iso=0 stays false.
+pub fn fwcfg_acpi_served() -> bool {
+    FWCFG_ACPI.load(Ordering::Acquire)
 }
 
 /// Last CMOS index (NMI bit stripped). Nested VT-x `5b2739a` died on `port=0x71`.
@@ -1293,7 +1357,23 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                                     BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
                                 }
                                 FW_CFG_E820_SEL => e820_byte(p.fw_off),
-                                _ => p.fw_buf[p.fw_off as usize],
+                                crate::devices::guest_acpi::FW_CFG_ACPI_LOADER_SEL => {
+                                    crate::devices::guest_acpi::acpi_loader_byte(p.fw_off)
+                                }
+                                crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL => {
+                                    crate::devices::guest_acpi::acpi_tables_byte(p.fw_off)
+                                }
+                                crate::devices::guest_acpi::FW_CFG_ACPI_RSDP_SEL => {
+                                    crate::devices::guest_acpi::acpi_rsdp_byte(p.fw_off)
+                                }
+                                _ => {
+                                    let i = p.fw_off as usize;
+                                    if i < p.fw_buf.len() {
+                                        p.fw_buf[i]
+                                    } else {
+                                        0
+                                    }
+                                }
                             };
                             p.fw_off = p.fw_off.saturating_add(1);
                             b
