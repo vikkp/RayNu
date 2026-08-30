@@ -98,6 +98,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIC IRQ0")
         && include_str!("../devices/guest_acpi.rs").contains("MADT IRQ0 ISO GSI 2")
         && include_str!("../devices/guest_acpi.rs").contains("DSDT PCI0 _PRT")
+        && include_str!("../devices/ide_cdrom.rs").contains("fn linux_hides_duplicate_slot0_ide")
+        && include_str!("../devices/ide_cdrom.rs").contains("linux hides duplicate slot0 IDE")
         && include_str!("../devices/guest_irq.rs").contains("PIT skips IOAPIC pin 0")
         && include_str!("../devices/guest_irq.rs").contains("fn raise_pic_irq")
         && include_str!("../devices/guest_irq.rs").contains("fn ioapic_gsi2_armed")

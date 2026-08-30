@@ -7,6 +7,9 @@
 //! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
 //! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
+//! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
+//! conflict `00:00.1`/`00:01.1`; `ata_piix` secondary `-22`). PIIX `00:01.1`
+//! stays. Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
@@ -232,6 +235,7 @@ fn with_cd<R>(f: impl FnOnce(&mut CdMedia) -> R) -> R {
 
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
+static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
@@ -261,6 +265,16 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
     let (bus, dev, fun, _) = pci_bdf(addr);
     // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
     bus == 0 && fun == 1 && (dev == 0 || dev == 1)
+}
+
+/// Firmware needs slot-0 fn1. Linux PCI scan of both IDE functions BAR-conflicts
+/// (iron COM2 `ata_piix` secondary `-22`). linux hides duplicate slot0 IDE.
+pub fn linux_hides_duplicate_slot0_ide(linux: bool, addr: u32) -> bool {
+    if !linux || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 0 && fun == 1
 }
 
 /// PCI config address for the guest IDE function (`00:00.1`).
@@ -444,6 +458,7 @@ pub fn reset() {
     with_cd(|m| *m = CdMedia::empty());
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
+    HIDE_SLOT0.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -1397,12 +1412,24 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
     }
 }
 
+fn note_hide_slot0() {
+    if !HIDE_SLOT0.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux hides duplicate slot0 IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 pub fn pci_read_data(port: u16, size: u8) -> u32 {
     with_cd(|m| {
         if !m.visible {
             return 0xFFFF_FFFF;
         }
         let addr = m.pci_addr;
+        if linux_hides_duplicate_slot0_ide(crate::boot::serial::linux_earlycon_share(), addr) {
+            note_hide_slot0();
+            return 0xFFFF_FFFF;
+        }
         if !pci_addr_selects_cd(addr) {
             return 0xFFFF_FFFF;
         }
@@ -1425,6 +1452,10 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
 
 pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
+        if linux_hides_duplicate_slot0_ide(crate::boot::serial::linux_earlycon_share(), m.pci_addr)
+        {
+            return;
+        }
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
