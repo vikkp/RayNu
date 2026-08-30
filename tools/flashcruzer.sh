@@ -80,7 +80,7 @@ Downloads the latest green CI r640-hypervisor.efi for this clone's branch
 and copies it to Cruzer RAYNUV (EFI/BOOT/BOOTX64.EFI plus EFI/RayNu/OVMF.fd).
 
 Options:
-  --branch BRANCH     git fetch + checkout + ff-only pull (default: current)
+  --branch BRANCH     fetch origin/BRANCH and git checkout -B (default: current)
   --wait              poll until CI for HEAD finishes (default 20 min)
   --download-only     write ~/r640-hypervisor.efi; do not flash
   --dry-run           pick the CI run; do not download or flash
@@ -183,6 +183,8 @@ self_test() {
   grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
   grep -q 'fat_bytes_too_small' "$ESP"
   grep -q 'do not git checkout a SHA' "$SCRIPT_PATH"
+  grep -q 'checkout -B' "$SCRIPT_PATH"
+  grep -q 'refs/heads/${br}:refs/remotes/origin/${br}' "$SCRIPT_PATH"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -224,6 +226,8 @@ if [[ ! -x "$ESP" ]]; then
 fi
 
 cd "$ROOT"
+echo "==> flashcruzer $SCRIPT_PATH"
+echo "==> pre-git $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=8 HEAD)"
 
 # When the operator `git checkout <sha>`, HEAD is detached. Infer the origin
 # branch that *points at* this commit and stay there (do not pull the tip).
@@ -240,12 +244,28 @@ infer_detached_branch() {
   BRANCH="$infer"
 }
 
+# `git fetch origin <branch>` only writes FETCH_HEAD. checkout -B from the
+# remote-tracking ref so a dirty/old working tree still gets origin/BRANCH.
+checkout_origin_branch() {
+  local br="$1"
+  echo "==> fetching refs/heads/${br}"
+  git fetch origin "refs/heads/${br}:refs/remotes/origin/${br}"
+  echo "==> checkout -B ${br} origin/${br}"
+  if ! git checkout -B "$br" "origin/${br}"; then
+    echo "error: cannot checkout origin/${br}" >&2
+    echo "       uncommitted changes in this clone? git status -sb" >&2
+    git status -sb >&2 || true
+    echo "hint: git stash push -u -m wip-before-flash" >&2
+    echo "      then retry, or checkout origin/${br} yourself and pass --no-git" >&2
+    exit 1
+  fi
+}
+
 if [[ "$NO_GIT" -eq 0 ]]; then
-  git fetch origin
   if [[ -n "$BRANCH" ]]; then
-    git checkout "$BRANCH"
-    git pull --ff-only origin "$BRANCH"
+    checkout_origin_branch "$BRANCH"
   else
+    git fetch origin
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     if [[ "$BRANCH" == "HEAD" ]]; then
       infer_detached_branch

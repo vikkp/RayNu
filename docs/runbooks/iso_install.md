@@ -152,9 +152,10 @@ works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
 The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
-`--refat-cruzer` (do **not** pass it again). Flash HEAD after eighty-seventh-slice
-CI is green (`--wait --branch cursor/e5-stage46-iso-a623`; do **not**
-`git checkout` a SHA). Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+`--refat-cruzer` (do **not** pass it again). `git fetch origin NAME` only
+writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
+`--wait --require-head --no-git` (do **not** `git checkout` a SHA). Flash
+`2d6b109` on `cursor/e5-stage46-iso-a623` after that SHA's CI is green. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
@@ -184,9 +185,13 @@ ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
   wget -O /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
     https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso
 cd ~/projects/raynu
-git fetch origin cursor/e5-stage46-iso-a623
-./tools/flashcruzer.sh --wait \
-  --branch cursor/e5-stage46-iso-a623 \
+# FETCH_HEAD-only is not a checkout. Point HEAD at origin, then flash with --no-git
+# so an old working-tree flashcruzer.sh cannot die on `git checkout $BRANCH`.
+git fetch origin refs/heads/cursor/e5-stage46-iso-a623:refs/remotes/origin/cursor/e5-stage46-iso-a623
+git checkout -B cursor/e5-stage46-iso-a623 origin/cursor/e5-stage46-iso-a623
+git log -1 --oneline   # WANT 2d6b109 (fw_cfg IoReadFifo8). Not a side-branch SHA.
+lsusb | grep -i 0781:5151
+./tools/flashcruzer.sh --wait --require-head --no-git \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 ```
 

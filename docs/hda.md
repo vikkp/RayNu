@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-sixty-sixth slice: FADT FACS. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-sixty-seventh slice: flashcruzer --branch checkout -B origin. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (FADT FACS). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flashcruzer --branch checkout -B). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-seventh slice: flashcruzer --branch checkout -B origin (git fetch origin NAME only writes FETCH_HEAD; checkout -B origin/NAME then --no-git flashes 2d6b109); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-sixth slice: FADT FACS (FIRMWARE_CTRL at FACP+36; 64-byte FACS 64-aligned after DSDT; ADD_POINTER before FACP CKSUM; not an SDT checksum); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fifth slice: PM1 SCI_EN at reset (FADT SMI_CMD is 0 so Linux acpi_hw_get_mode never writes SCI_EN; PM1_CNT starts with bit 0 so ACPI-on matches); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fourth slice: linux-line piix_init blacklist (initcall_blacklist=piix_init; Linux 6.12 ata_piix.c is module_init(piix_init), not ata_piix_init; grub.cfg Data Length stays 143→294); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

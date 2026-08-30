@@ -94,7 +94,10 @@ First time only (creates the symlink):
 ~/projects/raynu/tools/flashcruzer.sh --install-launcher
 ```
 
-The wrapper `git pull --ff-only`s the current branch, downloads
+`--branch NAME` fetches `origin/NAME` and `git checkout -B` onto that tip
+(not a SHA; `git fetch origin NAME` alone only writes `FETCH_HEAD`).
+`--no-git` skips fetch/checkout when you already moved HEAD. The wrapper
+then `git pull --ff-only`s the current branch when `--branch` is omitted, downloads
 `r640-hypervisor.efi` from the latest successful `ci` run (prefers
 `pull_request` over `push` so a nested-KVM QEMU flake does not hide a green
 PR artifact), verifies size + SHA256, refuses known-bad prefixes, then calls
