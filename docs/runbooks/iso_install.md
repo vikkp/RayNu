@@ -155,9 +155,11 @@ The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
 `--refat-cruzer` (do **not** pass it again). `git fetch origin NAME` only
 writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `--wait --require-head --no-git` (do **not** `git checkout` a SHA). Flash
-`8663f56` on `cursor/e5-pm1-sci-a623` (CI 49/49). `2d6b109` IoReadFifo8 still
+`8663f56` on `cursor/e5-pm1-sci-a623` (CI 49/49). Pin `--run 33333506987`.
+`FLASHCRUZER-OK` for `2d6b109` / run `33321642509` / EFI prefix `6fc742b0`
+(checkout `cursor/e5-stage46-iso-a623`) is **not** F11. `2d6b109` IoReadFifo8 still
 skips dest `0x205f18` inside identity `0x200000` (iron COM2 `3d6eba0`); that
-SHA cannot install ACPI. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+SHA cannot install ACPI. flashcruzer reject 2d6b109 dest skip. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
@@ -187,15 +189,17 @@ ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
   wget -O /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
     https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso
 cd ~/projects/raynu
-# FETCH_HEAD-only is not a checkout. Point HEAD at origin, then flash with --no-git
-# so an old working-tree flashcruzer.sh cannot die on `git checkout $BRANCH`.
-# 2d6b109 dest 0x205f18 is still inside identity 0x200000 (skip). Flash 8663f56.
+# Do not checkout cursor/e5-stage46-iso-a623 (that is 2d6b109 dest skip).
+# FETCH_HEAD-only is not a checkout. Point HEAD at origin, then pin the ACPI EFI.
+# FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # WANT 8663f56 (FADT FACS + identity 0x400000). Not 2d6b109.
+git log -1 --oneline   # tip may be docs-only c329d83; pin run 33333506987 (8663f56 EFI).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --wait --require-head --no-git \
+./tools/flashcruzer.sh --no-git --run 33333506987 \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
+# --wait --require-head --no-git stays valid on this branch after a green HEAD
+# artifact; do not use it on e5-stage46-iso-a623.
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
@@ -324,4 +328,4 @@ stops on decode fail. Not `ISO-INSTALL-OK`.
    (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
    magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
    Not Everest E5.
-   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/`ttyS0` + hold when armed; virtio BAR trap over scratch + PIIX3 ISA BAR RAZ + packed virtio common cfg + virtio MMIO raises PIT + virtio MMIO eax fallback size; packed virtio common cfg write; virtio MMIO polls lapic; linux I/O does not raise PIT (iron MADT stop); linux xAPIC EPT insn_len 0; linux preempt deadloop noskip; linux PIT prefer once; linux PIT prefer until DRIVER_OK; UART reassert RX not THRE; virtio drain every resume; product ISO fw_cfg ACPI MADT (iso=0 named files stay 3); linux PIC before LAPIC; linux PIC IRQ0; MADT IRQ0 ISO GSI 2; PIT skips IOAPIC pin 0; linux GSI 2 before PIC; fw_cfg IoReadFifo8 fills RAM (skip HV identity PML4 dest); PIIX4 PM1 SCI_EN; PM1 SCI_EN at reset; DSDT PCI0 _PRT; DSDT PCI0 _CRS; linux hides duplicate slot0 IDE; linux hides PIIX IDE; linux high-half hides PIIX; linux-line alpine_dev=vdb; linux-line virtio_pci; linux ATA floating bus; fw_cfg skip dest n=; fw_cfg identity overlay; HV identity PML4 0x400000; PEI dest holds ACPI tables; fw_cfg dest_ok fill dest=; dest_ok fill log cap 8; ACPI tables ZONE_FSEG; FSEG dest holds ACPI tables; linux-line ata_piix blacklist; linux-line piix_init blacklist; FADT FACS; lab stub still E4; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
+   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/`ttyS0` + hold when armed; virtio BAR trap over scratch + PIIX3 ISA BAR RAZ + packed virtio common cfg + virtio MMIO raises PIT + virtio MMIO eax fallback size; packed virtio common cfg write; virtio MMIO polls lapic; linux I/O does not raise PIT (iron MADT stop); linux xAPIC EPT insn_len 0; linux preempt deadloop noskip; linux PIT prefer once; linux PIT prefer until DRIVER_OK; UART reassert RX not THRE; virtio drain every resume; product ISO fw_cfg ACPI MADT (iso=0 named files stay 3); linux PIC before LAPIC; linux PIC IRQ0; MADT IRQ0 ISO GSI 2; PIT skips IOAPIC pin 0; linux GSI 2 before PIC; fw_cfg IoReadFifo8 fills RAM (skip HV identity PML4 dest); PIIX4 PM1 SCI_EN; PM1 SCI_EN at reset; DSDT PCI0 _PRT; DSDT PCI0 _CRS; linux hides duplicate slot0 IDE; linux hides PIIX IDE; linux high-half hides PIIX; linux-line alpine_dev=vdb; linux-line virtio_pci; linux ATA floating bus; fw_cfg skip dest n=; fw_cfg identity overlay; HV identity PML4 0x400000; PEI dest holds ACPI tables; fw_cfg dest_ok fill dest=; dest_ok fill log cap 8; ACPI tables ZONE_FSEG; FSEG dest holds ACPI tables; linux-line ata_piix blacklist; linux-line piix_init blacklist; FADT FACS; flashcruzer reject 2d6b109 dest skip; lab stub still E4; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
