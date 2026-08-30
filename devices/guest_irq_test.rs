@@ -1,7 +1,7 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
-    raise_pit, raise_virtio, reset, take_inject_vector, take_pic_vector, ATA_GSI, IOAPIC_GPA,
+    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector, ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
@@ -210,6 +210,28 @@ fn product_iso_pit_skips_ioapic_pin0() {
         "PIT skips IOAPIC pin 0"
     );
     assert!(take_inject_vector().is_none());
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_gsi2_armed_beats_pic() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    ioapic_write(0x10, 0x31);
+    raise_pit();
+    assert!(
+        crate::devices::guest_irq::ioapic_gsi2_armed(),
+        "linux GSI 2 before PIC"
+    );
+    assert!(pic_has_deliverable());
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x31),
+        "linux GSI 2 before PIC"
+    );
     reset();
     reset_cd();
     guest_platform::reset();

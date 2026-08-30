@@ -281,6 +281,27 @@ pub fn pic_has_deliverable() -> bool {
     with_irq(|c| pic_peek(c).is_some())
 }
 
+/// True when IOAPIC `pin` is unmasked with a remapped vector (not IRR).
+/// linux GSI 2 before PIC uses this so ACPI timer RTEs beat leftover PIC.
+pub fn ioapic_pin_unmasked(pin: u8) -> bool {
+    if !product_live() || (pin as usize) >= IOAPIC_PINS {
+        return false;
+    }
+    with_irq(|c| {
+        let rte = c.ioapic.redir[pin as usize];
+        if rte & RTE_MASK != 0 {
+            return false;
+        }
+        (rte & 0xff) as u8 >= 16
+    })
+}
+
+/// MADT IRQ0 ISO pin is live (Linux programmed GSI 2).
+/// linux GSI 2 before PIC. Not `ISO-INSTALL-OK`.
+pub fn ioapic_gsi2_armed() -> bool {
+    ioapic_pin_unmasked(PIT_IOAPIC_GSI)
+}
+
 /// Consume one PIC vector. Does not touch IOAPIC.
 ///
 /// VM-entry injects this before LAPIC so `noapic` jiffies move after

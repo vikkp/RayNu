@@ -84,6 +84,7 @@ use super::{
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_irq0_vec,
+    guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
     guest_uefi_virtio_drain_every_resume,
     GUEST_UEFI_INTR_TYPE_NMI,
@@ -1043,9 +1044,13 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MADT IRQ0 ISO GSI 2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIT skips IOAPIC pin 0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux GSI 2 before PIC"));
     assert!(guest_uefi_pit_skips_ioapic_pin0());
-    assert!(guest_uefi_linux_pic_before_lapic(true));
-    assert!(!guest_uefi_linux_pic_before_lapic(false));
+    assert!(guest_uefi_linux_gsi2_before_pic(true));
+    assert!(!guest_uefi_linux_gsi2_before_pic(false));
+    assert!(guest_uefi_linux_pic_before_lapic(true, false));
+    assert!(!guest_uefi_linux_pic_before_lapic(true, true));
+    assert!(!guest_uefi_linux_pic_before_lapic(false, false));
     assert!(guest_uefi_linux_pic_irq0_vec(0x20));
     assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
     assert!(guest_uefi_linux_exc_error_code(8));
