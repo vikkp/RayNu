@@ -43,7 +43,7 @@ use super::{
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
     guest_uefi_flash_off, guest_uefi_gpa_to_hpa,
     try_alloc_product_iso_install_disk,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX, guest_uefi_fwcfg_identity_overlay, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, copy_low_ram_bytes, write_low_ram_bytes, guest_uefi_fwcfg_identity_overlay_apply, guest_uefi_fwcfg_identity_overlay_restore, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX, guest_uefi_fwcfg_identity_overlay, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, guest_uefi_fwcfg_dest_ok_fill, GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX, copy_low_ram_bytes, write_low_ram_bytes, guest_uefi_fwcfg_identity_overlay_apply, guest_uefi_fwcfg_identity_overlay_restore, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
@@ -698,6 +698,38 @@ fn marker_and_residual_honest() {
         u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
         false
     ));
+    assert!(GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX.contains("fw_cfg dest_ok fill dest="));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_LOADER_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(0x511, 0x205f18, 4, false));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        overlay_dest,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x1F0,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        true
+    ));
     {
         // Nested 1e0f4a7 dest is now ordinary RAM. Overlay cannot hold
         // etc/acpi/tables; dest_ok fill must. PEI dest holds ACPI tables.
@@ -782,6 +814,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI dest holds ACPI tables"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg dest_ok fill dest="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));
