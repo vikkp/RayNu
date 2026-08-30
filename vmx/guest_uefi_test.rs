@@ -769,6 +769,53 @@ fn marker_and_residual_honest() {
         crate::devices::ide_cdrom::reset();
         crate::devices::guest_platform::reset();
     }
+    {
+        // ZONE_FSEG AllocateMaxAddress dest is conventional 640KiB, not
+        // PEI stack 0x205f18 and not ZONE_HIGH leftover. FSEG dest holds
+        // ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x9E000usize;
+        assert!(dest < crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(dest + n <= crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(guest_uefi_io_string_dest_ok(dest as u64));
+        assert!(guest_uefi_fwcfg_dest_ok_fill(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        assert!(!guest_uefi_fwcfg_identity_overlay(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
     assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x100000, 4, false));
     {
         let mut ram = vec![0u8; (GUEST_UEFI_HV_PML4
@@ -821,6 +868,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg dest_ok fill dest="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("dest_ok fill log cap 8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI tables ZONE_FSEG"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FSEG dest holds ACPI tables"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));

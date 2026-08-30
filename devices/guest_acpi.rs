@@ -43,6 +43,7 @@ const CMD_ADD_PTR: u32 = 2;
 const CMD_CKSUM: u32 = 3;
 /// QEMU HIGH (top of conventional / 2GiB CMOS lie). Product ISO tables
 /// are FSEG so IoReadFifo8 dest stays in the 32MiB identity slab.
+/// FSEG dest holds ACPI tables (conventional 640KiB).
 #[allow(dead_code)]
 const ZONE_HIGH: u8 = 1;
 const ZONE_FSEG: u8 = 2;
