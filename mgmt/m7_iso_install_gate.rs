@@ -118,6 +118,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_fwcfg_string_fills_ram")
         && include_str!("../vmx/guest_uefi.rs").contains("fw_cfg IoReadFifo8")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_io_string_dest_ok")
+        && include_str!("../vmx/guest_uefi.rs").contains("fw_cfg string skip HV identity dest=")
         && include_str!("../devices/guest_platform.rs").contains("fn is_fwcfg_data_port")
         && include_str!("../devices/guest_platform.rs").contains("fn is_acpi_pm1_io")
         && include_str!("../devices/guest_platform.rs").contains("PIIX4 PM1 SCI_EN")
