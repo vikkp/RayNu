@@ -13,5 +13,5 @@ f413a9fc
 63cd694f
 26db0610
 # 2d6b109 dest skip (IoReadFifo8 still skips dest 0x205f18 inside identity 0x200000).
-# FLASHCRUZER-OK on run 33321642509 is not F11. Pin 8663f56 run 33333506987.
+# FLASHCRUZER-OK on run 33321642509 is not F11. Pin 084430f run 33337287432.
 6fc742b0

@@ -155,11 +155,12 @@ The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
 `--refat-cruzer` (do **not** pass it again). `git fetch origin NAME` only
 writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `--wait --require-head --no-git` (do **not** `git checkout` a SHA). Flash
-`8663f56` on `cursor/e5-pm1-sci-a623` (CI 49/49). Pin `--run 33333506987`.
+`084430f` on `cursor/e5-pm1-sci-a623` (CI 49/49). Pin `--run 33337287432`.
+Do **not** F11 `8663f56` / `--run 33333506987` (dest_ok then 0xAF00 Delay).
 `FLASHCRUZER-OK` for `2d6b109` / run `33321642509` / EFI prefix `6fc742b0`
 (checkout `cursor/e5-stage46-iso-a623`) is **not** F11. `2d6b109` IoReadFifo8 still
 skips dest `0x205f18` inside identity `0x200000` (iron COM2 `3d6eba0`); that
-SHA cannot install ACPI. Iron COM2 after F11 of that Cruzer is **`2d6b109`**: `pde0=0x20b027` (HV PT still `0x20B000`, identity `0x200000`), no `dest_ok fill`, `io string port=0x511 n=4 (rep insw)` only, DXE n=529 then `stop n=33297` `reason=0xc` `sectors=0` `catalog=0` `ataio=0` (POST_DXE_TAIL 32768, never PACKET). HPET froze at 11800 while `IN AL,DX` at `rip=0x7f020492`. That is not `8663f56` (`pde0` would be `0x40b027` plus `dest_ok fill`). Iron COM2 after F11 of `8663f56` **is** that SHA: `pde0=0x40b027`, `fw_cfg dest_ok fill dest=0x81ec98 n=56` x8, BOTH-OK, ACPI MADT, then `IN EAX,DX` at `rip=0x7f01f988` `stop n=33297` `sectors=0` `unh=4` after unhandled `0xAF00`/`0xAF05` (0xAF00 PM timer; do **not** F11 `8663f56` again). flashcruzer reject 2d6b109 dest skip. auto-answer / # without login. product ISO POST_DXE_TAIL skip (armed Stage 46 does not stop at n=33297 `sectors=0`; lab iso=0 still uses the tail). emergency mount+exit (3.21 `/init` has no `setup-disk`). linux-line usbdelay (mkinitfs 3.11 `myopts` has no `alpine_dev`; nlplug `-b` is the repositories file). io string (rep insb); 0xAF00 PM timer. 0xAF00 PM timer. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+SHA cannot install ACPI. Iron COM2 after F11 of that Cruzer is **`2d6b109`**: `pde0=0x20b027` (HV PT still `0x20B000`, identity `0x200000`), no `dest_ok fill`, `io string port=0x511 n=4 (rep insw)` only, DXE n=529 then `stop n=33297` `reason=0xc` `sectors=0` `catalog=0` `ataio=0` (POST_DXE_TAIL 32768, never PACKET). HPET froze at 11800 while `IN AL,DX` at `rip=0x7f020492`. That is not `8663f56` (`pde0` would be `0x40b027` plus `dest_ok fill`). Iron COM2 after F11 of `8663f56` **is** that SHA: `pde0=0x40b027`, `fw_cfg dest_ok fill dest=0x81ec98 n=56` x8, BOTH-OK, ACPI MADT, then `IN EAX,DX` at `rip=0x7f01f988` `stop n=33297` `sectors=0` `unh=4` after unhandled `0xAF00`/`0xAF05` (0xAF00 PM timer; do **not** F11 `8663f56` again). flash 084430f. flashcruzer reject 2d6b109 dest skip. auto-answer / # without login. product ISO POST_DXE_TAIL skip (armed Stage 46 does not stop at n=33297 `sectors=0`; lab iso=0 still uses the tail). emergency mount+exit (3.21 `/init` has no `setup-disk`). linux-line usbdelay (mkinitfs 3.11 `myopts` has no `alpine_dev`; nlplug `-b` is the repositories file). io string (rep insb); 0xAF00 PM timer. 0xAF00 PM timer. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
@@ -194,9 +195,9 @@ cd ~/projects/raynu
 # FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # tip may be docs-only c329d83; pin run 33333506987 (8663f56 EFI).
+git log -1 --oneline   # want 084430f; pin run 33337287432 (0xAF00 PM timer).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --no-git --run 33333506987 \
+./tools/flashcruzer.sh --no-git --run 33337287432 \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
