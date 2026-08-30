@@ -525,7 +525,7 @@ pub fn iso_install_scripts_present() -> bool {
         && runbook.contains("docs/evidence/r640")
         && runbook.contains("Latitude / QEMU")
         && runbook.contains("--wait --require-head --no-git")
-        && runbook.contains("checkout -B cursor/e5-stage46-iso-a623 origin/cursor/e5-stage46-iso-a623")
+        && runbook.contains("checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623")
         && evidence.contains("SHA256")
         && evidence.contains("Serial excerpt")
         && evidence.contains(M7_ISO_INSTALL_OK_MARKER)

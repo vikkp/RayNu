@@ -155,7 +155,9 @@ The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
 `--refat-cruzer` (do **not** pass it again). `git fetch origin NAME` only
 writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `--wait --require-head --no-git` (do **not** `git checkout` a SHA). Flash
-`2d6b109` on `cursor/e5-stage46-iso-a623` after that SHA's CI is green. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+`8663f56` on `cursor/e5-pm1-sci-a623` (CI 49/49). `2d6b109` IoReadFifo8 still
+skips dest `0x205f18` inside identity `0x200000` (iron COM2 `3d6eba0`); that
+SHA cannot install ACPI. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
 unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
 reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
 empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
@@ -187,9 +189,10 @@ ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
 cd ~/projects/raynu
 # FETCH_HEAD-only is not a checkout. Point HEAD at origin, then flash with --no-git
 # so an old working-tree flashcruzer.sh cannot die on `git checkout $BRANCH`.
-git fetch origin refs/heads/cursor/e5-stage46-iso-a623:refs/remotes/origin/cursor/e5-stage46-iso-a623
-git checkout -B cursor/e5-stage46-iso-a623 origin/cursor/e5-stage46-iso-a623
-git log -1 --oneline   # WANT 2d6b109 (fw_cfg IoReadFifo8). Not a side-branch SHA.
+# 2d6b109 dest 0x205f18 is still inside identity 0x200000 (skip). Flash 8663f56.
+git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
+git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
+git log -1 --oneline   # WANT 8663f56 (FADT FACS + identity 0x400000). Not 2d6b109.
 lsusb | grep -i 0781:5151
 ./tools/flashcruzer.sh --wait --require-head --no-git \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
