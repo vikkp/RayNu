@@ -1,7 +1,8 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
-    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector, ATA_GSI, IOAPIC_GPA,
+    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector,
+    arm_firmware_virtual_wire, ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
@@ -142,6 +143,28 @@ fn pic_init_unmask_all() {
     let _ = pic_io(0xA1, false, 1, 0x01);
     let _ = pic_io(0x21, false, 1, 0x00);
     let _ = pic_io(0xA1, false, 1, 0x00);
+}
+
+#[test]
+fn product_iso_firmware_virtual_wire_pic_irq0() {
+    arm_product_iso();
+    raise_pit();
+    assert!(
+        !pic_has_deliverable(),
+        "OVMF never ICW2: IRR latched but not deliverable (iron beb1576 pic=0)"
+    );
+    assert!(take_pic_vector().is_none());
+    arm_firmware_virtual_wire();
+    assert!(pic_has_deliverable(), "firmware virtual-wire PIC");
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "firmware virtual-wire PIC IRQ0 vec 0x20"
+    );
+    assert!(take_pic_vector().is_none());
+    reset();
+    reset_cd();
+    guest_platform::reset();
 }
 
 #[test]

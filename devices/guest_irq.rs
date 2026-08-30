@@ -269,6 +269,25 @@ pub fn has_deliverable() -> bool {
     with_irq(|c| peek_vector(c).is_some())
 }
 
+/// 8259 virtual-wire: IRQ 0 delivers vec 0x20 without waiting for OVMF ICW2.
+///
+/// Iron COM2 `beb1576`: `pic=0 gsi2=0` while IF=1 TPR=0; `raise_pit` latched
+/// IRR that neither chip could deliver. Unmask IRQ 0 only (not UART/ATA).
+/// If firmware later ICW2-programs the PIC, those writes overwrite this.
+/// firmware virtual-wire PIC. Not `ISO-INSTALL-OK`.
+pub fn arm_firmware_virtual_wire() {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| {
+        if !c.master.ready || c.master.vector < 16 {
+            c.master.ready = true;
+            c.master.vector = 0x20;
+        }
+        c.master.imr &= !1;
+    });
+}
+
 /// True when the 8259 has a remapped (ICW2 ≥ 16) unmasked IRR bit.
 ///
 /// Does not look at IOAPIC. Linux virtual-wire / no MADT delivers PIT

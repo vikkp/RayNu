@@ -158,6 +158,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// HLT stall quiet tick print-only (iron `084430f` BOTH-OK then HLT `0x7f0680d0` `ataio=0`; nested `9ce65ae` ATAPI-OK missing after quiet skipped `cpu_flush`).
 /// firmware HLT ignores TPR (iron `084430f` inject `vec=0x20` only after CR8).
 /// firmware HLT stall waits for IRQ (do not skip_hlt after BOTH-OK `ataio=0`).
+/// firmware virtual-wire PIC (iron `beb1576` `pic=0 gsi2=0` IF=1 TPR=0).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
