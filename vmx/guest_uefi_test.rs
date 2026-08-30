@@ -700,6 +700,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides duplicate slot0 IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides PIIX IDE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1f21193"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1dd97d3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3d2be4"));

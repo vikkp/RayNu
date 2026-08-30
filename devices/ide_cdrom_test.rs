@@ -3,7 +3,7 @@
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
-    linux_hides_duplicate_slot0_ide,
+    linux_hides_duplicate_slot0_ide, linux_hides_piix_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
     is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
@@ -55,6 +55,24 @@ fn linux_hides_duplicate_slot0_ide_not_piix() {
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     pci_write_addr(0x8000_0900);
     assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    crate::boot::serial::set_linux_earlycon_share(false);
+    reset();
+}
+
+#[test]
+fn linux_hides_piix_ide_after_earlycon() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    assert!(!linux_hides_piix_ide(false, 0x8000_0900));
+    assert!(linux_hides_piix_ide(true, 0x8000_0900));
+    assert!(!linux_hides_piix_ide(true, 0x8000_0100));
+    assert!(!linux_hides_piix_ide(true, 0x8000_0800));
+    assert!(present_placeholder());
+    pci_write_addr(0x8000_0900);
+    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    crate::boot::serial::set_linux_earlycon_share(true);
+    pci_write_addr(0x8000_0900);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     crate::boot::serial::set_linux_earlycon_share(false);
     reset();
 }
