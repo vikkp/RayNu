@@ -5,6 +5,7 @@ use super::{
 use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
+    xapic_eax_fallback_skip_len,
     guest_uefi_insn_linear,
     guest_uefi_mmio_peek_linear,
     guest_uefi_mmio_skip_len,
@@ -1006,7 +1007,7 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_virtio_mmio_polls_lapic(true, true), "virtio MMIO polls lapic");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(false, true), "iso=0 firmware no extra lapic poll");
     assert!(!guest_uefi_virtio_mmio_polls_lapic(true, false));
-    assert!(guest_uefi_linux_io_raises_pit(true, true), "linux I/O raises PIT");
+    assert!(!guest_uefi_linux_io_raises_pit(true, true), "linux I/O does not raise PIT (iron MADT stop)");
     assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
     assert!(!guest_uefi_linux_io_raises_pit(true, false));
     assert!(
@@ -1026,8 +1027,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO eax fallback size"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg write"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO polls lapic"));
-    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux I/O raises PIT"));
-    assert!(include_str!("guest_uefi.rs").contains("linux I/O raises PIT (Stage 46"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux I/O does not raise PIT (iron MADT stop)"));
+    assert!(include_str!("guest_uefi.rs").contains("linux I/O does not raise PIT (iron MADT stop)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux xAPIC EPT insn_len 0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
@@ -1825,7 +1827,13 @@ fn xapic_fetch_miss_eax_fallback_when_skip_len_valid() {
         xapic_fetch_miss_eax_fallback(4, 6),
         "decode-fail with peek still EAX when skip-len is 1-15"
     );
-    assert!(!xapic_fetch_miss_eax_fallback(0, 0));
+    assert!(
+        xapic_fetch_miss_eax_fallback(0, 0),
+        "linux xAPIC EPT insn_len 0"
+    );
+    assert_eq!(xapic_eax_fallback_skip_len(0), 3);
+    assert_eq!(xapic_eax_fallback_skip_len(6), 6);
+    assert_eq!(xapic_eax_fallback_skip_len(16), 0);
     assert!(!xapic_fetch_miss_eax_fallback(0, 16));
     assert!(!xapic_fetch_miss_eax_fallback(4, 0));
     assert!(!xapic_fetch_miss_eax_fallback(16, 16), "do not skip 16-byte peek");
