@@ -242,6 +242,30 @@ pub fn has_deliverable() -> bool {
     with_irq(|c| peek_vector(c).is_some())
 }
 
+/// True when the 8259 has a remapped (ICW2 ≥ 16) unmasked IRR bit.
+///
+/// Does not look at IOAPIC. Linux virtual-wire / no MADT delivers PIT
+/// IRQ 0 here; OVMF leftover IOAPIC RTEs must not hide it.
+/// linux PIC before LAPIC. Not `ISO-INSTALL-OK`.
+pub fn pic_has_deliverable() -> bool {
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| pic_peek(c).is_some())
+}
+
+/// Consume one PIC vector. Does not touch IOAPIC.
+///
+/// VM-entry injects this before LAPIC so `noapic` jiffies move after
+/// `Freeing initrd` (iron `a525340`). linux PIC before LAPIC.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_pic_vector() -> Option<u8> {
+    if !product_live() {
+        return None;
+    }
+    with_irq(pic_take)
+}
+
 /// Consume one pending vector for VM-entry external-interrupt injection.
 ///
 /// IOAPIC first (Linux). PIC only after ICW2 remaps vectors out of 0..15.

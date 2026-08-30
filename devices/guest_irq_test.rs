@@ -1,8 +1,8 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi, raise_pit,
-    raise_virtio, reset, take_inject_vector, ATA_GSI, IOAPIC_GPA, IOAPIC_VERSION, PIT_IRQ,
-    VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
+    pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
+    raise_pit, raise_virtio, reset, take_inject_vector, take_pic_vector, ATA_GSI, IOAPIC_GPA,
+    IOAPIC_VERSION, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -150,6 +150,29 @@ fn product_iso_pit_irq0_injects_after_pic_ready() {
     pic_init_unmask_all();
     raise_pit();
     assert_eq!(take_inject_vector(), Some(0x20 + PIT_IRQ));
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_pic_deliverable_while_ovmf_ioapic_unmasked() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    ioapic_write(0, 0x10);
+    ioapic_write(0x10, 0x30);
+    raise_pit();
+    assert!(pic_has_deliverable(), "linux PIC before LAPIC");
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "virtual-wire PIT is PIC IRQ 0 even if OVMF left pin 0 unmasked"
+    );
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x30),
+        "IOAPIC pin 0 still pending for ACPI / take_inject_vector"
+    );
     reset();
     reset_cd();
     guest_platform::reset();
