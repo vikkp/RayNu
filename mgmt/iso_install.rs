@@ -112,7 +112,10 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`
 /// plus `earlycon=uart8250,io,0x3f8` plus `alpine_dev=vdb` plus
 /// `virtio_pci` in `modules=` so initramfs loads the PCI transport before
-/// `nlplug-findfs -b vdb`. linux-line virtio_pci. Same-length 33-byte swap
+/// `nlplug-findfs -b vdb` plus `initcall_blacklist=ata_piix_init` so the
+/// built-in `ata_piix` device_initcall does not `ata_msleep` after
+/// `Freeing initrd` if PCI hide/floating-bus miss. linux-line virtio_pci.
+/// linux-line ata_piix blacklist. Same-length 33-byte swap
 /// cannot add those without dropping `loop` or `virtio_blk`.
 /// Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron COM2 after
 /// leftover+#PF froze HPET during the 0x4000 CPUID walk, so a preemption
@@ -134,11 +137,12 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// on ATAPI/`sr0`. Put `alpine_dev=vdb` on the grown linux line. Initramfs
 /// `modules=` is `loop,squashfs,virtio_pci,virtio_blk` so `virtio_pci`
 /// binds `00:02.0`/`00:03.0` before `virtio_blk` creates `/dev/vdb`.
-/// Media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+/// Media is virtio-iso `00:03.0`. linux-line ata_piix blacklist.
+/// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 alpine_dev=vdb\ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 alpine_dev=vdb initcall_blacklist=ata_piix_init\ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;

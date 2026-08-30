@@ -527,7 +527,7 @@ via `ERASE_DISKS` still gets `y`. Twentieth slice: Alpine auto-answer exports `U
 ISO patch `set timeout=1` → `set timeout=0` (after `timeout=10`) and
 `insmod efi_gop` / `insmod efi_uga` → `insmod serial` when present so GRUB
 EFI does not wait on GOP. The linux-line grow into ISO9660 NUL pad also
-bumps PVD + Joliet `grub.cfg` Data Length 143→261 (a 143-byte read hid
+bumps PVD + Joliet `grub.cfg` Data Length 143→294 (a 143-byte read hid
 `initrd`/`}` and dropped to rescue `grub>` on iron COM2 after El Torito
 `bootimg=1`). Linux `hypervisor_cpuid_base` callee-saved GPR bump to
 `0x4000FF00` so each vendor is one CPUID (iron COM2 `90c85d5` still
