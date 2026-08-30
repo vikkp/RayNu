@@ -302,6 +302,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../boot/serial.rs").contains("linux earlycon pace LSR THRE")
         && include_str!("../boot/serial.rs").contains("fn set_linux_earlycon_share")
         && include_str!("../devices/guest_uart.rs").contains("linux earlycon pace LSR THRE")
+        && include_str!("../devices/guest_uart.rs").contains("Keep the 0x60/0x61 path until")
         && include_str!("../vmx/guest_uefi.rs").contains("linux earlycon pace LSR THRE")
         && include_str!("../vmx/guest_uefi.rs").contains("crate::boot::serial::guest_tx_clear()")
         && include_str!("../tools/qemu-boot-test.sh").contains("Kernel panic - not syncing")

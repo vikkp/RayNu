@@ -109,6 +109,9 @@ fn linux_earlycon_lsr_thre_follows_sol() {
     set_guest_tx_test_sol_not_ready(false);
     let (lsr2, _, _) = pio(0x03FD, true, 0);
     assert_eq!(lsr2 & 0x60, 0x60);
+    let src = include_str!("guest_uart.rs");
+    assert!(src.contains("linux earlycon pace LSR THRE"));
+    assert!(src.contains("Keep the 0x60/0x61 path until"));
     set_linux_earlycon_share(false);
     guest_tx_clear();
     reset();

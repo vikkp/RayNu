@@ -366,6 +366,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
     let ide = include_str!("../devices/ide_cdrom.rs");
     let plat = include_str!("../devices/guest_platform.rs");
     let virt = include_str!("../devices/guest_virtio_blk.rs");
+    let uart = include_str!("../devices/guest_uart.rs");
     let flash = include_str!("../tools/flash-cruzer-esp.sh");
     let msr = include_str!("../sched/msr_firewall.rs");
     let main = include_str!("../src/main.rs");
@@ -404,6 +405,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_linux_earlycon_share_on_bootimg")
         && guest.contains("guest UART TX drain COM2 independent")
         && guest.contains("linux earlycon pace LSR THRE")
+        && uart.contains("Keep the 0x60/0x61 path until")
         && guest.contains("linux earlycon skip #PF dump")
         && guest.contains("linux earlycon skip exc deliver")
         && guest.contains("poll ISO-INSTALL-OK every resume")

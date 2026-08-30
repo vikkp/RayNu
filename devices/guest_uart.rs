@@ -230,15 +230,25 @@ fn uart_read(u: &mut Uart, off: u8) -> u8 {
         3 => u.lcr,
         4 => u.mcr,
         5 => {
-            // linux earlycon pace LSR THRE (THRE|TEMT follow host COM2).
-            let mut m = 0u8;
-            if crate::boot::serial::guest_tx_guest_lsr_thre() {
-                m |= 0x60;
+            // Nested QEMU `dcf8495` `/init` SIGSEGV 3/3 when every LSR IN
+            // called into serial (share off). Keep the 0x60/0x61 path until
+            // product-ISO earlycon share. linux earlycon pace LSR THRE.
+            if !crate::boot::serial::linux_earlycon_share() {
+                if u.rx_len > 0 {
+                    0x61
+                } else {
+                    0x60
+                }
+            } else {
+                let mut m = 0u8;
+                if crate::boot::serial::guest_tx_guest_lsr_thre() {
+                    m |= 0x60;
+                }
+                if u.rx_len > 0 {
+                    m |= 0x01;
+                }
+                m
             }
-            if u.rx_len > 0 {
-                m |= 0x01;
-            }
-            m
         }
         6 => {
             if loopback(u) {

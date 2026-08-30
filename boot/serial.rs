@@ -195,6 +195,9 @@ pub fn guest_tx_guest_lsr_thre() -> bool {
     if !linux_earlycon_share() {
         return true;
     }
+    // Nested QEMU `dcf8495` `/init` SIGSEGV 3/3 when LSR always called here
+    // (share off). Pace only after product-ISO earlycon share. iso=0 never
+    // latches share.
     #[cfg(test)]
     {
         if GUEST_TX_TEST_SOL_NOT_READY.load(Ordering::Relaxed) {
