@@ -272,7 +272,8 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(g.contains("clocksource=tsc"));
     assert!(g.contains("idle=poll"));
     assert!(g.contains("earlycon=uart8250,io,0x3f8"));
-    assert!(g.contains("alpine_dev=vdb"));
+    assert!(g.contains("usbdelay=30"));
+    assert!(!g.contains("alpine_dev=vdb"));
     assert!(g.contains("initcall_blacklist=piix_init"));
     assert!(!g.contains("ata_piix_init"));
     assert!(g.contains("virtio_pci"));
@@ -345,6 +346,7 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
     assert!(orig_s.contains("virtio_pci"));
     assert!(!orig_s.contains("tsc="));
     assert!(!orig_s.contains("alpine_dev"));
+    assert!(!orig_s.contains("usbdelay"));
     assert!(!orig_win.contains(&b'}'));
     assert!(!orig_s.contains("initrd"));
     let patched = &iso[data..data + ISO_GRUB_CFG_PATCHED_SIZE as usize];
@@ -352,7 +354,8 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
     assert!(s.contains("lpj=4194304"));
     assert!(s.contains("tsc=reliable"));
     assert!(s.contains("earlycon=uart8250,io,0x3f8"));
-    assert!(s.contains("alpine_dev=vdb"));
+    assert!(s.contains("usbdelay=30"));
+    assert!(!s.contains("alpine_dev=vdb"));
     assert!(s.contains("initcall_blacklist=piix_init"));
     assert!(!s.contains("ata_piix_init"));
     assert!(s.contains("virtio_pci,virtio_blk"));

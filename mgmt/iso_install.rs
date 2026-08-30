@@ -110,9 +110,9 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// alpine-virt GRUB `"Linux virt"` stanza. Grow the linux line into the
 /// ISO9660 NUL pad after `}\n` so the E4 timer skip fits:
 /// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`
-/// plus `earlycon=uart8250,io,0x3f8` plus `alpine_dev=vdb` plus
+/// plus `earlycon=uart8250,io,0x3f8` plus `usbdelay=30` plus
 /// `virtio_pci` in `modules=` so initramfs loads the PCI transport before
-/// `nlplug-findfs -b vdb` plus `initcall_blacklist=piix_init` so the
+/// `nlplug-findfs` plus `initcall_blacklist=piix_init` so the
 /// built-in `ata_piix` `module_init(piix_init)` device_initcall does not
 /// `ata_msleep` after `Freeing initrd` if PCI hide/floating-bus miss.
 /// Linux 6.12 `drivers/ata/ata_piix.c` registers `piix_init`, not
@@ -132,12 +132,16 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// `syntax error` / rescue `grub>` (iron COM2 after El Torito
 /// `bootimg=1`). [`bump_iso9660_grub_cfg_size`] raises PVD + Joliet
 /// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. linux-line alpine_dev=vdb.
+/// linux-line usbdelay.
 /// Iron COM2 cmdline after
 /// El Torito had `modules=loop,squashfs,virtio_blk console=ttyS0 lpj=`
 /// `earlycon=` and **no** `alpine_dev=` — alpine-virt `grub.cfg` never
 /// contains `alpine_dev=cdrom` so that 16-byte swap is 0 hits. After
 /// linux high-half hides PIIX, `nlplug-findfs` without `-b vdb` can wait
-/// on ATAPI/`sr0`. Put `alpine_dev=vdb` on the grown linux line. Initramfs
+/// on ATAPI/`sr0`. alpine-virt 3.21 mkinitfs 3.11 `myopts` has `usbdelay`
+/// not `alpine_dev`; `nlplug-findfs -b` is the repositories file. Same-length
+/// swap `alpine_dev=vdb` → `usbdelay=30   ` (14 bytes) so the media wait is
+/// 30s not 5s. Initramfs
 /// `modules=` is `loop,squashfs,virtio_pci,virtio_blk` so `virtio_pci`
 /// binds `00:02.0`/`00:03.0` before `virtio_blk` creates `/dev/vdb`.
 /// Media is virtio-iso `00:03.0`. linux-line ata_piix blacklist.
@@ -146,11 +150,12 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// auto-answer / # without login (3.21 `/init` emergency shell has no getty).
 /// product ISO POST_DXE_TAIL skip (iron `2d6b109` `stop n=33297` `sectors=0`).
 /// emergency mount+exit (initramfs has no `setup-disk`).
+/// linux-line usbdelay (3.21 mkinitfs `myopts` has no `alpine_dev`).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 alpine_dev=vdb initcall_blacklist=piix_init    \ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30    initcall_blacklist=piix_init    \ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;

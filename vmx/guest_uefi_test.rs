@@ -876,6 +876,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("auto-answer / # without login"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO POST_DXE_TAIL skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("emergency mount+exit"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line usbdelay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("io string (rep insb)"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
