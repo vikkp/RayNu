@@ -1057,10 +1057,11 @@ pub fn guest_uefi_virtio_mmio_polls_lapic(linux: bool, product_iso: bool) -> boo
     linux && product_iso
 }
 
-/// Linux `msleep` / `jiffies` need PIT IRQ 0. After virtio ACK, `idle=poll`
-/// plus ATA/PCI I/O never HLT and starve VMX preempt. Raise PIT on each
-/// Linux product-ISO I/O (not UART — auto-answer still beats the timer).
-/// iso=0 does not. linux I/O raises PIT. Not `ISO-INSTALL-OK`.
+/// Linux `msleep` / `jiffies` / kworker need PIT IRQ 0. After virtio ACK,
+/// `idle=poll` plus ATA/PCI I/O never HLT and starve VMX preempt. Raise PIT
+/// on each Linux product-ISO non-UART exit (I/O, PAUSE, CPUID, MSR, EPT).
+/// UART stays off this path so auto-answer still beats the timer. iso=0
+/// does not. linux I/O raises PIT. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_linux_io_raises_pit(linux: bool, product_iso: bool) -> bool {
     linux && product_iso
 }
@@ -2712,6 +2713,8 @@ static LINUX_HV_SCAN_BUMP: AtomicBool = AtomicBool::new(false);
 static LINUX_DELAY_LOOP_SKIP: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static UART_HPET_LOG: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_IO_PIT_LOG: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static LINUX_LEAF4: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -4374,6 +4377,11 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         serial::set_linux_earlycon_share(true);
     }
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
+    {
+        let basic = reason & 0xFFFF;
+        let uart = basic == EXIT_REASON_IO_INSTRUCTION && is_com_uart_port(io_port_from_qual(qual));
+        linux_product_iso_raise_pit(uart);
+    }
     // linux earlycon hush HV (do not drain CHUNK on every exit).
     let _ = serial::drain_guest_tx(guest_uefi_linux_earlycon_drain(
         serial::linux_earlycon_share(),
@@ -7531,8 +7539,9 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
     skip_insn()
 }
 
-/// Linux product-ISO ATA/PCI I/O (and PAUSE): raise PIT so jiffies move.
+/// Linux product-ISO non-UART exits: raise PIT so jiffies and kworkers move.
 /// UART ports stay off this path so COM1 auto-answer still beats the timer.
+/// linux I/O raises PIT. Not `ISO-INSTALL-OK`.
 #[cfg(target_os = "uefi")]
 unsafe fn linux_product_iso_raise_pit(uart: bool) {
     if uart {
@@ -7552,6 +7561,12 @@ unsafe fn linux_product_iso_raise_pit(uart: bool) {
     crate::devices::guest_irq::raise_pit();
     crate::devices::guest_irq::prefer_pit_once();
     let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    if LINUX_IO_PIT_LOG
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        serial::write_line("boot: guest-UEFI linux I/O raises PIT (Stage 46; not ISO-INSTALL-OK)");
+    }
 }
 
 #[cfg(target_os = "uefi")]

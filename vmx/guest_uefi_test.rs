@@ -1024,6 +1024,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg write"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO polls lapic"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux I/O raises PIT"));
+    assert!(include_str!("guest_uefi.rs").contains("linux I/O raises PIT (Stage 46"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(guest_uefi_linux_exc_error_code(8));

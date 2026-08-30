@@ -323,6 +323,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("virtio MMIO polls lapic")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_io_raises_pit")
         && include_str!("../vmx/guest_uefi.rs").contains("linux I/O raises PIT")
+        && include_str!("../vmx/guest_uefi.rs").contains("linux I/O raises PIT (Stage 46")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_preempt_deadloop_noskip")
         && include_str!("../vmx/guest_uefi.rs").contains("linux preempt deadloop noskip")
         && include_str!("../vmx/guest_uefi.rs").contains("linux_product_iso_raise_pit")

@@ -429,6 +429,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("virtio MMIO polls lapic")
         && guest.contains("fn guest_uefi_linux_io_raises_pit")
         && guest.contains("linux I/O raises PIT")
+        && guest.contains("linux I/O raises PIT (Stage 46")
         && guest.contains("fn guest_uefi_linux_preempt_deadloop_noskip")
         && guest.contains("linux preempt deadloop noskip")
         && guest.contains("linux_product_iso_raise_pit")

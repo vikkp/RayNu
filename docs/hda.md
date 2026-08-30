@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-thirty-fourth slice: linux I/O raises PIT + linux preempt deadloop noskip + linux PIT prefer once. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-thirty-fifth slice: PIT on every Linux non-UART exit + COM2 log. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (linux I/O raises PIT + linux preempt deadloop noskip + linux PIT prefer once). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (linux I/O raises PIT on CPUID/MSR/EPT too). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-fifth slice: PIT on every Linux non-UART exit + COM2 `linux I/O raises PIT` log; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-fourth slice: linux I/O raises PIT + linux preempt deadloop noskip + linux PIT prefer once (iron 8x virtio MMIO off=0x14 then ATA/PCI I/O then Freeing initrd); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-third slice: packed virtio common cfg write + LAPIC timer poll on Linux MMIO; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-thirty-second slice: virtio MMIO eax fallback size (status 0x14 is a byte); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
