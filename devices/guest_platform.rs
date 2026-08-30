@@ -80,7 +80,9 @@ pub const PIIX4_PMBA_DEFAULT: u32 = 0x401;
 /// `IN EAX,DX` Delay (`rip=0x7f01f988`, HPET frozen, `unh=4`, `acpi=288`,
 /// `stop n=33297` `sectors=0`). Cruzer OVMF uses this as PM I/O base, not
 /// only `PIIX4_PMBA_VALUE` `0xB000`. Dword IN is the PM timer (PCD offset 0);
-/// `+8` is the usual timer. 0xAF00 PM timer. Not `ISO-INSTALL-OK`.
+/// `+8` is the usual timer. 0xAF00 PM timer. After SCI_EN at `0xB004`,
+/// Delay may be `IoRead32(0xB000)` (same PCD offset 0 on programmed PMBA).
+/// 0xB000 dword timer. Not `ISO-INSTALL-OK`.
 pub const PIIX4_PMBA_ALT: u32 = 0xAF00;
 
 /// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
@@ -526,6 +528,8 @@ pub fn is_pic_port(port: u16) -> bool {
 /// `PIIX4_PMBA_VALUE` `0xB000`. PEI `IoRead32(0)` in `InternalAcpiDelay`
 /// is the leftover port-0 path. PIIX4 PMBA timer is `0x408`. QEMU
 /// PIIX4 default is `0xB008`. Programmed PMBA+8 is also a timer.
+/// Dword IN of `0xB000` is Delay when PCD offset is 0 (word stays PM1 STS).
+/// 0xB000 dword timer.
 pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
     if acpi_pm_timer_fixed(port, size) {
         return true;
@@ -535,6 +539,7 @@ pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
 
 fn acpi_pm_timer_fixed(port: u16, size: u8) -> bool {
     (port == 0 && size == 4)
+        || (port == 0xB000 && size == 4)
         || (port == PIIX4_PMBA_ALT as u16 && size == 4)
         || (0x408..=0x40B).contains(&port)
         || (0xB008..=0xB00B).contains(&port)
@@ -558,7 +563,8 @@ pub fn is_piix_pm_io(port: u16) -> bool {
 }
 
 /// FADT PM1a (`0xB000` EVT / `0xB004` CNT), Cruzer OVMF `0xAF00` PMBA, plus
-/// programmed PMBA +0..+7. PIIX4 PM1 SCI_EN. 0xAF00 PM timer. Not `ISO-INSTALL-OK`.
+/// programmed PMBA +0..+7. PIIX4 PM1 SCI_EN. 0xAF00 PM timer.
+/// 0xB000 dword timer. Not `ISO-INSTALL-OK`.
 pub fn is_acpi_pm1_io(port: u16) -> bool {
     if (0xB000..=0xB007).contains(&port) || (0xAF00..=0xAF07).contains(&port) {
         return true;
@@ -673,7 +679,7 @@ fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
     if (0xAF08..=0xAF0B).contains(&port) {
         return u32::from(port - 0xAF08) * 8;
     }
-    if port == PIIX4_PMBA_ALT as u16 {
+    if port == 0xB000 || port == PIIX4_PMBA_ALT as u16 {
         return 0;
     }
     0
@@ -1523,8 +1529,9 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             }
             return rax;
         }
-        // IN first so dword IoRead32(0xAF00) is the PM timer (Delay). OUT to
-        // 0xAF00 still reaches PM1 below (constructor programs STS/CNT).
+        // IN first so dword IoRead32(0xAF00) and IoRead32(0xB000) are the PM
+        // timer (Delay, PCD offset 0). Word/byte IN and all OUT still reach
+        // PM1 below (constructor programs STS/CNT). 0xB000 dword timer.
         if is_in && acpi_pm_timer_matches(port, size, p.pmba) {
             let v = tick_pm_timer(p);
             let shift = acpi_pm_timer_shift(port, p.pmba);

@@ -384,6 +384,8 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_acpi_pm_timer_io(0x408, 4));
     assert!(is_acpi_pm_timer_io(0xAF00, 4));
     assert!(is_acpi_pm_timer_io(0xAF08, 4));
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert!(!is_acpi_pm_timer_io(0xB000, 2));
     assert!(is_platform_io_port(0xAF00));
     assert!(is_acpi_pm1_io(0xAF00));
 }
@@ -472,6 +474,30 @@ fn af00_pm_timer_ticks_dword_in() {
 }
 
 #[test]
+fn b000_pm_timer_ticks_dword_in() {
+    reset();
+    assert!(is_platform_io_port(0xB000));
+    assert!(is_acpi_pm1_io(0xB000));
+    assert!(is_acpi_pm1_io(0xB004));
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert!(!is_acpi_pm_timer_io(0xB000, 2));
+    assert!(!is_acpi_pm_timer_io(0xB000, 1));
+    assert!(is_acpi_pm_timer_io(0xB008, 4));
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    let a = io(0xB000, true, 4, 0) as u32;
+    let b = io(0xB000, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, ACPI_PM_STEP);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let t = io(0xB008, true, 4, 0) as u32;
+    assert_eq!(t, ACPI_PM_STEP.wrapping_mul(2));
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
+}
+
+#[test]
 fn piix4_pm_enumerates_and_pmba_write_ticks() {
     reset();
     assert_eq!(pm_pci_config_addr(), 0x8000_0B00);
@@ -494,7 +520,10 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     pci_write_addr(pm_pci_config_addr() | 0x40);
     pci_write_data(0xCFC, 4, 0xB001);
     assert!(is_piix_pm_io(0xB000));
-    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    let d0 = io(0xB000, true, 4, 0) as u32;
+    let d1 = io(0xB000, true, 4, 0) as u32;
+    assert_eq!(d1.wrapping_sub(d0), ACPI_PM_STEP);
     let t = io(0xB008, true, 4, 0) as u32;
     assert_ne!(t, 0xFFFF_FFFF);
     reset();
@@ -514,6 +543,8 @@ fn piix4_pm1_sci_en_sticky_on_fadt() {
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
     let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN) | (1 << 13));
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
     assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
     pci_write_addr(pm_pci_config_addr() | 0x40);
     pci_write_data(0xCFC, 4, 0xB001);
