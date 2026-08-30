@@ -271,6 +271,31 @@ fn piix3_isa_pirq_resets_disabled_like_qemu() {
 }
 
 #[test]
+fn piix3_isa_bar_raz_like_qemu() {
+    reset();
+    pci_write_addr(0x8000_0810);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4).expect("bar0"),
+        0,
+        "PIIX3 ISA BAR RAZ"
+    );
+    pci_write_addr(0x8000_0814);
+    pci_write_data(0xCFC, 4, 0xC058_0000);
+    assert_eq!(pci_read_data(0xCFC, 4).expect("bar1"), 0);
+    pci_write_addr(0x8000_0830);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(pci_read_data(0xCFC, 4).expect("rom"), 0);
+    pci_write_addr(0x8000_0860);
+    pci_write_data(0xCFC, 4, 0x0E0B_0A09);
+    assert_eq!(
+        pci_read_data(0xCFC, 4).expect("pirq still wr"),
+        0x0E0B_0A09
+    );
+    reset();
+}
+
+#[test]
 fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0xFCF8_F000));
     assert!(is_xapic_2m_gpa(0xFEE0_0000));

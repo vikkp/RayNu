@@ -71,6 +71,11 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert_eq!(sz, GUEST_VIRTIO_BAR0_SIZE_MASK);
     pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+    pci_write_data(0xCFC, 4, 0x8000_1000);
+    assert!(is_virtio_bar_gpa(0x8000_1000), "virtio BAR trap over scratch");
+    assert!(!is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
+    pci_write_data(0xCFC, 4, GUEST_VIRTIO_BAR0_DEFAULT);
+    assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_BAR0_DEFAULT)));
     pci_write_addr(pci_config_addr() | 0x3C);
     assert_eq!(
         pci_read_data(0xCFC, 1) as u8,

@@ -553,6 +553,11 @@ pub fn mmio_bar_base() -> u64 {
     with_virtio(|v| mmio_bar_base_locked(v))
 }
 
+/// Disk then ISO BAR GPAs. 0 when that device is off / queues unarmed.
+pub fn mmio_programmed_bar_gpas() -> [u64; 2] {
+    [mmio_bar_base(), mmio_iso_bar_base()]
+}
+
 fn mmio_iso_bar_base() -> u64 {
     with_iso(|v| mmio_bar_base_locked(v))
 }

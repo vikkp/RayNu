@@ -1137,6 +1137,11 @@ fn isa_dword(p: &Platform, off: u8) -> u32 {
     ])
 }
 
+/// PIIX3 ISA has no BAR/ROM. Writes to 0x10–0x27 and expansion ROM 0x30 stay 0.
+fn isa_cfg_offset_is_raz_bar(o: usize) -> bool {
+    (0x10..0x28).contains(&o) || (0x30..0x34).contains(&o)
+}
+
 fn isa_write_cfg(cfg: &mut [u8; 256], off: u8, size: u8, val: u32) {
     let n = match size {
         1 => 1usize,
@@ -1150,6 +1155,13 @@ fn isa_write_cfg(cfg: &mut [u8; 256], off: u8, size: u8, val: u32) {
         }
         // Keep VID/DID, class, Header Type (multifunction bit).
         if o < 4 || (8..12).contains(&o) || o == 0x0E {
+            continue;
+        }
+        // PIIX3 ISA BAR RAZ: QEMU does not register BARs on 8086:7000.
+        // Iron df0c118: Linux sized 0xFFFFFFFF into 00:01.0 and advertised
+        // 4GiB 64-bit prefetchable windows (0xc0580000c050) it could not
+        // assign. Not ISO-INSTALL-OK.
+        if isa_cfg_offset_is_raz_bar(o) {
             continue;
         }
         cfg[o] = (val >> (8 * i)) as u8;

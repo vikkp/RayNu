@@ -78,6 +78,7 @@ use super::{
     guest_uefi_linux_unhandled_try_skip, guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
     guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback, virtio_mmio_eax_fallback_len,
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
+    guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -985,6 +986,13 @@ fn marker_and_residual_honest() {
     assert!(virtio_mmio_eax_fallback(true, 0, 0), "linux EAX fallback skip 3");
     assert!(!virtio_mmio_eax_fallback(false, 0, 3), "iso=0 decode fail still stops");
     assert!(!virtio_mmio_eax_fallback(false, 0, 0), "iso=0 decode fail still stops");
+    assert!(guest_uefi_virtio_bar_overlaps_scratch(0x8000_1000), "virtio BAR trap over scratch");
+    assert!(guest_uefi_virtio_bar_overlaps_scratch(0x8000_0000));
+    assert!(!guest_uefi_virtio_bar_overlaps_scratch(0xFE00_0000));
+    assert!(guest_uefi_virtio_bar_should_trap(0x8000_1000));
+    assert!(!guest_uefi_virtio_bar_should_trap(0));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio BAR trap over scratch"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA BAR RAZ"));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
