@@ -944,6 +944,22 @@ pub fn guest_uefi_linux_unhandled_should_skip(linux: bool, insn_len: u64) -> boo
     linux && insn_len >= 1 && insn_len <= 15
 }
 
+/// Try skip on unhandled Linux exits, including VMCS length 0 (high-half
+/// fetch via [`skip_insn`] / [`guest_uefi_linux_fixed_skip_len`]).
+/// Triple-fault and VM-entry failure still stop. linux MOV DR skip.
+pub fn guest_uefi_linux_unhandled_try_skip(linux: bool, insn_len: u64, reason: u32) -> bool {
+    if !linux {
+        return false;
+    }
+    if reason == crate::vmx::fields::EXIT_REASON_TRIPLE_FAULT
+        || reason == crate::vmx::fields::EXIT_REASON_VMENTRY_GUEST_STATE
+        || reason == crate::vmx::fields::EXIT_REASON_VMENTRY_MSR_LOAD
+    {
+        return false;
+    }
+    guest_uefi_linux_unhandled_should_skip(linux, insn_len) || insn_len == 0
+}
+
 /// Hardware exceptions that push an error code (SDM 6.13).
 pub fn guest_uefi_linux_exc_error_code(vec: u8) -> bool {
     matches!(vec, 8 | 10 | 11 | 12 | 14 | 17)
@@ -1539,9 +1555,45 @@ pub fn guest_uefi_linux_nmi_should_inject(linux: bool, vec: u8) -> bool {
 /// stopped the private VMCS (IOAPIC skips; xAPIC EAX-fallbacks). Same skip
 /// window as [`xapic_fetch_miss_eax_fallback`]. iso=0 decode fail still stops
 /// so E4 SHELL is not starved of leftover DRAM (nested `1a4b687` `/init`
-/// SIGSEGV `exitcode=0xb` CR2 `ffff888000000413`).
+/// SIGSEGV `exitcode=0xb` CR2 `ffff888000000413`). Empty peek + VMCS len 0
+/// still EAX-fallbacks with skip 3 on Linux only (linux EAX fallback skip 3).
 pub fn virtio_mmio_eax_fallback(linux: bool, fetched_n: usize, insn_len: u64) -> bool {
-    linux && xapic_fetch_miss_eax_fallback(fetched_n, insn_len)
+    virtio_mmio_eax_fallback_len(linux, fetched_n, insn_len) != 0
+}
+
+/// When VMCS/effective length is 0 or longer than the peek, decode with
+/// `min(fetched, 15)` so Linux `movl mem, %reg` (`"=r"` not `"=a"`) is not
+/// an EAX guess. A 16-byte peek still decodes with cap 15. linux MMIO decode retry.
+pub fn virtio_mmio_retry_decode_len(fetched_n: usize, insn_len: u64) -> u64 {
+    if insn_len >= 1 && insn_len <= 15 && insn_len <= fetched_n as u64 {
+        0
+    } else {
+        let cap = fetched_n.min(15) as u64;
+        if cap >= 1 {
+            cap
+        } else {
+            0
+        }
+    }
+}
+
+/// Linux EAX fallback skip length after decode still fails.
+///
+/// Prefer a valid VMCS 1–15, else fetched 1–15 (not a 16-byte peek), else
+/// skip 3 when the peek is empty (`movl r/m32, r32`). iso=0 stays 0.
+pub fn virtio_mmio_eax_fallback_len(linux: bool, fetched_n: usize, insn_len: u64) -> u64 {
+    if !linux {
+        return 0;
+    }
+    if insn_len >= 1 && insn_len <= 15 {
+        insn_len
+    } else if fetched_n >= 1 && fetched_n <= 15 {
+        fetched_n as u64
+    } else if fetched_n == 0 && (insn_len == 0 || insn_len > 15) {
+        3
+    } else {
+        0
+    }
 }
 
 /// Pack VM-entry interruption-info for a hardware exception.
@@ -2162,11 +2214,31 @@ pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
     if invlpg != 0 {
         return invlpg;
     }
+    let mov_dr = guest_uefi_linux_mov_dr_len(bytes);
+    if mov_dr != 0 {
+        return mov_dr;
+    }
     if bytes.len() >= 2
         && bytes[0] == 0x0F
         && matches!(bytes[1], 0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09)
     {
         2
+    } else {
+        0
+    }
+}
+
+/// MOV DR `0F 21 /r` / `0F 23 /r` (optional REX). Register form is 3 bytes
+/// plus REX. Empty fetch stays 0 (do not guess). linux MOV DR skip.
+pub fn guest_uefi_linux_mov_dr_len(bytes: &[u8]) -> u64 {
+    let mut i = 0usize;
+    if let Some(&b) = bytes.first() {
+        if (0x40..=0x4F).contains(&b) {
+            i = 1;
+        }
+    }
+    if bytes.len() >= i + 3 && bytes[i] == 0x0F && (bytes[i + 1] == 0x21 || bytes[i + 1] == 0x23) {
+        (i + 3) as u64
     } else {
         0
     }
@@ -4422,6 +4494,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             // linux unhandled nowait stop: MOV DR (29) / GDTR-IDTR (46) /
             // LDTR-TR (47) / INVPCID (58) / XSAVES (63) / XRSTORS (64)
             // skip via VMCS length so iron 1a2544d does not drop to E4 hold.
+            // VMCS len 0 still tries skip_insn (high-half MOV DR).
             _ => {
                 let linux = guest_uefi_linux_guest_active(
                     serial::linux_earlycon_share(),
@@ -4429,7 +4502,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                     PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
                 );
                 let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-                if guest_uefi_linux_unhandled_should_skip(linux, len) {
+                if guest_uefi_linux_unhandled_try_skip(linux, len, basic) {
                     let k = LINUX_UNHANDLED_SKIP.fetch_add(1, Ordering::AcqRel);
                     if k < 8 {
                         serial::write_str_nowait(
@@ -7516,6 +7589,36 @@ fn merge_mmio_gpr(old: u64, val: u64, size: u8, zero_ext: bool, sign_ext: bool) 
     }
 }
 
+/// Decode BAR/IOAPIC/xAPIC MMIO. If VMCS length is 0 or longer than the
+/// peek, retry with [`virtio_mmio_retry_decode_len`] so Linux `ioread`
+/// (`"=r"`) is not an EAX guess. linux MMIO decode retry.
+#[cfg(target_os = "uefi")]
+unsafe fn decode_mmio_or_retry(
+    buf: &[u8],
+    n: usize,
+    insn_len: u64,
+) -> Option<crate::devices::guest_virtio_blk::MmioInsn> {
+    let slice = &buf[..n];
+    if let Some(op) =
+        crate::devices::guest_virtio_blk::decode_mmio_insn(slice, insn_len as usize)
+    {
+        return Some(op);
+    }
+    let cap = virtio_mmio_retry_decode_len(n, insn_len);
+    if cap == 0 {
+        return None;
+    }
+    let op = crate::devices::guest_virtio_blk::decode_mmio_insn(slice, cap as usize)?;
+    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
+    let long64 = guest_uefi_cs_ar_is_long(ar);
+    let skip = crate::devices::guest_virtio_blk::mmio_decoded_len(slice, long64)
+        .map(|d| d as u64)
+        .filter(|d| *d >= 1 && *d <= 15)
+        .unwrap_or(cap);
+    MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
+    Some(op)
+}
+
 /// Trap-and-emulate virtio-pci BAR MMIO (product ISO queues only).
 #[cfg(target_os = "uefi")]
 unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
@@ -7525,8 +7628,7 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
     };
     let mut buf = [0u8; 16];
     let (n, insn_len) = copy_mmio_insn(&mut buf);
-    let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
-    else {
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
         static FAIL_N: AtomicU32 = AtomicU32::new(0);
         if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
             serial::write_str_nowait("boot: guest-UEFI virtio MMIO decode fail gpa=0x");
@@ -7537,20 +7639,19 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             write_dec_nowait(insn_len);
             serial::write_byte_nowait(b'\n');
         }
-        if virtio_mmio_eax_fallback(
-            guest_uefi_linux_guest_active(
-                serial::linux_earlycon_share(),
-                guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
-                PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
-            ),
-            n,
-            insn_len,
-        ) {
+        let linux = guest_uefi_linux_guest_active(
+            serial::linux_earlycon_share(),
+            guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+            PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+        );
+        let skip = virtio_mmio_eax_fallback_len(linux, n, insn_len);
+        if skip != 0 {
             if FAIL_N.load(Ordering::Acquire) <= 8 {
                 serial::write_line_nowait(
                     "boot: guest-UEFI virtio MMIO eax fallback (not ISO-INSTALL-OK)",
                 );
             }
+            MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
             if is_write {
                 crate::devices::guest_virtio_blk::mmio_write_at(gpa, 4, cr_gpr(0));
                 let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
@@ -7847,15 +7948,33 @@ unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
     let off = (gpa.wrapping_sub(crate::devices::guest_irq::IOAPIC_GPA)) as u16;
     let mut buf = [0u8; 16];
     let (n, insn_len) = copy_mmio_insn(&mut buf);
-    let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
-    else {
-        serial::write_str("boot: guest-UEFI IOAPIC decode fail gpa=0x");
-        write_hex(gpa);
-        serial::write_str(" n=");
-        write_dec(n as u64);
-        serial::write_str(" len=");
-        write_dec(insn_len);
-        serial::write_byte(b'\n');
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
+        // IOAPIC decode fail nowait (share hushes write_str).
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str_nowait("boot: guest-UEFI IOAPIC decode fail gpa=0x");
+            write_hex_nowait(gpa);
+            serial::write_str_nowait(" n=");
+            write_dec_nowait(n as u64);
+            serial::write_str_nowait(" len=");
+            write_dec_nowait(insn_len);
+            serial::write_byte_nowait(b'\n');
+        }
+        let linux = guest_uefi_linux_guest_active(
+            serial::linux_earlycon_share(),
+            guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+            PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+        );
+        let skip = virtio_mmio_eax_fallback_len(linux, n, insn_len);
+        if skip != 0 {
+            MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
+            if is_write {
+                crate::devices::guest_irq::ioapic_write(off, cr_gpr(0) as u32);
+            } else {
+                set_cr_gpr(0, u64::from(crate::devices::guest_irq::ioapic_read(off)));
+            }
+            return skip_insn();
+        }
         return skip_insn();
     };
     if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
@@ -7995,7 +8114,7 @@ unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
     let is_write = (qual & 2) != 0;
     let mut buf = [0u8; 16];
     let (n, insn_len) = copy_mmio_insn(&mut buf);
-    let Some(op) = crate::devices::guest_virtio_blk::decode_mmio_insn(&buf[..n], insn_len as usize)
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len)
     else {
         static FAIL_N: AtomicU32 = AtomicU32::new(0);
         if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {

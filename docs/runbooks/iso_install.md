@@ -216,6 +216,9 @@ on nested QEMU too (lab stub / `iso=0` nested stays 65536). Iron COM2 close is `
 installer writes a partition table. Host/CI never prints that marker. `iso=0`
 / lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron
 P0-14 `last_commit` stays `2b795a0` until this gate actually closes.
+Linux virtio/IOAPIC MMIO retries decode from fetched bytes when VMCS length is 0
+(`ioread` is `"=r"`, not EAX); empty-peek Linux EAX fallback skips 3. iso=0 still
+stops on decode fail. Not `ISO-INSTALL-OK`.
 
 ## Next
 

@@ -75,8 +75,9 @@ use super::{
     guest_uefi_cpu_flush_skip_mapped,
     guest_uefi_cpu_flush_tick_scans_mapped,
     guest_uefi_linux_guest_active, guest_uefi_linux_unhandled_should_skip,
-    guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
-    guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback,
+    guest_uefi_linux_unhandled_try_skip, guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
+    guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback, virtio_mmio_eax_fallback_len,
+    virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -962,10 +963,28 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 0));
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 16));
     assert!(guest_uefi_linux_unhandled_should_skip(true, 3));
+    assert!(guest_uefi_linux_unhandled_try_skip(true, 0, 29));
+    assert!(!guest_uefi_linux_unhandled_try_skip(true, 0, 2), "triple fault still stops");
+    assert!(!guest_uefi_linux_unhandled_try_skip(false, 0, 29));
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x0F, 0x23, 0xC0]), 3);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x0F, 0x21, 0xC0]), 3);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x4C, 0x0F, 0x23, 0xC0]), 4);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x23, 0xC0]), 3);
+    assert_eq!(virtio_mmio_retry_decode_len(16, 0), 15, "linux MMIO decode retry");
+    assert_eq!(virtio_mmio_retry_decode_len(4, 7), 4, "insn_len longer than peek");
+    assert_eq!(virtio_mmio_retry_decode_len(8, 3), 0, "first decode already had len");
+    assert_eq!(virtio_mmio_retry_decode_len(0, 0), 0);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 0, 0), 3, "linux EAX fallback skip 3");
+    assert_eq!(virtio_mmio_eax_fallback_len(false, 0, 0), 0, "iso=0 decode fail still stops");
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 0, 6), 6);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 4, 0), 4);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 16, 0), 0, "do not skip 16-byte peek");
     assert!(virtio_mmio_eax_fallback(true, 0, 3));
     assert!(virtio_mmio_eax_fallback(true, 4, 6));
+    assert!(virtio_mmio_eax_fallback(true, 0, 0), "linux EAX fallback skip 3");
     assert!(!virtio_mmio_eax_fallback(false, 0, 3), "iso=0 decode fail still stops");
-    assert!(!virtio_mmio_eax_fallback(true, 0, 0));
+    assert!(!virtio_mmio_eax_fallback(false, 0, 0), "iso=0 decode fail still stops");
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));
