@@ -291,7 +291,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# is not F11. Pin 8663f56 (identity 0x400000) run 33333506987.
+# is not F11. Pin 8663f56 (identity 0x400000) run 33333506987 until this
+# branch's CI is 49/49 (0xAF00 PM timer). Iron COM2 8663f56 dest_ok then
+# IN EAX,DX Delay — do not F11 8663f56 again.
 # flashcruzer reject 2d6b109 dest skip. Not ISO-INSTALL-OK.
 refuse_2d6b109_dest_skip() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then

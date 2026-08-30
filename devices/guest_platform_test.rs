@@ -14,7 +14,7 @@ use super::{
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
-    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN,
+    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PIIX4_PMBA_ALT,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -382,6 +382,10 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_acpi_pm_timer_io(0, 4));
     assert!(!is_acpi_pm_timer_io(0, 1));
     assert!(is_acpi_pm_timer_io(0x408, 4));
+    assert!(is_acpi_pm_timer_io(0xAF00, 4));
+    assert!(is_acpi_pm_timer_io(0xAF08, 4));
+    assert!(is_platform_io_port(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF00));
 }
 
 #[test]
@@ -442,6 +446,29 @@ fn acpi_pm_timer_ticks_port0_and_pmba() {
     assert_eq!(acpi_pm_timer_reads(), 3);
     reset();
     assert_eq!(acpi_pm_timer_reads(), 0);
+}
+
+#[test]
+fn af00_pm_timer_ticks_dword_in() {
+    reset();
+    assert_eq!(PIIX4_PMBA_ALT, 0xAF00);
+    assert!(is_platform_io_port(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF04));
+    assert!(is_acpi_pm_timer_io(0xAF00, 4));
+    assert!(!is_acpi_pm_timer_io(0xAF00, 1));
+    assert!(is_acpi_pm_timer_io(0xAF08, 4));
+    let a = io(0xAF00, true, 4, 0) as u32;
+    let b = io(0xAF00, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, ACPI_PM_STEP);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let t = io(0xAF08, true, 4, 0) as u32;
+    assert_eq!(t, ACPI_PM_STEP.wrapping_mul(2));
+    let _ = io(0xAF04, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xAF04, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
 }
 
 #[test]

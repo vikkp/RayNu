@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-seventy-third slice: linux-line usbdelay + io string (rep insb) (F11 pin stays 8663f56 run 33333506987). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-seventy-fourth slice: 0xAF00 PM timer + tick port= (iron COM2 8663f56 dest_ok pde0=0x40b027 then IN EAX,DX Delay stop n=33297 sectors=0; do not F11 8663f56 again). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (linux-line usbdelay; io string (rep insb)). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (0xAF00 PM timer; tick port=). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-fourth slice: 0xAF00 PM timer (iron COM2 8663f56 dest_ok pde0=0x40b027 then unhandled 0xAF00/0xAF05 + IN EAX,DX Delay stop n=33297 sectors=0) + tick port=; do not F11 8663f56 again; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-third slice: linux-line usbdelay (alpine-virt 3.21 mkinitfs myopts has no alpine_dev; same-length usbdelay=30 so nlplug waits 30s not 5s) + io string (rep insb); F11 pin stays 8663f56; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-second slice: product ISO POST_DXE_TAIL skip (armed Stage 46 does not stop at n=33297 sectors=0; lab iso=0 still uses the tail) + emergency mount+exit (3.21 /init has no setup-disk; F11 pin stays 8663f56); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-first slice: iron COM2 2d6b109 pde0=0x20b027 (identity 0x200000; no dest_ok fill; DXE n=529 stop n=33297 sectors=0 catalog=0 ataio=0 POST_DXE_TAIL; not 8663f56); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
