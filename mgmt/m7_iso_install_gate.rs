@@ -103,6 +103,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/ide_cdrom.rs").contains("linux hides duplicate slot0 IDE")
         && include_str!("../devices/ide_cdrom.rs").contains("fn linux_hides_piix_ide")
         && include_str!("../devices/ide_cdrom.rs").contains("linux hides PIIX IDE")
+        && include_str!("../devices/ide_cdrom.rs").contains("fn linux_ata_floating_bus")
+        && include_str!("../devices/ide_cdrom.rs").contains("linux ATA floating bus")
         && include_str!("../boot/serial.rs").contains("fn linux_high_half")
         && include_str!("../vmx/guest_uefi.rs").contains("linux high-half hides PIIX")
         && include_str!("../devices/guest_irq.rs").contains("PIT skips IOAPIC pin 0")

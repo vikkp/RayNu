@@ -12,7 +12,10 @@
 //! PIIX IDE after Linux high-half so built-in `ata_piix` does not
 //! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
 //! share is too early: GRUB still needs PIIX ATAPI. Firmware still
-//! enumerates PIIX; media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+//! enumerates PIIX; media is virtio-iso `00:03.0`. Compatibility-mode ISA
+//! `0x1F0`/`0x170` stays decoded after PCI hide; linux ATA floating bus
+//! returns `0xFF` after Linux high-half so leftover `ata_piix` SRST skips
+//! without `ata_msleep`. Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
@@ -240,6 +243,7 @@ static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
 static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
+static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
@@ -292,6 +296,15 @@ pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
     bus == 0 && dev == 1 && fun == 1
+}
+
+/// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
+/// `ata_piix` SRST-`msleep`s while BSY/DRDY look live (iron COM2 after
+/// `Freeing initrd`). Return floating-bus `0xFF` after Linux high-half so
+/// libata skips the port without a timer wait. linux ATA floating bus.
+/// Not `ISO-INSTALL-OK`.
+pub fn linux_ata_floating_bus(linux_high_half: bool) -> bool {
+    linux_high_half
 }
 
 /// PCI config address for the guest IDE function (`00:00.1`).
@@ -477,6 +490,7 @@ pub fn reset() {
     PCI_ENUM.store(false, Ordering::Release);
     HIDE_SLOT0.store(false, Ordering::Release);
     HIDE_PIIX.store(false, Ordering::Release);
+    ATA_FLOAT.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -1816,9 +1830,25 @@ fn finish_packet(m: &mut CdMedia) {
     }
 }
 
+fn note_ata_float() {
+    if !ATA_FLOAT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux ATA floating bus (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 /// ATA primary PIO. Returns the value to merge into RAX on IN.
 pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     with_cd(|m| {
+        if linux_ata_floating_bus(crate::boot::serial::linux_high_half()) {
+            note_ata_float();
+            if is_in {
+                let mask = io_mask(size);
+                return (rax & !mask) | (0xffu64 & mask);
+            }
+            return rax;
+        }
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
         }
