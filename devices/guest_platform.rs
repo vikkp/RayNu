@@ -556,8 +556,11 @@ pub fn is_acpi_pm1_io(port: u16) -> bool {
     with_plat(|p| pm1_block_off(port, p.pmba).is_some())
 }
 
-/// ACPI 1.0 / PIIX4 `PM1_CNT` bit 0. Linux `acpi_enable` writes this and
-/// reads it back; RAZ/WI made ACPI mode fail after tables install.
+/// ACPI 1.0 / PIIX4 `PM1_CNT` bit 0. Linux `acpi_enable` writes this when
+/// FADT `SMI_CMD` is nonzero. Our FACP leaves `SMI_CMD` 0 (ACPI 2.0: no
+/// mode transition), so `acpi_hw_get_mode` returns ACPI without a PM1
+/// write. Reset with SCI_EN set so hardware matches. PIIX4 PM1 SCI_EN.
+/// PM1 SCI_EN at reset. Not `ISO-INSTALL-OK`.
 pub const PM1_CNT_SCI_EN: u16 = 1;
 /// Sleep enable. Ignore so a guest SLP_EN write does not halt the HV.
 const PM1_CNT_SLP_EN: u16 = 1 << 13;
@@ -586,6 +589,10 @@ fn pm1_read(p: &Platform, off: u16, size: u8) -> u64 {
         if o + i < 8 {
             v |= u64::from(blk[o + i]) << (8 * i);
         }
+    }
+    // FADT SMI_CMD is 0: Linux may never write SCI_EN. Log on CNT read.
+    if o < 6 && o.saturating_add(n) > 4 {
+        note_pm1_sci(p.pm1_cnt);
     }
     v
 }
@@ -860,7 +867,7 @@ struct Platform {
     pm1_sts: u16,
     /// PIIX4 PM1a_EN.
     pm1_en: u16,
-    /// PIIX4 PM1a_CNT. Bit 0 is SCI_EN (sticky for Linux acpi_enable).
+    /// PIIX4 PM1a_CNT. Bit 0 is SCI_EN (sticky; set at reset). PM1 SCI_EN at reset.
     pm1_cnt: u16,
     /// PIIX3 ISA config (QEMU `piix3_reset`). PIRQ at `0x60–0x63`.
     isa_cfg: [u8; 256],
@@ -898,7 +905,7 @@ impl Platform {
             pm_iose: 0,
             pm1_sts: 0,
             pm1_en: 0,
-            pm1_cnt: 0,
+            pm1_cnt: PM1_CNT_SCI_EN,
             isa_cfg: [0u8; 256],
             kbc_q: [0u8; KBC_QCAP],
             kbc_n: 0,

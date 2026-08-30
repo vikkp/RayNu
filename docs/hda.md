@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-sixty-fourth slice: linux-line piix_init blacklist. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-sixty-fifth slice: PM1 SCI_EN at reset. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (linux-line piix_init blacklist). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (PM1 SCI_EN at reset). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fifth slice: PM1 SCI_EN at reset (FADT SMI_CMD is 0 so Linux acpi_hw_get_mode never writes SCI_EN; PM1_CNT starts with bit 0 so ACPI-on matches); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-fourth slice: linux-line piix_init blacklist (initcall_blacklist=piix_init; Linux 6.12 ata_piix.c is module_init(piix_init), not ata_piix_init; grub.cfg Data Length stays 143→294); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-third slice: linux-line ata_piix blacklist (initcall_blacklist=ata_piix_init so built-in ata_piix does not ata_msleep after Freeing initrd; grub.cfg Data Length 143→294); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-sixty-second slice: FSEG dest holds ACPI tables (ZONE_FSEG ALLOC dest in conventional 640KiB identity, not PEI stack 0x205f18 and not ZONE_HIGH leftover); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

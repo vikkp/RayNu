@@ -120,6 +120,8 @@ fn facp_byte(off: u16) -> u8 {
         44 => 1, // dual 8259
         46 => 9, // SCI
         47 => 0,
+        // SMI_CMD / ACPI_ENABLE / ACPI_DISABLE stay 0 (already ACPI).
+        // PM1 SCI_EN at reset. Linux acpi_hw_get_mode skips the PM1 write.
         56..=59 => 0xB000u32.to_le_bytes()[off as usize - 56], // PM1a_EVT
         64..=67 => 0xB004u32.to_le_bytes()[off as usize - 64], // PM1a_CNT
         76..=79 => 0xB008u32.to_le_bytes()[off as usize - 76], // PM_TMR

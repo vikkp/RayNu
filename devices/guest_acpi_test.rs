@@ -50,6 +50,9 @@ fn facp_points_at_dsdt_offset_until_linker() {
     for i in 0..4 {
         assert_eq!(acpi_tables_byte(facp + 40 + i as u16), dsdt[i]);
     }
+    assert_eq!(acpi_tables_byte(facp + 48), 0, "FADT SMI_CMD 0 already ACPI");
+    assert_eq!(acpi_tables_byte(facp + 52), 0, "ACPI_ENABLE 0");
+    assert_eq!(acpi_tables_byte(facp + 53), 0, "ACPI_DISABLE 0");
     assert_eq!(acpi_tables_byte(0x110), b'D');
     assert_eq!(acpi_tables_byte(0x111), b'S');
     assert_eq!(acpi_tables_byte(0x112), b'D');

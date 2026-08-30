@@ -480,7 +480,9 @@ fn piix4_pm1_sci_en_sticky_on_fadt() {
     assert!(is_acpi_pm1_io(0xB004));
     assert!(!is_acpi_pm1_io(0xB008));
     assert!(is_platform_io_port(0xB004));
-    assert_eq!(io(0xB004, true, 2, 0xFFFF) as u16, 0);
+    assert_eq!(io(0xB004, true, 2, 0xFFFF) as u16, PM1_CNT_SCI_EN);
+    let _ = io(0xB004, false, 2, 0);
+    assert_eq!(io(0xB004, true, 2, 0) as u16, 0);
     let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN));
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
     let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN) | (1 << 13));
@@ -491,7 +493,7 @@ fn piix4_pm1_sci_en_sticky_on_fadt() {
     assert!(is_acpi_pm1_io(0xB004));
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
     reset();
-    assert_eq!(io(0xB004, true, 2, 0) as u16, 0);
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
 }
 
 #[test]
