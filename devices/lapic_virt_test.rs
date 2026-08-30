@@ -113,4 +113,12 @@ fn cr8_maps_to_tpr_class() {
     let v = take_deliverable_vector().expect("unmasked IRR");
     assert_eq!(v, 0x31);
     assert!(wrmsr(0x80B, 0).is_some());
+    latch_irr(0x20);
+    set_cr8(3);
+    assert!(!has_deliverable_irr());
+    assert!(has_pending_irr());
+    let v = take_highest_irr().expect("firmware HLT ignores TPR");
+    assert_eq!(v, 0x20);
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
 }

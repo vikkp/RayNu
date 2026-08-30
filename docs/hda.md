@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-seventy-eighth slice: HLT stall quiet tick print-only so nested leftover cpu_flush still runs (nested 9ce65ae ATAPI-OK missing; do not F11 9ce65ae / c08a13d). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-seventy-ninth slice: firmware HLT ignores TPR so BDS CpuSleep can take leftover IOAPIC IRQ when PIC is still masked (iron 084430f inject vec=0x20 only after CR8). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (HLT stall quiet tick print-only; nested ATAPI-OK cpu_flush). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (firmware HLT ignores TPR). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-ninth slice: firmware HLT ignores TPR (iron 084430f inject vec=0x20 only after CR8; PIC-first still needs pic_ready); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-eighth slice: HLT stall quiet tick print-only (nested 9ce65ae ATAPI-OK missing after quiet skipped cpu_flush; do not F11 9ce65ae / c08a13d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-seventh slice: firmware PIC before GSI 2 + HLT stall quiet tick (iron 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-seventy-sixth slice: 0xB000 dword timer (iron 8663f56 unh=4 then handled Delay not 0xB008; F11 pin stays 084430f); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -84,6 +84,7 @@ use super::{
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -886,6 +887,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIC before GSI 2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick print-only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT ignores TPR"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c08a13d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9ce65ae"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
@@ -1261,6 +1263,10 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
     assert!(!guest_uefi_pic_before_lapic(false, false, false));
+    assert!(guest_uefi_firmware_hlt_ignores_tpr(false, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(true, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, false, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, true, 1));
     assert!(guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 0));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16384, 12, true, 0));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, false, 0));

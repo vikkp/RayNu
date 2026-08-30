@@ -359,6 +359,12 @@ pub fn has_deliverable_irr() -> bool {
     ((vec as u32) & 0xF0) > ppr
 }
 
+/// True when IRR has any latched vector, ignoring TPR/PPR.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn has_pending_irr() -> bool {
+    highest_bit(core::ptr::addr_of!(APIC_IRR)).is_some()
+}
+
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
 /// Latches IRR (and GTIMER3); does **not** by itself program VM-entry inject.
 pub fn on_host_timer_fire() -> bool {
@@ -389,14 +395,15 @@ pub fn on_host_timer_fire() -> bool {
     }
 }
 
-/// Move the highest deliverable IRR bit into ISR and return its vector.
-pub fn take_deliverable_vector() -> Option<u32> {
+fn take_irr_vector(ignore_tpr: bool) -> Option<u32> {
     // SAFETY: VMEXIT path.
     unsafe {
         let vec = highest_bit(core::ptr::addr_of!(APIC_IRR))?;
-        let ppr = processor_priority() & 0xF0;
-        if ((vec as u32) & 0xF0) <= ppr {
-            return None;
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
         }
         bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
         bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
@@ -409,6 +416,17 @@ pub fn take_deliverable_vector() -> Option<u32> {
         }
         Some(vec as u32)
     }
+}
+
+/// Move the highest deliverable IRR bit into ISR and return its vector.
+pub fn take_deliverable_vector() -> Option<u32> {
+    take_irr_vector(false)
+}
+
+/// IRR→ISR ignoring TPR/PPR. Firmware BDS CpuSleep after BOTH-OK.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn take_highest_irr() -> Option<u32> {
+    take_irr_vector(true)
 }
 
 /// True once after GTIMER3 latches; caller should print the COM1 marker.
