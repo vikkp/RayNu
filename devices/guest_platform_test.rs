@@ -4,7 +4,7 @@ use super::{
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, hpet_ticks_from_tsc_delta, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
-    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, last_cmos_index,
+    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
     platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
@@ -365,6 +365,8 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_platform_sink_gpa(0xFE00_0000), "lab stub: virtio BAR stays sink");
     assert!(is_platform_io_port(0x70));
     assert!(is_platform_io_port(0x510));
+    assert!(is_fwcfg_data_port(0x511));
+    assert!(!is_fwcfg_data_port(0x510));
     assert!(is_platform_io_port(0x40));
     assert!(!is_platform_io_port(0xCF8));
     assert!(!is_platform_io_port(0x3F8));

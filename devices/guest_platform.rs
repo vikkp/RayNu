@@ -391,6 +391,11 @@ pub fn is_fwcfg_port(port: u16) -> bool {
     port == FW_CFG_SELECTOR_PORT || port == FW_CFG_DATA_PORT || (0x0514..=0x051B).contains(&port)
 }
 
+/// QEMU fw_cfg data port. OVMF `IoReadFifo8` is `rep insb` here.
+pub fn is_fwcfg_data_port(port: u16) -> bool {
+    port == FW_CFG_DATA_PORT
+}
+
 pub fn is_timer_port(port: u16) -> bool {
     (0x40..=0x43).contains(&port) || port == 0x61 || port == 0x80 || port == 0x92
 }
