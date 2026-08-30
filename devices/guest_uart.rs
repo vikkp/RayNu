@@ -161,9 +161,15 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
     (out, thr, irq)
 }
 
-/// Re-assert COM1 RX/THRE if Linux left IER set (edge inject consumed IRR).
+/// Re-assert COM1 RX if Linux left IER set (edge inject consumed IRR).
+///
+/// Do not re-assert THRE. IER.ETBEI plus an always-empty THR keeps IRQ 4
+/// ahead of PIT on every resume, so `idle=poll` never sees jiffies and
+/// Alpine `sleep` after virtio DRIVER_OK hangs. THRE still latches on
+/// THR/IER writes via [`pio`]. UART reassert RX not THRE.
+/// Not `ISO-INSTALL-OK`.
 pub fn reassert_irq() {
-    let pending = with_uart(|u| irq_pending(&u.com1));
+    let pending = with_uart(|u| u.com1.rx_len > 0 && u.com1.ier & 1 != 0);
     if pending {
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
     }

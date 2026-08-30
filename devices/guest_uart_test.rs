@@ -47,6 +47,37 @@ fn product_iso_thre_raises_irq4() {
     crate::devices::guest_irq::reset();
 }
 
+#[test]
+fn product_iso_reassert_rx_not_thre() {
+    reset();
+    crate::devices::guest_irq::reset();
+    arm_product_iso_for_irq();
+    crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
+    crate::devices::guest_irq::ioapic_write(0x10, 0x24);
+    let _ = pio(0x03FA, false, 0x01);
+    let _ = pio(0x03F9, false, 0x02);
+    assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
+    crate::devices::guest_irq::ioapic_eoi(0x24);
+    reassert_irq();
+    assert!(
+        crate::devices::guest_irq::take_inject_vector().is_none(),
+        "UART reassert RX not THRE"
+    );
+    let _ = pio(0x03F9, false, 0x01);
+    assert!(push_host_rx(b'x'));
+    assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
+    crate::devices::guest_irq::ioapic_eoi(0x24);
+    reassert_irq();
+    assert_eq!(
+        crate::devices::guest_irq::take_inject_vector(),
+        Some(0x24),
+        "RX still in FIFO reasserts"
+    );
+    crate::devices::ide_cdrom::reset();
+    reset();
+    crate::devices::guest_irq::reset();
+}
+
 fn arm_product_iso_for_irq() {
     crate::devices::ide_cdrom::reset();
     let extra =

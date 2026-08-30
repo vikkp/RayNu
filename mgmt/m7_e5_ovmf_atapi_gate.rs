@@ -439,6 +439,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && include_str!("../devices/guest_irq.rs").contains("linux PIT prefer until DRIVER_OK")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn virtio_needs_pit_over_uart")
         && guest.contains("fn linux_prefer_pit_until_driver_ok")
+        && uart.contains("UART reassert RX not THRE")
         && guest.contains("IOAPIC decode fail nowait")
         && guest.contains("fn guest_uefi_linux_mov_dr_len")
         && guest.contains("linux MOV DR skip")

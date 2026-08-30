@@ -84,6 +84,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("ept_install_ioapic_trap")
         && include_str!("../vmx/guest_uefi.rs").contains("handle_uart_product")
         && include_str!("../devices/guest_uart.rs").contains("fn reassert_irq(")
+        && include_str!("../devices/guest_uart.rs").contains("UART reassert RX not THRE")
         && include_str!("../devices/guest_uart.rs").contains("fn poll_host_rx(")
         && include_str!("../boot/serial.rs").contains("fn try_read_byte(")
         && include_str!("iso_install.rs").contains("fn patch_iso_linux_serial_console(")
