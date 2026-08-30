@@ -41,11 +41,14 @@ const DSDT_LEN: u16 = 225;
 const CMD_ALLOC: u32 = 1;
 const CMD_ADD_PTR: u32 = 2;
 const CMD_CKSUM: u32 = 3;
+/// QEMU HIGH (top of conventional / 2GiB CMOS lie). Product ISO tables
+/// are FSEG so IoReadFifo8 dest stays in the 32MiB identity slab.
+#[allow(dead_code)]
 const ZONE_HIGH: u8 = 1;
 const ZONE_FSEG: u8 = 2;
 
 /// `etc/acpi/tables` byte. Offsets are RSDT-relative until the linker adds
-/// the allocated HIGH base (ADD_POINTER).
+/// the allocated FSEG base (ADD_POINTER). ACPI tables ZONE_FSEG.
 pub fn acpi_tables_byte(off: u16) -> u8 {
     if off >= ACPI_TABLES_LEN {
         return 0;
@@ -188,7 +191,7 @@ const DSDT_AML: [u8; DSDT_LEN as usize] = [
 
 fn loader_entry_byte(ent: usize, i: usize) -> u8 {
     match ent {
-        0 => alloc_byte(i, b"etc/acpi/tables", 64, ZONE_HIGH),
+        0 => alloc_byte(i, b"etc/acpi/tables", 64, ZONE_FSEG),
         1 => alloc_byte(i, b"etc/acpi/rsdp", 16, ZONE_FSEG),
         2 => add_ptr_byte(i, b"etc/acpi/rsdp", b"etc/acpi/tables", 16, 4),
         3 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", 36, 4),

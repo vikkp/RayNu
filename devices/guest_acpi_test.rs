@@ -99,7 +99,7 @@ fn loader_allocate_then_add_pointer_qemu_layout() {
         name[i] = acpi_loader_byte(4 + i as u16);
     }
     assert!(name.starts_with(b"etc/acpi/tables\0"));
-    assert_eq!(acpi_loader_byte(64), 1, "ZONE_HIGH");
+    assert_eq!(acpi_loader_byte(64), 2, "ACPI tables ZONE_FSEG");
     let e2 = 2 * 128;
     assert_eq!(acpi_loader_byte(e2 as u16), 2, "ADD_POINTER");
     let mut dest = [0u8; 16];
