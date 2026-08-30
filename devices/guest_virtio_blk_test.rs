@@ -93,6 +93,12 @@ fn lab_stub_keeps_enum_cap_product_iso_gets_vendor_caps() {
     assert!(is_virtio_bar_gpa(u64::from(GUEST_VIRTIO_ISO_BAR0_DEFAULT)));
     assert_eq!(mmio_read(0x10, 2), 0xFFFF, "msix_config 16-bit");
     assert_eq!(mmio_read(0x10, 4), 0x0001_FFFF, "packed num_queues=1");
+    assert_eq!(
+        mmio_read(0x18, 4),
+        0xFFFF_0080,
+        "packed virtio common cfg queue_msix"
+    );
+    assert_eq!(mmio_read(0x1A, 2), 0xFFFF);
     assert_eq!(mmio_read_iso(0x04, 4) & VIRTIO_BLK_F_RO, VIRTIO_BLK_F_RO);
     let cap = mmio_read_iso(0x200, 8);
     assert_eq!(cap, (extra / 512) as u64);

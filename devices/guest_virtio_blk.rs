@@ -658,44 +658,71 @@ pub fn mmio_read_at(gpa: u64, size: u8) -> u64 {
     mmio_read_dev(is_virtio_iso_bar_gpa(gpa), off, size)
 }
 
+/// One little-endian byte of virtio-pci common cfg (QEMU packed layout).
+///
+/// Iron `deefa7c`: Linux ioread after BAR trap. A 32-bit load at 0x18 must
+/// return `queue_msix_vector=0xFFFF` in the high half — 0 looks like MSI-X
+/// vector 0 and the guest waits for a vector we never inject.
+/// packed virtio common cfg. Not `ISO-INSTALL-OK`.
+fn common_cfg_byte(v: &VirtioPci, off: u16) -> u8 {
+    let qsize = if v.queue_sel == 0 { v.queue_size } else { 0 };
+    let feat = features_for(v, v.feat_sel);
+    let drv = if v.drv_feat_sel == 0 {
+        v.drv_feat as u32
+    } else {
+        (v.drv_feat >> 32) as u32
+    };
+    match off {
+        0x00..=0x03 => (v.feat_sel >> (8 * (off - 0x00))) as u8,
+        0x04..=0x07 => (feat >> (8 * (off - 0x04))) as u8,
+        0x08..=0x0B => (v.drv_feat_sel >> (8 * (off - 0x08))) as u8,
+        0x0C..=0x0F => (drv >> (8 * (off - 0x0C))) as u8,
+        0x10 | 0x11 => 0xFF,
+        0x12 => 1,
+        0x13 => 0,
+        0x14 => v.status,
+        0x15 => 0,
+        0x16 => v.queue_sel as u8,
+        0x17 => (v.queue_sel >> 8) as u8,
+        0x18 => qsize as u8,
+        0x19 => (qsize >> 8) as u8,
+        0x1A | 0x1B => 0xFF,
+        0x1C => v.queue_enable as u8,
+        0x1D => (v.queue_enable >> 8) as u8,
+        0x1E | 0x1F => 0,
+        0x20..=0x27 => (v.queue_desc >> (8 * (off - 0x20))) as u8,
+        0x28..=0x2F => (v.queue_driver >> (8 * (off - 0x28))) as u8,
+        0x30..=0x37 => (v.queue_device >> (8 * (off - 0x30))) as u8,
+        _ => 0,
+    }
+}
+
+fn common_cfg_read(v: &VirtioPci, off: u16, size: u8) -> u64 {
+    let n = match size {
+        1 => 1u16,
+        2 => 2,
+        4 => 4,
+        8 => 8,
+        _ => 4,
+    };
+    let mut val = 0u64;
+    let mut i = 0u16;
+    while i < n {
+        val |= u64::from(common_cfg_byte(v, off.wrapping_add(i))) << (8 * i);
+        i += 1;
+    }
+    val
+}
+
 fn mmio_read_locked(v: &mut VirtioPci, off: u16, size: u8) -> u64 {
     if !v.queues_armed {
         return 0;
     }
     let cap = capacity_sectors_for(v);
+    if off < 0x38 {
+        return common_cfg_read(v, off, size);
+    }
     let val = match off {
-        0x00 => v.feat_sel as u64,
-        0x04 => features_for(v, v.feat_sel) as u64,
-        0x08 => v.drv_feat_sel as u64,
-        0x0C => {
-            if v.drv_feat_sel == 0 {
-                v.drv_feat as u32 as u64
-            } else {
-                (v.drv_feat >> 32) as u64
-            }
-        }
-        // Packed 32-bit: msix_config=0xFFFF, num_queues=1 in the high half.
-        0x10 => 0x0001_FFFF,
-        0x12 => 1,
-        0x14 => u64::from(v.status),
-        0x15 => 0,
-        0x16 => u64::from(v.queue_sel),
-        0x18 => {
-            if v.queue_sel == 0 {
-                u64::from(v.queue_size)
-            } else {
-                0
-            }
-        }
-        0x1A => 0xFFFF,
-        0x1C => u64::from(v.queue_enable),
-        0x1E => 0,
-        0x20 => v.queue_desc,
-        0x24 => v.queue_desc >> 32,
-        0x28 => v.queue_driver,
-        0x2C => v.queue_driver >> 32,
-        0x30 => v.queue_device,
-        0x34 => v.queue_device >> 32,
         x if x == OFF_ISR => {
             let isr = v.isr;
             v.isr = 0;
