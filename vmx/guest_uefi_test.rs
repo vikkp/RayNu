@@ -962,9 +962,10 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 0));
     assert!(!guest_uefi_linux_unhandled_should_skip(true, 16));
     assert!(guest_uefi_linux_unhandled_should_skip(true, 3));
-    assert!(virtio_mmio_eax_fallback(0, 3));
-    assert!(virtio_mmio_eax_fallback(4, 6));
-    assert!(!virtio_mmio_eax_fallback(0, 0));
+    assert!(virtio_mmio_eax_fallback(true, 0, 3));
+    assert!(virtio_mmio_eax_fallback(true, 4, 6));
+    assert!(!virtio_mmio_eax_fallback(false, 0, 3), "iso=0 decode fail still stops");
+    assert!(!virtio_mmio_eax_fallback(true, 0, 0));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));
     assert!(!guest_uefi_linux_exc_error_code(6));

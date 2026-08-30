@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-twenty-seventh slice: virtio MMIO eax fallback + linux NMI inject (iron 1a2544d past PAT/initrd then restore host xcr0; virtio_pci device_initcall after populate_rootfs). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-twenty-eighth slice: iso=0 virtio decode fail still stops (nested 1a4b687 /init SIGSEGV exitcode=0xb). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (virtio MMIO eax fallback + linux NMI inject). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (iso=0 virtio decode fail still stops). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-eighth slice: iso=0 virtio decode fail still stops (nested 1a4b687 /init SIGSEGV); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-seventh slice: virtio MMIO eax fallback + linux NMI inject (iron 1a2544d Freeing initrd then xcr0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-sixth slice: linux unhandled nowait stop (iron 1a2544d past PAT/initrd then restore host xcr0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-30 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-twenty-fifth slice: cpu_flush leftover per walk (iron abfb008 skip n=944 then tick n=256 hung); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

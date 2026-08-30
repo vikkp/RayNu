@@ -1537,9 +1537,11 @@ pub fn guest_uefi_linux_nmi_should_inject(linux: bool, vec: u8) -> bool {
 /// virtio MMIO eax fallback (iron `1a2544d` Freeing initrd then xcr0).
 /// `virtio_pci` is a `device_initcall` after `populate_rootfs`; decode fail
 /// stopped the private VMCS (IOAPIC skips; xAPIC EAX-fallbacks). Same skip
-/// window as [`xapic_fetch_miss_eax_fallback`].
-pub fn virtio_mmio_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
-    xapic_fetch_miss_eax_fallback(fetched_n, insn_len)
+/// window as [`xapic_fetch_miss_eax_fallback`]. iso=0 decode fail still stops
+/// so E4 SHELL is not starved of leftover DRAM (nested `1a4b687` `/init`
+/// SIGSEGV `exitcode=0xb` CR2 `ffff888000000413`).
+pub fn virtio_mmio_eax_fallback(linux: bool, fetched_n: usize, insn_len: u64) -> bool {
+    linux && xapic_fetch_miss_eax_fallback(fetched_n, insn_len)
 }
 
 /// Pack VM-entry interruption-info for a hardware exception.
@@ -7535,7 +7537,15 @@ unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
             write_dec_nowait(insn_len);
             serial::write_byte_nowait(b'\n');
         }
-        if virtio_mmio_eax_fallback(n, insn_len) {
+        if virtio_mmio_eax_fallback(
+            guest_uefi_linux_guest_active(
+                serial::linux_earlycon_share(),
+                guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+                PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+            ),
+            n,
+            insn_len,
+        ) {
             if FAIL_N.load(Ordering::Acquire) <= 8 {
                 serial::write_line_nowait(
                     "boot: guest-UEFI virtio MMIO eax fallback (not ISO-INSTALL-OK)",

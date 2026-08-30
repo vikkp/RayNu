@@ -312,6 +312,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux unhandled nowait stop")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_unhandled_should_skip")
         && include_str!("../vmx/guest_uefi.rs").contains("fn virtio_mmio_eax_fallback")
+        && include_str!("../vmx/guest_uefi.rs").contains("iso=0 decode fail still stops")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_nmi_entry_info")
         && include_str!("../vmx/guest_uefi.rs").contains("linux NMI inject")
         && include_str!("../boot/serial.rs").contains("fn write_str_nowait")

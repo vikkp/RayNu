@@ -418,6 +418,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_linux_unhandled_should_skip")
         && guest.contains("fn guest_uefi_linux_guest_active")
         && guest.contains("fn virtio_mmio_eax_fallback")
+        && guest.contains("iso=0 decode fail still stops")
         && guest.contains("fn guest_uefi_nmi_entry_info")
         && guest.contains("linux NMI inject")
         && include_str!("../boot/serial.rs").contains("fn write_str_nowait")
