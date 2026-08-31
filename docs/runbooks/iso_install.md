@@ -158,8 +158,8 @@ writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `ea30da1` / `--run 33389381409` (hide-IDE + inject `vec=0x20` livelocked the timer ISR
 to n=16777216 `rip=0x7f03fbe5` `pci_ide=0` `hlt=0`). Do **not** flash `a2acfc8` /
 `--run 33391068937` (n>16384 would not have changed that HLT at n~32768). firmware HLT skip without inject. flash 56f31d3. product ISO HLT stall before n=16384. do not F11 ea30da1. do not F11 56f31d3.
-flash 56f31d3 (CI run `33392055961`). Do **not** F11 `56f31d3` / `--run 33392055961` (scsi@3 first, no El Torito boot option). product ISO fw_cfg bootorder El Torito ide@ first. flash 90da03d (CI run `33394776080`). firmware HLT skip after ataio. do not F11 90da03d (`ataio==0` skip parks PACKET HLT at RET). flash e70a295 (CI run `33397104645`). flash 77f5866 (CI run `33399209557`). `--wait --require-head --no-git` after this pin, or `--run 33399209557` for the `77f5866` EFI. Do **not** F11 `b824789` / `--run 33387614559` (skip-after-inject raw pci_ide). Do **not** F11 `d61dc7e` / `--run 33349142609` (ConnectAll IdeBus CpuSleep). Do **not** F11 `5c0f7a2` / `--run 33347766697` (ATAPI-first bootorder without skip-without-inject). flash ea30da1.
-product ISO fw_cfg bootorder virtio-iso scsi@3 first; product ISO fw_cfg bootorder El Torito ide@ first; flash ea30da1; do not F11 b824789; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash d61dc7e; do not F11 5c0f7a2 (empty scsi@2 last; iso=0 stays CD then disk). Iron COM2 after F11 of `d61dc7e` is ConnectAll Started PIIX IDE (`pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no virtio-iso IN). product ISO hides PIIX IDE. skip-after-inject uses pci_ready. firmware HLT skip without inject. product ISO HLT stall before n=16384. `8336a06` CI run `33387083800` failed nested-KVM kill-init after GTIMER2 (iso=0 still CDROM-OK BOTH-OK). Do **not** F11 `d61dc7e` / `8336a06` / `6c53fb0` / `b824789` / `ea30da1` / `a2acfc8` / `56f31d3` / `90da03d` / `e70a295`. do not F11 ea30da1. Do **not** flash `ea30da1` pin `--run 33389381409` (inject `vec=0x20` timer ISR). flash 56f31d3. flash 90da03d. firmware HLT skip after ataio. do not F11 90da03d. flash e70a295. flash 77f5866. do not F11 e70a295.
+flash 56f31d3 (CI run `33392055961`). Do **not** F11 `56f31d3` / `--run 33392055961` (scsi@3 first, no El Torito boot option). product ISO fw_cfg bootorder El Torito ide@ first. flash 90da03d (CI run `33394776080`). firmware HLT skip after ataio. do not F11 90da03d (`ataio==0` skip parks PACKET HLT at RET). flash e70a295 (CI run `33397104645`). flash 77f5866 (CI run `33399209557`). firmware force IF for inject. do not F11 77f5866 (`skip-PIT` IF=0 after PACKET). `--wait --require-head --no-git` after this SHA CI. Do **not** F11 `b824789` / `--run 33387614559` (skip-after-inject raw pci_ide). Do **not** F11 `d61dc7e` / `--run 33349142609` (ConnectAll IdeBus CpuSleep). Do **not** F11 `5c0f7a2` / `--run 33347766697` (ATAPI-first bootorder without skip-without-inject). flash ea30da1.
+product ISO fw_cfg bootorder virtio-iso scsi@3 first; product ISO fw_cfg bootorder El Torito ide@ first; flash ea30da1; do not F11 b824789; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash d61dc7e; do not F11 5c0f7a2 (empty scsi@2 last; iso=0 stays CD then disk). Iron COM2 after F11 of `d61dc7e` is ConnectAll Started PIIX IDE (`pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no virtio-iso IN). product ISO hides PIIX IDE. skip-after-inject uses pci_ready. firmware HLT skip without inject. product ISO HLT stall before n=16384. `8336a06` CI run `33387083800` failed nested-KVM kill-init after GTIMER2 (iso=0 still CDROM-OK BOTH-OK). Do **not** F11 `d61dc7e` / `8336a06` / `6c53fb0` / `b824789` / `ea30da1` / `a2acfc8` / `56f31d3` / `90da03d` / `e70a295` / `77f5866`. do not F11 ea30da1. Do **not** flash `ea30da1` pin `--run 33389381409` (inject `vec=0x20` timer ISR). flash 56f31d3. flash 90da03d. firmware HLT skip after ataio. do not F11 90da03d. flash e70a295. flash 77f5866. do not F11 e70a295. firmware force IF for inject. do not F11 77f5866.
 Do **not** F11 `2ae4544` / `--run 33345731636` (LAPIC expiry without I/O-over-PIT).
 Do **not** F11 `084430f` / `--run 33337287432` (Delay then HLT stall).
 Do **not** F11 `8663f56` / `--run 33333506987` (dest_ok then 0xAF00 Delay).
@@ -201,20 +201,20 @@ cd ~/projects/raynu
 # FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # want this SHA (flash 77f5866 pin 33399209557).
-# Pin --run 33399209557 (77f5866 firmware skip PIT inject). do not F11 e70a295.
+git log -1 --oneline   # want this SHA (firmware force IF for inject; wait for CI).
+# Do not pin --run 33399209557 (77f5866 skip-PIT IF=0 after PACKET). do not F11 77f5866.
 # Do not pin --run 33397104645 (e70a295 skip-without-inject blocked ATA 14). do not F11 e70a295.
 # Pin --run 33394776080 (90da03d El Torito ide@ first). do not F11 90da03d.
 # Do not pin --run 33392055961 (56f31d3 scsi@3 first, no El Torito boot option). do not F11 56f31d3.
 # Do not pin --run 33389381409 (ea30da1 inject vec=0x20 timer ISR).
 # Do not pin --run 33391068937 (a2acfc8 n>16384 after that boot ended).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --no-git --run 33399209557 \
+./tools/flashcruzer.sh --wait --require-head --no-git \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware skip PIT inject. firmware HLT skip after ataio. flash 77f5866.
-# --run 33399209557 is F11. --run 33397104645 is not F11. do not F11 e70a295. do not F11 90da03d.
+# firmware force IF for inject. firmware skip PIT inject. flash 77f5866.
+# --run 33399209557 is not F11. do not F11 77f5866. do not F11 e70a295. do not F11 90da03d.
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
