@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-twenty-second slice: IOAPIC edge no remote IRR (PACKET after IDENTIFY without IOAPIC EOI; F11 pin stays 33422323257 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-twenty-third slice: flash 8e581c7 pin 33424573770 (IOAPIC edge no remote IRR CI green; do not F11 30b78a0 / --run 33422323257). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (IOAPIC edge no remote IRR). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash 8e581c7). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-third slice: flash 8e581c7 pin 33424573770 (IOAPIC edge no remote IRR CI green; do not F11 30b78a0 / --run 33422323257); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-second slice: IOAPIC edge no remote IRR (PACKET after IDENTIFY without IOAPIC EOI; F11 pin stays 33422323257 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-first slice: flash 30b78a0 pin 33422323257 (firmware take IOAPIC ATA CI green; do not F11 0bb06a2 / --run 33418246409); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twentieth slice: firmware take IOAPIC ATA (pin 14 only; do not latch virtio into IRR that ata_irr_only will not inject; F11 pin stays 33418246409 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
