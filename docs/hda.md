@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-ninety-ninth slice: flash 56f31d3 pin 33392055961 (firmware HLT skip without inject CI green; do not F11 ea30da1 / a2acfc8). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundredth slice: product ISO fw_cfg bootorder El Torito ide@ first (scsi@3 first was not a BDS CD option; skip-without-inject already landed; do not F11 56f31d3). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash 56f31d3). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO fw_cfg bootorder El Torito ide@ first). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundredth slice: product ISO fw_cfg bootorder El Torito ide@ first (scsi@3 first was not a BDS CD option; do not F11 56f31d3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-ninth slice: flash 56f31d3 pin 33392055961 (firmware HLT skip without inject CI green; do not F11 ea30da1 / a2acfc8); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-eighth slice: firmware HLT skip without inject + un-hide PIIX IDE (iron COM2 ea30da1 inject vec=0x20 timer ISR to n=16777216; do not F11 ea30da1 / a2acfc8 / d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-seventh slice: product ISO HLT stall before n=16384 (hide-IDE virtio-iso CpuSleep; do not F11 ea30da1 / d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

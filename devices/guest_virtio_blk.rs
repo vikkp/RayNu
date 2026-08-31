@@ -21,7 +21,8 @@
 //! Header Type on slot 0 stays multifunction so a walk finds IDE fn1.
 //! PIIX `00:01.1` is the same CD. iso=0 boot order is CD then disk.
 //! product ISO fw_cfg bootorder virtio-iso scsi@3 first (empty scsi@2
-//! second). ConnectDevicesFromQemu listing is not enough: iron COM2
+//! last). product ISO fw_cfg bootorder El Torito ide@ first.
+//! ConnectDevicesFromQemu listing is not enough: iron COM2
 //! `d61dc7e` still ConnectAll-Started IdeBus. product ISO hides PIIX IDE.
 //! Do **not**
 //! move virtio to `00:00.0`.

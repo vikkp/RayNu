@@ -170,10 +170,12 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware virtual-wire GSI 14 (PACKET IRQ 14 unmasked to vec 0x2E).
 /// flash 5c0f7a2 (CI run `33347766697`; do not F11 `2ae4544`).
 /// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
 /// flash d61dc7e (CI run `33349142609`; do not F11 `5c0f7a2`).
 /// flash b824789 (CI run 33387614559; do not F11 d61dc7e).
 /// flash ea30da1 (CI run 33389381409; do not F11 b824789).
 /// flash 56f31d3 (CI run 33392055961; do not F11 ea30da1 / a2acfc8).
+/// do not F11 56f31d3 (scsi@3 first was not an El Torito boot option).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
 /// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).
 /// firmware HLT skip without inject (iron COM2 ea30da1 inject vec=0x20 timer ISR;

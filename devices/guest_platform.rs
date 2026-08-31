@@ -10,6 +10,7 @@
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (iso=0 CD then virtio disk;
 //! product ISO fw_cfg bootorder virtio-iso scsi@3 first;
+//! product ISO fw_cfg bootorder El Torito ide@ first;
 //! product ISO hides PIIX IDE),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
@@ -177,18 +178,20 @@ pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 pub const BOOTORDER: &[u8] =
     b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
-/// Product ISO `bootorder`. Virtio-iso `00:03.0` first (`scsi@3`) so OVMF
-/// `ConnectDevicesFromQemu` Starts VirtioBlkDxe on the hybrid ISO and never
-/// Starts AtaAtapiPassThru. Iron COM2 `eac424b`: ATAPI-first `ide@1,1` hung
-/// CpuSleep `rip=0x7f0680d0` `ataio=0`. Empty install target `scsi@2` is
-/// second — never first (that would try to boot the blank disk). No `ide@`
-/// paths: iterating ATAPI after virtio would still hang IdeBus Start.
-/// iso=0 [`BOOTORDER`] stays CD then disk. Trailing NUL required.
+/// Product ISO `bootorder`. PIIX ATAPI `ide@1,1` first so BDS StartImages
+/// El Torito (Stage 45 / nested iso=0). scsi@3-only (`d61dc7e` / `56f31d3`)
+/// never listed the CD as a boot option: ConnectAll Started IdeBus, but
+/// ordered boot was virtio-iso then empty disk. Iron COM2 `eac424b`
+/// ATAPI-first hung CpuSleep; firmware HLT skip without inject skips that
+/// HLT without PIT `vec=0x20`. Virtio-iso `scsi@3` stays second. Empty
+/// install target `scsi@2` is last — never first. iso=0 [`BOOTORDER`]
+/// stays CD then disk. Trailing NUL required.
 /// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
 pub const BOOTORDER_PRODUCT: &[u8] =
-    b"/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
-/// Live fw_cfg `bootorder` bytes. Product window → virtio-iso first.
+/// Live fw_cfg `bootorder` bytes. Product window → El Torito then virtio-iso.
 pub fn bootorder_bytes() -> &'static [u8] {
     if crate::devices::ide_cdrom::product_iso_window_armed() {
         BOOTORDER_PRODUCT
@@ -197,14 +200,26 @@ pub fn bootorder_bytes() -> &'static [u8] {
     }
 }
 
-/// Product boot order is virtio-iso then empty virtio disk (ADR-014).
+/// Product boot order keeps virtio-iso before the empty install disk.
 /// iso=0 [`boot_order_cd_then_disk`] is unchanged.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
 pub fn boot_order_product_virtio_iso_first() -> bool {
     let iso = find_bytes(BOOTORDER_PRODUCT, b"scsi@3");
     let disk = find_bytes(BOOTORDER_PRODUCT, b"scsi@2");
-    let ide = find_bytes(BOOTORDER_PRODUCT, b"ide@");
-    match (iso, disk, ide) {
-        (Some(i), Some(d), None) => i < d,
+    match (iso, disk) {
+        (Some(i), Some(d)) => i < d,
+        _ => false,
+    }
+}
+
+/// Product BDS boots PIIX ATAPI El Torito before virtio-iso / empty disk.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+pub fn boot_order_product_eltorito_first() -> bool {
+    let ide = find_bytes(BOOTORDER_PRODUCT, b"ide@1,1");
+    let iso = find_bytes(BOOTORDER_PRODUCT, b"scsi@3");
+    let disk = find_bytes(BOOTORDER_PRODUCT, b"scsi@2");
+    match (ide, iso, disk) {
+        (Some(cd), Some(i), Some(d)) => cd < i && i < d,
         _ => false,
     }
 }
@@ -1160,7 +1175,7 @@ fn note_fwcfg_acpi() {
 fn note_fwcfg_bootorder_product() {
     if !FWCFG_BOOT_PRODUCT_LOG.swap(true, Ordering::Release) {
         crate::boot::serial::write_line_nowait(
-            "boot: product ISO fw_cfg bootorder virtio-iso scsi@3 first (not ISO-INSTALL-OK)",
+            "boot: product ISO fw_cfg bootorder El Torito ide@ first (not ISO-INSTALL-OK)",
         );
     }
 }

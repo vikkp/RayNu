@@ -19,6 +19,7 @@
 //! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). OVMF El
 //! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
 //! stays in the model and returns false. firmware HLT skip without inject.
+//! product ISO fw_cfg bootorder El Torito ide@ first.
 //! iso=0 keeps IDE. windows_iso / generic_uefi stay in
 //! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
 //! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
@@ -315,6 +316,7 @@ pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
 /// (`pci_ide=0` `ataio=0` `hlt=0`, no virtio-iso IN, stop `rip=0x7f03fbe5`).
 /// OVMF El Torito needs PIIX ATAPI (Stage 45 / nested iso=0). Do not hide.
 /// firmware HLT skip without inject. product ISO hides PIIX IDE.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
 /// Not `ISO-INSTALL-OK`.
 pub fn product_iso_hides_ide(_addr: u32) -> bool {
     false

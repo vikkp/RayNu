@@ -1,5 +1,5 @@
 use super::{
-    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, boot_order_product_virtio_iso_first, bootorder_bytes, bootorder_nul_terminated, cmos_above_16m_chunks,
+    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, boot_order_product_eltorito_first, boot_order_product_virtio_iso_first, bootorder_bytes, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
@@ -98,11 +98,14 @@ fn product_iso_fwcfg_bootorder_virtio_iso_first() {
     reset();
     assert!(boot_order_cd_then_disk());
     assert!(boot_order_product_virtio_iso_first());
+    assert!(boot_order_product_eltorito_first());
     assert!(bootorder_nul_terminated());
     assert_eq!(bootorder_bytes(), BOOTORDER);
     assert!(BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
-    assert!(BOOTORDER_PRODUCT.starts_with(b"/pci@i0cf8/scsi@3/disk@0,0"));
-    assert!(!BOOTORDER_PRODUCT.windows(4).any(|w| w == b"ide@"));
+    assert!(BOOTORDER_PRODUCT.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
+    assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@3"));
+    assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@2"));
+    assert!(!BOOTORDER_PRODUCT.windows(8).any(|w| w == b"drive@1/"));
     let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
     let mut iso = vec![0u8; extra];
     crate::devices::ide_cdrom::write_placeholder_iso(
