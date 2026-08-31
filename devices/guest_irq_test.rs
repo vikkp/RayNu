@@ -2,7 +2,7 @@ use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector,
-    arm_firmware_virtual_wire, firmware_virtual_wire_armed, ATA_GSI, IOAPIC_GPA,
+    arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
     ioapic_gsi2_armed,
 };
@@ -246,6 +246,43 @@ fn product_iso_firmware_virtual_wire_gsi14_unmasked() {
         take_ioapic_vector(),
         Some(0x20 + ATA_GSI),
         "firmware virtual-wire GSI 14"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_arm_ata_gsi14_without_pit() {
+    arm_product_iso();
+    raise_ata();
+    raise_pit();
+    assert!(
+        take_ioapic_vector().is_none(),
+        "masked pin 14 keeps ATA IRR undeliverable"
+    );
+    assert!(!pic_has_deliverable());
+    arm_firmware_ata_gsi14();
+    assert!(
+        !firmware_virtual_wire_armed(),
+        "firmware arm ATA GSI 14 does not arm virtual-wire"
+    );
+    assert!(
+        !ioapic_gsi2_armed(),
+        "firmware arm ATA GSI 14 does not unmask PIT GSI 2"
+    );
+    assert!(
+        !pic_has_deliverable(),
+        "firmware arm ATA GSI 14 does not unmask PIC IRQ 0"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware arm ATA GSI 14"
+    );
+    assert!(
+        take_ioapic_vector().is_none(),
+        "PIT pin 2 stays masked"
     );
     reset();
     reset_cd();

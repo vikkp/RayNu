@@ -97,6 +97,7 @@ use super::{
     guest_uefi_product_iso_pci_ready,
     guest_uefi_firmware_hlt_force_if,
     guest_uefi_firmware_force_if_for_inject,
+    guest_uefi_firmware_arm_ata_gsi14,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -926,6 +927,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5227ad9"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware force IF for inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 77f5866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
@@ -1366,6 +1368,14 @@ fn marker_and_residual_honest() {
         guest_uefi_firmware_force_if_for_inject(true, 0x2),
         0x2,
         "linux keeps guest IF"
+    );
+    assert!(
+        guest_uefi_firmware_arm_ata_gsi14(false),
+        "firmware arm ATA GSI 14"
+    );
+    assert!(
+        !guest_uefi_firmware_arm_ata_gsi14(true),
+        "linux programs its own RTEs"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),
@@ -2437,6 +2447,7 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
         1 << 9,
         "firmware force IF for inject after ataio"
     );
+    assert!(guest_uefi_firmware_arm_ata_gsi14(false));
     assert!(
         guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
         "product ISO quiet tick arms with the window, not n>16384"

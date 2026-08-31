@@ -186,6 +186,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// do not F11 77f5866 (skip-PIT IF=0 after PACKET never injected ATA 14).
 /// retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199).
 /// flash 5227ad9 (CI run 33404368817; firmware force IF for inject).
+/// firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14).
 /// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
 /// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).

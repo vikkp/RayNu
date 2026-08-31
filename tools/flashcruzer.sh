@@ -309,7 +309,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin 5227ad9 (firmware force IF for inject) run 33404368817 is F11.
+# Pin 5227ad9 (firmware force IF for inject) run 33404368817 is F11
+# until firmware arm ATA GSI 14 CI. wait_for_irq stays false so
+# virtual-wire never unmasks pin 14; force-IF cannot inject 0x2E.
 # retrigger 9df52c5 after nested-KVM SHELL flake (33402411199 iso=0 5/5).
 # do not F11 77f5866
 # / 388149b / --run 33399209557 / 33399991049 (skip-PIT IF=0 after PACKET).

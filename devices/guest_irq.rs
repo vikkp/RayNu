@@ -322,6 +322,23 @@ pub fn arm_firmware_virtual_wire() {
     });
 }
 
+/// Unmask IOAPIC pin 14 → vec 0x2E without PIT virtual-wire.
+///
+/// Firmware HLT wait_for_irq stays false, so [`arm_firmware_virtual_wire`]
+/// never runs. Pin 14 stays at the masked default RTE; `raise_ata` latches
+/// IRR that `take_ioapic_vector` cannot deliver. Force-IF then has nothing
+/// to inject. Do not unmask GSI 2 / PIC IRQ 0 (iron `ea30da1` `vec=0x20`
+/// timer ISR). Linux programs RTEs.
+/// firmware arm ATA GSI 14. Not `ISO-INSTALL-OK`.
+pub fn arm_firmware_ata_gsi14() {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| {
+        c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
+    });
+}
+
 /// True after [`arm_firmware_virtual_wire`] on the product-ISO HLT stall.
 /// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
 pub fn firmware_virtual_wire_armed() -> bool {

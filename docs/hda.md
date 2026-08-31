@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-eighth slice: flash 5227ad9 pin 33404368817 (firmware force IF for inject CI green; do not F11 77f5866 / --run 33402411199). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-ninth slice: firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14; F11 pin stays 33404368817 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash 5227ad9). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (firmware arm ATA GSI 14). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninth slice: firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14; F11 pin stays 33404368817 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighth slice: flash 5227ad9 pin 33404368817 (firmware force IF for inject CI green; do not F11 77f5866 / --run 33402411199); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventh slice: retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199 iso=0 5/5 after GTIMER2; force-IF firmware unchanged; do not F11 77f5866); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixth slice: firmware force IF for inject (PACKET nIEN=0 after ataio>0 still needs IF; do not F11 77f5866); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
