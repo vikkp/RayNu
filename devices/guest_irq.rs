@@ -28,10 +28,22 @@ pub const VIRTIO_GSI: u8 = 17;
 pub const VIRTIO_ISO_GSI: u8 = 18;
 /// PIC fallback for PCI INTx when the guest has not remapped via IOAPIC.
 pub const VIRTIO_PIC_IRQ: u8 = 11;
+/// ISA COM1. PIC already prefers IRQ 4 over PIT; IOAPIC must match.
+pub const UART_GSI: u8 = 4;
 /// ISA PIT. Linux `noapic` uses PIC IRQ 0 for jiffies / HLT wakeup.
 pub const PIT_IRQ: u8 = 0;
 /// MADT IRQ0 ISO GSI 2 (8259 cascade pin). Do not raise PIC IRQ 2.
 pub const PIT_IOAPIC_GSI: u8 = 2;
+/// IOAPIC pins that must beat PIT pin 2. Sequential peek 0..23 would
+/// always take virtual-wire GSI 2 and starve ATA/virtio/UART.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
+const IOAPIC_IO_PINS: [u8; 5] = [
+    ATA_GSI,
+    VIRTIO_GSI,
+    VIRTIO_ISO_GSI,
+    VIRTIO_PIC_IRQ,
+    UART_GSI,
+];
 
 const RTE_MASK: u64 = 1 << 16;
 /// IOAPIC RTE bit 15: 1 = level, 0 = edge.
@@ -276,16 +288,19 @@ pub fn has_deliverable() -> bool {
 
 /// 8259 virtual-wire: IRQ 0 delivers vec 0x20 without waiting for OVMF ICW2.
 /// IOAPIC GSI 2 is unmasked to the same vector so APIC-mode CpuSleep (CR8)
-/// can take PIT via LAPIC, not only PIC INTA.
+/// can take PIT via LAPIC, not only PIC INTA. GSI 14 is unmasked to vec
+/// 0x2E so PACKET IRQ 14 is deliverable after CpuSleep returns; peek
+/// prefers that pin over PIT. Unmask PIC IRQ 0 only (not UART). AEOI:
+/// OVMF IDT[0x20] EOIs LAPIC, not OCW2. GSI 2 edge does not leave remote IRR.
 ///
 /// Iron COM2 `beb1576`: `pic=0 gsi2=0` while IF=1 TPR=0; `raise_pit` latched
 /// IRR that neither chip could deliver. Iron COM2 `eac424b`: `pic=1` then
 /// six sparse `vec=0x20` (IDT handler writes CR8) and CpuSleep `ataio=0`
-/// through the cap. Unmask IRQ 0 only (not UART/ATA). AEOI: OVMF IDT[0x20]
-/// EOIs LAPIC, not OCW2. GSI 2 edge does not leave remote IRR.
-/// If firmware later ICW1-programs the PIC, those writes overwrite this.
+/// through the cap. If firmware later ICW1-programs the PIC, those writes
+/// overwrite this.
 /// firmware virtual-wire PIC. firmware virtual-wire AEOI.
-/// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
+/// firmware virtual-wire GSI 2. firmware virtual-wire GSI 14.
+/// IOAPIC I/O over PIT. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_virtual_wire() {
     if !product_live() {
         return;
@@ -300,6 +315,10 @@ pub fn arm_firmware_virtual_wire() {
         c.master.aeoi = true;
         // Edge, dest 0, vec 0x20, unmasked. firmware virtual-wire GSI 2.
         c.ioapic.redir[PIT_IOAPIC_GSI as usize] = u64::from(0x20u8);
+        // IRQ 14 → vec 0x2E (ICW2 0x20 + ATA). Masked default RTE would
+        // keep raise_ata's pin 14 IRR undeliverable while pin 2 is live.
+        // firmware virtual-wire GSI 14. IOAPIC I/O over PIT.
+        c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
     });
 }
 
@@ -426,23 +445,56 @@ fn ioapic_peek(c: &IrqChip) -> Option<u8> {
     ioapic_peek_pin(c).map(|(_, v)| v)
 }
 
+fn ioapic_pin_ready(c: &IrqChip, pin: u8) -> Option<u8> {
+    if (pin as usize) >= IOAPIC_PINS {
+        return None;
+    }
+    if (c.ioapic.irr & (1 << pin)) == 0 {
+        return None;
+    }
+    let rte = c.ioapic.redir[pin as usize];
+    if rte & RTE_MASK != 0 {
+        return None;
+    }
+    if rte & RTE_REMOTE_IRR != 0 {
+        return None;
+    }
+    let vec = (rte & 0xff) as u8;
+    if vec < 16 {
+        return None;
+    }
+    Some(vec)
+}
+
+fn ioapic_pin_is_io(pin: u8) -> bool {
+    pin == ATA_GSI
+        || pin == VIRTIO_GSI
+        || pin == VIRTIO_ISO_GSI
+        || pin == VIRTIO_PIC_IRQ
+        || pin == UART_GSI
+}
+
+/// Prefer ATA/virtio/UART over PIT pin 2 unless Linux latched prefer-once.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
 fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
+    if PREFER_PIT.load(Ordering::Acquire) {
+        if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
+            return Some((PIT_IOAPIC_GSI, vec));
+        }
+    }
+    for pin in IOAPIC_IO_PINS {
+        if let Some(vec) = ioapic_pin_ready(c, pin) {
+            return Some((pin, vec));
+        }
+    }
     for pin in 0..IOAPIC_PINS {
-        if (c.ioapic.irr & (1 << pin)) == 0 {
+        let pin = pin as u8;
+        if ioapic_pin_is_io(pin) {
             continue;
         }
-        let rte = c.ioapic.redir[pin];
-        if rte & RTE_MASK != 0 {
-            continue;
+        if let Some(vec) = ioapic_pin_ready(c, pin) {
+            return Some((pin, vec));
         }
-        if rte & RTE_REMOTE_IRR != 0 {
-            continue;
-        }
-        let vec = (rte & 0xff) as u8;
-        if vec < 16 {
-            continue;
-        }
-        return Some((pin as u8, vec));
     }
     None
 }

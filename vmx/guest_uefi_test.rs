@@ -90,6 +90,7 @@ use super::{
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
+    guest_uefi_ioapic_io_over_pit,
     guest_uefi_firmware_virtual_wire_pic,
     guest_uefi_firmware_hlt_force_if,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
@@ -904,6 +905,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT activity active"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware LAPIC timer expiry"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IOAPIC I/O over PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 14"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b26c86a"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));
@@ -1308,6 +1311,10 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_lapic_timer_expiry(true, true, 0));
     assert!(!guest_uefi_firmware_lapic_timer_expiry(false, false, 0));
     assert!(!guest_uefi_firmware_lapic_timer_expiry(false, true, 1));
+    assert!(
+        guest_uefi_ioapic_io_over_pit(),
+        "IOAPIC I/O over PIT"
+    );
     assert!(guest_uefi_firmware_virtual_wire_pic(false, true, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(true, true, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(false, false, 0));

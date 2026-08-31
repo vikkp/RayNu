@@ -213,6 +213,46 @@ fn product_iso_firmware_virtual_wire_gsi2_repeats() {
 }
 
 #[test]
+fn product_iso_firmware_ioapic_ata_beats_pit() {
+    arm_product_iso();
+    arm_firmware_virtual_wire();
+    raise_pit();
+    raise_ata();
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20 + ATA_GSI),
+        "IOAPIC I/O over PIT; firmware virtual-wire GSI 14"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20),
+        "PIT still deliverable after ATA"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_virtual_wire_gsi14_unmasked() {
+    arm_product_iso();
+    raise_ata();
+    assert!(
+        take_ioapic_vector().is_none(),
+        "masked pin 14 keeps ATA IRR undeliverable"
+    );
+    arm_firmware_virtual_wire();
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware virtual-wire GSI 14"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_firmware_virtual_wire_pic_aeoi_clears_on_icw() {
     arm_product_iso();
     arm_firmware_virtual_wire();
