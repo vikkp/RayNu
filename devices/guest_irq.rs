@@ -128,9 +128,11 @@ fn product_live() -> bool {
 }
 
 static PREFER_PIT: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 
 pub fn reset() {
     PREFER_PIT.store(false, Ordering::Release);
+    FIRMWARE_WIRE.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -273,17 +275,22 @@ pub fn has_deliverable() -> bool {
 }
 
 /// 8259 virtual-wire: IRQ 0 delivers vec 0x20 without waiting for OVMF ICW2.
+/// IOAPIC GSI 2 is unmasked to the same vector so APIC-mode CpuSleep (CR8)
+/// can take PIT via LAPIC, not only PIC INTA.
 ///
 /// Iron COM2 `beb1576`: `pic=0 gsi2=0` while IF=1 TPR=0; `raise_pit` latched
-/// IRR that neither chip could deliver. Unmask IRQ 0 only (not UART/ATA).
-/// AEOI: OVMF CpuSleep IDT[0x20] EOIs LAPIC, not OCW2, so ISR[0] must not
-/// stick after `take_pic_vector` or BDS gets one tick then HLT forever.
+/// IRR that neither chip could deliver. Iron COM2 `eac424b`: `pic=1` then
+/// six sparse `vec=0x20` (IDT handler writes CR8) and CpuSleep `ataio=0`
+/// through the cap. Unmask IRQ 0 only (not UART/ATA). AEOI: OVMF IDT[0x20]
+/// EOIs LAPIC, not OCW2. GSI 2 edge does not leave remote IRR.
 /// If firmware later ICW1-programs the PIC, those writes overwrite this.
-/// firmware virtual-wire PIC. firmware virtual-wire AEOI. Not `ISO-INSTALL-OK`.
+/// firmware virtual-wire PIC. firmware virtual-wire AEOI.
+/// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_virtual_wire() {
     if !product_live() {
         return;
     }
+    FIRMWARE_WIRE.store(true, Ordering::Release);
     with_irq(|c| {
         if !c.master.ready || c.master.vector < 16 {
             c.master.ready = true;
@@ -291,7 +298,15 @@ pub fn arm_firmware_virtual_wire() {
         }
         c.master.imr &= !1;
         c.master.aeoi = true;
+        // Edge, dest 0, vec 0x20, unmasked. firmware virtual-wire GSI 2.
+        c.ioapic.redir[PIT_IOAPIC_GSI as usize] = u64::from(0x20u8);
     });
+}
+
+/// True after [`arm_firmware_virtual_wire`] on the product-ISO HLT stall.
+/// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
+pub fn firmware_virtual_wire_armed() -> bool {
+    FIRMWARE_WIRE.load(Ordering::Acquire)
 }
 
 /// True when the 8259 has a remapped (ICW2 ≥ 16) unmasked IRR bit.
@@ -366,8 +381,13 @@ fn take_vector(c: &mut IrqChip) -> Option<u8> {
 fn ioapic_accept(c: &mut IrqChip, pin: u8) {
     let i = pin as usize;
     let mut rte = c.ioapic.redir[i];
-    rte |= RTE_REMOTE_IRR;
-    c.ioapic.redir[i] = rte;
+    let firmware_edge = FIRMWARE_WIRE.load(Ordering::Acquire)
+        && pin == PIT_IOAPIC_GSI
+        && rte & RTE_TRIG_LEVEL == 0;
+    if !firmware_edge {
+        rte |= RTE_REMOTE_IRR;
+        c.ioapic.redir[i] = rte;
+    }
     if rte & RTE_TRIG_LEVEL == 0 {
         c.ioapic.irr &= !(1 << pin);
     }

@@ -2,8 +2,9 @@ use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector,
-    arm_firmware_virtual_wire, ATA_GSI, IOAPIC_GPA,
+    arm_firmware_virtual_wire, firmware_virtual_wire_armed, ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
+    ioapic_gsi2_armed,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -173,6 +174,38 @@ fn product_iso_firmware_virtual_wire_pic_irq0() {
         take_pic_vector(),
         Some(0x20 + PIT_IRQ),
         "firmware virtual-wire AEOI repeats IRQ0"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_virtual_wire_gsi2_repeats() {
+    arm_product_iso();
+    raise_pit();
+    assert!(
+        !ioapic_gsi2_armed(),
+        "OVMF leftover pin 2 masked (iron beb1576 gsi2=0)"
+    );
+    assert!(take_ioapic_vector().is_none());
+    arm_firmware_virtual_wire();
+    assert!(firmware_virtual_wire_armed());
+    assert!(ioapic_gsi2_armed(), "firmware virtual-wire GSI 2");
+    assert!(
+        !crate::vmx::guest_uefi::guest_uefi_pic_before_lapic(true, true, false),
+        "firmware virtual-wire GSI 2 beats PIC-first"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20),
+        "firmware virtual-wire GSI 2 vec 0x20"
+    );
+    raise_pit();
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20),
+        "firmware virtual-wire GSI 2 AEOI"
     );
     reset();
     reset_cd();

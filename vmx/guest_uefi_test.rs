@@ -87,6 +87,7 @@ use super::{
     guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_virtual_wire_pic,
+    guest_uefi_firmware_hlt_force_if,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -893,6 +894,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT stall waits for IRQ"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire PIC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire AEOI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT force IF"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eac424b"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c08a13d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9ce65ae"));
@@ -1282,6 +1286,18 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_virtual_wire_pic(true, true, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(false, false, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(false, true, 1));
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(false, true, 0, 0x2),
+        0x2 | (1 << 9),
+        "firmware HLT force IF"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(true, true, 0, 0x2),
+        0x2,
+        "linux keeps guest IF"
+    );
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    crate::devices::guest_irq::reset();
     assert!(guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 0));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16384, 12, true, 0));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, false, 0));

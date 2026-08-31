@@ -160,6 +160,8 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware HLT stall waits for IRQ (do not skip_hlt after BOTH-OK `ataio=0`).
 /// firmware virtual-wire PIC (iron `beb1576` `pic=0 gsi2=0` IF=1 TPR=0).
 /// firmware virtual-wire AEOI (OVMF IDT[0x20] EOIs LAPIC not PIC; do not F11 `eac424b`).
+/// firmware virtual-wire GSI 2 (iron `eac424b` PIC inject then CR8 CpuSleep).
+/// firmware HLT force IF (CpuSleep is `hlt` without `sti`).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
