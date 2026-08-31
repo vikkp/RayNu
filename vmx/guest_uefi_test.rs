@@ -936,6 +936,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 12926eb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eaa580d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 0bb06a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 30b78a0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 12926eb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));

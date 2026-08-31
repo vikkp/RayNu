@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-twentieth slice: firmware take IOAPIC ATA (pin 14 only; do not latch virtio into IRR that ata_irr_only will not inject; F11 pin stays 33418246409 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-twenty-first slice: flash 30b78a0 pin 33422323257 (firmware take IOAPIC ATA CI green; do not F11 0bb06a2 / --run 33418246409). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (firmware take IOAPIC ATA). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash 30b78a0). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-first slice: flash 30b78a0 pin 33422323257 (firmware take IOAPIC ATA CI green; do not F11 0bb06a2 / --run 33418246409); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twentieth slice: firmware take IOAPIC ATA (pin 14 only; do not latch virtio into IRR that ata_irr_only will not inject; F11 pin stays 33418246409 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-nineteenth slice: flash 0bb06a2 pin 33418246409 (firmware ATA IRR only CI green; do not F11 12926eb / --run 33415083012); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighteenth slice: retrigger cdbee39 CI after nested-KVM kill-init (33417361559 iso=0 after GTIMER2; firmware ATA IRR only unchanged; F11 pin stays 33415083012); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

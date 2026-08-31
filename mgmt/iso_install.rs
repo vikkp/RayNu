@@ -197,6 +197,8 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash eaa580d (CI run 33413425759; firmware ATA over PIC).
 /// flash 12926eb (CI run 33415083012; firmware ATA over PIC keeps latched 0x2E).
 /// flash 0bb06a2 (CI run 33418246409; firmware ATA IRR only).
+/// flash 30b78a0 (CI run 33422323257; firmware take IOAPIC ATA).
+/// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
 /// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).
 /// do not F11 eaa580d (same-cycle ATA over PIC; next HLT steals PIC 0x20).
 /// do not F11 bce5bbb (prefer ATA IRR; PIC IRQ 0 starves 0x2E).
