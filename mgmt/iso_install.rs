@@ -225,6 +225,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// nested iso=0 firmware HLT ATA.
 /// firmware SRST ATA IRQ.
 /// product ISO firmware HLT ATA.
+/// product ISO firmware HLT ATA IOAPIC.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
 /// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).

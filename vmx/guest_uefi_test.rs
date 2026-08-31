@@ -1506,7 +1506,7 @@ fn marker_and_residual_honest() {
     assert_eq!(
         guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x2E)),
         0x76,
-        "do not inject leftover 0x2E"
+        "product ISO firmware HLT ATA IOAPIC; do not inject leftover 0x2E"
     );
     assert_eq!(guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x76)), 0x76);
     assert_eq!(
