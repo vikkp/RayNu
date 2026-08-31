@@ -166,6 +166,7 @@ self_test() {
   grep -q '^26db0610$' "$REJECT_FILE"
   grep -q '^6fc742b0$' "$REJECT_FILE"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
+  grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
   grep -q '33345731636' "$SCRIPT_PATH"
@@ -295,8 +296,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# is not F11. Pin d61dc7e (product ISO fw_cfg bootorder virtio-iso scsi@3 first)
-# run 33349142609. Do not F11 5c0f7a2 / run 33347766697 (ATAPI-first bootorder).
+# is not F11. Pin b824789 (product ISO hides PIIX IDE) run 33387614559.
+# Do not F11 d61dc7e / run 33349142609 (ConnectAll IdeBus CpuSleep).
+# Do not F11 5c0f7a2 / run 33347766697 (ATAPI-first bootorder).
 # Do not F11 2ae4544 / run 33345731636 (wakeup without ATA-over-PIT).
 # Iron COM2 8663f56 dest_ok then IN EAX,DX Delay — do not F11 8663f56 /
 # run 33333506987. Iron COM2 084430f Delay then HLT stall — do not F11
@@ -308,41 +310,47 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33321642509" ]]; then
     echo "error: run 33321642509 is 2d6b109 dest skip (identity 0x200000)" >&2
-    echo "       ACPI cannot install. Pin --run 33349142609 (d61dc7e)." >&2
+    echo "       ACPI cannot install. Pin --run 33387614559 (b824789)." >&2
     echo "       FLASHCRUZER-OK for 2d6b109 is not F11." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33333506987" ]]; then
     echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
-    echo "       Pin --run 33349142609 (d61dc7e virtio-iso scsi@3 first)." >&2
+    echo "       Pin --run 33387614559 (b824789 hide PIIX IDE)." >&2
     echo "       do not F11 8663f56 again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33337287432" ]]; then
     echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
-    echo "       Pin --run 33349142609 (d61dc7e virtio-iso scsi@3 first)." >&2
+    echo "       Pin --run 33387614559 (b824789 hide PIIX IDE)." >&2
     echo "       do not F11 084430f again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33345731636" ]]; then
     echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
-    echo "       Pin --run 33349142609 (d61dc7e virtio-iso scsi@3 first)." >&2
+    echo "       Pin --run 33387614559 (b824789 hide PIIX IDE)." >&2
     echo "       do not F11 2ae4544 again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33347766697" ]]; then
     echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
-    echo "       Pin --run 33349142609 (d61dc7e virtio-iso scsi@3 first)." >&2
+    echo "       Pin --run 33387614559 (b824789 hide PIIX IDE)." >&2
     echo "       do not F11 5c0f7a2 again." >&2
     exit 1
   fi
+  if [[ "$PIN_RUN" == "33349142609" ]]; then
+    echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
+    echo "       Pin --run 33387614559 (b824789 hide PIIX IDE)." >&2
+    echo "       do not F11 d61dc7e again." >&2
+    exit 1
+  fi
   case "$HEAD_SHORT" in
-    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*)
-      if [[ "$PIN_RUN" != "33349142609" ]]; then
+    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*)
+      if [[ "$PIN_RUN" != "33387614559" ]]; then
         echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
         echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
         echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
-        echo "       ./tools/flashcruzer.sh --no-git --wait --require-head --run 33349142609 --linux-iso ..." >&2
+        echo "       ./tools/flashcruzer.sh --no-git --wait --require-head --run 33387614559 --linux-iso ..." >&2
         exit 1
       fi
       ;;
@@ -510,7 +518,7 @@ if [[ "$ALLOW_REJECTED" -eq 0 && -f "$REJECT_FILE" ]]; then
     echo "error: EFI prefix $PREFIX is on the known-bad list ($REJECT_FILE)" >&2
     echo "       refusing to flash. Pass --allow-rejected only if you mean it." >&2
     if [[ "$PREFIX" == "6fc742b0" ]]; then
-      echo "       2d6b109 dest skip cannot install ACPI; pin --run 33349142609 (d61dc7e)." >&2
+      echo "       2d6b109 dest skip cannot install ACPI; pin --run 33387614559 (b824789)." >&2
     fi
     exit 1
   fi
