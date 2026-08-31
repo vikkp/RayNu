@@ -339,6 +339,18 @@ pub fn arm_firmware_ata_gsi14() {
     });
 }
 
+/// True when IOAPIC pin 14 is unmasked with IRR (vec `0x2E` ready).
+/// Product HLT/`PREEMPT` `raise_pit` latches PIC IRQ 0; if OVMF unmasked
+/// IRQ 0 while IRQ 14 stays masked, `pic_has_deliverable` steals the
+/// inject cycle and `try_inject` never `take_ioapic_vector`.
+/// firmware ATA over PIC. Not `ISO-INSTALL-OK`.
+pub fn ioapic_ata_ready() -> bool {
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| ioapic_pin_ready(c, ATA_GSI).is_some())
+}
+
 /// True after [`arm_firmware_virtual_wire`] on the product-ISO HLT stall.
 /// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
 pub fn firmware_virtual_wire_armed() -> bool {

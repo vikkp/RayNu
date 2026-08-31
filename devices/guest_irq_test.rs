@@ -2,7 +2,8 @@ use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector,
-    arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ATA_GSI, IOAPIC_GPA,
+    arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready,
+    ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
     ioapic_gsi2_armed,
 };
@@ -275,14 +276,55 @@ fn product_iso_firmware_arm_ata_gsi14_without_pit() {
         !pic_has_deliverable(),
         "firmware arm ATA GSI 14 does not unmask PIC IRQ 0"
     );
+    assert!(
+        ioapic_ata_ready(),
+        "firmware ATA over PIC: pin 14 ready"
+    );
     assert_eq!(
         take_ioapic_vector(),
         Some(0x20 + ATA_GSI),
         "firmware arm ATA GSI 14"
     );
     assert!(
+        !ioapic_ata_ready(),
+        "take consumes pin 14"
+    );
+    assert!(
         take_ioapic_vector().is_none(),
         "PIT pin 2 stays masked"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_ata_over_pic_beats_pit() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    // OVMF APIC-mode leftover: PIT IRQ 0 unmasked, ATA IRQ 14 still masked.
+    let _ = pic_io(0x21, false, 1, 0xFA);
+    let _ = pic_io(0xA1, false, 1, 0xFF);
+    raise_pit();
+    raise_ata();
+    arm_firmware_ata_gsi14();
+    assert!(
+        pic_has_deliverable(),
+        "HLT raise_pit leaves PIC IRQ 0 deliverable"
+    );
+    assert!(
+        ioapic_ata_ready(),
+        "firmware ATA over PIC: pin 14 ready while PIC IRQ 0 is live"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "PIC would take 0x20 and skip_pit would drop it"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x20 + ATA_GSI),
+        "IOAPIC pin 14 still ready after PIC IRQ 0"
     );
     reset();
     reset_cd();

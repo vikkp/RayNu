@@ -99,6 +99,7 @@ use super::{
     guest_uefi_firmware_force_if_for_inject,
     guest_uefi_firmware_arm_ata_gsi14,
     guest_uefi_firmware_prefer_ata_irr,
+    guest_uefi_firmware_ata_over_pic,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -931,6 +932,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ATA over PIC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware force IF for inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 77f5866"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
@@ -1388,12 +1390,24 @@ fn marker_and_residual_honest() {
         "firmware prefer ATA IRR after PACKET"
     );
     assert!(
-        !guest_uefi_firmware_prefer_ata_irr(false, 0),
-        "firmware prefer ATA IRR stays ataio>0"
+        guest_uefi_firmware_prefer_ata_irr(false, 0),
+        "firmware prefer ATA IRR before PACKET when 0x2E is latched"
     );
     assert!(
         !guest_uefi_firmware_prefer_ata_irr(true, 1),
         "linux keeps TPR"
+    );
+    assert!(
+        guest_uefi_firmware_ata_over_pic(false, true),
+        "firmware ATA over PIC"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(true, true),
+        "linux keeps PIC-first"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(false, false),
+        "firmware ATA over PIC only when pin 14 is ready"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),

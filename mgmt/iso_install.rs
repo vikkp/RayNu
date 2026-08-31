@@ -189,6 +189,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14).
 /// flash 489d938 (CI run 33408594472; firmware arm ATA GSI 14).
 /// firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr).
+/// firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip pin 14).
 /// flash bce5bbb (CI run 33411580450; firmware prefer ATA IRR).
 /// do not F11 489d938 (arm GSI 14 TPR-stuck 0x2E).
 /// do not F11 5227ad9 (force-IF pin 14 still masked).
