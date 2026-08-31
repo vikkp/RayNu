@@ -209,6 +209,7 @@ git log -1 --oneline   # want this SHA (flash 12926eb pin 33415083012).
 # Pin --run 33411580450 (bce5bbb firmware prefer ATA IRR). do not F11 489d938.
 # Do not pin --run 33408594472 (489d938 TPR-stuck 0x2E). do not F11 489d938.
 # Do not pin --run 33404368817 (5227ad9 force-IF pin 14 still masked). do not F11 5227ad9.
+# Do not pin --run 33417361559 (cdbee39 nested-KVM kill-init after GTIMER2). retrigger cdbee39. firmware ATA IRR only.
 # Do not pin --run 33402411199 (9df52c5 nested-KVM SHELL flake 5/5). firmware force IF for inject.
 # Do not pin --run 33399209557 (77f5866 skip-PIT IF=0 after PACKET). do not F11 77f5866.
 # Do not pin --run 33397104645 (e70a295 skip-without-inject blocked ATA 14). do not F11 e70a295.

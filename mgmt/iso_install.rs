@@ -191,6 +191,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr).
 /// firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip pin 14 or latched 0x2E).
 /// firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET).
+/// retrigger cdbee39 CI after nested-KVM kill-init (33417361559).
 /// flash bce5bbb (CI run 33411580450; firmware prefer ATA IRR).
 /// flash eaa580d (CI run 33413425759; firmware ATA over PIC).
 /// flash 12926eb (CI run 33415083012; firmware ATA over PIC keeps latched 0x2E).

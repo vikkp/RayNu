@@ -326,6 +326,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # Pin 12926eb (firmware ATA over PIC keeps latched 0x2E) run 33415083012 is F11.
 # After take_ioapic, latched 0x2E must beat the next HLT raise_pit PIC 0x20.
 # firmware ATA IRR only: do not take_highest_irr LVT 0xEF before PACKET.
+# retrigger cdbee39 after nested-KVM kill-init (33417361559 iso=0 after GTIMER2).
 # Do not F11 eaa580d / --run 33413425759 (same-cycle only). Do not F11 bce5bbb
 # / --run 33411580450 (prefer ATA IRR; PIC IRQ 0 starves 0x2E). Do not F11 489d938
 # / --run 33408594472 (TPR-stuck 0x2E). wait_for_irq stays false.
@@ -548,6 +549,12 @@ refuse_2d6b109_dest_skip() {
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33417361559" ]]; then
+    echo "error: run 33417361559 is cdbee39 nested-KVM kill-init after GTIMER2" >&2
+    echo "       firmware ATA IRR only unchanged; flash 12926eb / --run 33415083012." >&2
+    echo "       iso=0 never takes try_inject. Do not F11 cdbee39 / --run 33417361559." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33404368817" ]]; then

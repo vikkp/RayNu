@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-seventeenth slice: firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET; F11 pin stays 33415083012 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-eighteenth slice: retrigger cdbee39 CI after nested-KVM kill-init (33417361559 iso=0 after GTIMER2; firmware ATA IRR only unchanged; F11 pin stays 33415083012). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (firmware ATA IRR only). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (retrigger cdbee39). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighteenth slice: retrigger cdbee39 CI after nested-KVM kill-init (33417361559 iso=0 after GTIMER2; firmware ATA IRR only unchanged; F11 pin stays 33415083012); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventeenth slice: firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET; F11 pin stays 33415083012 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixteenth slice: flash 12926eb pin 33415083012 (firmware ATA over PIC keeps latched 0x2E CI green; do not F11 eaa580d / --run 33413425759); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifteenth slice: firmware ATA over PIC keeps latched 0x2E (next HLT raise_pit must not steal PIC 0x20 after take_ioapic; F11 pin stays 33413425759 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
