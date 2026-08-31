@@ -124,6 +124,46 @@ fn cr8_maps_to_tpr_class() {
 }
 
 #[test]
+fn firmware_prefer_ata_irr_ignores_tpr() {
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    set_cr8(2);
+    latch_irr(0x2E);
+    assert!(has_irr_vec(0x2E), "firmware prefer ATA IRR");
+    assert!(
+        !has_deliverable_irr(),
+        "0x2E class 0x20 is blocked when CR8=2"
+    );
+    assert!(take_deliverable_vector().is_none());
+    let v = take_irr_vec(0x2E, true).expect("firmware prefer ATA IRR");
+    assert_eq!(v, 0x2E);
+    assert!(!has_irr_vec(0x2E));
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
+}
+
+#[test]
+fn firmware_prefer_ata_irr_not_lvt() {
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    set_cr8(2);
+    latch_irr(0x2E);
+    latch_irr(0xEF);
+    assert!(has_irr_vec(0x2E), "firmware prefer ATA IRR");
+    assert!(has_irr_vec(0xEF));
+    let v = take_irr_vec(0x2E, true).expect("firmware prefer ATA IRR not LVT");
+    assert_eq!(v, 0x2E);
+    assert!(has_irr_vec(0xEF), "LVT stays in IRR");
+    assert!(!has_irr_vec(0x2E));
+    let v = take_highest_irr().expect("LVT still pending");
+    assert_eq!(v, 0xEF);
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
+}
+
+#[test]
 fn firmware_lapic_timer_expiry_masked_uses_vec20() {
     assert!(wrmsr(0x80F, 0x1FF).is_some());
     assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());

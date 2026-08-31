@@ -143,6 +143,14 @@ fn highest_bit(regs: *const [u32; 8]) -> Option<u8> {
     }
 }
 
+fn bit_is_set(regs: *const [u32; 8], vec: u8) -> bool {
+    // SAFETY: caller passes APIC_IRR/ISR pointer on VMEXIT path.
+    unsafe {
+        let w = (*regs)[(vec / 32) as usize];
+        (w & (1u32 << (vec % 32))) != 0
+    }
+}
+
 fn set_irr(vec: u8) {
     bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
 }
@@ -392,6 +400,15 @@ pub fn has_pending_irr() -> bool {
     highest_bit(core::ptr::addr_of!(APIC_IRR)).is_some()
 }
 
+/// True when IRR holds `vec` (does not consult TPR/PPR).
+/// firmware prefer ATA IRR. Not `ISO-INSTALL-OK`.
+pub fn has_irr_vec(vec: u8) -> bool {
+    if vec < 16 {
+        return false;
+    }
+    bit_is_set(core::ptr::addr_of!(APIC_IRR), vec)
+}
+
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
 /// Latches IRR (and GTIMER3); does **not** by itself program VM-entry inject.
 pub fn on_host_timer_fire() -> bool {
@@ -454,6 +471,38 @@ pub fn take_deliverable_vector() -> Option<u32> {
 /// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
 pub fn take_highest_irr() -> Option<u32> {
     take_irr_vector(true)
+}
+
+/// Move one chosen IRR bit into ISR. Firmware PACKET prefers ATA `0x2E`
+/// over LVT `0xEF` so ignore-TPR does not livelock the timer ISR
+/// (iron `ea30da1`). After ataio, `has_deliverable_irr` drops class `0x20`
+/// while CR8>=2 (iron `084430f`). firmware prefer ATA IRR.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
+    if vec < 16 {
+        return None;
+    }
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        if !bit_is_set(core::ptr::addr_of!(APIC_IRR), vec) {
+            return None;
+        }
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
+        }
+        bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
+        bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
+        if vec == lvt_timer_vector() || vec == 0xEF {
+            if !APIC_OK {
+                APIC_OK = true;
+                APIC_OK_PRINT = true;
+            }
+        }
+        Some(vec as u32)
+    }
 }
 
 /// True once after GTIMER3 latches; caller should print the COM1 marker.

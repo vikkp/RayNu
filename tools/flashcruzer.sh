@@ -182,6 +182,7 @@ self_test() {
   grep -q '33408594472' "$SCRIPT_PATH"
   grep -q 'flash 489d938' "$SCRIPT_PATH"
   grep -q 'firmware arm ATA GSI 14' "$SCRIPT_PATH"
+  grep -q 'firmware prefer ATA IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -312,7 +313,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin 489d938 (firmware arm ATA GSI 14) run 33408594472 is F11.
+# Pin 489d938 (firmware arm ATA GSI 14) run 33408594472 is F11
+# until firmware prefer ATA IRR CI. After PACKET, take_ioapic consumes
+# pin 14 then CR8>=2 blocks 0x2E in IRR; do not take_highest_irr (LVT 0xEF).
 # wait_for_irq stays false so virtual-wire never unmasks pin 14;
 # 5227ad9 force-IF cannot inject 0x2E. Do not F11 5227ad9 / --run 33404368817.
 # retrigger 9df52c5 after nested-KVM SHELL flake (33402411199 iso=0 5/5).
