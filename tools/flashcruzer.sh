@@ -206,6 +206,8 @@ self_test() {
   grep -q 'flash d7d63ca' "$SCRIPT_PATH"
   grep -q 'do not F11 8e581c7' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
+  grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
+  grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -339,6 +341,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin d7d63ca (firmware PIC ATA) run 33426291731 is F11. EFI 9770864112.
+# firmware OVMF ATA vector. do not clobber IOAPIC ATA vector.
 # firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it.
 # flash 8e581c7 is not F11. do not F11 8e581c7 / --run 33424573770.
 # IOAPIC edge no remote IRR: PACKET after IDENTIFY without IOAPIC EOI.

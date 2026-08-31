@@ -1,8 +1,9 @@
-use super::{
+    use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
+    firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
     ioapic_gsi2_armed,
@@ -360,6 +361,59 @@ fn product_iso_firmware_pic_ata_repeats_without_eoi() {
         Some(0x20 + ATA_GSI),
         "firmware PIC ATA AEOI: PACKET after IDENTIFY without OCW2"
     );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+fn pic_init_ovmf_edk2() {
+    // EDK2 Legacy8259: master 0x68, slave 0x70. IRQ 14 → 0x76.
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x68);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x70);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xFB);
+    let _ = pic_io(0xA1, false, 1, 0xFF);
+}
+
+#[test]
+fn product_iso_firmware_ovmf_ata_vector_not_0x2e() {
+    arm_product_iso();
+    pic_init_ovmf_edk2();
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x76);
+    raise_ata();
+    raise_pit();
+    arm_firmware_ata_gsi14();
+    assert_eq!(
+        firmware_ata_vec(),
+        0x76,
+        "firmware OVMF ATA vector"
+    );
+    assert!(
+        pic_ata_ready(),
+        "firmware PIC ATA: IRQ 14 at EDK2 0x76"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x76),
+        "do not clobber IOAPIC ATA vector: take PIC 0x76 not 0x2E"
+    );
+    assert_eq!(
+        take_ioapic_ata_vector(),
+        Some(0x76),
+        "do not clobber IOAPIC ATA vector"
+    );
+    assert!(
+        firmware_is_pit_vec(0x68),
+        "firmware skip PIT inject: EDK2 IRQ 0 is 0x68"
+    );
+    assert!(!firmware_is_pit_vec(0x76));
+    assert!(firmware_is_pit_vec(0x20));
     reset();
     reset_cd();
     guest_platform::reset();
