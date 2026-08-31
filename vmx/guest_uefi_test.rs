@@ -98,6 +98,8 @@ use super::{
     guest_uefi_nested_iso0_firmware_hlt_ata,
     guest_uefi_nested_iso0_ata_inject_vec,
     guest_uefi_product_firmware_hlt_wake,
+    guest_uefi_product_firmware_hlt_ata,
+    guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1490,6 +1492,23 @@ fn marker_and_residual_honest() {
         guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x68), Some(0x20)),
         0x68
     );
+    assert!(
+        guest_uefi_product_firmware_hlt_ata(false, true, 1, 12),
+        "product ISO firmware HLT ATA"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_ata(false, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_ata(true, true, 1, 12));
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(None),
+        0x76,
+        "product ISO firmware HLT ATA; do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x2E)),
+        0x76,
+        "do not inject leftover 0x2E"
+    );
+    assert_eq!(guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x76)), 0x76);
     assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),
         1,
