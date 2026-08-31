@@ -221,8 +221,8 @@ lsusb | grep -i 0781:5151
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb.
-# firmware prefer ATA IRR. firmware ATA over PIC. F11 pin is --run 33415083012.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. F11 pin is --run 33415083012 until this SHA CI.
 # --run 33415083012 is F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
 # do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
 ```
