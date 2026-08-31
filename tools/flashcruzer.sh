@@ -179,6 +179,9 @@ self_test() {
   grep -q '33402411199' "$SCRIPT_PATH"
   grep -q '33404368817' "$SCRIPT_PATH"
   grep -q 'flash 5227ad9' "$SCRIPT_PATH"
+  grep -q '33408594472' "$SCRIPT_PATH"
+  grep -q 'flash 489d938' "$SCRIPT_PATH"
+  grep -q 'firmware arm ATA GSI 14' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -309,9 +312,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin 5227ad9 (firmware force IF for inject) run 33404368817 is F11
-# until firmware arm ATA GSI 14 CI. wait_for_irq stays false so
-# virtual-wire never unmasks pin 14; force-IF cannot inject 0x2E.
+# Pin 489d938 (firmware arm ATA GSI 14) run 33408594472 is F11.
+# wait_for_irq stays false so virtual-wire never unmasks pin 14;
+# 5227ad9 force-IF cannot inject 0x2E. Do not F11 5227ad9 / --run 33404368817.
 # retrigger 9df52c5 after nested-KVM SHELL flake (33402411199 iso=0 5/5).
 # do not F11 77f5866
 # / 388149b / --run 33399209557 / 33399991049 (skip-PIT IF=0 after PACKET).
@@ -344,7 +347,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33333506987" ]]; then
     echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -358,7 +362,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33337287432" ]]; then
     echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -372,7 +377,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33345731636" ]]; then
     echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -386,7 +392,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33347766697" ]]; then
     echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -400,7 +407,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33349142609" ]]; then
     echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -414,7 +422,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33387614559" ]]; then
     echo "error: run 33387614559 is b824789 skip-after-inject raw pci_ide" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -428,7 +437,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33389381409" ]]; then
     echo "error: run 33389381409 is ea30da1 hide-IDE inject vec=0x20 timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -441,7 +451,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33391068937" ]]; then
     echo "error: run 33391068937 is a2acfc8 n>16384 after hide-IDE timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -454,7 +465,8 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33392055961" ]]; then
     echo "error: run 33392055961 is 56f31d3 scsi@3 first with no El Torito boot option" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -465,7 +477,8 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33394776080" ]]; then
     echo "error: run 33394776080 is 90da03d skip-after-inject ataio==0 parks PACKET HLT" >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -476,7 +489,8 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33397104645" ]]; then
     echo "error: run 33397104645 is e70a295 skip-without-inject blocked ATA 14" >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
@@ -486,28 +500,46 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33399209557" ]]; then
     echo "error: run 33399209557 is 77f5866 skip-PIT IF=0 after PACKET" >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       do not F11 e70a295." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33399991049" ]]; then
     echo "error: run 33399991049 is 388149b pin of 77f5866 skip-PIT IF=0 after PACKET" >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     echo "       do not F11 e70a295." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33402411199" ]]; then
     echo "error: run 33402411199 is 9df52c5 nested-KVM SHELL flake 5/5" >&2
-    echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33404368817" ]]; then
+    echo "error: run 33404368817 is 5227ad9 force-IF with pin 14 still masked" >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33405102333" ]]; then
+    echo "error: run 33405102333 is 807831c pin of 5227ad9 force-IF pin 14 masked" >&2
+    echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
     exit 1
   fi
   case "$HEAD_SHORT" in
-    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*|a2acfc8*|56f31d3*|b8a726d*|90da03d*|82c0fd4*|e70a295*|0541ef0*|77f5866*|388149b*)
+    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*|a2acfc8*|56f31d3*|b8a726d*|90da03d*|82c0fd4*|e70a295*|0541ef0*|77f5866*|388149b*|9df52c5*|5227ad9*|807831c*)
       echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
-      echo "       firmware force IF for inject; flash 5227ad9 / --run 33404368817." >&2
+      echo "       firmware arm ATA GSI 14; flash 489d938 / --run 33408594472." >&2
+      echo "       do not F11 5227ad9 / --run 33404368817." >&2
       echo "       do not F11 77f5866 / --run 33399209557." >&2
       echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
       echo "       do not F11 e70a295." >&2
@@ -519,7 +551,7 @@ refuse_2d6b109_dest_skip() {
       echo "       do not F11 ea30da1 / a2acfc8 / --run 33389381409 / 33391068937." >&2
       echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
       echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
-      echo "       ./tools/flashcruzer.sh --no-git --run 33404368817 --linux-iso ..." >&2
+      echo "       ./tools/flashcruzer.sh --no-git --run 33408594472 --linux-iso ..." >&2
       exit 1
       ;;
   esac

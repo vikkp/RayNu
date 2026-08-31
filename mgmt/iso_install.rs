@@ -187,6 +187,8 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199).
 /// flash 5227ad9 (CI run 33404368817; firmware force IF for inject).
 /// firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14).
+/// flash 489d938 (CI run 33408594472; firmware arm ATA GSI 14).
+/// do not F11 5227ad9 (force-IF pin 14 still masked).
 /// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
 /// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).
