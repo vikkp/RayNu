@@ -89,11 +89,14 @@ use super::{
     guest_uefi_firmware_hlt_skip_after_inject,
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
+    guest_uefi_firmware_leftover_timer_vec,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
+    guest_uefi_product_firmware_hlt_wake,
+    guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
     guest_uefi_ioapic_io_over_pit,
@@ -1423,6 +1426,46 @@ fn marker_and_residual_honest() {
         guest_uefi_firmware_skip_pit_inject(false, 0x20),
         "product skip_pit still drops 0x20"
     );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0xEF),
+        "product skip_pit still drops leftover LVT 0xEF"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x68),
+        "product ISO firmware HLT wake: remapped 0x68 injects"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake(false, true, 0, 12),
+        "product ISO firmware HLT wake"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake(true, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 1, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, false, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 0, 0x1e));
+    assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
+    assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
+    assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, None),
+        0x68,
+        "product ISO firmware HLT wake"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x20), None),
+        0x68
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0xEF)),
+        0x68
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x76), None),
+        0x76
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x68), Some(0x20)),
+        0x68
+    );
     assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),
         1,
@@ -1439,6 +1482,10 @@ fn marker_and_residual_honest() {
     assert!(
         guest_uefi_firmware_skip_pit_inject(false, 0x20),
         "firmware skip PIT inject"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x68),
+        "product ISO firmware HLT wake: remapped 0x68 injects"
     );
     assert!(
         !guest_uefi_firmware_skip_pit_inject(false, 0x2E),
@@ -2582,6 +2629,7 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
         guest_uefi_firmware_skip_pit_inject(false, 0x20),
         "firmware skip PIT inject"
     );
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x68));
     assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E));
     assert_eq!(
         guest_uefi_firmware_force_if_for_inject(false, 0),
