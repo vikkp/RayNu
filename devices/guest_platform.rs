@@ -14,7 +14,8 @@
 //! product ISO hides PIIX IDE),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
-//! uses a real PIC + IOAPIC in `guest_irq`), and a
+//! uses a real PIC + IOAPIC in `guest_irq`; nested iso=0 firmware HLT PIT
+//! shadows OUTs into that chip so CpuSleep can take IRQ 0 after BOTH-OK), and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
 //! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
@@ -1517,6 +1518,11 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     let mask = io_mask(size);
     if is_pic_port(port) && crate::devices::ide_cdrom::product_iso_window_armed() {
         return crate::devices::guest_irq::pic_io(port, is_in, size, rax);
+    }
+    // nested iso=0 firmware HLT PIT: shadow 8259 OUTs so ICW2 is tracked.
+    // Guest INs stay RAZ/WI (lab El Torito).
+    if is_pic_port(port) && !is_in {
+        crate::devices::guest_irq::pic_shadow_out(port, size, rax);
     }
     with_plat(|p| {
         if is_cmos_port(port) {

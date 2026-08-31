@@ -287,6 +287,33 @@ fn pic_raz_not_0xff_on_command_port() {
 }
 
 #[test]
+fn nested_iso0_pic_out_shadow_keeps_raz_in() {
+    reset();
+    crate::devices::ide_cdrom::reset();
+    crate::devices::guest_irq::reset();
+    assert!(!crate::devices::ide_cdrom::product_iso_window_armed());
+    let _ = io(0x20, false, 1, 0x11);
+    let _ = io(0x21, false, 1, 0x68);
+    assert_eq!(io(0x20, true, 1, 0xFFFF) as u8, 0, "8259 PIC RAZ/WI");
+    crate::devices::guest_irq::raise_nested_iso0_pit();
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit(),
+        None,
+        "ICW incomplete until ICW3/ICW4; nested PIT needs ready"
+    );
+    let _ = io(0x21, false, 1, 0x04);
+    let _ = io(0x21, false, 1, 0x01);
+    crate::devices::guest_irq::raise_nested_iso0_pit();
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit(),
+        Some(0x68),
+        "nested iso=0 firmware HLT PIT"
+    );
+    crate::devices::guest_irq::reset();
+    reset();
+}
+
+#[test]
 fn cmos_index_is_latched() {
     reset();
     let _ = io(0x70, false, 1, 0x8F);

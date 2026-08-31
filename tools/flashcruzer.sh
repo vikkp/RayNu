@@ -222,6 +222,7 @@ self_test() {
   grep -q '33437881901' "$SCRIPT_PATH"
   grep -q 'retrigger 0d36b53' "$SCRIPT_PATH"
   grep -q '33438918646' "$SCRIPT_PATH"
+  grep -q '33440951898' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -229,6 +230,7 @@ self_test() {
   grep -q 'do not clobber PIC ICW2' "$SCRIPT_PATH"
   grep -q 'PIC ATA vector follows ICW2' "$SCRIPT_PATH"
   grep -q 'firmware HLT insn_len 0 skip' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT PIT' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -365,6 +367,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # flash a14223f is not F11. do not F11 a14223f / --run 33436232227.
 # flash 4730397 is not F11. do not F11 4730397 / --run 33436822494.
 # firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
+# nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0).
+# do not F11 c0c9810 / --run 33440951898.
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
@@ -651,6 +655,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33438918646 is 9299888 retrigger nested ATAPI miss (ataio=0 packet=0)" >&2
     echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 9299888 / --run 33438918646." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33440951898" ]]; then
+    echo "error: run 33440951898 is c0c9810 pin-docs nested ATAPI miss (ataio=0)" >&2
+    echo "       nested iso=0 firmware HLT PIT; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c0c9810 / --run 33440951898." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

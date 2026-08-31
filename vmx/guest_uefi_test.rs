@@ -91,6 +91,7 @@ use super::{
     guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
+    guest_uefi_nested_iso0_firmware_hlt_pit,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
     guest_uefi_ioapic_io_over_pit,
@@ -955,6 +956,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber PIC ICW2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIC ATA vector follows ICW2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1378,6 +1380,18 @@ fn marker_and_residual_honest() {
         "firmware HLT skip after ataio"
     );
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(false, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT PIT"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_pit(true, false, true, 0, 12),
+        "product ISO keeps skip_pit; nested PIT is iso=0 only"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, true, true, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, false, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 1, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 0x1e));
     assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),
         1,

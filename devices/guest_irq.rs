@@ -214,6 +214,35 @@ pub fn raise_pit() {
     raise_ioapic_gsi(PIT_IOAPIC_GSI);
 }
 
+/// Nested iso=0 firmware HLT: latch PIC IRQ 0 without IOAPIC pin 2.
+/// Guest-visible 8259 stays RAZ/WI; OUTs are shadowed so ICW2 is live.
+/// Do not unmask via virtual-wire (iron `ea30da1`). If OVMF already
+/// remapped+unmasked IRQ 0, peek can deliver. If IRQ 0 is masked, unmask
+/// only that bit once the 8259 is ready (do not clobber PIC ICW2).
+/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_pit() {
+    crate::devices::guest_platform::pit_tick();
+    with_irq(|c| {
+        raise_pic_locked(c, PIT_IRQ);
+        if c.master.ready && c.master.vector >= 16 {
+            c.master.imr &= !1;
+        }
+    });
+}
+
+/// Consume PIC IRQ 0 on the iso=0 shadow 8259. Product ISO uses
+/// [`take_pic_vector`]. nested iso=0 firmware HLT PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_pit() -> Option<u8> {
+    with_irq(pic_take)
+}
+
+/// Shadow iso=0 8259 OUTs into IrqChip. Guest INs stay RAZ/WI.
+/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn pic_shadow_out(port: u16, size: u8, rax: u64) {
+    let _ = pic_io(port, false, size, rax);
+}
+
 /// Latch 8259 IRR only. PIT uses this so IOAPIC pin 0 stays clear.
 fn raise_pic_irq(irq: u8) {
     if !product_live() {
