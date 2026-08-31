@@ -2,6 +2,7 @@
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, pic_shadow_out, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
     raise_pit, raise_nested_iso0_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector, take_nested_iso0_pit,
+    take_nested_iso0_pit_or_edk2, nested_iso0_irq0_vec, NESTED_ISO0_EDK2_IRQ0,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
@@ -67,6 +68,42 @@ fn nested_iso0_firmware_hlt_pit_follows_icw2() {
         "nested iso=0 firmware HLT PIT"
     );
     assert!(take_nested_iso0_pit().is_none());
+    raise_nested_iso0_pit();
+    assert_eq!(
+        take_nested_iso0_pit_or_edk2(),
+        0x68,
+        "nested iso=0 EDK2 IRQ0 after take"
+    );
+    reset();
+}
+
+#[test]
+fn nested_iso0_edk2_irq0_when_pic_take_none() {
+    reset();
+    reset_cd();
+    guest_platform::reset();
+    assert!(!crate::devices::ide_cdrom::product_iso_window_armed());
+    assert_eq!(nested_iso0_irq0_vec(), NESTED_ISO0_EDK2_IRQ0);
+    raise_nested_iso0_pit();
+    assert!(
+        take_nested_iso0_pit().is_none(),
+        "no ICW: pic_take still needs ready"
+    );
+    assert_eq!(
+        take_nested_iso0_pit_or_edk2(),
+        0x68,
+        "nested iso=0 EDK2 IRQ0"
+    );
+    pic_shadow_out(0x20, 1, 0x11);
+    pic_shadow_out(0x21, 1, 0x68);
+    assert_eq!(nested_iso0_irq0_vec(), 0x68, "ICW2 without ICW4");
+    raise_nested_iso0_pit();
+    assert!(take_nested_iso0_pit().is_none(), "ICW4 pending");
+    assert_eq!(
+        take_nested_iso0_pit_or_edk2(),
+        0x68,
+        "nested iso=0 EDK2 IRQ0 follows ICW2"
+    );
     reset();
 }
 

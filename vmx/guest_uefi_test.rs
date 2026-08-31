@@ -1393,6 +1393,11 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 1, 12));
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 0x1e));
     assert_eq!(
+        crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ0,
+        0x68,
+        "nested iso=0 EDK2 IRQ0"
+    );
+    assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),
         1,
         "firmware HLT insn_len 0 skip"

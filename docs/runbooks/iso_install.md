@@ -223,6 +223,7 @@ git log -1 --oneline   # want this SHA (flash b5c3a9c pin 33440050729).
 # Do not pin --run 33408594472 (489d938 TPR-stuck 0x2E). do not F11 489d938.
 # Do not pin --run 33404368817 (5227ad9 force-IF pin 14 still masked). do not F11 5227ad9.
 # Do not pin --run 33440951898 (c0c9810 pin-docs nested ATAPI miss ataio=0). nested iso=0 firmware HLT PIT.
+# Do not pin --run 33443188019 (3ff3cf9 nested PIT VMXON-SKIP). nested iso=0 EDK2 IRQ0.
 # Do not pin --run 33438918646 (9299888 retrigger nested ATAPI miss ataio=0). firmware HLT insn_len 0 skip.
 # Do not pin --run 33437881901 (0d36b53 nested ATAPI miss ataio=0 packet=0). retrigger 0d36b53. PIC ATA vector follows ICW2.
 # Do not pin --run 33430294210 (5a69de2 nested-KVM kill-init after GTIMER2). retrigger 5a69de2. firmware OVMF ATA vector.
@@ -239,7 +240,7 @@ lsusb | grep -i 0781:5151
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E. do not clobber PIC ICW2. PIC ATA vector follows ICW2. firmware HLT insn_len 0 skip. nested iso=0 firmware HLT PIT. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7. flash d7d63ca. flash e4faceb. flash 3b7bbac. flash a14223f. flash b5c3a9c.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E. do not clobber PIC ICW2. PIC ATA vector follows ICW2. firmware HLT insn_len 0 skip. nested iso=0 firmware HLT PIT. nested iso=0 EDK2 IRQ0. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7. flash d7d63ca. flash e4faceb. flash 3b7bbac. flash a14223f. flash b5c3a9c.
 # firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33440050729.
 # --run 33440050729 is F11. --run 33436232227 is not F11. --run 33436822494 is not F11. --run 33433126839 is not F11. --run 33429494930 is not F11. --run 33426291731 is not F11. --run 33424573770 is not F11. --run 33422323257 is not F11. --run 33418246409 is not F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
 # do not F11 a14223f. do not F11 3b7bbac. do not F11 d7d63ca. do not F11 8e581c7. do not F11 30b78a0. do not F11 0bb06a2. do not F11 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.

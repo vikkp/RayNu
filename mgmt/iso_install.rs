@@ -219,6 +219,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// PIC ATA vector follows ICW2.
 /// firmware HLT insn_len 0 skip.
 /// nested iso=0 firmware HLT PIT.
+/// nested iso=0 EDK2 IRQ0.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
 /// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).

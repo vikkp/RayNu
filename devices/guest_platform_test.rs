@@ -301,6 +301,11 @@ fn nested_iso0_pic_out_shadow_keeps_raz_in() {
         None,
         "ICW incomplete until ICW3/ICW4; nested PIT needs ready"
     );
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit_or_edk2(),
+        0x68,
+        "nested iso=0 EDK2 IRQ0"
+    );
     let _ = io(0x21, false, 1, 0x04);
     let _ = io(0x21, false, 1, 0x01);
     crate::devices::guest_irq::raise_nested_iso0_pit();

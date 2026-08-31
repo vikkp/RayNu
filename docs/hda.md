@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-thirty-eighth slice: nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0; product skip_pit / wait_for_irq unchanged; F11 pin stays 33440050729). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-thirty-ninth slice: nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; PIC take-None injects 0x68; product skip_pit / wait_for_irq unchanged; F11 pin stays 33440050729). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware HLT PIT; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 EDK2 IRQ0; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-ninth slice: nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; PIC take-None injects 0x68; product skip_pit / wait_for_irq unchanged; F11 pin stays 33440050729); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-eighth slice: nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0; product skip_pit / wait_for_irq unchanged; F11 pin stays 33440050729); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-seventh slice: flash b5c3a9c pin 33440050729 (firmware HLT insn_len 0 skip CI green; EFI 9775891845; do not F11 a14223f / --run 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-sixth slice: firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

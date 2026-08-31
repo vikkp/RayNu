@@ -223,6 +223,8 @@ self_test() {
   grep -q 'retrigger 0d36b53' "$SCRIPT_PATH"
   grep -q '33438918646' "$SCRIPT_PATH"
   grep -q '33440951898' "$SCRIPT_PATH"
+  grep -q '33443188019' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -368,7 +370,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # flash 4730397 is not F11. do not F11 4730397 / --run 33436822494.
 # firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
 # nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0).
+# nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # do not F11 c0c9810 / --run 33440951898.
+# do not F11 3ff3cf9 / --run 33443188019.
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
@@ -661,6 +665,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33440951898 is c0c9810 pin-docs nested ATAPI miss (ataio=0)" >&2
     echo "       nested iso=0 firmware HLT PIT; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 c0c9810 / --run 33440951898." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33443188019" ]]; then
+    echo "error: run 33443188019 is 3ff3cf9 nested PIT VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 EDK2 IRQ0; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 3ff3cf9 / --run 33443188019." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

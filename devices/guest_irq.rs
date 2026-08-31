@@ -218,13 +218,13 @@ pub fn raise_pit() {
 /// Guest-visible 8259 stays RAZ/WI; OUTs are shadowed so ICW2 is live.
 /// Do not unmask via virtual-wire (iron `ea30da1`). If OVMF already
 /// remapped+unmasked IRQ 0, peek can deliver. If IRQ 0 is masked, unmask
-/// only that bit once the 8259 is ready (do not clobber PIC ICW2).
-/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+/// only that bit once ICW2 is ≥ 16 (do not wait for ICW4 `ready`; do not
+/// clobber PIC ICW2). nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
 pub fn raise_nested_iso0_pit() {
     crate::devices::guest_platform::pit_tick();
     with_irq(|c| {
         raise_pic_locked(c, PIT_IRQ);
-        if c.master.ready && c.master.vector >= 16 {
+        if c.master.vector >= 16 {
             c.master.imr &= !1;
         }
     });
@@ -235,6 +235,32 @@ pub fn raise_nested_iso0_pit() {
 /// Not `ISO-INSTALL-OK`.
 pub fn take_nested_iso0_pit() -> Option<u8> {
     with_irq(pic_take)
+}
+
+/// EDK2 `Legacy8259` master ICW2. nested iso=0 EDK2 IRQ0.
+/// Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_IRQ0: u8 = 0x68;
+
+/// Shadowed IRQ 0 vector, else EDK2 `0x68`. `pic_take` needs ICW4 `ready`;
+/// nested CpuSleep after BOTH-OK still WaitForInterrupt if ICW is incomplete
+/// (CI `33440951898` skip-without-inject; `3ff3cf9` take-None is a no-op).
+/// Product ISO never calls this. nested iso=0 EDK2 IRQ0.
+/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn nested_iso0_irq0_vec() -> u8 {
+    with_irq(|c| {
+        if c.master.vector >= 16 {
+            c.master.vector
+        } else {
+            NESTED_ISO0_EDK2_IRQ0
+        }
+    })
+}
+
+/// PIC take when the shadow 8259 can deliver, else EDK2 IRQ0 `0x68`.
+/// nested iso=0 EDK2 IRQ0. nested iso=0 firmware HLT PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_pit_or_edk2() -> u8 {
+    take_nested_iso0_pit().unwrap_or_else(nested_iso0_irq0_vec)
 }
 
 /// Shadow iso=0 8259 OUTs into IrqChip. Guest INs stay RAZ/WI.
