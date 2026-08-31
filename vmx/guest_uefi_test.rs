@@ -1409,7 +1409,7 @@ fn marker_and_residual_honest() {
     );
     assert!(
         !guest_uefi_firmware_ata_over_pic(false, false),
-        "firmware ATA over PIC only when pin 14 is ready"
+        "firmware ATA over PIC only when pin 14 or latched 0x2E is ready"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),

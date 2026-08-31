@@ -1313,14 +1313,16 @@ pub fn guest_uefi_firmware_prefer_ata_irr(linux: bool, _ataio: u32) -> bool {
     !linux
 }
 
-/// Firmware: IOAPIC ATA pin 14 beats PIC IRQ 0.
+/// Firmware: ATA `0x2E` beats PIC IRQ 0.
 /// Product HLT/`PREEMPT` always `raise_pit`. OVMF that unmasks PIC IRQ 0
 /// while masking IRQ 14 makes `pic_before_lapic` skip `take_ioapic_vector`;
 /// `skip_pit_inject` then drops `0x20` and PACKET never sees `0x2E`.
-/// Linux keeps PIC-first / GSI 2. wait_for_irq stays false.
-/// firmware ATA over PIC. Not `ISO-INSTALL-OK`.
-pub fn guest_uefi_firmware_ata_over_pic(linux: bool, ata_ioapic_ready: bool) -> bool {
-    !linux && ata_ioapic_ready
+/// After `take_ioapic` accepts pin 14, IRR holds `0x2E` but pin 14 is no
+/// longer ready: the next HLT `raise_pit` would steal PIC `0x20` unless
+/// latched `0x2E` also counts. Linux keeps PIC-first / GSI 2.
+/// wait_for_irq stays false. firmware ATA over PIC. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_ata_over_pic(linux: bool, ata_ready: bool) -> bool {
+    !linux && ata_ready
 }
 
 /// Linux programmed IOAPIC pin 2 (MADT IRQ0 ISO). Prefer that path.
@@ -9324,9 +9326,11 @@ unsafe fn try_inject_guest_irq() {
     let mut use_pic = guest_uefi_pic_before_lapic(pic_ready, gsi2_armed, linux);
     let ignore_tpr = guest_uefi_firmware_hlt_ignores_tpr(linux, pci_ide, ataio);
     let prefer_ata = guest_uefi_firmware_prefer_ata_irr(linux, ataio);
-    // firmware ATA over PIC: HLT raise_pit PIC IRQ 0 must not skip pin 14.
-    if guest_uefi_firmware_ata_over_pic(linux, crate::devices::guest_irq::ioapic_ata_ready())
-    {
+    // firmware ATA over PIC: HLT raise_pit PIC IRQ 0 must not skip pin 14
+    // or a 0x2E already latched into IRR after take_ioapic.
+    let ata_ready = crate::devices::guest_irq::ioapic_ata_ready()
+        || crate::devices::lapic_virt::has_irr_vec(0x2E);
+    if guest_uefi_firmware_ata_over_pic(linux, ata_ready) {
         use_pic = false;
     }
     if !use_pic {
