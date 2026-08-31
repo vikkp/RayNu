@@ -178,7 +178,9 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// do not F11 56f31d3 (scsi@3 first was not an El Torito boot option).
 /// flash 90da03d (CI run 33394776080; El Torito ide@ first).
 /// firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active).
+/// firmware skip PIT inject (ATA 14 / virtio INTx still inject; not PIT 0x20).
 /// do not F11 90da03d (ataio==0 skip parked PACKET HLT at RET).
+/// do not F11 e70a295 (skip-without-inject blocked ATA 14).
 /// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
 /// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).

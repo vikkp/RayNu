@@ -88,6 +88,7 @@ use super::{
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_hlt_skip_after_inject,
     guest_uefi_firmware_hlt_skip_without_inject,
+    guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1339,6 +1340,18 @@ fn marker_and_residual_honest() {
         "firmware HLT skip without inject"
     );
     assert!(!guest_uefi_firmware_hlt_skip_without_inject(true));
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "firmware skip PIT inject"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x2E),
+        "firmware skip PIT inject: ATA 14 still injects"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(true, 0x20),
+        "linux still injects PIT 0x20"
+    );
     assert_eq!(guest_uefi_firmware_hlt_skip_len(true), 1, "firmware HLT skip after inject");
     assert_eq!(guest_uefi_firmware_hlt_skip_len(false), 0, "nested iso=0 keeps skip_hlt");
     assert_eq!(
@@ -2394,6 +2407,11 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
         !guest_uefi_firmware_hlt_wait_for_irq(true, 1, 12, true, 0),
         "firmware HLT skip without inject"
     );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "firmware skip PIT inject"
+    );
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E));
     assert!(
         guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
         "product ISO quiet tick arms with the window, not n>16384"

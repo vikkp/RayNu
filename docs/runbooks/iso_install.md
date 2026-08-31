@@ -201,17 +201,19 @@ cd ~/projects/raynu
 # FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # want this SHA (flash e70a295 pin 33397104645).
-# Pin --run 33397104645 (e70a295 firmware HLT skip after ataio). do not F11 90da03d.
-# Pin --run 33394776080 (90da03d El Torito ide@ first). do not F11 56f31d3.
+git log -1 --oneline   # want this SHA (firmware skip PIT inject; wait for CI).
+# Do not pin --run 33397104645 (e70a295 skip-without-inject blocked ATA 14). do not F11 e70a295.
+# Pin --run 33394776080 (90da03d El Torito ide@ first). do not F11 90da03d.
 # Do not pin --run 33392055961 (56f31d3 scsi@3 first, no El Torito boot option). do not F11 56f31d3.
 # Do not pin --run 33389381409 (ea30da1 inject vec=0x20 timer ISR).
 # Do not pin --run 33391068937 (a2acfc8 n>16384 after that boot ended).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --no-git --run 33397104645 \
+./tools/flashcruzer.sh --wait --require-head --no-git \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
+# firmware skip PIT inject. firmware HLT skip after ataio. flash e70a295.
+# --run 33397104645 is not F11. do not F11 e70a295. do not F11 90da03d.
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`

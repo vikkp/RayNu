@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-third slice: flash e70a295 pin 33397104645 (firmware HLT skip after ataio CI green; do not F11 90da03d). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-fourth slice: firmware skip PIT inject (ATA 14 / virtio INTx still inject; do not F11 e70a295). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash e70a295). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (firmware skip PIT inject). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fourth slice: firmware skip PIT inject (ATA 14 / virtio INTx still inject; do not F11 e70a295); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-third slice: flash e70a295 pin 33397104645 (firmware HLT skip after ataio CI green; do not F11 90da03d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-second slice: firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active; do not F11 90da03d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-first slice: flash 90da03d pin 33394776080 (product ISO fw_cfg bootorder El Torito ide@ first CI green; do not F11 56f31d3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
