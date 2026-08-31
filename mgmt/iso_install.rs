@@ -179,6 +179,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash 90da03d (CI run 33394776080; El Torito ide@ first).
 /// firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active).
 /// do not F11 90da03d (ataio==0 skip parked PACKET HLT at RET).
+/// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
 /// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).
 /// firmware HLT skip without inject (iron COM2 ea30da1 inject vec=0x20 timer ISR;
