@@ -97,6 +97,7 @@ use super::{
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
     guest_uefi_nested_iso0_ata_inject_vec,
+    guest_uefi_nested_iso0_ata_lapic,
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
@@ -1422,7 +1423,17 @@ fn marker_and_residual_honest() {
         0x76,
         "do not inject leftover 0x2E"
     );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(Some(0xEF)),
+        0x76,
+        "nested iso=0 firmware HLT ATA LAPIC; do not inject leftover 0xEF"
+    );
     assert_eq!(guest_uefi_nested_iso0_ata_inject_vec(Some(0x76)), 0x76);
+    assert!(
+        guest_uefi_nested_iso0_ata_lapic(None),
+        "nested iso=0 firmware HLT ATA LAPIC"
+    );
+    assert!(!guest_uefi_nested_iso0_ata_lapic(Some(0x76)));
     assert_eq!(
         crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ0,
         0x68,

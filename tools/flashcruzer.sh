@@ -229,12 +229,14 @@ self_test() {
   grep -q '33446918467' "$SCRIPT_PATH"
   grep -q '33448452364' "$SCRIPT_PATH"
   grep -q '33449291916' "$SCRIPT_PATH"
+  grep -q '33450139765' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT ATA' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT ATA' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT ATA IOAPIC' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT ATA LAPIC' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -387,6 +389,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # firmware SRST ATA IRQ (product SRST deassert raises IRQ 14).
 # product ISO firmware HLT ATA (CI 33448452364 VMXON-SKIP; IDENTIFY WaitForInterrupt 0x76).
 # product ISO firmware HLT ATA IOAPIC (CI 33449291916 VMXON-SKIP; pic=0 take pin 14).
+# nested iso=0 firmware HLT ATA LAPIC (CI 33450139765 VMXON-SKIP; pic=0 latch 0x76).
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
 # do not F11 deb64f5 / --run 33444677681.
@@ -394,6 +397,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 2b1433f / --run 33446918467.
 # do not F11 61eef92 / --run 33448452364.
 # do not F11 05938ac / --run 33449291916.
+# do not F11 fe05f78 / --run 33450139765.
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
@@ -722,6 +726,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33449291916 is 05938ac product HLT ATA VMXON-SKIP (not ATAPI-OK)" >&2
     echo "       product ISO firmware HLT ATA IOAPIC; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 05938ac / --run 33449291916." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33450139765" ]]; then
+    echo "error: run 33450139765 is fe05f78 product ATA IOAPIC VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware HLT ATA LAPIC; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 fe05f78 / --run 33450139765." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
