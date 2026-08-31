@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-twenty-sixth slice: firmware OVMF ATA vector (do not clobber IOAPIC ATA to 0x2E; EDK2 8259 0x70→0x76). F11 pin stays 33426291731 until this CI. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-twenty-seventh slice: flash e4faceb pin 33429494930 (firmware OVMF ATA vector CI green; do not F11 d7d63ca / --run 33426291731). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (firmware OVMF ATA vector). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash e4faceb pin 33429494930). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-seventh slice: flash e4faceb pin 33429494930 (firmware OVMF ATA vector CI green; do not F11 d7d63ca / --run 33426291731); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-sixth slice: firmware OVMF ATA vector (do not clobber IOAPIC ATA to 0x2E; EDK2 8259 0x70→0x76; F11 pin stays 33426291731 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-fifth slice: flash d7d63ca pin 33426291731 (firmware PIC ATA CI green; do not F11 8e581c7 / --run 33424573770); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-fourth slice: firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it; F11 pin stays 33424573770 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
