@@ -8,7 +8,8 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
+//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (iso=0 CD then virtio disk;
+//! product ISO fw_cfg bootorder virtio-iso scsi@3 first),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
 //! uses a real PIC + IOAPIC in `guest_irq`), and a
@@ -163,18 +164,51 @@ pub const E820_LOW_1M: u64 = 0x100000;
 pub const E820_ENTRY_COUNT: u8 = 6;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
-/// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
-/// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk at `00:02.0` (`scsi@2`).
-/// Nested VT-x BOTH-OK with `ataio=0`: ConnectDevicesFromQemu of `scsi@0`
-/// enumerated IDE fn1 as a sibling and did not Start AtaAtapiPassThru.
-/// QEMU/OVMF TranslatePciOfwNodes: `ide@1,1/drive@0/disk@0` →
-/// `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`. Master is `DEV=0`.
-/// Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects the file unless the
-/// last byte is `'\0'` (`RETURN_INVALID_PARAMETER` otherwise).
+/// QEMU `bootorder` (OFW paths) for **iso=0** / lab El Torito. PIIX IDE
+/// `00:01.1` first (`ide@1,1`), then virtio-fn1 `00:00.1` (`ide@0,1`), then
+/// virtio disk at `00:02.0` (`scsi@2`). Nested VT-x BOTH-OK with `ataio=0`:
+/// ConnectDevicesFromQemu of `scsi@0` enumerated IDE fn1 as a sibling and
+/// did not Start AtaAtapiPassThru. QEMU/OVMF TranslatePciOfwNodes:
+/// `ide@1,1/drive@0/disk@0` → `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`.
+/// Master is `DEV=0`. Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects
+/// the file unless the last byte is `'\0'` (`RETURN_INVALID_PARAMETER`
+/// otherwise). Product ISO uses [`BOOTORDER_PRODUCT`].
 pub const BOOTORDER: &[u8] =
     b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
-/// Product boot order is CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
+/// Product ISO `bootorder`. Virtio-iso `00:03.0` first (`scsi@3`) so OVMF
+/// `ConnectDevicesFromQemu` Starts VirtioBlkDxe on the hybrid ISO and never
+/// Starts AtaAtapiPassThru. Iron COM2 `eac424b`: ATAPI-first `ide@1,1` hung
+/// CpuSleep `rip=0x7f0680d0` `ataio=0`. Empty install target `scsi@2` is
+/// second — never first (that would try to boot the blank disk). No `ide@`
+/// paths: iterating ATAPI after virtio would still hang IdeBus Start.
+/// iso=0 [`BOOTORDER`] stays CD then disk. Trailing NUL required.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+pub const BOOTORDER_PRODUCT: &[u8] =
+    b"/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+
+/// Live fw_cfg `bootorder` bytes. Product window → virtio-iso first.
+pub fn bootorder_bytes() -> &'static [u8] {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        BOOTORDER_PRODUCT
+    } else {
+        BOOTORDER
+    }
+}
+
+/// Product boot order is virtio-iso then empty virtio disk (ADR-014).
+/// iso=0 [`boot_order_cd_then_disk`] is unchanged.
+pub fn boot_order_product_virtio_iso_first() -> bool {
+    let iso = find_bytes(BOOTORDER_PRODUCT, b"scsi@3");
+    let disk = find_bytes(BOOTORDER_PRODUCT, b"scsi@2");
+    let ide = find_bytes(BOOTORDER_PRODUCT, b"ide@");
+    match (iso, disk, ide) {
+        (Some(i), Some(d), None) => i < d,
+        _ => false,
+    }
+}
+
+/// iso=0 / lab El Torito: CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
 pub fn boot_order_cd_then_disk() -> bool {
     let piix = find_bytes(BOOTORDER, b"ide@1,1/drive@0");
     let fn1 = find_bytes(BOOTORDER, b"ide@0,1/drive@0");
@@ -188,7 +222,7 @@ pub fn boot_order_cd_then_disk() -> bool {
 
 /// OVMF `ConnectDevicesFromQemu` / `StoreQemuBootOrder` require a C string.
 pub fn bootorder_nul_terminated() -> bool {
-    matches!(BOOTORDER.last(), Some(&0))
+    matches!(BOOTORDER.last(), Some(&0)) && matches!(BOOTORDER_PRODUCT.last(), Some(&0))
 }
 
 /// True when splash-time is 0 ms so OVMF skips BdsWait / FrontPage delay.
@@ -238,7 +272,7 @@ fn file_dir_byte(off: u16) -> u8 {
     match ent {
         0 => file_entry_byte(
             i,
-            BOOTORDER.len() as u32,
+            bootorder_bytes().len() as u32,
             FW_CFG_BOOTORDER_SEL,
             b"bootorder",
         ),
@@ -959,6 +993,7 @@ static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
 static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
 static FWCFG_ACPI: AtomicBool = AtomicBool::new(false);
+static FWCFG_BOOT_PRODUCT_LOG: AtomicBool = AtomicBool::new(false);
 static PM1_SCI: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
@@ -1074,8 +1109,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 2;
         }
         FW_CFG_BOOTORDER_SEL => {
-            p.fw_len = BOOTORDER.len() as u16;
+            p.fw_len = bootorder_bytes().len() as u16;
             FWCFG_BOOT.store(true, Ordering::Release);
+            if crate::devices::ide_cdrom::product_iso_window_armed() {
+                note_fwcfg_bootorder_product();
+            }
         }
         FW_CFG_E820_SEL => {
             p.fw_len = u16::from(E820_FILE_BYTES);
@@ -1118,6 +1156,14 @@ fn note_fwcfg_acpi() {
     }
 }
 
+fn note_fwcfg_bootorder_product() {
+    if !FWCFG_BOOT_PRODUCT_LOG.swap(true, Ordering::Release) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO fw_cfg bootorder virtio-iso scsi@3 first (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 fn note_cmos_mem(idx: u8) {
     if matches!(
         idx,
@@ -1140,6 +1186,7 @@ pub fn reset() {
     FWCFG_DIR.store(false, Ordering::Release);
     FWCFG_WAIT.store(false, Ordering::Release);
     FWCFG_ACPI.store(false, Ordering::Release);
+    FWCFG_BOOT_PRODUCT_LOG.store(false, Ordering::Release);
     PM1_SCI.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
@@ -1491,7 +1538,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             let b = match p.fw_sel {
                                 FW_CFG_FILE_DIR => file_dir_byte(p.fw_off),
                                 FW_CFG_BOOTORDER_SEL => {
-                                    BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
+                                    bootorder_bytes().get(p.fw_off as usize).copied().unwrap_or(0)
                                 }
                                 FW_CFG_E820_SEL => e820_byte(p.fw_off),
                                 crate::devices::guest_acpi::FW_CFG_ACPI_LOADER_SEL => {

@@ -909,6 +909,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware LAPIC timer expiry"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IOAPIC I/O over PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder virtio-iso scsi@3 first"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b26c86a"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));

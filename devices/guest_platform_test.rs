@@ -1,5 +1,5 @@
 use super::{
-    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
+    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, boot_order_product_virtio_iso_first, bootorder_bytes, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
@@ -7,7 +7,7 @@ use super::{
     is_piix_pm_io, is_acpi_pm1_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
-    platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
+    platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOTORDER_PRODUCT, BOOT_MENU_WAIT,
     E820_ENTRY_BYTES, E820_ENTRY_COUNT, E820_FILE_BYTES, E820_MID_GAP_BASE, E820_MID_GAP_BYTES,
     E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RAM, E820_VGA_BASE, E820_VGA_BYTES, E820_LOW_1M,
     E820_RESERVED, FW_CFG_BOOTORDER_SEL, FW_CFG_BOOT_MENU, FW_CFG_BOOT_WAIT_SEL,
@@ -90,6 +90,38 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert!(BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
     assert!(fwcfg_bootorder_served());
     reset();
+}
+
+#[test]
+fn product_iso_fwcfg_bootorder_virtio_iso_first() {
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert!(boot_order_cd_then_disk());
+    assert!(boot_order_product_virtio_iso_first());
+    assert!(bootorder_nul_terminated());
+    assert_eq!(bootorder_bytes(), BOOTORDER);
+    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
+    assert!(BOOTORDER_PRODUCT.starts_with(b"/pci@i0cf8/scsi@3/disk@0,0"));
+    assert!(!BOOTORDER_PRODUCT.windows(4).any(|w| w == b"ide@"));
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    crate::devices::ide_cdrom::write_placeholder_iso(
+        &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+    );
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(crate::devices::ide_cdrom::product_iso_window_armed());
+    assert_eq!(bootorder_bytes(), BOOTORDER_PRODUCT);
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
+    let n = BOOTORDER_PRODUCT.len();
+    let mut got = vec![0u8; n];
+    for b in got.iter_mut() {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    assert_eq!(&got[..], BOOTORDER_PRODUCT);
+    assert!(fwcfg_bootorder_served());
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert_eq!(bootorder_bytes(), BOOTORDER);
 }
 
 #[test]

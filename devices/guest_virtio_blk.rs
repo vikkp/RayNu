@@ -19,8 +19,10 @@
 //! to virtio `0x1042`, so DXE `PciRead16(OVMF_HOSTBRIDGE_DID)` missed the
 //! switch. `00:00.0` stays i440FX; latch reveals virtio at `00:02.0`.
 //! Header Type on slot 0 stays multifunction so a walk finds IDE fn1.
-//! PIIX `00:01.1` is the same CD. Boot order is CD then disk (fw_cfg
-//! `bootorder`). Do **not** move virtio to `00:00.0`.
+//! PIIX `00:01.1` is the same CD. iso=0 boot order is CD then disk.
+//! product ISO fw_cfg bootorder virtio-iso scsi@3 first (empty scsi@2
+//! second; ConnectDevicesFromQemu never Starts IdeBus). Do **not**
+//! move virtio to `00:00.0`.
 //! Lab stub: vendor cap `0x0001_0010` (enum only, not queues); slot 3 empty.
 //! Product ISO window: virtio-pci caps type 1/2/3/4 + trap-and-emulate BAR
 //! MMIO + split virtqueue IN/OUT/FLUSH (every data descriptor in the chain,
