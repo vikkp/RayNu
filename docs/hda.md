@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-thirty-fifth slice: retrigger 0d36b53 CI after nested ATAPI miss (33437881901 ataio=0 packet=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-thirty-sixth slice: firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (retrigger 0d36b53). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (firmware HLT insn_len 0 skip). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-sixth slice: firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-fifth slice: retrigger 0d36b53 CI after nested ATAPI miss (33437881901 ataio=0 packet=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-fourth slice: PIC ATA vector follows ICW2 (leftover 0x2E rewrite on ICW2 cycle, not ICW4 ready; F11 pin stays 33436232227 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-third slice: flash a14223f pin 33436232227 (do not clobber PIC ICW2 CI green; EFI 9774506155; do not F11 3b7bbac / --run 33433126839); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

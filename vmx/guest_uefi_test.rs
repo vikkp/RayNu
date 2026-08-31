@@ -90,6 +90,7 @@ use super::{
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_hlt_skip_len,
+    guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
     guest_uefi_ioapic_io_over_pit,
@@ -951,6 +952,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not inject leftover 0x2E"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber PIC ICW2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIC ATA vector follows ICW2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1374,6 +1376,12 @@ fn marker_and_residual_honest() {
         "firmware HLT skip after ataio"
     );
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(false, 16385, 12, true, 0));
+    assert_eq!(
+        guest_uefi_firmware_hlt_insn_len0_skip(false),
+        1,
+        "firmware HLT insn_len 0 skip"
+    );
+    assert_eq!(guest_uefi_firmware_hlt_insn_len0_skip(true), 0);
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16384, 12, true, 0));
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 1));
     assert!(

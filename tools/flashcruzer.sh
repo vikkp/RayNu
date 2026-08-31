@@ -218,12 +218,14 @@ self_test() {
   grep -q 'retrigger 5a69de2' "$SCRIPT_PATH"
   grep -q '33437881901' "$SCRIPT_PATH"
   grep -q 'retrigger 0d36b53' "$SCRIPT_PATH"
+  grep -q '33438918646' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
   grep -q 'do not inject leftover 0x2E' "$SCRIPT_PATH"
   grep -q 'do not clobber PIC ICW2' "$SCRIPT_PATH"
   grep -q 'PIC ATA vector follows ICW2' "$SCRIPT_PATH"
+  grep -q 'firmware HLT insn_len 0 skip' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -357,6 +359,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin a14223f (do not clobber PIC ICW2) run 33436232227 is F11. EFI 9774506155.
+# firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
@@ -625,6 +628,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33437881901 is 0d36b53 nested ATAPI miss (ataio=0 packet=0)" >&2
     echo "       PIC ATA vector follows ICW2; flash a14223f / --run 33436232227." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 0d36b53 / --run 33437881901." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33438918646" ]]; then
+    echo "error: run 33438918646 is 9299888 retrigger nested ATAPI miss (ataio=0 packet=0)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash a14223f / --run 33436232227." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9299888 / --run 33438918646." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

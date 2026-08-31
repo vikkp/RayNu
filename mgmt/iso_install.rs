@@ -215,6 +215,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
 /// do not clobber PIC ICW2.
 /// PIC ATA vector follows ICW2.
+/// firmware HLT insn_len 0 skip.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
 /// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).
