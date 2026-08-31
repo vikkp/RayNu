@@ -201,8 +201,9 @@ cd ~/projects/raynu
 # FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # want this SHA (flash e4faceb pin 33429494930).
-# Pin --run 33429494930 (e4faceb firmware OVMF ATA vector). do not F11 d7d63ca.
+git log -1 --oneline   # want this SHA (flash 3b7bbac pin 33433126839).
+# Pin --run 33433126839 (3b7bbac leftover 0x2E). do not F11 e4faceb.
+# Do not pin --run 33429494930 (e4faceb leftover IOAPIC 0x2E). do not F11 e4faceb.
 # Do not pin --run 33426291731 (d7d63ca PIC ATA clobbers IOAPIC to 0x2E). do not F11 d7d63ca.
 # Pin --run 33426291731 (d7d63ca firmware PIC ATA). do not F11 8e581c7.
 # Do not pin --run 33424573770 (8e581c7 PIC unmask never reached take_pic). do not F11 8e581c7.
@@ -228,13 +229,13 @@ git log -1 --oneline   # want this SHA (flash e4faceb pin 33429494930).
 # Do not pin --run 33389381409 (ea30da1 inject vec=0x20 timer ISR).
 # Do not pin --run 33391068937 (a2acfc8 n>16384 after that boot ended).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --no-git --run 33429494930 \
+./tools/flashcruzer.sh --no-git --run 33433126839 \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7. flash d7d63ca. flash e4faceb.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33429494930.
-# --run 33429494930 is F11. --run 33426291731 is not F11. --run 33424573770 is not F11. --run 33422323257 is not F11. --run 33418246409 is not F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7. flash d7d63ca. flash e4faceb. flash 3b7bbac.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33433126839.
+# --run 33433126839 is F11. --run 33429494930 is not F11. --run 33426291731 is not F11. --run 33424573770 is not F11. --run 33422323257 is not F11. --run 33418246409 is not F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
 # do not F11 d7d63ca. do not F11 8e581c7. do not F11 30b78a0. do not F11 0bb06a2. do not F11 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
 ```
 
