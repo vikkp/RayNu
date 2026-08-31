@@ -200,6 +200,7 @@ self_test() {
   grep -q 'flash 30b78a0' "$SCRIPT_PATH"
   grep -q 'do not F11 0bb06a2' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
+  grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -332,7 +333,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin 30b78a0 (firmware take IOAPIC ATA) run 33422323257 is F11. EFI 9769404589.
 # firmware take IOAPIC ATA: do not latch virtio/UART into IRR that ata_irr_only
-# will not inject. flash 0bb06a2 is not F11. do not F11 0bb06a2 / --run 33418246409.
+# will not inject. IOAPIC edge no remote IRR: PACKET after IDENTIFY without
+# IOAPIC EOI. flash 0bb06a2 is not F11. do not F11 0bb06a2 / --run 33418246409.
 # firmware ATA IRR only: do not take_highest_irr LVT 0xEF before PACKET.
 # flash 12926eb is not F11. do not F11 12926eb / --run 33415083012.
 # retrigger cdbee39 after nested-KVM kill-init (33417361559 iso=0 after GTIMER2).

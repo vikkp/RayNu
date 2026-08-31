@@ -328,14 +328,18 @@ pub fn arm_firmware_virtual_wire() {
 /// never runs. Pin 14 stays at the masked default RTE; `raise_ata` latches
 /// IRR that `take_ioapic_vector` cannot deliver. Force-IF then has nothing
 /// to inject. Do not unmask GSI 2 / PIC IRQ 0 (iron `ea30da1` `vec=0x20`
-/// timer ISR). Linux programs RTEs.
-/// firmware arm ATA GSI 14. Not `ISO-INSTALL-OK`.
+/// timer ISR). Also unmask PIC slave IRQ 14 (not all PIC IRQs) so IdeBus
+/// that EOIs the 8259 can take `0x2E` if IOAPIC remote IRR was stuck.
+/// Linux programs RTEs.
+/// firmware arm ATA GSI 14. IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_ata_gsi14() {
     if !product_live() {
         return;
     }
     with_irq(|c| {
         c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
+        c.slave.imr &= !(1 << (ATA_GSI - 8));
+        c.master.imr &= !(1 << PIC_SLAVE_IRQ);
     });
 }
 
@@ -425,15 +429,15 @@ fn take_vector(c: &mut IrqChip) -> Option<u8> {
     pic_take(c)
 }
 
-/// Accept an IOAPIC pin: set remote IRR. Edge clears pin IRR; level keeps
-/// it until `lower_gsi` so a lost inject can retry after LAPIC EOI.
+/// Accept an IOAPIC pin. Level sets remote IRR until LAPIC EOI. Edge
+/// does not: Intel Remote IRR is level-only, and OVMF IdeBus EOIs the
+/// 8259, not the IOAPIC. Setting remote IRR on edge pin 14 made the
+/// first IDENTIFY `take_ioapic_ata` stick; PACKET never saw pin 14 again.
+/// IOAPIC edge no remote IRR. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
 fn ioapic_accept(c: &mut IrqChip, pin: u8) {
     let i = pin as usize;
     let mut rte = c.ioapic.redir[i];
-    let firmware_edge = FIRMWARE_WIRE.load(Ordering::Acquire)
-        && pin == PIT_IOAPIC_GSI
-        && rte & RTE_TRIG_LEVEL == 0;
-    if !firmware_edge {
+    if rte & RTE_TRIG_LEVEL != 0 {
         rte |= RTE_REMOTE_IRR;
         c.ioapic.redir[i] = rte;
     }
@@ -504,7 +508,8 @@ fn ioapic_pin_ready(c: &IrqChip, pin: u8) -> Option<u8> {
     if rte & RTE_MASK != 0 {
         return None;
     }
-    if rte & RTE_REMOTE_IRR != 0 {
+    // Level waits for EOI. Edge must not: IOAPIC edge no remote IRR.
+    if rte & RTE_TRIG_LEVEL != 0 && rte & RTE_REMOTE_IRR != 0 {
         return None;
     }
     let vec = (rte & 0xff) as u8;

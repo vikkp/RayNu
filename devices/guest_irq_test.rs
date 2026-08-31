@@ -355,6 +355,31 @@ fn product_iso_firmware_take_ioapic_ata_leaves_virtio() {
 }
 
 #[test]
+fn product_iso_firmware_ioapic_edge_ata_repeats_without_eoi() {
+    arm_product_iso();
+    arm_firmware_ata_gsi14();
+    raise_ata();
+    assert_eq!(
+        take_ioapic_ata_vector(),
+        Some(0x20 + ATA_GSI),
+        "IDENTIFY take IOAPIC ATA"
+    );
+    assert!(
+        take_ioapic_ata_vector().is_none(),
+        "edge accept cleared IRR"
+    );
+    raise_ata();
+    assert_eq!(
+        take_ioapic_ata_vector(),
+        Some(0x20 + ATA_GSI),
+        "IOAPIC edge no remote IRR: PACKET after IDENTIFY without IOAPIC EOI"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_firmware_take_ioapic_ata_skips_virtio_only() {
     arm_product_iso();
     ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));

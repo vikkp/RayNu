@@ -9376,8 +9376,9 @@ unsafe fn try_inject_guest_irq() {
     }
     if !use_pic {
         if prefer_ata && guest_uefi_firmware_take_ioapic_ata(linux) {
-            // firmware take IOAPIC ATA: do not latch virtio/UART into IRR
-            // that ata_irr_only will not inject.
+        // firmware take IOAPIC ATA: do not latch virtio/UART into IRR
+        // that ata_irr_only will not inject. IOAPIC edge no remote IRR:
+        // PACKET after IDENTIFY must take pin 14 again without IOAPIC EOI.
             if let Some(vec) = crate::devices::guest_irq::take_ioapic_ata_vector() {
                 crate::devices::lapic_virt::latch_irr(vec);
             }
