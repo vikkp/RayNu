@@ -572,6 +572,10 @@ fn product_iso_identify_is_pio_only_and_nien_masks_irq() {
     ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
     ioapic_write(0x10, 0x40);
     let _ = ata_io(0x03F6, false, 1, 0x02);
+    assert!(
+        crate::devices::ide_cdrom::ata_nien(),
+        "nIEN latched on device control"
+    );
     let _ = ata_io(0x01F7, false, 1, 0xA0);
     assert!(
         take_inject_vector().is_none(),

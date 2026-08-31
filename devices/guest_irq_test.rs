@@ -1,7 +1,7 @@
 use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
-    pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok, raise_ata, raise_gsi,
-    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_vector, take_pic_vector,
+    pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
+    raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready,
     ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
@@ -325,6 +325,50 @@ fn product_iso_firmware_ata_over_pic_beats_pit() {
         take_ioapic_vector(),
         Some(0x20 + ATA_GSI),
         "IOAPIC pin 14 still ready after PIC IRQ 0"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_take_ioapic_ata_leaves_virtio() {
+    arm_product_iso();
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
+    ioapic_write(0x10, 0x51);
+    raise_virtio();
+    arm_firmware_ata_gsi14();
+    raise_ata();
+    assert_eq!(
+        take_ioapic_ata_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware take IOAPIC ATA: pin 14 not virtio"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x51),
+        "firmware take IOAPIC ATA leaves virtio pending"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_take_ioapic_ata_skips_virtio_only() {
+    arm_product_iso();
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
+    ioapic_write(0x10, 0x51);
+    raise_virtio();
+    arm_firmware_ata_gsi14();
+    assert!(
+        take_ioapic_ata_vector().is_none(),
+        "firmware take IOAPIC ATA: no pin 14"
+    );
+    assert_eq!(
+        take_ioapic_vector(),
+        Some(0x51),
+        "firmware take IOAPIC ATA does not consume virtio"
     );
     reset();
     reset_cd();

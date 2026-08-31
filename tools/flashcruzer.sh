@@ -196,6 +196,7 @@ self_test() {
   grep -q '33418246409' "$SCRIPT_PATH"
   grep -q 'flash 0bb06a2' "$SCRIPT_PATH"
   grep -q 'do not F11 12926eb' "$SCRIPT_PATH"
+  grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -327,7 +328,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin 0bb06a2 (firmware ATA IRR only) run 33418246409 is F11. EFI 9767926388.
-# firmware ATA IRR only: do not take_highest_irr LVT 0xEF before PACKET.
+# F11 pin stays 33418246409 until firmware take IOAPIC ATA CI.
+# firmware take IOAPIC ATA: do not latch virtio/UART into IRR that ata_irr_only
+# will not inject. firmware ATA IRR only: do not take_highest_irr LVT 0xEF before PACKET.
 # flash 12926eb is not F11. do not F11 12926eb / --run 33415083012.
 # retrigger cdbee39 after nested-KVM kill-init (33417361559 iso=0 after GTIMER2).
 # Do not F11 eaa580d / --run 33413425759 (same-cycle only). Do not F11 bce5bbb

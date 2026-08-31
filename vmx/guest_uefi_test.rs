@@ -101,6 +101,7 @@ use super::{
     guest_uefi_firmware_prefer_ata_irr,
     guest_uefi_firmware_ata_over_pic,
     guest_uefi_firmware_ata_irr_only,
+    guest_uefi_firmware_take_ioapic_ata,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -1424,6 +1425,14 @@ fn marker_and_residual_honest() {
         !guest_uefi_firmware_ata_irr_only(true),
         "linux still takes LVT"
     );
+    assert!(
+        guest_uefi_firmware_take_ioapic_ata(false),
+        "firmware take IOAPIC ATA"
+    );
+    assert!(
+        !guest_uefi_firmware_take_ioapic_ata(true),
+        "linux still takes any IOAPIC pin"
+    );
     assert_eq!(
         guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),
         0x2,
@@ -2498,6 +2507,8 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
     assert!(guest_uefi_firmware_prefer_ata_irr(false, 1));
     assert!(guest_uefi_firmware_ata_irr_only(false));
     assert!(!guest_uefi_firmware_ata_irr_only(true));
+    assert!(guest_uefi_firmware_take_ioapic_ata(false));
+    assert!(!guest_uefi_firmware_take_ioapic_ata(true));
     assert!(
         guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
         "product ISO quiet tick arms with the window, not n>16384"

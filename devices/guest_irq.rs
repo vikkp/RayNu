@@ -455,6 +455,24 @@ pub fn take_ioapic_vector() -> Option<u8> {
     })
 }
 
+/// Consume IOAPIC pin 14 only (ATA `0x2E`). Does not touch PIC or virtio.
+///
+/// Firmware `ata_irr_only` will not `take_highest_irr`. If
+/// [`take_ioapic_vector`] latches virtio/UART first, that vector sits in
+/// IRR undelivered and the inject cycle falls through to PIC `0x20` /
+/// skip_pit while pin 14 is still pending. Pin 14 only. Linux still uses
+/// [`take_ioapic_vector`]. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn take_ioapic_ata_vector() -> Option<u8> {
+    if !product_live() {
+        return None;
+    }
+    with_irq(|c| {
+        let vec = ioapic_pin_ready(c, ATA_GSI)?;
+        ioapic_accept(c, ATA_GSI);
+        Some(vec)
+    })
+}
+
 /// LAPIC EOI: drop remote IRR on RTEs that match `vec`. Level pins with
 /// the line still high become deliverable again.
 pub fn ioapic_eoi(vec: u8) {

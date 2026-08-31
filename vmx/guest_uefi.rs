@@ -1308,7 +1308,7 @@ pub fn guest_uefi_firmware_arm_ata_gsi14(linux: bool) -> bool {
 /// (iron `ea30da1` timer ISR). Gating on `ataio>0` left IDENTIFY `0x2E`
 /// under ignore-TPR `take_highest_irr`. wait_for_irq stays false. Linux
 /// keeps TPR. firmware prefer ATA IRR. flash 489d938. flash bce5bbb.
-/// flash eaa580d. flash 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. firmware ATA over PIC. firmware ATA IRR only. Not `ISO-INSTALL-OK`.
+/// flash eaa580d. flash 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_firmware_prefer_ata_irr(linux: bool, _ataio: u32) -> bool {
     !linux
 }
@@ -1335,6 +1335,18 @@ pub fn guest_uefi_firmware_ata_over_pic(linux: bool, ata_ready: bool) -> bool {
 /// wait_for_irq stays false. firmware ATA IRR only. flash 12926eb.
 /// Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_firmware_ata_irr_only(linux: bool) -> bool {
+    !linux
+}
+
+/// Firmware: `take_ioapic` pin 14 only.
+///
+/// `take_ioapic_vector` prefers ATA when pin 14 is ready, else virtio/UART.
+/// `ata_irr_only` then skips `take_highest_irr`, so a virtio latch is never
+/// injected and the cycle falls through to PIC `0x20` / skip_pit. Pin 14
+/// stays pending until a later exit. Linux still takes any IOAPIC pin.
+/// wait_for_irq stays false. firmware take IOAPIC ATA. flash 0bb06a2.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_take_ioapic_ata(linux: bool) -> bool {
     !linux
 }
 
@@ -4999,6 +5011,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             write_dec(crate::devices::guest_irq::pic_has_deliverable() as u64);
             serial::write_str(" gsi2=");
             write_dec(crate::devices::guest_irq::ioapic_gsi2_armed() as u64);
+            serial::write_str(" pin14=");
+            write_dec(crate::devices::guest_irq::ioapic_ata_ready() as u64);
+            serial::write_str(" nien=");
+            write_dec(crate::devices::ide_cdrom::ata_nien() as u64);
+            serial::write_str(" cmd=0x");
+            write_hex_u8(crate::devices::ide_cdrom::last_ata_cmd());
+            serial::write_str(" irr2e=");
+            write_dec(crate::devices::lapic_virt::has_irr_vec(0x2E) as u64);
         }
         serial::write_str(" insn=");
         dump_low_ram_insn(linear);
@@ -5120,6 +5140,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                         write_dec(crate::devices::guest_irq::pic_has_deliverable() as u64);
                         serial::write_str(" gsi2=");
                         write_dec(crate::devices::guest_irq::ioapic_gsi2_armed() as u64);
+                        serial::write_str(" pin14=");
+                        write_dec(crate::devices::guest_irq::ioapic_ata_ready() as u64);
+                        serial::write_str(" nien=");
+                        write_dec(crate::devices::ide_cdrom::ata_nien() as u64);
+                        serial::write_str(" cmd=0x");
+                        write_hex_u8(crate::devices::ide_cdrom::last_ata_cmd());
+                        serial::write_str(" irr2e=");
+                        write_dec(crate::devices::lapic_virt::has_irr_vec(0x2E) as u64);
                         serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
                     }
                     if guest_uefi_firmware_hlt_skip_after_inject(
@@ -9347,7 +9375,13 @@ unsafe fn try_inject_guest_irq() {
         use_pic = false;
     }
     if !use_pic {
-        if let Some(vec) = crate::devices::guest_irq::take_ioapic_vector() {
+        if prefer_ata && guest_uefi_firmware_take_ioapic_ata(linux) {
+            // firmware take IOAPIC ATA: do not latch virtio/UART into IRR
+            // that ata_irr_only will not inject.
+            if let Some(vec) = crate::devices::guest_irq::take_ioapic_ata_vector() {
+                crate::devices::lapic_virt::latch_irr(vec);
+            }
+        } else if let Some(vec) = crate::devices::guest_irq::take_ioapic_vector() {
             crate::devices::lapic_virt::latch_irr(vec);
         }
     }
@@ -9415,7 +9449,7 @@ unsafe fn try_inject_guest_irq() {
         // injects 0x20. firmware force IF for inject. do not F11 77f5866.
         // flash 5227ad9. flash 489d938. flash bce5bbb. flash eaa580d. flash 12926eb.
         // firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only.
-        // do not F11 eaa580d.
+        // firmware take IOAPIC ATA. do not F11 eaa580d.
         // do not F11 bce5bbb.
         // do not F11 489d938. do not F11 e70a295. Not ISO-INSTALL-OK.
         let _ = set_guest_uefi_interrupt_window(false);

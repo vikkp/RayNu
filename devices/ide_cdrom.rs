@@ -551,6 +551,12 @@ pub fn last_ata_cmd() -> u8 {
     LAST_ATA_CMD.load(Ordering::Acquire)
 }
 
+/// Device-control nIEN (1 = do not assert IRQ 14).
+/// firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn ata_nien() -> bool {
+    with_cd(|m| (m.ata_devctl & ATA_DEVCTL_NIEN) != 0)
+}
+
 /// ATA PIO accesses (status polls and commands). Nested VT-x `8e55abf`
 /// `ata=0x0` only counted command-register writes.
 pub fn ata_io_accesses() -> u32 {
