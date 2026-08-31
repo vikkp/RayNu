@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-eighty-sixth slice: firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 b26c86a). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-eighty-seventh slice: flash 2ae4544 pin 33345731636 (firmware LAPIC timer expiry CI 49/49; do not F11 b26c86a). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (firmware LAPIC timer expiry). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash 2ae4544). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-seventh slice: flash 2ae4544 pin 33345731636 (firmware LAPIC timer expiry CI 49/49; do not F11 b26c86a); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-sixth slice: firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 b26c86a); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-fifth slice: firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 daf3195); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-eighty-fourth slice: firmware HLT skip after inject (iron eac424b IRET-to-HLT); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
