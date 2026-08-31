@@ -333,7 +333,8 @@ pub fn arm_firmware_virtual_wire() {
 /// do not clobber IOAPIC ATA vector: EDK2 `Legacy8259` ICW2 is 0x68/0x70
 /// (IRQ 14 → 0x76). Forcing 0x2E injects into an empty IDT slot.
 /// firmware OVMF ATA vector. firmware arm ATA GSI 14. firmware PIC ATA.
-/// do not clobber PIC ICW2. IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
+/// do not clobber PIC ICW2. PIC ATA vector follows ICW2 (not ICW4 ready).
+/// IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_ata_gsi14() {
     if !product_live() {
         return;
@@ -438,8 +439,12 @@ pub fn firmware_is_pit_vec(vec: u8) -> bool {
     with_irq(|c| c.master.ready && c.master.vector >= 16 && vec == c.master.vector)
 }
 
+/// PIC ATA vector follows ICW2: OVMF writes slave 0x70 before ICW4 sets
+/// `ready`. Each ICW is a VM-exit; leftover IOAPIC 0x2E rewrite must see
+/// 0x76 on the ICW2 cycle, not wait for ICW4. take_pic still requires
+/// `ready`. do not clobber PIC ICW2. Not `ISO-INSTALL-OK`.
 fn pic_irq14_vec(c: &IrqChip) -> u8 {
-    if c.slave.ready && c.slave.vector >= 16 {
+    if c.slave.vector >= 16 {
         c.slave.vector.wrapping_add(ATA_GSI - 8)
     } else {
         0x20u8.wrapping_add(ATA_GSI)

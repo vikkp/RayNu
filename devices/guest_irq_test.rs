@@ -455,6 +455,11 @@ fn product_iso_firmware_arm_does_not_clobber_pic_icw2() {
     let _ = pic_io(0xA0, false, 1, 0x11);
     let _ = pic_io(0xA1, false, 1, 0x70);
     arm_firmware_ata_gsi14();
+    assert_eq!(
+        firmware_ata_vec(),
+        0x76,
+        "PIC ATA vector follows ICW2 even before ICW4 ready"
+    );
     let _ = pic_io(0x21, false, 1, 0x04);
     let _ = pic_io(0x21, false, 1, 0x01);
     let _ = pic_io(0xA1, false, 1, 0x02);
