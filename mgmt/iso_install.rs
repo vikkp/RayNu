@@ -202,7 +202,9 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash 8e581c7 (CI run 33424573770; IOAPIC edge no remote IRR).
 /// flash d7d63ca (CI run 33426291731; firmware PIC ATA).
 /// flash e4faceb (CI run 33429494930; firmware OVMF ATA vector).
+/// flash b5c3a9c (CI run 33440050729; firmware HLT insn_len 0 skip).
 /// flash a14223f (CI run 33436232227; do not clobber PIC ICW2).
+/// do not F11 a14223f (superseded; missing ICW2-follows + insn_len 0 skip).
 /// flash 3b7bbac (CI run 33433126839; leftover IOAPIC 0x2E).
 /// retrigger 5a69de2 CI after nested-KVM kill-init (33430294210).
 /// retrigger 0d36b53 CI after nested ATAPI miss (33437881901).

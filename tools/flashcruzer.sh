@@ -214,6 +214,9 @@ self_test() {
   grep -q '33436232227' "$SCRIPT_PATH"
   grep -q 'flash a14223f' "$SCRIPT_PATH"
   grep -q 'do not F11 3b7bbac' "$SCRIPT_PATH"
+  grep -q '33440050729' "$SCRIPT_PATH"
+  grep -q 'flash b5c3a9c' "$SCRIPT_PATH"
+  grep -q 'do not F11 a14223f' "$SCRIPT_PATH"
   grep -q '33430294210' "$SCRIPT_PATH"
   grep -q 'retrigger 5a69de2' "$SCRIPT_PATH"
   grep -q '33437881901' "$SCRIPT_PATH"
@@ -358,7 +361,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin a14223f (do not clobber PIC ICW2) run 33436232227 is F11. EFI 9774506155.
+# Pin b5c3a9c (firmware HLT insn_len 0 skip) run 33440050729 is F11. EFI 9775891845.
+# flash a14223f is not F11. do not F11 a14223f / --run 33436232227.
+# flash 4730397 is not F11. do not F11 4730397 / --run 33436822494.
 # firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
@@ -412,7 +417,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33333506987" ]]; then
     echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -428,7 +433,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33337287432" ]]; then
     echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -444,7 +449,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33345731636" ]]; then
     echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -460,7 +465,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33347766697" ]]; then
     echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -476,7 +481,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33349142609" ]]; then
     echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -492,7 +497,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33387614559" ]]; then
     echo "error: run 33387614559 is b824789 skip-after-inject raw pci_ide" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -508,7 +513,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33389381409" ]]; then
     echo "error: run 33389381409 is ea30da1 hide-IDE inject vec=0x20 timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -523,7 +528,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33391068937" ]]; then
     echo "error: run 33391068937 is a2acfc8 n>16384 after hide-IDE timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -538,7 +543,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33392055961" ]]; then
     echo "error: run 33392055961 is 56f31d3 scsi@3 first with no El Torito boot option" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -551,7 +556,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33394776080" ]]; then
     echo "error: run 33394776080 is 90da03d skip-after-inject ataio==0 parks PACKET HLT" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -564,7 +569,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33397104645" ]]; then
     echo "error: run 33397104645 is e70a295 skip-without-inject blocked ATA 14" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -576,7 +581,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33399209557" ]]; then
     echo "error: run 33399209557 is 77f5866 skip-PIT IF=0 after PACKET" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -585,7 +590,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33399991049" ]]; then
     echo "error: run 33399991049 is 388149b pin of 77f5866 skip-PIT IF=0 after PACKET" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -594,7 +599,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33402411199" ]]; then
     echo "error: run 33402411199 is 9df52c5 nested-KVM SHELL flake 5/5" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -602,122 +607,134 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33417361559" ]]; then
     echo "error: run 33417361559 is cdbee39 nested-KVM kill-init after GTIMER2" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 never takes try_inject. Do not F11 cdbee39 / --run 33417361559." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33430294210" ]]; then
     echo "error: run 33430294210 is 5a69de2 nested-KVM kill-init after GTIMER2" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 never takes try_inject. Do not F11 5a69de2 / --run 33430294210." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33433126839" ]]; then
     echo "error: run 33433126839 is 3b7bbac PIC ICW2 clobber (IRQ 14 0x26)" >&2
-    echo "       do not clobber PIC ICW2; flash a14223f / --run 33436232227." >&2
+    echo "       do not clobber PIC ICW2; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 3b7bbac / --run 33433126839." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33435849693" ]]; then
     echo "error: run 33435849693 is 010403c host-test fail (residual needle)" >&2
-    echo "       do not clobber PIC ICW2; flash a14223f / --run 33436232227." >&2
+    echo "       do not clobber PIC ICW2; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 010403c / --run 33435849693." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33436232227" ]]; then
+    echo "error: run 33436232227 is a14223f superseded (missing ICW2-follows + insn_len 0 skip)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 a14223f / --run 33436232227." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33436822494" ]]; then
+    echo "error: run 33436822494 is 4730397 pin of a14223f (superseded F11)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 4730397 / --run 33436822494." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33437881901" ]]; then
     echo "error: run 33437881901 is 0d36b53 nested ATAPI miss (ataio=0 packet=0)" >&2
-    echo "       PIC ATA vector follows ICW2; flash a14223f / --run 33436232227." >&2
+    echo "       PIC ATA vector follows ICW2; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 0d36b53 / --run 33437881901." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33438918646" ]]; then
     echo "error: run 33438918646 is 9299888 retrigger nested ATAPI miss (ataio=0 packet=0)" >&2
-    echo "       firmware HLT insn_len 0 skip; flash a14223f / --run 33436232227." >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 9299888 / --run 33438918646." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
     echo "error: run 33429494930 is e4faceb leftover IOAPIC 0x2E after PIC remap" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 e4faceb / --run 33429494930." >&2
     echo "       do not F11 d7d63ca / --run 33426291731." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33431369645" ]]; then
     echo "error: run 33431369645 is 25e6596 retrigger of 5a69de2 leftover 0x2E EFI" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 e4faceb / --run 33429494930." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33418246409" ]]; then
     echo "error: run 33418246409 is 0bb06a2 ATA IRR only without take IOAPIC ATA" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 0bb06a2 / --run 33418246409." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33419049836" ]]; then
     echo "error: run 33419049836 is 6498158 pin of 0bb06a2 ATA IRR only" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 0bb06a2 / --run 33418246409." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33422323257" ]]; then
     echo "error: run 33422323257 is 30b78a0 take IOAPIC ATA with edge remote IRR" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 30b78a0 / --run 33422323257." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33422962160" ]]; then
     echo "error: run 33422962160 is 8a125b9 pin of 30b78a0 edge remote IRR" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 30b78a0 / --run 33422323257." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33424452815" ]]; then
     echo "error: run 33424452815 is ff1faeb host-test fail before PIC IRQ 14 assert" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 ff1faeb / --run 33424452815." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33424573770" ]]; then
     echo "error: run 33424573770 is 8e581c7 PIC unmask never reached take_pic" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 8e581c7 / --run 33424573770." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33425259123" ]]; then
     echo "error: run 33425259123 is d9b062d pin of 8e581c7 PIC unmask dead in try_inject" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 8e581c7 / --run 33424573770." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33426291731" ]]; then
     echo "error: run 33426291731 is d7d63ca PIC ATA that clobbers IOAPIC to 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 d7d63ca / --run 33426291731." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33427171899" ]]; then
     echo "error: run 33427171899 is 6457ec2 pin of d7d63ca IOAPIC 0x2E clobber" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 d7d63ca / --run 33426291731." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33415083012" ]]; then
     echo "error: run 33415083012 is 12926eb take_highest_irr LVT 0xEF before PACKET" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 12926eb / --run 33415083012." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33415638447" ]]; then
     echo "error: run 33415638447 is 6792eb7 pin of 12926eb LVT 0xEF fallthrough" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 12926eb / --run 33415083012." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33404368817" ]]; then
     echo "error: run 33404368817 is 5227ad9 force-IF with pin 14 still masked" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -725,7 +742,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33405102333" ]]; then
     echo "error: run 33405102333 is 807831c pin of 5227ad9 force-IF pin 14 masked" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -733,7 +750,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33408594472" ]]; then
     echo "error: run 33408594472 is 489d938 arm GSI 14 with TPR-stuck 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -741,7 +758,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33409711971" ]]; then
     echo "error: run 33409711971 is 6b94350 pin of 489d938 TPR-stuck 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     echo "       do not F11 5227ad9 / --run 33404368817." >&2
     echo "       do not F11 77f5866 / --run 33399209557." >&2
@@ -749,28 +766,28 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33411580450" ]]; then
     echo "error: run 33411580450 is bce5bbb prefer ATA IRR; PIC IRQ 0 starves 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 bce5bbb / --run 33411580450." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33412462849" ]]; then
     echo "error: run 33412462849 is fcad250 pin of bce5bbb PIC-starve 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 bce5bbb / --run 33411580450." >&2
     echo "       do not F11 489d938 / --run 33408594472." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33413425759" ]]; then
     echo "error: run 33413425759 is eaa580d ATA over PIC without latched 0x2E" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 eaa580d / --run 33413425759." >&2
     echo "       do not F11 bce5bbb / --run 33411580450." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33414038523" ]]; then
     echo "error: run 33414038523 is 5fdcafa pin of eaa580d same-cycle only" >&2
-    echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
     echo "       do not F11 eaa580d / --run 33413425759." >&2
     echo "       do not F11 bce5bbb / --run 33411580450." >&2
     exit 1
@@ -778,7 +795,7 @@ refuse_2d6b109_dest_skip() {
   case "$HEAD_SHORT" in
     2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*|a2acfc8*|56f31d3*|b8a726d*|90da03d*|82c0fd4*|e70a295*|0541ef0*|77f5866*|388149b*|9df52c5*|5227ad9*|807831c*|489d938*|6b94350*|bce5bbb*|fcad250*|eaa580d*|5fdcafa*|12926eb*|6792eb7*|cdbee39*|0bb06a2*|6498158*|30b78a0*|8a125b9*|ff1faeb*|8e581c7*|d9b062d*|d7d63ca*|6457ec2*)
       echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
-      echo "       firmware OVMF ATA vector; flash a14223f / --run 33436232227." >&2
+      echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
       echo "       do not F11 eaa580d / --run 33413425759." >&2
       echo "       do not F11 bce5bbb / --run 33411580450." >&2
       echo "       do not F11 5227ad9 / --run 33404368817." >&2
@@ -794,7 +811,7 @@ refuse_2d6b109_dest_skip() {
       echo "       do not F11 ea30da1 / a2acfc8 / --run 33389381409 / 33391068937." >&2
       echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
       echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
-      echo "       ./tools/flashcruzer.sh --no-git --run 33436232227 --linux-iso ..." >&2
+      echo "       ./tools/flashcruzer.sh --no-git --run 33440050729 --linux-iso ..." >&2
       exit 1
       ;;
   esac
