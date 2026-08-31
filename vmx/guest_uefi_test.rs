@@ -925,6 +925,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO HLT stall before n=16384"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip without inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after ataio"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 90da03d"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ea30da1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
     assert!(!guest_uefi_product_iso_pci_ready(false, true));
@@ -1324,8 +1326,13 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
     assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 1),
+        "firmware HLT skip after ataio"
+    );
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(false, 16385, 12, true, 0));
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16384, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 1));
     assert!(
         guest_uefi_firmware_hlt_skip_without_inject(false),
         "firmware HLT skip without inject"
