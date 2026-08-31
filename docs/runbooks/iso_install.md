@@ -201,7 +201,9 @@ cd ~/projects/raynu
 # FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
 git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
-git log -1 --oneline   # want this SHA (flash 12926eb pin 33415083012).
+git log -1 --oneline   # want this SHA (flash 0bb06a2 pin 33418246409).
+# Pin --run 33418246409 (0bb06a2 firmware ATA IRR only). do not F11 12926eb.
+# Do not pin --run 33415083012 (12926eb take_highest_irr LVT 0xEF). do not F11 12926eb.
 # Pin --run 33415083012 (12926eb firmware ATA over PIC keeps latched 0x2E). do not F11 eaa580d.
 # Do not pin --run 33413425759 (eaa580d same-cycle ATA over PIC). do not F11 eaa580d.
 # Pin --run 33413425759 (eaa580d firmware ATA over PIC). do not F11 bce5bbb.
@@ -218,14 +220,14 @@ git log -1 --oneline   # want this SHA (flash 12926eb pin 33415083012).
 # Do not pin --run 33389381409 (ea30da1 inject vec=0x20 timer ISR).
 # Do not pin --run 33391068937 (a2acfc8 n>16384 after that boot ended).
 lsusb | grep -i 0781:5151
-./tools/flashcruzer.sh --no-git --run 33415083012 \
+./tools/flashcruzer.sh --no-git --run 33418246409 \
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. F11 pin is --run 33415083012 until this SHA CI.
-# --run 33415083012 is F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
-# do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. F11 pin is --run 33418246409.
+# --run 33418246409 is F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
+# do not F11 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
 ```
 
 `--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
