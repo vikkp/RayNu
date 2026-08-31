@@ -928,6 +928,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5227ad9"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 489d938"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash bce5bbb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware force IF for inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 77f5866"));
