@@ -200,7 +200,9 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash 0bb06a2 (CI run 33418246409; firmware ATA IRR only).
 /// flash 30b78a0 (CI run 33422323257; firmware take IOAPIC ATA).
 /// flash 8e581c7 (CI run 33424573770; IOAPIC edge no remote IRR).
-/// firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it; F11 pin stays 33424573770 until this CI).
+/// flash d7d63ca (CI run 33426291731; firmware PIC ATA).
+/// do not F11 8e581c7 (PIC unmask never reached take_pic).
+/// firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it).
 /// firmware PIC ATA ICW2. firmware PIC ATA AEOI.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
