@@ -171,6 +171,7 @@ self_test() {
   grep -q '33392055961' "$SCRIPT_PATH"
   grep -q '33394776080' "$SCRIPT_PATH"
   grep -q '33397104645' "$SCRIPT_PATH"
+  grep -q '33399209557' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -301,8 +302,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin this SHA after CI (firmware skip PIT inject). skip-without-inject plus
-# El Torito ide@ first plus skip HLT after PACKET plus ATA 14 inject (not PIT).
+# Pin 77f5866 (firmware skip PIT inject) run 33399209557 is F11.
+# skip-without-inject plus El Torito ide@ first plus skip HLT after PACKET
+# plus ATA 14 / virtio INTx (not PIT 0x20).
 # do not F11 e70a295 / --run 33397104645 (skip-without-inject blocked ATA 14).
 # do not F11 90da03d / --run 33394776080 (ataio==0 skip parks PACKET HLT at RET).
 # do not F11 56f31d3 / --run 33392055961 (scsi@3 first, no El Torito boot).
@@ -329,7 +331,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33333506987" ]]; then
     echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -342,7 +344,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33337287432" ]]; then
     echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -355,7 +357,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33345731636" ]]; then
     echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -368,7 +370,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33347766697" ]]; then
     echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -381,7 +383,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33349142609" ]]; then
     echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -394,7 +396,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33387614559" ]]; then
     echo "error: run 33387614559 is b824789 skip-after-inject raw pci_ide" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -407,7 +409,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33389381409" ]]; then
     echo "error: run 33389381409 is ea30da1 hide-IDE inject vec=0x20 timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -419,7 +421,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33391068937" ]]; then
     echo "error: run 33391068937 is a2acfc8 n>16384 after hide-IDE timer ISR" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -431,7 +433,7 @@ refuse_2d6b109_dest_skip() {
   if [[ "$PIN_RUN" == "33392055961" ]]; then
     echo "error: run 33392055961 is 56f31d3 scsi@3 first with no El Torito boot option" >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
@@ -441,7 +443,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33394776080" ]]; then
     echo "error: run 33394776080 is 90da03d skip-after-inject ataio==0 parks PACKET HLT" >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
@@ -451,7 +453,7 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33397104645" ]]; then
     echo "error: run 33397104645 is e70a295 skip-without-inject blocked ATA 14" >&2
-    echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+    echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
     echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
     echo "       do not F11 e70a295." >&2
     echo "       do not F11 90da03d." >&2
@@ -461,7 +463,7 @@ refuse_2d6b109_dest_skip() {
   case "$HEAD_SHORT" in
     2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*|a2acfc8*|56f31d3*|b8a726d*|90da03d*|82c0fd4*|e70a295*|0541ef0*)
       echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
-      echo "       firmware skip PIT inject; wait for this SHA CI." >&2
+      echo "       firmware skip PIT inject; flash 77f5866 / --run 33399209557." >&2
       echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
       echo "       do not F11 e70a295." >&2
       echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
@@ -472,7 +474,7 @@ refuse_2d6b109_dest_skip() {
       echo "       do not F11 ea30da1 / a2acfc8 / --run 33389381409 / 33391068937." >&2
       echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
       echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
-      echo "       ./tools/flashcruzer.sh --wait --require-head --no-git --linux-iso ..." >&2
+      echo "       ./tools/flashcruzer.sh --no-git --run 33399209557 --linux-iso ..." >&2
       exit 1
       ;;
   esac
