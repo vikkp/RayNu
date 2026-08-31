@@ -208,6 +208,8 @@ self_test() {
   grep -q '33429494930' "$SCRIPT_PATH"
   grep -q 'flash e4faceb' "$SCRIPT_PATH"
   grep -q 'do not F11 d7d63ca' "$SCRIPT_PATH"
+  grep -q '33430294210' "$SCRIPT_PATH"
+  grep -q 'retrigger 5a69de2' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -344,6 +346,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin e4faceb (firmware OVMF ATA vector) run 33429494930 is F11. EFI 9772035166.
+# retrigger 5a69de2 after nested-KVM kill-init (33430294210 iso=0 after GTIMER2).
 # firmware OVMF ATA vector. do not clobber IOAPIC ATA vector.
 # flash d7d63ca is not F11. do not F11 d7d63ca / --run 33426291731.
 # firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it.
@@ -583,6 +586,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33417361559 is cdbee39 nested-KVM kill-init after GTIMER2" >&2
     echo "       firmware OVMF ATA vector; flash e4faceb / --run 33429494930." >&2
     echo "       iso=0 never takes try_inject. Do not F11 cdbee39 / --run 33417361559." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33430294210" ]]; then
+    echo "error: run 33430294210 is 5a69de2 nested-KVM kill-init after GTIMER2" >&2
+    echo "       firmware OVMF ATA vector; flash e4faceb / --run 33429494930." >&2
+    echo "       iso=0 never takes try_inject. Do not F11 5a69de2 / --run 33430294210." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33418246409" ]]; then
