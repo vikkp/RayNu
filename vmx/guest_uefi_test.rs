@@ -913,6 +913,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder virtio-iso scsi@3 first"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d61dc7e"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash ea30da1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
