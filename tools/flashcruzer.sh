@@ -217,6 +217,7 @@ self_test() {
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
   grep -q 'do not inject leftover 0x2E' "$SCRIPT_PATH"
+  grep -q 'do not clobber PIC ICW2' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -353,6 +354,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
 # retrigger 5a69de2 after nested-KVM kill-init (33430294210 iso=0 after GTIMER2).
 # firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+# do not clobber PIC ICW2. F11 pin stays 33433126839 until ICW2-clobber CI.
 # flash d7d63ca is not F11. do not F11 d7d63ca / --run 33426291731.
 # firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it.
 # flash 8e581c7 is not F11. do not F11 8e581c7 / --run 33424573770.

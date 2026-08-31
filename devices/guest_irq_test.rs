@@ -445,6 +445,38 @@ fn product_iso_firmware_leftover_0x2e_yields_pic_0x76() {
 }
 
 #[test]
+fn product_iso_firmware_arm_does_not_clobber_pic_icw2() {
+    arm_product_iso();
+    arm_firmware_ata_gsi14();
+    assert_eq!(firmware_ata_vec(), 0x2E, "early arm default ATA vec");
+    // ICW1 + ICW2 only: ready stays false until ICW4.
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x68);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x70);
+    arm_firmware_ata_gsi14();
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xFB);
+    let _ = pic_io(0xA1, false, 1, 0xFF);
+    raise_ata();
+    arm_firmware_ata_gsi14();
+    assert_eq!(
+        firmware_ata_vec(),
+        0x76,
+        "do not clobber PIC ICW2: IRQ 14 stays 0x76 not 0x26"
+    );
+    assert!(!firmware_is_pit_vec(0x76));
+    assert_eq!(take_pic_vector(), Some(0x76));
+    assert_eq!(take_ioapic_ata_vector(), Some(0x76));
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_firmware_ioapic_0x76_beats_pic_0x2e() {
     arm_product_iso();
     arm_firmware_ata_gsi14();

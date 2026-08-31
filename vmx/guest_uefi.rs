@@ -9387,7 +9387,7 @@ unsafe fn try_inject_guest_irq() {
         crate::devices::guest_irq::arm_firmware_ata_gsi14();
     }
     // firmware OVMF ATA vector: EDK2 8259 0x70+6=0x76, not leftover 0x2E.
-    // do not inject leftover 0x2E.
+    // do not inject leftover 0x2E. do not clobber PIC ICW2.
     let ata_vec = crate::devices::guest_irq::firmware_ata_vec();
     let gsi2_armed = crate::devices::guest_irq::ioapic_gsi2_armed();
     let pic_ready = crate::devices::guest_irq::pic_has_deliverable();

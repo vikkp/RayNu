@@ -307,10 +307,7 @@ pub fn arm_firmware_virtual_wire() {
     }
     FIRMWARE_WIRE.store(true, Ordering::Release);
     with_irq(|c| {
-        if !c.master.ready || c.master.vector < 16 {
-            c.master.ready = true;
-            c.master.vector = 0x20;
-        }
+        pic_idle_default(&mut c.master, 0x20);
         c.master.imr &= !1;
         c.master.aeoi = true;
         // Edge, dest 0, vec 0x20, unmasked. firmware virtual-wire GSI 2.
@@ -336,20 +333,17 @@ pub fn arm_firmware_virtual_wire() {
 /// do not clobber IOAPIC ATA vector: EDK2 `Legacy8259` ICW2 is 0x68/0x70
 /// (IRQ 14 → 0x76). Forcing 0x2E injects into an empty IDT slot.
 /// firmware OVMF ATA vector. firmware arm ATA GSI 14. firmware PIC ATA.
-/// IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
+/// do not clobber PIC ICW2. IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_ata_gsi14() {
     if !product_live() {
         return;
     }
     with_irq(|c| {
-        if !c.master.ready || c.master.vector < 16 {
-            c.master.ready = true;
-            c.master.vector = 0x20;
-        }
-        if !c.slave.ready || c.slave.vector < 16 {
-            c.slave.ready = true;
-            c.slave.vector = 0x28;
-        }
+        // do not clobber PIC ICW2: OVMF writes slave 0x70 while ready is
+        // still false (ICW4 pending). Forcing vector=0x20 here leaves IRQ 14
+        // at 0x26 after ICW4; leftover 0x2E rewrite never sees 0x76.
+        pic_idle_default(&mut c.master, 0x20);
+        pic_idle_default(&mut c.slave, 0x28);
         c.master.aeoi = true;
         c.slave.aeoi = true;
         // do not inject leftover 0x2E: early arm writes default 0x2E. After
@@ -404,6 +398,17 @@ pub fn firmware_ata_vec() -> u8 {
 
 fn ata_vec_default() -> u8 {
     0x20u8.wrapping_add(ATA_GSI)
+}
+
+/// Force default ICW2 only when the 8259 is idle. do not clobber PIC ICW2.
+fn pic_idle_default(p: &mut Pic, vec: u8) {
+    if p.init != 0 {
+        return;
+    }
+    if !p.ready || p.vector < 16 {
+        p.ready = true;
+        p.vector = vec;
+    }
 }
 
 fn firmware_ata_vec_locked(c: &IrqChip) -> u8 {

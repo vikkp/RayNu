@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-thirtieth slice: flash 3b7bbac pin 33433126839 (leftover IOAPIC 0x2E CI green; do not F11 e4faceb / --run 33429494930). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-thirty-first slice: do not clobber PIC ICW2 (arm during ICW4-pending overwrote 0x70→0x20; F11 pin stays 33433126839 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash 3b7bbac pin 33433126839). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (do not clobber PIC ICW2). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-first slice: do not clobber PIC ICW2 (arm during ICW4-pending overwrote 0x70→0x20; F11 pin stays 33433126839 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirtieth slice: flash 3b7bbac pin 33433126839 (leftover IOAPIC 0x2E CI green; do not F11 e4faceb / --run 33429494930); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-ninth slice: do not inject leftover IOAPIC 0x2E after PIC remap to 0x76 (F11 pin stays 33429494930 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-twenty-eighth slice: retrigger 5a69de2 CI after nested-KVM kill-init (33430294210 iso=0 after GTIMER2; firmware OVMF ATA vector unchanged; F11 pin stays 33429494930); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
