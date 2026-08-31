@@ -156,7 +156,7 @@ The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
 writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
 `--wait --require-head --no-git` (do **not** `git checkout` a SHA). Flash
 `d61dc7e` on `cursor/e5-pm1-sci-a623` (CI green). Pin `--run 33349142609`. Do **not** F11 `5c0f7a2` / `--run 33347766697` (ATAPI-first bootorder). flash d61dc7e.
-product ISO fw_cfg bootorder virtio-iso scsi@3 first; flash d61dc7e; do not F11 5c0f7a2 (empty scsi@2 second; iso=0 stays CD then disk). Iron COM2 after F11 of that Cruzer is `d61dc7e`: bootorder scsi@3 first, then ConnectAll still Started PIIX IDE (`pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no virtio-iso IN). product ISO hides PIIX IDE is the next EFI (do not F11 while this boot still prints). Do **not** F11 `d61dc7e` again after this boot ends — flash the hide-IDE EFI once CI greens.
+product ISO fw_cfg bootorder virtio-iso scsi@3 first; flash d61dc7e; do not F11 5c0f7a2 (empty scsi@2 second; iso=0 stays CD then disk). Iron COM2 after F11 of that Cruzer is `d61dc7e`: bootorder scsi@3 first, then ConnectAll still Started PIIX IDE (`pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no virtio-iso IN). product ISO hides PIIX IDE is the next EFI (do not F11 while this boot still prints). `8336a06` CI run `33387083800` failed nested-KVM kill-init after GTIMER2 (iso=0 still CDROM-OK BOTH-OK); pin stays `--run 33349142609`. Do **not** F11 `d61dc7e` again after this boot ends — flash the hide-IDE EFI once CI greens.
 Do **not** F11 `2ae4544` / `--run 33345731636` (LAPIC expiry without I/O-over-PIT).
 Do **not** F11 `084430f` / `--run 33337287432` (Delay then HLT stall).
 Do **not** F11 `8663f56` / `--run 33333506987` (dest_ok then 0xAF00 Delay).
