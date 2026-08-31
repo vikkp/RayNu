@@ -4,6 +4,7 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
+    product_iso_hides_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
     is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
@@ -79,6 +80,43 @@ fn linux_hides_piix_ide_after_high_half() {
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     crate::boot::serial::set_linux_earlycon_share(false);
     crate::boot::serial::set_linux_high_half(false);
+    reset();
+}
+
+#[test]
+fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
+    assert!(!product_iso_hides_ide(0x8000_0900));
+    assert!(!product_iso_hides_ide(0x8000_0100));
+    assert!(present_placeholder());
+    pci_write_addr(0x8000_0900);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "iso=0 firmware still enumerates PIIX IDE"
+    );
+    pci_write_addr(0x8000_0100);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "iso=0 firmware still enumerates slot0 IDE"
+    );
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present(&iso, 9));
+    assert!(product_iso_window_armed());
+    assert!(product_iso_hides_ide(0x8000_0900));
+    assert!(product_iso_hides_ide(0x8000_0100));
+    assert!(!product_iso_hides_ide(0x8000_0800), "do not hide PIIX ISA");
+    assert!(!product_iso_hides_ide(0x8000_1000), "do not hide virtio-blk");
+    pci_write_addr(0x8000_0900);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    pci_write_addr(0x8000_0100);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     reset();
 }
 

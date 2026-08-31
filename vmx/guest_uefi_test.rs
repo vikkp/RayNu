@@ -92,6 +92,7 @@ use super::{
     guest_uefi_firmware_lapic_timer_expiry,
     guest_uefi_ioapic_io_over_pit,
     guest_uefi_firmware_virtual_wire_pic,
+    guest_uefi_product_iso_pci_ready,
     guest_uefi_firmware_hlt_force_if,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
@@ -912,6 +913,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder virtio-iso scsi@3 first"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d61dc7e"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    assert!(guest_uefi_product_iso_pci_ready(true, false));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b26c86a"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));
@@ -2340,6 +2344,18 @@ fn stamp_empty_ovmf_vars_matches_debian_4m_template() {
         u32::from_le_bytes(pad[0x58..0x5C].try_into().unwrap()),
         0x3ffb8
     );
+}
+
+#[test]
+fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
+    crate::devices::ide_cdrom::reset();
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let iso = vec![0u8; extra];
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(guest_uefi_product_iso_pci_ready(false, true));
+    assert!(!guest_uefi_product_iso_pci_ready(false, false));
+    crate::devices::ide_cdrom::reset();
 }
 
 #[test]

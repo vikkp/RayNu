@@ -11,11 +11,15 @@
 //! conflict `00:00.1`/`00:01.1`; `ata_piix` secondary `-22`). linux hides
 //! PIIX IDE after Linux high-half so built-in `ata_piix` does not
 //! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
-//! share is too early: GRUB still needs PIIX ATAPI. Firmware still
-//! enumerates PIIX; media is virtio-iso `00:03.0`. Compatibility-mode ISA
-//! `0x1F0`/`0x170` stays decoded after PCI hide; linux ATA floating bus
-//! returns `0xFF` after Linux high-half so leftover `ata_piix` SRST skips
-//! without `ata_msleep`. Not `ISO-INSTALL-OK`.
+//! share is too early: GRUB still needs PIIX ATAPI on iso=0. Product ISO
+//! hides PIIX IDE (`00:00.1` and `00:01.1`) while the window is armed so
+//! OVMF ConnectAll cannot Start IdeBus CpuSleep (iron COM2 `d61dc7e`:
+//! scsi@3 first, then `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, no
+//! virtio-iso IN). iso=0 keeps IDE. windows_iso / generic_uefi stay in
+//! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
+//! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
+//! so leftover `ata_piix` SRST skips without `ata_msleep`.
+//! Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
@@ -243,6 +247,7 @@ static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
 static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
+static HIDE_PRODUCT: AtomicBool = AtomicBool::new(false);
 static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
@@ -296,6 +301,18 @@ pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
     bus == 0 && dev == 1 && fun == 1
+}
+
+/// Iron COM2 `d61dc7e`: product `bootorder` scsi@3 first was served, then
+/// PciBus ConnectAll still Started AtaAtapiPassThru (`pci select 00:01.01`,
+/// `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no
+/// `virtio-iso IN`). Hide `00:00.1` and `00:01.1` while the product ISO
+/// window is armed so ConnectAll cannot CpuSleep. iso=0 keeps IDE.
+/// windows_iso / generic_uefi stay in the model. Virtual-wire arms on
+/// virtio-blk `00:02.0` enum. product ISO hides PIIX IDE.
+/// Not `ISO-INSTALL-OK`.
+pub fn product_iso_hides_ide(addr: u32) -> bool {
+    product_iso_window_armed() && pci_addr_selects_cd(addr)
 }
 
 /// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
@@ -490,6 +507,7 @@ pub fn reset() {
     PCI_ENUM.store(false, Ordering::Release);
     HIDE_SLOT0.store(false, Ordering::Release);
     HIDE_PIIX.store(false, Ordering::Release);
+    HIDE_PRODUCT.store(false, Ordering::Release);
     ATA_FLOAT.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
@@ -1460,12 +1478,24 @@ fn note_hide_piix() {
     }
 }
 
+fn note_hide_product() {
+    if !HIDE_PRODUCT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO hides PIIX IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 pub fn pci_read_data(port: u16, size: u8) -> u32 {
     with_cd(|m| {
         if !m.visible {
             return 0xFFFF_FFFF;
         }
         let addr = m.pci_addr;
+        if product_iso_hides_ide(addr) {
+            note_hide_product();
+            return 0xFFFF_FFFF;
+        }
         let linux = crate::boot::serial::linux_earlycon_share();
         if linux_hides_duplicate_slot0_ide(linux, addr) {
             note_hide_slot0();
@@ -1497,8 +1527,11 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
 
 pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
-        let linux = crate::boot::serial::linux_earlycon_share();
-        if linux_hides_duplicate_slot0_ide(linux, m.pci_addr)
+        if product_iso_hides_ide(m.pci_addr)
+            || linux_hides_duplicate_slot0_ide(
+                crate::boot::serial::linux_earlycon_share(),
+                m.pci_addr,
+            )
             || linux_hides_piix_ide(crate::boot::serial::linux_high_half(), m.pci_addr)
         {
             return;

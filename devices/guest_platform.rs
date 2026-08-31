@@ -9,7 +9,8 @@
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
 //! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (iso=0 CD then virtio disk;
-//! product ISO fw_cfg bootorder virtio-iso scsi@3 first),
+//! product ISO fw_cfg bootorder virtio-iso scsi@3 first;
+//! product ISO hides PIIX IDE),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
 //! uses a real PIC + IOAPIC in `guest_irq`), and a
