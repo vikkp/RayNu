@@ -191,6 +191,8 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr).
 /// firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip pin 14).
 /// flash bce5bbb (CI run 33411580450; firmware prefer ATA IRR).
+/// flash eaa580d (CI run 33413425759; firmware ATA over PIC).
+/// do not F11 bce5bbb (prefer ATA IRR; PIC IRQ 0 starves 0x2E).
 /// do not F11 489d938 (arm GSI 14 TPR-stuck 0x2E).
 /// do not F11 5227ad9 (force-IF pin 14 still masked).
 /// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
