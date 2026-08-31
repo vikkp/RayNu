@@ -891,7 +891,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xAF00 PM timer"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("tick port="));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 084430f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5c0f7a2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 2ae4544"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2ae4544"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xB000 dword timer"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIC before GSI 2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick"));

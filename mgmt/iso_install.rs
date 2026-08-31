@@ -168,6 +168,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
 /// IOAPIC I/O over PIT (virtual-wire pin 2 would starve ATA 14 after CpuSleep).
 /// firmware virtual-wire GSI 14 (PACKET IRQ 14 unmasked to vec 0x2E).
+/// flash 5c0f7a2 (CI run `33347766697`; do not F11 `2ae4544`).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
     b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
