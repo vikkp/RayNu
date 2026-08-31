@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-forty-fifth slice: nested iso=0 firmware HLT ATA LAPIC (pic=0 latch EDK2 0x76 into LAPIC IRR; inject 0x76 not leftover 0x2E/0xEF). CI 33450139765 VMXON-SKIP; F11 pin stays 33440050729. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-forty-sixth slice: iron COM2 b5c3a9c / 33440050729 BOTH-OK pci_ide=1 then HLT 0x7f0680d0 ataio=0 inj=0 pic=0 skip-after-inject (no inject vec=; not ISO-INSTALL-OK). product ISO firmware HLT wake LAPIC (latch 0x68) + product ISO firmware HLT ATA LAPIC (latch 0x76). CI 33451734183 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware HLT ATA LAPIC; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (iron COM2 b5c3a9c; product ISO firmware HLT wake LAPIC + ATA LAPIC; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-sixth slice: iron COM2 b5c3a9c / 33440050729 BOTH-OK pci_ide=1 HLT 0x7f0680d0 ataio=0 inj=0 pic=0 skip-after-inject; product ISO firmware HLT wake LAPIC (latch 0x68) + product ISO firmware HLT ATA LAPIC (latch 0x76); CI 33451734183 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-fifth slice: nested iso=0 firmware HLT ATA LAPIC (pic=0 latch EDK2 0x76 into LAPIC IRR; CI 33450139765 VMXON-SKIP; F11 pin stays 33440050729); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-fourth slice: product ISO firmware HLT ATA IOAPIC (pic=0 APIC-mode take pin 14 after raise_ata; CI 33449291916 VMXON-SKIP; F11 pin stays 33440050729); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-third slice: product ISO firmware HLT ATA (IDENTIFY WaitForInterrupt IRQ 14 / EDK2 0x76 not leftover 0x2E; CI 33448452364 VMXON-SKIP; F11 pin stays 33440050729); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

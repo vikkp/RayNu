@@ -101,6 +101,8 @@ use super::{
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
+    guest_uefi_product_firmware_hlt_ata_lapic,
+    guest_uefi_product_firmware_hlt_wake_lapic,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1504,6 +1506,11 @@ fn marker_and_residual_honest() {
         0x68
     );
     assert!(
+        guest_uefi_product_firmware_hlt_wake_lapic(None),
+        "product ISO firmware HLT wake LAPIC"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lapic(Some(0x68)));
+    assert!(
         guest_uefi_product_firmware_hlt_ata(false, true, 1, 12),
         "product ISO firmware HLT ATA"
     );
@@ -1519,7 +1526,17 @@ fn marker_and_residual_honest() {
         0x76,
         "product ISO firmware HLT ATA IOAPIC; do not inject leftover 0x2E"
     );
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0xEF)),
+        0x76,
+        "product ISO firmware HLT ATA LAPIC; do not inject leftover 0xEF"
+    );
     assert_eq!(guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x76)), 0x76);
+    assert!(
+        guest_uefi_product_firmware_hlt_ata_lapic(None),
+        "product ISO firmware HLT ATA LAPIC"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_ata_lapic(Some(0x76)));
     assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),
         1,
