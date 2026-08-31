@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-fifteenth slice: firmware ATA over PIC keeps latched 0x2E (next HLT raise_pit must not steal PIC 0x20 after take_ioapic; F11 pin stays 33413425759 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-sixteenth slice: flash 12926eb pin 33415083012 (firmware ATA over PIC keeps latched 0x2E CI green; do not F11 eaa580d / --run 33413425759). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (firmware ATA over PIC keeps latched 0x2E). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (flash 12926eb). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixteenth slice: flash 12926eb pin 33415083012 (firmware ATA over PIC keeps latched 0x2E CI green; do not F11 eaa580d / --run 33413425759); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifteenth slice: firmware ATA over PIC keeps latched 0x2E (next HLT raise_pit must not steal PIC 0x20 after take_ioapic; F11 pin stays 33413425759 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fourteenth slice: flash eaa580d pin 33413425759 (firmware ATA over PIC CI green; do not F11 bce5bbb / --run 33411580450); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirteenth slice: firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip latching 0x2E; F11 pin stays 33411580450 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
