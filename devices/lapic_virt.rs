@@ -350,6 +350,33 @@ pub fn poll_timer_expiry() -> bool {
     on_host_timer_fire()
 }
 
+/// HLT-exiting spends no guest time, so `poll_timer_expiry` never sees
+/// CUR_COUNT hit 0 while BDS CpuSleeps. Force LVT expiry into IRR.
+/// If LVT is still masked (reset `0xEF`), use vec 0x20 (iron `eac424b`
+/// IDT[0x20] writes CR8). If OVMF already unmasked, keep that vector.
+/// firmware LAPIC timer expiry. Not `ISO-INSTALL-OK`.
+pub fn force_firmware_lapic_timer_expiry() -> bool {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        let masked = (APIC_LVT_TIMER & LVT_MASKED) != 0;
+        if masked {
+            APIC_LVT_TIMER =
+                (APIC_LVT_TIMER & !0xFF & !LVT_MASKED) | 0x20 | LVT_PERIODIC;
+        } else {
+            APIC_LVT_TIMER = (APIC_LVT_TIMER & !LVT_MASKED) | LVT_PERIODIC;
+        }
+        APIC_SVR |= SVR_ENABLED;
+        if APIC_INIT_COUNT == 0 {
+            APIC_INIT_COUNT = 1;
+        }
+        TIMER_START_TSC = 0;
+        TIMER_RUNNING = true;
+        HOST_TIMER_FOR_GUEST = true;
+        PENDING_VECTOR = Some(lvt_timer_vector());
+    }
+    on_host_timer_fire()
+}
+
 /// True when IRR holds a vector deliverable against the current PPR.
 pub fn has_deliverable_irr() -> bool {
     let Some(vec) = highest_bit(core::ptr::addr_of!(APIC_IRR)) else {

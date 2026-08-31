@@ -122,3 +122,29 @@ fn cr8_maps_to_tpr_class() {
     assert!(wrmsr(0x80B, 0).is_some());
     set_cr8(0);
 }
+
+#[test]
+fn firmware_lapic_timer_expiry_masked_uses_vec20() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    let v = take_highest_irr().expect("firmware LAPIC timer expiry IRR");
+    assert_eq!(v, 0x20);
+    assert!(wrmsr(0x80B, 0).is_some());
+}
+
+#[test]
+fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, 0x27u64).is_some());
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    let v = take_highest_irr().expect("keep OVMF LVT vector");
+    assert_eq!(v, 0x27);
+    assert!(wrmsr(0x80B, 0).is_some());
+}
