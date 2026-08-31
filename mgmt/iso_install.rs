@@ -205,6 +205,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash a14223f (CI run 33436232227; do not clobber PIC ICW2).
 /// flash 3b7bbac (CI run 33433126839; leftover IOAPIC 0x2E).
 /// retrigger 5a69de2 CI after nested-KVM kill-init (33430294210).
+/// retrigger 0d36b53 CI after nested ATAPI miss (33437881901).
 /// do not F11 3b7bbac (PIC ICW2 clobber IRQ 14 0x26).
 /// do not F11 e4faceb (leftover IOAPIC 0x2E after PIC remap).
 /// do not F11 d7d63ca (PIC ATA clobbers IOAPIC ATA to 0x2E).

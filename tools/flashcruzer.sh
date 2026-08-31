@@ -216,6 +216,8 @@ self_test() {
   grep -q 'do not F11 3b7bbac' "$SCRIPT_PATH"
   grep -q '33430294210' "$SCRIPT_PATH"
   grep -q 'retrigger 5a69de2' "$SCRIPT_PATH"
+  grep -q '33437881901' "$SCRIPT_PATH"
+  grep -q 'retrigger 0d36b53' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -355,6 +357,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin a14223f (do not clobber PIC ICW2) run 33436232227 is F11. EFI 9774506155.
+# retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
 # retrigger 5a69de2 after nested-KVM kill-init (33430294210 iso=0 after GTIMER2).
@@ -616,6 +619,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33435849693 is 010403c host-test fail (residual needle)" >&2
     echo "       do not clobber PIC ICW2; flash a14223f / --run 33436232227." >&2
     echo "       do not F11 010403c / --run 33435849693." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33437881901" ]]; then
+    echo "error: run 33437881901 is 0d36b53 nested ATAPI miss (ataio=0 packet=0)" >&2
+    echo "       PIC ATA vector follows ICW2; flash a14223f / --run 33436232227." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0d36b53 / --run 33437881901." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
