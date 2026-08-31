@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-ninety-fourth slice: flash b824789 pin 33387614559 (product ISO hides PIIX IDE CI green; do not F11 d61dc7e ConnectAll hang). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-ninety-fifth slice: skip-after-inject uses pci_ready (hide-IDE virtio enum, not raw pci_ide; do not flash b824789 until this CI). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash b824789 hide-IDE pin). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (skip-after-inject uses pci_ready). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fifth slice: skip-after-inject uses pci_ready (hide-IDE virtio enum; do not flash b824789 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fourth slice: flash b824789 pin 33387614559 (product ISO hides PIIX IDE CI green; do not F11 d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-third slice: retrigger hide-IDE CI after nested-KVM kill-init flake (8336a06 run 33387083800; iso=0 CDROM-OK BOTH-OK; pin stays 33349142609); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-second slice: product ISO hides PIIX IDE (iron COM2 d61dc7e scsi@3 first then ConnectAll CpuSleep pci_ide=1 ataio=0; iso=0 keeps IDE); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

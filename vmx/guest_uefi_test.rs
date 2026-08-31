@@ -915,6 +915,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5c0f7a2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
     assert!(!guest_uefi_product_iso_pci_ready(false, true));
     assert!(guest_uefi_product_iso_pci_ready(true, false));
@@ -2356,6 +2357,8 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
     let iso = vec![0u8; extra];
     assert!(crate::devices::ide_cdrom::present(&iso, 9));
     assert!(guest_uefi_product_iso_pci_ready(false, true));
+    assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
     assert!(!guest_uefi_product_iso_pci_ready(false, false));
     crate::devices::ide_cdrom::reset();
 }
