@@ -318,13 +318,13 @@ fn product_iso_firmware_ata_over_pic_beats_pit() {
     );
     assert_eq!(
         take_pic_vector(),
-        Some(0x20 + PIT_IRQ),
-        "PIC would take 0x20 and skip_pit would drop it"
+        Some(0x20 + ATA_GSI),
+        "firmware arm ATA GSI 14 unmasks PIC IRQ 14; skip_pit would not drop 0x2E"
     );
     assert_eq!(
         take_ioapic_vector(),
         Some(0x20 + ATA_GSI),
-        "IOAPIC pin 14 still ready after PIC IRQ 0"
+        "IOAPIC pin 14 still ready after PIC IRQ 14"
     );
     reset();
     reset_cd();
