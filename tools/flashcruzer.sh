@@ -202,6 +202,7 @@ self_test() {
   grep -q '33424573770' "$SCRIPT_PATH"
   grep -q 'flash 8e581c7' "$SCRIPT_PATH"
   grep -q 'do not F11 30b78a0' "$SCRIPT_PATH"
+  grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -335,6 +336,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin 8e581c7 (IOAPIC edge no remote IRR) run 33424573770 is F11. EFI 9770263826.
+# firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it. F11 pin stays
+# 33424573770 until this CI. firmware PIC ATA ICW2. firmware PIC ATA AEOI.
 # IOAPIC edge no remote IRR: PACKET after IDENTIFY without IOAPIC EOI.
 # flash 30b78a0 is not F11. do not F11 30b78a0 / --run 33422323257.
 # firmware take IOAPIC ATA: do not latch virtio/UART into IRR that ata_irr_only

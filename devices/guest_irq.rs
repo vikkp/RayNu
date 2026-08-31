@@ -330,13 +330,26 @@ pub fn arm_firmware_virtual_wire() {
 /// to inject. Do not unmask GSI 2 / PIC IRQ 0 (iron `ea30da1` `vec=0x20`
 /// timer ISR). Also unmask PIC slave IRQ 14 (not all PIC IRQs) so IdeBus
 /// that EOIs the 8259 can take `0x2E` if IOAPIC remote IRR was stuck.
-/// Linux programs RTEs.
-/// firmware arm ATA GSI 14. IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
+/// firmware PIC ATA ICW2: iron `pic=0` never remaps; unmask is a no-op
+/// until master/slave ready. firmware PIC ATA AEOI: OVMF IDT[0x2E] may
+/// EOI LAPIC not OCW2 (same as virtual-wire IDT[0x20]). Linux programs RTEs.
+/// firmware arm ATA GSI 14. firmware PIC ATA. IOAPIC edge no remote IRR.
+/// Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_ata_gsi14() {
     if !product_live() {
         return;
     }
     with_irq(|c| {
+        if !c.master.ready || c.master.vector < 16 {
+            c.master.ready = true;
+            c.master.vector = 0x20;
+        }
+        if !c.slave.ready || c.slave.vector < 16 {
+            c.slave.ready = true;
+            c.slave.vector = 0x28;
+        }
+        c.master.aeoi = true;
+        c.slave.aeoi = true;
         c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
         c.slave.imr &= !(1 << (ATA_GSI - 8));
         c.master.imr &= !(1 << PIC_SLAVE_IRQ);
@@ -354,6 +367,15 @@ pub fn ioapic_ata_ready() -> bool {
         return false;
     }
     with_irq(|c| ioapic_pin_ready(c, ATA_GSI).is_some())
+}
+
+/// True when the 8259 would deliver ATA `0x2E` (IRQ 14 beats PIT).
+/// firmware PIC ATA. Not `ISO-INSTALL-OK`.
+pub fn pic_ata_ready() -> bool {
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| pic_peek(c) == Some(0x20u8.wrapping_add(ATA_GSI)))
 }
 
 /// True after [`arm_firmware_virtual_wire`] on the product-ISO HLT stall.
@@ -607,8 +629,10 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
     } else {
         let s = irq - 8;
         c.slave.irr &= !(1 << s);
-        c.slave.isr |= 1 << s;
-        c.master.isr |= 1 << PIC_SLAVE_IRQ;
+        if !c.slave.aeoi {
+            c.slave.isr |= 1 << s;
+            c.master.isr |= 1 << PIC_SLAVE_IRQ;
+        }
         if c.slave.irr & !c.slave.imr == 0 {
             c.master.irr &= !(1 << PIC_SLAVE_IRQ);
         }

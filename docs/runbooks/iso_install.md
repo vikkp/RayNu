@@ -203,6 +203,7 @@ git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5
 git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
 git log -1 --oneline   # want this SHA (flash 8e581c7 pin 33424573770).
 # Pin --run 33424573770 (8e581c7 IOAPIC edge no remote IRR). do not F11 30b78a0.
+# firmware PIC ATA. firmware PIC ATA ICW2. firmware PIC ATA AEOI. F11 pin stays 33424573770 until this CI.
 # Do not pin --run 33422323257 (30b78a0 take IOAPIC ATA with edge remote IRR). do not F11 30b78a0.
 # Pin --run 33422323257 (30b78a0 firmware take IOAPIC ATA). do not F11 0bb06a2.
 # Do not pin --run 33418246409 (0bb06a2 ATA IRR only without take IOAPIC ATA). do not F11 0bb06a2.
@@ -227,8 +228,8 @@ lsusb | grep -i 0781:5151
   --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
 # --wait --require-head --no-git stays valid on this branch after a green HEAD
 # artifact; do not use it on e5-stage46-iso-a623.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7.
-# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33424573770.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33424573770.
 # --run 33424573770 is F11. --run 33422323257 is not F11. --run 33418246409 is not F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
 # do not F11 30b78a0. do not F11 0bb06a2. do not F11 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
 ```

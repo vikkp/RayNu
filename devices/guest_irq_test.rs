@@ -2,7 +2,7 @@ use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
     raise_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector,
-    arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready,
+    arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
     ioapic_gsi2_armed,
@@ -273,6 +273,15 @@ fn product_iso_firmware_arm_ata_gsi14_without_pit() {
         "firmware arm ATA GSI 14 does not unmask PIT GSI 2"
     );
     assert!(
+        pic_ata_ready(),
+        "firmware PIC ATA ICW2: IRQ 14 deliverable without OVMF ICW2"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware PIC ATA: take 0x2E not PIT 0x20"
+    );
+    assert!(
         !pic_has_deliverable(),
         "firmware arm ATA GSI 14 does not unmask PIC IRQ 0"
     );
@@ -325,6 +334,31 @@ fn product_iso_firmware_ata_over_pic_beats_pit() {
         take_ioapic_vector(),
         Some(0x20 + ATA_GSI),
         "IOAPIC pin 14 still ready after PIC IRQ 14"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_pic_ata_repeats_without_eoi() {
+    arm_product_iso();
+    raise_ata();
+    arm_firmware_ata_gsi14();
+    assert!(
+        pic_ata_ready(),
+        "firmware PIC ATA"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware PIC ATA IDENTIFY"
+    );
+    raise_ata();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + ATA_GSI),
+        "firmware PIC ATA AEOI: PACKET after IDENTIFY without OCW2"
     );
     reset();
     reset_cd();

@@ -102,6 +102,7 @@ use super::{
     guest_uefi_firmware_ata_over_pic,
     guest_uefi_firmware_ata_irr_only,
     guest_uefi_firmware_take_ioapic_ata,
+    guest_uefi_firmware_pic_ata,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
@@ -1434,6 +1435,18 @@ fn marker_and_residual_honest() {
         "firmware take IOAPIC ATA"
     );
     assert!(
+        guest_uefi_firmware_pic_ata(false, true),
+        "firmware PIC ATA"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(true, true),
+        "linux keeps PIC-first / GSI 2"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(false, false),
+        "firmware PIC ATA only when PIC peek is 0x2E"
+    );
+    assert!(
         !guest_uefi_firmware_take_ioapic_ata(true),
         "linux still takes any IOAPIC pin"
     );
@@ -2513,6 +2526,9 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
     assert!(!guest_uefi_firmware_ata_irr_only(true));
     assert!(guest_uefi_firmware_take_ioapic_ata(false));
     assert!(!guest_uefi_firmware_take_ioapic_ata(true));
+    assert!(guest_uefi_firmware_pic_ata(false, true));
+    assert!(!guest_uefi_firmware_pic_ata(true, true));
+    assert!(!guest_uefi_firmware_pic_ata(false, false));
     assert!(
         guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
         "product ISO quiet tick arms with the window, not n>16384"
