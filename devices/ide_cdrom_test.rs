@@ -109,14 +109,21 @@ fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
     write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
     assert!(present(&iso, 9));
     assert!(product_iso_window_armed());
-    assert!(product_iso_hides_ide(0x8000_0900));
-    assert!(product_iso_hides_ide(0x8000_0100));
+    assert!(
+        !product_iso_hides_ide(0x8000_0900),
+        "firmware HLT skip without inject: OVMF El Torito needs PIIX ATAPI"
+    );
+    assert!(!product_iso_hides_ide(0x8000_0100));
     assert!(!product_iso_hides_ide(0x8000_0800), "do not hide PIIX ISA");
     assert!(!product_iso_hides_ide(0x8000_1000), "do not hide virtio-blk");
     pci_write_addr(0x8000_0900);
-    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "product ISO still enumerates PIIX IDE for El Torito"
+    );
     pci_write_addr(0x8000_0100);
-    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
     reset();
 }
 

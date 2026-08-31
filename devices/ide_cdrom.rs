@@ -12,10 +12,14 @@
 //! PIIX IDE after Linux high-half so built-in `ata_piix` does not
 //! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
 //! share is too early: GRUB still needs PIIX ATAPI on iso=0. Product ISO
-//! hides PIIX IDE (`00:00.1` and `00:01.1`) while the window is armed so
-//! OVMF ConnectAll cannot Start IdeBus CpuSleep (iron COM2 `d61dc7e`:
-//! scsi@3 first, then `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, no
-//! virtio-iso IN). iso=0 keeps IDE. windows_iso / generic_uefi stay in
+//! hid PIIX IDE (`8336a06` / `ea30da1`) so ConnectAll would not Start
+//! IdeBus CpuSleep (iron COM2 `d61dc7e`: scsi@3 first, then `pci_ide=1`,
+//! HLT `rip=0x7f0680d0` `ataio=0`, no virtio-iso IN). Hide plus
+//! skip-after-inject `vec=0x20` livelocked the timer ISR through the
+//! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). OVMF El
+//! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
+//! stays in the model and returns false. firmware HLT skip without inject.
+//! iso=0 keeps IDE. windows_iso / generic_uefi stay in
 //! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
 //! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
 //! so leftover `ata_piix` SRST skips without `ata_msleep`.
@@ -306,13 +310,14 @@ pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
 /// Iron COM2 `d61dc7e`: product `bootorder` scsi@3 first was served, then
 /// PciBus ConnectAll still Started AtaAtapiPassThru (`pci select 00:01.01`,
 /// `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no
-/// `virtio-iso IN`). Hide `00:00.1` and `00:01.1` while the product ISO
-/// window is armed so ConnectAll cannot CpuSleep. iso=0 keeps IDE.
-/// windows_iso / generic_uefi stay in the model. Virtual-wire arms on
-/// virtio-blk `00:02.0` enum. product ISO hides PIIX IDE.
+/// `virtio-iso IN`). Hide-IDE (`8336a06` / `ea30da1`) then skip-after-inject
+/// `vec=0x20` livelocked the timer ISR through the 16_777_216 cap
+/// (`pci_ide=0` `ataio=0` `hlt=0`, no virtio-iso IN, stop `rip=0x7f03fbe5`).
+/// OVMF El Torito needs PIIX ATAPI (Stage 45 / nested iso=0). Do not hide.
+/// firmware HLT skip without inject. product ISO hides PIIX IDE.
 /// Not `ISO-INSTALL-OK`.
-pub fn product_iso_hides_ide(addr: u32) -> bool {
-    product_iso_window_armed() && pci_addr_selects_cd(addr)
+pub fn product_iso_hides_ide(_addr: u32) -> bool {
+    false
 }
 
 /// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
