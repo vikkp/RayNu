@@ -16,7 +16,8 @@
 //! IdeBus CpuSleep (iron COM2 `d61dc7e`: scsi@3 first, then `pci_ide=1`,
 //! HLT `rip=0x7f0680d0` `ataio=0`, no virtio-iso IN). Hide plus
 //! skip-after-inject `vec=0x20` livelocked the timer ISR through the
-//! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). OVMF El
+//! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). firmware SRST ATA IRQ
+//! after SRST clear so IdeBus WaitForInterrupt sees IRQ 14. OVMF El
 //! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
 //! stays in the model and returns false. firmware HLT skip without inject.
 //! product ISO fw_cfg bootorder El Torito ide@ first.
@@ -2013,6 +2014,9 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                         m.xfer = AtaXfer::Idle;
                     } else if (prev & ATA_DEVCTL_SRST) != 0 {
                         apply_atapi_signature(m);
+                        // firmware SRST ATA IRQ: IdeBus WaitForInterrupt
+                        // after SRST clear needs IRQ 14 (nIEN=0).
+                        raise_ata_irq(m);
                     }
                 }
                 _ => {}

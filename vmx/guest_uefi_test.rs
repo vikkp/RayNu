@@ -95,6 +95,8 @@ use super::{
     guest_uefi_nested_iso0_firmware_hlt_pit,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
+    guest_uefi_nested_iso0_firmware_hlt_ata,
+    guest_uefi_nested_iso0_ata_inject_vec,
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
@@ -1397,6 +1399,28 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, false, 0, 12));
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 1, 12));
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 0x1e));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
+        "nested iso=0 firmware HLT ATA"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_ata(true, false, true, 1, 12));
+    assert_eq!(
+        crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ14,
+        0x76,
+        "nested iso=0 firmware HLT ATA"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(None),
+        0x76,
+        "do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(Some(0x2E)),
+        0x76,
+        "do not inject leftover 0x2E"
+    );
+    assert_eq!(guest_uefi_nested_iso0_ata_inject_vec(Some(0x76)), 0x76);
     assert_eq!(
         crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ0,
         0x68,

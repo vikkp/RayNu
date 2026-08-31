@@ -263,6 +263,52 @@ pub fn take_nested_iso0_pit_or_edk2() -> u8 {
     take_nested_iso0_pit().unwrap_or_else(nested_iso0_irq0_vec)
 }
 
+/// EDK2 `Legacy8259` slave ICW2 + 6. nested iso=0 firmware HLT ATA.
+/// do not inject leftover 0x2E. Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_IRQ14: u8 = 0x76;
+
+/// Shadowed IRQ 14 vector, else EDK2 `0x76`. nested iso=0 firmware HLT ATA.
+/// do not inject leftover 0x2E. Not `ISO-INSTALL-OK`.
+pub fn nested_iso0_irq14_vec() -> u8 {
+    with_irq(|c| {
+        if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(ATA_GSI - 8)
+        } else {
+            NESTED_ISO0_EDK2_IRQ14
+        }
+    })
+}
+
+/// Nested iso=0 firmware HLT after IDENTIFY/PACKET: latch PIC IRQ 14
+/// without IOAPIC. Unmask slave IRQ 14 + cascade when ICW2 ≥ 16.
+/// nested iso=0 firmware HLT ATA. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_ata() {
+    with_irq(|c| {
+        raise_pic_locked(c, ATA_GSI);
+        if c.slave.vector >= 16 {
+            c.slave.imr &= !(1 << (ATA_GSI - 8));
+            c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+        }
+    });
+}
+
+/// Consume PIC IRQ 14 on the iso=0 shadow 8259. nested iso=0 firmware HLT ATA.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_ata() -> Option<u8> {
+    with_irq(|c| {
+        let want = if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(ATA_GSI - 8)
+        } else {
+            return None;
+        };
+        if pic_peek(c) == Some(want) {
+            pic_take(c)
+        } else {
+            None
+        }
+    })
+}
+
 /// Shadow iso=0 8259 OUTs into IrqChip. Guest INs stay RAZ/WI.
 /// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
 pub fn pic_shadow_out(port: u16, size: u8, rax: u64) {

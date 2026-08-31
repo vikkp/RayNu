@@ -1,8 +1,8 @@
     use super::{
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, pic_shadow_out, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
-    raise_pit, raise_nested_iso0_pit, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector, take_nested_iso0_pit,
-    take_nested_iso0_pit_or_edk2, nested_iso0_irq0_vec, NESTED_ISO0_EDK2_IRQ0,
+    raise_pit,     raise_nested_iso0_pit, raise_nested_iso0_ata, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector, take_nested_iso0_pit,
+    take_nested_iso0_pit_or_edk2, take_nested_iso0_ata, nested_iso0_irq0_vec, nested_iso0_irq14_vec, NESTED_ISO0_EDK2_IRQ0, NESTED_ISO0_EDK2_IRQ14,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
@@ -73,6 +73,41 @@ fn nested_iso0_firmware_hlt_pit_follows_icw2() {
         take_nested_iso0_pit_or_edk2(),
         0x68,
         "nested iso=0 EDK2 IRQ0 after take"
+    );
+    reset();
+}
+
+#[test]
+fn nested_iso0_firmware_hlt_ata_edk2_irq14() {
+    reset();
+    reset_cd();
+    guest_platform::reset();
+    assert!(!crate::devices::ide_cdrom::product_iso_window_armed());
+    assert_eq!(
+        nested_iso0_irq14_vec(),
+        NESTED_ISO0_EDK2_IRQ14,
+        "nested iso=0 firmware HLT ATA"
+    );
+    raise_nested_iso0_ata();
+    assert!(
+        take_nested_iso0_ata().is_none(),
+        "no ICW: pic_take still needs ready"
+    );
+    pic_shadow_out(0x20, 1, 0x11);
+    pic_shadow_out(0x21, 1, 0x68);
+    pic_shadow_out(0x21, 1, 0x04);
+    pic_shadow_out(0x21, 1, 0x01);
+    pic_shadow_out(0xA0, 1, 0x11);
+    pic_shadow_out(0xA1, 1, 0x70);
+    pic_shadow_out(0xA1, 1, 0x02);
+    pic_shadow_out(0xA1, 1, 0x01);
+    pic_shadow_out(0x21, 1, 0xFB);
+    pic_shadow_out(0xA1, 1, 0xBF);
+    raise_nested_iso0_ata();
+    assert_eq!(
+        take_nested_iso0_ata(),
+        Some(0x76),
+        "nested iso=0 firmware HLT ATA; do not inject leftover 0x2E"
     );
     reset();
 }
@@ -481,6 +516,22 @@ fn product_iso_firmware_ovmf_ata_vector_not_0x2e() {
     );
     assert!(!firmware_is_pit_vec(0x76));
     assert!(firmware_is_pit_vec(0x20));
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_srst_clear_raises_ata_irq() {
+    arm_product_iso();
+    pic_init_ovmf_edk2();
+    arm_firmware_ata_gsi14();
+    let _ = crate::devices::ide_cdrom::ata_io(0x3F6, false, 1, 0x04);
+    let _ = crate::devices::ide_cdrom::ata_io(0x3F6, false, 1, 0x00);
+    assert!(
+        ioapic_ata_ready() || pic_ata_ready(),
+        "firmware SRST ATA IRQ"
+    );
     reset();
     reset_cd();
     guest_platform::reset();
