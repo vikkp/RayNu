@@ -918,6 +918,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO HLT stall before n=16384"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ea30da1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
     assert!(!guest_uefi_product_iso_pci_ready(false, true));
     assert!(guest_uefi_product_iso_pci_ready(true, false));
@@ -1306,6 +1308,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_ignores_tpr(true, true, 0));
     assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, false, 0));
     assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, true, 1));
+    crate::devices::ide_cdrom::reset();
     assert!(guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(false, 16385, 12, true, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16384, 12, true, 0));
@@ -2360,8 +2363,16 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
     assert!(crate::devices::ide_cdrom::present(&iso, 9));
     assert!(guest_uefi_product_iso_pci_ready(false, true));
     assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
-    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
-    assert!(!guest_uefi_product_iso_pci_ready(false, false));
+        assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
+        assert!(
+            guest_uefi_firmware_hlt_skip_after_inject(true, 1, 12, true, 0),
+            "product ISO HLT stall before n=16384: hide-IDE virtio-iso CpuSleep must inject"
+        );
+        assert!(
+            guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
+            "product ISO quiet tick arms with the window, not n>16384"
+        );
+        assert!(!guest_uefi_product_iso_pci_ready(false, false));
     crate::devices::ide_cdrom::reset();
 }
 

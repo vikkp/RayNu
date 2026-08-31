@@ -297,7 +297,10 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# is not F11. Pin ea30da1 (skip-after-inject uses pci_ready) run 33389381409.
+# Pin ea30da1 (skip-after-inject uses pci_ready) run 33389381409 is not F11:
+# hide-IDE virtio-iso CpuSleep is at n << 16384; skip-after-inject waited
+# for that floor and parked HLT; RET. product ISO HLT stall before n=16384.
+# Do not F11 ea30da1 / run 33389381409. Wait for this SHA CI.
 # Do not F11 b824789 / run 33387614559 (hide-IDE skip-after-inject raw pci_ide).
 # Do not F11 d61dc7e / run 33349142609 (ConnectAll IdeBus CpuSleep).
 # Do not F11 5c0f7a2 / run 33347766697 (ATAPI-first bootorder).
@@ -312,55 +315,62 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33321642509" ]]; then
     echo "error: run 33321642509 is 2d6b109 dest skip (identity 0x200000)" >&2
-    echo "       ACPI cannot install. Pin --run 33389381409 (ea30da1)." >&2
+    echo "       ACPI cannot install. product ISO HLT stall before n=16384;" >&2
+    echo "       wait for this SHA CI. Do not F11 ea30da1 / --run 33389381409." >&2
     echo "       FLASHCRUZER-OK for 2d6b109 is not F11." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33333506987" ]]; then
     echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 8663f56 again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33337287432" ]]; then
     echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 084430f again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33345731636" ]]; then
     echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 2ae4544 again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33347766697" ]]; then
     echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 5c0f7a2 again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33349142609" ]]; then
     echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 d61dc7e again." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33387614559" ]]; then
     echo "error: run 33387614559 is b824789 skip-after-inject raw pci_ide" >&2
-    echo "       Pin --run 33389381409 (ea30da1 skip-after-inject pci_ready)." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
     echo "       do not F11 b824789." >&2
     exit 1
   fi
+  if [[ "$PIN_RUN" == "33389381409" ]]; then
+    echo "error: run 33389381409 is ea30da1 hide-IDE n>16384" >&2
+    echo "       product ISO HLT stall before n=16384. Wait for this SHA CI." >&2
+    echo "       do not F11 ea30da1." >&2
+    exit 1
+  fi
   case "$HEAD_SHORT" in
-    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*)
-      if [[ "$PIN_RUN" != "33389381409" ]]; then
-        echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
-        echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
-        echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
-        echo "       ./tools/flashcruzer.sh --no-git --wait --require-head --run 33389381409 --linux-iso ..." >&2
-        exit 1
-      fi
+    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*)
+      echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
+      echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+      echo "       do not F11 ea30da1 / --run 33389381409." >&2
+      echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
+      echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
+      echo "       ./tools/flashcruzer.sh --no-git --wait --require-head --linux-iso ..." >&2
+      exit 1
       ;;
   esac
 }
@@ -526,7 +536,7 @@ if [[ "$ALLOW_REJECTED" -eq 0 && -f "$REJECT_FILE" ]]; then
     echo "error: EFI prefix $PREFIX is on the known-bad list ($REJECT_FILE)" >&2
     echo "       refusing to flash. Pass --allow-rejected only if you mean it." >&2
     if [[ "$PREFIX" == "6fc742b0" ]]; then
-      echo "       2d6b109 dest skip cannot install ACPI; pin --run 33389381409 (ea30da1)." >&2
+      echo "       2d6b109 dest skip cannot install ACPI; do not F11 ea30da1 / --run 33389381409." >&2
     fi
     exit 1
   fi

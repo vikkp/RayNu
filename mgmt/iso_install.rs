@@ -174,6 +174,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// flash b824789 (CI run 33387614559; do not F11 d61dc7e).
 /// flash ea30da1 (CI run 33389381409; do not F11 b824789).
 /// skip-after-inject uses pci_ready (hide-IDE virtio enum).
+/// product ISO HLT stall before n=16384 (do not F11 ea30da1).
 /// product ISO hides PIIX IDE (iron COM2 `d61dc7e` ConnectAll CpuSleep).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =

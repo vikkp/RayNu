@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN hundred-ninety-sixth slice: flash ea30da1 pin 33389381409 (skip-after-inject uses pci_ready CI green; do not F11 b824789 / d61dc7e). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN hundred-ninety-seventh slice: product ISO HLT stall before n=16384 (hide-IDE virtio-iso CpuSleep; do not F11 ea30da1 / d61dc7e). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (flash ea30da1 skip-after-inject pin). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO HLT stall before n=16384). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-seventh slice: product ISO HLT stall before n=16384 (hide-IDE virtio-iso CpuSleep; do not F11 ea30da1 / d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-sixth slice: flash ea30da1 pin 33389381409 (skip-after-inject uses pci_ready CI green; do not F11 b824789); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fifth slice: skip-after-inject uses pci_ready (hide-IDE virtio enum; do not flash b824789 until this CI); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN hundred-ninety-fourth slice: flash b824789 pin 33387614559 (product ISO hides PIIX IDE CI green; do not F11 d61dc7e); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
