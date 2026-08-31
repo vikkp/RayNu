@@ -213,6 +213,7 @@ self_test() {
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
+  grep -q 'do not inject leftover 0x2E' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -346,8 +347,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
 # Pin e4faceb (firmware OVMF ATA vector) run 33429494930 is F11. EFI 9772035166.
+# do not inject leftover 0x2E. F11 pin stays 33429494930 until leftover-0x2E CI.
 # retrigger 5a69de2 after nested-KVM kill-init (33430294210 iso=0 after GTIMER2).
-# firmware OVMF ATA vector. do not clobber IOAPIC ATA vector.
+# firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
 # flash d7d63ca is not F11. do not F11 d7d63ca / --run 33426291731.
 # firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it.
 # flash 8e581c7 is not F11. do not F11 8e581c7 / --run 33424573770.

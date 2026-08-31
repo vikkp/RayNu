@@ -944,6 +944,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d7d63ca"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware OVMF ATA vector"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber IOAPIC ATA vector"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not inject leftover 0x2E"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));

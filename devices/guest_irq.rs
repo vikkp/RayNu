@@ -352,13 +352,12 @@ pub fn arm_firmware_ata_gsi14() {
         }
         c.master.aeoi = true;
         c.slave.aeoi = true;
+        // do not inject leftover 0x2E: early arm writes default 0x2E. After
+        // OVMF ICW2 0x70 (IRQ 14 → 0x76) that RTE is still 0x2E. take_ioapic
+        // then injects into an empty IDT slot when pic_ata is false.
         let rte = c.ioapic.redir[ATA_GSI as usize];
-        let vec = (rte & 0xff) as u8;
-        if vec >= 16 {
-            c.ioapic.redir[ATA_GSI as usize] = rte & !RTE_MASK;
-        } else {
-            c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
-        }
+        let want = firmware_ata_vec_locked(c);
+        c.ioapic.redir[ATA_GSI as usize] = (rte & !0xff & !RTE_MASK) | u64::from(want);
         c.slave.imr &= !(1 << (ATA_GSI - 8));
         c.master.imr &= !(1 << PIC_SLAVE_IRQ);
     });
@@ -377,29 +376,49 @@ pub fn ioapic_ata_ready() -> bool {
     with_irq(|c| ioapic_pin_ready(c, ATA_GSI).is_some())
 }
 
-/// True when the 8259 would deliver ATA IRQ 14 (beats PIT).
-/// firmware PIC ATA. firmware OVMF ATA vector. Not `ISO-INSTALL-OK`.
+/// True when the 8259 would deliver ATA IRQ 14 at [`firmware_ata_vec`].
+/// PIC default `0x2E` must not beat an OVMF IOAPIC `0x76`.
+/// firmware PIC ATA. firmware OVMF ATA vector. do not inject leftover 0x2E.
+/// Not `ISO-INSTALL-OK`.
 pub fn pic_ata_ready() -> bool {
     if !product_live() {
         return false;
     }
-    with_irq(|c| pic_peek(c) == Some(pic_irq14_vec(c)))
+    with_irq(|c| {
+        let want = firmware_ata_vec_locked(c);
+        pic_peek(c) == Some(want) && want == pic_irq14_vec(c)
+    })
 }
 
-/// IOAPIC pin 14 vector if remapped, else PIC IRQ 14, else `0x2E`.
-/// firmware OVMF ATA vector. Not `ISO-INSTALL-OK`.
+/// OVMF-programmed IOAPIC pin 14, else remapped PIC IRQ 14, else `0x2E`.
+/// Leftover default `0x2E` does not hide PIC `0x76`. PIC `0x2E` does not
+/// hide a non-default IOAPIC vector. firmware OVMF ATA vector.
+/// do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+/// Not `ISO-INSTALL-OK`.
 pub fn firmware_ata_vec() -> u8 {
     if !product_live() {
         return 0x20u8.wrapping_add(ATA_GSI);
     }
-    with_irq(|c| {
-        let v = (c.ioapic.redir[ATA_GSI as usize] & 0xff) as u8;
-        if v >= 16 {
-            v
-        } else {
-            pic_irq14_vec(c)
-        }
-    })
+    with_irq(|c| firmware_ata_vec_locked(c))
+}
+
+fn ata_vec_default() -> u8 {
+    0x20u8.wrapping_add(ATA_GSI)
+}
+
+fn firmware_ata_vec_locked(c: &IrqChip) -> u8 {
+    let io = (c.ioapic.redir[ATA_GSI as usize] & 0xff) as u8;
+    let pic = pic_irq14_vec(c);
+    let default = ata_vec_default();
+    if io >= 16 && io != default {
+        io
+    } else if pic != default {
+        pic
+    } else if io >= 16 {
+        io
+    } else {
+        pic
+    }
 }
 
 /// Firmware PIT (IRQ 0) whatever ICW2 OVMF programmed, plus virtual-wire 0x20.

@@ -420,6 +420,54 @@ fn product_iso_firmware_ovmf_ata_vector_not_0x2e() {
 }
 
 #[test]
+fn product_iso_firmware_leftover_0x2e_yields_pic_0x76() {
+    arm_product_iso();
+    arm_firmware_ata_gsi14();
+    assert_eq!(firmware_ata_vec(), 0x2E, "early arm default ATA vec");
+    pic_init_ovmf_edk2();
+    raise_ata();
+    arm_firmware_ata_gsi14();
+    assert_eq!(
+        firmware_ata_vec(),
+        0x76,
+        "do not inject leftover 0x2E after EDK2 ICW2"
+    );
+    assert!(pic_ata_ready(), "firmware PIC ATA at 0x76");
+    assert_eq!(take_pic_vector(), Some(0x76));
+    assert_eq!(
+        take_ioapic_ata_vector(),
+        Some(0x76),
+        "do not inject leftover 0x2E: IOAPIC pin 14 synced to PIC 0x76"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_ioapic_0x76_beats_pic_0x2e() {
+    arm_product_iso();
+    arm_firmware_ata_gsi14();
+    ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
+    ioapic_write(0x10, 0x76);
+    raise_ata();
+    arm_firmware_ata_gsi14();
+    assert_eq!(
+        firmware_ata_vec(),
+        0x76,
+        "do not clobber IOAPIC ATA vector"
+    );
+    assert!(
+        !pic_ata_ready(),
+        "PIC default 0x2E must not beat OVMF IOAPIC 0x76"
+    );
+    assert_eq!(take_ioapic_ata_vector(), Some(0x76));
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_firmware_take_ioapic_ata_leaves_virtio() {
     arm_product_iso();
     ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
