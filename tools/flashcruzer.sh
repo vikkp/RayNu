@@ -175,6 +175,8 @@ self_test() {
   grep -q '33399991049' "$SCRIPT_PATH"
   grep -q 'firmware force IF for inject' "$SCRIPT_PATH"
   grep -q 'do not F11 77f5866' "$SCRIPT_PATH"
+  grep -q 'retrigger 9df52c5' "$SCRIPT_PATH"
+  grep -q '33402411199' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
   grep -q '33349142609' "$SCRIPT_PATH"
   grep -q '33347766697' "$SCRIPT_PATH"
@@ -305,7 +307,9 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 
 # 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
 # 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
-# Pin this SHA (firmware force IF for inject) after CI. do not F11 77f5866
+# Pin this SHA (firmware force IF for inject) after CI. retrigger 9df52c5
+# after nested-KVM SHELL flake (33402411199 iso=0 5/5; not force-IF).
+# do not F11 77f5866
 # / 388149b / --run 33399209557 / 33399991049 (skip-PIT IF=0 after PACKET).
 # flash 77f5866 is not F11. firmware skip PIT inject.
 # skip-without-inject plus El Torito ide@ first plus skip HLT after PACKET
