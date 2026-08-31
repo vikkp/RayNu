@@ -92,6 +92,8 @@ use super::{
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
+    guest_uefi_nested_iso0_firmware_lapic_timer,
+    guest_uefi_nested_iso0_inject_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
     guest_uefi_ioapic_io_over_pit,
@@ -1396,6 +1398,30 @@ fn marker_and_residual_honest() {
         crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ0,
         0x68,
         "nested iso=0 EDK2 IRQ0"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(Some(0x68), Some(0x20)),
+        0x68,
+        "PIC take beats LAPIC"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(None, Some(0x20)),
+        0x20,
+        "nested iso=0 firmware LAPIC timer"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(None, None),
+        0x68,
+        "nested iso=0 EDK2 IRQ0 when both empty"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
+        "nested iso=0 firmware LAPIC timer"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_lapic_timer(true, false, true, 0, 12));
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "product skip_pit still drops 0x20"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_insn_len0_skip(false),

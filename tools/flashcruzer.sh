@@ -224,6 +224,8 @@ self_test() {
   grep -q '33438918646' "$SCRIPT_PATH"
   grep -q '33440951898' "$SCRIPT_PATH"
   grep -q '33443188019' "$SCRIPT_PATH"
+  grep -q '33444677681' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
@@ -371,8 +373,10 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
 # nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0).
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
+# nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
+# do not F11 deb64f5 / --run 33444677681.
 # retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
 # flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
 # flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
@@ -671,6 +675,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33443188019 is 3ff3cf9 nested PIT VMXON-SKIP (not ATAPI-OK)" >&2
     echo "       nested iso=0 EDK2 IRQ0; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 3ff3cf9 / --run 33443188019." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33444677681" ]]; then
+    echo "error: run 33444677681 is deb64f5 nested EDK2 IRQ0 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware LAPIC timer; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 deb64f5 / --run 33444677681." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
