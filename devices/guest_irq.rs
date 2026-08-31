@@ -49,6 +49,8 @@ struct Pic {
     expect_icw4: bool,
     ready: bool,
     read_isr: bool,
+    /// ICW4 AEOI / firmware virtual-wire: INTA does not leave ISR set.
+    aeoi: bool,
 }
 
 struct Ioapic {
@@ -75,6 +77,7 @@ impl Pic {
             expect_icw4: false,
             ready: false,
             read_isr: false,
+            aeoi: false,
         }
     }
 }
@@ -273,8 +276,10 @@ pub fn has_deliverable() -> bool {
 ///
 /// Iron COM2 `beb1576`: `pic=0 gsi2=0` while IF=1 TPR=0; `raise_pit` latched
 /// IRR that neither chip could deliver. Unmask IRQ 0 only (not UART/ATA).
-/// If firmware later ICW2-programs the PIC, those writes overwrite this.
-/// firmware virtual-wire PIC. Not `ISO-INSTALL-OK`.
+/// AEOI: OVMF CpuSleep IDT[0x20] EOIs LAPIC, not OCW2, so ISR[0] must not
+/// stick after `take_pic_vector` or BDS gets one tick then HLT forever.
+/// If firmware later ICW1-programs the PIC, those writes overwrite this.
+/// firmware virtual-wire PIC. firmware virtual-wire AEOI. Not `ISO-INSTALL-OK`.
 pub fn arm_firmware_virtual_wire() {
     if !product_live() {
         return;
@@ -285,6 +290,7 @@ pub fn arm_firmware_virtual_wire() {
             c.master.vector = 0x20;
         }
         c.master.imr &= !1;
+        c.master.aeoi = true;
     });
 }
 
@@ -469,7 +475,9 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);
-        c.master.isr |= 1 << irq;
+        if !c.master.aeoi {
+            c.master.isr |= 1 << irq;
+        }
         Some(c.master.vector.wrapping_add(irq))
     } else {
         let s = irq - 8;
@@ -548,6 +556,7 @@ fn pic_cmd(p: &mut Pic, val: u8) {
         p.irr = 0;
         p.ready = false;
         p.read_isr = false;
+        p.aeoi = false;
         return;
     }
     if val & 0x08 != 0 {
@@ -578,6 +587,9 @@ fn pic_data(p: &mut Pic, val: u8) {
         3 => {
             p.init = 0;
             p.ready = p.vector >= 16;
+            // ICW4 bit 1 is AEOI. Firmware virtual-wire already set it;
+            // honor a real ICW4 so Linux nested EOI still works.
+            p.aeoi = val & 2 != 0;
         }
         _ => p.imr = val,
     }

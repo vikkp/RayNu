@@ -162,6 +162,39 @@ fn product_iso_firmware_virtual_wire_pic_irq0() {
         "firmware virtual-wire PIC IRQ0 vec 0x20"
     );
     assert!(take_pic_vector().is_none());
+    // OVMF CpuSleep IDT[0x20] EOIs LAPIC, not PIC OCW2. Without AEOI the
+    // next raise_pit would see ISR[0] and never inject again.
+    raise_pit();
+    assert!(
+        pic_has_deliverable(),
+        "firmware virtual-wire AEOI"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "firmware virtual-wire AEOI repeats IRQ0"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_firmware_virtual_wire_pic_aeoi_clears_on_icw() {
+    arm_product_iso();
+    arm_firmware_virtual_wire();
+    raise_pit();
+    assert_eq!(take_pic_vector(), Some(0x20 + PIT_IRQ));
+    pic_init_unmask_all();
+    raise_pit();
+    assert_eq!(take_pic_vector(), Some(0x20 + PIT_IRQ));
+    raise_pit();
+    assert!(
+        !pic_has_deliverable(),
+        "ICW4 without AEOI leaves ISR[0]; Linux OCW2 still required"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert!(pic_has_deliverable());
     reset();
     reset_cd();
     guest_platform::reset();
