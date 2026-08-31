@@ -88,6 +88,7 @@ use super::{
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_hlt_skip_after_inject,
     guest_uefi_firmware_hlt_skip_len,
+    guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_virtual_wire_pic,
     guest_uefi_firmware_hlt_force_if,
     guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
@@ -899,6 +900,8 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT force IF"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT activity active"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e81c2e"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b"));
@@ -1292,6 +1295,11 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16384, 12, true, 0));
     assert_eq!(guest_uefi_firmware_hlt_skip_len(true), 1, "firmware HLT skip after inject");
     assert_eq!(guest_uefi_firmware_hlt_skip_len(false), 0, "nested iso=0 keeps skip_hlt");
+    assert_eq!(
+        guest_uefi_firmware_hlt_activity_active(),
+        0,
+        "firmware HLT activity active"
+    );
     assert!(guest_uefi_firmware_virtual_wire_pic(false, true, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(true, true, 0));
     assert!(!guest_uefi_firmware_virtual_wire_pic(false, false, 0));
