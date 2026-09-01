@@ -292,8 +292,10 @@ self_test() {
   grep -q 'nested iso=0 firmware HLT 0x68 miss' "$SCRIPT_PATH"
   grep -q 'firmware HLT inject cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after inject' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT inject cap' "$SCRIPT_PATH"
   grep -q '33466890874' "$SCRIPT_PATH"
   grep -q '33468177902' "$SCRIPT_PATH"
+  grep -q '33469144799' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
   grep -q '33466397855' "$SCRIPT_PATH"
@@ -445,6 +447,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 dd0096b / --run 33466890874.
 # nested iso=0 firmware HLT skip after inject (CI 33468177902 VMXON 8x 0x20 then skip-HLT ataio=0).
 # do not F11 65b94c1 / --run 33468177902.
+# nested iso=0 firmware HLT inject cap (CI 33469144799 skip-after-inject hlt=0 8x 0x20 ataio=0).
+# do not F11 cfabb62 / --run 33469144799.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -994,6 +998,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33468177902 is 65b94c1 nested VMXON 8x inject 0x20 then skip-HLT (ATAPI-OK missing)" >&2
     echo "       nested iso=0 firmware HLT skip after inject; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 65b94c1 / --run 33468177902." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33469144799" ]]; then
+    echo "error: run 33469144799 is cfabb62 nested VMXON skip-after-inject 8x 0x20 hlt=0 (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT inject cap; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 cfabb62 / --run 33469144799." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
