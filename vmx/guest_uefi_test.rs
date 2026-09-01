@@ -105,6 +105,7 @@ use super::{
     guest_uefi_product_firmware_hlt_ata_lapic,
     guest_uefi_product_firmware_hlt_wake_lapic,
     guest_uefi_product_firmware_hlt_wake_lapic_timer,
+    guest_uefi_product_firmware_hlt_wake_idt20,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1496,17 +1497,26 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, None),
-        0x68,
-        "product ISO firmware HLT wake"
+        0x20,
+        "product ISO firmware HLT wake IDT 0x20"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x20), None),
-        0x68
+        0x20,
+        "product ISO firmware HLT wake IDT 0x20"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0xEF)),
-        0x68
+        0x20,
+        "product ISO firmware HLT wake IDT 0x20; leftover 0xEF substitutes 0x20"
     );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_idt20(false, 0x20),
+        "product ISO firmware HLT wake IDT 0x20"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(true, 0x20));
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(false, 0x68));
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(false, 0xEF));
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x76), None),
         0x76
