@@ -164,6 +164,10 @@
 //! dword-only (`addr==0 && len==4`). Dump `cf8s=`. CI `33537641723`
 //! VMXON ATAPI miss (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`).
 //! do not F11 30ccfc0.
+//! nested iso=0 firmware IdeBus CF8E: QEMU `pci_host_data_read/write`
+//! gates CFC on `config_reg` bit 31. Enable-clear IN is `0xFFFFFFFF`.
+//! Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8 unproven).
+//! do not F11 02e8843.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -282,6 +286,10 @@
 //! stores `config_reg` only when `addr==0 && len==4`. Size-1/2 OUT to
 //! `0xCF8` is ignored. Dump `cf8s=`. CI `33537641723` VMXON ATAPI miss
 //! (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`). do not F11 30ccfc0.
+//! nested iso=0 firmware IdeBus CF8E: QEMU `pci_host_data_read` returns
+//! `0xFFFFFFFF` and `pci_host_data_write` is ignored when bit 31 is
+//! clear. Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8
+//! unproven). do not F11 02e8843.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
