@@ -89,12 +89,16 @@ jobs:
           # Nested VT-x requires host CPUID.VMX; many cloud VMs expose KVM without it.
           if [[ -r /dev/kvm && -w /dev/kvm ]] && grep -qw vmx /proc/cpuinfo; then
             echo "KVM + host VMX — requiring VMXON through M3.8 early path"
-            # Nested KVM sometimes #DFs Linux before LINUX-EARLY-OK after
-            # BZIMAGE-OK (vec 8). Two retries (3 attempts). Push and PR each
-            # run this job; one side can flake while the other passes.
-            # Not a Stage 10 / guest-fw change.
+            # Nested KVM sometimes #DFs Linux / kills init (exit 0xb) after
+            # GTIMER2. 8336a06 run 33387083800: iso=0 still CDROM-OK BOTH-OK,
+            # then init SIGSEGV. 9df52c5 run 33402411199: same flake 5/5
+            # after force-IF (iso=0 never takes try_inject). Six retries
+            # (7 attempts). Push and PR each run this job; one side can
+            # flake while the other passes.
+            # Not a Stage 10 / guest-fw change. Not ISO-INSTALL-OK.
+            # retrigger 9df52c5 CI after nested-KVM SHELL flake.
             ok=0
-            for attempt in 1 2 3; do
+            for attempt in 1 2 3 4 5 6 7; do
               if REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh; then
                 ok=1
                 break

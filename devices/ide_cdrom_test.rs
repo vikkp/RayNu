@@ -2,7 +2,16 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, last_pci_cfg_read_off, last_pci_cfg_write_off, pci_status,
+    pci_cmd_max,
+    pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
+    GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
+    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    take_ide_pci_cmd_wr_exit,
+    take_ide_pci_cmd_ata_hlt,
+    ide_pci_cmd_ata_hlt_pending,
+    linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
+    product_iso_hides_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
     is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
@@ -10,16 +19,29 @@
     ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_ISO_CAP,
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
+    GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
+    GUEST_CD_PCI_IDETIM_RAZ, GUEST_CD_PCI_SUBSYS, GUEST_CD_PCI_SUBSYS_ZERO,
+    GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_CMD_WMASK_QEMU, GUEST_CD_PCI_STATUS,
+    GUEST_CD_PCI_STATUS_RESET, GUEST_CD_PCI_STATUS_W1C,
+    GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
+    GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
+    GUEST_CD_BMIDE_PRD_ALIGN,
+    GUEST_CD_SEC_IOPORT,
+    pci_int_line, pci_latency, pci_cache_line,
+    bmide_cmd, bmide_status, bmide_ins, bmide_prd,
 };
 
 #[test]
 fn pci_bdf_and_ports() {
     reset();
     let addr = pci_config_addr();
-    assert_eq!(pci_bdf(addr), (0, 0, 1, 0));
+    assert_eq!(pci_bdf(addr), (0, 1, 1, 0));
     assert!(pci_addr_selects_cd(addr));
-    assert!(pci_addr_selects_cd(0x8000_0100)); // 00:00.1 IDE (virtio fn1)
-    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 same CD (PIIX fn1)
+    assert!(
+        !pci_addr_selects_cd(0x8000_0100),
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
+    );
+    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 PIIX IDE
     assert!(!pci_addr_selects_cd(0x8000_0000)); // 00:00.0 virtio
     assert!(!pci_addr_selects_cd(0x8000_0800)); // 00:01.0 ISA
     assert!(!pci_addr_selects_cd(0x8000_4000)); // 00:08.0 host
@@ -32,11 +54,174 @@ fn pci_bdf_and_ports() {
     assert!(is_ata_primary_port(0x170));
     assert!(is_ata_primary_port(0x177));
     assert!(is_ata_primary_port(0x376));
+    assert!(present_placeholder());
+    assert_eq!(
+        ata_io(0x170, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: data 0"
+    );
+    assert_eq!(
+        ata_io(0x376, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: 0x376 both-empty"
+    );
+    assert!(!is_ata_primary_port(0x02), "unimplemented BAR1 does not steal port 2");
     assert!(!is_ata_primary_port(0x3F8));
     assert!(!is_bmide_port(0xC400));
     assert!(is_pci_data_port(0xCFC));
     assert!(is_pci_data_port(0xCFE));
     assert!(!is_pci_data_port(0xCF8));
+}
+
+#[test]
+fn secondary_channel_is_empty_not_atapi_alias() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(
+        ata_io(0x1F7, true, 1, 0) as u8 & 0x40,
+        0x40,
+        "primary DRDY"
+    );
+    assert_eq!(
+        ata_io(0x170, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: data 0 not ATAPI"
+    );
+    assert_eq!(ata_io(0x376, true, 1, 0) as u8, GUEST_CD_SEC_IOPORT);
+    assert!(!is_ata_data_port(0x170));
+    assert!(!is_ata_primary_port(0x02));
+    let before = ata_io_accesses();
+    let _ = ata_io(0x376, false, 1, 0x02);
+    assert!(
+        ata_io_accesses() > before,
+        "nested iso=0 firmware IdeBus secondary ioport: Start PIO counted"
+    );
+    let _ = ata_io(0x0177, false, 1, 0xEC);
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: IDENTIFY still 0"
+    );
+    assert_eq!(ata_io(0x0171, true, 1, 0) as u8, GUEST_CD_SEC_IOPORT);
+    let _ = ata_io(0x0376, false, 1, 0x04);
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: SRST still 0"
+    );
+    reset();
+}
+
+#[test]
+fn linux_hides_duplicate_slot0_ide_not_piix() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    assert!(!linux_hides_duplicate_slot0_ide(false, 0x8000_0100));
+    assert!(linux_hides_duplicate_slot0_ide(true, 0x8000_0100));
+    assert!(!linux_hides_duplicate_slot0_ide(true, 0x8000_0900));
+    assert!(present_placeholder());
+    pci_write_addr(0x8000_0100);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
+    );
+    crate::boot::serial::set_linux_earlycon_share(true);
+    pci_write_addr(0x8000_0100);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    crate::boot::serial::set_linux_earlycon_share(false);
+    reset();
+}
+
+#[test]
+fn linux_hides_piix_ide_after_high_half() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
+    assert!(!linux_hides_piix_ide(false, 0x8000_0900));
+    assert!(linux_hides_piix_ide(true, 0x8000_0900));
+    assert!(!linux_hides_piix_ide(true, 0x8000_0100));
+    assert!(!linux_hides_piix_ide(true, 0x8000_0800));
+    assert!(present_placeholder());
+    pci_write_addr(0x8000_0900);
+    crate::boot::serial::set_linux_earlycon_share(true);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "bootimg share must not hide PIIX (GRUB ATAPI)"
+    );
+    crate::boot::serial::set_linux_high_half(true);
+    pci_write_addr(0x8000_0900);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
+    reset();
+}
+
+#[test]
+fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
+    assert!(!product_iso_hides_ide(0x8000_0900));
+    assert!(!product_iso_hides_ide(0x8000_0100));
+    assert!(present_placeholder());
+    pci_write_addr(0x8000_0900);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "iso=0 firmware still enumerates PIIX IDE"
+    );
+    pci_write_addr(0x8000_0100);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
+    );
+    reset();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present(&iso, 9));
+    assert!(product_iso_window_armed());
+    assert!(
+        !product_iso_hides_ide(0x8000_0900),
+        "firmware HLT skip without inject: OVMF El Torito needs PIIX ATAPI"
+    );
+    assert!(!product_iso_hides_ide(0x8000_0100));
+    assert!(!product_iso_hides_ide(0x8000_0800), "do not hide PIIX ISA");
+    assert!(!product_iso_hides_ide(0x8000_1000), "do not hide virtio-blk");
+    pci_write_addr(0x8000_0900);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "product ISO still enumerates PIIX IDE for El Torito"
+    );
+    pci_write_addr(0x8000_0100);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "nested iso=0 firmware IdeBus slot0 fn1"
+    );
+    reset();
+}
+
+#[test]
+fn linux_ata_floating_bus_after_high_half() {
+    reset();
+    crate::boot::serial::set_linux_high_half(false);
+    assert!(!linux_ata_floating_bus(false));
+    assert!(linux_ata_floating_bus(true));
+    assert!(present_placeholder());
+    let st = ata_io(0x1F7, true, 1, 0) as u8;
+    assert_ne!(st, 0xFF, "GRUB/OVMF still need live ATA status");
+    crate::boot::serial::set_linux_high_half(true);
+    assert_eq!(ata_io(0x1F7, true, 1, 0) as u8, 0xFF);
+    assert_eq!(ata_io(0x3F6, true, 1, 0) as u8, 0xFF);
+    let _ = ata_io(0x1F7, false, 1, 0xA1);
+    assert_eq!(ata_io(0x1F7, true, 1, 0) as u8, 0xFF);
+    crate::boot::serial::set_linux_high_half(false);
+    reset();
 }
 
 #[test]
@@ -49,11 +234,12 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_CD_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_CD_PCI_DEVICE);
-    // IDE is 00:00.1 — virtio fn1; PEI DID probe is 00:00.0.
+    // IDE is PIIX 00:01.1. QEMU i440FX 00:00.1 is empty.
     pci_write_addr(0x8000_0102);
     assert_eq!(
         pci_read_data(0xCFC, 2) & 0xffff,
-        u32::from(GUEST_CD_PCI_DEVICE)
+        0xffff,
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
     );
     pci_write_addr(0x8000_0902);
     assert_eq!(
@@ -102,8 +288,8 @@ fn pci_bar0_probe_reports_eight_byte_io() {
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        0xFFFF_FFF9,
-        "8-byte I/O BAR: mask 0xFFFFFFF8 | 1"
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: unimplemented BAR0 probe is 0"
     );
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
@@ -112,6 +298,595 @@ fn pci_bar0_probe_reports_eight_byte_io() {
         0xFFFF_FFF1,
         "16-byte I/O BMIDE: mask 0xFFFFFFF0 | 1"
     );
+    assert_eq!(
+        pci_bar0(),
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: BAR0 stays unimplemented"
+    );
+    reset();
+}
+
+#[test]
+fn pci_bar0_probe_does_not_clobber_live_bar() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(pci_read_data(0xCFC, 4), 0);
+    assert_eq!(
+        pci_bar0(),
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: live BAR0 stays 0"
+    );
+    assert!(
+        is_ata_primary_port(0x1F0),
+        "legacy 0x1F0 stays decoded after size probe"
+    );
+    pci_write_data(0xCFC, 4, 0x1F1);
+    assert_eq!(pci_bar0(), 0);
+    reset();
+}
+
+#[test]
+fn pci_bar0_probe_oneshot_second_read_is_live() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(pci_read_data(0xCFC, 4), 0);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: second dword stays unimplemented"
+    );
+    assert_eq!(pci_bar0(), 0);
+    reset();
+}
+
+#[test]
+fn pci_bar4_bmide_unprogrammed_until_assigned() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(
+        pci_bar4(),
+        1,
+        "nested iso=0 firmware IdeBus BM unprogrammed: BAR4 I/O address 0"
+    );
+    assert!(!is_bmide_port(0xCC00));
+    assert!(!is_bmide_port(0xC400));
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xCC01);
+    assert_eq!(pci_bar4(), 0xCC01);
+    assert!(
+        !is_bmide_port(0xCC00),
+        "nested iso=0 firmware IdeBus BMIDE IO: BAR4 assigned, COMMAND.IO off"
+    );
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
+    assert!(
+        is_bmide_port(0xCC00),
+        "nested iso=0 firmware IdeBus BMIDE IO: COMMAND.IO decodes BAR4"
+    );
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0);
+    assert_eq!(pci_bar4(), 1);
+    reset();
+}
+
+#[test]
+fn pci_bar4_probe_stays_until_restore() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BM sticky: first dword is mask"
+    );
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BM sticky: second dword stays mask"
+    );
+    assert_eq!(
+        pci_bar4(),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BAR4 wmask: QEMU stores mask in config"
+    );
+    pci_write_data(0xCFC, 4, 0xCC01);
+    assert_eq!(pci_bar4(), 0xCC01);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xCC01);
+    reset();
+}
+
+#[test]
+fn pci_command_write_latches_ide_cmd_wake() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    assert_eq!(
+        pci_read_data(0xCFC, 4) & 0xffff,
+        0,
+        "product ISO firmware IDE cmd reset 0"
+    );
+    assert!(
+        !take_ide_pci_cmd_wr_exit(),
+        "product ISO firmware wake IDE cmd: idle"
+    );
+    pci_write_data(0xCFC, 4, 0x0005);
+    assert_eq!(
+        pci_command(),
+        0x0005,
+        "nested iso=0 firmware IdeBus PCI"
+    );
+    assert!(
+        take_ide_pci_cmd_wr_exit(),
+        "product ISO firmware wake IDE cmd"
+    );
+    assert!(
+        ide_pci_cmd_ata_hlt_pending(),
+        "product ISO firmware IDE cmd ATA on HLT: survives I/O take"
+    );
+    assert!(
+        take_ide_pci_cmd_ata_hlt(),
+        "product ISO firmware IDE cmd ATA on HLT: survives I/O take"
+    );
+    assert!(!take_ide_pci_cmd_wr_exit());
+    assert!(!take_ide_pci_cmd_ata_hlt());
+    assert!(!ide_pci_cmd_ata_hlt_pending());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0x1F1);
+    assert!(
+        !take_ide_pci_cmd_wr_exit(),
+        "product ISO firmware wake IDE cmd: BAR write is not Start"
+    );
+    assert!(
+        !take_ide_pci_cmd_ata_hlt(),
+        "product ISO firmware IDE cmd ATA on HLT: BAR write is not Start"
+    );
+    reset();
+}
+
+#[test]
+fn pci_command_disable_is_not_start() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0);
+    assert_eq!(
+        pci_command(),
+        0,
+        "nested iso=0 firmware IdeBus PCI cmd: write 0 stays 0"
+    );
+    assert_eq!(
+        pci_cmd_writes(),
+        1,
+        "nested iso=0 firmware IdeBus prog-if: disable still counts cmdn"
+    );
+    assert_eq!(last_pci_cmd_write(), 0);
+    assert!(
+        !take_ide_pci_cmd_wr_exit(),
+        "nested iso=0 firmware IdeBus PCI cmd: disable is not Start"
+    );
+    reset();
+}
+
+#[test]
+fn pci_command_wmask_drops_mse() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0007);
+    assert_eq!(
+        pci_command(),
+        GUEST_CD_PCI_CMD_WMASK_QEMU,
+        "nested iso=0 firmware IdeBus PCI cmd QEMU: EnableAttributes 0x7 stores 0x7"
+    );
+    assert_eq!(last_pci_cmd_write(), 0x0007);
+    assert_eq!(pci_cmd_max(), 0x0007);
+    assert!(take_ide_pci_cmd_wr_exit());
+    reset();
+}
+
+#[test]
+fn pci_command_wmask_keeps_intx_serr() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0507);
+    assert_eq!(
+        pci_command(),
+        GUEST_CD_PCI_CMD_WMASK,
+        "nested iso=0 firmware IdeBus PCI cmd INTX: EnableAttributes 0x507 stores 0x507"
+    );
+    assert_eq!(last_pci_cmd_write(), 0x0507);
+    assert_eq!(pci_cmd_max(), 0x0507);
+    assert!(take_ide_pci_cmd_wr_exit());
+    reset();
+}
+
+#[test]
+fn pci_command_byte_rmw_preserves_high() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 1, 0x07);
+    pci_write_data(0xCFD, 1, 0x00);
+    assert_eq!(
+        pci_command(),
+        0x0007,
+        "nested iso=0 firmware IdeBus PCI cmd RMW: size-1 OUT at 0x04 then 0x05 keeps 0x0007"
+    );
+    assert_eq!(pci_cmd_max(), 0x0007);
+    assert!(take_ide_pci_cmd_wr_exit());
+    reset();
+}
+
+#[test]
+fn pci_status_fast_back_with_devsel() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_STATUS,
+        "nested iso=0 firmware IdeBus PCI status: reset FAST_BACK+DEVSEL"
+    );
+    pci_write_data(0xCFC, 4, 0x0007);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        u32::from(GUEST_CD_PCI_CMD_WMASK_QEMU) | GUEST_CD_PCI_STATUS,
+        "nested iso=0 firmware IdeBus PCI status: command write keeps FAST_BACK"
+    );
+    reset();
+}
+
+#[test]
+fn pci_cmd_status_per_byte_w1c() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0xF900_0027);
+    assert_eq!(
+        pci_command(),
+        0x0007,
+        "nested iso=0 firmware IdeBus PCI cmd status: 0x27 stores 0x7"
+    );
+    assert_eq!(last_pci_cmd_in(), 0x0027);
+    assert_eq!(pci_status(), GUEST_CD_PCI_STATUS_RESET);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        u32::from(0x0007u16) | GUEST_CD_PCI_STATUS,
+        "nested iso=0 firmware IdeBus PCI cmd status: W1C 0xF900 leaves FAST_BACK"
+    );
+    assert_eq!(GUEST_CD_PCI_STATUS_W1C, 0xF900);
+    reset();
+}
+
+#[test]
+fn pci_int_line_reset_zero_persists() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x3C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        u32::from(GUEST_CD_PCI_INT_LINE_RESET) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
+        "nested iso=0 firmware IdeBus INTLINE: reset line 0 pin 0"
+    );
+    assert_eq!(pci_int_line(), 0);
+    pci_write_data(0xCFC, 4, 0x0000_010E);
+    assert_eq!(
+        pci_int_line(),
+        0x0E,
+        "nested iso=0 firmware IdeBus INTLINE: PciBus write persists"
+    );
+    assert_eq!(
+        pci_read_data(0xCFC, 4) & 0xff,
+        0x0E
+    );
+    assert_eq!(
+        (pci_read_data(0xCFC, 4) >> 8) & 0xff,
+        u32::from(GUEST_CD_PCI_INT_PIN),
+        "nested iso=0 firmware IdeBus INTPIN: pin stays 0"
+    );
+    reset();
+}
+
+#[test]
+fn pci_intline_rmw_word_then_pin() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x3C);
+    pci_write_data(0xCFC, 2, 0x010E);
+    assert_eq!(
+        pci_int_line(),
+        0x0E,
+        "nested iso=0 firmware IdeBus INTLINE RMW: size-2 0x010E stores line 0x0E"
+    );
+    assert_eq!(last_pci_intline_write(), 0x0E);
+    assert_eq!(
+        (pci_read_data(0xCFC, 4) >> 8) & 0xff,
+        u32::from(GUEST_CD_PCI_INT_PIN),
+        "nested iso=0 firmware IdeBus INTLINE RMW: pin stays 0"
+    );
+    pci_write_data(0xCFD, 1, 0x01);
+    assert_eq!(
+        pci_int_line(),
+        0x0E,
+        "nested iso=0 firmware IdeBus INTLINE RMW: size-1 at 0x3D does not clear line"
+    );
+    assert_eq!(last_pci_intline_write(), 0x0E);
+    reset();
+}
+
+#[test]
+fn pci_cls_rmw_word_then_latency() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x0C);
+    pci_write_data(0xCFC, 2, 0x2010);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus CLS RMW: size-2 0x2010 stores CLS 0x10"
+    );
+    assert_eq!(last_pci_cls_write(), 0x10);
+    assert_eq!(
+        pci_latency(),
+        0,
+        "nested iso=0 firmware IdeBus CLS RMW: latency stays 0"
+    );
+    pci_write_data(0xCFD, 1, 0x20);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus CLS RMW: size-1 at 0x0D does not clear CLS"
+    );
+    assert_eq!(last_pci_cls_write(), 0x10);
+    reset();
+}
+
+#[test]
+fn pci_cache_line_and_latency_persist() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x0C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus LAT: reset CLS and latency 0"
+    );
+    pci_write_data(0xCFC, 4, 0x0000_2010);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus LAT: cache line persists"
+    );
+    assert_eq!(
+        pci_latency(),
+        0,
+        "nested iso=0 firmware IdeBus LT RO: latency write ignored"
+    );
+    assert_eq!(
+        (pci_read_data(0xCFC, 4) >> 16) & 0xff,
+        0,
+        "nested iso=0 firmware IdeBus LAT: header type stays 0"
+    );
+    reset();
+}
+
+#[test]
+fn pci_class_prog_if_is_native_capable() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x08);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_CLASS,
+        "nested iso=0 firmware IdeBus ISA BAR: class dword 0x01018000"
+    );
+    pci_write_addr(pci_config_addr() | 0x09);
+    assert_eq!(
+        pci_read_data(0xCFC, 1),
+        u32::from(GUEST_CD_PCI_PROG_IF),
+        "nested iso=0 firmware IdeBus ISA BAR: byte 0x80 not 0x8F"
+    );
+    assert_eq!(pci_cmd_writes(), 0);
+    reset();
+}
+
+#[test]
+fn pci_idetim_is_raz_like_qemu_piix() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_IDETIM_RAZ,
+        "nested iso=0 firmware IdeBus IDETIM RAZ: reset 0"
+    );
+    assert_eq!(pci_idetim(), 0);
+    assert_eq!(GUEST_CD_PCI_IDETIM_RAZ, 0);
+    reset();
+}
+
+#[test]
+fn pci_idetim_persists_like_qemu_cfg40() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, GUEST_CD_PCI_IDETIM);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_IDETIM,
+        "nested iso=0 firmware IdeBus IDETIM persist: decode-enable stores"
+    );
+    assert_eq!(pci_idetim(), GUEST_CD_PCI_IDETIM);
+    reset();
+}
+
+#[test]
+fn pci_cfg44_persists_like_qemu_cfg_ram() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x44);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: reset 0x44 is 0"
+    );
+    pci_write_data(0xCFC, 4, 0xAABB_CCDD);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xAABB_CCDD,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: 0x44 write persists"
+    );
+    assert_eq!(pci_cfg44(), 0xAABB_CCDD);
+    pci_write_addr(pci_config_addr() | 0x40);
+    assert_eq!(
+        pci_idetim(),
+        0,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: 0x40 unchanged"
+    );
+    reset();
+}
+
+#[test]
+fn pci_cfg_ram_rmw_span_then_mid() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    pci_write_data(0xCFF, 2, 0xBBAA);
+    assert_eq!(
+        pci_idetim(),
+        0xAA00_0000,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-2 at 0x43 stores 0xAA in IDETIM high"
+    );
+    assert_eq!(
+        pci_cfg44(),
+        0x0000_00BB,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-2 at 0x43 stores 0xBB in 0x44"
+    );
+    assert_eq!(last_pci_cfg40_write(), 0xBB);
+    pci_write_data(0xCFD, 1, 0x11);
+    assert_eq!(
+        pci_idetim(),
+        0xAA00_1100,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-1 at 0x41 does not clear 0x43"
+    );
+    assert_eq!(
+        pci_cfg44(),
+        0x0000_00BB,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-1 at 0x41 does not clear 0x44"
+    );
+    assert_eq!(last_pci_cfg40_write(), 0x11);
+    reset();
+}
+
+#[test]
+fn pci_cfg_read_spans_header_into_ram() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xAABB_CCDD);
+    pci_write_addr(pci_config_addr() | 0x3C);
+    assert_eq!(
+        pci_read_data(0xCFE, 4),
+        0xCCDD_0000,
+        "nested iso=0 firmware IdeBus cfg read: size-4 at 0x3E includes 0x40"
+    );
+    assert_eq!(last_pci_cfg_read_off(), 0x3E);
+    reset();
+}
+
+#[test]
+fn pci_cfg_write_spans_class_into_cls_and_bar3_into_bar4() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x08);
+    pci_write_data(0xCFE, 4, 0x2010_0000);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus cfg write: size-4 at 0x0A stores CLS"
+    );
+    assert_eq!(
+        pci_latency(),
+        0,
+        "nested iso=0 firmware IdeBus cfg write: latency 0x0D stays RO"
+    );
+    assert_eq!(last_pci_cfg_write_off(), 0x0A);
+    pci_write_addr(pci_config_addr() | 0x1C);
+    pci_write_data(0xCFE, 4, 0xFFFF_0000);
+    assert_eq!(
+        pci_bar4(),
+        0x0000_FFF1,
+        "nested iso=0 firmware IdeBus cfg write: size-4 at 0x1E stores BAR4"
+    );
+    assert_eq!(last_pci_cfg_write_off(), 0x1E);
+    reset();
+}
+
+#[test]
+fn pci_bar4_qemu_wmask_per_byte_probe() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 1, 0xFF);
+    pci_write_data(0xCFD, 1, 0xFF);
+    pci_write_data(0xCFE, 1, 0xFF);
+    pci_write_data(0xCFF, 1, 0xFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BAR4 wmask: per-byte 0xFF is size probe"
+    );
+    assert_eq!(pci_bar4(), GUEST_CD_PCI_BAR4_PROBE);
+    assert_eq!(last_pci_bar4_write(), 0xFF);
+    assert_eq!(GUEST_CD_PCI_BAR4_WMASK, 0xFFFF_FFF0);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
+    assert!(
+        !is_bmide_port(0xFFF0),
+        "nested iso=0 firmware IdeBus BAR4 map: probe must not decode 0xFFF0"
+    );
+    assert!(!pci_bar4_mapped());
+    reset();
+}
+
+#[test]
+fn pci_rom_probe_stays_zero() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x30);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_ROM,
+        "nested iso=0 firmware IdeBus PCI ROM: reset 0x30 is 0"
+    );
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus PCI ROM: 0xFFFFFFFF probe is not sticky"
+    );
+    assert_eq!(pci_rom(), GUEST_CD_PCI_ROM);
+    reset();
+}
+
+#[test]
+fn pci_svid_is_qemu_default() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x2C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_SUBSYS,
+        "nested iso=0 firmware IdeBus PCI SVID: QEMU default 0x1AF4:0x1100"
+    );
+    assert_eq!(pci_svid(), GUEST_CD_PCI_SUBSYS);
+    assert_eq!(GUEST_CD_PCI_SUBSYS_ZERO, 0);
     reset();
 }
 
@@ -121,29 +896,69 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x10);
     pci_write_data(0xCFC, 4, 0xC000);
-    assert_eq!(pci_read_data(0xCFC, 4) & 0xFFF8, 0xC000);
-    assert!(is_ata_primary_port(0xC000));
-    assert!(is_ata_data_port(0xC000));
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: BAR0 write ignored"
+    );
+    assert!(!is_ata_primary_port(0xC000));
     assert!(is_ata_data_port(0x1F0), "legacy 1F0 stays a data FIFO");
-    assert!(!is_ata_data_port(0xC007));
     assert!(!is_ata_data_port(0x1F7));
     assert!(is_ata_primary_port(0x1F0), "legacy 1F0 stays decoded");
-    let _ = ata_io(0xC006, false, 1, 0xA0);
-    let _ = ata_io(0xC007, false, 1, 0xA0);
-    assert_eq!(ata_io(0xC002, true, 1, 0) as u8, 0x01);
+    let _ = ata_io(0x1F6, false, 1, 0xA0);
+    let _ = ata_io(0x1F7, false, 1, 0xA0);
+    assert_eq!(ata_io(0x1F2, true, 1, 0) as u8, 0x01);
     let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
     for chunk in cdb.chunks(2) {
         let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
-        let _ = ata_io(0xC000, false, 2, w);
+        let _ = ata_io(0x1F0, false, 2, w);
     }
     assert_eq!(last_scsi(), 0x28);
-    assert_eq!(ata_io(0xC000, true, 1, 0) as u8, 1);
+    assert_eq!(ata_io(0x1F0, true, 1, 0) as u8, 1);
     assert!(sectors_read() >= 1);
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xC400);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
     assert!(is_bmide_port(0xC400));
     assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
     assert!(!is_bmide_port(0x1F0));
+    reset();
+}
+
+#[test]
+fn bmide_qemu_byte_ops() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xC400);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
+    assert!(is_bmide_port(0xC400));
+    assert_eq!(
+        bmide_io(0xC400, true, 4, 0) as u32,
+        GUEST_CD_BMIDE_WIDE,
+        "nested iso=0 firmware IdeBus BMIDE: dword IN is all-ones"
+    );
+    assert_eq!(
+        bmide_io(0xC401, true, 1, 0) as u8,
+        GUEST_CD_BMIDE_UNUSED,
+        "nested iso=0 firmware IdeBus BMIDE: unused byte is 0xff"
+    );
+    assert_eq!(bmide_io(0xC400, true, 1, 0) as u8, 0);
+    assert_eq!(bmide_io(0xC402, true, 1, 0) as u8, 0);
+    let _ = bmide_io(0xC400, false, 1, 0x09);
+    assert_eq!(bmide_cmd(), 0x09);
+    let _ = bmide_io(0xC402, false, 1, 0x60);
+    assert_eq!(bmide_status(), 0x60);
+    let _ = bmide_io(0xC404, false, 4, 0x1234_5607);
+    assert_eq!(
+        bmide_prd(),
+        0x1234_5604,
+        "nested iso=0 firmware IdeBus BMIDE PRD: dword write is & ~3"
+    );
+    assert_eq!(GUEST_CD_BMIDE_PRD_ALIGN, 0xFFFF_FFFC);
+    assert!(bmide_ins() >= 4);
     reset();
 }
 
@@ -184,14 +999,24 @@ fn slave_absent_status_zero_identify_aborts() {
 fn secondary_channel_packet_read10() {
     reset();
     assert!(present_placeholder());
+    let scsi_before = last_scsi();
     let _ = ata_io(0x0177, false, 1, 0xA0);
     let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
     for chunk in cdb.chunks(2) {
         let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
         let _ = ata_io(0x0170, false, 2, w);
     }
-    assert_eq!(last_scsi(), 0x28);
-    assert!(sectors_read() >= 1);
+    assert_eq!(
+        last_scsi(),
+        scsi_before,
+        "nested iso=0 firmware IdeBus secondary ioport: PACKET ignored"
+    );
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        GUEST_CD_SEC_IOPORT,
+        "nested iso=0 firmware IdeBus secondary ioport: PACKET still 0"
+    );
+    assert_eq!(ata_io(0x0171, true, 1, 0) as u8, GUEST_CD_SEC_IOPORT);
     reset();
 }
 
@@ -466,6 +1291,10 @@ fn product_iso_identify_is_pio_only_and_nien_masks_irq() {
     ioapic_write(0, 0x10 + 2 * u32::from(ATA_GSI));
     ioapic_write(0x10, 0x40);
     let _ = ata_io(0x03F6, false, 1, 0x02);
+    assert!(
+        crate::devices::ide_cdrom::ata_nien(),
+        "nIEN latched on device control"
+    );
     let _ = ata_io(0x01F7, false, 1, 0xA0);
     assert!(
         take_inject_vector().is_none(),

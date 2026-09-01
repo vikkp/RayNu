@@ -63,7 +63,7 @@ else
   mkdir -p "$VERUS_HOME"
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
-  curl -fsSL -o "$tmp/$asset" "$url"
+  curl -fsSL --retry 4 --retry-delay 4 --retry-all-errors -o "$tmp/$asset" "$url"
 
   echo "==> Verifying sha256 of $asset"
   got="$(sha256sum "$tmp/$asset" | awk '{print $1}')"

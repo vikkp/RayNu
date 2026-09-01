@@ -113,4 +113,83 @@ fn cr8_maps_to_tpr_class() {
     let v = take_deliverable_vector().expect("unmasked IRR");
     assert_eq!(v, 0x31);
     assert!(wrmsr(0x80B, 0).is_some());
+    latch_irr(0x20);
+    set_cr8(3);
+    assert!(!has_deliverable_irr());
+    assert!(has_pending_irr());
+    let v = take_highest_irr().expect("firmware HLT ignores TPR");
+    assert_eq!(v, 0x20);
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
+}
+
+#[test]
+fn firmware_prefer_ata_irr_ignores_tpr() {
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    set_cr8(2);
+    latch_irr(0x2E);
+    assert!(has_irr_vec(0x2E), "firmware prefer ATA IRR");
+    assert!(
+        !has_deliverable_irr(),
+        "0x2E class 0x20 is blocked when CR8=2"
+    );
+    assert!(take_deliverable_vector().is_none());
+    let v = take_irr_vec(0x2E, true).expect("firmware prefer ATA IRR");
+    assert_eq!(v, 0x2E);
+    assert!(!has_irr_vec(0x2E));
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
+}
+
+#[test]
+fn firmware_prefer_ata_irr_not_lvt() {
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    set_cr8(2);
+    latch_irr(0x2E);
+    latch_irr(0xEF);
+    assert!(has_irr_vec(0x2E), "firmware prefer ATA IRR");
+    assert!(has_irr_vec(0xEF));
+    let v = take_irr_vec(0x2E, true).expect("firmware prefer ATA IRR not LVT");
+    assert_eq!(v, 0x2E);
+    assert!(has_irr_vec(0xEF), "LVT stays in IRR");
+    assert!(!has_irr_vec(0x2E));
+    let v = take_highest_irr().expect("LVT still pending");
+    assert_eq!(v, 0xEF);
+    assert!(wrmsr(0x80B, 0).is_some());
+    set_cr8(0);
+}
+
+#[test]
+fn firmware_lapic_timer_expiry_masked_uses_vec20() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    let v = take_highest_irr().expect("firmware LAPIC timer expiry IRR");
+    assert_eq!(v, 0x20);
+    assert!(
+        firmware_lvt_timer_unmasked_0x20(),
+        "product ISO firmware LVT timer inject"
+    );
+    assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
+    assert!(wrmsr(0x80B, 0).is_some());
+}
+
+#[test]
+fn firmware_lapic_timer_expiry_keeps_unmasked_vector() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, 0x27u64).is_some());
+    while take_highest_irr().is_some() {
+        assert!(wrmsr(0x80B, 0).is_some());
+    }
+    assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
+    let v = take_highest_irr().expect("keep OVMF LVT vector");
+    assert_eq!(v, 0x27);
+    assert!(wrmsr(0x80B, 0).is_some());
 }

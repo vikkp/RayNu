@@ -110,24 +110,242 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// alpine-virt GRUB `"Linux virt"` stanza. Grow the linux line into the
 /// ISO9660 NUL pad after `}\n` so the E4 timer skip fits:
 /// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`
-/// plus `earlycon=uart8250,io,0x3f8`. Same-length 33-byte swap cannot add
-/// those without dropping `loop` or `virtio_blk`. Nested `f1afc27` sat in
-/// `delay_loop` (`48ffc875fb`); iron COM2 after leftover+#PF froze HPET
-/// during the 0x4000 CPUID walk, so a preemption skip may never fire and
-/// `time_init` / TSC vs HPET calibrate would hang even after
-/// hypervisor-hide. Iron `73c2cab` logged `hypervisor-scan bump` then
-/// COM2 ended with no `Linux version` — `console=ttyS0` is late; earlycon
-/// prints through the 16550 from `start_kernel`. alpine-virt 3.21.3
+/// plus `earlycon=uart8250,io,0x3f8` plus `usbdelay=30` plus
+/// `virtio_pci` in `modules=` so initramfs loads the PCI transport before
+/// `nlplug-findfs` plus `initcall_blacklist=piix_init` so the
+/// built-in `ata_piix` `module_init(piix_init)` device_initcall does not
+/// `ata_msleep` after `Freeing initrd` if PCI hide/floating-bus miss.
+/// Linux 6.12 `drivers/ata/ata_piix.c` registers `piix_init`, not
+/// `ata_piix_init` (`initcall_blacklist=` matches kallsyms). Four trailing
+/// spaces keep FROM/TO length 269 / Data Length 294. linux-line virtio_pci.
+/// linux-line ata_piix blacklist. linux-line piix_init blacklist. Same-length 33-byte swap
+/// cannot add those without dropping `loop` or `virtio_blk`.
+/// Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron COM2 after
+/// leftover+#PF froze HPET during the 0x4000 CPUID walk, so a preemption
+/// skip may never fire and `time_init` / TSC vs HPET calibrate would hang
+/// even after hypervisor-hide. Iron `73c2cab` logged `hypervisor-scan bump`
+/// then COM2 ended with no `Linux version` — `console=ttyS0` is late;
+/// earlycon prints through the 16550 from `start_kernel`. alpine-virt 3.21.3
 /// `grub.cfg` ISO9660 Data Length is 143; the sector has ~1905 NULs after
 /// `}\n`. Growing into that pad without bumping Data Length truncates
 /// GRUB's read at `tsc=` (unclosed `{`, no `initrd`) → `out of memory` /
 /// `syntax error` / rescue `grub>` (iron COM2 after El Torito
 /// `bootimg=1`). [`bump_iso9660_grub_cfg_size`] raises PVD + Joliet
-/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. Not `ISO-INSTALL-OK`.
+/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. linux-line alpine_dev=vdb.
+/// linux-line usbdelay.
+/// Iron COM2 cmdline after
+/// El Torito had `modules=loop,squashfs,virtio_blk console=ttyS0 lpj=`
+/// `earlycon=` and **no** `alpine_dev=` — alpine-virt `grub.cfg` never
+/// contains `alpine_dev=cdrom` so that 16-byte swap is 0 hits. After
+/// linux high-half hides PIIX, `nlplug-findfs` without `-b vdb` can wait
+/// on ATAPI/`sr0`. alpine-virt 3.21 mkinitfs 3.11 `myopts` has `usbdelay`
+/// not `alpine_dev`; `nlplug-findfs -b` is the repositories file. Same-length
+/// swap `alpine_dev=vdb` → `usbdelay=30   ` (14 bytes) so the media wait is
+/// 30s not 5s. Initramfs
+/// `modules=` is `loop,squashfs,virtio_pci,virtio_blk` so `virtio_pci`
+/// binds `00:02.0`/`00:03.0` before `virtio_blk` creates `/dev/vdb`.
+/// Media is virtio-iso `00:03.0`. linux-line ata_piix blacklist.
+/// linux-line piix_init blacklist.
+/// flashcruzer reject 2d6b109 dest skip (`6fc742b0` / run `33321642509` is not F11).
+/// auto-answer / # without login (3.21 `/init` emergency shell has no getty).
+/// product ISO POST_DXE_TAIL skip (iron `2d6b109` `stop n=33297` `sectors=0`).
+/// emergency mount+exit (initramfs has no `setup-disk`).
+/// linux-line usbdelay (3.21 mkinitfs `myopts` has no `alpine_dev`).
+/// 0xAF00 PM timer (iron `8663f56` dest_ok then `IN EAX,DX` Delay).
+/// flash 084430f (CI run `33337287432`; do not F11 `8663f56`).
+/// 0xB000 dword timer (Delay after SCI_EN may be IoRead32 of PMBA+0).
+/// firmware PIC before GSI 2 (BDS CpuSleep needs PIC IRQ 0).
+/// HLT stall quiet tick print-only (iron `084430f` BOTH-OK then HLT `0x7f0680d0` `ataio=0`; nested `9ce65ae` ATAPI-OK missing after quiet skipped `cpu_flush`).
+/// firmware HLT ignores TPR (iron `084430f` inject `vec=0x20` only after CR8).
+/// firmware HLT stall waits for IRQ (inject on HLT stall after BOTH-OK `ataio=0`).
+/// firmware virtual-wire PIC (iron `beb1576` `pic=0 gsi2=0` IF=1 TPR=0).
+/// firmware virtual-wire AEOI (OVMF IDT[0x20] EOIs LAPIC not PIC; do not F11 `eac424b`).
+/// firmware virtual-wire GSI 2 (iron `eac424b` PIC inject then CR8 CpuSleep).
+/// firmware HLT force IF (CpuSleep is `hlt` without `sti`).
+/// firmware HLT skip after inject (hardware wakeup; iron COM2 eac424b IRET-to-HLT; do not F11 `8e81c2e`).
+/// firmware HLT skip only after inject (iron COM2 `b5c3a9c` skip with `inj=0`).
+/// product ISO firmware HLT wake LAPIC timer (CI `33453324709` VMXON-SKIP; pic=0 force LVT).
+/// product ISO firmware HLT wake IDT 0x20 (CI `33454130069` VMXON-SKIP; skip-only-after-inject IRET to RET).
+/// product ISO firmware HLT wake IDT 0x20 only (CI `33454767329` VMXON-SKIP; ignore unmasked LVT).
+/// product ISO firmware HLT wake LVT unmask (CI `33455373334` VMXON-SKIP; inject 0x20 with LVT unmasked).
+/// product ISO firmware LVT timer inject (CI `33455903058` VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
+/// product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt; CI `33463983585`/`33463955237` VMXON-SKIP; CI `33463584633` curl 35).
+/// product ISO firmware wake preempt (CI `33456465331` VMXON-SKIP; HLT only, not VMX preemption 52; skip RIP stays HLT-only).
+/// product ISO firmware no preempt inject (CF8 walk must finish; inject on CpuSleep HLT; CI `33461867968`/`33462312015` VMXON-SKIP).
+/// product ISO firmware wake Delay I/O (CI `33457132491` VMXON-SKIP; ACPI PM timer I/O Delay; skip RIP stays HLT-only; do not wake CF8).
+/// product ISO firmware Delay I/O no inject (PM timer IN already ticks; do not inject 0x20 mid-Delay; CI `33462988233` VMXON-SKIP).
+/// product ISO firmware wake IDE cmd (CI `33458084140` VMXON-SKIP; IdeBus Start PCI command write; empty CF8 does not wake).
+/// product ISO firmware IDE cmd reset 0 (PIIX/QEMU command is 0 at reset so IdeBus Start writes offset 0x04; reset `0x0005` skipped that write; CI `33459130885` VMXON-SKIP).
+/// product ISO firmware IDE cmd ATA IRQ (IdeBus Start PCI command write raises IRQ 14; BAR writes do not; CI `33459800906` VMXON-SKIP).
+/// product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects `0x76` not timer `0x20`; BAR/CF8 does not; CI `33460343555` VMXON-SKIP).
+/// product ISO firmware IDE cmd ATA on HLT (defer `0x76` to CpuSleep after IdeBus Start, not mid-PciIo; CI `33460640154` VMXON-SKIP).
+/// product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA `0x76` waits for CpuSleep; CI `33461311226` VMXON-SKIP).
+/// product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT `0x20` not ATA `0x76`; iron `cmd=0x00` `ataio=0` `pic=0`).
+/// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
+/// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
+/// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
+/// IOAPIC I/O over PIT (virtual-wire pin 2 would starve ATA 14 after CpuSleep).
+/// firmware virtual-wire GSI 14 (PACKET IRQ 14 unmasked to vec 0x2E).
+/// flash 5c0f7a2 (CI run `33347766697`; do not F11 `2ae4544`).
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// flash d61dc7e (CI run `33349142609`; do not F11 `5c0f7a2`).
+/// flash b824789 (CI run 33387614559; do not F11 d61dc7e).
+/// flash ea30da1 (CI run 33389381409; do not F11 b824789).
+/// flash 56f31d3 (CI run 33392055961; do not F11 ea30da1 / a2acfc8).
+/// do not F11 56f31d3 (scsi@3 first was not an El Torito boot option).
+/// flash 90da03d (CI run 33394776080; El Torito ide@ first).
+/// firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active).
+/// firmware skip PIT inject (ATA 14 / virtio INTx still inject; not PIT 0x20).
+/// do not F11 90da03d (ataio==0 skip parked PACKET HLT at RET).
+/// do not F11 e70a295 (skip-without-inject blocked ATA 14).
+/// flash 77f5866 (CI run 33399209557; firmware skip PIT inject).
+/// firmware force IF for inject (PACKET nIEN=0 after ataio>0 still needs IF).
+/// do not F11 77f5866 (skip-PIT IF=0 after PACKET never injected ATA 14).
+/// retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199).
+/// flash 5227ad9 (CI run 33404368817; firmware force IF for inject).
+/// firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14).
+/// flash 489d938 (CI run 33408594472; firmware arm ATA GSI 14).
+/// firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr).
+/// firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip pin 14 or latched 0x2E).
+/// firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET).
+/// firmware take IOAPIC ATA (do not latch virtio/UART into IRR that ata_irr_only will not inject).
+/// IOAPIC edge no remote IRR (PACKET after IDENTIFY without IOAPIC EOI).
+/// retrigger cdbee39 CI after nested-KVM kill-init (33417361559).
+/// flash bce5bbb (CI run 33411580450; firmware prefer ATA IRR).
+/// flash eaa580d (CI run 33413425759; firmware ATA over PIC).
+/// flash 12926eb (CI run 33415083012; firmware ATA over PIC keeps latched 0x2E).
+/// flash 0bb06a2 (CI run 33418246409; firmware ATA IRR only).
+/// flash 30b78a0 (CI run 33422323257; firmware take IOAPIC ATA).
+/// flash 8e581c7 (CI run 33424573770; IOAPIC edge no remote IRR).
+/// flash d7d63ca (CI run 33426291731; firmware PIC ATA).
+/// flash e4faceb (CI run 33429494930; firmware OVMF ATA vector).
+/// flash b5c3a9c (CI run 33440050729; firmware HLT insn_len 0 skip).
+/// flash a14223f (CI run 33436232227; do not clobber PIC ICW2).
+/// do not F11 a14223f (superseded; missing ICW2-follows + insn_len 0 skip).
+/// flash 3b7bbac (CI run 33433126839; leftover IOAPIC 0x2E).
+/// retrigger 5a69de2 CI after nested-KVM kill-init (33430294210).
+/// retrigger 0d36b53 CI after nested ATAPI miss (33437881901).
+/// do not F11 3b7bbac (PIC ICW2 clobber IRQ 14 0x26).
+/// do not F11 e4faceb (leftover IOAPIC 0x2E after PIC remap).
+/// do not F11 d7d63ca (PIC ATA clobbers IOAPIC ATA to 0x2E).
+/// do not F11 8e581c7 (PIC unmask never reached take_pic).
+/// firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it).
+/// firmware PIC ATA ICW2. firmware PIC ATA AEOI.
+/// firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+/// do not clobber PIC ICW2.
+/// PIC ATA vector follows ICW2.
+/// firmware HLT insn_len 0 skip.
+/// nested iso=0 firmware HLT PIT.
+/// nested iso=0 firmware HLT no PIT inject.
+/// nested iso=0 firmware HLT EDK2 0x68.
+/// nested iso=0 firmware HLT 0x68 miss.
+/// firmware HLT inject cap.
+/// nested iso=0 firmware HLT skip after inject.
+/// nested iso=0 firmware HLT inject cap.
+/// guest-UEFI stop inj.
+/// nested iso=0 firmware HLT skip after cap.
+/// nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71.
+/// i440FX slot-0 Header Type single function.
+/// nested iso=0 firmware IdeBus PCI.
+/// nested iso=0 firmware IdeBus BAR.
+/// nested iso=0 firmware IdeBus BAR oneshot.
+/// nested iso=0 firmware IdeBus bootorder.
+/// nested iso=0 firmware IdeBus PCI cmd.
+/// nested iso=0 firmware IdeBus prog-if.
+/// nested iso=0 firmware IdeBus prog-if native.
+/// nested iso=0 firmware IdeBus IDETIM.
+/// nested iso=0 firmware IdeBus connect.
+/// nested iso=0 firmware IdeBus OFW.
+/// nested iso=0 firmware IdeBus ConnectAll.
+/// nested iso=0 firmware IdeBus BM.
+/// nested iso=0 firmware IdeBus ConnectAll first.
+/// nested iso=0 firmware IdeBus ConnectAll trail.
+/// nested iso=0 firmware IdeBus BM unprogrammed.
+/// nested iso=0 firmware IdeBus ISA BAR.
+/// nested iso=0 firmware IdeBus PCI cmd QEMU.
+/// nested iso=0 firmware IdeBus PCI cmd RMW.
+/// nested iso=0 firmware IdeBus PCI cmd INTX.
+/// nested iso=0 firmware IdeBus IDETIM persist.
+/// nested iso=0 firmware IdeBus PCI SVID.
+/// nested iso=0 firmware IdeBus LT RO.
+/// nested iso=0 firmware IdeBus PCI cfg RAM.
+/// nested iso=0 firmware IdeBus PCI ROM.
+/// nested iso=0 firmware IdeBus BAR4 wmask.
+/// nested iso=0 firmware IdeBus BAR4 map.
+/// nested iso=0 firmware IdeBus BMIDE PRD.
+/// nested iso=0 firmware IdeBus PCI cmd status.
+/// nested iso=0 firmware IdeBus INTLINE RMW.
+/// nested iso=0 firmware IdeBus CLS RMW.
+/// nested iso=0 firmware IdeBus cfg RAM RMW.
+/// nested iso=0 firmware IdeBus cfg read.
+/// nested iso=0 firmware IdeBus cfg write.
+/// nested iso=0 firmware IdeBus CF8.
+/// nested iso=0 firmware IdeBus CF8E.
+/// nested iso=0 firmware IdeBus IO aperture.
+/// nested iso=0 firmware IdeBus PCI cmd mask.
+/// nested iso=0 firmware IdeBus PCI status.
+/// nested iso=0 firmware IdeBus INTLINE.
+/// nested iso=0 firmware IdeBus LAT.
+/// nested iso=0 firmware IdeBus BM sticky.
+/// nested iso=0 firmware IdeBus BMIDE.
+/// nested iso=0 firmware IdeBus INTPIN.
+/// nested iso=0 firmware IdeBus BMIDE IO.
+/// nested iso=0 firmware IdeBus secondary empty.
+/// nested iso=0 firmware IdeBus secondary absent.
+/// nested iso=0 firmware IdeBus secondary DRDY.
+/// nested iso=0 firmware IdeBus secondary abort.
+/// nested iso=0 firmware IdeBus secondary ioport.
+/// nested iso=0 firmware IdeBus IDETIM RAZ.
+/// nested iso=0 firmware IdeBus slot0 fn1.
+/// product ISO firmware HLT EDK2 0x68.
+/// nested iso=0 EDK2 IRQ0.
+/// nested iso=0 firmware LAPIC timer.
+/// product ISO firmware HLT wake.
+/// nested iso=0 firmware HLT ATA.
+/// firmware SRST ATA IRQ.
+/// product ISO firmware HLT ATA.
+/// product ISO firmware HLT ATA IOAPIC.
+/// nested iso=0 firmware HLT ATA LAPIC.
+/// product ISO firmware HLT ATA LAPIC.
+/// product ISO firmware HLT wake LAPIC.
+/// product ISO firmware HLT wake LAPIC timer.
+/// product ISO firmware HLT wake IDT 0x20.
+/// product ISO firmware HLT wake IDT 0x20 only.
+/// product ISO firmware HLT wake LVT unmask.
+/// product ISO firmware LVT timer inject.
+/// product ISO firmware no LVT inject I/O.
+/// product ISO firmware wake preempt.
+/// product ISO firmware no preempt inject.
+/// product ISO firmware wake Delay I/O.
+/// product ISO firmware Delay I/O no inject.
+/// product ISO firmware wake IDE cmd.
+/// product ISO firmware IDE cmd reset 0.
+/// product ISO firmware IDE cmd ATA IRQ.
+/// product ISO firmware IDE cmd inject ATA.
+/// product ISO firmware IDE cmd ATA on HLT.
+/// product ISO firmware IDE cmd I/O no inject.
+/// product ISO firmware IDE cmd HLT 0x20.
+/// firmware HLT skip only after inject.
+/// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
+/// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
+/// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).
+/// do not F11 eaa580d (same-cycle ATA over PIC; next HLT steals PIC 0x20).
+/// do not F11 bce5bbb (prefer ATA IRR; PIC IRQ 0 starves 0x2E).
+/// do not F11 489d938 (arm GSI 14 TPR-stuck 0x2E).
+/// do not F11 5227ad9 (force-IF pin 14 still masked).
+/// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
+/// skip-after-inject uses pci_ready (hide-IDE virtio enum).
+/// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).
+/// firmware HLT skip without inject (iron COM2 ea30da1 inject vec=0x20 timer ISR;
+/// do not F11 a2acfc8 / --run 33391068937).
+/// product ISO hides PIIX IDE (iron COM2 `d61dc7e` ConnectAll CpuSleep; un-hidden).
+/// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8\ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30    initcall_blacklist=piix_init    \ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;
@@ -203,7 +421,9 @@ pub const ISO_GRUB_INSMOD_ALLVID_FROM: &[u8] = b"insmod all_video";
 pub const ISO_GRUB_INSMOD_ALLVID_TO: &[u8] = b"insmod serial   ";
 const _: () = assert!(ISO_GRUB_INSMOD_ALLVID_FROM.len() == ISO_GRUB_INSMOD_ALLVID_TO.len());
 /// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
-/// ISO `/dev/vdb`. 0 hits is fine when the string is absent.
+/// ISO `/dev/vdb` when that string exists on other ISOs. alpine-virt 3.21.3
+/// `grub.cfg` has no `alpine_dev=cdrom` (0 hits); the grown linux line
+/// carries `alpine_dev=vdb` instead. Not `ISO-INSTALL-OK`.
 pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
 pub const ISO_ALPINE_DEV_TO: &[u8] = b"alpine_dev=vdb  ";
 const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());

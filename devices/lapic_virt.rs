@@ -113,6 +113,16 @@ fn lvt_timer_vector() -> u8 {
     unsafe { (APIC_LVT_TIMER & 0xFF) as u8 }
 }
 
+/// True when the firmware LVT timer is unmasked with vector `0x20`.
+/// Product skip_pit must not drop that periodic tick (CI `33455903058`
+/// VMXON-SKIP: unmask then main-path skip_pit ate every later `0x20`).
+/// Leftover PIT `0x20` while LVT is still masked `0xEF` still drops
+/// (iron `ea30da1`). product ISO firmware LVT timer inject.
+/// Not `ISO-INSTALL-OK`.
+pub fn firmware_lvt_timer_unmasked_0x20() -> bool {
+    timer_should_deliver() && lvt_timer_vector() == 0x20
+}
+
 fn bit_set(regs: *mut [u32; 8], vec: u8) {
     // SAFETY: caller passes exclusive APIC_IRR/ISR pointer on VMEXIT path.
     unsafe {
@@ -140,6 +150,14 @@ fn highest_bit(regs: *const [u32; 8]) -> Option<u8> {
             }
         }
         None
+    }
+}
+
+fn bit_is_set(regs: *const [u32; 8], vec: u8) -> bool {
+    // SAFETY: caller passes APIC_IRR/ISR pointer on VMEXIT path.
+    unsafe {
+        let w = (*regs)[(vec / 32) as usize];
+        (w & (1u32 << (vec % 32))) != 0
     }
 }
 
@@ -350,6 +368,33 @@ pub fn poll_timer_expiry() -> bool {
     on_host_timer_fire()
 }
 
+/// HLT-exiting spends no guest time, so `poll_timer_expiry` never sees
+/// CUR_COUNT hit 0 while BDS CpuSleeps. Force LVT expiry into IRR.
+/// If LVT is still masked (reset `0xEF`), use vec 0x20 (iron `eac424b`
+/// IDT[0x20] writes CR8). If OVMF already unmasked, keep that vector.
+/// firmware LAPIC timer expiry. Not `ISO-INSTALL-OK`.
+pub fn force_firmware_lapic_timer_expiry() -> bool {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        let masked = (APIC_LVT_TIMER & LVT_MASKED) != 0;
+        if masked {
+            APIC_LVT_TIMER =
+                (APIC_LVT_TIMER & !0xFF & !LVT_MASKED) | 0x20 | LVT_PERIODIC;
+        } else {
+            APIC_LVT_TIMER = (APIC_LVT_TIMER & !LVT_MASKED) | LVT_PERIODIC;
+        }
+        APIC_SVR |= SVR_ENABLED;
+        if APIC_INIT_COUNT == 0 {
+            APIC_INIT_COUNT = 1;
+        }
+        TIMER_START_TSC = 0;
+        TIMER_RUNNING = true;
+        HOST_TIMER_FOR_GUEST = true;
+        PENDING_VECTOR = Some(lvt_timer_vector());
+    }
+    on_host_timer_fire()
+}
+
 /// True when IRR holds a vector deliverable against the current PPR.
 pub fn has_deliverable_irr() -> bool {
     let Some(vec) = highest_bit(core::ptr::addr_of!(APIC_IRR)) else {
@@ -357,6 +402,21 @@ pub fn has_deliverable_irr() -> bool {
     };
     let ppr = processor_priority() & 0xF0;
     ((vec as u32) & 0xF0) > ppr
+}
+
+/// True when IRR has any latched vector, ignoring TPR/PPR.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn has_pending_irr() -> bool {
+    highest_bit(core::ptr::addr_of!(APIC_IRR)).is_some()
+}
+
+/// True when IRR holds `vec` (does not consult TPR/PPR).
+/// firmware prefer ATA IRR. Not `ISO-INSTALL-OK`.
+pub fn has_irr_vec(vec: u8) -> bool {
+    if vec < 16 {
+        return false;
+    }
+    bit_is_set(core::ptr::addr_of!(APIC_IRR), vec)
 }
 
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
@@ -389,18 +449,62 @@ pub fn on_host_timer_fire() -> bool {
     }
 }
 
-/// Move the highest deliverable IRR bit into ISR and return its vector.
-pub fn take_deliverable_vector() -> Option<u32> {
+fn take_irr_vector(ignore_tpr: bool) -> Option<u32> {
     // SAFETY: VMEXIT path.
     unsafe {
         let vec = highest_bit(core::ptr::addr_of!(APIC_IRR))?;
-        let ppr = processor_priority() & 0xF0;
-        if ((vec as u32) & 0xF0) <= ppr {
-            return None;
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
         }
         bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
         bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
         // Timer LVT vector (typically 0xEF) → M3.12 APIC-OK.
+        if vec == lvt_timer_vector() || vec == 0xEF {
+            if !APIC_OK {
+                APIC_OK = true;
+                APIC_OK_PRINT = true;
+            }
+        }
+        Some(vec as u32)
+    }
+}
+
+/// Move the highest deliverable IRR bit into ISR and return its vector.
+pub fn take_deliverable_vector() -> Option<u32> {
+    take_irr_vector(false)
+}
+
+/// IRR→ISR ignoring TPR/PPR. Firmware BDS CpuSleep after BOTH-OK.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn take_highest_irr() -> Option<u32> {
+    take_irr_vector(true)
+}
+
+/// Move one chosen IRR bit into ISR. Firmware PACKET prefers ATA `0x2E`
+/// over LVT `0xEF` so ignore-TPR does not livelock the timer ISR
+/// (iron `ea30da1`). After ataio, `has_deliverable_irr` drops class `0x20`
+/// while CR8>=2 (iron `084430f`). firmware prefer ATA IRR.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
+    if vec < 16 {
+        return None;
+    }
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        if !bit_is_set(core::ptr::addr_of!(APIC_IRR), vec) {
+            return None;
+        }
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
+        }
+        bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
+        bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
         if vec == lvt_timer_vector() || vec == 0xEF {
             if !APIC_OK {
                 APIC_OK = true;

@@ -28,10 +28,22 @@ pub const VIRTIO_GSI: u8 = 17;
 pub const VIRTIO_ISO_GSI: u8 = 18;
 /// PIC fallback for PCI INTx when the guest has not remapped via IOAPIC.
 pub const VIRTIO_PIC_IRQ: u8 = 11;
+/// ISA COM1. PIC already prefers IRQ 4 over PIT; IOAPIC must match.
+pub const UART_GSI: u8 = 4;
 /// ISA PIT. Linux `noapic` uses PIC IRQ 0 for jiffies / HLT wakeup.
 pub const PIT_IRQ: u8 = 0;
 /// MADT IRQ0 ISO GSI 2 (8259 cascade pin). Do not raise PIC IRQ 2.
 pub const PIT_IOAPIC_GSI: u8 = 2;
+/// IOAPIC pins that must beat PIT pin 2. Sequential peek 0..23 would
+/// always take virtual-wire GSI 2 and starve ATA/virtio/UART.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
+const IOAPIC_IO_PINS: [u8; 5] = [
+    ATA_GSI,
+    VIRTIO_GSI,
+    VIRTIO_ISO_GSI,
+    VIRTIO_PIC_IRQ,
+    UART_GSI,
+];
 
 const RTE_MASK: u64 = 1 << 16;
 /// IOAPIC RTE bit 15: 1 = level, 0 = edge.
@@ -49,6 +61,8 @@ struct Pic {
     expect_icw4: bool,
     ready: bool,
     read_isr: bool,
+    /// ICW4 AEOI / firmware virtual-wire: INTA does not leave ISR set.
+    aeoi: bool,
 }
 
 struct Ioapic {
@@ -75,6 +89,7 @@ impl Pic {
             expect_icw4: false,
             ready: false,
             read_isr: false,
+            aeoi: false,
         }
     }
 }
@@ -125,9 +140,11 @@ fn product_live() -> bool {
 }
 
 static PREFER_PIT: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 
 pub fn reset() {
     PREFER_PIT.store(false, Ordering::Release);
+    FIRMWARE_WIRE.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -195,6 +212,150 @@ pub fn raise_pit() {
     crate::devices::guest_platform::pit_tick();
     raise_pic_irq(PIT_IRQ);
     raise_ioapic_gsi(PIT_IOAPIC_GSI);
+}
+
+/// Nested iso=0 firmware HLT: latch PIC IRQ 0 without IOAPIC pin 2.
+/// Guest-visible 8259 stays RAZ/WI; OUTs are shadowed so ICW2 is live.
+/// Do not unmask via virtual-wire (iron `ea30da1`). If OVMF already
+/// remapped+unmasked IRQ 0, peek can deliver. If IRQ 0 is masked, unmask
+/// only that bit once ICW2 is ≥ 16 (do not wait for ICW4 `ready`; do not
+/// clobber PIC ICW2). nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_pit() {
+    crate::devices::guest_platform::pit_tick();
+    with_irq(|c| {
+        raise_pic_locked(c, PIT_IRQ);
+        if c.master.vector >= 16 {
+            c.master.imr &= !1;
+        }
+    });
+}
+
+/// Consume PIC IRQ 0 on the iso=0 shadow 8259. Product ISO uses
+/// [`take_pic_vector`]. nested iso=0 firmware HLT PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_pit() -> Option<u8> {
+    with_irq(pic_take)
+}
+
+/// EDK2 `Legacy8259` master ICW2. nested iso=0 EDK2 IRQ0.
+/// Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_IRQ0: u8 = 0x68;
+
+/// Shadowed IRQ 0 vector, else EDK2 `0x68`. `pic_take` needs ICW4 `ready`;
+/// nested CpuSleep after BOTH-OK still WaitForInterrupt if ICW is incomplete
+/// (CI `33440951898` skip-without-inject; `3ff3cf9` take-None is a no-op).
+/// Product ISO never calls this. nested iso=0 EDK2 IRQ0.
+/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn nested_iso0_irq0_vec() -> u8 {
+    with_irq(|c| {
+        if c.master.vector >= 16 {
+            c.master.vector
+        } else {
+            NESTED_ISO0_EDK2_IRQ0
+        }
+    })
+}
+
+/// PIC take when the shadow 8259 can deliver, else EDK2 IRQ0 `0x68`.
+/// nested iso=0 EDK2 IRQ0. nested iso=0 firmware HLT PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_pit_or_edk2() -> u8 {
+    take_nested_iso0_pit().unwrap_or_else(nested_iso0_irq0_vec)
+}
+
+/// FADT SCI_INT (IRQ 9). PIIX4 SCI is GSI 9. nested iso=0 firmware HLT PM1 SCI.
+/// Not `ISO-INSTALL-OK`.
+pub const SCI_GSI: u8 = 9;
+/// EDK2 `Legacy8259` slave ICW2 `0x70` + (IRQ 9 - 8). nested iso=0 firmware
+/// HLT 0x71. Timer `0x20` is CPUID (CI `33470837613`); `0x68` is CR
+/// livelock (CI `33466890874`). Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_SCI: u8 = 0x71;
+
+/// EDK2 `Legacy8259` slave ICW2 + 6. nested iso=0 firmware HLT ATA.
+/// do not inject leftover 0x2E. Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_IRQ14: u8 = 0x76;
+
+/// Shadowed IRQ 14 vector, else EDK2 `0x76`. nested iso=0 firmware HLT ATA.
+/// do not inject leftover 0x2E. Not `ISO-INSTALL-OK`.
+pub fn nested_iso0_irq14_vec() -> u8 {
+    with_irq(|c| {
+        if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(ATA_GSI - 8)
+        } else {
+            NESTED_ISO0_EDK2_IRQ14
+        }
+    })
+}
+
+/// Nested iso=0 firmware HLT after BOTH-OK: latch PIC IRQ 9 (SCI) without
+/// IOAPIC pin 2 / leftover LVT `0x20`. Unmask slave IRQ 9 + cascade when
+/// ICW2 ≥ 16. Also sets PM1 TMR_STS. nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_sci() {
+    crate::devices::guest_platform::raise_pm1_tmr_sci();
+    with_irq(|c| {
+        raise_pic_locked(c, SCI_GSI);
+        if c.slave.vector >= 16 {
+            c.slave.imr &= !(1 << (SCI_GSI - 8));
+            c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+        }
+    });
+}
+
+/// Consume PIC IRQ 9 on the iso=0 shadow 8259. nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_sci() -> Option<u8> {
+    with_irq(|c| {
+        let want = if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(SCI_GSI - 8)
+        } else {
+            NESTED_ISO0_EDK2_SCI
+        };
+        if c.slave.vector >= 16
+            && (c.slave.irr & (1 << (SCI_GSI - 8))) != 0
+            && (c.slave.imr & (1 << (SCI_GSI - 8))) == 0
+        {
+            c.slave.irr &= !(1 << (SCI_GSI - 8));
+            return Some(want);
+        }
+        None
+    })
+}
+
+/// Nested iso=0 firmware HLT after IDENTIFY/PACKET: latch PIC IRQ 14
+/// without IOAPIC. Unmask slave IRQ 14 + cascade when ICW2 ≥ 16.
+/// nested iso=0 firmware HLT ATA. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_ata() {
+    with_irq(|c| {
+        raise_pic_locked(c, ATA_GSI);
+        if c.slave.vector >= 16 {
+            c.slave.imr &= !(1 << (ATA_GSI - 8));
+            c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+        }
+    });
+}
+
+/// Consume PIC IRQ 14 on the iso=0 shadow 8259. nested iso=0 firmware HLT ATA.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_ata() -> Option<u8> {
+    with_irq(|c| {
+        let want = if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(ATA_GSI - 8)
+        } else {
+            return None;
+        };
+        if pic_peek(c) == Some(want) {
+            pic_take(c)
+        } else {
+            None
+        }
+    })
+}
+
+/// Shadow iso=0 8259 OUTs into IrqChip. Guest INs stay RAZ/WI.
+/// nested iso=0 firmware HLT PIT. Not `ISO-INSTALL-OK`.
+pub fn pic_shadow_out(port: u16, size: u8, rax: u64) {
+    let _ = pic_io(port, false, size, rax);
 }
 
 /// Latch 8259 IRR only. PIT uses this so IOAPIC pin 0 stays clear.
@@ -269,6 +430,177 @@ pub fn has_deliverable() -> bool {
     with_irq(|c| peek_vector(c).is_some())
 }
 
+/// 8259 virtual-wire: IRQ 0 delivers vec 0x20 without waiting for OVMF ICW2.
+/// IOAPIC GSI 2 is unmasked to the same vector so APIC-mode CpuSleep (CR8)
+/// can take PIT via LAPIC, not only PIC INTA. GSI 14 is unmasked to vec
+/// 0x2E so PACKET IRQ 14 is deliverable after CpuSleep returns; peek
+/// prefers that pin over PIT. Unmask PIC IRQ 0 only (not UART). AEOI:
+/// OVMF IDT[0x20] EOIs LAPIC, not OCW2. GSI 2 edge does not leave remote IRR.
+///
+/// Iron COM2 `beb1576`: `pic=0 gsi2=0` while IF=1 TPR=0; `raise_pit` latched
+/// IRR that neither chip could deliver. Iron COM2 `eac424b`: `pic=1` then
+/// six sparse `vec=0x20` (IDT handler writes CR8) and CpuSleep `ataio=0`
+/// through the cap. If firmware later ICW1-programs the PIC, those writes
+/// overwrite this.
+/// firmware virtual-wire PIC. firmware virtual-wire AEOI.
+/// firmware virtual-wire GSI 2. firmware virtual-wire GSI 14.
+/// IOAPIC I/O over PIT. Not `ISO-INSTALL-OK`.
+pub fn arm_firmware_virtual_wire() {
+    if !product_live() {
+        return;
+    }
+    FIRMWARE_WIRE.store(true, Ordering::Release);
+    with_irq(|c| {
+        pic_idle_default(&mut c.master, 0x20);
+        c.master.imr &= !1;
+        c.master.aeoi = true;
+        // Edge, dest 0, vec 0x20, unmasked. firmware virtual-wire GSI 2.
+        c.ioapic.redir[PIT_IOAPIC_GSI as usize] = u64::from(0x20u8);
+        // IRQ 14 → vec 0x2E (ICW2 0x20 + ATA). Masked default RTE would
+        // keep raise_ata's pin 14 IRR undeliverable while pin 2 is live.
+        // firmware virtual-wire GSI 14. IOAPIC I/O over PIT.
+        c.ioapic.redir[ATA_GSI as usize] = u64::from(0x20u8.wrapping_add(ATA_GSI));
+    });
+}
+
+/// Unmask IOAPIC pin 14 without PIT virtual-wire.
+///
+/// Firmware HLT wait_for_irq stays false, so [`arm_firmware_virtual_wire`]
+/// never runs. Pin 14 stays at the masked default RTE; `raise_ata` latches
+/// IRR that `take_ioapic_vector` cannot deliver. Force-IF then has nothing
+/// to inject. Do not unmask GSI 2 / PIC IRQ 0 (iron `ea30da1` `vec=0x20`
+/// timer ISR). Also unmask PIC slave IRQ 14 (not all PIC IRQs) so IdeBus
+/// that EOIs the 8259 can take IRQ 14 if IOAPIC remote IRR was stuck.
+/// firmware PIC ATA ICW2: iron `pic=0` never remaps; unmask is a no-op
+/// until master/slave ready. firmware PIC ATA AEOI: OVMF IDT may
+/// EOI LAPIC not OCW2 (same as virtual-wire IDT[0x20]). Linux programs RTEs.
+/// do not clobber IOAPIC ATA vector: EDK2 `Legacy8259` ICW2 is 0x68/0x70
+/// (IRQ 14 → 0x76). Forcing 0x2E injects into an empty IDT slot.
+/// firmware OVMF ATA vector. firmware arm ATA GSI 14. firmware PIC ATA.
+/// do not clobber PIC ICW2. PIC ATA vector follows ICW2 (not ICW4 ready).
+/// IOAPIC edge no remote IRR. Not `ISO-INSTALL-OK`.
+pub fn arm_firmware_ata_gsi14() {
+    if !product_live() {
+        return;
+    }
+    with_irq(|c| {
+        // do not clobber PIC ICW2: OVMF writes slave 0x70 while ready is
+        // still false (ICW4 pending). Forcing vector=0x20 here leaves IRQ 14
+        // at 0x26 after ICW4; leftover 0x2E rewrite never sees 0x76.
+        pic_idle_default(&mut c.master, 0x20);
+        pic_idle_default(&mut c.slave, 0x28);
+        c.master.aeoi = true;
+        c.slave.aeoi = true;
+        // do not inject leftover 0x2E: early arm writes default 0x2E. After
+        // OVMF ICW2 0x70 (IRQ 14 → 0x76) that RTE is still 0x2E. take_ioapic
+        // then injects into an empty IDT slot when pic_ata is false.
+        let rte = c.ioapic.redir[ATA_GSI as usize];
+        let want = firmware_ata_vec_locked(c);
+        c.ioapic.redir[ATA_GSI as usize] = (rte & !0xff & !RTE_MASK) | u64::from(want);
+        c.slave.imr &= !(1 << (ATA_GSI - 8));
+        c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+    });
+}
+
+/// True when IOAPIC pin 14 is unmasked with IRR (vec `0x2E` ready).
+/// Product HLT/`PREEMPT` `raise_pit` latches PIC IRQ 0; if OVMF unmasked
+/// IRQ 0 while IRQ 14 stays masked, `pic_has_deliverable` steals the
+/// inject cycle and `try_inject` never `take_ioapic_vector`. After accept,
+/// pin 14 IRR is clear and LAPIC `has_irr_vec(0x2E)` must still beat PIC.
+/// firmware ATA over PIC. Not `ISO-INSTALL-OK`.
+pub fn ioapic_ata_ready() -> bool {
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| ioapic_pin_ready(c, ATA_GSI).is_some())
+}
+
+/// True when the 8259 would deliver ATA IRQ 14 at [`firmware_ata_vec`].
+/// PIC default `0x2E` must not beat an OVMF IOAPIC `0x76`.
+/// firmware PIC ATA. firmware OVMF ATA vector. do not inject leftover 0x2E.
+/// Not `ISO-INSTALL-OK`.
+pub fn pic_ata_ready() -> bool {
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| {
+        let want = firmware_ata_vec_locked(c);
+        pic_peek(c) == Some(want) && want == pic_irq14_vec(c)
+    })
+}
+
+/// OVMF-programmed IOAPIC pin 14, else remapped PIC IRQ 14, else `0x2E`.
+/// Leftover default `0x2E` does not hide PIC `0x76`. PIC `0x2E` does not
+/// hide a non-default IOAPIC vector. firmware OVMF ATA vector.
+/// do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+/// Not `ISO-INSTALL-OK`.
+pub fn firmware_ata_vec() -> u8 {
+    if !product_live() {
+        return 0x20u8.wrapping_add(ATA_GSI);
+    }
+    with_irq(|c| firmware_ata_vec_locked(c))
+}
+
+fn ata_vec_default() -> u8 {
+    0x20u8.wrapping_add(ATA_GSI)
+}
+
+/// Force default ICW2 only when the 8259 is idle. do not clobber PIC ICW2.
+fn pic_idle_default(p: &mut Pic, vec: u8) {
+    if p.init != 0 {
+        return;
+    }
+    if !p.ready || p.vector < 16 {
+        p.ready = true;
+        p.vector = vec;
+    }
+}
+
+fn firmware_ata_vec_locked(c: &IrqChip) -> u8 {
+    let io = (c.ioapic.redir[ATA_GSI as usize] & 0xff) as u8;
+    let pic = pic_irq14_vec(c);
+    let default = ata_vec_default();
+    if io >= 16 && io != default {
+        io
+    } else if pic != default {
+        pic
+    } else if io >= 16 {
+        io
+    } else {
+        pic
+    }
+}
+
+/// Firmware PIT (IRQ 0) whatever ICW2 OVMF programmed, plus virtual-wire 0x20.
+/// firmware skip PIT inject. firmware OVMF ATA vector. Not `ISO-INSTALL-OK`.
+pub fn firmware_is_pit_vec(vec: u8) -> bool {
+    if vec == 0x20 {
+        return true;
+    }
+    if !product_live() {
+        return false;
+    }
+    with_irq(|c| c.master.ready && c.master.vector >= 16 && vec == c.master.vector)
+}
+
+/// PIC ATA vector follows ICW2: OVMF writes slave 0x70 before ICW4 sets
+/// `ready`. Each ICW is a VM-exit; leftover IOAPIC 0x2E rewrite must see
+/// 0x76 on the ICW2 cycle, not wait for ICW4. take_pic still requires
+/// `ready`. do not clobber PIC ICW2. Not `ISO-INSTALL-OK`.
+fn pic_irq14_vec(c: &IrqChip) -> u8 {
+    if c.slave.vector >= 16 {
+        c.slave.vector.wrapping_add(ATA_GSI - 8)
+    } else {
+        0x20u8.wrapping_add(ATA_GSI)
+    }
+}
+
+/// True after [`arm_firmware_virtual_wire`] on the product-ISO HLT stall.
+/// firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
+pub fn firmware_virtual_wire_armed() -> bool {
+    FIRMWARE_WIRE.load(Ordering::Acquire)
+}
+
 /// True when the 8259 has a remapped (ICW2 ≥ 16) unmasked IRR bit.
 ///
 /// Does not look at IOAPIC. Linux virtual-wire / no MADT delivers PIT
@@ -336,13 +668,18 @@ fn take_vector(c: &mut IrqChip) -> Option<u8> {
     pic_take(c)
 }
 
-/// Accept an IOAPIC pin: set remote IRR. Edge clears pin IRR; level keeps
-/// it until `lower_gsi` so a lost inject can retry after LAPIC EOI.
+/// Accept an IOAPIC pin. Level sets remote IRR until LAPIC EOI. Edge
+/// does not: Intel Remote IRR is level-only, and OVMF IdeBus EOIs the
+/// 8259, not the IOAPIC. Setting remote IRR on edge pin 14 made the
+/// first IDENTIFY `take_ioapic_ata` stick; PACKET never saw pin 14 again.
+/// IOAPIC edge no remote IRR. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
 fn ioapic_accept(c: &mut IrqChip, pin: u8) {
     let i = pin as usize;
     let mut rte = c.ioapic.redir[i];
-    rte |= RTE_REMOTE_IRR;
-    c.ioapic.redir[i] = rte;
+    if rte & RTE_TRIG_LEVEL != 0 {
+        rte |= RTE_REMOTE_IRR;
+        c.ioapic.redir[i] = rte;
+    }
     if rte & RTE_TRIG_LEVEL == 0 {
         c.ioapic.irr &= !(1 << pin);
     }
@@ -357,6 +694,24 @@ pub fn take_ioapic_vector() -> Option<u8> {
     with_irq(|c| {
         let (pin, vec) = ioapic_peek_pin(c)?;
         ioapic_accept(c, pin);
+        Some(vec)
+    })
+}
+
+/// Consume IOAPIC pin 14 only (ATA `0x2E`). Does not touch PIC or virtio.
+///
+/// Firmware `ata_irr_only` will not `take_highest_irr`. If
+/// [`take_ioapic_vector`] latches virtio/UART first, that vector sits in
+/// IRR undelivered and the inject cycle falls through to PIC `0x20` /
+/// skip_pit while pin 14 is still pending. Pin 14 only. Linux still uses
+/// [`take_ioapic_vector`]. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn take_ioapic_ata_vector() -> Option<u8> {
+    if !product_live() {
+        return None;
+    }
+    with_irq(|c| {
+        let vec = ioapic_pin_ready(c, ATA_GSI)?;
+        ioapic_accept(c, ATA_GSI);
         Some(vec)
     })
 }
@@ -381,23 +736,57 @@ fn ioapic_peek(c: &IrqChip) -> Option<u8> {
     ioapic_peek_pin(c).map(|(_, v)| v)
 }
 
+fn ioapic_pin_ready(c: &IrqChip, pin: u8) -> Option<u8> {
+    if (pin as usize) >= IOAPIC_PINS {
+        return None;
+    }
+    if (c.ioapic.irr & (1 << pin)) == 0 {
+        return None;
+    }
+    let rte = c.ioapic.redir[pin as usize];
+    if rte & RTE_MASK != 0 {
+        return None;
+    }
+    // Level waits for EOI. Edge must not: IOAPIC edge no remote IRR.
+    if rte & RTE_TRIG_LEVEL != 0 && rte & RTE_REMOTE_IRR != 0 {
+        return None;
+    }
+    let vec = (rte & 0xff) as u8;
+    if vec < 16 {
+        return None;
+    }
+    Some(vec)
+}
+
+fn ioapic_pin_is_io(pin: u8) -> bool {
+    pin == ATA_GSI
+        || pin == VIRTIO_GSI
+        || pin == VIRTIO_ISO_GSI
+        || pin == VIRTIO_PIC_IRQ
+        || pin == UART_GSI
+}
+
+/// Prefer ATA/virtio/UART over PIT pin 2 unless Linux latched prefer-once.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
 fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
+    if PREFER_PIT.load(Ordering::Acquire) {
+        if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
+            return Some((PIT_IOAPIC_GSI, vec));
+        }
+    }
+    for pin in IOAPIC_IO_PINS {
+        if let Some(vec) = ioapic_pin_ready(c, pin) {
+            return Some((pin, vec));
+        }
+    }
     for pin in 0..IOAPIC_PINS {
-        if (c.ioapic.irr & (1 << pin)) == 0 {
+        let pin = pin as u8;
+        if ioapic_pin_is_io(pin) {
             continue;
         }
-        let rte = c.ioapic.redir[pin];
-        if rte & RTE_MASK != 0 {
-            continue;
+        if let Some(vec) = ioapic_pin_ready(c, pin) {
+            return Some((pin, vec));
         }
-        if rte & RTE_REMOTE_IRR != 0 {
-            continue;
-        }
-        let vec = (rte & 0xff) as u8;
-        if vec < 16 {
-            continue;
-        }
-        return Some((pin as u8, vec));
     }
     None
 }
@@ -450,13 +839,17 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);
-        c.master.isr |= 1 << irq;
+        if !c.master.aeoi {
+            c.master.isr |= 1 << irq;
+        }
         Some(c.master.vector.wrapping_add(irq))
     } else {
         let s = irq - 8;
         c.slave.irr &= !(1 << s);
-        c.slave.isr |= 1 << s;
-        c.master.isr |= 1 << PIC_SLAVE_IRQ;
+        if !c.slave.aeoi {
+            c.slave.isr |= 1 << s;
+            c.master.isr |= 1 << PIC_SLAVE_IRQ;
+        }
         if c.slave.irr & !c.slave.imr == 0 {
             c.master.irr &= !(1 << PIC_SLAVE_IRQ);
         }
@@ -529,6 +922,7 @@ fn pic_cmd(p: &mut Pic, val: u8) {
         p.irr = 0;
         p.ready = false;
         p.read_isr = false;
+        p.aeoi = false;
         return;
     }
     if val & 0x08 != 0 {
@@ -559,6 +953,9 @@ fn pic_data(p: &mut Pic, val: u8) {
         3 => {
             p.init = 0;
             p.ready = p.vector >= 16;
+            // ICW4 bit 1 is AEOI. Firmware virtual-wire already set it;
+            // honor a real ICW4 so Linux nested EOI still works.
+            p.aeoi = val & 2 != 0;
         }
         _ => p.imr = val,
     }

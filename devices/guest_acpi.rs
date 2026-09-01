@@ -7,7 +7,12 @@
 //! Iron `bc6fb70`: `efi:` had no `ACPI=` then `APIC: ACPI MADT or MP tables
 //! are not detected`. Without MADT Linux `disable_ioapic_support()` and
 //! never programs GSI 17/18. product ISO fw_cfg ACPI MADT (iso=0 named files stay 3).
-//! Not `ISO-INSTALL-OK`.
+//! DSDT PCI0 _PRT (slot 2 INTA GSI 17, slot 3 INTA GSI 18) so Linux ACPI
+//! IRQ routing finds virtio after tables install. DSDT PCI0 _CRS (bus 0,
+//! CF8/IO, VGA, PCI MMIO `0xC0000000..0xFEBFFFFF`) so ACPI-on BAR assign
+//! misses the 2 GiB UC scratch at `0x80000000`. FADT FACS (`FIRMWARE_CTRL`)
+//! so Linux `acpi_tb_setup_fadt_registers` finds a FACS after tables
+//! install (`SMI_CMD` is 0; already ACPI). Not `ISO-INSTALL-OK`.
 
 /// QEMU `FW_CFG_FILE_FIRST` + 3. `etc/table-loader`.
 pub const FW_CFG_ACPI_LOADER_SEL: u16 = 0x23;
@@ -19,9 +24,9 @@ pub const FW_CFG_ACPI_RSDP_SEL: u16 = 0x25;
 /// Extra named files when the product ISO window is armed.
 pub const FW_CFG_NAMED_FILE_COUNT_ACPI: u32 = 3;
 
-pub const ACPI_TABLES_LEN: u16 = 0x134;
+pub const ACPI_TABLES_LEN: u16 = FACS_OFF + FACS_LEN;
 pub const ACPI_RSDP_LEN: u16 = 20;
-pub const ACPI_LOADER_ENTRIES: usize = 11;
+pub const ACPI_LOADER_ENTRIES: usize = 12;
 pub const ACPI_LOADER_LEN: u16 = (ACPI_LOADER_ENTRIES * 128) as u16;
 
 const RSDT_OFF: u16 = 0;
@@ -31,19 +36,32 @@ const FACP_LEN: u16 = 116;
 const MADT_OFF: u16 = 0xC0;
 const MADT_LEN: u16 = 74;
 const DSDT_OFF: u16 = 0x110;
-const DSDT_LEN: u16 = 36;
+/// iasl AML: PCI0 PNP0A03 + _PRT + _CRS. DSDT PCI0 _PRT. DSDT PCI0 _CRS.
+/// Not `ISO-INSTALL-OK`.
+const DSDT_LEN: u16 = 225;
+/// ACPI 1.0 FACS (no SDT checksum). FADT FACS. FACP FIRMWARE_CTRL.
+/// 64-byte aligned after DSDT (ACPI 1.0 FACS alignment). Pad is zeros.
+const FACS_OFF: u16 = ((DSDT_OFF + DSDT_LEN + 63) / 64) * 64;
+const FACS_LEN: u16 = 64;
 
 const CMD_ALLOC: u32 = 1;
 const CMD_ADD_PTR: u32 = 2;
 const CMD_CKSUM: u32 = 3;
+/// QEMU HIGH (top of conventional / 2GiB CMOS lie). Product ISO tables
+/// are FSEG so IoReadFifo8 dest stays in the 32MiB identity slab.
+/// FSEG dest holds ACPI tables (conventional 640KiB).
+#[allow(dead_code)]
 const ZONE_HIGH: u8 = 1;
 const ZONE_FSEG: u8 = 2;
 
 /// `etc/acpi/tables` byte. Offsets are RSDT-relative until the linker adds
-/// the allocated HIGH base (ADD_POINTER).
+/// the allocated FSEG base (ADD_POINTER). ACPI tables ZONE_FSEG.
 pub fn acpi_tables_byte(off: u16) -> u8 {
     if off >= ACPI_TABLES_LEN {
         return 0;
+    }
+    if off >= FACS_OFF {
+        return facs_byte(off - FACS_OFF);
     }
     if off >= DSDT_OFF {
         return dsdt_byte(off - DSDT_OFF);
@@ -107,10 +125,13 @@ fn facp_byte(off: u16) -> u8 {
         return b;
     }
     match off {
+        36..=39 => u32::from(FACS_OFF).to_le_bytes()[off as usize - 36],
         40..=43 => u32::from(DSDT_OFF).to_le_bytes()[off as usize - 40],
         44 => 1, // dual 8259
         46 => 9, // SCI
         47 => 0,
+        // SMI_CMD / ACPI_ENABLE / ACPI_DISABLE stay 0 (already ACPI).
+        // PM1 SCI_EN at reset. Linux acpi_hw_get_mode skips the PM1 write.
         56..=59 => 0xB000u32.to_le_bytes()[off as usize - 56], // PM1a_EVT
         64..=67 => 0xB004u32.to_le_bytes()[off as usize - 64], // PM1a_CNT
         76..=79 => 0xB008u32.to_le_bytes()[off as usize - 76], // PM_TMR
@@ -156,34 +177,74 @@ fn madt_byte(off: u16) -> u8 {
 }
 
 fn dsdt_byte(off: u16) -> u8 {
-    hdr_byte(off, b"DSDT", DSDT_LEN, 2).unwrap_or(0)
+    DSDT_AML.get(off as usize).copied().unwrap_or(0)
 }
+
+/// ACPI 1.0 FACS. No SDT checksum (offset 8 is hardware_signature).
+/// FADT FACS. Not `ISO-INSTALL-OK`.
+fn facs_byte(off: u16) -> u8 {
+    match off {
+        0..=3 => b"FACS"[off as usize],
+        4..=7 => u32::from(FACS_LEN).to_le_bytes()[off as usize - 4],
+        _ => 0,
+    }
+}
+
+/// DSDT PCI0 _PRT. Slot 2 INTA → GSI 17, slot 3 INTA → GSI 18.
+/// DSDT PCI0 _CRS. PCI MMIO producer `0xC0000000..0xFEBFFFFF` (not
+/// `0x80000000` scratch). `iasl` of `PNP0A03` PCI0 (no `_ADR`).
+/// Not `ISO-INSTALL-OK`.
+const DSDT_AML: [u8; DSDT_LEN as usize] = [
+    0x44, 0x53, 0x44, 0x54, 0xE1, 0x00, 0x00, 0x00, 0x02, 0xB8, 0x52, 0x41, 0x59, 0x4E, 0x55, 0x56,
+    0x52, 0x41, 0x59, 0x4E, 0x55, 0x56, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x49, 0x4E, 0x54, 0x4C,
+    0x28, 0x06, 0x23, 0x20, 0x10, 0x4C, 0x0B, 0x5F, 0x53, 0x42, 0x5F, 0x5B, 0x82, 0x44, 0x0B, 0x50,
+    0x43, 0x49, 0x30, 0x08, 0x5F, 0x48, 0x49, 0x44, 0x0C, 0x41, 0xD0, 0x0A, 0x03, 0x08, 0x5F, 0x55,
+    0x49, 0x44, 0x00, 0x08, 0x5F, 0x42, 0x42, 0x4E, 0x00, 0x08, 0x5F, 0x50, 0x52, 0x54, 0x12, 0x1A,
+    0x02, 0x12, 0x0B, 0x04, 0x0C, 0xFF, 0xFF, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x11, 0x12, 0x0B, 0x04,
+    0x0C, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00, 0x0A, 0x12, 0x08, 0x5F, 0x43, 0x52, 0x53, 0x11, 0x42,
+    0x07, 0x0A, 0x6E, 0x88, 0x0D, 0x00, 0x02, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x01, 0x00, 0x47, 0x01, 0xF8, 0x0C, 0xF8, 0x0C, 0x01, 0x08, 0x88, 0x0D, 0x00, 0x01, 0x0C,
+    0x03, 0x00, 0x00, 0x00, 0x00, 0xF7, 0x0C, 0x00, 0x00, 0xF8, 0x0C, 0x88, 0x0D, 0x00, 0x01, 0x0C,
+    0x03, 0x00, 0x00, 0x00, 0x0D, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xF3, 0x87, 0x17, 0x00, 0x00, 0x0C,
+    0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0x0B, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x02, 0x00, 0x87, 0x17, 0x00, 0x00, 0x0C, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xBF, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x3E, 0x79,
+    0x00,
+];
 
 fn loader_entry_byte(ent: usize, i: usize) -> u8 {
     match ent {
-        0 => alloc_byte(i, b"etc/acpi/tables", 64, ZONE_HIGH),
+        0 => alloc_byte(i, b"etc/acpi/tables", 64, ZONE_FSEG),
         1 => alloc_byte(i, b"etc/acpi/rsdp", 16, ZONE_FSEG),
         2 => add_ptr_byte(i, b"etc/acpi/rsdp", b"etc/acpi/tables", 16, 4),
         3 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", 36, 4),
         4 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", 40, 4),
         5 => add_ptr_byte(i, b"etc/acpi/tables", b"etc/acpi/tables", u32::from(FACP_OFF) + 40, 4),
-        6 => cksum_byte(i, b"etc/acpi/rsdp", 8, 0, u32::from(ACPI_RSDP_LEN)),
-        7 => cksum_byte(i, b"etc/acpi/tables", 9, 0, u32::from(RSDT_LEN)),
-        8 => cksum_byte(
+        // FADT FACS ADD_POINTER before FACP CKSUM (FIRMWARE_CTRL is in the FACP range).
+        6 => add_ptr_byte(
+            i,
+            b"etc/acpi/tables",
+            b"etc/acpi/tables",
+            u32::from(FACP_OFF) + 36,
+            4,
+        ),
+        7 => cksum_byte(i, b"etc/acpi/rsdp", 8, 0, u32::from(ACPI_RSDP_LEN)),
+        8 => cksum_byte(i, b"etc/acpi/tables", 9, 0, u32::from(RSDT_LEN)),
+        9 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(FACP_OFF) + 9,
             u32::from(FACP_OFF),
             u32::from(FACP_LEN),
         ),
-        9 => cksum_byte(
+        10 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(MADT_OFF) + 9,
             u32::from(MADT_OFF),
             u32::from(MADT_LEN),
         ),
-        10 => cksum_byte(
+        11 => cksum_byte(
             i,
             b"etc/acpi/tables",
             u32::from(DSDT_OFF) + 9,

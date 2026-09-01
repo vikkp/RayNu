@@ -214,6 +214,8 @@ pub const EXIT_REASON_VMENTRY_GUEST_STATE: u32 = 33;
 pub const EXIT_REASON_VMENTRY_MSR_LOAD: u32 = 34;
 /// EPT violation.
 pub const EXIT_REASON_EPT_VIOLATION: u32 = 48;
+/// VMX-preemption timer (SDM Table 24-15).
+pub const EXIT_REASON_PREEMPTION_TIMER: u32 = 52;
 /// XSETBV (always exits from non-root).
 pub const EXIT_REASON_XSETBV: u32 = 55;
 
@@ -351,6 +353,7 @@ mod fields_test {
         assert_eq!(EXIT_REASON, 0x4402);
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
+        assert_eq!(EXIT_REASON_PREEMPTION_TIMER, 52);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
         assert_eq!(SECONDARY_ENABLE_RDTSCP, 1 << 3);
         assert_eq!(SECONDARY_ENABLE_INVPCID, 1 << 12);

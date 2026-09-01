@@ -80,7 +80,7 @@ Downloads the latest green CI r640-hypervisor.efi for this clone's branch
 and copies it to Cruzer RAYNUV (EFI/BOOT/BOOTX64.EFI plus EFI/RayNu/OVMF.fd).
 
 Options:
-  --branch BRANCH     git fetch + checkout + ff-only pull (default: current)
+  --branch BRANCH     fetch origin/BRANCH and git checkout -B (default: current)
   --wait              poll until CI for HEAD finishes (default 20 min)
   --download-only     write ~/r640-hypervisor.efi; do not flash
   --dry-run           pick the CI run; do not download or flash
@@ -164,6 +164,242 @@ self_test() {
   "$ESP" --self-test
   python3 "$PICK" --self-test
   grep -q '^26db0610$' "$REJECT_FILE"
+  grep -q '^6fc742b0$' "$REJECT_FILE"
+  grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
+  grep -q '33389381409' "$SCRIPT_PATH"
+  grep -q '33391068937' "$SCRIPT_PATH"
+  grep -q '33392055961' "$SCRIPT_PATH"
+  grep -q '33394776080' "$SCRIPT_PATH"
+  grep -q '33397104645' "$SCRIPT_PATH"
+  grep -q '33399209557' "$SCRIPT_PATH"
+  grep -q '33399991049' "$SCRIPT_PATH"
+  grep -q 'firmware force IF for inject' "$SCRIPT_PATH"
+  grep -q 'do not F11 77f5866' "$SCRIPT_PATH"
+  grep -q 'retrigger 9df52c5' "$SCRIPT_PATH"
+  grep -q '33402411199' "$SCRIPT_PATH"
+  grep -q '33404368817' "$SCRIPT_PATH"
+  grep -q 'flash 5227ad9' "$SCRIPT_PATH"
+  grep -q '33408594472' "$SCRIPT_PATH"
+  grep -q 'flash 489d938' "$SCRIPT_PATH"
+  grep -q 'firmware arm ATA GSI 14' "$SCRIPT_PATH"
+  grep -q 'firmware prefer ATA IRR' "$SCRIPT_PATH"
+  grep -q 'firmware ATA over PIC' "$SCRIPT_PATH"
+  grep -q '33411580450' "$SCRIPT_PATH"
+  grep -q 'flash bce5bbb' "$SCRIPT_PATH"
+  grep -q 'do not F11 489d938' "$SCRIPT_PATH"
+  grep -q '33413425759' "$SCRIPT_PATH"
+  grep -q 'flash eaa580d' "$SCRIPT_PATH"
+  grep -q 'do not F11 bce5bbb' "$SCRIPT_PATH"
+  grep -q '33415083012' "$SCRIPT_PATH"
+  grep -q 'flash 12926eb' "$SCRIPT_PATH"
+  grep -q 'do not F11 eaa580d' "$SCRIPT_PATH"
+  grep -q '33418246409' "$SCRIPT_PATH"
+  grep -q 'flash 0bb06a2' "$SCRIPT_PATH"
+  grep -q 'do not F11 12926eb' "$SCRIPT_PATH"
+  grep -q '33422323257' "$SCRIPT_PATH"
+  grep -q 'flash 30b78a0' "$SCRIPT_PATH"
+  grep -q 'do not F11 0bb06a2' "$SCRIPT_PATH"
+  grep -q '33424573770' "$SCRIPT_PATH"
+  grep -q 'flash 8e581c7' "$SCRIPT_PATH"
+  grep -q 'do not F11 30b78a0' "$SCRIPT_PATH"
+  grep -q '33426291731' "$SCRIPT_PATH"
+  grep -q 'flash d7d63ca' "$SCRIPT_PATH"
+  grep -q 'do not F11 8e581c7' "$SCRIPT_PATH"
+  grep -q '33429494930' "$SCRIPT_PATH"
+  grep -q 'flash e4faceb' "$SCRIPT_PATH"
+  grep -q 'do not F11 d7d63ca' "$SCRIPT_PATH"
+  grep -q '33433126839' "$SCRIPT_PATH"
+  grep -q 'flash 3b7bbac' "$SCRIPT_PATH"
+  grep -q 'do not F11 e4faceb' "$SCRIPT_PATH"
+  grep -q '33436232227' "$SCRIPT_PATH"
+  grep -q 'flash a14223f' "$SCRIPT_PATH"
+  grep -q 'do not F11 3b7bbac' "$SCRIPT_PATH"
+  grep -q '33440050729' "$SCRIPT_PATH"
+  grep -q 'flash b5c3a9c' "$SCRIPT_PATH"
+  grep -q 'do not F11 a14223f' "$SCRIPT_PATH"
+  grep -q '33430294210' "$SCRIPT_PATH"
+  grep -q 'retrigger 5a69de2' "$SCRIPT_PATH"
+  grep -q '33437881901' "$SCRIPT_PATH"
+  grep -q 'retrigger 0d36b53' "$SCRIPT_PATH"
+  grep -q '33438918646' "$SCRIPT_PATH"
+  grep -q '33440951898' "$SCRIPT_PATH"
+  grep -q '33443188019' "$SCRIPT_PATH"
+  grep -q '33444677681' "$SCRIPT_PATH"
+  grep -q '33445476540' "$SCRIPT_PATH"
+  grep -q '33446918467' "$SCRIPT_PATH"
+  grep -q '33448452364' "$SCRIPT_PATH"
+  grep -q '33449291916' "$SCRIPT_PATH"
+  grep -q '33450139765' "$SCRIPT_PATH"
+  grep -q '33451734183' "$SCRIPT_PATH"
+  grep -q '33452659198' "$SCRIPT_PATH"
+  grep -q '33453324709' "$SCRIPT_PATH"
+  grep -q '33454130069' "$SCRIPT_PATH"
+  grep -q '33454767329' "$SCRIPT_PATH"
+  grep -q '33455373334' "$SCRIPT_PATH"
+  grep -q '33455903058' "$SCRIPT_PATH"
+  grep -q '33456465331' "$SCRIPT_PATH"
+  grep -q '33457132491' "$SCRIPT_PATH"
+  grep -q '33458084140' "$SCRIPT_PATH"
+  grep -q '33459130885' "$SCRIPT_PATH"
+  grep -q '33459800906' "$SCRIPT_PATH"
+  grep -q '33460343555' "$SCRIPT_PATH"
+  grep -q '33460640154' "$SCRIPT_PATH"
+  grep -q '33461311226' "$SCRIPT_PATH"
+  grep -q '33461867968' "$SCRIPT_PATH"
+  grep -q '33462312015' "$SCRIPT_PATH"
+  grep -q '33462988233' "$SCRIPT_PATH"
+  grep -q '33463584633' "$SCRIPT_PATH"
+  grep -q '33463983585' "$SCRIPT_PATH"
+  grep -q '33463955237' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT ATA' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT ATA' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT ATA IOAPIC' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT ATA LAPIC' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT ATA LAPIC' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake LAPIC' "$SCRIPT_PATH"
+  grep -q 'firmware HLT skip only after inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake LAPIC timer' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake IDT 0x20' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake IDT 0x20 only' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT wake LVT unmask' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware LVT timer inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware no LVT inject I/O' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware wake preempt' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware no preempt inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware wake Delay I/O' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware Delay I/O no inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware wake IDE cmd' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd reset 0' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd ATA IRQ' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd inject ATA' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd ATA on HLT' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd I/O no inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd HLT 0x20' "$SCRIPT_PATH"
+  grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
+  grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
+  grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
+  grep -q 'do not inject leftover 0x2E' "$SCRIPT_PATH"
+  grep -q 'do not clobber PIC ICW2' "$SCRIPT_PATH"
+  grep -q 'PIC ATA vector follows ICW2' "$SCRIPT_PATH"
+  grep -q 'firmware HLT insn_len 0 skip' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT PIT' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT no PIT inject' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT EDK2 0x68' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT EDK2 0x68' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT 0x68 miss' "$SCRIPT_PATH"
+  grep -q 'firmware HLT inject cap' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT skip after inject' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT inject cap' "$SCRIPT_PATH"
+  grep -q '33466890874' "$SCRIPT_PATH"
+  grep -q '33468177902' "$SCRIPT_PATH"
+  grep -q '33469144799' "$SCRIPT_PATH"
+  grep -q '33470144235' "$SCRIPT_PATH"
+  grep -q '33470837613' "$SCRIPT_PATH"
+  grep -q '33471631130' "$SCRIPT_PATH"
+  grep -q '33473305422' "$SCRIPT_PATH"
+  grep -q '33474177126' "$SCRIPT_PATH"
+  grep -q '33475246727' "$SCRIPT_PATH"
+  grep -q '33475850114' "$SCRIPT_PATH"
+  grep -q '33477097074' "$SCRIPT_PATH"
+  grep -q '33477720477' "$SCRIPT_PATH"
+  grep -q '33478850408' "$SCRIPT_PATH"
+  grep -q '33481842584' "$SCRIPT_PATH"
+  grep -q '33482463623' "$SCRIPT_PATH"
+  grep -q '33483102988' "$SCRIPT_PATH"
+  grep -q '33484124603' "$SCRIPT_PATH"
+  grep -q '33484950374' "$SCRIPT_PATH"
+  grep -q '33486002459' "$SCRIPT_PATH"
+  grep -q '33486901066' "$SCRIPT_PATH"
+  grep -q '33488202396' "$SCRIPT_PATH"
+  grep -q '33489676272' "$SCRIPT_PATH"
+  grep -q '33489677821' "$SCRIPT_PATH"
+  grep -q '33491808360' "$SCRIPT_PATH"
+  grep -q '33492680088' "$SCRIPT_PATH"
+  grep -q '33493717089' "$SCRIPT_PATH"
+  grep -q '33494990002' "$SCRIPT_PATH"
+  grep -q '33495768739' "$SCRIPT_PATH"
+  grep -q '33496568841' "$SCRIPT_PATH"
+  grep -q '33497723127' "$SCRIPT_PATH"
+  grep -q '33498693991' "$SCRIPT_PATH"
+  grep -q '33499455958' "$SCRIPT_PATH"
+  grep -q '33500735336' "$SCRIPT_PATH"
+  grep -q '33501858987' "$SCRIPT_PATH"
+  grep -q '33503174554' "$SCRIPT_PATH"
+  grep -q '33504402447' "$SCRIPT_PATH"
+  grep -q '33505842402' "$SCRIPT_PATH"
+  grep -q '33506851920' "$SCRIPT_PATH"
+  grep -q '33508115698' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
+  grep -q 'i440FX slot-0 Header Type single function' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BAR' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BAR oneshot' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus bootorder' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus prog-if' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus prog-if native' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus IDETIM' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus connect' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus OFW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus ConnectAll' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BM' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus ConnectAll first' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus ConnectAll trail' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BM unprogrammed' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus ISA BAR' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd mask' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI status' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus INTLINE' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus LAT' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BM sticky' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BMIDE' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus INTPIN' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BMIDE IO' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus secondary empty' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus secondary absent' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus secondary DRDY' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus secondary abort' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus secondary ioport' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus IDETIM RAZ' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus slot0 fn1' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd QEMU' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd RMW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd INTX' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus IDETIM persist' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI SVID' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus LT RO' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cfg RAM' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI ROM' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BAR4 wmask' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BAR4 map' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BMIDE PRD' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd status' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus INTLINE RMW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus CLS RMW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus cfg RAM RMW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus cfg read' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus cfg write' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus CF8' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus CF8E' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus IO aperture' "$SCRIPT_PATH"
+  grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
+  grep -q '33464757885' "$SCRIPT_PATH"
+  grep -q '33465649406' "$SCRIPT_PATH"
+  grep -q '33466397855' "$SCRIPT_PATH"
+  grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
+  grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
+  grep -q '33387614559' "$SCRIPT_PATH"
+  grep -q '33349142609' "$SCRIPT_PATH"
+  grep -q '33347766697' "$SCRIPT_PATH"
+  grep -q '33345731636' "$SCRIPT_PATH"
+  grep -q '33337287432' "$SCRIPT_PATH"
+  grep -q '33333506987' "$SCRIPT_PATH"
+  grep -q '33321642509' "$SCRIPT_PATH"
   grep -qi 'never hardcode' "$SCRIPT_PATH"
   grep -q '0781:5151' "$SCRIPT_PATH"
   grep -q 'RAYNU-V-CRUZER-FLASH-OK' "$ESP"
@@ -183,6 +419,8 @@ self_test() {
   grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
   grep -q 'fat_bytes_too_small' "$ESP"
   grep -q 'do not git checkout a SHA' "$SCRIPT_PATH"
+  grep -q 'checkout -B' "$SCRIPT_PATH"
+  grep -q 'refs/heads/${br}:refs/remotes/origin/${br}' "$SCRIPT_PATH"
   tmp="$(mktemp)"
   printf '%s\n' \
     '==> waiting for CI on 68452b0b (PENDING' \
@@ -224,6 +462,8 @@ if [[ ! -x "$ESP" ]]; then
 fi
 
 cd "$ROOT"
+echo "==> flashcruzer $SCRIPT_PATH"
+echo "==> pre-git $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=8 HEAD)"
 
 # When the operator `git checkout <sha>`, HEAD is detached. Infer the origin
 # branch that *points at* this commit and stay there (do not pull the tip).
@@ -240,12 +480,28 @@ infer_detached_branch() {
   BRANCH="$infer"
 }
 
+# `git fetch origin <branch>` only writes FETCH_HEAD. checkout -B from the
+# remote-tracking ref so a dirty/old working tree still gets origin/BRANCH.
+checkout_origin_branch() {
+  local br="$1"
+  echo "==> fetching refs/heads/${br}"
+  git fetch origin "refs/heads/${br}:refs/remotes/origin/${br}"
+  echo "==> checkout -B ${br} origin/${br}"
+  if ! git checkout -B "$br" "origin/${br}"; then
+    echo "error: cannot checkout origin/${br}" >&2
+    echo "       uncommitted changes in this clone? git status -sb" >&2
+    git status -sb >&2 || true
+    echo "hint: git stash push -u -m wip-before-flash" >&2
+    echo "      then retry, or checkout origin/${br} yourself and pass --no-git" >&2
+    exit 1
+  fi
+}
+
 if [[ "$NO_GIT" -eq 0 ]]; then
-  git fetch origin
   if [[ -n "$BRANCH" ]]; then
-    git checkout "$BRANCH"
-    git pull --ff-only origin "$BRANCH"
+    checkout_origin_branch "$BRANCH"
   else
+    git fetch origin
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     if [[ "$BRANCH" == "HEAD" ]]; then
       infer_detached_branch
@@ -264,6 +520,1189 @@ HEAD="$(git rev-parse HEAD)"
 HEAD_SHORT="$(git rev-parse --short=8 HEAD)"
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
+
+# 2d6b109 dest skip: IoReadFifo8 still skips dest 0x205f18 inside identity
+# 0x200000. Operator FLASHCRUZER-OK on e5-stage46-iso-a623 / run 33321642509
+# Pin b5c3a9c (firmware HLT insn_len 0 skip) run 33440050729 is F11. EFI 9775891845.
+# flash a14223f is not F11. do not F11 a14223f / --run 33436232227.
+# flash 4730397 is not F11. do not F11 4730397 / --run 33436822494.
+# firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0).
+# nested iso=0 firmware HLT PIT (CI 33440951898 skip-without-inject ataio=0).
+# nested iso=0 firmware HLT no PIT inject (CI 33464757885 VMXON inject 0x20 timer ISR CPUID ataio=0).
+# do not F11 7f199db / --run 33464757885.
+# nested iso=0 firmware HLT EDK2 0x68 (CI 33465649406 VMXON-SKIP; leftover LVT 0x20 stole EDK2 IRQ0).
+# do not F11 739eb8a / --run 33465649406.
+# product ISO firmware HLT EDK2 0x68 (CI 33466397855 VMXON-SKIP; iron ea30da1 leftover 0x20 timer ISR).
+# do not F11 13052e7 / --run 33466397855.
+# nested iso=0 firmware HLT 0x68 miss (CI 33466890874 VMXON inject 0x68 CR livelock ataio=0).
+# firmware HLT inject cap (stop after 8; CI 33466890874 print-only cap).
+# do not F11 dd0096b / --run 33466890874.
+# nested iso=0 firmware HLT skip after inject (CI 33468177902 VMXON 8x 0x20 then skip-HLT ataio=0).
+# do not F11 65b94c1 / --run 33468177902.
+# nested iso=0 firmware HLT inject cap (CI 33469144799 skip-after-inject hlt=0 8x 0x20 ataio=0).
+# do not F11 cfabb62 / --run 33469144799.
+# guest-UEFI stop inj (CI 33470144235 VMXON-SKIP; inj= on POST_DXE_TAIL stop).
+# do not F11 ee90aad / --run 33470144235.
+# nested iso=0 firmware HLT skip after cap (CI 33470837613 VMXON inj=1487 CPUID ataio=0).
+# do not F11 e416806 / --run 33470837613.
+# nested iso=0 firmware HLT PM1 SCI (CI 33471631130 VMXON-SKIP skip-after-cap; inject FADT SCI 0x71 not leftover LVT 0x20).
+# nested iso=0 firmware HLT 0x71.
+# do not F11 1c7ff1c / --run 33471631130.
+# i440FX slot-0 Header Type single function (CI 33473305422 VMXON-SKIP SCI unproven; duplicate 00:00.1 IDE ataio=0).
+# nested iso=0 firmware IdeBus PCI.
+# do not F11 68aff41 / --run 33473305422.
+# nested iso=0 firmware IdeBus BAR (CI 33474177126 VMXON pcicmd=0x1 8x 0x71 then skip-HLT ataio=0).
+# do not F11 95a4724 / --run 33474177126.
+# nested iso=0 firmware IdeBus BAR oneshot (CI 33475246727 VMXON-SKIP; skip-HLT can interrupt BAR restore).
+# do not F11 0e4c1d8 / --run 33475246727.
+# nested iso=0 firmware IdeBus bootorder (CI 33475850114 VMXON bar0=0x1f1 probe=0x00 ataio=0; ghost ide@0,1 after slot-0 single-function).
+# do not F11 f3761c4 / --run 33475850114.
+# nested iso=0 firmware IdeBus PCI cmd (CI 33477097074 VMXON-SKIP; do not OR 0x0001; disable is not Start).
+# do not F11 9829386 / --run 33477097074.
+# nested iso=0 firmware IdeBus prog-if (CI 33477720477 VMXON-SKIP; 2b7a884 PCI cmd unproven; 0x8A not 0x80).
+# do not F11 2b7a884 / --run 33477720477.
+# nested iso=0 firmware IdeBus prog-if native (CI 33478850408 VMXON-SKIP; 7c52010 0x8A unproven; 0x8F GetBar).
+# do not F11 7c52010 / --run 33478850408.
+# nested iso=0 firmware IdeBus IDETIM (CI 33481842584 VMXON-SKIP; 9b6c2eb 0x8F unproven; 0x40 decode-enable).
+# do not F11 9b6c2eb / --run 33481842584.
+# nested iso=0 firmware IdeBus connect (CI 33482463623 VMXON-SKIP; 23666d6 IDETIM unproven; controller-only ide@1,1).
+# do not F11 23666d6 / --run 33482463623.
+# nested iso=0 firmware IdeBus OFW (CI 33483102988 VMXON-SKIP; 745b4cb connect unproven; pci8086,7010@1,1).
+# do not F11 745b4cb / --run 33483102988.
+# nested iso=0 firmware IdeBus ConnectAll (CI 33484124603 VMXON-SKIP; 6f600f0 OFW unproven; force-connect-all@0).
+# do not F11 6f600f0 / --run 33484124603.
+# nested iso=0 firmware IdeBus BM (CI 33484950374 VMXON-SKIP; f9163b7 ConnectAll unproven; BAR4 0xCC01).
+# do not F11 f9163b7 / --run 33484950374.
+# nested iso=0 firmware IdeBus ConnectAll first (CI 33486002459 VMXON-SKIP; 7661d22 BM unproven; leading force-connect-all@0).
+# do not F11 7661d22 / --run 33486002459.
+# nested iso=0 firmware IdeBus ConnectAll trail (CI 33486901066 VMXON pcicmd=0x0 bar4=0xcc01 ataio=0; 291b539 ConnectAll first regression).
+# do not F11 291b539 / --run 33486901066.
+# nested iso=0 firmware IdeBus BM unprogrammed (CI 33488202396 VMXON pcicmd=0x0 bar4=0xcc01 ataio=0; trail also pcicmd=0x0).
+# do not F11 c6fcf13 / --run 33488202396.
+# nested iso=0 firmware IdeBus ISA BAR (CI 33489676272 / 33489677821 VMXON-SKIP; 9ce3499 BAR4 unprogrammed; BAR0-3 unimplemented + prog-if 0x80).
+# do not F11 9ce3499 / --run 33489676272.
+# do not F11 9ce3499 / --run 33489677821.
+# nested iso=0 firmware IdeBus PCI cmd mask (CI 33491808360 VMXON-SKIP; 6fa77d1 ISA BAR unproven; PIIX wmask IO|MASTER).
+# do not F11 6fa77d1 / --run 33491808360.
+# nested iso=0 firmware IdeBus PCI status (CI 33492680088 VMXON-SKIP; 943a2d3 cmd mask unproven; PIIX FAST_BACK+DEVSEL 0x0280_0000).
+# do not F11 943a2d3 / --run 33492680088.
+# nested iso=0 firmware IdeBus INTLINE (CI 33493717089 VMXON-SKIP; 828a002 FAST_BACK unproven; QEMU INTLINE reset 0 and persist).
+# do not F11 828a002 / --run 33493717089.
+# nested iso=0 firmware IdeBus LAT (CI 33494990002 VMXON-SKIP; fe658f7 INTLINE unproven; QEMU CLS/latency persist).
+# do not F11 fe658f7 / --run 33494990002.
+# nested iso=0 firmware IdeBus BM sticky (CI 33495768739 VMXON-SKIP; 0c0f3cf LAT unproven; BAR4 probe mask until restore).
+# do not F11 0c0f3cf / --run 33495768739.
+# nested iso=0 firmware IdeBus BMIDE (CI 33496568841 VMXON-SKIP; 17836fc BM sticky unproven; QEMU bmdma size!=1 all-ones byte cmd+0 status+2 else 0xff).
+# do not F11 17836fc / --run 33496568841.
+# nested iso=0 firmware IdeBus INTPIN (CI 33497723127 VMXON-SKIP; 8344896 BMIDE unproven; QEMU PIIX3 IDE interrupt pin 0).
+# do not F11 8344896 / --run 33497723127.
+# nested iso=0 firmware IdeBus BMIDE IO (CI 33498693991 VMXON-SKIP; b9e4b81 INTPIN unproven; QEMU BAR4 I/O only when COMMAND.IO).
+# do not F11 b9e4b81 / --run 33498693991.
+# nested iso=0 firmware IdeBus secondary empty (CI 33499455958 VMXON-SKIP; af80d50 BMIDE IO unproven; QEMU CD primary master only; 0x170/0x376 floating 0xFF).
+# do not F11 af80d50 / --run 33499455958.
+# nested iso=0 firmware IdeBus secondary absent (CI 33500735336 VMXON-SKIP; 8b6b36a secondary empty unproven; QEMU empty unit status 0x00 not floating 0xFF).
+# do not F11 8b6b36a / --run 33500735336.
+# nested iso=0 firmware IdeBus secondary DRDY (CI 33501858987 VMXON-SKIP; 2f513ec secondary absent unproven; QEMU ide_reset empty READY|SEEK 0x50).
+# do not F11 2f513ec / --run 33501858987.
+# nested iso=0 firmware IdeBus secondary abort (CI 33503174554 VMXON-SKIP; 96b4f0a secondary DRDY unproven; QEMU empty IDENTIFY abort READY|ERR ABRT).
+# do not F11 96b4f0a / --run 33503174554.
+# nested iso=0 firmware IdeBus secondary ioport (CI 33504402447 VMXON-SKIP; 853a9c8 secondary abort unproven; QEMU both-empty ioport_read status 0 not ide_reset 0x50).
+# do not F11 853a9c8 / --run 33504402447.
+# nested iso=0 firmware IdeBus IDETIM RAZ (CI 33505842402 VMXON-SKIP; f8964e1 secondary ioport unproven; QEMU PIIX3 PCI 0x40 RAZ 0 not ICH 0x80008000).
+# do not F11 f8964e1 / --run 33505842402.
+# nested iso=0 firmware IdeBus slot0 fn1 (CI 33506851920 VMXON-SKIP; 98d20ea IDETIM RAZ unproven; QEMU i440FX 00:00.1 empty; CD at PIIX 00:01.1 only).
+# do not F11 98d20ea / --run 33506851920.
+# nested iso=0 firmware IdeBus PCI cmd QEMU (CI 33508115698 VMXON-SKIP; edf0682 slot0 fn1 unproven; QEMU pci_init_wmask IO|MEM|MASTER 0x0007 not ICH 0x0005).
+# do not F11 edf0682 / --run 33508115698.
+# nested iso=0 firmware IdeBus PCI cmd RMW (CI 33508883644 VMXON ATAPI miss; de5fee7 cmdwr=0 cannot hide EnableAttributes; QEMU pci_default_write_config per-byte; dump cmdmax=).
+# do not F11 de5fee7 / --run 33508883644.
+# nested iso=0 firmware IdeBus PCI cmd INTX (CI 33511226072 VMXON-SKIP; 0300ae3 RMW unproven; QEMU pci_init_wmask IO|MEM|MASTER|SERR|INTX_DISABLE 0x0507 not 0x0007).
+# do not F11 0300ae3 / --run 33511226072.
+# nested iso=0 firmware IdeBus IDETIM persist (CI 33512599515 VMXON-SKIP; e90cb0d INTX unproven; QEMU pci_init_wmask 0xff from 0x40 not RAZ).
+# do not F11 e90cb0d / --run 33512599515.
+# nested iso=0 firmware IdeBus PCI SVID (CI 33513789990 VMXON-SKIP; 6382957 IDETIM persist unproven; QEMU default SVID 0x1AF4:0x1100; dump svid=).
+# do not F11 6382957 / --run 33513789990.
+# nested iso=0 firmware IdeBus LT RO (CI 33514750785 VMXON-SKIP; 1bb1dac SVID unproven; QEMU pci_init_wmask cache line 0x0C not latency 0x0D).
+# do not F11 1bb1dac / --run 33514750785.
+# nested iso=0 firmware IdeBus PCI cfg RAM (CI 33515762670 VMXON-SKIP; 1e95a93 LT RO unproven; QEMU pci_init_wmask 0xff from 0x40 through 0xFF; dump cfg44=).
+# do not F11 1e95a93 / --run 33515762670.
+# nested iso=0 firmware IdeBus PCI ROM (CI 33517730802 VMXON-SKIP; c490f55 cfg RAM unproven; QEMU PIIX IDE no ROM BAR wmask 0; dump rom=).
+# do not F11 c490f55 / --run 33517730802.
+# nested iso=0 firmware IdeBus BAR4 wmask (CI 33519529357 VMXON-SKIP; 3bceb8f ROM unproven; QEMU pci_register_bar 16-byte IO wmask 0xFFFFFFF0 type bit RO; dump b4wr=).
+# do not F11 3bceb8f / --run 33519529357.
+# nested iso=0 firmware IdeBus BAR4 map (CI 33521391092 VMXON-SKIP; 5c7ec22 BAR4 wmask unproven; QEMU pci_bar_address IO wrap last>=UINT32_MAX unmapped; dump b4map=).
+# do not F11 5c7ec22 / --run 33521391092.
+# nested iso=0 firmware IdeBus BMIDE PRD (CI 33525128613 VMXON-SKIP; f0b3ecb BAR4 map unproven; QEMU bmdma_addr_write & ~3; dump bmprd=).
+# do not F11 f0b3ecb / --run 33525128613.
+# nested iso=0 firmware IdeBus PCI cmd status (CI 33526016282 VMXON ATAPI miss; 8d487bd cmdmax=0x0 cmdn=3 cmdwr=0x0 bar4=0x1 b4wr=0x1 ataio=0; QEMU pci_default_write_config command+status per-byte plus pci_init_w1cmask 0xF900; dump cmdin=).
+# do not F11 8d487bd / --run 33526016282.
+# nested iso=0 firmware IdeBus INTLINE RMW (CI 33528635379 VMXON-SKIP; eeaa681 cmd status unproven; QEMU pci_default_write_config INTERRUPT_LINE per-byte wmask 0xFF; dump ilwr=).
+# do not F11 eeaa681 / --run 33528635379.
+# nested iso=0 firmware IdeBus CLS RMW (CI 33531358763 VMXON ATAPI miss; 436df8d ilwr=0 intl=0 cls=0 ataio=0; QEMU pci_default_write_config CACHE_LINE_SIZE per-byte wmask 0xFF; Latency/header/BIST stay RO 0; dump clwr=).
+# do not F11 436df8d / --run 33531358763.
+# nested iso=0 firmware IdeBus cfg RAM RMW (CI 33533510182 VMXON-SKIP; 1465367 CLS RMW unproven; QEMU pci_default_write_config 0x40-0xFF per-byte spanning dwords; dump c40w=).
+# do not F11 1465367 / --run 33533510182.
+# nested iso=0 firmware IdeBus cfg read (CI 33535050708 VMXON-SKIP; b6e8ab7 cfg RAM RMW unproven; QEMU pci_default_read_config memcpy from config+addr; dump cfgo=).
+# do not F11 b6e8ab7 / --run 33535050708.
+# nested iso=0 firmware IdeBus cfg write (CI 33536269880 VMXON-SKIP; 004ef9b cfg read unproven; QEMU pci_default_write_config one per-byte walk; dump cfgw=).
+# do not F11 004ef9b / --run 33536269880.
+# nested iso=0 firmware IdeBus CF8 (CI 33537641723 VMXON ATAPI miss; 30ccfc0 cfg write unproven; QEMU pci_host_config_write stores CF8 only when addr==0 && len==4; dump cf8s=).
+# do not F11 30ccfc0 / --run 33537641723.
+# nested iso=0 firmware IdeBus CF8E (CI 33539999700 VMXON-SKIP; 02e8843 CF8 unproven; QEMU pci_host_data_read/write gates CFC on config_reg bit 31; dump cf8e=).
+# do not F11 02e8843 / --run 33539999700.
+# nested iso=0 firmware IdeBus IO aperture (CI 33541472361 VMXON-SKIP; a50ad99 CF8E unproven; QEMU/OVMF i440FX PcdPciIoBase=0xC000 PcdPciIoSize=0x4000; dump iobase=).
+# do not F11 a50ad99 / --run 33541472361.
+# nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
+# nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
+# product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
+# nested iso=0 firmware HLT ATA (CI 33446918467 VMXON-SKIP; IDENTIFY WaitForInterrupt IRQ 14).
+# firmware SRST ATA IRQ (product SRST deassert raises IRQ 14).
+# product ISO firmware HLT ATA (CI 33448452364 VMXON-SKIP; IDENTIFY WaitForInterrupt 0x76).
+# product ISO firmware HLT ATA IOAPIC (CI 33449291916 VMXON-SKIP; pic=0 take pin 14).
+# nested iso=0 firmware HLT ATA LAPIC (CI 33450139765 VMXON-SKIP; pic=0 latch 0x76).
+# product ISO firmware HLT ATA LAPIC (CI 33451734183 VMXON-SKIP; pic=0 latch 0x76).
+# product ISO firmware HLT wake LAPIC (iron COM2 b5c3a9c ataio=0 inj=0 pic=0).
+# firmware HLT skip only after inject (CI 33452659198 VMXON-SKIP; iron COM2 b5c3a9c inj=0).
+# do not F11 77d84d3 / --run 33452659198.
+# product ISO firmware HLT wake LAPIC timer (CI 33453324709 VMXON-SKIP; pic=0 force LVT).
+# do not F11 c4cd522 / --run 33453324709.
+# product ISO firmware HLT wake IDT 0x20 (CI 33454130069 VMXON-SKIP; skip-only-after-inject IRET to RET).
+# do not F11 37320ad / --run 33454130069.
+# product ISO firmware HLT wake IDT 0x20 only (CI 33454767329 VMXON-SKIP; ignore unmasked LVT 0x27).
+# do not F11 d454545 / --run 33454767329.
+# product ISO firmware HLT wake LVT unmask (CI 33455373334 VMXON-SKIP; inject 0x20 with LVT unmasked).
+# do not F11 f37674f / --run 33455373334.
+# product ISO firmware LVT timer inject (CI 33455903058 VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
+# product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt).
+# CI 33463983585 VMXON-SKIP. do not F11 89bba8f / --run 33463983585.
+# CI 33463955237 VMXON-SKIP. do not F11 4b11843 / --run 33463955237.
+# CI 33463584633 curl 35. do not F11 4e98f27 / --run 33463584633.
+# do not F11 91f15b3 / --run 33455903058.
+# product ISO firmware wake preempt (CI 33456465331 VMXON-SKIP; HLT only, not VMX preemption 52; skip RIP stays HLT-only).
+# product ISO firmware no preempt inject (CF8 walk must finish; inject on CpuSleep HLT).
+# CI 33461867968 VMXON-SKIP. do not F11 c7e4638 / --run 33461867968.
+# CI 33462312015 VMXON-SKIP. do not F11 90569fd / --run 33462312015.
+# product ISO firmware Delay I/O no inject (PM timer IN already ticks; inject on CpuSleep HLT).
+# CI 33462988233 VMXON-SKIP. do not F11 b670993 / --run 33462988233.
+# do not F11 8f04fa6 / --run 33456465331.
+# product ISO firmware wake Delay I/O (CI 33457132491 VMXON-SKIP; ACPI PM timer I/O Delay; skip RIP stays HLT-only; do not wake CF8).
+# do not F11 1b758d2 / --run 33457132491.
+# product ISO firmware wake IDE cmd (CI 33458084140 VMXON-SKIP; IdeBus Start PCI command write; skip RIP stays HLT-only; empty CF8 does not wake).
+# do not F11 ce11fda / --run 33458084140.
+# product ISO firmware IDE cmd reset 0 (PIIX/QEMU command is 0 at reset so IdeBus Start writes offset 0x04; reset 0x0005 skipped that write).
+# CI 33459130885 VMXON-SKIP. do not F11 8851af8 / --run 33459130885.
+# product ISO firmware IDE cmd ATA IRQ (IdeBus Start PCI command write raises IRQ 14; BAR writes do not).
+# CI 33459800906 VMXON-SKIP. do not F11 7d02e96 / --run 33459800906.
+# product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects 0x76 not timer 0x20).
+# CI 33460343555 VMXON-SKIP. do not F11 72885fa / --run 33460343555.
+# product ISO firmware IDE cmd ATA on HLT (defer 0x76 to CpuSleep after IdeBus Start; not mid-PciIo).
+# CI 33460640154 VMXON-SKIP. do not F11 244750c / --run 33460640154.
+# product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA 0x76 waits for CpuSleep).
+# CI 33461311226 VMXON-SKIP. do not F11 2d64091 / --run 33461311226.
+# product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT 0x20 not ATA 0x76; iron cmd=0x00 ataio=0 pic=0).
+# do not F11 c0c9810 / --run 33440951898.
+# do not F11 3ff3cf9 / --run 33443188019.
+# do not F11 deb64f5 / --run 33444677681.
+# do not F11 a83c51c / --run 33445476540.
+# do not F11 2b1433f / --run 33446918467.
+# do not F11 61eef92 / --run 33448452364.
+# do not F11 05938ac / --run 33449291916.
+# do not F11 fe05f78 / --run 33450139765.
+# do not F11 74ba1de / --run 33451734183.
+# do not F11 77d84d3 / --run 33452659198.
+# retrigger 0d36b53 after nested ATAPI miss (33437881901 ataio=0 packet=0).
+# flash 3b7bbac is not F11. do not F11 3b7bbac / --run 33433126839.
+# flash e4faceb is not F11. do not F11 e4faceb / --run 33429494930.
+# retrigger 5a69de2 after nested-KVM kill-init (33430294210 iso=0 after GTIMER2).
+# firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+# do not clobber PIC ICW2. PIC ATA vector follows ICW2.
+# flash d7d63ca is not F11. do not F11 d7d63ca / --run 33426291731.
+# firmware PIC ATA: take PIC 0x2E when the 8259 can deliver it.
+# flash 8e581c7 is not F11. do not F11 8e581c7 / --run 33424573770.
+# IOAPIC edge no remote IRR: PACKET after IDENTIFY without IOAPIC EOI.
+# flash 30b78a0 is not F11. do not F11 30b78a0 / --run 33422323257.
+# firmware take IOAPIC ATA: do not latch virtio/UART into IRR that ata_irr_only
+# will not inject. flash 0bb06a2 is not F11. do not F11 0bb06a2 / --run 33418246409.
+# firmware ATA IRR only: do not take_highest_irr LVT 0xEF before PACKET.
+# flash 12926eb is not F11. do not F11 12926eb / --run 33415083012.
+# retrigger cdbee39 after nested-KVM kill-init (33417361559 iso=0 after GTIMER2).
+# Do not F11 eaa580d / --run 33413425759 (same-cycle only). Do not F11 bce5bbb
+# / --run 33411580450 (prefer ATA IRR; PIC IRQ 0 starves 0x2E). Do not F11 489d938
+# / --run 33408594472 (TPR-stuck 0x2E). wait_for_irq stays false.
+# 5227ad9 force-IF cannot inject 0x2E. Do not F11 5227ad9 / --run 33404368817.
+# retrigger 9df52c5 after nested-KVM SHELL flake (33402411199 iso=0 5/5).
+# do not F11 77f5866
+# / 388149b / --run 33399209557 / 33399991049 (skip-PIT IF=0 after PACKET).
+# flash 77f5866 is not F11. firmware skip PIT inject.
+# skip-without-inject plus El Torito ide@ first plus skip HLT after PACKET
+# plus ATA 14 / virtio INTx (not PIT 0x20) plus IF after ataio.
+# do not F11 e70a295 / --run 33397104645 (skip-without-inject blocked ATA 14).
+# do not F11 90da03d / --run 33394776080 (ataio==0 skip parks PACKET HLT at RET).
+# do not F11 56f31d3 / --run 33392055961 (scsi@3 first, no El Torito boot).
+# Do not F11 ea30da1 / a2acfc8 / --run 33389381409 / 33391068937.
+# Do not F11 b824789 / run 33387614559 (hide-IDE skip-after-inject raw pci_ide).
+# Do not F11 d61dc7e / run 33349142609 (ConnectAll IdeBus CpuSleep).
+# Do not F11 5c0f7a2 / run 33347766697 (ATAPI-first bootorder).
+# Do not F11 2ae4544 / run 33345731636 (wakeup without ATA-over-PIT).
+# Iron COM2 8663f56 dest_ok then IN EAX,DX Delay — do not F11 8663f56 /
+# run 33333506987. Iron COM2 084430f Delay then HLT stall — do not F11
+# 084430f / run 33337287432. flashcruzer reject 2d6b109 dest skip.
+# Not ISO-INSTALL-OK.
+refuse_2d6b109_dest_skip() {
+  if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
+    return 0
+  fi
+  if [[ "$PIN_RUN" == "33321642509" ]]; then
+    echo "error: run 33321642509 is 2d6b109 dest skip (identity 0x200000)" >&2
+    echo "       ACPI cannot install. product ISO HLT stall before n=16384;" >&2
+    echo "       wait for this SHA CI. Do not F11 ea30da1 / --run 33389381409." >&2
+    echo "       FLASHCRUZER-OK for 2d6b109 is not F11." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33333506987" ]]; then
+    echo "error: run 33333506987 is 8663f56 dest_ok then 0xAF00 Delay" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 8663f56 again." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33337287432" ]]; then
+    echo "error: run 33337287432 is 084430f Delay then HLT stall" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 084430f again." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33345731636" ]]; then
+    echo "error: run 33345731636 is 2ae4544 LAPIC expiry without I/O-over-PIT" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 2ae4544 again." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33347766697" ]]; then
+    echo "error: run 33347766697 is 5c0f7a2 ATAPI-first bootorder" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 5c0f7a2 again." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33349142609" ]]; then
+    echo "error: run 33349142609 is d61dc7e ConnectAll IdeBus CpuSleep" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 d61dc7e again." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33387614559" ]]; then
+    echo "error: run 33387614559 is b824789 skip-after-inject raw pci_ide" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       product ISO HLT stall before n=16384; wait for this SHA CI." >&2
+    echo "       do not F11 b824789." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33389381409" ]]; then
+    echo "error: run 33389381409 is ea30da1 hide-IDE inject vec=0x20 timer ISR" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       do not F11 ea30da1." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33391068937" ]]; then
+    echo "error: run 33391068937 is a2acfc8 n>16384 after hide-IDE timer ISR" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       do not F11 a2acfc8 / ea30da1." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33392055961" ]]; then
+    echo "error: run 33392055961 is 56f31d3 scsi@3 first with no El Torito boot option" >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+    echo "       do not F11 56f31d3." >&2
+    echo "       do not F11 90da03d." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33394776080" ]]; then
+    echo "error: run 33394776080 is 90da03d skip-after-inject ataio==0 parks PACKET HLT" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       do not F11 56f31d3." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33397104645" ]]; then
+    echo "error: run 33397104645 is e70a295 skip-without-inject blocked ATA 14" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+    echo "       do not F11 e70a295." >&2
+    echo "       do not F11 90da03d." >&2
+    echo "       do not F11 56f31d3." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33399209557" ]]; then
+    echo "error: run 33399209557 is 77f5866 skip-PIT IF=0 after PACKET" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       do not F11 e70a295." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33399991049" ]]; then
+    echo "error: run 33399991049 is 388149b pin of 77f5866 skip-PIT IF=0 after PACKET" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    echo "       do not F11 e70a295." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33402411199" ]]; then
+    echo "error: run 33402411199 is 9df52c5 nested-KVM SHELL flake 5/5" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33417361559" ]]; then
+    echo "error: run 33417361559 is cdbee39 nested-KVM kill-init after GTIMER2" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 never takes try_inject. Do not F11 cdbee39 / --run 33417361559." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33430294210" ]]; then
+    echo "error: run 33430294210 is 5a69de2 nested-KVM kill-init after GTIMER2" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 never takes try_inject. Do not F11 5a69de2 / --run 33430294210." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33433126839" ]]; then
+    echo "error: run 33433126839 is 3b7bbac PIC ICW2 clobber (IRQ 14 0x26)" >&2
+    echo "       do not clobber PIC ICW2; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 3b7bbac / --run 33433126839." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33435849693" ]]; then
+    echo "error: run 33435849693 is 010403c host-test fail (residual needle)" >&2
+    echo "       do not clobber PIC ICW2; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 010403c / --run 33435849693." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33436232227" ]]; then
+    echo "error: run 33436232227 is a14223f superseded (missing ICW2-follows + insn_len 0 skip)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 a14223f / --run 33436232227." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33436822494" ]]; then
+    echo "error: run 33436822494 is 4730397 pin of a14223f (superseded F11)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 4730397 / --run 33436822494." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33437881901" ]]; then
+    echo "error: run 33437881901 is 0d36b53 nested ATAPI miss (ataio=0 packet=0)" >&2
+    echo "       PIC ATA vector follows ICW2; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0d36b53 / --run 33437881901." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33438918646" ]]; then
+    echo "error: run 33438918646 is 9299888 retrigger nested ATAPI miss (ataio=0 packet=0)" >&2
+    echo "       firmware HLT insn_len 0 skip; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9299888 / --run 33438918646." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33440951898" ]]; then
+    echo "error: run 33440951898 is c0c9810 pin-docs nested ATAPI miss (ataio=0)" >&2
+    echo "       nested iso=0 firmware HLT PIT; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c0c9810 / --run 33440951898." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33443188019" ]]; then
+    echo "error: run 33443188019 is 3ff3cf9 nested PIT VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 EDK2 IRQ0; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 3ff3cf9 / --run 33443188019." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33444677681" ]]; then
+    echo "error: run 33444677681 is deb64f5 nested EDK2 IRQ0 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware LAPIC timer; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 deb64f5 / --run 33444677681." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33445476540" ]]; then
+    echo "error: run 33445476540 is a83c51c nested LAPIC VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT wake; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 a83c51c / --run 33445476540." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33446918467" ]]; then
+    echo "error: run 33446918467 is 2b1433f product firmware HLT wake VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware HLT ATA; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 2b1433f / --run 33446918467." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33448452364" ]]; then
+    echo "error: run 33448452364 is 61eef92 nested ATA VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT ATA; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 61eef92 / --run 33448452364." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33449291916" ]]; then
+    echo "error: run 33449291916 is 05938ac product HLT ATA VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT ATA IOAPIC; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 05938ac / --run 33449291916." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33450139765" ]]; then
+    echo "error: run 33450139765 is fe05f78 product ATA IOAPIC VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware HLT ATA LAPIC; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 fe05f78 / --run 33450139765." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33451734183" ]]; then
+    echo "error: run 33451734183 is 74ba1de nested ATA LAPIC VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT ATA LAPIC; product ISO firmware HLT wake LAPIC;" >&2
+    echo "       flash b5c3a9c / --run 33440050729 (iron COM2 ataio=0 inj=0; do not re-flash)." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 74ba1de / --run 33451734183." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33452659198" ]]; then
+    echo "error: run 33452659198 is 77d84d3 wake+ATA LAPIC VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       firmware HLT skip only after inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 77d84d3 / --run 33452659198." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33453324709" ]]; then
+    echo "error: run 33453324709 is c4cd522 skip-only-after-inject VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT wake LAPIC timer; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c4cd522 / --run 33453324709." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33454130069" ]]; then
+    echo "error: run 33454130069 is 37320ad wake LAPIC timer VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT wake IDT 0x20; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 37320ad / --run 33454130069." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33454767329" ]]; then
+    echo "error: run 33454767329 is d454545 wake IDT 0x20 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT wake IDT 0x20 only; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 d454545 / --run 33454767329." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33455373334" ]]; then
+    echo "error: run 33455373334 is f37674f wake IDT 0x20 only VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT wake LVT unmask; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 f37674f / --run 33455373334." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33455903058" ]]; then
+    echo "error: run 33455903058 is 91f15b3 LVT unmask VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware LVT timer inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 91f15b3 / --run 33455903058." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33456465331" ]]; then
+    echo "error: run 33456465331 is 8f04fa6 LVT timer inject VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware wake preempt; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8f04fa6 / --run 33456465331." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33457132491" ]]; then
+    echo "error: run 33457132491 is 1b758d2 wake preempt VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware wake Delay I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1b758d2 / --run 33457132491." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33458084140" ]]; then
+    echo "error: run 33458084140 is ce11fda Delay I/O VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd reset 0; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 ce11fda / --run 33458084140." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33459130885" ]]; then
+    echo "error: run 33459130885 is 8851af8 residual VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd inject ATA; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8851af8 / --run 33459130885." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33459800906" ]]; then
+    echo "error: run 33459800906 is 7d02e96 IDE cmd reset 0 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd inject ATA; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 7d02e96 / --run 33459800906." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33460343555" ]]; then
+    echo "error: run 33460343555 is 72885fa IDE cmd ATA IRQ VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd ATA on HLT; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 72885fa / --run 33460343555." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33460640154" ]]; then
+    echo "error: run 33460640154 is 244750c IDE cmd inject ATA VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd I/O no inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 244750c / --run 33460640154." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33461311226" ]]; then
+    echo "error: run 33461311226 is 2d64091 IDE cmd ATA on HLT VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no preempt inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 2d64091 / --run 33461311226." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33461867968" ]]; then
+    echo "error: run 33461867968 is c7e4638 IDE cmd I/O no inject VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no preempt inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c7e4638 / --run 33461867968." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33462312015" ]]; then
+    echo "error: run 33462312015 is 90569fd IDE cmd HLT 0x20 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware Delay I/O no inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 90569fd / --run 33462312015." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33462988233" ]]; then
+    echo "error: run 33462988233 is b670993 no preempt inject VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 b670993 / --run 33462988233." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463983585" ]]; then
+    echo "error: run 33463983585 is 89bba8f docs/HDA VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 89bba8f / --run 33463983585." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463955237" ]]; then
+    echo "error: run 33463955237 is 4b11843 Verus curl retry VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 4b11843 / --run 33463955237." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463584633" ]]; then
+    echo "error: run 33463584633 is 4e98f27 Delay I/O no inject M4.8 curl 35 (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 4e98f27 / --run 33463584633." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33464757885" ]]; then
+    echo "error: run 33464757885 is 7f199db nested VMXON inject 0x20 timer ISR (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT no PIT inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 7f199db / --run 33464757885." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33465649406" ]]; then
+    echo "error: run 33465649406 is 739eb8a nested no PIT inject VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware HLT EDK2 0x68; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 739eb8a / --run 33465649406." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33466397855" ]]; then
+    echo "error: run 33466397855 is 13052e7 nested EDK2 0x68 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT EDK2 0x68; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 13052e7 / --run 33466397855." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33466890874" ]]; then
+    echo "error: run 33466890874 is dd0096b nested VMXON inject 0x68 CR livelock (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT 0x68 miss; firmware HLT inject cap; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 dd0096b / --run 33466890874." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33468177902" ]]; then
+    echo "error: run 33468177902 is 65b94c1 nested VMXON 8x inject 0x20 then skip-HLT (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT skip after inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 65b94c1 / --run 33468177902." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33469144799" ]]; then
+    echo "error: run 33469144799 is cfabb62 nested VMXON skip-after-inject 8x 0x20 hlt=0 (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT inject cap; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 cfabb62 / --run 33469144799." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33470144235" ]]; then
+    echo "error: run 33470144235 is ee90aad nested VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       guest-UEFI stop inj; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 ee90aad / --run 33470144235." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33470837613" ]]; then
+    echo "error: run 33470837613 is e416806 nested VMXON inj=1487 CPUID livelock (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware HLT skip after cap; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 e416806 / --run 33470837613." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33471631130" ]]; then
+    echo "error: run 33471631130 is 1c7ff1c nested VMXON-SKIP skip-after-cap (not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware HLT PM1 SCI; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1c7ff1c / --run 33471631130." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33473305422" ]]; then
+    echo "error: run 33473305422 is 68aff41 nested VMXON-SKIP (SCI unproven; not ATAPI-OK)" >&2
+    echo "       i440FX slot-0 Header Type single function; flash b5c3a9c / --run 33440050729." >&2
+    echo "       nested iso=0 firmware IdeBus PCI. Do not F11 68aff41 / --run 33473305422." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33474177126" ]]; then
+    echo "error: run 33474177126 is 95a4724 nested VMXON pcicmd=0x1 8x 0x71 then skip-HLT ataio=0 (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware IdeBus BAR; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 95a4724 / --run 33474177126." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33475246727" ]]; then
+    echo "error: run 33475246727 is 0e4c1d8 nested VMXON-SKIP (BAR oneshot unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BAR oneshot; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0e4c1d8 / --run 33475246727." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33475850114" ]]; then
+    echo "error: run 33475850114 is f3761c4 nested VMXON bar0=0x1f1 probe=0x00 ataio=0 (ATAPI-OK missing)" >&2
+    echo "       nested iso=0 firmware IdeBus bootorder; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 f3761c4 / --run 33475850114." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33477097074" ]]; then
+    echo "error: run 33477097074 is 9829386 nested VMXON-SKIP (bootorder unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9829386 / --run 33477097074." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33477720477" ]]; then
+    echo "error: run 33477720477 is 2b7a884 nested VMXON-SKIP (PCI cmd unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus prog-if; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 2b7a884 / --run 33477720477." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33478850408" ]]; then
+    echo "error: run 33478850408 is 7c52010 nested VMXON-SKIP (prog-if 0x8A unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus prog-if native; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 7c52010 / --run 33478850408." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33481842584" ]]; then
+    echo "error: run 33481842584 is 9b6c2eb nested VMXON-SKIP (prog-if 0x8F unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus IDETIM; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9b6c2eb / --run 33481842584." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33482463623" ]]; then
+    echo "error: run 33482463623 is 23666d6 nested VMXON-SKIP (IDETIM unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus connect; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 23666d6 / --run 33482463623." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33483102988" ]]; then
+    echo "error: run 33483102988 is 745b4cb nested VMXON-SKIP (connect unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus OFW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 745b4cb / --run 33483102988." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33484124603" ]]; then
+    echo "error: run 33484124603 is 6f600f0 nested VMXON-SKIP (OFW unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus ConnectAll; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 6f600f0 / --run 33484124603." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33484950374" ]]; then
+    echo "error: run 33484950374 is f9163b7 nested VMXON-SKIP (ConnectAll unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BM; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 f9163b7 / --run 33484950374." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33486002459" ]]; then
+    echo "error: run 33486002459 is 7661d22 nested VMXON-SKIP (BM unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus ConnectAll first; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 7661d22 / --run 33486002459." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33486901066" ]]; then
+    echo "error: run 33486901066 is 291b539 nested VMXON ATAPI-miss (pcicmd=0x0 bar4=0xcc01 ataio=0)" >&2
+    echo "       nested iso=0 firmware IdeBus ConnectAll trail; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 291b539 / --run 33486901066." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33488202396" ]]; then
+    echo "error: run 33488202396 is c6fcf13 nested VMXON ATAPI-miss (pcicmd=0x0 bar4=0xcc01 ataio=0)" >&2
+    echo "       nested iso=0 firmware IdeBus BM unprogrammed; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c6fcf13 / --run 33488202396." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33489676272" ]]; then
+    echo "error: run 33489676272 is 9ce3499 nested VMXON-SKIP (BAR4 unprogrammed; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus ISA BAR; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9ce3499 / --run 33489676272." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33489677821" ]]; then
+    echo "error: run 33489677821 is 9ce3499 nested VMXON-SKIP (BAR4 unprogrammed; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus ISA BAR; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 9ce3499 / --run 33489677821." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33491808360" ]]; then
+    echo "error: run 33491808360 is 6fa77d1 nested VMXON-SKIP (ISA BAR unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd mask; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 6fa77d1 / --run 33491808360." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33492680088" ]]; then
+    echo "error: run 33492680088 is 943a2d3 nested VMXON-SKIP (PCI cmd mask unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI status; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 943a2d3 / --run 33492680088." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33493717089" ]]; then
+    echo "error: run 33493717089 is 828a002 nested VMXON-SKIP (FAST_BACK unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus INTLINE; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 828a002 / --run 33493717089." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33494990002" ]]; then
+    echo "error: run 33494990002 is fe658f7 nested VMXON-SKIP (INTLINE unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus LAT; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 fe658f7 / --run 33494990002." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33495768739" ]]; then
+    echo "error: run 33495768739 is 0c0f3cf nested VMXON-SKIP (LAT unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BM sticky; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0c0f3cf / --run 33495768739." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33496568841" ]]; then
+    echo "error: run 33496568841 is 17836fc nested VMXON-SKIP (BM sticky unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BMIDE; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 17836fc / --run 33496568841." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33497723127" ]]; then
+    echo "error: run 33497723127 is 8344896 nested VMXON-SKIP (BMIDE unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus INTPIN; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8344896 / --run 33497723127." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33498693991" ]]; then
+    echo "error: run 33498693991 is b9e4b81 nested VMXON-SKIP (INTPIN unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BMIDE IO; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 b9e4b81 / --run 33498693991." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33499455958" ]]; then
+    echo "error: run 33499455958 is af80d50 nested VMXON-SKIP (BMIDE IO unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus secondary empty; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 af80d50 / --run 33499455958." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33500735336" ]]; then
+    echo "error: run 33500735336 is 8b6b36a nested VMXON-SKIP (secondary empty unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus secondary absent; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8b6b36a / --run 33500735336." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33501858987" ]]; then
+    echo "error: run 33501858987 is 2f513ec nested VMXON-SKIP (secondary absent unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus secondary DRDY; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 2f513ec / --run 33501858987." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33503174554" ]]; then
+    echo "error: run 33503174554 is 96b4f0a nested VMXON-SKIP (secondary DRDY unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus secondary abort; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 96b4f0a / --run 33503174554." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33504402447" ]]; then
+    echo "error: run 33504402447 is 853a9c8 nested VMXON-SKIP (secondary abort unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus secondary ioport; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 853a9c8 / --run 33504402447." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33505842402" ]]; then
+    echo "error: run 33505842402 is f8964e1 nested VMXON-SKIP (secondary ioport unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus IDETIM RAZ; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 f8964e1 / --run 33505842402." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33506851920" ]]; then
+    echo "error: run 33506851920 is 98d20ea nested VMXON-SKIP (IDETIM RAZ unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus slot0 fn1; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 98d20ea / --run 33506851920." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33508115698" ]]; then
+    echo "error: run 33508115698 is edf0682 nested VMXON-SKIP (slot0 fn1 unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd QEMU; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 edf0682 / --run 33508115698." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33508883644" ]]; then
+    echo "error: run 33508883644 is de5fee7 nested VMXON ATAPI miss (not ATAPI-OK; do not F11 de5fee7)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd RMW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 de5fee7 / --run 33508883644." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33511226072" ]]; then
+    echo "error: run 33511226072 is 0300ae3 nested VMXON-SKIP (RMW unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd INTX; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0300ae3 / --run 33511226072." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33512599515" ]]; then
+    echo "error: run 33512599515 is e90cb0d nested VMXON-SKIP (INTX unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus IDETIM persist; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 e90cb0d / --run 33512599515." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33513789990" ]]; then
+    echo "error: run 33513789990 is 6382957 nested VMXON-SKIP (IDETIM persist unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI SVID; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 6382957 / --run 33513789990." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33514750785" ]]; then
+    echo "error: run 33514750785 is 1bb1dac nested VMXON-SKIP (SVID unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus LT RO; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1bb1dac / --run 33514750785." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33515762670" ]]; then
+    echo "error: run 33515762670 is 1e95a93 nested VMXON-SKIP (LT RO unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cfg RAM; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1e95a93 / --run 33515762670." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33517730802" ]]; then
+    echo "error: run 33517730802 is c490f55 nested VMXON-SKIP (cfg RAM unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI ROM; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 c490f55 / --run 33517730802." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33519529357" ]]; then
+    echo "error: run 33519529357 is 3bceb8f nested VMXON-SKIP (ROM unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BAR4 wmask; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 3bceb8f / --run 33519529357." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33521391092" ]]; then
+    echo "error: run 33521391092 is 5c7ec22 nested VMXON-SKIP (BAR4 wmask unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BAR4 map; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 5c7ec22 / --run 33521391092." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33525128613" ]]; then
+    echo "error: run 33525128613 is f0b3ecb nested VMXON-SKIP (BAR4 map unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BMIDE PRD; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 f0b3ecb / --run 33525128613." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33526016282" ]]; then
+    echo "error: run 33526016282 is 8d487bd nested VMXON ATAPI miss (not ATAPI-OK; do not F11 8d487bd)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd status; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8d487bd / --run 33526016282." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33528635379" ]]; then
+    echo "error: run 33528635379 is eeaa681 nested VMXON-SKIP (cmd status unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus INTLINE RMW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 eeaa681 / --run 33528635379." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33531358763" ]]; then
+    echo "error: run 33531358763 is 436df8d nested VMXON ATAPI miss (not ATAPI-OK; do not F11 436df8d)" >&2
+    echo "       nested iso=0 firmware IdeBus CLS RMW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 436df8d / --run 33531358763." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33533510182" ]]; then
+    echo "error: run 33533510182 is 1465367 nested VMXON-SKIP (CLS RMW unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus cfg RAM RMW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1465367 / --run 33533510182." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33535050708" ]]; then
+    echo "error: run 33535050708 is b6e8ab7 nested VMXON-SKIP (cfg RAM RMW unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus cfg read; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 b6e8ab7 / --run 33535050708." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33536269880" ]]; then
+    echo "error: run 33536269880 is 004ef9b nested VMXON-SKIP (cfg read unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus cfg write; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 004ef9b / --run 33536269880." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33537641723" ]]; then
+    echo "error: run 33537641723 is 30ccfc0 nested VMXON ATAPI miss (cfg write unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus CF8; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 30ccfc0 / --run 33537641723." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33539999700" ]]; then
+    echo "error: run 33539999700 is 02e8843 nested VMXON-SKIP (CF8 unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus CF8E; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 02e8843 / --run 33539999700." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33541472361" ]]; then
+    echo "error: run 33541472361 is a50ad99 nested VMXON-SKIP (CF8E unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus IO aperture; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 a50ad99 / --run 33541472361." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33429494930" ]]; then
+    echo "error: run 33429494930 is e4faceb leftover IOAPIC 0x2E after PIC remap" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 e4faceb / --run 33429494930." >&2
+    echo "       do not F11 d7d63ca / --run 33426291731." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33431369645" ]]; then
+    echo "error: run 33431369645 is 25e6596 retrigger of 5a69de2 leftover 0x2E EFI" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 e4faceb / --run 33429494930." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33418246409" ]]; then
+    echo "error: run 33418246409 is 0bb06a2 ATA IRR only without take IOAPIC ATA" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 0bb06a2 / --run 33418246409." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33419049836" ]]; then
+    echo "error: run 33419049836 is 6498158 pin of 0bb06a2 ATA IRR only" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 0bb06a2 / --run 33418246409." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33422323257" ]]; then
+    echo "error: run 33422323257 is 30b78a0 take IOAPIC ATA with edge remote IRR" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 30b78a0 / --run 33422323257." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33422962160" ]]; then
+    echo "error: run 33422962160 is 8a125b9 pin of 30b78a0 edge remote IRR" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 30b78a0 / --run 33422323257." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33424452815" ]]; then
+    echo "error: run 33424452815 is ff1faeb host-test fail before PIC IRQ 14 assert" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 ff1faeb / --run 33424452815." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33424573770" ]]; then
+    echo "error: run 33424573770 is 8e581c7 PIC unmask never reached take_pic" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 8e581c7 / --run 33424573770." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33425259123" ]]; then
+    echo "error: run 33425259123 is d9b062d pin of 8e581c7 PIC unmask dead in try_inject" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 8e581c7 / --run 33424573770." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33426291731" ]]; then
+    echo "error: run 33426291731 is d7d63ca PIC ATA that clobbers IOAPIC to 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 d7d63ca / --run 33426291731." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33427171899" ]]; then
+    echo "error: run 33427171899 is 6457ec2 pin of d7d63ca IOAPIC 0x2E clobber" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 d7d63ca / --run 33426291731." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33415083012" ]]; then
+    echo "error: run 33415083012 is 12926eb take_highest_irr LVT 0xEF before PACKET" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 12926eb / --run 33415083012." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33415638447" ]]; then
+    echo "error: run 33415638447 is 6792eb7 pin of 12926eb LVT 0xEF fallthrough" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 12926eb / --run 33415083012." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33404368817" ]]; then
+    echo "error: run 33404368817 is 5227ad9 force-IF with pin 14 still masked" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33405102333" ]]; then
+    echo "error: run 33405102333 is 807831c pin of 5227ad9 force-IF pin 14 masked" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33408594472" ]]; then
+    echo "error: run 33408594472 is 489d938 arm GSI 14 with TPR-stuck 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33409711971" ]]; then
+    echo "error: run 33409711971 is 6b94350 pin of 489d938 TPR-stuck 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    echo "       do not F11 5227ad9 / --run 33404368817." >&2
+    echo "       do not F11 77f5866 / --run 33399209557." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33411580450" ]]; then
+    echo "error: run 33411580450 is bce5bbb prefer ATA IRR; PIC IRQ 0 starves 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 bce5bbb / --run 33411580450." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33412462849" ]]; then
+    echo "error: run 33412462849 is fcad250 pin of bce5bbb PIC-starve 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 bce5bbb / --run 33411580450." >&2
+    echo "       do not F11 489d938 / --run 33408594472." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33413425759" ]]; then
+    echo "error: run 33413425759 is eaa580d ATA over PIC without latched 0x2E" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 eaa580d / --run 33413425759." >&2
+    echo "       do not F11 bce5bbb / --run 33411580450." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33414038523" ]]; then
+    echo "error: run 33414038523 is 5fdcafa pin of eaa580d same-cycle only" >&2
+    echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+    echo "       do not F11 eaa580d / --run 33413425759." >&2
+    echo "       do not F11 bce5bbb / --run 33411580450." >&2
+    exit 1
+  fi
+  case "$HEAD_SHORT" in
+    2d6b109*|8663f56*|084430f*|2ae4544*|5c0f7a2*|d61dc7e*|b824789*|2cf313e*|ea30da1*|c587ba7*|a2acfc8*|56f31d3*|b8a726d*|90da03d*|82c0fd4*|e70a295*|0541ef0*|77f5866*|388149b*|9df52c5*|5227ad9*|807831c*|489d938*|6b94350*|bce5bbb*|fcad250*|eaa580d*|5fdcafa*|12926eb*|6792eb7*|cdbee39*|0bb06a2*|6498158*|30b78a0*|8a125b9*|ff1faeb*|8e581c7*|d9b062d*|d7d63ca*|6457ec2*)
+      echo "error: HEAD $HEAD_SHORT is not the F11 pin" >&2
+      echo "       firmware OVMF ATA vector; flash b5c3a9c / --run 33440050729." >&2
+      echo "       do not F11 eaa580d / --run 33413425759." >&2
+      echo "       do not F11 bce5bbb / --run 33411580450." >&2
+      echo "       do not F11 5227ad9 / --run 33404368817." >&2
+      echo "       do not F11 489d938 / --run 33408594472." >&2
+      echo "       do not F11 77f5866 / --run 33399209557." >&2
+      echo "       firmware HLT skip after ataio; flash e70a295 / --run 33397104645." >&2
+      echo "       do not F11 e70a295." >&2
+      echo "       product ISO fw_cfg bootorder El Torito ide@ first; flash 90da03d / --run 33394776080." >&2
+      echo "       firmware HLT skip without inject; flash 56f31d3 / --run 33392055961." >&2
+      echo "       do not F11 56f31d3." >&2
+      echo "       do not F11 90da03d." >&2
+      echo "       product ISO HLT stall before n=16384; do not F11 ea30da1." >&2
+      echo "       do not F11 ea30da1 / a2acfc8 / --run 33389381409 / 33391068937." >&2
+      echo "       do not checkout cursor/e5-stage46-iso-a623 for F11." >&2
+      echo "       git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623" >&2
+      echo "       ./tools/flashcruzer.sh --no-git --run 33440050729 --linux-iso ..." >&2
+      exit 1
+      ;;
+  esac
+}
+refuse_2d6b109_dest_skip
 
 install_launcher || true
 
@@ -424,6 +1863,9 @@ if [[ "$ALLOW_REJECTED" -eq 0 && -f "$REJECT_FILE" ]]; then
   if grep -Eiq "^${PREFIX}$" "$REJECT_FILE"; then
     echo "error: EFI prefix $PREFIX is on the known-bad list ($REJECT_FILE)" >&2
     echo "       refusing to flash. Pass --allow-rejected only if you mean it." >&2
+    if [[ "$PREFIX" == "6fc742b0" ]]; then
+      echo "       2d6b109 dest skip cannot install ACPI; do not F11 ea30da1 / --run 33389381409." >&2
+    fi
     exit 1
   fi
 fi

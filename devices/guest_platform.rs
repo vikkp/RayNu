@@ -8,10 +8,14 @@
 //! returned `0xFF` (PEI treated that as nearly 4 GiB of RAM). This module
 //! serves honest CMOS memory size, QEMU fw_cfg RAM_SIZE, an i440FX
 //! host bridge at `00:08.0`, PIIX3 ISA at `00:01.0` (multifunction),
-//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (CD then virtio disk),
+//! PIIX4 PM at `00:01.3`, fw_cfg `bootorder` (iso=0 CD then virtio disk;
+//! product ISO fw_cfg bootorder virtio-iso scsi@3 first;
+//! product ISO fw_cfg bootorder El Torito ide@ first;
+//! product ISO hides PIIX IDE),
 //! fw_cfg `etc/e820` (EPT 32 MiB; CMOS/fw_cfg **report** 2 GiB LowMemory so PEI HOB ends at `Uc32Base`; classic VGA hole `[640KiB, 1MiB)` not RAM; reserved PCI UC `[2GiB, 4GiB)`; iron `f9a08c9` type-2 mid-gap ignored; iron `7e5d70f` live GPA0 4K still ASSERT — stop PT peek/poke), fw_cfg `etc/boot-menu-wait` 0 ms
 //! (skip BdsWait), 8259 PIC RAZ/WI (lab El Torito; Stage 46 product ISO
-//! uses a real PIC + IOAPIC in `guest_irq`), and a
+//! uses a real PIC + IOAPIC in `guest_irq`; nested iso=0 firmware HLT PIT
+//! shadows OUTs into that chip so CpuSleep can take IRQ 0 after BOTH-OK), and a
 //! 24-bit ACPI PM timer (port 0 dword + PIIX `0x408` + programmed PMBA).
 //! Nested VT-x `20763e4`: 4 MiB flash + empty VARS `_FVH` stopped the
 //! `0xFFC00000` EPT, then QEMU hit the 300 s kill with no `stop n=`
@@ -76,6 +80,18 @@ pub const PM_BRIDGE_DEV: u8 = 1;
 pub const PM_BRIDGE_FN: u8 = 3;
 /// Default PIIX4 PMBA (IO bit set). Timer is at `PMBA&~1 + 8` = `0x408`.
 pub const PIIX4_PMBA_DEFAULT: u32 = 0x401;
+/// QEMU/OVMF `PIIX4_PMBA_MASK` bits 15:6 (64-byte I/O). A dword probe of
+/// `0xFFFFFFFF` must not claim 4GiB overlapping the PCI I/O window
+/// `0xC000`/`0x4000`. nested iso=0 firmware IdeBus IO aperture.
+pub const PIIX4_PMBA_WMASK: u32 = 0xFFC0;
+/// Iron COM2 `8663f56`: unhandled `0xAF00` dword + `0xAF05` byte then
+/// `IN EAX,DX` Delay (`rip=0x7f01f988`, HPET frozen, `unh=4`, `acpi=288`,
+/// `stop n=33297` `sectors=0`). Cruzer OVMF uses this as PM I/O base, not
+/// only `PIIX4_PMBA_VALUE` `0xB000`. Dword IN is the PM timer (PCD offset 0);
+/// `+8` is the usual timer. 0xAF00 PM timer. After SCI_EN at `0xB004`,
+/// Delay may be `IoRead32(0xB000)` (same PCD offset 0 on programmed PMBA).
+/// 0xB000 dword timer. Not `ISO-INSTALL-OK`.
+pub const PIIX4_PMBA_ALT: u32 = 0xAF00;
 
 /// PCI Header Type (config dword `0x0C` bits 23:16). Bit 7 = multifunction.
 pub const PCI_HEADER_MULTIFUNCTION: u32 = 0x0080_0000;
@@ -123,9 +139,12 @@ pub const E820_ENTRY_BYTES: u8 = 20;
 pub const E820_RAM: u32 = 1;
 /// QEMU `E820_RESERVED`. Host-owned 4 GiB identity PML4 (not OVMF MEMFD).
 pub const E820_RESERVED: u32 = 2;
-/// GPA of the hypervisor 4 GiB identity PML4 (2 MiB). Below OVMF MEMFD
+/// GPA of the hypervisor 4 GiB identity PML4 (4 MiB). Below OVMF MEMFD
 /// `0x800000` so CpuDxe heap cannot clobber CR3 (iron `101b8ec` `pde=0x30646870`).
-pub const HV_IDENTITY_PML4: u64 = 0x200000;
+/// Was `0x200000` (iron `cc7d78a` / nested `1e0f4a7` PEI stack dest `0x205f18`).
+/// HV identity PML4 0x400000 (not 0x200000 PEI stack) so fw_cfg IoReadFifo8
+/// can fill the QEMU signature and ACPI blobs without overlay/skip.
+pub const HV_IDENTITY_PML4: u64 = 0x400000;
 /// Nine 4 KiB pages became eleven: PML4 + PDPT + 4 PDs + high-half PDPT +
 /// 2 PDs + leftover-high overflow PDPT+PD, plus 16 SPLIT4K PT pages
 /// (iron `06b011a` `err=0x3` `pde=0x1c000e7`). Must match
@@ -148,35 +167,120 @@ pub const E820_VGA_BYTES: u64 = 0x60000;
 pub const E820_LOW_1M: u64 = 0x100000;
 /// Six e820 entries: 640 KiB RAM / VGA reserved / RAM to PML4 / reserved
 /// PML4 / RAM to 2 GiB / PCI UC. Do **not** type-1 `[0, 2MiB)` (covers VGA).
+/// Entry 2 RAM is `[1MiB, 4MiB)` so PEI stack dest `0x205f18` is ordinary RAM.
 pub const E820_ENTRY_COUNT: u8 = 6;
 pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 
-/// QEMU `bootorder` (OFW paths). PIIX IDE `00:01.1` first (`ide@1,1`), then
-/// virtio-fn1 `00:00.1` (`ide@0,1`), then virtio disk at `00:02.0` (`scsi@2`).
-/// Nested VT-x BOTH-OK with `ataio=0`: ConnectDevicesFromQemu of `scsi@0`
-/// enumerated IDE fn1 as a sibling and did not Start AtaAtapiPassThru.
-/// QEMU/OVMF TranslatePciOfwNodes: `ide@1,1/drive@0/disk@0` →
-/// `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`. Master is `DEV=0`.
-/// Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects the file unless the
-/// last byte is `'\0'` (`RETURN_INVALID_PARAMETER` otherwise).
+/// QEMU `bootorder` (OFW paths) for **iso=0** / lab El Torito. PIIX IDE
+/// `00:01.1` first (`ide@1,1`), then virtio disk at `00:02.0` (`scsi@2`).
+/// `ide@0,1/drive@0` is a historical needle: virtio-fn1 `00:00.1` after a
+/// multifunction slot-0. i440FX slot-0 Header Type single function removed
+/// that BDF; ConnectDevicesFromQemu of the ghost path enumerated a missing
+/// `Pci(0x0,0x1)` and did not Start AtaAtapiPassThru (`ataio=0`). CI
+/// `33475850114` VMXON `bar0=0x1f1` `probe=0x00` `pcicmd=0x1` `ataio=0`.
+/// nested iso=0 firmware IdeBus bootorder.
+/// Nested VT-x BOTH-OK with `ataio=0`:
+/// ConnectDevicesFromQemu of `scsi@0` enumerated IDE fn1 as a sibling and
+/// did not Start AtaAtapiPassThru. QEMU/OVMF TranslatePciOfwNodes:
+/// `ide@1,1/drive@0/disk@0` → `PciRoot(0x0)/Pci(0x1,0x1)/Ata(Primary,Master,0x0)`.
+/// Master is `DEV=0`. Trailing NUL: OVMF `ConnectDevicesFromQemu` rejects
+/// the file unless the last byte is `'\0'` (`RETURN_INVALID_PARAMETER`
+/// otherwise). Product ISO uses [`BOOTORDER_PRODUCT`].
+/// nested iso=0 firmware IdeBus connect: controller-only `ide@1,1` before
+/// the Ata() child so ConnectDevicesFromQemu Starts Pci(1,1) / IdeBus
+/// (CI `33482463623` VMXON-SKIP; `23666d6` IDETIM unproven). do not F11
+/// 23666d6.
+/// nested iso=0 firmware IdeBus OFW: QEMU/OVMF also name PIIX
+/// `pci8086,7010@1,1`. TranslatePciOfwNodes `ide@` with drive/disk is
+/// Ata() before Start; the pci8086,7010 node is generic Pci(1,1).
+/// CI `33483102988` VMXON-SKIP (`745b4cb` connect unproven). do not F11
+/// 745b4cb.
+/// nested iso=0 firmware IdeBus ConnectAll: `/force-connect-all@0`
+/// parses but TranslateOfwNodes is UNSUPPORTED, so ConnectDevicesFromQemu
+/// does not convert NOT_FOUND to SUCCESS and BDS ConnectAll Starts
+/// IdeBus. StoreQemuBootOrder skips UNSUPPORTED and still stores El
+/// Torito. CI `33484124603` VMXON-SKIP (`6f600f0` OFW unproven). do not
+/// F11 6f600f0.
+/// nested iso=0 firmware IdeBus ConnectAll first is a historical needle:
+/// CI `33486901066` VMXON `pcicmd=0x0`. Live bootorder trails.
+/// nested iso=0 firmware IdeBus ConnectAll trail: `/force-connect-all@0`
+/// last so ConnectDevicesFromQemu still OFW-connects Pci(1,1). CI
+/// `33486901066` VMXON leading ConnectAll first left `pcicmd=0x0`
+/// `cmdn=3` `cmdwr=0x0` `bar4=0xcc01` `ataio=0`. f3761c4 trailing OFW
+/// had `pcicmd=0x1`. BAR4 stays `0xCC01`. do not F11 291b539.
 pub const BOOTORDER: &[u8] =
-    b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0";
 
-/// Product boot order is CD (PIIX then virtio-fn1) then virtio disk (ADR-014).
+/// Product ISO `bootorder`. PIIX ATAPI `ide@1,1` first so BDS StartImages
+/// El Torito (Stage 45 / nested iso=0). scsi@3-only (`d61dc7e` / `56f31d3`)
+/// never listed the CD as a boot option: ConnectAll Started IdeBus, but
+/// ordered boot was virtio-iso then empty disk. Iron COM2 `eac424b`
+/// ATAPI-first hung CpuSleep; firmware HLT skip without inject skips that
+/// HLT without PIT `vec=0x20`. Virtio-iso `scsi@3` stays second. Empty
+/// install target `scsi@2` is last — never first. iso=0 [`BOOTORDER`]
+/// stays CD then disk. Trailing NUL required.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+pub const BOOTORDER_PRODUCT: &[u8] =
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0";
+
+/// Live fw_cfg `bootorder` bytes. Product window → El Torito then virtio-iso.
+pub fn bootorder_bytes() -> &'static [u8] {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        BOOTORDER_PRODUCT
+    } else {
+        BOOTORDER
+    }
+}
+
+/// Product boot order keeps virtio-iso before the empty install disk.
+/// iso=0 [`boot_order_cd_then_disk`] is unchanged.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+pub fn boot_order_product_virtio_iso_first() -> bool {
+    let iso = find_bytes(BOOTORDER_PRODUCT, b"scsi@3");
+    let disk = find_bytes(BOOTORDER_PRODUCT, b"scsi@2");
+    match (iso, disk) {
+        (Some(i), Some(d)) => i < d,
+        _ => false,
+    }
+}
+
+/// Product BDS boots PIIX ATAPI El Torito before virtio-iso / empty disk.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+pub fn boot_order_product_eltorito_first() -> bool {
+    let ide = find_bytes(BOOTORDER_PRODUCT, b"ide@1,1");
+    let iso = find_bytes(BOOTORDER_PRODUCT, b"scsi@3");
+    let disk = find_bytes(BOOTORDER_PRODUCT, b"scsi@2");
+    match (ide, iso, disk) {
+        (Some(cd), Some(i), Some(d)) => cd < i && i < d,
+        _ => false,
+    }
+}
+
+/// iso=0 / lab El Torito: PIIX CD then virtio disk (ADR-014).
+/// Ghost `ide@0,1` is gone (nested iso=0 firmware IdeBus bootorder).
+/// nested iso=0 firmware IdeBus connect: controller-only `ide@1,1` first.
+/// nested iso=0 firmware IdeBus OFW: `pci8086,7010@1,1` before `ide@`.
+/// nested iso=0 firmware IdeBus ConnectAll trail: `/force-connect-all@0` last.
 pub fn boot_order_cd_then_disk() -> bool {
+    let ofw = find_bytes(BOOTORDER, b"pci8086,7010@1,1\n");
+    let ctl = find_bytes(BOOTORDER, b"ide@1,1\n");
     let piix = find_bytes(BOOTORDER, b"ide@1,1/drive@0");
-    let fn1 = find_bytes(BOOTORDER, b"ide@0,1/drive@0");
+    let ghost = find_bytes(BOOTORDER, b"ide@0,1");
     let slave = find_bytes(BOOTORDER, b"drive@1");
     let disk = find_bytes(BOOTORDER, b"scsi@2");
-    match (piix, fn1, slave, disk) {
-        (Some(p), Some(f), None, Some(d)) => p < f && f < d,
+    let fall = find_bytes(BOOTORDER, b"force-connect-all@0");
+    match (ofw, ctl, piix, ghost, slave, disk, fall) {
+        (Some(o), Some(c), Some(p), None, None, Some(d), Some(f)) => {
+            o < c && c < p && p < d && d < f
+        }
         _ => false,
     }
 }
 
 /// OVMF `ConnectDevicesFromQemu` / `StoreQemuBootOrder` require a C string.
 pub fn bootorder_nul_terminated() -> bool {
-    matches!(BOOTORDER.last(), Some(&0))
+    matches!(BOOTORDER.last(), Some(&0)) && matches!(BOOTORDER_PRODUCT.last(), Some(&0))
 }
 
 /// True when splash-time is 0 ms so OVMF skips BdsWait / FrontPage delay.
@@ -226,7 +330,7 @@ fn file_dir_byte(off: u16) -> u8 {
     match ent {
         0 => file_entry_byte(
             i,
-            BOOTORDER.len() as u32,
+            bootorder_bytes().len() as u32,
             FW_CFG_BOOTORDER_SEL,
             b"bootorder",
         ),
@@ -516,6 +620,8 @@ pub fn is_pic_port(port: u16) -> bool {
 /// `PIIX4_PMBA_VALUE` `0xB000`. PEI `IoRead32(0)` in `InternalAcpiDelay`
 /// is the leftover port-0 path. PIIX4 PMBA timer is `0x408`. QEMU
 /// PIIX4 default is `0xB008`. Programmed PMBA+8 is also a timer.
+/// Dword IN of `0xB000` is Delay when PCD offset is 0 (word stays PM1 STS).
+/// 0xB000 dword timer.
 pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
     if acpi_pm_timer_fixed(port, size) {
         return true;
@@ -524,7 +630,12 @@ pub fn is_acpi_pm_timer_io(port: u16, size: u8) -> bool {
 }
 
 fn acpi_pm_timer_fixed(port: u16, size: u8) -> bool {
-    (port == 0 && size == 4) || (0x408..=0x40B).contains(&port) || (0xB008..=0xB00B).contains(&port)
+    (port == 0 && size == 4)
+        || (port == 0xB000 && size == 4)
+        || (port == PIIX4_PMBA_ALT as u16 && size == 4)
+        || (0x408..=0x40B).contains(&port)
+        || (0xB008..=0xB00B).contains(&port)
+        || (0xAF08..=0xAF0B).contains(&port)
 }
 
 fn acpi_pm_timer_pmba(port: u16, pmba: u32) -> bool {
@@ -537,9 +648,126 @@ fn acpi_pm_timer_matches(port: u16, size: u8, pmba: u32) -> bool {
     acpi_pm_timer_fixed(port, size) || acpi_pm_timer_pmba(port, pmba)
 }
 
-/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; other regs RAZ/WI.
+/// PIIX4 PM I/O block (64 bytes at PMBA). Timer is at +8; PM1 at +0..+7;
+/// other regs RAZ/WI.
 pub fn is_piix_pm_io(port: u16) -> bool {
     with_plat(|p| is_piix_pm_io_port(port, p.pmba))
+}
+
+/// FADT PM1a (`0xB000` EVT / `0xB004` CNT), Cruzer OVMF `0xAF00` PMBA, plus
+/// programmed PMBA +0..+7. PIIX4 PM1 SCI_EN. 0xAF00 PM timer.
+/// 0xB000 dword timer. Not `ISO-INSTALL-OK`.
+pub fn is_acpi_pm1_io(port: u16) -> bool {
+    if (0xB000..=0xB007).contains(&port) || (0xAF00..=0xAF07).contains(&port) {
+        return true;
+    }
+    with_plat(|p| pm1_block_off(port, p.pmba).is_some())
+}
+
+/// ACPI 1.0 / PIIX4 `PM1_CNT` bit 0. Linux `acpi_enable` writes this when
+/// FADT `SMI_CMD` is nonzero. Our FACP leaves `SMI_CMD` 0 (ACPI 2.0: no
+/// mode transition), so `acpi_hw_get_mode` returns ACPI without a PM1
+/// write. Reset with SCI_EN set so hardware matches. PIIX4 PM1 SCI_EN.
+/// PM1 SCI_EN at reset. Not `ISO-INSTALL-OK`.
+pub const PM1_CNT_SCI_EN: u16 = 1;
+/// Sleep enable. Ignore so a guest SLP_EN write does not halt the HV.
+const PM1_CNT_SLP_EN: u16 = 1 << 13;
+/// ACPI 1.0 `PM1_STS`/`PM1_EN` timer bit. Nested iso=0 firmware HLT PM1 SCI
+/// latches this so CpuSleep can take FADT SCI (IRQ 9 / EDK2 `0x71`) instead
+/// of leftover LAPIC `0x20` (CI `33470837613` CPUID) or `0x68` (CI
+/// `33466890874` CR livelock). nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub const PM1_STS_TMR: u16 = 1;
+pub const PM1_EN_TMR: u16 = 1;
+
+fn pm1_block_off(port: u16, pmba: u32) -> Option<u16> {
+    if (0xB000..=0xB007).contains(&port) {
+        return Some(port - 0xB000);
+    }
+    if (0xAF00..=0xAF07).contains(&port) {
+        return Some(port - 0xAF00);
+    }
+    let base = (pmba & !1) as u16;
+    if port >= base && port < base.wrapping_add(8) {
+        Some(port - base)
+    } else {
+        None
+    }
+}
+
+fn pm1_read(p: &Platform, off: u16, size: u8) -> u64 {
+    let mut blk = [0u8; 8];
+    blk[0..2].copy_from_slice(&p.pm1_sts.to_le_bytes());
+    blk[2..4].copy_from_slice(&p.pm1_en.to_le_bytes());
+    blk[4..6].copy_from_slice(&p.pm1_cnt.to_le_bytes());
+    let o = off as usize;
+    let n = usize::from(size).min(8);
+    let mut v = 0u64;
+    for i in 0..n {
+        if o + i < 8 {
+            v |= u64::from(blk[o + i]) << (8 * i);
+        }
+    }
+    // FADT SMI_CMD is 0: Linux may never write SCI_EN. Log on CNT read.
+    if o < 6 && o.saturating_add(n) > 4 {
+        note_pm1_sci(p.pm1_cnt);
+    }
+    v
+}
+
+fn pm1_write(p: &mut Platform, off: u16, size: u8, val: u64) {
+    let o = off as usize;
+    let n = usize::from(size).min(8);
+    let mut touched_cnt = false;
+    for i in 0..n {
+        let b = ((val >> (8 * i)) & 0xff) as u8;
+        match o + i {
+            0 => p.pm1_sts &= !u16::from(b),
+            1 => p.pm1_sts &= !(u16::from(b) << 8),
+            2 => p.pm1_en = (p.pm1_en & 0xFF00) | u16::from(b),
+            3 => p.pm1_en = (p.pm1_en & 0x00FF) | (u16::from(b) << 8),
+            4 => {
+                p.pm1_cnt = (p.pm1_cnt & 0xFF00) | u16::from(b);
+                touched_cnt = true;
+            }
+            5 => {
+                p.pm1_cnt = (p.pm1_cnt & 0x00FF) | (u16::from(b) << 8);
+                touched_cnt = true;
+            }
+            _ => {}
+        }
+    }
+    if touched_cnt {
+        p.pm1_cnt &= !PM1_CNT_SLP_EN;
+        note_pm1_sci(p.pm1_cnt);
+    }
+}
+
+fn note_pm1_sci(cnt: u16) {
+    if (cnt & PM1_CNT_SCI_EN) == 0 {
+        return;
+    }
+    if !PM1_SCI.swap(true, Ordering::Release) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI PIIX4 PM1 SCI_EN (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+/// Latch PM1 timer SCI (TMR_STS + TMR_EN). SCI_EN is already set at reset.
+/// nested iso=0 firmware HLT PM1 SCI. nested iso=0 firmware HLT 0x71.
+/// Not `ISO-INSTALL-OK`.
+pub fn raise_pm1_tmr_sci() {
+    with_plat(|p| {
+        p.pm1_sts |= PM1_STS_TMR;
+        p.pm1_en |= PM1_EN_TMR;
+        note_pm1_sci(p.pm1_cnt);
+    });
+}
+
+/// True after [`raise_pm1_tmr_sci`]. nested iso=0 firmware HLT PM1 SCI.
+pub fn pm1_tmr_sci_pending() -> bool {
+    with_plat(|p| (p.pm1_sts & PM1_STS_TMR) != 0 && (p.pm1_en & PM1_EN_TMR) != 0)
 }
 
 fn is_piix_pm_io_port(port: u16, pmba: u32) -> bool {
@@ -563,6 +791,12 @@ fn acpi_pm_timer_shift(port: u16, pmba: u32) -> u32 {
     if (0xB008..=0xB00B).contains(&port) {
         return u32::from(port - 0xB008) * 8;
     }
+    if (0xAF08..=0xAF0B).contains(&port) {
+        return u32::from(port - 0xAF08) * 8;
+    }
+    if port == 0xB000 || port == PIIX4_PMBA_ALT as u16 {
+        return 0;
+    }
     0
 }
 
@@ -572,6 +806,8 @@ pub fn is_platform_io_port(port: u16) -> bool {
         || is_timer_port(port)
         || is_pic_port(port)
         || is_kbc_port(port)
+        || (0xB000..=0xB007).contains(&port)
+        || (0xAF00..=0xAF07).contains(&port)
 }
 
 /// Local APIC 2 MiB window (`0xFEE00000`). Not a zero sink — version 0
@@ -768,6 +1004,12 @@ struct Platform {
     pmba: u32,
     pm_cmd: u16,
     pm_iose: u8,
+    /// PIIX4 PM1a_STS (write-1-to-clear).
+    pm1_sts: u16,
+    /// PIIX4 PM1a_EN.
+    pm1_en: u16,
+    /// PIIX4 PM1a_CNT. Bit 0 is SCI_EN (sticky; set at reset). PM1 SCI_EN at reset.
+    pm1_cnt: u16,
     /// PIIX3 ISA config (QEMU `piix3_reset`). PIRQ at `0x60–0x63`.
     isa_cfg: [u8; 256],
     /// 8042 output queue (`0x60` reads). Not keystrokes.
@@ -802,6 +1044,9 @@ impl Platform {
             pmba: PIIX4_PMBA_DEFAULT,
             pm_cmd: 0x0001,
             pm_iose: 0,
+            pm1_sts: 0,
+            pm1_en: 0,
+            pm1_cnt: PM1_CNT_SCI_EN,
             isa_cfg: [0u8; 256],
             kbc_q: [0u8; KBC_QCAP],
             kbc_n: 0,
@@ -829,6 +1074,8 @@ static FWCFG_E820: AtomicBool = AtomicBool::new(false);
 static FWCFG_DIR: AtomicBool = AtomicBool::new(false);
 static FWCFG_WAIT: AtomicBool = AtomicBool::new(false);
 static FWCFG_ACPI: AtomicBool = AtomicBool::new(false);
+static FWCFG_BOOT_PRODUCT_LOG: AtomicBool = AtomicBool::new(false);
+static PM1_SCI: AtomicBool = AtomicBool::new(false);
 static HOST_ENUM: AtomicBool = AtomicBool::new(false);
 static ACPI_PM: AtomicU32 = AtomicU32::new(0);
 static LAST_CMOS: AtomicU8 = AtomicU8::new(0);
@@ -943,8 +1190,11 @@ fn select_fwcfg(p: &mut Platform, sel: u16) {
             p.fw_len = 2;
         }
         FW_CFG_BOOTORDER_SEL => {
-            p.fw_len = BOOTORDER.len() as u16;
+            p.fw_len = bootorder_bytes().len() as u16;
             FWCFG_BOOT.store(true, Ordering::Release);
+            if crate::devices::ide_cdrom::product_iso_window_armed() {
+                note_fwcfg_bootorder_product();
+            }
         }
         FW_CFG_E820_SEL => {
             p.fw_len = u16::from(E820_FILE_BYTES);
@@ -987,6 +1237,14 @@ fn note_fwcfg_acpi() {
     }
 }
 
+fn note_fwcfg_bootorder_product() {
+    if !FWCFG_BOOT_PRODUCT_LOG.swap(true, Ordering::Release) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO fw_cfg bootorder El Torito ide@ first (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 fn note_cmos_mem(idx: u8) {
     if matches!(
         idx,
@@ -1009,6 +1267,8 @@ pub fn reset() {
     FWCFG_DIR.store(false, Ordering::Release);
     FWCFG_WAIT.store(false, Ordering::Release);
     FWCFG_ACPI.store(false, Ordering::Release);
+    FWCFG_BOOT_PRODUCT_LOG.store(false, Ordering::Release);
+    PM1_SCI.store(false, Ordering::Release);
     HOST_ENUM.store(false, Ordering::Release);
     ACPI_PM.store(0, Ordering::Release);
     LAST_CMOS.store(0, Ordering::Release);
@@ -1302,7 +1562,8 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 _ => 0xffff_ffff,
             };
             v = (v & !(mask << shift)) | ((val & mask) << shift);
-            p.pmba = v | 1;
+            // nested iso=0 firmware IdeBus IO aperture: QEMU PIIX4_PMBA_MASK.
+            p.pmba = (v & PIIX4_PMBA_WMASK) | 1;
         } else if off == 0x80 {
             p.pm_iose = val as u8;
         }
@@ -1322,6 +1583,11 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     let mask = io_mask(size);
     if is_pic_port(port) && crate::devices::ide_cdrom::product_iso_window_armed() {
         return crate::devices::guest_irq::pic_io(port, is_in, size, rax);
+    }
+    // nested iso=0 firmware HLT PIT: shadow 8259 OUTs so ICW2 is tracked.
+    // Guest INs stay RAZ/WI (lab El Torito).
+    if is_pic_port(port) && !is_in {
+        crate::devices::guest_irq::pic_shadow_out(port, size, rax);
     }
     with_plat(|p| {
         if is_cmos_port(port) {
@@ -1359,7 +1625,7 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             let b = match p.fw_sel {
                                 FW_CFG_FILE_DIR => file_dir_byte(p.fw_off),
                                 FW_CFG_BOOTORDER_SEL => {
-                                    BOOTORDER.get(p.fw_off as usize).copied().unwrap_or(0)
+                                    bootorder_bytes().get(p.fw_off as usize).copied().unwrap_or(0)
                                 }
                                 FW_CFG_E820_SEL => e820_byte(p.fw_off),
                                 crate::devices::guest_acpi::FW_CFG_ACPI_LOADER_SEL => {
@@ -1397,12 +1663,20 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             }
             return rax;
         }
-        if acpi_pm_timer_matches(port, size, p.pmba) {
+        // IN first so dword IoRead32(0xAF00) and IoRead32(0xB000) are the PM
+        // timer (Delay, PCD offset 0). Word/byte IN and all OUT still reach
+        // PM1 below (constructor programs STS/CNT). 0xB000 dword timer.
+        if is_in && acpi_pm_timer_matches(port, size, p.pmba) {
+            let v = tick_pm_timer(p);
+            let shift = acpi_pm_timer_shift(port, p.pmba);
+            return (rax & !mask) | (u64::from(v >> shift) & mask);
+        }
+        if let Some(off) = pm1_block_off(port, p.pmba) {
             if is_in {
-                let v = tick_pm_timer(p);
-                let shift = acpi_pm_timer_shift(port, p.pmba);
-                return (rax & !mask) | (u64::from(v >> shift) & mask);
+                let v = pm1_read(p, off, size);
+                return (rax & !mask) | (v & mask);
             }
+            pm1_write(p, off, size, rax);
             return rax;
         }
         if is_piix_pm_io_port(port, p.pmba) {

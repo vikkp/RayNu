@@ -1,20 +1,21 @@
 use super::{
-    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, bootorder_nul_terminated, cmos_above_16m_chunks,
+    acpi_pm_timer_reads, boot_menu_wait_skips_bds, boot_order_cd_then_disk, boot_order_product_eltorito_first, boot_order_product_virtio_iso_first, bootorder_bytes, bootorder_nul_terminated, cmos_above_16m_chunks,
     cmos_extended_kb, cmos_mem_served, e820_byte, e820_splits_gcd_mid_gap, e820_splits_mtrr_uc_hole, e820_splits_vga_below_1m, fwcfg_boot_wait_served,
     fwcfg_bootorder_served,
     fwcfg_e820_served, fwcfg_file_dir_served, fwcfg_ram_served, fwcfg_acpi_served, fwcfg_named_file_count, host_bridge_enumerated, host_pci_config_addr, hpet_init_sink,
     hpet_tick_sink, hpet_tick_sink_by, hpet_ticks_from_tsc_delta, io, is_acpi_pm_timer_io, is_hpet_gpa, is_kbc_port, is_pic_port,
-    is_piix_pm_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
+    is_piix_pm_io, is_acpi_pm1_io, is_platform_io_port, is_platform_sink_gpa, is_unbacked_report_ram_gpa, is_xapic_2m_gpa, is_fwcfg_data_port, last_cmos_index,
     pci_addr_selects_host, pci_addr_selects_isa, pci_addr_selects_pm, pci_cfg_offset,
     pci_header_is_multifunction, pci_read_data, pci_write_addr, pci_write_data,
-    platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOT_MENU_WAIT,
+    platform_memory_served, platform_reports_2g_lowmem, pm_pci_config_addr, reset, ACPI_PM_STEP, BOOTORDER, BOOTORDER_PRODUCT, BOOT_MENU_WAIT,
     E820_ENTRY_BYTES, E820_ENTRY_COUNT, E820_FILE_BYTES, E820_MID_GAP_BASE, E820_MID_GAP_BYTES,
     E820_PCI_UC_BASE, E820_PCI_UC_BYTES, E820_RAM, E820_VGA_BASE, E820_VGA_BYTES, E820_LOW_1M,
     E820_RESERVED, FW_CFG_BOOTORDER_SEL, FW_CFG_BOOT_MENU, FW_CFG_BOOT_WAIT_SEL,
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
-    PM_BRIDGE_VENDOR,
+    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PM1_STS_TMR, PM1_EN_TMR, PIIX4_PMBA_ALT, PIIX4_PMBA_WMASK,
+    raise_pm1_tmr_sci, pm1_tmr_sci_pending,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -79,7 +80,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(count, FW_CFG_NAMED_FILE_COUNT);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
-    let mut got = [0u8; 128];
+    let mut got = [0u8; 256];
     let n = BOOTORDER.len();
     for b in got.iter_mut().take(n) {
         *b = io(0x511, true, 1, 0) as u8;
@@ -87,9 +88,51 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(&got[..n], BOOTORDER);
     assert!(BOOTORDER.windows(8).any(|w| w == b"drive@0/"));
     assert!(!BOOTORDER.windows(8).any(|w| w == b"drive@1/"));
-    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0"));
+    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER.windows(20).any(|w| w == b"force-connect-all@0\n"));
+    assert!(
+        !BOOTORDER.windows(7).any(|w| w == b"ide@0,1"),
+        "nested iso=0 firmware IdeBus bootorder: no ghost slot-0 IDE"
+    );
     assert!(fwcfg_bootorder_served());
     reset();
+}
+
+#[test]
+fn product_iso_fwcfg_bootorder_virtio_iso_first() {
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert!(boot_order_cd_then_disk());
+    assert!(boot_order_product_virtio_iso_first());
+    assert!(boot_order_product_eltorito_first());
+    assert!(bootorder_nul_terminated());
+    assert_eq!(bootorder_bytes(), BOOTORDER);
+    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER.windows(20).any(|w| w == b"force-connect-all@0\n"));
+    assert!(BOOTORDER_PRODUCT.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER_PRODUCT.windows(20).any(|w| w == b"force-connect-all@0\n"));
+    assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@3"));
+    assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@2"));
+    assert!(!BOOTORDER_PRODUCT.windows(8).any(|w| w == b"drive@1/"));
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    crate::devices::ide_cdrom::write_placeholder_iso(
+        &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+    );
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(crate::devices::ide_cdrom::product_iso_window_armed());
+    assert_eq!(bootorder_bytes(), BOOTORDER_PRODUCT);
+    let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
+    let n = BOOTORDER_PRODUCT.len();
+    let mut got = vec![0u8; n];
+    for b in got.iter_mut() {
+        *b = io(0x511, true, 1, 0) as u8;
+    }
+    assert_eq!(&got[..], BOOTORDER_PRODUCT);
+    assert!(fwcfg_bootorder_served());
+    crate::devices::ide_cdrom::reset();
+    reset();
+    assert_eq!(bootorder_bytes(), BOOTORDER);
 }
 
 #[test]
@@ -100,7 +143,7 @@ fn fwcfg_e820_is_32m_ram() {
     assert_eq!(E820_FILE_BYTES, 120);
     assert_eq!(E820_RAM, 1);
     assert_eq!(E820_RESERVED, 2);
-    assert_eq!(HV_IDENTITY_PML4, 0x200000);
+    assert_eq!(HV_IDENTITY_PML4, 0x400000);
     assert_eq!(HV_IDENTITY_PML4_BYTES, 0x1B000);
     assert_eq!(E820_VGA_BASE, 0xA0000);
     assert_eq!(E820_VGA_BYTES, 0x60000);
@@ -252,6 +295,38 @@ fn pic_raz_not_0xff_on_command_port() {
 }
 
 #[test]
+fn nested_iso0_pic_out_shadow_keeps_raz_in() {
+    reset();
+    crate::devices::ide_cdrom::reset();
+    crate::devices::guest_irq::reset();
+    assert!(!crate::devices::ide_cdrom::product_iso_window_armed());
+    let _ = io(0x20, false, 1, 0x11);
+    let _ = io(0x21, false, 1, 0x68);
+    assert_eq!(io(0x20, true, 1, 0xFFFF) as u8, 0, "8259 PIC RAZ/WI");
+    crate::devices::guest_irq::raise_nested_iso0_pit();
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit(),
+        None,
+        "ICW incomplete until ICW3/ICW4; nested PIT needs ready"
+    );
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit_or_edk2(),
+        0x68,
+        "nested iso=0 EDK2 IRQ0"
+    );
+    let _ = io(0x21, false, 1, 0x04);
+    let _ = io(0x21, false, 1, 0x01);
+    crate::devices::guest_irq::raise_nested_iso0_pit();
+    assert_eq!(
+        crate::devices::guest_irq::take_nested_iso0_pit(),
+        Some(0x68),
+        "nested iso=0 firmware HLT PIT"
+    );
+    crate::devices::guest_irq::reset();
+    reset();
+}
+
+#[test]
 fn cmos_index_is_latched() {
     reset();
     let _ = io(0x70, false, 1, 0x8F);
@@ -382,6 +457,12 @@ fn sink_gpa_covers_stage40_fault() {
     assert!(is_acpi_pm_timer_io(0, 4));
     assert!(!is_acpi_pm_timer_io(0, 1));
     assert!(is_acpi_pm_timer_io(0x408, 4));
+    assert!(is_acpi_pm_timer_io(0xAF00, 4));
+    assert!(is_acpi_pm_timer_io(0xAF08, 4));
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert!(!is_acpi_pm_timer_io(0xB000, 2));
+    assert!(is_platform_io_port(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF00));
 }
 
 #[test]
@@ -445,6 +526,53 @@ fn acpi_pm_timer_ticks_port0_and_pmba() {
 }
 
 #[test]
+fn af00_pm_timer_ticks_dword_in() {
+    reset();
+    assert_eq!(PIIX4_PMBA_ALT, 0xAF00);
+    assert!(is_platform_io_port(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF00));
+    assert!(is_acpi_pm1_io(0xAF04));
+    assert!(is_acpi_pm_timer_io(0xAF00, 4));
+    assert!(!is_acpi_pm_timer_io(0xAF00, 1));
+    assert!(is_acpi_pm_timer_io(0xAF08, 4));
+    let a = io(0xAF00, true, 4, 0) as u32;
+    let b = io(0xAF00, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, ACPI_PM_STEP);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let t = io(0xAF08, true, 4, 0) as u32;
+    assert_eq!(t, ACPI_PM_STEP.wrapping_mul(2));
+    let _ = io(0xAF04, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xAF04, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
+}
+
+#[test]
+fn b000_pm_timer_ticks_dword_in() {
+    reset();
+    assert!(is_platform_io_port(0xB000));
+    assert!(is_acpi_pm1_io(0xB000));
+    assert!(is_acpi_pm1_io(0xB004));
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert!(!is_acpi_pm_timer_io(0xB000, 2));
+    assert!(!is_acpi_pm_timer_io(0xB000, 1));
+    assert!(is_acpi_pm_timer_io(0xB008, 4));
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    let a = io(0xB000, true, 4, 0) as u32;
+    let b = io(0xB000, true, 4, 0) as u32;
+    assert_eq!(a, 0);
+    assert_eq!(b, ACPI_PM_STEP);
+    assert_ne!(b, 0xFFFF_FFFF);
+    assert_eq!(acpi_pm_timer_reads(), 2);
+    let t = io(0xB008, true, 4, 0) as u32;
+    assert_eq!(t, ACPI_PM_STEP.wrapping_mul(2));
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
+}
+
+#[test]
 fn piix4_pm_enumerates_and_pmba_write_ticks() {
     reset();
     assert_eq!(pm_pci_config_addr(), 0x8000_0B00);
@@ -465,12 +593,59 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     let sts = io(0x500, true, 4, 0xFFFF_FFFF) as u32;
     assert_eq!(sts, 0);
     pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    let probe = pci_read_data(0xCFC, 4).expect("pmba");
+    assert_eq!(PIIX4_PMBA_WMASK, 0xFFC0);
+    assert_eq!(
+        probe, 0xFFC1,
+        "nested iso=0 firmware IdeBus IO aperture"
+    );
+    pci_write_addr(pm_pci_config_addr() | 0x40);
     pci_write_data(0xCFC, 4, 0xB001);
     assert!(is_piix_pm_io(0xB000));
-    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    let d0 = io(0xB000, true, 4, 0) as u32;
+    let d1 = io(0xB000, true, 4, 0) as u32;
+    assert_eq!(d1.wrapping_sub(d0), ACPI_PM_STEP);
     let t = io(0xB008, true, 4, 0) as u32;
     assert_ne!(t, 0xFFFF_FFFF);
     reset();
+}
+
+#[test]
+fn piix4_pm1_sci_en_sticky_on_fadt() {
+    reset();
+    assert!(is_acpi_pm1_io(0xB000));
+    assert!(is_acpi_pm1_io(0xB004));
+    assert!(!is_acpi_pm1_io(0xB008));
+    assert!(is_platform_io_port(0xB004));
+    assert_eq!(io(0xB004, true, 2, 0xFFFF) as u16, PM1_CNT_SCI_EN);
+    let _ = io(0xB004, false, 2, 0);
+    assert_eq!(io(0xB004, true, 2, 0) as u16, 0);
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    let _ = io(0xB004, false, 2, u64::from(PM1_CNT_SCI_EN) | (1 << 13));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    assert!(is_acpi_pm_timer_io(0xB000, 4));
+    assert_eq!(io(0xB000, true, 2, 0xFFFF) as u16, 0);
+    assert_eq!(io(0xB000, true, 4, 0xFFFF_FFFF) as u32, 0);
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xB001);
+    assert!(is_acpi_pm1_io(0xB004));
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+    reset();
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+}
+
+#[test]
+fn nested_iso0_firmware_hlt_pm1_sci_latches_tmr() {
+    reset();
+    assert!(!pm1_tmr_sci_pending());
+    raise_pm1_tmr_sci();
+    assert!(pm1_tmr_sci_pending(), "nested iso=0 firmware HLT PM1 SCI");
+    assert_eq!(io(0xB000, true, 2, 0) as u16, PM1_STS_TMR);
+    assert_eq!(io(0xB002, true, 2, 0) as u16, PM1_EN_TMR);
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
 }
 
 #[test]

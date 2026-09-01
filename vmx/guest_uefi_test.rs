@@ -43,7 +43,7 @@ use super::{
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
     guest_uefi_flash_off, guest_uefi_gpa_to_hpa,
     try_alloc_product_iso_install_disk,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX, guest_uefi_fwcfg_identity_overlay, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, guest_uefi_fwcfg_dest_ok_fill, guest_uefi_fwcfg_dest_ok_fill_should_log, GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX, GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP, copy_low_ram_bytes, write_low_ram_bytes, guest_uefi_fwcfg_identity_overlay_apply, guest_uefi_fwcfg_identity_overlay_restore, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
     ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
@@ -83,7 +83,119 @@ use super::{
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
-    guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_irq0_vec,
+    guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_firmware_hlt_ignores_tpr,
+    guest_uefi_firmware_hlt_wait_for_irq,
+    guest_uefi_firmware_hlt_skip_after_inject,
+    guest_uefi_firmware_hlt_skip_only_after_inject,
+    guest_uefi_firmware_hlt_skip_without_inject,
+    guest_uefi_firmware_skip_pit_inject,
+    guest_uefi_firmware_leftover_timer_vec,
+    guest_uefi_product_firmware_lvt_timer_inject,
+    guest_uefi_product_firmware_no_lvt_inject_io,
+    guest_uefi_firmware_hlt_skip_len,
+    guest_uefi_firmware_hlt_insn_len0_skip,
+    guest_uefi_nested_iso0_firmware_hlt_pit,
+    guest_uefi_nested_iso0_firmware_hlt_no_pit_inject,
+    guest_uefi_nested_iso0_firmware_hlt_edk2_irq0,
+    guest_uefi_nested_iso0_firmware_hlt_068_miss,
+    guest_uefi_firmware_hlt_inject_cap,
+    guest_uefi_nested_iso0_firmware_hlt_inject_cap,
+    NESTED_ISO0_FIRMWARE_HLT_INJECT_CAP,
+    guest_uefi_nested_iso0_firmware_hlt_skip_after_cap,
+    guest_uefi_nested_iso0_firmware_hlt_skip_after_inject,
+    guest_uefi_nested_iso0_firmware_hlt_pm1_sci,
+    guest_uefi_i440fx_slot0_header_single_function,
+    guest_uefi_nested_iso0_firmware_idebus_bar,
+    guest_uefi_nested_iso0_firmware_idebus_bar_oneshot,
+    guest_uefi_nested_iso0_firmware_idebus_bootorder,
+    guest_uefi_nested_iso0_firmware_idebus_connect,
+    guest_uefi_nested_iso0_firmware_idebus_ofw,
+    guest_uefi_nested_iso0_firmware_idebus_connectall,
+    guest_uefi_nested_iso0_firmware_idebus_connectall_first,
+    guest_uefi_nested_iso0_firmware_idebus_connectall_trail,
+    guest_uefi_nested_iso0_firmware_idebus_bm,
+    guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed,
+    guest_uefi_nested_iso0_firmware_idebus_isa_bar,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_mask,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_qemu,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_rmw,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_intx,
+    guest_uefi_nested_iso0_firmware_idebus_status,
+    guest_uefi_nested_iso0_firmware_idebus_intline,
+    guest_uefi_nested_iso0_firmware_idebus_intpin,
+    guest_uefi_nested_iso0_firmware_idebus_lat,
+    guest_uefi_nested_iso0_firmware_idebus_lt_ro,
+    guest_uefi_nested_iso0_firmware_idebus_cfg_ram,
+    guest_uefi_nested_iso0_firmware_idebus_rom,
+    guest_uefi_nested_iso0_firmware_idebus_bar4_wmask,
+    guest_uefi_nested_iso0_firmware_idebus_bar4_map,
+    guest_uefi_nested_iso0_firmware_idebus_bmide_prd,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_status,
+    guest_uefi_nested_iso0_firmware_idebus_intline_rmw,
+    guest_uefi_nested_iso0_firmware_idebus_cls_rmw,
+    guest_uefi_nested_iso0_firmware_idebus_cfg_ram_rmw,
+    guest_uefi_nested_iso0_firmware_idebus_cfg_read,
+    guest_uefi_nested_iso0_firmware_idebus_cfg_write,
+    guest_uefi_nested_iso0_firmware_idebus_cf8,
+    guest_uefi_nested_iso0_firmware_idebus_cf8e,
+    guest_uefi_nested_iso0_firmware_idebus_io_aperture,
+    guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
+    guest_uefi_nested_iso0_firmware_idebus_bmide,
+    guest_uefi_nested_iso0_firmware_idebus_bmide_io,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_empty,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_absent,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_drdy,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_abort,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_ioport,
+    guest_uefi_nested_iso0_firmware_idebus_cmd,
+    guest_uefi_nested_iso0_firmware_idebus_progif,
+    guest_uefi_nested_iso0_firmware_idebus_progif_native,
+    guest_uefi_nested_iso0_firmware_idebus_idetim,
+    guest_uefi_nested_iso0_firmware_idebus_idetim_raz,
+    guest_uefi_nested_iso0_firmware_idebus_idetim_persist,
+    guest_uefi_nested_iso0_firmware_idebus_svid,
+    guest_uefi_nested_iso0_firmware_idebus_slot0_fn1,
+    guest_uefi_nested_iso0_firmware_lapic_timer,
+    guest_uefi_nested_iso0_inject_vec,
+    guest_uefi_nested_iso0_firmware_hlt_ata,
+    guest_uefi_nested_iso0_ata_inject_vec,
+    guest_uefi_nested_iso0_ata_lapic,
+    guest_uefi_product_firmware_hlt_wake,
+    guest_uefi_product_firmware_wake_preempt,
+    guest_uefi_product_firmware_no_preempt_inject,
+    guest_uefi_product_firmware_wake_delay_io,
+    guest_uefi_product_firmware_delay_io_no_inject,
+    guest_uefi_product_firmware_wake_ide_cmd,
+    guest_uefi_product_firmware_ide_cmd_io_no_inject,
+    guest_uefi_product_firmware_ide_cmd_inject_ata,
+    guest_uefi_product_firmware_ide_cmd_ata_on_hlt,
+    guest_uefi_product_firmware_ide_cmd_hlt_timer,
+    guest_uefi_product_firmware_ide_cmd_hlt_vec,
+    guest_uefi_product_firmware_hlt_ata,
+    guest_uefi_product_firmware_hlt_ata_inject_vec,
+    guest_uefi_product_firmware_hlt_ata_lapic,
+    guest_uefi_product_firmware_hlt_wake_lapic,
+    guest_uefi_product_firmware_hlt_wake_lapic_timer,
+    guest_uefi_product_firmware_hlt_wake_idt20,
+    guest_uefi_product_firmware_hlt_wake_idt20_only,
+    guest_uefi_product_firmware_hlt_wake_lvt_unmask,
+    guest_uefi_product_firmware_hlt_edk2_irq0,
+    guest_uefi_firmware_hlt_ataio0_wake_vec,
+    guest_uefi_firmware_hlt_activity_active,
+    guest_uefi_firmware_lapic_timer_expiry,
+    guest_uefi_ioapic_io_over_pit,
+    guest_uefi_firmware_virtual_wire_pic,
+    guest_uefi_product_iso_pci_ready,
+    guest_uefi_firmware_hlt_force_if,
+    guest_uefi_firmware_force_if_for_inject,
+    guest_uefi_firmware_arm_ata_gsi14,
+    guest_uefi_firmware_prefer_ata_irr,
+    guest_uefi_firmware_ata_over_pic,
+    guest_uefi_firmware_ata_irr_only,
+    guest_uefi_firmware_take_ioapic_ata,
+    guest_uefi_firmware_pic_ata,
+    guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
     guest_uefi_virtio_drain_every_resume,
@@ -474,7 +586,7 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_PHYS_BITS_MIN, 36);
     assert_eq!(GUEST_UEFI_IRON_PF_CR2, 0x80B000);
     assert_eq!(GUEST_UEFI_MEMFD_BASE, 0x800000);
-    assert_eq!(GUEST_UEFI_HV_PML4, 0x200000);
+    assert_eq!(GUEST_UEFI_HV_PML4, 0x400000);
     assert_eq!(
         GUEST_UEFI_HV_PML4,
         crate::devices::guest_platform::HV_IDENTITY_PML4
@@ -672,21 +784,187 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, false), 0x1002);
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, true), 0x0FFE);
     assert!(guest_uefi_io_string_fills_ram(0x1F0));
-    assert!(guest_uefi_io_string_fills_ram(0x170));
+    assert!(
+        !guest_uefi_io_string_fills_ram(0x170),
+        "nested iso=0 firmware IdeBus secondary ioport: not ATA data"
+    );
     assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     assert!(guest_uefi_io_string_fills_ram(0x511));
     assert!(guest_uefi_fwcfg_string_fills_ram(0x511));
     assert!(!guest_uefi_fwcfg_string_fills_ram(0x510));
-    assert!(!guest_uefi_io_string_dest_ok(0x205f18));
+    assert!(guest_uefi_io_string_dest_ok(0x205f18));
+    assert!(GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX.contains("fw_cfg string skip HV identity dest="));
+    assert!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX.contains("fw_cfg identity overlay dest="));
+    assert_eq!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, 16);
+    let overlay_dest = GUEST_UEFI_HV_PML4 + 0x5f18;
+    assert!(!guest_uefi_io_string_dest_ok(overlay_dest));
+    assert!(guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, true));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 17, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x1F0, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false));
+    assert!(
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN)
+            > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP
+    );
+    assert!(!guest_uefi_fwcfg_identity_overlay(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX.contains("fw_cfg dest_ok fill dest="));
+    assert_eq!(GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP, 8);
+    assert!(guest_uefi_fwcfg_dest_ok_fill_should_log(0));
+    assert!(guest_uefi_fwcfg_dest_ok_fill_should_log(7));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill_should_log(8));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_LOADER_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(0x511, 0x205f18, 4, false));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        overlay_dest,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x1F0,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        true
+    ));
+    {
+        // Nested 1e0f4a7 dest is now ordinary RAM. Overlay cannot hold
+        // etc/acpi/tables; dest_ok fill must. PEI dest holds ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x205f18usize;
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        assert_eq!(
+            ram[dest],
+            crate::devices::guest_acpi::acpi_tables_byte(0)
+        );
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
+    {
+        // ZONE_FSEG AllocateMaxAddress dest is conventional 640KiB, not
+        // PEI stack 0x205f18 and not ZONE_HIGH leftover. FSEG dest holds
+        // ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x9E000usize;
+        assert!(dest < crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(dest + n <= crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(guest_uefi_io_string_dest_ok(dest as u64));
+        assert!(guest_uefi_fwcfg_dest_ok_fill(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        assert!(!guest_uefi_fwcfg_identity_overlay(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x100000, 4, false));
+    {
+        let mut ram = vec![0u8; (GUEST_UEFI_HV_PML4
+            + crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES)
+            as usize];
+        let d = overlay_dest as usize;
+        ram[d] = 0xAA;
+        ram[d + 1] = 0xBB;
+        ram[d + 2] = 0xCC;
+        ram[d + 3] = 0xDD;
+        let mut saved = [0u8; 4];
+        assert!(guest_uefi_fwcfg_identity_overlay_apply(
+            &mut ram,
+            overlay_dest,
+            b"QEMU",
+            &mut saved
+        ));
+        assert_eq!(&saved, &[0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(&ram[d..d + 4], b"QEMU");
+        assert!(guest_uefi_fwcfg_identity_overlay_restore(
+            &mut ram, overlay_dest, &saved
+        ));
+        assert_eq!(&ram[d..d + 4], &[0xAA, 0xBB, 0xCC, 0xDD]);
+        let mut tmp = [0u8; 4];
+        assert!(copy_low_ram_bytes(&ram, overlay_dest, &mut tmp));
+        assert!(write_low_ram_bytes(&mut ram, overlay_dest, b"QEMU"));
+    }
     assert!(guest_uefi_io_string_dest_ok(0x100000));
     assert!(guest_uefi_io_string_dest_ok(0x7bddd000));
     assert!(!guest_uefi_io_string_fills_ram(0xCF8));
     crate::devices::ide_cdrom::reset();
     assert!(crate::devices::ide_cdrom::present_placeholder());
-    crate::devices::ide_cdrom::pci_write_addr(crate::devices::ide_cdrom::pci_config_addr() | 0x10);
-    crate::devices::ide_cdrom::pci_write_data(0xCFC, 4, 0xC000);
-    assert!(guest_uefi_io_string_fills_ram(0xC000));
-    assert!(!guest_uefi_io_string_fills_ram(0xC007));
+    assert!(guest_uefi_io_string_fills_ram(0x1F0));
+    assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     crate::devices::ide_cdrom::reset();
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, false), 0x1234);
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, true), 0x1_0000_1234);
@@ -696,6 +974,169 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATA-only"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg IoReadFifo8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip HV identity PML4 dest"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg string skip HV identity dest="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI dest holds ACPI tables"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg dest_ok fill dest="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("dest_ok fill log cap 8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI tables ZONE_FSEG"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FSEG dest holds ACPI tables"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line ata_piix blacklist"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line piix_init blacklist"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FADT FACS"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flashcruzer reject 2d6b109 dest skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("auto-answer / # without login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO POST_DXE_TAIL skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("emergency mount+exit"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line usbdelay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("io string (rep insb)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xAF00 PM timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("tick port="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 084430f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 2ae4544"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2ae4544"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xB000 dword timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIC before GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick print-only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT ignores TPR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT stall waits for IRQ"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire PIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire AEOI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT force IF"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT activity active"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware LAPIC timer expiry"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IOAPIC I/O over PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder virtio-iso scsi@3 first"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder El Torito ide@ first"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 56f31d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d61dc7e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash ea30da1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 56f31d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 90da03d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash e70a295"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 77f5866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5227ad9"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 489d938"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash bce5bbb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash eaa580d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 12926eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eaa580d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 0bb06a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 30b78a0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 8e581c7"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d7d63ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash e4faceb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash a14223f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b5c3a9c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 a14223f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 3b7bbac"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 3b7bbac"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e4faceb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d7d63ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware OVMF ATA vector"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber IOAPIC ATA vector"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not inject leftover 0x2E"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber PIC ICW2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIC ATA vector follows ICW2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT no PIT inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT EDK2 0x68"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO firmware HLT EDK2 0x68"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT 0x68 miss"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT inject cap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT skip after inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT inject cap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33466890874"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33468177902"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33469144799"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 65b94c1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 cfabb62"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest-UEFI stop inj"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33470144235"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ee90aad"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT skip after cap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33470837613"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e416806"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PM1 SCI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT 0x71"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33471631130"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 1c7ff1c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX slot-0 Header Type single function"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus PCI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33473305422"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 68aff41"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus BAR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33474177126"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 95a4724"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus BAR oneshot"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33475246727"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0e4c1d8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus bootorder"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33475850114"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 f3761c4"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus PCI cmd"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33477097074"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9829386"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus prog-if"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33477720477"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2b7a884"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus prog-if native"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33478850408"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 7c52010"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus IDETIM"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33481842584"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9b6c2eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus connect"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33482463623"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 23666d6"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 12926eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ATA over PIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware force IF for inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 77f5866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b824789"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO HLT stall before n=16384"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip without inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after ataio"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 90da03d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ea30da1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    assert!(guest_uefi_product_iso_pci_ready(true, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b26c86a"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e81c2e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eac424b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c08a13d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9ce65ae"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides duplicate slot0 IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides PIIX IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux high-half hides PIIX"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux ATA floating bus"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1f21193"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1dd97d3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3d2be4"));
@@ -1058,6 +1499,970 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_pic_before_lapic(true, false));
     assert!(!guest_uefi_linux_pic_before_lapic(true, true));
     assert!(!guest_uefi_linux_pic_before_lapic(false, false));
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    assert!(!guest_uefi_pic_before_lapic(true, true, true));
+    assert!(!guest_uefi_pic_before_lapic(false, false, false));
+    assert!(guest_uefi_firmware_hlt_ignores_tpr(false, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(true, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, false, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, true, 1));
+    crate::devices::ide_cdrom::reset();
+    assert!(
+        !guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 0),
+        "firmware HLT skip without inject: do not arm virtual-wire on product ISO HLT"
+    );
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(false, 16385, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16384, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
+    assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_firmware_hlt_skip_only_after_inject(true),
+        "firmware HLT skip only after inject"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_skip_only_after_inject(false),
+        "firmware HLT skip only after inject; iron COM2 b5c3a9c inj=0"
+    );
+    assert!(
+        guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 1),
+        "firmware HLT skip after ataio"
+    );
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(false, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT PIT"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_pit(true, false, true, 0, 12),
+        "product ISO keeps skip_pit; nested PIT is iso=0 only"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, true, true, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, false, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 1, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 0x1e));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_no_pit_inject(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT no PIT inject"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_no_pit_inject(
+        false, false, true, 1, 12
+    ));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_edk2_irq0(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT EDK2 0x68"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_edk2_irq0(
+        false, false, true, 1, 12
+    ));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_068_miss(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT 0x68 miss"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_068_miss(
+        false, false, true, 1, 12
+    ));
+    assert!(
+        guest_uefi_firmware_hlt_inject_cap(0),
+        "firmware HLT inject cap"
+    );
+    assert!(guest_uefi_firmware_hlt_inject_cap(7));
+    assert!(
+        !guest_uefi_firmware_hlt_inject_cap(8),
+        "firmware HLT inject cap: 8 shots then stop"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT skip after inject"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(true, false, true, 0, 12),
+        "product ISO keeps skip_after_inject; nested skip is iso=0 only"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, true, true, 0, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, false, 0, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, true, 1, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, true, 0, 0x1e
+    ));
+    assert_eq!(
+        NESTED_ISO0_FIRMWARE_HLT_INJECT_CAP, 8,
+        "nested iso=0 firmware HLT inject cap"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_inject_cap(0),
+        "nested iso=0 firmware HLT inject cap"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_hlt_inject_cap(7));
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_inject_cap(8),
+        "nested iso=0 firmware HLT inject cap: 8 shots then skip"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+            false, false, true, 0, 12, 7
+        ),
+        "nested iso=0 firmware HLT skip after cap waits for 8"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+            false, false, true, 0, 12, 8
+        ),
+        "nested iso=0 firmware HLT skip after cap"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+        true, false, true, 0, 12, 8
+    ));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
+        "nested iso=0 firmware HLT ATA"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 0, 12));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_ata(true, false, true, 1, 12));
+    assert_eq!(
+        crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ14,
+        0x76,
+        "nested iso=0 firmware HLT ATA"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(None),
+        0x76,
+        "do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(Some(0x2E)),
+        0x76,
+        "do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_ata_inject_vec(Some(0xEF)),
+        0x76,
+        "nested iso=0 firmware HLT ATA LAPIC; do not inject leftover 0xEF"
+    );
+    assert_eq!(guest_uefi_nested_iso0_ata_inject_vec(Some(0x76)), 0x76);
+    assert!(
+        guest_uefi_nested_iso0_ata_lapic(None),
+        "nested iso=0 firmware HLT ATA LAPIC"
+    );
+    assert!(!guest_uefi_nested_iso0_ata_lapic(Some(0x76)));
+    assert_eq!(
+        crate::devices::guest_irq::NESTED_ISO0_EDK2_IRQ0,
+        0x68,
+        "nested iso=0 EDK2 IRQ0"
+    );
+    assert_eq!(
+        crate::devices::guest_irq::NESTED_ISO0_EDK2_SCI,
+        0x71,
+        "nested iso=0 firmware HLT 0x71"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(Some(0x70), Some(0x20)),
+        0x70,
+        "PIC take beats LAPIC"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(Some(0x68), Some(0x20)),
+        0x71,
+        "nested iso=0 firmware HLT 0x68 miss; leftover 0x68 is not IDENTIFY"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(None, Some(0x20)),
+        0x71,
+        "nested iso=0 firmware HLT PM1 SCI; leftover LVT 0x20 is not SCI"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_inject_vec(None, None),
+        0x71,
+        "nested iso=0 firmware HLT 0x71 when both empty"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_pm1_sci(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT PM1 SCI"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_pm1_sci(
+        true, false, true, 0, 12
+    ));
+    assert!(
+        guest_uefi_i440fx_slot0_header_single_function(0),
+        "i440FX slot-0 Header Type single function"
+    );
+    assert!(
+        !guest_uefi_i440fx_slot0_header_single_function(
+            crate::devices::guest_platform::PCI_HEADER_MULTIFUNCTION
+        ),
+        "slot-0 Header Type is multifunction stays a historical needle"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar(0x1F1, 0xFFFF_FFF9),
+        "nested iso=0 firmware IdeBus BAR"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_bar(0xFFFF_FFF9, 0xFFFF_FFF9),
+        "probe mask must not be the live command BAR"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar_oneshot(0x1F1),
+        "nested iso=0 firmware IdeBus BAR oneshot"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bar_oneshot(0xFFFF_FFF9));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bootorder(
+            b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus bootorder"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_connect(
+            b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus connect"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_connect(
+            b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        )
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_ofw(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus OFW"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_ofw(
+            b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        )
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_connectall(
+            b"/force-connect-all@0\n/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus ConnectAll"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_connectall_first(
+            b"/force-connect-all@0\n/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus ConnectAll first"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_connectall_trail(
+            b"/force-connect-all@0\n/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        )
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_connectall_trail(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus ConnectAll trail"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_connectall_first(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0"
+        )
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_connectall(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        )
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bm(0xCC01),
+        "nested iso=0 firmware IdeBus BM"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bm(1));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed(1),
+        "nested iso=0 firmware IdeBus BM unprogrammed"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed(0xCC01));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_isa_bar(0),
+        "nested iso=0 firmware IdeBus ISA BAR"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_isa_bar(0x1F1));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_mask(0x0005, 0x0007),
+        "nested iso=0 firmware IdeBus PCI cmd mask"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_mask(0x0007, 0x0007));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_qemu(0x0007, 0x0007),
+        "nested iso=0 firmware IdeBus PCI cmd QEMU"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_qemu(0x0005, 0x0007));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_rmw(0x07, 0x00, 0x0007),
+        "nested iso=0 firmware IdeBus PCI cmd RMW"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_rmw(0x07, 0x00, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_intx(0x0507, 0x0507),
+        "nested iso=0 firmware IdeBus PCI cmd INTX"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_intx(0x0007, 0x0507));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_status(0x0280_0000),
+        "nested iso=0 firmware IdeBus PCI status"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_status(0x0280_0005));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_status(0x0200_0000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_intline(0),
+        "nested iso=0 firmware IdeBus INTLINE"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_intline(0x0E));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_intpin(0),
+        "nested iso=0 firmware IdeBus INTPIN"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_intpin(1));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_lat(0x20, 0x20),
+        "nested iso=0 firmware IdeBus LAT"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_lat(0, 0x20));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_lt_ro(0, 0x20),
+        "nested iso=0 firmware IdeBus LT RO"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_lt_ro(0x20, 0x20));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cfg_ram(0xAABB_CCDD, 0xAABB_CCDD),
+        "nested iso=0 firmware IdeBus PCI cfg RAM"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cfg_ram(0, 0xAABB_CCDD));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_rom(0, 0xFFFF_FFFF),
+        "nested iso=0 firmware IdeBus PCI ROM"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_rom(0xFFFF_FFFF, 0xFFFF_FFFF));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar4_wmask(0xFFFF_FFF1, 0xFFFF_FFFF),
+        "nested iso=0 firmware IdeBus BAR4 wmask"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_bar4_wmask(0xCC01, 0xCC00));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bar4_wmask(1, 0xFFFF_FFFF));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar4_map(false, 0xFFFF_FFF1, true),
+        "nested iso=0 firmware IdeBus BAR4 map"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_bar4_map(true, 0xCC01, true));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bar4_map(true, 0xFFFF_FFF1, true));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bmide_prd(0x1234_5604, 0x1234_5607),
+        "nested iso=0 firmware IdeBus BMIDE PRD"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bmide_prd(0x1234_5607, 0x1234_5607));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_status(0x0007, 0x0027, 0x0280, 0xF900),
+        "nested iso=0 firmware IdeBus PCI cmd status"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_status(0, 0x0027, 0x0280, 0xF900));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_intline_rmw(0x0E, 0x010E, 0),
+        "nested iso=0 firmware IdeBus INTLINE RMW"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_intline_rmw(0x01, 0x010E, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cls_rmw(0x10, 0x2010, 0),
+        "nested iso=0 firmware IdeBus CLS RMW"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cls_rmw(0x20, 0x2010, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cfg_ram_rmw(0xAA00_0000, 0x0000_00BB, 0xBBAA),
+        "nested iso=0 firmware IdeBus cfg RAM RMW"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cfg_ram_rmw(0, 0x0000_00BB, 0xBBAA));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cfg_read(0xCCDD_0000, 0xAABB_CCDD),
+        "nested iso=0 firmware IdeBus cfg read"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cfg_read(0, 0xAABB_CCDD));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cfg_write(0x10, 0x0000_FFF1),
+        "nested iso=0 firmware IdeBus cfg write"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cfg_write(0, 0x0000_FFF1));
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8(0x8000_0900, 0x8000_0930, 4),
+        0x8000_0930,
+        "nested iso=0 firmware IdeBus CF8"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8(0x8000_0900, 0x8000_0930, 2),
+        0x8000_0900
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8(0x8000_0900, 0x8000_0930, 1),
+        0x8000_0900
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8e(0x8000_0900, 4),
+        None,
+        "nested iso=0 firmware IdeBus CF8E"
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8e(0x0000_0900, 4),
+        Some(0xFFFF_FFFF)
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8e(0x0000_0900, 2),
+        Some(0xFFFF)
+    );
+    assert_eq!(
+        guest_uefi_nested_iso0_firmware_idebus_cf8e(0x0000_0900, 1),
+        Some(0xFF)
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xC001),
+        "nested iso=0 firmware IdeBus IO aperture"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xFFC1));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_io_aperture(1));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xB001));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
+        "nested iso=0 firmware IdeBus BM sticky"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bm_sticky(1));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bmide(0xFFFF_FFFF, 0xFF),
+        "nested iso=0 firmware IdeBus BMIDE"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bmide(0, 0xFF));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bmide(0xFFFF_FFFF, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bmide_io(0, 0xCC01, false),
+        "nested iso=0 firmware IdeBus BMIDE IO"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_bmide_io(1, 0xCC01, true));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bmide_io(0, 0xCC01, true));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_empty(0x170, 0xFF),
+        "nested iso=0 firmware IdeBus secondary empty"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_empty(0x170, 0x50));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_absent(0x170, 0),
+        "nested iso=0 firmware IdeBus secondary absent"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_absent(0x170, 0xFF));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_absent(0x170, 0x50));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_drdy(0x376, 0x50),
+        "nested iso=0 firmware IdeBus secondary DRDY"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_drdy(0x376, 0x00));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_abort(0x41, 0x04),
+        "nested iso=0 firmware IdeBus secondary abort"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_abort(0x50, 0x04));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x376, 0),
+        "nested iso=0 firmware IdeBus secondary ioport"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x376, 0x50));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x177, 0x41));
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_bootorder(
+            b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n\0"
+        ),
+        "ide@0,1/drive@0 is a historical needle"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd(0, 0),
+        "nested iso=0 firmware IdeBus PCI cmd"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd(1, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_progif(0x80),
+        "nested iso=0 firmware IdeBus prog-if"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x8A));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x8F));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_progif_native(0x8F),
+        "nested iso=0 firmware IdeBus prog-if native"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif_native(0x8A));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_idetim(0x8000_8000),
+        "nested iso=0 firmware IdeBus IDETIM"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_idetim(0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_idetim_raz(0),
+        "nested iso=0 firmware IdeBus IDETIM RAZ"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_idetim_raz(0x8000_8000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_idetim_persist(0x8000_8000, 0x8000_8000),
+        "nested iso=0 firmware IdeBus IDETIM persist"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_idetim_persist(0, 0x8000_8000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_svid(0x1100_1AF4),
+        "nested iso=0 firmware IdeBus PCI SVID"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_svid(0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(0, 1, false),
+        "nested iso=0 firmware IdeBus slot0 fn1"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(0, 1, true));
+    assert!(guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(1, 1, true));
+    assert!(
+        guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
+        "nested iso=0 firmware LAPIC timer"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_lapic_timer(true, false, true, 0, 12));
+    let _ = crate::devices::lapic_virt::wrmsr(0x832, 0x1_0000 | 0xEF);
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "product skip_pit still drops 0x20 while LVT is masked"
+    );
+    assert!(
+        !guest_uefi_product_firmware_lvt_timer_inject(false, 0x20),
+        "product ISO firmware LVT timer inject: masked LVT is leftover PIT"
+    );
+    assert!(!guest_uefi_product_firmware_lvt_timer_inject(true, 0x20));
+    let _ = crate::devices::lapic_virt::force_firmware_lapic_timer_expiry();
+    assert!(
+        guest_uefi_product_firmware_lvt_timer_inject(false, 0x20),
+        "product ISO firmware LVT timer inject"
+    );
+    assert!(
+        guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 30),
+        "product ISO firmware no LVT inject I/O"
+    );
+    assert!(
+        guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 52),
+        "product ISO firmware no LVT inject I/O: preempt"
+    );
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 12),
+        "product ISO firmware no LVT inject I/O: HLT still wakes"
+    );
+    let _ = crate::devices::lapic_virt::wrmsr(0x832, 0x1_0000 | 0xEF);
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 30),
+        "product ISO firmware no LVT inject I/O: masked LVT"
+    );
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 12),
+        "product ISO firmware no LVT inject I/O: HLT still wakes"
+    );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0xEF),
+        "product skip_pit still drops leftover LVT 0xEF"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x68),
+        "product ISO firmware HLT wake: remapped 0x68 injects"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake(false, true, 0, 12),
+        "product ISO firmware HLT wake"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake(true, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 1, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, false, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 0, 0x1e));
+    assert!(
+        guest_uefi_product_firmware_wake_preempt(12),
+        "product ISO firmware wake preempt"
+    );
+    assert!(
+        guest_uefi_product_firmware_no_preempt_inject(52),
+        "product ISO firmware no preempt inject"
+    );
+    assert!(
+        !guest_uefi_product_firmware_no_preempt_inject(12),
+        "product ISO firmware no preempt inject: HLT still wakes"
+    );
+    assert!(
+        !guest_uefi_product_firmware_wake_preempt(52),
+        "product ISO firmware no preempt inject: CF8 walk"
+    );
+    assert!(
+        !guest_uefi_product_firmware_hlt_wake(false, true, 0, 52),
+        "product ISO firmware no preempt inject"
+    );
+    assert!(!guest_uefi_product_firmware_wake_preempt(0x1e));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 52, true, 1),
+        "product ISO firmware wake preempt: skip_after_inject is HLT-only"
+    );
+    assert!(
+        guest_uefi_product_firmware_wake_delay_io(false, true, 0, 30, 0xB008, 4),
+        "product ISO firmware wake Delay I/O"
+    );
+    assert!(
+        guest_uefi_product_firmware_delay_io_no_inject(
+            false, true, 0, 30, 0xB008, 4
+        ),
+        "product ISO firmware Delay I/O no inject"
+    );
+    assert!(
+        !guest_uefi_product_firmware_delay_io_no_inject(
+            false, true, 0, 12, 0xB008, 4
+        ),
+        "product ISO firmware Delay I/O no inject: HLT still wakes"
+    );
+    assert!(guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 30, 0x408, 4
+    ));
+    assert!(guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 30, 0xB000, 4
+    ));
+    assert!(
+        !guest_uefi_product_firmware_wake_delay_io(false, true, 0, 30, 0xCF8, 4),
+        "product ISO firmware wake Delay I/O: do not inject mid-CF8"
+    );
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 12, 0xB008, 4
+    ));
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        true, true, 0, 30, 0xB008, 4
+    ));
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        false, true, 1, 30, 0xB008, 4
+    ));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 30, true, 1),
+        "product ISO firmware wake Delay I/O: skip_after_inject is HLT-only"
+    );
+    assert!(
+        guest_uefi_product_firmware_wake_ide_cmd(false, true, 0, 30, true),
+        "product ISO firmware wake IDE cmd"
+    );
+    assert!(
+        !guest_uefi_product_firmware_wake_ide_cmd(false, true, 0, 30, false),
+        "product ISO firmware wake IDE cmd: empty-slot CF8 does not wake"
+    );
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        false, true, 0, 12, true
+    ));
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        true, true, 0, 30, true
+    ));
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        false, true, 1, 30, true
+    ));
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_io_no_inject(false, true, 0, 30, true),
+        "product ISO firmware IDE cmd I/O no inject"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_io_no_inject(false, true, 0, 12, true),
+        "product ISO firmware IDE cmd I/O no inject: HLT still injects"
+    );
+    assert!(!guest_uefi_product_firmware_ide_cmd_io_no_inject(
+        false, true, 0, 30, false
+    ));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 30, true, 1),
+        "product ISO firmware IDE cmd I/O no inject: skip_after_inject is HLT-only"
+    );
+    assert!(
+        include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd reset 0"),
+        "product ISO firmware IDE cmd reset 0"
+    );
+    assert!(
+        include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd ATA IRQ"),
+        "product ISO firmware IDE cmd ATA IRQ"
+    );
+    assert!(
+        include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd ATA on HLT"),
+        "product ISO firmware IDE cmd ATA on HLT"
+    );
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_inject_ata(true),
+        "product ISO firmware IDE cmd inject ATA"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_inject_ata(false),
+        "product ISO firmware IDE cmd inject ATA: BAR/CF8 does not"
+    );
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_ata_on_hlt(false, true, 0, 12, true),
+        "product ISO firmware IDE cmd ATA on HLT"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_ata_on_hlt(false, true, 0, 12, false),
+        "product ISO firmware IDE cmd ATA on HLT: no pending"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_ata_on_hlt(false, true, 0, 30, true),
+        "product ISO firmware IDE cmd ATA on HLT: I/O is not CpuSleep"
+    );
+    assert!(!guest_uefi_product_firmware_ide_cmd_ata_on_hlt(
+        false, true, 1, 12, true
+    ));
+    assert!(!guest_uefi_product_firmware_ide_cmd_ata_on_hlt(
+        true, true, 0, 12, true
+    ));
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_hlt_timer(false, true, 0, 12, true),
+        "product ISO firmware IDE cmd HLT 0x20"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_ide_cmd_hlt_vec(true),
+        0x20,
+        "product ISO firmware IDE cmd HLT 0x20; nested iso=0 firmware HLT 0x68 miss"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_ide_cmd_hlt_vec(false),
+        0x20,
+        "product ISO firmware IDE cmd HLT 0x20: still 0x20 without pending"
+    );
+    assert!(!guest_uefi_product_firmware_ide_cmd_hlt_timer(
+        false, true, 1, 12, true
+    ));
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(None),
+        0x76,
+        "product ISO firmware IDE cmd inject ATA"
+    );
+    assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
+    assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
+    assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, None),
+        0x20,
+        "nested iso=0 firmware HLT 0x68 miss; timer 0x20"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x20), None),
+        0x20,
+        "nested iso=0 firmware HLT 0x68 miss; leftover 0x20 is the timer ISR"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0xEF)),
+        0x20,
+        "nested iso=0 firmware HLT 0x68 miss; leftover 0xEF substitutes 0x20"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_idt20(false, 0x20),
+        "product ISO firmware HLT wake IDT 0x20"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(true, 0x20));
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(false, 0x68));
+    assert!(!guest_uefi_product_firmware_hlt_wake_idt20(false, 0xEF));
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x76), None),
+        0x76
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x68), Some(0x20)),
+        0x20,
+        "nested iso=0 firmware HLT 0x68 miss"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_lapic(None),
+        "product ISO firmware HLT wake LAPIC"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lapic(Some(0x68)));
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_lapic_timer(None),
+        "product ISO firmware HLT wake LAPIC timer"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lapic_timer(Some(0x68)));
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_idt20_only(),
+        "product ISO firmware HLT wake IDT 0x20 only"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_lvt_unmask(false),
+        "product ISO firmware HLT wake LVT unmask"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lvt_unmask(true));
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0x27)),
+        0x20,
+        "nested iso=0 firmware HLT 0x68 miss; ignore unmasked LVT 0x27"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_edk2_irq0(false, true, 0, 12),
+        "product ISO firmware HLT EDK2 0x68"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_edk2_irq0(true, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_edk2_irq0(false, true, 1, 12));
+    assert!(
+        guest_uefi_product_firmware_hlt_ata(false, true, 1, 12),
+        "product ISO firmware HLT ATA"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_ata(false, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_ata(true, true, 1, 12));
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(None),
+        0x76,
+        "product ISO firmware HLT ATA; do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x2E)),
+        0x76,
+        "product ISO firmware HLT ATA IOAPIC; do not inject leftover 0x2E"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0xEF)),
+        0x76,
+        "product ISO firmware HLT ATA LAPIC; do not inject leftover 0xEF"
+    );
+    assert_eq!(guest_uefi_product_firmware_hlt_ata_inject_vec(Some(0x76)), 0x76);
+    assert!(
+        guest_uefi_product_firmware_hlt_ata_lapic(None),
+        "product ISO firmware HLT ATA LAPIC"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_ata_lapic(Some(0x76)));
+    assert_eq!(
+        guest_uefi_firmware_hlt_insn_len0_skip(false),
+        1,
+        "firmware HLT insn_len 0 skip"
+    );
+    assert_eq!(guest_uefi_firmware_hlt_insn_len0_skip(true), 0);
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16384, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 1));
+    assert!(
+        guest_uefi_firmware_hlt_skip_without_inject(false),
+        "firmware HLT skip without inject"
+    );
+    assert!(!guest_uefi_firmware_hlt_skip_without_inject(true));
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "firmware skip PIT inject"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x68),
+        "product ISO firmware HLT wake: remapped 0x68 injects"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x2E),
+        "firmware skip PIT inject: ATA 14 still injects"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(true, 0x20),
+        "linux still injects PIT 0x20"
+    );
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(false, 0x2),
+        0x2 | (1 << 9),
+        "firmware force IF for inject"
+    );
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(true, 0x2),
+        0x2,
+        "linux keeps guest IF"
+    );
+    assert!(
+        guest_uefi_firmware_arm_ata_gsi14(false),
+        "firmware arm ATA GSI 14"
+    );
+    assert!(
+        !guest_uefi_firmware_arm_ata_gsi14(true),
+        "linux programs its own RTEs"
+    );
+    assert!(
+        guest_uefi_firmware_prefer_ata_irr(false, 1),
+        "firmware prefer ATA IRR after PACKET"
+    );
+    assert!(
+        guest_uefi_firmware_prefer_ata_irr(false, 0),
+        "firmware prefer ATA IRR before PACKET when 0x2E is latched"
+    );
+    assert!(
+        !guest_uefi_firmware_prefer_ata_irr(true, 1),
+        "linux keeps TPR"
+    );
+    assert!(
+        guest_uefi_firmware_ata_over_pic(false, true),
+        "firmware ATA over PIC"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(true, true),
+        "linux keeps PIC-first"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(false, false),
+        "firmware ATA over PIC only when pin 14 or latched 0x2E is ready"
+    );
+    assert!(
+        guest_uefi_firmware_ata_irr_only(false),
+        "firmware ATA IRR only"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_irr_only(true),
+        "linux still takes LVT"
+    );
+    assert!(
+        guest_uefi_firmware_take_ioapic_ata(false),
+        "firmware take IOAPIC ATA"
+    );
+    assert!(
+        guest_uefi_firmware_pic_ata(false, true),
+        "firmware PIC ATA"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(true, true),
+        "linux keeps PIC-first / GSI 2"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(false, false),
+        "firmware PIC ATA only when PIC peek is 0x2E"
+    );
+    assert!(
+        !guest_uefi_firmware_take_ioapic_ata(true),
+        "linux still takes any IOAPIC pin"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),
+        0x2,
+        "virtual-wire force IF stays ataio==0"
+    );
+    assert_eq!(guest_uefi_firmware_hlt_skip_len(true), 1, "firmware HLT skip after inject");
+    assert_eq!(guest_uefi_firmware_hlt_skip_len(false), 0, "nested iso=0 keeps skip_hlt");
+    assert_eq!(
+        guest_uefi_firmware_hlt_activity_active(),
+        0,
+        "firmware HLT activity active"
+    );
+    assert!(guest_uefi_firmware_lapic_timer_expiry(false, true, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(true, true, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(false, false, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(false, true, 1));
+    assert!(
+        guest_uefi_ioapic_io_over_pit(),
+        "IOAPIC I/O over PIT"
+    );
+    assert!(guest_uefi_firmware_virtual_wire_pic(false, true, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(true, true, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(false, false, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(false, true, 1));
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(false, true, 0, 0x2),
+        0x2 | (1 << 9),
+        "firmware HLT force IF"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(true, true, 0, 0x2),
+        0x2,
+        "linux keeps guest IF"
+    );
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16384, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, false, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 1));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 0x1e, true, 0));
     assert!(guest_uefi_linux_pic_irq0_vec(0x20));
     assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
     assert!(guest_uefi_linux_exc_error_code(8));
@@ -1244,11 +2649,14 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
     assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
     assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));
-    assert_eq!(guest_uefi_gpa0_split_pt_gpa(), 0x20B000);
+    assert_eq!(
+        guest_uefi_gpa0_split_pt_gpa(),
+        GUEST_UEFI_HV_PML4 + crate::vmx::guest_pt::IDENTITY_4G_BYTES
+    );
     {
         // Iron 4ae87de: live CR3 GPA0 is still 2MiB (pde0=0xE3) spanning
         // the 1MiB fixed-MTRR boundary. Peek/poke fills HV SPLIT4K PT at
-        // 0x20B000 and points PD[0] at it.
+        // GUEST_UEFI_HV_PML4+0xB000 and points PD[0] at it.
         use core::cell::RefCell;
         let high = RefCell::new([0u8; 0x4000]);
         let pt = RefCell::new([0u8; 4096]);
@@ -1676,6 +3084,19 @@ fn past_sec_predicates_are_honest() {
         true, 115, 115, 0, 0, false, false, false
     ));
     assert!(
+        post_atapi_should_stop(
+            true,
+            115 + GUEST_UEFI_POST_DXE_TAIL,
+            115,
+            0,
+            0,
+            false,
+            false,
+            false
+        ),
+        "lab stub still applies POST_DXE_TAIL when sectors==0"
+    );
+    assert!(
         !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false),
         "first ATAPI sector must not stop Stage 45"
     );
@@ -1735,6 +3156,19 @@ fn past_sec_predicates_are_honest() {
         assert!(
             !post_atapi_should_stop(true, 200, 115, 180, 4, true, true, true),
             "Stage 46 product CD continues past El Torito"
+        );
+        assert!(
+            !post_atapi_should_stop(
+                true,
+                115 + GUEST_UEFI_POST_DXE_TAIL,
+                115,
+                0,
+                0,
+                false,
+                false,
+                false
+            ),
+            "product ISO POST_DXE_TAIL skip (iron 2d6b109 stop n=33297 sectors=0)"
         );
         assert_eq!(guest_uefi_resume_cap(false), GUEST_UEFI_PRODUCT_ISO_RESUME_CAP);
         assert_eq!(
@@ -2028,6 +3462,52 @@ fn stamp_empty_ovmf_vars_matches_debian_4m_template() {
         u32::from_le_bytes(pad[0x58..0x5C].try_into().unwrap()),
         0x3ffb8
     );
+}
+
+#[test]
+fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
+    crate::devices::ide_cdrom::reset();
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let iso = vec![0u8; extra];
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(guest_uefi_product_iso_pci_ready(false, true));
+    assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
+    assert!(
+        guest_uefi_firmware_hlt_skip_after_inject(true, 1, 12, true, 0),
+        "product ISO HLT stall before n=16384: skip CpuSleep without PIT inject"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_wait_for_irq(true, 1, 12, true, 0),
+        "firmware HLT skip without inject"
+    );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20),
+        "firmware skip PIT inject"
+    );
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x68));
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E));
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(false, 0),
+        1 << 9,
+        "firmware force IF for inject after ataio"
+    );
+    assert!(guest_uefi_firmware_arm_ata_gsi14(false));
+    assert!(guest_uefi_firmware_prefer_ata_irr(false, 1));
+    assert!(guest_uefi_firmware_ata_irr_only(false));
+    assert!(!guest_uefi_firmware_ata_irr_only(true));
+    assert!(guest_uefi_firmware_take_ioapic_ata(false));
+    assert!(!guest_uefi_firmware_take_ioapic_ata(true));
+    assert!(guest_uefi_firmware_pic_ata(false, true));
+    assert!(!guest_uefi_firmware_pic_ata(true, true));
+    assert!(!guest_uefi_firmware_pic_ata(false, false));
+    assert!(
+        guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
+        "product ISO quiet tick arms with the window, not n>16384"
+    );
+    assert!(!guest_uefi_product_iso_pci_ready(false, false));
+    crate::devices::ide_cdrom::reset();
 }
 
 #[test]

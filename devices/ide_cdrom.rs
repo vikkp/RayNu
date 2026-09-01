@@ -4,9 +4,32 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
+//! PCI IDE at PIIX `00:01.1`. QEMU i440FX `00:00.0` is single-function, so
+//! `00:00.1` is empty (`0xFFFFFFFF`). Aliasing the CD at slot-0 fn1 made
+//! PciBus Start a second IDE on the same `0x1F0` as PIIX (`ataio=0`).
+//! nested iso=0 firmware IdeBus slot0 fn1. IDE at `00:00.1` stays a
+//! historical needle. nested iso=0 firmware IdeBus PCI.
 //! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
+//! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
+//! conflict `00:00.1`/`00:01.1`; `ata_piix` secondary `-22`). linux hides
+//! PIIX IDE after Linux high-half so built-in `ata_piix` does not
+//! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
+//! share is too early: GRUB still needs PIIX ATAPI on iso=0. Product ISO
+//! hid PIIX IDE (`8336a06` / `ea30da1`) so ConnectAll would not Start
+//! IdeBus CpuSleep (iron COM2 `d61dc7e`: scsi@3 first, then `pci_ide=1`,
+//! HLT `rip=0x7f0680d0` `ataio=0`, no virtio-iso IN). Hide plus
+//! skip-after-inject `vec=0x20` livelocked the timer ISR through the
+//! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). firmware SRST ATA IRQ
+//! after SRST clear so IdeBus WaitForInterrupt sees IRQ 14. OVMF El
+//! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
+//! stays in the model and returns false. firmware HLT skip without inject.
+//! product ISO fw_cfg bootorder El Torito ide@ first.
+//! iso=0 keeps IDE. windows_iso / generic_uefi stay in
+//! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
+//! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
+//! so leftover `ata_piix` SRST skips without `ata_msleep`.
+//! Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
@@ -24,8 +47,269 @@
 //! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
 //! (nested Intel `f93caee`: `0xA1`×4 `ataio=408` `packet=0`).
 //! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
-//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
+//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. nested iso=0
+//! firmware IdeBus BAR: size probe does not persist `0xFFFFFFF9` as the
+//! live command BAR (CI `33474177126` VMXON `pcicmd=0x1` `ataio=0`).
+//! nested iso=0 firmware IdeBus BAR oneshot: dword probe read returns the
+//! mask then live `0x1F1` (CI `33475246727` VMXON-SKIP; skip-HLT can
+//! interrupt PciBus before it restores the BAR). Historical: live BAR0
+//! is now unimplemented (0). nested iso=0 firmware IdeBus ISA BAR.
+//! BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
+//! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
+//! IdeBus Start writes offset 0x04 (wake latch). Reset `0x0005` (I/O+BM
+//! already on) skipped that write; iron `b5c3a9c` `ataio=0` after BOTH-OK.
+//! nested iso=0 firmware IdeBus PCI cmd: do not OR `0x0001` on command
+//! writes (CI `33477097074` VMXON-SKIP; CI `33475850114` `pcicmd=0x1`
+//! was a 0-or-1 write, not IdeBus EnableAttributes `0x5`). Disable
+//! (`0`) is not Start. CI `33477720477` VMXON-SKIP (`2b7a884` cmd
+//! unproven). do not F11 2b7a884.
+//! nested iso=0 firmware IdeBus prog-if: class programming interface
+//! is `0x8A` (ISA compatibility, both channels, BM, native-capable),
+//! not compat-only `0x80`. Dump `cmdn=` `cmdwr=` so `pcicmd=` is not
+//! the only Start signal. CI `33478850408` VMXON-SKIP (`7c52010`
+//! 0x8A unproven). do not F11 7c52010.
+//! nested iso=0 firmware IdeBus prog-if native: `0x8F` sets bits 0 and 2
+//! so IdeBus GetBar uses BAR0/BAR1, not ISA `0x1F0`. CI `33481842584`
+//! VMXON-SKIP (`9b6c2eb` 0x8F unproven). do not F11 9b6c2eb.
+//! nested iso=0 firmware IdeBus ISA BAR: QEMU PIIX leaves BAR0-3
+//! unimplemented and prog-if `0x80` (compat ISA `0x1F0`/`0x3F6`). Native
+//! `0x8F` plus live `bar0=0x1f1` sat in the ISA hole so PciBus left
+//! `pcicmd=0x0` (CI `33488202396` VMXON; CI `33489676272`/`33489677821`
+//! VMXON-SKIP). do not F11 9ce3499.
+//! nested iso=0 firmware IdeBus PCI cmd mask: ICH wmask is IO|MASTER
+//! (`0x0005`). Historical. CI `33491808360` VMXON-SKIP (`6fa77d1`
+//! ISA BAR unproven). do not F11 6fa77d1.
+//! nested iso=0 firmware IdeBus PCI cmd QEMU: QEMU `pci_piix_ide_realize`
+//! does not filter command wmask, so `pci_init_wmask` is IO|MEM|MASTER
+//! (`0x0007`). ICH `0x0005` dropped MSE so EnableAttributes `0x0007`
+//! readback failed before ISA `0x3F6`. CI `33508115698` VMXON-SKIP
+//! (`edf0682` slot0 fn1 unproven). do not F11 edf0682.
+//! nested iso=0 firmware IdeBus PCI cmd RMW: QEMU `pci_default_write_config`
+//! merges per-byte. A size-1 OUT at 0x04 must not zero bits 8-15; 0x05
+//! updates the high command byte. Dump `cmdmax=`. CI `33508883644` VMXON
+//! `pcicmd=0x0` `cmdn=3` `cmdwr=0x0` `ataio=0` (ATAPI miss). do not F11
+//! de5fee7.
+//! nested iso=0 firmware IdeBus PCI cmd INTX: QEMU `pci_init_wmask` is
+//! IO|MEM|MASTER|INTX_DISABLE plus SERR (`0x0507`). Live `0x0007` dropped
+//! bits 8 and 10 so a word EnableAttributes `0x0407`/`0x0507` readback
+//! failed before ISA `0x3F6`. CI `33511226072` VMXON-SKIP (`0300ae3` RMW
+//! unproven). do not F11 0300ae3.
+//! nested iso=0 firmware IdeBus IDETIM persist: QEMU `pci_init_wmask`
+//! memset `0xff` from `0x40` so PCI `0x40` writes persist. Live RAZ made
+//! `idetim=0` even if firmware wrote decode-enable. CI `33512599515`
+//! VMXON-SKIP (`e90cb0d` INTX unproven). do not F11 e90cb0d.
+//! nested iso=0 firmware IdeBus PCI SVID: QEMU `pci_set_default_subsystem_id`
+//! is Red Hat Qumranet `0x1AF4` / QEMU `0x1100`. Live `0` at PCI `0x2C`
+//! looked unprogrammed. Dump `svid=`. CI `33513789990` VMXON-SKIP
+//! (`6382957` IDETIM persist unproven). do not F11 6382957.
+//! nested iso=0 firmware IdeBus LT RO: QEMU `pci_init_wmask` sets cache
+//! line `0x0C` writable, not latency timer `0x0D` (stays 0). Live LAT
+//! persist stored a write QEMU would drop. CI `33514750785` VMXON-SKIP
+//! (`1bb1dac` SVID unproven). do not F11 1bb1dac.
+//! nested iso=0 firmware IdeBus PCI cfg RAM: QEMU `pci_init_wmask` is
+//! `0xff` from PCI `0x40` through `0xFF`. IDETIM persist covered only
+//! the first dword. CI `33515762670` VMXON-SKIP (`1e95a93` LT RO
+//! unproven). do not F11 1e95a93. Dump `cfg44=`.
+//! nested iso=0 firmware IdeBus PCI ROM: QEMU PIIX IDE has no expansion
+//! ROM (`pci_register_bar` never sets `0x30`; wmask 0). Probe
+//! `0xFFFFFFFF` must read back 0, not a size mask. Dump `rom=`. CI
+//! `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven). do not F11
+//! c490f55.
+//! nested iso=0 firmware IdeBus BAR4 wmask: QEMU `pci_register_bar`
+//! 16-byte I/O wmask is `~(16-1)=0xFFFFFFF0`; type bit 1 is RO. Probe
+//! `0xFFFFFFFF` stores `0xFFFFFFF1` in config (not a sticky side bit
+//! that left live BAR 1). Per-byte RMW. Dump `b4wr=`. CI `33519529357`
+//! VMXON-SKIP (`3bceb8f` ROM unproven). do not F11 3bceb8f.
+//! nested iso=0 firmware IdeBus BAR4 map: QEMU `pci_bar_address` I/O is
+//! unmapped when COMMAND.IO is 0, address is 0, or
+//! `last_addr >= UINT32_MAX` (probe `0xFFFFFFF0+15=0xFFFFFFFF` must not
+//! decode as `0xFFF0`). Dump `b4map=`. CI `33521391092` VMXON-SKIP
+//! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22.
+//! nested iso=0 firmware IdeBus BMIDE PRD: QEMU `bmdma_addr_write`
+//! keeps the PRD pointer dword-aligned (`& ~3`). Dump `bmprd=`. CI
+//! `33525128613` VMXON-SKIP (`f0b3ecb` BAR4 map unproven). do not F11
+//! f0b3ecb.
+//! nested iso=0 firmware IdeBus PCI cmd status: QEMU
+//! `pci_default_write_config` walks command then status per-byte.
+//! Command wmask `0x0507`; status `pci_init_w1cmask` `0xF900`. Dump
+//! `cmdin=`. CI `33526016282` VMXON ATAPI miss (`8d487bd` `cmdmax=0x0`
+//! `cmdn=3` `cmdwr=0x0` `bar4=0x1` `b4wr=0x1` `ataio=0`). do not F11
+//! 8d487bd.
+//! nested iso=0 firmware IdeBus INTLINE RMW: QEMU
+//! `pci_default_write_config` walks INTERRUPT_LINE per-byte (`wmask` `0xFF`).
+//! Pin/MinGnt/MaxLat stay RO 0. Dump `ilwr=`. CI `33528635379`
+//! VMXON-SKIP (`eeaa681` cmd status unproven). do not F11 eeaa681.
+//! nested iso=0 firmware IdeBus CLS RMW: QEMU
+//! `pci_default_write_config` walks CACHE_LINE_SIZE per-byte (`wmask` `0xFF`).
+//! Latency/header/BIST stay RO 0. Dump `clwr=`. CI `33531358763`
+//! VMXON ATAPI miss (`436df8d` `ilwr=0` `intl=0` `cls=0` `ataio=0`).
+//! do not F11 436df8d.
+//! nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
+//! `pci_default_write_config` walks `0x40` through `0xFF` per-byte
+//! (`wmask` `0xFF`), including dword-spanning writes. Dump `c40w=`.
+//! CI `33533510182` VMXON-SKIP (`1465367` CLS RMW unproven).
+//! do not F11 1465367.
+//! nested iso=0 firmware IdeBus cfg read: QEMU
+//! `pci_default_read_config` memcpy from `config+addr` for `len`, not
+//! an aligned-dword shift (a size-4 at `0x3E` includes `0x40`). Dump
+//! `cfgo=`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM RMW
+//! unproven). do not F11 b6e8ab7.
+//! nested iso=0 firmware IdeBus cfg write: QEMU
+//! `pci_default_write_config` is one per-byte walk (not dword-aligned
+//! dispatch). A size-4 at `0x0A` reaches CLS `0x0C`; a size-4 at `0x1E`
+//! reaches BAR4. Dump `cfgw=`. CI `33536269880` VMXON-SKIP (`004ef9b`
+//! cfg read unproven). do not F11 004ef9b.
+//! nested iso=0 firmware IdeBus CF8: QEMU `pci_host_config_write` is
+//! dword-only (`addr==0 && len==4`). Dump `cf8s=`. CI `33537641723`
+//! VMXON ATAPI miss (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`).
+//! do not F11 30ccfc0.
+//! nested iso=0 firmware IdeBus CF8E: QEMU `pci_host_data_read/write`
+//! gates CFC on `config_reg` bit 31. Enable-clear IN is `0xFFFFFFFF`.
+//! Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8 unproven).
+//! do not F11 02e8843.
+//! nested iso=0 firmware IdeBus IO aperture: QEMU/OVMF i440FX PCI I/O
+//! is `PcdPciIoBase=0xC000` `PcdPciIoSize=0x4000`. Dump `iobase=`.
+//! CI `33541472361` VMXON-SKIP (`a50ad99` CF8E unproven). do not F11
+//! a50ad99.
+//! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
+//! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
+//! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
+//! CI `33492680088` VMXON-SKIP (`943a2d3` cmd mask unproven).
+//! do not F11 943a2d3.
+//! nested iso=0 firmware IdeBus INTLINE: QEMU interrupt line reset is 0
+//! and writes persist. Hardwired `0x0E` ignored PciBus program/readback.
+//! CI `33493717089` VMXON-SKIP (`828a002` FAST_BACK unproven).
+//! do not F11 828a002.
+//! nested iso=0 firmware IdeBus LAT: QEMU PCI wmask lets cache line
+//! (0x0C) and latency timer (0x0D) persist; header type stays 0.
+//! Hardwired 0 ignored PciBus program/readback. CI `33494990002`
+//! VMXON-SKIP (`fe658f7` INTLINE unproven). do not F11 fe658f7.
+//! nested iso=0 firmware IdeBus BM sticky: BAR4 size probe stays the
+//! mask until a restore write (QEMU). Oneshot consume left the second
+//! dword as address 0 so PciBus skipped IO assignment. CI `33495768739`
+//! VMXON-SKIP (`0c0f3cf` LAT unproven). do not F11 0c0f3cf.
+//! nested iso=0 firmware IdeBus BMIDE: QEMU `bmdma_read` returns all-ones
+//! when size != 1; byte cmd at BAR4+0, status at +2, else `0xff`. RAZ 0
+//! made a dword probe look like no controller. CI `33496568841`
+//! VMXON-SKIP (`17836fc` BM sticky unproven). do not F11 17836fc.
+//! nested iso=0 firmware IdeBus INTPIN: QEMU PIIX3 IDE interrupt pin is
+//! 0 (class does not set INTx). Pin 1 made PciBus allocate PIRQ (ISA
+//! 0x80 disabled) before EnableAttributes / ISA `0x3F6`. CI
+//! `33497723127` VMXON-SKIP (`8344896` BMIDE unproven). do not F11 8344896.
+//! nested iso=0 firmware IdeBus BMIDE IO: QEMU `pci_register_bar` I/O is
+//! decoded only when COMMAND.IO is set. BAR4 assigned with `pcicmd=0`
+//! still returned BMIDE (not floating `0xFF`). CI `33498693991`
+//! VMXON-SKIP (`b9e4b81` INTPIN unproven). do not F11 b9e4b81.
+//! nested iso=0 firmware IdeBus secondary empty: QEMU CD is primary
+//! master only. `0x170`/`0x376` were a second ATAPI alias; BAR0=0 also
+//! decoded ports `0-7`. IdeBus Start probes both channels. CI
+//! `33499455958` VMXON-SKIP (`af80d50` BMIDE IO unproven). do not F11
+//! af80d50.
+//! nested iso=0 firmware IdeBus secondary absent: QEMU `ide_init_ioport`
+//! still decodes secondary; empty units read status `0x00` (no device),
+//! not floating `0xFF` (no controller) and not ATAPI `0x50`. CI
+//! `33500735336` VMXON-SKIP (`8b6b36a` secondary empty unproven). do not
+//! F11 8b6b36a.
+//! nested iso=0 firmware IdeBus secondary DRDY: QEMU `ide_reset` sets
+//! READY|SEEK `0x50` on empty units (dummy data `0xFF`). Status `0x00`
+//! looked like no device so IdeBus Start skipped the channel without
+//! IDENTIFY. CI `33501858987` VMXON-SKIP (`2f513ec` secondary absent
+//! unproven). do not F11 2f513ec.
+//! nested iso=0 firmware IdeBus secondary abort: QEMU empty unit
+//! IDENTIFY/PACKET aborts READY|ERR `0x41` ABRT `0x04` so Start does
+//! not WaitForInterrupt. CI `33503174554` VMXON-SKIP (`96b4f0a`
+//! secondary DRDY unproven). do not F11 96b4f0a.
+//! nested iso=0 firmware IdeBus secondary ioport: QEMU
+//! `ide_ioport_read` / `ide_status_read` return 0 when both units have
+//! no blk. `ide_reset` READY|SEEK `0x50` is internal; abort `0x41` is
+//! not guest-visible. DRDY made Start IDENTIFY/WaitForInterrupt on
+//! empty secondary before primary `0x3F6`. CI `33504402447` VMXON-SKIP
+//! (`853a9c8` secondary abort unproven). do not F11 853a9c8.
+//! nested iso=0 firmware IdeBus IDETIM RAZ: QEMU PIIX3 does not implement
+//! ICH IDETIM at PCI `0x40` (generic RAZ 0). Decode-enable `0x80008000`
+//! is not what OVMF sees on QEMU. CI `33505842402` VMXON-SKIP (`f8964e1`
+//! secondary ioport unproven). do not F11 f8964e1.
+//! nested iso=0 firmware IdeBus slot0 fn1: QEMU i440FX `00:00.1` is empty
+//! (`0xFFFFFFFF`). CD lives at PIIX `00:01.1` only. CI `33506851920`
+//! VMXON-SKIP (`98d20ea` IDETIM RAZ unproven). do not F11 98d20ea.
+//! nested iso=0 firmware IdeBus PCI cmd QEMU: QEMU default command wmask
+//! is `0x0007` (IO|MEM|MASTER). ICH `0x0005` stays historical. CI
+//! `33508115698` VMXON-SKIP (`edf0682` slot0 fn1 unproven). do not F11
+//! edf0682.
+//! nested iso=0 firmware IdeBus PCI cmd INTX: QEMU `pci_init_wmask` is
+//! `0x0507` (IO|MEM|MASTER|SERR|INTX_DISABLE). CI `33511226072` VMXON-SKIP
+//! (`0300ae3` RMW unproven). do not F11 0300ae3.
+//! nested iso=0 firmware IdeBus IDETIM persist: QEMU `pci_init_wmask`
+//! is `0xff` from PCI `0x40`. RAZ discarded a decode-enable write.
+//! CI `33512599515` VMXON-SKIP (`e90cb0d` INTX unproven). do not F11
+//! e90cb0d.
+//! nested iso=0 firmware IdeBus PCI SVID: QEMU default SVID/SDID is
+//! `0x1AF4`/`0x1100`. CI `33513789990` VMXON-SKIP (`6382957` IDETIM
+//! persist unproven). do not F11 6382957.
+//! nested iso=0 firmware IdeBus LT RO: QEMU latency timer `0x0D` wmask
+//! is 0. CI `33514750785` VMXON-SKIP (`1bb1dac` SVID unproven). do not
+//! F11 1bb1dac.
+//! nested iso=0 firmware IdeBus PCI cfg RAM: QEMU `pci_init_wmask` is
+//! `0xff` from `0x40` through `0xFF`, not only the IDETIM dword. Live
+//! RAZ of `0x44+` dropped SIDETIM/UDMA readback. Dump `cfg44=`. CI
+//! `33515762670` VMXON-SKIP (`1e95a93` LT RO unproven). do not F11
+//! 1e95a93.
+//! nested iso=0 firmware IdeBus PCI ROM: QEMU no ROM BAR at `0x30`
+//! (wmask 0). CI `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven).
+//! do not F11 c490f55. Dump `rom=`.
+//! nested iso=0 firmware IdeBus BAR4 wmask: QEMU wmask `0xFFFFFFF0`,
+//! type bit RO. CI `33519529357` VMXON-SKIP (`3bceb8f` ROM unproven).
+//! do not F11 3bceb8f. Dump `b4wr=`.
+//! nested iso=0 firmware IdeBus BAR4 map: QEMU `pci_bar_address` wrap
+//! `last >= UINT32_MAX` unmapped. CI `33521391092` VMXON-SKIP
+//! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22. Dump `b4map=`.
+//! nested iso=0 firmware IdeBus BMIDE PRD: QEMU `& ~3`. CI
+//! `33525128613` VMXON-SKIP (`f0b3ecb` BAR4 map unproven). do not F11
+//! f0b3ecb. Dump `bmprd=`.
+//! nested iso=0 firmware IdeBus PCI cmd status: QEMU per-byte
+//! command+status plus `pci_init_w1cmask` `0xF900`. CI `33526016282`
+//! VMXON ATAPI miss (`8d487bd` `cmdmax=0x0` `ataio=0`). do not F11
+//! 8d487bd. Dump `cmdin=`.
+//! nested iso=0 firmware IdeBus INTLINE RMW: QEMU INTERRUPT_LINE
+//! per-byte. CI `33528635379` VMXON-SKIP (`eeaa681` cmd status
+//! unproven). do not F11 eeaa681. Dump `ilwr=`.
+//! nested iso=0 firmware IdeBus CLS RMW: QEMU CACHE_LINE_SIZE
+//! per-byte. CI `33531358763` VMXON ATAPI miss (`436df8d`
+//! `ilwr=0` `intl=0` `cls=0`). do not F11 436df8d. Dump `clwr=`.
+//! nested iso=0 firmware IdeBus cfg RAM RMW: QEMU `0x40`–`0xFF`
+//! per-byte, spanning dwords. CI `33533510182` VMXON-SKIP
+//! (`1465367` CLS RMW unproven). do not F11 1465367. Dump `c40w=`.
+//! nested iso=0 firmware IdeBus cfg read: QEMU memcpy from
+//! `config+addr`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM
+//! RMW unproven). do not F11 b6e8ab7. Dump `cfgo=`.
+//! nested iso=0 firmware IdeBus cfg write: QEMU one per-byte walk.
+//! CI `33536269880` VMXON-SKIP (`004ef9b` cfg read unproven). do not
+//! F11 004ef9b. Dump `cfgw=`.
+//! nested iso=0 firmware IdeBus CF8: QEMU `pci_host_config_write`
+//! stores `config_reg` only when `addr==0 && len==4`. Size-1/2 OUT to
+//! `0xCF8` is ignored. Dump `cf8s=`. CI `33537641723` VMXON ATAPI miss
+//! (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`). do not F11 30ccfc0.
+//! nested iso=0 firmware IdeBus CF8E: QEMU `pci_host_data_read` returns
+//! `0xFFFFFFFF` and `pci_host_data_write` is ignored when bit 31 is
+//! clear. Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8
+//! unproven). do not F11 02e8843.
+//! nested iso=0 firmware IdeBus IO aperture: QEMU/OVMF i440FX
+//! `PcdPciIoBase=0xC000` `PcdPciIoSize=0x4000`. PciBus assigns BAR4
+//! from that window. Dump `iobase=`. CI `33541472361` VMXON-SKIP
+//! (`a50ad99` CF8E unproven). do not F11 a50ad99.
+//! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
+//! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
+//! channel look disabled. Dump `idetim=`. Historical.
+//! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
+//! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
+//! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
+//! (not timer `0x20`) on the following CpuSleep HLT, not during the PCI OUT.
+//! product ISO firmware IDE cmd ATA on HLT.
+//! product ISO firmware IDE cmd I/O no inject: PCI command OUT does not
+//! inject; IDT `0x20` waits for CpuSleep.
+//! product ISO firmware IDE cmd HLT 0x20: that CpuSleep injects timer
+//! `0x20` (iron `cmd=0x00` `ataio=0` `pic=0`); ATA `0x76` waits for `ataio>0`.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than
@@ -34,7 +318,7 @@
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
@@ -71,10 +355,107 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
-pub const GUEST_CD_PCI_DEV: u8 = 0;
+pub const GUEST_CD_PCI_DEV: u8 = 1;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
+/// Mass-storage IDE, prog-if `0x80` (compat + BM), revision 0.
+/// QEMU PIIX stock. nested iso=0 firmware IdeBus prog-if. nested iso=0
+/// firmware IdeBus ISA BAR. Native `0x8F` stays a historical needle.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8000;
+/// Programming interface byte (PCI 0x09). Bit 7 = BM, bits 0+2 clear
+/// so IdeBus Start uses ISA `0x1F0`/`0x3F6` not GetBar.
+/// nested iso=0 firmware IdeBus ISA BAR.
+pub const GUEST_CD_PCI_PROG_IF: u8 = 0x80;
+/// QEMU PIIX command BARs are unimplemented. PciBus must not claim ISA
+/// `0x1F0`. nested iso=0 firmware IdeBus ISA BAR. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
+/// QEMU `pci_init_wmask` PCI command: I/O + Memory + Bus Master +
+/// INTX_DISABLE, then SERR (`0x0507`). nested iso=0 firmware IdeBus PCI
+/// cmd INTX. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0507;
+/// IO|MEM|MASTER only (`0x0007`). Historical needle. nested iso=0
+/// firmware IdeBus PCI cmd QEMU. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK_QEMU: u16 = 0x0007;
+/// ICH PIIX hardwired-0 MSE. Historical needle. nested iso=0 firmware
+/// IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK_ICH: u16 = 0x0005;
+/// PIIX/QEMU PCI status in the command+status dword: DEVSEL medium plus
+/// Fast Back-to-Back Capable. QEMU `PCI_STATUS_DEVSEL_MEDIUM |
+/// PCI_STATUS_FAST_BACK`. nested iso=0 firmware IdeBus PCI status.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_STATUS: u32 = 0x0280_0000;
+/// QEMU reset FAST_BACK|DEVSEL_MEDIUM. nested iso=0 firmware IdeBus PCI
+/// cmd status. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_STATUS_RESET: u16 = 0x0280;
+/// QEMU `pci_init_w1cmask` PCI_STATUS. nested iso=0 firmware IdeBus PCI
+/// cmd status. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_STATUS_W1C: u16 = 0xF900;
+/// PIIX/QEMU interrupt line reset. PciBus writes the routed IRQ.
+/// nested iso=0 firmware IdeBus INTLINE. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_INT_LINE_RESET: u8 = 0;
+/// QEMU PIIX3 IDE interrupt pin is 0 (no INTx). Pin 1 stays a historical
+/// needle. nested iso=0 firmware IdeBus INTPIN. Dump `intp=`.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_INT_PIN: u8 = 0;
+/// QEMU PCI cache-line persist; latency timer reset 0 and RO.
+/// nested iso=0 firmware IdeBus LAT. nested iso=0 firmware IdeBus LT RO.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CACHE_LINE_RESET: u8 = 0;
+pub const GUEST_CD_PCI_LATENCY_RESET: u8 = 0;
+/// PIIX IDETIM dword (PCI 0x40). Decode-enable persist. nested iso=0
+/// firmware IdeBus IDETIM. nested iso=0 firmware IdeBus IDETIM persist.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
+/// Historical RAZ 0. nested iso=0 firmware IdeBus IDETIM RAZ.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_IDETIM_RAZ: u32 = 0;
+/// QEMU `pci_set_default_subsystem_id`: Red Hat Qumranet `0x1AF4` plus
+/// QEMU `0x1100`. Dump `svid=`. nested iso=0 firmware IdeBus PCI SVID.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_SVID: u16 = 0x1AF4;
+pub const GUEST_CD_PCI_SDID: u16 = 0x1100;
+pub const GUEST_CD_PCI_SUBSYS: u32 = 0x1100_1AF4;
+/// Historical zero SVID. nested iso=0 firmware IdeBus PCI SVID.
+pub const GUEST_CD_PCI_SUBSYS_ZERO: u32 = 0;
+/// QEMU PIIX IDE has no expansion ROM at PCI `0x30`. Dump `rom=`.
+/// nested iso=0 firmware IdeBus PCI ROM. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_ROM: u32 = 0;
+/// PIIX BMIDE BAR4 reset: I/O bit, address 0 (unprogrammed). PciBus
+/// skips an address-0 command BAR. CI `33488202396` VMXON `bar4=0xcc01`
+/// `pcicmd=0x0` `ataio=0`. f3761c4 `bar4=1` `pcicmd=0x1`. Write-0 must
+/// not restore `0xCC01`. nested iso=0 firmware IdeBus BM unprogrammed.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_RESET: u32 = 1;
+/// BAR4 size-probe mask (16-byte I/O). nested iso=0 firmware IdeBus BM sticky.
+pub const GUEST_CD_PCI_BAR4_PROBE: u32 = 0xFFFF_FFF1;
+/// QEMU `pci_register_bar` 16-byte I/O: `wmask = ~(size-1)`. Type bit
+/// is RO 1. nested iso=0 firmware IdeBus BAR4 wmask. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_WMASK: u32 = 0xFFFF_FFF0;
+/// QEMU `pci_bar_address` I/O last-byte compare (`UINT32_MAX`). Probe
+/// `0xFFFFFFF0 + 16 - 1` hits this and stays unmapped. nested iso=0
+/// firmware IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_LAST_MAX: u32 = 0xFFFF_FFFF;
+/// QEMU `bmdma_read` when size != 1. nested iso=0 firmware IdeBus BMIDE.
+pub const GUEST_CD_BMIDE_WIDE: u32 = 0xFFFF_FFFF;
+/// Unused BMIDE byte offsets (+1/+3) read `0xFF`. nested iso=0 firmware
+/// IdeBus BMIDE.
+pub const GUEST_CD_BMIDE_UNUSED: u8 = 0xFF;
+/// QEMU `bmdma_addr_write` `& ~3`. nested iso=0 firmware IdeBus BMIDE PRD.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_BMIDE_PRD_ALIGN: u32 = 0xFFFF_FFFC;
+/// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
+/// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
+/// QEMU empty-unit IDENTIFY abort: READY|ERR, ABRT. nested iso=0 firmware
+/// IdeBus secondary abort. Guest-visible ioport stays 0 (see
+/// [`GUEST_CD_SEC_IOPORT`]). Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_SEC_ABORT_STATUS: u8 = 0x41;
+pub const GUEST_CD_SEC_ABORT_ERR: u8 = 0x04;
+/// QEMU both-empty channel ioport: status/error/data read 0.
+/// nested iso=0 firmware IdeBus secondary ioport. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_SEC_IOPORT: u8 = 0;
 
 const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
@@ -138,11 +519,35 @@ struct CdMedia {
     last_read_lba: u32,
     pci_addr: u32,
     pci_cmd: u16,
+    /// QEMU stored PCI status (offset 0x06). Reset FAST_BACK|DEVSEL.
+    /// nested iso=0 firmware IdeBus PCI cmd status.
+    pci_status: u16,
     bar0: u32,
     bar1: u32,
     bar2: u32,
     bar3: u32,
     bar4: u32,
+    /// Bit i set: BAR i is in PCI size-probe; the next dword read returns
+    /// the mask and clears the bit (oneshot). Live address stays the
+    /// previous value. nested iso=0 firmware IdeBus BAR.
+    /// nested iso=0 firmware IdeBus BAR oneshot.
+    bar_probe: u8,
+    /// QEMU `pci_init_wmask` RAM from PCI `0x40` through `0xFF`.
+    /// First dword is IDETIM. nested iso=0 firmware IdeBus IDETIM.
+    /// nested iso=0 firmware IdeBus PCI cfg RAM.
+    pci_cfg40: [u8; 192],
+    /// PCI interrupt line (offset 0x3C). QEMU reset is 0; pin at 0x3D is 0.
+    /// nested iso=0 firmware IdeBus INTLINE. nested iso=0 firmware IdeBus INTPIN.
+    irq_line: u8,
+    /// PCI cache line size (0x0C) and latency timer (0x0D). Header type RO 0.
+    /// nested iso=0 firmware IdeBus LAT.
+    cache_line: u8,
+    latency: u8,
+    /// PIIX BMIDE cmd/status (BAR4 extra_io, two channels). nested iso=0
+    /// firmware IdeBus BMIDE.
+    bmide_cmd: [u8; 2],
+    bmide_status: [u8; 2],
+    bmide_prd: [u32; 2],
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -180,12 +585,26 @@ impl CdMedia {
             boot_image_read: false,
             last_read_lba: 0,
             pci_addr: 0,
-            pci_cmd: 0x0005,
-            bar0: 0x1F1,
-            bar1: 0x03F5,
-            bar2: 0x0171,
-            bar3: 0x0375,
-            bar4: 1,
+            // product ISO firmware IDE cmd reset 0: PIIX/QEMU command is 0
+            // until IdeBus Start writes offset 0x04 (wake latch).
+            pci_cmd: 0,
+            pci_status: GUEST_CD_PCI_STATUS_RESET,
+            bar0: GUEST_CD_PCI_BAR0_RESET,
+            bar1: GUEST_CD_PCI_BAR0_RESET,
+            bar2: GUEST_CD_PCI_BAR0_RESET,
+            bar3: GUEST_CD_PCI_BAR0_RESET,
+            bar4: GUEST_CD_PCI_BAR4_RESET,
+            bar_probe: 0,
+            // nested iso=0 firmware IdeBus IDETIM persist / PCI cfg RAM:
+            // QEMU reset is 0 from 0x40 through 0xFF.
+            pci_cfg40: [0u8; 192],
+            // nested iso=0 firmware IdeBus INTLINE: QEMU reset is 0, not 0x0E.
+            irq_line: GUEST_CD_PCI_INT_LINE_RESET,
+            cache_line: GUEST_CD_PCI_CACHE_LINE_RESET,
+            latency: GUEST_CD_PCI_LATENCY_RESET,
+            bmide_cmd: [0, 0],
+            bmide_status: [0, 0],
+            bmide_prd: [0, 0],
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -232,6 +651,10 @@ fn with_cd<R>(f: impl FnOnce(&mut CdMedia) -> R) -> R {
 
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
+static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
+static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
+static HIDE_PRODUCT: AtomicBool = AtomicBool::new(false);
+static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
@@ -241,6 +664,43 @@ static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+/// Product IdeBus Start writes PCI command (offset 0x04). Empty-slot CF8
+/// does not set this. product ISO firmware wake IDE cmd.
+static IDE_PCI_CMD_WR_EXIT: AtomicBool = AtomicBool::new(false);
+/// IdeBus Start PCI command write: inject ATA 0x76 on the next HLT, not
+/// during the CF8/CFC OUT. product ISO firmware IDE cmd ATA on HLT.
+static IDE_PCI_CMD_ATA_HLT: AtomicBool = AtomicBool::new(false);
+/// Count of PCI command (offset 0x04) writes, including disable `0`.
+/// nested iso=0 firmware IdeBus prog-if. Dump `cmdn=`.
+static PCI_CMD_WR_N: AtomicU32 = AtomicU32::new(0);
+/// Last PCI command write (not OR-forced). Dump `cmdwr=`.
+static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+/// Last raw PCI command bytes before wmask. Dump `cmdin=`.
+/// nested iso=0 firmware IdeBus PCI cmd status.
+static LAST_PCI_CMD_IN: AtomicU16 = AtomicU16::new(0);
+/// High-water PCI command since reset. Dump `cmdmax=`.
+/// nested iso=0 firmware IdeBus PCI cmd RMW.
+static PCI_CMD_MAX: AtomicU16 = AtomicU16::new(0);
+/// Last BAR4 config write (guest `val`). Dump `b4wr=`.
+/// nested iso=0 firmware IdeBus BAR4 wmask.
+static LAST_BAR4_WR: AtomicU32 = AtomicU32::new(0);
+/// Last INTERRUPT_LINE byte written. Dump `ilwr=`.
+/// nested iso=0 firmware IdeBus INTLINE RMW.
+static LAST_INTLINE_WR: AtomicU8 = AtomicU8::new(0);
+/// Last CACHE_LINE_SIZE byte written. Dump `clwr=`.
+/// nested iso=0 firmware IdeBus CLS RMW.
+static LAST_CLS_WR: AtomicU8 = AtomicU8::new(0);
+/// Last PCI cfg RAM (`0x40`–`0xFF`) byte written. Dump `c40w=`.
+/// nested iso=0 firmware IdeBus cfg RAM RMW.
+static LAST_CFG40_WR: AtomicU8 = AtomicU8::new(0);
+/// Last PCI config offset read. Dump `cfgo=`.
+/// nested iso=0 firmware IdeBus cfg read.
+static LAST_CFG_RD_OFF: AtomicU8 = AtomicU8::new(0);
+/// Last PCI config offset written. Dump `cfgw=`.
+/// nested iso=0 firmware IdeBus cfg write.
+static LAST_CFG_WR_OFF: AtomicU8 = AtomicU8::new(0);
+/// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
+static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -259,11 +719,58 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
-    // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
-    bus == 0 && fun == 1 && (dev == 0 || dev == 1)
+    // nested iso=0 firmware IdeBus slot0 fn1: PIIX `00:01.1` only.
+    // `00:00.1` is empty on QEMU i440FX (single-function slot 0).
+    bus == 0 && fun == 1 && dev == 1
 }
 
-/// PCI config address for the guest IDE function (`00:00.1`).
+/// Firmware needs slot-0 fn1. Linux PCI scan of both IDE functions BAR-conflicts
+/// (iron COM2 `ata_piix` secondary `-22`). linux hides duplicate slot0 IDE.
+pub fn linux_hides_duplicate_slot0_ide(linux: bool, addr: u32) -> bool {
+    if !linux || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 0 && fun == 1
+}
+
+/// Firmware already booted the El Torito CD. Built-in alpine-virt `ata_piix`
+/// is a device_initcall after `Freeing initrd` and `ata_msleep`s on SRST
+/// (iron COM2 then silent). Do **not** use earlycon share (bootimg): GRUB
+/// still reads the kernel from PIIX ATAPI. linux hides PIIX IDE after
+/// Linux high-half. Media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
+    if !linux_high_half || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 1 && fun == 1
+}
+
+/// Iron COM2 `d61dc7e`: product `bootorder` scsi@3 first was served, then
+/// PciBus ConnectAll still Started AtaAtapiPassThru (`pci select 00:01.01`,
+/// `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no
+/// `virtio-iso IN`). Hide-IDE (`8336a06` / `ea30da1`) then skip-after-inject
+/// `vec=0x20` livelocked the timer ISR through the 16_777_216 cap
+/// (`pci_ide=0` `ataio=0` `hlt=0`, no virtio-iso IN, stop `rip=0x7f03fbe5`).
+/// OVMF El Torito needs PIIX ATAPI (Stage 45 / nested iso=0). Do not hide.
+/// firmware HLT skip without inject. product ISO hides PIIX IDE.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// Not `ISO-INSTALL-OK`.
+pub fn product_iso_hides_ide(_addr: u32) -> bool {
+    false
+}
+
+/// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
+/// `ata_piix` SRST-`msleep`s while BSY/DRDY look live (iron COM2 after
+/// `Freeing initrd`). Return floating-bus `0xFF` after Linux high-half so
+/// libata skips the port without a timer wait. linux ATA floating bus.
+/// Not `ISO-INSTALL-OK`.
+pub fn linux_ata_floating_bus(linux_high_half: bool) -> bool {
+    linux_high_half
+}
+
+/// PCI config address for the guest IDE function (`00:01.1`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_CD_PCI_BUS) << 16)
@@ -272,7 +779,7 @@ pub fn pci_config_addr() -> u32 {
 }
 
 pub fn is_ata_primary_port(port: u16) -> bool {
-    with_cd(|m| ata_reg(m, port).is_some())
+    with_cd(|m| ata_reg(m, port).is_some() || ata_secondary_empty(port))
 }
 
 /// ATA data register (command-block offset 0): legacy `0x1F0`/`0x170` or a
@@ -298,56 +805,150 @@ fn apply_no_device(m: &mut CdMedia) {
 }
 
 /// Map an I/O port onto the ATA command block (0–7) or control port.
+/// nested iso=0 firmware IdeBus secondary empty: QEMU CD is primary
+/// master only. Unimplemented BAR0-3 (address 0) do not decode.
 fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
-    // Compatibility mode keeps ISA ports even after PciBus relocates BARs.
+    // Compatibility mode keeps ISA primary even after PciBus relocates BARs.
     if (0x01F0..=0x01F7).contains(&port) {
         return Some((port - 0x01F0) as u8);
     }
-    if (0x0170..=0x0177).contains(&port) {
-        return Some((port - 0x0170) as u8);
-    }
-    if port == 0x03F6 || port == 0x0376 {
+    if port == 0x03F6 {
         return Some(8);
     }
     let cmd = (m.bar0 & !7) as u16;
-    if port.wrapping_sub(cmd) < 8 {
+    if cmd != 0 && port.wrapping_sub(cmd) < 8 {
         return Some((port - cmd) as u8);
     }
     let cmd2 = (m.bar2 & !7) as u16;
-    if port.wrapping_sub(cmd2) < 8 {
+    if cmd2 != 0 && port.wrapping_sub(cmd2) < 8 {
         return Some((port - cmd2) as u8);
     }
     let ctl = (m.bar1 & !3) as u16;
-    if port == ctl.wrapping_add(2) {
+    if ctl != 0 && port == ctl.wrapping_add(2) {
         return Some(8);
     }
     let ctl2 = (m.bar3 & !3) as u16;
-    if port == ctl2.wrapping_add(2) {
+    if ctl2 != 0 && port == ctl2.wrapping_add(2) {
         return Some(8);
     }
     None
 }
 
+/// QEMU secondary IDE (`0x170`/`0x376`) is a decoded empty channel.
+/// nested iso=0 firmware IdeBus secondary empty. nested iso=0 firmware
+/// IdeBus secondary absent.
+fn ata_secondary_empty(port: u16) -> bool {
+    (0x0170..=0x0177).contains(&port) || port == 0x0376
+}
+
+/// QEMU `ide_ioport_read` / `ide_status_read`: both units no blk → 0.
+/// nested iso=0 firmware IdeBus secondary ioport.
+fn ata_secondary_read(_port: u16) -> u8 {
+    GUEST_CD_SEC_IOPORT
+}
+
+fn ata_secondary_write(_port: u16, _val: u8) {
+    // Command writes still decode (ataio counted). Guest-visible reads
+    // stay 0 even after IDENTIFY abort (`ide_ioport_read` both-empty).
+}
+
 fn bmide_base(m: &CdMedia) -> u16 {
-    (m.bar4 & !0xF) as u16
+    bmide_mapped_base(m).unwrap_or(0)
+}
+
+/// QEMU `pci_bar_address` for a 16-byte I/O BAR. nested iso=0 firmware
+/// IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+fn bmide_mapped_base(m: &CdMedia) -> Option<u16> {
+    if (m.pci_cmd & 0x0001) == 0 {
+        return None;
+    }
+    let new_addr = m.bar4 & GUEST_CD_PCI_BAR4_WMASK;
+    let last_addr = new_addr.wrapping_add(15);
+    // QEMU: last_addr <= new_addr || last_addr >= UINT32_MAX || new_addr == 0.
+    // Probe stores 0xFFFFFFF1 so new=0xFFFFFFF0 last=0xFFFFFFFF (unmapped).
+    // Truncating that to u16 looked like 0xFFF0.
+    if last_addr <= new_addr || last_addr >= GUEST_CD_PCI_BAR4_LAST_MAX || new_addr == 0 {
+        return None;
+    }
+    if new_addr > 0xFFFF {
+        return None;
+    }
+    Some(new_addr as u16)
 }
 
 /// Bus-master IDE (BAR4, 16-byte I/O). Address 0 is unprogrammed — do not
-/// steal the PIC/PIT range.
+/// steal the PIC/PIT range. nested iso=0 firmware IdeBus BMIDE IO: QEMU
+/// `pci_register_bar` decodes only when COMMAND.IO is set.
+/// nested iso=0 firmware IdeBus BAR4 map: size-probe wrap is unmapped.
 pub fn is_bmide_port(port: u16) -> bool {
-    with_cd(|m| {
-        let base = bmide_base(m);
-        base != 0 && port.wrapping_sub(base) < 16
+    with_cd(|m| match bmide_mapped_base(m) {
+        Some(base) => port.wrapping_sub(base) < 16,
+        None => false,
     })
 }
 
-/// RAZ/WI BMIDE. Unhandled `IN` was `0xFF` (looks busy/error).
-pub fn bmide_io(_port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
-    if is_in {
+/// QEMU PIIX BMIDE (BAR4). nested iso=0 firmware IdeBus BMIDE.
+///
+/// QEMU `bmdma_read`: size != 1 returns all-ones; byte cmd at +0, status
+/// at +2, else `0xff`. PRD address lives at +4/+12. RAZ 0 made a dword
+/// probe look like no controller. CI `33496568841` VMXON-SKIP
+/// (`17836fc` BM sticky unproven). do not F11 17836fc.
+pub fn bmide_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
+    with_cd(|m| {
+        let base = bmide_base(m);
+        let off = port.wrapping_sub(base) as u8;
         let mask = io_mask(size);
-        rax & !mask
-    } else {
-        rax
+        if is_in {
+            BMIDE_IN_N.fetch_add(1, Ordering::AcqRel);
+            let val = bmide_read(m, off, size);
+            (rax & !mask) | (val & mask)
+        } else {
+            bmide_write(m, off, size, rax);
+            rax
+        }
+    })
+}
+
+fn bmide_read(m: &CdMedia, off: u8, size: u8) -> u64 {
+    let local = off & 7;
+    let ch = if off < 8 { 0usize } else { 1usize };
+    if local >= 4 {
+        let shift = (local - 4) * 8;
+        return u64::from(m.bmide_prd[ch] >> shift);
+    }
+    if size != 1 {
+        return io_mask(size);
+    }
+    match local {
+        0 => u64::from(m.bmide_cmd[ch]),
+        2 => u64::from(m.bmide_status[ch]),
+        _ => u64::from(GUEST_CD_BMIDE_UNUSED),
+    }
+}
+
+fn bmide_write(m: &mut CdMedia, off: u8, size: u8, rax: u64) {
+    let local = off & 7;
+    let ch = if off < 8 { 0usize } else { 1usize };
+    if local >= 4 {
+        let shift = u32::from(local - 4) * 8;
+        let mask = io_mask(size) as u32;
+        let bits = (rax as u32 & mask) << shift;
+        // nested iso=0 firmware IdeBus BMIDE PRD: QEMU `& ~3`.
+        m.bmide_prd[ch] = (m.bmide_prd[ch] & !(mask << shift)) | (bits & GUEST_CD_BMIDE_PRD_ALIGN);
+        return;
+    }
+    if size != 1 {
+        return;
+    }
+    match local {
+        0 => m.bmide_cmd[ch] = (rax as u8) & 0x09,
+        2 => {
+            let val = rax as u8;
+            m.bmide_status[ch] = (val & 0x60)
+                | (m.bmide_status[ch] & 0x01)
+                | (m.bmide_status[ch] & !val & 0x06);
+        }
+        _ => {}
     }
 }
 
@@ -444,6 +1045,10 @@ pub fn reset() {
     with_cd(|m| *m = CdMedia::empty());
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
+    HIDE_SLOT0.store(false, Ordering::Release);
+    HIDE_PIIX.store(false, Ordering::Release);
+    HIDE_PRODUCT.store(false, Ordering::Release);
+    ATA_FLOAT.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -453,6 +1058,19 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    IDE_PCI_CMD_WR_EXIT.store(false, Ordering::Release);
+    IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
+    PCI_CMD_WR_N.store(0, Ordering::Release);
+    LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    LAST_PCI_CMD_IN.store(0, Ordering::Release);
+    PCI_CMD_MAX.store(0, Ordering::Release);
+    LAST_BAR4_WR.store(0, Ordering::Release);
+    LAST_INTLINE_WR.store(0, Ordering::Release);
+    LAST_CLS_WR.store(0, Ordering::Release);
+    LAST_CFG40_WR.store(0, Ordering::Release);
+    LAST_CFG_RD_OFF.store(0, Ordering::Release);
+    LAST_CFG_WR_OFF.store(0, Ordering::Release);
+    BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -479,10 +1097,198 @@ pub fn last_ata_cmd() -> u8 {
     LAST_ATA_CMD.load(Ordering::Acquire)
 }
 
+/// IDE PCI command register (offset 0x04). Nested iso=0 firmware IdeBus PCI.
+/// Not `ISO-INSTALL-OK`.
+pub fn pci_command() -> u16 {
+    with_cd(|m| m.pci_cmd)
+}
+
+/// PCI command writes including disable `0`. Dump `cmdn=`.
+/// nested iso=0 firmware IdeBus prog-if. Not `ISO-INSTALL-OK`.
+pub fn pci_cmd_writes() -> u32 {
+    PCI_CMD_WR_N.load(Ordering::Acquire)
+}
+
+/// Last PCI command write. Dump `cmdwr=`. nested iso=0 firmware IdeBus prog-if.
+pub fn last_pci_cmd_write() -> u16 {
+    LAST_PCI_CMD_WR.load(Ordering::Acquire)
+}
+
+/// Last raw PCI command bytes before wmask. Dump `cmdin=`.
+/// nested iso=0 firmware IdeBus PCI cmd status. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cmd_in() -> u16 {
+    LAST_PCI_CMD_IN.load(Ordering::Acquire)
+}
+
+/// Stored PCI status. nested iso=0 firmware IdeBus PCI cmd status.
+pub fn pci_status() -> u16 {
+    with_cd(|m| m.pci_status)
+}
+
+/// High-water PCI command. Dump `cmdmax=`. nested iso=0 firmware IdeBus PCI cmd RMW.
+pub fn pci_cmd_max() -> u16 {
+    PCI_CMD_MAX.load(Ordering::Acquire)
+}
+
+/// Last BAR4 config write. Dump `b4wr=`. nested iso=0 firmware IdeBus
+/// BAR4 wmask. Not `ISO-INSTALL-OK`.
+pub fn last_pci_bar4_write() -> u32 {
+    LAST_BAR4_WR.load(Ordering::Acquire)
+}
+
+/// QEMU `pci_bar_address` mapped the 16-byte BMIDE window. Dump `b4map=`.
+/// nested iso=0 firmware IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+pub fn pci_bar4_mapped() -> bool {
+    with_cd(|m| bmide_mapped_base(m).is_some())
+}
+
+/// Live BAR0. QEMU PIIX leaves this unimplemented (`0`); ISA `0x1F0`
+/// still decodes. Dump `bar0=`. nested iso=0 firmware IdeBus ISA BAR.
+/// Not `ISO-INSTALL-OK`.
+pub fn pci_bar0() -> u32 {
+    with_cd(|m| m.bar0)
+}
+
+/// Live BAR4 BMIDE. Reset is unprogrammed (`1`). Dump `bar4=`.
+/// nested iso=0 firmware IdeBus BM unprogrammed. Not `ISO-INSTALL-OK`.
+pub fn pci_bar4() -> u32 {
+    with_cd(|m| m.bar4)
+}
+
+/// Sticky probe bits before oneshot consume. nested iso=0 firmware IdeBus
+/// BAR oneshot. Not `ISO-INSTALL-OK`.
+pub fn pci_bar_probe() -> u8 {
+    with_cd(|m| m.bar_probe)
+}
+
+/// PIIX IDETIM (PCI 0x40). QEMU generic config persist. Dump `idetim=`.
+/// nested iso=0 firmware IdeBus IDETIM persist.
+pub fn pci_idetim() -> u32 {
+    with_cd(|m| cfg40_dword(m, 0x40))
+}
+
+/// PCI config dword at `0x44` (QEMU RAM after IDETIM). Dump `cfg44=`.
+/// nested iso=0 firmware IdeBus PCI cfg RAM.
+pub fn pci_cfg44() -> u32 {
+    with_cd(|m| cfg40_dword(m, 0x44))
+}
+
+/// QEMU default subsystem dword (PCI 0x2C). Dump `svid=`.
+/// nested iso=0 firmware IdeBus PCI SVID.
+pub fn pci_svid() -> u32 {
+    GUEST_CD_PCI_SUBSYS
+}
+
+/// PCI expansion ROM BAR (offset 0x30). QEMU unimplemented, always 0.
+/// Dump `rom=`. nested iso=0 firmware IdeBus PCI ROM.
+pub fn pci_rom() -> u32 {
+    GUEST_CD_PCI_ROM
+}
+
+/// PCI interrupt line (offset 0x3C). Dump `intl=`. nested iso=0 firmware
+/// IdeBus INTLINE. Not `ISO-INSTALL-OK`.
+pub fn pci_int_line() -> u8 {
+    with_cd(|m| m.irq_line)
+}
+
+/// Last INTERRUPT_LINE byte written. Dump `ilwr=`. nested iso=0 firmware
+/// IdeBus INTLINE RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_intline_write() -> u8 {
+    LAST_INTLINE_WR.load(Ordering::Acquire)
+}
+
+/// Last CACHE_LINE_SIZE byte written. Dump `clwr=`. nested iso=0 firmware
+/// IdeBus CLS RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cls_write() -> u8 {
+    LAST_CLS_WR.load(Ordering::Acquire)
+}
+
+/// Last PCI cfg RAM byte written. Dump `c40w=`. nested iso=0 firmware
+/// IdeBus cfg RAM RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg40_write() -> u8 {
+    LAST_CFG40_WR.load(Ordering::Acquire)
+}
+
+/// Last PCI config offset read. Dump `cfgo=`. nested iso=0 firmware
+/// IdeBus cfg read. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg_read_off() -> u8 {
+    LAST_CFG_RD_OFF.load(Ordering::Acquire)
+}
+
+/// Last PCI config offset written. Dump `cfgw=`. nested iso=0 firmware
+/// IdeBus cfg write. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg_write_off() -> u8 {
+    LAST_CFG_WR_OFF.load(Ordering::Acquire)
+}
+
+/// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
+/// IdeBus LAT. Not `ISO-INSTALL-OK`.
+pub fn pci_latency() -> u8 {
+    with_cd(|m| m.latency)
+}
+
+/// PCI cache line size (offset 0x0C). Dump `cls=`. nested iso=0 firmware
+/// IdeBus CLS RMW. Not `ISO-INSTALL-OK`.
+pub fn pci_cache_line() -> u8 {
+    with_cd(|m| m.cache_line)
+}
+
+/// Primary BMIDE command byte. Dump `bmcmd=`. nested iso=0 firmware
+/// IdeBus BMIDE. Not `ISO-INSTALL-OK`.
+pub fn bmide_cmd() -> u8 {
+    with_cd(|m| m.bmide_cmd[0])
+}
+
+/// Primary BMIDE status byte. Dump `bmst=`. nested iso=0 firmware
+/// IdeBus BMIDE. Not `ISO-INSTALL-OK`.
+pub fn bmide_status() -> u8 {
+    with_cd(|m| m.bmide_status[0])
+}
+
+/// Primary BMIDE PRD pointer. Dump `bmprd=`. nested iso=0 firmware
+/// IdeBus BMIDE PRD. Not `ISO-INSTALL-OK`.
+pub fn bmide_prd() -> u32 {
+    with_cd(|m| m.bmide_prd[0])
+}
+
+/// BMIDE INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
+pub fn bmide_ins() -> u32 {
+    BMIDE_IN_N.load(Ordering::Acquire)
+}
+
+/// Device-control nIEN (1 = do not assert IRQ 14).
+/// firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn ata_nien() -> bool {
+    with_cd(|m| (m.ata_devctl & ATA_DEVCTL_NIEN) != 0)
+}
+
 /// ATA PIO accesses (status polls and commands). Nested VT-x `8e55abf`
 /// `ata=0x0` only counted command-register writes.
 pub fn ata_io_accesses() -> u32 {
     ATA_IO_N.load(Ordering::Acquire)
+}
+
+/// Consume "this exit wrote the IDE PCI command register."
+/// IdeBus Start enables I/O here; empty-slot CF8 does not.
+/// product ISO firmware wake IDE cmd. Not `ISO-INSTALL-OK`.
+pub fn take_ide_pci_cmd_wr_exit() -> bool {
+    IDE_PCI_CMD_WR_EXIT.swap(false, Ordering::AcqRel)
+}
+
+/// Consume the IdeBus Start PCI-command latch **on HLT only**.
+///
+/// Unlike `take_ide_pci_cmd_wr_exit`, this is not consumed on the I/O exit
+/// itself. The pending bit survives the CF8/CFC OUT so the following
+/// CpuSleep HLT can inject ATA `0x76`. product ISO firmware IDE cmd ATA on HLT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_ide_pci_cmd_ata_hlt() -> bool {
+    IDE_PCI_CMD_ATA_HLT.swap(false, Ordering::AcqRel)
+}
+
+/// Peek whether IdeBus Start is waiting for CpuSleep ATA `0x76`.
+/// Does not consume. product ISO firmware IDE cmd ATA on HLT.
+pub fn ide_pci_cmd_ata_hlt_pending() -> bool {
+    IDE_PCI_CMD_ATA_HLT.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1379,21 +2185,153 @@ pub fn pci_read_addr() -> u32 {
     with_cd(|m| m.pci_addr)
 }
 
-fn config_dword(m: &CdMedia, off: u8) -> u32 {
+fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
+    // nested iso=0 firmware IdeBus ISA BAR: QEMU PIIX does not
+    // register BAR0-3. Probe and live are 0. ISA 0x1F0/0x3F6 stay
+    // decoded. Historical 8-byte command BAR size mask was
+    // `0xFFFF_FFF8`; 4-byte control was `0xFFFF_FFFC`. Not
+    // `ISO-INSTALL-OK`.
+    if bar <= 3 {
+        return match bar {
+            0 => m.bar0,
+            1 => m.bar1,
+            2 => m.bar2,
+            _ => m.bar3,
+        };
+    }
+    let _ = consume_probe;
+    // nested iso=0 firmware IdeBus BAR4 wmask: QEMU stores the masked
+    // probe in config. Sticky side-bit left live BAR 1 so pci_bar4()
+    // lied during ParseBar.
+    m.bar4
+}
+
+fn ide_bar4_write_byte(m: &mut CdMedia, a: u8, b: u8) {
+    // nested iso=0 firmware IdeBus BAR4 wmask: QEMU pci_register_bar
+    // 16-byte I/O wmask is ~(16-1). Type bit 1 is RO. Per-byte RMW.
+    // nested iso=0 firmware IdeBus cfg write: a spanning size-4 at
+    // 0x1E reaches 0x20/0x21.
+    if a < 0x20 || a > 0x23 {
+        return;
+    }
+    let shift = u32::from(a - 0x20) * 8;
+    let wmask = ((GUEST_CD_PCI_BAR4_WMASK >> shift) & 0xFF) as u8;
+    let cur = (m.bar4 >> shift) as u8;
+    let next = (cur & !wmask) | (b & wmask);
+    m.bar4 = (m.bar4 & !(0xFFu32 << shift)) | (u32::from(next) << shift);
+    m.bar4 = (m.bar4 & GUEST_CD_PCI_BAR4_WMASK) | 1;
+    let bit = 1u8 << 4;
+    if m.bar4 == GUEST_CD_PCI_BAR4_PROBE {
+        m.bar_probe |= bit;
+    } else {
+        m.bar_probe &= !bit;
+    }
+}
+
+fn cfg40_dword(m: &CdMedia, aligned: u8) -> u32 {
+    let i = aligned.wrapping_sub(0x40) as usize;
+    if i.saturating_add(3) >= m.pci_cfg40.len() {
+        return 0;
+    }
+    u32::from_le_bytes([
+        m.pci_cfg40[i],
+        m.pci_cfg40[i + 1],
+        m.pci_cfg40[i + 2],
+        m.pci_cfg40[i + 3],
+    ])
+}
+
+fn cfg40_write(m: &mut CdMedia, off: u8, size: u8, val: u32) {
+    // nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
+    // pci_default_write_config walks 0x40-0xFF per-byte (wmask 0xFF),
+    // including writes that span the next dword.
+    let n = match size {
+        1 => 1u8,
+        2 => 2,
+        _ => 4,
+    };
+    for i in 0..n {
+        let a = off.wrapping_add(i);
+        if a < 0x40 {
+            continue;
+        }
+        let idx = (a as usize).wrapping_sub(0x40);
+        if idx >= m.pci_cfg40.len() {
+            continue;
+        }
+        let b = (val >> (8 * u32::from(i))) as u8;
+        LAST_CFG40_WR.store(b, Ordering::Release);
+        m.pci_cfg40[idx] = b;
+    }
+}
+
+fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
-        0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
-        0x08 => 0x01018000, // class IDE, prog-if 0x80
+        // nested iso=0 firmware IdeBus PCI status / PCI cmd status:
+        // stored status (reset FAST_BACK|DEVSEL; W1C on write).
+        0x04 => u32::from(m.pci_cmd) | (u32::from(m.pci_status) << 16),
+        // nested iso=0 firmware IdeBus ISA BAR: 0x80 not 0x8F/0x8A.
+        0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
-        0x0C => 0x0000_0000,
-        0x10 => m.bar0,
-        0x14 => m.bar1,
-        0x18 => m.bar2,
-        0x1C => m.bar3,
-        0x20 => m.bar4,
-        0x2C => 0x0000_0000,
-        0x3C => 0x0000_010E, // pin 1, IRQ 14
+        0x0C => u32::from(m.cache_line) | (u32::from(m.latency) << 8),
+        0x10 => ide_bar_read(m, 0, consume_probe),
+        0x14 => ide_bar_read(m, 1, consume_probe),
+        0x18 => ide_bar_read(m, 2, consume_probe),
+        0x1C => ide_bar_read(m, 3, consume_probe),
+        0x20 => ide_bar_read(m, 4, consume_probe),
+        // nested iso=0 firmware IdeBus PCI SVID: QEMU default 0x1AF4:0x1100.
+        0x2C => GUEST_CD_PCI_SUBSYS,
+        // nested iso=0 firmware IdeBus PCI ROM: QEMU no ROM BAR.
+        0x30 => GUEST_CD_PCI_ROM,
+        0x3C => u32::from(m.irq_line) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
+        // nested iso=0 firmware IdeBus PCI cfg RAM: QEMU 0x40-0xFF persist.
+        off if off >= 0x40 => cfg40_dword(m, off),
         _ => 0,
+    }
+}
+
+/// QEMU `pci_default_read_config` image: memcpy from `config+addr`.
+/// nested iso=0 firmware IdeBus cfg read.
+fn config_image(m: &mut CdMedia, consume_probe: bool) -> [u8; 256] {
+    let mut c = [0u8; 256];
+    let mut off = 0u8;
+    loop {
+        let bytes = config_dword(m, off, consume_probe).to_le_bytes();
+        let i = off as usize;
+        c[i] = bytes[0];
+        c[i + 1] = bytes[1];
+        c[i + 2] = bytes[2];
+        c[i + 3] = bytes[3];
+        if off == 0xFC {
+            break;
+        }
+        off = off.wrapping_add(4);
+    }
+    c
+}
+
+fn note_hide_slot0() {
+    if !HIDE_SLOT0.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux hides duplicate slot0 IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+fn note_hide_piix() {
+    if !HIDE_PIIX.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux hides PIIX IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+fn note_hide_product() {
+    if !HIDE_PRODUCT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO hides PIIX IDE (not ISO-INSTALL-OK)",
+        );
     }
 }
 
@@ -1403,47 +2341,143 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             return 0xFFFF_FFFF;
         }
         let addr = m.pci_addr;
+        if product_iso_hides_ide(addr) {
+            note_hide_product();
+            return 0xFFFF_FFFF;
+        }
+        let linux = crate::boot::serial::linux_earlycon_share();
+        if linux_hides_duplicate_slot0_ide(linux, addr) {
+            note_hide_slot0();
+            return 0xFFFF_FFFF;
+        }
+        if linux_hides_piix_ide(crate::boot::serial::linux_high_half(), addr) {
+            note_hide_piix();
+            return 0xFFFF_FFFF;
+        }
         if !pci_addr_selects_cd(addr) {
             return 0xFFFF_FFFF;
         }
         let off = pci_cfg_offset(addr, port);
-        let aligned = off & 0xFC;
-        if aligned == 0 {
+        LAST_CFG_RD_OFF.store(off, Ordering::Release);
+        if (off & 0xFC) == 0 {
             m.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }
-        let dword = config_dword(m, aligned);
-        let shift = (off & 3) * 8;
-        let shifted = dword >> shift;
-        match size {
-            1 => shifted & 0xff,
-            2 => shifted & 0xffff,
-            _ => shifted,
+        let consume_probe = size != 1 && size != 2;
+        // nested iso=0 firmware IdeBus cfg read: QEMU memcpy from
+        // config+addr for len, not an aligned-dword shift.
+        let cfg = config_image(m, consume_probe);
+        let n = match size {
+            1 => 1usize,
+            2 => 2,
+            _ => 4,
+        };
+        let mut val = 0u32;
+        let start = off as usize;
+        for i in 0..n {
+            let idx = start + i;
+            if idx < 256 {
+                val |= u32::from(cfg[idx]) << (8 * i);
+            }
         }
+        val
     })
 }
 
-pub fn pci_write_data(port: u16, _size: u8, val: u32) {
+pub fn pci_write_data(port: u16, size: u8, val: u32) {
     with_cd(|m| {
+        if product_iso_hides_ide(m.pci_addr)
+            || linux_hides_duplicate_slot0_ide(
+                crate::boot::serial::linux_earlycon_share(),
+                m.pci_addr,
+            )
+            || linux_hides_piix_ide(crate::boot::serial::linux_high_half(), m.pci_addr)
+        {
+            return;
+        }
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
         let off = pci_cfg_offset(m.pci_addr, port);
-        let aligned = off & 0xFC;
-        if off == 0x04 {
-            m.pci_cmd = (val as u16) | 0x0001;
-        } else if aligned == 0x10 {
-            // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
-            m.bar0 = (val & 0xFFFF_FFF8) | 1;
-        } else if aligned == 0x14 {
-            m.bar1 = (val & 0xFFFF_FFFC) | 1;
-        } else if aligned == 0x18 {
-            m.bar2 = (val & 0xFFFF_FFF8) | 1;
-        } else if aligned == 0x1C {
-            m.bar3 = (val & 0xFFFF_FFFC) | 1;
-        } else if aligned == 0x20 {
-            // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
-            m.bar4 = (val & 0xFFFF_FFF0) | 1;
+        LAST_CFG_WR_OFF.store(off, Ordering::Release);
+        // nested iso=0 firmware IdeBus cfg write: QEMU
+        // pci_default_write_config walks every byte from addr for len.
+        // pci_host_config_write_common clips MIN(len, 256 - addr).
+        let want = match size {
+            1 => 1u8,
+            2 => 2,
+            _ => 4,
+        };
+        let max = (256u16).saturating_sub(u16::from(off));
+        let n = if u16::from(want) > max {
+            max as u8
+        } else {
+            want
+        };
+        let mut touched_cmd = false;
+        let mut cmd_in = m.pci_cmd;
+        let mut touched_bar4 = false;
+        for i in 0..n {
+            let a = off.wrapping_add(i);
+            let b = (val >> (8 * u32::from(i))) as u8;
+            if a == 0x04 || a == 0x05 {
+                // nested iso=0 firmware IdeBus PCI cmd status.
+                touched_cmd = true;
+                let shift = u32::from(a - 0x04) * 8;
+                cmd_in = (cmd_in & !(0xFFu16 << shift)) | (u16::from(b) << shift);
+                let wmask = ((GUEST_CD_PCI_CMD_WMASK >> shift) & 0xFF) as u8;
+                let cur = ((m.pci_cmd >> shift) as u8 & !wmask) | (b & wmask);
+                m.pci_cmd = (m.pci_cmd & !(0xFFu16 << shift)) | (u16::from(cur) << shift);
+            } else if a == 0x06 || a == 0x07 {
+                let shift = u32::from(a - 0x06) * 8;
+                let w1c = ((GUEST_CD_PCI_STATUS_W1C >> shift) & 0xFF) as u8;
+                let cur = (m.pci_status >> shift) as u8;
+                let next = cur & !(b & w1c);
+                m.pci_status = (m.pci_status & !(0xFFu16 << shift)) | (u16::from(next) << shift);
+            } else if a == 0x0C {
+                // nested iso=0 firmware IdeBus CLS RMW / cfg write:
+                // size-4 at 0x0A reaches CACHE_LINE_SIZE. LT 0x0D stays RO.
+                LAST_CLS_WR.store(b, Ordering::Release);
+                m.cache_line = b;
+            } else if (0x20..=0x23).contains(&a) {
+                touched_bar4 = true;
+                ide_bar4_write_byte(m, a, b);
+            } else if a == 0x3C {
+                LAST_INTLINE_WR.store(b, Ordering::Release);
+                m.irq_line = b;
+            } else if a >= 0x40 && off < 0x40 {
+                let idx = (a as usize).wrapping_sub(0x40);
+                if idx < m.pci_cfg40.len() {
+                    LAST_CFG40_WR.store(b, Ordering::Release);
+                    m.pci_cfg40[idx] = b;
+                }
+            }
+        }
+        if off >= 0x40 {
+            cfg40_write(m, off, size, val);
+        }
+        if touched_bar4 {
+            LAST_BAR4_WR.store(val, Ordering::Release);
+        }
+        if touched_cmd {
+            LAST_PCI_CMD_IN.store(cmd_in, Ordering::Release);
+            LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
+            PCI_CMD_MAX.fetch_max(m.pci_cmd, Ordering::AcqRel);
+            PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
+            // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
+            // do not force I/O-space. Disable is not IdeBus Start.
+            // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=/cmdmax=/cmdin=.
+            if (m.pci_cmd & 0x0001) != 0 {
+                // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
+                // product ISO firmware IDE cmd reset 0: this write now happens.
+                // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
+                // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
+                // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
+                // the CF8/CFC OUT; CpuSleep HLT consumes it.
+                IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
+                IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
+                raise_ata_irq(m);
+            }
         }
     });
 }
@@ -1752,11 +2786,39 @@ fn finish_packet(m: &mut CdMedia) {
     }
 }
 
+fn note_ata_float() {
+    if !ATA_FLOAT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux ATA floating bus (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 /// ATA primary PIO. Returns the value to merge into RAX on IN.
 pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     with_cd(|m| {
+        if linux_ata_floating_bus(crate::boot::serial::linux_high_half()) {
+            note_ata_float();
+            if is_in {
+                let mask = io_mask(size);
+                return (rax & !mask) | (0xffu64 & mask);
+            }
+            return rax;
+        }
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
+        }
+        if ata_secondary_empty(port) {
+            // nested iso=0 firmware IdeBus secondary ioport: QEMU
+            // both-empty ioport_read is 0 (not DRDY 0x50 / abort 0x41).
+            ATA_IO_N.fetch_add(1, Ordering::AcqRel);
+            if is_in {
+                let val = ata_secondary_read(port);
+                let mask = io_mask(size);
+                return (rax & !mask) | (u64::from(val) & mask);
+            }
+            ata_secondary_write(port, rax as u8);
+            return rax;
         }
         let Some(reg) = ata_reg(m, port) else {
             return if is_in { rax | 0xff } else { rax };
@@ -1873,6 +2935,9 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                         m.xfer = AtaXfer::Idle;
                     } else if (prev & ATA_DEVCTL_SRST) != 0 {
                         apply_atapi_signature(m);
+                        // firmware SRST ATA IRQ: IdeBus WaitForInterrupt
+                        // after SRST clear needs IRQ 14 (nIEN=0).
+                        raise_ata_irq(m);
                     }
                 }
                 _ => {}
