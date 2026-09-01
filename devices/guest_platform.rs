@@ -186,8 +186,13 @@ pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 /// the Ata() child so ConnectDevicesFromQemu Starts Pci(1,1) / IdeBus
 /// (CI `33482463623` VMXON-SKIP; `23666d6` IDETIM unproven). do not F11
 /// 23666d6.
+/// nested iso=0 firmware IdeBus OFW: QEMU/OVMF also name PIIX
+/// `pci8086,7010@1,1`. TranslatePciOfwNodes `ide@` with drive/disk is
+/// Ata() before Start; the pci8086,7010 node is generic Pci(1,1).
+/// CI `33483102988` VMXON-SKIP (`745b4cb` connect unproven). do not F11
+/// 745b4cb.
 pub const BOOTORDER: &[u8] =
-    b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
 /// Product ISO `bootorder`. PIIX ATAPI `ide@1,1` first so BDS StartImages
 /// El Torito (Stage 45 / nested iso=0). scsi@3-only (`d61dc7e` / `56f31d3`)
@@ -200,7 +205,7 @@ pub const BOOTORDER: &[u8] =
 /// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
 /// product ISO fw_cfg bootorder El Torito ide@ first.
 pub const BOOTORDER_PRODUCT: &[u8] =
-    b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
 
 /// Live fw_cfg `bootorder` bytes. Product window → El Torito then virtio-iso.
 pub fn bootorder_bytes() -> &'static [u8] {
@@ -238,14 +243,16 @@ pub fn boot_order_product_eltorito_first() -> bool {
 /// iso=0 / lab El Torito: PIIX CD then virtio disk (ADR-014).
 /// Ghost `ide@0,1` is gone (nested iso=0 firmware IdeBus bootorder).
 /// nested iso=0 firmware IdeBus connect: controller-only `ide@1,1` first.
+/// nested iso=0 firmware IdeBus OFW: `pci8086,7010@1,1` before `ide@`.
 pub fn boot_order_cd_then_disk() -> bool {
+    let ofw = find_bytes(BOOTORDER, b"pci8086,7010@1,1\n");
     let ctl = find_bytes(BOOTORDER, b"ide@1,1\n");
     let piix = find_bytes(BOOTORDER, b"ide@1,1/drive@0");
     let ghost = find_bytes(BOOTORDER, b"ide@0,1");
     let slave = find_bytes(BOOTORDER, b"drive@1");
     let disk = find_bytes(BOOTORDER, b"scsi@2");
-    match (ctl, piix, ghost, slave, disk) {
-        (Some(c), Some(p), None, None, Some(d)) => c < p && p < d,
+    match (ofw, ctl, piix, ghost, slave, disk) {
+        (Some(o), Some(c), Some(p), None, None, Some(d)) => o < c && c < p && p < d,
         _ => false,
     }
 }

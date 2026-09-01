@@ -308,6 +308,7 @@ self_test() {
   grep -q '33478850408' "$SCRIPT_PATH"
   grep -q '33481842584' "$SCRIPT_PATH"
   grep -q '33482463623' "$SCRIPT_PATH"
+  grep -q '33483102988' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
@@ -321,6 +322,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus prog-if native' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus IDETIM' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus connect' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus OFW' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -501,6 +503,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 9b6c2eb / --run 33481842584.
 # nested iso=0 firmware IdeBus connect (CI 33482463623 VMXON-SKIP; 23666d6 IDETIM unproven; controller-only ide@1,1).
 # do not F11 23666d6 / --run 33482463623.
+# nested iso=0 firmware IdeBus OFW (CI 33483102988 VMXON-SKIP; 745b4cb connect unproven; pci8086,7010@1,1).
+# do not F11 745b4cb / --run 33483102988.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1128,6 +1132,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33482463623 is 23666d6 nested VMXON-SKIP (IDETIM unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus connect; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 23666d6 / --run 33482463623." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33483102988" ]]; then
+    echo "error: run 33483102988 is 745b4cb nested VMXON-SKIP (connect unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus OFW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 745b4cb / --run 33483102988." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
