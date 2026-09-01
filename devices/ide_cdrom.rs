@@ -140,6 +140,11 @@
 //! `pci_default_write_config` walks INTERRUPT_LINE per-byte (`wmask` `0xFF`).
 //! Pin/MinGnt/MaxLat stay RO 0. Dump `ilwr=`. CI `33528635379`
 //! VMXON-SKIP (`eeaa681` cmd status unproven). do not F11 eeaa681.
+//! nested iso=0 firmware IdeBus CLS RMW: QEMU
+//! `pci_default_write_config` walks CACHE_LINE_SIZE per-byte (`wmask` `0xFF`).
+//! Latency/header/BIST stay RO 0. Dump `clwr=`. CI `33531358763`
+//! VMXON ATAPI miss (`436df8d` `ilwr=0` `intl=0` `cls=0` `ataio=0`).
+//! do not F11 436df8d.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -242,6 +247,9 @@
 //! nested iso=0 firmware IdeBus INTLINE RMW: QEMU INTERRUPT_LINE
 //! per-byte. CI `33528635379` VMXON-SKIP (`eeaa681` cmd status
 //! unproven). do not F11 eeaa681. Dump `ilwr=`.
+//! nested iso=0 firmware IdeBus CLS RMW: QEMU CACHE_LINE_SIZE
+//! per-byte. CI `33531358763` VMXON ATAPI miss (`436df8d`
+//! `ilwr=0` `intl=0` `cls=0`). do not F11 436df8d. Dump `clwr=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -631,6 +639,9 @@ static LAST_BAR4_WR: AtomicU32 = AtomicU32::new(0);
 /// Last INTERRUPT_LINE byte written. Dump `ilwr=`.
 /// nested iso=0 firmware IdeBus INTLINE RMW.
 static LAST_INTLINE_WR: AtomicU8 = AtomicU8::new(0);
+/// Last CACHE_LINE_SIZE byte written. Dump `clwr=`.
+/// nested iso=0 firmware IdeBus CLS RMW.
+static LAST_CLS_WR: AtomicU8 = AtomicU8::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -998,6 +1009,7 @@ pub fn reset() {
     PCI_CMD_MAX.store(0, Ordering::Release);
     LAST_BAR4_WR.store(0, Ordering::Release);
     LAST_INTLINE_WR.store(0, Ordering::Release);
+    LAST_CLS_WR.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -1125,6 +1137,12 @@ pub fn last_pci_intline_write() -> u8 {
     LAST_INTLINE_WR.load(Ordering::Acquire)
 }
 
+/// Last CACHE_LINE_SIZE byte written. Dump `clwr=`. nested iso=0 firmware
+/// IdeBus CLS RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cls_write() -> u8 {
+    LAST_CLS_WR.load(Ordering::Acquire)
+}
+
 /// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
 /// IdeBus LAT. Not `ISO-INSTALL-OK`.
 pub fn pci_latency() -> u8 {
@@ -1132,7 +1150,7 @@ pub fn pci_latency() -> u8 {
 }
 
 /// PCI cache line size (offset 0x0C). Dump `cls=`. nested iso=0 firmware
-/// IdeBus LAT. Not `ISO-INSTALL-OK`.
+/// IdeBus CLS RMW. Not `ISO-INSTALL-OK`.
 pub fn pci_cache_line() -> u8 {
     with_cd(|m| m.cache_line)
 }
@@ -2376,12 +2394,23 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 }
             }
         } else if aligned == 0x0C {
-            // nested iso=0 firmware IdeBus LT RO: QEMU wmask is cache
-            // line only. Latency timer 0x0D stays 0.
-            if off == 0x0C {
-                m.cache_line = val as u8;
+            // nested iso=0 firmware IdeBus CLS RMW: QEMU
+            // pci_default_write_config walks CACHE_LINE_SIZE per-byte
+            // (wmask 0xFF). Latency/header/BIST stay RO 0.
+            // nested iso=0 firmware IdeBus LT RO: latency 0x0D stays 0.
+            let n = match size {
+                1 => 1u8,
+                2 => 2,
+                _ => 4,
+            };
+            for i in 0..n {
+                let a = off.wrapping_add(i);
+                let b = (val >> (8 * u32::from(i))) as u8;
+                if a == 0x0C {
+                    LAST_CLS_WR.store(b, Ordering::Release);
+                    m.cache_line = b;
+                }
             }
-            let _ = size;
         }
     });
 }

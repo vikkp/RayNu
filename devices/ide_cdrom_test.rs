@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, pci_status,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, pci_status,
     pci_cmd_max,
     pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
@@ -617,6 +617,33 @@ fn pci_intline_rmw_word_then_pin() {
         "nested iso=0 firmware IdeBus INTLINE RMW: size-1 at 0x3D does not clear line"
     );
     assert_eq!(last_pci_intline_write(), 0x0E);
+    reset();
+}
+
+#[test]
+fn pci_cls_rmw_word_then_latency() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x0C);
+    pci_write_data(0xCFC, 2, 0x2010);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus CLS RMW: size-2 0x2010 stores CLS 0x10"
+    );
+    assert_eq!(last_pci_cls_write(), 0x10);
+    assert_eq!(
+        pci_latency(),
+        0,
+        "nested iso=0 firmware IdeBus CLS RMW: latency stays 0"
+    );
+    pci_write_data(0xCFD, 1, 0x20);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus CLS RMW: size-1 at 0x0D does not clear CLS"
+    );
+    assert_eq!(last_pci_cls_write(), 0x10);
     reset();
 }
 

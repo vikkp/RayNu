@@ -133,6 +133,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_bmide_prd,
     guest_uefi_nested_iso0_firmware_idebus_cmd_status,
     guest_uefi_nested_iso0_firmware_idebus_intline_rmw,
+    guest_uefi_nested_iso0_firmware_idebus_cls_rmw,
     guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
     guest_uefi_nested_iso0_firmware_idebus_bmide,
     guest_uefi_nested_iso0_firmware_idebus_bmide_io,
@@ -1863,6 +1864,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus INTLINE RMW"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_intline_rmw(0x01, 0x010E, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cls_rmw(0x10, 0x2010, 0),
+        "nested iso=0 firmware IdeBus CLS RMW"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cls_rmw(0x20, 0x2010, 0));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
         "nested iso=0 firmware IdeBus BM sticky"
