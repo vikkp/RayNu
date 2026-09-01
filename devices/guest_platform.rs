@@ -197,14 +197,15 @@ pub const E820_FILE_BYTES: u8 = E820_ENTRY_BYTES * E820_ENTRY_COUNT;
 /// IdeBus. StoreQemuBootOrder skips UNSUPPORTED and still stores El
 /// Torito. CI `33484124603` VMXON-SKIP (`6f600f0` OFW unproven). do not
 /// F11 6f600f0.
-/// nested iso=0 firmware IdeBus ConnectAll first: leading
-/// `/force-connect-all@0` so ConnectDevicesFromQemu returns UNSUPPORTED
-/// before EfiBootManagerConnectDevicePath of Pci(1,1). Trailing still
-/// connected the PCI handle (NOT_FOUND children OK) then skipped
-/// IdeBus Start. CI `33486002459` VMXON-SKIP (`7661d22` BM unproven).
-/// do not F11 7661d22.
+/// nested iso=0 firmware IdeBus ConnectAll first is a historical needle:
+/// CI `33486901066` VMXON `pcicmd=0x0`. Live bootorder trails.
+/// nested iso=0 firmware IdeBus ConnectAll trail: `/force-connect-all@0`
+/// last so ConnectDevicesFromQemu still OFW-connects Pci(1,1). CI
+/// `33486901066` VMXON leading ConnectAll first left `pcicmd=0x0`
+/// `cmdn=3` `cmdwr=0x0` `bar4=0xcc01` `ataio=0`. f3761c4 trailing OFW
+/// had `pcicmd=0x1`. BAR4 stays `0xCC01`. do not F11 291b539.
 pub const BOOTORDER: &[u8] =
-    b"/force-connect-all@0\n/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0";
 
 /// Product ISO `bootorder`. PIIX ATAPI `ide@1,1` first so BDS StartImages
 /// El Torito (Stage 45 / nested iso=0). scsi@3-only (`d61dc7e` / `56f31d3`)
@@ -217,7 +218,7 @@ pub const BOOTORDER: &[u8] =
 /// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
 /// product ISO fw_cfg bootorder El Torito ide@ first.
 pub const BOOTORDER_PRODUCT: &[u8] =
-    b"/force-connect-all@0\n/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n\0";
+    b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@3/disk@0,0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0";
 
 /// Live fw_cfg `bootorder` bytes. Product window → El Torito then virtio-iso.
 pub fn bootorder_bytes() -> &'static [u8] {
@@ -256,7 +257,7 @@ pub fn boot_order_product_eltorito_first() -> bool {
 /// Ghost `ide@0,1` is gone (nested iso=0 firmware IdeBus bootorder).
 /// nested iso=0 firmware IdeBus connect: controller-only `ide@1,1` first.
 /// nested iso=0 firmware IdeBus OFW: `pci8086,7010@1,1` before `ide@`.
-/// nested iso=0 firmware IdeBus ConnectAll first: `/force-connect-all@0` first.
+/// nested iso=0 firmware IdeBus ConnectAll trail: `/force-connect-all@0` last.
 pub fn boot_order_cd_then_disk() -> bool {
     let ofw = find_bytes(BOOTORDER, b"pci8086,7010@1,1\n");
     let ctl = find_bytes(BOOTORDER, b"ide@1,1\n");
@@ -267,7 +268,7 @@ pub fn boot_order_cd_then_disk() -> bool {
     let fall = find_bytes(BOOTORDER, b"force-connect-all@0");
     match (ofw, ctl, piix, ghost, slave, disk, fall) {
         (Some(o), Some(c), Some(p), None, None, Some(d), Some(f)) => {
-            f < o && o < c && c < p && p < d
+            o < c && c < p && p < d && d < f
         }
         _ => false,
     }

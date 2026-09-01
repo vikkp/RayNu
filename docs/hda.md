@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-eighty-sixth slice: nested iso=0 firmware IdeBus ConnectAll first (CI 33486002459 VMXON-SKIP; 7661d22 BM unproven; leading force-connect-all@0 so ConnectDevicesFromQemu returns UNSUPPORTED before Pci(1,1) bind; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-eighty-seventh slice: nested iso=0 firmware IdeBus ConnectAll trail (CI 33486901066 VMXON pcicmd=0x0 cmdn=3 cmdwr=0x0 bar4=0xcc01 ataio=0; 291b539 ConnectAll first regression vs f3761c4 pcicmd=0x1; trail OFW Pci(1,1) again; BAR4 stays 0xCC01; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus ConnectAll first; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus ConnectAll trail; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-seventh slice: nested iso=0 firmware IdeBus ConnectAll trail (CI 33486901066 VMXON pcicmd=0x0 cmdn=3 cmdwr=0x0 bar4=0xcc01 ataio=0; 291b539 ConnectAll first regression vs f3761c4 pcicmd=0x1; trail OFW Pci(1,1) again; BAR4 stays 0xCC01; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-sixth slice: nested iso=0 firmware IdeBus ConnectAll first (CI 33486002459 VMXON-SKIP; 7661d22 BM unproven; leading force-connect-all@0 so ConnectDevicesFromQemu returns UNSUPPORTED before Pci(1,1) bind; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-fifth slice: nested iso=0 firmware IdeBus BM (CI 33484950374 VMXON-SKIP; f9163b7 ConnectAll unproven; BAR4 0xCC01 not address 0 so EnableAttributes BusMaster can Start and write 0x3F6; dump bar4=; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-fourth slice: nested iso=0 firmware IdeBus ConnectAll (CI 33484124603 VMXON-SKIP; 6f600f0 OFW unproven; force-connect-all@0 so ConnectDevicesFromQemu UNSUPPORTED and BDS ConnectAll Starts IdeBus; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
