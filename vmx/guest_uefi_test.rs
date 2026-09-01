@@ -119,6 +119,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_isa_bar,
     guest_uefi_nested_iso0_firmware_idebus_cmd_mask,
     guest_uefi_nested_iso0_firmware_idebus_status,
+    guest_uefi_nested_iso0_firmware_idebus_intline,
     guest_uefi_nested_iso0_firmware_idebus_cmd,
     guest_uefi_nested_iso0_firmware_idebus_progif,
     guest_uefi_nested_iso0_firmware_idebus_progif_native,
@@ -1762,6 +1763,11 @@ fn marker_and_residual_honest() {
     );
     assert!(guest_uefi_nested_iso0_firmware_idebus_status(0x0280_0005));
     assert!(!guest_uefi_nested_iso0_firmware_idebus_status(0x0200_0000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_intline(0),
+        "nested iso=0 firmware IdeBus INTLINE"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_intline(0x0E));
     assert!(
         !guest_uefi_nested_iso0_firmware_idebus_bootorder(
             b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n\0"

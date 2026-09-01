@@ -19,6 +19,8 @@
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
+    GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
+    pci_int_line,
 };
 
 #[test]
@@ -393,6 +395,35 @@ fn pci_status_fast_back_with_devsel() {
         pci_read_data(0xCFC, 4),
         u32::from(GUEST_CD_PCI_CMD_WMASK) | GUEST_CD_PCI_STATUS,
         "nested iso=0 firmware IdeBus PCI status: command write keeps FAST_BACK"
+    );
+    reset();
+}
+
+#[test]
+fn pci_int_line_reset_zero_persists() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x3C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        u32::from(GUEST_CD_PCI_INT_LINE_RESET) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
+        "nested iso=0 firmware IdeBus INTLINE: reset line 0 pin 1"
+    );
+    assert_eq!(pci_int_line(), 0);
+    pci_write_data(0xCFC, 4, 0x0000_010E);
+    assert_eq!(
+        pci_int_line(),
+        0x0E,
+        "nested iso=0 firmware IdeBus INTLINE: PciBus write persists"
+    );
+    assert_eq!(
+        pci_read_data(0xCFC, 4) & 0xff,
+        0x0E
+    );
+    assert_eq!(
+        (pci_read_data(0xCFC, 4) >> 8) & 0xff,
+        u32::from(GUEST_CD_PCI_INT_PIN),
+        "nested iso=0 firmware IdeBus INTLINE: pin stays 1"
     );
     reset();
 }
