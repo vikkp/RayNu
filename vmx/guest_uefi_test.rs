@@ -104,6 +104,7 @@ use super::{
     guest_uefi_product_firmware_wake_preempt,
     guest_uefi_product_firmware_no_preempt_inject,
     guest_uefi_product_firmware_wake_delay_io,
+    guest_uefi_product_firmware_delay_io_no_inject,
     guest_uefi_product_firmware_wake_ide_cmd,
     guest_uefi_product_firmware_ide_cmd_io_no_inject,
     guest_uefi_product_firmware_ide_cmd_inject_ata,
@@ -1538,6 +1539,18 @@ fn marker_and_residual_honest() {
     assert!(
         guest_uefi_product_firmware_wake_delay_io(false, true, 0, 30, 0xB008, 4),
         "product ISO firmware wake Delay I/O"
+    );
+    assert!(
+        guest_uefi_product_firmware_delay_io_no_inject(
+            false, true, 0, 30, 0xB008, 4
+        ),
+        "product ISO firmware Delay I/O no inject"
+    );
+    assert!(
+        !guest_uefi_product_firmware_delay_io_no_inject(
+            false, true, 0, 12, 0xB008, 4
+        ),
+        "product ISO firmware Delay I/O no inject: HLT still wakes"
     );
     assert!(guest_uefi_product_firmware_wake_delay_io(
         false, true, 0, 30, 0x408, 4
