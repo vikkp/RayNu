@@ -116,6 +116,11 @@
 //! `0xFFFFFFFF` must read back 0, not a size mask. Dump `rom=`. CI
 //! `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven). do not F11
 //! c490f55.
+//! nested iso=0 firmware IdeBus BAR4 wmask: QEMU `pci_register_bar`
+//! 16-byte I/O wmask is `~(16-1)=0xFFFFFFF0`; type bit 1 is RO. Probe
+//! `0xFFFFFFFF` stores `0xFFFFFFF1` in config (not a sticky side bit
+//! that left live BAR 1). Per-byte RMW. Dump `b4wr=`. CI `33519529357`
+//! VMXON-SKIP (`3bceb8f` ROM unproven). do not F11 3bceb8f.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -202,6 +207,9 @@
 //! nested iso=0 firmware IdeBus PCI ROM: QEMU no ROM BAR at `0x30`
 //! (wmask 0). CI `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven).
 //! do not F11 c490f55. Dump `rom=`.
+//! nested iso=0 firmware IdeBus BAR4 wmask: QEMU wmask `0xFFFFFFF0`,
+//! type bit RO. CI `33519529357` VMXON-SKIP (`3bceb8f` ROM unproven).
+//! do not F11 3bceb8f. Dump `b4wr=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -328,6 +336,9 @@ pub const GUEST_CD_PCI_ROM: u32 = 0;
 pub const GUEST_CD_PCI_BAR4_RESET: u32 = 1;
 /// BAR4 size-probe mask (16-byte I/O). nested iso=0 firmware IdeBus BM sticky.
 pub const GUEST_CD_PCI_BAR4_PROBE: u32 = 0xFFFF_FFF1;
+/// QEMU `pci_register_bar` 16-byte I/O: `wmask = ~(size-1)`. Type bit
+/// is RO 1. nested iso=0 firmware IdeBus BAR4 wmask. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_WMASK: u32 = 0xFFFF_FFF0;
 /// QEMU `bmdma_read` when size != 1. nested iso=0 firmware IdeBus BMIDE.
 pub const GUEST_CD_BMIDE_WIDE: u32 = 0xFFFF_FFFF;
 /// Unused BMIDE byte offsets (+1/+3) read `0xFF`. nested iso=0 firmware
@@ -562,6 +573,9 @@ static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
 /// High-water PCI command since reset. Dump `cmdmax=`.
 /// nested iso=0 firmware IdeBus PCI cmd RMW.
 static PCI_CMD_MAX: AtomicU16 = AtomicU16::new(0);
+/// Last BAR4 config write (guest `val`). Dump `b4wr=`.
+/// nested iso=0 firmware IdeBus BAR4 wmask.
+static LAST_BAR4_WR: AtomicU32 = AtomicU32::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -907,6 +921,7 @@ pub fn reset() {
     PCI_CMD_WR_N.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
     PCI_CMD_MAX.store(0, Ordering::Release);
+    LAST_BAR4_WR.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -954,6 +969,12 @@ pub fn last_pci_cmd_write() -> u16 {
 /// High-water PCI command. Dump `cmdmax=`. nested iso=0 firmware IdeBus PCI cmd RMW.
 pub fn pci_cmd_max() -> u16 {
     PCI_CMD_MAX.load(Ordering::Acquire)
+}
+
+/// Last BAR4 config write. Dump `b4wr=`. nested iso=0 firmware IdeBus
+/// BAR4 wmask. Not `ISO-INSTALL-OK`.
+pub fn last_pci_bar4_write() -> u32 {
+    LAST_BAR4_WR.load(Ordering::Acquire)
 }
 
 /// Live BAR0. QEMU PIIX leaves this unimplemented (`0`); ISA `0x1F0`
@@ -1975,37 +1996,43 @@ fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
             _ => m.bar3,
         };
     }
-    let bit = 1u8 << bar;
-    if (m.bar_probe & bit) != 0 {
-        // nested iso=0 firmware IdeBus BM sticky: QEMU keeps returning
-        // the size mask until a restore write. Oneshot consume was for
-        // BAR0 (now unimplemented). CI `33495768739` VMXON-SKIP
-        // (`0c0f3cf` LAT unproven). do not F11 0c0f3cf.
-        let _ = consume_probe;
-        return GUEST_CD_PCI_BAR4_PROBE;
-    }
+    let _ = consume_probe;
+    // nested iso=0 firmware IdeBus BAR4 wmask: QEMU stores the masked
+    // probe in config. Sticky side-bit left live BAR 1 so pci_bar4()
+    // lied during ParseBar.
     m.bar4
 }
 
-fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
+fn ide_bar_write(m: &mut CdMedia, bar: u8, off: u8, size: u8, val: u32) {
     // nested iso=0 firmware IdeBus ISA BAR: BAR0-3 writes are ignored.
     // Historical 8-byte command BAR size mask was `0xFFFF_FFF8`; 4-byte
     // control was `0xFFFF_FFFC`. QEMU PIIX does not register those BARs.
     if bar <= 3 {
         return;
     }
-    let bit = 1u8 << bar;
-    // nested iso=0 firmware IdeBus BAR: 0xFFFFFFFF is size probe only.
-    if val == 0xFFFF_FFFF {
-        m.bar_probe |= bit;
-        return;
-    }
-    m.bar_probe &= !bit;
-    m.bar4 = if (val & 0xFFFF_FFF0) == 0 {
-        GUEST_CD_PCI_BAR4_RESET
-    } else {
-        (val & 0xFFFF_FFF0) | 1
+    // nested iso=0 firmware IdeBus BAR4 wmask: QEMU pci_register_bar
+    // 16-byte I/O wmask is ~(16-1). Type bit 1 is RO. Per-byte RMW.
+    LAST_BAR4_WR.store(val, Ordering::Release);
+    let shift = u32::from(off & 3) * 8;
+    let bits = match size {
+        1 => 8u32,
+        2 => 16,
+        _ => 32,
     };
+    let width_mask = if bits >= 32 {
+        0xFFFF_FFFF
+    } else {
+        (1u32 << bits) - 1
+    };
+    let mask = width_mask << shift;
+    let merged = (m.bar4 & !mask) | ((val << shift) & mask);
+    m.bar4 = (merged & GUEST_CD_PCI_BAR4_WMASK) | 1;
+    let bit = 1u8 << bar;
+    if m.bar4 == GUEST_CD_PCI_BAR4_PROBE {
+        m.bar_probe |= bit;
+    } else {
+        m.bar_probe &= !bit;
+    }
 }
 
 fn cfg40_dword(m: &CdMedia, aligned: u8) -> u32 {
@@ -2189,16 +2216,17 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             // nested iso=0 firmware IdeBus BAR: do not persist the mask.
-            ide_bar_write(m, 0, val);
+            ide_bar_write(m, 0, off, size, val);
         } else if aligned == 0x14 {
-            ide_bar_write(m, 1, val);
+            ide_bar_write(m, 1, off, size, val);
         } else if aligned == 0x18 {
-            ide_bar_write(m, 2, val);
+            ide_bar_write(m, 2, off, size, val);
         } else if aligned == 0x1C {
-            ide_bar_write(m, 3, val);
+            ide_bar_write(m, 3, off, size, val);
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
-            ide_bar_write(m, 4, val);
+            // nested iso=0 firmware IdeBus BAR4 wmask.
+            ide_bar_write(m, 4, off, size, val);
         } else if aligned == 0x30 {
             // nested iso=0 firmware IdeBus PCI ROM: QEMU wmask 0, no
             // size-probe sticky. 0xFFFFFFFF must not persist.
