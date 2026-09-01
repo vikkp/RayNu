@@ -107,6 +107,7 @@ use super::{
     guest_uefi_product_firmware_hlt_wake_lapic_timer,
     guest_uefi_product_firmware_hlt_wake_idt20,
     guest_uefi_product_firmware_hlt_wake_idt20_only,
+    guest_uefi_product_firmware_hlt_wake_lvt_unmask,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1540,6 +1541,11 @@ fn marker_and_residual_honest() {
         guest_uefi_product_firmware_hlt_wake_idt20_only(),
         "product ISO firmware HLT wake IDT 0x20 only"
     );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_lvt_unmask(false),
+        "product ISO firmware HLT wake LVT unmask"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lvt_unmask(true));
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0x27)),
         0x20,
