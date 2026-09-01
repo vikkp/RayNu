@@ -109,6 +109,11 @@
 //! decoded only when COMMAND.IO is set. BAR4 assigned with `pcicmd=0`
 //! still returned BMIDE (not floating `0xFF`). CI `33498693991`
 //! VMXON-SKIP (`b9e4b81` INTPIN unproven). do not F11 b9e4b81.
+//! nested iso=0 firmware IdeBus secondary empty: QEMU CD is primary
+//! master only. `0x170`/`0x376` were a second ATAPI alias; BAR0=0 also
+//! decoded ports `0-7`. IdeBus Start probes both channels. CI
+//! `33499455958` VMXON-SKIP (`af80d50` BMIDE IO unproven). do not F11
+//! af80d50.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -512,7 +517,7 @@ pub fn pci_config_addr() -> u32 {
 }
 
 pub fn is_ata_primary_port(port: u16) -> bool {
-    with_cd(|m| ata_reg(m, port).is_some())
+    with_cd(|m| ata_reg(m, port).is_some() || ata_secondary_empty(port))
 }
 
 /// ATA data register (command-block offset 0): legacy `0x1F0`/`0x170` or a
@@ -538,34 +543,39 @@ fn apply_no_device(m: &mut CdMedia) {
 }
 
 /// Map an I/O port onto the ATA command block (0–7) or control port.
+/// nested iso=0 firmware IdeBus secondary empty: QEMU CD is primary
+/// master only. Unimplemented BAR0-3 (address 0) do not decode.
 fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
-    // Compatibility mode keeps ISA ports even after PciBus relocates BARs.
+    // Compatibility mode keeps ISA primary even after PciBus relocates BARs.
     if (0x01F0..=0x01F7).contains(&port) {
         return Some((port - 0x01F0) as u8);
     }
-    if (0x0170..=0x0177).contains(&port) {
-        return Some((port - 0x0170) as u8);
-    }
-    if port == 0x03F6 || port == 0x0376 {
+    if port == 0x03F6 {
         return Some(8);
     }
     let cmd = (m.bar0 & !7) as u16;
-    if port.wrapping_sub(cmd) < 8 {
+    if cmd != 0 && port.wrapping_sub(cmd) < 8 {
         return Some((port - cmd) as u8);
     }
     let cmd2 = (m.bar2 & !7) as u16;
-    if port.wrapping_sub(cmd2) < 8 {
+    if cmd2 != 0 && port.wrapping_sub(cmd2) < 8 {
         return Some((port - cmd2) as u8);
     }
     let ctl = (m.bar1 & !3) as u16;
-    if port == ctl.wrapping_add(2) {
+    if ctl != 0 && port == ctl.wrapping_add(2) {
         return Some(8);
     }
     let ctl2 = (m.bar3 & !3) as u16;
-    if port == ctl2.wrapping_add(2) {
+    if ctl2 != 0 && port == ctl2.wrapping_add(2) {
         return Some(8);
     }
     None
+}
+
+/// QEMU secondary IDE (`0x170`/`0x376`) is an empty channel. nested iso=0
+/// firmware IdeBus secondary empty.
+fn ata_secondary_empty(port: u16) -> bool {
+    (0x0170..=0x0177).contains(&port) || port == 0x0376
 }
 
 fn bmide_base(m: &CdMedia) -> u16 {
@@ -2328,6 +2338,15 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
         }
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
+        }
+        if ata_secondary_empty(port) {
+            // nested iso=0 firmware IdeBus secondary empty: floating bus.
+            ATA_IO_N.fetch_add(1, Ordering::AcqRel);
+            if is_in {
+                let mask = io_mask(size);
+                return (rax & !mask) | (0xffu64 & mask);
+            }
+            return rax;
         }
         let Some(reg) = ata_reg(m, port) else {
             return if is_in { rax | 0xff } else { rax };
