@@ -4,7 +4,7 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
     pci_cmd_max,
-    pci_idetim,
+    pci_idetim, pci_svid,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
@@ -19,7 +19,7 @@
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
-    GUEST_CD_PCI_IDETIM_RAZ,
+    GUEST_CD_PCI_IDETIM_RAZ, GUEST_CD_PCI_SUBSYS, GUEST_CD_PCI_SUBSYS_ZERO,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_CMD_WMASK_QEMU, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
@@ -640,6 +640,21 @@ fn pci_idetim_persists_like_qemu_cfg40() {
         "nested iso=0 firmware IdeBus IDETIM persist: decode-enable stores"
     );
     assert_eq!(pci_idetim(), GUEST_CD_PCI_IDETIM);
+    reset();
+}
+
+#[test]
+fn pci_svid_is_qemu_default() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x2C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_SUBSYS,
+        "nested iso=0 firmware IdeBus PCI SVID: QEMU default 0x1AF4:0x1100"
+    );
+    assert_eq!(pci_svid(), GUEST_CD_PCI_SUBSYS);
+    assert_eq!(GUEST_CD_PCI_SUBSYS_ZERO, 0);
     reset();
 }
 

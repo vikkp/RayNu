@@ -139,6 +139,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_idetim,
     guest_uefi_nested_iso0_firmware_idebus_idetim_raz,
     guest_uefi_nested_iso0_firmware_idebus_idetim_persist,
+    guest_uefi_nested_iso0_firmware_idebus_svid,
     guest_uefi_nested_iso0_firmware_idebus_slot0_fn1,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
@@ -1893,6 +1894,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus IDETIM persist"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_idetim_persist(0, 0x8000_8000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_svid(0x1100_1AF4),
+        "nested iso=0 firmware IdeBus PCI SVID"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_svid(0));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(0, 1, false),
         "nested iso=0 firmware IdeBus slot0 fn1"

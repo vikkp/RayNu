@@ -99,6 +99,10 @@
 //! memset `0xff` from `0x40` so PCI `0x40` writes persist. Live RAZ made
 //! `idetim=0` even if firmware wrote decode-enable. CI `33512599515`
 //! VMXON-SKIP (`e90cb0d` INTX unproven). do not F11 e90cb0d.
+//! nested iso=0 firmware IdeBus PCI SVID: QEMU `pci_set_default_subsystem_id`
+//! is Red Hat Qumranet `0x1AF4` / QEMU `0x1100`. Live `0` at PCI `0x2C`
+//! looked unprogrammed. Dump `svid=`. CI `33513789990` VMXON-SKIP
+//! (`6382957` IDETIM persist unproven). do not F11 6382957.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -171,6 +175,9 @@
 //! is `0xff` from PCI `0x40`. RAZ discarded a decode-enable write.
 //! CI `33512599515` VMXON-SKIP (`e90cb0d` INTX unproven). do not F11
 //! e90cb0d.
+//! nested iso=0 firmware IdeBus PCI SVID: QEMU default SVID/SDID is
+//! `0x1AF4`/`0x1100`. CI `33513789990` VMXON-SKIP (`6382957` IDETIM
+//! persist unproven). do not F11 6382957.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -277,6 +284,14 @@ pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
 /// Historical RAZ 0. nested iso=0 firmware IdeBus IDETIM RAZ.
 /// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM_RAZ: u32 = 0;
+/// QEMU `pci_set_default_subsystem_id`: Red Hat Qumranet `0x1AF4` plus
+/// QEMU `0x1100`. Dump `svid=`. nested iso=0 firmware IdeBus PCI SVID.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_SVID: u16 = 0x1AF4;
+pub const GUEST_CD_PCI_SDID: u16 = 0x1100;
+pub const GUEST_CD_PCI_SUBSYS: u32 = 0x1100_1AF4;
+/// Historical zero SVID. nested iso=0 firmware IdeBus PCI SVID.
+pub const GUEST_CD_PCI_SUBSYS_ZERO: u32 = 0;
 /// PIIX BMIDE BAR4 reset: I/O bit, address 0 (unprogrammed). PciBus
 /// skips an address-0 command BAR. CI `33488202396` VMXON `bar4=0xcc01`
 /// `pcicmd=0x0` `ataio=0`. f3761c4 `bar4=1` `pcicmd=0x1`. Write-0 must
@@ -934,6 +949,12 @@ pub fn pci_bar_probe() -> u8 {
 /// nested iso=0 firmware IdeBus IDETIM persist.
 pub fn pci_idetim() -> u32 {
     with_cd(|m| m.idetim)
+}
+
+/// QEMU default subsystem dword (PCI 0x2C). Dump `svid=`.
+/// nested iso=0 firmware IdeBus PCI SVID.
+pub fn pci_svid() -> u32 {
+    GUEST_CD_PCI_SUBSYS
 }
 
 /// PCI interrupt line (offset 0x3C). Dump `intl=`. nested iso=0 firmware
@@ -1959,7 +1980,8 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
         0x18 => ide_bar_read(m, 2, consume_probe),
         0x1C => ide_bar_read(m, 3, consume_probe),
         0x20 => ide_bar_read(m, 4, consume_probe),
-        0x2C => 0x0000_0000,
+        // nested iso=0 firmware IdeBus PCI SVID: QEMU default 0x1AF4:0x1100.
+        0x2C => GUEST_CD_PCI_SUBSYS,
         0x3C => u32::from(m.irq_line) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
         // nested iso=0 firmware IdeBus IDETIM persist: QEMU 0x40 is stored.
         0x40 => m.idetim,
