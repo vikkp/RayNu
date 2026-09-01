@@ -270,19 +270,22 @@ fn pci_bar0_probe_oneshot_second_read_is_live() {
 }
 
 #[test]
-fn pci_bar4_bmide_is_nonzero_io() {
+fn pci_bar4_bmide_unprogrammed_until_assigned() {
     reset();
     assert!(present_placeholder());
     assert_eq!(
         pci_bar4(),
-        0xCC01,
-        "nested iso=0 firmware IdeBus BM: BAR4 is I/O at 0xCC00 not address 0"
+        1,
+        "nested iso=0 firmware IdeBus BM unprogrammed: BAR4 I/O address 0"
     );
-    assert!(is_bmide_port(0xCC00));
+    assert!(!is_bmide_port(0xCC00));
     assert!(!is_bmide_port(0xC400));
     pci_write_addr(pci_config_addr() | 0x20);
-    pci_write_data(0xCFC, 4, 0);
+    pci_write_data(0xCFC, 4, 0xCC01);
     assert_eq!(pci_bar4(), 0xCC01);
+    assert!(is_bmide_port(0xCC00));
+    pci_write_data(0xCFC, 4, 0);
+    assert_eq!(pci_bar4(), 1);
     reset();
 }
 

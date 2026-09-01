@@ -141,7 +141,13 @@ pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8F;
 /// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
 /// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
-/// PIIX BMIDE BAR4 (PCI 0x20). I/O at `0xCC00`, not address 0.
+/// PIIX BMIDE BAR4 reset: I/O bit, address 0 (unprogrammed). PciBus
+/// skips an address-0 command BAR. CI `33488202396` VMXON `bar4=0xcc01`
+/// `pcicmd=0x0` `ataio=0`. f3761c4 `bar4=1` `pcicmd=0x1`. Write-0 must
+/// not restore `0xCC01`. nested iso=0 firmware IdeBus BM unprogrammed.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_RESET: u32 = 1;
+/// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
 /// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
 
@@ -264,7 +270,7 @@ impl CdMedia {
             bar1: 0x03F5,
             bar2: 0x0171,
             bar3: 0x0375,
-            bar4: GUEST_CD_PCI_BAR4,
+            bar4: GUEST_CD_PCI_BAR4_RESET,
             bar_probe: 0,
             // nested iso=0 firmware IdeBus IDETIM: both channels decode-enable.
             idetim: GUEST_CD_PCI_IDETIM,
@@ -653,9 +659,8 @@ pub fn pci_bar0() -> u32 {
     with_cd(|m| m.bar0)
 }
 
-/// Live BAR4 BMIDE. Address 0 is not a valid I/O BAR; EnableAttributes
-/// BusMaster then fails before Start writes `0x3F6`. Dump `bar4=`.
-/// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
+/// Live BAR4 BMIDE. Reset is unprogrammed (`1`). Dump `bar4=`.
+/// nested iso=0 firmware IdeBus BM unprogrammed. Not `ISO-INSTALL-OK`.
 pub fn pci_bar4() -> u32 {
     with_cd(|m| m.bar4)
 }
@@ -1662,7 +1667,7 @@ fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
         }
         _ => {
             m.bar4 = if (val & 0xFFFF_FFF0) == 0 {
-                GUEST_CD_PCI_BAR4
+                GUEST_CD_PCI_BAR4_RESET
             } else {
                 (val & 0xFFFF_FFF0) | 1
             };

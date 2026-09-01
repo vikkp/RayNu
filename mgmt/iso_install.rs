@@ -262,6 +262,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// nested iso=0 firmware IdeBus BM.
 /// nested iso=0 firmware IdeBus ConnectAll first.
 /// nested iso=0 firmware IdeBus ConnectAll trail.
+/// nested iso=0 firmware IdeBus BM unprogrammed.
 /// product ISO firmware HLT EDK2 0x68.
 /// nested iso=0 EDK2 IRQ0.
 /// nested iso=0 firmware LAPIC timer.
