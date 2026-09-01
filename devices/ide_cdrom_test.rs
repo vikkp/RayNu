@@ -24,9 +24,10 @@
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_CMD_WMASK_QEMU, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
+    GUEST_CD_BMIDE_PRD_ALIGN,
     GUEST_CD_SEC_IOPORT,
     pci_int_line, pci_latency, pci_cache_line,
-    bmide_cmd, bmide_status, bmide_ins,
+    bmide_cmd, bmide_status, bmide_ins, bmide_prd,
 };
 
 #[test]
@@ -797,6 +798,13 @@ fn bmide_qemu_byte_ops() {
     assert_eq!(bmide_cmd(), 0x09);
     let _ = bmide_io(0xC402, false, 1, 0x60);
     assert_eq!(bmide_status(), 0x60);
+    let _ = bmide_io(0xC404, false, 4, 0x1234_5607);
+    assert_eq!(
+        bmide_prd(),
+        0x1234_5604,
+        "nested iso=0 firmware IdeBus BMIDE PRD: dword write is & ~3"
+    );
+    assert_eq!(GUEST_CD_BMIDE_PRD_ALIGN, 0xFFFF_FFFC);
     assert!(bmide_ins() >= 4);
     reset();
 }

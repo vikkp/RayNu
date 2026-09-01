@@ -126,6 +126,10 @@
 //! `last_addr >= UINT32_MAX` (probe `0xFFFFFFF0+15=0xFFFFFFFF` must not
 //! decode as `0xFFF0`). Dump `b4map=`. CI `33521391092` VMXON-SKIP
 //! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22.
+//! nested iso=0 firmware IdeBus BMIDE PRD: QEMU `bmdma_addr_write`
+//! keeps the PRD pointer dword-aligned (`& ~3`). Dump `bmprd=`. CI
+//! `33525128613` VMXON-SKIP (`f0b3ecb` BAR4 map unproven). do not F11
+//! f0b3ecb.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -218,6 +222,9 @@
 //! nested iso=0 firmware IdeBus BAR4 map: QEMU `pci_bar_address` wrap
 //! `last >= UINT32_MAX` unmapped. CI `33521391092` VMXON-SKIP
 //! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22. Dump `b4map=`.
+//! nested iso=0 firmware IdeBus BMIDE PRD: QEMU `& ~3`. CI
+//! `33525128613` VMXON-SKIP (`f0b3ecb` BAR4 map unproven). do not F11
+//! f0b3ecb. Dump `bmprd=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -356,6 +363,9 @@ pub const GUEST_CD_BMIDE_WIDE: u32 = 0xFFFF_FFFF;
 /// Unused BMIDE byte offsets (+1/+3) read `0xFF`. nested iso=0 firmware
 /// IdeBus BMIDE.
 pub const GUEST_CD_BMIDE_UNUSED: u8 = 0xFF;
+/// QEMU `bmdma_addr_write` `& ~3`. nested iso=0 firmware IdeBus BMIDE PRD.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_BMIDE_PRD_ALIGN: u32 = 0xFFFF_FFFC;
 /// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
 /// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
@@ -822,7 +832,8 @@ fn bmide_write(m: &mut CdMedia, off: u8, size: u8, rax: u64) {
         let shift = u32::from(local - 4) * 8;
         let mask = io_mask(size) as u32;
         let bits = (rax as u32 & mask) << shift;
-        m.bmide_prd[ch] = (m.bmide_prd[ch] & !(mask << shift)) | bits;
+        // nested iso=0 firmware IdeBus BMIDE PRD: QEMU `& ~3`.
+        m.bmide_prd[ch] = (m.bmide_prd[ch] & !(mask << shift)) | (bits & GUEST_CD_BMIDE_PRD_ALIGN);
         return;
     }
     if size != 1 {
@@ -1084,6 +1095,12 @@ pub fn bmide_cmd() -> u8 {
 /// IdeBus BMIDE. Not `ISO-INSTALL-OK`.
 pub fn bmide_status() -> u8 {
     with_cd(|m| m.bmide_status[0])
+}
+
+/// Primary BMIDE PRD pointer. Dump `bmprd=`. nested iso=0 firmware
+/// IdeBus BMIDE PRD. Not `ISO-INSTALL-OK`.
+pub fn bmide_prd() -> u32 {
+    with_cd(|m| m.bmide_prd[0])
 }
 
 /// BMIDE INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
