@@ -50,6 +50,8 @@
 //! already on) skipped that write; iron `b5c3a9c` `ataio=0` after BOTH-OK.
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
+//! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
+//! (not timer `0x20`). CpuSleep HLT still uses IDT `0x20`.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than
@@ -1578,6 +1580,7 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
             // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
             // product ISO firmware IDE cmd reset 0: this write now happens.
             // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
+            // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
             IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
             raise_ata_irq(m);
         } else if aligned == 0x10 {

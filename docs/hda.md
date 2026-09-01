@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-fifty-seventh slice: product ISO firmware IDE cmd ATA IRQ (IdeBus Start PCI command write raises IRQ 14; BAR writes do not). CI 33459800906 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-fifty-eighth slice: product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects 0x76 not timer 0x20; BAR/CF8 does not). CI 33460343555 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (product ISO firmware IDE cmd ATA IRQ; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware IDE cmd inject ATA; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-eighth slice: product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects 0x76 not timer 0x20; BAR/CF8 does not; CI 33460343555 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-seventh slice: product ISO firmware IDE cmd ATA IRQ (IdeBus Start PCI command write raises IRQ 14; BAR writes do not; CI 33459800906 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-sixth slice: product ISO firmware IDE cmd reset 0 (PIIX/QEMU PCI command is 0 at reset so IdeBus Start writes offset 0x04; reset 0x0005 skipped that write; CI 33459130885 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-fifth slice: product ISO firmware wake IDE cmd (IdeBus Start PCI command write; empty CF8 does not wake; CI 33458084140 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

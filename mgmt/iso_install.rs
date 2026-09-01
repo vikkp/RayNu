@@ -174,6 +174,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware wake IDE cmd (CI `33458084140` VMXON-SKIP; IdeBus Start PCI command write; empty CF8 does not wake).
 /// product ISO firmware IDE cmd reset 0 (PIIX/QEMU command is 0 at reset so IdeBus Start writes offset 0x04; reset `0x0005` skipped that write; CI `33459130885` VMXON-SKIP).
 /// product ISO firmware IDE cmd ATA IRQ (IdeBus Start PCI command write raises IRQ 14; BAR writes do not; CI `33459800906` VMXON-SKIP).
+/// product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects `0x76` not timer `0x20`; BAR/CF8 does not; CI `33460343555` VMXON-SKIP).
 /// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
 /// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
 /// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
@@ -250,6 +251,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware wake IDE cmd.
 /// product ISO firmware IDE cmd reset 0.
 /// product ISO firmware IDE cmd ATA IRQ.
+/// product ISO firmware IDE cmd inject ATA.
 /// firmware HLT skip only after inject.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).

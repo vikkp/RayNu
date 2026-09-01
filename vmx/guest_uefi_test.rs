@@ -104,6 +104,7 @@ use super::{
     guest_uefi_product_firmware_wake_preempt,
     guest_uefi_product_firmware_wake_delay_io,
     guest_uefi_product_firmware_wake_ide_cmd,
+    guest_uefi_product_firmware_ide_cmd_inject_ata,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
@@ -1572,6 +1573,19 @@ fn marker_and_residual_honest() {
     assert!(
         include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd ATA IRQ"),
         "product ISO firmware IDE cmd ATA IRQ"
+    );
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_inject_ata(true),
+        "product ISO firmware IDE cmd inject ATA"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_inject_ata(false),
+        "product ISO firmware IDE cmd inject ATA: BAR/CF8 does not"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_hlt_ata_inject_vec(None),
+        0x76,
+        "product ISO firmware IDE cmd inject ATA"
     );
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
