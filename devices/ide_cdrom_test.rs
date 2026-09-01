@@ -226,11 +226,16 @@ fn pci_bar0_probe_reports_eight_byte_io() {
 fn pci_command_write_latches_ide_cmd_wake() {
     reset();
     assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    assert_eq!(
+        pci_read_data(0xCFC, 4) & 0xffff,
+        0,
+        "product ISO firmware IDE cmd reset 0"
+    );
     assert!(
         !take_ide_pci_cmd_wr_exit(),
         "product ISO firmware wake IDE cmd: idle"
     );
-    pci_write_addr(pci_config_addr() | 0x04);
     pci_write_data(0xCFC, 4, 0x0005);
     assert!(
         take_ide_pci_cmd_wr_exit(),

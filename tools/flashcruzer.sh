@@ -240,6 +240,7 @@ self_test() {
   grep -q '33456465331' "$SCRIPT_PATH"
   grep -q '33457132491' "$SCRIPT_PATH"
   grep -q '33458084140' "$SCRIPT_PATH"
+  grep -q '33459130885' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
@@ -258,6 +259,7 @@ self_test() {
   grep -q 'product ISO firmware wake preempt' "$SCRIPT_PATH"
   grep -q 'product ISO firmware wake Delay I/O' "$SCRIPT_PATH"
   grep -q 'product ISO firmware wake IDE cmd' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd reset 0' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -431,6 +433,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 1b758d2 / --run 33457132491.
 # product ISO firmware wake IDE cmd (CI 33458084140 VMXON-SKIP; IdeBus Start PCI command write; skip RIP stays HLT-only; empty CF8 does not wake).
 # do not F11 ce11fda / --run 33458084140.
+# product ISO firmware IDE cmd reset 0 (PIIX/QEMU command is 0 at reset so IdeBus Start writes offset 0x04; reset 0x0005 skipped that write).
+# CI 33459130885 VMXON-SKIP. do not F11 8851af8 / --run 33459130885.
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
 # do not F11 deb64f5 / --run 33444677681.
@@ -834,8 +838,14 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33458084140" ]]; then
     echo "error: run 33458084140 is ce11fda Delay I/O VMXON-SKIP (not ATAPI-OK)" >&2
-    echo "       product ISO firmware wake IDE cmd; flash b5c3a9c / --run 33440050729." >&2
+    echo "       product ISO firmware IDE cmd reset 0; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 ce11fda / --run 33458084140." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33459130885" ]]; then
+    echo "error: run 33459130885 is 8851af8 residual VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd reset 0; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8851af8 / --run 33459130885." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

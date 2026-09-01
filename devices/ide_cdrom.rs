@@ -45,6 +45,9 @@
 //! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
 //! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
+//! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
+//! IdeBus Start writes offset 0x04 (wake latch). Reset `0x0005` (I/O+BM
+//! already on) skipped that write; iron `b5c3a9c` `ataio=0` after BOTH-OK.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than
@@ -199,7 +202,9 @@ impl CdMedia {
             boot_image_read: false,
             last_read_lba: 0,
             pci_addr: 0,
-            pci_cmd: 0x0005,
+            // product ISO firmware IDE cmd reset 0: PIIX/QEMU command is 0
+            // until IdeBus Start writes offset 0x04 (wake latch).
+            pci_cmd: 0,
             bar0: 0x1F1,
             bar1: 0x03F5,
             bar2: 0x0171,
@@ -1569,6 +1574,7 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         if off == 0x04 {
             m.pci_cmd = (val as u16) | 0x0001;
             // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
+            // product ISO firmware IDE cmd reset 0: this write now happens.
             IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.

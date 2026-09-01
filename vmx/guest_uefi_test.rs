@@ -1565,6 +1565,10 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_product_firmware_wake_ide_cmd(
         false, true, 1, 30, true
     ));
+    assert!(
+        include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd reset 0"),
+        "product ISO firmware IDE cmd reset 0"
+    );
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));
