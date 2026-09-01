@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 e3cbfa5 one-shot PIT then HLT hang; #229 skip HLT after first wake. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Iron COM2 e3cbfa5 one-shot then 16M-exit cap (ataio=0 catalog=0). Flash 21dc562 / 33559849096. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. PIT storm closed; ATA still missing. |
-| Gates touched | Stage 46 OPEN (3a one-shot done; 3b fail HLT hang). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (3a one-shot done; 3b fail n=16777216). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 hit 16M exit cap (ataio=0 catalog=0); flash 21dc562 / 33559849096 skip-HLT; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 PIT one-shot then HLT hang; #229 skip HLT after first wake; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock; #229 one-shot PIT after first wake; do not F11 33555104832; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Retrigger ee82483 after nested-KVM QEMU clwb #UD kill-init (33554248661 UEFI+host green); wait-for-PIT unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

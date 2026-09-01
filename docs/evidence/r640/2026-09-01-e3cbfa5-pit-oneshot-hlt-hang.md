@@ -22,12 +22,14 @@ APIC/CR8 livelock (`rip=0x7f03f641` / `0x7f03fbe5` / `0x7f0697a9`) did **not** r
 
 No `Linux version`, no `efi:` / `ACPI=`, no `ataio>0`, no `sectors>0`.
 
-After the one-shot, ticks stay on CpuSleep:
+After the one-shot, ticks stay on CpuSleep until the 2²⁴ exit cap:
 
 - `reason=0xc` `rip=0x7f0680d0` `insn=f4c3` `inj=1`
-- `ataio=0` `cmd=0x00` `pin14=0` through `n>800k` (still printing)
+- `ataio=0` `cmd=0x00` `pin14=0` `hlt=0`
+- stop `n=16777216` `catalog=0` `bootimg=0` `readlba=0` `elt=0` `packet=0` `scsi=0x0` `ata=0x0` `acpi=3964`
+- `Stage 46 product ISO hold (not ISO-INSTALL-OK); not E4 SHELL`
 
-One PIT is not the event BDS is waiting for. Wait-for-irq after one-shot is a deadlock (further `0x20` is skipped). Do not F11 this pin again.
+One PIT is not the event BDS is waiting for. Wait-for-irq after one-shot is a deadlock (further `0x20` is skipped). Do not F11 this pin again. Next pin is `21dc562` / `--run 33559849096` (skip HLT after the one-shot).
 
 ## Ladder
 
