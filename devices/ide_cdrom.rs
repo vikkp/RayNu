@@ -4,10 +4,11 @@
 //! Proven Core: **outside** (ADR-002 / ADR-014)
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
-//! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
-//! i440FX slot-0 Header Type single function so PciBus does not Start
-//! both (same `0x1F0` BARs; `ataio=0`). slot-0 Header Type is
-//! multifunction stays a historical needle. nested iso=0 firmware IdeBus PCI.
+//! PCI IDE at PIIX `00:01.1`. QEMU i440FX `00:00.0` is single-function, so
+//! `00:00.1` is empty (`0xFFFFFFFF`). Aliasing the CD at slot-0 fn1 made
+//! PciBus Start a second IDE on the same `0x1F0` as PIIX (`ataio=0`).
+//! nested iso=0 firmware IdeBus slot0 fn1. IDE at `00:00.1` stays a
+//! historical needle. nested iso=0 firmware IdeBus PCI.
 //! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
 //! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
@@ -138,6 +139,9 @@
 //! ICH IDETIM at PCI `0x40` (generic RAZ 0). Decode-enable `0x80008000`
 //! is not what OVMF sees on QEMU. CI `33505842402` VMXON-SKIP (`f8964e1`
 //! secondary ioport unproven). do not F11 f8964e1.
+//! nested iso=0 firmware IdeBus slot0 fn1: QEMU i440FX `00:00.1` is empty
+//! (`0xFFFFFFFF`). CD lives at PIIX `00:01.1` only. CI `33506851920`
+//! VMXON-SKIP (`98d20ea` IDETIM RAZ unproven). do not F11 98d20ea.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -195,7 +199,7 @@ pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
-pub const GUEST_CD_PCI_DEV: u8 = 0;
+pub const GUEST_CD_PCI_DEV: u8 = 1;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
@@ -494,8 +498,9 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
         return false;
     }
     let (bus, dev, fun, _) = pci_bdf(addr);
-    // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
-    bus == 0 && fun == 1 && (dev == 0 || dev == 1)
+    // nested iso=0 firmware IdeBus slot0 fn1: PIIX `00:01.1` only.
+    // `00:00.1` is empty on QEMU i440FX (single-function slot 0).
+    bus == 0 && fun == 1 && dev == 1
 }
 
 /// Firmware needs slot-0 fn1. Linux PCI scan of both IDE functions BAR-conflicts
@@ -544,7 +549,7 @@ pub fn linux_ata_floating_bus(linux_high_half: bool) -> bool {
     linux_high_half
 }
 
-/// PCI config address for the guest IDE function (`00:00.1`).
+/// PCI config address for the guest IDE function (`00:01.1`).
 pub fn pci_config_addr() -> u32 {
     0x8000_0000
         | (u32::from(GUEST_CD_PCI_BUS) << 16)

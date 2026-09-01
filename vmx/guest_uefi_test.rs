@@ -135,6 +135,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_progif_native,
     guest_uefi_nested_iso0_firmware_idebus_idetim,
     guest_uefi_nested_iso0_firmware_idebus_idetim_raz,
+    guest_uefi_nested_iso0_firmware_idebus_slot0_fn1,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -1868,6 +1869,12 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus IDETIM RAZ"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_idetim_raz(0x8000_8000));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(0, 1, false),
+        "nested iso=0 firmware IdeBus slot0 fn1"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(0, 1, true));
+    assert!(guest_uefi_nested_iso0_firmware_idebus_slot0_fn1(1, 1, true));
     assert!(
         guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
         "nested iso=0 firmware LAPIC timer"

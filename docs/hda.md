@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-third slice: nested iso=0 firmware IdeBus IDETIM RAZ (CI 33505842402 VMXON-SKIP; f8964e1 secondary ioport unproven; QEMU PIIX3 PCI 0x40 is unimplemented RAZ 0, ICH decode-enable 0x80008000 is not QEMU; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-fourth slice: nested iso=0 firmware IdeBus slot0 fn1 (CI 33506851920 VMXON-SKIP; 98d20ea IDETIM RAZ unproven; QEMU i440FX 00:00.1 empty 0xFFFFFFFF, CD at PIIX 00:01.1 only so IdeBus Start is not a duplicate 0x1F0 bus; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus IDETIM RAZ; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus slot0 fn1; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-fourth slice: nested iso=0 firmware IdeBus slot0 fn1 (CI 33506851920 VMXON-SKIP; 98d20ea IDETIM RAZ unproven; QEMU i440FX 00:00.1 empty 0xFFFFFFFF, CD at PIIX 00:01.1 only so IdeBus Start is not a duplicate 0x1F0 bus; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-third slice: nested iso=0 firmware IdeBus IDETIM RAZ (CI 33505842402 VMXON-SKIP; f8964e1 secondary ioport unproven; QEMU PIIX3 PCI 0x40 is unimplemented RAZ 0, ICH decode-enable 0x80008000 is not QEMU; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-second slice: nested iso=0 firmware IdeBus secondary ioport (CI 33504402447 VMXON-SKIP; 853a9c8 secondary abort unproven; QEMU both-empty ide_ioport_read status 0, ide_reset 0x50 is internal, abort 0x41 is not guest-visible so Start can PIO primary 0x3F6; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-first slice: nested iso=0 firmware IdeBus secondary abort (CI 33503174554 VMXON-SKIP; 96b4f0a secondary DRDY unproven; QEMU empty unit IDENTIFY/PACKET aborts READY|ERR 0x41 ABRT 0x04 so Start does not WaitForInterrupt; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

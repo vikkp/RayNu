@@ -26,8 +26,8 @@ fn pci_bdf_is_probe_slot_not_ide() {
     assert!(pci_addr_selects_slot0(0x8000_0000));
     assert!(pci_addr_selects_owned(0x8000_0000));
     assert!(!pci_addr_selects_virtio(0x8000_0000));
-    assert!(!pci_addr_selects_virtio(0x8000_0900)); // 00:01.1 IDE
-    assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 IDE
+    assert!(!pci_addr_selects_virtio(0x8000_0900)); // 00:01.1 PIIX IDE
+    assert!(!pci_addr_selects_virtio(0x8000_0100)); // 00:00.1 empty (not IDE)
     assert!(!pci_addr_selects_virtio(0x8000_4000)); // 00:08.0 host
     assert!(!pci_addr_selects_virtio(0x8000_0800)); // 00:01.0 ISA
     assert_eq!(pci_bdf(pci_config_addr_iso()), (0, 3, 0, 0));

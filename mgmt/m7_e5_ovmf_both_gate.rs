@@ -116,7 +116,7 @@ pub fn prop_both_pci_on_one_boot() -> bool {
         && (host_id >> 16) as u16 == HOST_BRIDGE_DEVICE
         && pm_pci_config_addr() == 0x8000_0B00
         && virtio_cfg() == 0x8000_1000
-        && ide_cdrom::pci_config_addr() == 0x8000_0100
+        && ide_cdrom::pci_config_addr() == 0x8000_0900
 }
 
 pub fn ovmf_both_surface_present() -> bool {

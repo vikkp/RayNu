@@ -31,10 +31,13 @@
 fn pci_bdf_and_ports() {
     reset();
     let addr = pci_config_addr();
-    assert_eq!(pci_bdf(addr), (0, 0, 1, 0));
+    assert_eq!(pci_bdf(addr), (0, 1, 1, 0));
     assert!(pci_addr_selects_cd(addr));
-    assert!(pci_addr_selects_cd(0x8000_0100)); // 00:00.1 IDE (virtio fn1)
-    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 same CD (PIIX fn1)
+    assert!(
+        !pci_addr_selects_cd(0x8000_0100),
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
+    );
+    assert!(pci_addr_selects_cd(0x8000_0900)); // 00:01.1 PIIX IDE
     assert!(!pci_addr_selects_cd(0x8000_0000)); // 00:00.0 virtio
     assert!(!pci_addr_selects_cd(0x8000_0800)); // 00:01.0 ISA
     assert!(!pci_addr_selects_cd(0x8000_4000)); // 00:08.0 host
@@ -114,7 +117,11 @@ fn linux_hides_duplicate_slot0_ide_not_piix() {
     assert!(!linux_hides_duplicate_slot0_ide(true, 0x8000_0900));
     assert!(present_placeholder());
     pci_write_addr(0x8000_0100);
-    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
+    );
     crate::boot::serial::set_linux_earlycon_share(true);
     pci_write_addr(0x8000_0100);
     assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
@@ -162,10 +169,10 @@ fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
         "iso=0 firmware still enumerates PIIX IDE"
     );
     pci_write_addr(0x8000_0100);
-    assert_ne!(
+    assert_eq!(
         pci_read_data(0xCFC, 4),
         0xFFFF_FFFF,
-        "iso=0 firmware still enumerates slot0 IDE"
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
     );
     reset();
     let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
@@ -187,7 +194,11 @@ fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
         "product ISO still enumerates PIIX IDE for El Torito"
     );
     pci_write_addr(0x8000_0100);
-    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "nested iso=0 firmware IdeBus slot0 fn1"
+    );
     reset();
 }
 
@@ -219,11 +230,12 @@ fn present_placeholder_enumerates_and_reads_pvd() {
     let id = pci_read_data(0xCFC, 4);
     assert_eq!(id as u16, GUEST_CD_PCI_VENDOR);
     assert_eq!((id >> 16) as u16, GUEST_CD_PCI_DEVICE);
-    // IDE is 00:00.1 — virtio fn1; PEI DID probe is 00:00.0.
+    // IDE is PIIX 00:01.1. QEMU i440FX 00:00.1 is empty.
     pci_write_addr(0x8000_0102);
     assert_eq!(
         pci_read_data(0xCFC, 2) & 0xffff,
-        u32::from(GUEST_CD_PCI_DEVICE)
+        0xffff,
+        "nested iso=0 firmware IdeBus slot0 fn1: 00:00.1 empty"
     );
     pci_write_addr(0x8000_0902);
     assert_eq!(
