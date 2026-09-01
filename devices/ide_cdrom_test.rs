@@ -20,7 +20,7 @@
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
-    pci_int_line,
+    pci_int_line, pci_latency, pci_cache_line,
 };
 
 #[test]
@@ -424,6 +424,35 @@ fn pci_int_line_reset_zero_persists() {
         (pci_read_data(0xCFC, 4) >> 8) & 0xff,
         u32::from(GUEST_CD_PCI_INT_PIN),
         "nested iso=0 firmware IdeBus INTLINE: pin stays 1"
+    );
+    reset();
+}
+
+#[test]
+fn pci_cache_line_and_latency_persist() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x0C);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus LAT: reset CLS and latency 0"
+    );
+    pci_write_data(0xCFC, 4, 0x0000_2010);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus LAT: cache line persists"
+    );
+    assert_eq!(
+        pci_latency(),
+        0x20,
+        "nested iso=0 firmware IdeBus LAT: latency persists"
+    );
+    assert_eq!(
+        (pci_read_data(0xCFC, 4) >> 16) & 0xff,
+        0,
+        "nested iso=0 firmware IdeBus LAT: header type stays 0"
     );
     reset();
 }

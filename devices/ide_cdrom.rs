@@ -89,6 +89,10 @@
 //! and writes persist. Hardwired `0x0E` ignored PciBus program/readback.
 //! CI `33493717089` VMXON-SKIP (`828a002` FAST_BACK unproven).
 //! do not F11 828a002.
+//! nested iso=0 firmware IdeBus LAT: QEMU PCI wmask lets cache line
+//! (0x0C) and latency timer (0x0D) persist; header type stays 0.
+//! Hardwired 0 ignored PciBus program/readback. CI `33494990002`
+//! VMXON-SKIP (`fe658f7` INTLINE unproven). do not F11 fe658f7.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -175,6 +179,10 @@ pub const GUEST_CD_PCI_STATUS: u32 = 0x0280_0000;
 pub const GUEST_CD_PCI_INT_LINE_RESET: u8 = 0;
 /// PCI interrupt pin A. nested iso=0 firmware IdeBus INTLINE.
 pub const GUEST_CD_PCI_INT_PIN: u8 = 1;
+/// QEMU PCI cache-line and latency timer reset to 0; writes persist.
+/// nested iso=0 firmware IdeBus LAT. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CACHE_LINE_RESET: u8 = 0;
+pub const GUEST_CD_PCI_LATENCY_RESET: u8 = 0;
 /// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
 /// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
@@ -266,6 +274,10 @@ struct CdMedia {
     /// PCI interrupt line (offset 0x3C). QEMU reset is 0; pin at 0x3D is 1.
     /// nested iso=0 firmware IdeBus INTLINE.
     irq_line: u8,
+    /// PCI cache line size (0x0C) and latency timer (0x0D). Header type RO 0.
+    /// nested iso=0 firmware IdeBus LAT.
+    cache_line: u8,
+    latency: u8,
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -316,6 +328,8 @@ impl CdMedia {
             idetim: GUEST_CD_PCI_IDETIM,
             // nested iso=0 firmware IdeBus INTLINE: QEMU reset is 0, not 0x0E.
             irq_line: GUEST_CD_PCI_INT_LINE_RESET,
+            cache_line: GUEST_CD_PCI_CACHE_LINE_RESET,
+            latency: GUEST_CD_PCI_LATENCY_RESET,
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -723,6 +737,18 @@ pub fn pci_idetim() -> u32 {
 /// IdeBus INTLINE. Not `ISO-INSTALL-OK`.
 pub fn pci_int_line() -> u8 {
     with_cd(|m| m.irq_line)
+}
+
+/// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
+/// IdeBus LAT. Not `ISO-INSTALL-OK`.
+pub fn pci_latency() -> u8 {
+    with_cd(|m| m.latency)
+}
+
+/// PCI cache line size (offset 0x0C). Dump `cls=`. nested iso=0 firmware
+/// IdeBus LAT. Not `ISO-INSTALL-OK`.
+pub fn pci_cache_line() -> u8 {
+    with_cd(|m| m.cache_line)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).
@@ -1707,7 +1733,7 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
         // nested iso=0 firmware IdeBus ISA BAR: 0x80 not 0x8F/0x8A.
         0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
-        0x0C => 0x0000_0000,
+        0x0C => u32::from(m.cache_line) | (u32::from(m.latency) << 8),
         0x10 => ide_bar_read(m, 0, consume_probe),
         0x14 => ide_bar_read(m, 1, consume_probe),
         0x18 => ide_bar_read(m, 2, consume_probe),
@@ -1851,6 +1877,16 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             // nested iso=0 firmware IdeBus INTLINE: persist line; pin is RO.
             if off == 0x3C {
                 m.irq_line = val as u8;
+            }
+        } else if aligned == 0x0C {
+            // nested iso=0 firmware IdeBus LAT: persist CLS/latency; HT RO.
+            if off == 0x0C {
+                m.cache_line = val as u8;
+                if size != 1 {
+                    m.latency = (val >> 8) as u8;
+                }
+            } else if off == 0x0D {
+                m.latency = val as u8;
             }
         }
     });
