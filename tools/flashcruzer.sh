@@ -244,6 +244,7 @@ self_test() {
   grep -q '33459800906' "$SCRIPT_PATH"
   grep -q '33460343555' "$SCRIPT_PATH"
   grep -q '33460640154' "$SCRIPT_PATH"
+  grep -q '33461311226' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
@@ -266,6 +267,7 @@ self_test() {
   grep -q 'product ISO firmware IDE cmd ATA IRQ' "$SCRIPT_PATH"
   grep -q 'product ISO firmware IDE cmd inject ATA' "$SCRIPT_PATH"
   grep -q 'product ISO firmware IDE cmd ATA on HLT' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd I/O no inject' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -447,6 +449,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # CI 33460343555 VMXON-SKIP. do not F11 72885fa / --run 33460343555.
 # product ISO firmware IDE cmd ATA on HLT (defer 0x76 to CpuSleep after IdeBus Start; not mid-PciIo).
 # CI 33460640154 VMXON-SKIP. do not F11 244750c / --run 33460640154.
+# product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA 0x76 waits for CpuSleep).
+# CI 33461311226 VMXON-SKIP. do not F11 2d64091 / --run 33461311226.
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
 # do not F11 deb64f5 / --run 33444677681.
@@ -874,8 +878,14 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33460640154" ]]; then
     echo "error: run 33460640154 is 244750c IDE cmd inject ATA VMXON-SKIP (not ATAPI-OK)" >&2
-    echo "       product ISO firmware IDE cmd ATA on HLT; flash b5c3a9c / --run 33440050729." >&2
+    echo "       product ISO firmware IDE cmd I/O no inject; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 244750c / --run 33460640154." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33461311226" ]]; then
+    echo "error: run 33461311226 is 2d64091 IDE cmd ATA on HLT VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware IDE cmd I/O no inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 2d64091 / --run 33461311226." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

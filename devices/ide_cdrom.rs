@@ -53,6 +53,8 @@
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
 //! (not timer `0x20`) on the following CpuSleep HLT, not during the PCI OUT.
 //! product ISO firmware IDE cmd ATA on HLT.
+//! product ISO firmware IDE cmd I/O no inject: PCI command OUT does not
+//! inject; ATA `0x76` waits for CpuSleep.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than

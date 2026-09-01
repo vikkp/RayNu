@@ -104,6 +104,7 @@ use super::{
     guest_uefi_product_firmware_wake_preempt,
     guest_uefi_product_firmware_wake_delay_io,
     guest_uefi_product_firmware_wake_ide_cmd,
+    guest_uefi_product_firmware_ide_cmd_io_no_inject,
     guest_uefi_product_firmware_ide_cmd_inject_ata,
     guest_uefi_product_firmware_ide_cmd_ata_on_hlt,
     guest_uefi_product_firmware_hlt_ata,
@@ -1567,6 +1568,21 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_product_firmware_wake_ide_cmd(
         false, true, 1, 30, true
     ));
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_io_no_inject(false, true, 0, 30, true),
+        "product ISO firmware IDE cmd I/O no inject"
+    );
+    assert!(
+        !guest_uefi_product_firmware_ide_cmd_io_no_inject(false, true, 0, 12, true),
+        "product ISO firmware IDE cmd I/O no inject: HLT still injects"
+    );
+    assert!(!guest_uefi_product_firmware_ide_cmd_io_no_inject(
+        false, true, 0, 30, false
+    ));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 30, true, 1),
+        "product ISO firmware IDE cmd I/O no inject: skip_after_inject is HLT-only"
+    );
     assert!(
         include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd reset 0"),
         "product ISO firmware IDE cmd reset 0"
