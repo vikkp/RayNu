@@ -108,6 +108,7 @@ use super::{
     guest_uefi_i440fx_slot0_header_single_function,
     guest_uefi_nested_iso0_firmware_idebus_bar,
     guest_uefi_nested_iso0_firmware_idebus_bar_oneshot,
+    guest_uefi_nested_iso0_firmware_idebus_bootorder,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -1031,6 +1032,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus BAR oneshot"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33475246727"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0e4c1d8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus bootorder"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33475850114"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 f3761c4"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1644,6 +1648,18 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus BAR oneshot"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_bar_oneshot(0xFFFF_FFF9));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bootorder(
+            b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus bootorder"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_bootorder(
+            b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n\0"
+        ),
+        "ide@0,1/drive@0 is a historical needle"
+    );
     assert!(
         guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
         "nested iso=0 firmware LAPIC timer"
