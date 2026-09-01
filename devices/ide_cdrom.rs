@@ -160,6 +160,10 @@
 //! dispatch). A size-4 at `0x0A` reaches CLS `0x0C`; a size-4 at `0x1E`
 //! reaches BAR4. Dump `cfgw=`. CI `33536269880` VMXON-SKIP (`004ef9b`
 //! cfg read unproven). do not F11 004ef9b.
+//! nested iso=0 firmware IdeBus CF8: QEMU `pci_host_config_write` is
+//! dword-only (`addr==0 && len==4`). Dump `cf8s=`. CI `33537641723`
+//! VMXON ATAPI miss (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`).
+//! do not F11 30ccfc0.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -274,6 +278,10 @@
 //! nested iso=0 firmware IdeBus cfg write: QEMU one per-byte walk.
 //! CI `33536269880` VMXON-SKIP (`004ef9b` cfg read unproven). do not
 //! F11 004ef9b. Dump `cfgw=`.
+//! nested iso=0 firmware IdeBus CF8: QEMU `pci_host_config_write`
+//! stores `config_reg` only when `addr==0 && len==4`. Size-1/2 OUT to
+//! `0xCF8` is ignored. Dump `cf8s=`. CI `33537641723` VMXON ATAPI miss
+//! (`30ccfc0` `cfgw=0x30` `bar4=0x1` `ataio=0`). do not F11 30ccfc0.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
