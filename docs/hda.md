@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-eighty-first slice: nested iso=0 firmware IdeBus IDETIM (CI 33481842584 VMXON-SKIP; 9b6c2eb 0x8F unproven; PCI 0x40 decode-enable 0x80008000 not RAZ; dump idetim=; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-eighty-second slice: nested iso=0 firmware IdeBus connect (CI 33482463623 VMXON-SKIP; 23666d6 IDETIM unproven; controller-only ide@1,1 before Ata() child so ConnectDevicesFromQemu Starts Pci(1,1); F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus IDETIM; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus connect; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-second slice: nested iso=0 firmware IdeBus connect (CI 33482463623 VMXON-SKIP; 23666d6 IDETIM unproven; controller-only ide@1,1 before Ata() child so ConnectDevicesFromQemu Starts Pci(1,1); F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eighty-first slice: nested iso=0 firmware IdeBus IDETIM (CI 33481842584 VMXON-SKIP; 9b6c2eb 0x8F unproven; PCI 0x40 decode-enable 0x80008000 not RAZ; dump idetim=; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-eightieth slice: nested iso=0 firmware IdeBus prog-if native (CI 33478850408 VMXON-SKIP; 7c52010 0x8A unproven; 0x8F sets native bits 0+2 so GetBar not ISA 0x1F0; dump prgif=; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-ninth slice: nested iso=0 firmware IdeBus prog-if (CI 33477720477 VMXON-SKIP; 2b7a884 PCI cmd unproven; class 0x8A not compat-only 0x80; dump cmdn=/cmdwr=; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

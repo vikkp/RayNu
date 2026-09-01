@@ -105,7 +105,7 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     virtio_ok
         && boot_served
         && first == *b"/pci@i0c"
-        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1/drive@0")
+        && BOOTORDER.starts_with(b"/pci@i0cf8/ide@1,1\n")
         && !BOOTORDER.windows(15).any(|w| w == b"ide@0,1/drive@0")
 }
 
