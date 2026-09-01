@@ -2,7 +2,8 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    last_pci_cmd_wr, pci_addr_selects_cd, pci_bdf, pci_cmd, pci_cmd_writes, pci_config_addr,
+    pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
     product_iso_hides_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
@@ -39,6 +40,26 @@ fn pci_bdf_and_ports() {
     assert!(is_pci_data_port(0xCFC));
     assert!(is_pci_data_port(0xCFE));
     assert!(!is_pci_data_port(0xCF8));
+}
+
+#[test]
+fn ide_pci_cmdwr_counts_firmware_command_write() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(pci_cmd(), 0x0005);
+    assert_eq!(pci_cmd_writes(), 0);
+    assert_eq!(last_pci_cmd_wr(), 0);
+    pci_write_addr(0x8000_0104);
+    pci_write_data(0xCFC, 2, 0x0005);
+    assert_eq!(last_pci_cmd_wr(), 0x0005);
+    assert_eq!(pci_cmd(), 0x0005);
+    assert_eq!(pci_cmd_writes(), 1);
+    pci_write_data(0xCFC, 2, 0x0000);
+    assert_eq!(last_pci_cmd_wr(), 0x0000);
+    assert_eq!(pci_cmd(), 0x0001, "stored command still ORs IO on write");
+    assert_eq!(pci_cmd_writes(), 2);
+    reset();
+    assert_eq!(pci_cmd_writes(), 0);
 }
 
 #[test]

@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 e3cbfa5 one-shot then 16M-exit cap (ataio=0 catalog=0). Flash 21dc562 / 33559849096. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. PIT storm closed; ATA still missing. |
-| Gates touched | Stage 46 OPEN (3a one-shot done; 3b fail n=16777216). Not Everest E5. |
+| Summary | Iron COM2 21dc562 skip-HLT after one-shot then same CpuSleep. Next pin prints IDE cmdwr/pcicmd. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. HLT policy exhausted; ATA still missing. |
+| Gates touched | Stage 46 OPEN (3a skip-HLT done; 3b fail same hang). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -369,12 +369,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
-| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. Close path #229 is dest_ok plus one-shot PIT (proved `e3cbfa5`) plus skip-HLT after that wake. Do not F11 `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. Do not OR PCI command `0x0001`. |
+| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. Close path #229 is dest_ok plus skip-HLT after one-shot (proved `21dc562`, still `ataio=0`). Next is iron `cmdwr`/`pcicmd`. Do not F11 `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. Do not OR PCI command `0x0001`. |
 
 ---
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 21dc562 skip-HLT after one-shot then same CpuSleep; #229 prints IDE cmdwr/pcicmd; do not F11 33559849096; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 hit 16M exit cap (ataio=0 catalog=0); flash 21dc562 / 33559849096 skip-HLT; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e3cbfa5 PIT one-shot then HLT hang; #229 skip HLT after first wake; do not F11 33558261624; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock; #229 one-shot PIT after first wake; do not F11 33555104832; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

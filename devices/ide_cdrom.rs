@@ -52,7 +52,7 @@
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
@@ -263,6 +263,8 @@ static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
+static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -525,6 +527,8 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    PCI_CMD_WRITES.store(0, Ordering::Release);
+    LAST_PCI_CMD_WR.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -561,6 +565,23 @@ pub fn ata_nien() -> bool {
 /// `ata=0x0` only counted command-register writes.
 pub fn ata_io_accesses() -> u32 {
     ATA_IO_N.load(Ordering::Acquire)
+}
+
+/// Live IDE PCI command (offset 0x04). Default `0x0005` (IO+BusMaster).
+/// Iron COM2 `21dc562` never printed this; ADR-015 needs `cmdwr`/`pcicmd`.
+pub fn pci_cmd() -> u16 {
+    with_cd(|m| m.pci_cmd)
+}
+
+/// Count of firmware writes to IDE PCI command. Nested STAGE46_WALL is
+/// `cmdwr=0` after ParseBar. Do not OR `0x0001` without a write.
+pub fn pci_cmd_writes() -> u32 {
+    PCI_CMD_WRITES.load(Ordering::Acquire)
+}
+
+/// Last firmware value written to IDE PCI command (before the IO OR).
+pub fn last_pci_cmd_wr() -> u16 {
+    LAST_PCI_CMD_WR.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1555,7 +1576,15 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            m.pci_cmd = (val as u16) | 0x0001;
+            let wr = val as u16;
+            LAST_PCI_CMD_WR.store(wr, Ordering::Release);
+            m.pci_cmd = wr | 0x0001;
+            let n = PCI_CMD_WRITES.fetch_add(1, Ordering::AcqRel);
+            if n == 0 {
+                crate::boot::serial::write_line_nowait(
+                    "boot: Stage 46 IDE pci cmdwr (not ISO-INSTALL-OK)",
+                );
+            }
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             m.bar0 = (val & 0xFFFF_FFF8) | 1;

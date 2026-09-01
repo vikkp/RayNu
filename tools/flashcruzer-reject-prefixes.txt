@@ -19,3 +19,5 @@ f413a9fc
 937a2f6e
 # e3cbfa5 / 33558261624 PIT one-shot then HLT hang (ataio=0).
 8a2a359e
+# 21dc562 / 33559849096 skip-HLT after one-shot then same CpuSleep (ataio=0).
+938f9928
