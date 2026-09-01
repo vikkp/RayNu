@@ -131,6 +131,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_bar4_wmask,
     guest_uefi_nested_iso0_firmware_idebus_bar4_map,
     guest_uefi_nested_iso0_firmware_idebus_bmide_prd,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_status,
     guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
     guest_uefi_nested_iso0_firmware_idebus_bmide,
     guest_uefi_nested_iso0_firmware_idebus_bmide_io,
@@ -1851,6 +1852,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus BMIDE PRD"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_bmide_prd(0x1234_5607, 0x1234_5607));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_status(0x0007, 0x0027, 0x0280, 0xF900),
+        "nested iso=0 firmware IdeBus PCI cmd status"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_status(0, 0x0027, 0x0280, 0xF900));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
         "nested iso=0 firmware IdeBus BM sticky"

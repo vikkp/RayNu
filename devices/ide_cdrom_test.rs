@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, pci_status,
     pci_cmd_max,
     pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
@@ -22,6 +22,7 @@
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_IDETIM_RAZ, GUEST_CD_PCI_SUBSYS, GUEST_CD_PCI_SUBSYS_ZERO,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_CMD_WMASK_QEMU, GUEST_CD_PCI_STATUS,
+    GUEST_CD_PCI_STATUS_RESET, GUEST_CD_PCI_STATUS_W1C,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
     GUEST_CD_BMIDE_PRD_ALIGN,
@@ -538,6 +539,28 @@ fn pci_status_fast_back_with_devsel() {
         u32::from(GUEST_CD_PCI_CMD_WMASK_QEMU) | GUEST_CD_PCI_STATUS,
         "nested iso=0 firmware IdeBus PCI status: command write keeps FAST_BACK"
     );
+    reset();
+}
+
+#[test]
+fn pci_cmd_status_per_byte_w1c() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0xF900_0027);
+    assert_eq!(
+        pci_command(),
+        0x0007,
+        "nested iso=0 firmware IdeBus PCI cmd status: 0x27 stores 0x7"
+    );
+    assert_eq!(last_pci_cmd_in(), 0x0027);
+    assert_eq!(pci_status(), GUEST_CD_PCI_STATUS_RESET);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        u32::from(0x0007u16) | GUEST_CD_PCI_STATUS,
+        "nested iso=0 firmware IdeBus PCI cmd status: W1C 0xF900 leaves FAST_BACK"
+    );
+    assert_eq!(GUEST_CD_PCI_STATUS_W1C, 0xF900);
     reset();
 }
 

@@ -275,6 +275,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// nested iso=0 firmware IdeBus BAR4 wmask.
 /// nested iso=0 firmware IdeBus BAR4 map.
 /// nested iso=0 firmware IdeBus BMIDE PRD.
+/// nested iso=0 firmware IdeBus PCI cmd status.
 /// nested iso=0 firmware IdeBus PCI cmd mask.
 /// nested iso=0 firmware IdeBus PCI status.
 /// nested iso=0 firmware IdeBus INTLINE.
