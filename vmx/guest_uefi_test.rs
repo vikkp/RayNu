@@ -102,6 +102,7 @@ use super::{
     guest_uefi_firmware_hlt_inject_cap,
     guest_uefi_nested_iso0_firmware_hlt_inject_cap,
     NESTED_ISO0_FIRMWARE_HLT_INJECT_CAP,
+    guest_uefi_nested_iso0_firmware_hlt_skip_after_cap,
     guest_uefi_nested_iso0_firmware_hlt_skip_after_inject,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
@@ -1009,6 +1010,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest-UEFI stop inj"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33470144235"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ee90aad"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT skip after cap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33470837613"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e416806"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1503,18 +1507,33 @@ fn marker_and_residual_honest() {
         false, false, true, 0, 0x1e
     ));
     assert_eq!(
-        NESTED_ISO0_FIRMWARE_HLT_INJECT_CAP, 16384,
+        NESTED_ISO0_FIRMWARE_HLT_INJECT_CAP, 8,
         "nested iso=0 firmware HLT inject cap"
     );
     assert!(
         guest_uefi_nested_iso0_firmware_hlt_inject_cap(0),
         "nested iso=0 firmware HLT inject cap"
     );
-    assert!(guest_uefi_nested_iso0_firmware_hlt_inject_cap(16383));
+    assert!(guest_uefi_nested_iso0_firmware_hlt_inject_cap(7));
     assert!(
-        !guest_uefi_nested_iso0_firmware_hlt_inject_cap(16384),
-        "nested iso=0 firmware HLT inject cap: remaining HLT window"
+        !guest_uefi_nested_iso0_firmware_hlt_inject_cap(8),
+        "nested iso=0 firmware HLT inject cap: 8 shots then skip"
     );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+            false, false, true, 0, 12, 7
+        ),
+        "nested iso=0 firmware HLT skip after cap waits for 8"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+            false, false, true, 0, 12, 8
+        ),
+        "nested iso=0 firmware HLT skip after cap"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_cap(
+        true, false, true, 0, 12, 8
+    ));
     assert!(
         guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
         "nested iso=0 firmware HLT ATA"
