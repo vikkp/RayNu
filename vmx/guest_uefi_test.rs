@@ -86,6 +86,7 @@ use super::{
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
     guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_firmware_hlt_wait_for_irq,
+    guest_uefi_firmware_hlt_wait_for_irq_oneshot,
     guest_uefi_firmware_hlt_skip_after_inject,
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
@@ -963,6 +964,11 @@ fn marker_and_residual_honest() {
     assert!(
         E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock")
     );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after PIT one-shot"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e3cbfa5"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 e3cbfa5 PIT one-shot then HLT hang")
+    );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
@@ -1379,6 +1385,14 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq_oneshot(true, 16385, 12, true, 0, false),
+        "first HLT still waits for PIT"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_wait_for_irq_oneshot(true, 16385, 12, true, 0, true),
+        "iron e3cbfa5: do not wait after PIT one-shot"
+    );
     assert!(
         !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0),
         "do not skip CpuSleep before first ATA"

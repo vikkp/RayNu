@@ -17,3 +17,5 @@ f413a9fc
 6fc742b0
 # 24c5fa6 / 33555104832 wait-for-irq then stacked PIT livelock (ataio=0).
 937a2f6e
+# e3cbfa5 / 33558261624 PIT one-shot then HLT hang (ataio=0).
+8a2a359e

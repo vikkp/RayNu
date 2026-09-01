@@ -166,8 +166,11 @@ self_test() {
   grep -q '^26db0610$' "$REJECT_FILE"
   grep -q '^6fc742b0$' "$REJECT_FILE"
   grep -q '^937a2f6e$' "$REJECT_FILE"
+  grep -q '^8a2a359e$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
+  grep -q '33558261624' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
+  grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -401,10 +404,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # run 33333506987. Iron COM2 084430f Delay then HLT stall — do not F11
 # 084430f / run 33337287432. flashcruzer reject 2d6b109 dest skip.
 # do not F11 24c5fa6 / --run 33555104832 (wait-for-irq then PIT livelock).
-# firmware PIT one-shot after first wake. Not ISO-INSTALL-OK.
+# do not F11 e3cbfa5 / --run 33558261624 (one-shot then HLT hang).
+# firmware HLT skip after PIT one-shot. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33558261624" ]]; then
+    echo "error: run 33558261624 is e3cbfa5 PIT one-shot then HLT hang" >&2
+    echo "       one vec=0x20; IRET to rip=0x7f0680d0 ataio=0." >&2
+    echo "       do not F11 e3cbfa5 / --run 33558261624 again." >&2
+    echo "       do not F11 24c5fa6 / --run 33555104832 (PIT livelock)." >&2
+    echo "       wait for this SHA CI (skip HLT after PIT one-shot)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33555104832" || "$PIN_RUN" == "33554248661" ]]; then
     echo "error: run $PIN_RUN is 24c5fa6/ee82483 HLT wait-for-irq then PIT livelock" >&2
