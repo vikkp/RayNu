@@ -65,7 +65,10 @@
 //! nested iso=0 firmware IdeBus prog-if: class programming interface
 //! is `0x8A` (ISA compatibility, both channels, BM, native-capable),
 //! not compat-only `0x80`. Dump `cmdn=` `cmdwr=` so `pcicmd=` is not
-//! the only Start signal.
+//! the only Start signal. CI `33478850408` VMXON-SKIP (`7c52010`
+//! 0x8A unproven). do not F11 7c52010.
+//! nested iso=0 firmware IdeBus prog-if native: `0x8F` sets bits 0 and 2
+//! so IdeBus GetBar uses BAR0/BAR1, not ISA `0x1F0`.
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
@@ -124,11 +127,13 @@ pub const GUEST_CD_PCI_DEV: u8 = 0;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
-/// Mass-storage IDE, prog-if `0x8A` (native-capable), revision 0.
-/// nested iso=0 firmware IdeBus prog-if. Not `ISO-INSTALL-OK`.
-pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8A00;
-/// Programming interface byte (PCI 0x09). nested iso=0 firmware IdeBus prog-if.
-pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8A;
+/// Mass-storage IDE, prog-if `0x8F` (native both + BM), revision 0.
+/// nested iso=0 firmware IdeBus prog-if. nested iso=0 firmware IdeBus
+/// prog-if native. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8F00;
+/// Programming interface byte (PCI 0x09). Bits 0 and 2 = native both.
+/// nested iso=0 firmware IdeBus prog-if native.
+pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8F;
 
 const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
@@ -1642,7 +1647,7 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
-        // nested iso=0 firmware IdeBus prog-if: 0x8A not compat-only 0x80.
+        // nested iso=0 firmware IdeBus prog-if native: 0x8F not 0x8A/0x80.
         0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,

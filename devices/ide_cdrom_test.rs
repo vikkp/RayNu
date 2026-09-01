@@ -348,13 +348,13 @@ fn pci_class_prog_if_is_native_capable() {
     assert_eq!(
         pci_read_data(0xCFC, 4),
         GUEST_CD_PCI_CLASS,
-        "nested iso=0 firmware IdeBus prog-if: class dword 0x01018A00"
+        "nested iso=0 firmware IdeBus prog-if native: class dword 0x01018F00"
     );
     pci_write_addr(pci_config_addr() | 0x09);
     assert_eq!(
         pci_read_data(0xCFC, 1),
         u32::from(GUEST_CD_PCI_PROG_IF),
-        "nested iso=0 firmware IdeBus prog-if: byte 0x8A not 0x80"
+        "nested iso=0 firmware IdeBus prog-if native: byte 0x8F not 0x8A"
     );
     assert_eq!(pci_cmd_writes(), 0);
     reset();
