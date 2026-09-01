@@ -758,7 +758,10 @@ fn marker_and_residual_honest() {
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, false), 0x1002);
     assert_eq!(guest_uefi_io_string_advance(0x1000, 2, true), 0x0FFE);
     assert!(guest_uefi_io_string_fills_ram(0x1F0));
-    assert!(guest_uefi_io_string_fills_ram(0x170));
+    assert!(
+        !guest_uefi_io_string_fills_ram(0x170),
+        "nested iso=0 firmware IdeBus secondary empty: not ATA data"
+    );
     assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     assert!(guest_uefi_io_string_fills_ram(0x511));
     assert!(guest_uefi_fwcfg_string_fills_ram(0x511));

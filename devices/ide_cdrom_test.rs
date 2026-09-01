@@ -673,14 +673,19 @@ fn slave_absent_status_zero_identify_aborts() {
 fn secondary_channel_packet_read10() {
     reset();
     assert!(present_placeholder());
+    let scsi_before = last_scsi();
     let _ = ata_io(0x0177, false, 1, 0xA0);
     let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
     for chunk in cdb.chunks(2) {
         let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
         let _ = ata_io(0x0170, false, 2, w);
     }
-    assert_eq!(last_scsi(), 0x28);
-    assert!(sectors_read() >= 1);
+    assert_eq!(
+        last_scsi(),
+        scsi_before,
+        "nested iso=0 firmware IdeBus secondary empty: PACKET ignored"
+    );
+    assert_eq!(ata_io(0x0177, true, 1, 0) as u8, 0xFF);
     reset();
 }
 
