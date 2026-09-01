@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-forty-ninth slice: product ISO firmware HLT wake IDT 0x20 (pic=0 inject leftover PIT 0x20 on firmware HLT ataio==0; skip-only-after-inject IRET to RET; main skip_pit still drops 0x20). CI 33454130069 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-fiftieth slice: product ISO firmware HLT wake IDT 0x20 only (ignore unmasked LVT 0x27; do not take_highest_irr). CI 33454767329 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (product ISO firmware HLT wake IDT 0x20; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware HLT wake IDT 0x20 only; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fiftieth slice: product ISO firmware HLT wake IDT 0x20 only (ignore unmasked LVT 0x27; CI 33454767329 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-ninth slice: product ISO firmware HLT wake IDT 0x20 (pic=0 inject leftover PIT 0x20; skip-only-after-inject IRET to RET; CI 33454130069 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-eighth slice: product ISO firmware HLT wake LAPIC timer (pic=0 force LVT; CI 33453324709 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-forty-seventh slice: firmware HLT skip only after inject (iron COM2 b5c3a9c skip with inj=0; CI 33452659198 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

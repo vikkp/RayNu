@@ -166,6 +166,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware HLT skip only after inject (iron COM2 `b5c3a9c` skip with `inj=0`).
 /// product ISO firmware HLT wake LAPIC timer (CI `33453324709` VMXON-SKIP; pic=0 force LVT).
 /// product ISO firmware HLT wake IDT 0x20 (CI `33454130069` VMXON-SKIP; skip-only-after-inject IRET to RET).
+/// product ISO firmware HLT wake IDT 0x20 only (CI `33454767329` VMXON-SKIP; ignore unmasked LVT).
 /// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
 /// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
 /// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
@@ -234,6 +235,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake LAPIC.
 /// product ISO firmware HLT wake LAPIC timer.
 /// product ISO firmware HLT wake IDT 0x20.
+/// product ISO firmware HLT wake IDT 0x20 only.
 /// firmware HLT skip only after inject.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
