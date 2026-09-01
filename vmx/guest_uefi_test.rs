@@ -1006,6 +1006,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33469144799"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 65b94c1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 cfabb62"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest-UEFI stop inj"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33470144235"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ee90aad"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));

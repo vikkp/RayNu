@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-seventieth slice: nested iso=0 firmware HLT inject cap (CI 33469144799 VMXON skip-after-inject hlt=0 8x 0x20 ataio=0; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-seventy-first slice: guest-UEFI stop inj (CI 33470144235 VMXON-SKIP not ATAPI-OK; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware HLT inject cap; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (guest-UEFI stop inj; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-first slice: guest-UEFI stop inj (CI 33470144235 VMXON-SKIP not ATAPI-OK; inj= on POST_DXE_TAIL stop; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventieth slice: nested iso=0 firmware HLT inject cap (CI 33469144799 VMXON skip-after-inject hlt=0 8x 0x20 ataio=0 ATAPI-OK missing; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-ninth slice: nested iso=0 firmware HLT skip after inject (CI 33468177902 VMXON 8x inject vec=0x20 then skip-HLT ataio=0 ATAPI-OK missing; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-eighth slice: nested iso=0 firmware HLT 0x68 miss + firmware HLT inject cap (CI 33466890874 VMXON inject vec=0x68 CR livelock ataio=0 ATAPI-OK missing; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
