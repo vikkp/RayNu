@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-sixth slice: nested iso=0 firmware IdeBus PCI cmd RMW (CI 33508883644 VMXON ATAPI miss; de5fee7 pcicmd=0x0 cmdn=3 cmdwr=0x0 ataio=0; QEMU pci_default_write_config per-byte so size-1 OUT at 0x04 does not zero bits 8-15; dump cmdmax=; F11 pin stays 33440050729 do not re-flash; do not F11 de5fee7). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-seventh slice: nested iso=0 firmware IdeBus PCI cmd INTX (CI 33511226072 VMXON-SKIP; 0300ae3 RMW unproven; QEMU pci_init_wmask is IO|MEM|MASTER|INTX_DISABLE plus SERR 0x0507, live 0x0007 dropped bits 8 and 10 so EnableAttributes 0x0407/0x0507 readback failed before 0x3F6; F11 pin stays 33440050729 do not re-flash; do not F11 0300ae3). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus PCI cmd RMW; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus PCI cmd INTX; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-seventh slice: nested iso=0 firmware IdeBus PCI cmd INTX (CI 33511226072 VMXON-SKIP; 0300ae3 RMW unproven; QEMU pci_init_wmask is IO|MEM|MASTER|INTX_DISABLE plus SERR 0x0507, live 0x0007 dropped bits 8 and 10 so EnableAttributes 0x0407/0x0507 readback failed before 0x3F6; F11 pin stays 33440050729 do not re-flash; do not F11 0300ae3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-sixth slice: nested iso=0 firmware IdeBus PCI cmd RMW (CI 33508883644 VMXON ATAPI miss; de5fee7 pcicmd=0x0 cmdn=3 cmdwr=0x0 ataio=0; QEMU pci_default_write_config per-byte so size-1 OUT at 0x04 does not zero bits 8-15; dump cmdmax=; F11 pin stays 33440050729 do not re-flash; do not F11 de5fee7); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-fifth slice: nested iso=0 firmware IdeBus PCI cmd QEMU (CI 33508115698 VMXON-SKIP; edf0682 slot0 fn1 unproven; QEMU pci_init_wmask IO|MEM|MASTER 0x0007, ICH 0x0005 dropped MSE so EnableAttributes 0x0007 readback failed before 0x3F6; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-fourth slice: nested iso=0 firmware IdeBus slot0 fn1 (CI 33506851920 VMXON-SKIP; 98d20ea IDETIM RAZ unproven; QEMU i440FX 00:00.1 empty 0xFFFFFFFF, CD at PIIX 00:01.1 only so IdeBus Start is not a duplicate 0x1F0 bus; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -90,6 +90,11 @@
 //! updates the high command byte. Dump `cmdmax=`. CI `33508883644` VMXON
 //! `pcicmd=0x0` `cmdn=3` `cmdwr=0x0` `ataio=0` (ATAPI miss). do not F11
 //! de5fee7.
+//! nested iso=0 firmware IdeBus PCI cmd INTX: QEMU `pci_init_wmask` is
+//! IO|MEM|MASTER|INTX_DISABLE plus SERR (`0x0507`). Live `0x0007` dropped
+//! bits 8 and 10 so a word EnableAttributes `0x0407`/`0x0507` readback
+//! failed before ISA `0x3F6`. CI `33511226072` VMXON-SKIP (`0300ae3` RMW
+//! unproven). do not F11 0300ae3.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -155,6 +160,9 @@
 //! is `0x0007` (IO|MEM|MASTER). ICH `0x0005` stays historical. CI
 //! `33508115698` VMXON-SKIP (`edf0682` slot0 fn1 unproven). do not F11
 //! edf0682.
+//! nested iso=0 firmware IdeBus PCI cmd INTX: QEMU `pci_init_wmask` is
+//! `0x0507` (IO|MEM|MASTER|SERR|INTX_DISABLE). CI `33511226072` VMXON-SKIP
+//! (`0300ae3` RMW unproven). do not F11 0300ae3.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -228,10 +236,13 @@ pub const GUEST_CD_PCI_PROG_IF: u8 = 0x80;
 /// QEMU PIIX command BARs are unimplemented. PciBus must not claim ISA
 /// `0x1F0`. nested iso=0 firmware IdeBus ISA BAR. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
-/// QEMU `pci_init_wmask` PCI command: I/O + Memory + Bus Master (`0x0007`).
-/// `pci_piix_ide_realize` does not filter MSE. nested iso=0 firmware
-/// IdeBus PCI cmd QEMU. Not `ISO-INSTALL-OK`.
-pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0007;
+/// QEMU `pci_init_wmask` PCI command: I/O + Memory + Bus Master +
+/// INTX_DISABLE, then SERR (`0x0507`). nested iso=0 firmware IdeBus PCI
+/// cmd INTX. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0507;
+/// IO|MEM|MASTER only (`0x0007`). Historical needle. nested iso=0
+/// firmware IdeBus PCI cmd QEMU. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK_QEMU: u16 = 0x0007;
 /// ICH PIIX hardwired-0 MSE. Historical needle. nested iso=0 firmware
 /// IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_CMD_WMASK_ICH: u16 = 0x0005;

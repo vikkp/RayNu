@@ -20,7 +20,7 @@
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_IDETIM_RAZ,
-    GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
+    GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_CMD_WMASK_QEMU, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
     GUEST_CD_SEC_IOPORT,
@@ -473,11 +473,28 @@ fn pci_command_wmask_drops_mse() {
     pci_write_data(0xCFC, 4, 0x0007);
     assert_eq!(
         pci_command(),
-        GUEST_CD_PCI_CMD_WMASK,
+        GUEST_CD_PCI_CMD_WMASK_QEMU,
         "nested iso=0 firmware IdeBus PCI cmd QEMU: EnableAttributes 0x7 stores 0x7"
     );
     assert_eq!(last_pci_cmd_write(), 0x0007);
     assert_eq!(pci_cmd_max(), 0x0007);
+    assert!(take_ide_pci_cmd_wr_exit());
+    reset();
+}
+
+#[test]
+fn pci_command_wmask_keeps_intx_serr() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0507);
+    assert_eq!(
+        pci_command(),
+        GUEST_CD_PCI_CMD_WMASK,
+        "nested iso=0 firmware IdeBus PCI cmd INTX: EnableAttributes 0x507 stores 0x507"
+    );
+    assert_eq!(last_pci_cmd_write(), 0x0507);
+    assert_eq!(pci_cmd_max(), 0x0507);
     assert!(take_ide_pci_cmd_wr_exit());
     reset();
 }
@@ -512,7 +529,7 @@ fn pci_status_fast_back_with_devsel() {
     pci_write_data(0xCFC, 4, 0x0007);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        u32::from(GUEST_CD_PCI_CMD_WMASK) | GUEST_CD_PCI_STATUS,
+        u32::from(GUEST_CD_PCI_CMD_WMASK_QEMU) | GUEST_CD_PCI_STATUS,
         "nested iso=0 firmware IdeBus PCI status: command write keeps FAST_BACK"
     );
     reset();
