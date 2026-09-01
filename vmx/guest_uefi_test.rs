@@ -107,6 +107,8 @@ use super::{
     guest_uefi_product_firmware_ide_cmd_io_no_inject,
     guest_uefi_product_firmware_ide_cmd_inject_ata,
     guest_uefi_product_firmware_ide_cmd_ata_on_hlt,
+    guest_uefi_product_firmware_ide_cmd_hlt_timer,
+    guest_uefi_product_firmware_ide_cmd_hlt_vec,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
@@ -1620,6 +1622,23 @@ fn marker_and_residual_honest() {
     ));
     assert!(!guest_uefi_product_firmware_ide_cmd_ata_on_hlt(
         true, true, 0, 12, true
+    ));
+    assert!(
+        guest_uefi_product_firmware_ide_cmd_hlt_timer(false, true, 0, 12, true),
+        "product ISO firmware IDE cmd HLT 0x20"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_ide_cmd_hlt_vec(true),
+        0x20,
+        "product ISO firmware IDE cmd HLT 0x20"
+    );
+    assert_eq!(
+        guest_uefi_product_firmware_ide_cmd_hlt_vec(false),
+        0x20,
+        "product ISO firmware IDE cmd HLT 0x20: still 0x20 without pending"
+    );
+    assert!(!guest_uefi_product_firmware_ide_cmd_hlt_timer(
+        false, true, 1, 12, true
     ));
     assert_eq!(
         guest_uefi_product_firmware_hlt_ata_inject_vec(None),

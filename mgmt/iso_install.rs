@@ -177,6 +177,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware IDE cmd inject ATA (IdeBus Start PCI command write injects `0x76` not timer `0x20`; BAR/CF8 does not; CI `33460343555` VMXON-SKIP).
 /// product ISO firmware IDE cmd ATA on HLT (defer `0x76` to CpuSleep after IdeBus Start, not mid-PciIo; CI `33460640154` VMXON-SKIP).
 /// product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA `0x76` waits for CpuSleep; CI `33461311226` VMXON-SKIP).
+/// product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT `0x20` not ATA `0x76`; iron `cmd=0x00` `ataio=0` `pic=0`).
 /// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
 /// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
 /// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
@@ -256,6 +257,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware IDE cmd inject ATA.
 /// product ISO firmware IDE cmd ATA on HLT.
 /// product ISO firmware IDE cmd I/O no inject.
+/// product ISO firmware IDE cmd HLT 0x20.
 /// firmware HLT skip only after inject.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).

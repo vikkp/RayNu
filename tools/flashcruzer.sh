@@ -268,6 +268,7 @@ self_test() {
   grep -q 'product ISO firmware IDE cmd inject ATA' "$SCRIPT_PATH"
   grep -q 'product ISO firmware IDE cmd ATA on HLT' "$SCRIPT_PATH"
   grep -q 'product ISO firmware IDE cmd I/O no inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware IDE cmd HLT 0x20' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -451,6 +452,7 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # CI 33460640154 VMXON-SKIP. do not F11 244750c / --run 33460640154.
 # product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA 0x76 waits for CpuSleep).
 # CI 33461311226 VMXON-SKIP. do not F11 2d64091 / --run 33461311226.
+# product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT 0x20 not ATA 0x76; iron cmd=0x00 ataio=0 pic=0).
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
 # do not F11 deb64f5 / --run 33444677681.
