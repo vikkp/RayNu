@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-seventy-third slice: nested iso=0 firmware HLT PM1 SCI (CI 33471631130 VMXON-SKIP skip-after-cap; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-seventy-fourth slice: i440FX slot-0 Header Type single function (CI 33473305422 VMXON-SKIP SCI unproven; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware HLT PM1 SCI / 0x71; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (i440FX slot-0 Header Type single function / nested iso=0 firmware IdeBus PCI; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-fourth slice: i440FX slot-0 Header Type single function (CI 33473305422 VMXON-SKIP SCI unproven; duplicate 00:00.1 + PIIX 00:01.1 same 0x1F0; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-third slice: nested iso=0 firmware HLT PM1 SCI (CI 33471631130 VMXON-SKIP skip-after-cap; inject FADT SCI 0x71 not leftover LVT 0x20; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-second slice: nested iso=0 firmware HLT skip after cap (CI 33470837613 VMXON inj=1487 CPUID rip=0x7f0edbf5 ataio=0 ATAPI-OK missing; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-first slice: guest-UEFI stop inj (CI 33470144235 VMXON-SKIP not ATAPI-OK; inj= on POST_DXE_TAIL stop; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    pci_addr_selects_cd, pci_bdf, pci_command, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
     ide_pci_cmd_ata_hlt_pending,
@@ -239,6 +239,11 @@ fn pci_command_write_latches_ide_cmd_wake() {
         "product ISO firmware wake IDE cmd: idle"
     );
     pci_write_data(0xCFC, 4, 0x0005);
+    assert_eq!(
+        pci_command(),
+        0x0005,
+        "nested iso=0 firmware IdeBus PCI"
+    );
     assert!(
         take_ide_pci_cmd_wr_exit(),
         "product ISO firmware wake IDE cmd"

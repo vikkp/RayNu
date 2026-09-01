@@ -5,6 +5,9 @@
 //! VERIFICATION: L1 (runtime + host tests; QEMU is the guest-visible gate)
 //!
 //! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
+//! i440FX slot-0 Header Type single function so PciBus does not Start
+//! both (same `0x1F0` BARs; `ataio=0`). slot-0 Header Type is
+//! multifunction stays a historical needle. nested iso=0 firmware IdeBus PCI.
 //! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
 //! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
@@ -572,6 +575,12 @@ pub fn ata_commands() -> u32 {
 /// Last byte written to the ATA command register.
 pub fn last_ata_cmd() -> u8 {
     LAST_ATA_CMD.load(Ordering::Acquire)
+}
+
+/// IDE PCI command register (offset 0x04). Nested iso=0 firmware IdeBus PCI.
+/// Not `ISO-INSTALL-OK`.
+pub fn pci_command() -> u16 {
+    with_cd(|m| m.pci_cmd)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).

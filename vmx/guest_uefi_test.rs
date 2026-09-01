@@ -105,6 +105,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_hlt_skip_after_cap,
     guest_uefi_nested_iso0_firmware_hlt_skip_after_inject,
     guest_uefi_nested_iso0_firmware_hlt_pm1_sci,
+    guest_uefi_i440fx_slot0_header_single_function,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -1018,6 +1019,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT 0x71"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33471631130"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 1c7ff1c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("i440FX slot-0 Header Type single function"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus PCI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33473305422"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 68aff41"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1608,6 +1613,16 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pm1_sci(
         true, false, true, 0, 12
     ));
+    assert!(
+        guest_uefi_i440fx_slot0_header_single_function(0),
+        "i440FX slot-0 Header Type single function"
+    );
+    assert!(
+        !guest_uefi_i440fx_slot0_header_single_function(
+            crate::devices::guest_platform::PCI_HEADER_MULTIFUNCTION
+        ),
+        "slot-0 Header Type is multifunction stays a historical needle"
+    );
     assert!(
         guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
         "nested iso=0 firmware LAPIC timer"

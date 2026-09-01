@@ -893,7 +893,10 @@ fn virtio_fn0_is_multifunction() {
     assert!(pci_header_is_multifunction(ht));
     pci_write_addr(pci_config_addr_slot0() | 0x0C);
     let slot0_ht = pci_read_data(0xCFC, 4);
-    assert!(pci_header_is_multifunction(slot0_ht));
+    assert!(
+        !pci_header_is_multifunction(slot0_ht),
+        "i440FX slot-0 Header Type single function"
+    );
     reset();
 }
 

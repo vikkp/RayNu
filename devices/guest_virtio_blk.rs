@@ -18,8 +18,13 @@
 //! ICH9 `0x0600`; default `ASSERT(FALSE)`. Latch used to rewrite `00:00.0`
 //! to virtio `0x1042`, so DXE `PciRead16(OVMF_HOSTBRIDGE_DID)` missed the
 //! switch. `00:00.0` stays i440FX; latch reveals virtio at `00:02.0`.
-//! Header Type on slot 0 stays multifunction so a walk finds IDE fn1.
-//! PIIX `00:01.1` is the same CD. iso=0 boot order is CD then disk.
+//! Header Type on slot 0 stays multifunction so a walk finds IDE fn1
+//! is a historical needle. i440FX slot-0 Header Type single function:
+//! real i440FX `00:00.0` is not multifunction. Advertising fn1 made
+//! PciBus Start a second IDE at `00:00.1` with the same `0x1F0` BARs as
+//! PIIX `00:01.1`; ConnectAll then never IDENTIFY (`ataio=0`). PIIX
+//! `00:01.1` stays the CD. nested iso=0 firmware IdeBus PCI.
+//! iso=0 boot order is CD then disk.
 //! product ISO fw_cfg bootorder virtio-iso scsi@3 first (empty scsi@2
 //! last). product ISO fw_cfg bootorder El Torito ide@ first.
 //! ConnectDevicesFromQemu listing is not enough: iron COM2
@@ -415,7 +420,9 @@ fn slot0_dword(off: u8) -> u32 {
         0x00 => u32::from(HOST_BRIDGE_VENDOR) | (u32::from(HOST_BRIDGE_DEVICE) << 16),
         0x04 => 0x0000_0006,
         0x08 => 0x0600_0000, // host bridge (not virtio SCSI class)
-        0x0C => PCI_HEADER_MULTIFUNCTION,
+        // i440FX slot-0 Header Type single function. slot-0 Header Type is
+        // multifunction stays a historical needle (duplicate IDE ataio=0).
+        0x0C => 0,
         _ => 0,
     }
 }
