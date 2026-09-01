@@ -80,7 +80,7 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(count, FW_CFG_NAMED_FILE_COUNT);
     reset();
     let _ = io(0x510, false, 2, u64::from(FW_CFG_BOOTORDER_SEL));
-    let mut got = [0u8; 128];
+    let mut got = [0u8; 256];
     let n = BOOTORDER.len();
     for b in got.iter_mut().take(n) {
         *b = io(0x511, true, 1, 0) as u8;
