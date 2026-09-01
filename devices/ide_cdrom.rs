@@ -114,6 +114,11 @@
 //! decoded ports `0-7`. IdeBus Start probes both channels. CI
 //! `33499455958` VMXON-SKIP (`af80d50` BMIDE IO unproven). do not F11
 //! af80d50.
+//! nested iso=0 firmware IdeBus secondary absent: QEMU `ide_init_ioport`
+//! still decodes secondary; empty units read status `0x00` (no device),
+//! not floating `0xFF` (no controller) and not ATAPI `0x50`. CI
+//! `33500735336` VMXON-SKIP (`8b6b36a` secondary empty unproven). do not
+//! F11 8b6b36a.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -572,8 +577,9 @@ fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
     None
 }
 
-/// QEMU secondary IDE (`0x170`/`0x376`) is an empty channel. nested iso=0
-/// firmware IdeBus secondary empty.
+/// QEMU secondary IDE (`0x170`/`0x376`) is a decoded empty channel.
+/// nested iso=0 firmware IdeBus secondary empty. nested iso=0 firmware
+/// IdeBus secondary absent.
 fn ata_secondary_empty(port: u16) -> bool {
     (0x0170..=0x0177).contains(&port) || port == 0x0376
 }
@@ -2340,11 +2346,12 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             return if is_in { rax | 0xff } else { rax };
         }
         if ata_secondary_empty(port) {
-            // nested iso=0 firmware IdeBus secondary empty: floating bus.
+            // nested iso=0 firmware IdeBus secondary absent: QEMU empty
+            // unit status 0x00, not floating 0xFF, not ATAPI DRDY.
             ATA_IO_N.fetch_add(1, Ordering::AcqRel);
             if is_in {
                 let mask = io_mask(size);
-                return (rax & !mask) | (0xffu64 & mask);
+                return rax & !mask;
             }
             return rax;
         }

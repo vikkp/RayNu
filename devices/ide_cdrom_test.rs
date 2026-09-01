@@ -47,13 +47,13 @@ fn pci_bdf_and_ports() {
     assert!(is_ata_primary_port(0x376));
     assert_eq!(
         ata_io(0x170, true, 1, 0) as u8,
-        0xFF,
-        "nested iso=0 firmware IdeBus secondary empty: 0x170 floating"
+        0x00,
+        "nested iso=0 firmware IdeBus secondary absent: 0x170 empty unit"
     );
     assert_eq!(
         ata_io(0x376, true, 1, 0) as u8,
-        0xFF,
-        "nested iso=0 firmware IdeBus secondary empty: 0x376 floating"
+        0x00,
+        "nested iso=0 firmware IdeBus secondary absent: 0x376 empty unit"
     );
     assert!(!is_ata_primary_port(0x02), "unimplemented BAR1 does not steal port 2");
     assert!(!is_ata_primary_port(0x3F8));
@@ -74,17 +74,17 @@ fn secondary_channel_is_empty_not_atapi_alias() {
     );
     assert_eq!(
         ata_io(0x170, true, 1, 0) as u8,
-        0xFF,
-        "nested iso=0 firmware IdeBus secondary empty: not ATAPI alias"
+        0x00,
+        "nested iso=0 firmware IdeBus secondary absent: not ATAPI alias"
     );
-    assert_eq!(ata_io(0x376, true, 1, 0) as u8, 0xFF);
+    assert_eq!(ata_io(0x376, true, 1, 0) as u8, 0x00);
     assert!(!is_ata_data_port(0x170));
     assert!(!is_ata_primary_port(0x02));
     let before = ata_io_accesses();
     let _ = ata_io(0x376, false, 1, 0x02);
     assert!(
         ata_io_accesses() > before,
-        "nested iso=0 firmware IdeBus secondary empty: Start PIO counted"
+        "nested iso=0 firmware IdeBus secondary absent: Start PIO counted"
     );
     reset();
 }
@@ -683,9 +683,9 @@ fn secondary_channel_packet_read10() {
     assert_eq!(
         last_scsi(),
         scsi_before,
-        "nested iso=0 firmware IdeBus secondary empty: PACKET ignored"
+        "nested iso=0 firmware IdeBus secondary absent: PACKET ignored"
     );
-    assert_eq!(ata_io(0x0177, true, 1, 0) as u8, 0xFF);
+    assert_eq!(ata_io(0x0177, true, 1, 0) as u8, 0x00);
     reset();
 }
 
