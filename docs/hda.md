@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-sixty-first slice: product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT 0x20 not ATA 0x76; iron cmd=0x00 ataio=0 pic=0). F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-sixty-second slice: product ISO firmware no preempt inject (CF8 walk must finish; inject 0x20 on CpuSleep HLT not VMX preemption 52). CI 33461867968/33462312015 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (product ISO firmware IDE cmd HLT 0x20; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware no preempt inject; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-second slice: product ISO firmware no preempt inject (CF8 walk must finish; inject 0x20 on CpuSleep HLT not VMX preemption 52; CI 33461867968/33462312015 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-first slice: product ISO firmware IDE cmd HLT 0x20 (IdeBus Start CpuSleep injects IDT 0x20 not ATA 0x76; iron cmd=0x00 ataio=0 pic=0; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixtieth slice: product ISO firmware IDE cmd I/O no inject (PCI command OUT does not inject; ATA 0x76 waits for CpuSleep; CI 33461311226 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-ninth slice: product ISO firmware IDE cmd ATA on HLT (defer ATA 0x76 to CpuSleep after IdeBus Start, not mid-PciIo; CI 33460640154 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

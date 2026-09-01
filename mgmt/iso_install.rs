@@ -169,7 +169,8 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake IDT 0x20 only (CI `33454767329` VMXON-SKIP; ignore unmasked LVT).
 /// product ISO firmware HLT wake LVT unmask (CI `33455373334` VMXON-SKIP; inject 0x20 with LVT unmasked).
 /// product ISO firmware LVT timer inject (CI `33455903058` VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
-/// product ISO firmware wake preempt (CI `33456465331` VMXON-SKIP; HLT or VMX preemption 52; skip RIP stays HLT-only).
+/// product ISO firmware wake preempt (CI `33456465331` VMXON-SKIP; HLT only, not VMX preemption 52; skip RIP stays HLT-only).
+/// product ISO firmware no preempt inject (CF8 walk must finish; inject on CpuSleep HLT; CI `33461867968`/`33462312015` VMXON-SKIP).
 /// product ISO firmware wake Delay I/O (CI `33457132491` VMXON-SKIP; ACPI PM timer I/O Delay; skip RIP stays HLT-only; do not wake CF8).
 /// product ISO firmware wake IDE cmd (CI `33458084140` VMXON-SKIP; IdeBus Start PCI command write; empty CF8 does not wake).
 /// product ISO firmware IDE cmd reset 0 (PIIX/QEMU command is 0 at reset so IdeBus Start writes offset 0x04; reset `0x0005` skipped that write; CI `33459130885` VMXON-SKIP).
@@ -250,6 +251,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake LVT unmask.
 /// product ISO firmware LVT timer inject.
 /// product ISO firmware wake preempt.
+/// product ISO firmware no preempt inject.
 /// product ISO firmware wake Delay I/O.
 /// product ISO firmware wake IDE cmd.
 /// product ISO firmware IDE cmd reset 0.

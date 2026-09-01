@@ -102,6 +102,7 @@ use super::{
     guest_uefi_nested_iso0_ata_lapic,
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_product_firmware_wake_preempt,
+    guest_uefi_product_firmware_no_preempt_inject,
     guest_uefi_product_firmware_wake_delay_io,
     guest_uefi_product_firmware_wake_ide_cmd,
     guest_uefi_product_firmware_ide_cmd_io_no_inject,
@@ -1514,12 +1515,20 @@ fn marker_and_residual_honest() {
         "product ISO firmware wake preempt"
     );
     assert!(
-        guest_uefi_product_firmware_wake_preempt(52),
-        "product ISO firmware wake preempt"
+        guest_uefi_product_firmware_no_preempt_inject(52),
+        "product ISO firmware no preempt inject"
     );
     assert!(
-        guest_uefi_product_firmware_hlt_wake(false, true, 0, 52),
-        "product ISO firmware wake preempt"
+        !guest_uefi_product_firmware_no_preempt_inject(12),
+        "product ISO firmware no preempt inject: HLT still wakes"
+    );
+    assert!(
+        !guest_uefi_product_firmware_wake_preempt(52),
+        "product ISO firmware no preempt inject: CF8 walk"
+    );
+    assert!(
+        !guest_uefi_product_firmware_hlt_wake(false, true, 0, 52),
+        "product ISO firmware no preempt inject"
     );
     assert!(!guest_uefi_product_firmware_wake_preempt(0x1e));
     assert!(
