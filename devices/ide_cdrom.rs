@@ -124,6 +124,10 @@
 //! looked like no device so IdeBus Start skipped the channel without
 //! IDENTIFY. CI `33501858987` VMXON-SKIP (`2f513ec` secondary absent
 //! unproven). do not F11 2f513ec.
+//! nested iso=0 firmware IdeBus secondary abort: QEMU empty unit
+//! IDENTIFY/PACKET aborts READY|ERR `0x41` ABRT `0x04` so Start does
+//! not WaitForInterrupt. CI `33503174554` VMXON-SKIP (`96b4f0a`
+//! secondary DRDY unproven). do not F11 96b4f0a.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -235,7 +239,12 @@ pub const GUEST_CD_BMIDE_UNUSED: u8 = 0xFF;
 /// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
 /// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
+/// QEMU empty-unit IDENTIFY abort: READY|ERR, ABRT. nested iso=0 firmware
+/// IdeBus secondary abort. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_SEC_ABORT_STATUS: u8 = 0x41;
+pub const GUEST_CD_SEC_ABORT_ERR: u8 = 0x04;
 
+const ATA_ERR_ABRT: u8 = 0x04;
 const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
 const ATA_STATUS_SEEK: u8 = 0x10;
@@ -437,6 +446,10 @@ static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+/// Secondary empty-unit status (QEMU ide_reset READY|SEEK). nested iso=0
+/// firmware IdeBus secondary DRDY. nested iso=0 firmware IdeBus secondary abort.
+static SECONDARY_STATUS: AtomicU8 = AtomicU8::new(ATA_STATUS_DRDY | ATA_STATUS_SEEK);
+static SECONDARY_ERR: AtomicU8 = AtomicU8::new(0);
 /// Product IdeBus Start writes PCI command (offset 0x04). Empty-slot CF8
 /// does not set this. product ISO firmware wake IDE cmd.
 static IDE_PCI_CMD_WR_EXIT: AtomicBool = AtomicBool::new(false);
@@ -590,14 +603,29 @@ fn ata_secondary_empty(port: u16) -> bool {
 }
 
 /// QEMU `ide_reset` empty unit: READY|SEEK on status/alt, dummy data 0xFF.
-/// nested iso=0 firmware IdeBus secondary DRDY.
+/// IDENTIFY/PACKET abort READY|ERR + ABRT. nested iso=0 firmware IdeBus
+/// secondary DRDY. nested iso=0 firmware IdeBus secondary abort.
 fn ata_secondary_read(port: u16) -> u8 {
     if port == 0x0177 || port == 0x0376 {
-        ATA_STATUS_DRDY | ATA_STATUS_SEEK
+        SECONDARY_STATUS.load(Ordering::Acquire)
+    } else if port == 0x0171 {
+        SECONDARY_ERR.load(Ordering::Acquire)
     } else if port == 0x0170 {
         0xFF
     } else {
         0
+    }
+}
+
+fn ata_secondary_write(port: u16, val: u8) {
+    if port == 0x0177 {
+        // QEMU empty unit: IDENTIFY/PACKET/any command aborts.
+        SECONDARY_ERR.store(ATA_ERR_ABRT, Ordering::Release);
+        SECONDARY_STATUS.store(GUEST_CD_SEC_ABORT_STATUS, Ordering::Release);
+        let _ = val;
+    } else if port == 0x0376 && (val & ATA_DEVCTL_SRST) != 0 {
+        SECONDARY_ERR.store(0, Ordering::Release);
+        SECONDARY_STATUS.store(ATA_STATUS_DRDY | ATA_STATUS_SEEK, Ordering::Release);
     }
 }
 
@@ -788,6 +816,8 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    SECONDARY_STATUS.store(ATA_STATUS_DRDY | ATA_STATUS_SEEK, Ordering::Release);
+    SECONDARY_ERR.store(0, Ordering::Release);
     IDE_PCI_CMD_WR_EXIT.store(false, Ordering::Release);
     IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
     PCI_CMD_WR_N.store(0, Ordering::Release);
@@ -2363,15 +2393,15 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             return if is_in { rax | 0xff } else { rax };
         }
         if ata_secondary_empty(port) {
-            // nested iso=0 firmware IdeBus secondary DRDY: QEMU ide_reset
-            // sets READY|SEEK (0x50) on empty units; dummy data is 0xFF.
-            // Status 0x00 looked like no device; 0xFF like no controller.
+            // nested iso=0 firmware IdeBus secondary abort: QEMU empty
+            // unit IDENTIFY aborts READY|ERR + ABRT (not WaitForInterrupt).
             ATA_IO_N.fetch_add(1, Ordering::AcqRel);
             if is_in {
                 let val = ata_secondary_read(port);
                 let mask = io_mask(size);
                 return (rax & !mask) | (u64::from(val) & mask);
             }
+            ata_secondary_write(port, rax as u8);
             return rax;
         }
         let Some(reg) = ata_reg(m, port) else {

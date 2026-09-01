@@ -21,6 +21,7 @@
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
+    GUEST_CD_SEC_ABORT_STATUS, GUEST_CD_SEC_ABORT_ERR,
     pci_int_line, pci_latency, pci_cache_line,
     bmide_cmd, bmide_status, bmide_ins,
 };
@@ -87,6 +88,20 @@ fn secondary_channel_is_empty_not_atapi_alias() {
         ata_io_accesses() > before,
         "nested iso=0 firmware IdeBus secondary DRDY: Start PIO counted"
     );
+    let _ = ata_io(0x0177, false, 1, 0xEC);
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        GUEST_CD_SEC_ABORT_STATUS,
+        "nested iso=0 firmware IdeBus secondary abort: IDENTIFY"
+    );
+    assert_eq!(ata_io(0x0171, true, 1, 0) as u8, GUEST_CD_SEC_ABORT_ERR);
+    let _ = ata_io(0x0376, false, 1, 0x04);
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        0x50,
+        "nested iso=0 firmware IdeBus secondary abort: SRST restores DRDY"
+    );
+    assert_eq!(ata_io(0x0171, true, 1, 0) as u8, 0);
     reset();
 }
 
@@ -684,9 +699,14 @@ fn secondary_channel_packet_read10() {
     assert_eq!(
         last_scsi(),
         scsi_before,
-        "nested iso=0 firmware IdeBus secondary DRDY: PACKET ignored"
+        "nested iso=0 firmware IdeBus secondary abort: PACKET ignored"
     );
-    assert_eq!(ata_io(0x0177, true, 1, 0) as u8, 0x50);
+    assert_eq!(
+        ata_io(0x0177, true, 1, 0) as u8,
+        GUEST_CD_SEC_ABORT_STATUS,
+        "nested iso=0 firmware IdeBus secondary abort: READY|ERR"
+    );
+    assert_eq!(ata_io(0x0171, true, 1, 0) as u8, GUEST_CD_SEC_ABORT_ERR);
     reset();
 }
 
