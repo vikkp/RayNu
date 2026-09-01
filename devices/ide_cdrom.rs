@@ -85,6 +85,11 @@
 //! (`0x0007`). ICH `0x0005` dropped MSE so EnableAttributes `0x0007`
 //! readback failed before ISA `0x3F6`. CI `33508115698` VMXON-SKIP
 //! (`edf0682` slot0 fn1 unproven). do not F11 edf0682.
+//! nested iso=0 firmware IdeBus PCI cmd RMW: QEMU `pci_default_write_config`
+//! merges per-byte. A size-1 OUT at 0x04 must not zero bits 8-15; 0x05
+//! updates the high command byte. Dump `cmdmax=`. CI `33508883644` VMXON
+//! `pcicmd=0x0` `cmdn=3` `cmdwr=0x0` `ataio=0` (ATAPI miss). do not F11
+//! de5fee7.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -490,6 +495,9 @@ static IDE_PCI_CMD_ATA_HLT: AtomicBool = AtomicBool::new(false);
 static PCI_CMD_WR_N: AtomicU32 = AtomicU32::new(0);
 /// Last PCI command write (not OR-forced). Dump `cmdwr=`.
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+/// High-water PCI command since reset. Dump `cmdmax=`.
+/// nested iso=0 firmware IdeBus PCI cmd RMW.
+static PCI_CMD_MAX: AtomicU16 = AtomicU16::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -834,6 +842,7 @@ pub fn reset() {
     IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
     PCI_CMD_WR_N.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    PCI_CMD_MAX.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -876,6 +885,11 @@ pub fn pci_cmd_writes() -> u32 {
 /// Last PCI command write. Dump `cmdwr=`. nested iso=0 firmware IdeBus prog-if.
 pub fn last_pci_cmd_write() -> u16 {
     LAST_PCI_CMD_WR.load(Ordering::Acquire)
+}
+
+/// High-water PCI command. Dump `cmdmax=`. nested iso=0 firmware IdeBus PCI cmd RMW.
+pub fn pci_cmd_max() -> u16 {
+    PCI_CMD_MAX.load(Ordering::Acquire)
 }
 
 /// Live BAR0. QEMU PIIX leaves this unimplemented (`0`); ISA `0x1F0`
@@ -2014,14 +2028,28 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         }
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
-        if off == 0x04 {
-            // nested iso=0 firmware IdeBus PCI cmd QEMU: IO|MEM|MASTER.
-            m.pci_cmd = (val as u16) & GUEST_CD_PCI_CMD_WMASK;
+        if aligned == 0x04 && off <= 0x05 {
+            // nested iso=0 firmware IdeBus PCI cmd RMW: QEMU merges per-byte.
+            let shift = u32::from(off & 3) * 8;
+            let bits = match size {
+                1 => 8u32,
+                2 => 16,
+                _ => 32,
+            };
+            let width_mask = if bits >= 32 {
+                0xFFFF_FFFF
+            } else {
+                (1u32 << bits) - 1
+            };
+            let mask = width_mask << shift;
+            let merged = (u32::from(m.pci_cmd) & !mask) | ((val << shift) & mask);
+            m.pci_cmd = (merged as u16) & GUEST_CD_PCI_CMD_WMASK;
             LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
+            PCI_CMD_MAX.fetch_max(m.pci_cmd, Ordering::AcqRel);
             PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
             // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
             // do not force I/O-space. Disable is not IdeBus Start.
-            // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=.
+            // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=/cmdmax=.
             if (m.pci_cmd & 0x0001) != 0 {
                 // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
                 // product ISO firmware IDE cmd reset 0: this write now happens.

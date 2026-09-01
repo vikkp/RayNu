@@ -3,6 +3,7 @@
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
+    pci_cmd_max,
     pci_idetim,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
@@ -476,6 +477,24 @@ fn pci_command_wmask_drops_mse() {
         "nested iso=0 firmware IdeBus PCI cmd QEMU: EnableAttributes 0x7 stores 0x7"
     );
     assert_eq!(last_pci_cmd_write(), 0x0007);
+    assert_eq!(pci_cmd_max(), 0x0007);
+    assert!(take_ide_pci_cmd_wr_exit());
+    reset();
+}
+
+#[test]
+fn pci_command_byte_rmw_preserves_high() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 1, 0x07);
+    pci_write_data(0xCFD, 1, 0x00);
+    assert_eq!(
+        pci_command(),
+        0x0007,
+        "nested iso=0 firmware IdeBus PCI cmd RMW: size-1 OUT at 0x04 then 0x05 keeps 0x0007"
+    );
+    assert_eq!(pci_cmd_max(), 0x0007);
     assert!(take_ide_pci_cmd_wr_exit());
     reset();
 }
