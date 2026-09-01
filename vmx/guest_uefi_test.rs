@@ -129,6 +129,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_secondary_absent,
     guest_uefi_nested_iso0_firmware_idebus_secondary_drdy,
     guest_uefi_nested_iso0_firmware_idebus_secondary_abort,
+    guest_uefi_nested_iso0_firmware_idebus_secondary_ioport,
     guest_uefi_nested_iso0_firmware_idebus_cmd,
     guest_uefi_nested_iso0_firmware_idebus_progif,
     guest_uefi_nested_iso0_firmware_idebus_progif_native,
@@ -763,7 +764,7 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_io_string_fills_ram(0x1F0));
     assert!(
         !guest_uefi_io_string_fills_ram(0x170),
-        "nested iso=0 firmware IdeBus secondary DRDY: not ATA data"
+        "nested iso=0 firmware IdeBus secondary ioport: not ATA data"
     );
     assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     assert!(guest_uefi_io_string_fills_ram(0x511));
@@ -1828,6 +1829,12 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus secondary abort"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_abort(0x50, 0x04));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x376, 0),
+        "nested iso=0 firmware IdeBus secondary ioport"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x376, 0x50));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_secondary_ioport(0x177, 0x41));
     assert!(
         !guest_uefi_nested_iso0_firmware_idebus_bootorder(
             b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n\0"
