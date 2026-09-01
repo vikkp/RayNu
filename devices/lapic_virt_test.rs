@@ -173,6 +173,11 @@ fn firmware_lapic_timer_expiry_masked_uses_vec20() {
     assert!(force_firmware_lapic_timer_expiry(), "firmware LAPIC timer expiry");
     let v = take_highest_irr().expect("firmware LAPIC timer expiry IRR");
     assert_eq!(v, 0x20);
+    assert!(
+        firmware_lvt_timer_unmasked_0x20(),
+        "product ISO firmware LVT timer inject"
+    );
+    assert!(wrmsr(0x832, (LVT_MASKED | 0xEF) as u64).is_some());
     assert!(wrmsr(0x80B, 0).is_some());
 }
 

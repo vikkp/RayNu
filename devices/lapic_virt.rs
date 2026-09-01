@@ -113,6 +113,16 @@ fn lvt_timer_vector() -> u8 {
     unsafe { (APIC_LVT_TIMER & 0xFF) as u8 }
 }
 
+/// True when the firmware LVT timer is unmasked with vector `0x20`.
+/// Product skip_pit must not drop that periodic tick (CI `33455903058`
+/// VMXON-SKIP: unmask then main-path skip_pit ate every later `0x20`).
+/// Leftover PIT `0x20` while LVT is still masked `0xEF` still drops
+/// (iron `ea30da1`). product ISO firmware LVT timer inject.
+/// Not `ISO-INSTALL-OK`.
+pub fn firmware_lvt_timer_unmasked_0x20() -> bool {
+    timer_should_deliver() && lvt_timer_vector() == 0x20
+}
+
 fn bit_set(regs: *mut [u32; 8], vec: u8) {
     // SAFETY: caller passes exclusive APIC_IRR/ISR pointer on VMEXIT path.
     unsafe {

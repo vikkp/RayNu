@@ -91,6 +91,7 @@ use super::{
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_leftover_timer_vec,
+    guest_uefi_product_firmware_lvt_timer_inject,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
@@ -1474,10 +1475,16 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware LAPIC timer"
     );
     assert!(!guest_uefi_nested_iso0_firmware_lapic_timer(true, false, true, 0, 12));
+    let _ = crate::devices::lapic_virt::wrmsr(0x832, 0x1_0000 | 0xEF);
     assert!(
         guest_uefi_firmware_skip_pit_inject(false, 0x20),
-        "product skip_pit still drops 0x20"
+        "product skip_pit still drops 0x20 while LVT is masked"
     );
+    assert!(
+        !guest_uefi_product_firmware_lvt_timer_inject(false, 0x20),
+        "product ISO firmware LVT timer inject: masked LVT is leftover PIT"
+    );
+    assert!(!guest_uefi_product_firmware_lvt_timer_inject(true, 0x20));
     assert!(
         guest_uefi_firmware_skip_pit_inject(false, 0xEF),
         "product skip_pit still drops leftover LVT 0xEF"
