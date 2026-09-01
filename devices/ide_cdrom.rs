@@ -111,6 +111,11 @@
 //! `0xff` from PCI `0x40` through `0xFF`. IDETIM persist covered only
 //! the first dword. CI `33515762670` VMXON-SKIP (`1e95a93` LT RO
 //! unproven). do not F11 1e95a93. Dump `cfg44=`.
+//! nested iso=0 firmware IdeBus PCI ROM: QEMU PIIX IDE has no expansion
+//! ROM (`pci_register_bar` never sets `0x30`; wmask 0). Probe
+//! `0xFFFFFFFF` must read back 0, not a size mask. Dump `rom=`. CI
+//! `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven). do not F11
+//! c490f55.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -194,6 +199,9 @@
 //! RAZ of `0x44+` dropped SIDETIM/UDMA readback. Dump `cfg44=`. CI
 //! `33515762670` VMXON-SKIP (`1e95a93` LT RO unproven). do not F11
 //! 1e95a93.
+//! nested iso=0 firmware IdeBus PCI ROM: QEMU no ROM BAR at `0x30`
+//! (wmask 0). CI `33517730802` VMXON-SKIP (`c490f55` cfg RAM unproven).
+//! do not F11 c490f55. Dump `rom=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -309,6 +317,9 @@ pub const GUEST_CD_PCI_SDID: u16 = 0x1100;
 pub const GUEST_CD_PCI_SUBSYS: u32 = 0x1100_1AF4;
 /// Historical zero SVID. nested iso=0 firmware IdeBus PCI SVID.
 pub const GUEST_CD_PCI_SUBSYS_ZERO: u32 = 0;
+/// QEMU PIIX IDE has no expansion ROM at PCI `0x30`. Dump `rom=`.
+/// nested iso=0 firmware IdeBus PCI ROM. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_ROM: u32 = 0;
 /// PIIX BMIDE BAR4 reset: I/O bit, address 0 (unprogrammed). PciBus
 /// skips an address-0 command BAR. CI `33488202396` VMXON `bar4=0xcc01`
 /// `pcicmd=0x0` `ataio=0`. f3761c4 `bar4=1` `pcicmd=0x1`. Write-0 must
@@ -980,6 +991,12 @@ pub fn pci_cfg44() -> u32 {
 /// nested iso=0 firmware IdeBus PCI SVID.
 pub fn pci_svid() -> u32 {
     GUEST_CD_PCI_SUBSYS
+}
+
+/// PCI expansion ROM BAR (offset 0x30). QEMU unimplemented, always 0.
+/// Dump `rom=`. nested iso=0 firmware IdeBus PCI ROM.
+pub fn pci_rom() -> u32 {
+    GUEST_CD_PCI_ROM
 }
 
 /// PCI interrupt line (offset 0x3C). Dump `intl=`. nested iso=0 firmware
@@ -2047,6 +2064,8 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
         0x20 => ide_bar_read(m, 4, consume_probe),
         // nested iso=0 firmware IdeBus PCI SVID: QEMU default 0x1AF4:0x1100.
         0x2C => GUEST_CD_PCI_SUBSYS,
+        // nested iso=0 firmware IdeBus PCI ROM: QEMU no ROM BAR.
+        0x30 => GUEST_CD_PCI_ROM,
         0x3C => u32::from(m.irq_line) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
         // nested iso=0 firmware IdeBus PCI cfg RAM: QEMU 0x40-0xFF persist.
         off if off >= 0x40 => cfg40_dword(m, off),
@@ -2180,6 +2199,10 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
             ide_bar_write(m, 4, val);
+        } else if aligned == 0x30 {
+            // nested iso=0 firmware IdeBus PCI ROM: QEMU wmask 0, no
+            // size-probe sticky. 0xFFFFFFFF must not persist.
+            let _ = (size, val);
         } else if aligned >= 0x40 {
             // nested iso=0 firmware IdeBus PCI cfg RAM: QEMU
             // pci_init_wmask is 0xff from 0x40 through 0xFF.

@@ -4,7 +4,8 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
     pci_cmd_max,
-    pci_idetim, pci_cfg44, pci_svid,
+    pci_idetim, pci_cfg44, pci_svid, pci_rom,
+    GUEST_CD_PCI_ROM,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
@@ -666,6 +667,26 @@ fn pci_cfg44_persists_like_qemu_cfg_ram() {
         0,
         "nested iso=0 firmware IdeBus PCI cfg RAM: 0x40 unchanged"
     );
+    reset();
+}
+
+#[test]
+fn pci_rom_probe_stays_zero() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x30);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_ROM,
+        "nested iso=0 firmware IdeBus PCI ROM: reset 0x30 is 0"
+    );
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus PCI ROM: 0xFFFFFFFF probe is not sticky"
+    );
+    assert_eq!(pci_rom(), GUEST_CD_PCI_ROM);
     reset();
 }
 
