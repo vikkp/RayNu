@@ -106,6 +106,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_hlt_skip_after_inject,
     guest_uefi_nested_iso0_firmware_hlt_pm1_sci,
     guest_uefi_i440fx_slot0_header_single_function,
+    guest_uefi_nested_iso0_firmware_idebus_bar,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -1023,6 +1024,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus PCI"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33473305422"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 68aff41"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus BAR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33474177126"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 95a4724"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1622,6 +1626,14 @@ fn marker_and_residual_honest() {
             crate::devices::guest_platform::PCI_HEADER_MULTIFUNCTION
         ),
         "slot-0 Header Type is multifunction stays a historical needle"
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar(0x1F1, 0xFFFF_FFF9),
+        "nested iso=0 firmware IdeBus BAR"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_bar(0xFFFF_FFF9, 0xFFFF_FFF9),
+        "probe mask must not be the live command BAR"
     );
     assert!(
         guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),

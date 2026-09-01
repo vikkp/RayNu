@@ -46,7 +46,10 @@
 //! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
 //! (nested Intel `f93caee`: `0xA1`×4 `ataio=408` `packet=0`).
 //! Command BARs are 8-byte I/O (`0xFFFFFFFF` probe → `0xFFFFFFF9`); ATA
-//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. BMIDE BAR4 is
+//! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. nested iso=0
+//! firmware IdeBus BAR: size probe does not persist `0xFFFFFFF9` as the
+//! live command BAR (CI `33474177126` VMXON `pcicmd=0x1` `ataio=0`).
+//! BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
 //! IdeBus Start writes offset 0x04 (wake latch). Reset `0x0005` (I/O+BM
@@ -177,6 +180,9 @@ struct CdMedia {
     bar2: u32,
     bar3: u32,
     bar4: u32,
+    /// Bit i set: BAR i is in PCI size-probe; read returns the mask, live
+    /// address stays the previous value. nested iso=0 firmware IdeBus BAR.
+    bar_probe: u8,
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -222,6 +228,7 @@ impl CdMedia {
             bar2: 0x0171,
             bar3: 0x0375,
             bar4: 1,
+            bar_probe: 0,
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -581,6 +588,12 @@ pub fn last_ata_cmd() -> u8 {
 /// Not `ISO-INSTALL-OK`.
 pub fn pci_command() -> u16 {
     with_cd(|m| m.pci_cmd)
+}
+
+/// Live BAR0 (legacy `0x1F0`). Size-probe mask is not this value.
+/// nested iso=0 firmware IdeBus BAR. Not `ISO-INSTALL-OK`.
+pub fn pci_bar0() -> u32 {
+    with_cd(|m| m.bar0)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).
@@ -1512,6 +1525,71 @@ pub fn pci_read_addr() -> u32 {
     with_cd(|m| m.pci_addr)
 }
 
+fn ide_bar_read(m: &CdMedia, bar: u8) -> u32 {
+    let bit = 1u8 << bar;
+    if (m.bar_probe & bit) != 0 {
+        return match bar {
+            0 | 2 => 0xFFFF_FFF9,
+            1 | 3 => 0xFFFF_FFFD,
+            _ => 0xFFFF_FFF1,
+        };
+    }
+    match bar {
+        0 => m.bar0,
+        1 => m.bar1,
+        2 => m.bar2,
+        3 => m.bar3,
+        _ => m.bar4,
+    }
+}
+
+fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
+    let bit = 1u8 << bar;
+    // nested iso=0 firmware IdeBus BAR: 0xFFFFFFFF is size probe only.
+    if val == 0xFFFF_FFFF {
+        m.bar_probe |= bit;
+        return;
+    }
+    m.bar_probe &= !bit;
+    match bar {
+        0 => {
+            m.bar0 = if (val & 0xFFFF_FFF8) == 0 {
+                0x1F1
+            } else {
+                (val & 0xFFFF_FFF8) | 1
+            };
+        }
+        1 => {
+            m.bar1 = if (val & 0xFFFF_FFFC) == 0 {
+                0x03F5
+            } else {
+                (val & 0xFFFF_FFFC) | 1
+            };
+        }
+        2 => {
+            m.bar2 = if (val & 0xFFFF_FFF8) == 0 {
+                0x0171
+            } else {
+                (val & 0xFFFF_FFF8) | 1
+            };
+        }
+        3 => {
+            m.bar3 = if (val & 0xFFFF_FFFC) == 0 {
+                0x0375
+            } else {
+                (val & 0xFFFF_FFFC) | 1
+            };
+        }
+        _ => {
+            m.bar4 = if (val & 0xFFFF_FFF0) == 0 {
+                1
+            } else {
+                (val & 0xFFFF_FFF0) | 1
+            };
+        }
+    }
+}
+
 fn config_dword(m: &CdMedia, off: u8) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
@@ -1519,11 +1597,11 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x08 => 0x01018000, // class IDE, prog-if 0x80
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
-        0x10 => m.bar0,
-        0x14 => m.bar1,
-        0x18 => m.bar2,
-        0x1C => m.bar3,
-        0x20 => m.bar4,
+        0x10 => ide_bar_read(m, 0),
+        0x14 => ide_bar_read(m, 1),
+        0x18 => ide_bar_read(m, 2),
+        0x1C => ide_bar_read(m, 3),
+        0x20 => ide_bar_read(m, 4),
         0x2C => 0x0000_0000,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
@@ -1622,16 +1700,17 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
             raise_ata_irq(m);
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
-            m.bar0 = (val & 0xFFFF_FFF8) | 1;
+            // nested iso=0 firmware IdeBus BAR: do not persist the mask.
+            ide_bar_write(m, 0, val);
         } else if aligned == 0x14 {
-            m.bar1 = (val & 0xFFFF_FFFC) | 1;
+            ide_bar_write(m, 1, val);
         } else if aligned == 0x18 {
-            m.bar2 = (val & 0xFFFF_FFF8) | 1;
+            ide_bar_write(m, 2, val);
         } else if aligned == 0x1C {
-            m.bar3 = (val & 0xFFFF_FFFC) | 1;
+            ide_bar_write(m, 3, val);
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
-            m.bar4 = (val & 0xFFFF_FFF0) | 1;
+            ide_bar_write(m, 4, val);
         }
     });
 }
