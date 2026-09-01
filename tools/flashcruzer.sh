@@ -168,12 +168,15 @@ self_test() {
   grep -q '^937a2f6e$' "$REJECT_FILE"
   grep -q '^8a2a359e$' "$REJECT_FILE"
   grep -q '^938f9928$' "$REJECT_FILE"
+  grep -q '^43a38ac8$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
+  grep -q '33562028442' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
+  grep -q 'do not F11 184ee61' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -409,10 +412,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 24c5fa6 / --run 33555104832 (wait-for-irq then PIT livelock).
 # do not F11 e3cbfa5 / --run 33558261624 (one-shot then HLT hang).
 # do not F11 21dc562 / --run 33559849096 (skip-HLT then same CpuSleep).
-# Stage 46 IDE pci cmdwr. Not ISO-INSTALL-OK.
+# do not F11 184ee61 / --run 33562028442 (cmdwr=6 last wr=0x0 stored 0x1).
+# Honor IDE pci cmd (no OR 0x0001). Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33562028442" ]]; then
+    echo "error: run 33562028442 is 184ee61 IDE cmdwr OR hang" >&2
+    echo "       cmdwr=6 wr=0x0 pcicmd=0x1 (OR 0x0001 hid disable)." >&2
+    echo "       do not F11 184ee61 / --run 33562028442 again." >&2
+    echo "       do not F11 21dc562 / --run 33559849096." >&2
+    echo "       wait for this SHA CI (honor IDE pci cmd, no OR 0x0001)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33559849096" ]]; then
     echo "error: run 33559849096 is 21dc562 skip-HLT after PIT one-shot" >&2

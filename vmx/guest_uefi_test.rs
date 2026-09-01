@@ -975,6 +975,9 @@ fn marker_and_residual_honest() {
             .contains("iron COM2 21dc562 HLT skip after PIT one-shot then same CpuSleep")
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 IDE pci cmdwr"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 184ee61"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 184ee61 cmdwr=6 wr=0x0 pcicmd=0x1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("honor IDE pci cmd (no OR 0x0001)"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));

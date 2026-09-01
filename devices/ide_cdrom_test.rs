@@ -56,7 +56,7 @@ fn ide_pci_cmdwr_counts_firmware_command_write() {
     assert_eq!(pci_cmd_writes(), 1);
     pci_write_data(0xCFC, 2, 0x0000);
     assert_eq!(last_pci_cmd_wr(), 0x0000);
-    assert_eq!(pci_cmd(), 0x0001, "stored command still ORs IO on write");
+    assert_eq!(pci_cmd(), 0x0000, "honor COMMAND write; do not OR 0x0001");
     assert_eq!(pci_cmd_writes(), 2);
     reset();
     assert_eq!(pci_cmd_writes(), 0);

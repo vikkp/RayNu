@@ -573,13 +573,14 @@ pub fn pci_cmd() -> u16 {
     with_cd(|m| m.pci_cmd)
 }
 
-/// Count of firmware writes to IDE PCI command. Nested STAGE46_WALL is
-/// `cmdwr=0` after ParseBar. Do not OR `0x0001` without a write.
+/// Count of firmware writes to IDE PCI command. Iron COM2 `184ee61`:
+/// `cmdwr=6` `wr=0x0` `pcicmd=0x1` (OR `0x0001` hid the disable).
+/// Store the write as-is. Do not OR `0x0001`.
 pub fn pci_cmd_writes() -> u32 {
     PCI_CMD_WRITES.load(Ordering::Acquire)
 }
 
-/// Last firmware value written to IDE PCI command (before the IO OR).
+/// Last firmware value written to IDE PCI command (stored as written).
 pub fn last_pci_cmd_wr() -> u16 {
     LAST_PCI_CMD_WR.load(Ordering::Acquire)
 }
@@ -1576,13 +1577,15 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
+            // Iron COM2 184ee61: six writes, last wr=0x0, stored 0x1 because
+            // this OR hid disable. ADR-015: honor COMMAND.IO as written.
             let wr = val as u16;
             LAST_PCI_CMD_WR.store(wr, Ordering::Release);
-            m.pci_cmd = wr | 0x0001;
+            m.pci_cmd = wr;
             let n = PCI_CMD_WRITES.fetch_add(1, Ordering::AcqRel);
             if n == 0 {
                 crate::boot::serial::write_line_nowait(
-                    "boot: Stage 46 IDE pci cmdwr (not ISO-INSTALL-OK)",
+                    "boot: Stage 46 IDE pci cmdwr honor (not ISO-INSTALL-OK)",
                 );
             }
         } else if aligned == 0x10 {
