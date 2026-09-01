@@ -48,6 +48,8 @@
 //! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
 //! IdeBus Start writes offset 0x04 (wake latch). Reset `0x0005` (I/O+BM
 //! already on) skipped that write; iron `b5c3a9c` `ataio=0` after BOTH-OK.
+//! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
+//! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than
@@ -1575,7 +1577,9 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
             m.pci_cmd = (val as u16) | 0x0001;
             // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
             // product ISO firmware IDE cmd reset 0: this write now happens.
+            // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
             IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
+            raise_ata_irq(m);
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             m.bar0 = (val & 0xFFFF_FFF8) | 1;

@@ -1569,6 +1569,10 @@ fn marker_and_residual_honest() {
         include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd reset 0"),
         "product ISO firmware IDE cmd reset 0"
     );
+    assert!(
+        include_str!("../devices/ide_cdrom.rs").contains("product ISO firmware IDE cmd ATA IRQ"),
+        "product ISO firmware IDE cmd ATA IRQ"
+    );
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));

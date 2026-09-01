@@ -12,6 +12,7 @@
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
     present as present_iso, reset as reset_cd, write_placeholder_iso, MOCK_EFI_ISO_BYTES, ISO_SECTOR,
+    pci_config_addr, pci_write_addr, pci_write_data,
 };
 
 fn arm_product_iso() {
@@ -531,6 +532,28 @@ fn product_iso_srst_clear_raises_ata_irq() {
     assert!(
         ioapic_ata_ready() || pic_ata_ready(),
         "firmware SRST ATA IRQ"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_pci_cmd_write_raises_ata_irq() {
+    arm_product_iso();
+    pic_init_ovmf_edk2();
+    arm_firmware_ata_gsi14();
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0x1F1);
+    assert!(
+        !ioapic_ata_ready() && !pic_ata_ready(),
+        "product ISO firmware IDE cmd ATA IRQ: BAR write is not Start"
+    );
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0005);
+    assert!(
+        ioapic_ata_ready() || pic_ata_ready(),
+        "product ISO firmware IDE cmd ATA IRQ"
     );
     reset();
     reset_cd();
