@@ -101,6 +101,7 @@ use super::{
     guest_uefi_nested_iso0_ata_inject_vec,
     guest_uefi_nested_iso0_ata_lapic,
     guest_uefi_product_firmware_hlt_wake,
+    guest_uefi_product_firmware_wake_preempt,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
@@ -1501,6 +1502,23 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 1, 12));
     assert!(!guest_uefi_product_firmware_hlt_wake(false, false, 0, 12));
     assert!(!guest_uefi_product_firmware_hlt_wake(false, true, 0, 0x1e));
+    assert!(
+        guest_uefi_product_firmware_wake_preempt(12),
+        "product ISO firmware wake preempt"
+    );
+    assert!(
+        guest_uefi_product_firmware_wake_preempt(52),
+        "product ISO firmware wake preempt"
+    );
+    assert!(
+        guest_uefi_product_firmware_hlt_wake(false, true, 0, 52),
+        "product ISO firmware wake preempt"
+    );
+    assert!(!guest_uefi_product_firmware_wake_preempt(0x1e));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 52, true, 1),
+        "product ISO firmware wake preempt: skip_after_inject is HLT-only"
+    );
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));

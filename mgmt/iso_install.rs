@@ -169,6 +169,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake IDT 0x20 only (CI `33454767329` VMXON-SKIP; ignore unmasked LVT).
 /// product ISO firmware HLT wake LVT unmask (CI `33455373334` VMXON-SKIP; inject 0x20 with LVT unmasked).
 /// product ISO firmware LVT timer inject (CI `33455903058` VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
+/// product ISO firmware wake preempt (CI `33456465331` VMXON-SKIP; HLT or VMX preemption 52; skip RIP stays HLT-only).
 /// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
 /// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
 /// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
@@ -240,6 +241,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake IDT 0x20 only.
 /// product ISO firmware HLT wake LVT unmask.
 /// product ISO firmware LVT timer inject.
+/// product ISO firmware wake preempt.
 /// firmware HLT skip only after inject.
 /// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
 /// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
