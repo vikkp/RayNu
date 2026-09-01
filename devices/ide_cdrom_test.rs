@@ -251,6 +251,22 @@ fn pci_bar0_probe_does_not_clobber_live_bar() {
 }
 
 #[test]
+fn pci_bar0_probe_oneshot_second_read_is_live() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x10);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFF9);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0x1F1,
+        "nested iso=0 firmware IdeBus BAR oneshot: second dword is live BAR"
+    );
+    assert_eq!(pci_bar0(), 0x1F1);
+    reset();
+}
+
+#[test]
 fn pci_command_write_latches_ide_cmd_wake() {
     reset();
     assert!(present_placeholder());

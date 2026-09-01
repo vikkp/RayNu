@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-seventy-fifth slice: nested iso=0 firmware IdeBus BAR (CI 33474177126 VMXON pcicmd=0x1 8x 0x71 then skip-HLT ataio=0; size probe must not persist 0xFFFFFFF9 as live BAR0; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-seventy-sixth slice: nested iso=0 firmware IdeBus BAR oneshot (CI 33475246727 VMXON-SKIP; dword probe read then live 0x1F1 so skip-HLT cannot leave GetBar on 0xFFFFFFF9; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus BAR; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus BAR oneshot; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-sixth slice: nested iso=0 firmware IdeBus BAR oneshot (CI 33475246727 VMXON-SKIP; dword probe read returns mask then live 0x1F1; skip-HLT must not leave GetBar on 0xFFFFFFF9; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-fifth slice: nested iso=0 firmware IdeBus BAR (CI 33474177126 VMXON pcicmd=0x1 8x SCI 0x71 then skip-HLT ataio=0; 0xFFFFFFFF size probe must not persist as live BAR0; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-fourth slice: i440FX slot-0 Header Type single function (CI 33473305422 VMXON-SKIP SCI unproven; duplicate 00:00.1 + PIIX 00:01.1 same 0x1F0; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-third slice: nested iso=0 firmware HLT PM1 SCI (CI 33471631130 VMXON-SKIP skip-after-cap; inject FADT SCI 0x71 not leftover LVT 0x20; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

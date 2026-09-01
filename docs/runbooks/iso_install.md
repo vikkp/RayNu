@@ -264,6 +264,7 @@ git log -1 --oneline   # want this SHA (flash b5c3a9c pin 33440050729).
 # Do not pin --run 33473305422 (68aff41 nested VMXON-SKIP SCI unproven). i440FX slot-0 Header Type single function.
 # nested iso=0 firmware IdeBus PCI (duplicate 00:00.1 + PIIX 00:01.1 same 0x1F0; PciBus never IDENTIFY).
 # Do not pin --run 33474177126 (95a4724 nested VMXON pcicmd=0x1 8x 0x71 then skip-HLT ataio=0). nested iso=0 firmware IdeBus BAR.
+# Do not pin --run 33475246727 (0e4c1d8 nested VMXON-SKIP). nested iso=0 firmware IdeBus BAR oneshot.
 # firmware HLT inject cap (stop after 8; CI 33466890874 print-only cap kept injecting).
 # product ISO firmware HLT EDK2 0x68 (iron ea30da1 leftover 0x20 is timer ISR; do not force LVT).
 # nested iso=0 firmware HLT EDK2 0x68 (PIC take else 0x68; do not force leftover LVT 0x20).

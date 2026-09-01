@@ -49,6 +49,9 @@
 //! decodes legacy `0x1F0`/`0x170` and BAR-relocated ports. nested iso=0
 //! firmware IdeBus BAR: size probe does not persist `0xFFFFFFF9` as the
 //! live command BAR (CI `33474177126` VMXON `pcicmd=0x1` `ataio=0`).
+//! nested iso=0 firmware IdeBus BAR oneshot: dword probe read returns the
+//! mask then live `0x1F1` (CI `33475246727` VMXON-SKIP; skip-HLT can
+//! interrupt PciBus before it restores the BAR).
 //! BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
@@ -180,8 +183,10 @@ struct CdMedia {
     bar2: u32,
     bar3: u32,
     bar4: u32,
-    /// Bit i set: BAR i is in PCI size-probe; read returns the mask, live
-    /// address stays the previous value. nested iso=0 firmware IdeBus BAR.
+    /// Bit i set: BAR i is in PCI size-probe; the next dword read returns
+    /// the mask and clears the bit (oneshot). Live address stays the
+    /// previous value. nested iso=0 firmware IdeBus BAR.
+    /// nested iso=0 firmware IdeBus BAR oneshot.
     bar_probe: u8,
     ata_feat: u8,
     ata_count: u8,
@@ -594,6 +599,12 @@ pub fn pci_command() -> u16 {
 /// nested iso=0 firmware IdeBus BAR. Not `ISO-INSTALL-OK`.
 pub fn pci_bar0() -> u32 {
     with_cd(|m| m.bar0)
+}
+
+/// Sticky probe bits before oneshot consume. nested iso=0 firmware IdeBus
+/// BAR oneshot. Not `ISO-INSTALL-OK`.
+pub fn pci_bar_probe() -> u8 {
+    with_cd(|m| m.bar_probe)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).
@@ -1525,9 +1536,14 @@ pub fn pci_read_addr() -> u32 {
     with_cd(|m| m.pci_addr)
 }
 
-fn ide_bar_read(m: &CdMedia, bar: u8) -> u32 {
+fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
     let bit = 1u8 << bar;
     if (m.bar_probe & bit) != 0 {
+        // nested iso=0 firmware IdeBus BAR oneshot: skip-HLT can leave
+        // PciBus without a restore write (CI 33475246727 VMXON-SKIP).
+        if consume_probe {
+            m.bar_probe &= !bit;
+        }
         return match bar {
             0 | 2 => 0xFFFF_FFF9,
             1 | 3 => 0xFFFF_FFFD,
@@ -1590,18 +1606,18 @@ fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
     }
 }
 
-fn config_dword(m: &CdMedia, off: u8) -> u32 {
+fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
         0x08 => 0x01018000, // class IDE, prog-if 0x80
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
-        0x10 => ide_bar_read(m, 0),
-        0x14 => ide_bar_read(m, 1),
-        0x18 => ide_bar_read(m, 2),
-        0x1C => ide_bar_read(m, 3),
-        0x20 => ide_bar_read(m, 4),
+        0x10 => ide_bar_read(m, 0, consume_probe),
+        0x14 => ide_bar_read(m, 1, consume_probe),
+        0x18 => ide_bar_read(m, 2, consume_probe),
+        0x1C => ide_bar_read(m, 3, consume_probe),
+        0x20 => ide_bar_read(m, 4, consume_probe),
         0x2C => 0x0000_0000,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
@@ -1660,7 +1676,8 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             m.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }
-        let dword = config_dword(m, aligned);
+        let consume_probe = size != 1 && size != 2;
+        let dword = config_dword(m, aligned, consume_probe);
         let shift = (off & 3) * 8;
         let shifted = dword >> shift;
         match size {

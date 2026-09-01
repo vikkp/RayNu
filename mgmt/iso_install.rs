@@ -250,6 +250,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// i440FX slot-0 Header Type single function.
 /// nested iso=0 firmware IdeBus PCI.
 /// nested iso=0 firmware IdeBus BAR.
+/// nested iso=0 firmware IdeBus BAR oneshot.
 /// product ISO firmware HLT EDK2 0x68.
 /// nested iso=0 EDK2 IRQ0.
 /// nested iso=0 firmware LAPIC timer.
