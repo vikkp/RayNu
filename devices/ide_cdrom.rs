@@ -119,6 +119,11 @@
 //! not floating `0xFF` (no controller) and not ATAPI `0x50`. CI
 //! `33500735336` VMXON-SKIP (`8b6b36a` secondary empty unproven). do not
 //! F11 8b6b36a.
+//! nested iso=0 firmware IdeBus secondary DRDY: QEMU `ide_reset` sets
+//! READY|SEEK `0x50` on empty units (dummy data `0xFF`). Status `0x00`
+//! looked like no device so IdeBus Start skipped the channel without
+//! IDENTIFY. CI `33501858987` VMXON-SKIP (`2f513ec` secondary absent
+//! unproven). do not F11 2f513ec.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -582,6 +587,18 @@ fn ata_reg(m: &CdMedia, port: u16) -> Option<u8> {
 /// IdeBus secondary absent.
 fn ata_secondary_empty(port: u16) -> bool {
     (0x0170..=0x0177).contains(&port) || port == 0x0376
+}
+
+/// QEMU `ide_reset` empty unit: READY|SEEK on status/alt, dummy data 0xFF.
+/// nested iso=0 firmware IdeBus secondary DRDY.
+fn ata_secondary_read(port: u16) -> u8 {
+    if port == 0x0177 || port == 0x0376 {
+        ATA_STATUS_DRDY | ATA_STATUS_SEEK
+    } else if port == 0x0170 {
+        0xFF
+    } else {
+        0
+    }
 }
 
 fn bmide_base(m: &CdMedia) -> u16 {
@@ -2346,12 +2363,14 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
             return if is_in { rax | 0xff } else { rax };
         }
         if ata_secondary_empty(port) {
-            // nested iso=0 firmware IdeBus secondary absent: QEMU empty
-            // unit status 0x00, not floating 0xFF, not ATAPI DRDY.
+            // nested iso=0 firmware IdeBus secondary DRDY: QEMU ide_reset
+            // sets READY|SEEK (0x50) on empty units; dummy data is 0xFF.
+            // Status 0x00 looked like no device; 0xFF like no controller.
             ATA_IO_N.fetch_add(1, Ordering::AcqRel);
             if is_in {
+                let val = ata_secondary_read(port);
                 let mask = io_mask(size);
-                return rax & !mask;
+                return (rax & !mask) | (u64::from(val) & mask);
             }
             return rax;
         }
