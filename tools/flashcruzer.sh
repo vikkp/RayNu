@@ -320,6 +320,7 @@ self_test() {
   grep -q '33492680088' "$SCRIPT_PATH"
   grep -q '33493717089' "$SCRIPT_PATH"
   grep -q '33494990002' "$SCRIPT_PATH"
+  grep -q '33495768739' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
@@ -344,6 +345,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus PCI status' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus INTLINE' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus LAT' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus BM sticky' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -547,6 +549,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 828a002 / --run 33493717089.
 # nested iso=0 firmware IdeBus LAT (CI 33494990002 VMXON-SKIP; fe658f7 INTLINE unproven; QEMU CLS/latency persist).
 # do not F11 fe658f7 / --run 33494990002.
+# nested iso=0 firmware IdeBus BM sticky (CI 33495768739 VMXON-SKIP; 0c0f3cf LAT unproven; BAR4 probe mask until restore).
+# do not F11 0c0f3cf / --run 33495768739.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1246,6 +1250,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33494990002 is fe658f7 nested VMXON-SKIP (INTLINE unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus LAT; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 fe658f7 / --run 33494990002." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33495768739" ]]; then
+    echo "error: run 33495768739 is 0c0f3cf nested VMXON-SKIP (LAT unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus BM sticky; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 0c0f3cf / --run 33495768739." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

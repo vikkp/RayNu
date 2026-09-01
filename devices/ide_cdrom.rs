@@ -93,6 +93,10 @@
 //! (0x0C) and latency timer (0x0D) persist; header type stays 0.
 //! Hardwired 0 ignored PciBus program/readback. CI `33494990002`
 //! VMXON-SKIP (`fe658f7` INTLINE unproven). do not F11 fe658f7.
+//! nested iso=0 firmware IdeBus BM sticky: BAR4 size probe stays the
+//! mask until a restore write (QEMU). Oneshot consume left the second
+//! dword as address 0 so PciBus skipped IO assignment. CI `33495768739`
+//! VMXON-SKIP (`0c0f3cf` LAT unproven). do not F11 0c0f3cf.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -192,6 +196,8 @@ pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
 /// not restore `0xCC01`. nested iso=0 firmware IdeBus BM unprogrammed.
 /// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4_RESET: u32 = 1;
+/// BAR4 size-probe mask (16-byte I/O). nested iso=0 firmware IdeBus BM sticky.
+pub const GUEST_CD_PCI_BAR4_PROBE: u32 = 0xFFFF_FFF1;
 /// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
 /// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
@@ -1694,12 +1700,12 @@ fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
     }
     let bit = 1u8 << bar;
     if (m.bar_probe & bit) != 0 {
-        // nested iso=0 firmware IdeBus BAR oneshot: skip-HLT can leave
-        // PciBus without a restore write (CI 33475246727 VMXON-SKIP).
-        if consume_probe {
-            m.bar_probe &= !bit;
-        }
-        return 0xFFFF_FFF1;
+        // nested iso=0 firmware IdeBus BM sticky: QEMU keeps returning
+        // the size mask until a restore write. Oneshot consume was for
+        // BAR0 (now unimplemented). CI `33495768739` VMXON-SKIP
+        // (`0c0f3cf` LAT unproven). do not F11 0c0f3cf.
+        let _ = consume_probe;
+        return GUEST_CD_PCI_BAR4_PROBE;
     }
     m.bar4
 }

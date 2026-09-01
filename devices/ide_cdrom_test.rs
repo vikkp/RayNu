@@ -20,6 +20,7 @@
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
+    GUEST_CD_PCI_BAR4_PROBE,
     pci_int_line, pci_latency, pci_cache_line,
 };
 
@@ -289,6 +290,29 @@ fn pci_bar4_bmide_unprogrammed_until_assigned() {
     assert!(is_bmide_port(0xCC00));
     pci_write_data(0xCFC, 4, 0);
     assert_eq!(pci_bar4(), 1);
+    reset();
+}
+
+#[test]
+fn pci_bar4_probe_stays_until_restore() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BM sticky: first dword is mask"
+    );
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_BAR4_PROBE,
+        "nested iso=0 firmware IdeBus BM sticky: second dword stays mask"
+    );
+    assert_eq!(pci_bar4(), 1);
+    pci_write_data(0xCFC, 4, 0xCC01);
+    assert_eq!(pci_bar4(), 0xCC01);
+    assert_eq!(pci_read_data(0xCFC, 4), 0xCC01);
     reset();
 }
 
