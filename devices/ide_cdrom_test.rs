@@ -4,7 +4,7 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
     pci_cmd_max,
-    pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write,
+    pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
@@ -691,6 +691,13 @@ fn pci_bar4_qemu_wmask_per_byte_probe() {
     assert_eq!(pci_bar4(), GUEST_CD_PCI_BAR4_PROBE);
     assert_eq!(last_pci_bar4_write(), 0xFF);
     assert_eq!(GUEST_CD_PCI_BAR4_WMASK, 0xFFFF_FFF0);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
+    assert!(
+        !is_bmide_port(0xFFF0),
+        "nested iso=0 firmware IdeBus BAR4 map: probe must not decode 0xFFF0"
+    );
+    assert!(!pci_bar4_mapped());
     reset();
 }
 

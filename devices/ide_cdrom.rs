@@ -121,6 +121,11 @@
 //! `0xFFFFFFFF` stores `0xFFFFFFF1` in config (not a sticky side bit
 //! that left live BAR 1). Per-byte RMW. Dump `b4wr=`. CI `33519529357`
 //! VMXON-SKIP (`3bceb8f` ROM unproven). do not F11 3bceb8f.
+//! nested iso=0 firmware IdeBus BAR4 map: QEMU `pci_bar_address` I/O is
+//! unmapped when COMMAND.IO is 0, address is 0, or
+//! `last_addr >= UINT32_MAX` (probe `0xFFFFFFF0+15=0xFFFFFFFF` must not
+//! decode as `0xFFF0`). Dump `b4map=`. CI `33521391092` VMXON-SKIP
+//! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -210,6 +215,9 @@
 //! nested iso=0 firmware IdeBus BAR4 wmask: QEMU wmask `0xFFFFFFF0`,
 //! type bit RO. CI `33519529357` VMXON-SKIP (`3bceb8f` ROM unproven).
 //! do not F11 3bceb8f. Dump `b4wr=`.
+//! nested iso=0 firmware IdeBus BAR4 map: QEMU `pci_bar_address` wrap
+//! `last >= UINT32_MAX` unmapped. CI `33521391092` VMXON-SKIP
+//! (`5c7ec22` BAR4 wmask unproven). do not F11 5c7ec22. Dump `b4map=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -339,6 +347,10 @@ pub const GUEST_CD_PCI_BAR4_PROBE: u32 = 0xFFFF_FFF1;
 /// QEMU `pci_register_bar` 16-byte I/O: `wmask = ~(size-1)`. Type bit
 /// is RO 1. nested iso=0 firmware IdeBus BAR4 wmask. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4_WMASK: u32 = 0xFFFF_FFF0;
+/// QEMU `pci_bar_address` I/O last-byte compare (`UINT32_MAX`). Probe
+/// `0xFFFFFFF0 + 16 - 1` hits this and stays unmapped. nested iso=0
+/// firmware IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR4_LAST_MAX: u32 = 0xFFFF_FFFF;
 /// QEMU `bmdma_read` when size != 1. nested iso=0 firmware IdeBus BMIDE.
 pub const GUEST_CD_BMIDE_WIDE: u32 = 0xFFFF_FFFF;
 /// Unused BMIDE byte offsets (+1/+3) read `0xFF`. nested iso=0 firmware
@@ -730,19 +742,37 @@ fn ata_secondary_write(_port: u16, _val: u8) {
 }
 
 fn bmide_base(m: &CdMedia) -> u16 {
-    (m.bar4 & !0xF) as u16
+    bmide_mapped_base(m).unwrap_or(0)
+}
+
+/// QEMU `pci_bar_address` for a 16-byte I/O BAR. nested iso=0 firmware
+/// IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+fn bmide_mapped_base(m: &CdMedia) -> Option<u16> {
+    if (m.pci_cmd & 0x0001) == 0 {
+        return None;
+    }
+    let new_addr = m.bar4 & GUEST_CD_PCI_BAR4_WMASK;
+    let last_addr = new_addr.wrapping_add(15);
+    // QEMU: last_addr <= new_addr || last_addr >= UINT32_MAX || new_addr == 0.
+    // Probe stores 0xFFFFFFF1 so new=0xFFFFFFF0 last=0xFFFFFFFF (unmapped).
+    // Truncating that to u16 looked like 0xFFF0.
+    if last_addr <= new_addr || last_addr >= GUEST_CD_PCI_BAR4_LAST_MAX || new_addr == 0 {
+        return None;
+    }
+    if new_addr > 0xFFFF {
+        return None;
+    }
+    Some(new_addr as u16)
 }
 
 /// Bus-master IDE (BAR4, 16-byte I/O). Address 0 is unprogrammed — do not
 /// steal the PIC/PIT range. nested iso=0 firmware IdeBus BMIDE IO: QEMU
 /// `pci_register_bar` decodes only when COMMAND.IO is set.
+/// nested iso=0 firmware IdeBus BAR4 map: size-probe wrap is unmapped.
 pub fn is_bmide_port(port: u16) -> bool {
-    with_cd(|m| {
-        if (m.pci_cmd & 0x0001) == 0 {
-            return false;
-        }
-        let base = bmide_base(m);
-        base != 0 && port.wrapping_sub(base) < 16
+    with_cd(|m| match bmide_mapped_base(m) {
+        Some(base) => port.wrapping_sub(base) < 16,
+        None => false,
     })
 }
 
@@ -975,6 +1005,12 @@ pub fn pci_cmd_max() -> u16 {
 /// BAR4 wmask. Not `ISO-INSTALL-OK`.
 pub fn last_pci_bar4_write() -> u32 {
     LAST_BAR4_WR.load(Ordering::Acquire)
+}
+
+/// QEMU `pci_bar_address` mapped the 16-byte BMIDE window. Dump `b4map=`.
+/// nested iso=0 firmware IdeBus BAR4 map. Not `ISO-INSTALL-OK`.
+pub fn pci_bar4_mapped() -> bool {
+    with_cd(|m| bmide_mapped_base(m).is_some())
 }
 
 /// Live BAR0. QEMU PIIX leaves this unimplemented (`0`); ISA `0x1F0`

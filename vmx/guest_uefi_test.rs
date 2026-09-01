@@ -129,6 +129,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_cfg_ram,
     guest_uefi_nested_iso0_firmware_idebus_rom,
     guest_uefi_nested_iso0_firmware_idebus_bar4_wmask,
+    guest_uefi_nested_iso0_firmware_idebus_bar4_map,
     guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
     guest_uefi_nested_iso0_firmware_idebus_bmide,
     guest_uefi_nested_iso0_firmware_idebus_bmide_io,
@@ -1838,6 +1839,12 @@ fn marker_and_residual_honest() {
     );
     assert!(guest_uefi_nested_iso0_firmware_idebus_bar4_wmask(0xCC01, 0xCC00));
     assert!(!guest_uefi_nested_iso0_firmware_idebus_bar4_wmask(1, 0xFFFF_FFFF));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_bar4_map(false, 0xFFFF_FFF1, true),
+        "nested iso=0 firmware IdeBus BAR4 map"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_bar4_map(true, 0xCC01, true));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_bar4_map(true, 0xFFFF_FFF1, true));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
         "nested iso=0 firmware IdeBus BM sticky"
