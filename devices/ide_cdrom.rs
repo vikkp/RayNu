@@ -57,6 +57,10 @@
 //! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
 //! IdeBus Start writes offset 0x04 (wake latch). Reset `0x0005` (I/O+BM
 //! already on) skipped that write; iron `b5c3a9c` `ataio=0` after BOTH-OK.
+//! nested iso=0 firmware IdeBus PCI cmd: do not OR `0x0001` on command
+//! writes (CI `33477097074` VMXON-SKIP; CI `33475850114` `pcicmd=0x1`
+//! was a 0-or-1 write, not IdeBus EnableAttributes `0x5`). Disable
+//! (`0`) is not Start.
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
@@ -1705,16 +1709,20 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            m.pci_cmd = (val as u16) | 0x0001;
-            // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
-            // product ISO firmware IDE cmd reset 0: this write now happens.
-            // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
-            // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
-            // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
-            // the CF8/CFC OUT; CpuSleep HLT consumes it.
-            IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
-            IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
-            raise_ata_irq(m);
+            m.pci_cmd = val as u16;
+            // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
+            // do not force I/O-space. Disable is not IdeBus Start.
+            if (m.pci_cmd & 0x0001) != 0 {
+                // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
+                // product ISO firmware IDE cmd reset 0: this write now happens.
+                // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
+                // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
+                // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
+                // the CF8/CFC OUT; CpuSleep HLT consumes it.
+                IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
+                IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
+                raise_ata_irq(m);
+            }
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             // nested iso=0 firmware IdeBus BAR: do not persist the mask.

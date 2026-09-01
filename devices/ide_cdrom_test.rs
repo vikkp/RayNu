@@ -315,6 +315,24 @@ fn pci_command_write_latches_ide_cmd_wake() {
 }
 
 #[test]
+fn pci_command_disable_is_not_start() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0);
+    assert_eq!(
+        pci_command(),
+        0,
+        "nested iso=0 firmware IdeBus PCI cmd: write 0 stays 0"
+    );
+    assert!(
+        !take_ide_pci_cmd_wr_exit(),
+        "nested iso=0 firmware IdeBus PCI cmd: disable is not Start"
+    );
+    reset();
+}
+
+#[test]
 fn pci_bar0_relocated_packet_read10_counts_sector() {
     reset();
     assert!(present_placeholder());
