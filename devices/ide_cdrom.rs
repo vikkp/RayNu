@@ -145,6 +145,11 @@
 //! Latency/header/BIST stay RO 0. Dump `clwr=`. CI `33531358763`
 //! VMXON ATAPI miss (`436df8d` `ilwr=0` `intl=0` `cls=0` `ataio=0`).
 //! do not F11 436df8d.
+//! nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
+//! `pci_default_write_config` walks `0x40` through `0xFF` per-byte
+//! (`wmask` `0xFF`), including dword-spanning writes. Dump `c40w=`.
+//! CI `33533510182` VMXON-SKIP (`1465367` CLS RMW unproven).
+//! do not F11 1465367.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -250,6 +255,9 @@
 //! nested iso=0 firmware IdeBus CLS RMW: QEMU CACHE_LINE_SIZE
 //! per-byte. CI `33531358763` VMXON ATAPI miss (`436df8d`
 //! `ilwr=0` `intl=0` `cls=0`). do not F11 436df8d. Dump `clwr=`.
+//! nested iso=0 firmware IdeBus cfg RAM RMW: QEMU `0x40`–`0xFF`
+//! per-byte, spanning dwords. CI `33533510182` VMXON-SKIP
+//! (`1465367` CLS RMW unproven). do not F11 1465367. Dump `c40w=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -642,6 +650,9 @@ static LAST_INTLINE_WR: AtomicU8 = AtomicU8::new(0);
 /// Last CACHE_LINE_SIZE byte written. Dump `clwr=`.
 /// nested iso=0 firmware IdeBus CLS RMW.
 static LAST_CLS_WR: AtomicU8 = AtomicU8::new(0);
+/// Last PCI cfg RAM (`0x40`–`0xFF`) byte written. Dump `c40w=`.
+/// nested iso=0 firmware IdeBus cfg RAM RMW.
+static LAST_CFG40_WR: AtomicU8 = AtomicU8::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -1010,6 +1021,7 @@ pub fn reset() {
     LAST_BAR4_WR.store(0, Ordering::Release);
     LAST_INTLINE_WR.store(0, Ordering::Release);
     LAST_CLS_WR.store(0, Ordering::Release);
+    LAST_CFG40_WR.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -1141,6 +1153,12 @@ pub fn last_pci_intline_write() -> u8 {
 /// IdeBus CLS RMW. Not `ISO-INSTALL-OK`.
 pub fn last_pci_cls_write() -> u8 {
     LAST_CLS_WR.load(Ordering::Acquire)
+}
+
+/// Last PCI cfg RAM byte written. Dump `c40w=`. nested iso=0 firmware
+/// IdeBus cfg RAM RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg40_write() -> u8 {
+    LAST_CFG40_WR.load(Ordering::Acquire)
 }
 
 /// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
@@ -2172,30 +2190,27 @@ fn cfg40_dword(m: &CdMedia, aligned: u8) -> u32 {
 }
 
 fn cfg40_write(m: &mut CdMedia, off: u8, size: u8, val: u32) {
-    let aligned = off & 0xFC;
-    let base = aligned.wrapping_sub(0x40) as usize;
-    if base.saturating_add(3) >= m.pci_cfg40.len() {
-        return;
+    // nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
+    // pci_default_write_config walks 0x40-0xFF per-byte (wmask 0xFF),
+    // including writes that span the next dword.
+    let n = match size {
+        1 => 1u8,
+        2 => 2,
+        _ => 4,
+    };
+    for i in 0..n {
+        let a = off.wrapping_add(i);
+        if a < 0x40 {
+            continue;
+        }
+        let idx = (a as usize).wrapping_sub(0x40);
+        if idx >= m.pci_cfg40.len() {
+            continue;
+        }
+        let b = (val >> (8 * u32::from(i))) as u8;
+        LAST_CFG40_WR.store(b, Ordering::Release);
+        m.pci_cfg40[idx] = b;
     }
-    let mut dword = cfg40_dword(m, aligned);
-    let shift = u32::from(off & 3) * 8;
-    let bits = match size {
-        1 => 8u32,
-        2 => 16,
-        _ => 32,
-    };
-    let width_mask = if bits >= 32 {
-        0xFFFF_FFFF
-    } else {
-        (1u32 << bits) - 1
-    };
-    let mask = width_mask << shift;
-    dword = (dword & !mask) | ((val << shift) & mask);
-    let bytes = dword.to_le_bytes();
-    m.pci_cfg40[base] = bytes[0];
-    m.pci_cfg40[base + 1] = bytes[1];
-    m.pci_cfg40[base + 2] = bytes[2];
-    m.pci_cfg40[base + 3] = bytes[3];
 }
 
 fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
@@ -2373,13 +2388,15 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             // size-probe sticky. 0xFFFFFFFF must not persist.
             let _ = (size, val);
         } else if aligned >= 0x40 {
-            // nested iso=0 firmware IdeBus PCI cfg RAM: QEMU
-            // pci_init_wmask is 0xff from 0x40 through 0xFF.
+            // nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
+            // pci_default_write_config walks 0x40-0xFF per-byte.
             cfg40_write(m, off, size, val);
         } else if aligned == 0x3C {
             // nested iso=0 firmware IdeBus INTLINE RMW: QEMU
             // pci_default_write_config walks INTERRUPT_LINE per-byte
             // (wmask 0xFF). Pin/MinGnt/MaxLat stay RO 0.
+            // nested iso=0 firmware IdeBus cfg RAM RMW: a size-4 at
+            // 0x3D reaches 0x40.
             let n = match size {
                 1 => 1u8,
                 2 => 2,
@@ -2391,6 +2408,12 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 if a == 0x3C {
                     LAST_INTLINE_WR.store(b, Ordering::Release);
                     m.irq_line = b;
+                } else if a >= 0x40 {
+                    let idx = (a as usize).wrapping_sub(0x40);
+                    if idx < m.pci_cfg40.len() {
+                        LAST_CFG40_WR.store(b, Ordering::Release);
+                        m.pci_cfg40[idx] = b;
+                    }
                 }
             }
         } else if aligned == 0x0C {

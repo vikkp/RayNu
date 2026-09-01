@@ -381,6 +381,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus PCI cmd status' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus INTLINE RMW' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus CLS RMW' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus cfg RAM RMW' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -634,6 +635,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 eeaa681 / --run 33528635379.
 # nested iso=0 firmware IdeBus CLS RMW (CI 33531358763 VMXON ATAPI miss; 436df8d ilwr=0 intl=0 cls=0 ataio=0; QEMU pci_default_write_config CACHE_LINE_SIZE per-byte wmask 0xFF; Latency/header/BIST stay RO 0; dump clwr=).
 # do not F11 436df8d / --run 33531358763.
+# nested iso=0 firmware IdeBus cfg RAM RMW (CI 33533510182 VMXON-SKIP; 1465367 CLS RMW unproven; QEMU pci_default_write_config 0x40-0xFF per-byte spanning dwords; dump c40w=).
+# do not F11 1465367 / --run 33533510182.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1483,6 +1486,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33531358763 is 436df8d nested VMXON ATAPI miss (not ATAPI-OK; do not F11 436df8d)" >&2
     echo "       nested iso=0 firmware IdeBus CLS RMW; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 436df8d / --run 33531358763." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33533510182" ]]; then
+    echo "error: run 33533510182 is 1465367 nested VMXON-SKIP (CLS RMW unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus cfg RAM RMW; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1465367 / --run 33533510182." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

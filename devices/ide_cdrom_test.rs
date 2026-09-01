@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, pci_status,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, pci_status,
     pci_cmd_max,
     pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
@@ -749,6 +749,38 @@ fn pci_cfg44_persists_like_qemu_cfg_ram() {
         0,
         "nested iso=0 firmware IdeBus PCI cfg RAM: 0x40 unchanged"
     );
+    reset();
+}
+
+#[test]
+fn pci_cfg_ram_rmw_span_then_mid() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    pci_write_data(0xCFF, 2, 0xBBAA);
+    assert_eq!(
+        pci_idetim(),
+        0xAA00_0000,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-2 at 0x43 stores 0xAA in IDETIM high"
+    );
+    assert_eq!(
+        pci_cfg44(),
+        0x0000_00BB,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-2 at 0x43 stores 0xBB in 0x44"
+    );
+    assert_eq!(last_pci_cfg40_write(), 0xBB);
+    pci_write_data(0xCFD, 1, 0x11);
+    assert_eq!(
+        pci_idetim(),
+        0xAA00_1100,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-1 at 0x41 does not clear 0x43"
+    );
+    assert_eq!(
+        pci_cfg44(),
+        0x0000_00BB,
+        "nested iso=0 firmware IdeBus cfg RAM RMW: size-1 at 0x41 does not clear 0x44"
+    );
+    assert_eq!(last_pci_cfg40_write(), 0x11);
     reset();
 }
 
