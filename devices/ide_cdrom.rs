@@ -76,6 +76,10 @@
 //! `0x8F` plus live `bar0=0x1f1` sat in the ISA hole so PciBus left
 //! `pcicmd=0x0` (CI `33488202396` VMXON; CI `33489676272`/`33489677821`
 //! VMXON-SKIP). do not F11 9ce3499.
+//! nested iso=0 firmware IdeBus PCI cmd mask: PIIX/QEMU wmask is IO|MASTER
+//! (`0x0005`). EnableAttributes `0x0007` (MSE) must store `0x0005` so
+//! readback matches hardware. CI `33491808360` VMXON-SKIP (`6fa77d1`
+//! ISA BAR unproven). do not F11 6fa77d1.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -149,6 +153,9 @@ pub const GUEST_CD_PCI_PROG_IF: u8 = 0x80;
 /// QEMU PIIX command BARs are unimplemented. PciBus must not claim ISA
 /// `0x1F0`. nested iso=0 firmware IdeBus ISA BAR. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
+/// PIIX/QEMU PCI command wmask: I/O Space + Bus Master only (MSE hardwired 0).
+/// nested iso=0 firmware IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0005;
 /// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
 /// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
@@ -1764,7 +1771,8 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            m.pci_cmd = val as u16;
+            // nested iso=0 firmware IdeBus PCI cmd mask: IO|MASTER only.
+            m.pci_cmd = (val as u16) & GUEST_CD_PCI_CMD_WMASK;
             LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
             PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
             // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;

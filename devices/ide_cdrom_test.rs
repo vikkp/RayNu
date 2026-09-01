@@ -18,6 +18,7 @@
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
+    GUEST_CD_PCI_CMD_WMASK,
 };
 
 #[test]
@@ -358,6 +359,22 @@ fn pci_command_disable_is_not_start() {
         !take_ide_pci_cmd_wr_exit(),
         "nested iso=0 firmware IdeBus PCI cmd: disable is not Start"
     );
+    reset();
+}
+
+#[test]
+fn pci_command_wmask_drops_mse() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0007);
+    assert_eq!(
+        pci_command(),
+        GUEST_CD_PCI_CMD_WMASK,
+        "nested iso=0 firmware IdeBus PCI cmd mask: EnableAttributes 0x7 stores 0x5"
+    );
+    assert_eq!(last_pci_cmd_write(), 0x0005);
+    assert!(take_ide_pci_cmd_wr_exit());
     reset();
 }
 
