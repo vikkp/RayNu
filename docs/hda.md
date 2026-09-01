@@ -350,7 +350,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 b5c3a9c dest_ok + ACPI MADT then HLT ataio=0; #229 now on that pin plus firmware HLT wait-for-PIT before ATA. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Retrigger ee82483 wait-for-PIT after nested-KVM QEMU clwb flake (33554248661). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. dest_ok proved; ATA not started. |
 | Gates touched | Stage 46 OPEN (3a done; 3b fail HLT; wait-for-PIT next flash). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Retrigger ee82483 after nested-KVM QEMU clwb #UD kill-init (33554248661 UEFI+host green); wait-for-PIT unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 b5c3a9c dest_ok + ACPI MADT then HLT ataio=0; #229 wait-for-PIT before ATA; do not F11 33440050729; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-sixth slice: firmware HLT insn_len 0 skip (nested CpuSleep f4c3 ataio=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-31 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-thirty-fifth slice: retrigger 0d36b53 CI after nested ATAPI miss (33437881901 ataio=0 packet=0; PIC ATA vector follows ICW2 unchanged; F11 pin stays 33436232227); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

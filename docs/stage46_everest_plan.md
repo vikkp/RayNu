@@ -35,5 +35,8 @@ Iron note: [`docs/evidence/r640/2026-09-01-b5c3a9c-acpi-madt-hlt.md`](evidence/r
 OVMF is in BDS **CpuSleep**: `ataio=0` `sectors=0` `cmd=0x00` `pin14=0`, HLT `rip=0x7f0680d0`. CD is visible. ATA never started. That is **STAGE46_WALL**, now on real COM2.
 
 This #229 HEAD: dest_ok pin `b5c3a9c` plus firmware HLT **wait-for-PIT** before first ATA (virtual-wire + inject `0x20`, no skip-after-inject while `ataio==0`).
+CI `33554248661` (`ee82483`) UEFI+host green; QEMU boot gate died on nested
+`clwb` `#UD` / kill-init (known flake, not this HLT change). Retrigger for a
+green `--run`. Do not flash `33554248661` without `--allow-uefi-only`.
 
 Next proof: COM2 `HLT wait-for-irq` then `ataio>0` or `sectors>0` / El Torito. Not `cmdwr` OR `0x0001`. Not a new fw_cfg dest SHA (**FWCFG_PRODUCT_STANCE**). Still not `ISO-INSTALL-OK`.
