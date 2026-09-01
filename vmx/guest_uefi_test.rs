@@ -100,6 +100,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_hlt_edk2_irq0,
     guest_uefi_nested_iso0_firmware_hlt_068_miss,
     guest_uefi_firmware_hlt_inject_cap,
+    guest_uefi_nested_iso0_firmware_hlt_skip_after_inject,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -996,7 +997,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO firmware HLT EDK2 0x68"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT 0x68 miss"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT inject cap"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT skip after inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33466890874"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33468177902"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 65b94c1"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1470,6 +1474,26 @@ fn marker_and_residual_honest() {
         !guest_uefi_firmware_hlt_inject_cap(8),
         "firmware HLT inject cap: 8 shots then stop"
     );
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT skip after inject"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(true, false, true, 0, 12),
+        "product ISO keeps skip_after_inject; nested skip is iso=0 only"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, true, true, 0, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, false, 0, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, true, 1, 12
+    ));
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_skip_after_inject(
+        false, false, true, 0, 0x1e
+    ));
     assert!(
         guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
         "nested iso=0 firmware HLT ATA"
