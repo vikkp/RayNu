@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-twenty-third slice: nested iso=0 firmware IdeBus CF8E (CI 33539999700 VMXON-SKIP; 02e8843 CF8 unproven; QEMU pci_host_data_read/write gates CFC on config_reg bit 31; dump cf8e=; F11 pin stays 33440050729 do not re-flash; do not F11 02e8843). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-twenty-fourth slice: nested iso=0 firmware IdeBus IO aperture (CI 33541472361 VMXON-SKIP; a50ad99 CF8E unproven; QEMU/OVMF i440FX PcdPciIoBase=0xC000 PcdPciIoSize=0x4000 so PciBus can assign BAR4; PIIX4 PMBA wmask 0xFFC0 so a 0xFFFFFFFF probe stores 0xFFC1 not 4GiB overlapping the window; dump iobase=; F11 pin stays 33440050729 do not re-flash; do not F11 a50ad99). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus CF8E; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus IO aperture; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twenty-fourth slice: nested iso=0 firmware IdeBus IO aperture (CI 33541472361 VMXON-SKIP; a50ad99 CF8E unproven; QEMU/OVMF i440FX PcdPciIoBase=0xC000 PcdPciIoSize=0x4000; PIIX4 PMBA wmask 0xFFC0 probe 0xFFFFFFFF stores 0xFFC1; dump iobase=; F11 pin stays 33440050729 do not re-flash; do not F11 a50ad99); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twenty-third slice: nested iso=0 firmware IdeBus CF8E (CI 33539999700 VMXON-SKIP; 02e8843 CF8 unproven; QEMU pci_host_data_read/write gates CFC on config_reg bit 31; dump cf8e=; F11 pin stays 33440050729 do not re-flash; do not F11 02e8843); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twenty-second slice: nested iso=0 firmware IdeBus CF8 (CI 33537641723 VMXON ATAPI miss; 30ccfc0 cfg write unproven; QEMU pci_host_config_write stores CF8 only when addr==0 && len==4; dump cf8s=; F11 pin stays 33440050729 do not re-flash; do not F11 30ccfc0); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twenty-first slice: nested iso=0 firmware IdeBus cfg write (CI 33536269880 VMXON-SKIP; 004ef9b cfg read unproven; QEMU pci_default_write_config one per-byte walk; dump cfgw=; F11 pin stays 33440050729 do not re-flash; do not F11 004ef9b); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -168,6 +168,10 @@
 //! gates CFC on `config_reg` bit 31. Enable-clear IN is `0xFFFFFFFF`.
 //! Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8 unproven).
 //! do not F11 02e8843.
+//! nested iso=0 firmware IdeBus IO aperture: QEMU/OVMF i440FX PCI I/O
+//! is `PcdPciIoBase=0xC000` `PcdPciIoSize=0x4000`. Dump `iobase=`.
+//! CI `33541472361` VMXON-SKIP (`a50ad99` CF8E unproven). do not F11
+//! a50ad99.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -290,6 +294,10 @@
 //! `0xFFFFFFFF` and `pci_host_data_write` is ignored when bit 31 is
 //! clear. Dump `cf8e=`. CI `33539999700` VMXON-SKIP (`02e8843` CF8
 //! unproven). do not F11 02e8843.
+//! nested iso=0 firmware IdeBus IO aperture: QEMU/OVMF i440FX
+//! `PcdPciIoBase=0xC000` `PcdPciIoSize=0x4000`. PciBus assigns BAR4
+//! from that window. Dump `iobase=`. CI `33541472361` VMXON-SKIP
+//! (`a50ad99` CF8E unproven). do not F11 a50ad99.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.

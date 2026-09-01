@@ -14,7 +14,7 @@ use super::{
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
-    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PM1_STS_TMR, PM1_EN_TMR, PIIX4_PMBA_ALT,
+    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PM1_STS_TMR, PM1_EN_TMR, PIIX4_PMBA_ALT, PIIX4_PMBA_WMASK,
     raise_pm1_tmr_sci, pm1_tmr_sci_pending,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
@@ -592,6 +592,14 @@ fn piix4_pm_enumerates_and_pmba_write_ticks() {
     assert!(is_piix_pm_io(0x500));
     let sts = io(0x500, true, 4, 0xFFFF_FFFF) as u32;
     assert_eq!(sts, 0);
+    pci_write_addr(pm_pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    let probe = pci_read_data(0xCFC, 4).expect("pmba");
+    assert_eq!(PIIX4_PMBA_WMASK, 0xFFC0);
+    assert_eq!(
+        probe, 0xFFC1,
+        "nested iso=0 firmware IdeBus IO aperture"
+    );
     pci_write_addr(pm_pci_config_addr() | 0x40);
     pci_write_data(0xCFC, 4, 0xB001);
     assert!(is_piix_pm_io(0xB000));

@@ -80,6 +80,10 @@ pub const PM_BRIDGE_DEV: u8 = 1;
 pub const PM_BRIDGE_FN: u8 = 3;
 /// Default PIIX4 PMBA (IO bit set). Timer is at `PMBA&~1 + 8` = `0x408`.
 pub const PIIX4_PMBA_DEFAULT: u32 = 0x401;
+/// QEMU/OVMF `PIIX4_PMBA_MASK` bits 15:6 (64-byte I/O). A dword probe of
+/// `0xFFFFFFFF` must not claim 4GiB overlapping the PCI I/O window
+/// `0xC000`/`0x4000`. nested iso=0 firmware IdeBus IO aperture.
+pub const PIIX4_PMBA_WMASK: u32 = 0xFFC0;
 /// Iron COM2 `8663f56`: unhandled `0xAF00` dword + `0xAF05` byte then
 /// `IN EAX,DX` Delay (`rip=0x7f01f988`, HPET frozen, `unh=4`, `acpi=288`,
 /// `stop n=33297` `sectors=0`). Cruzer OVMF uses this as PM I/O base, not
@@ -1558,7 +1562,8 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 _ => 0xffff_ffff,
             };
             v = (v & !(mask << shift)) | ((val & mask) << shift);
-            p.pmba = v | 1;
+            // nested iso=0 firmware IdeBus IO aperture: QEMU PIIX4_PMBA_MASK.
+            p.pmba = (v & PIIX4_PMBA_WMASK) | 1;
         } else if off == 0x80 {
             p.pm_iose = val as u8;
         }

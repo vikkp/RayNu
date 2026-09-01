@@ -139,6 +139,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_cfg_write,
     guest_uefi_nested_iso0_firmware_idebus_cf8,
     guest_uefi_nested_iso0_firmware_idebus_cf8e,
+    guest_uefi_nested_iso0_firmware_idebus_io_aperture,
     guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
     guest_uefi_nested_iso0_firmware_idebus_bmide,
     guest_uefi_nested_iso0_firmware_idebus_bmide_io,
@@ -1919,6 +1920,13 @@ fn marker_and_residual_honest() {
         guest_uefi_nested_iso0_firmware_idebus_cf8e(0x0000_0900, 1),
         Some(0xFF)
     );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xC001),
+        "nested iso=0 firmware IdeBus IO aperture"
+    );
+    assert!(guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xFFC1));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_io_aperture(1));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_io_aperture(0xB001));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
         "nested iso=0 firmware IdeBus BM sticky"
