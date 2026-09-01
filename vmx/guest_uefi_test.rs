@@ -104,6 +104,7 @@ use super::{
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
     guest_uefi_product_firmware_hlt_wake_lapic,
+    guest_uefi_product_firmware_hlt_wake_lapic_timer,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -1519,6 +1520,16 @@ fn marker_and_residual_honest() {
         "product ISO firmware HLT wake LAPIC"
     );
     assert!(!guest_uefi_product_firmware_hlt_wake_lapic(Some(0x68)));
+    assert!(
+        guest_uefi_product_firmware_hlt_wake_lapic_timer(None),
+        "product ISO firmware HLT wake LAPIC timer"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_wake_lapic_timer(Some(0x68)));
+    assert_eq!(
+        guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0x27)),
+        0x27,
+        "product ISO firmware HLT wake LAPIC timer; unmasked LVT injects"
+    );
     assert!(
         guest_uefi_product_firmware_hlt_ata(false, true, 1, 12),
         "product ISO firmware HLT ATA"
