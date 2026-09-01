@@ -322,6 +322,7 @@ self_test() {
   grep -q '33494990002' "$SCRIPT_PATH"
   grep -q '33495768739' "$SCRIPT_PATH"
   grep -q '33496568841' "$SCRIPT_PATH"
+  grep -q '33497723127' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
@@ -348,6 +349,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus LAT' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus BM sticky' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus BMIDE' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus INTPIN' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -555,6 +557,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 0c0f3cf / --run 33495768739.
 # nested iso=0 firmware IdeBus BMIDE (CI 33496568841 VMXON-SKIP; 17836fc BM sticky unproven; QEMU bmdma size!=1 all-ones byte cmd+0 status+2 else 0xff).
 # do not F11 17836fc / --run 33496568841.
+# nested iso=0 firmware IdeBus INTPIN (CI 33497723127 VMXON-SKIP; 8344896 BMIDE unproven; QEMU PIIX3 IDE interrupt pin 0).
+# do not F11 8344896 / --run 33497723127.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1266,6 +1270,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33496568841 is 17836fc nested VMXON-SKIP (BM sticky unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus BMIDE; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 17836fc / --run 33496568841." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33497723127" ]]; then
+    echo "error: run 33497723127 is 8344896 nested VMXON-SKIP (BMIDE unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus INTPIN; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 8344896 / --run 33497723127." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

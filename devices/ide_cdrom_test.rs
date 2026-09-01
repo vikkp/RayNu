@@ -432,7 +432,7 @@ fn pci_int_line_reset_zero_persists() {
     assert_eq!(
         pci_read_data(0xCFC, 4),
         u32::from(GUEST_CD_PCI_INT_LINE_RESET) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
-        "nested iso=0 firmware IdeBus INTLINE: reset line 0 pin 1"
+        "nested iso=0 firmware IdeBus INTLINE: reset line 0 pin 0"
     );
     assert_eq!(pci_int_line(), 0);
     pci_write_data(0xCFC, 4, 0x0000_010E);
@@ -448,7 +448,7 @@ fn pci_int_line_reset_zero_persists() {
     assert_eq!(
         (pci_read_data(0xCFC, 4) >> 8) & 0xff,
         u32::from(GUEST_CD_PCI_INT_PIN),
-        "nested iso=0 firmware IdeBus INTLINE: pin stays 1"
+        "nested iso=0 firmware IdeBus INTPIN: pin stays 0"
     );
     reset();
 }

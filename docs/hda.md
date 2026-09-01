@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-ninety-fifth slice: nested iso=0 firmware IdeBus BMIDE (CI 33496568841 VMXON-SKIP; 17836fc BM sticky unproven; QEMU bmdma size!=1 all-ones, byte cmd at +0, status at +2, else 0xff; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-ninety-sixth slice: nested iso=0 firmware IdeBus INTPIN (CI 33497723127 VMXON-SKIP; 8344896 BMIDE unproven; QEMU PIIX3 IDE interrupt pin 0 so PciBus does not allocate PIRQ 0x80 before EnableAttributes / ISA 0x3F6; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus BMIDE; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus INTPIN; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninety-sixth slice: nested iso=0 firmware IdeBus INTPIN (CI 33497723127 VMXON-SKIP; 8344896 BMIDE unproven; QEMU PIIX3 IDE interrupt pin 0 so PciBus does not allocate PIRQ 0x80 before EnableAttributes / ISA 0x3F6; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninety-fifth slice: nested iso=0 firmware IdeBus BMIDE (CI 33496568841 VMXON-SKIP; 17836fc BM sticky unproven; QEMU bmdma size!=1 all-ones, byte cmd at +0, status at +2, else 0xff; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninety-fourth slice: nested iso=0 firmware IdeBus BM sticky (CI 33495768739 VMXON-SKIP; 0c0f3cf LAT unproven; QEMU BAR4 size probe stays 0xFFFFFFF1 until restore write so PciBus can assign IO; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-ninety-third slice: nested iso=0 firmware IdeBus LAT (CI 33494990002 VMXON-SKIP; fe658f7 INTLINE unproven; QEMU PCI wmask persists cache line 0x0C and latency timer 0x0D; header type stays 0; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

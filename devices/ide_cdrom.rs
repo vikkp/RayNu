@@ -101,6 +101,10 @@
 //! when size != 1; byte cmd at BAR4+0, status at +2, else `0xff`. RAZ 0
 //! made a dword probe look like no controller. CI `33496568841`
 //! VMXON-SKIP (`17836fc` BM sticky unproven). do not F11 17836fc.
+//! nested iso=0 firmware IdeBus INTPIN: QEMU PIIX3 IDE interrupt pin is
+//! 0 (class does not set INTx). Pin 1 made PciBus allocate PIRQ (ISA
+//! 0x80 disabled) before EnableAttributes / ISA `0x3F6`. CI
+//! `33497723127` VMXON-SKIP (`8344896` BMIDE unproven). do not F11 8344896.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -182,11 +186,13 @@ pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0005;
 /// PCI_STATUS_FAST_BACK`. nested iso=0 firmware IdeBus PCI status.
 /// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_STATUS: u32 = 0x0280_0000;
-/// PIIX/QEMU interrupt line reset. PciBus writes the routed IRQ; pin is 1.
+/// PIIX/QEMU interrupt line reset. PciBus writes the routed IRQ.
 /// nested iso=0 firmware IdeBus INTLINE. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_INT_LINE_RESET: u8 = 0;
-/// PCI interrupt pin A. nested iso=0 firmware IdeBus INTLINE.
-pub const GUEST_CD_PCI_INT_PIN: u8 = 1;
+/// QEMU PIIX3 IDE interrupt pin is 0 (no INTx). Pin 1 stays a historical
+/// needle. nested iso=0 firmware IdeBus INTPIN. Dump `intp=`.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_INT_PIN: u8 = 0;
 /// QEMU PCI cache-line and latency timer reset to 0; writes persist.
 /// nested iso=0 firmware IdeBus LAT. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_CACHE_LINE_RESET: u8 = 0;
@@ -286,8 +292,8 @@ struct CdMedia {
     /// PIIX IDETIM at PCI 0x40-0x43. Bit 15 of each word is decode enable.
     /// nested iso=0 firmware IdeBus IDETIM.
     idetim: u32,
-    /// PCI interrupt line (offset 0x3C). QEMU reset is 0; pin at 0x3D is 1.
-    /// nested iso=0 firmware IdeBus INTLINE.
+    /// PCI interrupt line (offset 0x3C). QEMU reset is 0; pin at 0x3D is 0.
+    /// nested iso=0 firmware IdeBus INTLINE. nested iso=0 firmware IdeBus INTPIN.
     irq_line: u8,
     /// PCI cache line size (0x0C) and latency timer (0x0D). Header type RO 0.
     /// nested iso=0 firmware IdeBus LAT.
@@ -1971,7 +1977,7 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             };
             m.idetim = (m.idetim & !(mask << shift)) | ((val & mask) << shift);
         } else if aligned == 0x3C {
-            // nested iso=0 firmware IdeBus INTLINE: persist line; pin is RO.
+            // nested iso=0 firmware IdeBus INTLINE: persist line; pin is RO 0.
             if off == 0x3C {
                 m.irq_line = val as u8;
             }
