@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_command, pci_cmd_writes, last_pci_cmd_write,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
     pci_idetim,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
@@ -266,6 +266,23 @@ fn pci_bar0_probe_oneshot_second_read_is_live() {
         "nested iso=0 firmware IdeBus BAR oneshot: second dword is live BAR"
     );
     assert_eq!(pci_bar0(), 0x1F1);
+    reset();
+}
+
+#[test]
+fn pci_bar4_bmide_is_nonzero_io() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(
+        pci_bar4(),
+        0xCC01,
+        "nested iso=0 firmware IdeBus BM: BAR4 is I/O at 0xCC00 not address 0"
+    );
+    assert!(is_bmide_port(0xCC00));
+    assert!(!is_bmide_port(0xC400));
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0);
+    assert_eq!(pci_bar4(), 0xCC01);
     reset();
 }
 
