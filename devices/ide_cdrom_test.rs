@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, pci_status,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, last_pci_cfg_read_off, pci_status,
     pci_cmd_max,
     pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
@@ -781,6 +781,22 @@ fn pci_cfg_ram_rmw_span_then_mid() {
         "nested iso=0 firmware IdeBus cfg RAM RMW: size-1 at 0x41 does not clear 0x44"
     );
     assert_eq!(last_pci_cfg40_write(), 0x11);
+    reset();
+}
+
+#[test]
+fn pci_cfg_read_spans_header_into_ram() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    pci_write_data(0xCFC, 4, 0xAABB_CCDD);
+    pci_write_addr(pci_config_addr() | 0x3C);
+    assert_eq!(
+        pci_read_data(0xCFE, 4),
+        0xCCDD_0000,
+        "nested iso=0 firmware IdeBus cfg read: size-4 at 0x3E includes 0x40"
+    );
+    assert_eq!(last_pci_cfg_read_off(), 0x3E);
     reset();
 }
 

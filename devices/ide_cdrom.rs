@@ -150,6 +150,11 @@
 //! (`wmask` `0xFF`), including dword-spanning writes. Dump `c40w=`.
 //! CI `33533510182` VMXON-SKIP (`1465367` CLS RMW unproven).
 //! do not F11 1465367.
+//! nested iso=0 firmware IdeBus cfg read: QEMU
+//! `pci_default_read_config` memcpy from `config+addr` for `len`, not
+//! an aligned-dword shift (a size-4 at `0x3E` includes `0x40`). Dump
+//! `cfgo=`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM RMW
+//! unproven). do not F11 b6e8ab7.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -258,6 +263,9 @@
 //! nested iso=0 firmware IdeBus cfg RAM RMW: QEMU `0x40`–`0xFF`
 //! per-byte, spanning dwords. CI `33533510182` VMXON-SKIP
 //! (`1465367` CLS RMW unproven). do not F11 1465367. Dump `c40w=`.
+//! nested iso=0 firmware IdeBus cfg read: QEMU memcpy from
+//! `config+addr`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM
+//! RMW unproven). do not F11 b6e8ab7. Dump `cfgo=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -653,6 +661,9 @@ static LAST_CLS_WR: AtomicU8 = AtomicU8::new(0);
 /// Last PCI cfg RAM (`0x40`–`0xFF`) byte written. Dump `c40w=`.
 /// nested iso=0 firmware IdeBus cfg RAM RMW.
 static LAST_CFG40_WR: AtomicU8 = AtomicU8::new(0);
+/// Last PCI config offset read. Dump `cfgo=`.
+/// nested iso=0 firmware IdeBus cfg read.
+static LAST_CFG_RD_OFF: AtomicU8 = AtomicU8::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -1022,6 +1033,7 @@ pub fn reset() {
     LAST_INTLINE_WR.store(0, Ordering::Release);
     LAST_CLS_WR.store(0, Ordering::Release);
     LAST_CFG40_WR.store(0, Ordering::Release);
+    LAST_CFG_RD_OFF.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -1159,6 +1171,12 @@ pub fn last_pci_cls_write() -> u8 {
 /// IdeBus cfg RAM RMW. Not `ISO-INSTALL-OK`.
 pub fn last_pci_cfg40_write() -> u8 {
     LAST_CFG40_WR.load(Ordering::Acquire)
+}
+
+/// Last PCI config offset read. Dump `cfgo=`. nested iso=0 firmware
+/// IdeBus cfg read. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg_read_off() -> u8 {
+    LAST_CFG_RD_OFF.load(Ordering::Acquire)
 }
 
 /// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
@@ -2239,6 +2257,26 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     }
 }
 
+/// QEMU `pci_default_read_config` image: memcpy from `config+addr`.
+/// nested iso=0 firmware IdeBus cfg read.
+fn config_image(m: &mut CdMedia, consume_probe: bool) -> [u8; 256] {
+    let mut c = [0u8; 256];
+    let mut off = 0u8;
+    loop {
+        let bytes = config_dword(m, off, consume_probe).to_le_bytes();
+        let i = off as usize;
+        c[i] = bytes[0];
+        c[i + 1] = bytes[1];
+        c[i + 2] = bytes[2];
+        c[i + 3] = bytes[3];
+        if off == 0xFC {
+            break;
+        }
+        off = off.wrapping_add(4);
+    }
+    c
+}
+
 fn note_hide_slot0() {
     if !HIDE_SLOT0.swap(true, Ordering::AcqRel) {
         crate::boot::serial::write_line_nowait(
@@ -2286,20 +2324,29 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             return 0xFFFF_FFFF;
         }
         let off = pci_cfg_offset(addr, port);
-        let aligned = off & 0xFC;
-        if aligned == 0 {
+        LAST_CFG_RD_OFF.store(off, Ordering::Release);
+        if (off & 0xFC) == 0 {
             m.pci_enum = true;
             PCI_ENUM.store(true, Ordering::Release);
         }
         let consume_probe = size != 1 && size != 2;
-        let dword = config_dword(m, aligned, consume_probe);
-        let shift = (off & 3) * 8;
-        let shifted = dword >> shift;
-        match size {
-            1 => shifted & 0xff,
-            2 => shifted & 0xffff,
-            _ => shifted,
+        // nested iso=0 firmware IdeBus cfg read: QEMU memcpy from
+        // config+addr for len, not an aligned-dword shift.
+        let cfg = config_image(m, consume_probe);
+        let n = match size {
+            1 => 1usize,
+            2 => 2,
+            _ => 4,
+        };
+        let mut val = 0u32;
+        let start = off as usize;
+        for i in 0..n {
+            let idx = start + i;
+            if idx < 256 {
+                val |= u32::from(cfg[idx]) << (8 * i);
+            }
         }
+        val
     })
 }
 
