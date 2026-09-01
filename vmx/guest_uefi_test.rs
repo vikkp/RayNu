@@ -102,6 +102,7 @@ use super::{
     guest_uefi_nested_iso0_ata_lapic,
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_product_firmware_wake_preempt,
+    guest_uefi_product_firmware_wake_delay_io,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
@@ -1518,6 +1519,33 @@ fn marker_and_residual_honest() {
     assert!(
         !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 52, true, 1),
         "product ISO firmware wake preempt: skip_after_inject is HLT-only"
+    );
+    assert!(
+        guest_uefi_product_firmware_wake_delay_io(false, true, 0, 30, 0xB008, 4),
+        "product ISO firmware wake Delay I/O"
+    );
+    assert!(guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 30, 0x408, 4
+    ));
+    assert!(guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 30, 0xB000, 4
+    ));
+    assert!(
+        !guest_uefi_product_firmware_wake_delay_io(false, true, 0, 30, 0xCF8, 4),
+        "product ISO firmware wake Delay I/O: do not inject mid-CF8"
+    );
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        false, true, 0, 12, 0xB008, 4
+    ));
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        true, true, 0, 30, 0xB008, 4
+    ));
+    assert!(!guest_uefi_product_firmware_wake_delay_io(
+        false, true, 1, 30, 0xB008, 4
+    ));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 30, true, 1),
+        "product ISO firmware wake Delay I/O: skip_after_inject is HLT-only"
     );
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));

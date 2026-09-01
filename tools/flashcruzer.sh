@@ -238,6 +238,7 @@ self_test() {
   grep -q '33455373334' "$SCRIPT_PATH"
   grep -q '33455903058' "$SCRIPT_PATH"
   grep -q '33456465331' "$SCRIPT_PATH"
+  grep -q '33457132491' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
@@ -254,6 +255,7 @@ self_test() {
   grep -q 'product ISO firmware HLT wake LVT unmask' "$SCRIPT_PATH"
   grep -q 'product ISO firmware LVT timer inject' "$SCRIPT_PATH"
   grep -q 'product ISO firmware wake preempt' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware wake Delay I/O' "$SCRIPT_PATH"
   grep -q 'firmware PIC ATA' "$SCRIPT_PATH"
   grep -q 'firmware OVMF ATA vector' "$SCRIPT_PATH"
   grep -q 'do not clobber IOAPIC ATA vector' "$SCRIPT_PATH"
@@ -423,6 +425,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 91f15b3 / --run 33455903058.
 # product ISO firmware wake preempt (CI 33456465331 VMXON-SKIP; HLT or VMX preemption 52; skip RIP stays HLT-only).
 # do not F11 8f04fa6 / --run 33456465331.
+# product ISO firmware wake Delay I/O (CI 33457132491 VMXON-SKIP; ACPI PM timer I/O Delay; skip RIP stays HLT-only; do not wake CF8).
+# do not F11 1b758d2 / --run 33457132491.
 # do not F11 c0c9810 / --run 33440951898.
 # do not F11 3ff3cf9 / --run 33443188019.
 # do not F11 deb64f5 / --run 33444677681.
@@ -816,6 +820,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33456465331 is 8f04fa6 LVT timer inject VMXON-SKIP (not ATAPI-OK)" >&2
     echo "       product ISO firmware wake preempt; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 8f04fa6 / --run 33456465331." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33457132491" ]]; then
+    echo "error: run 33457132491 is 1b758d2 wake preempt VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware wake Delay I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1b758d2 / --run 33457132491." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
