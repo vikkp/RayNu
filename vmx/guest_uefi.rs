@@ -1547,7 +1547,7 @@ pub fn guest_uefi_nested_iso0_firmware_idebus_connect(bootorder: &[u8]) -> bool 
 /// `33483102988` VMXON-SKIP (`745b4cb` connect unproven). do not F11
 /// 745b4cb. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_nested_iso0_firmware_idebus_ofw(bootorder: &[u8]) -> bool {
-    bootorder.windows(18).any(|w| w == b"pci8086,7010@1,1\n")
+    bootorder.windows(17).any(|w| w == b"pci8086,7010@1,1\n")
         && bootorder.windows(8).any(|w| w == b"ide@1,1\n")
 }
 
