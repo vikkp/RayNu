@@ -265,6 +265,17 @@ static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+const PCI_CMD_WR_SEQ_CAP: usize = 8;
+static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+];
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -529,6 +540,9 @@ pub fn reset() {
     ATA_IO_N.store(0, Ordering::Release);
     PCI_CMD_WRITES.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    for slot in PCI_CMD_WR_SEQ.iter() {
+        slot.store(0, Ordering::Release);
+    }
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -575,6 +589,7 @@ pub fn pci_cmd() -> u16 {
 
 /// Count of firmware writes to IDE PCI command. Iron COM2 `184ee61`:
 /// `cmdwr=6` `wr=0x0` `pcicmd=0x1` (OR `0x0001` hid the disable).
+/// Iron COM2 `abba969`: honor stuck `pcicmd=0` `wr=0` still `ataio=0`.
 /// Store the write as-is. Do not OR `0x0001`.
 pub fn pci_cmd_writes() -> u32 {
     PCI_CMD_WRITES.load(Ordering::Acquire)
@@ -583,6 +598,15 @@ pub fn pci_cmd_writes() -> u32 {
 /// Last firmware value written to IDE PCI command (stored as written).
 pub fn last_pci_cmd_wr() -> u16 {
     LAST_PCI_CMD_WR.load(Ordering::Acquire)
+}
+
+/// Firmware COMMAND write `i` (0-based, first eight). Iron `abba969`
+/// left only the last `wr=`; the next proof is the six-write sequence.
+pub fn pci_cmd_wr_at(i: usize) -> u16 {
+    PCI_CMD_WR_SEQ
+        .get(i)
+        .map(|slot| slot.load(Ordering::Acquire))
+        .unwrap_or(0)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1471,6 +1495,15 @@ pub fn present_placeholder_if_idle() -> bool {
     present_placeholder()
 }
 
+fn write_hex16_nowait(v: u16) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_str_nowait("0x");
+    for shift in [12, 8, 4, 0] {
+        let nibble = ((v >> shift) & 0xf) as usize;
+        crate::boot::serial::write_byte_nowait(HEX[nibble]);
+    }
+}
+
 pub fn pci_write_addr(addr: u32) {
     with_cd(|m| m.pci_addr = addr);
 }
@@ -1577,17 +1610,23 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            // Iron COM2 184ee61: six writes, last wr=0x0, stored 0x1 because
-            // this OR hid disable. ADR-015: honor COMMAND.IO as written.
+            // Iron COM2 abba969: honor stuck. Last wr=0x0 stored 0x0.
+            // Print each write so COM2 shows whether EnableAttributes
+            // ever set IO (ADR-015). Do not OR 0x0001.
             let wr = val as u16;
             LAST_PCI_CMD_WR.store(wr, Ordering::Release);
             m.pci_cmd = wr;
             let n = PCI_CMD_WRITES.fetch_add(1, Ordering::AcqRel);
-            if n == 0 {
-                crate::boot::serial::write_line_nowait(
-                    "boot: Stage 46 IDE pci cmdwr honor (not ISO-INSTALL-OK)",
-                );
+            if (n as usize) < PCI_CMD_WR_SEQ_CAP {
+                PCI_CMD_WR_SEQ[n as usize].store(wr, Ordering::Release);
             }
+            crate::boot::serial::write_str_nowait(
+                "boot: Stage 46 IDE pci cmdwr honor wr=",
+            );
+            write_hex16_nowait(wr);
+            crate::boot::serial::write_str_nowait(" n=");
+            crate::boot::serial::write_byte_nowait(b'0' + (n.min(9) as u8));
+            crate::boot::serial::write_line_nowait(" (not ISO-INSTALL-OK)");
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             m.bar0 = (val & 0xFFFF_FFF8) | 1;

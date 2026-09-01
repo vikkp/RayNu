@@ -23,3 +23,5 @@ f413a9fc
 938f9928
 # 184ee61 / 33562028442 cmdwr=6 last wr=0x0 stored 0x1 (OR hid disable).
 43a38ac8
+# abba969 / 33567464001 honor COMMAND then same hang (pcicmd=0 wr=0 ataio=0).
+80c79a6f

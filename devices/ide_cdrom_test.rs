@@ -2,7 +2,8 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    last_pci_cmd_wr, pci_addr_selects_cd, pci_bdf, pci_cmd, pci_cmd_writes, pci_config_addr,
+    last_pci_cmd_wr, pci_addr_selects_cd, pci_bdf, pci_cmd, pci_cmd_writes, pci_cmd_wr_at,
+    pci_config_addr,
     pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
     product_iso_hides_ide,
@@ -54,12 +55,15 @@ fn ide_pci_cmdwr_counts_firmware_command_write() {
     assert_eq!(last_pci_cmd_wr(), 0x0005);
     assert_eq!(pci_cmd(), 0x0005);
     assert_eq!(pci_cmd_writes(), 1);
+    assert_eq!(pci_cmd_wr_at(0), 0x0005);
     pci_write_data(0xCFC, 2, 0x0000);
     assert_eq!(last_pci_cmd_wr(), 0x0000);
     assert_eq!(pci_cmd(), 0x0000, "honor COMMAND write; do not OR 0x0001");
     assert_eq!(pci_cmd_writes(), 2);
+    assert_eq!(pci_cmd_wr_at(1), 0x0000);
     reset();
     assert_eq!(pci_cmd_writes(), 0);
+    assert_eq!(pci_cmd_wr_at(0), 0);
 }
 
 #[test]
