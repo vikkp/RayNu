@@ -103,6 +103,10 @@
 //! is Red Hat Qumranet `0x1AF4` / QEMU `0x1100`. Live `0` at PCI `0x2C`
 //! looked unprogrammed. Dump `svid=`. CI `33513789990` VMXON-SKIP
 //! (`6382957` IDETIM persist unproven). do not F11 6382957.
+//! nested iso=0 firmware IdeBus LT RO: QEMU `pci_init_wmask` sets cache
+//! line `0x0C` writable, not latency timer `0x0D` (stays 0). Live LAT
+//! persist stored a write QEMU would drop. CI `33514750785` VMXON-SKIP
+//! (`1bb1dac` SVID unproven). do not F11 1bb1dac.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -178,6 +182,9 @@
 //! nested iso=0 firmware IdeBus PCI SVID: QEMU default SVID/SDID is
 //! `0x1AF4`/`0x1100`. CI `33513789990` VMXON-SKIP (`6382957` IDETIM
 //! persist unproven). do not F11 6382957.
+//! nested iso=0 firmware IdeBus LT RO: QEMU latency timer `0x0D` wmask
+//! is 0. CI `33514750785` VMXON-SKIP (`1bb1dac` SVID unproven). do not
+//! F11 1bb1dac.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -273,8 +280,9 @@ pub const GUEST_CD_PCI_INT_LINE_RESET: u8 = 0;
 /// needle. nested iso=0 firmware IdeBus INTPIN. Dump `intp=`.
 /// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_INT_PIN: u8 = 0;
-/// QEMU PCI cache-line and latency timer reset to 0; writes persist.
-/// nested iso=0 firmware IdeBus LAT. Not `ISO-INSTALL-OK`.
+/// QEMU PCI cache-line persist; latency timer reset 0 and RO.
+/// nested iso=0 firmware IdeBus LAT. nested iso=0 firmware IdeBus LT RO.
+/// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_CACHE_LINE_RESET: u8 = 0;
 pub const GUEST_CD_PCI_LATENCY_RESET: u8 = 0;
 /// PIIX IDETIM dword (PCI 0x40). Decode-enable persist. nested iso=0
@@ -2137,15 +2145,12 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
                 m.irq_line = val as u8;
             }
         } else if aligned == 0x0C {
-            // nested iso=0 firmware IdeBus LAT: persist CLS/latency; HT RO.
+            // nested iso=0 firmware IdeBus LT RO: QEMU wmask is cache
+            // line only. Latency timer 0x0D stays 0.
             if off == 0x0C {
                 m.cache_line = val as u8;
-                if size != 1 {
-                    m.latency = (val >> 8) as u8;
-                }
-            } else if off == 0x0D {
-                m.latency = val as u8;
             }
+            let _ = size;
         }
     });
 }

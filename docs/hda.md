@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-ninth slice: nested iso=0 firmware IdeBus PCI SVID (CI 33513789990 VMXON-SKIP; 6382957 IDETIM persist unproven; QEMU pci_set_default_subsystem_id is 0x1AF4:0x1100, live 0 at PCI 0x2C looked unprogrammed; dump svid=; F11 pin stays 33440050729 do not re-flash; do not F11 6382957). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-tenth slice: nested iso=0 firmware IdeBus LT RO (CI 33514750785 VMXON-SKIP; 1bb1dac SVID unproven; QEMU pci_init_wmask sets cache line 0x0C writable, latency timer 0x0D stays 0; F11 pin stays 33440050729 do not re-flash; do not F11 1bb1dac). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus PCI SVID; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus LT RO; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-tenth slice: nested iso=0 firmware IdeBus LT RO (CI 33514750785 VMXON-SKIP; 1bb1dac SVID unproven; QEMU pci_init_wmask sets cache line 0x0C writable, latency timer 0x0D stays 0; F11 pin stays 33440050729 do not re-flash; do not F11 1bb1dac); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-ninth slice: nested iso=0 firmware IdeBus PCI SVID (CI 33513789990 VMXON-SKIP; 6382957 IDETIM persist unproven; QEMU pci_set_default_subsystem_id is 0x1AF4:0x1100, live 0 at PCI 0x2C looked unprogrammed; dump svid=; F11 pin stays 33440050729 do not re-flash; do not F11 6382957); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-eighth slice: nested iso=0 firmware IdeBus IDETIM persist (CI 33512599515 VMXON-SKIP; e90cb0d INTX unproven; QEMU pci_init_wmask is 0xff from PCI 0x40 so writes persist, live RAZ discarded decode-enable and dump idetim=0 could not tell; F11 pin stays 33440050729 do not re-flash; do not F11 e90cb0d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-seventh slice: nested iso=0 firmware IdeBus PCI cmd INTX (CI 33511226072 VMXON-SKIP; 0300ae3 RMW unproven; QEMU pci_init_wmask is IO|MEM|MASTER|INTX_DISABLE plus SERR 0x0507, live 0x0007 dropped bits 8 and 10 so EnableAttributes 0x0407/0x0507 readback failed before 0x3F6; F11 pin stays 33440050729 do not re-flash; do not F11 0300ae3); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -372,6 +372,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus PCI cmd INTX' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus IDETIM persist' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus PCI SVID' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus LT RO' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -607,6 +608,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 e90cb0d / --run 33512599515.
 # nested iso=0 firmware IdeBus PCI SVID (CI 33513789990 VMXON-SKIP; 6382957 IDETIM persist unproven; QEMU default SVID 0x1AF4:0x1100; dump svid=).
 # do not F11 6382957 / --run 33513789990.
+# nested iso=0 firmware IdeBus LT RO (CI 33514750785 VMXON-SKIP; 1bb1dac SVID unproven; QEMU pci_init_wmask cache line 0x0C not latency 0x0D).
+# do not F11 1bb1dac / --run 33514750785.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1402,6 +1405,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33513789990 is 6382957 nested VMXON-SKIP (IDETIM persist unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus PCI SVID; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 6382957 / --run 33513789990." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33514750785" ]]; then
+    echo "error: run 33514750785 is 1bb1dac nested VMXON-SKIP (SVID unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus LT RO; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 1bb1dac / --run 33514750785." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

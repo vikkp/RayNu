@@ -582,8 +582,8 @@ fn pci_cache_line_and_latency_persist() {
     );
     assert_eq!(
         pci_latency(),
-        0x20,
-        "nested iso=0 firmware IdeBus LAT: latency persists"
+        0,
+        "nested iso=0 firmware IdeBus LT RO: latency write ignored"
     );
     assert_eq!(
         (pci_read_data(0xCFC, 4) >> 16) & 0xff,
