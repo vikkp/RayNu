@@ -110,6 +110,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_bar_oneshot,
     guest_uefi_nested_iso0_firmware_idebus_bootorder,
     guest_uefi_nested_iso0_firmware_idebus_cmd,
+    guest_uefi_nested_iso0_firmware_idebus_progif,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -1039,6 +1040,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus PCI cmd"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33477097074"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9829386"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus prog-if"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33477720477"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2b7a884"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1669,6 +1673,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus PCI cmd"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd(1, 0));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_progif(0x8A),
+        "nested iso=0 firmware IdeBus prog-if"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x80));
     assert!(
         guest_uefi_nested_iso0_firmware_lapic_timer(false, false, true, 0, 12),
         "nested iso=0 firmware LAPIC timer"

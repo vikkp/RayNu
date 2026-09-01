@@ -60,7 +60,12 @@
 //! nested iso=0 firmware IdeBus PCI cmd: do not OR `0x0001` on command
 //! writes (CI `33477097074` VMXON-SKIP; CI `33475850114` `pcicmd=0x1`
 //! was a 0-or-1 write, not IdeBus EnableAttributes `0x5`). Disable
-//! (`0`) is not Start.
+//! (`0`) is not Start. CI `33477720477` VMXON-SKIP (`2b7a884` cmd
+//! unproven). do not F11 2b7a884.
+//! nested iso=0 firmware IdeBus prog-if: class programming interface
+//! is `0x8A` (ISA compatibility, both channels, BM, native-capable),
+//! not compat-only `0x80`. Dump `cmdn=` `cmdwr=` so `pcicmd=` is not
+//! the only Start signal.
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
@@ -78,7 +83,7 @@
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
@@ -119,6 +124,11 @@ pub const GUEST_CD_PCI_DEV: u8 = 0;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
+/// Mass-storage IDE, prog-if `0x8A` (native-capable), revision 0.
+/// nested iso=0 firmware IdeBus prog-if. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8A00;
+/// Programming interface byte (PCI 0x09). nested iso=0 firmware IdeBus prog-if.
+pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8A;
 
 const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
@@ -303,6 +313,11 @@ static IDE_PCI_CMD_WR_EXIT: AtomicBool = AtomicBool::new(false);
 /// IdeBus Start PCI command write: inject ATA 0x76 on the next HLT, not
 /// during the CF8/CFC OUT. product ISO firmware IDE cmd ATA on HLT.
 static IDE_PCI_CMD_ATA_HLT: AtomicBool = AtomicBool::new(false);
+/// Count of PCI command (offset 0x04) writes, including disable `0`.
+/// nested iso=0 firmware IdeBus prog-if. Dump `cmdn=`.
+static PCI_CMD_WR_N: AtomicU32 = AtomicU32::new(0);
+/// Last PCI command write (not OR-forced). Dump `cmdwr=`.
+static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -567,6 +582,8 @@ pub fn reset() {
     ATA_IO_N.store(0, Ordering::Release);
     IDE_PCI_CMD_WR_EXIT.store(false, Ordering::Release);
     IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
+    PCI_CMD_WR_N.store(0, Ordering::Release);
+    LAST_PCI_CMD_WR.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -597,6 +614,17 @@ pub fn last_ata_cmd() -> u8 {
 /// Not `ISO-INSTALL-OK`.
 pub fn pci_command() -> u16 {
     with_cd(|m| m.pci_cmd)
+}
+
+/// PCI command writes including disable `0`. Dump `cmdn=`.
+/// nested iso=0 firmware IdeBus prog-if. Not `ISO-INSTALL-OK`.
+pub fn pci_cmd_writes() -> u32 {
+    PCI_CMD_WR_N.load(Ordering::Acquire)
+}
+
+/// Last PCI command write. Dump `cmdwr=`. nested iso=0 firmware IdeBus prog-if.
+pub fn last_pci_cmd_write() -> u16 {
+    LAST_PCI_CMD_WR.load(Ordering::Acquire)
 }
 
 /// Live BAR0 (legacy `0x1F0`). Size-probe mask is not this value.
@@ -1614,7 +1642,8 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
-        0x08 => 0x01018000, // class IDE, prog-if 0x80
+        // nested iso=0 firmware IdeBus prog-if: 0x8A not compat-only 0x80.
+        0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,
         0x10 => ide_bar_read(m, 0, consume_probe),
@@ -1710,8 +1739,11 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let aligned = off & 0xFC;
         if off == 0x04 {
             m.pci_cmd = val as u16;
+            LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
+            PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
             // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
             // do not force I/O-space. Disable is not IdeBus Start.
+            // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=.
             if (m.pci_cmd & 0x0001) != 0 {
                 // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
                 // product ISO firmware IDE cmd reset 0: this write now happens.

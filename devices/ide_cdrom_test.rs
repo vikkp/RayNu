@@ -2,7 +2,8 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_command, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_command, pci_cmd_writes, last_pci_cmd_write,
+    pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
     ide_pci_cmd_ata_hlt_pending,
@@ -15,6 +16,7 @@
     ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_ISO_CAP,
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
+    GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF,
 };
 
 #[test]
@@ -325,10 +327,36 @@ fn pci_command_disable_is_not_start() {
         0,
         "nested iso=0 firmware IdeBus PCI cmd: write 0 stays 0"
     );
+    assert_eq!(
+        pci_cmd_writes(),
+        1,
+        "nested iso=0 firmware IdeBus prog-if: disable still counts cmdn"
+    );
+    assert_eq!(last_pci_cmd_write(), 0);
     assert!(
         !take_ide_pci_cmd_wr_exit(),
         "nested iso=0 firmware IdeBus PCI cmd: disable is not Start"
     );
+    reset();
+}
+
+#[test]
+fn pci_class_prog_if_is_native_capable() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x08);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_CLASS,
+        "nested iso=0 firmware IdeBus prog-if: class dword 0x01018A00"
+    );
+    pci_write_addr(pci_config_addr() | 0x09);
+    assert_eq!(
+        pci_read_data(0xCFC, 1),
+        u32::from(GUEST_CD_PCI_PROG_IF),
+        "nested iso=0 firmware IdeBus prog-if: byte 0x8A not 0x80"
+    );
+    assert_eq!(pci_cmd_writes(), 0);
     reset();
 }
 

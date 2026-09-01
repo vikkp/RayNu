@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-seventy-eighth slice: nested iso=0 firmware IdeBus PCI cmd (CI 33477097074 VMXON-SKIP; CI 33475850114 VMXON bar0=0x1f1 ataio=0; do not OR 0x0001; disable is not Start; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-seventy-ninth slice: nested iso=0 firmware IdeBus prog-if (CI 33477720477 VMXON-SKIP; 2b7a884 PCI cmd unproven; class 0x8A not compat-only 0x80; dump cmdn=/cmdwr=; F11 pin stays 33440050729 do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus PCI cmd; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus prog-if; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-ninth slice: nested iso=0 firmware IdeBus prog-if (CI 33477720477 VMXON-SKIP; 2b7a884 PCI cmd unproven; class 0x8A not compat-only 0x80; dump cmdn=/cmdwr=; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-eighth slice: nested iso=0 firmware IdeBus PCI cmd (CI 33477097074 VMXON-SKIP; CI 33475850114 VMXON bar0=0x1f1 probe=0x00 pcicmd=0x1 ataio=0; do not OR 0x0001; disable is not Start; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-seventh slice: nested iso=0 firmware IdeBus bootorder (CI 33475850114 VMXON bar0=0x1f1 probe=0x00 pcicmd=0x1 ataio=0; drop ghost ide@0,1 after slot-0 single-function; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-seventy-sixth slice: nested iso=0 firmware IdeBus BAR oneshot (CI 33475246727 VMXON-SKIP; dword probe read returns mask then live 0x1F1; skip-HLT must not leave GetBar on 0xFFFFFFF9; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
