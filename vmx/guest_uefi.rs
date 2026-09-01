@@ -1359,7 +1359,8 @@ pub fn guest_uefi_product_firmware_hlt_wake(
 /// product ISO firmware wake preempt. firmware skip PIT inject.
 /// Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_product_firmware_wake_preempt(reason: u32) -> bool {
-    reason == crate::vmx::fields::EXIT_REASON_HLT || reason == EXIT_REASON_PREEMPTION_TIMER
+    reason == crate::vmx::fields::EXIT_REASON_HLT
+        || reason == crate::vmx::fields::EXIT_REASON_PREEMPTION_TIMER
 }
 
 /// Product firmware HLT `ataio==0` wake vector: PIC except leftover `0xEF`.
