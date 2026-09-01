@@ -18,6 +18,7 @@
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
+    GUEST_CD_PCI_IDETIM_RAZ,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
     GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
@@ -565,24 +566,24 @@ fn pci_class_prog_if_is_native_capable() {
 }
 
 #[test]
-fn pci_idetim_decode_enable_persists() {
+fn pci_idetim_is_raz_like_qemu_piix() {
     reset();
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x40);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        GUEST_CD_PCI_IDETIM,
-        "nested iso=0 firmware IdeBus IDETIM: reset decode-enable"
+        GUEST_CD_PCI_IDETIM_RAZ,
+        "nested iso=0 firmware IdeBus IDETIM RAZ: reset 0"
     );
-    assert_eq!(pci_idetim(), 0x8000_8000);
-    pci_write_data(0xCFC, 2, 0);
+    assert_eq!(pci_idetim(), 0);
+    pci_write_data(0xCFC, 4, GUEST_CD_PCI_IDETIM);
     assert_eq!(
-        pci_read_data(0xCFC, 2),
+        pci_read_data(0xCFC, 4),
         0,
-        "nested iso=0 firmware IdeBus IDETIM: primary write persists"
+        "nested iso=0 firmware IdeBus IDETIM RAZ: write ignored"
     );
-    assert_eq!(pci_idetim() & 0xFFFF, 0);
-    assert_eq!(pci_idetim() >> 16, 0x8000);
+    assert_eq!(pci_idetim(), 0);
+    assert_eq!(GUEST_CD_PCI_IDETIM, 0x8000_8000);
     reset();
 }
 
