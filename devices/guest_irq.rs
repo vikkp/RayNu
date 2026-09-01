@@ -263,6 +263,14 @@ pub fn take_nested_iso0_pit_or_edk2() -> u8 {
     take_nested_iso0_pit().unwrap_or_else(nested_iso0_irq0_vec)
 }
 
+/// FADT SCI_INT (IRQ 9). PIIX4 SCI is GSI 9. nested iso=0 firmware HLT PM1 SCI.
+/// Not `ISO-INSTALL-OK`.
+pub const SCI_GSI: u8 = 9;
+/// EDK2 `Legacy8259` slave ICW2 `0x70` + (IRQ 9 - 8). nested iso=0 firmware
+/// HLT 0x71. Timer `0x20` is CPUID (CI `33470837613`); `0x68` is CR
+/// livelock (CI `33466890874`). Not `ISO-INSTALL-OK`.
+pub const NESTED_ISO0_EDK2_SCI: u8 = 0x71;
+
 /// EDK2 `Legacy8259` slave ICW2 + 6. nested iso=0 firmware HLT ATA.
 /// do not inject leftover 0x2E. Not `ISO-INSTALL-OK`.
 pub const NESTED_ISO0_EDK2_IRQ14: u8 = 0x76;
@@ -276,6 +284,41 @@ pub fn nested_iso0_irq14_vec() -> u8 {
         } else {
             NESTED_ISO0_EDK2_IRQ14
         }
+    })
+}
+
+/// Nested iso=0 firmware HLT after BOTH-OK: latch PIC IRQ 9 (SCI) without
+/// IOAPIC pin 2 / leftover LVT `0x20`. Unmask slave IRQ 9 + cascade when
+/// ICW2 ≥ 16. Also sets PM1 TMR_STS. nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub fn raise_nested_iso0_sci() {
+    crate::devices::guest_platform::raise_pm1_tmr_sci();
+    with_irq(|c| {
+        raise_pic_locked(c, SCI_GSI);
+        if c.slave.vector >= 16 {
+            c.slave.imr &= !(1 << (SCI_GSI - 8));
+            c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+        }
+    });
+}
+
+/// Consume PIC IRQ 9 on the iso=0 shadow 8259. nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub fn take_nested_iso0_sci() -> Option<u8> {
+    with_irq(|c| {
+        let want = if c.slave.vector >= 16 {
+            c.slave.vector.wrapping_add(SCI_GSI - 8)
+        } else {
+            NESTED_ISO0_EDK2_SCI
+        };
+        if c.slave.vector >= 16
+            && (c.slave.irr & (1 << (SCI_GSI - 8))) != 0
+            && (c.slave.imr & (1 << (SCI_GSI - 8))) == 0
+        {
+            c.slave.irr &= !(1 << (SCI_GSI - 8));
+            return Some(want);
+        }
+        None
     })
 }
 

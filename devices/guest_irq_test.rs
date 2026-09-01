@@ -2,7 +2,8 @@
     has_deliverable, ioapic_read, ioapic_write, is_hpet_split_2m_gpa, is_ioapic_gpa, lower_ata,
     pic_has_deliverable, pic_io, pic_shadow_out, prefer_pit_once, prefer_pit_until_driver_ok,     raise_ata, raise_gsi,
     raise_pit,     raise_nested_iso0_pit, raise_nested_iso0_ata, raise_virtio, reset, take_inject_vector, take_ioapic_ata_vector, take_ioapic_vector, take_pic_vector, take_nested_iso0_pit,
-    take_nested_iso0_pit_or_edk2, take_nested_iso0_ata, nested_iso0_irq0_vec, nested_iso0_irq14_vec, NESTED_ISO0_EDK2_IRQ0, NESTED_ISO0_EDK2_IRQ14,
+    take_nested_iso0_pit_or_edk2, take_nested_iso0_ata, take_nested_iso0_sci, nested_iso0_irq0_vec, nested_iso0_irq14_vec, NESTED_ISO0_EDK2_IRQ0, NESTED_ISO0_EDK2_IRQ14, NESTED_ISO0_EDK2_SCI,
+    raise_nested_iso0_sci,
     arm_firmware_virtual_wire, arm_firmware_ata_gsi14, firmware_virtual_wire_armed, ioapic_ata_ready, pic_ata_ready,
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
@@ -109,6 +110,44 @@ fn nested_iso0_firmware_hlt_ata_edk2_irq14() {
         take_nested_iso0_ata(),
         Some(0x76),
         "nested iso=0 firmware HLT ATA; do not inject leftover 0x2E"
+    );
+    reset();
+}
+
+#[test]
+fn nested_iso0_firmware_hlt_pm1_sci_edk2_0x71() {
+    reset();
+    reset_cd();
+    guest_platform::reset();
+    assert_eq!(
+        NESTED_ISO0_EDK2_SCI,
+        0x71,
+        "nested iso=0 firmware HLT 0x71"
+    );
+    raise_nested_iso0_sci();
+    assert!(
+        guest_platform::pm1_tmr_sci_pending(),
+        "nested iso=0 firmware HLT PM1 SCI"
+    );
+    assert!(
+        take_nested_iso0_sci().is_none(),
+        "no ICW: pic_take still needs ready"
+    );
+    pic_shadow_out(0x20, 1, 0x11);
+    pic_shadow_out(0x21, 1, 0x68);
+    pic_shadow_out(0x21, 1, 0x04);
+    pic_shadow_out(0x21, 1, 0x01);
+    pic_shadow_out(0xA0, 1, 0x11);
+    pic_shadow_out(0xA1, 1, 0x70);
+    pic_shadow_out(0xA1, 1, 0x02);
+    pic_shadow_out(0xA1, 1, 0x01);
+    pic_shadow_out(0x21, 1, 0xFB);
+    pic_shadow_out(0xA1, 1, 0xFD);
+    raise_nested_iso0_sci();
+    assert_eq!(
+        take_nested_iso0_sci(),
+        Some(0x71),
+        "nested iso=0 firmware HLT PM1 SCI; nested iso=0 firmware HLT 0x71"
     );
     reset();
 }

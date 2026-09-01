@@ -14,7 +14,8 @@ use super::{
     FW_CFG_E820_SEL, FW_CFG_NAMED_FILE_COUNT, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR, HPET_CAP_REV,
     HPET_CLK_PERIOD_FS, HPET_GPA, HPET_INSN_STEP, HPET_MAIN_STEP, HPET_SINK_OFF, HPET_UART_IO_STEP_CAP, HV_IDENTITY_PML4, HV_IDENTITY_PML4_BYTES, ISA_BRIDGE_DEVICE, TSC_PER_HPET_TICK,
     ISA_BRIDGE_VENDOR, PCI_HEADER_MULTIFUNCTION, PLATFORM_RAM_BYTES, PLATFORM_REPORT_RAM_BYTES, PM_BRIDGE_DEVICE,
-    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PIIX4_PMBA_ALT,
+    PM_BRIDGE_VENDOR, PM1_CNT_SCI_EN, PM1_STS_TMR, PM1_EN_TMR, PIIX4_PMBA_ALT,
+    raise_pm1_tmr_sci, pm1_tmr_sci_pending,
 };
 use crate::memory::ept_hw::GUEST_UEFI_LOW_RAM_BYTES;
 
@@ -618,6 +619,17 @@ fn piix4_pm1_sci_en_sticky_on_fadt() {
     assert!(is_acpi_pm1_io(0xB004));
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
     reset();
+    assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
+}
+
+#[test]
+fn nested_iso0_firmware_hlt_pm1_sci_latches_tmr() {
+    reset();
+    assert!(!pm1_tmr_sci_pending());
+    raise_pm1_tmr_sci();
+    assert!(pm1_tmr_sci_pending(), "nested iso=0 firmware HLT PM1 SCI");
+    assert_eq!(io(0xB000, true, 2, 0) as u16, PM1_STS_TMR);
+    assert_eq!(io(0xB002, true, 2, 0) as u16, PM1_EN_TMR);
     assert_eq!(io(0xB004, true, 2, 0) as u16, PM1_CNT_SCI_EN);
 }
 

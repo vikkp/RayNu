@@ -631,6 +631,13 @@ pub fn is_acpi_pm1_io(port: u16) -> bool {
 pub const PM1_CNT_SCI_EN: u16 = 1;
 /// Sleep enable. Ignore so a guest SLP_EN write does not halt the HV.
 const PM1_CNT_SLP_EN: u16 = 1 << 13;
+/// ACPI 1.0 `PM1_STS`/`PM1_EN` timer bit. Nested iso=0 firmware HLT PM1 SCI
+/// latches this so CpuSleep can take FADT SCI (IRQ 9 / EDK2 `0x71`) instead
+/// of leftover LAPIC `0x20` (CI `33470837613` CPUID) or `0x68` (CI
+/// `33466890874` CR livelock). nested iso=0 firmware HLT PM1 SCI.
+/// nested iso=0 firmware HLT 0x71. Not `ISO-INSTALL-OK`.
+pub const PM1_STS_TMR: u16 = 1;
+pub const PM1_EN_TMR: u16 = 1;
 
 fn pm1_block_off(port: u16, pmba: u32) -> Option<u16> {
     if (0xB000..=0xB007).contains(&port) {
@@ -704,6 +711,22 @@ fn note_pm1_sci(cnt: u16) {
             "boot: guest-UEFI PIIX4 PM1 SCI_EN (not ISO-INSTALL-OK)",
         );
     }
+}
+
+/// Latch PM1 timer SCI (TMR_STS + TMR_EN). SCI_EN is already set at reset.
+/// nested iso=0 firmware HLT PM1 SCI. nested iso=0 firmware HLT 0x71.
+/// Not `ISO-INSTALL-OK`.
+pub fn raise_pm1_tmr_sci() {
+    with_plat(|p| {
+        p.pm1_sts |= PM1_STS_TMR;
+        p.pm1_en |= PM1_EN_TMR;
+        note_pm1_sci(p.pm1_cnt);
+    });
+}
+
+/// True after [`raise_pm1_tmr_sci`]. nested iso=0 firmware HLT PM1 SCI.
+pub fn pm1_tmr_sci_pending() -> bool {
+    with_plat(|p| (p.pm1_sts & PM1_STS_TMR) != 0 && (p.pm1_en & PM1_EN_TMR) != 0)
 }
 
 fn is_piix_pm_io_port(port: u16, pmba: u32) -> bool {

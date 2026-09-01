@@ -259,6 +259,8 @@ git log -1 --oneline   # want this SHA (flash b5c3a9c pin 33440050729).
 # Do not pin --run 33469144799 (cfabb62 nested VMXON skip-after-inject 8x 0x20 hlt=0 ataio=0). nested iso=0 firmware HLT inject cap.
 # Do not pin --run 33470144235 (ee90aad nested VMXON-SKIP). guest-UEFI stop inj.
 # Do not pin --run 33470837613 (e416806 nested VMXON inj=1487 CPUID ataio=0). nested iso=0 firmware HLT skip after cap.
+# Do not pin --run 33471631130 (1c7ff1c nested VMXON-SKIP skip-after-cap). nested iso=0 firmware HLT PM1 SCI.
+# nested iso=0 firmware HLT 0x71 (FADT SCI IRQ 9; leftover 0x20 is CPUID, 0x68 is CR livelock).
 # firmware HLT inject cap (stop after 8; CI 33466890874 print-only cap kept injecting).
 # product ISO firmware HLT EDK2 0x68 (iron ea30da1 leftover 0x20 is timer ISR; do not force LVT).
 # nested iso=0 firmware HLT EDK2 0x68 (PIC take else 0x68; do not force leftover LVT 0x20).
