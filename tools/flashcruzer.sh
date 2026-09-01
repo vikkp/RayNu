@@ -317,6 +317,7 @@ self_test() {
   grep -q '33489676272' "$SCRIPT_PATH"
   grep -q '33489677821' "$SCRIPT_PATH"
   grep -q '33491808360' "$SCRIPT_PATH"
+  grep -q '33492680088' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
@@ -338,6 +339,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus BM unprogrammed' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus ISA BAR' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus PCI cmd mask' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI status' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -535,6 +537,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 9ce3499 / --run 33489677821.
 # nested iso=0 firmware IdeBus PCI cmd mask (CI 33491808360 VMXON-SKIP; 6fa77d1 ISA BAR unproven; PIIX wmask IO|MASTER).
 # do not F11 6fa77d1 / --run 33491808360.
+# nested iso=0 firmware IdeBus PCI status (CI 33492680088 VMXON-SKIP; 943a2d3 cmd mask unproven; PIIX FAST_BACK+DEVSEL 0x0280_0000).
+# do not F11 943a2d3 / --run 33492680088.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1216,6 +1220,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33491808360 is 6fa77d1 nested VMXON-SKIP (ISA BAR unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus PCI cmd mask; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 6fa77d1 / --run 33491808360." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33492680088" ]]; then
+    echo "error: run 33492680088 is 943a2d3 nested VMXON-SKIP (PCI cmd mask unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI status; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 943a2d3 / --run 33492680088." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

@@ -80,6 +80,11 @@
 //! (`0x0005`). EnableAttributes `0x0007` (MSE) must store `0x0005` so
 //! readback matches hardware. CI `33491808360` VMXON-SKIP (`6fa77d1`
 //! ISA BAR unproven). do not F11 6fa77d1.
+//! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
+//! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
+//! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
+//! CI `33492680088` VMXON-SKIP (`943a2d3` cmd mask unproven).
+//! do not F11 943a2d3.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -156,6 +161,11 @@ pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
 /// PIIX/QEMU PCI command wmask: I/O Space + Bus Master only (MSE hardwired 0).
 /// nested iso=0 firmware IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0005;
+/// PIIX/QEMU PCI status in the command+status dword: DEVSEL medium plus
+/// Fast Back-to-Back Capable. QEMU `PCI_STATUS_DEVSEL_MEDIUM |
+/// PCI_STATUS_FAST_BACK`. nested iso=0 firmware IdeBus PCI status.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_STATUS: u32 = 0x0280_0000;
 /// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
 /// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
@@ -1672,7 +1682,8 @@ fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
 fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
-        0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
+        // nested iso=0 firmware IdeBus PCI status: FAST_BACK with DEVSEL.
+        0x04 => u32::from(m.pci_cmd) | GUEST_CD_PCI_STATUS,
         // nested iso=0 firmware IdeBus ISA BAR: 0x80 not 0x8F/0x8A.
         0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
