@@ -248,6 +248,9 @@ self_test() {
   grep -q '33461867968' "$SCRIPT_PATH"
   grep -q '33462312015' "$SCRIPT_PATH"
   grep -q '33462988233' "$SCRIPT_PATH"
+  grep -q '33463584633' "$SCRIPT_PATH"
+  grep -q '33463983585' "$SCRIPT_PATH"
+  grep -q '33463955237' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware LAPIC timer' "$SCRIPT_PATH"
   grep -q 'nested iso=0 EDK2 IRQ0' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake' "$SCRIPT_PATH"
@@ -263,6 +266,7 @@ self_test() {
   grep -q 'product ISO firmware HLT wake IDT 0x20 only' "$SCRIPT_PATH"
   grep -q 'product ISO firmware HLT wake LVT unmask' "$SCRIPT_PATH"
   grep -q 'product ISO firmware LVT timer inject' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware no LVT inject I/O' "$SCRIPT_PATH"
   grep -q 'product ISO firmware wake preempt' "$SCRIPT_PATH"
   grep -q 'product ISO firmware no preempt inject' "$SCRIPT_PATH"
   grep -q 'product ISO firmware wake Delay I/O' "$SCRIPT_PATH"
@@ -440,6 +444,10 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # product ISO firmware HLT wake LVT unmask (CI 33455373334 VMXON-SKIP; inject 0x20 with LVT unmasked).
 # do not F11 f37674f / --run 33455373334.
 # product ISO firmware LVT timer inject (CI 33455903058 VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
+# product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt).
+# CI 33463983585 VMXON-SKIP. do not F11 89bba8f / --run 33463983585.
+# CI 33463955237 VMXON-SKIP. do not F11 4b11843 / --run 33463955237.
+# CI 33463584633 curl 35. do not F11 4e98f27 / --run 33463584633.
 # do not F11 91f15b3 / --run 33455903058.
 # product ISO firmware wake preempt (CI 33456465331 VMXON-SKIP; HLT only, not VMX preemption 52; skip RIP stays HLT-only).
 # product ISO firmware no preempt inject (CF8 walk must finish; inject on CpuSleep HLT).
@@ -914,8 +922,26 @@ refuse_2d6b109_dest_skip() {
   fi
   if [[ "$PIN_RUN" == "33462988233" ]]; then
     echo "error: run 33462988233 is b670993 no preempt inject VMXON-SKIP (not ATAPI-OK)" >&2
-    echo "       product ISO firmware Delay I/O no inject; flash b5c3a9c / --run 33440050729." >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 b670993 / --run 33462988233." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463983585" ]]; then
+    echo "error: run 33463983585 is 89bba8f docs/HDA VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 89bba8f / --run 33463983585." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463955237" ]]; then
+    echo "error: run 33463955237 is 4b11843 Verus curl retry VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 4b11843 / --run 33463955237." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33463584633" ]]; then
+    echo "error: run 33463584633 is 4e98f27 Delay I/O no inject M4.8 curl 35 (not ATAPI-OK)" >&2
+    echo "       product ISO firmware no LVT inject I/O; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 4e98f27 / --run 33463584633." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then

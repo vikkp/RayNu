@@ -92,6 +92,7 @@ use super::{
     guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_leftover_timer_vec,
     guest_uefi_product_firmware_lvt_timer_inject,
+    guest_uefi_product_firmware_no_lvt_inject_io,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
@@ -1495,6 +1496,32 @@ fn marker_and_residual_honest() {
         "product ISO firmware LVT timer inject: masked LVT is leftover PIT"
     );
     assert!(!guest_uefi_product_firmware_lvt_timer_inject(true, 0x20));
+    let _ = crate::devices::lapic_virt::force_firmware_lapic_timer_expiry();
+    assert!(
+        guest_uefi_product_firmware_lvt_timer_inject(false, 0x20),
+        "product ISO firmware LVT timer inject"
+    );
+    assert!(
+        guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 30),
+        "product ISO firmware no LVT inject I/O"
+    );
+    assert!(
+        guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 52),
+        "product ISO firmware no LVT inject I/O: preempt"
+    );
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 12),
+        "product ISO firmware no LVT inject I/O: HLT still wakes"
+    );
+    let _ = crate::devices::lapic_virt::wrmsr(0x832, 0x1_0000 | 0xEF);
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 30),
+        "product ISO firmware no LVT inject I/O: masked LVT"
+    );
+    assert!(
+        !guest_uefi_product_firmware_no_lvt_inject_io(false, 0x20, 12),
+        "product ISO firmware no LVT inject I/O: HLT still wakes"
+    );
     assert!(
         guest_uefi_firmware_skip_pit_inject(false, 0xEF),
         "product skip_pit still drops leftover LVT 0xEF"

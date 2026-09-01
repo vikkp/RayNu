@@ -169,6 +169,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake IDT 0x20 only (CI `33454767329` VMXON-SKIP; ignore unmasked LVT).
 /// product ISO firmware HLT wake LVT unmask (CI `33455373334` VMXON-SKIP; inject 0x20 with LVT unmasked).
 /// product ISO firmware LVT timer inject (CI `33455903058` VMXON-SKIP; skip_pit must not drop periodic LVT 0x20).
+/// product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt; CI `33463983585`/`33463955237` VMXON-SKIP; CI `33463584633` curl 35).
 /// product ISO firmware wake preempt (CI `33456465331` VMXON-SKIP; HLT only, not VMX preemption 52; skip RIP stays HLT-only).
 /// product ISO firmware no preempt inject (CF8 walk must finish; inject on CpuSleep HLT; CI `33461867968`/`33462312015` VMXON-SKIP).
 /// product ISO firmware wake Delay I/O (CI `33457132491` VMXON-SKIP; ACPI PM timer I/O Delay; skip RIP stays HLT-only; do not wake CF8).
@@ -251,6 +252,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO firmware HLT wake IDT 0x20 only.
 /// product ISO firmware HLT wake LVT unmask.
 /// product ISO firmware LVT timer inject.
+/// product ISO firmware no LVT inject I/O.
 /// product ISO firmware wake preempt.
 /// product ISO firmware no preempt inject.
 /// product ISO firmware wake Delay I/O.

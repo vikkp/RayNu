@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-sixty-third slice: product ISO firmware Delay I/O no inject (PM timer IN already ticks; inject 0x20 on CpuSleep HLT not Delay I/O). CI 33462988233 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-sixty-fourth slice: product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt; inject 0x20 on CpuSleep HLT). CI 33463983585/33463955237 VMXON-SKIP; CI 33463584633 curl 35; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (product ISO firmware Delay I/O no inject; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware no LVT inject I/O; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-fourth slice: product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt; inject 0x20 on CpuSleep HLT; CI 33463983585/33463955237 VMXON-SKIP; CI 33463584633 curl 35; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | CI: retry Verus release download (curl 35 reset on M4.8 large-page-spec); Stage 46 still OPEN; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-third slice: product ISO firmware Delay I/O no inject (PM timer IN already ticks; inject 0x20 on CpuSleep HLT not Delay I/O; CI 33462988233 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-second slice: product ISO firmware no preempt inject (CF8 walk must finish; inject 0x20 on CpuSleep HLT not VMX preemption 52; CI 33461867968/33462312015 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
