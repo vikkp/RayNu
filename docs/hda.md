@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-twentieth slice: nested iso=0 firmware IdeBus cfg read (CI 33535050708 VMXON-SKIP; b6e8ab7 cfg RAM RMW unproven; QEMU pci_default_read_config memcpy from config+addr for len, not an aligned-dword shift; dump cfgo=; F11 pin stays 33440050729 do not re-flash; do not F11 b6e8ab7). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-twenty-first slice: nested iso=0 firmware IdeBus cfg write (CI 33536269880 VMXON-SKIP; 004ef9b cfg read unproven; QEMU pci_default_write_config is one per-byte walk so size-4 at 0x0A reaches CLS and size-4 at 0x1E reaches BAR4; dump cfgw=; F11 pin stays 33440050729 do not re-flash; do not F11 004ef9b). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus cfg read; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus cfg write; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twenty-first slice: nested iso=0 firmware IdeBus cfg write (CI 33536269880 VMXON-SKIP; 004ef9b cfg read unproven; QEMU pci_default_write_config one per-byte walk; dump cfgw=; F11 pin stays 33440050729 do not re-flash; do not F11 004ef9b); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-twentieth slice: nested iso=0 firmware IdeBus cfg read (CI 33535050708 VMXON-SKIP; b6e8ab7 cfg RAM RMW unproven; QEMU pci_default_read_config memcpy from config+addr; dump cfgo=; F11 pin stays 33440050729 do not re-flash; do not F11 b6e8ab7); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-nineteenth slice: nested iso=0 firmware IdeBus cfg RAM RMW (CI 33533510182 VMXON-SKIP; 1465367 CLS RMW unproven; QEMU pci_default_write_config 0x40-0xFF per-byte spanning dwords; dump c40w=; F11 pin stays 33440050729 do not re-flash; do not F11 1465367); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-eighteenth slice: nested iso=0 firmware IdeBus CLS RMW (CI 33531358763 VMXON ATAPI miss; 436df8d ilwr=0 intl=0 cls=0 ataio=0; QEMU pci_default_write_config CACHE_LINE_SIZE per-byte wmask 0xFF; dump clwr=; F11 pin stays 33440050729 do not re-flash; do not F11 436df8d); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

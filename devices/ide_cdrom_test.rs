@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, last_pci_cfg_read_off, pci_status,
+    pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command,     pci_cmd_writes, last_pci_cmd_write, last_pci_cmd_in, last_pci_intline_write, last_pci_cls_write, last_pci_cfg40_write, last_pci_cfg_read_off, last_pci_cfg_write_off, pci_status,
     pci_cmd_max,
     pci_idetim, pci_cfg44, pci_svid, pci_rom, last_pci_bar4_write, pci_bar4_mapped,
     GUEST_CD_PCI_ROM, GUEST_CD_PCI_BAR4_WMASK,
@@ -797,6 +797,34 @@ fn pci_cfg_read_spans_header_into_ram() {
         "nested iso=0 firmware IdeBus cfg read: size-4 at 0x3E includes 0x40"
     );
     assert_eq!(last_pci_cfg_read_off(), 0x3E);
+    reset();
+}
+
+#[test]
+fn pci_cfg_write_spans_class_into_cls_and_bar3_into_bar4() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x08);
+    pci_write_data(0xCFE, 4, 0x2010_0000);
+    assert_eq!(
+        pci_cache_line(),
+        0x10,
+        "nested iso=0 firmware IdeBus cfg write: size-4 at 0x0A stores CLS"
+    );
+    assert_eq!(
+        pci_latency(),
+        0,
+        "nested iso=0 firmware IdeBus cfg write: latency 0x0D stays RO"
+    );
+    assert_eq!(last_pci_cfg_write_off(), 0x0A);
+    pci_write_addr(pci_config_addr() | 0x1C);
+    pci_write_data(0xCFE, 4, 0xFFFF_0000);
+    assert_eq!(
+        pci_bar4(),
+        0x0000_FFF1,
+        "nested iso=0 firmware IdeBus cfg write: size-4 at 0x1E stores BAR4"
+    );
+    assert_eq!(last_pci_cfg_write_off(), 0x1E);
     reset();
 }
 

@@ -155,6 +155,11 @@
 //! an aligned-dword shift (a size-4 at `0x3E` includes `0x40`). Dump
 //! `cfgo=`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM RMW
 //! unproven). do not F11 b6e8ab7.
+//! nested iso=0 firmware IdeBus cfg write: QEMU
+//! `pci_default_write_config` is one per-byte walk (not dword-aligned
+//! dispatch). A size-4 at `0x0A` reaches CLS `0x0C`; a size-4 at `0x1E`
+//! reaches BAR4. Dump `cfgw=`. CI `33536269880` VMXON-SKIP (`004ef9b`
+//! cfg read unproven). do not F11 004ef9b.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -266,6 +271,9 @@
 //! nested iso=0 firmware IdeBus cfg read: QEMU memcpy from
 //! `config+addr`. CI `33535050708` VMXON-SKIP (`b6e8ab7` cfg RAM
 //! RMW unproven). do not F11 b6e8ab7. Dump `cfgo=`.
+//! nested iso=0 firmware IdeBus cfg write: QEMU one per-byte walk.
+//! CI `33536269880` VMXON-SKIP (`004ef9b` cfg read unproven). do not
+//! F11 004ef9b. Dump `cfgw=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -664,6 +672,9 @@ static LAST_CFG40_WR: AtomicU8 = AtomicU8::new(0);
 /// Last PCI config offset read. Dump `cfgo=`.
 /// nested iso=0 firmware IdeBus cfg read.
 static LAST_CFG_RD_OFF: AtomicU8 = AtomicU8::new(0);
+/// Last PCI config offset written. Dump `cfgw=`.
+/// nested iso=0 firmware IdeBus cfg write.
+static LAST_CFG_WR_OFF: AtomicU8 = AtomicU8::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -1034,6 +1045,7 @@ pub fn reset() {
     LAST_CLS_WR.store(0, Ordering::Release);
     LAST_CFG40_WR.store(0, Ordering::Release);
     LAST_CFG_RD_OFF.store(0, Ordering::Release);
+    LAST_CFG_WR_OFF.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -1177,6 +1189,12 @@ pub fn last_pci_cfg40_write() -> u8 {
 /// IdeBus cfg read. Not `ISO-INSTALL-OK`.
 pub fn last_pci_cfg_read_off() -> u8 {
     LAST_CFG_RD_OFF.load(Ordering::Acquire)
+}
+
+/// Last PCI config offset written. Dump `cfgw=`. nested iso=0 firmware
+/// IdeBus cfg write. Not `ISO-INSTALL-OK`.
+pub fn last_pci_cfg_write_off() -> u8 {
+    LAST_CFG_WR_OFF.load(Ordering::Acquire)
 }
 
 /// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
@@ -2146,7 +2164,9 @@ pub fn pci_read_addr() -> u32 {
 fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
     // nested iso=0 firmware IdeBus ISA BAR: QEMU PIIX does not
     // register BAR0-3. Probe and live are 0. ISA 0x1F0/0x3F6 stay
-    // decoded. Not `ISO-INSTALL-OK`.
+    // decoded. Historical 8-byte command BAR size mask was
+    // `0xFFFF_FFF8`; 4-byte control was `0xFFFF_FFFC`. Not
+    // `ISO-INSTALL-OK`.
     if bar <= 3 {
         return match bar {
             0 => m.bar0,
@@ -2162,31 +2182,21 @@ fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
     m.bar4
 }
 
-fn ide_bar_write(m: &mut CdMedia, bar: u8, off: u8, size: u8, val: u32) {
-    // nested iso=0 firmware IdeBus ISA BAR: BAR0-3 writes are ignored.
-    // Historical 8-byte command BAR size mask was `0xFFFF_FFF8`; 4-byte
-    // control was `0xFFFF_FFFC`. QEMU PIIX does not register those BARs.
-    if bar <= 3 {
-        return;
-    }
+fn ide_bar4_write_byte(m: &mut CdMedia, a: u8, b: u8) {
     // nested iso=0 firmware IdeBus BAR4 wmask: QEMU pci_register_bar
     // 16-byte I/O wmask is ~(16-1). Type bit 1 is RO. Per-byte RMW.
-    LAST_BAR4_WR.store(val, Ordering::Release);
-    let shift = u32::from(off & 3) * 8;
-    let bits = match size {
-        1 => 8u32,
-        2 => 16,
-        _ => 32,
-    };
-    let width_mask = if bits >= 32 {
-        0xFFFF_FFFF
-    } else {
-        (1u32 << bits) - 1
-    };
-    let mask = width_mask << shift;
-    let merged = (m.bar4 & !mask) | ((val << shift) & mask);
-    m.bar4 = (merged & GUEST_CD_PCI_BAR4_WMASK) | 1;
-    let bit = 1u8 << bar;
+    // nested iso=0 firmware IdeBus cfg write: a spanning size-4 at
+    // 0x1E reaches 0x20/0x21.
+    if a < 0x20 || a > 0x23 {
+        return;
+    }
+    let shift = u32::from(a - 0x20) * 8;
+    let wmask = ((GUEST_CD_PCI_BAR4_WMASK >> shift) & 0xFF) as u8;
+    let cur = (m.bar4 >> shift) as u8;
+    let next = (cur & !wmask) | (b & wmask);
+    m.bar4 = (m.bar4 & !(0xFFu32 << shift)) | (u32::from(next) << shift);
+    m.bar4 = (m.bar4 & GUEST_CD_PCI_BAR4_WMASK) | 1;
+    let bit = 1u8 << 4;
     if m.bar4 == GUEST_CD_PCI_BAR4_PROBE {
         m.bar_probe |= bit;
     } else {
@@ -2365,121 +2375,84 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             return;
         }
         let off = pci_cfg_offset(m.pci_addr, port);
-        let aligned = off & 0xFC;
-        if aligned == 0x04 {
-            // nested iso=0 firmware IdeBus PCI cmd status: QEMU
-            // pci_default_write_config walks command then status per-byte.
-            // Command wmask 0x0507; status w1cmask 0xF900.
-            let n = match size {
-                1 => 1u8,
-                2 => 2,
-                _ => 4,
-            };
-            let mut touched_cmd = false;
-            let mut cmd_in = m.pci_cmd;
-            for i in 0..n {
-                let a = off.wrapping_add(i);
-                let b = (val >> (8 * u32::from(i))) as u8;
-                if a == 0x04 || a == 0x05 {
-                    touched_cmd = true;
-                    let shift = u32::from(a - 0x04) * 8;
-                    cmd_in = (cmd_in & !(0xFFu16 << shift)) | (u16::from(b) << shift);
-                    let wmask = ((GUEST_CD_PCI_CMD_WMASK >> shift) & 0xFF) as u8;
-                    let cur = ((m.pci_cmd >> shift) as u8 & !wmask) | (b & wmask);
-                    m.pci_cmd = (m.pci_cmd & !(0xFFu16 << shift)) | (u16::from(cur) << shift);
-                } else if a == 0x06 || a == 0x07 {
-                    let shift = u32::from(a - 0x06) * 8;
-                    let w1c = ((GUEST_CD_PCI_STATUS_W1C >> shift) & 0xFF) as u8;
-                    let cur = (m.pci_status >> shift) as u8;
-                    let next = cur & !(b & w1c);
-                    m.pci_status =
-                        (m.pci_status & !(0xFFu16 << shift)) | (u16::from(next) << shift);
+        LAST_CFG_WR_OFF.store(off, Ordering::Release);
+        // nested iso=0 firmware IdeBus cfg write: QEMU
+        // pci_default_write_config walks every byte from addr for len.
+        // pci_host_config_write_common clips MIN(len, 256 - addr).
+        let want = match size {
+            1 => 1u8,
+            2 => 2,
+            _ => 4,
+        };
+        let max = (256u16).saturating_sub(u16::from(off));
+        let n = if u16::from(want) > max {
+            max as u8
+        } else {
+            want
+        };
+        let mut touched_cmd = false;
+        let mut cmd_in = m.pci_cmd;
+        let mut touched_bar4 = false;
+        for i in 0..n {
+            let a = off.wrapping_add(i);
+            let b = (val >> (8 * u32::from(i))) as u8;
+            if a == 0x04 || a == 0x05 {
+                // nested iso=0 firmware IdeBus PCI cmd status.
+                touched_cmd = true;
+                let shift = u32::from(a - 0x04) * 8;
+                cmd_in = (cmd_in & !(0xFFu16 << shift)) | (u16::from(b) << shift);
+                let wmask = ((GUEST_CD_PCI_CMD_WMASK >> shift) & 0xFF) as u8;
+                let cur = ((m.pci_cmd >> shift) as u8 & !wmask) | (b & wmask);
+                m.pci_cmd = (m.pci_cmd & !(0xFFu16 << shift)) | (u16::from(cur) << shift);
+            } else if a == 0x06 || a == 0x07 {
+                let shift = u32::from(a - 0x06) * 8;
+                let w1c = ((GUEST_CD_PCI_STATUS_W1C >> shift) & 0xFF) as u8;
+                let cur = (m.pci_status >> shift) as u8;
+                let next = cur & !(b & w1c);
+                m.pci_status = (m.pci_status & !(0xFFu16 << shift)) | (u16::from(next) << shift);
+            } else if a == 0x0C {
+                // nested iso=0 firmware IdeBus CLS RMW / cfg write:
+                // size-4 at 0x0A reaches CACHE_LINE_SIZE. LT 0x0D stays RO.
+                LAST_CLS_WR.store(b, Ordering::Release);
+                m.cache_line = b;
+            } else if (0x20..=0x23).contains(&a) {
+                touched_bar4 = true;
+                ide_bar4_write_byte(m, a, b);
+            } else if a == 0x3C {
+                LAST_INTLINE_WR.store(b, Ordering::Release);
+                m.irq_line = b;
+            } else if a >= 0x40 && off < 0x40 {
+                let idx = (a as usize).wrapping_sub(0x40);
+                if idx < m.pci_cfg40.len() {
+                    LAST_CFG40_WR.store(b, Ordering::Release);
+                    m.pci_cfg40[idx] = b;
                 }
             }
-            if touched_cmd {
-                LAST_PCI_CMD_IN.store(cmd_in, Ordering::Release);
-                LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
-                PCI_CMD_MAX.fetch_max(m.pci_cmd, Ordering::AcqRel);
-                PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
-                // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
-                // do not force I/O-space. Disable is not IdeBus Start.
-                // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=/cmdmax=/cmdin=.
-                if (m.pci_cmd & 0x0001) != 0 {
-                    // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
-                    // product ISO firmware IDE cmd reset 0: this write now happens.
-                    // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
-                    // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
-                    // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
-                    // the CF8/CFC OUT; CpuSleep HLT consumes it.
-                    IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
-                    IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
-                    raise_ata_irq(m);
-                }
-            }
-        } else if aligned == 0x10 {
-            // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
-            // nested iso=0 firmware IdeBus BAR: do not persist the mask.
-            ide_bar_write(m, 0, off, size, val);
-        } else if aligned == 0x14 {
-            ide_bar_write(m, 1, off, size, val);
-        } else if aligned == 0x18 {
-            ide_bar_write(m, 2, off, size, val);
-        } else if aligned == 0x1C {
-            ide_bar_write(m, 3, off, size, val);
-        } else if aligned == 0x20 {
-            // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
-            // nested iso=0 firmware IdeBus BAR4 wmask.
-            ide_bar_write(m, 4, off, size, val);
-        } else if aligned == 0x30 {
-            // nested iso=0 firmware IdeBus PCI ROM: QEMU wmask 0, no
-            // size-probe sticky. 0xFFFFFFFF must not persist.
-            let _ = (size, val);
-        } else if aligned >= 0x40 {
-            // nested iso=0 firmware IdeBus cfg RAM RMW: QEMU
-            // pci_default_write_config walks 0x40-0xFF per-byte.
+        }
+        if off >= 0x40 {
             cfg40_write(m, off, size, val);
-        } else if aligned == 0x3C {
-            // nested iso=0 firmware IdeBus INTLINE RMW: QEMU
-            // pci_default_write_config walks INTERRUPT_LINE per-byte
-            // (wmask 0xFF). Pin/MinGnt/MaxLat stay RO 0.
-            // nested iso=0 firmware IdeBus cfg RAM RMW: a size-4 at
-            // 0x3D reaches 0x40.
-            let n = match size {
-                1 => 1u8,
-                2 => 2,
-                _ => 4,
-            };
-            for i in 0..n {
-                let a = off.wrapping_add(i);
-                let b = (val >> (8 * u32::from(i))) as u8;
-                if a == 0x3C {
-                    LAST_INTLINE_WR.store(b, Ordering::Release);
-                    m.irq_line = b;
-                } else if a >= 0x40 {
-                    let idx = (a as usize).wrapping_sub(0x40);
-                    if idx < m.pci_cfg40.len() {
-                        LAST_CFG40_WR.store(b, Ordering::Release);
-                        m.pci_cfg40[idx] = b;
-                    }
-                }
-            }
-        } else if aligned == 0x0C {
-            // nested iso=0 firmware IdeBus CLS RMW: QEMU
-            // pci_default_write_config walks CACHE_LINE_SIZE per-byte
-            // (wmask 0xFF). Latency/header/BIST stay RO 0.
-            // nested iso=0 firmware IdeBus LT RO: latency 0x0D stays 0.
-            let n = match size {
-                1 => 1u8,
-                2 => 2,
-                _ => 4,
-            };
-            for i in 0..n {
-                let a = off.wrapping_add(i);
-                let b = (val >> (8 * u32::from(i))) as u8;
-                if a == 0x0C {
-                    LAST_CLS_WR.store(b, Ordering::Release);
-                    m.cache_line = b;
-                }
+        }
+        if touched_bar4 {
+            LAST_BAR4_WR.store(val, Ordering::Release);
+        }
+        if touched_cmd {
+            LAST_PCI_CMD_IN.store(cmd_in, Ordering::Release);
+            LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
+            PCI_CMD_MAX.fetch_max(m.pci_cmd, Ordering::AcqRel);
+            PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);
+            // nested iso=0 firmware IdeBus PCI cmd: QEMU stores the write;
+            // do not force I/O-space. Disable is not IdeBus Start.
+            // nested iso=0 firmware IdeBus prog-if: dump cmdn=/cmdwr=/cmdmax=/cmdin=.
+            if (m.pci_cmd & 0x0001) != 0 {
+                // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
+                // product ISO firmware IDE cmd reset 0: this write now happens.
+                // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
+                // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
+                // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
+                // the CF8/CFC OUT; CpuSleep HLT consumes it.
+                IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
+                IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
+                raise_ata_irq(m);
             }
         }
     });
