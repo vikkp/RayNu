@@ -624,14 +624,22 @@ fn pci_idetim_is_raz_like_qemu_piix() {
         "nested iso=0 firmware IdeBus IDETIM RAZ: reset 0"
     );
     assert_eq!(pci_idetim(), 0);
+    assert_eq!(GUEST_CD_PCI_IDETIM_RAZ, 0);
+    reset();
+}
+
+#[test]
+fn pci_idetim_persists_like_qemu_cfg40() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
     pci_write_data(0xCFC, 4, GUEST_CD_PCI_IDETIM);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        0,
-        "nested iso=0 firmware IdeBus IDETIM RAZ: write ignored"
+        GUEST_CD_PCI_IDETIM,
+        "nested iso=0 firmware IdeBus IDETIM persist: decode-enable stores"
     );
-    assert_eq!(pci_idetim(), 0);
-    assert_eq!(GUEST_CD_PCI_IDETIM, 0x8000_8000);
+    assert_eq!(pci_idetim(), GUEST_CD_PCI_IDETIM);
     reset();
 }
 

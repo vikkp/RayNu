@@ -267,6 +267,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// nested iso=0 firmware IdeBus PCI cmd QEMU.
 /// nested iso=0 firmware IdeBus PCI cmd RMW.
 /// nested iso=0 firmware IdeBus PCI cmd INTX.
+/// nested iso=0 firmware IdeBus IDETIM persist.
 /// nested iso=0 firmware IdeBus PCI cmd mask.
 /// nested iso=0 firmware IdeBus PCI status.
 /// nested iso=0 firmware IdeBus INTLINE.

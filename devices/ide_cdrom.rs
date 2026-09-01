@@ -95,6 +95,10 @@
 //! bits 8 and 10 so a word EnableAttributes `0x0407`/`0x0507` readback
 //! failed before ISA `0x3F6`. CI `33511226072` VMXON-SKIP (`0300ae3` RMW
 //! unproven). do not F11 0300ae3.
+//! nested iso=0 firmware IdeBus IDETIM persist: QEMU `pci_init_wmask`
+//! memset `0xff` from `0x40` so PCI `0x40` writes persist. Live RAZ made
+//! `idetim=0` even if firmware wrote decode-enable. CI `33512599515`
+//! VMXON-SKIP (`e90cb0d` INTX unproven). do not F11 e90cb0d.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -163,6 +167,10 @@
 //! nested iso=0 firmware IdeBus PCI cmd INTX: QEMU `pci_init_wmask` is
 //! `0x0507` (IO|MEM|MASTER|SERR|INTX_DISABLE). CI `33511226072` VMXON-SKIP
 //! (`0300ae3` RMW unproven). do not F11 0300ae3.
+//! nested iso=0 firmware IdeBus IDETIM persist: QEMU `pci_init_wmask`
+//! is `0xff` from PCI `0x40`. RAZ discarded a decode-enable write.
+//! CI `33512599515` VMXON-SKIP (`e90cb0d` INTX unproven). do not F11
+//! e90cb0d.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -262,12 +270,12 @@ pub const GUEST_CD_PCI_INT_PIN: u8 = 0;
 /// nested iso=0 firmware IdeBus LAT. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_CACHE_LINE_RESET: u8 = 0;
 pub const GUEST_CD_PCI_LATENCY_RESET: u8 = 0;
-/// PIIX IDETIM dword (PCI 0x40). Historical decode-enable. Live QEMU PIIX
-/// is RAZ 0. nested iso=0 firmware IdeBus IDETIM. nested iso=0 firmware
-/// IdeBus IDETIM RAZ. Not `ISO-INSTALL-OK`.
+/// PIIX IDETIM dword (PCI 0x40). Decode-enable persist. nested iso=0
+/// firmware IdeBus IDETIM. nested iso=0 firmware IdeBus IDETIM persist.
+/// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
-/// QEMU PIIX3 PCI 0x40 is unimplemented (RAZ/WI). nested iso=0 firmware
-/// IdeBus IDETIM RAZ. Not `ISO-INSTALL-OK`.
+/// Historical RAZ 0. nested iso=0 firmware IdeBus IDETIM RAZ.
+/// Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM_RAZ: u32 = 0;
 /// PIIX BMIDE BAR4 reset: I/O bit, address 0 (unprogrammed). PciBus
 /// skips an address-0 command BAR. CI `33488202396` VMXON `bar4=0xcc01`
@@ -427,7 +435,7 @@ impl CdMedia {
             bar3: GUEST_CD_PCI_BAR0_RESET,
             bar4: GUEST_CD_PCI_BAR4_RESET,
             bar_probe: 0,
-            // nested iso=0 firmware IdeBus IDETIM RAZ: QEMU PIIX 0x40 is 0.
+            // nested iso=0 firmware IdeBus IDETIM persist: reset 0 like QEMU.
             idetim: GUEST_CD_PCI_IDETIM_RAZ,
             // nested iso=0 firmware IdeBus INTLINE: QEMU reset is 0, not 0x0E.
             irq_line: GUEST_CD_PCI_INT_LINE_RESET,
@@ -922,8 +930,8 @@ pub fn pci_bar_probe() -> u8 {
     with_cd(|m| m.bar_probe)
 }
 
-/// PIIX IDETIM (PCI 0x40). QEMU PIIX3 is RAZ 0. Dump `idetim=`.
-/// nested iso=0 firmware IdeBus IDETIM RAZ.
+/// PIIX IDETIM (PCI 0x40). QEMU generic config persist. Dump `idetim=`.
+/// nested iso=0 firmware IdeBus IDETIM persist.
 pub fn pci_idetim() -> u32 {
     with_cd(|m| m.idetim)
 }
@@ -1953,7 +1961,7 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
         0x20 => ide_bar_read(m, 4, consume_probe),
         0x2C => 0x0000_0000,
         0x3C => u32::from(m.irq_line) | (u32::from(GUEST_CD_PCI_INT_PIN) << 8),
-        // nested iso=0 firmware IdeBus IDETIM RAZ: QEMU PIIX 0x40 is 0.
+        // nested iso=0 firmware IdeBus IDETIM persist: QEMU 0x40 is stored.
         0x40 => m.idetim,
         _ => 0,
     }
@@ -2086,9 +2094,21 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
             ide_bar_write(m, 4, val);
         } else if aligned == 0x40 {
-            // nested iso=0 firmware IdeBus IDETIM RAZ: QEMU PIIX3 does not
-            // implement ICH IDETIM (writes ignored, read 0).
-            let _ = (val, size, off);
+            // nested iso=0 firmware IdeBus IDETIM persist: QEMU
+            // pci_init_wmask is 0xff from 0x40. RAZ discarded writes.
+            let shift = u32::from(off & 3) * 8;
+            let bits = match size {
+                1 => 8u32,
+                2 => 16,
+                _ => 32,
+            };
+            let width_mask = if bits >= 32 {
+                0xFFFF_FFFF
+            } else {
+                (1u32 << bits) - 1
+            };
+            let mask = width_mask << shift;
+            m.idetim = (m.idetim & !mask) | ((val << shift) & mask);
         } else if aligned == 0x3C {
             // nested iso=0 firmware IdeBus INTLINE: persist line; pin is RO 0.
             if off == 0x3C {
