@@ -238,6 +238,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// firmware HLT insn_len 0 skip.
 /// nested iso=0 firmware HLT PIT.
 /// nested iso=0 firmware HLT no PIT inject.
+/// nested iso=0 firmware HLT EDK2 0x68.
 /// nested iso=0 EDK2 IRQ0.
 /// nested iso=0 firmware LAPIC timer.
 /// product ISO firmware HLT wake.

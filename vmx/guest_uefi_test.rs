@@ -97,6 +97,7 @@ use super::{
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
     guest_uefi_nested_iso0_firmware_hlt_no_pit_inject,
+    guest_uefi_nested_iso0_firmware_hlt_edk2_irq0,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -988,6 +989,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT no PIT inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT EDK2 0x68"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1439,6 +1441,13 @@ fn marker_and_residual_honest() {
         false, false, true, 1, 12
     ));
     assert!(
+        guest_uefi_nested_iso0_firmware_hlt_edk2_irq0(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT EDK2 0x68"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_edk2_irq0(
+        false, false, true, 1, 12
+    ));
+    assert!(
         guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
         "nested iso=0 firmware HLT ATA"
     );
@@ -1482,8 +1491,8 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(
         guest_uefi_nested_iso0_inject_vec(None, Some(0x20)),
-        0x20,
-        "nested iso=0 firmware LAPIC timer"
+        0x68,
+        "nested iso=0 firmware HLT EDK2 0x68; leftover LVT 0x20 is not IDENTIFY"
     );
     assert_eq!(
         guest_uefi_nested_iso0_inject_vec(None, None),
