@@ -122,6 +122,7 @@ use super::{
     guest_uefi_product_firmware_hlt_wake_idt20,
     guest_uefi_product_firmware_hlt_wake_idt20_only,
     guest_uefi_product_firmware_hlt_wake_lvt_unmask,
+    guest_uefi_product_firmware_hlt_edk2_irq0,
     guest_uefi_firmware_hlt_ataio0_wake_vec,
     guest_uefi_firmware_hlt_activity_active,
     guest_uefi_firmware_lapic_timer_expiry,
@@ -990,6 +991,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT no PIT inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT EDK2 0x68"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO firmware HLT EDK2 0x68"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1696,13 +1698,13 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(
         guest_uefi_product_firmware_ide_cmd_hlt_vec(true),
-        0x20,
-        "product ISO firmware IDE cmd HLT 0x20"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68"
     );
     assert_eq!(
         guest_uefi_product_firmware_ide_cmd_hlt_vec(false),
-        0x20,
-        "product ISO firmware IDE cmd HLT 0x20: still 0x20 without pending"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68: still 0x68 without pending"
     );
     assert!(!guest_uefi_product_firmware_ide_cmd_hlt_timer(
         false, true, 1, 12, true
@@ -1717,18 +1719,18 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, None),
-        0x20,
-        "product ISO firmware HLT wake IDT 0x20"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(Some(0x20), None),
-        0x20,
-        "product ISO firmware HLT wake IDT 0x20"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68; leftover 0x20 is timer ISR"
     );
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0xEF)),
-        0x20,
-        "product ISO firmware HLT wake IDT 0x20; leftover 0xEF substitutes 0x20"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68; leftover 0xEF substitutes 0x68"
     );
     assert!(
         guest_uefi_product_firmware_hlt_wake_idt20(false, 0x20),
@@ -1766,9 +1768,15 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_product_firmware_hlt_wake_lvt_unmask(true));
     assert_eq!(
         guest_uefi_firmware_hlt_ataio0_wake_vec(None, Some(0x27)),
-        0x20,
-        "product ISO firmware HLT wake IDT 0x20 only; ignore unmasked LVT"
+        0x68,
+        "product ISO firmware HLT EDK2 0x68; ignore unmasked LVT"
     );
+    assert!(
+        guest_uefi_product_firmware_hlt_edk2_irq0(false, true, 0, 12),
+        "product ISO firmware HLT EDK2 0x68"
+    );
+    assert!(!guest_uefi_product_firmware_hlt_edk2_irq0(true, true, 0, 12));
+    assert!(!guest_uefi_product_firmware_hlt_edk2_irq0(false, true, 1, 12));
     assert!(
         guest_uefi_product_firmware_hlt_ata(false, true, 1, 12),
         "product ISO firmware HLT ATA"

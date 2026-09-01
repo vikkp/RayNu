@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-sixty-sixth slice: nested iso=0 firmware HLT EDK2 0x68 (CI 33464757885 leftover LVT 0x20 stole IRQ0; CI 33465649406 VMXON-SKIP). F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-sixty-seventh slice: product ISO firmware HLT EDK2 0x68 (iron ea30da1 leftover 0x20 timer ISR; CI 33466397855 VMXON-SKIP). F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware HLT EDK2 0x68; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware HLT EDK2 0x68; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-seventh slice: product ISO firmware HLT EDK2 0x68 (iron ea30da1 leftover 0x20 timer ISR; CI 33466397855 nested 0x68 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-sixth slice: nested iso=0 firmware HLT EDK2 0x68 (CI 33464757885 leftover LVT 0x20 stole IRQ0; CI 33465649406 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-fifth slice: nested iso=0 firmware HLT no PIT inject (CI 33464757885 VMXON inject 0x20 timer ISR CPUID ataio=0 ATAPI-OK missing; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-sixty-fourth slice: product ISO firmware no LVT inject I/O (unmasked LVT 0x20 must not inject on CF8/Delay/preempt; inject 0x20 on CpuSleep HLT; CI 33463983585/33463955237 VMXON-SKIP; CI 33463584633 curl 35; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

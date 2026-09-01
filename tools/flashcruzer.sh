@@ -288,8 +288,10 @@ self_test() {
   grep -q 'nested iso=0 firmware HLT PIT' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT no PIT inject' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT EDK2 0x68' "$SCRIPT_PATH"
+  grep -q 'product ISO firmware HLT EDK2 0x68' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
+  grep -q '33466397855' "$SCRIPT_PATH"
   grep -q 'firmware take IOAPIC ATA' "$SCRIPT_PATH"
   grep -q 'IOAPIC edge no remote IRR' "$SCRIPT_PATH"
   grep -q '33387614559' "$SCRIPT_PATH"
@@ -431,6 +433,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 7f199db / --run 33464757885.
 # nested iso=0 firmware HLT EDK2 0x68 (CI 33465649406 VMXON-SKIP; leftover LVT 0x20 stole EDK2 IRQ0).
 # do not F11 739eb8a / --run 33465649406.
+# product ISO firmware HLT EDK2 0x68 (CI 33466397855 VMXON-SKIP; iron ea30da1 leftover 0x20 timer ISR).
+# do not F11 13052e7 / --run 33466397855.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -962,6 +966,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33465649406 is 739eb8a nested no PIT inject VMXON-SKIP (not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware HLT EDK2 0x68; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 739eb8a / --run 33465649406." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33466397855" ]]; then
+    echo "error: run 33466397855 is 13052e7 nested EDK2 0x68 VMXON-SKIP (not ATAPI-OK)" >&2
+    echo "       product ISO firmware HLT EDK2 0x68; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 13052e7 / --run 33466397855." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
