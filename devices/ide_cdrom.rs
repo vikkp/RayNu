@@ -51,7 +51,8 @@
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
-//! (not timer `0x20`). CpuSleep HLT still uses IDT `0x20`.
+//! (not timer `0x20`) on the following CpuSleep HLT, not during the PCI OUT.
+//! product ISO firmware IDE cmd ATA on HLT.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
 //! on QEMU if the operator has not called [`present`] yet). Bytes larger than
@@ -276,6 +277,9 @@ static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 /// Product IdeBus Start writes PCI command (offset 0x04). Empty-slot CF8
 /// does not set this. product ISO firmware wake IDE cmd.
 static IDE_PCI_CMD_WR_EXIT: AtomicBool = AtomicBool::new(false);
+/// IdeBus Start PCI command write: inject ATA 0x76 on the next HLT, not
+/// during the CF8/CFC OUT. product ISO firmware IDE cmd ATA on HLT.
+static IDE_PCI_CMD_ATA_HLT: AtomicBool = AtomicBool::new(false);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -539,6 +543,7 @@ pub fn reset() {
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
     IDE_PCI_CMD_WR_EXIT.store(false, Ordering::Release);
+    IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -582,6 +587,22 @@ pub fn ata_io_accesses() -> u32 {
 /// product ISO firmware wake IDE cmd. Not `ISO-INSTALL-OK`.
 pub fn take_ide_pci_cmd_wr_exit() -> bool {
     IDE_PCI_CMD_WR_EXIT.swap(false, Ordering::AcqRel)
+}
+
+/// Consume the IdeBus Start PCI-command latch **on HLT only**.
+///
+/// Unlike `take_ide_pci_cmd_wr_exit`, this is not consumed on the I/O exit
+/// itself. The pending bit survives the CF8/CFC OUT so the following
+/// CpuSleep HLT can inject ATA `0x76`. product ISO firmware IDE cmd ATA on HLT.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_ide_pci_cmd_ata_hlt() -> bool {
+    IDE_PCI_CMD_ATA_HLT.swap(false, Ordering::AcqRel)
+}
+
+/// Peek whether IdeBus Start is waiting for CpuSleep ATA `0x76`.
+/// Does not consume. product ISO firmware IDE cmd ATA on HLT.
+pub fn ide_pci_cmd_ata_hlt_pending() -> bool {
+    IDE_PCI_CMD_ATA_HLT.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1581,7 +1602,10 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
             // product ISO firmware IDE cmd reset 0: this write now happens.
             // product ISO firmware IDE cmd ATA IRQ: INTRQ after I/O enable.
             // product ISO firmware IDE cmd inject ATA: wake injects 0x76.
+            // product ISO firmware IDE cmd ATA on HLT: sticky bit survives
+            // the CF8/CFC OUT; CpuSleep HLT consumes it.
             IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
+            IDE_PCI_CMD_ATA_HLT.store(true, Ordering::Release);
             raise_ata_irq(m);
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.

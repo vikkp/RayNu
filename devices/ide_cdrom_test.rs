@@ -4,6 +4,8 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
+    take_ide_pci_cmd_ata_hlt,
+    ide_pci_cmd_ata_hlt_pending,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
     product_iso_hides_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
@@ -241,12 +243,26 @@ fn pci_command_write_latches_ide_cmd_wake() {
         take_ide_pci_cmd_wr_exit(),
         "product ISO firmware wake IDE cmd"
     );
+    assert!(
+        ide_pci_cmd_ata_hlt_pending(),
+        "product ISO firmware IDE cmd ATA on HLT: survives I/O take"
+    );
+    assert!(
+        take_ide_pci_cmd_ata_hlt(),
+        "product ISO firmware IDE cmd ATA on HLT: survives I/O take"
+    );
     assert!(!take_ide_pci_cmd_wr_exit());
+    assert!(!take_ide_pci_cmd_ata_hlt());
+    assert!(!ide_pci_cmd_ata_hlt_pending());
     pci_write_addr(pci_config_addr() | 0x10);
     pci_write_data(0xCFC, 4, 0x1F1);
     assert!(
         !take_ide_pci_cmd_wr_exit(),
         "product ISO firmware wake IDE cmd: BAR write is not Start"
+    );
+    assert!(
+        !take_ide_pci_cmd_ata_hlt(),
+        "product ISO firmware IDE cmd ATA on HLT: BAR write is not Start"
     );
     reset();
 }
