@@ -111,6 +111,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_bootorder,
     guest_uefi_nested_iso0_firmware_idebus_connect,
     guest_uefi_nested_iso0_firmware_idebus_ofw,
+    guest_uefi_nested_iso0_firmware_idebus_connectall,
     guest_uefi_nested_iso0_firmware_idebus_cmd,
     guest_uefi_nested_iso0_firmware_idebus_progif,
     guest_uefi_nested_iso0_firmware_idebus_progif_native,
@@ -1695,6 +1696,17 @@ fn marker_and_residual_honest() {
     assert!(
         !guest_uefi_nested_iso0_firmware_idebus_ofw(
             b"/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
+        )
+    );
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_connectall(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n/force-connect-all@0\n\0"
+        ),
+        "nested iso=0 firmware IdeBus ConnectAll"
+    );
+    assert!(
+        !guest_uefi_nested_iso0_firmware_idebus_connectall(
+            b"/pci@i0cf8/pci8086,7010@1,1\n/pci@i0cf8/ide@1,1\n/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/scsi@2/disk@0,0\n\0"
         )
     );
     assert!(
