@@ -277,10 +277,11 @@ quiet except HTTP/WARN/markers.
 **Option 2 (2026-09-01):** living ladder
 [`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229
-on dest_ok pin `b5c3a9c` plus firmware HLT wait-for-PIT before ATA.
-Do not F11 `b5c3a9c` / `--run 33440050729` (same HLT). Do not flash
-`2d6b109` (dest skip) or `8024439`. Next proof is COM2 `ataio>0` or
-`sectors>0` / El Torito — still not `ISO-INSTALL-OK`.
+on dest_ok plus wait-for-irq (proved on `24c5fa6`) plus one-shot PIT.
+Do not F11 `24c5fa6` / `--run 33555104832` (PIT livelock). Do not F11
+`b5c3a9c` / `--run 33440050729`. Do not flash `2d6b109` or `8024439`.
+Next proof is COM2 `ataio>0` or `sectors>0` / El Torito — still not
+`ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

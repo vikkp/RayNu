@@ -165,6 +165,9 @@ self_test() {
   python3 "$PICK" --self-test
   grep -q '^26db0610$' "$REJECT_FILE"
   grep -q '^6fc742b0$' "$REJECT_FILE"
+  grep -q '^937a2f6e$' "$REJECT_FILE"
+  grep -q '33555104832' "$SCRIPT_PATH"
+  grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -397,7 +400,30 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # Iron COM2 8663f56 dest_ok then IN EAX,DX Delay — do not F11 8663f56 /
 # run 33333506987. Iron COM2 084430f Delay then HLT stall — do not F11
 # 084430f / run 33337287432. flashcruzer reject 2d6b109 dest skip.
-# Not ISO-INSTALL-OK.
+# do not F11 24c5fa6 / --run 33555104832 (wait-for-irq then PIT livelock).
+# firmware PIT one-shot after first wake. Not ISO-INSTALL-OK.
+refuse_24c5fa6_pit_livelock() {
+  if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
+    return 0
+  fi
+  if [[ "$PIN_RUN" == "33555104832" || "$PIN_RUN" == "33554248661" ]]; then
+    echo "error: run $PIN_RUN is 24c5fa6/ee82483 HLT wait-for-irq then PIT livelock" >&2
+    echo "       stacked vec=0x20 after CpuSleep wake; ataio=0 through n>2.5M." >&2
+    echo "       do not F11 24c5fa6 / --run 33555104832 again." >&2
+    echo "       do not F11 ee82483 / --run 33554248661 (same wait-for-PIT)." >&2
+    echo "       do not F11 b5c3a9c / --run 33440050729." >&2
+    echo "       wait for this SHA CI (one-shot PIT after first wake)." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33440050729" ]]; then
+    echo "error: run 33440050729 is b5c3a9c dest_ok then HLT skip-after-inject" >&2
+    echo "       ataio=0 cmd=0x00 through n≈1.8M. Do not F11 b5c3a9c again." >&2
+    echo "       do not F11 24c5fa6 / --run 33555104832 (PIT livelock)." >&2
+    echo "       wait for this SHA CI (one-shot PIT after first wake)." >&2
+    exit 1
+  fi
+}
+
 refuse_2d6b109_dest_skip() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
@@ -799,6 +825,7 @@ refuse_2d6b109_dest_skip() {
       ;;
   esac
 }
+refuse_24c5fa6_pit_livelock
 refuse_2d6b109_dest_skip
 
 install_launcher || true

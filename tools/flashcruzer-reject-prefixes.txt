@@ -15,3 +15,5 @@ f413a9fc
 # 2d6b109 dest skip (IoReadFifo8 still skips dest 0x205f18 inside identity 0x200000).
 # FLASHCRUZER-OK on run 33321642509 is not F11. Pin ea30da1 run 33389381409.
 6fc742b0
+# 24c5fa6 / 33555104832 wait-for-irq then stacked PIT livelock (ataio=0).
+937a2f6e

@@ -89,6 +89,7 @@ use super::{
     guest_uefi_firmware_hlt_skip_after_inject,
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
+    guest_uefi_firmware_skip_pit_inject_oneshot,
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_firmware_hlt_activity_active,
@@ -957,6 +958,11 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 12926eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIT one-shot after first wake"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 24c5fa6"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock")
+    );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
@@ -1397,7 +1403,23 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_skip_without_inject(true));
     assert!(
         !guest_uefi_firmware_skip_pit_inject(false, 0x20, 0),
-        "allow PIT before first ATA so BDS leaves CpuSleep"
+        "allow first PIT before ATA so BDS leaves CpuSleep"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x20, 0, false),
+        "first PIT still injects before ATA"
+    );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x20, 0, true),
+        "iron 24c5fa6: drop stacked PIT after the first wake"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x2E, 0, true),
+        "oneshot PIT does not drop ATA 14"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(true, 0x20, 0, true),
+        "linux still injects PIT 0x20"
     );
     assert!(
         guest_uefi_firmware_skip_pit_inject(false, 0x20, 1),
