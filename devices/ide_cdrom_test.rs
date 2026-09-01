@@ -3,6 +3,7 @@
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_command, pci_cmd_writes, last_pci_cmd_write,
+    pci_idetim,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
@@ -16,7 +17,7 @@
     ELTORITO_BOOTX64_OFF, ELTORITO_PAYLOAD_MAGIC, ELTORITO_SECTOR_COUNT, GUEST_CD_ISO_CAP,
     GUEST_CD_PCI_DEVICE,
     GUEST_CD_PCI_VENDOR, ISO_SECTOR, M7_E5_OVMF_CDROM_OK_MARKER, MOCK_EFI_ISO_BYTES,
-    GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF,
+    GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
 };
 
 #[test]
@@ -357,6 +358,28 @@ fn pci_class_prog_if_is_native_capable() {
         "nested iso=0 firmware IdeBus prog-if native: byte 0x8F not 0x8A"
     );
     assert_eq!(pci_cmd_writes(), 0);
+    reset();
+}
+
+#[test]
+fn pci_idetim_decode_enable_persists() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x40);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        GUEST_CD_PCI_IDETIM,
+        "nested iso=0 firmware IdeBus IDETIM: reset decode-enable"
+    );
+    assert_eq!(pci_idetim(), 0x8000_8000);
+    pci_write_data(0xCFC, 2, 0);
+    assert_eq!(
+        pci_read_data(0xCFC, 2),
+        0,
+        "nested iso=0 firmware IdeBus IDETIM: primary write persists"
+    );
+    assert_eq!(pci_idetim() & 0xFFFF, 0);
+    assert_eq!(pci_idetim() >> 16, 0x8000);
     reset();
 }
 

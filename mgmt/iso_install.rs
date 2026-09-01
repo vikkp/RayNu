@@ -255,6 +255,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// nested iso=0 firmware IdeBus PCI cmd.
 /// nested iso=0 firmware IdeBus prog-if.
 /// nested iso=0 firmware IdeBus prog-if native.
+/// nested iso=0 firmware IdeBus IDETIM.
 /// product ISO firmware HLT EDK2 0x68.
 /// nested iso=0 EDK2 IRQ0.
 /// nested iso=0 firmware LAPIC timer.

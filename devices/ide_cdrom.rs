@@ -68,7 +68,11 @@
 //! the only Start signal. CI `33478850408` VMXON-SKIP (`7c52010`
 //! 0x8A unproven). do not F11 7c52010.
 //! nested iso=0 firmware IdeBus prog-if native: `0x8F` sets bits 0 and 2
-//! so IdeBus GetBar uses BAR0/BAR1, not ISA `0x1F0`.
+//! so IdeBus GetBar uses BAR0/BAR1, not ISA `0x1F0`. CI `33481842584`
+//! VMXON-SKIP (`9b6c2eb` 0x8F unproven). do not F11 9b6c2eb.
+//! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
+//! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
+//! channel look disabled. Dump `idetim=`.
 //! product ISO firmware IDE cmd ATA IRQ: that Start write also raises IRQ 14
 //! (nIEN=0) so IdeBus WaitForInterrupt can see pin 14. BAR writes do not.
 //! product ISO firmware IDE cmd inject ATA: that same write injects `0x76`
@@ -134,6 +138,9 @@ pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8F00;
 /// Programming interface byte (PCI 0x09). Bits 0 and 2 = native both.
 /// nested iso=0 firmware IdeBus prog-if native.
 pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8F;
+/// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
+/// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
 
 const ATA_STATUS_ERR: u8 = 0x01;
 const ATA_STATUS_DRQ: u8 = 0x08;
@@ -207,6 +214,9 @@ struct CdMedia {
     /// previous value. nested iso=0 firmware IdeBus BAR.
     /// nested iso=0 firmware IdeBus BAR oneshot.
     bar_probe: u8,
+    /// PIIX IDETIM at PCI 0x40-0x43. Bit 15 of each word is decode enable.
+    /// nested iso=0 firmware IdeBus IDETIM.
+    idetim: u32,
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -253,6 +263,8 @@ impl CdMedia {
             bar3: 0x0375,
             bar4: 1,
             bar_probe: 0,
+            // nested iso=0 firmware IdeBus IDETIM: both channels decode-enable.
+            idetim: GUEST_CD_PCI_IDETIM,
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -642,6 +654,11 @@ pub fn pci_bar0() -> u32 {
 /// BAR oneshot. Not `ISO-INSTALL-OK`.
 pub fn pci_bar_probe() -> u8 {
     with_cd(|m| m.bar_probe)
+}
+
+/// PIIX IDETIM (PCI 0x40). Dump `idetim=`. nested iso=0 firmware IdeBus IDETIM.
+pub fn pci_idetim() -> u32 {
+    with_cd(|m| m.idetim)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).
@@ -1658,6 +1675,8 @@ fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
         0x20 => ide_bar_read(m, 4, consume_probe),
         0x2C => 0x0000_0000,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
+        // nested iso=0 firmware IdeBus IDETIM: decode-enable not RAZ.
+        0x40 => m.idetim,
         _ => 0,
     }
 }
@@ -1726,7 +1745,7 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
     })
 }
 
-pub fn pci_write_data(port: u16, _size: u8, val: u32) {
+pub fn pci_write_data(port: u16, size: u8, val: u32) {
     with_cd(|m| {
         if product_iso_hides_ide(m.pci_addr)
             || linux_hides_duplicate_slot0_ide(
@@ -1773,6 +1792,20 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
             ide_bar_write(m, 4, val);
+        } else if aligned == 0x40 {
+            // nested iso=0 firmware IdeBus IDETIM: persist decode-enable.
+            let shift = (off & 3) * 8;
+            let width = match size {
+                1 => 8u32,
+                2 => 16,
+                _ => 32,
+            };
+            let mask = if width >= 32 {
+                0xFFFF_FFFF
+            } else {
+                (1u32 << width) - 1
+            };
+            m.idetim = (m.idetim & !(mask << shift)) | ((val & mask) << shift);
         }
     });
 }
