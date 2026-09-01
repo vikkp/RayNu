@@ -245,6 +245,9 @@ fn pci_command_write_latches_ide_cmd_wake() {
     );
     reset();
 }
+
+#[test]
+fn pci_bar0_relocated_packet_read10_counts_sector() {
     reset();
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x10);
