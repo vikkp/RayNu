@@ -45,6 +45,7 @@ fn pci_bdf_and_ports() {
     assert!(is_ata_primary_port(0x170));
     assert!(is_ata_primary_port(0x177));
     assert!(is_ata_primary_port(0x376));
+    assert!(present_placeholder());
     assert_eq!(
         ata_io(0x170, true, 1, 0) as u8,
         0x00,
