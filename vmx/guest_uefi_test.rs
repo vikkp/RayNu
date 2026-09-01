@@ -87,6 +87,7 @@ use super::{
     guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_hlt_skip_after_inject,
+    guest_uefi_firmware_hlt_skip_only_after_inject,
     guest_uefi_firmware_hlt_skip_without_inject,
     guest_uefi_firmware_skip_pit_inject,
     guest_uefi_firmware_leftover_timer_vec,
@@ -1387,6 +1388,14 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
     assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_firmware_hlt_skip_only_after_inject(true),
+        "firmware HLT skip only after inject"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_skip_only_after_inject(false),
+        "firmware HLT skip only after inject; iron COM2 b5c3a9c inj=0"
+    );
     assert!(
         guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 1),
         "firmware HLT skip after ataio"
