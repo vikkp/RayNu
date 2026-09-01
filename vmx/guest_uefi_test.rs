@@ -1363,14 +1363,20 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, true, 1));
     crate::devices::ide_cdrom::reset();
     assert!(
-        !guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 0),
-        "firmware HLT skip without inject: do not arm virtual-wire on product ISO HLT"
+        guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 0),
+        "iron b5c3a9c: product ISO HLT before ATA waits for PIT"
     );
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(false, 16385, 12, true, 0));
-    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16384, 12, true, 0));
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq(true, 16384, 12, true, 0),
+        "wait-for-irq is not gated on n>16384"
+    );
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
     assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
-    assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0),
+        "do not skip CpuSleep before first ATA"
+    );
     assert!(
         guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 1),
         "firmware HLT skip after ataio"
@@ -1390,15 +1396,19 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_firmware_hlt_skip_without_inject(true));
     assert!(
-        guest_uefi_firmware_skip_pit_inject(false, 0x20),
-        "firmware skip PIT inject"
+        !guest_uefi_firmware_skip_pit_inject(false, 0x20, 0),
+        "allow PIT before first ATA so BDS leaves CpuSleep"
     );
     assert!(
-        !guest_uefi_firmware_skip_pit_inject(false, 0x2E),
+        guest_uefi_firmware_skip_pit_inject(false, 0x20, 1),
+        "firmware skip PIT inject after PACKET"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x2E, 1),
         "firmware skip PIT inject: ATA 14 still injects"
     );
     assert!(
-        !guest_uefi_firmware_skip_pit_inject(true, 0x20),
+        !guest_uefi_firmware_skip_pit_inject(true, 0x20, 1),
         "linux still injects PIT 0x20"
     );
     assert_eq!(
@@ -2521,21 +2531,24 @@ fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
     let iso = vec![0u8; extra];
     assert!(crate::devices::ide_cdrom::present(&iso, 9));
     assert!(guest_uefi_product_iso_pci_ready(false, true));
-    assert!(guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0),
+        "do not skip CpuSleep before first ATA"
+    );
     assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
     assert!(
-        guest_uefi_firmware_hlt_skip_after_inject(true, 1, 12, true, 0),
-        "product ISO HLT stall before n=16384: skip CpuSleep without PIT inject"
+        guest_uefi_firmware_hlt_skip_after_inject(true, 1, 12, true, 1),
+        "product ISO skip CpuSleep only after PACKET"
     );
     assert!(
-        !guest_uefi_firmware_hlt_wait_for_irq(true, 1, 12, true, 0),
-        "firmware HLT skip without inject"
+        guest_uefi_firmware_hlt_wait_for_irq(true, 1, 12, true, 0),
+        "iron b5c3a9c: wait for PIT before ATA"
     );
     assert!(
-        guest_uefi_firmware_skip_pit_inject(false, 0x20),
-        "firmware skip PIT inject"
+        !guest_uefi_firmware_skip_pit_inject(false, 0x20, 0),
+        "allow PIT before first ATA"
     );
-    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E));
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E, 0));
     assert_eq!(
         guest_uefi_firmware_force_if_for_inject(false, 0),
         1 << 9,

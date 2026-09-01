@@ -274,7 +274,15 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-Eighty-seventh slice (this EFI): skip-decode INVLPG `0F 01 /7`
+**Option 2 (2026-09-01):** living ladder
+[`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
+Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229
+on dest_ok pin `b5c3a9c` plus firmware HLT wait-for-PIT before ATA.
+Do not F11 `b5c3a9c` / `--run 33440050729` (same HLT). Do not flash
+`2d6b109` (dest skip) or `8024439`. Next proof is COM2 `ataio>0` or
+`sectors>0` / El Torito — still not `ISO-INSTALL-OK`.
+
+Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux
 `#PF` deliver. Empty fetch does not guess a length (COM2
 `linux invlpg miss`). Do not clear primary INVLPG-exiting (Xeon

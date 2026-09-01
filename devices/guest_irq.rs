@@ -321,8 +321,8 @@ pub fn arm_firmware_virtual_wire() {
 
 /// Unmask IOAPIC pin 14 without PIT virtual-wire.
 ///
-/// Firmware HLT wait_for_irq stays false, so [`arm_firmware_virtual_wire`]
-/// never runs. Pin 14 stays at the masked default RTE; `raise_ata` latches
+/// Firmware HLT wait_for_irq now arms virtual-wire before first ATA.
+/// Pin 14 still needs this unmask: `raise_ata` latches
 /// IRR that `take_ioapic_vector` cannot deliver. Force-IF then has nothing
 /// to inject. Do not unmask GSI 2 / PIC IRQ 0 (iron `ea30da1` `vec=0x20`
 /// timer ISR). Also unmask PIC slave IRQ 14 (not all PIC IRQs) so IdeBus

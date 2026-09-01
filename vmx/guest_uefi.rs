@@ -1113,44 +1113,44 @@ pub fn guest_uefi_firmware_hlt_ignores_tpr(linux: bool, pci_ide: bool, ataio: u3
 }
 
 /// After BOTH-OK, `skip_hlt` without inject turns CpuSleep into a busy
-/// `RET` loop so the timer ISR never runs as a wait. Inject without skip
-/// IRETs to HLT (iron COM2 `eac424b`). Iron COM2 `ea30da1`: skip AND inject
-/// `vec=0x20` livelocked the timer ISR (`rip=0x7f03fbe5` CPUID, `hlt=0`,
-/// cap 16_777_216, no virtio-iso IN). Nested iso=0 skips without inject
-/// and reaches ATAPI. Do not wait-for-IRQ / virtual-wire on firmware HLT.
-/// firmware HLT stall waits for IRQ. firmware HLT skip without inject.
-/// product ISO HLT stall before n=16384. Not `ISO-INSTALL-OK`.
+/// `RET` loop so the timer ISR never runs as a wait (iron COM2 `b5c3a9c`:
+/// `HLT skip-after-inject` `ataio=0` `cmd=0x00` through `n≈1.8M`).
+/// Inject without skip IRETed to HLT until virtual-wire AEOI (`eac424b`).
+/// `ea30da1` skip AND inject `vec=0x20` livelocked the timer ISR
+/// (`pci_ide=0`). Product ISO + `pci_ide` + `ataio==0` waits in HLT,
+/// arms virtual-wire, and injects PIT so BDS can start ATA. Nested
+/// iso=0 (`pci_ide` false) still skips without inject. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_firmware_hlt_wait_for_irq(
-    _product_iso: bool,
+    product_iso: bool,
     _n: u32,
-    _reason: u32,
-    _pci_ide: bool,
-    _ataio: u32,
+    reason: u32,
+    pci_ide: bool,
+    ataio: u32,
 ) -> bool {
-    false
+    product_iso
+        && reason == crate::vmx::fields::EXIT_REASON_HLT
+        && pci_ide
+        && ataio == 0
 }
 
-/// Skip CpuSleep `HLT` and set activity Active so ConnectAll continues.
-/// Also skip after PACKET (`ataio>0`): IdeBus may HLT waiting for IRQ 14.
-/// `skip_hlt` without activity Active parks at RET (`daf3195`). Quiet tick
-/// stays `ataio==0` (print-only). Do not inject PIT: iron COM2 `ea30da1`
-/// `inject vec=0x20` never returned to the boot media Start.
-/// firmware HLT skip after ataio. firmware HLT skip after inject.
-/// firmware HLT skip without inject. firmware skip PIT inject.
-/// skip-after-inject uses pci_ready.
-/// product ISO HLT stall before n=16384. do not F11 ea30da1.
-/// do not F11 90da03d. flash e70a295. do not F11 e70a295.
-/// flash 77f5866. do not F11 8e81c2e. Not `ISO-INSTALL-OK`.
+/// Skip CpuSleep `HLT` and set activity Active so ConnectAll continues
+/// **after** PACKET (`ataio>0`): IdeBus may HLT waiting for IRQ 14.
+/// Iron COM2 `b5c3a9c` skipped before ATA (`ataio=0` `cmd=0x00`) and never
+/// issued IDENTIFY. `skip_hlt` without activity Active parks at RET
+/// (`daf3195`). Quiet tick stays `ataio==0` (print-only). Do not skip
+/// before first ATA: wait-for-IRQ + PIT. `ea30da1` skip+inject was
+/// `pci_ide=0`. skip-after-inject uses pci_ready. Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_firmware_hlt_skip_after_inject(
     product_iso: bool,
     n: u32,
     reason: u32,
     pci_ide: bool,
-    _ataio: u32,
+    ataio: u32,
 ) -> bool {
     product_iso
         && reason == crate::vmx::fields::EXIT_REASON_HLT
         && pci_ide
+        && ataio > 0
         && (n > 16384 || crate::devices::ide_cdrom::product_iso_window_armed())
 }
 
@@ -1164,16 +1164,15 @@ pub fn guest_uefi_firmware_hlt_skip_without_inject(linux: bool) -> bool {
     !linux
 }
 
-/// Drop firmware PIT `vec=0x20` after take; do not VM-entry it.
-/// Iron COM2 `ea30da1` skip+inject livelocked the timer ISR. `e70a295`
-/// skip-without-inject also blocked ATA 14, so PACKET HLT with nIEN=0
-/// never saw IRQ 14. Linux still injects 0x20. wait_for_irq stays false
-/// (no virtual-wire). firmware skip PIT inject. do not F11 e70a295.
-/// flash 77f5866. firmware force IF for inject. do not F11 77f5866.
-/// flash 5227ad9. firmware arm ATA GSI 14. flash 489d938.
-/// firmware prefer ATA IRR. Not `ISO-INSTALL-OK`.
-pub fn guest_uefi_firmware_skip_pit_inject(linux: bool, vec: u32) -> bool {
-    guest_uefi_firmware_hlt_skip_without_inject(linux)
+/// Drop firmware PIT `vec=0x20` after take **once ATA has started**.
+/// Iron COM2 `b5c3a9c` skip-PIT + skip-after-inject left BDS in CpuSleep
+/// (`ataio=0`). Allow `0x20` before first ATA so virtual-wire can wake
+/// HLT. After `ataio>0`, drop PIT (`ea30da1` skip+inject livelock was
+/// `pci_ide=0`). `e70a295` skip-without-inject also blocked ATA 14.
+/// Linux still injects 0x20. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_skip_pit_inject(linux: bool, vec: u32, ataio: u32) -> bool {
+    ataio > 0
+        && guest_uefi_firmware_hlt_skip_without_inject(linux)
         && crate::devices::guest_irq::firmware_is_pit_vec(vec as u8)
 }
 
@@ -3187,6 +3186,7 @@ static PCI_BAR_TRACE: AtomicU32 = AtomicU32::new(0);
 static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
 static HLT_STALL_LOGGED: AtomicBool = AtomicBool::new(false);
 static SKIP_AFTER_INJECT_LOGGED: AtomicBool = AtomicBool::new(false);
+static WAIT_FOR_IRQ_LOGGED: AtomicBool = AtomicBool::new(false);
 static INJECT_N: AtomicU32 = AtomicU32::new(0);
 static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
@@ -3774,6 +3774,7 @@ pub fn reset_guest_uefi_launch() {
     HLT_SKIPS.store(0, Ordering::Release);
     HLT_STALL_LOGGED.store(false, Ordering::Release);
     SKIP_AFTER_INJECT_LOGGED.store(false, Ordering::Release);
+    WAIT_FOR_IRQ_LOGGED.store(false, Ordering::Release);
     INJECT_N.store(0, Ordering::Release);
     SPIN_JMP_SKIPS.store(0, Ordering::Release);
     LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
@@ -5132,14 +5133,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                         crate::devices::guest_virtio_blk::pci_enumerated(),
                     );
                     let ataio = crate::devices::ide_cdrom::ata_io_accesses();
-                    if guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio)
-                        && guest_uefi_firmware_hlt_wait_for_irq(
-                            crate::devices::ide_cdrom::product_iso_window_armed(),
-                            n,
-                            basic,
-                            pci_ide,
-                            ataio,
-                        )
+                    let wait_irq = guest_uefi_firmware_hlt_wait_for_irq(
+                        crate::devices::ide_cdrom::product_iso_window_armed(),
+                        n,
+                        basic,
+                        pci_ide,
+                        ataio,
+                    );
+                    if guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio) && wait_irq
                     {
                         crate::devices::guest_irq::arm_firmware_virtual_wire();
                         if guest_uefi_firmware_lapic_timer_expiry(linux, pci_ide, ataio)
@@ -5213,6 +5214,20 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                             let after = ops::vmread(GUEST_RIP).unwrap_or(0);
                             serial::write_str("boot: guest-UEFI HLT skip-after-inject rip=0x");
                             write_hex(after);
+                            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+                        }
+                        true
+                    } else if wait_irq {
+                        // Iron COM2 b5c3a9c: skip-after-inject + skip-PIT
+                        // burned CpuSleep at rip=0x7f0680d0 ataio=0. Stay
+                        // halted; virtual-wire + PIT wake BDS so ATA can
+                        // start. Do not set activity Active (that RET-parks).
+                        if WAIT_FOR_IRQ_LOGGED
+                            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                            .is_ok()
+                        {
+                            serial::write_str("boot: guest-UEFI HLT wait-for-irq rip=0x");
+                            write_hex(ops::vmread(GUEST_RIP).unwrap_or(0));
                             serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
                         }
                         true
@@ -9498,7 +9513,7 @@ unsafe fn try_inject_guest_irq() {
         let _ = set_guest_uefi_interrupt_window(false);
         return;
     };
-    if guest_uefi_firmware_skip_pit_inject(linux, vec) {
+    if guest_uefi_firmware_skip_pit_inject(linux, vec, ataio) {
         // firmware skip PIT inject. Consumed vec=0x20; do not VM-entry it.
         // PIC prefers slave IRQ 14 over PIT when both pending. Linux still
         // injects 0x20. firmware force IF for inject. do not F11 77f5866.
