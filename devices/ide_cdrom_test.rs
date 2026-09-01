@@ -473,9 +473,9 @@ fn pci_command_wmask_drops_mse() {
     assert_eq!(
         pci_command(),
         GUEST_CD_PCI_CMD_WMASK,
-        "nested iso=0 firmware IdeBus PCI cmd mask: EnableAttributes 0x7 stores 0x5"
+        "nested iso=0 firmware IdeBus PCI cmd QEMU: EnableAttributes 0x7 stores 0x7"
     );
-    assert_eq!(last_pci_cmd_write(), 0x0005);
+    assert_eq!(last_pci_cmd_write(), 0x0007);
     assert!(take_ide_pci_cmd_wr_exit());
     reset();
 }

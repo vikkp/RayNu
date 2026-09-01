@@ -118,6 +118,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed,
     guest_uefi_nested_iso0_firmware_idebus_isa_bar,
     guest_uefi_nested_iso0_firmware_idebus_cmd_mask,
+    guest_uefi_nested_iso0_firmware_idebus_cmd_qemu,
     guest_uefi_nested_iso0_firmware_idebus_status,
     guest_uefi_nested_iso0_firmware_idebus_intline,
     guest_uefi_nested_iso0_firmware_idebus_intpin,
@@ -1772,6 +1773,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus PCI cmd mask"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_mask(0x0007, 0x0007));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cmd_qemu(0x0007, 0x0007),
+        "nested iso=0 firmware IdeBus PCI cmd QEMU"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd_qemu(0x0005, 0x0007));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_status(0x0280_0000),
         "nested iso=0 firmware IdeBus PCI status"

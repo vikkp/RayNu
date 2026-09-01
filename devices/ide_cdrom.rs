@@ -77,10 +77,14 @@
 //! `0x8F` plus live `bar0=0x1f1` sat in the ISA hole so PciBus left
 //! `pcicmd=0x0` (CI `33488202396` VMXON; CI `33489676272`/`33489677821`
 //! VMXON-SKIP). do not F11 9ce3499.
-//! nested iso=0 firmware IdeBus PCI cmd mask: PIIX/QEMU wmask is IO|MASTER
-//! (`0x0005`). EnableAttributes `0x0007` (MSE) must store `0x0005` so
-//! readback matches hardware. CI `33491808360` VMXON-SKIP (`6fa77d1`
+//! nested iso=0 firmware IdeBus PCI cmd mask: ICH wmask is IO|MASTER
+//! (`0x0005`). Historical. CI `33491808360` VMXON-SKIP (`6fa77d1`
 //! ISA BAR unproven). do not F11 6fa77d1.
+//! nested iso=0 firmware IdeBus PCI cmd QEMU: QEMU `pci_piix_ide_realize`
+//! does not filter command wmask, so `pci_init_wmask` is IO|MEM|MASTER
+//! (`0x0007`). ICH `0x0005` dropped MSE so EnableAttributes `0x0007`
+//! readback failed before ISA `0x3F6`. CI `33508115698` VMXON-SKIP
+//! (`edf0682` slot0 fn1 unproven). do not F11 edf0682.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -142,6 +146,10 @@
 //! nested iso=0 firmware IdeBus slot0 fn1: QEMU i440FX `00:00.1` is empty
 //! (`0xFFFFFFFF`). CD lives at PIIX `00:01.1` only. CI `33506851920`
 //! VMXON-SKIP (`98d20ea` IDETIM RAZ unproven). do not F11 98d20ea.
+//! nested iso=0 firmware IdeBus PCI cmd QEMU: QEMU default command wmask
+//! is `0x0007` (IO|MEM|MASTER). ICH `0x0005` stays historical. CI
+//! `33508115698` VMXON-SKIP (`edf0682` slot0 fn1 unproven). do not F11
+//! edf0682.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -215,9 +223,13 @@ pub const GUEST_CD_PCI_PROG_IF: u8 = 0x80;
 /// QEMU PIIX command BARs are unimplemented. PciBus must not claim ISA
 /// `0x1F0`. nested iso=0 firmware IdeBus ISA BAR. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
-/// PIIX/QEMU PCI command wmask: I/O Space + Bus Master only (MSE hardwired 0).
-/// nested iso=0 firmware IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
-pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0005;
+/// QEMU `pci_init_wmask` PCI command: I/O + Memory + Bus Master (`0x0007`).
+/// `pci_piix_ide_realize` does not filter MSE. nested iso=0 firmware
+/// IdeBus PCI cmd QEMU. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK: u16 = 0x0007;
+/// ICH PIIX hardwired-0 MSE. Historical needle. nested iso=0 firmware
+/// IdeBus PCI cmd mask. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CMD_WMASK_ICH: u16 = 0x0005;
 /// PIIX/QEMU PCI status in the command+status dword: DEVSEL medium plus
 /// Fast Back-to-Back Capable. QEMU `PCI_STATUS_DEVSEL_MEDIUM |
 /// PCI_STATUS_FAST_BACK`. nested iso=0 firmware IdeBus PCI status.
@@ -2003,7 +2015,7 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            // nested iso=0 firmware IdeBus PCI cmd mask: IO|MASTER only.
+            // nested iso=0 firmware IdeBus PCI cmd QEMU: IO|MEM|MASTER.
             m.pci_cmd = (val as u16) & GUEST_CD_PCI_CMD_WMASK;
             LAST_PCI_CMD_WR.store(m.pci_cmd, Ordering::Release);
             PCI_CMD_WR_N.fetch_add(1, Ordering::AcqRel);

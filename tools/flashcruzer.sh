@@ -331,6 +331,7 @@ self_test() {
   grep -q '33504402447' "$SCRIPT_PATH"
   grep -q '33505842402' "$SCRIPT_PATH"
   grep -q '33506851920' "$SCRIPT_PATH"
+  grep -q '33508115698' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT skip after cap' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT PM1 SCI' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware HLT 0x71' "$SCRIPT_PATH"
@@ -366,6 +367,7 @@ self_test() {
   grep -q 'nested iso=0 firmware IdeBus secondary ioport' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus IDETIM RAZ' "$SCRIPT_PATH"
   grep -q 'nested iso=0 firmware IdeBus slot0 fn1' "$SCRIPT_PATH"
+  grep -q 'nested iso=0 firmware IdeBus PCI cmd QEMU' "$SCRIPT_PATH"
   grep -q 'guest-UEFI stop inj' "$SCRIPT_PATH"
   grep -q '33464757885' "$SCRIPT_PATH"
   grep -q '33465649406' "$SCRIPT_PATH"
@@ -591,6 +593,8 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 f8964e1 / --run 33505842402.
 # nested iso=0 firmware IdeBus slot0 fn1 (CI 33506851920 VMXON-SKIP; 98d20ea IDETIM RAZ unproven; QEMU i440FX 00:00.1 empty; CD at PIIX 00:01.1 only).
 # do not F11 98d20ea / --run 33506851920.
+# nested iso=0 firmware IdeBus PCI cmd QEMU (CI 33508115698 VMXON-SKIP; edf0682 slot0 fn1 unproven; QEMU pci_init_wmask IO|MEM|MASTER 0x0007 not ICH 0x0005).
+# do not F11 edf0682 / --run 33508115698.
 # nested iso=0 EDK2 IRQ0 (CI 33443188019 VMXON-SKIP; take-None unproven on VMX).
 # nested iso=0 firmware LAPIC timer (CI 33444677681 VMXON-SKIP; 33440951898 pic=0 gsi2=0).
 # product ISO firmware HLT wake (skip_pit leftover 0x20; inject EDK2 0x68 on firmware HLT ataio==0).
@@ -1356,6 +1360,12 @@ refuse_2d6b109_dest_skip() {
     echo "error: run 33506851920 is 98d20ea nested VMXON-SKIP (IDETIM RAZ unproven; not ATAPI-OK)" >&2
     echo "       nested iso=0 firmware IdeBus slot0 fn1; flash b5c3a9c / --run 33440050729." >&2
     echo "       iso=0 E4 SHELL held. Do not F11 98d20ea / --run 33506851920." >&2
+    exit 1
+  fi
+  if [[ "$PIN_RUN" == "33508115698" ]]; then
+    echo "error: run 33508115698 is edf0682 nested VMXON-SKIP (slot0 fn1 unproven; not ATAPI-OK)" >&2
+    echo "       nested iso=0 firmware IdeBus PCI cmd QEMU; flash b5c3a9c / --run 33440050729." >&2
+    echo "       iso=0 E4 SHELL held. Do not F11 edf0682 / --run 33508115698." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33429494930" ]]; then
