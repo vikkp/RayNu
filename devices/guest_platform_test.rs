@@ -88,7 +88,8 @@ fn fwcfg_bootorder_is_cd_then_disk() {
     assert_eq!(&got[..n], BOOTORDER);
     assert!(BOOTORDER.windows(8).any(|w| w == b"drive@0/"));
     assert!(!BOOTORDER.windows(8).any(|w| w == b"drive@1/"));
-    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER.starts_with(b"/force-connect-all@0\n"));
+    assert!(BOOTORDER.windows(17).any(|w| w == b"pci8086,7010@1,1\n"));
     assert!(BOOTORDER.windows(20).any(|w| w == b"force-connect-all@0\n"));
     assert!(
         !BOOTORDER.windows(7).any(|w| w == b"ide@0,1"),
@@ -107,9 +108,11 @@ fn product_iso_fwcfg_bootorder_virtio_iso_first() {
     assert!(boot_order_product_eltorito_first());
     assert!(bootorder_nul_terminated());
     assert_eq!(bootorder_bytes(), BOOTORDER);
-    assert!(BOOTORDER.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER.starts_with(b"/force-connect-all@0\n"));
+    assert!(BOOTORDER.windows(17).any(|w| w == b"pci8086,7010@1,1\n"));
     assert!(BOOTORDER.windows(20).any(|w| w == b"force-connect-all@0\n"));
-    assert!(BOOTORDER_PRODUCT.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n"));
+    assert!(BOOTORDER_PRODUCT.starts_with(b"/force-connect-all@0\n"));
+    assert!(BOOTORDER_PRODUCT.windows(17).any(|w| w == b"pci8086,7010@1,1\n"));
     assert!(BOOTORDER_PRODUCT.windows(20).any(|w| w == b"force-connect-all@0\n"));
     assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@3"));
     assert!(BOOTORDER_PRODUCT.windows(6).any(|w| w == b"scsi@2"));

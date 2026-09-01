@@ -104,8 +104,9 @@ pub fn prop_virtio_pci_and_bootorder() -> bool {
     ide_cdrom::reset();
     virtio_ok
         && boot_served
-        && first == *b"/pci@i0c"
-        && BOOTORDER.starts_with(b"/pci@i0cf8/pci8086,7010@1,1\n")
+        && first == *b"/force-c"
+        && BOOTORDER.starts_with(b"/force-connect-all@0\n")
+        && BOOTORDER.windows(17).any(|w| w == b"pci8086,7010@1,1\n")
         && !BOOTORDER.windows(15).any(|w| w == b"ide@0,1/drive@0")
 }
 
