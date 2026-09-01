@@ -288,7 +288,17 @@ fn pci_bar4_bmide_unprogrammed_until_assigned() {
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xCC01);
     assert_eq!(pci_bar4(), 0xCC01);
-    assert!(is_bmide_port(0xCC00));
+    assert!(
+        !is_bmide_port(0xCC00),
+        "nested iso=0 firmware IdeBus BMIDE IO: BAR4 assigned, COMMAND.IO off"
+    );
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
+    assert!(
+        is_bmide_port(0xCC00),
+        "nested iso=0 firmware IdeBus BMIDE IO: COMMAND.IO decodes BAR4"
+    );
+    pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0);
     assert_eq!(pci_bar4(), 1);
     reset();
@@ -552,6 +562,8 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(sectors_read() >= 1);
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xC400);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
     assert!(is_bmide_port(0xC400));
     assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
     assert!(!is_bmide_port(0x1F0));
@@ -564,6 +576,8 @@ fn bmide_qemu_byte_ops() {
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xC400);
+    pci_write_addr(pci_config_addr() | 0x04);
+    pci_write_data(0xCFC, 4, 0x0001);
     assert!(is_bmide_port(0xC400));
     assert_eq!(
         bmide_io(0xC400, true, 4, 0) as u32,

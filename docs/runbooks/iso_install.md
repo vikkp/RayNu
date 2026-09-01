@@ -286,6 +286,7 @@ git log -1 --oneline   # want this SHA (flash b5c3a9c pin 33440050729).
 # Do not pin --run 33495768739 (0c0f3cf nested VMXON-SKIP). nested iso=0 firmware IdeBus BM sticky.
 # Do not pin --run 33496568841 (17836fc nested VMXON-SKIP). nested iso=0 firmware IdeBus BMIDE.
 # Do not pin --run 33497723127 (8344896 nested VMXON-SKIP). nested iso=0 firmware IdeBus INTPIN.
+# Do not pin --run 33498693991 (b9e4b81 nested VMXON-SKIP). nested iso=0 firmware IdeBus BMIDE IO.
 # firmware HLT inject cap (stop after 8; CI 33466890874 print-only cap kept injecting).
 # product ISO firmware HLT EDK2 0x68 (iron ea30da1 leftover 0x20 is timer ISR; do not force LVT).
 # nested iso=0 firmware HLT EDK2 0x68 (PIC take else 0x68; do not force leftover LVT 0x20).

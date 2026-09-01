@@ -105,6 +105,10 @@
 //! 0 (class does not set INTx). Pin 1 made PciBus allocate PIRQ (ISA
 //! 0x80 disabled) before EnableAttributes / ISA `0x3F6`. CI
 //! `33497723127` VMXON-SKIP (`8344896` BMIDE unproven). do not F11 8344896.
+//! nested iso=0 firmware IdeBus BMIDE IO: QEMU `pci_register_bar` I/O is
+//! decoded only when COMMAND.IO is set. BAR4 assigned with `pcicmd=0`
+//! still returned BMIDE (not floating `0xFF`). CI `33498693991`
+//! VMXON-SKIP (`b9e4b81` INTPIN unproven). do not F11 b9e4b81.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -569,9 +573,13 @@ fn bmide_base(m: &CdMedia) -> u16 {
 }
 
 /// Bus-master IDE (BAR4, 16-byte I/O). Address 0 is unprogrammed — do not
-/// steal the PIC/PIT range.
+/// steal the PIC/PIT range. nested iso=0 firmware IdeBus BMIDE IO: QEMU
+/// `pci_register_bar` decodes only when COMMAND.IO is set.
 pub fn is_bmide_port(port: u16) -> bool {
     with_cd(|m| {
+        if (m.pci_cmd & 0x0001) == 0 {
+            return false;
+        }
         let base = bmide_base(m);
         base != 0 && port.wrapping_sub(base) < 16
     })
