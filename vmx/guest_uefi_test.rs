@@ -126,6 +126,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_intpin,
     guest_uefi_nested_iso0_firmware_idebus_lat,
     guest_uefi_nested_iso0_firmware_idebus_lt_ro,
+    guest_uefi_nested_iso0_firmware_idebus_cfg_ram,
     guest_uefi_nested_iso0_firmware_idebus_bm_sticky,
     guest_uefi_nested_iso0_firmware_idebus_bmide,
     guest_uefi_nested_iso0_firmware_idebus_bmide_io,
@@ -1819,6 +1820,11 @@ fn marker_and_residual_honest() {
         "nested iso=0 firmware IdeBus LT RO"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_lt_ro(0x20, 0x20));
+    assert!(
+        guest_uefi_nested_iso0_firmware_idebus_cfg_ram(0xAABB_CCDD, 0xAABB_CCDD),
+        "nested iso=0 firmware IdeBus PCI cfg RAM"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_cfg_ram(0, 0xAABB_CCDD));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_bm_sticky(0xFFFF_FFF1),
         "nested iso=0 firmware IdeBus BM sticky"

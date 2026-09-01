@@ -4,7 +4,7 @@
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
     pci_addr_selects_cd, pci_bdf, pci_bar0, pci_bar4, pci_command, pci_cmd_writes, last_pci_cmd_write,
     pci_cmd_max,
-    pci_idetim, pci_svid,
+    pci_idetim, pci_cfg44, pci_svid,
     pci_config_addr, pci_read_data, pci_write_addr, pci_write_data,
     take_ide_pci_cmd_wr_exit,
     take_ide_pci_cmd_ata_hlt,
@@ -640,6 +640,32 @@ fn pci_idetim_persists_like_qemu_cfg40() {
         "nested iso=0 firmware IdeBus IDETIM persist: decode-enable stores"
     );
     assert_eq!(pci_idetim(), GUEST_CD_PCI_IDETIM);
+    reset();
+}
+
+#[test]
+fn pci_cfg44_persists_like_qemu_cfg_ram() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x44);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: reset 0x44 is 0"
+    );
+    pci_write_data(0xCFC, 4, 0xAABB_CCDD);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xAABB_CCDD,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: 0x44 write persists"
+    );
+    assert_eq!(pci_cfg44(), 0xAABB_CCDD);
+    pci_write_addr(pci_config_addr() | 0x40);
+    assert_eq!(
+        pci_idetim(),
+        0,
+        "nested iso=0 firmware IdeBus PCI cfg RAM: 0x40 unchanged"
+    );
     reset();
 }
 
