@@ -136,6 +136,10 @@
 //! `cmdin=`. CI `33526016282` VMXON ATAPI miss (`8d487bd` `cmdmax=0x0`
 //! `cmdn=3` `cmdwr=0x0` `bar4=0x1` `b4wr=0x1` `ataio=0`). do not F11
 //! 8d487bd.
+//! nested iso=0 firmware IdeBus INTLINE RMW: QEMU
+//! `pci_default_write_config` walks INTERRUPT_LINE per-byte (`wmask` `0xFF`).
+//! Pin/MinGnt/MaxLat stay RO 0. Dump `ilwr=`. CI `33528635379`
+//! VMXON-SKIP (`eeaa681` cmd status unproven). do not F11 eeaa681.
 //! nested iso=0 firmware IdeBus PCI status: QEMU `piix_ide_reset` sets
 //! `PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK` (`0x0280_0000` in
 //! the command+status dword). DEVSEL-only `0x0200_0000` omitted FAST_BACK.
@@ -235,6 +239,9 @@
 //! command+status plus `pci_init_w1cmask` `0xF900`. CI `33526016282`
 //! VMXON ATAPI miss (`8d487bd` `cmdmax=0x0` `ataio=0`). do not F11
 //! 8d487bd. Dump `cmdin=`.
+//! nested iso=0 firmware IdeBus INTLINE RMW: QEMU INTERRUPT_LINE
+//! per-byte. CI `33528635379` VMXON-SKIP (`eeaa681` cmd status
+//! unproven). do not F11 eeaa681. Dump `ilwr=`.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`. Historical.
@@ -621,6 +628,9 @@ static PCI_CMD_MAX: AtomicU16 = AtomicU16::new(0);
 /// Last BAR4 config write (guest `val`). Dump `b4wr=`.
 /// nested iso=0 firmware IdeBus BAR4 wmask.
 static LAST_BAR4_WR: AtomicU32 = AtomicU32::new(0);
+/// Last INTERRUPT_LINE byte written. Dump `ilwr=`.
+/// nested iso=0 firmware IdeBus INTLINE RMW.
+static LAST_INTLINE_WR: AtomicU8 = AtomicU8::new(0);
 /// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
 static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
@@ -987,6 +997,7 @@ pub fn reset() {
     LAST_PCI_CMD_IN.store(0, Ordering::Release);
     PCI_CMD_MAX.store(0, Ordering::Release);
     LAST_BAR4_WR.store(0, Ordering::Release);
+    LAST_INTLINE_WR.store(0, Ordering::Release);
     BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
@@ -1106,6 +1117,12 @@ pub fn pci_rom() -> u32 {
 /// IdeBus INTLINE. Not `ISO-INSTALL-OK`.
 pub fn pci_int_line() -> u8 {
     with_cd(|m| m.irq_line)
+}
+
+/// Last INTERRUPT_LINE byte written. Dump `ilwr=`. nested iso=0 firmware
+/// IdeBus INTLINE RMW. Not `ISO-INSTALL-OK`.
+pub fn last_pci_intline_write() -> u8 {
+    LAST_INTLINE_WR.load(Ordering::Acquire)
 }
 
 /// PCI latency timer (offset 0x0D). Dump `lat=`. nested iso=0 firmware
@@ -2342,9 +2359,21 @@ pub fn pci_write_data(port: u16, size: u8, val: u32) {
             // pci_init_wmask is 0xff from 0x40 through 0xFF.
             cfg40_write(m, off, size, val);
         } else if aligned == 0x3C {
-            // nested iso=0 firmware IdeBus INTLINE: persist line; pin is RO 0.
-            if off == 0x3C {
-                m.irq_line = val as u8;
+            // nested iso=0 firmware IdeBus INTLINE RMW: QEMU
+            // pci_default_write_config walks INTERRUPT_LINE per-byte
+            // (wmask 0xFF). Pin/MinGnt/MaxLat stay RO 0.
+            let n = match size {
+                1 => 1u8,
+                2 => 2,
+                _ => 4,
+            };
+            for i in 0..n {
+                let a = off.wrapping_add(i);
+                let b = (val >> (8 * u32::from(i))) as u8;
+                if a == 0x3C {
+                    LAST_INTLINE_WR.store(b, Ordering::Release);
+                    m.irq_line = b;
+                }
             }
         } else if aligned == 0x0C {
             // nested iso=0 firmware IdeBus LT RO: QEMU wmask is cache

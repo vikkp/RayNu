@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN three-hundred-sixteenth slice: nested iso=0 firmware IdeBus PCI cmd status (CI 33526016282 VMXON ATAPI miss; 8d487bd cmdmax=0x0 cmdn=3 cmdwr=0x0 bar4=0x1 b4wr=0x1 ataio=0; QEMU pci_default_write_config walks command then status per-byte, command wmask 0x0507, status pci_init_w1cmask 0xF900; dump cmdin=; F11 pin stays 33440050729 do not re-flash; do not F11 8d487bd). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN three-hundred-seventeenth slice: nested iso=0 firmware IdeBus INTLINE RMW (CI 33528635379 VMXON-SKIP; eeaa681 cmd status unproven; QEMU pci_default_write_config walks INTERRUPT_LINE per-byte wmask 0xFF; Pin/MinGnt/MaxLat stay RO 0; dump ilwr=; F11 pin stays 33440050729 do not re-flash; do not F11 eeaa681). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus PCI cmd status; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (nested iso=0 firmware IdeBus INTLINE RMW; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-seventeenth slice: nested iso=0 firmware IdeBus INTLINE RMW (CI 33528635379 VMXON-SKIP; eeaa681 cmd status unproven; QEMU pci_default_write_config INTERRUPT_LINE per-byte wmask 0xFF; dump ilwr=; F11 pin stays 33440050729 do not re-flash; do not F11 eeaa681); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-sixteenth slice: nested iso=0 firmware IdeBus PCI cmd status (CI 33526016282 VMXON ATAPI miss; 8d487bd cmdmax=0x0 cmdn=3 cmdwr=0x0 bar4=0x1 b4wr=0x1 ataio=0; QEMU pci_default_write_config command+status per-byte plus pci_init_w1cmask 0xF900; dump cmdin=; F11 pin stays 33440050729 do not re-flash; do not F11 8d487bd); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-fifteenth slice: nested iso=0 firmware IdeBus BMIDE PRD (CI 33525128613 VMXON-SKIP; f0b3ecb BAR4 map unproven; QEMU bmdma_addr_write keeps the PRD pointer dword-aligned & ~3; dump bmprd=; F11 pin stays 33440050729 do not re-flash; do not F11 f0b3ecb); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN three-hundred-fourteenth slice: nested iso=0 firmware IdeBus BAR4 map (CI 33521391092 VMXON-SKIP; 5c7ec22 BAR4 wmask unproven; QEMU pci_bar_address IO wrap last>=UINT32_MAX unmapped so probe 0xFFFFFFF1 must not decode as 0xFFF0; dump b4map=; F11 pin stays 33440050729 do not re-flash; do not F11 5c7ec22); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
