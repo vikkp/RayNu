@@ -96,6 +96,7 @@ use super::{
     guest_uefi_firmware_hlt_skip_len,
     guest_uefi_firmware_hlt_insn_len0_skip,
     guest_uefi_nested_iso0_firmware_hlt_pit,
+    guest_uefi_nested_iso0_firmware_hlt_no_pit_inject,
     guest_uefi_nested_iso0_firmware_lapic_timer,
     guest_uefi_nested_iso0_inject_vec,
     guest_uefi_nested_iso0_firmware_hlt_ata,
@@ -986,6 +987,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIC ATA vector follows ICW2"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware HLT no PIT inject"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
@@ -1429,6 +1431,13 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, false, 0, 12));
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 1, 12));
     assert!(!guest_uefi_nested_iso0_firmware_hlt_pit(false, false, true, 0, 0x1e));
+    assert!(
+        guest_uefi_nested_iso0_firmware_hlt_no_pit_inject(false, false, true, 0, 12),
+        "nested iso=0 firmware HLT no PIT inject"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_hlt_no_pit_inject(
+        false, false, true, 1, 12
+    ));
     assert!(
         guest_uefi_nested_iso0_firmware_hlt_ata(false, false, true, 1, 12),
         "nested iso=0 firmware HLT ATA"

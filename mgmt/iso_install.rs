@@ -237,6 +237,7 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// PIC ATA vector follows ICW2.
 /// firmware HLT insn_len 0 skip.
 /// nested iso=0 firmware HLT PIT.
+/// nested iso=0 firmware HLT no PIT inject.
 /// nested iso=0 EDK2 IRQ0.
 /// nested iso=0 firmware LAPIC timer.
 /// product ISO firmware HLT wake.
