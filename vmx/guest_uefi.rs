@@ -1384,6 +1384,25 @@ pub fn guest_uefi_product_firmware_wake_delay_io(
         && crate::devices::guest_platform::is_acpi_pm_timer_io(port, size)
 }
 
+/// Product firmware `ataio==0` wake when IdeBus Start writes the IDE PCI
+/// command register (offset 0x04). Empty-slot CF8 does not set that latch.
+/// skip_after_inject stays HLT-only. Do not arm virtual-wire.
+/// CI `33458084140` VMXON-SKIP. product ISO firmware wake IDE cmd.
+/// firmware skip PIT inject. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_product_firmware_wake_ide_cmd(
+    linux: bool,
+    pci_ide: bool,
+    ataio: u32,
+    reason: u32,
+    ide_cmd_wr: bool,
+) -> bool {
+    !linux
+        && pci_ide
+        && ataio == 0
+        && reason == crate::vmx::fields::EXIT_REASON_IO_INSTRUCTION
+        && ide_cmd_wr
+}
+
 /// Product firmware HLT `ataio==0` wake vector: PIC except leftover `0xEF`.
 /// Ignore unmasked LVT (nested OVMF `0x27` is not iron IDT[0x20]).
 /// Default `0x20` (iron `ea30da1` timer ISR). PIC ICW2 never ran (`pic=0`)
@@ -10069,9 +10088,13 @@ unsafe fn try_inject_product_firmware_hlt_wake(
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let port = io_port_from_qual(qual);
     let size = ((qual & 7) + 1) as u8;
+    let ide_cmd_wr = crate::devices::ide_cdrom::take_ide_pci_cmd_wr_exit();
     if !guest_uefi_product_firmware_hlt_wake(linux, pci_ide, ataio, reason)
         && !guest_uefi_product_firmware_wake_delay_io(
             linux, pci_ide, ataio, reason, port, size,
+        )
+        && !guest_uefi_product_firmware_wake_ide_cmd(
+            linux, pci_ide, ataio, reason, ide_cmd_wr,
         )
     {
         return false;

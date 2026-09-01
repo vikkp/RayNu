@@ -103,6 +103,7 @@ use super::{
     guest_uefi_product_firmware_hlt_wake,
     guest_uefi_product_firmware_wake_preempt,
     guest_uefi_product_firmware_wake_delay_io,
+    guest_uefi_product_firmware_wake_ide_cmd,
     guest_uefi_product_firmware_hlt_ata,
     guest_uefi_product_firmware_hlt_ata_inject_vec,
     guest_uefi_product_firmware_hlt_ata_lapic,
@@ -1547,6 +1548,23 @@ fn marker_and_residual_honest() {
         !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 30, true, 1),
         "product ISO firmware wake Delay I/O: skip_after_inject is HLT-only"
     );
+    assert!(
+        guest_uefi_product_firmware_wake_ide_cmd(false, true, 0, 30, true),
+        "product ISO firmware wake IDE cmd"
+    );
+    assert!(
+        !guest_uefi_product_firmware_wake_ide_cmd(false, true, 0, 30, false),
+        "product ISO firmware wake IDE cmd: empty-slot CF8 does not wake"
+    );
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        false, true, 0, 12, true
+    ));
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        true, true, 0, 30, true
+    ));
+    assert!(!guest_uefi_product_firmware_wake_ide_cmd(
+        false, true, 1, 30, true
+    ));
     assert!(guest_uefi_firmware_leftover_timer_vec(0x20));
     assert!(guest_uefi_firmware_leftover_timer_vec(0xEF));
     assert!(!guest_uefi_firmware_leftover_timer_vec(0x68));

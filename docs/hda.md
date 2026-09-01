@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Stage 46 OPEN two-hundred-fifty-fourth slice: product ISO firmware wake Delay I/O (ACPI PM timer 0xB008/0x408/0xB000; not CF8). CI 33457132491 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Summary | Stage 46 OPEN two-hundred-fifty-fifth slice: product ISO firmware wake IDE cmd (IdeBus Start PCI command write; empty CF8 does not wake). CI 33458084140 VMXON-SKIP; F11 pin stays 33440050729 (do not re-flash). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Not installer. |
-| Gates touched | Stage 46 OPEN (product ISO firmware wake Delay I/O; F11 stays 33440050729). Not Everest E5. |
+| Gates touched | Stage 46 OPEN (product ISO firmware wake IDE cmd; F11 stays 33440050729). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -374,6 +374,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-fifth slice: product ISO firmware wake IDE cmd (IdeBus Start PCI command write; empty CF8 does not wake; CI 33458084140 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-fourth slice: product ISO firmware wake Delay I/O (ACPI PM timer 0xB008/0x408/0xB000 not CF8; CI 33457132491 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-third slice: product ISO firmware wake preempt (HLT or VMX preemption 52; skip RIP stays HLT-only; CI 33456465331 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Stage 46 OPEN two-hundred-fifty-second slice: product ISO firmware LVT timer inject (skip_pit must not drop periodic LVT 0x20 after unmask; CI 33455903058 VMXON-SKIP; F11 pin stays 33440050729 do not re-flash); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

@@ -264,6 +264,9 @@ static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+/// Product IdeBus Start writes PCI command (offset 0x04). Empty-slot CF8
+/// does not set this. product ISO firmware wake IDE cmd.
+static IDE_PCI_CMD_WR_EXIT: AtomicBool = AtomicBool::new(false);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -526,6 +529,7 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    IDE_PCI_CMD_WR_EXIT.store(false, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -562,6 +566,13 @@ pub fn ata_nien() -> bool {
 /// `ata=0x0` only counted command-register writes.
 pub fn ata_io_accesses() -> u32 {
     ATA_IO_N.load(Ordering::Acquire)
+}
+
+/// Consume "this exit wrote the IDE PCI command register."
+/// IdeBus Start enables I/O here; empty-slot CF8 does not.
+/// product ISO firmware wake IDE cmd. Not `ISO-INSTALL-OK`.
+pub fn take_ide_pci_cmd_wr_exit() -> bool {
+    IDE_PCI_CMD_WR_EXIT.swap(false, Ordering::AcqRel)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1557,6 +1568,8 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let aligned = off & 0xFC;
         if off == 0x04 {
             m.pci_cmd = (val as u16) | 0x0001;
+            // product ISO firmware wake IDE cmd: IdeBus Start, not empty CF8.
+            IDE_PCI_CMD_WR_EXIT.store(true, Ordering::Release);
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             m.bar0 = (val & 0xFFFF_FFF8) | 1;
