@@ -27,3 +27,5 @@ f413a9fc
 80c79a6f
 # 060c504 / 33569757025 cmdwr seq all zeros (EnableAttributes never wrote 0x5).
 cafaafd1
+# c144001 / 33571164257 EnableAttributes pcicmd=0x5 still ataio=0.
+2389db6a

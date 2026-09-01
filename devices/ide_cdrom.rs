@@ -266,8 +266,9 @@ static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
 static PCI_CMD_ENABLE_PRINTED: AtomicBool = AtomicBool::new(false);
-/// PciBus EnableAttributes IO+BusMaster. Iron COM2 `060c504` wrote
-/// COMMAND `0` six times and never `0x5`. Do not OR `0x0001`.
+/// PciBus EnableAttributes IO+BusMaster. Iron COM2 `c144001` restored
+/// this after write-0 (`pcicmd=0x5`) and still `ataio=0`. COMMAND closed.
+/// Do not OR `0x0001`.
 const IDE_PCI_CMD_ENABLE: u16 = 0x0005;
 const PCI_CMD_WR_SEQ_CAP: usize = 8;
 static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [

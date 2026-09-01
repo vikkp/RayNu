@@ -171,18 +171,21 @@ self_test() {
   grep -q '^43a38ac8$' "$REJECT_FILE"
   grep -q '^80c79a6f$' "$REJECT_FILE"
   grep -q '^cafaafd1$' "$REJECT_FILE"
+  grep -q '^2389db6a$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
   grep -q '33562028442' "$SCRIPT_PATH"
   grep -q '33567464001' "$SCRIPT_PATH"
   grep -q '33569757025' "$SCRIPT_PATH"
+  grep -q '33571164257' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
   grep -q 'do not F11 184ee61' "$SCRIPT_PATH"
   grep -q 'do not F11 abba969' "$SCRIPT_PATH"
   grep -q 'do not F11 060c504' "$SCRIPT_PATH"
+  grep -q 'do not F11 c144001' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -421,10 +424,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 184ee61 / --run 33562028442 (cmdwr=6 last wr=0x0 stored 0x1).
 # do not F11 abba969 / --run 33567464001 (honor pcicmd=0 wr=0 still ataio=0).
 # do not F11 060c504 / --run 33569757025 (seq=0,0,0,0,0,0).
-# EnableAttributes 0x0005 after write-0. Not ISO-INSTALL-OK.
+# do not F11 c144001 / --run 33571164257 (EnableAttributes pcicmd=0x5 still ataio=0).
+# print last PCI CF8 on HLT. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33571164257" ]]; then
+    echo "error: run 33571164257 is c144001 EnableAttributes hang" >&2
+    echo "       pcicmd=0x5 seq=0,0,0,0,0,0 wr=0x0 still ataio=0." >&2
+    echo "       COMMAND is closed. do not F11 c144001 / --run 33571164257 again." >&2
+    echo "       do not F11 060c504 / --run 33569757025." >&2
+    echo "       wait for this SHA CI (last PCI CF8 on HLT stall)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33569757025" ]]; then
     echo "error: run 33569757025 is 060c504 IDE cmdwr seq all zeros" >&2
