@@ -343,16 +343,16 @@ pub fn prop_bar_relocated_read10() -> bool {
     ide_cdrom::pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
     let probe = ide_cdrom::pci_read_data(0xCFC, 4);
     ide_cdrom::pci_write_data(0xCFC, 4, 0xC000);
-    let _ = ide_cdrom::ata_io(0xC007, false, 1, 0xA0);
+    let _ = ide_cdrom::ata_io(0x1F7, false, 1, 0xA0);
     let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
     for chunk in cdb.chunks(2) {
         let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
-        let _ = ide_cdrom::ata_io(0xC000, false, 2, w);
+        let _ = ide_cdrom::ata_io(0x1F0, false, 2, w);
     }
-    let pvd0 = ide_cdrom::ata_io(0xC000, true, 1, 0) as u8;
+    let pvd0 = ide_cdrom::ata_io(0x1F0, true, 1, 0) as u8;
     let sectors = ide_cdrom::sectors_read();
     ide_cdrom::reset();
-    probe == 0xFFFF_FFF9 && pvd0 == 1 && atapi_read_evidence(sectors)
+    probe == 0 && pvd0 == 1 && atapi_read_evidence(sectors)
 }
 
 pub fn ovmf_atapi_surface_present() -> bool {
@@ -528,6 +528,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_bm")
         && guest.contains("nested iso=0 firmware IdeBus BM unprogrammed")
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed")
+        && guest.contains("nested iso=0 firmware IdeBus ISA BAR")
+        && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_isa_bar")
         && guest.contains("nested iso=0 firmware IdeBus ConnectAll first")
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_connectall_first")
         && guest.contains("nested iso=0 firmware IdeBus ConnectAll trail")
@@ -540,6 +542,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus IDETIM")
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus BM")
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus BM unprogrammed")
+        && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus ISA BAR")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus bootorder")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus connect")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus OFW")
@@ -773,6 +776,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_bm")
         && guest.contains("nested iso=0 firmware IdeBus BM unprogrammed")
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed")
+        && guest.contains("nested iso=0 firmware IdeBus ISA BAR")
+        && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_isa_bar")
         && guest.contains("nested iso=0 firmware IdeBus ConnectAll first")
         && guest.contains("fn guest_uefi_nested_iso0_firmware_idebus_connectall_first")
         && guest.contains("nested iso=0 firmware IdeBus ConnectAll trail")
@@ -785,6 +790,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus IDETIM")
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus BM")
         && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus BM unprogrammed")
+        && include_str!("../devices/ide_cdrom.rs").contains("nested iso=0 firmware IdeBus ISA BAR")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus bootorder")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus connect")
         && include_str!("../devices/guest_platform.rs").contains("nested iso=0 firmware IdeBus OFW")
@@ -2250,6 +2256,10 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus BM unprogrammed")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33488202396")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c6fcf13")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware IdeBus ISA BAR")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33489676272")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("33489677821")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9ce3499")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 EDK2 IRQ0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("nested iso=0 firmware LAPIC timer")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO firmware HLT wake")

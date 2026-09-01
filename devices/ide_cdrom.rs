@@ -51,7 +51,8 @@
 //! live command BAR (CI `33474177126` VMXON `pcicmd=0x1` `ataio=0`).
 //! nested iso=0 firmware IdeBus BAR oneshot: dword probe read returns the
 //! mask then live `0x1F1` (CI `33475246727` VMXON-SKIP; skip-HLT can
-//! interrupt PciBus before it restores the BAR).
+//! interrupt PciBus before it restores the BAR). Historical: live BAR0
+//! is now unimplemented (0). nested iso=0 firmware IdeBus ISA BAR.
 //! BMIDE BAR4 is
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! product ISO firmware IDE cmd reset 0: PIIX/QEMU PCI command is 0 until
@@ -70,6 +71,11 @@
 //! nested iso=0 firmware IdeBus prog-if native: `0x8F` sets bits 0 and 2
 //! so IdeBus GetBar uses BAR0/BAR1, not ISA `0x1F0`. CI `33481842584`
 //! VMXON-SKIP (`9b6c2eb` 0x8F unproven). do not F11 9b6c2eb.
+//! nested iso=0 firmware IdeBus ISA BAR: QEMU PIIX leaves BAR0-3
+//! unimplemented and prog-if `0x80` (compat ISA `0x1F0`/`0x3F6`). Native
+//! `0x8F` plus live `bar0=0x1f1` sat in the ISA hole so PciBus left
+//! `pcicmd=0x0` (CI `33488202396` VMXON; CI `33489676272`/`33489677821`
+//! VMXON-SKIP). do not F11 9ce3499.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -131,13 +137,18 @@ pub const GUEST_CD_PCI_DEV: u8 = 0;
 pub const GUEST_CD_PCI_FN: u8 = 1;
 pub const GUEST_CD_PCI_VENDOR: u16 = 0x8086;
 pub const GUEST_CD_PCI_DEVICE: u16 = 0x7010;
-/// Mass-storage IDE, prog-if `0x8F` (native both + BM), revision 0.
-/// nested iso=0 firmware IdeBus prog-if. nested iso=0 firmware IdeBus
-/// prog-if native. Not `ISO-INSTALL-OK`.
-pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8F00;
-/// Programming interface byte (PCI 0x09). Bits 0 and 2 = native both.
-/// nested iso=0 firmware IdeBus prog-if native.
-pub const GUEST_CD_PCI_PROG_IF: u8 = 0x8F;
+/// Mass-storage IDE, prog-if `0x80` (compat + BM), revision 0.
+/// QEMU PIIX stock. nested iso=0 firmware IdeBus prog-if. nested iso=0
+/// firmware IdeBus ISA BAR. Native `0x8F` stays a historical needle.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_CLASS: u32 = 0x0101_8000;
+/// Programming interface byte (PCI 0x09). Bit 7 = BM, bits 0+2 clear
+/// so IdeBus Start uses ISA `0x1F0`/`0x3F6` not GetBar.
+/// nested iso=0 firmware IdeBus ISA BAR.
+pub const GUEST_CD_PCI_PROG_IF: u8 = 0x80;
+/// QEMU PIIX command BARs are unimplemented. PciBus must not claim ISA
+/// `0x1F0`. nested iso=0 firmware IdeBus ISA BAR. Not `ISO-INSTALL-OK`.
+pub const GUEST_CD_PCI_BAR0_RESET: u32 = 0;
 /// PIIX IDETIM dword (PCI 0x40). Bit 15 of each 16-bit half = decode enable.
 /// nested iso=0 firmware IdeBus IDETIM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
@@ -266,10 +277,10 @@ impl CdMedia {
             // product ISO firmware IDE cmd reset 0: PIIX/QEMU command is 0
             // until IdeBus Start writes offset 0x04 (wake latch).
             pci_cmd: 0,
-            bar0: 0x1F1,
-            bar1: 0x03F5,
-            bar2: 0x0171,
-            bar3: 0x0375,
+            bar0: GUEST_CD_PCI_BAR0_RESET,
+            bar1: GUEST_CD_PCI_BAR0_RESET,
+            bar2: GUEST_CD_PCI_BAR0_RESET,
+            bar3: GUEST_CD_PCI_BAR0_RESET,
             bar4: GUEST_CD_PCI_BAR4_RESET,
             bar_probe: 0,
             // nested iso=0 firmware IdeBus IDETIM: both channels decode-enable.
@@ -653,8 +664,9 @@ pub fn last_pci_cmd_write() -> u16 {
     LAST_PCI_CMD_WR.load(Ordering::Acquire)
 }
 
-/// Live BAR0 (legacy `0x1F0`). Size-probe mask is not this value.
-/// nested iso=0 firmware IdeBus BAR. Not `ISO-INSTALL-OK`.
+/// Live BAR0. QEMU PIIX leaves this unimplemented (`0`); ISA `0x1F0`
+/// still decodes. Dump `bar0=`. nested iso=0 firmware IdeBus ISA BAR.
+/// Not `ISO-INSTALL-OK`.
 pub fn pci_bar0() -> u32 {
     with_cd(|m| m.bar0)
 }
@@ -1606,6 +1618,17 @@ pub fn pci_read_addr() -> u32 {
 }
 
 fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
+    // nested iso=0 firmware IdeBus ISA BAR: QEMU PIIX does not
+    // register BAR0-3. Probe and live are 0. ISA 0x1F0/0x3F6 stay
+    // decoded. Not `ISO-INSTALL-OK`.
+    if bar <= 3 {
+        return match bar {
+            0 => m.bar0,
+            1 => m.bar1,
+            2 => m.bar2,
+            _ => m.bar3,
+        };
+    }
     let bit = 1u8 << bar;
     if (m.bar_probe & bit) != 0 {
         // nested iso=0 firmware IdeBus BAR oneshot: skip-HLT can leave
@@ -1613,22 +1636,18 @@ fn ide_bar_read(m: &mut CdMedia, bar: u8, consume_probe: bool) -> u32 {
         if consume_probe {
             m.bar_probe &= !bit;
         }
-        return match bar {
-            0 | 2 => 0xFFFF_FFF9,
-            1 | 3 => 0xFFFF_FFFD,
-            _ => 0xFFFF_FFF1,
-        };
+        return 0xFFFF_FFF1;
     }
-    match bar {
-        0 => m.bar0,
-        1 => m.bar1,
-        2 => m.bar2,
-        3 => m.bar3,
-        _ => m.bar4,
-    }
+    m.bar4
 }
 
 fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
+    // nested iso=0 firmware IdeBus ISA BAR: BAR0-3 writes are ignored.
+    // Historical 8-byte command BAR size mask was `0xFFFF_FFF8`; 4-byte
+    // control was `0xFFFF_FFFC`. QEMU PIIX does not register those BARs.
+    if bar <= 3 {
+        return;
+    }
     let bit = 1u8 << bar;
     // nested iso=0 firmware IdeBus BAR: 0xFFFFFFFF is size probe only.
     if val == 0xFFFF_FFFF {
@@ -1636,50 +1655,18 @@ fn ide_bar_write(m: &mut CdMedia, bar: u8, val: u32) {
         return;
     }
     m.bar_probe &= !bit;
-    match bar {
-        0 => {
-            m.bar0 = if (val & 0xFFFF_FFF8) == 0 {
-                0x1F1
-            } else {
-                (val & 0xFFFF_FFF8) | 1
-            };
-        }
-        1 => {
-            m.bar1 = if (val & 0xFFFF_FFFC) == 0 {
-                0x03F5
-            } else {
-                (val & 0xFFFF_FFFC) | 1
-            };
-        }
-        2 => {
-            m.bar2 = if (val & 0xFFFF_FFF8) == 0 {
-                0x0171
-            } else {
-                (val & 0xFFFF_FFF8) | 1
-            };
-        }
-        3 => {
-            m.bar3 = if (val & 0xFFFF_FFFC) == 0 {
-                0x0375
-            } else {
-                (val & 0xFFFF_FFFC) | 1
-            };
-        }
-        _ => {
-            m.bar4 = if (val & 0xFFFF_FFF0) == 0 {
-                GUEST_CD_PCI_BAR4_RESET
-            } else {
-                (val & 0xFFFF_FFF0) | 1
-            };
-        }
-    }
+    m.bar4 = if (val & 0xFFFF_FFF0) == 0 {
+        GUEST_CD_PCI_BAR4_RESET
+    } else {
+        (val & 0xFFFF_FFF0) | 1
+    };
 }
 
 fn config_dword(m: &mut CdMedia, off: u8, consume_probe: bool) -> u32 {
     match off {
         0x00 => u32::from(GUEST_CD_PCI_VENDOR) | (u32::from(GUEST_CD_PCI_DEVICE) << 16),
         0x04 => u32::from(m.pci_cmd) | 0x0200_0000,
-        // nested iso=0 firmware IdeBus prog-if native: 0x8F not 0x8A/0x80.
+        // nested iso=0 firmware IdeBus ISA BAR: 0x80 not 0x8F/0x8A.
         0x08 => GUEST_CD_PCI_CLASS,
         // Multifunction bit lives on ISA `00:01.0`. This is PIIX IDE fn1.
         0x0C => 0x0000_0000,

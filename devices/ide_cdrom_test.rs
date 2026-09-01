@@ -214,8 +214,8 @@ fn pci_bar0_probe_reports_eight_byte_io() {
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        0xFFFF_FFF9,
-        "8-byte I/O BAR: mask 0xFFFFFFF8 | 1"
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: unimplemented BAR0 probe is 0"
     );
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
@@ -226,8 +226,8 @@ fn pci_bar0_probe_reports_eight_byte_io() {
     );
     assert_eq!(
         pci_bar0(),
-        0x1F1,
-        "nested iso=0 firmware IdeBus BAR: probe must not persist as live BAR0"
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: BAR0 stays unimplemented"
     );
     reset();
 }
@@ -238,18 +238,18 @@ fn pci_bar0_probe_does_not_clobber_live_bar() {
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x10);
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
-    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFF9);
+    assert_eq!(pci_read_data(0xCFC, 4), 0);
     assert_eq!(
         pci_bar0(),
-        0x1F1,
-        "nested iso=0 firmware IdeBus BAR: live BAR0 stays 0x1F1"
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: live BAR0 stays 0"
     );
     assert!(
         is_ata_primary_port(0x1F0),
         "legacy 0x1F0 stays decoded after size probe"
     );
     pci_write_data(0xCFC, 4, 0x1F1);
-    assert_eq!(pci_bar0(), 0x1F1);
+    assert_eq!(pci_bar0(), 0);
     reset();
 }
 
@@ -259,13 +259,13 @@ fn pci_bar0_probe_oneshot_second_read_is_live() {
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x10);
     pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
-    assert_eq!(pci_read_data(0xCFC, 4), 0xFFFF_FFF9);
+    assert_eq!(pci_read_data(0xCFC, 4), 0);
     assert_eq!(
         pci_read_data(0xCFC, 4),
-        0x1F1,
-        "nested iso=0 firmware IdeBus BAR oneshot: second dword is live BAR"
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: second dword stays unimplemented"
     );
-    assert_eq!(pci_bar0(), 0x1F1);
+    assert_eq!(pci_bar0(), 0);
     reset();
 }
 
@@ -369,13 +369,13 @@ fn pci_class_prog_if_is_native_capable() {
     assert_eq!(
         pci_read_data(0xCFC, 4),
         GUEST_CD_PCI_CLASS,
-        "nested iso=0 firmware IdeBus prog-if native: class dword 0x01018F00"
+        "nested iso=0 firmware IdeBus ISA BAR: class dword 0x01018000"
     );
     pci_write_addr(pci_config_addr() | 0x09);
     assert_eq!(
         pci_read_data(0xCFC, 1),
         u32::from(GUEST_CD_PCI_PROG_IF),
-        "nested iso=0 firmware IdeBus prog-if native: byte 0x8F not 0x8A"
+        "nested iso=0 firmware IdeBus ISA BAR: byte 0x80 not 0x8F"
     );
     assert_eq!(pci_cmd_writes(), 0);
     reset();
@@ -409,23 +409,25 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(present_placeholder());
     pci_write_addr(pci_config_addr() | 0x10);
     pci_write_data(0xCFC, 4, 0xC000);
-    assert_eq!(pci_read_data(0xCFC, 4) & 0xFFF8, 0xC000);
-    assert!(is_ata_primary_port(0xC000));
-    assert!(is_ata_data_port(0xC000));
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "nested iso=0 firmware IdeBus ISA BAR: BAR0 write ignored"
+    );
+    assert!(!is_ata_primary_port(0xC000));
     assert!(is_ata_data_port(0x1F0), "legacy 1F0 stays a data FIFO");
-    assert!(!is_ata_data_port(0xC007));
     assert!(!is_ata_data_port(0x1F7));
     assert!(is_ata_primary_port(0x1F0), "legacy 1F0 stays decoded");
-    let _ = ata_io(0xC006, false, 1, 0xA0);
-    let _ = ata_io(0xC007, false, 1, 0xA0);
-    assert_eq!(ata_io(0xC002, true, 1, 0) as u8, 0x01);
+    let _ = ata_io(0x1F6, false, 1, 0xA0);
+    let _ = ata_io(0x1F7, false, 1, 0xA0);
+    assert_eq!(ata_io(0x1F2, true, 1, 0) as u8, 0x01);
     let cdb = [0x28u8, 0, 0, 0, 0, 16, 0, 0, 1, 0, 0, 0];
     for chunk in cdb.chunks(2) {
         let w = u64::from(chunk[0]) | (u64::from(chunk[1]) << 8);
-        let _ = ata_io(0xC000, false, 2, w);
+        let _ = ata_io(0x1F0, false, 2, w);
     }
     assert_eq!(last_scsi(), 0x28);
-    assert_eq!(ata_io(0xC000, true, 1, 0) as u8, 1);
+    assert_eq!(ata_io(0x1F0, true, 1, 0) as u8, 1);
     assert!(sectors_read() >= 1);
     pci_write_addr(pci_config_addr() | 0x20);
     pci_write_data(0xCFC, 4, 0xC400);

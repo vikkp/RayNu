@@ -116,6 +116,7 @@ use super::{
     guest_uefi_nested_iso0_firmware_idebus_connectall_trail,
     guest_uefi_nested_iso0_firmware_idebus_bm,
     guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed,
+    guest_uefi_nested_iso0_firmware_idebus_isa_bar,
     guest_uefi_nested_iso0_firmware_idebus_cmd,
     guest_uefi_nested_iso0_firmware_idebus_progif,
     guest_uefi_nested_iso0_firmware_idebus_progif_native,
@@ -924,10 +925,8 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_io_string_fills_ram(0xCF8));
     crate::devices::ide_cdrom::reset();
     assert!(crate::devices::ide_cdrom::present_placeholder());
-    crate::devices::ide_cdrom::pci_write_addr(crate::devices::ide_cdrom::pci_config_addr() | 0x10);
-    crate::devices::ide_cdrom::pci_write_data(0xCFC, 4, 0xC000);
-    assert!(guest_uefi_io_string_fills_ram(0xC000));
-    assert!(!guest_uefi_io_string_fills_ram(0xC007));
+    assert!(guest_uefi_io_string_fills_ram(0x1F0));
+    assert!(!guest_uefi_io_string_fills_ram(0x1F7));
     crate::devices::ide_cdrom::reset();
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, false), 0x1234);
     assert_eq!(guest_uefi_io_addr_reg(0x1_0000_1234, true), 0x1_0000_1234);
@@ -1746,6 +1745,11 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_bm_unprogrammed(0xCC01));
     assert!(
+        guest_uefi_nested_iso0_firmware_idebus_isa_bar(0),
+        "nested iso=0 firmware IdeBus ISA BAR"
+    );
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_isa_bar(0x1F1));
+    assert!(
         !guest_uefi_nested_iso0_firmware_idebus_bootorder(
             b"/pci@i0cf8/ide@1,1/drive@0/disk@0\n/pci@i0cf8/ide@0,1/drive@0/disk@0\n\0"
         ),
@@ -1757,11 +1761,11 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_cmd(1, 0));
     assert!(
-        guest_uefi_nested_iso0_firmware_idebus_progif(0x8F),
+        guest_uefi_nested_iso0_firmware_idebus_progif(0x80),
         "nested iso=0 firmware IdeBus prog-if"
     );
     assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x8A));
-    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x80));
+    assert!(!guest_uefi_nested_iso0_firmware_idebus_progif(0x8F));
     assert!(
         guest_uefi_nested_iso0_firmware_idebus_progif_native(0x8F),
         "nested iso=0 firmware IdeBus prog-if native"
