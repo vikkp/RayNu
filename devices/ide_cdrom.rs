@@ -97,6 +97,10 @@
 //! mask until a restore write (QEMU). Oneshot consume left the second
 //! dword as address 0 so PciBus skipped IO assignment. CI `33495768739`
 //! VMXON-SKIP (`0c0f3cf` LAT unproven). do not F11 0c0f3cf.
+//! nested iso=0 firmware IdeBus BMIDE: QEMU `bmdma_read` returns all-ones
+//! when size != 1; byte cmd at BAR4+0, status at +2, else `0xff`. RAZ 0
+//! made a dword probe look like no controller. CI `33496568841`
+//! VMXON-SKIP (`17836fc` BM sticky unproven). do not F11 17836fc.
 //! nested iso=0 firmware IdeBus IDETIM: PCI `0x40`/`0x42` bit 15 decode
 //! enable is set (`0x80008000`) and writes persist. RAZ 0 made a
 //! channel look disabled. Dump `idetim=`.
@@ -198,6 +202,11 @@ pub const GUEST_CD_PCI_IDETIM: u32 = 0x8000_8000;
 pub const GUEST_CD_PCI_BAR4_RESET: u32 = 1;
 /// BAR4 size-probe mask (16-byte I/O). nested iso=0 firmware IdeBus BM sticky.
 pub const GUEST_CD_PCI_BAR4_PROBE: u32 = 0xFFFF_FFF1;
+/// QEMU `bmdma_read` when size != 1. nested iso=0 firmware IdeBus BMIDE.
+pub const GUEST_CD_BMIDE_WIDE: u32 = 0xFFFF_FFFF;
+/// Unused BMIDE byte offsets (+1/+3) read `0xFF`. nested iso=0 firmware
+/// IdeBus BMIDE.
+pub const GUEST_CD_BMIDE_UNUSED: u8 = 0xFF;
 /// Assigned QEMU-like BMIBA (`0xCC00`) if firmware writes a non-zero base.
 /// nested iso=0 firmware IdeBus BM. Not `ISO-INSTALL-OK`.
 pub const GUEST_CD_PCI_BAR4: u32 = 0xCC01;
@@ -284,6 +293,11 @@ struct CdMedia {
     /// nested iso=0 firmware IdeBus LAT.
     cache_line: u8,
     latency: u8,
+    /// PIIX BMIDE cmd/status (BAR4 extra_io, two channels). nested iso=0
+    /// firmware IdeBus BMIDE.
+    bmide_cmd: [u8; 2],
+    bmide_status: [u8; 2],
+    bmide_prd: [u32; 2],
     ata_feat: u8,
     ata_count: u8,
     ata_lba: [u8; 3],
@@ -336,6 +350,9 @@ impl CdMedia {
             irq_line: GUEST_CD_PCI_INT_LINE_RESET,
             cache_line: GUEST_CD_PCI_CACHE_LINE_RESET,
             latency: GUEST_CD_PCI_LATENCY_RESET,
+            bmide_cmd: [0, 0],
+            bmide_status: [0, 0],
+            bmide_prd: [0, 0],
             ata_feat: 0,
             ata_count: 0x01,
             ata_lba: ATAPI_SIG_LBA,
@@ -406,6 +423,8 @@ static IDE_PCI_CMD_ATA_HLT: AtomicBool = AtomicBool::new(false);
 static PCI_CMD_WR_N: AtomicU32 = AtomicU32::new(0);
 /// Last PCI command write (not OR-forced). Dump `cmdwr=`.
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+/// BMIDE I/O INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
+static BMIDE_IN_N: AtomicU32 = AtomicU32::new(0);
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -552,13 +571,67 @@ pub fn is_bmide_port(port: u16) -> bool {
     })
 }
 
-/// RAZ/WI BMIDE. Unhandled `IN` was `0xFF` (looks busy/error).
-pub fn bmide_io(_port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
-    if is_in {
+/// QEMU PIIX BMIDE (BAR4). nested iso=0 firmware IdeBus BMIDE.
+///
+/// QEMU `bmdma_read`: size != 1 returns all-ones; byte cmd at +0, status
+/// at +2, else `0xff`. PRD address lives at +4/+12. RAZ 0 made a dword
+/// probe look like no controller. CI `33496568841` VMXON-SKIP
+/// (`17836fc` BM sticky unproven). do not F11 17836fc.
+pub fn bmide_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
+    with_cd(|m| {
+        let base = bmide_base(m);
+        let off = port.wrapping_sub(base) as u8;
         let mask = io_mask(size);
-        rax & !mask
-    } else {
-        rax
+        if is_in {
+            BMIDE_IN_N.fetch_add(1, Ordering::AcqRel);
+            let val = bmide_read(m, off, size);
+            (rax & !mask) | (val & mask)
+        } else {
+            bmide_write(m, off, size, rax);
+            rax
+        }
+    })
+}
+
+fn bmide_read(m: &CdMedia, off: u8, size: u8) -> u64 {
+    let local = off & 7;
+    let ch = if off < 8 { 0usize } else { 1usize };
+    if local >= 4 {
+        let shift = (local - 4) * 8;
+        return u64::from(m.bmide_prd[ch] >> shift);
+    }
+    if size != 1 {
+        return io_mask(size);
+    }
+    match local {
+        0 => u64::from(m.bmide_cmd[ch]),
+        2 => u64::from(m.bmide_status[ch]),
+        _ => u64::from(GUEST_CD_BMIDE_UNUSED),
+    }
+}
+
+fn bmide_write(m: &mut CdMedia, off: u8, size: u8, rax: u64) {
+    let local = off & 7;
+    let ch = if off < 8 { 0usize } else { 1usize };
+    if local >= 4 {
+        let shift = u32::from(local - 4) * 8;
+        let mask = io_mask(size) as u32;
+        let bits = (rax as u32 & mask) << shift;
+        m.bmide_prd[ch] = (m.bmide_prd[ch] & !(mask << shift)) | bits;
+        return;
+    }
+    if size != 1 {
+        return;
+    }
+    match local {
+        0 => m.bmide_cmd[ch] = (rax as u8) & 0x09,
+        2 => {
+            let val = rax as u8;
+            m.bmide_status[ch] = (val & 0x60)
+                | (m.bmide_status[ch] & 0x01)
+                | (m.bmide_status[ch] & !val & 0x06);
+        }
+        _ => {}
     }
 }
 
@@ -672,6 +745,7 @@ pub fn reset() {
     IDE_PCI_CMD_ATA_HLT.store(false, Ordering::Release);
     PCI_CMD_WR_N.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    BMIDE_IN_N.store(0, Ordering::Release);
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
@@ -755,6 +829,23 @@ pub fn pci_latency() -> u8 {
 /// IdeBus LAT. Not `ISO-INSTALL-OK`.
 pub fn pci_cache_line() -> u8 {
     with_cd(|m| m.cache_line)
+}
+
+/// Primary BMIDE command byte. Dump `bmcmd=`. nested iso=0 firmware
+/// IdeBus BMIDE. Not `ISO-INSTALL-OK`.
+pub fn bmide_cmd() -> u8 {
+    with_cd(|m| m.bmide_cmd[0])
+}
+
+/// Primary BMIDE status byte. Dump `bmst=`. nested iso=0 firmware
+/// IdeBus BMIDE. Not `ISO-INSTALL-OK`.
+pub fn bmide_status() -> u8 {
+    with_cd(|m| m.bmide_status[0])
+}
+
+/// BMIDE INs. Dump `bmin=`. nested iso=0 firmware IdeBus BMIDE.
+pub fn bmide_ins() -> u32 {
+    BMIDE_IN_N.load(Ordering::Acquire)
 }
 
 /// Device-control nIEN (1 = do not assert IRQ 14).

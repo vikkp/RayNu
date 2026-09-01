@@ -20,8 +20,9 @@
     GUEST_CD_PCI_CLASS, GUEST_CD_PCI_PROG_IF, GUEST_CD_PCI_IDETIM,
     GUEST_CD_PCI_CMD_WMASK, GUEST_CD_PCI_STATUS,
     GUEST_CD_PCI_INT_LINE_RESET, GUEST_CD_PCI_INT_PIN,
-    GUEST_CD_PCI_BAR4_PROBE,
+    GUEST_CD_PCI_BAR4_PROBE, GUEST_CD_BMIDE_WIDE, GUEST_CD_BMIDE_UNUSED,
     pci_int_line, pci_latency, pci_cache_line,
+    bmide_cmd, bmide_status, bmide_ins,
 };
 
 #[test]
@@ -554,6 +555,33 @@ fn pci_bar0_relocated_packet_read10_counts_sector() {
     assert!(is_bmide_port(0xC400));
     assert_eq!(bmide_io(0xC400, true, 1, 0xFF) as u8, 0);
     assert!(!is_bmide_port(0x1F0));
+    reset();
+}
+
+#[test]
+fn bmide_qemu_byte_ops() {
+    reset();
+    assert!(present_placeholder());
+    pci_write_addr(pci_config_addr() | 0x20);
+    pci_write_data(0xCFC, 4, 0xC400);
+    assert!(is_bmide_port(0xC400));
+    assert_eq!(
+        bmide_io(0xC400, true, 4, 0) as u32,
+        GUEST_CD_BMIDE_WIDE,
+        "nested iso=0 firmware IdeBus BMIDE: dword IN is all-ones"
+    );
+    assert_eq!(
+        bmide_io(0xC401, true, 1, 0) as u8,
+        GUEST_CD_BMIDE_UNUSED,
+        "nested iso=0 firmware IdeBus BMIDE: unused byte is 0xff"
+    );
+    assert_eq!(bmide_io(0xC400, true, 1, 0) as u8, 0);
+    assert_eq!(bmide_io(0xC402, true, 1, 0) as u8, 0);
+    let _ = bmide_io(0xC400, false, 1, 0x09);
+    assert_eq!(bmide_cmd(), 0x09);
+    let _ = bmide_io(0xC402, false, 1, 0x60);
+    assert_eq!(bmide_status(), 0x60);
+    assert!(bmide_ins() >= 4);
     reset();
 }
 
