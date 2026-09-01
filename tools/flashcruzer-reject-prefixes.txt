@@ -25,3 +25,5 @@ f413a9fc
 43a38ac8
 # abba969 / 33567464001 honor COMMAND then same hang (pcicmd=0 wr=0 ataio=0).
 80c79a6f
+# 060c504 / 33569757025 cmdwr seq all zeros (EnableAttributes never wrote 0x5).
+cafaafd1

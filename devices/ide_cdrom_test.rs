@@ -58,7 +58,11 @@ fn ide_pci_cmdwr_counts_firmware_command_write() {
     assert_eq!(pci_cmd_wr_at(0), 0x0005);
     pci_write_data(0xCFC, 2, 0x0000);
     assert_eq!(last_pci_cmd_wr(), 0x0000);
-    assert_eq!(pci_cmd(), 0x0000, "honor COMMAND write; do not OR 0x0001");
+    assert_eq!(
+        pci_cmd(),
+        0x0005,
+        "EnableAttributes IO+BM after write-0; do not OR 0x0001"
+    );
     assert_eq!(pci_cmd_writes(), 2);
     assert_eq!(pci_cmd_wr_at(1), 0x0000);
     reset();

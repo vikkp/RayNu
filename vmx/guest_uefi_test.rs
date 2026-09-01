@@ -984,6 +984,9 @@ fn marker_and_residual_honest() {
             .contains("iron COM2 abba969 honor pcicmd=0 wr=0 cmdwr=6 ataio=0")
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print IDE pci cmdwr seq"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 060c504"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 060c504 seq=0,0,0,0,0,0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EnableAttributes 0x0005 after write-0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));

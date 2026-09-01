@@ -265,6 +265,10 @@ static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+static PCI_CMD_ENABLE_PRINTED: AtomicBool = AtomicBool::new(false);
+/// PciBus EnableAttributes IO+BusMaster. Iron COM2 `060c504` wrote
+/// COMMAND `0` six times and never `0x5`. Do not OR `0x0001`.
+const IDE_PCI_CMD_ENABLE: u16 = 0x0005;
 const PCI_CMD_WR_SEQ_CAP: usize = 8;
 static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [
     AtomicU16::new(0),
@@ -540,6 +544,7 @@ pub fn reset() {
     ATA_IO_N.store(0, Ordering::Release);
     PCI_CMD_WRITES.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    PCI_CMD_ENABLE_PRINTED.store(false, Ordering::Release);
     for slot in PCI_CMD_WR_SEQ.iter() {
         slot.store(0, Ordering::Release);
     }
@@ -587,10 +592,9 @@ pub fn pci_cmd() -> u16 {
     with_cd(|m| m.pci_cmd)
 }
 
-/// Count of firmware writes to IDE PCI command. Iron COM2 `184ee61`:
-/// `cmdwr=6` `wr=0x0` `pcicmd=0x1` (OR `0x0001` hid the disable).
-/// Iron COM2 `abba969`: honor stuck `pcicmd=0` `wr=0` still `ataio=0`.
-/// Store the write as-is. Do not OR `0x0001`.
+/// Count of firmware writes to IDE PCI command. Iron COM2 `060c504`:
+/// six writes all `0` (`seq=0,0,0,0,0,0`). EnableAttributes never
+/// set IO. After write-0, restore `0x0005`. Do not OR `0x0001`.
 pub fn pci_cmd_writes() -> u32 {
     PCI_CMD_WRITES.load(Ordering::Acquire)
 }
@@ -600,8 +604,8 @@ pub fn last_pci_cmd_wr() -> u16 {
     LAST_PCI_CMD_WR.load(Ordering::Acquire)
 }
 
-/// Firmware COMMAND write `i` (0-based, first eight). Iron `abba969`
-/// left only the last `wr=`; the next proof is the six-write sequence.
+/// Firmware COMMAND write `i` (0-based, first eight). Iron `060c504`:
+/// `seq=0,0,0,0,0,0` (EnableAttributes never wrote `0x5`).
 pub fn pci_cmd_wr_at(i: usize) -> u16 {
     PCI_CMD_WR_SEQ
         .get(i)
@@ -1610,15 +1614,24 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            // Iron COM2 abba969: honor stuck. Last wr=0x0 stored 0x0.
-            // Print each write so COM2 shows whether EnableAttributes
-            // ever set IO (ADR-015). Do not OR 0x0001.
+            // Iron COM2 060c504: wr=0 six times, seq=0,0,0,0,0,0.
+            // EnableAttributes never wrote 0x5. ADR-015: after that
+            // dump, restore IO+BM. Do not OR 0x0001 (184ee61).
             let wr = val as u16;
             LAST_PCI_CMD_WR.store(wr, Ordering::Release);
-            m.pci_cmd = wr;
             let n = PCI_CMD_WRITES.fetch_add(1, Ordering::AcqRel);
             if (n as usize) < PCI_CMD_WR_SEQ_CAP {
                 PCI_CMD_WR_SEQ[n as usize].store(wr, Ordering::Release);
+            }
+            if wr == 0 {
+                m.pci_cmd = IDE_PCI_CMD_ENABLE;
+                if !PCI_CMD_ENABLE_PRINTED.swap(true, Ordering::AcqRel) {
+                    crate::boot::serial::write_line_nowait(
+                        "boot: Stage 46 IDE pci EnableAttributes (not ISO-INSTALL-OK)",
+                    );
+                }
+            } else {
+                m.pci_cmd = wr;
             }
             crate::boot::serial::write_str_nowait(
                 "boot: Stage 46 IDE pci cmdwr honor wr=",
