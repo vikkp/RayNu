@@ -55,7 +55,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | # | Status | Do | Proof |
 |---|--------|----|-------|
 | 0 | **DONE** | Park #231. Path is #229. | ADR-015 |
-| 1 | **IN PROGRESS** | Green CI on the live pin | `21f3407` run `33574327641` died on nested-KVM `clwb` `#UD` kill-init (E4 Linux, not `cf8en=`). Retrigger. Do not flash `33574327641`. |
+| 1 | **IN PROGRESS** | Green CI on the live pin | `b0a3356` run `33575225212` missed nested `ATAPI-OK` 7/7 (iso=0 BOTH-OK then E4; same flake as `0d36b53`). `cf8en=` unchanged. Do not flash `33575225212` / `33574327641`. |
 | 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `61991be` / `33573126367` (EFI `12f84c66`). Never PERC. Never `8024439`. |
 | 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `61991be`) |
 | 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`61991be`): HLT `cf8=0x0` `pcicmd=0x5` `seq=0,0,0,0,0,0`, then CpuSleep `rip=0x7f0680d0` `ataio=0`. Never reached Linux. |
@@ -94,10 +94,10 @@ walk, writes CONFIG_ADDRESS 0, then CpuSleep. `ataio=0` `pin14=0`
 `cmd=0x00` (last ATA 0x1F7, not PCI COMMAND). ATA I/O is not gated on
 `pci_cmd`. `cf8=0x0` is the last write, not the last enabled BDF.
 
-This #229 HEAD prints `cf8en=` (last CF8 with bit 31). `21f3407` CI
-`33574327641` died on nested-KVM `clwb` `#UD` (known flake). Retrigger
-and wait 49/49. Do not flash `33574327641`. Do not F11 `61991be`.
-Do not flash `3b1cf51` (docs only).
+This #229 HEAD prints `cf8en=` (last CF8 with bit 31). `b0a3356` CI
+`33575225212` missed nested `ATAPI-OK` 7/7 (known flake; E4 SHELL/M4
+still landed). Retrigger and wait 49/49. Do not flash `33575225212`
+or `33574327641`. Do not F11 `61991be`. Do not flash `3b1cf51`.
 
 Next proof: HLT `cf8=0x0 cf8en=0x8000xxxx`, then `ataio>0` or the same
 hang. Still not `ISO-INSTALL-OK`. After step 6, E5 can close. TLS and
