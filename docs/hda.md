@@ -350,8 +350,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 61991be HLT cf8=0x0 still ataio=0; #229 prints last enabled CF8 (cf8en=). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Same hang; last CF8 is deselect. |
+| Summary | Retrigger 21f3407 cf8en= after nested-KVM QEMU clwb #UD kill-init (33574327641). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. cf8en= unchanged. |
 | Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b FAIL / 3c FAIL / 3d IN PROGRESS). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Retrigger 21f3407 after nested-KVM QEMU clwb #UD kill-init (33574327641); cf8en= unchanged; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Iron COM2 61991be HLT cf8=0x0 still ataio=0; #229 prints last enabled CF8; do not F11 33573126367; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Option 2 plan catch-up: 2d6b109 refused; 3a dest_ok+MADT DONE; COMMAND closed on c144001; 3c pin 61991be / 33573126367; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0; #229 prints last CF8 on HLT; do not F11 33571164257; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

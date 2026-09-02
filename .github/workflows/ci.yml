@@ -97,6 +97,8 @@ jobs:
             # flake while the other passes.
             # Not a Stage 10 / guest-fw change. Not ISO-INSTALL-OK.
             # retrigger 9df52c5 CI after nested-KVM SHELL flake.
+            # retrigger 21f3407 CI after nested-KVM clwb #UD kill-init
+            # (33574327641; 66 0f ae f1; cf8en= unchanged).
             ok=0
             for attempt in 1 2 3 4 5 6 7; do
               if REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh; then
