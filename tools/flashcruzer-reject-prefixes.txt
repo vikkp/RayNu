@@ -31,3 +31,5 @@ cafaafd1
 2389db6a
 # 61991be / 33573126367 HLT cf8=0x0 (CONFIG_ADDRESS cleared, still ataio=0).
 12f84c66
+# 5de9e1c / 33575888121 HLT cf8en=0x80004008 (00:08.0+08 host class, still ataio=0).
+59e0a391

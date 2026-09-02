@@ -173,6 +173,7 @@ self_test() {
   grep -q '^cafaafd1$' "$REJECT_FILE"
   grep -q '^2389db6a$' "$REJECT_FILE"
   grep -q '^12f84c66$' "$REJECT_FILE"
+  grep -q '^59e0a391$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
@@ -181,6 +182,7 @@ self_test() {
   grep -q '33569757025' "$SCRIPT_PATH"
   grep -q '33571164257' "$SCRIPT_PATH"
   grep -q '33573126367' "$SCRIPT_PATH"
+  grep -q '33575888121' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
@@ -189,6 +191,7 @@ self_test() {
   grep -q 'do not F11 060c504' "$SCRIPT_PATH"
   grep -q 'do not F11 c144001' "$SCRIPT_PATH"
   grep -q 'do not F11 61991be' "$SCRIPT_PATH"
+  grep -q 'do not F11 5de9e1c' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -429,10 +432,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 060c504 / --run 33569757025 (seq=0,0,0,0,0,0).
 # do not F11 c144001 / --run 33571164257 (EnableAttributes pcicmd=0x5 still ataio=0).
 # do not F11 61991be / --run 33573126367 (HLT cf8=0x0 still ataio=0).
-# print last enabled CF8. Not ISO-INSTALL-OK.
+# do not F11 5de9e1c / --run 33575888121 (HLT cf8en=0x80004008 host class).
+# print last IDE CF8. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33575888121" ]]; then
+    echo "error: run 33575888121 is 5de9e1c HLT cf8en=0x80004008 hang" >&2
+    echo "       last enabled CF8 is i440FX host 00:08.0+08; still ataio=0." >&2
+    echo "       do not F11 5de9e1c / --run 33575888121 again." >&2
+    echo "       do not F11 61991be / --run 33573126367." >&2
+    echo "       wait for this SHA CI (last IDE CF8 on HLT)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33573126367" ]]; then
     echo "error: run 33573126367 is 61991be HLT cf8=0x0 hang" >&2
