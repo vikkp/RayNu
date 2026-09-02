@@ -266,6 +266,10 @@ static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
 static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
 static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
 static PCI_CMD_ENABLE_PRINTED: AtomicBool = AtomicBool::new(false);
+/// Last write to IDE Expansion ROM (offset `0x30`). Iron COM2 `7ba1ccf`
+/// HLT `cf8ide=0x80000930` (`00:01.1+30`). No option ROM (QEMU PIIX).
+static LAST_PCI_ROM_WR: AtomicU32 = AtomicU32::new(0);
+static PCI_ROM_WR_PRINTED: AtomicBool = AtomicBool::new(false);
 /// PciBus EnableAttributes IO+BusMaster. Iron COM2 `c144001` restored
 /// this after write-0 (`pcicmd=0x5`) and still `ataio=0`. COMMAND closed.
 /// Do not OR `0x0001`.
@@ -546,6 +550,8 @@ pub fn reset() {
     PCI_CMD_WRITES.store(0, Ordering::Release);
     LAST_PCI_CMD_WR.store(0, Ordering::Release);
     PCI_CMD_ENABLE_PRINTED.store(false, Ordering::Release);
+    LAST_PCI_ROM_WR.store(0, Ordering::Release);
+    PCI_ROM_WR_PRINTED.store(false, Ordering::Release);
     for slot in PCI_CMD_WR_SEQ.iter() {
         slot.store(0, Ordering::Release);
     }
@@ -612,6 +618,12 @@ pub fn pci_cmd_wr_at(i: usize) -> u16 {
         .get(i)
         .map(|slot| slot.load(Ordering::Acquire))
         .unwrap_or(0)
+}
+
+/// Last firmware write to IDE Expansion ROM (`0x30`). Iron `7ba1ccf`
+/// last IDE CF8 is `00:01.1+30`. Reads stay 0 (no option ROM).
+pub fn last_pci_rom_wr() -> u32 {
+    LAST_PCI_ROM_WR.load(Ordering::Acquire)
 }
 
 /// Retain ISO bytes without making the PCI device live.
@@ -1509,6 +1521,15 @@ fn write_hex16_nowait(v: u16) {
     }
 }
 
+fn write_hex32_nowait(v: u32) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_str_nowait("0x");
+    for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
+        let nibble = ((v >> shift) & 0xf) as usize;
+        crate::boot::serial::write_byte_nowait(HEX[nibble]);
+    }
+}
+
 pub fn pci_write_addr(addr: u32) {
     with_cd(|m| m.pci_addr = addr);
 }
@@ -1530,6 +1551,9 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x1C => m.bar3,
         0x20 => m.bar4,
         0x2C => 0x0000_0000,
+        // Iron COM2 `7ba1ccf` last IDE CF8 is `00:01.1+30`. QEMU PIIX
+        // has no option ROM. Size-probe write of `0xFFFFFFFF` stays WI.
+        0x30 => 0,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
     }
@@ -1653,6 +1677,17 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
             m.bar4 = (val & 0xFFFF_FFF0) | 1;
+        } else if aligned == 0x30 {
+            // Expansion ROM RAZ/WI. Iron COM2 `7ba1ccf` HLT
+            // `cf8ide=0x80000930` still `ataio=0`. Do not map a ghost ROM.
+            LAST_PCI_ROM_WR.store(val, Ordering::Release);
+            if !PCI_ROM_WR_PRINTED.swap(true, Ordering::AcqRel) {
+                crate::boot::serial::write_str_nowait(
+                    "boot: Stage 46 IDE pci rombar wr=",
+                );
+                write_hex32_nowait(val);
+                crate::boot::serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+            }
         }
     });
 }

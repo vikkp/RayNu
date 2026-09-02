@@ -2,7 +2,7 @@
     ata_io, ata_io_accesses, bmide_io, cdrom_visible_evidence, eltorito_boot_image_read,
     eltorito_catalog_read, eltorito_validation_checksum_ok, host_identify_word0, host_read10,
     is_ata_data_port, is_ata_primary_port, is_bmide_port, is_pci_data_port, last_ata_cmd, last_read_lba, last_scsi,
-    last_pci_cmd_wr, pci_addr_selects_cd, pci_bdf, pci_cmd, pci_cmd_writes, pci_cmd_wr_at,
+    last_pci_cmd_wr, last_pci_rom_wr, pci_addr_selects_cd, pci_bdf, pci_cmd, pci_cmd_writes, pci_cmd_wr_at,
     pci_config_addr,
     pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
@@ -68,6 +68,32 @@ fn ide_pci_cmdwr_counts_firmware_command_write() {
     reset();
     assert_eq!(pci_cmd_writes(), 0);
     assert_eq!(pci_cmd_wr_at(0), 0);
+}
+
+#[test]
+fn ide_pci_rombar_is_raz_wi() {
+    reset();
+    assert!(present_placeholder());
+    assert_eq!(pci_bdf(0x8000_0930), (0, 1, 1, 0x30));
+    assert!(pci_addr_selects_cd(0x8000_0930));
+    pci_write_addr(0x8000_0930);
+    assert_eq!(pci_read_data(0xCFC, 4), 0, "no option ROM before probe");
+    pci_write_addr(0x8000_0930);
+    pci_write_data(0xCFC, 4, 0xFFFF_FFFF);
+    assert_eq!(last_pci_rom_wr(), 0xFFFF_FFFF);
+    pci_write_addr(0x8000_0930);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0,
+        "size probe stays RAZ; do not map a ghost ROM"
+    );
+    pci_write_addr(0x8000_0930);
+    pci_write_data(0xCFC, 4, 0x0000_0001);
+    assert_eq!(last_pci_rom_wr(), 0x0000_0001);
+    pci_write_addr(0x8000_0930);
+    assert_eq!(pci_read_data(0xCFC, 4), 0);
+    reset();
+    assert_eq!(last_pci_rom_wr(), 0);
 }
 
 #[test]

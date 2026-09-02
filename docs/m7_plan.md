@@ -278,11 +278,11 @@ quiet except HTTP/WARN/markers.
 [`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
 3a dest_ok + ACPI MADT **DONE**. COMMAND closed (`c144001` `pcicmd=0x5`
-still `ataio=0`). Iron COM2 `5de9e1c` HLT `cf8en=0x80004008`
-(`00:08.0+08` host class) still `ataio=0` (refused). Do not flash
-`2d6b109`, `5de9e1c` / `--run 33575888121`, `61991be`, `3b1cf51`,
-or `8024439`. Next is last IDE CF8 (`cf8ide=`). 3b Linux `ACPI=` is
-blocked on `ataio>0`. Still not `ISO-INSTALL-OK`.
+still `ataio=0`). Iron COM2 `7ba1ccf` HLT `cf8ide=0x80000930`
+(`00:01.1+30` Expansion ROM) still `ataio=0` (refused). Do not flash
+`2d6b109`, `7ba1ccf` / `--run 33627470674`, `5de9e1c`, `61991be`,
+`3b1cf51`, or `8024439`. Next is last IDE ROM write (`romwr=`).
+3b Linux `ACPI=` is blocked on `ataio>0`. Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

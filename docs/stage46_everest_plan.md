@@ -33,6 +33,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 
 ## Stop rules
 
+- Do not F11 `7ba1ccf` / `--run 33627470674` (`cf8ide=0x80000930` PIIX ROM BAR still `ataio=0`).
 - Do not F11 `5de9e1c` / `--run 33575888121` (`cf8en=0x80004008` host class still `ataio=0`).
 - Do not F11 `61991be` / `--run 33573126367` (`cf8=0x0` still `ataio=0`).
 - Do not F11 `c144001` / `--run 33571164257` (`pcicmd=0x5` still `ataio=0`).
@@ -56,13 +57,14 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | # | Status | Do | Proof |
 |---|--------|----|-------|
 | 0 | **DONE** | Park #231. Path is #229. | ADR-015 |
-| 1 | **DONE** | Green CI on the live pin | 49/49 on `5de9e1c` (`--run 33575888121`) — **refused after COM2** |
-| 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `5de9e1c` / `33575888121` (EFI `59e0a391`). Never PERC. Never `8024439`. |
-| 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `5de9e1c`) |
-| 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`5de9e1c`): HLT `cf8en=0x80004008` `pcicmd=0x5`, then CpuSleep `rip=0x7f0680d0` `ataio=0`. Never reached Linux. |
+| 1 | **DONE** | Green CI on the live pin | 49/49 on `7ba1ccf` (`--run 33627470674`) — **refused after COM2** |
+| 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `7ba1ccf` / `33627470674` (EFI `f7c2f14b`). Never PERC. Never `8024439`. |
+| 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `7ba1ccf`) |
+| 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`7ba1ccf`): HLT `cf8ide=0x80000930` `pcicmd=0x5`, then CpuSleep `rip=0x7f0680d0` `ataio=0`. Never reached Linux. |
 | 3c | **FAIL** | COM2 of `61991be` last CF8 | HLT `cf8=0x0` — firmware wrote CONFIG_ADDRESS 0 after the PCI walk. Still `ataio=0`. |
 | 3d | **FAIL** | COM2 of `5de9e1c` last enabled CF8 | HLT `cf8en=0x80004008` = i440FX host `00:08.0+08` (class). Not an IDE BDF. Still `ataio=0`. |
-| 3e | **IN PROGRESS** | Print last IDE CF8 (`cf8ide=`) | HLT `cf8en=0x80004008 cf8ide=0x80000xxx` (last IDE register), then `ataio>0` or the same hang. |
+| 3e | **FAIL** | COM2 of `7ba1ccf` last IDE CF8 | HLT `cf8ide=0x80000930` = PIIX `00:01.1+30` (Expansion ROM). Still `ataio=0`. |
+| 3f | **IN PROGRESS** | Print last IDE ROM write (`romwr=`) | HLT `cf8ide=0x80000930 romwr=0x……`, then `ataio>0` or the same hang. |
 | 4 | BLOCKED | Linux stays up | `Linux version` then `/init` or `~#` |
 | 5 | BLOCKED | `setup-disk` sees the disk | `/dev/vda`, not `No disks available`. Fail here → virtio, not #231. |
 | 6 | OPEN | Installer writes GPT | COM2 `RAYNU-V-M7-ISO-INSTALL-OK` |
@@ -82,9 +84,11 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | `c144001` | EnableAttributes `pcicmd=0x5`. Still `ataio=0`. **COMMAND closed.** |
 | `61991be` | HLT `cf8=0x0`. Firmware deselected CONFIG_ADDRESS after the walk. |
 | `5de9e1c` | HLT `cf8en=0x80004008`. Last live BDF is host `00:08.0+08`, not IDE. Still `ataio=0`. |
+| `7ba1ccf` | HLT `cf8ide=0x80000930`. Last IDE register is PIIX Expansion ROM. Still `ataio=0`. |
 
 HLT policy is exhausted. COMMAND is closed. Last enabled CF8 is the host
-bridge class register. Nested `cmdwr=0` / ParseBar is not the iron picture.
+bridge class register. Last IDE CF8 is Expansion ROM `0x30` (no option ROM).
+Nested `cmdwr=0` / ParseBar is not the iron picture.
 Further #231 IdeBus PCI slices cannot close E5.
 
 ---
@@ -97,12 +101,13 @@ walk, last enabled CF8 is i440FX host `00:08.0` offset `0x08`, then
 writes CONFIG_ADDRESS 0 and CpuSleep. `ataio=0` `pin14=0` `cmd=0x00`
 (last ATA 0x1F7, not PCI COMMAND). ATA I/O is not gated on `pci_cmd`.
 
-This #229 HEAD prints `cf8ide=` (last enabled IDE `00:00.1` / `00:01.1`
-CF8). Wait CI, then flash. Do not F11 `5de9e1c`. Do not flash `3b1cf51`.
+This #229 HEAD prints `romwr=` (last write to IDE `0x30`) and keeps the
+ROM BAR RAZ/WI. Wait CI, then flash. Do not F11 `7ba1ccf`. Do not flash
+`3b1cf51`.
 
-Next proof: HLT `cf8ide=0x80000xxx`, then `ataio>0` or the same hang.
-Still not `ISO-INSTALL-OK`. After step 6, E5 can close. TLS and guest
-console stay residual; they are not this ladder.
+Next proof: HLT `cf8ide=0x80000930 romwr=0x……`, then `ataio>0` or the
+same hang. Still not `ISO-INSTALL-OK`. After step 6, E5 can close. TLS
+and guest console stay residual; they are not this ladder.
 
 ---
 

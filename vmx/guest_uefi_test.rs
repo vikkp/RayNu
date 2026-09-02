@@ -999,6 +999,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5de9e1c"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 5de9e1c HLT cf8en=0x80004008"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last IDE CF8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 7ba1ccf"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 7ba1ccf HLT cf8ide=0x80000930"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last IDE ROM BAR write"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));

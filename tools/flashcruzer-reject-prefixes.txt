@@ -33,3 +33,5 @@ cafaafd1
 12f84c66
 # 5de9e1c / 33575888121 HLT cf8en=0x80004008 (00:08.0+08 host class, still ataio=0).
 59e0a391
+# 7ba1ccf / 33627470674 HLT cf8ide=0x80000930 (00:01.1+30 Expansion ROM, still ataio=0).
+f7c2f14b
