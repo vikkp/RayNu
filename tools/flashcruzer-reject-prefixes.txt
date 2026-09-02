@@ -35,3 +35,5 @@ cafaafd1
 59e0a391
 # 7ba1ccf / 33627470674 HLT cf8ide=0x80000930 (00:01.1+30 Expansion ROM, still ataio=0).
 f7c2f14b
+# 118edcf / 33630723649 HLT romwr=0xfffffffe (ROM size probe, enable bit clear, still ataio=0).
+6c359fea

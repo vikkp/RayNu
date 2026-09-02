@@ -18,9 +18,15 @@
 //! skip-after-inject `vec=0x20` livelocked the timer ISR through the
 //! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). OVMF El
 //! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
-//! stays in the model and returns false. firmware HLT skip without inject.
+//! stays in the model and returns false. Iron COM2 `118edcf` HLT
+//! `romwr=0xfffffffe` (standard ROM size probe, enable bit clear) then
+//! the same CpuSleep `ataio=0`. Both IDE functions share I/O BARs
+//! (`0x1f1`/`0x3f5`/`0x171`/`0x375`). product ISO hides duplicate slot0
+//! IDE (`00:00.1` → `0xFFFFFFFF`) so PciBus does not assign the same
+//! ports twice; PIIX `00:01.1` stays for El Torito. iso=0 keeps both.
+//! firmware HLT skip without inject.
 //! product ISO fw_cfg bootorder El Torito ide@ first.
-//! iso=0 keeps IDE. windows_iso / generic_uefi stay in
+//! windows_iso / generic_uefi stay in
 //! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
 //! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
 //! so leftover `ata_piix` SRST skips without `ata_msleep`.
@@ -253,6 +259,7 @@ static PCI_ENUM: AtomicBool = AtomicBool::new(false);
 static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
 static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
 static HIDE_PRODUCT: AtomicBool = AtomicBool::new(false);
+static HIDE_PRODUCT_SLOT0: AtomicBool = AtomicBool::new(false);
 static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
@@ -342,6 +349,20 @@ pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
 /// Not `ISO-INSTALL-OK`.
 pub fn product_iso_hides_ide(_addr: u32) -> bool {
     false
+}
+
+/// Product ISO presents the same ATAPI at `00:00.1` and PIIX `00:01.1`
+/// with the same I/O BARs. Iron COM2 `118edcf` finished the PCI walk
+/// (`romwr=0xfffffffe` size probe) then CpuSleep `ataio=0`. Hide only
+/// the slot-0 duplicate so PciBus cannot conflict the ports. Keep PIIX
+/// for El Torito (`ea30da1` hide-PIIX + skip-after-inject livelocked,
+/// `pci_ide=0`). iso=0 / lab stub keeps both. Not `ISO-INSTALL-OK`.
+pub fn product_iso_hides_duplicate_slot0_ide(addr: u32) -> bool {
+    if !product_iso_window_armed() || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 0 && fun == 1
 }
 
 /// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
@@ -537,6 +558,7 @@ pub fn reset() {
     HIDE_SLOT0.store(false, Ordering::Release);
     HIDE_PIIX.store(false, Ordering::Release);
     HIDE_PRODUCT.store(false, Ordering::Release);
+    HIDE_PRODUCT_SLOT0.store(false, Ordering::Release);
     ATA_FLOAT.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
@@ -1583,6 +1605,14 @@ fn note_hide_product() {
     }
 }
 
+fn note_hide_product_slot0() {
+    if !HIDE_PRODUCT_SLOT0.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO hides duplicate slot0 IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 pub fn pci_read_data(port: u16, size: u8) -> u32 {
     with_cd(|m| {
         if !m.visible {
@@ -1591,6 +1621,10 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
         let addr = m.pci_addr;
         if product_iso_hides_ide(addr) {
             note_hide_product();
+            return 0xFFFF_FFFF;
+        }
+        if product_iso_hides_duplicate_slot0_ide(addr) {
+            note_hide_product_slot0();
             return 0xFFFF_FFFF;
         }
         let linux = crate::boot::serial::linux_earlycon_share();
@@ -1625,6 +1659,7 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
 pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
         if product_iso_hides_ide(m.pci_addr)
+            || product_iso_hides_duplicate_slot0_ide(m.pci_addr)
             || linux_hides_duplicate_slot0_ide(
                 crate::boot::serial::linux_earlycon_share(),
                 m.pci_addr,

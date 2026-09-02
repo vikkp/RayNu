@@ -6,7 +6,7 @@
     pci_config_addr,
     pci_read_data, pci_write_addr, pci_write_data,
     linux_hides_duplicate_slot0_ide, linux_hides_piix_ide, linux_ata_floating_bus,
-    product_iso_hides_ide,
+    product_iso_hides_ide, product_iso_hides_duplicate_slot0_ide,
     present, present_placeholder, product_iso_window_armed, is_lab_eltorito_media,
     is_lab_eltorito_stub_len, reset, retained_len, sectors_read, take_marker, write_eltorito_efi_pe,
     write_eltorito_fat12, edk2_eltorito_partition_blocks, edk2_fat12_bootx64_ok,
@@ -171,6 +171,14 @@ fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
     assert!(!product_iso_hides_ide(0x8000_0100));
     assert!(!product_iso_hides_ide(0x8000_0800), "do not hide PIIX ISA");
     assert!(!product_iso_hides_ide(0x8000_1000), "do not hide virtio-blk");
+    assert!(
+        product_iso_hides_duplicate_slot0_ide(0x8000_0100),
+        "product ISO hides duplicate slot0 IDE (same I/O BARs as PIIX)"
+    );
+    assert!(
+        !product_iso_hides_duplicate_slot0_ide(0x8000_0900),
+        "keep PIIX 00:01.1 for El Torito"
+    );
     pci_write_addr(0x8000_0900);
     assert_ne!(
         pci_read_data(0xCFC, 4),
@@ -178,7 +186,47 @@ fn product_iso_hides_ide_on_window_iso0_keeps_ide() {
         "product ISO still enumerates PIIX IDE for El Torito"
     );
     pci_write_addr(0x8000_0100);
-    assert_ne!(pci_read_data(0xCFC, 4), 0xFFFF_FFFF);
+    assert_eq!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "product ISO hides 00:00.1 so PciBus does not double-assign BARs"
+    );
+    reset();
+}
+
+#[test]
+fn product_iso_hides_duplicate_slot0_keeps_piix() {
+    reset();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
+    assert!(!product_iso_hides_duplicate_slot0_ide(0x8000_0100));
+    assert!(present_placeholder());
+    assert!(!product_iso_window_armed());
+    pci_write_addr(0x8000_0100);
+    assert_ne!(
+        pci_read_data(0xCFC, 4),
+        0xFFFF_FFFF,
+        "iso=0 keeps slot-0 IDE (nested / Stage 45)"
+    );
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present(&iso, 9));
+    assert!(product_iso_window_armed());
+    assert!(product_iso_hides_duplicate_slot0_ide(0x8000_0100));
+    assert!(!product_iso_hides_duplicate_slot0_ide(0x8000_0900));
+    assert!(!product_iso_hides_duplicate_slot0_ide(0x8000_0800));
+    assert!(!product_iso_hides_duplicate_slot0_ide(0x8000_1000));
+    pci_write_addr(0x8000_0100);
+    pci_write_data(0xCFC, 2, 0x0000);
+    assert_eq!(
+        pci_cmd(),
+        0x0005,
+        "hidden slot-0 must not eat PIIX COMMAND writes"
+    );
+    pci_write_addr(0x8000_0900);
+    pci_write_data(0xCFC, 2, 0x0000);
+    assert_eq!(pci_cmd(), 0x0005, "PIIX write-0 still EnableAttributes");
     reset();
 }
 

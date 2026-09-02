@@ -1002,6 +1002,9 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 7ba1ccf"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 7ba1ccf HLT cf8ide=0x80000930"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last IDE ROM BAR write"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 118edcf"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 118edcf HLT romwr=0xfffffffe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides duplicate slot0 IDE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
