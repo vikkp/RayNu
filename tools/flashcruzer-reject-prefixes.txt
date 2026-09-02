@@ -37,3 +37,5 @@ cafaafd1
 f7c2f14b
 # 118edcf / 33630723649 HLT romwr=0xfffffffe (ROM size probe, enable bit clear, still ataio=0).
 6c359fea
+# 27eda8c / 33695570769 hide-slot0 still ataio=0 (CDROM-OK via PIIX, same CpuSleep).
+687b3b20

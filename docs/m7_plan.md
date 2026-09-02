@@ -277,13 +277,12 @@ quiet except HTTP/WARN/markers.
 **Option 2 (2026-09-02):** living ladder
 [`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
-3a dest_ok + ACPI MADT **DONE**. COMMAND closed (`c144001` `pcicmd=0x5`
-still `ataio=0`). CF8/ROM closed (`118edcf` HLT `romwr=0xfffffffe`
-size probe still `ataio=0`). Do not flash `2d6b109`, `118edcf` /
-`--run 33630723649`, `7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or
-`8024439`. Next is product ISO hide of duplicate slot-0 IDE (keep
-PIIX). 3b Linux `ACPI=` is blocked on `ataio>0`. Still not
-`ISO-INSTALL-OK`.
+3a dest_ok + ACPI MADT **DONE**. COMMAND closed. CF8/ROM closed.
+Hide-slot0 **FAIL** (`27eda8c` CDROM-OK via PIIX, still `ataio=0`).
+Do not flash `2d6b109`, `27eda8c` / `--run 33695570769`, `118edcf`,
+`7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or `8024439`. Next is
+HLT retaddr (`[RSP]`). 3b Linux `ACPI=` is blocked on `ataio>0`.
+Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

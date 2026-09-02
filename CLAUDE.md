@@ -287,7 +287,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 012   | UEFI NIC HTTP Listen (E3)              | In-binary Tcp4/SNP HTTP PRE-EBS; M7.6; post-EBS SNP rejected 2026-08-17 |
 | 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); Stage 1 0–G closed; shared LOM accepted; SNP bring-up only |
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
-| 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND closed; CF8/ROM closed (118edcf HLT romwr=0xfffffffe); product ISO hide slot-0 IDE (keep PIIX); do not claim ISO-INSTALL-OK |
+| 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0 closed (27eda8c still ataio=0); print HLT retaddr; do not claim ISO-INSTALL-OK |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
