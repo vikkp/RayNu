@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-01
+last_updated: 2026-09-02
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0. Next last PCI CF8 on HLT. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. COMMAND path closed. |
-| Gates touched | Stage 46 OPEN (EnableAttributes proved; 3b fail same hang). Not Everest E5. |
+| Summary | Option 2 ladder rewritten: 2d6b109 refused; 3a MADT DONE; 3b ataio=0; pin 61991be CF8 on HLT. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Plan catch-up only. |
+| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b FAIL / 3c IN PROGRESS). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-02 | e5-stage46-iso | 0.5 | 95 | Option 2 plan catch-up: 2d6b109 refused; 3a dest_ok+MADT DONE; COMMAND closed on c144001; 3c pin 61991be / 33573126367; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0; #229 prints last CF8 on HLT; do not F11 33571164257; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 060c504 seq=0,0,0,0,0,0; #229 EnableAttributes 0x0005 after write-0; do not F11 33569757025; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-01 | e5-stage46-iso | 0.5 | 95 | Iron COM2 abba969 honor pcicmd=0 wr=0 still ataio=0; #229 prints cmdwr seq; do not F11 33567464001; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

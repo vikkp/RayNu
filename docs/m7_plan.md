@@ -274,15 +274,13 @@ re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
 **First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
-**Option 2 (2026-09-01):** living ladder
+**Option 2 (2026-09-02):** living ladder
 [`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
-COMMAND is closed (iron COM2 `c144001` `pcicmd=0x5` still `ataio=0`).
-Do not F11 `c144001` / `--run 33571164257`. Do not F11 `e3cbfa5` /
-`--run 33558261624` (one-shot then HLT hang). Do not F11 `24c5fa6` /
-`b5c3a9c`. Do not flash `2d6b109` or `8024439`. Next proof is COM2
-HLT `cf8=` then `ataio>0` or `sectors>0` / El Torito — still not
-`ISO-INSTALL-OK`.
+3a dest_ok + ACPI MADT **DONE**. COMMAND closed (`c144001` `pcicmd=0x5`
+still `ataio=0`). Do not flash `2d6b109` (refused dest skip) or
+`8024439`. Current pin `61991be` / `--run 33573126367` (HLT `cf8=`).
+3b Linux `ACPI=` is blocked on `ataio>0`. Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

@@ -1,49 +1,113 @@
 # Stage 46 Option 2 — Everest move plan
 
-Living tracker for [PR #229](https://github.com/vikkp/RayNu/pull/229).
-Decision: [ADR-015](adr/ADR-015.md).
+Living tracker for draft [PR #229](https://github.com/vikkp/RayNu/pull/229)
+(`cursor/e5-stage46-iso-a623`). Decision: [ADR-015](adr/ADR-015.md).
 
 **Do not claim `RAYNU-V-M7-ISO-INSTALL-OK`.** HDA `last_commit` stays `2b795a0`.
+#231 tip stays `8024439` (parked). #229 stays draft.
+
+---
+
+## Where this plan was wrong (2026-09-01 note)
+
+The first Option 2 note said Everest was waiting on a Cruzer flash of
+`2d6b109` (fw_cfg `rep insb`) and that later #229 SHAs were docs only.
+
+That is stale:
+
+| Old claim | Lived |
+|-----------|--------|
+| Flash `2d6b109` | **Refused.** Dest skip at HV identity `0x200000`. Never F11 again. |
+| Iron last reached `Freeing initrd` without `ACPI=` | That dump was the unflashed-`2d6b109` era. Later #229 pins print `fw_cfg dest_ok fill` and `product ISO fw_cfg ACPI MADT`. |
+| Later #229 SHAs are docs only | **False.** dest_ok, HLT policy, COMMAND, EnableAttributes are code + iron COM2. |
+| Fail at step 3 → one dest / `rep insb` fix | dest / MADT is **DONE**. Step 3 split: 3a MADT closed; 3b Linux `ACPI=` never reached because `ataio=0`. |
+| Nested F11 `--run 33440050729` stays on the parked fork | That pin is **#229** `b5c3a9c` (skip-after-inject). Refused. Not a #231 flash. |
+| Flashable EFI is `2d6b109` | Current pin is **`61991be` / `--run 33573126367`** (last PCI CF8 on HLT). |
+
+What the first note still got right: Option 2 is the path. Park #231.
+Everest E5 is iron `ISO-INSTALL-OK`, not stamp persist, not nested
+ParseBar. HDA iso ~99% is scaffolding. This pod has no VMX / Cruzer.
+Host/CI never prints the iron marker. One SHA per failed COM2 step.
 
 ---
 
 ## Stop rules
 
-- Do not F11 `c144001` / `--run 33571164257` again (`pcicmd=0x5` still `ataio=0`).
-- Do not F11 `060c504` / `--run 33569757025` again (`seq=0,0,0,0,0,0`).
-- Do not F11 `abba969` / `--run 33567464001` again (honor `pcicmd=0` `wr=0` still `ataio=0`).
-- Do not F11 `184ee61` / `--run 33562028442` again (`cmdwr=6` last `wr=0x0` stored `0x1`).
-- Do not F11 `21dc562` / `--run 33559849096` again (skip-HLT then same CpuSleep).
-- Do not F11 `e3cbfa5` / `--run 33558261624` again (one-shot then HLT hang).
-- Do not F11 `24c5fa6` / `--run 33555104832` again (PIT livelock).
-- Do not F11 `b5c3a9c` / `--run 33440050729` again (skip-after-inject CpuSleep).
+- Do not F11 `c144001` / `--run 33571164257` (`pcicmd=0x5` still `ataio=0`).
+- Do not F11 `060c504` / `--run 33569757025` (`seq=0,0,0,0,0,0`).
+- Do not F11 `abba969` / `--run 33567464001` (honor `pcicmd=0` still `ataio=0`).
+- Do not F11 `184ee61` / `--run 33562028442` (`OR 0x0001` hid disable).
+- Do not F11 `21dc562` / `--run 33559849096` (skip-HLT then same CpuSleep).
+- Do not F11 `e3cbfa5` / `--run 33558261624` (one-shot then HLT hang).
+- Do not F11 `24c5fa6` / `--run 33555104832` (PIT livelock).
+- Do not F11 `b5c3a9c` / `--run 33440050729` (skip-after-inject CpuSleep).
 - Do not flash `2d6b109` (dest skip) or `8024439` (later IdeBus).
 - No new EFI SHA without a COM2 line that fails the current step.
-- One SHA per fail. Not an IdeBus PCI farm. Host/CI never prints the iron marker.
+- One SHA per fail. Not an IdeBus PCI farm. Not another HLT policy.
 - Do not OR PCI command `0x0001`. COMMAND path is closed.
+- Do not resume #231 for further `COMMAND.IO`.
 
 ---
 
-## Ladder
+## Ladder (tick only the proof column)
 
-| # | Status | Proof | This COM2 (`c144001`) |
-|---|--------|-------|------------------------|
-| 0 | DONE | ADR-015 | — |
-| 1–2 | DONE | Flash pin `--run 33571164257` | Cruzer `FLASH-OK`, iso 63 MiB |
-| 3a | **DONE** | dest_ok + ACPI MADT + wait-for-irq + one-shot + skip-HLT | unchanged |
-| 3b | **FAIL** | Linux `efi:` contains `ACPI=` | `pcicmd=0x5` then same `rip=0x7f0680d0` `ataio=0` |
-| 4–6 | BLOCKED | `/init` · disk · `ISO-INSTALL-OK` | — |
+| # | Status | Do | Proof |
+|---|--------|----|-------|
+| 0 | **DONE** | Park #231. Path is #229. | ADR-015 |
+| 1 | **DONE** | Green CI on the live pin | 49/49 on `61991be` (`--run 33573126367`) |
+| 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `c144001` / `33571164257` (EFI `2389db6a`). Never PERC. Never `8024439`. |
+| 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `c144001`) |
+| 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`c144001`): EnableAttributes `pcicmd=0x5` `seq=0,0,0,0,0,0`, then CpuSleep `rip=0x7f0680d0` `ataio=0`. Never reached Linux. |
+| 3c | **IN PROGRESS** | COM2 of `61991be` | HLT stall prints `cf8=0x…` (BDF Connect parked on). Same hang or `ataio>0`. |
+| 4 | BLOCKED | Linux stays up | `Linux version` then `/init` or `~#` |
+| 5 | BLOCKED | `setup-disk` sees the disk | `/dev/vda`, not `No disks available`. Fail here → virtio, not #231. |
+| 6 | OPEN | Installer writes GPT | COM2 `RAYNU-V-M7-ISO-INSTALL-OK` |
 
-Iron notes:
+---
 
-- [`docs/evidence/r640/2026-09-01-c144001-enableattr-still-ataio0.md`](evidence/r640/2026-09-01-c144001-enableattr-still-ataio0.md) — EnableAttributes `pcicmd=0x5`, still `ataio=0`
+## Closed experiments (do not repeat)
+
+| Pin | What we learned |
+|-----|-----------------|
+| `2d6b109` | dest skip. Not the ACPI EFI. |
+| `b5c3a9c` | dest_ok + MADT, then skip-after-inject CpuSleep `ataio=0`. |
+| `24c5fa6` / `e3cbfa5` / `21dc562` | HLT policy exhausted (wait-for-irq, one-shot, skip-after-oneshot). |
+| `184ee61` | `OR 0x0001` left `pcicmd=0x1`. |
+| `abba969` | Honor COMMAND: `pcicmd=0`. |
+| `060c504` | Six COMMAND writes, all `0`. |
+| `c144001` | EnableAttributes `pcicmd=0x5`. Still `ataio=0`. **COMMAND closed.** |
+
+HLT policy is exhausted. COMMAND is closed. Nested `cmdwr=0` / ParseBar is
+not the iron picture (iron writes COMMAND six times). Further #231 IdeBus
+PCI slices cannot close E5.
 
 ---
 
 ## Current wall
 
-COMMAND is closed. EnableAttributes `0x0005` is on the wire. Firmware still never issues ATA. Same CpuSleep. `ataio=0`.
+Firmware enumerates IDE (CDROM-OK, BOTH-OK), dest_ok + ACPI MADT land,
+COMMAND on the wire is IO+BM (`pcicmd=0x5`). Firmware never issues ATA.
+Same CpuSleep. `ataio=0` `pin14=0` `cmd=0x00` (last ATA 0x1F7, not PCI
+COMMAND). ATA I/O is not gated on `pci_cmd`.
 
-This #229 HEAD: print last PCI CF8 on the HLT stall. Do not F11 `c144001` / `33571164257`. Stay on #229. Do not flash `8024439`. Do not resume #231 for `COMMAND.IO`.
+This #229 HEAD (`61991be`): last PCI CF8 on the HLT stall. Operator is
+F11'ing `--run 33573126367` now. No new SHA until that COM2 is in.
 
-Next proof: COM2 HLT `cf8=0x…` (BDF Connect parked on), then `ataio>0` or the same hang. Still not `ISO-INSTALL-OK`.
+Next proof: HLT `cf8=0x…`, then `ataio>0` or the same hang. Still not
+`ISO-INSTALL-OK`. After step 6, E5 can close. TLS and guest console stay
+residual; they are not this ladder.
+
+---
+
+## How we stay honest
+
+- Tick only the proof column. Latitude / QEMU / nested ≠ R640 COM2.
+- Fail at 3b → one SHA that is not dest, not HLT policy, not COMMAND.IO,
+  not #231.
+- Fail at 5 → virtio, not #231.
+- Host/CI never prints `RAYNU-V-M7-ISO-INSTALL-OK`.
+- Cruzer only: `0781:5151` / `RAYNUV` / `/dev/sdc`. Flash from
+  `~/projects/raynu` with `--no-git --run <id>`. `artifact commit=` is
+  leftover #231 HEAD — ignore it.
+
+HDA: months_to_everest 0.5 held · overall 95% · ETA 2026-09.
