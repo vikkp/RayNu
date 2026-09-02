@@ -993,6 +993,9 @@ fn marker_and_residual_honest() {
             .contains("iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0")
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last PCI CF8 on HLT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 61991be"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 61991be HLT cf8=0x0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last enabled CF8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));

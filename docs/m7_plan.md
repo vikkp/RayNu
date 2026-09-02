@@ -278,9 +278,11 @@ quiet except HTTP/WARN/markers.
 [`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
 3a dest_ok + ACPI MADT **DONE**. COMMAND closed (`c144001` `pcicmd=0x5`
-still `ataio=0`). Do not flash `2d6b109` (refused dest skip) or
-`8024439`. Current pin `61991be` / `--run 33573126367` (HLT `cf8=`).
-3b Linux `ACPI=` is blocked on `ataio>0`. Still not `ISO-INSTALL-OK`.
+still `ataio=0`). Iron COM2 `61991be` HLT `cf8=0x0` still `ataio=0`
+(refused). Do not flash `2d6b109` (dest skip), `61991be` /
+`--run 33573126367`, `3b1cf51` (docs only), or `8024439`. Next is
+last enabled CF8 (`cf8en=`). 3b Linux `ACPI=` is blocked on `ataio>0`.
+Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

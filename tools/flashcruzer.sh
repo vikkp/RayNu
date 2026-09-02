@@ -172,6 +172,7 @@ self_test() {
   grep -q '^80c79a6f$' "$REJECT_FILE"
   grep -q '^cafaafd1$' "$REJECT_FILE"
   grep -q '^2389db6a$' "$REJECT_FILE"
+  grep -q '^12f84c66$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
@@ -179,6 +180,7 @@ self_test() {
   grep -q '33567464001' "$SCRIPT_PATH"
   grep -q '33569757025' "$SCRIPT_PATH"
   grep -q '33571164257' "$SCRIPT_PATH"
+  grep -q '33573126367' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
@@ -186,6 +188,7 @@ self_test() {
   grep -q 'do not F11 abba969' "$SCRIPT_PATH"
   grep -q 'do not F11 060c504' "$SCRIPT_PATH"
   grep -q 'do not F11 c144001' "$SCRIPT_PATH"
+  grep -q 'do not F11 61991be' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -425,10 +428,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 abba969 / --run 33567464001 (honor pcicmd=0 wr=0 still ataio=0).
 # do not F11 060c504 / --run 33569757025 (seq=0,0,0,0,0,0).
 # do not F11 c144001 / --run 33571164257 (EnableAttributes pcicmd=0x5 still ataio=0).
-# print last PCI CF8 on HLT. Not ISO-INSTALL-OK.
+# do not F11 61991be / --run 33573126367 (HLT cf8=0x0 still ataio=0).
+# print last enabled CF8. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33573126367" ]]; then
+    echo "error: run 33573126367 is 61991be HLT cf8=0x0 hang" >&2
+    echo "       CONFIG_ADDRESS cleared; still ataio=0 CpuSleep." >&2
+    echo "       do not F11 61991be / --run 33573126367 again." >&2
+    echo "       do not F11 c144001 / --run 33571164257." >&2
+    echo "       wait for this SHA CI (last enabled CF8 on HLT)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33571164257" ]]; then
     echo "error: run 33571164257 is c144001 EnableAttributes hang" >&2

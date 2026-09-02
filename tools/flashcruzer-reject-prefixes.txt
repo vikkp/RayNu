@@ -29,3 +29,5 @@ f413a9fc
 cafaafd1
 # c144001 / 33571164257 EnableAttributes pcicmd=0x5 still ataio=0.
 2389db6a
+# 61991be / 33573126367 HLT cf8=0x0 (CONFIG_ADDRESS cleared, still ataio=0).
+12f84c66
