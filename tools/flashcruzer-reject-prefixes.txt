@@ -45,3 +45,5 @@ e9a5fd01
 8dd46b1c
 # 0b770cd / 33701350767 rethx=0xe056ff41b84d8b48 still ataio=0 (call [r14-0x20] CpuSleep).
 b17314b7
+# e0d5c55 / 33753069821 WFE return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0.
+5d85f5c7

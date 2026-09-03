@@ -33,6 +33,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 
 ## Stop rules
 
+- Do not F11 `e0d5c55` / `--run 33753069821` (WFE return `caller=0x7feffe28` then EPT `0x34` `rip=0x7ec8f6ff`, still `ataio=0`).
 - Do not F11 `0b770cd` / `--run 33701350767` (`rethx=0xe056ff41b84d8b48`, still `ataio=0`).
 - Do not F11 `6c4bfde` / `--run 33699177232` (ConIn CR fired, still `ataio=0`).
 - Do not F11 `2d4ab51` / `--run 33697154185` (HLT `ret=0x7ff0e055` DxeCore Wait, still `ataio=0`).
@@ -76,7 +77,8 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | 3h | **FAIL** | COM2 of `2d4ab51` HLT retaddr | HLT `ret=0x7ff0e055` = DxeCore WaitForEvent (AcpiTimer `0x7ff635d2`), not PciBus. Still `ataio=0`. |
 | 3i | **FAIL** | COM2 of `6c4bfde` ConIn CR | CR printed. Same hang `ret=0x7ff0e055` `ataio=0`. Timer wait, not serial. |
 | 3j | **FAIL** | COM2 of `0b770cd` callsite | `rethx=0xe056ff41b84d8b48` = `call [r14-0x20]` CpuSleep. Still `ataio=0`. |
-| 3k | **IN PROGRESS** | Force WaitForEvent `EFI_SUCCESS` | Unwind frame (`leave; ret` + `RAX=0`). Print `caller=`. |
+| 3k | **FAIL** | COM2 of `e0d5c55` WFE return | Poke **hit** (`caller=0x7feffe28`). Hang moved to EPT `0x34` `rip=0x7ec8f6ff`. Still `ataio=0`. |
+| 3l | **IN PROGRESS** | Host-zero firmware ZeroMem dest | Print `firmware ZeroMem ept gpa=` + RWE-map dest. |
 | 4 | BLOCKED | Linux stays up | `Linux version` then `/init` or `~#` |
 | 5 | BLOCKED | `setup-disk` sees the disk | `/dev/vda`, not `No disks available`. Fail here → virtio, not #231. |
 | 6 | OPEN | Installer writes GPT | COM2 `RAYNU-V-M7-ISO-INSTALL-OK` |
@@ -102,6 +104,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | `2d4ab51` | HLT `ret=0x7ff0e055`. DxeCore WaitForEvent, not PciBus. Still `ataio=0`. **Caller named.** |
 | `6c4bfde` | ConIn CR fired. Same hang. **Serial ConIn wait closed.** |
 | `0b770cd` | `rethx=0xe056ff41b84d8b48` = `call [r14-0x20]` CpuSleep. Event never signals. **Callsite closed.** |
+| `e0d5c55` | WFE return `caller=0x7feffe28`. Hang moved. EPT `0x34` `rip=0x7ec8f6ff` `insn=31c031ff8903` ZeroMem. Still `ataio=0`. **WFE unwind closed.** |
 
 HLT policy is exhausted. COMMAND is closed. CF8/ROM diagnostics are
 closed (`romwr=0xfffffffe`). Nested `cmdwr=0` / ParseBar is not the
@@ -112,10 +115,10 @@ Do not hide PIIX (`ea30da1`). Do not start another dest / HLT / COMMAND SHA.
 
 | Question | Answer |
 |----------|--------|
-| Diagnosis track | **Yes.** Each pin killed one hypothesis. We know the exact call. |
-| Product track (`ataio>0`) | **Stalled.** ~15 iron pins, `ataio` still 0. Informed ≠ closer to Linux. |
-| Right next move | Change WaitForEvent's outcome (this SHA). Not another print. |
-| Wrong next moves | dest, HLT policy, COMMAND, CF8/ROM, hide-slot0/PIIX, ConIn, #231 |
+| Diagnosis track | **Yes.** Each pin killed one hypothesis. WFE poke hit; hang named. |
+| Product track (`ataio>0`) | **Stalled.** ~16 iron pins, `ataio` still 0. Informed ≠ closer to Linux. |
+| Right next move | Host-zero / RWE-map the ZeroMem dest (this SHA). Not another unwind. |
+| Wrong next moves | dest, HLT policy, COMMAND, CF8/ROM, hide-slot0/PIIX, ConIn, WFE unwind, #231 |
 
 ---
 
@@ -131,14 +134,15 @@ CONFIG_ADDRESS 0 and CpuSleep. `ataio=0` `pin14=0` `cmd=0x00`
 
 Hide-slot0 is kept. ConIn CR is kept (fired, not sufficient). Callsite
 is `call [r14-0x20]` into CpuSleep (`rethx=0xe056ff41b84d8b48`).
-CpuSleep returns; WaitForEvent loops; the event never signals. This
-#229 HEAD unwinds that WaitForEvent as `EFI_SUCCESS` and prints
-`caller=`. Wait CI, then flash. Do not F11 `0b770cd`. Do not F11
-`6c4bfde`. Do not flash `3b1cf51`.
+`e0d5c55` unwound WaitForEvent as `EFI_SUCCESS` (`caller=0x7feffe28`).
+Firmware left CpuSleep, resumed PciBus CF8, then EPT-faulted in a
+ZeroMem dword store (`rip=0x7ec8f6ff`). This #229 HEAD host-zeros that
+dest and RWE-replaces the report-RAM leaf. Wait CI, then flash. Do not
+F11 `e0d5c55`. Do not F11 `0b770cd`. Do not flash `3b1cf51`.
 
-Next proof: `firmware WaitForEvent return caller=0x……`, then `ataio>0`
-or a new hang/crash. Still not `ISO-INSTALL-OK`. After step 6, E5 can
-close. TLS and guest console stay residual; they are not this ladder.
+Next proof: `firmware ZeroMem ept gpa=0x……`, then `ataio>0` or a new
+hang/crash. Still not `ISO-INSTALL-OK`. After step 6, E5 can close.
+TLS and guest console stay residual; they are not this ladder.
 
 ---
 
@@ -147,7 +151,7 @@ close. TLS and guest console stay residual; they are not this ladder.
 - Tick only the proof column. Latitude / QEMU / nested ≠ R640 COM2.
 - Fail at 3b → one SHA that is not dest, not HLT policy, not COMMAND.IO,
   not CF8/ROM print, not hide-slot0, not hide-PIIX, not retaddr print,
-  not ConIn CR, not callsite print, not #231.
+  not ConIn CR, not callsite print, not another WFE unwind, not #231.
 - Fail at 5 → virtio, not #231.
 - Host/CI never prints `RAYNU-V-M7-ISO-INSTALL-OK`.
 - Cruzer only: `0781:5151` / `RAYNUV` / `/dev/sdc`. Flash from

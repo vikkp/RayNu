@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 0b770cd rethx=0xe056ff41b84d8b48 (call [r14-0x20] CpuSleep) still ataio=0; #229 force WaitForEvent return. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Callsite closed. |
-| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b–3j FAIL / 3k IN PROGRESS). Not Everest E5. |
+| Summary | Iron COM2 e0d5c55 WFE return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0; #229 firmware ZeroMem ept fill. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. WFE unwind closed. |
+| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b–3k FAIL / 3l IN PROGRESS). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -369,12 +369,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
-| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite closed (`0b770cd` `rethx=` still `ataio=0`). Do not resume #231 for `COMMAND.IO`. Close path #229 force WaitForEvent return. Do not F11 `33701350767` / `33699177232` / `33697154185` / `33695570769` / `33630723649` / `33627470674` / `33575888121` / `33573126367` / `33571164257` / `33569757025` / `33567464001` / `33562028442` / `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. |
+| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed (`e0d5c55` caller then EPT ZeroMem still `ataio=0`). Do not resume #231 for `COMMAND.IO`. Close path #229 firmware ZeroMem ept fill. Do not F11 `33753069821` / `33701350767` / `33699177232` / `33697154185` / `33695570769` / `33630723649` / `33627470674` / `33575888121` / `33573126367` / `33571164257` / `33569757025` / `33567464001` / `33562028442` / `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. |
 
 ---
 
 ## HDA changelog
 
+| 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 e0d5c55 WFE return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0; #229 firmware ZeroMem ept fill; do not F11 33753069821; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 0b770cd rethx=0xe056ff41b84d8b48 (call [r14-0x20]) still ataio=0; #229 force WaitForEvent return; do not F11 33701350767; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 6c4bfde ConIn CR still ataio=0 (timer Wait, not serial); #229 prints HLT callsite; do not F11 33699177232; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 2d4ab51 HLT ret=0x7ff0e055 (DxeCore Wait) still ataio=0; #229 firmware ConIn CR; do not F11 33697154185; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
