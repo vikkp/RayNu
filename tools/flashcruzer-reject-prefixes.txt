@@ -43,3 +43,5 @@ f7c2f14b
 e9a5fd01
 # 6c4bfde / 33699177232 ConIn CR still ataio=0 (same DxeCore CpuSleep).
 8dd46b1c
+# 0b770cd / 33701350767 rethx=0xe056ff41b84d8b48 still ataio=0 (call [r14-0x20] CpuSleep).
+b17314b7

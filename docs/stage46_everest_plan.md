@@ -33,6 +33,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 
 ## Stop rules
 
+- Do not F11 `0b770cd` / `--run 33701350767` (`rethx=0xe056ff41b84d8b48`, still `ataio=0`).
 - Do not F11 `6c4bfde` / `--run 33699177232` (ConIn CR fired, still `ataio=0`).
 - Do not F11 `2d4ab51` / `--run 33697154185` (HLT `ret=0x7ff0e055` DxeCore Wait, still `ataio=0`).
 - Do not F11 `27eda8c` / `--run 33695570769` (hide-slot0, CDROM-OK via PIIX, still `ataio=0`).
@@ -63,10 +64,10 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | # | Status | Do | Proof |
 |---|--------|----|-------|
 | 0 | **DONE** | Park #231. Path is #229. | ADR-015 |
-| 1 | **DONE** | Green CI on the live pin | 49/49 on `6c4bfde` (`--run 33699177232`) — **refused after COM2** |
-| 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `6c4bfde` / `33699177232` (EFI `8dd46b1c`). Never PERC. Never `8024439`. |
-| 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `6c4bfde`) |
-| 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`6c4bfde`): ConIn CR then CpuSleep `ret=0x7ff0e055` `ataio=0`. Never reached Linux. |
+| 1 | **DONE** | Green CI on the live pin | 49/49 on `0b770cd` (`--run 33701350767`) — **refused after COM2** |
+| 2 | **DONE** (many pins) | Flash Cruzer from clone, `--no-git --run <id>` | `FLASH-OK` on `0b770cd` / `33701350767` (EFI `b17314b7`). Never PERC. Never `8024439`. |
+| 3a | **DONE** | COM2: fw_cfg + ACPI tables | `dest_ok fill dest=0x81ec98` **and** `product ISO fw_cfg ACPI MADT` (held through `0b770cd`) |
+| 3b | **FAIL** | COM2: firmware starts ATA / Linux sees ACPI | Need `ataio>0` then Linux `efi:` contains `ACPI=`. Last COM2 (`0b770cd`): `rethx=` then CpuSleep `ataio=0`. Never reached Linux. |
 | 3c | **FAIL** | COM2 of `61991be` last CF8 | HLT `cf8=0x0` — firmware wrote CONFIG_ADDRESS 0 after the PCI walk. Still `ataio=0`. |
 | 3d | **FAIL** | COM2 of `5de9e1c` last enabled CF8 | HLT `cf8en=0x80004008` = i440FX host `00:08.0+08` (class). Not an IDE BDF. Still `ataio=0`. |
 | 3e | **FAIL** | COM2 of `7ba1ccf` last IDE CF8 | HLT `cf8ide=0x80000930` = PIIX `00:01.1+30` (Expansion ROM). Still `ataio=0`. |
@@ -74,7 +75,8 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | 3g | **FAIL** | COM2 of `27eda8c` hide slot-0 | Hide printed. CDROM-OK on `00:01.1`. `cmdwr=3`. Same hang `ataio=0`. BAR conflict is not the wall. |
 | 3h | **FAIL** | COM2 of `2d4ab51` HLT retaddr | HLT `ret=0x7ff0e055` = DxeCore WaitForEvent (AcpiTimer `0x7ff635d2`), not PciBus. Still `ataio=0`. |
 | 3i | **FAIL** | COM2 of `6c4bfde` ConIn CR | CR printed. Same hang `ret=0x7ff0e055` `ataio=0`. Timer wait, not serial. |
-| 3j | **IN PROGRESS** | Print HLT callsite (`rethx=` at `ret-8`) | Names the DxeCore call before CpuSleep. Then poke that wait. |
+| 3j | **FAIL** | COM2 of `0b770cd` callsite | `rethx=0xe056ff41b84d8b48` = `call [r14-0x20]` CpuSleep. Still `ataio=0`. |
+| 3k | **IN PROGRESS** | Force WaitForEvent `EFI_SUCCESS` | Unwind frame (`leave; ret` + `RAX=0`). Print `caller=`. |
 | 4 | BLOCKED | Linux stays up | `Linux version` then `/init` or `~#` |
 | 5 | BLOCKED | `setup-disk` sees the disk | `/dev/vda`, not `No disks available`. Fail here → virtio, not #231. |
 | 6 | OPEN | Installer writes GPT | COM2 `RAYNU-V-M7-ISO-INSTALL-OK` |
@@ -99,11 +101,21 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | `27eda8c` | Hide slot-0. CDROM-OK via PIIX. Same CpuSleep. **BAR conflict closed.** |
 | `2d4ab51` | HLT `ret=0x7ff0e055`. DxeCore WaitForEvent, not PciBus. Still `ataio=0`. **Caller named.** |
 | `6c4bfde` | ConIn CR fired. Same hang. **Serial ConIn wait closed.** |
+| `0b770cd` | `rethx=0xe056ff41b84d8b48` = `call [r14-0x20]` CpuSleep. Event never signals. **Callsite closed.** |
 
 HLT policy is exhausted. COMMAND is closed. CF8/ROM diagnostics are
 closed (`romwr=0xfffffffe`). Nested `cmdwr=0` / ParseBar is not the
 iron picture. Further #231 IdeBus PCI slices cannot close E5.
 Do not hide PIIX (`ea30da1`). Do not start another dest / HLT / COMMAND SHA.
+
+### Gauge (are we on the right track?)
+
+| Question | Answer |
+|----------|--------|
+| Diagnosis track | **Yes.** Each pin killed one hypothesis. We know the exact call. |
+| Product track (`ataio>0`) | **Stalled.** ~15 iron pins, `ataio` still 0. Informed ≠ closer to Linux. |
+| Right next move | Change WaitForEvent's outcome (this SHA). Not another print. |
+| Wrong next moves | dest, HLT policy, COMMAND, CF8/ROM, hide-slot0/PIIX, ConIn, #231 |
 
 ---
 
@@ -117,14 +129,16 @@ CONFIG_ADDRESS 0 and CpuSleep. `ataio=0` `pin14=0` `cmd=0x00`
 (last ATA 0x1F7, not PCI COMMAND). ATA I/O is not gated on `pci_cmd`.
 `00:00.1` and `00:01.1` share the same I/O BARs.
 
-Hide-slot0 is kept. ConIn CR is kept (fired, not sufficient). Caller is
-DxeCore timer WaitForEvent (`ret=0x7ff0e055`), not serial ConIn. This
-#229 HEAD prints 8 bytes at `ret-8` as `rethx=`. Wait CI, then flash.
-Do not F11 `6c4bfde`. Do not F11 `2d4ab51`. Do not flash `3b1cf51`.
+Hide-slot0 is kept. ConIn CR is kept (fired, not sufficient). Callsite
+is `call [r14-0x20]` into CpuSleep (`rethx=0xe056ff41b84d8b48`).
+CpuSleep returns; WaitForEvent loops; the event never signals. This
+#229 HEAD unwinds that WaitForEvent as `EFI_SUCCESS` and prints
+`caller=`. Wait CI, then flash. Do not F11 `0b770cd`. Do not F11
+`6c4bfde`. Do not flash `3b1cf51`.
 
-Next proof: HLT `rethx=0x……`, then we can poke that wait. Still not
-`ISO-INSTALL-OK`. After step 6, E5 can close. TLS and guest console
-stay residual; they are not this ladder.
+Next proof: `firmware WaitForEvent return caller=0x……`, then `ataio>0`
+or a new hang/crash. Still not `ISO-INSTALL-OK`. After step 6, E5 can
+close. TLS and guest console stay residual; they are not this ladder.
 
 ---
 
@@ -133,7 +147,7 @@ stay residual; they are not this ladder.
 - Tick only the proof column. Latitude / QEMU / nested ≠ R640 COM2.
 - Fail at 3b → one SHA that is not dest, not HLT policy, not COMMAND.IO,
   not CF8/ROM print, not hide-slot0, not hide-PIIX, not retaddr print,
-  not ConIn CR, not #231.
+  not ConIn CR, not callsite print, not #231.
 - Fail at 5 → virtio, not #231.
 - Host/CI never prints `RAYNU-V-M7-ISO-INSTALL-OK`.
 - Cruzer only: `0781:5151` / `RAYNUV` / `/dev/sdc`. Flash from

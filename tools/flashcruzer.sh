@@ -179,6 +179,7 @@ self_test() {
   grep -q '^687b3b20$' "$REJECT_FILE"
   grep -q '^e9a5fd01$' "$REJECT_FILE"
   grep -q '^8dd46b1c$' "$REJECT_FILE"
+  grep -q '^b17314b7$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
@@ -193,6 +194,7 @@ self_test() {
   grep -q '33695570769' "$SCRIPT_PATH"
   grep -q '33697154185' "$SCRIPT_PATH"
   grep -q '33699177232' "$SCRIPT_PATH"
+  grep -q '33701350767' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
@@ -207,6 +209,7 @@ self_test() {
   grep -q 'do not F11 27eda8c' "$SCRIPT_PATH"
   grep -q 'do not F11 2d4ab51' "$SCRIPT_PATH"
   grep -q 'do not F11 6c4bfde' "$SCRIPT_PATH"
+  grep -q 'do not F11 0b770cd' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -453,10 +456,19 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 27eda8c / --run 33695570769 (hide-slot0 still ataio=0).
 # do not F11 2d4ab51 / --run 33697154185 (HLT ret=0x7ff0e055 still ataio=0).
 # do not F11 6c4bfde / --run 33699177232 (ConIn CR still ataio=0).
-# print HLT callsite. Not ISO-INSTALL-OK.
+# do not F11 0b770cd / --run 33701350767 (rethx=0xe056ff41b84d8b48 still ataio=0).
+# firmware WaitForEvent return. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33701350767" ]]; then
+    echo "error: run 33701350767 is 0b770cd rethx hang" >&2
+    echo "       call [r14-0x20] CpuSleep; DxeCore Wait still ataio=0." >&2
+    echo "       do not F11 0b770cd / --run 33701350767 again." >&2
+    echo "       do not F11 6c4bfde / --run 33699177232." >&2
+    echo "       wait for this SHA CI (firmware WaitForEvent return)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33699177232" ]]; then
     echo "error: run 33699177232 is 6c4bfde ConIn CR hang" >&2
