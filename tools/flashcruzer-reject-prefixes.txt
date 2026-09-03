@@ -49,3 +49,5 @@ b17314b7
 5d85f5c7
 # c8d504d / 33757018875 ZeroMem ept fill never printed (0x34 is preempt not EPT) still ataio=0.
 30215d93
+# d0e44d4 / 33815993163 WFE preempt skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3).
+4f9042de
