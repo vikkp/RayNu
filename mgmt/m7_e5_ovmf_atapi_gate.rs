@@ -1986,6 +1986,9 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE
             .contains("iron COM2 27eda8c hide-slot0 still ataio=0")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print HLT retaddr")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 2d4ab51 HLT ret=0x7ff0e055 still ataio=0")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2d4ab51")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ConIn CR")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides PIIX IDE")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux high-half hides PIIX")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux ATA floating bus")

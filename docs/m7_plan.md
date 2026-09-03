@@ -279,9 +279,11 @@ quiet except HTTP/WARN/markers.
 Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
 3a dest_ok + ACPI MADT **DONE**. COMMAND closed. CF8/ROM closed.
 Hide-slot0 **FAIL** (`27eda8c` CDROM-OK via PIIX, still `ataio=0`).
-Do not flash `2d6b109`, `27eda8c` / `--run 33695570769`, `118edcf`,
-`7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or `8024439`. Next is
-HLT retaddr (`[RSP]`). 3b Linux `ACPI=` is blocked on `ataio>0`.
+HLT retaddr **FAIL** (`2d4ab51` `ret=0x7ff0e055` DxeCore, still
+`ataio=0`). Do not flash `2d6b109`, `2d4ab51` / `--run 33697154185`,
+`27eda8c` / `--run 33695570769`, `118edcf`, `7ba1ccf`, `5de9e1c`,
+`61991be`, `3b1cf51`, or `8024439`. Next is firmware ConIn CR.
+3b Linux `ACPI=` is blocked on `ataio>0`.
 Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
