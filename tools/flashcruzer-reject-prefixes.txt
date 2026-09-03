@@ -41,3 +41,5 @@ f7c2f14b
 687b3b20
 # 2d4ab51 / 33697154185 HLT ret=0x7ff0e055 (DxeCore WaitForEvent, still ataio=0).
 e9a5fd01
+# 6c4bfde / 33699177232 ConIn CR still ataio=0 (same DxeCore CpuSleep).
+8dd46b1c
