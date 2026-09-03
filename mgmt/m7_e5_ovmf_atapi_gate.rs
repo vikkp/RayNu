@@ -1997,6 +1997,8 @@ pub fn run_m7_e5_ovmf_atapi_gate() -> bool {
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WaitForEvent return")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e0d5c55")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ZeroMem ept fill")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c8d504d")
+        && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE preempt skip")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides PIIX IDE")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux high-half hides PIIX")
         && E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux ATA floating bus")

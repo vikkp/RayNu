@@ -283,13 +283,15 @@ HLT retaddr **FAIL** (`2d4ab51` `ret=0x7ff0e055` DxeCore, still
 `ataio=0`). ConIn CR **FAIL** (`6c4bfde` CR fired; timer Wait still
 `ataio=0`). Callsite **FAIL** (`0b770cd` `rethx=0xe056ff41b84d8b48`
 `call [r14-0x20]`, still `ataio=0`). WFE return **FAIL**
-(`e0d5c55` `caller=0x7feffe28` then EPT `0x34` `rip=0x7ec8f6ff`,
-still `ataio=0`). Do not flash `2d6b109`,
+(`e0d5c55` `caller=0x7feffe28` then preempt `0x34` `rip=0x7ec8f6ff`,
+still `ataio=0`). ZeroMem ept fill **FAIL** (`c8d504d`: fill never
+printed; `0x34` is preempt not EPT). Do not flash `2d6b109`,
+`c8d504d` / `--run 33757018875`,
 `e0d5c55` / `--run 33753069821`, `0b770cd` / `--run 33701350767`,
 `6c4bfde` / `--run 33699177232`,
 `2d4ab51` / `--run 33697154185`, `27eda8c` / `--run 33695570769`,
 `118edcf`, `7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or `8024439`.
-Next is firmware ZeroMem ept fill. 3b Linux `ACPI=` is blocked
+Next is firmware WFE preempt skip. 3b Linux `ACPI=` is blocked
 on `ataio>0`. Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`

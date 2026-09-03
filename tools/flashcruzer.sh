@@ -197,6 +197,7 @@ self_test() {
   grep -q '33699177232' "$SCRIPT_PATH"
   grep -q '33701350767' "$SCRIPT_PATH"
   grep -q '33753069821' "$SCRIPT_PATH"
+  grep -q '33757018875' "$SCRIPT_PATH"
   grep -q 'do not F11 24c5fa6' "$SCRIPT_PATH"
   grep -q 'do not F11 e3cbfa5' "$SCRIPT_PATH"
   grep -q 'do not F11 21dc562' "$SCRIPT_PATH"
@@ -213,7 +214,9 @@ self_test() {
   grep -q 'do not F11 6c4bfde' "$SCRIPT_PATH"
   grep -q 'do not F11 0b770cd' "$SCRIPT_PATH"
   grep -q 'do not F11 e0d5c55' "$SCRIPT_PATH"
+  grep -q 'do not F11 c8d504d' "$SCRIPT_PATH"
   grep -q 'firmware ZeroMem ept fill' "$SCRIPT_PATH"
+  grep -q 'firmware WFE preempt skip' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -461,18 +464,28 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 2d4ab51 / --run 33697154185 (HLT ret=0x7ff0e055 still ataio=0).
 # do not F11 6c4bfde / --run 33699177232 (ConIn CR still ataio=0).
 # do not F11 0b770cd / --run 33701350767 (rethx=0xe056ff41b84d8b48 still ataio=0).
-# do not F11 e0d5c55 / --run 33753069821 (WFE return then EPT ZeroMem still ataio=0).
-# firmware ZeroMem ept fill. Not ISO-INSTALL-OK.
+# do not F11 e0d5c55 / --run 33753069821 (WFE return then preempt 0x34 still ataio=0).
+# do not F11 c8d504d / --run 33757018875 (ZeroMem ept fill never printed; 0x34 is preempt).
+# firmware WFE preempt skip. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
   fi
+  if [[ "$PIN_RUN" == "33757018875" ]]; then
+    echo "error: run 33757018875 is c8d504d ZeroMem-fill miss" >&2
+    echo "       WFE return hit; no firmware ZeroMem ept gpa= (0x34 is preempt)." >&2
+    echo "       noskip endbr64+cmp [rip],4 then rip=0x7ec8f639 still ataio=0." >&2
+    echo "       do not F11 c8d504d / --run 33757018875 again." >&2
+    echo "       do not F11 e0d5c55 / --run 33753069821." >&2
+    echo "       wait for this SHA CI (firmware WFE preempt skip)." >&2
+    exit 1
+  fi
   if [[ "$PIN_RUN" == "33753069821" ]]; then
-    echo "error: run 33753069821 is e0d5c55 WFE-return then EPT hang" >&2
-    echo "       WaitForEvent return caller=0x7feffe28; EPT 0x34 rip=0x7ec8f6ff." >&2
+    echo "error: run 33753069821 is e0d5c55 WFE-return then preempt hang" >&2
+    echo "       WaitForEvent return caller=0x7feffe28; reason=0x34 is preempt not EPT." >&2
     echo "       still ataio=0. do not F11 e0d5c55 / --run 33753069821 again." >&2
+    echo "       do not F11 c8d504d / --run 33757018875." >&2
     echo "       do not F11 0b770cd / --run 33701350767." >&2
-    echo "       wait for this SHA CI (firmware ZeroMem ept fill)." >&2
     exit 1
   fi
   if [[ "$PIN_RUN" == "33701350767" ]]; then
