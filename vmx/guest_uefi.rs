@@ -3609,6 +3609,8 @@ static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
+/// Non-success service returns logged so far (bounded).
+static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
 static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
@@ -6396,6 +6398,25 @@ unsafe fn raynu_f_stage_iso_bootloader(
         crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
         layout.sfs,
     );
+    // A loader reads LoadedImage->DeviceHandle and its device path to find the
+    // volume it booted from; publish a well-formed Media/CD-ROM path.
+    let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+    crate::raynu_f::protocol::encode_cd_device_path(
+        1,
+        u64::from(et.load_lba),
+        u64::from(et.sector_count),
+        &mut dp,
+    );
+    let mem_dp = SlabMem { hpa: ram_hpa, len: GUEST_UEFI_LOW_RAM_BYTES };
+    if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+        st.device_path = layout.device_path;
+        st.device_handle = crate::raynu_f::HANDLE_CD;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_CD,
+            crate::raynu_f::protocol::GUID_DEVICE_PATH,
+            layout.device_path,
+        );
+    }
     serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
     write_dec(u64::from(et.load_lba));
     serial::write_str(" efi=");
@@ -6623,6 +6644,8 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
     serial::write_str(" svc=");
     write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
+    serial::write_str(" svc_err=");
+    write_dec(u64::from(RAYNU_F_SVC_ERRS.load(Ordering::Acquire)));
     serial::write_str(" conout_ok=");
     write_dec(u64::from(RAYNU_F_CONOUT_LOGGED.load(Ordering::Acquire)));
     serial::write_line(" (F2b; not ISO-INSTALL-OK)");
@@ -9716,7 +9739,12 @@ unsafe fn handle_raynu_f_service() -> bool {
         serial::write_line(crate::raynu_f::RAYNU_F_EBS_OK_MARKER);
     }
     let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
-    if n < 8 {
+    // Log the opening sequence, then every non-success (capped) — that is the
+    // diagnostic that names which service a real bootloader needs next.
+    let failed = d.status != crate::raynu_f::EFI_SUCCESS;
+    let show = n < 24
+        || (failed && RAYNU_F_SVC_ERRS.fetch_add(1, Ordering::AcqRel) < 32);
+    if show {
         serial::write_str("boot: RayNu-F svc=");
         serial::write_str(id.name());
         serial::write_str(" id=0x");

@@ -99,6 +99,7 @@ pub const IMAGE_GUID_LOADED_IMAGE_OFF: usize = 0x1720;
 pub const IMAGE_SFS_OFF: usize = 0x1740;
 pub const IMAGE_GUID_FILE_INFO_OFF: usize = 0x1760;
 pub const IMAGE_LOADED_IMAGE_OFF: usize = 0x1780;
+pub const IMAGE_DEVICE_PATH_OFF: usize = 0x17E0;
 pub const IMAGE_FILE_PROTO_OFF: usize = 0x1800;
 /// Stride per file-protocol instance (0x58 rounded up for alignment).
 pub const IMAGE_FILE_PROTO_STRIDE: usize = 0x60;
@@ -134,6 +135,7 @@ pub struct FirmwareImageLayout {
     pub sfs: u64,
     pub guid_file_info: u64,
     pub loaded_image: u64,
+    pub device_path: u64,
     pub file_proto_base: u64,
 }
 
@@ -252,6 +254,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         sfs: base + IMAGE_SFS_OFF as u64,
         guid_file_info: base + IMAGE_GUID_FILE_INFO_OFF as u64,
         loaded_image: base + IMAGE_LOADED_IMAGE_OFF as u64,
+        device_path: base + IMAGE_DEVICE_PATH_OFF as u64,
         file_proto_base: base + IMAGE_FILE_PROTO_OFF as u64,
     };
 

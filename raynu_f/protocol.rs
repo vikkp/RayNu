@@ -55,6 +55,42 @@ pub const LOADED_IMAGE_SIZE: usize = 0x60;
 /// `EFI_LOADED_IMAGE_PROTOCOL_REVISION`.
 pub const LOADED_IMAGE_REVISION: u32 = 0x1000;
 
+/// A well-formed device path for the CD: a Media/CD-ROM node followed by the
+/// End node. A loader reads `LoadedImage->DeviceHandle` and its device path to
+/// find the volume it booted from, so a NULL here would strand it.
+/// Media Device Path (type 4) / CD-ROM (subtype 2), length 0x18:
+/// header(4) + BootEntry u32 + PartitionStart u64 + PartitionSize u64.
+pub const DP_TYPE_MEDIA: u8 = 0x04;
+pub const DP_SUBTYPE_CDROM: u8 = 0x02;
+pub const DP_TYPE_END: u8 = 0x7F;
+pub const DP_SUBTYPE_END_ENTIRE: u8 = 0xFF;
+pub const DP_CDROM_LEN: usize = 0x18;
+pub const DP_END_LEN: usize = 0x04;
+pub const DEVICE_PATH_BYTES: usize = DP_CDROM_LEN + DP_END_LEN;
+
+/// Serialize the CD device path (`boot_entry`, and the El Torito extent in
+/// 2048-byte CD blocks).
+pub fn encode_cd_device_path(
+    boot_entry: u32,
+    partition_start: u64,
+    partition_size: u64,
+    out: &mut [u8; DEVICE_PATH_BYTES],
+) {
+    for b in out.iter_mut() {
+        *b = 0;
+    }
+    out[0] = DP_TYPE_MEDIA;
+    out[1] = DP_SUBTYPE_CDROM;
+    out[2..4].copy_from_slice(&(DP_CDROM_LEN as u16).to_le_bytes());
+    out[4..8].copy_from_slice(&boot_entry.to_le_bytes());
+    out[8..16].copy_from_slice(&partition_start.to_le_bytes());
+    out[16..24].copy_from_slice(&partition_size.to_le_bytes());
+    out[DP_CDROM_LEN] = DP_TYPE_END;
+    out[DP_CDROM_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
+    out[DP_CDROM_LEN + 2..DP_CDROM_LEN + 4]
+        .copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
 /// `EFI_LOCATE_SEARCH_TYPE`.
 pub const ALL_HANDLES: u32 = 0;
 pub const BY_REGISTER_NOTIFY: u32 = 1;

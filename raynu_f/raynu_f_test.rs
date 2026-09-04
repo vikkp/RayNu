@@ -1707,6 +1707,48 @@ fn raynu_f_filesystem_loadimage_startimage() {
     let bad = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf + 0x9000, rsp: stack };
     assert_eq!(dispatch(ServiceId::LoadImage, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, 0x8000_0000_0000_0012);
 
+    // --- device path + LoadedImage.DeviceHandle ---------------------------
+    // A loader reads DeviceHandle/FilePath to find its own volume; a NULL
+    // there would strand it, so both must be populated and well-formed.
+    {
+        use super::protocol::{
+            encode_cd_device_path, DEVICE_PATH_BYTES, DP_CDROM_LEN, DP_SUBTYPE_CDROM,
+            DP_SUBTYPE_END_ENTIRE, DP_TYPE_END, DP_TYPE_MEDIA, GUID_DEVICE_PATH,
+            LOADED_IMAGE_DEVICE_HANDLE_OFF, LOADED_IMAGE_FILE_PATH_OFF,
+        };
+        use super::tables::IMAGE_DEVICE_PATH_OFF;
+        let mut dp = [0u8; DEVICE_PATH_BYTES];
+        encode_cd_device_path(1, 64, 512, &mut dp);
+        assert_eq!(dp[0], DP_TYPE_MEDIA);
+        assert_eq!(dp[1], DP_SUBTYPE_CDROM);
+        assert_eq!(u16::from_le_bytes([dp[2], dp[3]]) as usize, DP_CDROM_LEN);
+        assert_eq!(u32::from_le_bytes(dp[4..8].try_into().unwrap()), 1);
+        assert_eq!(u64::from_le_bytes(dp[8..16].try_into().unwrap()), 64);
+        assert_eq!(u64::from_le_bytes(dp[16..24].try_into().unwrap()), 512);
+        // End-of-device-path node terminates it.
+        assert_eq!(dp[DP_CDROM_LEN], DP_TYPE_END);
+        assert_eq!(dp[DP_CDROM_LEN + 1], DP_SUBTYPE_END_ENTIRE);
+        assert_eq!(u16::from_le_bytes([dp[DP_CDROM_LEN + 2], dp[DP_CDROM_LEN + 3]]), 4);
+        assert_eq!(layout.device_path, tb as u64 + IMAGE_DEVICE_PATH_OFF as u64);
+        // Publish it the way the launcher does, then re-run LoadImage so
+        // LoadedImage picks the fields up.
+        guest.write(layout.device_path, &dp);
+        st.device_path = layout.device_path;
+        st.device_handle = super::HANDLE_CD;
+        assert_eq!(st.protocols.install(super::HANDLE_CD, GUID_DEVICE_PATH, layout.device_path), EFI_SUCCESS);
+        guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64);
+        guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle);
+        let again = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+        assert_eq!(dispatch(ServiceId::LoadImage, again, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+        assert_eq!(guest.u64_at(li + LOADED_IMAGE_DEVICE_HANDLE_OFF as u64), super::HANDLE_CD);
+        assert_eq!(guest.u64_at(li + LOADED_IMAGE_FILE_PATH_OFF as u64), layout.device_path);
+        // And the loader can look the device path up on that handle.
+        guest.write(p_guid + 0x60, &GUID_DEVICE_PATH);
+        guest.put_u64(p_root, 0);
+        assert_eq!(dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(super::HANDLE_CD, p_guid + 0x60, p_root, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+        assert_eq!(guest.u64_at(p_root), layout.device_path);
+    }
+
     // --- StartImage asks the hypervisor to redirect the guest -------------
     let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_SUCCESS);

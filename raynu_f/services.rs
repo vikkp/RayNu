@@ -415,6 +415,9 @@ pub struct FirmwareState {
     pub fat_volume_off: u64,
     /// F5: the one image `LoadImage` has staged, if any.
     pub loaded_image_proto: u64,
+    /// Device path published for the boot volume, and the handle owning it.
+    pub device_path: u64,
+    pub device_handle: u64,
     pub image_handle: u64,
     pub image_base: u64,
     pub image_size: u64,
@@ -444,6 +447,8 @@ impl FirmwareState {
             sfs: 0,
             fat_volume_off: 0,
             loaded_image_proto: 0,
+            device_path: 0,
+            device_handle: 0,
             image_handle: 0,
             image_base: 0,
             image_size: 0,
@@ -906,6 +911,8 @@ fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u6
             && write_u64(mem, li + super::protocol::LOADED_IMAGE_PARENT_OFF as u64, a.a2)
             && write_u64(mem, li + super::protocol::LOADED_IMAGE_SYSTEM_TABLE_OFF as u64, st.system_table)
             && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_BASE_OFF as u64, st.image_base)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_DEVICE_HANDLE_OFF as u64, st.device_handle)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_FILE_PATH_OFF as u64, st.device_path)
             && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_SIZE_OFF as u64, st.image_size);
         if !ok {
             let _ = st.pool.free_pages_at(base, pages);
