@@ -53,3 +53,5 @@ b17314b7
 4f9042de
 # 9474ab6 / 33817483733 WFE state4 poke then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0.
 de05db35
+# 4e16b59 / 33820727776 firmware WFE event #PF inject fired OVMF own #PF then CpuDeadLoop still ataio=0 (ADR-016 RayNu-F pivot).
+23f33693

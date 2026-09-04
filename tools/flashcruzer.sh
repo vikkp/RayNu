@@ -184,6 +184,7 @@ self_test() {
   grep -q '^30215d93$' "$REJECT_FILE"
   grep -q '^4f9042de$' "$REJECT_FILE"
   grep -q '^de05db35$' "$REJECT_FILE"
+  grep -q '^23f33693$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
@@ -226,6 +227,9 @@ self_test() {
   grep -q '33817483733' "$SCRIPT_PATH"
   grep -q 'do not F11 9474ab6' "$SCRIPT_PATH"
   grep -q 'firmware WFE event #PF' "$SCRIPT_PATH"
+  grep -q '33820727776' "$SCRIPT_PATH"
+  grep -q 'do not F11 4e16b59' "$SCRIPT_PATH"
+  grep -q 'RayNu-F' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -478,9 +482,21 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 d0e44d4 / --run 33815993163 (WFE skip hit then same spin still ataio=0).
 # do not F11 9474ab6 / --run 33817483733 (state4 poke then #PF cr2=-0x48 HV stop).
 # firmware WFE event #PF. Not ISO-INSTALL-OK.
+# do not F11 4e16b59 / --run 33820727776 (event #PF inject fired OVMF own #PF
+# then CpuDeadLoop). ADR-016: E5 path is now RayNu-F (be the guest firmware);
+# firmware state forcing disabled. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33820727776" ]]; then
+    echo "error: run 33820727776 is 4e16b59 firmware WFE event #PF inject" >&2
+    echo "       inject fired OVMF own #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018" >&2
+    echo "       then CpuDeadLoop. still ataio=0. self-inflicted (ADR-016)." >&2
+    echo "       do not F11 4e16b59 / --run 33820727776 again." >&2
+    echo "       E5 path is now RayNu-F (be the guest firmware); firmware" >&2
+    echo "       state forcing is disabled (RAYNU_F_NO_FW_STATE_MUTATION)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33817483733" ]]; then
     echo "error: run 33817483733 is 9474ab6 WFE-state4 then event #PF stop" >&2
