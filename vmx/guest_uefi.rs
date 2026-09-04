@@ -3598,6 +3598,20 @@ static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
 /// F2b: stop after this many exits without a HLT.
 const RAYNU_F_EXIT_CAP: u32 = 65_536;
+/// F2b: entry RIP of the launched app (decodes the HLT path on stop).
+static RAYNU_F_ENTRY: AtomicU64 = AtomicU64::new(0);
+/// F3 one-shot markers.
+static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
+/// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
+static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
+/// RayNu-F firmware state (pool, events, TPL). Single BSP-owned instance;
+/// touched only from the guest-firmware VM-exit path while the guest is
+/// halted, so no lock is needed (same discipline as the SAVED_* GPR slots).
+#[cfg(target_os = "uefi")]
+static mut RAYNU_F_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
 #[cfg(target_os = "uefi")]
 static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -6188,6 +6202,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     SAVED_R14 = 0;
     SAVED_R15 = 0;
     RAYNU_F_EXITS.store(0, Ordering::Release);
+    RAYNU_F_ENTRY.store(loaded.entry, Ordering::Release);
     RAYNU_F_MODE.store(true, Ordering::Release);
     serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
     write_hex(loaded.entry);
@@ -6314,8 +6329,14 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             guest_uefi_vmresume();
         }
         EXIT_REASON_HLT => {
+            let entry = RAYNU_F_ENTRY.load(Ordering::Acquire);
             serial::write_str("boot: RayNu-F guest HLT rip=0x");
             write_hex(rip);
+            if rip == entry.wrapping_add(crate::raynu_f::TESTAPP_HLT_OK_OFF) {
+                serial::write_str(" path=OK");
+            } else if rip == entry.wrapping_add(crate::raynu_f::TESTAPP_HLT_FAIL_OFF) {
+                serial::write_str(" path=FAIL (a service returned an error)");
+            }
             serial::write_byte(b'\n');
             raynu_f_stop("hlt");
         }
@@ -9253,22 +9274,94 @@ unsafe fn handle_raynu_f_service() {
             // KANI-TARGET: RayNu-F guest CHAR16 read (outside Proven Core).
             unsafe { copy_guest_linear_bytes(addr, buf) }
         }
+        fn write(&self, addr: u64, buf: &[u8]) -> usize {
+            // SAFETY: same walk as `read`; only RayNu-F-owned guest RAM.
+            // KANI-TARGET: RayNu-F guest OUT-param write (outside Proven Core).
+            if unsafe { write_guest_linear_bytes(addr, buf) } {
+                buf.len()
+            } else {
+                0
+            }
+        }
     }
     struct Sink;
     impl crate::raynu_f::ConsoleSink for Sink {
         fn write_byte(&mut self, b: u8) {
             serial::write_byte(b);
         }
+        fn has_input(&self) -> bool {
+            if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
+                return true;
+            }
+            if let Some(b) = serial::try_read_byte() {
+                RAYNU_F_PENDING_RX.store(u32::from(b), Ordering::Release);
+                return true;
+            }
+            false
+        }
+        fn read_input(&mut self) -> Option<u8> {
+            if !self.has_input() {
+                return None;
+            }
+            let b = RAYNU_F_PENDING_RX.swap(0x100, Ordering::AcqRel);
+            Some(b as u8)
+        }
     }
+    /// Owned firmware clock: TSC over the pre-EBS calibrated rate.
+    struct Tsc {
+        hz: u64,
+    }
+    impl crate::raynu_f::TimeSource for Tsc {
+        fn now_100ns(&self) -> u64 {
+            // ticks * 10_000_000 / hz, without overflow for ~5 years of TSC.
+            let t = cpu::rdtsc();
+            (t / self.hz).saturating_mul(10_000_000)
+                + ((t % self.hz).saturating_mul(10_000_000)) / self.hz
+        }
+    }
+    let mut hz = crate::boot::raynu_f_flag::tsc_hz();
+    if hz == 0 {
+        hz = 1_000_000_000;
+        if !RAYNU_F_CLOCK_WARNED.swap(true, Ordering::AcqRel) {
+            serial::write_line("boot: RayNu-F WARN clock uncalibrated; assuming 1 GHz TSC");
+        }
+    }
+    let clock = Tsc { hz };
     let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
     let args = crate::raynu_f::ServiceArgs {
         a1: SAVED_RCX,
         a2: SAVED_R10,
         a3: SAVED_R8,
         a4: SAVED_R9,
+        rsp: ops::vmread(GUEST_RSP).unwrap_or(0),
     };
-    let d = crate::raynu_f::dispatch(id, args, &Mem, &mut Sink);
+    // SAFETY: BSP-only firmware state; guest halted on this exit (see decl).
+    // KANI-TARGET: RayNu-F firmware state mutation (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let d = crate::raynu_f::dispatch(
+        id,
+        args,
+        &Mem,
+        &mut Sink,
+        st,
+        &clock,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    );
     SAVED_RAX = d.status;
+    if d.alloc_ok && !RAYNU_F_MEM_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_MEM_OK_MARKER);
+    }
+    if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::TimerFired(_)))
+        && !RAYNU_F_TIMER_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(crate::raynu_f::RAYNU_F_TIMER_OK_MARKER);
+    }
+    if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::Stuck)) {
+        serial::write_line("boot: RayNu-F WARN WaitForEvent had nothing that could signal (EFI_TIMEOUT)");
+    }
+    if d.exited_boot_services && !RAYNU_F_EBS_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_EBS_OK_MARKER);
+    }
     let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
     if n < 8 {
         serial::write_str("boot: RayNu-F svc=");
