@@ -6040,6 +6040,30 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec_nowait(u64::from(entry_fail));
     serial::write_str_nowait(" intr=0x");
     write_hex_nowait(intr);
+    if tf {
+        // Triple fault: the guest could not deliver its own #DF. Print the
+        // state that decides deliverability (nested 5a9e8e4 after EBS).
+        serial::write_str_nowait(" cr0=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR0).unwrap_or(0));
+        serial::write_str_nowait(" cr3=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
+        serial::write_str_nowait(" cr4=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR4).unwrap_or(0));
+        serial::write_str_nowait(" cr2=0x");
+        write_hex_nowait(cpu::read_cr2());
+        serial::write_str_nowait(" rsp=0x");
+        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
+        serial::write_str_nowait(" idtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
+        serial::write_str_nowait("/0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_LIMIT).unwrap_or(0));
+        serial::write_str_nowait(" gdtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_GDTR_BASE).unwrap_or(0));
+        serial::write_str_nowait(" tr=0x");
+        write_hex_nowait(ops::vmread(GUEST_TR_BASE).unwrap_or(0));
+        serial::write_str_nowait(" efer=0x");
+        write_hex_nowait(ops::vmread(GUEST_IA32_EFER).unwrap_or(0));
+    }
     serial::write_byte_nowait(b'\n');
     serial::write_str("boot: guest-UEFI stop n=");
     write_dec(n as u64);
@@ -7785,6 +7809,26 @@ unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
         true,
         crate::devices::ide_cdrom::product_iso_window_armed(),
     );
+    // #DF/#TS/#NP/#SS re-injected into a kernel are one step from a triple
+    // fault (nested 5a9e8e4: reason=0x2 with no other trace). Always name
+    // them, with the state the kernel's own handler could not print.
+    if matches!(vec, 8 | 10 | 11 | 12) {
+        serial::write_str_nowait("boot: guest-UEFI linux fatal-class exc vec=0x");
+        write_hex_nowait(u64::from(vec));
+        serial::write_str_nowait(" err=0x");
+        write_hex_nowait(ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0));
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(ops::vmread(GUEST_RIP).unwrap_or(0));
+        serial::write_str_nowait(" rsp=0x");
+        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
+        serial::write_str_nowait(" cr2=0x");
+        write_hex_nowait(cpu::read_cr2());
+        serial::write_str_nowait(" cr3=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
+        serial::write_str_nowait(" idtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
+        serial::write_byte_nowait(b'\n');
+    }
     if n < 4 && !linux_iso {
         // linux earlycon skip exc deliver (same hush as skip #PF dump).
         serial::write_str("boot: guest-UEFI linux exc deliver n=");

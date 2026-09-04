@@ -196,8 +196,8 @@ fn product_iso_esp_retain_rejects_lab_size_and_hold_follows_window() {
 fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_SERIAL_CONSOLE_FROM.len(), ISO_SERIAL_CONSOLE_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
-    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 269);
-    assert_eq!(ISO_GRUB_CFG_PATCHED_SIZE, 294);
+    assert_eq!(ISO_GRUB_LINUX_FROM.len(), 277);
+    assert_eq!(ISO_GRUB_CFG_PATCHED_SIZE, 302);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -275,6 +275,7 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(g.contains("usbdelay=30"));
     assert!(!g.contains("alpine_dev=vdb"));
     assert!(g.contains("initcall_blacklist=piix_init"));
+    assert!(g.contains(" efi=noruntime "));
     assert!(!g.contains("ata_piix_init"));
     assert!(g.contains("virtio_pci"));
     assert!(g.contains("virtio_blk"));

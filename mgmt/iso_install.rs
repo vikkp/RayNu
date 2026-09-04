@@ -117,7 +117,11 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// `ata_msleep` after `Freeing initrd` if PCI hide/floating-bus miss.
 /// Linux 6.12 `drivers/ata/ata_piix.c` registers `piix_init`, not
 /// `ata_piix_init` (`initcall_blacklist=` matches kallsyms). Four trailing
-/// spaces keep FROM/TO length 269 / Data Length 294. linux-line virtio_pci.
+/// FROM/TO length 277 / Data Length 302 (was 269/294 before `efi=noruntime`). linux-line virtio_pci.
+/// linux-line efi=noruntime: RayNu-F (ADR-016) has no runtime services after
+/// EBS; nested `5a9e8e4` triple-faulted inside `efi_enter_virtual_mode`
+/// before reaching our `SetVirtualAddressMap` trampoline. Linux keeps the
+/// EFI memory map and config tables (ACPI later) and skips virtual mode.
 /// linux-line ata_piix blacklist. linux-line piix_init blacklist. Same-length 33-byte swap
 /// cannot add those without dropping `loop` or `virtio_blk`.
 /// Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron COM2 after
@@ -231,9 +235,9 @@ const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len
 /// product ISO hides PIIX IDE (iron COM2 `d61dc7e` ConnectAll CpuSleep; un-hidden).
 /// Not `ISO-INSTALL-OK`.
 pub const ISO_GRUB_LINUX_FROM: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 pub const ISO_GRUB_LINUX_TO: &[u8] =
-    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30    initcall_blacklist=piix_init    \ninitrd\t/boot/initramfs-virt\n}\n";
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime \ninitrd\t/boot/initramfs-virt\n}\n";
 const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
 const fn trailing_zero_count(s: &[u8]) -> usize {
     let mut n = 0usize;
