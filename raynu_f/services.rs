@@ -163,6 +163,10 @@ impl ServiceId {
         ServiceId(Self::BOOT_BASE + i as u32)
     }
 
+    // EFI_RUNTIME_SERVICES entries we answer (spec order: GetTime 0 … ).
+    pub const GetVariable: ServiceId = ServiceId(0x306);
+    pub const GetNextVariableName: ServiceId = ServiceId(0x307);
+
     /// Runtime service `i` in `EFI_RUNTIME_SERVICES` spec order (0 = GetTime).
     pub const fn runtime_service(i: usize) -> ServiceId {
         ServiceId(Self::RUNTIME_BASE + i as u32)
@@ -276,6 +280,8 @@ impl ServiceId {
             ServiceId::FileGetInfo => "File.GetInfo",
             ServiceId::FileSetInfo => "File.SetInfo",
             ServiceId::FileFlush => "File.Flush",
+            ServiceId::GetVariable => "RT.GetVariable",
+            ServiceId::GetNextVariableName => "RT.GetNextVariableName",
             ServiceId(v) if (Self::BOOT_BASE..Self::BOOT_BASE + 44).contains(&v) => "BootServices",
             ServiceId(v) if (Self::RUNTIME_BASE..Self::RUNTIME_BASE + 14).contains(&v) => {
                 "RuntimeServices"
@@ -583,6 +589,13 @@ fn get_memory_map(
     let mut runs = [MemRun { typ: 0, start: 0, pages: 0 }; MAX_DESCRIPTORS];
     let n = st.pool.memory_map(slab_bytes, &mut runs);
     let need = n as u64 * MEMORY_DESCRIPTOR_SIZE;
+    // DescriptorSize / DescriptorVersion are outputs on the sizing call too
+    // (EDK2 CoreGetMemoryMap writes them before the buffer check). The Linux
+    // EFI stub computes its pool size from desc_size after a NULL-buffer
+    // call; nested d7e755d: uninitialized desc_size → AllocatePool with size
+    // 0x1793e758e70f3100 → INVALID_PARAMETER → "exit_boot() failed".
+    let _ = write_u64(mem, p_dsize, MEMORY_DESCRIPTOR_SIZE);
+    let _ = write_u32(mem, p_dver, MEMORY_DESCRIPTOR_VERSION);
     if p_map == 0 || size < need {
         let _ = write_u64(mem, p_size, need);
         return EFI_BUFFER_TOO_SMALL;
@@ -1734,6 +1747,47 @@ pub fn dispatch(
                 out.start_image = Some((st.image_entry, st.image_handle));
                 st.image_started = true;
                 EFI_SUCCESS
+            }
+        }
+        ServiceId::UnloadImage => {
+            // (ImageHandle): only a loaded-and-not-running image can go.
+            // GRUB unloads the kernel after a failed StartImage (d7e755d).
+            if a.a1 == 0 || a.a1 != st.image_handle || st.image_started || st.image_base == 0 {
+                EFI_INVALID_PARAMETER
+            } else {
+                let pages = (st.image_size + 4095) / 4096;
+                let _ = st.pool.free_pages_at(st.image_base, pages);
+                if st.loaded_image_proto != 0 {
+                    let _ = st.protocols.uninstall(
+                        st.image_handle,
+                        &super::protocol::GUID_LOADED_IMAGE,
+                        st.loaded_image_proto,
+                    );
+                }
+                st.image_base = 0;
+                st.image_size = 0;
+                st.image_entry = 0;
+                EFI_SUCCESS
+            }
+        }
+        ServiceId::GetVariable => {
+            // (Name*, Guid*, Attributes*, DataSize*, Data*). RayNu-F has no
+            // variable store, so every variable is honestly absent —
+            // EFI_NOT_FOUND, which is what "SecureBoot not set" means to a
+            // loader (UNSUPPORTED made the Linux stub print "Could not
+            // determine UEFI Secure Boot status").
+            if a.a1 == 0 || a.a2 == 0 || a.a4 == 0 {
+                EFI_INVALID_PARAMETER
+            } else {
+                PROTO_NOT_FOUND
+            }
+        }
+        ServiceId::GetNextVariableName => {
+            // (*NameSize, Name*, Guid*): an empty store ends immediately.
+            if a.a1 == 0 || a.a2 == 0 || a.a3 == 0 {
+                EFI_INVALID_PARAMETER
+            } else {
+                PROTO_NOT_FOUND
             }
         }
         ServiceId::Exit => {

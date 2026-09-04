@@ -365,14 +365,33 @@ fn raynu_f_tables_and_console_dispatch() {
 
     // Honest unsupported / not-ready paths.
     let args = ServiceArgs::regs(0, 0, 0, 0);
-    // Exit/UnloadImage and runtime services remain unimplemented.
+    // Protocol notify and most runtime services remain unimplemented; the
+    // variable services answer "no such variable" (no store), never a fake.
     assert_eq!(
-        dispatch(ServiceId::UnloadImage, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        dispatch(ServiceId::RegisterProtocolNotify, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
         EFI_UNSUPPORTED
     );
     assert_eq!(
         dispatch(ServiceId::runtime_service(0), args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
         EFI_UNSUPPORTED
+    );
+    assert_eq!(ServiceId::GetVariable, ServiceId::runtime_service(6));
+    assert_eq!(
+        dispatch(ServiceId::GetVariable, ServiceArgs::regs(base + 0x1900, base + 0x1910, 0, base + 0x1920), &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        0x8000_0000_0000_000E
+    );
+    assert_eq!(
+        dispatch(ServiceId::GetVariable, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        EFI_INVALID_PARAMETER
+    );
+    assert_eq!(
+        dispatch(ServiceId::GetNextVariableName, ServiceArgs::regs(base + 0x1900, base + 0x1910, base + 0x1920, 0), &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        0x8000_0000_0000_000E
+    );
+    // UnloadImage with nothing loaded is a parameter error, not a success.
+    assert_eq!(
+        dispatch(ServiceId::UnloadImage, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        EFI_INVALID_PARAMETER
     );
     assert_eq!(
         dispatch(ServiceId::ConInReadKeyStroke, ServiceArgs::regs(0, base + 0x1900, 0, 0), &guest, &mut sink3, &mut st, &clk, SLAB).status,
@@ -687,10 +706,17 @@ fn raynu_f_memory_events_timer_services() {
     assert_eq!(stack_arg(&guest, stack, 4), None);
     let args = ServiceArgs { a1: p_out, a2: 0, a3: p_out2, a4: p_out3, rsp: stack };
     guest.put_u64(p_out, 0);
+    guest.put_u64(p_out3, 0);
     let d = dispatch(ServiceId::GetMemoryMap, args, &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_BUFFER_TOO_SMALL);
     let need = guest.u64_at(p_out);
     assert!(need >= 8 * MEMORY_DESCRIPTOR_SIZE && need % MEMORY_DESCRIPTOR_SIZE == 0);
+    // The sizing call also reports DescriptorSize/Version (Linux computes its
+    // pool size from desc_size here; nested d7e755d got garbage).
+    assert_eq!(guest.u64_at(p_out3), MEMORY_DESCRIPTOR_SIZE);
+    let mut dv0 = [0u8; 4];
+    guest.read(p_dver, &mut dv0);
+    assert_eq!(u32::from_le_bytes(dv0), 1);
     // Now with a big enough buffer at scratch+0x100.
     let map = scratch + 0x100;
     guest.put_u64(p_out, need);
@@ -1150,7 +1176,7 @@ fn raynu_f_protocols_and_blockio() {
 
     // --- still honestly unsupported ---------------------------------------
     let a0 = ServiceArgs::regs(0, 0, 0, 0);
-    for id in [ServiceId::UnloadImage, ServiceId::ConnectController, ServiceId::ProtocolsPerHandle] {
+    for id in [ServiceId::RegisterProtocolNotify, ServiceId::ConnectController, ServiceId::ProtocolsPerHandle] {
         assert_eq!(dispatch(id, a0, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED, "{}", id.name());
     }
     // Exit is implemented (F6-prep c) but with no started image it is a
@@ -1771,6 +1797,14 @@ fn raynu_f_filesystem_loadimage_startimage() {
     assert_eq!(d.status, EFI_INVALID_PARAMETER);
     assert_eq!(d.exit_image, None);
     assert_eq!(dispatch(ServiceId::Exit, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    // UnloadImage after Exit frees the image pages and its LoadedImage.
+    let free_before = st.pool.free_pages();
+    let img_pages = (st.image_size + 4095) / 4096;
+    assert_eq!(dispatch(ServiceId::UnloadImage, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(st.pool.free_pages() as u64, free_before as u64 + img_pages);
+    assert_eq!(st.image_base, 0);
+    assert_eq!(st.protocols.interface_for(HANDLE_IMAGE, &GUID_LOADED_IMAGE), None);
+    assert_eq!(dispatch(ServiceId::UnloadImage, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
 
     // --- Close releases the slot -------------------------------------------
     let open_before = st.fs.open_count();
