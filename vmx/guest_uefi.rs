@@ -1337,6 +1337,19 @@ pub fn guest_uefi_firmware_wfe_event_pf_insn(b: [u8; 4]) -> bool {
 /// exit so later MMIO / identity-map `#PF`s still hit the HV.
 pub const GUEST_UEFI_EXC_BITMAP_PF: u64 = 1 << 14;
 
+/// Exception bitmap installed at the RayNu-F → Linux hand-off (F6b, ADR-016).
+///
+/// INVARIANTS:
+/// - `#PF` (14), `#UD` (6), `#GP` (13) are **not** intercepted: the kernel
+///   owns its faults; the firmware-phase `#PF` repair path (OVMF identity
+///   rebuild at `0x400000`) must never run against a kernel we launched
+/// - `#DF` (8) stays intercepted so a dead kernel is dumped, not silent
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_raynu_f_handoff_exception_bitmap() -> u32 {
+    guest_uefi_linux_exception_bitmap()
+}
+
 /// `EXIT_REASON_EXCEPTION_NMI` (0) with valid vector 14.
 pub fn guest_uefi_exit_is_page_fault(basic: u32, intr: u64) -> bool {
     basic == 0 && (intr & (1u64 << 31)) != 0 && (intr & 0xff) == 14
@@ -3645,6 +3658,8 @@ static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
 /// CPUID exits taken on the RayNu-F path (first 8 are logged).
 static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
+/// F6b: `ExitBootServices` on RayNu-F handed the VMCS to the Linux exit path.
+static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
 /// `StartImage` caller context for `Exit`: guest RSP at the `out` (points at
 /// the caller's return address) and the MS x64 callee-saved GPRs.
 struct RaynuFStartCtx {
@@ -6340,6 +6355,35 @@ unsafe fn raynu_f_configure_high_ram() {
     serial::write_str(" premapped=");
     write_dec(bytes);
     serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+}
+
+/// F6b: the guest called `ExitBootServices` on RayNu-F — the firmware phase
+/// is over and a kernel owns the machine. Hand the VMCS to the Stage-46
+/// Linux exit path (MSR/CR/xAPIC/virtio/PIT emulation that already booted
+/// Alpine on iron under the OVMF leg) and retire the RayNu-F fast path.
+///
+/// Nested `449f638`: `EBS-OK` then `unexpected exit reason=0x20` (WRMSR) at
+/// `rip=0x300013f` — the kernel's relocated entry code.
+///
+/// Exception intercepts drop to the Linux bitmap first: the firmware-phase
+/// `#PF` handler repairs OVMF's identity tables at `0x400000` (our own CR3
+/// region), which must never run against a kernel we launched.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_linux_handoff() {
+    let _ = ops::vmwrite(
+        EXCEPTION_BITMAP,
+        u64::from(guest_uefi_raynu_f_handoff_exception_bitmap()),
+    );
+    // Kernel printk (earlycon on the guest UART) and hypervisor lines now
+    // share COM; identity-RIP earlycon would otherwise be cut (iron b983ef8).
+    serial::set_linux_earlycon_share(true);
+    RAYNU_F_LINUX_HANDOFF.store(true, Ordering::Release);
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F EBS hand-off to Stage-46 Linux exit path exits=");
+    write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
+    serial::write_str(" svc=");
+    write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
+    serial::write_line(" (F6b; not ISO-INSTALL-OK)");
 }
 
 /// F4: retained product ISO bytes (CD backing store), if any.
@@ -9893,6 +9937,7 @@ unsafe fn handle_raynu_f_service() -> bool {
     }
     if d.exited_boot_services && !RAYNU_F_EBS_LOGGED.swap(true, Ordering::AcqRel) {
         serial::write_line(crate::raynu_f::RAYNU_F_EBS_OK_MARKER);
+        raynu_f_linux_handoff();
     }
     let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
     // Log the opening sequence, then every non-success (capped) — that is the

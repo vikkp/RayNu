@@ -1446,6 +1446,13 @@ fn marker_and_residual_honest() {
         guest_uefi_report_ram_premap_gpa(0, GUEST_UEFI_REPORT_RAM_SLOTS),
         Some(0x0200_0000)
     );
+    // RayNu-F → Linux hand-off (F6b): the kernel owns #PF/#UD/#GP; #DF still exits.
+    let hb = super::guest_uefi_raynu_f_handoff_exception_bitmap();
+    assert_eq!(hb & (1 << 14), 0, "#PF must not run the OVMF identity repair");
+    assert_eq!(hb & (1 << 6), 0, "#UD is Linux alternatives");
+    assert_eq!(hb & (1 << 13), 0, "#GP stays in the guest");
+    assert_ne!(hb & (1 << 8), 0, "#DF is dumped, not silent");
+    assert_eq!(hb, crate::vmx::fields::LINUX_EXCEPTION_BITMAP);
     // RayNu-F high RAM (F6-prep): only the contiguous pre-mapped prefix counts.
     let all = |i: usize| guest_uefi_report_ram_premap_gpa(i, pre_n).unwrap_or(u64::MAX);
     assert_eq!(
