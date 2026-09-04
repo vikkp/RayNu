@@ -6155,13 +6155,13 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     let cr0_fixed1 = cpu::rdmsr(IA32_VMX_CR0_FIXED1);
     let cr0 = (plan.cr0 | cr0_fixed0) & cr0_fixed1;
     let cr4 = guest_cr4_real() | plan.cr4;
-    let entry = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
+    let entry_ctls = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
     let ok = [
         ops::vmwrite(GUEST_CR0, cr0),
         ops::vmwrite(GUEST_CR3, plan.cr3),
         ops::vmwrite(GUEST_CR4, cr4),
         ops::vmwrite(GUEST_IA32_EFER, plan.efer),
-        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry, true)),
+        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry_ctls, true)),
         ops::vmwrite(GUEST_CS_SELECTOR, 0x08),
         ops::vmwrite(GUEST_SS_SELECTOR, 0x10),
         ops::vmwrite(GUEST_DS_SELECTOR, 0x10),
@@ -6190,7 +6190,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         ops::vmwrite(GUEST_GDTR_LIMIT, 0x17),
         ops::vmwrite(GUEST_IDTR_BASE, 0),
         ops::vmwrite(GUEST_IDTR_LIMIT, 0),
-        ops::vmwrite(GUEST_RIP, loaded.entry),
+        ops::vmwrite(GUEST_RIP, entry),
         ops::vmwrite(GUEST_RSP, plan.rsp),
         ops::vmwrite(GUEST_RFLAGS, plan.rflags),
         ops::vmwrite(GUEST_ACTIVITY_STATE, 0),
@@ -6209,7 +6209,7 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // MS x64 ABI entry: RCX = ImageHandle, RDX = *SystemTable.
     SAVED_RAX = 0;
     SAVED_RBX = 0;
-    SAVED_RCX = plan.rcx;
+    SAVED_RCX = image_handle;
     SAVED_RDX = plan.rdx;
     SAVED_RSI = 0;
     SAVED_RDI = 0;
@@ -6223,15 +6223,20 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     SAVED_R14 = 0;
     SAVED_R15 = 0;
     RAYNU_F_EXITS.store(0, Ordering::Release);
-    RAYNU_F_ENTRY.store(loaded.entry, Ordering::Release);
+    RAYNU_F_ENTRY.store(entry, Ordering::Release);
     RAYNU_F_MODE.store(true, Ordering::Release);
     serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
-    write_hex(loaded.entry);
+    write_hex(entry);
     serial::write_str(" system_table=0x");
     write_hex(plan.rdx);
     serial::write_str(" relocs=");
     write_dec(u64::from(loaded.relocs_applied));
-    serial::write_line(" (F2b; not ISO-INSTALL-OK)");
+    serial::write_str(if iso_entry.is_some() {
+        " image=ISO-BOOTX64"
+    } else {
+        " image=test-app"
+    });
+    serial::write_line(" (F2b/F5; not ISO-INSTALL-OK)");
     raynu_f_vmlaunch();
 }
 
