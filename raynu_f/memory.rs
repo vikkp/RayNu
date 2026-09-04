@@ -64,6 +64,22 @@ pub const MEMORY_DESCRIPTOR_SIZE: u64 = 40;
 pub const MEMORY_DESCRIPTOR_VERSION: u32 = 1;
 /// `EFI_MEMORY_WB` attribute for RAM.
 pub const EFI_MEMORY_WB: u64 = 0x8;
+/// `EFI_MEMORY_RUNTIME`: the OS must keep this region mapped (and, for code,
+/// executable) after `ExitBootServices`. Our trampolines live in the
+/// firmware image; nested `0ab0f9d`: Linux `efi_set_virtual_address_map`
+/// jumped to trampoline `0x8003b0` in a region we had typed
+/// `EfiBootServicesData` → mapped NX as free RAM → "kernel tried to execute
+/// NX-protected page" → panic.
+pub const EFI_MEMORY_RUNTIME: u64 = 1 << 63;
+
+/// Attribute word for a descriptor of `typ`.
+pub fn attributes_for(typ: u32) -> u64 {
+    if typ == EFI_RUNTIME_SERVICES_CODE || typ == EFI_RUNTIME_SERVICES_DATA {
+        EFI_MEMORY_WB | EFI_MEMORY_RUNTIME
+    } else {
+        EFI_MEMORY_WB
+    }
+}
 /// Upper bound on descriptors we will emit (coalesced runs). A loader that
 /// fragments the high region can produce many; 256 × 40 B is a 10 KiB map.
 pub const MAX_DESCRIPTORS: usize = 256;
@@ -418,8 +434,11 @@ impl PagePool {
         // stack+GDT). PTs and GDT are live for the guest: Reserved. The
         // unused slack between them is ours, not the loader's.
         push(EFI_RESERVED_MEMORY_TYPE, 0, F2_TABLES_BASE);
+        // The firmware image holds the service trampolines a kernel calls
+        // after EBS (SetVirtualAddressMap, GetVariable): runtime code, kept
+        // mapped and executable by the OS.
         push(
-            EFI_BOOT_SERVICES_DATA,
+            EFI_RUNTIME_SERVICES_CODE,
             F2_TABLES_BASE,
             F2_TABLES_BASE + IMAGE_BYTES as u64,
         );
@@ -471,5 +490,5 @@ pub fn encode_descriptor(run: &MemRun, out: &mut [u8; 40]) {
     out[8..16].copy_from_slice(&run.start.to_le_bytes());
     out[16..24].copy_from_slice(&0u64.to_le_bytes()); // VirtualStart
     out[24..32].copy_from_slice(&run.pages.to_le_bytes());
-    out[32..40].copy_from_slice(&EFI_MEMORY_WB.to_le_bytes());
+    out[32..40].copy_from_slice(&attributes_for(run.typ).to_le_bytes());
 }

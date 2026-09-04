@@ -735,6 +735,7 @@ fn raynu_f_memory_events_timer_services() {
     let n = (need / MEMORY_DESCRIPTOR_SIZE) as usize;
     let mut cursor = 0u64;
     let mut saw_conv = false;
+    let mut saw_rt = false;
     for i in 0..n {
         let d0 = map + i as u64 * MEMORY_DESCRIPTOR_SIZE;
         let mut t = [0u8; 4];
@@ -743,10 +744,24 @@ fn raynu_f_memory_events_timer_services() {
         let start = guest.u64_at(d0 + 8);
         let pages = guest.u64_at(d0 + 24);
         assert_eq!(start, cursor, "descriptor {i} not contiguous");
+        let attr = guest.u64_at(d0 + 32);
         if i == 0 {
             assert_eq!(typ, EFI_RESERVED_MEMORY_TYPE);
             assert_eq!(pages * 4096, 0x0080_0000);
         }
+        if i == 1 {
+            // The firmware image (trampolines + tables) is runtime code the
+            // OS keeps mapped and executable after EBS (nested 0ab0f9d: Linux
+            // executed our SetVirtualAddressMap trampoline from an NX page).
+            assert_eq!(start, 0x0080_0000);
+            assert_eq!(pages * 4096, super::tables::IMAGE_BYTES as u64);
+            assert_eq!(typ, super::memory::EFI_RUNTIME_SERVICES_CODE);
+            assert_ne!(attr & super::memory::EFI_MEMORY_RUNTIME, 0);
+            saw_rt = true;
+        } else {
+            assert_eq!(attr & super::memory::EFI_MEMORY_RUNTIME, 0, "only runtime regions carry RUNTIME");
+        }
+        assert_ne!(attr & super::memory::EFI_MEMORY_WB, 0);
         if typ == EFI_CONVENTIONAL_MEMORY {
             saw_conv = true;
         }
@@ -754,6 +769,7 @@ fn raynu_f_memory_events_timer_services() {
     }
     assert_eq!(cursor, SLAB);
     assert!(saw_conv);
+    assert!(saw_rt);
     // ExitBootServices: wrong key rejected, right key accepted (one-shot).
     assert_eq!(dispatch(ServiceId::ExitBootServices, ServiceArgs::regs(0x5246_0000_0000_0010, key + 7, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
     assert!(!st.pool.exited());

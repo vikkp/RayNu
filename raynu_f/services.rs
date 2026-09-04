@@ -164,6 +164,7 @@ impl ServiceId {
     }
 
     // EFI_RUNTIME_SERVICES entries we answer (spec order: GetTime 0 … ).
+    pub const SetVirtualAddressMap: ServiceId = ServiceId(0x304);
     pub const GetVariable: ServiceId = ServiceId(0x306);
     pub const GetNextVariableName: ServiceId = ServiceId(0x307);
 
@@ -280,6 +281,7 @@ impl ServiceId {
             ServiceId::FileGetInfo => "File.GetInfo",
             ServiceId::FileSetInfo => "File.SetInfo",
             ServiceId::FileFlush => "File.Flush",
+            ServiceId::SetVirtualAddressMap => "RT.SetVirtualAddressMap",
             ServiceId::GetVariable => "RT.GetVariable",
             ServiceId::GetNextVariableName => "RT.GetNextVariableName",
             ServiceId(v) if (Self::BOOT_BASE..Self::BOOT_BASE + 44).contains(&v) => "BootServices",
