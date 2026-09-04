@@ -129,8 +129,20 @@ if [[ "$REQUIRE_VMX" == "1" ]] && [[ -f /sys/module/kvm_intel/parameters/enable_
   fi
 fi
 
-echo "==> Building EFI"
-"$ROOT/tools/build.sh"
+# SKIP_BUILD=1 boots the EFI already at target/<target>/release (e.g. a CI
+# artifact from `gh run download`) instead of rebuilding from the checked-out
+# source. Without it, HEAD -- not the downloaded file -- is what gets tested.
+if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+  PREBUILT="$ROOT/target/x86_64-unknown-uefi/release/r640-hypervisor.efi"
+  if [[ ! -f "$PREBUILT" ]]; then
+    echo "error: SKIP_BUILD=1 but $PREBUILT is missing" >&2
+    exit 1
+  fi
+  echo "==> SKIP_BUILD=1: using prebuilt EFI $(sha256sum "$PREBUILT" | cut -c1-16)... ($(wc -c <"$PREBUILT") bytes)"
+else
+  echo "==> Building EFI"
+  "$ROOT/tools/build.sh"
+fi
 
 # M3.8: prefer real tinyconfig asset; proto fixture only if nothing present.
 if [[ ! -f "$ROOT/assets/bzImage" ]]; then
