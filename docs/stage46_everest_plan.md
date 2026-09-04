@@ -51,6 +51,18 @@ as a read-only diagnostic/fallback with forcing disabled
 nested/QEMU (already reaches ATAPI-OK); reserve iron flashes for
 iron-specific confirmation.
 
+### RayNu-F ladder (tick only on evidence; details in ADR-016)
+
+| # | Status | Proof |
+|---|--------|-------|
+| F0 | **DONE** | `RAYNU-V-RAYNU-F-SCAFFOLD-OK` (host) |
+| F1 | **DONE (host)** | `RAYNU-V-RAYNU-F-TABLES-OK`: byte-exact UEFI 2.10 tables + valid CRC32s + trampolines round-trip + `ConOut.OutputString` lands on the sink; service port `0x5246` wired into `emulate_io_port`. No guest has run it. |
+| F2 | OPEN | PE32+ loader + long-mode launch; live guest `OutputString` → serial `RAYNU-V-RAYNU-F-CONOUT-OK` (guest VM-exit only; never host/CI). Proven on nested/QEMU first. |
+| F3 | BLOCKED | memory services + owned timer tick |
+| F4 | BLOCKED | BlockIo over CD + virtio-blk |
+| F5 | BLOCKED | SimpleFileSystem + LoadImage/StartImage of the ISO's `BOOTX64.EFI` |
+| F6 | BLOCKED | iron `RAYNU-V-M7-ISO-INSTALL-OK` |
+
 ## Stop rules
 
 - **Do not mutate third-party firmware internal state** (force returns, skip its

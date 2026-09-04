@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 4e16b59 event #PF inject fired OVMF own #PF + CpuDeadLoop still ataio=0; confirmed 3k–3o was self-inflicted (forcing OVMF internal state). **Pivot ADR-016: be the guest firmware ourselves — RayNu-F** (own EFI system table + boot services; skeleton `raynu_f/`); 3k–3o forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); No third-party firmware state mutation. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. OVMF forcing family closed; RayNu-F scaffold (`RAYNU-V-RAYNU-F-SCAFFOLD-OK`), not the iron OK. |
-| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b–3o FAIL → pivot RayNu-F). ADR-016 + governance (No third-party firmware state mutation). Not Everest E5. |
+| Summary | **RayNu-F F1 closed (host):** byte-exact UEFI 2.10 x64 `EFI_SYSTEM_TABLE`/`EFI_BOOT_SERVICES`(44)/`EFI_RUNTIME_SERVICES`(14)/`SIMPLE_TEXT_OUTPUT+INPUT` with valid CRC32s and `L"RayNu-F"` vendor; 14-byte guest trampolines turn every service call into an I/O exit on port `0x5246` (no VMCALL; outside Proven Core); host dispatcher implements `ConOut.OutputString` (serial), boot/runtime honestly `EFI_UNSUPPORTED`; wired into `emulate_io_port`. `RAYNU-V-RAYNU-F-TABLES-OK`. **No guest has executed the tables yet** (F2 loader+launch next; `RAYNU-F-CONOUT-OK` is guest-exit-only). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Tables/dispatch are real host-tested code, not bookkeeping; not counted toward E5 until a guest runs them. |
+| Gates touched | RayNu-F F0 DONE, F1 DONE (host), F2 OPEN. Stage 46 OVMF forcing family closed (ADR-016). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | RayNu-F F1 closed (host): byte-exact UEFI 2.10 tables + CRC32 + 0x5246 trampolines + ConOut.OutputString dispatcher wired into emulate_io_port (RAYNU-V-RAYNU-F-TABLES-OK); no guest has run them (F2 loader+launch next); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Iron COM2 4e16b59 event #PF inject fired OVMF own #PF + CpuDeadLoop still ataio=0; pivot ADR-016 be the guest firmware (RayNu-F scaffold); 3k–3o OVMF forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); No third-party firmware state mutation; do not F11 33820727776; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; #229 firmware WFE event #PF; do not F11 33817483733; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 d0e44d4 WFE skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3); #229 firmware WFE state4 poke; do not F11 33815993163; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
