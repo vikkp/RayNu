@@ -34,6 +34,26 @@ pub const GUID_DEVICE_PATH: Guid = [
 /// Handles RayNu-F publishes. Tagged like the console handles in `tables.rs`.
 pub const HANDLE_CD: u64 = 0x5246_0000_0000_0020;
 pub const HANDLE_DISK: u64 = 0x5246_0000_0000_0021;
+/// Handle for the image `LoadImage` staged (F5).
+pub const HANDLE_IMAGE: u64 = 0x5246_0000_0000_0022;
+
+/// `EFI_LOADED_IMAGE_PROTOCOL` field offsets (x64) and size.
+pub const LOADED_IMAGE_REVISION_OFF: usize = 0x00;
+pub const LOADED_IMAGE_PARENT_OFF: usize = 0x08;
+pub const LOADED_IMAGE_SYSTEM_TABLE_OFF: usize = 0x10;
+pub const LOADED_IMAGE_DEVICE_HANDLE_OFF: usize = 0x18;
+pub const LOADED_IMAGE_FILE_PATH_OFF: usize = 0x20;
+pub const LOADED_IMAGE_RESERVED_OFF: usize = 0x28;
+pub const LOADED_IMAGE_LOAD_OPTIONS_SIZE_OFF: usize = 0x30;
+pub const LOADED_IMAGE_LOAD_OPTIONS_OFF: usize = 0x38;
+pub const LOADED_IMAGE_IMAGE_BASE_OFF: usize = 0x40;
+pub const LOADED_IMAGE_IMAGE_SIZE_OFF: usize = 0x48;
+pub const LOADED_IMAGE_IMAGE_CODE_TYPE_OFF: usize = 0x50;
+pub const LOADED_IMAGE_IMAGE_DATA_TYPE_OFF: usize = 0x54;
+pub const LOADED_IMAGE_UNLOAD_OFF: usize = 0x58;
+pub const LOADED_IMAGE_SIZE: usize = 0x60;
+/// `EFI_LOADED_IMAGE_PROTOCOL_REVISION`.
+pub const LOADED_IMAGE_REVISION: u32 = 0x1000;
 
 /// `EFI_LOCATE_SEARCH_TYPE`.
 pub const ALL_HANDLES: u32 = 0;

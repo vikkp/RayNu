@@ -33,6 +33,7 @@ use super::blockio::{
     lba_offset, validate_transfer, BlockMedia, EFI_DEVICE_ERROR as BLK_DEVICE_ERROR,
     MAX_TRANSFER_BYTES,
 };
+use super::filesystem::{FileSystem, FILE_SLOTS, MAX_PATH_BYTES};
 use super::protocol::{
     Guid, Protocols, ALL_HANDLES, BY_PROTOCOL, EFI_BUFFER_TOO_SMALL as PROTO_BUFFER_TOO_SMALL,
     EFI_NOT_FOUND as PROTO_NOT_FOUND, MAX_HANDLES,
@@ -44,7 +45,7 @@ pub const RAYNU_F_SERVICE_PORT: u16 = 0x5246;
 /// Each trampoline slot is 16 bytes (14 used + 2 NOP pad).
 pub const TRAMPOLINE_SLOT_BYTES: usize = 16;
 /// Number of service slots we lay out (11 console + 44 boot + 14 runtime + 4 BlockIo).
-pub const TRAMPOLINE_SLOT_COUNT: usize = 73;
+pub const TRAMPOLINE_SLOT_COUNT: usize = 84;
 /// Exact stub length before padding.
 pub const TRAMPOLINE_STUB_BYTES: usize = 14;
 
@@ -76,6 +77,8 @@ impl ServiceId {
     pub const BOOT_BASE: u32 = 0x200;
     pub const RUNTIME_BASE: u32 = 0x300;
     pub const BLOCKIO_BASE: u32 = 0x400;
+    pub const SFS_BASE: u32 = 0x500;
+    pub const FILE_BASE: u32 = 0x510;
 
     pub const ConOutReset: ServiceId = ServiceId(0x100);
     pub const ConOutOutputString: ServiceId = ServiceId(0x101);
@@ -141,6 +144,20 @@ impl ServiceId {
     pub const BlockIoWriteBlocks: ServiceId = ServiceId(0x402);
     pub const BlockIoFlushBlocks: ServiceId = ServiceId(0x403);
 
+    // EFI_SIMPLE_FILE_SYSTEM_PROTOCOL.
+    pub const SfsOpenVolume: ServiceId = ServiceId(0x500);
+    // EFI_FILE_PROTOCOL (spec order).
+    pub const FileOpen: ServiceId = ServiceId(0x510);
+    pub const FileClose: ServiceId = ServiceId(0x511);
+    pub const FileDelete: ServiceId = ServiceId(0x512);
+    pub const FileRead: ServiceId = ServiceId(0x513);
+    pub const FileWrite: ServiceId = ServiceId(0x514);
+    pub const FileGetPosition: ServiceId = ServiceId(0x515);
+    pub const FileSetPosition: ServiceId = ServiceId(0x516);
+    pub const FileGetInfo: ServiceId = ServiceId(0x517);
+    pub const FileSetInfo: ServiceId = ServiceId(0x518);
+    pub const FileFlush: ServiceId = ServiceId(0x519);
+
     /// Boot service `i` in `EFI_BOOT_SERVICES` spec order (0 = RaiseTPL).
     pub const fn boot_service(i: usize) -> ServiceId {
         ServiceId(Self::BOOT_BASE + i as u32)
@@ -164,6 +181,10 @@ impl ServiceId {
             Some(55 + (v - Self::RUNTIME_BASE) as usize)
         } else if v >= Self::BLOCKIO_BASE && v < Self::BLOCKIO_BASE + 4 {
             Some(69 + (v - Self::BLOCKIO_BASE) as usize)
+        } else if v == Self::SFS_BASE {
+            Some(73)
+        } else if v >= Self::FILE_BASE && v < Self::FILE_BASE + 10 {
+            Some(74 + (v - Self::FILE_BASE) as usize)
         } else {
             None
         }
@@ -179,8 +200,12 @@ impl ServiceId {
             Some(ServiceId(Self::BOOT_BASE + (slot - 11) as u32))
         } else if slot < 69 {
             Some(ServiceId(Self::RUNTIME_BASE + (slot - 55) as u32))
-        } else if slot < TRAMPOLINE_SLOT_COUNT {
+        } else if slot < 73 {
             Some(ServiceId(Self::BLOCKIO_BASE + (slot - 69) as u32))
+        } else if slot == 73 {
+            Some(ServiceId(Self::SFS_BASE))
+        } else if slot < TRAMPOLINE_SLOT_COUNT {
+            Some(ServiceId(Self::FILE_BASE + (slot - 74) as u32))
         } else {
             None
         }
@@ -240,6 +265,17 @@ impl ServiceId {
             ServiceId::BlockIoReadBlocks => "BlockIo.ReadBlocks",
             ServiceId::BlockIoWriteBlocks => "BlockIo.WriteBlocks",
             ServiceId::BlockIoFlushBlocks => "BlockIo.FlushBlocks",
+            ServiceId::SfsOpenVolume => "Sfs.OpenVolume",
+            ServiceId::FileOpen => "File.Open",
+            ServiceId::FileClose => "File.Close",
+            ServiceId::FileDelete => "File.Delete",
+            ServiceId::FileRead => "File.Read",
+            ServiceId::FileWrite => "File.Write",
+            ServiceId::FileGetPosition => "File.GetPosition",
+            ServiceId::FileSetPosition => "File.SetPosition",
+            ServiceId::FileGetInfo => "File.GetInfo",
+            ServiceId::FileSetInfo => "File.SetInfo",
+            ServiceId::FileFlush => "File.Flush",
             ServiceId(v) if (Self::BOOT_BASE..Self::BOOT_BASE + 44).contains(&v) => "BootServices",
             ServiceId(v) if (Self::RUNTIME_BASE..Self::RUNTIME_BASE + 14).contains(&v) => {
                 "RuntimeServices"
@@ -369,6 +405,22 @@ pub struct FirmwareState {
     pub media_disk: BlockMedia,
     pub read_blocks: Option<BlockReadFn>,
     pub write_blocks: Option<BlockWriteFn>,
+    /// F5: mounted FAT volume + open-file table.
+    pub fs: FileSystem,
+    /// Base GPA of the per-slot `EFI_FILE_PROTOCOL` array, and the SFS struct.
+    pub file_proto_base: u64,
+    pub sfs: u64,
+    /// Byte offset of the FAT volume inside the CD backing store (the El
+    /// Torito boot image extent).
+    pub fat_volume_off: u64,
+    /// F5: the one image `LoadImage` has staged, if any.
+    pub loaded_image_proto: u64,
+    pub image_handle: u64,
+    pub image_base: u64,
+    pub image_size: u64,
+    pub image_entry: u64,
+    /// System table GPA (handed to a started image in RDX).
+    pub system_table: u64,
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
@@ -387,6 +439,16 @@ impl FirmwareState {
             media_disk: BlockMedia::disk(0),
             read_blocks: None,
             write_blocks: None,
+            fs: FileSystem::new(),
+            file_proto_base: 0,
+            sfs: 0,
+            fat_volume_off: 0,
+            loaded_image_proto: 0,
+            image_handle: 0,
+            image_base: 0,
+            image_size: 0,
+            image_entry: 0,
+            system_table: 0,
             block_reads: 0,
             block_writes: 0,
         }
@@ -419,6 +481,14 @@ pub struct Dispatched {
     pub exited_boot_services: bool,
     /// A `BlockIo` read or write completed on this call.
     pub block_io_ok: bool,
+    /// A file read through `EFI_FILE_PROTOCOL` completed on this call.
+    pub file_read_ok: bool,
+    /// `LoadImage` staged an image on this call.
+    pub image_loaded: bool,
+    /// `StartImage`: redirect the guest to `(entry, image_handle)` instead of
+    /// returning to the caller. The caller's return address stays on the
+    /// stack, so the image's `ret` lands back after the `StartImage` call.
+    pub start_image: Option<(u64, u64)>,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -728,6 +798,132 @@ fn block_transfer(
     EFI_SUCCESS
 }
 
+/// A `VolumeRead` over the CD backing store, offset by the FAT volume's
+/// extent inside the ISO (the El Torito boot image).
+struct FatVolumeReader<'a> {
+    read: BlockReadFn,
+    base: u64,
+    media_id: u32,
+    _mem: &'a (),
+}
+
+impl super::fat::VolumeRead for FatVolumeReader<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        (self.read)(self.media_id, self.base + off, buf)
+    }
+}
+
+/// `This` pointer → open-file slot index.
+fn file_slot_of(st: &FirmwareState, this: u64) -> Option<usize> {
+    let base = st.file_proto_base;
+    if base == 0 || this < base {
+        return None;
+    }
+    let stride = super::tables::IMAGE_FILE_PROTO_STRIDE as u64;
+    let d = this - base;
+    if d % stride != 0 {
+        return None;
+    }
+    let slot = (d / stride) as usize;
+    if slot < FILE_SLOTS {
+        Some(slot)
+    } else {
+        None
+    }
+}
+
+/// Read a NUL-terminated CHAR16 path from the guest into ASCII.
+fn read_guest_path(mem: &dyn GuestMem, addr: u64, out: &mut [u8; MAX_PATH_BYTES]) -> Option<usize> {
+    if addr == 0 {
+        return None;
+    }
+    let mut units = [0u16; MAX_PATH_BYTES];
+    for (i, u) in units.iter_mut().enumerate() {
+        let mut b = [0u8; 2];
+        if mem.read(addr + i as u64 * 2, &mut b) < 2 {
+            return None;
+        }
+        *u = u16::from_le_bytes(b);
+        if *u == 0 {
+            break;
+        }
+    }
+    super::filesystem::utf16_path_to_ascii(&units, out)
+}
+
+/// `LoadImage(BootPolicy, Parent, DevicePath, SourceBuffer, SourceSize, *ImageHandle)`.
+/// Only the `SourceBuffer` form is supported; a `DevicePath`-only load needs
+/// device-path parsing we do not publish (honest `EFI_UNSUPPORTED`).
+fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u64, bool) {
+    let Some(src_size) = stack_arg(mem, a.rsp, 5) else {
+        return (EFI_INVALID_PARAMETER, false);
+    };
+    let Some(p_handle) = stack_arg(mem, a.rsp, 6) else {
+        return (EFI_INVALID_PARAMETER, false);
+    };
+    let src = a.a4;
+    if src == 0 || src_size == 0 {
+        return (EFI_UNSUPPORTED, false);
+    }
+    if p_handle == 0 {
+        return (EFI_INVALID_PARAMETER, false);
+    }
+    // Parse enough to size the image, then allocate from our pool.
+    let mut hdr = [0u8; super::pe::MAX_HEADER_BYTES];
+    let take = (src_size as usize).min(super::pe::MAX_HEADER_BYTES);
+    if take < 0x40 || mem.read(src, &mut hdr[..take]) < take {
+        return (EFI_INVALID_PARAMETER, false);
+    }
+    let Ok(pe) = super::pe::parse_pe32plus(&hdr[..take]) else {
+        // Not a PE32+ x64 EFI application.
+        return (0x8000_0000_0000_0012, false); // EFI_LOAD_ERROR
+    };
+    let pages = (u64::from(pe.size_of_image) + 4095) / 4096;
+    let (status, base) = st.pool.allocate_pages(
+        super::memory::ALLOCATE_ANY_PAGES,
+        super::memory::EFI_LOADER_CODE,
+        pages,
+        0,
+    );
+    if status != EFI_SUCCESS {
+        return (status, false);
+    }
+    let loaded = match super::pe::load_pe32plus_guest(mem, src, src_size, base, pages * 4096) {
+        Ok(l) => l,
+        Err(_) => {
+            let _ = st.pool.free_pages_at(base, pages);
+            return (0x8000_0000_0000_0012, false); // EFI_LOAD_ERROR
+        }
+    };
+    st.image_base = loaded.load_base;
+    st.image_size = u64::from(loaded.size_of_image);
+    st.image_entry = loaded.entry;
+    st.image_handle = super::protocol::HANDLE_IMAGE;
+    // Publish EFI_LOADED_IMAGE_PROTOCOL for the started image.
+    if st.loaded_image_proto != 0 {
+        let li = st.loaded_image_proto;
+        let ok = write_u32(mem, li + super::protocol::LOADED_IMAGE_REVISION_OFF as u64, super::protocol::LOADED_IMAGE_REVISION)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_PARENT_OFF as u64, a.a2)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_SYSTEM_TABLE_OFF as u64, st.system_table)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_BASE_OFF as u64, st.image_base)
+            && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_SIZE_OFF as u64, st.image_size);
+        if !ok {
+            let _ = st.pool.free_pages_at(base, pages);
+            return (EFI_INVALID_PARAMETER, false);
+        }
+        let _ = st.protocols.install(
+            st.image_handle,
+            super::protocol::GUID_LOADED_IMAGE,
+            li,
+        );
+    }
+    if !write_u64(mem, p_handle, st.image_handle) {
+        let _ = st.pool.free_pages_at(base, pages);
+        return (EFI_INVALID_PARAMETER, false);
+    }
+    (EFI_SUCCESS, true)
+}
+
 /// Dispatch one RayNu-F service call. Console, memory, event/timer, TPL,
 /// misc boot services, the handle/protocol database and `BlockIo` are
 /// implemented; image services (`LoadImage`/`StartImage`),
@@ -749,6 +945,9 @@ pub fn dispatch(
         alloc_ok: false,
         exited_boot_services: false,
         block_io_ok: false,
+        file_read_ok: false,
+        image_loaded: false,
+        start_image: None,
     };
     let a = args;
     out.status = match id {
@@ -1026,7 +1225,197 @@ pub fn dispatch(
             }
         }
 
-        // ---- not yet (F5): images, SimpleFileSystem, runtime -------------
+        // ---- SimpleFileSystem / EFI_FILE_PROTOCOL (F5) -------------------
+        ServiceId::SfsOpenVolume => {
+            // (This, **Root)
+            if a.a1 == 0 || a.a1 != st.sfs || a.a2 == 0 {
+                EFI_INVALID_PARAMETER
+            } else {
+                let (status, handle) = st.fs.open_volume();
+                if status == EFI_SUCCESS {
+                    let slot = (handle & 0xFFF) as u64;
+                    let this = st.file_proto_base
+                        + slot * super::tables::IMAGE_FILE_PROTO_STRIDE as u64;
+                    if write_u64(mem, a.a2, this) {
+                        EFI_SUCCESS
+                    } else {
+                        let _ = st.fs.close(handle);
+                        EFI_INVALID_PARAMETER
+                    }
+                } else {
+                    status
+                }
+            }
+        }
+        ServiceId::FileOpen => {
+            // (This, **New, FileName, OpenMode, Attributes) — 5th on stack.
+            let Some(slot) = file_slot_of(st, a.a1) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            let mut path = [0u8; MAX_PATH_BYTES];
+            let Some(n) = read_guest_path(mem, a.a3, &mut path) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            let Some(read) = st.read_blocks else {
+                return finish(out, EFI_DEVICE_ERROR);
+            };
+            let r = FatVolumeReader {
+                read,
+                base: st.fat_volume_off,
+                media_id: super::blockio::MEDIA_ID_CD,
+                _mem: &(),
+            };
+            let this_handle = FileSystem::handle_for(slot);
+            let (status, handle) = st.fs.open(this_handle, &path[..n], a.a4, &r);
+            if status == EFI_SUCCESS {
+                let ns = (handle & 0xFFF) as u64;
+                let newthis =
+                    st.file_proto_base + ns * super::tables::IMAGE_FILE_PROTO_STRIDE as u64;
+                if a.a2 != 0 && write_u64(mem, a.a2, newthis) {
+                    EFI_SUCCESS
+                } else {
+                    let _ = st.fs.close(handle);
+                    EFI_INVALID_PARAMETER
+                }
+            } else {
+                status
+            }
+        }
+        ServiceId::FileClose => match file_slot_of(st, a.a1) {
+            Some(slot) => st.fs.close(FileSystem::handle_for(slot)),
+            None => EFI_INVALID_PARAMETER,
+        },
+        ServiceId::FileRead => {
+            // (This, *BufferSize, Buffer)
+            let Some(slot) = file_slot_of(st, a.a1) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            let Some(want) = read_u64(mem, a.a2) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            let Some(read) = st.read_blocks else {
+                return finish(out, EFI_DEVICE_ERROR);
+            };
+            let r = FatVolumeReader {
+                read,
+                base: st.fat_volume_off,
+                media_id: super::blockio::MEDIA_ID_CD,
+                _mem: &(),
+            };
+            let h = FileSystem::handle_for(slot);
+            let mut buf = [0u8; 4096];
+            let mut done = 0u64;
+            let mut status = EFI_SUCCESS;
+            while done < want {
+                let chunk = (want - done).min(4096) as usize;
+                let (s, n) = st.fs.read(h, &mut buf[..chunk], &r);
+                if s != EFI_SUCCESS {
+                    status = s;
+                    break;
+                }
+                if n == 0 {
+                    break; // EOF
+                }
+                if a.a3 == 0 || mem.write(a.a3 + done, &buf[..n]) != n {
+                    status = EFI_INVALID_PARAMETER;
+                    break;
+                }
+                done += n as u64;
+                if n < chunk {
+                    break;
+                }
+            }
+            if status == EFI_SUCCESS {
+                if write_u64(mem, a.a2, done) {
+                    out.file_read_ok = done > 0;
+                    EFI_SUCCESS
+                } else {
+                    EFI_INVALID_PARAMETER
+                }
+            } else {
+                status
+            }
+        }
+        ServiceId::FileGetPosition => match file_slot_of(st, a.a1) {
+            Some(slot) => match st.fs.position(FileSystem::handle_for(slot)) {
+                Some(p) if a.a2 != 0 && write_u64(mem, a.a2, p) => EFI_SUCCESS,
+                _ => EFI_INVALID_PARAMETER,
+            },
+            None => EFI_INVALID_PARAMETER,
+        },
+        ServiceId::FileSetPosition => match file_slot_of(st, a.a1) {
+            Some(slot) => st.fs.set_position(FileSystem::handle_for(slot), a.a2),
+            None => EFI_INVALID_PARAMETER,
+        },
+        ServiceId::FileGetInfo => {
+            // (This, *InfoType, *BufferSize, Buffer) — only EFI_FILE_INFO.
+            let Some(slot) = file_slot_of(st, a.a1) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            match read_guid(mem, a.a2) {
+                Some(g) if g == super::filesystem::GUID_FILE_INFO => {
+                    let Some(size) = read_u64(mem, a.a3) else {
+                        return finish(out, EFI_INVALID_PARAMETER);
+                    };
+                    let mut info = [0u8; 512];
+                    let cap = (size as usize).min(info.len());
+                    let (status, need) =
+                        st.fs.file_info(FileSystem::handle_for(slot), &mut info[..cap]);
+                    let _ = write_u64(mem, a.a3, need);
+                    if status == EFI_SUCCESS {
+                        if a.a4 != 0 && mem.write(a.a4, &info[..need as usize]) == need as usize {
+                            EFI_SUCCESS
+                        } else {
+                            EFI_INVALID_PARAMETER
+                        }
+                    } else {
+                        status
+                    }
+                }
+                Some(_) => EFI_UNSUPPORTED, // FileSystemInfo / VolumeLabel not published
+                None => EFI_INVALID_PARAMETER,
+            }
+        }
+        // Read-only volume: these are refused honestly, not silently ignored.
+        ServiceId::FileWrite | ServiceId::FileDelete | ServiceId::FileSetInfo => {
+            if file_slot_of(st, a.a1).is_some() {
+                0x8000_0000_0000_0008 // EFI_WRITE_PROTECTED
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+        ServiceId::FileFlush => {
+            if file_slot_of(st, a.a1).is_some() {
+                EFI_SUCCESS
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+
+        // ---- image services (F5) ---------------------------------------
+        ServiceId::LoadImage => {
+            let (status, ok) = load_image(st, mem, a);
+            out.image_loaded = ok;
+            status
+        }
+        ServiceId::StartImage => {
+            // (ImageHandle, *ExitDataSize, **ExitData)
+            if st.image_entry == 0 || a.a1 != st.image_handle {
+                EFI_INVALID_PARAMETER
+            } else {
+                // Zero the optional ExitData out-params; we never produce any.
+                if a.a2 != 0 {
+                    let _ = write_u64(mem, a.a2, 0);
+                }
+                if a.a3 != 0 {
+                    let _ = write_u64(mem, a.a3, 0);
+                }
+                out.start_image = Some((st.image_entry, st.image_handle));
+                EFI_SUCCESS
+            }
+        }
+
+        // ---- not yet: Exit/UnloadImage, runtime services ----------------
         _ => EFI_UNSUPPORTED,
     };
     out.block_io_ok = matches!(

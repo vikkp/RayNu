@@ -92,8 +92,18 @@ pub const IMAGE_MEDIA_DISK_OFF: usize = 0x16C0;
 pub const IMAGE_GUID_BLOCK_IO_OFF: usize = 0x1700;
 pub const IMAGE_GUID_SIMPLE_FS_OFF: usize = 0x1710;
 pub const IMAGE_GUID_LOADED_IMAGE_OFF: usize = 0x1720;
-/// Total bytes the image needs (two 4 KiB pages).
-pub const IMAGE_BYTES: usize = 0x2000;
+/// F5: `EFI_SIMPLE_FILE_SYSTEM_PROTOCOL`, then one `EFI_FILE_PROTOCOL`
+/// instance per open-file slot (a guest calls `This->Read(This, ...)`, so
+/// each handle needs its own struct), then a `LoadedImage` for the started
+/// image and its `EFI_FILE_INFO` GUID.
+pub const IMAGE_SFS_OFF: usize = 0x1740;
+pub const IMAGE_GUID_FILE_INFO_OFF: usize = 0x1760;
+pub const IMAGE_LOADED_IMAGE_OFF: usize = 0x1780;
+pub const IMAGE_FILE_PROTO_OFF: usize = 0x1800;
+/// Stride per file-protocol instance (0x58 rounded up for alignment).
+pub const IMAGE_FILE_PROTO_STRIDE: usize = 0x60;
+/// Total bytes the image needs (three 4 KiB pages: tables + 16 file protos).
+pub const IMAGE_BYTES: usize = 0x3000;
 
 /// Handles are opaque non-null values the guest hands back to us. We use
 /// small tagged constants rather than real memory so a stray dereference
@@ -121,6 +131,10 @@ pub struct FirmwareImageLayout {
     pub guid_block_io: u64,
     pub guid_simple_fs: u64,
     pub guid_loaded_image: u64,
+    pub sfs: u64,
+    pub guid_file_info: u64,
+    pub loaded_image: u64,
+    pub file_proto_base: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,6 +249,10 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         guid_block_io: base + IMAGE_GUID_BLOCK_IO_OFF as u64,
         guid_simple_fs: base + IMAGE_GUID_SIMPLE_FS_OFF as u64,
         guid_loaded_image: base + IMAGE_GUID_LOADED_IMAGE_OFF as u64,
+        sfs: base + IMAGE_SFS_OFF as u64,
+        guid_file_info: base + IMAGE_GUID_FILE_INFO_OFF as u64,
+        loaded_image: base + IMAGE_LOADED_IMAGE_OFF as u64,
+        file_proto_base: base + IMAGE_FILE_PROTO_OFF as u64,
     };
 
     // Trampoline page: one stub per service slot.
@@ -382,6 +400,36 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         .copy_from_slice(&super::protocol::GUID_SIMPLE_FILE_SYSTEM);
     buf[IMAGE_GUID_LOADED_IMAGE_OFF..IMAGE_GUID_LOADED_IMAGE_OFF + 16]
         .copy_from_slice(&super::protocol::GUID_LOADED_IMAGE);
+    buf[IMAGE_GUID_FILE_INFO_OFF..IMAGE_GUID_FILE_INFO_OFF + 16]
+        .copy_from_slice(&super::filesystem::GUID_FILE_INFO);
+
+    // F5: EFI_SIMPLE_FILE_SYSTEM_PROTOCOL.
+    put_u64(buf, IMAGE_SFS_OFF + super::filesystem::SFS_REVISION_OFF, super::filesystem::SFS_REVISION);
+    put_u64(
+        buf,
+        IMAGE_SFS_OFF + super::filesystem::SFS_OPEN_VOLUME_OFF,
+        trampoline_slot_gpa(layout.trampolines, ServiceId::SfsOpenVolume),
+    );
+    // One EFI_FILE_PROTOCOL per open-file slot; all share the trampolines and
+    // are distinguished by `This`.
+    for slot in 0..super::filesystem::FILE_SLOTS {
+        let f = IMAGE_FILE_PROTO_OFF + slot * IMAGE_FILE_PROTO_STRIDE;
+        put_u64(buf, f + super::filesystem::FILE_REVISION_OFF, super::filesystem::FILE_REVISION);
+        for (off, id) in [
+            (super::filesystem::FILE_OPEN_OFF, ServiceId::FileOpen),
+            (super::filesystem::FILE_CLOSE_OFF, ServiceId::FileClose),
+            (super::filesystem::FILE_DELETE_OFF, ServiceId::FileDelete),
+            (super::filesystem::FILE_READ_OFF, ServiceId::FileRead),
+            (super::filesystem::FILE_WRITE_OFF, ServiceId::FileWrite),
+            (super::filesystem::FILE_GET_POSITION_OFF, ServiceId::FileGetPosition),
+            (super::filesystem::FILE_SET_POSITION_OFF, ServiceId::FileSetPosition),
+            (super::filesystem::FILE_GET_INFO_OFF, ServiceId::FileGetInfo),
+            (super::filesystem::FILE_SET_INFO_OFF, ServiceId::FileSetInfo),
+            (super::filesystem::FILE_FLUSH_OFF, ServiceId::FileFlush),
+        ] {
+            put_u64(buf, f + off, trampoline_slot_gpa(layout.trampolines, id));
+        }
+    }
 
     Ok(layout)
 }

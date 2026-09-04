@@ -205,6 +205,160 @@ pub fn section(file: &[u8], pe: &PeImage, i: u16) -> Option<Section> {
     })
 }
 
+/// Largest PE header region we will pull into a stack buffer to parse.
+pub const MAX_HEADER_BYTES: usize = 4096;
+
+/// Load a PE32+ that lives in **guest memory** at `src` (`src_len` bytes) to
+/// `dst` in guest memory, using a `GuestMem` for every access. Mirrors
+/// [`load_pe32plus`] for the `LoadImage(SourceBuffer)` path, where both the
+/// file and the destination are the guest's.
+///
+/// The header region is copied into a bounded stack buffer to parse; sections
+/// and relocations stream through 4 KiB chunks so nothing unbounded is held.
+pub fn load_pe32plus_guest(
+    mem: &dyn super::services::GuestMem,
+    src: u64,
+    src_len: u64,
+    dst: u64,
+    dst_len: u64,
+) -> Result<Loaded, PeError> {
+    if dst & 0xfff != 0 {
+        return Err(PeError::LoadBaseUnaligned);
+    }
+    // Parse from a bounded header window.
+    let hdr_take = (src_len as usize).min(MAX_HEADER_BYTES);
+    if hdr_take < 0x40 {
+        return Err(PeError::TooShort);
+    }
+    let mut hdr = [0u8; MAX_HEADER_BYTES];
+    if mem.read(src, &mut hdr[..hdr_take]) < hdr_take {
+        return Err(PeError::TooShort);
+    }
+    let pe = parse_pe32plus(&hdr[..hdr_take])?;
+    let image_len = pe.size_of_image as u64;
+    if dst_len < image_len {
+        return Err(PeError::DestinationTooSmall);
+    }
+    if u64::from(pe.size_of_headers) > src_len {
+        return Err(PeError::HeadersOutOfFile);
+    }
+
+    // Zero the destination image.
+    let zero = [0u8; 4096];
+    let mut done = 0u64;
+    while done < image_len {
+        let chunk = (image_len - done).min(4096) as usize;
+        if mem.write(dst + done, &zero[..chunk]) != chunk {
+            return Err(PeError::DestinationTooSmall);
+        }
+        done += chunk as u64;
+    }
+
+    // Copy a guest→guest byte range through a bounded buffer.
+    let mut copy = |from: u64, to: u64, len: u64| -> bool {
+        let mut buf = [0u8; 4096];
+        let mut n = 0u64;
+        while n < len {
+            let chunk = (len - n).min(4096) as usize;
+            if mem.read(from + n, &mut buf[..chunk]) != chunk
+                || mem.write(to + n, &buf[..chunk]) != chunk
+            {
+                return false;
+            }
+            n += chunk as u64;
+        }
+        true
+    };
+
+    // Headers.
+    if !copy(src, dst, u64::from(pe.size_of_headers)) {
+        return Err(PeError::HeadersOutOfFile);
+    }
+
+    // Sections.
+    let mut loaded = 0u16;
+    for i in 0..pe.num_sections {
+        let s = section(&hdr[..hdr_take], &pe, i).ok_or(PeError::SectionOutOfFile)?;
+        let va = u64::from(s.virtual_address);
+        let vsz = u64::from(s.virtual_size);
+        let raw = u64::from(s.size_of_raw_data);
+        let ptr = u64::from(s.pointer_to_raw_data);
+        if va >= image_len || va.saturating_add(vsz.max(raw)) > image_len {
+            return Err(PeError::SectionOutOfImage);
+        }
+        if raw > 0 {
+            if ptr.saturating_add(raw) > src_len {
+                return Err(PeError::SectionOutOfFile);
+            }
+            if !copy(src + ptr, dst + va, raw) {
+                return Err(PeError::SectionOutOfFile);
+            }
+        }
+        loaded += 1;
+    }
+
+    // Base relocations, read back from the loaded image.
+    let mut relocs_applied = 0u32;
+    let delta = dst.wrapping_sub(pe.image_base);
+    let (rd_rva, rd_size) = pe.reloc_dir;
+    if delta != 0 && rd_size != 0 {
+        let end = u64::from(rd_rva).saturating_add(u64::from(rd_size));
+        if end > image_len {
+            return Err(PeError::RelocOutOfImage);
+        }
+        let mut off = u64::from(rd_rva);
+        while off + 8 <= end {
+            let mut blk = [0u8; 8];
+            if mem.read(dst + off, &mut blk) < 8 {
+                return Err(PeError::RelocOutOfImage);
+            }
+            let page_rva = u64::from(u32::from_le_bytes([blk[0], blk[1], blk[2], blk[3]]));
+            let block = u64::from(u32::from_le_bytes([blk[4], blk[5], blk[6], blk[7]]));
+            if block < 8 || off + block > end {
+                return Err(PeError::RelocOutOfImage);
+            }
+            let mut e = off + 8;
+            while e + 2 <= off + block {
+                let mut eb = [0u8; 2];
+                if mem.read(dst + e, &mut eb) < 2 {
+                    return Err(PeError::RelocOutOfImage);
+                }
+                let entry = u16::from_le_bytes(eb);
+                let typ = entry >> 12;
+                let at = page_rva + u64::from(entry & 0xfff);
+                match typ {
+                    REL_ABSOLUTE => {}
+                    REL_DIR64 => {
+                        if at + 8 > image_len {
+                            return Err(PeError::RelocOutOfImage);
+                        }
+                        let mut v = [0u8; 8];
+                        if mem.read(dst + at, &mut v) < 8 {
+                            return Err(PeError::RelocOutOfImage);
+                        }
+                        let nv = u64::from_le_bytes(v).wrapping_add(delta);
+                        if mem.write(dst + at, &nv.to_le_bytes()) != 8 {
+                            return Err(PeError::RelocOutOfImage);
+                        }
+                        relocs_applied += 1;
+                    }
+                    other => return Err(PeError::RelocUnsupportedType(other)),
+                }
+                e += 2;
+            }
+            off += block;
+        }
+    }
+
+    Ok(Loaded {
+        load_base: dst,
+        entry: dst + u64::from(pe.entry_rva),
+        size_of_image: pe.size_of_image,
+        sections_loaded: loaded,
+        relocs_applied,
+    })
+}
+
 /// Load `file` so that RVA 0 lands at `dst[0]`, which the caller maps at
 /// guest address `load_base` (page-aligned). Applies DIR64 relocations.
 pub fn load_pe32plus(file: &[u8], load_base: u64, dst: &mut [u8]) -> Result<Loaded, PeError> {

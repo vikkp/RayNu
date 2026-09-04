@@ -60,6 +60,16 @@ pub const RAYNU_F_FS_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-FS-GATE-OK";
 /// `EFI_FILE_PROTOCOL`. Guest-exit-only.
 pub const RAYNU_F_FS_OK_MARKER: &str = "RAYNU-V-RAYNU-F-FS-OK";
 
+/// Host / CI marker when the F5b gate passes: SimpleFileSystem +
+/// EFI_FILE_PROTOCOL exposed to a guest, `LoadImage` from a guest buffer with
+/// relocations, `LoadedImage` published, and `StartImage` requesting a guest
+/// redirect. Host only.
+pub const RAYNU_F_IMAGE_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-IMAGE-GATE-OK";
+
+/// Serial marker when a live guest `StartImage` redirects into a loaded
+/// image. Guest-exit-only.
+pub const RAYNU_F_START_IMAGE_OK_MARKER: &str = "RAYNU-V-RAYNU-F-START-IMAGE-OK";
+
 /// Host / CI marker when the F4 gate passes: handle/protocol database +
 /// `BlockIo` media/validation/transfer against a mock guest. Host only.
 pub const RAYNU_F_BLOCKIO_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-BLOCKIO-GATE-OK";

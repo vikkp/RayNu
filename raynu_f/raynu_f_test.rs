@@ -365,9 +365,9 @@ fn raynu_f_tables_and_console_dispatch() {
 
     // Honest unsupported / not-ready paths.
     let args = ServiceArgs::regs(0, 0, 0, 0);
-    // Image services are F5; runtime services are later.
+    // Exit/UnloadImage and runtime services remain unimplemented.
     assert_eq!(
-        dispatch(ServiceId::LoadImage, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        dispatch(ServiceId::UnloadImage, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
         EFI_UNSUPPORTED
     );
     assert_eq!(
@@ -1148,9 +1148,9 @@ fn raynu_f_protocols_and_blockio() {
     assert_eq!(dispatch(ServiceId::BlockIoFlushBlocks, ServiceArgs::regs(layout.blockio_disk, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
     assert_eq!(dispatch(ServiceId::BlockIoFlushBlocks, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
 
-    // --- still honestly unsupported (F5) ----------------------------------
+    // --- still honestly unsupported ---------------------------------------
     let a0 = ServiceArgs::regs(0, 0, 0, 0);
-    for id in [ServiceId::LoadImage, ServiceId::StartImage, ServiceId::Exit, ServiceId::ConnectController] {
+    for id in [ServiceId::Exit, ServiceId::UnloadImage, ServiceId::ConnectController, ServiceId::ProtocolsPerHandle] {
         assert_eq!(dispatch(id, a0, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED, "{}", id.name());
     }
 
@@ -1486,4 +1486,248 @@ fn raynu_f_fat_and_simple_filesystem() {
 
     #[cfg(not(target_os = "uefi"))]
     println!("{}", super::RAYNU_F_FS_GATE_MARKER);
+}
+
+/// F5b: the CD backing store is an ISO whose El Torito boot image is the FAT
+/// ESP built by `build_fat12_esp`. `F5_CD_FAT_OFF` is that extent's offset.
+const F5_CD_FAT_OFF: u64 = 64 * 2048; // LBA 64
+static F5_CD: std::sync::OnceLock<std::sync::Mutex<Vec<u8>>> = std::sync::OnceLock::new();
+
+fn f5_read(media_id: u32, off: u64, buf: &mut [u8]) -> bool {
+    if media_id != super::MEDIA_ID_CD {
+        return false;
+    }
+    let g = F5_CD.get().unwrap().lock().unwrap();
+    let s = off as usize;
+    if s + buf.len() > g.len() {
+        return false;
+    }
+    buf.copy_from_slice(&g[s..s + buf.len()]);
+    true
+}
+
+#[test]
+fn raynu_f_filesystem_loadimage_startimage() {
+    use super::filesystem::{
+        EFI_FILE_MODE_READ, EFI_FILE_MODE_WRITE, FILE_INFO_FILE_SIZE_OFF, FILE_SLOTS,
+        GUID_FILE_INFO, SFS_OPEN_VOLUME_OFF, SFS_REVISION, SFS_REVISION_OFF,
+    };
+    use super::protocol::{
+        GUID_LOADED_IMAGE, HANDLE_IMAGE, LOADED_IMAGE_IMAGE_BASE_OFF,
+        LOADED_IMAGE_IMAGE_SIZE_OFF, LOADED_IMAGE_REVISION, LOADED_IMAGE_REVISION_OFF,
+        LOADED_IMAGE_SYSTEM_TABLE_OFF,
+    };
+    use super::services::{
+        dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_SUCCESS,
+        EFI_UNSUPPORTED, STACK_ARG5_OFF,
+    };
+    use super::tables::{
+        build_firmware_image, get_u64, IMAGE_BYTES, IMAGE_FILE_PROTO_OFF,
+        IMAGE_FILE_PROTO_STRIDE, IMAGE_GUID_FILE_INFO_OFF, IMAGE_SFS_OFF,
+        IMAGE_SYSTEM_TABLE_OFF,
+    };
+    use super::testapp::{build_test_app, TESTAPP_FILE_BYTES};
+
+    const EFI_WRITE_PROTECTED: u64 = 0x8000_0000_0000_0008;
+    const EFI_NOT_FOUND: u64 = 0x8000_0000_0000_000E;
+
+    // Build an "ISO" whose El Torito boot image is our FAT12 ESP.
+    let mut app = vec![0u8; TESTAPP_FILE_BYTES];
+    build_test_app(&mut app).unwrap();
+    let esp = build_fat12_esp(&app);
+    let mut iso = vec![0u8; F5_CD_FAT_OFF as usize + esp.len() + 2048];
+    iso[16 * 2048] = 1;
+    iso[16 * 2048 + 1..16 * 2048 + 6].copy_from_slice(b"CD001");
+    iso[F5_CD_FAT_OFF as usize..F5_CD_FAT_OFF as usize + esp.len()].copy_from_slice(&esp);
+    let iso_len = iso.len() as u64;
+    F5_CD.set(std::sync::Mutex::new(iso)).ok();
+
+    // Guest slab with our tables.
+    let base = 0u64;
+    let mut mem = vec![0u8; SLAB as usize];
+    let tb = 0x0080_0000usize;
+    let layout = build_firmware_image(tb as u64, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
+    let guest = MockGuest::new(base, mem);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    let mut st = FirmwareState::new();
+
+    // Mount: CD BlockIo backing + FAT volume at the El Torito extent.
+    st.read_blocks = Some(f5_read);
+    st.media_cd = super::BlockMedia::cd(iso_len);
+    st.blockio_cd = layout.blockio_cd;
+    st.fat_volume_off = F5_CD_FAT_OFF;
+    st.file_proto_base = layout.file_proto_base;
+    st.sfs = layout.sfs;
+    st.loaded_image_proto = layout.loaded_image;
+    st.system_table = layout.system_table;
+    // Parse the BPB off the CD the way the launcher will.
+    let mut boot = [0u8; 512];
+    assert!(f5_read(super::MEDIA_ID_CD, F5_CD_FAT_OFF, &mut boot));
+    st.fs.volume = Some(super::fat::parse_bpb(&boot).expect("BPB off the CD"));
+    let _ = st.protocols.install(super::HANDLE_CD, super::protocol::GUID_SIMPLE_FILE_SYSTEM, layout.sfs);
+
+    // --- table shapes -----------------------------------------------------
+    assert_eq!(layout.sfs, tb as u64 + IMAGE_SFS_OFF as u64);
+    assert_eq!(get_u64(&guest.mem.borrow(), tb + IMAGE_SFS_OFF + SFS_REVISION_OFF), SFS_REVISION);
+    assert_eq!(
+        get_u64(&guest.mem.borrow(), tb + IMAGE_SFS_OFF + SFS_OPEN_VOLUME_OFF),
+        super::trampoline_slot_gpa(layout.trampolines, ServiceId::SfsOpenVolume)
+    );
+    assert_eq!(&guest.mem.borrow()[tb + IMAGE_GUID_FILE_INFO_OFF..tb + IMAGE_GUID_FILE_INFO_OFF + 16], &GUID_FILE_INFO);
+    // Every file slot has its own EFI_FILE_PROTOCOL, all sharing trampolines.
+    let f0 = tb + IMAGE_FILE_PROTO_OFF;
+    let f1 = f0 + IMAGE_FILE_PROTO_STRIDE;
+    assert_eq!(
+        get_u64(&guest.mem.borrow(), f0 + super::filesystem::FILE_READ_OFF),
+        get_u64(&guest.mem.borrow(), f1 + super::filesystem::FILE_READ_OFF)
+    );
+    assert_eq!(layout.file_proto_base, f0 as u64);
+    // The array fits inside the image.
+    assert!(IMAGE_FILE_PROTO_OFF + FILE_SLOTS * IMAGE_FILE_PROTO_STRIDE <= IMAGE_BYTES);
+
+    let scratch = 0x00AF_0000u64;
+    let stack = scratch + 0x4000;
+    let p_root = scratch;
+    let p_file = scratch + 8;
+    let p_size = scratch + 16;
+    let p_pos = scratch + 24;
+    let p_handle = scratch + 32;
+    let p_guid = scratch + 0x100;
+    let path_gpa = scratch + 0x200;
+    let buf = scratch + 0x1000;
+
+    // Guest writes the CHAR16 path, as a real loader would.
+    let units: Vec<u16> = "\\EFI\\BOOT\\BOOTX64.EFI\0".encode_utf16().collect();
+    for (i, u) in units.iter().enumerate() {
+        guest.write(path_gpa + i as u64 * 2, &u.to_le_bytes());
+    }
+
+    // --- OpenVolume -------------------------------------------------------
+    let d = dispatch(ServiceId::SfsOpenVolume, ServiceArgs::regs(layout.sfs, p_root, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let root = guest.u64_at(p_root);
+    assert_eq!(root, layout.file_proto_base); // first slot
+    // A bogus `This` is rejected.
+    assert_eq!(dispatch(ServiceId::SfsOpenVolume, ServiceArgs::regs(0xDEAD, p_root, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+
+    // --- Open the bootloader ---------------------------------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, 0); // Attributes
+    let args = ServiceArgs { a1: root, a2: p_file, a3: path_gpa, a4: EFI_FILE_MODE_READ, rsp: stack };
+    let d = dispatch(ServiceId::FileOpen, args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let fh = guest.u64_at(p_file);
+    assert_ne!(fh, root);
+    assert_eq!((fh - layout.file_proto_base) % IMAGE_FILE_PROTO_STRIDE as u64, 0);
+    // Write mode on the read-only CD is refused honestly.
+    let wargs = ServiceArgs { a1: root, a2: p_file, a3: path_gpa, a4: EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, rsp: stack };
+    assert_eq!(dispatch(ServiceId::FileOpen, wargs, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_WRITE_PROTECTED);
+
+    // --- GetInfo(EFI_FILE_INFO) reports the real size ---------------------
+    guest.write(p_guid, &GUID_FILE_INFO);
+    guest.put_u64(p_size, 512);
+    let d = dispatch(ServiceId::FileGetInfo, ServiceArgs::regs(fh, p_guid, p_size, buf), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let mut fs8 = [0u8; 8];
+    guest.read(buf + FILE_INFO_FILE_SIZE_OFF as u64, &mut fs8);
+    assert_eq!(u64::from_le_bytes(fs8), app.len() as u64);
+    // An unknown info GUID is unsupported, not faked.
+    guest.write(p_guid + 0x20, &GUID_LOADED_IMAGE);
+    assert_eq!(dispatch(ServiceId::FileGetInfo, ServiceArgs::regs(fh, p_guid + 0x20, p_size, buf), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED);
+
+    // --- Read the whole PE into guest memory ------------------------------
+    guest.put_u64(p_size, app.len() as u64);
+    let d = dispatch(ServiceId::FileRead, ServiceArgs::regs(fh, p_size, buf, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.file_read_ok);
+    assert_eq!(guest.u64_at(p_size), app.len() as u64);
+    let mut got = vec![0u8; app.len()];
+    guest.read(buf, &mut got);
+    assert_eq!(got, app, "file read through EFI_FILE_PROTOCOL matches the ESP payload");
+    // Position advanced; a second read hits EOF with zero bytes.
+    assert_eq!(dispatch(ServiceId::FileGetPosition, ServiceArgs::regs(fh, p_pos, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_pos), app.len() as u64);
+    guest.put_u64(p_size, 64);
+    let d = dispatch(ServiceId::FileRead, ServiceArgs::regs(fh, p_size, buf + 0x8000, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!((d.status, guest.u64_at(p_size)), (EFI_SUCCESS, 0));
+    // Rewind and re-read the first two bytes.
+    assert_eq!(dispatch(ServiceId::FileSetPosition, ServiceArgs::regs(fh, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    guest.put_u64(p_size, 2);
+    dispatch(ServiceId::FileRead, ServiceArgs::regs(fh, p_size, buf + 0x8000, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    let mut mz = [0u8; 2];
+    guest.read(buf + 0x8000, &mut mz);
+    assert_eq!(&mz, b"MZ");
+    // Write/Delete/SetInfo are refused; Flush is a no-op success.
+    for id in [ServiceId::FileWrite, ServiceId::FileDelete, ServiceId::FileSetInfo] {
+        assert_eq!(dispatch(id, ServiceArgs::regs(fh, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_WRITE_PROTECTED, "{}", id.name());
+    }
+    assert_eq!(dispatch(ServiceId::FileFlush, ServiceArgs::regs(fh, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    // Bogus `This` values are rejected everywhere.
+    for id in [ServiceId::FileRead, ServiceId::FileClose, ServiceId::FileGetPosition] {
+        assert_eq!(dispatch(id, ServiceArgs::regs(0xDEAD, p_size, buf, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER, "{}", id.name());
+    }
+
+    // --- LoadImage from the bytes we just read ----------------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, app.len() as u64); // SourceSize
+    guest.put_u64(stack + STACK_ARG5_OFF + 8, p_handle); // *ImageHandle
+    let li_args = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf, rsp: stack };
+    let free_before = st.pool.free_pages();
+    let d = dispatch(ServiceId::LoadImage, li_args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.image_loaded);
+    assert_eq!(guest.u64_at(p_handle), HANDLE_IMAGE);
+    assert!(st.pool.free_pages() < free_before, "image came from our pool");
+    assert_ne!(st.image_base, 0);
+    assert_eq!(st.image_size, super::testapp::TESTAPP_SIZE_OF_IMAGE as u64);
+    assert_eq!(st.image_entry, st.image_base + super::testapp::TESTAPP_ENTRY_RVA as u64);
+    // The image really landed: entry bytes match the app's code, and the
+    // DIR64 relocation was applied against the new base.
+    let mut code = [0u8; 8];
+    guest.read(st.image_entry, &mut code);
+    assert_eq!(&code, &super::testapp::TESTAPP_CODE[..8]);
+    let msg_ptr = guest.u64_at(st.image_base + super::testapp::TESTAPP_MSG_PTR_RVA as u64);
+    assert_eq!(msg_ptr, st.image_base + super::testapp::TESTAPP_MSG_RVA as u64);
+    // LoadedImage was published on the image handle with honest fields.
+    let li = st.loaded_image_proto;
+    let mut rev = [0u8; 4];
+    guest.read(li + LOADED_IMAGE_REVISION_OFF as u64, &mut rev);
+    assert_eq!(u32::from_le_bytes(rev), LOADED_IMAGE_REVISION);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_IMAGE_BASE_OFF as u64), st.image_base);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_IMAGE_SIZE_OFF as u64), st.image_size);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_SYSTEM_TABLE_OFF as u64), tb as u64 + IMAGE_SYSTEM_TABLE_OFF as u64);
+    guest.write(p_guid + 0x40, &GUID_LOADED_IMAGE);
+    guest.put_u64(p_root, 0);
+    assert_eq!(dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(HANDLE_IMAGE, p_guid + 0x40, p_root, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_root), li);
+    // A DevicePath-only load (no SourceBuffer) is honestly unsupported.
+    let dp = ServiceArgs { a1: 0, a2: 0, a3: 0x1234, a4: 0, rsp: stack };
+    assert_eq!(dispatch(ServiceId::LoadImage, dp, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED);
+    // Non-PE source is EFI_LOAD_ERROR, not a crash.
+    guest.write(buf + 0x9000, b"not a PE at all");
+    let bad = ServiceArgs { a1: 0, a2: 0, a3: 0, a4: buf + 0x9000, rsp: stack };
+    assert_eq!(dispatch(ServiceId::LoadImage, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, 0x8000_0000_0000_0012);
+
+    // --- StartImage asks the hypervisor to redirect the guest -------------
+    let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(d.start_image, Some((st.image_entry, HANDLE_IMAGE)));
+    // A wrong handle does not redirect.
+    let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_INVALID_PARAMETER);
+    assert_eq!(d.start_image, None);
+
+    // --- Close releases the slot -------------------------------------------
+    let open_before = st.fs.open_count();
+    assert_eq!(dispatch(ServiceId::FileClose, ServiceArgs::regs(fh, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(st.fs.open_count(), open_before - 1);
+    // Opening a path that is not there.
+    let units2: Vec<u16> = "\\EFI\\BOOT\\NOPE.EFI\0".encode_utf16().collect();
+    for (i, u) in units2.iter().enumerate() {
+        guest.write(path_gpa + 0x100 + i as u64 * 2, &u.to_le_bytes());
+    }
+    let a2 = ServiceArgs { a1: root, a2: p_file, a3: path_gpa + 0x100, a4: EFI_FILE_MODE_READ, rsp: stack };
+    assert_eq!(dispatch(ServiceId::FileOpen, a2, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+
+    #[cfg(not(target_os = "uefi"))]
+    println!("{}", super::RAYNU_F_IMAGE_GATE_MARKER);
 }
