@@ -19,8 +19,11 @@
 //! a guest calls it. Not yet: a PE loader or a launch, so no guest has called
 //! it. It is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
+pub mod launch_plan;
+pub mod pe;
 pub mod services;
 pub mod tables;
+pub mod testapp;
 
 #[cfg(test)]
 #[path = "raynu_f_test.rs"]
@@ -37,6 +40,14 @@ pub use tables::{
     build_firmware_image, crc32, header_crc_valid, BuildError, FirmwareImageLayout,
     IMAGE_BYTES,
 };
+pub use launch_plan::{plan_f2, LaunchPlan, PlanError};
+pub use pe::{load_pe32plus, parse_pe32plus, Loaded, PeError, PeImage};
+pub use testapp::{build_test_app, TESTAPP_FILE_BYTES, TESTAPP_MESSAGE};
+
+/// Host / CI marker when the F2a gate passes: PE32+ loader (headers, sections,
+/// DIR64 relocs) + the RayNu-F test app round-trips through it + the F2 launch
+/// plan is consistent. Host only — nothing has been launched.
+pub const RAYNU_F_LOADER_OK_MARKER: &str = "RAYNU-V-RAYNU-F-LOADER-OK";
 
 /// Host / CI marker when the RayNu-F scaffold gate passes. Scaffold only —
 /// **not** the iron `ISO-INSTALL-OK`.
