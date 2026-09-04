@@ -6725,6 +6725,17 @@ unsafe fn raynu_f_stop(why: &str) -> ! {
     write_dec(u64::from(RAYNU_F_SVC_ERRS.load(Ordering::Acquire)));
     serial::write_str(" conout_ok=");
     write_dec(u64::from(RAYNU_F_CONOUT_LOGGED.load(Ordering::Acquire)));
+    // SAFETY: BSP-only firmware state; the guest is stopped (see decl).
+    // KANI-TARGET: RayNu-F stop summary read (outside Proven Core).
+    let st = unsafe { &*core::ptr::addr_of!(RAYNU_F_STATE) };
+    serial::write_str(" blk_rd=");
+    write_dec(u64::from(st.block_reads));
+    serial::write_str(" blk_wr=");
+    write_dec(u64::from(st.block_writes));
+    serial::write_str(" allocs=");
+    write_dec(u64::from(st.pool.allocs));
+    serial::write_str(" free_pages=");
+    write_dec(st.pool.free_pages() as u64);
     serial::write_line(" (F2b; not ISO-INSTALL-OK)");
     leave_to_e4();
 }
@@ -9850,7 +9861,12 @@ unsafe fn handle_raynu_f_service() -> bool {
     let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
     // Log the opening sequence, then every non-success (capped) — that is the
     // diagnostic that names which service a real bootloader needs next.
-    let failed = d.status != crate::raynu_f::EFI_SUCCESS;
+    // A key poll returning EFI_NOT_READY is the loader waiting, not a
+    // failure; do not let it burn the error-log budget (nested 2d34fff:
+    // GRUB's "Press any key" loop was 524k of them).
+    let key_poll = id == crate::raynu_f::ServiceId::ConInReadKeyStroke
+        && d.status == crate::raynu_f::EFI_NOT_READY;
+    let failed = d.status != crate::raynu_f::EFI_SUCCESS && !key_poll;
     let show = n < 24
         || (failed && RAYNU_F_SVC_ERRS.fetch_add(1, Ordering::AcqRel) < 32);
     if show {

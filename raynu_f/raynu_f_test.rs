@@ -1949,6 +1949,154 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
     assert_eq!(guest.u64_at(p_out), li);
 }
 
+/// F6-prep b: the GRUB → Linux EFI stub initrd handshake, nested `2d34fff`.
+/// GRUB's last act before the kernel is
+/// `InstallMultipleProtocolInterfaces(&h, &LoadFile2, &lf2, &DevicePath, &dp, NULL)`
+/// with `h == NULL`; the kernel then `LocateDevicePath(&LoadFile2, &dp, &h)`
+/// and calls GRUB's `LoadFile` directly. We only hold the handle.
+#[test]
+fn raynu_f_install_multiple_and_locate_device_path() {
+    use super::protocol::{
+        GUID_BLOCK_IO, GUID_DEVICE_PATH, GUID_LOAD_FILE2, HANDLE_CD, HANDLE_DYNAMIC_BASE,
+        EFI_NOT_FOUND, EFI_OUT_OF_RESOURCES,
+    };
+    use super::services::{
+        dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_SUCCESS,
+        STACK_ARG5_OFF,
+    };
+    use super::tables::{build_firmware_image, IMAGE_BYTES};
+
+    let mut mem = vec![0u8; SLAB as usize];
+    let tb = 0x0080_0000usize;
+    let layout = build_firmware_image(tb as u64, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
+    let guest = MockGuest::new(0, mem);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    let mut st = FirmwareState::new();
+
+    let scratch = 0x00AF_0000u64;
+    let stack = scratch + 0x4000;
+    let p_handle = scratch; // EFI_HANDLE cell
+    let g_lf2 = scratch + 0x100;
+    let g_dp = scratch + 0x110;
+    let g_blk = scratch + 0x120;
+    guest.write(g_lf2, &GUID_LOAD_FILE2);
+    guest.write(g_dp, &GUID_DEVICE_PATH);
+    guest.write(g_blk, &GUID_BLOCK_IO);
+    // GRUB's LoadFile2 "interface" is a struct in its own memory; any pointer.
+    let lf2_iface = scratch + 0x200;
+    // Linux initrd vendor media device path: Media(4)/Vendor(3), len 0x14
+    // = hdr(4) + GUID(16), then End-Entire.
+    let dp_initrd = scratch + 0x300;
+    let mut dp = [0u8; 0x18];
+    dp[0] = 0x04;
+    dp[1] = 0x03;
+    dp[2..4].copy_from_slice(&0x14u16.to_le_bytes());
+    dp[4..20].copy_from_slice(&[
+        0x27, 0xE4, 0x68, 0x55, 0xFC, 0x68, 0x3D, 0x4F, 0xAC, 0x74, 0xCA, 0x55, 0x52, 0x31, 0xCC, 0x68,
+    ]);
+    dp[0x14] = 0x7F;
+    dp[0x15] = 0xFF;
+    dp[0x16..0x18].copy_from_slice(&4u16.to_le_bytes());
+    guest.write(dp_initrd, &dp);
+
+    // --- InstallMultiple with *Handle == NULL mints a handle ---------------
+    // args: a1=&h, a2=&LoadFile2, a3=lf2, a4=&DevicePath, [rsp+0x28]=dp, [rsp+0x30]=NULL
+    guest.put_u64(p_handle, 0);
+    guest.put_u64(stack + STACK_ARG5_OFF, dp_initrd);
+    guest.put_u64(stack + STACK_ARG5_OFF + 8, 0);
+    let a = ServiceArgs { a1: p_handle, a2: g_lf2, a3: lf2_iface, a4: g_dp, rsp: stack };
+    let d = dispatch(ServiceId::InstallMultipleProtocolInterfaces, a, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let h = guest.u64_at(p_handle);
+    assert_eq!(h, HANDLE_DYNAMIC_BASE);
+    assert_eq!(st.protocols.interface_for(h, &GUID_LOAD_FILE2), Some(lf2_iface));
+    assert_eq!(st.protocols.interface_for(h, &GUID_DEVICE_PATH), Some(dp_initrd));
+    // A second NULL-handle install mints a different handle.
+    guest.put_u64(p_handle, 0);
+    guest.put_u64(stack + STACK_ARG5_OFF, 0); // (&BlockIo, iface) then NULL
+    let a2 = ServiceArgs { a1: p_handle, a2: g_blk, a3: scratch + 0x400, a4: 0, rsp: stack };
+    assert_eq!(dispatch(ServiceId::InstallMultipleProtocolInterfaces, a2, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_handle), HANDLE_DYNAMIC_BASE + 1);
+    // Installing onto an existing handle keeps it.
+    guest.put_u64(p_handle, HANDLE_CD);
+    assert_eq!(dispatch(ServiceId::InstallMultipleProtocolInterfaces, a2, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_handle), HANDLE_CD);
+    assert_eq!(st.protocols.interface_for(HANDLE_CD, &GUID_BLOCK_IO), Some(scratch + 0x400));
+    // Malformed: NULL *Handle pointer; empty list; NULL interface.
+    assert_eq!(dispatch(ServiceId::InstallMultipleProtocolInterfaces, ServiceArgs { a1: 0, ..a }, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    assert_eq!(dispatch(ServiceId::InstallMultipleProtocolInterfaces, ServiceArgs { a2: 0, ..a }, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    guest.put_u64(p_handle, 0);
+    guest.put_u64(stack + STACK_ARG5_OFF, dp_initrd);
+    let bad = ServiceArgs { a3: 0, ..a };
+    assert_eq!(dispatch(ServiceId::InstallMultipleProtocolInterfaces, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    assert_eq!(guest.u64_at(p_handle), 0, "no handle minted on failure");
+    let _ = EFI_OUT_OF_RESOURCES;
+
+    // --- LocateDevicePath finds GRUB's handle for the kernel ----------------
+    // Publish the CD's own device path too (launcher does); it must not match.
+    let dp_cd = scratch + 0x500;
+    let mut cd = [0u8; super::protocol::DEVICE_PATH_BYTES];
+    super::protocol::encode_cd_device_path(1, 77, 2880, &mut cd);
+    guest.write(dp_cd, &cd);
+    assert_eq!(st.protocols.install(HANDLE_CD, GUID_DEVICE_PATH, dp_cd), EFI_SUCCESS);
+    // Kernel: dp = &initrd path; (&LoadFile2, &dp, &h)
+    let p_dp = scratch + 0x600;
+    let p_h = scratch + 0x608;
+    guest.put_u64(p_dp, dp_initrd);
+    guest.put_u64(p_h, 0);
+    let d = dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_lf2, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_h), h);
+    // *DevicePath advanced to the End node (whole path matched).
+    assert_eq!(guest.u64_at(p_dp), dp_initrd + 0x14);
+    // A path nobody published, or a protocol nobody has on a matching path.
+    let dp_other = scratch + 0x700;
+    let mut other = dp;
+    other[4] ^= 0xFF;
+    guest.write(dp_other, &other);
+    guest.put_u64(p_dp, dp_other);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_lf2, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    guest.put_u64(p_dp, dp_cd);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_lf2, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    // The CD path does resolve for BlockIo, and a longer request
+    // (CD path + extra node) still resolves to the CD with the tail returned.
+    guest.put_u64(p_dp, dp_cd);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_blk, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_h), HANDLE_CD);
+    let dp_long = scratch + 0x800;
+    let mut long = [0u8; 0x18 + 0x14 + 4];
+    long[..0x18].copy_from_slice(&cd[..0x18]); // CD node without its End
+    long[0x18..0x18 + 0x14].copy_from_slice(&dp[..0x14]); // vendor node
+    long[0x2C] = 0x7F;
+    long[0x2D] = 0xFF;
+    long[0x2E..0x30].copy_from_slice(&4u16.to_le_bytes());
+    guest.write(dp_long, &long);
+    guest.put_u64(p_dp, dp_long);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_blk, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_h), HANDLE_CD);
+    assert_eq!(guest.u64_at(p_dp), dp_long + 0x18, "remainder starts at the vendor node");
+    // Unterminated path is rejected, not walked off the end.
+    let dp_bad = scratch + 0x900;
+    guest.write(dp_bad, &[0x04, 0x03, 0x00, 0x00]); // len 0
+    guest.put_u64(p_dp, dp_bad);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_blk, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+
+    // --- UninstallMultiple ------------------------------------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, dp_initrd);
+    guest.put_u64(stack + STACK_ARG5_OFF + 8, 0);
+    // Wrong interface for one pair: nothing removed.
+    let u_bad = ServiceArgs { a1: h, a2: g_lf2, a3: lf2_iface + 8, a4: g_dp, rsp: stack };
+    assert_eq!(dispatch(ServiceId::UninstallMultipleProtocolInterfaces, u_bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    assert!(st.protocols.handle_exists(h));
+    let u = ServiceArgs { a1: h, a2: g_lf2, a3: lf2_iface, a4: g_dp, rsp: stack };
+    assert_eq!(dispatch(ServiceId::UninstallMultipleProtocolInterfaces, u, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert!(!st.protocols.handle_exists(h));
+    guest.put_u64(p_dp, dp_initrd);
+    assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_lf2, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    let _ = layout;
+}
+
 /// Opt-in integration test against a real distro ISO: set `RAYNU_F_REAL_ISO`
 /// to its path and run with `--ignored`. Walks exactly what the launcher's F5c
 /// path does: El Torito -> EFI FAT ESP -> \EFI\BOOT\BOOTX64.EFI -> PE32+ load.

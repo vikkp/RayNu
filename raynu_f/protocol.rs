@@ -31,11 +31,25 @@ pub const GUID_DEVICE_PATH: Guid = [
     0x91, 0x6E, 0x57, 0x09, 0x3F, 0x6D, 0xD2, 0x11, 0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B,
 ];
 
+/// `EFI_LOAD_FILE2_PROTOCOL_GUID` {4006C0C1-FCB3-403E-996D-4A6C8724E06D}.
+/// GRUB installs this (with a vendor device path) so the Linux EFI stub can
+/// fetch the initrd; the kernel then calls GRUB's `LoadFile` directly,
+/// guest-to-guest — we only need to hold the handle and answer
+/// `LocateDevicePath`.
+pub const GUID_LOAD_FILE2: Guid = [
+    0xC1, 0xC0, 0x06, 0x40, 0xB3, 0xFC, 0x3E, 0x40, 0x99, 0x6D, 0x4A, 0x6C, 0x87, 0x24, 0xE0, 0x6D,
+];
+
 /// Handles RayNu-F publishes. Tagged like the console handles in `tables.rs`.
 pub const HANDLE_CD: u64 = 0x5246_0000_0000_0020;
 pub const HANDLE_DISK: u64 = 0x5246_0000_0000_0021;
 /// Handle for the image `LoadImage` staged (F5).
 pub const HANDLE_IMAGE: u64 = 0x5246_0000_0000_0022;
+/// First handle minted for a guest `InstallMultipleProtocolInterfaces` with
+/// `*Handle == NULL` (GRUB's initrd `LoadFile2` handle is the first).
+pub const HANDLE_DYNAMIC_BASE: u64 = 0x5246_0000_0000_0100;
+/// Dynamic handles we will mint before saying `EFI_OUT_OF_RESOURCES`.
+pub const MAX_DYNAMIC_HANDLES: u64 = 0x100;
 
 /// `EFI_LOADED_IMAGE_PROTOCOL` field offsets (x64) and size.
 pub const LOADED_IMAGE_REVISION_OFF: usize = 0x00;
@@ -127,13 +141,47 @@ const EMPTY: Entry = Entry {
 #[derive(Clone)]
 pub struct Protocols {
     slots: [Entry; PROTOCOL_SLOTS],
+    /// Dynamic handles minted so far (see [`HANDLE_DYNAMIC_BASE`]).
+    minted: u64,
 }
 
 impl Protocols {
     pub const fn new() -> Self {
         Protocols {
             slots: [EMPTY; PROTOCOL_SLOTS],
+            minted: 0,
         }
+    }
+
+    /// Mint a fresh, never-before-used handle for a guest install with
+    /// `*Handle == NULL`. Tagged and never a guest pointer.
+    pub fn new_handle(&mut self) -> Option<u64> {
+        if self.minted >= MAX_DYNAMIC_HANDLES {
+            return None;
+        }
+        let h = HANDLE_DYNAMIC_BASE + self.minted;
+        self.minted += 1;
+        Some(h)
+    }
+
+    /// Remove `guid` from `handle` if `interface` matches what is installed
+    /// (UEFI `UninstallProtocolInterface`). `EFI_NOT_FOUND` otherwise.
+    pub fn uninstall(&mut self, handle: u64, guid: &Guid, interface: u64) -> u64 {
+        for s in self.slots.iter_mut() {
+            if s.used && s.handle == handle && &s.guid == guid {
+                if s.interface != interface {
+                    return EFI_NOT_FOUND;
+                }
+                *s = EMPTY;
+                return EFI_SUCCESS;
+            }
+        }
+        EFI_NOT_FOUND
+    }
+
+    /// Whether `handle` has at least one protocol (i.e. still exists).
+    pub fn handle_exists(&self, handle: u64) -> bool {
+        self.slots.iter().any(|s| s.used && s.handle == handle)
     }
 
     /// Publish `guid` on `handle` pointing at `interface`. Replaces an

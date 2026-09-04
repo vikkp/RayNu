@@ -36,7 +36,7 @@ use super::blockio::{
 use super::filesystem::{FileSystem, FILE_SLOTS, MAX_PATH_BYTES};
 use super::protocol::{
     Guid, Protocols, ALL_HANDLES, BY_PROTOCOL, EFI_BUFFER_TOO_SMALL as PROTO_BUFFER_TOO_SMALL,
-    EFI_NOT_FOUND as PROTO_NOT_FOUND, MAX_HANDLES,
+    EFI_NOT_FOUND as PROTO_NOT_FOUND, EFI_OUT_OF_RESOURCES, MAX_HANDLES,
 };
 use super::tables::{crc32_feed, crc32_finish, crc32_start};
 
@@ -748,6 +748,211 @@ fn locate_handle_buffer(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceAr
     }
 }
 
+/// Most (GUID, interface) pairs one `InstallMultipleProtocolInterfaces` /
+/// `UninstallMultipleProtocolInterfaces` call may carry (GRUB uses two).
+pub const MAX_MULTI_PAIRS: usize = 8;
+
+/// The variadic tail of `(Un)InstallMultipleProtocolInterfaces`, MS x64:
+/// pair `k` (0-based) is `(arg 2k+2, arg 2k+3)` where args 1–4 are registers
+/// and 5+ are on the stack. Ends at the first NULL GUID pointer. Returns the
+/// pairs collected, or `None` on a malformed list (unreadable stack, too
+/// many pairs, GUID unreadable).
+fn collect_multi_pairs(
+    mem: &dyn GuestMem,
+    a: ServiceArgs,
+    out: &mut [(Guid, u64); MAX_MULTI_PAIRS],
+) -> Option<usize> {
+    let arg = |n: u32| -> Option<u64> {
+        match n {
+            1 => Some(a.a1),
+            2 => Some(a.a2),
+            3 => Some(a.a3),
+            4 => Some(a.a4),
+            _ => stack_arg(mem, a.rsp, n),
+        }
+    };
+    let mut n = 0usize;
+    loop {
+        let gp = arg(2 + 2 * n as u32)?;
+        if gp == 0 {
+            return Some(n);
+        }
+        if n == MAX_MULTI_PAIRS {
+            return None;
+        }
+        let g = read_guid(mem, gp)?;
+        let iface = arg(3 + 2 * n as u32)?;
+        out[n] = (g, iface);
+        n += 1;
+    }
+}
+
+/// `InstallMultipleProtocolInterfaces(*Handle, Guid*, Interface, …, NULL)`
+/// (UEFI 2.10 §7.3). `*Handle == NULL` mints a new handle. All-or-nothing:
+/// a failure rolls back the pairs already installed. GRUB's Linux loader
+/// uses this to publish `LoadFile2` + a vendor `DevicePath` for the initrd
+/// (nested `2d34fff`: `id=0x226 → EFI_UNSUPPORTED` was the last thing before
+/// "Press any key to continue...").
+fn install_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    if a.a1 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let Some(mut handle) = read_u64(mem, a.a1) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let mut pairs = [([0u8; 16], 0u64); MAX_MULTI_PAIRS];
+    let Some(n) = collect_multi_pairs(mem, a, &mut pairs) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if n == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    // A NULL interface is legal only for protocols that carry no interface
+    // (spec); a real pointer is what loaders pass. Refuse NULL up front so a
+    // half-installed handle never exists.
+    if pairs[..n].iter().any(|(_, iface)| *iface == 0) {
+        return EFI_INVALID_PARAMETER;
+    }
+    let minted = handle == 0;
+    if minted {
+        match st.protocols.new_handle() {
+            Some(h) => handle = h,
+            None => return EFI_OUT_OF_RESOURCES,
+        }
+    }
+    for i in 0..n {
+        let (g, iface) = pairs[i];
+        let s = st.protocols.install(handle, g, iface);
+        if s != EFI_SUCCESS {
+            for (g2, iface2) in pairs[..i].iter() {
+                let _ = st.protocols.uninstall(handle, g2, *iface2);
+            }
+            return s;
+        }
+    }
+    if minted && !write_u64(mem, a.a1, handle) {
+        for (g, iface) in pairs[..n].iter() {
+            let _ = st.protocols.uninstall(handle, g, *iface);
+        }
+        return EFI_INVALID_PARAMETER;
+    }
+    EFI_SUCCESS
+}
+
+/// `UninstallMultipleProtocolInterfaces(Handle, Guid*, Interface, …, NULL)`.
+/// Every pair must be present with that interface; otherwise nothing is
+/// removed and `EFI_INVALID_PARAMETER` is returned (spec).
+fn uninstall_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    if a.a1 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let mut pairs = [([0u8; 16], 0u64); MAX_MULTI_PAIRS];
+    let Some(n) = collect_multi_pairs(mem, a, &mut pairs) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if n == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    if pairs[..n]
+        .iter()
+        .any(|(g, iface)| st.protocols.interface_for(a.a1, g) != Some(*iface))
+    {
+        return EFI_INVALID_PARAMETER;
+    }
+    for (g, iface) in pairs[..n].iter() {
+        let _ = st.protocols.uninstall(a.a1, g, *iface);
+    }
+    EFI_SUCCESS
+}
+
+/// Longest device path we will walk (bytes) and its node cap.
+pub const MAX_DEVICE_PATH_BYTES: usize = 512;
+pub const MAX_DEVICE_PATH_NODES: usize = 16;
+
+/// Byte length of a guest device path up to (not including) its End-Entire
+/// node, or `None` if malformed / unterminated within the caps.
+fn device_path_len(mem: &dyn GuestMem, dp: u64) -> Option<usize> {
+    let mut off = 0usize;
+    for _ in 0..MAX_DEVICE_PATH_NODES {
+        let mut hdr = [0u8; 4];
+        if mem.read(dp + off as u64, &mut hdr) < 4 {
+            return None;
+        }
+        let len = usize::from(u16::from_le_bytes([hdr[2], hdr[3]]));
+        if hdr[0] == super::protocol::DP_TYPE_END {
+            // End-Entire terminates; an End-Instance (0x01) would need
+            // multi-instance paths we do not model.
+            return if hdr[1] == super::protocol::DP_SUBTYPE_END_ENTIRE { Some(off) } else { None };
+        }
+        if len < 4 || off + len > MAX_DEVICE_PATH_BYTES {
+            return None;
+        }
+        off += len;
+    }
+    None
+}
+
+/// `LocateDevicePath(Guid*, DevicePath**, Handle*)` (UEFI 2.10 §7.3): the
+/// handle supporting `Guid` whose device path is the longest prefix of
+/// `*DevicePath`; `*DevicePath` is advanced to the first unmatched node.
+/// This is how the Linux EFI stub finds GRUB's initrd `LoadFile2` handle
+/// (vendor media path `5568E427-68FC-4F3D-AC74-CA555231CC68`).
+fn locate_device_path(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    let Some(guid) = read_guid(mem, a.a1) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if a.a2 == 0 || a.a3 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let Some(want) = read_u64(mem, a.a2) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let Some(want_len) = device_path_len(mem, want) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let mut handles = [0u64; MAX_HANDLES];
+    let n = st.protocols.locate(BY_PROTOCOL, Some(&guid), &mut handles);
+    let mut best: Option<(u64, usize)> = None;
+    for &h in &handles[..n] {
+        let Some(hdp) = st.protocols.interface_for(h, &super::protocol::GUID_DEVICE_PATH) else {
+            continue;
+        };
+        let Some(hlen) = device_path_len(mem, hdp) else {
+            continue;
+        };
+        if hlen > want_len {
+            continue;
+        }
+        // Byte-compare the handle's whole path against the request's prefix.
+        let mut same = true;
+        let mut off = 0usize;
+        let mut x = [0u8; 64];
+        let mut y = [0u8; 64];
+        while off < hlen {
+            let k = (hlen - off).min(64);
+            if mem.read(hdp + off as u64, &mut x[..k]) < k
+                || mem.read(want + off as u64, &mut y[..k]) < k
+                || x[..k] != y[..k]
+            {
+                same = false;
+                break;
+            }
+            off += k;
+        }
+        if same && best.map_or(true, |(_, l)| hlen > l) {
+            best = Some((h, hlen));
+        }
+    }
+    let Some((h, matched)) = best else {
+        return PROTO_NOT_FOUND;
+    };
+    if write_u64(mem, a.a3, h) && write_u64(mem, a.a2, want + matched as u64) {
+        EFI_SUCCESS
+    } else {
+        EFI_INVALID_PARAMETER
+    }
+}
+
 /// `ReadBlocks` / `WriteBlocks`: `(This, MediaId, Lba, BufferSize, *Buffer)`.
 fn block_transfer(
     st: &mut FirmwareState,
@@ -1211,6 +1416,9 @@ pub fn dispatch(
         }
         ServiceId::LocateHandle => locate_handle(st, mem, a),
         ServiceId::LocateHandleBuffer => locate_handle_buffer(st, mem, a),
+        ServiceId::LocateDevicePath => locate_device_path(st, mem, a),
+        ServiceId::InstallMultipleProtocolInterfaces => install_multiple(st, mem, a),
+        ServiceId::UninstallMultipleProtocolInterfaces => uninstall_multiple(st, mem, a),
         ServiceId::InstallProtocolInterface => {
             // (*Handle, *Guid, InterfaceType, Interface)
             let Some(handle) = read_u64(mem, a.a1) else {
