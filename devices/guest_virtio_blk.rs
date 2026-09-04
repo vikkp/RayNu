@@ -971,6 +971,52 @@ pub fn take_iso_install_ok() -> bool {
     !ISO_OK.swap(true, Ordering::AcqRel)
 }
 
+/// RayNu-F (ADR-016 F4) `BlockIo` read of the install disk at a byte offset.
+/// Bounds-checked against the attached disk; the caller has already validated
+/// the request against media geometry.
+pub fn raynu_f_disk_read(off: u64, buf: &mut [u8]) -> bool {
+    let hpa = DISK_HPA.load(Ordering::Acquire);
+    let dlen = DISK_LEN.load(Ordering::Acquire);
+    if hpa == 0 || buf.is_empty() {
+        return false;
+    }
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    if end > dlen {
+        return false;
+    }
+    // SAFETY: attach_disk installed exclusive disk frames; range checked.
+    // KANI-TARGET: RayNu-F BlockIo disk read (outside Proven Core).
+    let disk = unsafe { core::slice::from_raw_parts(hpa as *const u8, dlen as usize) };
+    let start = off as usize;
+    buf.copy_from_slice(&disk[start..start + buf.len()]);
+    true
+}
+
+/// RayNu-F (ADR-016 F4) `BlockIo` write to the install disk at a byte offset.
+/// This is the path a real installer's GPT/ESP writes will take.
+pub fn raynu_f_disk_write(off: u64, buf: &[u8]) -> bool {
+    let hpa = DISK_HPA.load(Ordering::Acquire);
+    let dlen = DISK_LEN.load(Ordering::Acquire);
+    if hpa == 0 || buf.is_empty() {
+        return false;
+    }
+    let Some(end) = off.checked_add(buf.len() as u64) else {
+        return false;
+    };
+    if end > dlen {
+        return false;
+    }
+    // SAFETY: attach_disk installed exclusive disk frames; range checked.
+    // KANI-TARGET: RayNu-F BlockIo disk write (outside Proven Core).
+    let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen as usize) };
+    let start = off as usize;
+    disk[start..start + buf.len()].copy_from_slice(buf);
+    BYTES_WRITTEN.fetch_add(buf.len() as u64, Ordering::AcqRel);
+    true
+}
+
 /// Walk a split virtqueue in a flat GPA image (`guest_mem[gpa]`).
 pub fn process_blk_queue_in(
     guest_mem: &mut [u8],

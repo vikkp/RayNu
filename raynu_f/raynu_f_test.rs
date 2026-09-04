@@ -365,9 +365,9 @@ fn raynu_f_tables_and_console_dispatch() {
 
     // Honest unsupported / not-ready paths.
     let args = ServiceArgs::regs(0, 0, 0, 0);
-    // Protocol/handle services are F4; runtime services are later.
+    // Image services are F5; runtime services are later.
     assert_eq!(
-        dispatch(ServiceId::HandleProtocol, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
+        dispatch(ServiceId::LoadImage, args, &guest, &mut sink3, &mut st, &clk, SLAB).status,
         EFI_UNSUPPORTED
     );
     assert_eq!(
@@ -839,4 +839,321 @@ fn raynu_f_memory_events_timer_services() {
 
     #[cfg(not(target_os = "uefi"))]
     println!("{RAYNU_F_SERVICES_OK_MARKER}");
+}
+
+/// Backing store for the F4 BlockIo tests: CD image + install disk.
+static F4_CD: std::sync::OnceLock<std::sync::Mutex<Vec<u8>>> = std::sync::OnceLock::new();
+static F4_DISK: std::sync::OnceLock<std::sync::Mutex<Vec<u8>>> = std::sync::OnceLock::new();
+
+fn f4_read(media_id: u32, off: u64, buf: &mut [u8]) -> bool {
+    let cell = match media_id {
+        super::MEDIA_ID_CD => &F4_CD,
+        super::MEDIA_ID_DISK => &F4_DISK,
+        _ => return false,
+    };
+    let g = cell.get().unwrap().lock().unwrap();
+    let start = off as usize;
+    if start + buf.len() > g.len() {
+        return false;
+    }
+    buf.copy_from_slice(&g[start..start + buf.len()]);
+    true
+}
+
+fn f4_write(media_id: u32, off: u64, buf: &[u8]) -> bool {
+    if media_id != super::MEDIA_ID_DISK {
+        return false;
+    }
+    let mut g = F4_DISK.get().unwrap().lock().unwrap();
+    let start = off as usize;
+    if start + buf.len() > g.len() {
+        return false;
+    }
+    g[start..start + buf.len()].copy_from_slice(buf);
+    true
+}
+
+#[test]
+fn raynu_f_protocols_and_blockio() {
+    use super::blockio::{
+        validate_transfer, BlockMedia, BLOCKIO_MEDIA_OFF, BLOCKIO_READ_OFF, BLOCKIO_REVISION2,
+        BLOCKIO_REVISION_OFF, BLOCKIO_WRITE_OFF, CD_BLOCK_SIZE, DISK_BLOCK_SIZE,
+        EFI_BAD_BUFFER_SIZE, EFI_MEDIA_CHANGED, EFI_NO_MEDIA, EFI_WRITE_PROTECTED,
+        MEDIA_BLOCK_SIZE_OFF, MEDIA_LAST_BLOCK_OFF, MEDIA_MEDIA_ID_OFF, MEDIA_PRESENT_OFF,
+        MEDIA_READ_ONLY_OFF, MEDIA_REMOVABLE_OFF, MEDIA_SIZE,
+    };
+    use super::memory::POOL_HEADER_BYTES;
+    use super::protocol::{
+        Protocols, ALL_HANDLES, BY_PROTOCOL, BY_REGISTER_NOTIFY, GUID_BLOCK_IO,
+        GUID_LOADED_IMAGE, GUID_SIMPLE_FILE_SYSTEM, HANDLE_CD, HANDLE_DISK, MAX_HANDLES,
+    };
+    use super::services::{
+        dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_SUCCESS,
+        EFI_UNSUPPORTED, STACK_ARG5_OFF,
+    };
+    use super::tables::{
+        build_firmware_image, get_u64, write_block_media, IMAGE_BLOCKIO_CD_OFF,
+        IMAGE_BLOCKIO_DISK_OFF, IMAGE_BYTES, IMAGE_GUID_BLOCK_IO_OFF, IMAGE_MEDIA_CD_OFF,
+        IMAGE_MEDIA_DISK_OFF,
+    };
+    use super::RAYNU_F_BLOCKIO_GATE_MARKER;
+
+    const EFI_NOT_FOUND: u64 = 0x8000_0000_0000_000E;
+    const EFI_BUFFER_TOO_SMALL: u64 = 0x8000_0000_0000_0005;
+
+    // --- GUIDs are the real UEFI values ----------------------------------
+    // BlockIo {964E5B21-6459-11D2-8E39-00A0C969723B}
+    assert_eq!(u32::from_le_bytes(GUID_BLOCK_IO[0..4].try_into().unwrap()), 0x964E_5B21);
+    assert_eq!(u16::from_le_bytes(GUID_BLOCK_IO[4..6].try_into().unwrap()), 0x6459);
+    assert_eq!(u16::from_le_bytes(GUID_BLOCK_IO[6..8].try_into().unwrap()), 0x11D2);
+    assert_eq!(&GUID_BLOCK_IO[8..], &[0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B]);
+    assert_eq!(u32::from_le_bytes(GUID_SIMPLE_FILE_SYSTEM[0..4].try_into().unwrap()), 0x964E_5B22);
+    assert_eq!(u32::from_le_bytes(GUID_LOADED_IMAGE[0..4].try_into().unwrap()), 0x5B1B_31A1);
+    assert_ne!(GUID_BLOCK_IO, GUID_SIMPLE_FILE_SYSTEM);
+
+    // --- media encoding matches EFI_BLOCK_IO_MEDIA ------------------------
+    assert_eq!(MEDIA_SIZE, 0x30);
+    let iso_bytes = 64u64 * 2048; // 64 CD blocks
+    let disk_bytes = 256u64 * 512; // 256 disk blocks
+    let media_cd = BlockMedia::cd(iso_bytes);
+    let media_disk = BlockMedia::disk(disk_bytes);
+    assert_eq!(media_cd.block_size, CD_BLOCK_SIZE);
+    assert_eq!(media_cd.last_block, 63);
+    assert!(media_cd.read_only && media_cd.removable && media_cd.present);
+    assert_eq!(media_disk.block_size, DISK_BLOCK_SIZE);
+    assert_eq!(media_disk.last_block, 255);
+    assert!(!media_disk.read_only && !media_disk.removable && media_disk.present);
+    // No media when there are no blocks.
+    assert!(!BlockMedia::cd(0).present);
+    assert!(!BlockMedia::disk(511).present);
+    let mut enc = [0u8; MEDIA_SIZE];
+    media_cd.encode(&mut enc);
+    assert_eq!(u32::from_le_bytes(enc[MEDIA_MEDIA_ID_OFF..MEDIA_MEDIA_ID_OFF + 4].try_into().unwrap()), super::MEDIA_ID_CD);
+    assert_eq!(enc[MEDIA_REMOVABLE_OFF], 1);
+    assert_eq!(enc[MEDIA_PRESENT_OFF], 1);
+    assert_eq!(enc[MEDIA_READ_ONLY_OFF], 1);
+    assert_eq!(u32::from_le_bytes(enc[MEDIA_BLOCK_SIZE_OFF..MEDIA_BLOCK_SIZE_OFF + 4].try_into().unwrap()), 2048);
+    assert_eq!(u64::from_le_bytes(enc[MEDIA_LAST_BLOCK_OFF..MEDIA_LAST_BLOCK_OFF + 8].try_into().unwrap()), 63);
+
+    // --- transfer validation (spec 13.9) ---------------------------------
+    assert_eq!(validate_transfer(&media_cd, 1, 0, 2048, 0x1000, false), EFI_SUCCESS);
+    assert_eq!(validate_transfer(&media_cd, 1, 0, 0, 0, false), EFI_SUCCESS); // zero-length ok
+    assert_eq!(validate_transfer(&media_cd, 9, 0, 2048, 0x1000, false), EFI_MEDIA_CHANGED);
+    assert_eq!(validate_transfer(&media_cd, 1, 0, 2048, 0x1000, true), EFI_WRITE_PROTECTED);
+    assert_eq!(validate_transfer(&media_cd, 1, 0, 100, 0x1000, false), EFI_BAD_BUFFER_SIZE);
+    assert_eq!(validate_transfer(&media_cd, 1, 64, 2048, 0x1000, false), EFI_INVALID_PARAMETER);
+    assert_eq!(validate_transfer(&media_cd, 1, 63, 4096, 0x1000, false), EFI_INVALID_PARAMETER);
+    assert_eq!(validate_transfer(&media_cd, 1, 63, 2048, 0x1000, false), EFI_SUCCESS);
+    assert_eq!(validate_transfer(&media_cd, 1, u64::MAX, 2048, 0x1000, false), EFI_INVALID_PARAMETER);
+    assert_eq!(validate_transfer(&media_cd, 1, 0, 2048, 0, false), EFI_INVALID_PARAMETER);
+    assert_eq!(validate_transfer(&BlockMedia::cd(0), 1, 0, 2048, 0x1000, false), EFI_NO_MEDIA);
+    assert_eq!(validate_transfer(&media_disk, 2, 0, 512, 0x1000, true), EFI_SUCCESS);
+
+    // --- protocol database ------------------------------------------------
+    let mut db = Protocols::new();
+    assert_eq!(db.install(HANDLE_CD, GUID_BLOCK_IO, 0x9000), EFI_SUCCESS);
+    assert_eq!(db.install(HANDLE_DISK, GUID_BLOCK_IO, 0x9100), EFI_SUCCESS);
+    assert_eq!(db.interface_for(HANDLE_CD, &GUID_BLOCK_IO), Some(0x9000));
+    assert_eq!(db.interface_for(HANDLE_DISK, &GUID_BLOCK_IO), Some(0x9100));
+    assert_eq!(db.interface_for(HANDLE_CD, &GUID_SIMPLE_FILE_SYSTEM), None);
+    assert_eq!(db.interface_for(0xDEAD, &GUID_BLOCK_IO), None);
+    // Re-install replaces rather than duplicating.
+    assert_eq!(db.install(HANDLE_CD, GUID_BLOCK_IO, 0x9200), EFI_SUCCESS);
+    assert_eq!(db.interface_for(HANDLE_CD, &GUID_BLOCK_IO), Some(0x9200));
+    assert_eq!(db.count_on_handle(HANDLE_CD), 1);
+    assert_eq!(db.install(0, GUID_BLOCK_IO, 0x1), EFI_INVALID_PARAMETER);
+    let mut hs = [0u64; MAX_HANDLES];
+    assert_eq!(db.locate(BY_PROTOCOL, Some(&GUID_BLOCK_IO), &mut hs), 2);
+    assert!(hs[..2].contains(&HANDLE_CD) && hs[..2].contains(&HANDLE_DISK));
+    assert_eq!(db.locate(BY_PROTOCOL, Some(&GUID_SIMPLE_FILE_SYSTEM), &mut hs), 0);
+    assert_eq!(db.locate(ALL_HANDLES, None, &mut hs), 2);
+    assert_eq!(db.first_interface(&GUID_BLOCK_IO), Some(0x9200));
+
+    // --- table layout: two BlockIo instances sharing trampolines ----------
+    let base = 0u64;
+    let mut mem = vec![0u8; SLAB as usize];
+    let tb = 0x0080_0000usize;
+    let layout = build_firmware_image(tb as u64, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
+    write_block_media(&mut mem[tb..tb + IMAGE_BYTES], IMAGE_MEDIA_CD_OFF, &media_cd);
+    write_block_media(&mut mem[tb..tb + IMAGE_BYTES], IMAGE_MEDIA_DISK_OFF, &media_disk);
+    assert_eq!(layout.blockio_cd, tb as u64 + IMAGE_BLOCKIO_CD_OFF as u64);
+    assert_eq!(layout.media_cd, tb as u64 + IMAGE_MEDIA_CD_OFF as u64);
+    assert_ne!(layout.blockio_cd, layout.blockio_disk);
+    let cd = tb + IMAGE_BLOCKIO_CD_OFF;
+    let dk = tb + IMAGE_BLOCKIO_DISK_OFF;
+    assert_eq!(get_u64(&mem, cd + BLOCKIO_REVISION_OFF), BLOCKIO_REVISION2);
+    assert_eq!(get_u64(&mem, cd + BLOCKIO_MEDIA_OFF), layout.media_cd);
+    assert_eq!(get_u64(&mem, dk + BLOCKIO_MEDIA_OFF), layout.media_disk);
+    // Both instances point at the same shared trampolines.
+    assert_eq!(get_u64(&mem, cd + BLOCKIO_READ_OFF), get_u64(&mem, dk + BLOCKIO_READ_OFF));
+    assert_ne!(get_u64(&mem, cd + BLOCKIO_READ_OFF), get_u64(&mem, cd + BLOCKIO_WRITE_OFF));
+    assert_eq!(
+        get_u64(&mem, cd + BLOCKIO_READ_OFF),
+        super::trampoline_slot_gpa(layout.trampolines, ServiceId::BlockIoReadBlocks)
+    );
+    // The GUID constant is in the image for a guest to point HandleProtocol at.
+    assert_eq!(&mem[tb + IMAGE_GUID_BLOCK_IO_OFF..tb + IMAGE_GUID_BLOCK_IO_OFF + 16], &GUID_BLOCK_IO);
+
+    // --- backing stores ---------------------------------------------------
+    // CD: a plausible ISO9660 — "CD001" at LBA 16 offset 1.
+    let mut iso = vec![0u8; iso_bytes as usize];
+    iso[16 * 2048] = 1;
+    iso[16 * 2048 + 1..16 * 2048 + 6].copy_from_slice(b"CD001");
+    F4_CD.set(std::sync::Mutex::new(iso)).ok();
+    F4_DISK.set(std::sync::Mutex::new(vec![0u8; disk_bytes as usize])).ok();
+
+    let guest = MockGuest::new(base, mem);
+    let mut sink = CaptureSink::default();
+    let mut st = FirmwareState::new();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    st.media_cd = media_cd;
+    st.media_disk = media_disk;
+    st.blockio_cd = layout.blockio_cd;
+    st.blockio_disk = layout.blockio_disk;
+    st.read_blocks = Some(f4_read);
+    st.write_blocks = Some(f4_write);
+    assert_eq!(st.protocols.install(HANDLE_CD, GUID_BLOCK_IO, layout.blockio_cd), EFI_SUCCESS);
+    assert_eq!(st.protocols.install(HANDLE_DISK, GUID_BLOCK_IO, layout.blockio_disk), EFI_SUCCESS);
+    assert_eq!(st.media_for(layout.blockio_cd).map(|m| m.media_id), Some(super::MEDIA_ID_CD));
+    assert_eq!(st.media_for(0xDEAD), None);
+
+    let scratch = 0x00AF_0000u64;
+    let stack = scratch + 0x2000;
+    let p_iface = scratch;
+    let p_guid = scratch + 0x40;
+    let p_size = scratch + 0x50;
+    let p_count = scratch + 0x58;
+    let buf = scratch + 0x1000;
+    guest.write(p_guid, &GUID_BLOCK_IO);
+
+    // --- HandleProtocol / OpenProtocol / LocateProtocol -------------------
+    guest.put_u64(p_iface, 0);
+    let d = dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(HANDLE_CD, p_guid, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let bio_cd = guest.u64_at(p_iface);
+    assert_eq!(bio_cd, layout.blockio_cd);
+    // A guest can now follow This->Media and read geometry itself.
+    assert_eq!(guest.u64_at(bio_cd + BLOCKIO_MEDIA_OFF as u64), layout.media_cd);
+    let mut mid = [0u8; 4];
+    guest.read(layout.media_cd + MEDIA_MEDIA_ID_OFF as u64, &mut mid);
+    assert_eq!(u32::from_le_bytes(mid), super::MEDIA_ID_CD);
+    // Unknown handle / unknown GUID.
+    assert_eq!(dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(0xDEAD, p_guid, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    guest.write(p_guid + 0x20, &GUID_SIMPLE_FILE_SYSTEM);
+    assert_eq!(dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(HANDLE_CD, p_guid + 0x20, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    // OpenProtocol yields the same interface; CloseProtocol succeeds.
+    guest.put_u64(p_iface, 0);
+    assert_eq!(dispatch(ServiceId::OpenProtocol, ServiceArgs::regs(HANDLE_DISK, p_guid, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_iface), layout.blockio_disk);
+    assert_eq!(dispatch(ServiceId::CloseProtocol, ServiceArgs::regs(HANDLE_DISK, p_guid, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    // LocateProtocol returns the first publisher.
+    guest.put_u64(p_iface, 0);
+    assert_eq!(dispatch(ServiceId::LocateProtocol, ServiceArgs::regs(p_guid, 0, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_ne!(guest.u64_at(p_iface), 0);
+
+    // --- LocateHandle: sizing then fill -----------------------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, 0); // Buffer = NULL
+    guest.put_u64(p_size, 0);
+    let args = ServiceArgs { a1: BY_PROTOCOL as u64, a2: p_guid, a3: 0, a4: p_size, rsp: stack };
+    assert_eq!(dispatch(ServiceId::LocateHandle, args, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_BUFFER_TOO_SMALL);
+    assert_eq!(guest.u64_at(p_size), 16); // two handles
+    guest.put_u64(stack + STACK_ARG5_OFF, buf);
+    guest.put_u64(p_size, 16);
+    let d = dispatch(ServiceId::LocateHandle, args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    let h0 = guest.u64_at(buf);
+    let h1 = guest.u64_at(buf + 8);
+    assert!([h0, h1].contains(&HANDLE_CD) && [h0, h1].contains(&HANDLE_DISK));
+    // ByRegisterNotify is honestly unsupported.
+    let args_n = ServiceArgs { a1: BY_REGISTER_NOTIFY as u64, a2: p_guid, a3: 0, a4: p_size, rsp: stack };
+    assert_eq!(dispatch(ServiceId::LocateHandle, args_n, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED);
+
+    // --- LocateHandleBuffer allocates from our pool -----------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, p_iface);
+    let free_before = st.pool.free_pages();
+    let args = ServiceArgs { a1: BY_PROTOCOL as u64, a2: p_guid, a3: 0, a4: p_count, rsp: stack };
+    let d = dispatch(ServiceId::LocateHandleBuffer, args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_count), 2);
+    let arr = guest.u64_at(p_iface);
+    assert_eq!(arr & 0xfff, POOL_HEADER_BYTES);
+    assert!(st.pool.free_pages() < free_before);
+    let a0 = guest.u64_at(arr);
+    assert!([HANDLE_CD, HANDLE_DISK].contains(&a0));
+    // FreePool releases it.
+    assert_eq!(dispatch(ServiceId::FreePool, ServiceArgs::regs(arr, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(st.pool.free_pages(), free_before);
+
+    // --- InstallProtocolInterface (a loader publishing its own) -----------
+    let p_handle = scratch + 0x80; // must not collide with p_guid+0x20
+    guest.put_u64(p_handle, HANDLE_CD);
+    guest.write(p_guid + 0x20, &GUID_SIMPLE_FILE_SYSTEM);
+    let d = dispatch(ServiceId::InstallProtocolInterface, ServiceArgs::regs(p_handle, p_guid + 0x20, 0, 0xABCD_0000), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    guest.put_u64(p_iface, 0);
+    assert_eq!(dispatch(ServiceId::HandleProtocol, ServiceArgs::regs(HANDLE_CD, p_guid + 0x20, p_iface, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(p_iface), 0xABCD_0000);
+    // Non-native interface types are rejected.
+    assert_eq!(dispatch(ServiceId::InstallProtocolInterface, ServiceArgs::regs(p_handle, p_guid + 0x20, 1, 0x1), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+
+    // --- BlockIo.ReadBlocks: the ISO9660 PVD at LBA 16 --------------------
+    guest.put_u64(stack + STACK_ARG5_OFF, buf);
+    let args = ServiceArgs { a1: bio_cd, a2: super::MEDIA_ID_CD as u64, a3: 16, a4: 2048, rsp: stack };
+    let d = dispatch(ServiceId::BlockIoReadBlocks, args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.block_io_ok);
+    assert_eq!(st.block_reads, 1);
+    let mut sig = [0u8; 6];
+    guest.read(buf, &mut sig);
+    assert_eq!(&sig, b"\x01CD001"); // volume descriptor type 1 + magic
+    // Writing the CD is refused by media, not by the backend.
+    let d = dispatch(ServiceId::BlockIoWriteBlocks, args, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_WRITE_PROTECTED);
+    assert!(!d.block_io_ok);
+    // Wrong media id / past the end / bad size.
+    let bad = ServiceArgs { a1: bio_cd, a2: 99, a3: 16, a4: 2048, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_MEDIA_CHANGED);
+    let bad = ServiceArgs { a1: bio_cd, a2: super::MEDIA_ID_CD as u64, a3: 64, a4: 2048, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    let bad = ServiceArgs { a1: bio_cd, a2: super::MEDIA_ID_CD as u64, a3: 0, a4: 999, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_BAD_BUFFER_SIZE);
+    // A bogus `This` is rejected.
+    let bad = ServiceArgs { a1: 0xDEAD, a2: 1, a3: 0, a4: 512, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, bad, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+
+    // --- BlockIo write/read round-trip on the install disk ----------------
+    // This is the path a real installer's GPT write will take.
+    let gpt = b"EFI PART";
+    guest.write(buf, gpt);
+    let wargs = ServiceArgs { a1: layout.blockio_disk, a2: super::MEDIA_ID_DISK as u64, a3: 1, a4: 512, rsp: stack };
+    let d = dispatch(ServiceId::BlockIoWriteBlocks, wargs, &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert!(d.block_io_ok);
+    assert_eq!(st.block_writes, 1);
+    // It really landed in the backing store at LBA 1 = byte 512.
+    assert_eq!(&F4_DISK.get().unwrap().lock().unwrap()[512..520], gpt);
+    // Read it back through the protocol into a different buffer.
+    guest.put_u64(stack + STACK_ARG5_OFF, buf + 0x800);
+    let rargs = ServiceArgs { a1: layout.blockio_disk, a2: super::MEDIA_ID_DISK as u64, a3: 1, a4: 512, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, rargs, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    let mut back = [0u8; 8];
+    guest.read(buf + 0x800, &mut back);
+    assert_eq!(&back, gpt);
+    // Multi-block transfer spanning our 4096-byte chunking.
+    guest.put_u64(stack + STACK_ARG5_OFF, buf);
+    let many = ServiceArgs { a1: layout.blockio_disk, a2: super::MEDIA_ID_DISK as u64, a3: 0, a4: 512 * 20, rsp: stack };
+    assert_eq!(dispatch(ServiceId::BlockIoReadBlocks, many, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    // Reset / Flush.
+    assert_eq!(dispatch(ServiceId::BlockIoReset, ServiceArgs::regs(bio_cd, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(dispatch(ServiceId::BlockIoFlushBlocks, ServiceArgs::regs(layout.blockio_disk, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(dispatch(ServiceId::BlockIoFlushBlocks, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+
+    // --- still honestly unsupported (F5) ----------------------------------
+    let a0 = ServiceArgs::regs(0, 0, 0, 0);
+    for id in [ServiceId::LoadImage, ServiceId::StartImage, ServiceId::Exit, ServiceId::ConnectController] {
+        assert_eq!(dispatch(id, a0, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED, "{}", id.name());
+    }
+
+    #[cfg(not(target_os = "uefi"))]
+    println!("{RAYNU_F_BLOCKIO_GATE_MARKER}");
 }

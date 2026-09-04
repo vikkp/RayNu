@@ -19,10 +19,12 @@
 //! a guest calls it. Not yet: a PE loader or a launch, so no guest has called
 //! it. It is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
+pub mod blockio;
 pub mod events;
 pub mod launch_plan;
 pub mod memory;
 pub mod pe;
+pub mod protocol;
 pub mod services;
 pub mod tables;
 pub mod testapp;
@@ -38,7 +40,18 @@ pub use services::{
     OUTPUT_STRING_CAP_CHARS, RAYNU_F_SERVICE_PORT, TRAMPOLINE_SLOT_BYTES,
     TRAMPOLINE_SLOT_COUNT,
 };
+pub use blockio::{BlockMedia, MEDIA_ID_CD, MEDIA_ID_DISK};
 pub use events::{TimeSource, WaitOutcome};
+pub use protocol::{GUID_BLOCK_IO, HANDLE_CD, HANDLE_DISK};
+pub use tables::write_block_media;
+
+/// Serial marker on the first live guest `BlockIo` read or write.
+/// Guest-exit-only.
+pub const RAYNU_F_BLOCKIO_OK_MARKER: &str = "RAYNU-V-RAYNU-F-BLOCKIO-OK";
+
+/// Host / CI marker when the F4 gate passes: handle/protocol database +
+/// `BlockIo` media/validation/transfer against a mock guest. Host only.
+pub const RAYNU_F_BLOCKIO_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-BLOCKIO-GATE-OK";
 pub use testapp::{TESTAPP_HLT_FAIL_OFF, TESTAPP_HLT_OK_OFF};
 
 /// Serial marker the hypervisor prints the first time a live guest's

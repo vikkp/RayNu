@@ -83,6 +83,15 @@ pub const IMAGE_CONOUT_OFF: usize = 0x1400;
 pub const IMAGE_CONOUT_MODE_OFF: usize = 0x1480;
 pub const IMAGE_CONIN_OFF: usize = 0x14A0;
 pub const IMAGE_VENDOR_OFF: usize = 0x1500;
+/// F4: `EFI_BLOCK_IO_PROTOCOL` + `EFI_BLOCK_IO_MEDIA` for the CD and disk,
+/// plus the GUID constants a guest passes to `HandleProtocol`.
+pub const IMAGE_BLOCKIO_CD_OFF: usize = 0x1600;
+pub const IMAGE_MEDIA_CD_OFF: usize = 0x1640;
+pub const IMAGE_BLOCKIO_DISK_OFF: usize = 0x1680;
+pub const IMAGE_MEDIA_DISK_OFF: usize = 0x16C0;
+pub const IMAGE_GUID_BLOCK_IO_OFF: usize = 0x1700;
+pub const IMAGE_GUID_SIMPLE_FS_OFF: usize = 0x1710;
+pub const IMAGE_GUID_LOADED_IMAGE_OFF: usize = 0x1720;
 /// Total bytes the image needs (two 4 KiB pages).
 pub const IMAGE_BYTES: usize = 0x2000;
 
@@ -105,6 +114,13 @@ pub struct FirmwareImageLayout {
     pub con_out_mode: u64,
     pub con_in: u64,
     pub vendor: u64,
+    pub blockio_cd: u64,
+    pub media_cd: u64,
+    pub blockio_disk: u64,
+    pub media_disk: u64,
+    pub guid_block_io: u64,
+    pub guid_simple_fs: u64,
+    pub guid_loaded_image: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -212,6 +228,13 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         con_out_mode: base + IMAGE_CONOUT_MODE_OFF as u64,
         con_in: base + IMAGE_CONIN_OFF as u64,
         vendor: base + IMAGE_VENDOR_OFF as u64,
+        blockio_cd: base + IMAGE_BLOCKIO_CD_OFF as u64,
+        media_cd: base + IMAGE_MEDIA_CD_OFF as u64,
+        blockio_disk: base + IMAGE_BLOCKIO_DISK_OFF as u64,
+        media_disk: base + IMAGE_MEDIA_DISK_OFF as u64,
+        guid_block_io: base + IMAGE_GUID_BLOCK_IO_OFF as u64,
+        guid_simple_fs: base + IMAGE_GUID_SIMPLE_FS_OFF as u64,
+        guid_loaded_image: base + IMAGE_GUID_LOADED_IMAGE_OFF as u64,
     };
 
     // Trampoline page: one stub per service slot.
@@ -322,5 +345,50 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         SYSTEM_TABLE_SIZE,
     );
 
+    // F4: two EFI_BLOCK_IO_PROTOCOL instances sharing one set of trampolines
+    // (`This`/`MediaId` select the device). Media contents are refreshed by
+    // the launcher once the real ISO / disk sizes are known.
+    for (proto, media) in [
+        (IMAGE_BLOCKIO_CD_OFF, layout.media_cd),
+        (IMAGE_BLOCKIO_DISK_OFF, layout.media_disk),
+    ] {
+        put_u64(buf, proto + super::blockio::BLOCKIO_REVISION_OFF, super::blockio::BLOCKIO_REVISION2);
+        put_u64(buf, proto + super::blockio::BLOCKIO_MEDIA_OFF, media);
+        put_u64(
+            buf,
+            proto + super::blockio::BLOCKIO_RESET_OFF,
+            trampoline_slot_gpa(layout.trampolines, ServiceId::BlockIoReset),
+        );
+        put_u64(
+            buf,
+            proto + super::blockio::BLOCKIO_READ_OFF,
+            trampoline_slot_gpa(layout.trampolines, ServiceId::BlockIoReadBlocks),
+        );
+        put_u64(
+            buf,
+            proto + super::blockio::BLOCKIO_WRITE_OFF,
+            trampoline_slot_gpa(layout.trampolines, ServiceId::BlockIoWriteBlocks),
+        );
+        put_u64(
+            buf,
+            proto + super::blockio::BLOCKIO_FLUSH_OFF,
+            trampoline_slot_gpa(layout.trampolines, ServiceId::BlockIoFlushBlocks),
+        );
+    }
+    // GUID constants a guest can point `HandleProtocol` at.
+    buf[IMAGE_GUID_BLOCK_IO_OFF..IMAGE_GUID_BLOCK_IO_OFF + 16]
+        .copy_from_slice(&super::protocol::GUID_BLOCK_IO);
+    buf[IMAGE_GUID_SIMPLE_FS_OFF..IMAGE_GUID_SIMPLE_FS_OFF + 16]
+        .copy_from_slice(&super::protocol::GUID_SIMPLE_FILE_SYSTEM);
+    buf[IMAGE_GUID_LOADED_IMAGE_OFF..IMAGE_GUID_LOADED_IMAGE_OFF + 16]
+        .copy_from_slice(&super::protocol::GUID_LOADED_IMAGE);
+
     Ok(layout)
+}
+
+/// Write one device's `EFI_BLOCK_IO_MEDIA` into the image buffer.
+pub fn write_block_media(buf: &mut [u8], off: usize, media: &super::blockio::BlockMedia) {
+    let mut m = [0u8; super::blockio::MEDIA_SIZE];
+    media.encode(&mut m);
+    buf[off..off + super::blockio::MEDIA_SIZE].copy_from_slice(&m);
 }

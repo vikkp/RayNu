@@ -29,14 +29,22 @@ use super::memory::{
     encode_descriptor, MemRun, PagePool, EFI_BUFFER_TOO_SMALL, MAX_DESCRIPTORS,
     MEMORY_DESCRIPTOR_SIZE, MEMORY_DESCRIPTOR_VERSION, POOL_HEADER_BYTES, POOL_MAGIC,
 };
+use super::blockio::{
+    lba_offset, validate_transfer, BlockMedia, EFI_DEVICE_ERROR as BLK_DEVICE_ERROR,
+    MAX_TRANSFER_BYTES,
+};
+use super::protocol::{
+    Guid, Protocols, ALL_HANDLES, BY_PROTOCOL, EFI_BUFFER_TOO_SMALL as PROTO_BUFFER_TOO_SMALL,
+    EFI_NOT_FOUND as PROTO_NOT_FOUND, MAX_HANDLES,
+};
 use super::tables::{crc32_feed, crc32_finish, crc32_start};
 
 /// `'R' 'F'` — the RayNu-F service I/O port. Unused by OVMF / QEMU / PC legacy.
 pub const RAYNU_F_SERVICE_PORT: u16 = 0x5246;
 /// Each trampoline slot is 16 bytes (14 used + 2 NOP pad).
 pub const TRAMPOLINE_SLOT_BYTES: usize = 16;
-/// Number of service slots we lay out.
-pub const TRAMPOLINE_SLOT_COUNT: usize = 69;
+/// Number of service slots we lay out (11 console + 44 boot + 14 runtime + 4 BlockIo).
+pub const TRAMPOLINE_SLOT_COUNT: usize = 73;
 /// Exact stub length before padding.
 pub const TRAMPOLINE_STUB_BYTES: usize = 14;
 
@@ -67,6 +75,7 @@ impl ServiceId {
     pub const CONIN_BASE: u32 = 0x180;
     pub const BOOT_BASE: u32 = 0x200;
     pub const RUNTIME_BASE: u32 = 0x300;
+    pub const BLOCKIO_BASE: u32 = 0x400;
 
     pub const ConOutReset: ServiceId = ServiceId(0x100);
     pub const ConOutOutputString: ServiceId = ServiceId(0x101);
@@ -126,6 +135,12 @@ impl ServiceId {
     pub const SetMem: ServiceId = ServiceId(0x22A);
     pub const CreateEventEx: ServiceId = ServiceId(0x22B);
 
+    // EFI_BLOCK_IO_PROTOCOL methods (shared by the CD and disk instances).
+    pub const BlockIoReset: ServiceId = ServiceId(0x400);
+    pub const BlockIoReadBlocks: ServiceId = ServiceId(0x401);
+    pub const BlockIoWriteBlocks: ServiceId = ServiceId(0x402);
+    pub const BlockIoFlushBlocks: ServiceId = ServiceId(0x403);
+
     /// Boot service `i` in `EFI_BOOT_SERVICES` spec order (0 = RaiseTPL).
     pub const fn boot_service(i: usize) -> ServiceId {
         ServiceId(Self::BOOT_BASE + i as u32)
@@ -147,6 +162,8 @@ impl ServiceId {
             Some(11 + (v - Self::BOOT_BASE) as usize)
         } else if v >= Self::RUNTIME_BASE && v < Self::RUNTIME_BASE + 14 {
             Some(55 + (v - Self::RUNTIME_BASE) as usize)
+        } else if v >= Self::BLOCKIO_BASE && v < Self::BLOCKIO_BASE + 4 {
+            Some(69 + (v - Self::BLOCKIO_BASE) as usize)
         } else {
             None
         }
@@ -160,8 +177,10 @@ impl ServiceId {
             Some(ServiceId(Self::CONIN_BASE + (slot - 9) as u32))
         } else if slot < 55 {
             Some(ServiceId(Self::BOOT_BASE + (slot - 11) as u32))
-        } else if slot < TRAMPOLINE_SLOT_COUNT {
+        } else if slot < 69 {
             Some(ServiceId(Self::RUNTIME_BASE + (slot - 55) as u32))
+        } else if slot < TRAMPOLINE_SLOT_COUNT {
+            Some(ServiceId(Self::BLOCKIO_BASE + (slot - 69) as u32))
         } else {
             None
         }
@@ -216,6 +235,11 @@ impl ServiceId {
             ServiceId::CopyMem => "CopyMem",
             ServiceId::SetMem => "SetMem",
             ServiceId::CreateEventEx => "CreateEventEx",
+            ServiceId::InstallProtocolInterface => "InstallProtocolInterface",
+            ServiceId::BlockIoReset => "BlockIo.Reset",
+            ServiceId::BlockIoReadBlocks => "BlockIo.ReadBlocks",
+            ServiceId::BlockIoWriteBlocks => "BlockIo.WriteBlocks",
+            ServiceId::BlockIoFlushBlocks => "BlockIo.FlushBlocks",
             ServiceId(v) if (Self::BOOT_BASE..Self::BOOT_BASE + 44).contains(&v) => "BootServices",
             ServiceId(v) if (Self::RUNTIME_BASE..Self::RUNTIME_BASE + 14).contains(&v) => {
                 "RuntimeServices"
@@ -326,12 +350,28 @@ impl ServiceArgs {
     }
 }
 
+/// Backing-store access for block devices. Plain `fn` pointers keep
+/// `FirmwareState` a `const`-constructible static with no lifetimes.
+pub type BlockReadFn = fn(u32, u64, &mut [u8]) -> bool;
+pub type BlockWriteFn = fn(u32, u64, &[u8]) -> bool;
+
 /// All RayNu-F firmware state the dispatcher mutates. Lives in the hypervisor
 /// as a single BSP-owned instance; host tests build their own.
 pub struct FirmwareState {
     pub pool: PagePool,
     pub events: Events,
+    pub protocols: Protocols,
     pub watchdog_sets: u32,
+    /// `This` pointer → media, published by the launcher.
+    pub blockio_cd: u64,
+    pub blockio_disk: u64,
+    pub media_cd: BlockMedia,
+    pub media_disk: BlockMedia,
+    pub read_blocks: Option<BlockReadFn>,
+    pub write_blocks: Option<BlockWriteFn>,
+    /// Successful block reads / writes (host bookkeeping for markers).
+    pub block_reads: u32,
+    pub block_writes: u32,
 }
 
 impl FirmwareState {
@@ -339,7 +379,27 @@ impl FirmwareState {
         FirmwareState {
             pool: PagePool::new(),
             events: Events::new(),
+            protocols: Protocols::new(),
             watchdog_sets: 0,
+            blockio_cd: 0,
+            blockio_disk: 0,
+            media_cd: BlockMedia::cd(0),
+            media_disk: BlockMedia::disk(0),
+            read_blocks: None,
+            write_blocks: None,
+            block_reads: 0,
+            block_writes: 0,
+        }
+    }
+
+    /// Resolve a `This` pointer to its media description.
+    pub fn media_for(&self, this: u64) -> Option<&BlockMedia> {
+        if this != 0 && this == self.blockio_cd {
+            Some(&self.media_cd)
+        } else if this != 0 && this == self.blockio_disk {
+            Some(&self.media_disk)
+        } else {
+            None
         }
     }
 }
@@ -357,6 +417,8 @@ pub struct Dispatched {
     pub alloc_ok: bool,
     /// `ExitBootServices` succeeded on this call.
     pub exited_boot_services: bool,
+    /// A `BlockIo` read or write completed on this call.
+    pub block_io_ok: bool,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -520,9 +582,156 @@ fn calculate_crc32(mem: &dyn GuestMem, data: u64, len: u64, p_out: u64) -> u64 {
     }
 }
 
-/// Dispatch one RayNu-F service call. Console, memory, event/timer, TPL and
-/// misc boot services are implemented; protocol/handle/image services are
-/// `EFI_UNSUPPORTED` in this slice (F4/F5), and runtime services too.
+fn read_guid(mem: &dyn GuestMem, addr: u64) -> Option<Guid> {
+    if addr == 0 {
+        return None;
+    }
+    let mut g = [0u8; 16];
+    if mem.read(addr, &mut g) < 16 {
+        return None;
+    }
+    Some(g)
+}
+
+/// `LocateHandle(SearchType, *Guid, SearchKey, *BufferSize, *Buffer)`.
+fn locate_handle(st: &FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    let search = a.a1 as u32;
+    if search == BY_PROTOCOL && a.a2 == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    if search != ALL_HANDLES && search != BY_PROTOCOL {
+        return EFI_UNSUPPORTED; // ByRegisterNotify needs notify registration
+    }
+    let guid = read_guid(mem, a.a2);
+    let Some(p_buf) = stack_arg(mem, a.rsp, 5) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let p_size = a.a4;
+    let Some(size) = read_u64(mem, p_size) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let mut out = [0u64; MAX_HANDLES];
+    let n = st.protocols.locate(search, guid.as_ref(), &mut out);
+    if n == 0 {
+        return PROTO_NOT_FOUND;
+    }
+    let need = n as u64 * 8;
+    if p_buf == 0 || size < need {
+        let _ = write_u64(mem, p_size, need);
+        return PROTO_BUFFER_TOO_SMALL;
+    }
+    for i in 0..n {
+        if !write_u64(mem, p_buf + i as u64 * 8, out[i]) {
+            return EFI_INVALID_PARAMETER;
+        }
+    }
+    let _ = write_u64(mem, p_size, need);
+    EFI_SUCCESS
+}
+
+/// `LocateHandleBuffer(SearchType, *Guid, SearchKey, *NoHandles, **Buffer)` —
+/// allocates the result array from our pool.
+fn locate_handle_buffer(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    let search = a.a1 as u32;
+    if search != ALL_HANDLES && search != BY_PROTOCOL {
+        return EFI_UNSUPPORTED;
+    }
+    let guid = read_guid(mem, a.a2);
+    let Some(p_buf) = stack_arg(mem, a.rsp, 5) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    if a.a4 == 0 || p_buf == 0 {
+        return EFI_INVALID_PARAMETER;
+    }
+    let mut out = [0u64; MAX_HANDLES];
+    let n = st.protocols.locate(search, guid.as_ref(), &mut out);
+    if n == 0 {
+        return PROTO_NOT_FOUND;
+    }
+    let bytes = n as u64 * 8;
+    let pages = PagePool::pool_pages_for(bytes);
+    let (status, base) = st.pool.allocate_pages(
+        super::memory::ALLOCATE_ANY_PAGES,
+        super::memory::EFI_BOOT_SERVICES_DATA,
+        pages,
+        0,
+    );
+    if status != EFI_SUCCESS {
+        return status;
+    }
+    let arr = base + POOL_HEADER_BYTES;
+    let ok = write_u64(mem, base, POOL_MAGIC)
+        && write_u64(mem, base + 8, pages)
+        && (0..n).all(|i| write_u64(mem, arr + i as u64 * 8, out[i]))
+        && write_u64(mem, a.a4, n as u64)
+        && write_u64(mem, p_buf, arr);
+    if ok {
+        EFI_SUCCESS
+    } else {
+        let _ = st.pool.free_pages_at(base, pages);
+        EFI_INVALID_PARAMETER
+    }
+}
+
+/// `ReadBlocks` / `WriteBlocks`: `(This, MediaId, Lba, BufferSize, *Buffer)`.
+fn block_transfer(
+    st: &mut FirmwareState,
+    mem: &dyn GuestMem,
+    a: ServiceArgs,
+    write: bool,
+) -> u64 {
+    let Some(buffer) = stack_arg(mem, a.rsp, 5) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let Some(media) = st.media_for(a.a1).copied() else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let media_id = a.a2 as u32;
+    let lba = a.a3;
+    let size = a.a4;
+    let v = validate_transfer(&media, media_id, lba, size, buffer, write);
+    if v != EFI_SUCCESS || size == 0 {
+        return v;
+    }
+    let off = lba_offset(&media, lba);
+    let mut buf = [0u8; 4096];
+    let mut done = 0u64;
+    while done < size {
+        let chunk = (size - done).min(4096) as usize;
+        if write {
+            let Some(w) = st.write_blocks else {
+                return BLK_DEVICE_ERROR;
+            };
+            if mem.read(buffer + done, &mut buf[..chunk]) != chunk
+                || !w(media_id, off + done, &buf[..chunk])
+            {
+                return BLK_DEVICE_ERROR;
+            }
+        } else {
+            let Some(r) = st.read_blocks else {
+                return BLK_DEVICE_ERROR;
+            };
+            if !r(media_id, off + done, &mut buf[..chunk])
+                || mem.write(buffer + done, &buf[..chunk]) != chunk
+            {
+                return BLK_DEVICE_ERROR;
+            }
+        }
+        done += chunk as u64;
+    }
+    if write {
+        st.block_writes = st.block_writes.saturating_add(1);
+    } else {
+        st.block_reads = st.block_reads.saturating_add(1);
+    }
+    let _ = MAX_TRANSFER_BYTES;
+    EFI_SUCCESS
+}
+
+/// Dispatch one RayNu-F service call. Console, memory, event/timer, TPL,
+/// misc boot services, the handle/protocol database and `BlockIo` are
+/// implemented; image services (`LoadImage`/`StartImage`),
+/// `SimpleFileSystem` and runtime services are `EFI_UNSUPPORTED` (F5).
 pub fn dispatch(
     id: ServiceId,
     args: ServiceArgs,
@@ -539,6 +748,7 @@ pub fn dispatch(
         wait: None,
         alloc_ok: false,
         exited_boot_services: false,
+        block_io_ok: false,
     };
     let a = args;
     out.status = match id {
@@ -741,9 +951,88 @@ pub fn dispatch(
         ServiceId::CopyMem => copy_mem(mem, a.a1, a.a2, a.a3),
         ServiceId::SetMem => set_mem(mem, a.a1, a.a2, a.a3 as u8),
 
-        // ---- not yet (F4/F5): handles, protocols, images, runtime ----------
+        // ---- handles / protocols (F4) ----------------------------------
+        ServiceId::HandleProtocol => {
+            // (Handle, *Guid, **Interface)
+            match read_guid(mem, a.a2) {
+                Some(g) if a.a3 != 0 => match st.protocols.interface_for(a.a1, &g) {
+                    Some(iface) if write_u64(mem, a.a3, iface) => EFI_SUCCESS,
+                    Some(_) => EFI_INVALID_PARAMETER,
+                    None => PROTO_NOT_FOUND,
+                },
+                _ => EFI_INVALID_PARAMETER,
+            }
+        }
+        ServiceId::OpenProtocol => {
+            // (Handle, *Guid, **Interface, AgentHandle, ControllerHandle, Attributes)
+            // Agent/controller bookkeeping and BY_CHILD/BY_DRIVER are not
+            // modelled; a GET_PROTOCOL-style open is what loaders need.
+            match read_guid(mem, a.a2) {
+                Some(g) => match st.protocols.interface_for(a.a1, &g) {
+                    Some(iface) => {
+                        if a.a3 == 0 || write_u64(mem, a.a3, iface) {
+                            EFI_SUCCESS
+                        } else {
+                            EFI_INVALID_PARAMETER
+                        }
+                    }
+                    None => PROTO_NOT_FOUND,
+                },
+                None => EFI_INVALID_PARAMETER,
+            }
+        }
+        ServiceId::CloseProtocol => EFI_SUCCESS,
+        ServiceId::LocateProtocol => {
+            // (*Guid, Registration, **Interface)
+            match read_guid(mem, a.a1) {
+                Some(g) if a.a3 != 0 => match st.protocols.first_interface(&g) {
+                    Some(iface) if write_u64(mem, a.a3, iface) => EFI_SUCCESS,
+                    Some(_) => EFI_INVALID_PARAMETER,
+                    None => PROTO_NOT_FOUND,
+                },
+                _ => EFI_INVALID_PARAMETER,
+            }
+        }
+        ServiceId::LocateHandle => locate_handle(st, mem, a),
+        ServiceId::LocateHandleBuffer => locate_handle_buffer(st, mem, a),
+        ServiceId::InstallProtocolInterface => {
+            // (*Handle, *Guid, InterfaceType, Interface)
+            let Some(handle) = read_u64(mem, a.a1) else {
+                return finish(out, EFI_INVALID_PARAMETER);
+            };
+            match read_guid(mem, a.a2) {
+                // Only EFI_NATIVE_INTERFACE (0) exists.
+                Some(g) if a.a3 == 0 && handle != 0 => st.protocols.install(handle, g, a.a4),
+                _ => EFI_INVALID_PARAMETER,
+            }
+        }
+
+        // ---- BlockIo (F4) ----------------------------------------------
+        ServiceId::BlockIoReset => {
+            if st.media_for(a.a1).is_some() {
+                EFI_SUCCESS
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+        ServiceId::BlockIoReadBlocks => block_transfer(st, mem, a, false),
+        ServiceId::BlockIoWriteBlocks => block_transfer(st, mem, a, true),
+        ServiceId::BlockIoFlushBlocks => {
+            // Writes reach the backing store synchronously (WriteCaching=0).
+            if st.media_for(a.a1).is_some() {
+                EFI_SUCCESS
+            } else {
+                EFI_INVALID_PARAMETER
+            }
+        }
+
+        // ---- not yet (F5): images, SimpleFileSystem, runtime -------------
         _ => EFI_UNSUPPORTED,
     };
+    out.block_io_ok = matches!(
+        id,
+        ServiceId::BlockIoReadBlocks | ServiceId::BlockIoWriteBlocks
+    ) && out.status == EFI_SUCCESS;
     // Keep the pub consts referenced so the event-type API stays a single
     // source of truth for tests.
     let _ = (EVT_TIMER, EVT_NOTIFY_WAIT, EVT_NOTIFY_SIGNAL, TPL_HIGH_LEVEL, EFI_DEVICE_ERROR, EFI_NOT_FOUND);

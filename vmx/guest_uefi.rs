@@ -3604,6 +3604,7 @@ static RAYNU_F_ENTRY: AtomicU64 = AtomicU64::new(0);
 static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
 static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
@@ -6102,10 +6103,16 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
         leave_to_e4();
     }
     let tb = plan.tables_base as usize;
-    if build_firmware_image(plan.tables_base, &mut slab[tb..tb + IMAGE_BYTES]).is_err() {
-        serial::write_line("boot: RayNu-F launch failed: tables (F2b)");
-        leave_to_e4();
-    }
+    let layout = match build_firmware_image(plan.tables_base, &mut slab[tb..tb + IMAGE_BYTES]) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F launch failed: tables (F2b)");
+            leave_to_e4();
+        }
+    };
+    // F4: publish BlockIo for the retained CD and the virtio-blk install
+    // target, with real media geometry, then bind the backing stores.
+    raynu_f_publish_block_devices(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
     let mut file = [0u8; TESTAPP_FILE_BYTES];
     if build_test_app(&mut file).is_err() {
         serial::write_line("boot: RayNu-F launch failed: test app (F2b)");
@@ -6212,6 +6219,101 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     write_dec(u64::from(loaded.relocs_applied));
     serial::write_line(" (F2b; not ISO-INSTALL-OK)");
     raynu_f_vmlaunch();
+}
+
+/// F4: retained product ISO bytes (CD backing store), if any.
+#[cfg(target_os = "uefi")]
+fn raynu_f_cd_bytes() -> Option<&'static [u8]> {
+    crate::mgmt::iso_install::product_iso_retained_bytes()
+}
+
+/// F4 backing-store reader. `media_id` selects CD vs install disk; `off` is a
+/// byte offset the dispatcher already validated against media geometry.
+#[cfg(target_os = "uefi")]
+fn raynu_f_read_backing(media_id: u32, off: u64, buf: &mut [u8]) -> bool {
+    match media_id {
+        crate::raynu_f::MEDIA_ID_CD => {
+            let Some(iso) = raynu_f_cd_bytes() else {
+                return false;
+            };
+            let Ok(start) = usize::try_from(off) else {
+                return false;
+            };
+            let Some(end) = start.checked_add(buf.len()) else {
+                return false;
+            };
+            if end > iso.len() {
+                return false;
+            }
+            buf.copy_from_slice(&iso[start..end]);
+            true
+        }
+        crate::raynu_f::MEDIA_ID_DISK => {
+            crate::devices::guest_virtio_blk::raynu_f_disk_read(off, buf)
+        }
+        _ => false,
+    }
+}
+
+/// F4 backing-store writer. The CD is read-only (the dispatcher already
+/// rejects writes via `EFI_WRITE_PROTECTED`).
+#[cfg(target_os = "uefi")]
+fn raynu_f_write_backing(media_id: u32, off: u64, buf: &[u8]) -> bool {
+    match media_id {
+        crate::raynu_f::MEDIA_ID_DISK => {
+            crate::devices::guest_virtio_blk::raynu_f_disk_write(off, buf)
+        }
+        _ => false,
+    }
+}
+
+/// F4: fill in real media geometry and publish `BlockIo` on the CD and disk
+/// handles so a loader can find them the architected way.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_publish_block_devices(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    img: &mut [u8],
+) {
+    let iso_bytes = raynu_f_cd_bytes().map_or(0, |b| b.len() as u64);
+    let disk_bytes = crate::devices::guest_virtio_blk::disk_bytes();
+    let media_cd = crate::raynu_f::BlockMedia::cd(iso_bytes);
+    let media_disk = crate::raynu_f::BlockMedia::disk(disk_bytes);
+    crate::raynu_f::write_block_media(
+        img,
+        crate::raynu_f::tables::IMAGE_MEDIA_CD_OFF,
+        &media_cd,
+    );
+    crate::raynu_f::write_block_media(
+        img,
+        crate::raynu_f::tables::IMAGE_MEDIA_DISK_OFF,
+        &media_disk,
+    );
+    // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+    // KANI-TARGET: RayNu-F block device publish (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    st.media_cd = media_cd;
+    st.media_disk = media_disk;
+    st.blockio_cd = layout.blockio_cd;
+    st.blockio_disk = layout.blockio_disk;
+    st.read_blocks = Some(raynu_f_read_backing);
+    st.write_blocks = Some(raynu_f_write_backing);
+    let _ = st
+        .protocols
+        .install(crate::raynu_f::HANDLE_CD, crate::raynu_f::GUID_BLOCK_IO, layout.blockio_cd);
+    let _ = st.protocols.install(
+        crate::raynu_f::HANDLE_DISK,
+        crate::raynu_f::GUID_BLOCK_IO,
+        layout.blockio_disk,
+    );
+    serial::write_str("boot: RayNu-F BlockIo cd_bytes=");
+    write_dec(iso_bytes);
+    serial::write_str(" cd_last_lba=");
+    write_dec(media_cd.last_block);
+    serial::write_str(" disk_bytes=");
+    write_dec(disk_bytes);
+    serial::write_str(" disk_last_lba=");
+    write_dec(media_disk.last_block);
+    serial::write_line(" (F4; not ISO-INSTALL-OK)");
 }
 
 /// Load the guest GPRs from the saved slots and VMLAUNCH (first entry does
@@ -9355,6 +9457,9 @@ unsafe fn handle_raynu_f_service() {
         && !RAYNU_F_TIMER_LOGGED.swap(true, Ordering::AcqRel)
     {
         serial::write_line(crate::raynu_f::RAYNU_F_TIMER_OK_MARKER);
+    }
+    if d.block_io_ok && !RAYNU_F_BLOCKIO_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_BLOCKIO_OK_MARKER);
     }
     if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::Stuck)) {
         serial::write_line("boot: RayNu-F WARN WaitForEvent had nothing that could signal (EFI_TIMEOUT)");
