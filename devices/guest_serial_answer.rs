@@ -45,9 +45,11 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// Remounting busy `/dev/vdb` fails with Resource busy and leaves apk pointed
 /// at an empty `/media/cdrom/apks`. Discover an existing `/media/*/apks` first;
 /// only fall back to `mkdir` + `mount -t iso9660` `/dev/vdb`||`/dev/sr0` when
-/// none is found. Overwrite `/etc/apk/repositories` with that path (do not
-/// append) so `apk add grub` does not block on a network mirror (live ISO has
-/// no DHCP yet). `virtio_pci` + `mdev -s` so `/sys/block/vda` exists before
+/// none is found. BusyBox ash requires spaces after `{` and before `}` —
+/// `{mkdir` parses as a name and dies with `unexpected "}"` (nested `50ed61c`).
+/// Overwrite `/etc/apk/repositories` with that path (do not append) so
+/// `apk add grub` does not block on a network mirror (live ISO has no DHCP
+/// yet). `virtio_pci` + `mdev -s` so `/sys/block/vda` exists before
 /// `setup-disk` `find_disks` (otherwise `No disks available` exits after we
 /// answer n). Wait until `/dev/vda` exists (`mdev -s` each second, up to 5s)
 /// so a slow virtio probe is a block device before `setup-disk` opens it —
@@ -63,7 +65,7 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// finished apk root). Do not `apk update` first — that can hang on a missing
 /// index and never reach `setup-disk`. setup-disk before apk update.
 pub(crate) const SETUP: &[u8] =
-    b"for m in virtio_pci virtio_blk sr_mod isofs;do modprobe $m;done;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*;do [ -d $d/apks ]&&R=$d/apks&&break;done;[ $R ]||{mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks;};echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
+    b"for m in virtio_pci virtio_blk sr_mod isofs;do modprobe $m;done;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*;do [ -d $d/apks ]&&R=$d/apks&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks; };echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 /// alpine-virt 3.21 `/init` emergency shell has busybox + modprobe, **no**
 /// `setup-disk`. If `/media/*/apks` already exists, `exit` so `/init`

@@ -56,6 +56,14 @@ fn login_queues_root_then_setup_disk() {
         "discover nlplug mount (/media/vdb) before remount"
     );
     assert!(
+        core::str::from_utf8(SETUP).unwrap().contains("{ mkdir"),
+        "BusyBox ash needs space after {{ (nested 50ed61c unexpected }})"
+    );
+    assert!(
+        core::str::from_utf8(SETUP).unwrap().contains("apks; }"),
+        "BusyBox ash needs space before }}"
+    );
+    assert!(
         core::str::from_utf8(SETUP).unwrap().contains("$d/apks"),
         "use existing /media/*/apks (avoid Resource busy on /dev/vdb)"
     );

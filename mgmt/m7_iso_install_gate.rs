@@ -710,6 +710,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_serial_answer.rs").contains("mount -t iso9660 /dev/vdb")
         && include_str!("../devices/guest_serial_answer.rs").contains("for d in /media/*")
         && include_str!("../devices/guest_serial_answer.rs").contains("$d/apks")
+        && include_str!("../devices/guest_serial_answer.rs").contains("{ mkdir")
+        && include_str!("../devices/guest_serial_answer.rs").contains("apks; }")
         && include_str!("../devices/guest_serial_answer.rs").contains("mkdir -p /media/cdrom")
         && include_str!("../devices/guest_virtio_blk.rs").contains("pub test:")
         && include_str!("../devices/guest_virtio_blk.rs").contains("fn mmio_test_rflags(")
