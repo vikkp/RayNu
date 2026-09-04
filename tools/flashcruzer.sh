@@ -88,6 +88,7 @@ Options:
   --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
   --linux-iso PATH    stage EFI/RayNu/linux.iso (Stage 46; size must exceed 73728)
   --no-linux-iso      remove leftover product ISO so E4 LINUX-EARLY still runs
+  --raynu-f           stage EFI/RayNu/raynuf.txt (ADR-016 F2b RayNu-F test app; default removes it)
   --refat-cruzer      mkfs.vfat -I -F 32 -n RAYNUV on identified whole-disk Cruzer (64MiB FAT)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
@@ -117,6 +118,7 @@ while [[ $# -gt 0 ]]; do
     --no-ovmf) NO_OVMF=1; shift ;;
     --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
     --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --raynu-f) RAYNU_F_FLAG=1; shift ;;
     --refat-cruzer) REFAT=1; shift ;;
     --ovmf) OVMF_PATH="${2:-}"; shift 2 ;;
     --no-git) NO_GIT=1; shift ;;
@@ -310,6 +312,8 @@ self_test() {
   grep -q -- '--no-ovmf' "$ESP"
   grep -q -- '--linux-iso' "$ESP"
   grep -q -- '--no-linux-iso' "$ESP"
+  grep -q -- '--raynu-f' "$ESP"
+  grep -q 'EFI/RayNu/raynuf.txt' "$ESP"
   grep -q 'EFI/RayNu/linux.iso' "$ESP"
   grep -q 'pruning leftover ESP ISOs' "$ESP"
   grep -q 'ESP free=' "$ESP"
@@ -1273,6 +1277,9 @@ elif [[ -n "$LINUX_ISO" ]]; then
 fi
 if [[ "$REFAT" -eq 1 ]]; then
   ESP_ARGS+=(--refat-cruzer)
+fi
+if [[ "${RAYNU_F_FLAG:-0}" -eq 1 ]]; then
+  ESP_ARGS+=(--raynu-f)
 fi
 if [[ "$(id -u)" -eq 0 ]]; then
   "$ESP" "${ESP_ARGS[@]}"

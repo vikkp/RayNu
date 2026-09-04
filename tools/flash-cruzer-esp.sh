@@ -22,6 +22,7 @@
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso --refat-cruzer
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso --raynu-f   # ADR-016 F2b
 #
 # Stage 46: alpine-virt linux.iso is ~63 MiB. The Cruzer media is 977.5 MiB
 # but the FAT may be a 64 MiB image (131072 sectors) that cannot hold ISO+
@@ -44,6 +45,9 @@ OVMF_SRC=""
 NO_OVMF=0
 LINUX_ISO=""
 NO_LINUX_ISO=0
+# ADR-016 F2b: --raynu-f stages EFI/RayNu/raynuf.txt (RayNu-F test-app launch
+# after the OVMF leg stops). Default removes a stale flag so it never rides along.
+RAYNU_F_FLAG=0
 REFAT=0
 SELFTEST=0
 DRY=0
@@ -245,6 +249,7 @@ while [[ $# -gt 0 ]]; do
     --no-ovmf) NO_OVMF=1; shift ;;
     --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
     --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --raynu-f) RAYNU_F_FLAG=1; shift ;;
     --refat-cruzer) REFAT=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
@@ -480,6 +485,17 @@ elif [[ -n "$LINUX_ISO" ]]; then
     exit 1
   fi
   echo "==> linux.iso bytes=$DEST_LINUX_BYTES (Stage 46; not ISO-INSTALL-OK)"
+fi
+
+# ADR-016 F2b: RayNu-F launch opt-in. Presence is the signal; content empty.
+sudo rm -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "$RAYNU_F_FLAG" == "1" ]]; then
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo touch "$MNT/EFI/RayNu/raynuf.txt"
+  sudo sync -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || sudo sync
+  echo "==> --raynu-f: staged EFI/RayNu/raynuf.txt (RayNu-F F2b; not ISO-INSTALL-OK)"
+else
+  echo "==> RayNu-F flag not staged (pass --raynu-f to run the F2b test app)"
 fi
 
 INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
