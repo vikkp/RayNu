@@ -3585,6 +3585,10 @@ static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
 static LAST_HPET_TSC: AtomicU64 = AtomicU64::new(0);
 static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
 static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
+/// RayNu-F service calls seen (ADR-016). First few are logged.
+static RAYNU_F_CALLS: AtomicU32 = AtomicU32::new(0);
+/// One-shot `RAYNU-V-RAYNU-F-CONOUT-OK` on the first live guest OutputString.
+static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
 static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -8893,6 +8897,57 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     load_report_ram_at(page, linear, size)
 }
 
+/// RayNu-F service call (ADR-016): `out dx, eax` to port `0x5246` from a
+/// trampoline in **our own** firmware tables. EAX = service id; args are
+/// `RCX / R10 / R8 / R9` (the stub moved RDX to R10 before loading DX).
+/// We perform the service against guest memory we own and return
+/// `EFI_STATUS` in RAX. This is our contract, not a foreign firmware's —
+/// nothing here forces another firmware's internal state.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_raynu_f_service() {
+    struct Mem;
+    impl crate::raynu_f::GuestMem for Mem {
+        fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
+            // SAFETY: the guest is VMX-halted on this I/O exit; the walk uses
+            // its live CR3 the same way the insn-dump path does.
+            // KANI-TARGET: RayNu-F guest CHAR16 read (outside Proven Core).
+            unsafe { copy_guest_linear_bytes(addr, buf) }
+        }
+    }
+    struct Sink;
+    impl crate::raynu_f::ConsoleSink for Sink {
+        fn write_byte(&mut self, b: u8) {
+            serial::write_byte(b);
+        }
+    }
+    let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
+    let args = crate::raynu_f::ServiceArgs {
+        a1: SAVED_RCX,
+        a2: SAVED_R10,
+        a3: SAVED_R8,
+        a4: SAVED_R9,
+    };
+    let d = crate::raynu_f::dispatch(id, args, &Mem, &mut Sink);
+    SAVED_RAX = d.status;
+    let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
+    if n < 8 {
+        serial::write_str("boot: RayNu-F svc=");
+        serial::write_str(id.name());
+        serial::write_str(" id=0x");
+        write_hex_u32(id.0);
+        serial::write_str(" status=0x");
+        write_hex(d.status);
+        serial::write_line(" (ADR-016; not ISO-INSTALL-OK)");
+    }
+    if id == crate::raynu_f::ServiceId::ConOutOutputString
+        && d.status == crate::raynu_f::EFI_SUCCESS
+        && d.chars_out > 0
+        && !RAYNU_F_CONOUT_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(crate::raynu_f::RAYNU_F_CONOUT_OK_MARKER);
+    }
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
     if is_pci_config_port(port) || crate::devices::ide_cdrom::is_pci_data_port(port) {
@@ -8948,6 +9003,10 @@ unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
     }
     if is_debugcon_port(port) {
         handle_debugcon(is_in, size);
+        return;
+    }
+    if crate::raynu_f::is_service_call(port, is_in, size) {
+        handle_raynu_f_service();
         return;
     }
     let k = IO_UNHANDLED_N.fetch_add(1, Ordering::AcqRel);
