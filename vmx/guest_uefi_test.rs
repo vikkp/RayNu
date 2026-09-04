@@ -2725,6 +2725,30 @@ fn try_alloc_skips_256mib_when_scratch_would_starve() {
 }
 
 #[test]
+fn try_alloc_nested_prefers_64mib_on_typical_pool() {
+    // Nested pool ~256 MiB: leave blocks 256 MiB disk, so 64 MiB lands.
+    const PAGES: u64 = (256 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, true).unwrap();
+    assert_eq!(bytes, 64 * 1024 * 1024);
+}
+
+#[test]
+fn try_alloc_nested_256mib_when_pool_and_leave_allow() {
+    // Nested with room for 256 MiB disk + 64 MiB leave.
+    const PAGES: u64 = (512 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, true).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
+}
+
+#[test]
 fn flash_window_pads_code_only_image_to_4mib() {
     assert_eq!(GUEST_UEFI_FLASH_BASE, 0xFFC0_0000);
     assert_eq!(GUEST_UEFI_FLASH_WINDOW, 4 * 1024 * 1024);

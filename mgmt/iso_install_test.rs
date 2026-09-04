@@ -38,7 +38,10 @@ fn markers_stable() {
     assert_eq!(PRODUCT_ISO_ESP_PATHS[0], "\\EFI\\RayNu\\linux.iso");
     assert!(PRODUCT_ISO_ESP_PATHS.contains(&"\\linux.iso"));
     assert!(PRODUCT_ISO_ESP_PATHS.contains(&"\\EFI\\RayNu\\install.iso"));
-    assert_eq!(product_iso_install_disk_bytes(true), LAB_INSTALL_DISK_BYTES as usize);
+    assert_eq!(
+        product_iso_install_disk_bytes(true),
+        DEFAULT_INSTALL_DISK_BYTES as usize
+    );
     assert_eq!(
         product_iso_install_disk_bytes(false),
         PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
@@ -56,10 +59,12 @@ fn markers_stable() {
         .position(|&b| b == LAB_INSTALL_DISK_BYTES as usize)
         .unwrap();
     assert!(i64 < i1);
-    assert_eq!(
-        product_iso_install_disk_try_sizes(true),
-        &[LAB_INSTALL_DISK_BYTES as usize]
-    );
+    let nested_sizes = product_iso_install_disk_try_sizes(true);
+    assert_eq!(nested_sizes[0], 256 * 1024 * 1024);
+    assert_eq!(nested_sizes[1], DEFAULT_INSTALL_DISK_BYTES as usize);
+    assert_eq!(*nested_sizes.last().unwrap(), LAB_INSTALL_DISK_BYTES as usize);
+    assert!(nested_sizes.contains(&(32 * 1024 * 1024)));
+    assert!(nested_sizes.contains(&(16 * 1024 * 1024)));
     assert_eq!(
         product_iso_frame_pool_prefer_end(false, false),
         crate::guest::linux_boot::GUEST_RAM_BYTES

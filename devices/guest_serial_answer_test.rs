@@ -50,6 +50,10 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sleep 1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("[ -b /dev/vda ]"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mkdir -p /media/cdrom"));
+    assert!(
+        core::str::from_utf8(SETUP).unwrap().contains("mountpoint -q /media/cdrom"),
+        "skip remount when live ISO already mounted (Resource busy)"
+    );
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount -t iso9660 /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("|| mount -t iso9660 /dev/sr0"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
@@ -79,6 +83,7 @@ fn emergency_shell_without_login_queues_mount_exit() {
     }
     assert_eq!(got, MOUNT_EXIT);
     assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("exit"));
+    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("mountpoint -q /media/cdrom"));
     assert!(
         !core::str::from_utf8(MOUNT_EXIT).unwrap().contains("setup-disk"),
         "emergency mount+exit: initramfs has no setup-disk"

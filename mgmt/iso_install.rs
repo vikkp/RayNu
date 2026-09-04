@@ -509,13 +509,17 @@ pub fn present_product_iso_if_retained() -> bool {
     crate::devices::ide_cdrom::present(bytes, 1)
 }
 
-/// Iron product-ISO virtio-blk (1 GiB). Nested stays [`LAB_INSTALL_DISK_BYTES`].
+/// Iron product-ISO virtio-blk (1 GiB). Nested prefers
+/// [`DEFAULT_INSTALL_DISK_BYTES`] (64 MiB) — lab ESP arm stays
+/// [`LAB_INSTALL_DISK_BYTES`].
 pub const PRODUCT_ISO_INSTALL_DISK_IRON_BYTES: usize = 1024 * 1024 * 1024;
 
 /// Install-disk size for the guest-UEFI virtio-pci backend when the window is armed.
 pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
     if host_hypervisor {
-        LAB_INSTALL_DISK_BYTES as usize
+        // Nested RayNu-F / product-ISO: GPT + Alpine ESP need ≥64 MiB.
+        // Lab `isoinstall.txt` ESP arm still uses [`LAB_INSTALL_DISK_BYTES`].
+        DEFAULT_INSTALL_DISK_BYTES as usize
     } else {
         PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
     }
@@ -540,10 +544,18 @@ pub fn product_iso_frame_pool_prefer_end(product_iso: bool, host_hypervisor: boo
 /// this disk **before** report-RAM so 64 MiB (the REST default) fits.
 /// Iron product-ISO raises the pool to 512 MiB. A 256 MiB disk lands when
 /// leftover DRAM backs report-RAM (scratch-only leave); a tighter precise
-/// pool still falls to 64 MiB. Nested stays 1 MiB. iso=0 does not use this.
+/// pool still falls to 64 MiB. Nested (RayNu-F after Alpine shell) tries
+/// 256/64/32/16 then 1 MiB fallback — not locked at lab 1 MiB. iso=0 does
+/// not use this.
 pub fn product_iso_install_disk_try_sizes(host_hypervisor: bool) -> &'static [usize] {
     if host_hypervisor {
-        &[LAB_INSTALL_DISK_BYTES as usize]
+        &[
+            256 * 1024 * 1024,
+            DEFAULT_INSTALL_DISK_BYTES as usize,
+            32 * 1024 * 1024,
+            16 * 1024 * 1024,
+            LAB_INSTALL_DISK_BYTES as usize,
+        ]
     } else {
         &[
             PRODUCT_ISO_INSTALL_DISK_IRON_BYTES,

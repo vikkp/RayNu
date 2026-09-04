@@ -43,34 +43,38 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// so the first write is ESP+Linux FS (partition-table detect). `mkdir -p` the
 /// mountpoint (nlplug may not have created `/media/cdrom` when the ISO is
 /// virtio-blk `/dev/vdb` rather than ATAPI), then mount so apk can see
-/// distro packages. Overwrite `/etc/apk/repositories` with `/media/cdrom/apks`
-/// (do not append) so `apk add grub` does not block on a
-/// network mirror (live ISO has no DHCP yet). `virtio_pci` + `mdev -s` so
-/// `/sys/block/vda` exists before `setup-disk` `find_disks` (otherwise
-/// `No disks available` exits after we answer n). Wait until `/dev/vda`
-/// exists (`mdev -s` each second, up to 5s) so a slow virtio probe is a
-/// block device before `setup-disk` opens it — `mdev` then `sleep 1` left
-/// the node missing if the driver bound during the sleep. If virtio-iso
-/// `/dev/vdb` is not ready, mount ATAPI `/dev/sr0` so apk still sees ISO9660.
-/// `sr_mod` so `/dev/sr0` exists when the live image booted from virtio-iso.
-/// `isofs` + `mount -t iso9660` so BusyBox does not probe a virtio-blk ISO as
-/// a disk (iso9660 is absent from `/proc/filesystems` until the module loads).
-/// auto-answer / # without login (3.21 emergency shell has no getty).
-/// alpine-conf `find_efi_size` defaults ESP to 160 MiB (512-byte FAT32 min
-/// ~34 MiB). That is larger than a 64 MiB fallback disk and leaves ~96 MiB
-/// root on the 256 MiB iron disk. `BOOT_SIZE=48` is above the FAT32 floor
-/// so GPT+ESP still land (ISO-INSTALL-OK is the partition table, not a
-/// finished apk root). Do not `apk update` first — that can hang on a
-/// missing index and never reach `setup-disk`. setup-disk before apk update.
+/// distro packages. After live boot, `/dev/vdb` is often already mounted at
+/// `/media/cdrom` — remount then fails with Resource busy; `mountpoint -q`
+/// treats that as success so apk repos still point at the ISO. Overwrite
+/// `/etc/apk/repositories` with `/media/cdrom/apks` (do not append) so
+/// `apk add grub` does not block on a network mirror (live ISO has no DHCP
+/// yet). `virtio_pci` + `mdev -s` so `/sys/block/vda` exists before
+/// `setup-disk` `find_disks` (otherwise `No disks available` exits after we
+/// answer n). Wait until `/dev/vda` exists (`mdev -s` each second, up to 5s)
+/// so a slow virtio probe is a block device before `setup-disk` opens it —
+/// `mdev` then `sleep 1` left the node missing if the driver bound during
+/// the sleep. If virtio-iso `/dev/vdb` is not ready, mount ATAPI `/dev/sr0`
+/// so apk still sees ISO9660. `sr_mod` so `/dev/sr0` exists when the live
+/// image booted from virtio-iso. `isofs` + `mount -t iso9660` so BusyBox
+/// does not probe a virtio-blk ISO as a disk (iso9660 is absent from
+/// `/proc/filesystems` until the module loads). auto-answer / # without login without
+/// login (3.21 emergency shell has no getty). alpine-conf `find_efi_size`
+/// defaults ESP to 160 MiB (512-byte FAT32 min ~34 MiB). That is larger than
+/// a 64 MiB fallback disk and leaves ~96 MiB root on the 256 MiB iron disk.
+/// `BOOT_SIZE=48` is above the FAT32 floor so GPT+ESP still land
+/// (ISO-INSTALL-OK is the partition table, not a finished apk root). Do not
+/// `apk update` first — that can hang on a missing index and never reach
+/// `setup-disk`. setup-disk before apk update.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done; mkdir -p /media/cdrom; mountpoint -q /media/cdrom|| mount -t iso9660 /dev/vdb /media/cdrom|| mount -t iso9660 /dev/sr0 /media/cdrom; echo /media/cdrom/apks > /etc/apk/repositories; ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 /// alpine-virt 3.21 `/init` emergency shell has busybox + modprobe, **no**
 /// `setup-disk`. Mount ISO at `/media/cdrom` then `exit` so `/init`
 /// `find_boot_repositories` can switch_root to live alpine (getty `login:`
-/// then SETUP). emergency mount+exit.
+/// then SETUP). Skip remount when already mounted (Resource busy). emergency
+/// mount+exit.
 pub(crate) const MOUNT_EXIT: &[u8] =
-    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; mdev -s; mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom; exit\r";
+    b"modprobe virtio_pci; modprobe virtio_blk; modprobe sr_mod; modprobe isofs; mdev -s; mkdir -p /media/cdrom; mountpoint -q /media/cdrom|| mount -t iso9660 /dev/vdb /media/cdrom|| mount -t iso9660 /dev/sr0 /media/cdrom; exit\r";
 const _: () = assert!(MOUNT_EXIT.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";

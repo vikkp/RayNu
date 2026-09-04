@@ -3427,18 +3427,18 @@ pub fn product_iso_disk_leave_pages() -> u64 {
 ///
 /// INVARIANTS:
 /// - Does not invent an HPA; only [`FrameAllocator::allocate_contiguous`]
-/// - Nested stays 1 MiB; iron tries 1 GiB then 256/64/32/16/1 MiB
+/// - Nested + iron both leave scratch for report-RAM when trying >64 MiB
+/// - Nested tries 256/64/32/16/1 MiB; iron tries 1 GiB then that ladder
 ///
 /// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
 pub fn try_alloc_product_iso_install_disk(
     alloc: &mut FrameAllocator,
     nested: bool,
 ) -> Option<(PhysFrame, usize)> {
-    let leave = if nested {
-        0
-    } else {
-        product_iso_disk_leave_pages()
-    };
+    // Nested used to leave=0 + only 1 MiB. After Alpine shell on RayNu-F,
+    // nested must land a GPT-capable disk; leave scratch so a 256 MiB
+    // try cannot starve report-RAM on a ~256 MiB pool (falls to 64 MiB).
+    let leave = product_iso_disk_leave_pages();
     let keep = crate::mgmt::iso::DEFAULT_INSTALL_DISK_BYTES as usize;
     for &want in crate::mgmt::iso_install::product_iso_install_disk_try_sizes(nested) {
         let pages = (want / 4096) as u64;

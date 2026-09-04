@@ -428,7 +428,7 @@ the nested-KVM `/init` flake.
 Sixty-third slice (this EFI): iron COM2 `virtio-blk install disk bytes=1048576`
 because greedy 2 MiB report-RAM ate the `[1MiB,256MiB)` pool. Reserve the
 install disk **before** report-RAM so 64 MiB (REST default) fits; leftover
-2 MiB slots still back CMOS 2 GiB. Do not invent HPA. Nested stays 1 MiB.
+2 MiB slots still back CMOS 2 GiB. Do not invent HPA. Nested tries 256/64/32/16/1 MiB (leave scratch; typically lands 64 MiB).
 Sixty-second slice (this EFI): iron COM2 `xAPIC MMIO decode fail
 gpa=0xfee000f0 insn=` at `rip=0xfffcfc86` (OVMF flash). Identity peek
 only covered 32 MiB RAM; copy instruction bytes from the private flash

@@ -350,10 +350,11 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | **Nested `2bebea7` (CI `33913170225`): CEA present both PGDs.** Walk `user-idtr`/`kern-idtr` share `pte=0x800000000708f121` (P=1 U=0 NX=1 GPA `0x708f000`). `#DF` at X.509 is reserved-bit `#PF` on the IDT page after `sync_guest_efer_lma` stripped NXE on userspace RIP (RayNu-F never intercepts `#PF`). This slice: sticky NXE after RayNu-F EBS / once held; firmware still strips; dump `efer=` on fatal-class. Do not clone CEA. Do not `nopti`. F6a ACPI still open. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested confirmation of NXE hold next. E5 closes only on iron `ISO-INSTALL-OK`. |
-| Gates touched | RayNu-F F6-prep: nested `2bebea7` CEA clone proven; NXE hold host-proven. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Summary | **Code-first after nested Alpine shell (`ac57efa` NXE hold):** grow nested product-ISO install disk past lab 1 MiB (try 256/64/32/16/1 MiB with scratch leave so typical ~256 MiB pool lands 64 MiB); serial auto-answer `mountpoint -q /media/cdrom` so already-mounted virtio-ISO does not Resource-busy before apk repos + `setup-disk`. Host tests cover nested try-sizes + mountpoint. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested GPT/`setup-disk` evidence next; F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Gates touched | RayNu-F F6-prep: nested install disk ≥64 MiB path + honest ISO apk mount. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
 | Months Δ | 0.5→0.5 |
+
 
 ---
 
@@ -375,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested Alpine shell already on `ac57efa` (NXE hold); this cut grows nested product-ISO virtio-blk try-ladder past 1 MiB (256/64/32/16/1 + leave) and skips remount when `/media/cdrom` already busy so apk/`setup-disk` can see ISO apks; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 2bebea7 (CI 33913170225): trampoline+LSTAR closed; CEA present both PGDs (pte=0x800000000708f121 NX GPA 0x708f000); userspace VM-exit stripped NXE (high-half-only allow; RayNu-F never intercepts #PF); sticky NXE after RayNu-F EBS / once held; dump efer= on fatal-class; do not clone CEA; do not nopti; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 659bb41 (CI 33909234183): trampoline+LSTAR closed (cs=0x33 lstar live) then #DF CPL3 IDT[#PF] cr2=0xfffffe00000000e0 under PTI user CR3 0x2e1f804; host 4-level PT walk dump user-idtr vs kern-idtr + nowait syscall WRMSR; do not clone CEA; do not nopti; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 8f62fea (run 33905004811): trampoline closed then #DF at X.509 (rip=0 user RSP LSTAR=0 — first usermode helper syscall); guest-UEFI handle_wrmsr now HostPassthrough cpu::wrmsr for STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX (mirror G0 launch.rs); #DF/#TS/#NP/#SS stop+dump not re-inject; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
