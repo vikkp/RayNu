@@ -181,6 +181,9 @@ self_test() {
   grep -q '^8dd46b1c$' "$REJECT_FILE"
   grep -q '^b17314b7$' "$REJECT_FILE"
   grep -q '^5d85f5c7$' "$REJECT_FILE"
+  grep -q '^30215d93$' "$REJECT_FILE"
+  grep -q '^4f9042de$' "$REJECT_FILE"
+  grep -q '^de05db35$' "$REJECT_FILE"
   grep -q '33555104832' "$SCRIPT_PATH"
   grep -q '33558261624' "$SCRIPT_PATH"
   grep -q '33559849096' "$SCRIPT_PATH"
@@ -220,6 +223,9 @@ self_test() {
   grep -q 'firmware ZeroMem ept fill' "$SCRIPT_PATH"
   grep -q 'firmware WFE preempt skip' "$SCRIPT_PATH"
   grep -q 'firmware WFE state4 poke' "$SCRIPT_PATH"
+  grep -q '33817483733' "$SCRIPT_PATH"
+  grep -q 'do not F11 9474ab6' "$SCRIPT_PATH"
+  grep -q 'firmware WFE event #PF' "$SCRIPT_PATH"
   grep -q 'flashcruzer reject 2d6b109 dest skip' "$SCRIPT_PATH"
   grep -q '33389381409' "$SCRIPT_PATH"
   grep -q '33391068937' "$SCRIPT_PATH"
@@ -470,10 +476,20 @@ echo "==> repo=$REPO branch=$BRANCH HEAD=$HEAD_SHORT"
 # do not F11 e0d5c55 / --run 33753069821 (WFE return then preempt 0x34 still ataio=0).
 # do not F11 c8d504d / --run 33757018875 (ZeroMem ept fill never printed; 0x34 is preempt).
 # do not F11 d0e44d4 / --run 33815993163 (WFE skip hit then same spin still ataio=0).
-# firmware WFE state4 poke. Not ISO-INSTALL-OK.
+# do not F11 9474ab6 / --run 33817483733 (state4 poke then #PF cr2=-0x48 HV stop).
+# firmware WFE event #PF. Not ISO-INSTALL-OK.
 refuse_24c5fa6_pit_livelock() {
   if [[ "$ALLOW_REJECTED" -ne 0 ]]; then
     return 0
+  fi
+  if [[ "$PIN_RUN" == "33817483733" ]]; then
+    echo "error: run 33817483733 is 9474ab6 WFE-state4 then event #PF stop" >&2
+    echo "       poke dest=0x7ff18340 then cr2=0xffffffffffffffb8 rip=0x7ff0e018." >&2
+    echo "       HV #PF MMIO skip (RIP left 32MiB RAM) then product ISO hold. still ataio=0." >&2
+    echo "       do not F11 9474ab6 / --run 33817483733 again." >&2
+    echo "       do not F11 d0e44d4 / --run 33815993163." >&2
+    echo "       wait for this SHA CI (firmware WFE event #PF)." >&2
+    exit 1
   fi
   if [[ "$PIN_RUN" == "33815993163" ]]; then
     echo "error: run 33815993163 is d0e44d4 WFE-skip hang" >&2

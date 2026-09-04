@@ -46,7 +46,7 @@ use super::{
     guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX, guest_uefi_fwcfg_identity_overlay, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, guest_uefi_fwcfg_dest_ok_fill, guest_uefi_fwcfg_dest_ok_fill_should_log, GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX, GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP, copy_low_ram_bytes, write_low_ram_bytes, guest_uefi_fwcfg_identity_overlay_apply, guest_uefi_fwcfg_identity_overlay_restore, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
-    ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, guest_uefi_cpusleep_retaddr, last_hlt_retaddr, guest_uefi_cpusleep_callsite, last_hlt_callsite, guest_uefi_firmware_conin_cr_on_hlt, guest_uefi_waitforevent_force_return, guest_uefi_waitforevent_leave, guest_uefi_firmware_zeromem_ept, guest_uefi_firmware_zeromem_insn, guest_uefi_firmware_zeromem_dest_ok, guest_uefi_firmware_wfe_preempt_skip_len, guest_uefi_firmware_wfe_state4_dest, guest_uefi_firmware_wfe_state4_poke, GUEST_UEFI_WFE_HLT_RET, GUEST_UEFI_WFE_PREEMPT_SKIP_PREFIX, GUEST_UEFI_WFE_STATE4_RIP, GUEST_UEFI_WFE_STATE4_DEST, GUEST_UEFI_WFE_STATE4_VAL, GUEST_UEFI_WFE_STATE4_POKE_PREFIX, GUEST_UEFI_WFE_CALLSITE, GUEST_UEFI_WFE_CALLER, GUEST_UEFI_ZEROMEM_EPT_RIP, GUEST_UEFI_ZEROMEM_FILL_CAP, GUEST_UEFI_ZEROMEM_EPT_PREFIX, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
+    ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, guest_uefi_cpusleep_retaddr, last_hlt_retaddr, guest_uefi_cpusleep_callsite, last_hlt_callsite, guest_uefi_firmware_conin_cr_on_hlt, guest_uefi_waitforevent_force_return, guest_uefi_waitforevent_leave, guest_uefi_firmware_zeromem_ept, guest_uefi_firmware_zeromem_insn, guest_uefi_firmware_zeromem_dest_ok, guest_uefi_firmware_wfe_preempt_skip_len, guest_uefi_firmware_wfe_state4_dest, guest_uefi_firmware_wfe_state4_poke, guest_uefi_pf_is_null_relative, guest_uefi_firmware_wfe_event_pf, guest_uefi_firmware_wfe_event_pf_insn, guest_uefi_exit_is_page_fault, guest_uefi_firmware_wfe_event_pf_restore_bitmap, GUEST_UEFI_EXC_BITMAP_PF, GUEST_UEFI_WFE_HLT_RET, GUEST_UEFI_WFE_PREEMPT_SKIP_PREFIX, GUEST_UEFI_WFE_STATE4_RIP, GUEST_UEFI_WFE_STATE4_DEST, GUEST_UEFI_WFE_STATE4_VAL, GUEST_UEFI_WFE_STATE4_POKE_PREFIX, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP, GUEST_UEFI_WFE_EVENT_PF_PREFIX, GUEST_UEFI_EVENT_SIG, GUEST_UEFI_WFE_CALLSITE, GUEST_UEFI_WFE_CALLER, GUEST_UEFI_ZEROMEM_EPT_RIP, GUEST_UEFI_ZEROMEM_FILL_CAP, GUEST_UEFI_ZEROMEM_EPT_PREFIX, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
     GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_LINUX_PF_CR2, GUEST_UEFI_IRON_LINUX_PF_RIP, GUEST_UEFI_IRON_LINUX_CPUID_RIP, GUEST_UEFI_LINUX_DIRECT_MAP, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IO_STRING_CAP, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
     GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
@@ -1109,6 +1109,41 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d0e44d4"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE state4 poke"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 d0e44d4 WFE preempt skip len=12 rip=0x7ff0e7e8"));
+    assert_eq!(GUEST_UEFI_WFE_EVENT_PF_CR2, 0xffff_ffff_ffff_ffb8);
+    assert_eq!(GUEST_UEFI_WFE_EVENT_PF_RIP, 0x7ff0_e018);
+    assert_eq!(GUEST_UEFI_EVENT_SIG, 0x746e_7665);
+    assert!(GUEST_UEFI_WFE_EVENT_PF_PREFIX.contains("firmware WFE event #PF cr2=0x"));
+    assert!(guest_uefi_pf_is_null_relative(GUEST_UEFI_WFE_EVENT_PF_CR2));
+    assert!(!guest_uefi_pf_is_null_relative(GUEST_UEFI_IRON_PF_SIGNEXT_CR2));
+    assert!(!guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_WFE_EVENT_PF_CR2));
+    assert!(guest_uefi_firmware_wfe_event_pf_insn([0x49, 0x81, 0x7e, 0xb8]));
+    assert!(!guest_uefi_firmware_wfe_event_pf_insn([0xf3, 0x0f, 0x1e, 0xfa]));
+    assert!(guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, false, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 1, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, 0x1000
+    ));
+    assert!(guest_uefi_report_ram_should_map(GUEST_UEFI_WFE_EVENT_PF_RIP));
+    assert!(guest_uefi_exit_is_page_fault(0, 0x8000_000e));
+    assert!(!guest_uefi_exit_is_page_fault(0x1e, 0x8000_000e));
+    assert_eq!(
+        guest_uefi_firmware_wfe_event_pf_restore_bitmap(true, false, 0),
+        Some(GUEST_UEFI_EXC_BITMAP_PF)
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_event_pf_restore_bitmap(true, true, 0),
+        None
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9474ab6"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE event #PF"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340"));
     assert_eq!(
         guest_uefi_waitforevent_leave(0x2000, 0x1000, 0x7f01_0000),
         Some((0x7f01_0000, 0x2010))

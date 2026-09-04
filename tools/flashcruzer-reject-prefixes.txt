@@ -51,3 +51,5 @@ b17314b7
 30215d93
 # d0e44d4 / 33815993163 WFE preempt skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3).
 4f9042de
+# 9474ab6 / 33817483733 WFE state4 poke then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0.
+de05db35
