@@ -1030,6 +1030,40 @@ pub fn guest_uefi_pti_kernel_pgd_gpa(user_cr3: u64) -> u64 {
     (user_cr3 & !0xfff).wrapping_sub(0x1000)
 }
 
+/// Nested `2bebea7` CEA IDT[#PF] leaf: P=1 W=0 U=0 A=1 G=1 NX=1 GPA `0x708f000`.
+pub const GUEST_UEFI_LINUX_CEA_IDT_LEAF_NESTED_2BEBEA7: u64 = 0x8000_0000_0708_f121;
+
+pub fn guest_uefi_pte_present(pte: u64) -> bool {
+    (pte & 1) != 0
+}
+
+pub fn guest_uefi_pte_writable(pte: u64) -> bool {
+    (pte & (1 << 1)) != 0
+}
+
+pub fn guest_uefi_pte_user(pte: u64) -> bool {
+    (pte & (1 << 2)) != 0
+}
+
+pub fn guest_uefi_pte_nx(pte: u64) -> bool {
+    (pte & (1u64 << 63)) != 0
+}
+
+pub fn guest_uefi_pte_gpa(pte: u64) -> u64 {
+    pte & 0x000f_ffff_ffff_f000
+}
+
+/// Nested `2bebea7`: CEA IDT leaf is NX; userspace VM-exit stripped NXE
+/// because `allow_nx` was high-half RIP only (RayNu-F never intercepts `#PF`,
+/// so `PF_LINUX_DELIVER` stays 0). Keep NXE after Linux handoff / once held.
+pub fn guest_uefi_efer_nx_should_hold(
+    high_half_rip: bool,
+    linux_sticky: bool,
+    prev_hold: bool,
+) -> bool {
+    high_half_rip || linux_sticky || prev_hold
+}
+
 /// EPT leaf memory type WB. Scratch/sink stay UC (`ept_leaf_large(..., 0)`).
 pub const GUEST_UEFI_EPT_MT_WB: u64 = 6;
 /// Iron `0bad45d`: first hole GPA that hit the shared zero sink.
@@ -2702,8 +2736,8 @@ pub fn guest_uefi_cpuid_is_genuine_intel(ebx: u32, edx: u32, ecx: u32) -> bool {
         && ecx == CPUID_GENUINEINTEL_ECX
 }
 
-/// Linux after high-half `#PF` / high-half RIP may keep EFER.NXE.
-/// Firmware always strips it (CpuDxe `EFI_MEMORY_XP` ASSERT).
+/// Linux after high-half `#PF` / high-half RIP / RayNu-F EBS hold may keep
+/// EFER.NXE. Firmware always strips it (CpuDxe `EFI_MEMORY_XP` ASSERT).
 pub fn guest_uefi_efer_allow_nx(linux: bool) -> bool {
     linux
 }
@@ -3703,6 +3737,10 @@ static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
 /// F6b: `ExitBootServices` on RayNu-F handed the VMCS to the Linux exit path.
 static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
+/// Sticky EFER.NXE after Linux was allowed NX this boot. Nested `2bebea7`:
+/// RayNu-F never intercepts `#PF`, so `PF_LINUX_DELIVER` stays 0 and a
+/// userspace RIP would otherwise strip NXE on the next VM-exit.
+static LINUX_EFER_NX_HOLD: AtomicBool = AtomicBool::new(false);
 /// `StartImage` caller context for `Exit`: guest RSP at the `out` (points at
 /// the caller's return address) and the MS x64 callee-saved GPRs.
 struct RaynuFStartCtx {
@@ -4337,6 +4375,8 @@ pub fn reset_guest_uefi_launch() {
     crate::boot::serial::set_linux_high_half(false);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
 }
 
 /// Exits after a successful entry that were not triple-fault / VM-entry fail.
@@ -6382,6 +6422,8 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     SAVED_R15 = 0;
     RAYNU_F_EXITS.store(0, Ordering::Release);
     RAYNU_F_ENTRY.store(entry, Ordering::Release);
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
     RAYNU_F_MODE.store(true, Ordering::Release);
     serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
     write_hex(entry);
@@ -6450,6 +6492,7 @@ unsafe fn raynu_f_linux_handoff() {
     // share COM; identity-RIP earlycon would otherwise be cut (iron b983ef8).
     serial::set_linux_earlycon_share(true);
     RAYNU_F_LINUX_HANDOFF.store(true, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
     RAYNU_F_MODE.store(false, Ordering::Release);
     serial::write_str("boot: RayNu-F EBS hand-off to Stage-46 Linux exit path exits=");
     write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
@@ -7826,8 +7869,8 @@ unsafe fn handle_linux_nmi() -> bool {
     true
 }
 
-/// 4-level walk of a guest PGD for `linear`. Nested `659bb41`: user CR3
-/// vs kernel PGD pair shows whether PTI cloned `cpu_entry_area`.
+/// 4-level walk of a guest PGD for `linear`. Nested `2bebea7`: CEA is
+/// present in both user and kernel PGDs; the IDT leaf is NX supervisor.
 ///
 /// SAFETY: VMX-root; `pgd` is a guest-physical PGD the EPT already maps.
 /// KANI-TARGET: guest-UEFI fatal-class PT walk dump (outside Proven Core).
@@ -7912,6 +7955,10 @@ unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
         write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_SFMASK));
         serial::write_str_nowait(" gsbase=0x");
         write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_KERNEL_GS_BASE));
+        // After `sync_guest_efer_lma` (every VM-exit). Nested `2bebea7` stripped
+        // NXE on userspace RIP; post-hold dump must still show NXE.
+        serial::write_str_nowait(" efer=0x");
+        write_hex_nowait(ops::vmread(GUEST_IA32_EFER).unwrap_or(0));
         serial::write_byte_nowait(b'\n');
         // Walk only. Do not clone CEA into the user PGD (ADR-016).
         let kpgd = guest_uefi_pti_kernel_pgd_gpa(cr3);
@@ -12845,14 +12892,20 @@ unsafe fn handle_xsetbv() -> bool {
     skip_insn()
 }
 
-/// High-half Linux (or after `#PF` deliver) may keep EFER.NXE.
+/// High-half Linux, RayNu-F EBS handoff, `#PF` deliver, or a prior hold
+/// may keep EFER.NXE. Firmware (all false) still strips NXE.
 #[cfg(target_os = "uefi")]
 unsafe fn guest_uefi_linux_allow_efer_nx() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    guest_uefi_efer_allow_nx(
-        guest_uefi_pf_should_deliver_to_guest(rip)
-            || PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
-    )
+    let high_half_rip = guest_uefi_pf_should_deliver_to_guest(rip);
+    let linux_sticky = PF_LINUX_DELIVER.load(Ordering::Acquire) != 0
+        || RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
+    let prev_hold = LINUX_EFER_NX_HOLD.load(Ordering::Acquire);
+    let allow = guest_uefi_efer_nx_should_hold(high_half_rip, linux_sticky, prev_hold);
+    if allow {
+        LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
+    }
+    guest_uefi_efer_allow_nx(allow)
 }
 
 /// CR0.PG does not exit. On every VM-exit, set LMA = LME && PG and match
