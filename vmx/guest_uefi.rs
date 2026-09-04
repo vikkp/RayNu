@@ -3596,8 +3596,10 @@ static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
 /// F2b exit counter (cap guards a runaway guest).
 static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
-/// F2b: stop after this many exits without a HLT.
-const RAYNU_F_EXIT_CAP: u32 = 65_536;
+/// F2b/F5: stop after this many exits without a HLT. The built-in test app
+/// needs 2; a real ISO bootloader (GRUB / Linux EFI stub) does far more
+/// through our services, so the cap is generous but still bounded.
+const RAYNU_F_EXIT_CAP: u32 = 1_048_576;
 /// F2b: entry RIP of the launched app (decodes the HLT path on stop).
 static RAYNU_F_ENTRY: AtomicU64 = AtomicU64::new(0);
 /// F3 one-shot markers.
@@ -3605,6 +3607,8 @@ static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
 static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
@@ -6126,6 +6130,14 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
             leave_to_e4();
         }
     };
+    // F5: prefer the ISO's own \EFI\BOOT\BOOTX64.EFI when the retained
+    // product ISO carries a FAT El Torito ESP. The built-in test app is the
+    // fallback (no ISO, not FAT, or no loader present).
+    let iso_entry = raynu_f_stage_iso_bootloader(&layout, ram_hpa);
+    let (entry, image_handle) = match iso_entry {
+        Some(e) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+        None => (loaded.entry, plan.rcx),
+    };
     // Stack (zeroed; RSP slot holds a 0 return address) and GDT just above it.
     let sb = plan.stack_base as usize;
     let st = plan.stack_top as usize;
@@ -6267,6 +6279,239 @@ fn raynu_f_write_backing(media_id: u32, off: u64, buf: &[u8]) -> bool {
     }
 }
 
+/// `VolumeRead` over the retained ISO, offset to the El Torito boot image.
+#[cfg(target_os = "uefi")]
+struct IsoFatVol<'a> {
+    iso: &'a [u8],
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for IsoFatVol<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Ok(start) = usize::try_from(self.base.saturating_add(off)) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(buf.len()) else {
+            return false;
+        };
+        if end > self.iso.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.iso[start..end]);
+        true
+    }
+}
+
+/// `GuestMem` over the identity-mapped guest slab (F5 launch-time loading).
+#[cfg(target_os = "uefi")]
+struct SlabMem {
+    hpa: u64,
+    len: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::GuestMem for SlabMem {
+    fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
+        let Some(end) = addr.checked_add(buf.len() as u64) else {
+            return 0;
+        };
+        if end > self.len {
+            return 0;
+        }
+        // SAFETY: exclusive guest slab; range checked against its length.
+        // KANI-TARGET: RayNu-F slab read (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                (self.hpa + addr) as *const u8,
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        buf.len()
+    }
+    fn write(&self, addr: u64, buf: &[u8]) -> usize {
+        let Some(end) = addr.checked_add(buf.len() as u64) else {
+            return 0;
+        };
+        if end > self.len {
+            return 0;
+        }
+        // SAFETY: exclusive guest slab; range checked against its length.
+        // KANI-TARGET: RayNu-F slab write (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                (self.hpa + addr) as *mut u8,
+                buf.len(),
+            );
+        }
+        buf.len()
+    }
+}
+
+/// F5: mount the FAT ESP inside the retained ISO's El Torito boot image and
+/// stage its `\EFI\BOOT\BOOTX64.EFI` as the guest image. Returns the loaded
+/// entry point on success; `None` leaves the built-in test app as the guest.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_iso_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    let iso = raynu_f_cd_bytes()?;
+    let et = match crate::mgmt::el_torito::parse_el_torito(iso) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F no El Torito catalog in ISO (test app stays)");
+            return None;
+        }
+    };
+    let fat_off = u64::from(et.load_lba) * crate::mgmt::el_torito::ISO_SECTOR as u64;
+    let mut boot = [0u8; 512];
+    let vol_reader = IsoFatVol { iso, base: fat_off };
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line("boot: RayNu-F El Torito extent outside ISO (test app stays)");
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_str("boot: RayNu-F El Torito image is not FAT lba=");
+            write_dec(u64::from(et.load_lba));
+            serial::write_line(" (test app stays)");
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F FS mount (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    st.fs.volume = Some(vol);
+    st.fat_volume_off = fat_off;
+    st.file_proto_base = layout.file_proto_base;
+    st.sfs = layout.sfs;
+    st.loaded_image_proto = layout.loaded_image;
+    st.system_table = layout.system_table;
+    let _ = st.protocols.install(
+        crate::raynu_f::HANDLE_CD,
+        crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+        layout.sfs,
+    );
+    serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
+    write_dec(u64::from(et.load_lba));
+    serial::write_str(" efi=");
+    write_dec(et.efi as u64);
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+
+    let entry = match crate::raynu_f::fat::resolve_path(
+        &vol,
+        &vol_reader,
+        b"\\EFI\\BOOT\\BOOTX64.EFI",
+    ) {
+        Ok(e) => e,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the ESP (test app stays)",
+            );
+            return None;
+        }
+    };
+    let size = u64::from(entry.size);
+    serial::write_str("boot: RayNu-F found \\EFI\\BOOT\\BOOTX64.EFI bytes=");
+    write_dec(size);
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+
+    // Stage the file, then load the image — both out of our own pool.
+    let mem = SlabMem {
+        hpa: ram_hpa,
+        len: GUEST_UEFI_LOW_RAM_BYTES,
+    };
+    let file_pages = (size + 4095) / 4096;
+    let (s1, file_gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_DATA,
+        file_pages,
+        0,
+    );
+    if s1 != 0 {
+        serial::write_line("boot: RayNu-F WARN no pool pages for BOOTX64.EFI (test app stays)");
+        return None;
+    }
+    let mut tmp = [0u8; 4096];
+    let mut off = 0u64;
+    while off < size {
+        let chunk = ((size - off).min(4096)) as usize;
+        match crate::raynu_f::fat::read_chain(
+            &vol,
+            &vol_reader,
+            entry.first_cluster,
+            off,
+            &mut tmp[..chunk],
+        ) {
+            Ok(n) if n == chunk => {}
+            _ => {
+                serial::write_line("boot: RayNu-F WARN BOOTX64.EFI read failed (test app stays)");
+                return None;
+            }
+        }
+        if crate::raynu_f::GuestMem::write(&mem, file_gpa + off, &tmp[..chunk]) != chunk {
+            serial::write_line("boot: RayNu-F WARN staging write failed (test app stays)");
+            return None;
+        }
+        off += chunk as u64;
+    }
+    // Size the image, allocate, and load with relocations.
+    let mut hdr = [0u8; 4096];
+    let take = (size as usize).min(hdr.len());
+    if crate::raynu_f::GuestMem::read(&mem, file_gpa, &mut hdr[..take]) != take {
+        return None;
+    }
+    let pe = match crate::raynu_f::parse_pe32plus(&hdr[..take]) {
+        Ok(p) => p,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F BOOTX64.EFI is not PE32+ x64 (test app stays)");
+            return None;
+        }
+    };
+    let img_pages = (u64::from(pe.size_of_image) + 4095) / 4096;
+    let (s2, img_gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_CODE,
+        img_pages,
+        0,
+    );
+    if s2 != 0 {
+        serial::write_line("boot: RayNu-F WARN no pool pages for the image (test app stays)");
+        return None;
+    }
+    let loaded = match crate::raynu_f::pe::load_pe32plus_guest(
+        &mem,
+        file_gpa,
+        size,
+        img_gpa,
+        img_pages * 4096,
+    ) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F WARN BOOTX64.EFI load failed (test app stays)");
+            return None;
+        }
+    };
+    st.image_base = loaded.load_base;
+    st.image_size = u64::from(loaded.size_of_image);
+    st.image_entry = loaded.entry;
+    st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
+    serial::write_str("boot: RayNu-F ISO bootloader staged base=0x");
+    write_hex(loaded.load_base);
+    serial::write_str(" entry=0x");
+    write_hex(loaded.entry);
+    serial::write_str(" size=");
+    write_dec(u64::from(loaded.size_of_image));
+    serial::write_str(" relocs=");
+    write_dec(u64::from(loaded.relocs_applied));
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+    Some(loaded.entry)
+}
+
 /// F4: fill in real media geometry and publish `BlockIo` on the CD and disk
 /// handles so a loader can find them the architected way.
 #[cfg(target_os = "uefi")]
@@ -6406,8 +6651,9 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             let size = (qual & 7) + 1;
             let is_in = (qual & (1 << 3)) != 0;
             let port = io_port_from_qual(qual);
+            let mut redirected = false;
             if crate::raynu_f::is_service_call(port, is_in, size) {
-                handle_raynu_f_service();
+                redirected = handle_raynu_f_service();
             } else if is_com_uart_port(port) {
                 handle_uart(port, is_in, size);
             } else if is_debugcon_port(port) {
@@ -6424,9 +6670,11 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
                     SAVED_RAX |= if size == 1 { 0xff } else if size == 2 { 0xffff } else { 0xffff_ffff };
                 }
             }
-            let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-            if len == 0 || ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
-                raynu_f_stop("io-skip");
+            if !redirected {
+                let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+                if len == 0 || ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
+                    raynu_f_stop("io-skip");
+                }
             }
             guest_uefi_vmresume();
         }
@@ -9367,7 +9615,7 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
 /// `EFI_STATUS` in RAX. This is our contract, not a foreign firmware's —
 /// nothing here forces another firmware's internal state.
 #[cfg(target_os = "uefi")]
-unsafe fn handle_raynu_f_service() {
+unsafe fn handle_raynu_f_service() -> bool {
     struct Mem;
     impl crate::raynu_f::GuestMem for Mem {
         fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
@@ -9484,6 +9732,29 @@ unsafe fn handle_raynu_f_service() {
     {
         serial::write_line(crate::raynu_f::RAYNU_F_CONOUT_OK_MARKER);
     }
+    if d.file_read_ok && !RAYNU_F_FS_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_FS_OK_MARKER);
+    }
+    // StartImage: hand control to the loaded image instead of returning. The
+    // caller's return address is still at [RSP] (the stub only did mov/mov/
+    // out), so the image's own `ret` lands back after the StartImage call.
+    if let Some((entry, handle)) = d.start_image {
+        SAVED_RCX = handle;
+        SAVED_RDX = st.system_table;
+        if ops::vmwrite(GUEST_RIP, entry).is_ok() {
+            if !RAYNU_F_START_IMAGE_LOGGED.swap(true, Ordering::AcqRel) {
+                serial::write_str("boot: RayNu-F StartImage entry=0x");
+                write_hex(entry);
+                serial::write_str(" handle=0x");
+                write_hex(handle);
+                serial::write_line(" (F5; not ISO-INSTALL-OK)");
+                serial::write_line(crate::raynu_f::RAYNU_F_START_IMAGE_OK_MARKER);
+            }
+            return true;
+        }
+        serial::write_line("boot: RayNu-F WARN StartImage VMWRITE(RIP) failed");
+    }
+    false
 }
 
 #[cfg(target_os = "uefi")]
@@ -9544,7 +9815,7 @@ unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
         return;
     }
     if crate::raynu_f::is_service_call(port, is_in, size) {
-        handle_raynu_f_service();
+        let _ = handle_raynu_f_service();
         return;
     }
     let k = IO_UNHANDLED_N.fetch_add(1, Ordering::AcqRel);
