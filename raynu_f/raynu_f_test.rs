@@ -1773,3 +1773,71 @@ fn raynu_f_filesystem_loadimage_startimage() {
     #[cfg(not(target_os = "uefi"))]
     println!("{}", super::RAYNU_F_IMAGE_GATE_MARKER);
 }
+
+/// Opt-in integration test against a real distro ISO: set `RAYNU_F_REAL_ISO`
+/// to its path and run with `--ignored`. Walks exactly what the launcher's F5c
+/// path does: El Torito -> EFI FAT ESP -> \EFI\BOOT\BOOTX64.EFI -> PE32+ load.
+#[test]
+#[ignore]
+fn raynu_f_real_iso_bootloader_path() {
+    let Ok(path) = std::env::var("RAYNU_F_REAL_ISO") else {
+        eprintln!("RAYNU_F_REAL_ISO not set; skipping");
+        return;
+    };
+    let iso = std::fs::read(&path).expect("read ISO");
+    let et = crate::mgmt::el_torito::parse_el_torito(&iso).expect("El Torito catalog");
+    eprintln!("el torito: efi={} load_lba={} sectors={}", et.efi, et.load_lba, et.sector_count);
+    assert!(et.efi, "must select the EFI (0xEF) section entry, not the BIOS default");
+    let fat_off = et.load_lba as u64 * 2048;
+
+    struct Vol<'a>(&'a [u8], u64);
+    impl super::fat::VolumeRead for Vol<'_> {
+        fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+            let s = (self.1 + off) as usize;
+            if s + buf.len() > self.0.len() {
+                return false;
+            }
+            buf.copy_from_slice(&self.0[s..s + buf.len()]);
+            true
+        }
+    }
+    let vol = Vol(&iso, fat_off);
+    let mut boot = [0u8; 512];
+    assert!(super::fat::VolumeRead::read_at(&vol, 0, &mut boot));
+    let fv = super::fat::parse_bpb(&boot).expect("EFI image is FAT");
+    eprintln!("fat: {:?} bps={} spc={} clusters={}", fv.kind, fv.bytes_per_sector, fv.sectors_per_cluster, fv.cluster_count);
+
+    let e = super::fat::resolve_path(&fv, &vol, b"\\EFI\\BOOT\\BOOTX64.EFI").expect("BOOTX64.EFI present");
+    eprintln!("BOOTX64.EFI: size={} first_cluster={}", e.size, e.first_cluster);
+    assert!(e.size > 0 && !e.is_dir());
+
+    let mut file = vec![0u8; e.size as usize];
+    let n = super::fat::read_chain(&fv, &vol, e.first_cluster, 0, &mut file).expect("read chain");
+    assert_eq!(n, file.len(), "read the whole bootloader");
+    assert_eq!(&file[0..2], b"MZ");
+
+    let pe = super::parse_pe32plus(&file).expect("bootloader is PE32+ x64");
+    eprintln!("pe: entry_rva=0x{:x} image_base=0x{:x} size_of_image=0x{:x} sections={} subsystem={}",
+        pe.entry_rva, pe.image_base, pe.size_of_image, pe.num_sections, pe.subsystem);
+    assert_eq!(pe.subsystem, super::pe::SUBSYSTEM_EFI_APPLICATION);
+
+    // Load it at a base the launcher's pool would hand out (relocation path).
+    let mut img = vec![0u8; pe.size_of_image as usize];
+    let l = super::load_pe32plus(&file, 0x00B0_0000, &mut img).expect("loads with relocations");
+    eprintln!("loaded: entry=0x{:x} relocs={} sections={}", l.entry, l.relocs_applied, l.sections_loaded);
+    assert_eq!(l.sections_loaded, pe.num_sections);
+    // The launcher uses the GuestMem loader; prove it produces identical bytes.
+    let guest = MockGuest::new(0, {
+        let mut m = vec![0u8; 0x0200_0000];
+        m[0x0090_0000..0x0090_0000 + file.len()].copy_from_slice(&file);
+        m
+    });
+    let l2 = super::pe::load_pe32plus_guest(&guest, 0x0090_0000, file.len() as u64, 0x00B0_0000, pe.size_of_image as u64 + 4096)
+        .expect("guest-memory loader");
+    assert_eq!(l2.entry, l.entry);
+    assert_eq!(l2.relocs_applied, l.relocs_applied);
+    let mut back = vec![0u8; pe.size_of_image as usize];
+    guest.read(0x00B0_0000, &mut back);
+    assert_eq!(back, img, "slice loader and guest-memory loader agree byte for byte");
+    println!("RAYNU-V-RAYNU-F-REAL-ISO-PATH-OK");
+}

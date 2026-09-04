@@ -78,25 +78,49 @@ fn parse_catalog(cat: &[u8], catalog_lba: u32) -> Result<ElToritoImage, ElTorito
     if cat[0] != 0x01 || cat[30] != 0x55 || cat[31] != 0xAA {
         return Err(ElToritoError::BadCatalog);
     }
+    // Walk the catalog: the default (initial) entry follows validation and
+    // inherits the validation platform; later 0x90/0x91 section headers
+    // switch platform for the entries after them. A hybrid BIOS+UEFI ISO
+    // (Alpine, Debian, Ubuntu…) puts isolinux first (platform 0) and the FAT
+    // ESP under an EFI (0xEF) section header — so **prefer the EFI entry**
+    // and fall back to the default only when no EFI section exists.
+    let validation_efi = cat[1] == 0xEF;
+    let mut platform_efi = validation_efi;
+    let mut default: Option<(u32, u16)> = None;
+    let mut efi_entry: Option<(u32, u16)> = None;
     let mut off = 32;
-    let mut efi = cat[1] == 0xEF;
-    // Optional EFI section header 0x90/0x91.
-    if cat.len() >= off + 32 && (cat[off] == 0x90 || cat[off] == 0x91) {
-        efi = efi || cat[off + 1] == 0xEF;
+    let mut seen = 0;
+    while off + 32 <= cat.len() && seen < 64 {
+        let e = &cat[off..off + 32];
+        match e[0] {
+            0x90 | 0x91 => {
+                platform_efi = e[1] == 0xEF;
+            }
+            0x88 => {
+                let count = u16::from_le_bytes([e[6], e[7]]);
+                let lba = u32::from_le_bytes([e[8], e[9], e[10], e[11]]);
+                if lba != 0 {
+                    if platform_efi && efi_entry.is_none() {
+                        efi_entry = Some((lba, count));
+                    }
+                    if default.is_none() {
+                        default = Some((lba, count));
+                    }
+                }
+            }
+            // 0x00 right after validation is a non-bootable default entry;
+            // anywhere else it is the end of the catalog.
+            0x00 if off == 32 => {}
+            _ => break,
+        }
         off += 32;
+        seen += 1;
     }
-    if cat.len() < off + 32 {
-        return Err(ElToritoError::Truncated);
-    }
-    let ent = &cat[off..off + 32];
-    if ent[0] != 0x88 {
-        return Err(ElToritoError::NotBootable);
-    }
-    let sector_count = u16::from_le_bytes([ent[6], ent[7]]);
-    let load_lba = u32::from_le_bytes([ent[8], ent[9], ent[10], ent[11]]);
-    if load_lba == 0 {
-        return Err(ElToritoError::NotBootable);
-    }
+    let (load_lba, sector_count, efi) = match (efi_entry, default) {
+        (Some((l, c)), _) => (l, c, true),
+        (None, Some((l, c))) => (l, c, validation_efi),
+        (None, None) => return Err(ElToritoError::NotBootable),
+    };
     Ok(ElToritoImage {
         catalog_lba,
         load_lba,
