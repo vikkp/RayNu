@@ -1157,3 +1157,333 @@ fn raynu_f_protocols_and_blockio() {
     #[cfg(not(target_os = "uefi"))]
     println!("{RAYNU_F_BLOCKIO_GATE_MARKER}");
 }
+
+/// Build a real FAT12 volume containing `\EFI\BOOT\BOOTX64.EFI`.
+/// Geometry: 512 B sectors, 1 sector/cluster, 1 FAT, 64 root entries.
+fn build_fat12_esp(payload: &[u8]) -> Vec<u8> {
+    const SEC: usize = 512;
+    const TOTAL: usize = 512; // 512 sectors = 256 KiB
+    const RESERVED: usize = 1;
+    const FAT_SECS: usize = 2;
+    const ROOT_ENTS: usize = 64;
+    let root_secs = ROOT_ENTS * 32 / SEC; // 4
+    let mut v = vec![0u8; TOTAL * SEC];
+    // BPB
+    v[0] = 0xEB;
+    v[1] = 0x3C;
+    v[2] = 0x90;
+    v[3..11].copy_from_slice(b"RAYNUF  ");
+    v[11..13].copy_from_slice(&(SEC as u16).to_le_bytes());
+    v[13] = 1; // sectors per cluster
+    v[14..16].copy_from_slice(&(RESERVED as u16).to_le_bytes());
+    v[16] = 1; // num FATs
+    v[17..19].copy_from_slice(&(ROOT_ENTS as u16).to_le_bytes());
+    v[19..21].copy_from_slice(&(TOTAL as u16).to_le_bytes());
+    v[21] = 0xF8;
+    v[22..24].copy_from_slice(&(FAT_SECS as u16).to_le_bytes());
+    v[510] = 0x55;
+    v[511] = 0xAA;
+
+    let fat_start = RESERVED;
+    let root_start = fat_start + FAT_SECS;
+    let data_start = root_start + root_secs;
+
+    // FAT12 entry writer.
+    let set_fat = |v: &mut Vec<u8>, cl: usize, val: u16| {
+        let off = fat_start * SEC + cl * 3 / 2;
+        let cur = u16::from_le_bytes([v[off], v[off + 1]]);
+        let new = if cl & 1 == 0 {
+            (cur & 0xF000) | (val & 0x0FFF)
+        } else {
+            (cur & 0x000F) | (val << 4)
+        };
+        v[off..off + 2].copy_from_slice(&new.to_le_bytes());
+    };
+    set_fat(&mut v, 0, 0xFF8);
+    set_fat(&mut v, 1, 0xFFF);
+
+    // 8.3 directory entry writer.
+    let mk_ent = |name: &[u8; 11], attr: u8, cluster: u16, size: u32| {
+        let mut e = [0u8; 32];
+        e[..11].copy_from_slice(name);
+        e[11] = attr;
+        e[26..28].copy_from_slice(&cluster.to_le_bytes());
+        e[28..32].copy_from_slice(&size.to_le_bytes());
+        e
+    };
+
+    // Cluster 2 = \EFI dir, cluster 3 = \EFI\BOOT dir, clusters 4.. = file.
+    let cl_efi = 2usize;
+    let cl_boot = 3usize;
+    let cl_file = 4usize;
+    // Root: EFI <DIR> -> cluster 2
+    let root_off = root_start * SEC;
+    v[root_off..root_off + 32].copy_from_slice(&mk_ent(b"EFI        ", 0x10, cl_efi as u16, 0));
+    set_fat(&mut v, cl_efi, 0xFFF);
+    // \EFI: ".", "..", BOOT <DIR> -> cluster 3
+    let efi_off = (data_start + cl_efi - 2) * SEC;
+    v[efi_off..efi_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_efi as u16, 0));
+    v[efi_off + 32..efi_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, 0, 0));
+    v[efi_off + 64..efi_off + 96].copy_from_slice(&mk_ent(b"BOOT       ", 0x10, cl_boot as u16, 0));
+    set_fat(&mut v, cl_boot, 0xFFF);
+    // \EFI\BOOT: ".", "..", BOOTX64.EFI -> cluster 4, size = payload
+    let boot_off = (data_start + cl_boot - 2) * SEC;
+    v[boot_off..boot_off + 32].copy_from_slice(&mk_ent(b".          ", 0x10, cl_boot as u16, 0));
+    v[boot_off + 32..boot_off + 64].copy_from_slice(&mk_ent(b"..         ", 0x10, cl_efi as u16, 0));
+    v[boot_off + 64..boot_off + 96].copy_from_slice(&mk_ent(
+        b"BOOTX64 EFI",
+        0x20,
+        cl_file as u16,
+        payload.len() as u32,
+    ));
+    // Payload across a multi-cluster chain (512 B clusters exercise it).
+    let nclusters = (payload.len() + SEC - 1) / SEC;
+    for i in 0..nclusters {
+        let cl = cl_file + i;
+        let off = (data_start + cl - 2) * SEC;
+        let start = i * SEC;
+        let end = (start + SEC).min(payload.len());
+        v[off..off + (end - start)].copy_from_slice(&payload[start..end]);
+        let next = if i + 1 == nclusters { 0xFFF } else { (cl + 1) as u16 };
+        set_fat(&mut v, cl, next);
+    }
+    v
+}
+
+struct VecVol(Vec<u8>);
+impl super::fat::VolumeRead for VecVol {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let s = off as usize;
+        if s + buf.len() > self.0.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.0[s..s + buf.len()]);
+        true
+    }
+}
+
+#[test]
+fn raynu_f_fat_and_simple_filesystem() {
+    use super::fat::{
+        parse_bpb, resolve_path, FatError, FatKind, ATTR_DIRECTORY, ATTR_LONG_NAME,
+        DIR_ENTRY_FREE, DIR_ENTRY_SIZE,
+    };
+    use super::filesystem::{
+        utf16_path_to_ascii, FileSystem, EFI_FILE_DIRECTORY, EFI_FILE_MODE_CREATE,
+        EFI_FILE_MODE_READ, EFI_FILE_MODE_WRITE, FILE_INFO_ATTRIBUTE_OFF,
+        FILE_INFO_FILE_SIZE_OFF, FILE_INFO_NAME_OFF, FILE_INFO_SIZE_OFF, FILE_REVISION,
+        FILE_SIZE, GUID_FILE_INFO, MAX_PATH_BYTES, SFS_REVISION, SFS_SIZE,
+    };
+    use super::testapp::{build_test_app, TESTAPP_FILE_BYTES};
+
+    const EFI_SUCCESS: u64 = 0;
+    const EFI_NOT_FOUND: u64 = 0x8000_0000_0000_000E;
+    const EFI_UNSUPPORTED: u64 = 0x8000_0000_0000_0003;
+    const EFI_WRITE_PROTECTED: u64 = 0x8000_0000_0000_0008;
+    const EFI_INVALID_PARAMETER: u64 = 0x8000_0000_0000_0002;
+    const EFI_BUFFER_TOO_SMALL: u64 = 0x8000_0000_0000_0005;
+
+    // Spec-shape constants.
+    assert_eq!(SFS_SIZE, 0x10);
+    assert_eq!(FILE_SIZE, 0x58);
+    assert_eq!(SFS_REVISION, 0x0001_0000);
+    assert_eq!(FILE_REVISION, 0x0001_0000);
+    assert_eq!(FILE_INFO_NAME_OFF, 0x50);
+    // EFI_FILE_INFO_ID {09576E92-6D3F-11D2-8E39-00A0C969723B}
+    assert_eq!(u32::from_le_bytes(GUID_FILE_INFO[0..4].try_into().unwrap()), 0x0957_6E92);
+    assert_eq!(&GUID_FILE_INFO[8..], &[0x8E, 0x39, 0x00, 0xA0, 0xC9, 0x69, 0x72, 0x3B]);
+
+    // The payload is a real PE32+ so F5b can LoadImage it straight off the FS.
+    let mut app = vec![0u8; TESTAPP_FILE_BYTES];
+    build_test_app(&mut app).unwrap();
+    let vol_bytes = build_fat12_esp(&app);
+    let vol = VecVol(vol_bytes);
+
+    // --- BPB ------------------------------------------------------------
+    let mut boot = [0u8; 512];
+    assert!(super::fat::VolumeRead::read_at(&vol, 0, &mut boot));
+    let fv = parse_bpb(&boot).expect("BPB parses");
+    assert_eq!(fv.kind, FatKind::Fat12); // 512-sector volume => FAT12
+    assert_eq!(fv.bytes_per_sector, 512);
+    assert_eq!(fv.sectors_per_cluster, 1);
+    assert_eq!(fv.num_fats, 1);
+    assert_eq!(fv.root_entries, 64);
+    assert_eq!(fv.fat_start, 1);
+    assert_eq!(fv.root_start, 3);
+    assert_eq!(fv.root_sectors, 4);
+    assert_eq!(fv.data_start, 7);
+    assert_eq!(fv.cluster_bytes(), 512);
+    assert!(fv.cluster_is_valid(2) && !fv.cluster_is_valid(1));
+    assert!(fv.is_end_of_chain(0xFFF) && !fv.is_end_of_chain(3));
+    // Rejects junk and impossible geometry.
+    assert_eq!(parse_bpb(&[0u8; 16]), Err(FatError::ShortRead));
+    assert_eq!(parse_bpb(&[0u8; 512]), Err(FatError::BadBpb));
+
+    // --- short-name rendering + entry decode -----------------------------
+    let (n, l) = super::fat::short_name(b"BOOTX64 EFI");
+    assert_eq!(&n[..l], b"BOOTX64.EFI");
+    let (n, l) = super::fat::short_name(b"EFI        ");
+    assert_eq!(&n[..l], b"EFI");
+    // LFN slots and deleted entries are skipped, not misread as files.
+    let mut lfn = [0u8; DIR_ENTRY_SIZE];
+    lfn[11] = ATTR_LONG_NAME;
+    assert!(super::fat::parse_dir_entry(&lfn).is_none());
+    let mut del = [0u8; DIR_ENTRY_SIZE];
+    del[0] = DIR_ENTRY_FREE;
+    assert!(super::fat::parse_dir_entry(&del).is_none());
+    assert!(super::fat::parse_dir_entry(&[0u8; DIR_ENTRY_SIZE]).is_none());
+
+    // --- path resolution -------------------------------------------------
+    let e = resolve_path(&fv, &vol, b"\\EFI\\BOOT\\BOOTX64.EFI").expect("resolves");
+    assert_eq!(e.name_bytes(), b"BOOTX64.EFI");
+    assert_eq!(e.size as usize, app.len());
+    assert!(!e.is_dir());
+    // Forward slashes, duplicate and missing leading separators all work.
+    assert_eq!(resolve_path(&fv, &vol, b"/EFI/BOOT/BOOTX64.EFI").unwrap().size, e.size);
+    assert_eq!(resolve_path(&fv, &vol, b"EFI\\\\BOOT\\BOOTX64.EFI").unwrap().size, e.size);
+    // Case-insensitive (FAT semantics).
+    assert_eq!(resolve_path(&fv, &vol, b"\\efi\\boot\\bootx64.efi").unwrap().size, e.size);
+    // Directories resolve as directories.
+    let d = resolve_path(&fv, &vol, b"\\EFI").unwrap();
+    assert!(d.is_dir() && d.attr & ATTR_DIRECTORY != 0);
+    // Honest failures.
+    assert_eq!(resolve_path(&fv, &vol, b"\\EFI\\BOOT\\NOPE.EFI"), Err(FatError::NotFound));
+    assert_eq!(resolve_path(&fv, &vol, b"\\NOPE\\X"), Err(FatError::NotFound));
+    // A file used as a directory component is not silently accepted.
+    assert_eq!(
+        resolve_path(&fv, &vol, b"\\EFI\\BOOT\\BOOTX64.EFI\\X"),
+        Err(FatError::NotADirectory)
+    );
+    assert_eq!(resolve_path(&fv, &vol, b""), Err(FatError::NotFound));
+
+    // --- cluster-chain read matches the payload byte for byte -------------
+    let mut whole = vec![0u8; app.len()];
+    let got = super::fat::read_chain(&fv, &vol, e.first_cluster, 0, &mut whole).unwrap();
+    assert_eq!(got, app.len());
+    assert_eq!(whole, app);
+    // The chain really spans multiple clusters (512 B each).
+    assert!(app.len() > 512, "payload must exceed one cluster to prove chaining");
+    // Read at an offset that starts mid-chain.
+    let mut mid = [0u8; 64];
+    super::fat::read_chain(&fv, &vol, e.first_cluster, 600, &mut mid).unwrap();
+    assert_eq!(&mid[..], &app[600..664]);
+    // Offset past EOF yields nothing rather than garbage.
+    let mut none = [0u8; 16];
+    assert_eq!(
+        super::fat::read_chain(&fv, &vol, e.first_cluster, 1 << 20, &mut none).unwrap(),
+        0
+    );
+
+    // --- SimpleFileSystem / EFI_FILE_PROTOCOL ----------------------------
+    let mut fs = FileSystem::new();
+    assert!(!fs.mounted());
+    // Unmounted volume refuses OpenVolume.
+    assert_eq!(fs.open_volume().0, EFI_NOT_FOUND);
+    fs.volume = Some(fv);
+    assert!(fs.mounted());
+    let (st, root) = fs.open_volume();
+    assert_eq!(st, EFI_SUCCESS);
+    assert_ne!(root, 0);
+    assert_eq!(fs.is_directory(root), Some(true));
+    assert_eq!(fs.open_count(), 1);
+
+    // Open the bootloader read-only.
+    let (st, fh) = fs.open(root, b"\\EFI\\BOOT\\BOOTX64.EFI", EFI_FILE_MODE_READ, &vol);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_eq!(fs.size_of(fh), Some(app.len() as u64));
+    assert_eq!(fs.is_directory(fh), Some(false));
+    assert_eq!(fs.position(fh), Some(0));
+    // Write / create modes are refused honestly on a read-only volume.
+    assert_eq!(fs.open(root, b"\\X", EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, &vol).0, EFI_WRITE_PROTECTED);
+    assert_eq!(fs.open(root, b"\\X", EFI_FILE_MODE_CREATE | EFI_FILE_MODE_READ, &vol).0, EFI_WRITE_PROTECTED);
+    assert_eq!(fs.open(root, b"\\EFI", 0, &vol).0, EFI_INVALID_PARAMETER);
+    assert_eq!(fs.open(0xDEAD, b"\\EFI", EFI_FILE_MODE_READ, &vol).0, EFI_INVALID_PARAMETER);
+    assert_eq!(fs.open(root, b"\\NOPE", EFI_FILE_MODE_READ, &vol).0, EFI_NOT_FOUND);
+
+    // Sequential reads reassemble the whole PE, and the position advances.
+    let mut acc = Vec::new();
+    let mut chunk = [0u8; 100];
+    loop {
+        let (st, n) = fs.read(fh, &mut chunk, &vol);
+        assert_eq!(st, EFI_SUCCESS);
+        if n == 0 {
+            break;
+        }
+        acc.extend_from_slice(&chunk[..n]);
+    }
+    assert_eq!(acc, app);
+    assert_eq!(fs.position(fh), Some(app.len() as u64));
+    // It is a genuine PE32+ that our F2a loader accepts.
+    assert!(super::parse_pe32plus(&acc).is_ok());
+
+    // SetPosition: rewind, seek to EOF (u64::MAX), and re-read.
+    assert_eq!(fs.set_position(fh, 0), EFI_SUCCESS);
+    assert_eq!(fs.position(fh), Some(0));
+    let mut two = [0u8; 2];
+    let (st, n) = fs.read(fh, &mut two, &vol);
+    assert_eq!((st, n), (EFI_SUCCESS, 2));
+    assert_eq!(&two, b"MZ");
+    assert_eq!(fs.set_position(fh, u64::MAX), EFI_SUCCESS);
+    assert_eq!(fs.position(fh), Some(app.len() as u64));
+    assert_eq!(fs.read(fh, &mut two, &vol), (EFI_SUCCESS, 0)); // EOF, not an error
+    // Directories: rewind only, and Read is honestly unsupported.
+    assert_eq!(fs.set_position(root, 0), EFI_SUCCESS);
+    assert_eq!(fs.set_position(root, 8), EFI_UNSUPPORTED);
+    assert_eq!(fs.read(root, &mut two, &vol).0, EFI_UNSUPPORTED);
+
+    // GetInfo(EFI_FILE_INFO): sizing then fill.
+    let mut small = [0u8; 8];
+    let (st, need) = fs.file_info(fh, &mut small);
+    assert_eq!(st, EFI_BUFFER_TOO_SMALL);
+    assert_eq!(need, FILE_INFO_NAME_OFF as u64 + (b"BOOTX64.EFI".len() as u64 + 1) * 2);
+    let mut info = vec![0u8; need as usize];
+    let (st, wrote) = fs.file_info(fh, &mut info);
+    assert_eq!((st, wrote), (EFI_SUCCESS, need));
+    assert_eq!(u64::from_le_bytes(info[FILE_INFO_SIZE_OFF..8].try_into().unwrap()), need);
+    assert_eq!(
+        u64::from_le_bytes(info[FILE_INFO_FILE_SIZE_OFF..FILE_INFO_FILE_SIZE_OFF + 8].try_into().unwrap()),
+        app.len() as u64
+    );
+    assert_eq!(
+        u64::from_le_bytes(info[FILE_INFO_ATTRIBUTE_OFF..FILE_INFO_ATTRIBUTE_OFF + 8].try_into().unwrap())
+            & EFI_FILE_DIRECTORY,
+        0
+    );
+    // FileName is CHAR16 "BOOTX64.EFI\0".
+    let name: Vec<u8> = info[FILE_INFO_NAME_OFF..]
+        .chunks(2)
+        .take_while(|c| c[0] != 0 || c[1] != 0)
+        .map(|c| c[0])
+        .collect();
+    assert_eq!(name, b"BOOTX64.EFI");
+    // Root reports itself as a directory.
+    let mut rinfo = [0u8; 128];
+    let (st, _) = fs.file_info(root, &mut rinfo);
+    assert_eq!(st, EFI_SUCCESS);
+    assert_ne!(
+        u64::from_le_bytes(rinfo[FILE_INFO_ATTRIBUTE_OFF..FILE_INFO_ATTRIBUTE_OFF + 8].try_into().unwrap())
+            & EFI_FILE_DIRECTORY,
+        0
+    );
+
+    // Close releases the slot; the handle then becomes invalid.
+    let open_before = fs.open_count();
+    assert_eq!(fs.close(fh), EFI_SUCCESS);
+    assert_eq!(fs.open_count(), open_before - 1);
+    assert_eq!(fs.close(fh), EFI_INVALID_PARAMETER);
+    assert_eq!(fs.size_of(fh), None);
+    assert!(fs.file_reads > 0);
+
+    // --- guest CHAR16 path conversion -------------------------------------
+    let mut buf = [0u8; MAX_PATH_BYTES];
+    let units: Vec<u16> = "\\EFI\\BOOT\\BOOTX64.EFI\0".encode_utf16().collect();
+    let n = utf16_path_to_ascii(&units, &mut buf).unwrap();
+    assert_eq!(&buf[..n], b"\\EFI\\BOOT\\BOOTX64.EFI");
+    // Non-ASCII is rejected rather than silently mangled.
+    assert!(utf16_path_to_ascii(&[0x2603, 0], &mut buf).is_none());
+    let long: Vec<u16> = core::iter::repeat(b'A' as u16).take(MAX_PATH_BYTES + 1).collect();
+    assert!(utf16_path_to_ascii(&long, &mut buf).is_none());
+
+    #[cfg(not(target_os = "uefi"))]
+    println!("{}", super::RAYNU_F_FS_GATE_MARKER);
+}

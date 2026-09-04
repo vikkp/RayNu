@@ -21,6 +21,8 @@
 
 pub mod blockio;
 pub mod events;
+pub mod fat;
+pub mod filesystem;
 pub mod launch_plan;
 pub mod memory;
 pub mod pe;
@@ -48,6 +50,15 @@ pub use tables::write_block_media;
 /// Serial marker on the first live guest `BlockIo` read or write.
 /// Guest-exit-only.
 pub const RAYNU_F_BLOCKIO_OK_MARKER: &str = "RAYNU-V-RAYNU-F-BLOCKIO-OK";
+
+/// Host / CI marker when the F5a gate passes: FAT12/16/32 reader +
+/// `SimpleFileSystem`/`EFI_FILE_PROTOCOL` semantics over a real FAT volume
+/// holding `\EFI\BOOT\BOOTX64.EFI`. Host only — not yet exposed to a guest.
+pub const RAYNU_F_FS_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-FS-GATE-OK";
+
+/// Serial marker on the first live guest file read through
+/// `EFI_FILE_PROTOCOL`. Guest-exit-only.
+pub const RAYNU_F_FS_OK_MARKER: &str = "RAYNU-V-RAYNU-F-FS-OK";
 
 /// Host / CI marker when the F4 gate passes: handle/protocol database +
 /// `BlockIo` media/validation/transfer against a mock guest. Host only.
