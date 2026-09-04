@@ -88,4 +88,5 @@ fn filter_leaf7_hides_la57() {
     assert_eq!(r.ecx & crate::arch::cpu::CPUID_LEAF7_ECX_LA57, 0);
     assert_eq!(r.ebx & crate::arch::cpu::CPUID_LEAF7_EBX_CLFLUSHOPT, 0);
     assert_eq!(r.ebx & crate::arch::cpu::CPUID_LEAF7_EBX_CLWB, 0);
+    assert_eq!(r.ecx & crate::arch::cpu::CPUID_LEAF7_ECX_WAITPKG, 0);
 }

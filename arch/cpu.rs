@@ -31,6 +31,12 @@ pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
 pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
 /// CPUID.7.0:EBX bit 24 — CLWB. Same nested #UD; Linux then kill-init.
 pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
+/// CPUID.7.0:ECX bit 5 — WAITPKG (`UMONITOR`/`UMWAIT`/`TPAUSE`). Those #UD in
+/// VMX non-root unless the "enable user wait and pause" control is set (SDM
+/// 26.1.3), which we do not do. CI `34b5767` / `9511d4c` Oops `66 0F AE F1`
+/// is register-form `tpause ecx` in `delay_halt_tpause`, not CLWB; Linux
+/// takes that path only when this bit is visible. Hide it.
+pub const CPUID_LEAF7_ECX_WAITPKG: u32 = 1 << 5;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
 pub const CR4_OSXSAVE: u64 = 1 << 18;
 
@@ -501,6 +507,7 @@ mod cpu_test {
         assert_eq!(CPUID_LEAF7_ECX_LA57, 1 << 16);
         assert_eq!(CPUID_LEAF7_EBX_CLFLUSHOPT, 1 << 23);
         assert_eq!(CPUID_LEAF7_EBX_CLWB, 1 << 24);
+        assert_eq!(CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
         assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }

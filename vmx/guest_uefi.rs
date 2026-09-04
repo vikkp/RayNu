@@ -473,7 +473,7 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
             }
             r.ebx &= !((1 << 2) | (1 << 12) | (1 << 15));
             r.ebx &= !(CPUID_LEAF7_EBX_CLFLUSHOPT | CPUID_LEAF7_EBX_CLWB);
-            r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57);
+            r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57 | CPUID_LEAF7_ECX_WAITPKG);
         }
         7 if subleaf > 1 => {
             r.eax = 0;
@@ -630,6 +630,11 @@ pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
 /// `66 0F AE F1` while host CPUID still advertises them (CI `34b5767`).
 pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
 pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
+/// CPUID.7.0 ECX.WAITPKG (bit 5). `TPAUSE`/`UMWAIT`/`UMONITOR` #UD in VMX
+/// non-root without the user-wait-and-pause control (SDM 26.1.3); the
+/// `66 0F AE F1` Oops (CI `34b5767`, `9511d4c`) is register-form `tpause`,
+/// which Linux uses only when this bit is visible. Hide it on every leg.
+pub const CPUID_LEAF7_ECX_WAITPKG: u32 = crate::arch::cpu::CPUID_LEAF7_ECX_WAITPKG;
 /// i440FX / nested QEMU floor. Clip-36 (`5f59c86`) still left
 /// `[4GiB, 64GiB)` NP vs MTRR default WB.
 pub const GUEST_UEFI_PHYS_BITS_MIN: u32 = 36;

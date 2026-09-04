@@ -8,6 +8,7 @@
 use crate::arch::cpu::{
     self, CPUID_ECX_TSC_DEADLINE, CPUID_ECX_VMX, CPUID_ECX_X2APIC, CPUID_EDX_APIC,
     CPUID_LEAF7_EBX_CLFLUSHOPT, CPUID_LEAF7_EBX_CLWB, CPUID_LEAF7_ECX_LA57,
+    CPUID_LEAF7_ECX_WAITPKG,
 };
 
 /// COM1 marker when guest CPUID leaf 1 is filtered (M3.1 gate).
@@ -214,6 +215,9 @@ pub fn msr_firewall_ok() -> bool {
 /// - Leaf 7.0: ECX.LA57 is clear (E4 is 4-level; trampoline `#DF` at `0x9e036`)
 /// - Leaf 7.0: EBX.CLFLUSHOPT / CLWB clear (nested KVM #UD at `clwb`;
 ///   CI `34b5767` Oops invalid opcode then kill-init; `iso=0` E4 SHELL)
+/// - Leaf 7.0: ECX.WAITPKG clear — `TPAUSE`/`UMWAIT` #UD in VMX non-root
+///   without the user-wait-and-pause control; CI `9511d4c` Oops
+///   `66 0F AE F1` is `tpause ecx` in `delay_halt_tpause` (7/7 attempts)
 ///
 /// M3.1 policy: leaf 1 clears ECX.VMX so the guest cannot see nested VT-x.
 /// M3.11: show EDX.APIC + ECX.X2APIC — guest APIC is virtual (EPT hole / MSRs).
@@ -238,7 +242,7 @@ pub fn filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
         note_leaf1_filtered(out.ecx);
     }
     if leaf == 7 && subleaf == 0 {
-        out.ecx &= !CPUID_LEAF7_ECX_LA57;
+        out.ecx &= !(CPUID_LEAF7_ECX_LA57 | CPUID_LEAF7_ECX_WAITPKG);
         out.ebx &= !(CPUID_LEAF7_EBX_CLFLUSHOPT | CPUID_LEAF7_EBX_CLWB);
     }
     out

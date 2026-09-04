@@ -2110,6 +2110,8 @@ fn marker_and_residual_honest() {
     assert_eq!(leaf7.ecx & CPUID_LEAF7_ECX_LA57, 0);
     assert_eq!(leaf7.ebx & CPUID_LEAF7_EBX_CLFLUSHOPT, 0);
     assert_eq!(leaf7.ebx & CPUID_LEAF7_EBX_CLWB, 0);
+    assert_eq!(leaf7.ecx & super::CPUID_LEAF7_ECX_WAITPKG, 0);
+    assert_eq!(super::CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
     let top = guest_uefi_filter_cpuid(0xB, 0);
     assert_eq!(top.eax, 0);
     assert_eq!(top.ebx, 0);
