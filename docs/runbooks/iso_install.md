@@ -146,8 +146,7 @@ Not extract-boot bzImage.
 
 Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
 (fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
-bytes. Prefer `alpine-virt-*-x86_64.iso` (virtio + serial); standard also
-works if ATAPI `sr-mod` is on the cmdline. The ISO lives next to
+bytes. Nested `USE_EFI=1 BOOTLOADER=grub` proof: prefer `alpine-standard-*-x86_64.iso` (on-media `grub-efi` + `dosfstools`). `alpine-virt` fits Cruzer ESP (~63 MiB) but its on-media repo lacks those packages — bare `…/apks` is correct; path alone cannot fix missing pkgs. Standard needs larger media than the 977.5 MiB Cruzer FAT. The ISO lives next to
 `flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
@@ -255,7 +254,7 @@ lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
 advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
 scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
 guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
-with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda` after discovering `/media/*/apks` (nlplug often mounts at `/media/vdb`) or falling back to `mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom` then `echo $R >/etc/apk/repositories` (and `grub` if `bootloader?`
+with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda` after discovering `/media/*/apks` (nlplug often mounts at `/media/vdb`) or falling back to `mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom` then `[ -d $R ] && echo $R >/etc/apk/repositories` (and `grub` if `bootloader?`
 appears, `/dev/vda` if `Which disk`, `sys` if `How would you like`, `n` if `No disks available` then `(y/n)`, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO cmdline is patched to
 `squashfs,virtio_blk console=ttyS0` (`modules=loop,squashfs,virtio_blk` stays valid so Alpine
 can mount the live root and load virtio-blk; `console=` is a kernel param; product ISO xAPIC is

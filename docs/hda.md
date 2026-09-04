@@ -350,8 +350,8 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | **Nested `1b48e26` lived:** SETUP ran; `setup-disk` failed apk `dosfstools`/`grub-efi` missing because repos were bare `…/apks`. This cut: discover `/media/*/apks/main` (+ fallback `/media/cdrom/apks/main`); `modprobe -a` to keep QCAP. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested `setup-disk` with live `/media/*/apks` next; F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Summary | **Revert `4536b72`:** bare `/media/*/apks` (ISO layout; apk appends arch). Only `echo $R` when `[ -d $R ]` so live-init repos survive failed discovery+mount. `4536b72` `…/apks/main` was mirror layout and a regression vs nested `1b48e26`. #3 remains: alpine-virt on-media lacks `dosfstools`/`grub-efi` — nested proof switches to alpine-standard; keep `USE_EFI=1 BOOTLOADER=grub`. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested alpine-standard + bare `…/apks` next; F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`. |
 | Gates touched | RayNu-F F6-prep: ash-safe SETUP brace group. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
 | Months Δ | 0.5→0.5 |
 
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Revert `4536b72` apks/main→bare `…/apks`; guard repo write; nested path alpine-standard for grub-efi/dosfstools; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `1b48e26` setup-disk: apk missing dosfstools/grub-efi on bare `…/apks`; SETUP now uses `/media/*/apks/main`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `50ed61c` Alpine root shell; SETUP ash `unexpected "}"` on `{mkdir`; spaces `{ mkdir`/`apks; }` so `/media/*/apks` discovery + setup-disk can run; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `528af19` had 64 MiB disk but apk Resource-busy on remount; SETUP now finds `/media/*/apks` before mount fallback; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

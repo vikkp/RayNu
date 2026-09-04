@@ -43,39 +43,48 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// so the first write is ESP+Linux FS (partition-table detect). After live
 /// boot, nlplug often mounts virtio-ISO at `/media/vdb` (not `/media/cdrom`).
 /// Remounting busy `/dev/vdb` fails with Resource busy and leaves apk pointed
-/// at an empty `/media/cdrom/apks`. Discover an existing `/media/*/apks/main`
-/// first (apk index lives under `main`, not bare `apks` — nested `1b48e26`
-/// hit `dosfstools`/`grub-efi` "no such package" after writing `…/apks`);
-/// only fall back to `mkdir` + `mount -t iso9660` `/dev/vdb`||`/dev/sr0` when
-/// none is found. BusyBox ash requires spaces after `{` and before `}` —
-/// `{mkdir` parses as a name and dies with `unexpected "}"` (nested `50ed61c`).
-/// Overwrite `/etc/apk/repositories` with that path (do not append) so
-/// `apk add grub` does not block on a network mirror (live ISO has no DHCP
-/// yet). `modprobe -a` + `mdev -s` so `/sys/block/vda` exists before
-/// `setup-disk` `find_disks` (otherwise `No disks available` exits after we
-/// answer n). Wait until `/dev/vda` exists (`mdev -s` each second, up to 5s)
-/// so a slow virtio probe is a block device before `setup-disk` opens it —
-/// `mdev` then `sleep 1` left the node missing if the driver bound during
-/// the sleep. `sr_mod` so `/dev/sr0` exists when the live image booted from
+/// at an empty `/media/cdrom/apks`. Discover an existing `/media/*/apks`
+/// first (ISO media layout is bare `…/apks`; apk appends arch →
+/// `apks/x86_64/APKINDEX.tar.gz`. Mirror layout with a `main` component is
+/// wrong — nested `4536b72` found nothing and clobbered live repos; nested
+/// `1b48e26` bare `…/apks` read the index and only missed packages absent
+/// from alpine-virt on-media, `dosfstools`/`grub-efi`). Only fall back to
+/// `mkdir` + `mount -t iso9660` `/dev/vdb`||`/dev/sr0` when none is found.
+/// BusyBox ash requires spaces after `{` and before `}` — `{mkdir` parses
+/// as a name and dies with `unexpected "}"` (nested `50ed61c`). Write
+/// `/etc/apk/repositories` only when `$R` is a real directory (do not
+/// overwrite live-init's working line if discovery + mount both fail). Do
+/// not append — a network mirror blocks without DHCP. `modprobe -a` +
+/// `mdev -s` so `/sys/block/vda` exists before `setup-disk` `find_disks`
+/// (otherwise `No disks available` exits after we answer n). Wait until
+/// `/dev/vda` exists (`mdev -s` each second, up to 5s) so a slow virtio
+/// probe is a block device before `setup-disk` opens it — `mdev` then
+/// `sleep 1` left the node missing if the driver bound during the sleep.
+/// `sr_mod` so `/dev/sr0` exists when the live image booted from
 /// virtio-iso. `isofs` + `mount -t iso9660` so BusyBox does not probe a
-/// virtio-blk ISO as a disk (iso9660 is absent from `/proc/filesystems` until
-/// the module loads). auto-answer / # without login (3.21 emergency shell has
-/// no getty). alpine-conf `find_efi_size` defaults ESP to 160 MiB (512-byte
-/// FAT32 min ~34 MiB). That is larger than a 64 MiB fallback disk and leaves
-/// ~96 MiB root on the 256 MiB iron disk. `BOOT_SIZE=48` is above the FAT32
-/// floor so GPT+ESP still land (ISO-INSTALL-OK is the partition table, not a
-/// finished apk root). Do not `apk update` first — that can hang on a missing
-/// index and never reach `setup-disk`. setup-disk before apk update.
+/// virtio-blk ISO as a disk (iso9660 is absent from `/proc/filesystems`
+/// until the module loads). auto-answer / # without login (3.21 emergency
+/// shell has no getty). alpine-conf `find_efi_size` defaults ESP to
+/// 160 MiB (512-byte FAT32 min ~34 MiB). That is larger than a 64 MiB
+/// fallback disk and leaves ~96 MiB root on the 256 MiB iron disk.
+/// `BOOT_SIZE=48` is above the FAT32 floor so GPT+ESP still land
+/// (ISO-INSTALL-OK is the partition table, not a finished apk root). Do
+/// not `apk update` first — that can hang on a missing index and never
+/// reach `setup-disk`. setup-disk before apk update. Nested proof for
+/// `USE_EFI=1 BOOTLOADER=grub` needs an ISO whose on-media repo ships
+/// `grub-efi` + `dosfstools` (alpine-standard / alpine-extended); alpine-virt
+/// lacks them. Cruzer ESP still stages alpine-virt (~63 MiB) until larger
+/// media.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*/apks/main;do [ -d $d ]&&R=$d&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks/main; };echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*/apks;do [ -d $d ]&&R=$d&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks; };[ -d $R ]&&echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 /// alpine-virt 3.21 `/init` emergency shell has busybox + modprobe, **no**
-/// `setup-disk`. If `/media/*/apks/main` already exists, `exit` so `/init`
+/// `setup-disk`. If `/media/*/apks` already exists, `exit` so `/init`
 /// `find_boot_repositories` can switch_root to live alpine (getty `login:`
 /// then SETUP). Else mount ISO then exit. Avoid remounting busy vdb.
 /// emergency mount+exit.
 pub(crate) const MOUNT_EXIT: &[u8] =
-    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;mdev -s;for d in /media/*/apks/main;do [ -d $d ]&&exit;done;mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;exit\r";
+    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;mdev -s;for d in /media/*/apks;do [ -d $d ]&&exit;done;mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;exit\r";
 const _: () = assert!(MOUNT_EXIT.len() <= QCAP);
 pub(crate) const YES: &[u8] = b"y\r";
 pub(crate) const NO: &[u8] = b"n\r";

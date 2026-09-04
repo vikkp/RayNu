@@ -60,17 +60,24 @@ fn login_queues_root_then_setup_disk() {
         "BusyBox ash needs space after {{ (nested 50ed61c unexpected }})"
     );
     assert!(
-        core::str::from_utf8(SETUP).unwrap().contains("apks/main; }"),
+        core::str::from_utf8(SETUP).unwrap().contains("apks; }"),
         "BusyBox ash needs space before }}"
     );
     assert!(
-        core::str::from_utf8(SETUP).unwrap().contains("/media/*/apks/main"),
-        "apk index is under apks/main (not bare apks)"
+        core::str::from_utf8(SETUP).unwrap().contains("/media/*/apks"),
+        "ISO media repo is bare …/apks (apk appends arch; not …/apks/main)"
+    );
+    assert!(
+        !core::str::from_utf8(SETUP).unwrap().contains("apks/main"),
+        "4536b72 …/apks/main was a regression (mirror layout)"
     );
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount -t iso9660 /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("||mount -t iso9660 /dev/sr0"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks/main"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains(">/etc/apk/repositories"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
+    assert!(
+        core::str::from_utf8(SETUP).unwrap().contains("[ -d $R ]&&echo $R>/etc/apk/repositories"),
+        "do not clobber live-init repos when discovery+mount fail"
+    );
     assert!(!core::str::from_utf8(SETUP).unwrap().contains(">>"));
     assert!(
         !core::str::from_utf8(SETUP).unwrap().contains("apk update"),
@@ -97,7 +104,8 @@ fn emergency_shell_without_login_queues_mount_exit() {
     assert_eq!(got, MOUNT_EXIT);
     assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("exit"));
     assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("for d in /media/*"));
-    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("/media/*/apks/main"));
+    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("/media/*/apks"));
+    assert!(!core::str::from_utf8(MOUNT_EXIT).unwrap().contains("apks/main"));
     assert!(
         !core::str::from_utf8(MOUNT_EXIT).unwrap().contains("setup-disk"),
         "emergency mount+exit: initramfs has no setup-disk"

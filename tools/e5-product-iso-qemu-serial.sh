@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Nested QEMU serial capture of Stage 46 product ISO (alpine-virt).
+# Nested QEMU serial capture of Stage 46 product ISO (alpine-standard).
+# alpine-virt on-media repo lacks grub-efi + dosfstools needed for
+# USE_EFI=1 BOOTLOADER=grub. Nested proof uses alpine-standard (~900MiB).
+# Cruzer ESP still stages alpine-virt (~63MiB) until larger media.
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
 # above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
@@ -17,13 +20,13 @@ cd "$ROOT"
 TIMEOUT_SECS="${TIMEOUT_SECS:-480}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/e5-iso-serial.log}"
 ESP="${ESP:-$ROOT/target/e5-iso-esp}"
-ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso}"
-ISO_PATH="${PRODUCT_ISO:-$ROOT/target/alpine-virt-3.21.3-x86_64.iso}"
+ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-standard-3.21.3-x86_64.iso}"
+ISO_PATH="${PRODUCT_ISO:-$ROOT/target/alpine-standard-3.21.3-x86_64.iso}"
 
 mkdir -p "$(dirname "$SERIAL_LOG")" "$ESP" "$(dirname "$ISO_PATH")"
 
 if [[ ! -f "$ISO_PATH" ]]; then
-  echo "==> fetching alpine-virt ISO to $ISO_PATH"
+  echo "==> fetching alpine-standard ISO to $ISO_PATH"
   curl -fsSL -o "$ISO_PATH" "$ISO_URL"
 fi
 psz=$(wc -c <"$ISO_PATH" | tr -d ' ')
