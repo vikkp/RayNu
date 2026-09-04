@@ -46,7 +46,7 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("virtio_pci"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sr_mod"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("isofs"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe $m"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("modprobe -a"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mdev -s"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sleep 1"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("[ -b /dev/vda ]"));
@@ -60,16 +60,16 @@ fn login_queues_root_then_setup_disk() {
         "BusyBox ash needs space after {{ (nested 50ed61c unexpected }})"
     );
     assert!(
-        core::str::from_utf8(SETUP).unwrap().contains("apks; }"),
+        core::str::from_utf8(SETUP).unwrap().contains("apks/main; }"),
         "BusyBox ash needs space before }}"
     );
     assert!(
-        core::str::from_utf8(SETUP).unwrap().contains("$d/apks"),
-        "use existing /media/*/apks (avoid Resource busy on /dev/vdb)"
+        core::str::from_utf8(SETUP).unwrap().contains("/media/*/apks/main"),
+        "apk index is under apks/main (not bare apks)"
     );
     assert!(core::str::from_utf8(SETUP).unwrap().contains("mount -t iso9660 /dev/vdb"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("||mount -t iso9660 /dev/sr0"));
-    assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("/media/cdrom/apks/main"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains(">/etc/apk/repositories"));
     assert!(!core::str::from_utf8(SETUP).unwrap().contains(">>"));
     assert!(
@@ -97,7 +97,7 @@ fn emergency_shell_without_login_queues_mount_exit() {
     assert_eq!(got, MOUNT_EXIT);
     assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("exit"));
     assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("for d in /media/*"));
-    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("$d/apks"));
+    assert!(core::str::from_utf8(MOUNT_EXIT).unwrap().contains("/media/*/apks/main"));
     assert!(
         !core::str::from_utf8(MOUNT_EXIT).unwrap().contains("setup-disk"),
         "emergency mount+exit: initramfs has no setup-disk"
