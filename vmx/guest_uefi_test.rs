@@ -1452,6 +1452,7 @@ fn marker_and_residual_honest() {
     assert_eq!(hb & (1 << 6), 0, "#UD is Linux alternatives");
     assert_eq!(hb & (1 << 13), 0, "#GP stays in the guest");
     assert_ne!(hb & (1 << 8), 0, "#DF is dumped, not silent");
+    assert!(super::guest_uefi_linux_fatal_class_exc_stops(8));
     assert_eq!(hb, crate::vmx::fields::LINUX_EXCEPTION_BITMAP);
     // RayNu-F high RAM (F6-prep): only the contiguous pre-mapped prefix counts.
     let all = |i: usize| guest_uefi_report_ram_premap_gpa(i, pre_n).unwrap_or(u64::MAX);
@@ -2858,4 +2859,37 @@ fn cr_access_qual_cr8() {
     assert!(cr_access_is_cr8(8 | (1 << 4)));
     assert!(!cr_access_is_cr8(4));
     assert!(!cr_access_is_cr8(0));
+}
+
+#[test]
+fn raynu_f_linux_syscall_wrmsr_passthrough() {
+    use crate::sched::msr_firewall::{
+        classify_msr, MsrAccess, MsrAction, MSR_CSTAR, MSR_EFER, MSR_KERNEL_GS_BASE, MSR_LSTAR,
+        MSR_SFMASK, MSR_STAR, MSR_TSC_AUX,
+    };
+    use super::{guest_uefi_linux_fatal_class_exc_stops, guest_uefi_wrmsr_syscall_passthrough};
+    for msr in [
+        MSR_STAR,
+        MSR_LSTAR,
+        MSR_CSTAR,
+        MSR_SFMASK,
+        MSR_KERNEL_GS_BASE,
+        MSR_TSC_AUX,
+    ] {
+        assert!(guest_uefi_wrmsr_syscall_passthrough(msr));
+        assert_eq!(
+            classify_msr(msr, MsrAccess::Write),
+            MsrAction::HostPassthrough
+        );
+    }
+    assert!(!guest_uefi_wrmsr_syscall_passthrough(MSR_EFER));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(8));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(10));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(11));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(12));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(0));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(14));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(19));
+    assert_eq!(crate::vmx::fields::IDT_VECTORING_INFO, 0x0000_4408);
+    assert_eq!(crate::vmx::fields::IDT_VECTORING_ERROR_CODE, 0x0000_440A);
 }

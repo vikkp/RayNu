@@ -64,6 +64,10 @@ pub const EXIT_REASON: u64 = 0x0000_4402;
 pub const VM_EXIT_INTR_INFO: u64 = 0x0000_4404;
 /// VM-exit interruption error code (when bit 11 of intr info is set).
 pub const VM_EXIT_INTR_ERROR_CODE: u64 = 0x0000_4406;
+/// IDT-vectoring information (which exception was being delivered when this exit occurred).
+pub const IDT_VECTORING_INFO: u64 = 0x0000_4408;
+/// IDT-vectoring error code (when bit 11 of IDT-vectoring info is set).
+pub const IDT_VECTORING_ERROR_CODE: u64 = 0x0000_440A;
 pub const VM_EXIT_INSTRUCTION_LEN: u64 = 0x0000_440C;
 pub const EXIT_QUALIFICATION: u64 = 0x0000_6400;
 
@@ -349,6 +353,9 @@ mod fields_test {
         assert_eq!(HOST_RIP, 0x6C16);
         assert_eq!(EPT_POINTER, 0x201A);
         assert_eq!(EXIT_REASON, 0x4402);
+        assert_eq!(VM_EXIT_INTR_ERROR_CODE, 0x4406);
+        assert_eq!(IDT_VECTORING_INFO, 0x4408);
+        assert_eq!(IDT_VECTORING_ERROR_CODE, 0x440A);
         assert_eq!(PIN_BASED_VM_EXEC_CONTROL, 0x4000);
         assert_eq!(EXIT_REASON_HLT, 12);
         assert_eq!(SECONDARY_ENABLE_EPT, 1 << 1);
@@ -371,6 +378,9 @@ mod fields_test {
         assert!(VMCS_CLONE_FIELDS.contains(&HOST_RIP));
         assert!(VMCS_CLONE_FIELDS.contains(&CR4_GUEST_HOST_MASK));
         assert!(VMCS_CLONE_FIELDS.contains(&EXCEPTION_BITMAP));
+        // Read-only exit info: cloning would be a VMWRITE of a RO field.
+        assert!(!VMCS_CLONE_FIELDS.contains(&IDT_VECTORING_INFO));
+        assert!(!VMCS_CLONE_FIELDS.contains(&IDT_VECTORING_ERROR_CODE));
         for (i, &a) in VMCS_CLONE_FIELDS.iter().enumerate() {
             for (j, &b) in VMCS_CLONE_FIELDS.iter().enumerate() {
                 if i != j {

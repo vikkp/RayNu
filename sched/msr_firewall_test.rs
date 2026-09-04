@@ -42,6 +42,14 @@ fn allow_list_early_linux() {
         MsrAction::HostPassthrough
     );
     assert_eq!(
+        classify_msr(MSR_CSTAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_TSC_AUX, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
         classify_msr(MSR_APIC_BASE, MsrAccess::Read),
         MsrAction::Shadow
     );

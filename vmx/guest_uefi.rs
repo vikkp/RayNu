@@ -987,6 +987,28 @@ pub fn guest_uefi_linux_exc_error_code(vec: u8) -> bool {
     matches!(vec, 8 | 10 | 11 | 12 | 14 | 17)
 }
 
+/// `#DF/#TS/#NP/#SS` must stop, not re-inject. Nested `8f62fea`: LSTAR=0
+/// `syscall` → RIP=0 + user RSP → `#DF` → inject → triple fault `reason=0x2`.
+/// `#DE/#AC/#XF` still inject (iron `1a2544d` must not silent-stop after initrd).
+pub fn guest_uefi_linux_fatal_class_exc_stops(vec: u8) -> bool {
+    matches!(vec, 8 | 10 | 11 | 12)
+}
+
+/// Syscall-path MSRs Linux `syscall_init` writes. Guest-UEFI `handle_wrmsr`
+/// must `cpu::wrmsr` them (G0 `launch.rs` already does). Nested `8f62fea`:
+/// silent `_ => {}` left `LSTAR=0`; first user `syscall` landed at RIP 0.
+pub fn guest_uefi_wrmsr_syscall_passthrough(msr: u32) -> bool {
+    matches!(
+        msr,
+        msr_firewall::MSR_STAR
+            | msr_firewall::MSR_LSTAR
+            | msr_firewall::MSR_CSTAR
+            | msr_firewall::MSR_SFMASK
+            | msr_firewall::MSR_KERNEL_GS_BASE
+            | msr_firewall::MSR_TSC_AUX
+    )
+}
+
 /// EPT leaf memory type WB. Scratch/sink stay UC (`ept_leaf_large(..., 0)`).
 pub const GUEST_UEFI_EPT_MT_WB: u64 = 6;
 /// Iron `0bad45d`: first hole GPA that hit the shared zero sink.
@@ -7785,6 +7807,50 @@ unsafe fn handle_linux_nmi() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
+    if guest_uefi_linux_fatal_class_exc_stops(vec) {
+        // Nested 8f62fea: re-inject #DF → triple fault. Dump and stop.
+        serial::write_str_nowait("boot: guest-UEFI linux fatal-class exc vec=0x");
+        write_hex_nowait(u64::from(vec));
+        serial::write_str_nowait(" err=0x");
+        write_hex_nowait(ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0));
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(ops::vmread(GUEST_RIP).unwrap_or(0));
+        serial::write_str_nowait(" rsp=0x");
+        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
+        serial::write_str_nowait(" cr2=0x");
+        write_hex_nowait(cpu::read_cr2());
+        serial::write_str_nowait(" cr3=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
+        serial::write_str_nowait(" idtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
+        serial::write_str_nowait(" cs=0x");
+        write_hex_nowait(ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0));
+        serial::write_str_nowait(" ss=0x");
+        write_hex_nowait(ops::vmread(GUEST_SS_SELECTOR).unwrap_or(0));
+        serial::write_str_nowait(" rflags=0x");
+        write_hex_nowait(ops::vmread(GUEST_RFLAGS).unwrap_or(0));
+        serial::write_str_nowait(" idtv=0x");
+        write_hex_nowait(ops::vmread(IDT_VECTORING_INFO).unwrap_or(0));
+        serial::write_str_nowait(" idtverr=0x");
+        write_hex_nowait(ops::vmread(IDT_VECTORING_ERROR_CODE).unwrap_or(0));
+        // SAFETY: STAR/LSTAR/SFMASK/KERNEL_GS_BASE are the syscall-path
+        // allow-list; Linux programs them via WRMSR HostPassthrough so host
+        // RDMSR is the guest's live value. Nested 8f62fea #DF dump.
+        // KANI-TARGET: guest-UEFI fatal-class syscall MSR dump (outside Proven Core).
+        serial::write_str_nowait(" lstar=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_LSTAR));
+        serial::write_str_nowait(" star=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_STAR));
+        serial::write_str_nowait(" sfmask=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_SFMASK));
+        serial::write_str_nowait(" gsbase=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_KERNEL_GS_BASE));
+        serial::write_byte_nowait(b'\n');
+        serial::write_line_nowait(
+            "boot: guest-UEFI linux fatal-class stop (not inject; not ISO-INSTALL-OK)",
+        );
+        return false;
+    }
     LINUX_EXC_INJECT.store(true, Ordering::Release);
     let mut bmp = guest_uefi_linux_exception_bitmap();
     if vec < 32 {
@@ -7814,26 +7880,6 @@ unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
         true,
         crate::devices::ide_cdrom::product_iso_window_armed(),
     );
-    // #DF/#TS/#NP/#SS re-injected into a kernel are one step from a triple
-    // fault (nested 5a9e8e4: reason=0x2 with no other trace). Always name
-    // them, with the state the kernel's own handler could not print.
-    if matches!(vec, 8 | 10 | 11 | 12) {
-        serial::write_str_nowait("boot: guest-UEFI linux fatal-class exc vec=0x");
-        write_hex_nowait(u64::from(vec));
-        serial::write_str_nowait(" err=0x");
-        write_hex_nowait(ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0));
-        serial::write_str_nowait(" rip=0x");
-        write_hex_nowait(ops::vmread(GUEST_RIP).unwrap_or(0));
-        serial::write_str_nowait(" rsp=0x");
-        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
-        serial::write_str_nowait(" cr2=0x");
-        write_hex_nowait(cpu::read_cr2());
-        serial::write_str_nowait(" cr3=0x");
-        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
-        serial::write_str_nowait(" idtr=0x");
-        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
-        serial::write_byte_nowait(b'\n');
-    }
     if n < 4 && !linux_iso {
         // linux earlycon skip exc deliver (same hush as skip #PF dump).
         serial::write_str("boot: guest-UEFI linux exc deliver n=");
@@ -7870,9 +7916,8 @@ unsafe fn handle_exception_nmi(intr: u64, rip: u64, linear: u64, qual: u64) -> b
         return handle_linux_nmi();
     }
     if valid && linux {
-        // linux unhandled nowait stop: LINUX_EXCEPTION_BITMAP #DE/#DF/#AC
-        // must not silent-stop after initrd (iron 1a2544d). Inject; drop
-        // the vector from the bitmap so the inject does not re-exit.
+        // #DE/#AC/#XF inject (iron 1a2544d must not silent-stop after initrd).
+        // #DF/#TS/#NP/#SS stop: nested 8f62fea re-inject #DF → triple fault.
         return handle_linux_hw_exception(vec, guest_uefi_linux_exc_error_code(vec));
     }
     let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
@@ -12918,6 +12963,21 @@ unsafe fn handle_wrmsr() -> bool {
             let _ = ops::vmwrite(GUEST_GS_BASE, v);
         }
         msr_firewall::MsrAction::Shadow => msr_firewall::shadow_write(msr, v),
+        msr_firewall::MsrAction::HostPassthrough => {
+            // SAFETY: firewall allow-list (STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX).
+            // `syscall`/`sysret`/`swapgs` read these from hardware, not the VMCS.
+            // Nested 8f62fea: silent `_ => {}` left LSTAR=0 → user helper
+            // `syscall` at RIP=0 + user RSP → #DF. Mirror launch.rs.
+            // KANI-TARGET: guest-UEFI WRMSR HostPassthrough (outside Proven Core).
+            cpu::wrmsr(msr, v);
+            if guest_uefi_wrmsr_syscall_passthrough(msr) {
+                serial::write_str("boot: guest-UEFI linux syscall WRMSR index=0x");
+                write_hex(u64::from(msr));
+                serial::write_str(" val=0x");
+                write_hex(v);
+                serial::write_line(" (passthrough; not ISO-INSTALL-OK)");
+            }
+        }
         _ => {}
     }
     skip_cpuid_msr()
