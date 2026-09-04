@@ -1150,9 +1150,12 @@ fn raynu_f_protocols_and_blockio() {
 
     // --- still honestly unsupported ---------------------------------------
     let a0 = ServiceArgs::regs(0, 0, 0, 0);
-    for id in [ServiceId::Exit, ServiceId::UnloadImage, ServiceId::ConnectController, ServiceId::ProtocolsPerHandle] {
+    for id in [ServiceId::UnloadImage, ServiceId::ConnectController, ServiceId::ProtocolsPerHandle] {
         assert_eq!(dispatch(id, a0, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED, "{}", id.name());
     }
+    // Exit is implemented (F6-prep c) but with no started image it is a
+    // parameter error, never a silent success.
+    assert_eq!(dispatch(ServiceId::Exit, a0, &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
 
     #[cfg(not(target_os = "uefi"))]
     println!("{RAYNU_F_BLOCKIO_GATE_MARKER}");
@@ -1757,6 +1760,17 @@ fn raynu_f_filesystem_loadimage_startimage() {
     let d = dispatch(ServiceId::StartImage, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_INVALID_PARAMETER);
     assert_eq!(d.start_image, None);
+    // Exit from the started image asks the host to unwind to the caller
+    // with the image's status; a second Exit (nothing started) is refused.
+    assert!(st.image_started);
+    let d = dispatch(ServiceId::Exit, ServiceArgs::regs(HANDLE_IMAGE, 0x8000_0000_0000_0003, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_SUCCESS);
+    assert_eq!(d.exit_image, Some(0x8000_0000_0000_0003));
+    assert!(!st.image_started);
+    let d = dispatch(ServiceId::Exit, ServiceArgs::regs(HANDLE_IMAGE, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB);
+    assert_eq!(d.status, EFI_INVALID_PARAMETER);
+    assert_eq!(d.exit_image, None);
+    assert_eq!(dispatch(ServiceId::Exit, ServiceArgs::regs(0xDEAD, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
 
     // --- Close releases the slot -------------------------------------------
     let open_before = st.fs.open_count();
@@ -1962,7 +1976,7 @@ fn raynu_f_install_multiple_and_locate_device_path() {
     };
     use super::services::{
         dispatch, FirmwareState, ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_SUCCESS,
-        STACK_ARG5_OFF,
+        EFI_UNSUPPORTED as EFI_UNSUPPORTED_SVC, STACK_ARG5_OFF,
     };
     use super::tables::{build_firmware_image, IMAGE_BYTES};
 
@@ -2094,7 +2108,60 @@ fn raynu_f_install_multiple_and_locate_device_path() {
     assert!(!st.protocols.handle_exists(h));
     guest.put_u64(p_dp, dp_initrd);
     assert_eq!(dispatch(ServiceId::LocateDevicePath, ServiceArgs::regs(g_lf2, p_dp, p_h, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
-    let _ = layout;
+
+    // --- InstallConfigurationTable (the stub's initrd record) ---------------
+    use super::tables::{
+        header_crc_valid, CONFIG_TABLE_ENTRY_BYTES, CONFIG_TABLE_MAX_ENTRIES,
+        IMAGE_CONFIG_TABLE_OFF, IMAGE_SYSTEM_TABLE_OFF, SYSTEM_TABLE_CONFIG_TABLE_OFF,
+        SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF,
+    };
+    let sys = layout.system_table;
+    assert_eq!(layout.config_table, tb as u64 + IMAGE_CONFIG_TABLE_OFF as u64);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_CONFIG_TABLE_OFF as u64), layout.config_table);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 0);
+    // Not wired (state has no table): honest UNSUPPORTED, as before.
+    let g_initrd = scratch + 0xA00; // LINUX_EFI_INITRD_MEDIA_GUID
+    guest.write(g_initrd, &dp[4..20]);
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0x1234_0000, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_UNSUPPORTED_SVC);
+    st.system_table = sys;
+    st.config_table = layout.config_table;
+    // Add.
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0x1234_0000, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 1);
+    let mut e = [0u8; 16];
+    guest.read(layout.config_table, &mut e);
+    assert_eq!(e, dp[4..20]);
+    assert_eq!(guest.u64_at(layout.config_table + 16), 0x1234_0000);
+    // The system table header CRC was recomputed and still verifies.
+    assert!(header_crc_valid(&guest.mem.borrow(), tb + IMAGE_SYSTEM_TABLE_OFF));
+    // Replace (same GUID) keeps the count.
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0x5678_0000, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 1);
+    assert_eq!(guest.u64_at(layout.config_table + 16), 0x5678_0000);
+    // A second GUID appends; removing the first shifts it down.
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_blk, 0x9ABC_0000, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 2);
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), 1);
+    guest.read(layout.config_table, &mut e);
+    assert_eq!(e, GUID_BLOCK_IO);
+    assert_eq!(guest.u64_at(layout.config_table + 16), 0x9ABC_0000);
+    assert!(header_crc_valid(&guest.mem.borrow(), tb + IMAGE_SYSTEM_TABLE_OFF));
+    // Removing an absent GUID is NOT_FOUND; a NULL GUID pointer is invalid.
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_NOT_FOUND);
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(0, 1, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
+    // Fill to capacity, then one more is OUT_OF_RESOURCES.
+    for i in 1..CONFIG_TABLE_MAX_ENTRIES {
+        let g = scratch + 0xB00 + i as u64 * 16;
+        let mut gb = [0u8; 16];
+        gb[0] = i as u8;
+        gb[15] = 0xEE;
+        guest.write(g, &gb);
+        assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g, 0x1000 + i as u64, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_SUCCESS);
+    }
+    assert_eq!(guest.u64_at(sys + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64), CONFIG_TABLE_MAX_ENTRIES as u64);
+    assert_eq!(dispatch(ServiceId::InstallConfigurationTable, ServiceArgs::regs(g_initrd, 0x1, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_OUT_OF_RESOURCES);
+    let _ = CONFIG_TABLE_ENTRY_BYTES;
 }
 
 /// Opt-in integration test against a real distro ISO: set `RAYNU_F_REAL_ISO`

@@ -3645,6 +3645,30 @@ static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
 /// CPUID exits taken on the RayNu-F path (first 8 are logged).
 static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
+/// `StartImage` caller context for `Exit`: guest RSP at the `out` (points at
+/// the caller's return address) and the MS x64 callee-saved GPRs.
+struct RaynuFStartCtx {
+    rsp: AtomicU64,
+    rbx: AtomicU64,
+    rbp: AtomicU64,
+    rsi: AtomicU64,
+    rdi: AtomicU64,
+    r12: AtomicU64,
+    r13: AtomicU64,
+    r14: AtomicU64,
+    r15: AtomicU64,
+}
+static RAYNU_F_START_CTX: RaynuFStartCtx = RaynuFStartCtx {
+    rsp: AtomicU64::new(0),
+    rbx: AtomicU64::new(0),
+    rbp: AtomicU64::new(0),
+    rsi: AtomicU64::new(0),
+    rdi: AtomicU64::new(0),
+    r12: AtomicU64::new(0),
+    r13: AtomicU64::new(0),
+    r14: AtomicU64::new(0),
+    r15: AtomicU64::new(0),
+};
 static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
 static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
@@ -6150,6 +6174,13 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
             leave_to_e4();
         }
     };
+    {
+        // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+        // KANI-TARGET: RayNu-F table GPAs into state (outside Proven Core).
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.system_table = layout.system_table;
+        st.config_table = layout.config_table;
+    }
     // F4: publish BlockIo for the retained CD and the virtio-blk install
     // target, with real media geometry, then bind the backing stores.
     raynu_f_publish_block_devices(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
@@ -9937,7 +9968,49 @@ unsafe fn handle_raynu_f_service() -> bool {
     // StartImage: hand control to the loaded image instead of returning. The
     // caller's return address is still at [RSP] (the stub only did mov/mov/
     // out), so the image's own `ret` lands back after the StartImage call.
+    // Exit: the started image is done (the Linux EFI stub calls this when
+    // efi_stub_entry() fails). Unwind to the StartImage caller: its RSP still
+    // points at the return address it pushed, its callee-saved GPRs were
+    // snapshotted at StartImage, and ExitStatus goes back in RAX.
+    if let Some(status) = d.exit_image {
+        let ctx = &RAYNU_F_START_CTX;
+        let rsp = ctx.rsp.load(Ordering::Acquire);
+        let mut ret = [0u8; 8];
+        if rsp != 0 && crate::raynu_f::GuestMem::read(&Mem, rsp, &mut ret) == 8 {
+            let ret = u64::from_le_bytes(ret);
+            SAVED_RAX = status;
+            SAVED_RBX = ctx.rbx.load(Ordering::Acquire);
+            SAVED_RBP = ctx.rbp.load(Ordering::Acquire);
+            SAVED_RSI = ctx.rsi.load(Ordering::Acquire);
+            SAVED_RDI = ctx.rdi.load(Ordering::Acquire);
+            SAVED_R12 = ctx.r12.load(Ordering::Acquire);
+            SAVED_R13 = ctx.r13.load(Ordering::Acquire);
+            SAVED_R14 = ctx.r14.load(Ordering::Acquire);
+            SAVED_R15 = ctx.r15.load(Ordering::Acquire);
+            if ops::vmwrite(GUEST_RSP, rsp.wrapping_add(8)).is_ok()
+                && ops::vmwrite(GUEST_RIP, ret).is_ok()
+            {
+                serial::write_str("boot: RayNu-F Exit status=0x");
+                write_hex(status);
+                serial::write_str(" -> StartImage caller rip=0x");
+                write_hex(ret);
+                serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+                return true;
+            }
+        }
+        serial::write_line("boot: RayNu-F WARN Exit could not unwind to the StartImage caller");
+    }
     if let Some((entry, handle)) = d.start_image {
+        let ctx = &RAYNU_F_START_CTX;
+        ctx.rsp.store(args.rsp, Ordering::Release);
+        ctx.rbx.store(SAVED_RBX, Ordering::Release);
+        ctx.rbp.store(SAVED_RBP, Ordering::Release);
+        ctx.rsi.store(SAVED_RSI, Ordering::Release);
+        ctx.rdi.store(SAVED_RDI, Ordering::Release);
+        ctx.r12.store(SAVED_R12, Ordering::Release);
+        ctx.r13.store(SAVED_R13, Ordering::Release);
+        ctx.r14.store(SAVED_R14, Ordering::Release);
+        ctx.r15.store(SAVED_R15, Ordering::Release);
         SAVED_RCX = handle;
         SAVED_RDX = st.system_table;
         if ops::vmwrite(GUEST_RIP, entry).is_ok() {

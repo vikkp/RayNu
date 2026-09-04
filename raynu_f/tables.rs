@@ -103,8 +103,21 @@ pub const IMAGE_DEVICE_PATH_OFF: usize = 0x17E0;
 pub const IMAGE_FILE_PROTO_OFF: usize = 0x1800;
 /// Stride per file-protocol instance (0x58 rounded up for alignment).
 pub const IMAGE_FILE_PROTO_STRIDE: usize = 0x60;
-/// Total bytes the image needs (three 4 KiB pages: tables + 16 file protos).
+/// `EFI_CONFIGURATION_TABLE` array behind `SystemTable->ConfigurationTable`
+/// (spec 4.6): `{GUID, VOID *VendorTable}` = 24 bytes each. Guests add to it
+/// through `InstallConfigurationTable` (the Linux EFI stub registers the
+/// initrd it loaded; nested `166377a` died on `EFI_UNSUPPORTED` there). We
+/// will later publish ACPI here (F6a).
+pub const IMAGE_CONFIG_TABLE_OFF: usize = 0x2000;
+pub const CONFIG_TABLE_ENTRY_BYTES: usize = 24;
+pub const CONFIG_TABLE_MAX_ENTRIES: usize = 16;
+/// Total bytes the image needs (three 4 KiB pages: tables + 16 file protos +
+/// the configuration table array).
 pub const IMAGE_BYTES: usize = 0x3000;
+const _: () = assert!(IMAGE_FILE_PROTO_OFF + 16 * IMAGE_FILE_PROTO_STRIDE <= IMAGE_CONFIG_TABLE_OFF);
+const _: () = assert!(
+    IMAGE_CONFIG_TABLE_OFF + CONFIG_TABLE_MAX_ENTRIES * CONFIG_TABLE_ENTRY_BYTES <= IMAGE_BYTES
+);
 
 /// Handles are opaque non-null values the guest hands back to us. We use
 /// small tagged constants rather than real memory so a stray dereference
@@ -137,6 +150,8 @@ pub struct FirmwareImageLayout {
     pub loaded_image: u64,
     pub device_path: u64,
     pub file_proto_base: u64,
+    /// GPA of the `EFI_CONFIGURATION_TABLE` array (count lives in the system table).
+    pub config_table: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -256,6 +271,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         loaded_image: base + IMAGE_LOADED_IMAGE_OFF as u64,
         device_path: base + IMAGE_DEVICE_PATH_OFF as u64,
         file_proto_base: base + IMAGE_FILE_PROTO_OFF as u64,
+        config_table: base + IMAGE_CONFIG_TABLE_OFF as u64,
     };
 
     // Trampoline page: one stub per service slot.
@@ -357,7 +373,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
     put_u64(buf, st + SYSTEM_TABLE_RUNTIME_SERVICES_OFF, layout.runtime_services);
     put_u64(buf, st + SYSTEM_TABLE_BOOT_SERVICES_OFF, layout.boot_services);
     put_u64(buf, st + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF, 0);
-    put_u64(buf, st + SYSTEM_TABLE_CONFIG_TABLE_OFF, 0);
+    put_u64(buf, st + SYSTEM_TABLE_CONFIG_TABLE_OFF, layout.config_table);
     write_header(
         buf,
         st,

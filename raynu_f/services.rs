@@ -424,6 +424,11 @@ pub struct FirmwareState {
     pub image_entry: u64,
     /// System table GPA (handed to a started image in RDX).
     pub system_table: u64,
+    /// GPA of the `EFI_CONFIGURATION_TABLE` array the system table points at.
+    pub config_table: u64,
+    /// `StartImage` has handed control to `image_handle` and it has not
+    /// `Exit`ed yet (so `Exit` knows there is a caller to unwind to).
+    pub image_started: bool,
     /// Successful block reads / writes (host bookkeeping for markers).
     pub block_reads: u32,
     pub block_writes: u32,
@@ -454,6 +459,8 @@ impl FirmwareState {
             image_size: 0,
             image_entry: 0,
             system_table: 0,
+            config_table: 0,
+            image_started: false,
             block_reads: 0,
             block_writes: 0,
         }
@@ -494,6 +501,10 @@ pub struct Dispatched {
     /// returning to the caller. The caller's return address stays on the
     /// stack, so the image's `ret` lands back after the `StartImage` call.
     pub start_image: Option<(u64, u64)>,
+    /// `Exit(ImageHandle, ExitStatus, …)` from the started image: the host
+    /// must unwind the guest to the `StartImage` caller (its saved RSP /
+    /// callee-saved GPRs) and return `ExitStatus` in RAX there.
+    pub exit_image: Option<u64>,
 }
 
 fn read_u64(mem: &dyn GuestMem, addr: u64) -> Option<u64> {
@@ -865,6 +876,89 @@ fn uninstall_multiple(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs
     EFI_SUCCESS
 }
 
+/// `InstallConfigurationTable(Guid*, Table)` (UEFI 2.10 §7.3): add,
+/// replace (same GUID) or remove (`Table == NULL`) an entry in the array
+/// behind `SystemTable->ConfigurationTable`, update `NumberOfTableEntries`
+/// and re-CRC the system table header. The Linux EFI stub registers the
+/// initrd it loaded this way (nested `166377a`: `id=0x215 → UNSUPPORTED` →
+/// "Failed to load initrd").
+fn install_configuration_table(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> u64 {
+    use super::tables::{
+        CONFIG_TABLE_ENTRY_BYTES, CONFIG_TABLE_MAX_ENTRIES, SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF,
+        SYSTEM_TABLE_SIZE,
+    };
+    let Some(guid) = read_guid(mem, a.a1) else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let table = a.a2;
+    if st.config_table == 0 || st.system_table == 0 {
+        return EFI_UNSUPPORTED;
+    }
+    let Some(count) = read_u64(mem, st.system_table + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64)
+    else {
+        return EFI_INVALID_PARAMETER;
+    };
+    let count = (count as usize).min(CONFIG_TABLE_MAX_ENTRIES);
+    let entry = |i: usize| st.config_table + (i * CONFIG_TABLE_ENTRY_BYTES) as u64;
+    let mut found = None;
+    for i in 0..count {
+        if read_guid(mem, entry(i)) == Some(guid) {
+            found = Some(i);
+            break;
+        }
+    }
+    let new_count = match (found, table) {
+        (Some(i), 0) => {
+            // Remove: shift the tail down one slot.
+            let mut buf = [0u8; CONFIG_TABLE_ENTRY_BYTES];
+            for j in i + 1..count {
+                if mem.read(entry(j), &mut buf) != CONFIG_TABLE_ENTRY_BYTES
+                    || mem.write(entry(j - 1), &buf) != CONFIG_TABLE_ENTRY_BYTES
+                {
+                    return EFI_INVALID_PARAMETER;
+                }
+            }
+            let zero = [0u8; CONFIG_TABLE_ENTRY_BYTES];
+            let _ = mem.write(entry(count - 1), &zero);
+            count - 1
+        }
+        (Some(i), t) => {
+            if !write_u64(mem, entry(i) + 16, t) {
+                return EFI_INVALID_PARAMETER;
+            }
+            count
+        }
+        (None, 0) => return PROTO_NOT_FOUND,
+        (None, t) => {
+            if count >= CONFIG_TABLE_MAX_ENTRIES {
+                return EFI_OUT_OF_RESOURCES;
+            }
+            if mem.write(entry(count), &guid) != 16 || !write_u64(mem, entry(count) + 16, t) {
+                return EFI_INVALID_PARAMETER;
+            }
+            count + 1
+        }
+    };
+    if !write_u64(
+        mem,
+        st.system_table + SYSTEM_TABLE_NUM_TABLE_ENTRIES_OFF as u64,
+        new_count as u64,
+    ) {
+        return EFI_INVALID_PARAMETER;
+    }
+    // Header CRC32 covers the whole EFI_SYSTEM_TABLE with the CRC field zero.
+    let mut tbl = [0u8; SYSTEM_TABLE_SIZE];
+    if mem.read(st.system_table, &mut tbl) != SYSTEM_TABLE_SIZE {
+        return EFI_INVALID_PARAMETER;
+    }
+    tbl[16..20].copy_from_slice(&0u32.to_le_bytes());
+    let crc = crc32_finish(crc32_feed(crc32_start(), &tbl));
+    if !write_u32(mem, st.system_table + 16, crc) {
+        return EFI_INVALID_PARAMETER;
+    }
+    EFI_SUCCESS
+}
+
 /// Longest device path we will walk (bytes) and its node cap.
 pub const MAX_DEVICE_PATH_BYTES: usize = 512;
 pub const MAX_DEVICE_PATH_NODES: usize = 16;
@@ -1170,6 +1264,7 @@ pub fn dispatch(
         file_read_ok: false,
         image_loaded: false,
         start_image: None,
+        exit_image: None,
     };
     let a = args;
     out.status = match id {
@@ -1417,6 +1512,7 @@ pub fn dispatch(
         ServiceId::LocateHandle => locate_handle(st, mem, a),
         ServiceId::LocateHandleBuffer => locate_handle_buffer(st, mem, a),
         ServiceId::LocateDevicePath => locate_device_path(st, mem, a),
+        ServiceId::InstallConfigurationTable => install_configuration_table(st, mem, a),
         ServiceId::InstallMultipleProtocolInterfaces => install_multiple(st, mem, a),
         ServiceId::UninstallMultipleProtocolInterfaces => uninstall_multiple(st, mem, a),
         ServiceId::InstallProtocolInterface => {
@@ -1636,6 +1732,20 @@ pub fn dispatch(
                     let _ = write_u64(mem, a.a3, 0);
                 }
                 out.start_image = Some((st.image_entry, st.image_handle));
+                st.image_started = true;
+                EFI_SUCCESS
+            }
+        }
+        ServiceId::Exit => {
+            // (ImageHandle, ExitStatus, ExitDataSize, *ExitData). The Linux
+            // EFI stub calls this when efi_stub_entry() fails (nested
+            // 166377a: UNSUPPORTED here left it to fall off the end → #GP).
+            // The image's pages stay allocated (honest gap: no unload).
+            if a.a1 != st.image_handle || !st.image_started {
+                EFI_INVALID_PARAMETER
+            } else {
+                st.image_started = false;
+                out.exit_image = Some(a.a2);
                 EFI_SUCCESS
             }
         }
