@@ -603,9 +603,9 @@ fn raynu_f_memory_events_timer_services() {
     };
     use super::memory::{
         PagePool, ALLOCATE_ADDRESS, ALLOCATE_ANY_PAGES, ALLOCATE_MAX_ADDRESS,
-        EFI_BUFFER_TOO_SMALL, EFI_CONVENTIONAL_MEMORY, EFI_LOADER_DATA, EFI_NOT_FOUND,
-        EFI_OUT_OF_RESOURCES, EFI_RESERVED_MEMORY_TYPE, MEMORY_DESCRIPTOR_SIZE, POOL_BASE,
-        POOL_END, POOL_HEADER_BYTES, POOL_MAGIC, POOL_PAGES,
+        BELOW1M_BASE, BELOW1M_PAGES, EFI_BUFFER_TOO_SMALL, EFI_CONVENTIONAL_MEMORY,
+        EFI_LOADER_DATA, EFI_NOT_FOUND, EFI_OUT_OF_RESOURCES, EFI_RESERVED_MEMORY_TYPE,
+        MEMORY_DESCRIPTOR_SIZE, POOL_BASE, POOL_END, POOL_HEADER_BYTES, POOL_MAGIC, POOL_PAGES,
     };
     use super::services::{
         dispatch, stack_arg, FirmwareState, ServiceArgs, ServiceId, EFI_INVALID_PARAMETER,
@@ -655,14 +655,15 @@ fn raynu_f_memory_events_timer_services() {
 
     // --- AllocatePages / FreePages ----------------------------------------
     assert_eq!(POOL_PAGES, 5120);
-    assert_eq!(st.pool.free_pages(), POOL_PAGES);
+    assert_eq!(BELOW1M_PAGES, 158);
+    assert_eq!(st.pool.free_pages(), POOL_PAGES + BELOW1M_PAGES);
     guest.put_u64(p_out, 0);
     let d = dispatch(ServiceId::AllocatePages, ServiceArgs::regs(ALLOCATE_ANY_PAGES as u64, EFI_LOADER_DATA as u64, 4, p_out), &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_SUCCESS);
     assert!(d.alloc_ok);
     let a1 = guest.u64_at(p_out);
     assert_eq!(a1, POOL_BASE);
-    assert_eq!(st.pool.free_pages(), POOL_PAGES - 4);
+    assert_eq!(st.pool.free_pages(), POOL_PAGES + BELOW1M_PAGES - 4);
     // MaxAddress: must end at or below the given address.
     guest.put_u64(p_out, POOL_BASE + 0x8000 - 1);
     let d = dispatch(ServiceId::AllocatePages, ServiceArgs::regs(ALLOCATE_MAX_ADDRESS as u64, EFI_LOADER_DATA as u64, 2, p_out), &guest, &mut sink, &mut st, &clk, SLAB);
@@ -710,7 +711,7 @@ fn raynu_f_memory_events_timer_services() {
     let d = dispatch(ServiceId::GetMemoryMap, args, &guest, &mut sink, &mut st, &clk, SLAB);
     assert_eq!(d.status, EFI_BUFFER_TOO_SMALL);
     let need = guest.u64_at(p_out);
-    assert!(need >= 8 * MEMORY_DESCRIPTOR_SIZE && need % MEMORY_DESCRIPTOR_SIZE == 0);
+    assert!(need >= 12 * MEMORY_DESCRIPTOR_SIZE && need % MEMORY_DESCRIPTOR_SIZE == 0);
     // The sizing call also reports DescriptorSize/Version (Linux computes its
     // pool size from desc_size here; nested d7e755d got garbage).
     assert_eq!(guest.u64_at(p_out3), MEMORY_DESCRIPTOR_SIZE);
@@ -730,12 +731,15 @@ fn raynu_f_memory_events_timer_services() {
     let mut dv = [0u8; 4];
     guest.read(p_dver, &mut dv);
     assert_eq!(u32::from_le_bytes(dv), 1);
-    // First descriptor: Reserved [0, 0x800000). Descriptors are contiguous
-    // and cover [0, SLAB).
+    // First descriptor: Reserved [0, 0x1000) (IVT/BDA). The firmware image
+    // at 0x800000 is RuntimeServicesCode. A conventional run exists below
+    // 1 MiB (Linux real-mode trampoline). Descriptors are contiguous and
+    // cover [0, SLAB).
     let n = (need / MEMORY_DESCRIPTOR_SIZE) as usize;
     let mut cursor = 0u64;
     let mut saw_conv = false;
     let mut saw_rt = false;
+    let mut saw_below1m = false;
     for i in 0..n {
         let d0 = map + i as u64 * MEMORY_DESCRIPTOR_SIZE;
         let mut t = [0u8; 4];
@@ -747,13 +751,12 @@ fn raynu_f_memory_events_timer_services() {
         let attr = guest.u64_at(d0 + 32);
         if i == 0 {
             assert_eq!(typ, EFI_RESERVED_MEMORY_TYPE);
-            assert_eq!(pages * 4096, 0x0080_0000);
+            assert_eq!(pages * 4096, BELOW1M_BASE);
         }
-        if i == 1 {
+        if start == 0x0080_0000 {
             // The firmware image (trampolines + tables) is runtime code the
             // OS keeps mapped and executable after EBS (nested 0ab0f9d: Linux
             // executed our SetVirtualAddressMap trampoline from an NX page).
-            assert_eq!(start, 0x0080_0000);
             assert_eq!(pages * 4096, super::tables::IMAGE_BYTES as u64);
             assert_eq!(typ, super::memory::EFI_RUNTIME_SERVICES_CODE);
             assert_ne!(attr & super::memory::EFI_MEMORY_RUNTIME, 0);
@@ -764,12 +767,18 @@ fn raynu_f_memory_events_timer_services() {
         assert_ne!(attr & super::memory::EFI_MEMORY_WB, 0);
         if typ == EFI_CONVENTIONAL_MEMORY {
             saw_conv = true;
+            if start < 0x10_0000 {
+                saw_below1m = true;
+                assert_eq!(start, BELOW1M_BASE);
+                assert_eq!(pages, BELOW1M_PAGES as u64);
+            }
         }
         cursor = start + pages * 4096;
     }
     assert_eq!(cursor, SLAB);
     assert!(saw_conv);
     assert!(saw_rt);
+    assert!(saw_below1m, "Linux reserve_real_mode needs conventional below 1MiB");
     // ExitBootServices: wrong key rejected, right key accepted (one-shot).
     assert_eq!(dispatch(ServiceId::ExitBootServices, ServiceArgs::regs(0x5246_0000_0000_0010, key + 7, 0, 0), &guest, &mut sink, &mut st, &clk, SLAB).status, EFI_INVALID_PARAMETER);
     assert!(!st.pool.exited());
@@ -1847,9 +1856,10 @@ fn raynu_f_filesystem_loadimage_startimage() {
 fn raynu_f_high_ram_and_launch_loaded_image() {
     use super::memory::{
         MemRun, PagePool, ALLOCATE_ADDRESS, ALLOCATE_ANY_PAGES, ALLOCATE_MAX_ADDRESS,
-        EFI_BOOT_SERVICES_DATA, EFI_CONVENTIONAL_MEMORY, EFI_INVALID_PARAMETER, EFI_LOADER_CODE,
-        EFI_LOADER_DATA, EFI_NOT_FOUND, EFI_OUT_OF_RESOURCES, EFI_RESERVED_MEMORY_TYPE,
-        EFI_SUCCESS, HIGH_MAX_PAGES, MAX_DESCRIPTORS, POOL_BASE, POOL_END, POOL_PAGES,
+        BELOW1M_BASE, BELOW1M_END, BELOW1M_PAGES, EFI_BOOT_SERVICES_DATA, EFI_CONVENTIONAL_MEMORY,
+        EFI_INVALID_PARAMETER, EFI_LOADER_CODE, EFI_LOADER_DATA, EFI_NOT_FOUND,
+        EFI_OUT_OF_RESOURCES, EFI_RESERVED_MEMORY_TYPE, EFI_SUCCESS, HIGH_MAX_PAGES,
+        MAX_DESCRIPTORS, POOL_BASE, POOL_END, POOL_PAGES,
     };
     use super::protocol::{
         GUID_LOADED_IMAGE, HANDLE_IMAGE, LOADED_IMAGE_DEVICE_HANDLE_OFF,
@@ -1871,8 +1881,9 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
         assert_eq!(r.start, cursor);
         cursor = r.start + r.pages * 4096;
         if r.typ == EFI_CONVENTIONAL_MEMORY {
-            // Only the pool window may be conventional.
-            assert!(r.start >= POOL_BASE && cursor <= POOL_END, "conventional outside pool: {r:?}");
+            let in_pool = r.start >= POOL_BASE && cursor <= POOL_END;
+            let in_below1m = r.start >= BELOW1M_BASE && cursor <= BELOW1M_END;
+            assert!(in_pool || in_below1m, "conventional outside managed windows: {r:?}");
         }
     }
     assert_eq!(cursor, SLAB);
@@ -1893,7 +1904,7 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
     let high_pages = (64 * 1024 * 1024) / 4096;
     assert_eq!(pool.set_high_region(HIGH_BASE, high_pages), high_pages);
     assert_eq!(pool.high_region(), Some((HIGH_BASE, high_pages)));
-    assert_eq!(pool.free_pages(), POOL_PAGES + high_pages);
+    assert_eq!(pool.free_pages(), POOL_PAGES + BELOW1M_PAGES + high_pages);
     assert_eq!(pool.free_low_pages(), POOL_PAGES);
 
     // Map: slab, reserved tail, then the high region as one conventional run.
@@ -1914,9 +1925,15 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
     // Every conventional descriptor must be allocatable in full at its own
     // address; that is the contract GRUB relies on (else "too little memory"
     // / AllocateAddress NOT_FOUND, nested 7ee3a3b lines 240/259).
+    // GRUB efi/mm.c discards regions below 1 MiB for the heap; Linux then
+    // needs that window still conventional at EBS (nested 033bc0d trampoline
+    // panic). Walk the same way.
     let mut grabbed = 0u64;
     let want = 8192u64; // GRUB DEFAULT_HEAP_SIZE 32 MiB in pages
     for r in runs[..n].iter().filter(|r| r.typ == EFI_CONVENTIONAL_MEMORY) {
+        if r.start < 0x10_0000 {
+            continue;
+        }
         if grabbed >= want {
             break;
         }
@@ -1927,6 +1944,14 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
         grabbed += take;
     }
     assert_eq!(grabbed, want, "a 32 MiB heap fits");
+    // Below-1M window must still be conventional after the loader's 32 MiB grab.
+    let n_after = pool.memory_map(SLAB, &mut runs);
+    assert!(
+        runs[..n_after].iter().any(|r| r.typ == EFI_CONVENTIONAL_MEMORY
+            && r.start == BELOW1M_BASE
+            && r.pages == BELOW1M_PAGES as u64),
+        "GRUB heap stole the Linux trampoline window"
+    );
     // Firmware-internal pool allocation still works after the loader's grab
     // (nested 7ee3a3b line 240 was OUT_OF_RESOURCES here).
     let (s, p) = pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 3, 0);
@@ -2011,6 +2036,69 @@ fn raynu_f_high_ram_and_launch_loaded_image() {
         EFI_SUCCESS
     );
     assert_eq!(guest.u64_at(p_out), li);
+}
+
+/// Nested `033bc0d`: Linux 6.12.13-virt reached `start_kernel` on RayNu-F
+/// then panicked in `init_real_mode` because the map reserved `[0, 8 MiB)`
+/// as one blob — no conventional page below 1 MiB for the real-mode trampoline.
+/// The window must be `EfiConventionalMemory`, `AllocateAddress`-honest, and
+/// still free after `AllocateAnyPages` / a GRUB-sized heap grab.
+#[test]
+fn raynu_f_below_1m_trampoline_window() {
+    use super::memory::{
+        MemRun, PagePool, ALLOCATE_ADDRESS, ALLOCATE_ANY_PAGES, ALLOCATE_MAX_ADDRESS,
+        BELOW1M_BASE, BELOW1M_END, BELOW1M_PAGES, EFI_CONVENTIONAL_MEMORY, EFI_LOADER_DATA,
+        EFI_SUCCESS, MAX_DESCRIPTORS, POOL_BASE,
+    };
+
+    const SLAB: u64 = 0x0200_0000;
+    let mut pool = PagePool::new();
+    let mut runs = [MemRun { typ: 0, start: 0, pages: 0 }; MAX_DESCRIPTORS];
+    let n = pool.memory_map(SLAB, &mut runs);
+    let mut cursor = 0u64;
+    let mut below = None;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor);
+        cursor = r.start + r.pages * 4096;
+        if r.typ == EFI_CONVENTIONAL_MEMORY && r.start < 0x10_0000 {
+            below = Some(*r);
+        }
+    }
+    assert_eq!(cursor, SLAB);
+    let below = below.expect("no conventional run below 1MiB");
+    assert_eq!(below.start, BELOW1M_BASE);
+    assert_eq!(below.start + below.pages * 4096, BELOW1M_END);
+    assert_eq!(below.pages, BELOW1M_PAGES as u64);
+    assert!(below.pages >= 2, "Linux trampoline needs at least a couple of pages");
+
+    // Honesty: AllocateAddress of the whole window succeeds.
+    let (s, at) = pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_DATA, below.pages, below.start);
+    assert_eq!((s, at), (EFI_SUCCESS, BELOW1M_BASE));
+    assert_eq!(pool.free_pages_at(BELOW1M_BASE, below.pages), EFI_SUCCESS);
+
+    // AnyPages must not steal it (firmware/loader heap stays in the slab).
+    let (s, p) = pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 1, 0);
+    assert_eq!(s, EFI_SUCCESS);
+    assert!(p >= POOL_BASE, "AnyPages consumed the trampoline window: {p:#x}");
+    assert_eq!(pool.free_pages_at(p, 1), EFI_SUCCESS);
+
+    // Explicit sub-1M MaxAddress (what a firmware that *wants* low RAM would do).
+    let (s, q) = pool.allocate_pages(ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, 1, BELOW1M_END - 1);
+    assert_eq!(s, EFI_SUCCESS);
+    assert!(q >= BELOW1M_BASE && q + 4096 <= BELOW1M_END, "MaxAddress sub-1M {q:#x}");
+    assert_eq!(pool.free_pages_at(q, 1), EFI_SUCCESS);
+
+    // After AnyPages has taken a bite of the slab, the window is still
+    // conventional — the e820 Linux `reserve_real_mode` will see.
+    let (s, _) = pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 16, 0);
+    assert_eq!(s, EFI_SUCCESS);
+    let n = pool.memory_map(SLAB, &mut runs);
+    assert!(
+        runs[..n].iter().any(|r| r.typ == EFI_CONVENTIONAL_MEMORY
+            && r.start < 0x10_0000
+            && r.pages >= 1),
+        "AnyPages drained the trampoline window out of the map"
+    );
 }
 
 /// F6-prep b: the GRUB → Linux EFI stub initrd handshake, nested `2d34fff`.

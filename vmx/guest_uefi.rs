@@ -6242,6 +6242,11 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     // it cannot allocate. Nested 7ee3a3b: GRUB's 32 MiB heap drained the
     // 20 MiB slab pool and hit AllocateAddress NOT_FOUND on unmanaged gaps.
     raynu_f_configure_high_ram();
+    serial::write_str("boot: RayNu-F below-1M conventional base=0x");
+    write_hex(crate::raynu_f::memory::BELOW1M_BASE);
+    serial::write_str(" pages=");
+    write_dec(crate::raynu_f::memory::BELOW1M_PAGES as u64);
+    serial::write_line(" (Linux trampoline; not ISO-INSTALL-OK)");
     // F5: prefer the ISO's own \EFI\BOOT\BOOTX64.EFI when the retained
     // product ISO carries a FAT El Torito ESP. The built-in test app is the
     // fallback (no ISO, not FAT, or no loader present).

@@ -3,9 +3,18 @@
 //!
 //! Pillar: [Z] · Proven Core: **outside** (ADR-016)
 //!
-//! Two page regions, both managed host-side with a page bitmap + per-page
+//! Three page regions, all managed host-side with a page bitmap + per-page
 //! type byte:
 //!
+//! * **below-1M** — classic PC conventional window ([`BELOW1M_BASE`],
+//!   [`BELOW1M_END`]) so Linux `reserve_real_mode` can place its trampoline.
+//!   Nested `033bc0d`: `[0, 8 MiB)` was one Reserved run → "No sub-1M memory
+//!   is available for the trampoline" → `init_real_mode` panic. Identity PTs
+//!   live at 4 MiB, so this window does not collide with them. `AllocateAnyPages`
+//!   / `AllocateMaxAddress` (max ≥ 1 MiB) **do not** consume it, so it survives
+//!   as conventional through `ExitBootServices`; GRUB's EFI heap already skips
+//!   `< 1 MiB`. Only `AllocateAddress` (and `AllocateMaxAddress` with max
+//!   `< 1 MiB`) hand it out — the honesty rule still holds.
 //! * **low** — a fixed window of the 32 MiB identity slab ([`POOL_BASE`],
 //!   [`POOL_END`]);
 //! * **high** — the report-RAM the hypervisor already EPT-maps for the
@@ -21,13 +30,22 @@
 //! conventional.
 //!
 //! Everything the guest can hand back to us (addresses, map keys) is
-//! validated against the two regions. Pool allocations are page-granular
+//! validated against the three regions. Pool allocations are page-granular
 //! with a 16-byte header — simple and correct; a sub-page pool is a later
 //! refinement if a loader needs it.
 
-use super::launch_plan::{F2_APP_LOAD_BASE, F2_STACK_TOP, F2_TABLES_BASE};
+use super::launch_plan::{F2_APP_LOAD_BASE, F2_IDENTITY_PML4, F2_STACK_TOP, F2_TABLES_BASE};
 use super::tables::IMAGE_BYTES;
 use super::testapp::TESTAPP_SIZE_OF_IMAGE;
+
+/// Classic PC conventional window below 1 MiB (IVT/BDA at page 0, EBDA at
+/// 0x9F000, VGA/ROM hole `[0xA0000, 1 MiB)` stay reserved). Linux
+/// `reserve_real_mode` searches `[0, 1 MiB)` for the SMP/real-mode trampoline
+/// even when `smpboot: SMP disabled`.
+pub const BELOW1M_BASE: u64 = 0x0000_1000;
+pub const BELOW1M_END: u64 = 0x0009_F000;
+pub const BELOW1M_PAGES: usize = ((BELOW1M_END - BELOW1M_BASE) / 4096) as usize; // 158
+const BELOW1M_BITMAP_WORDS: usize = (BELOW1M_PAGES + 63) / 64;
 
 /// Guest-firmware pool window inside the slab.
 pub const POOL_BASE: u64 = 0x00B0_0000;
@@ -106,14 +124,17 @@ pub struct MemRun {
 /// Which managed region a page index refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Region {
+    Below1m,
     Low,
     High,
 }
 
-/// Host-side page allocator over the low pool window plus the optional high
-/// report-RAM region.
+/// Host-side page allocator over the below-1M trampoline window, the low
+/// slab pool, and the optional high report-RAM region.
 #[derive(Clone)]
 pub struct PagePool {
+    below1m_used: [u64; BELOW1M_BITMAP_WORDS],
+    below1m_typ: [u8; BELOW1M_PAGES],
     used: [u64; BITMAP_WORDS],
     typ: [u8; POOL_PAGES],
     /// High region: base GPA and live page count (0 = not configured).
@@ -132,6 +153,8 @@ pub struct PagePool {
 impl PagePool {
     pub const fn new() -> Self {
         PagePool {
+            below1m_used: [0; BELOW1M_BITMAP_WORDS],
+            below1m_typ: [0; BELOW1M_PAGES],
             used: [0; BITMAP_WORDS],
             typ: [0; POOL_PAGES],
             high_base: 0,
@@ -181,6 +204,7 @@ impl PagePool {
 
     fn pages_in(&self, r: Region) -> usize {
         match r {
+            Region::Below1m => BELOW1M_PAGES,
             Region::Low => POOL_PAGES,
             Region::High => self.high_pages,
         }
@@ -188,6 +212,7 @@ impl PagePool {
 
     fn base_of(&self, r: Region) -> u64 {
         match r {
+            Region::Below1m => BELOW1M_BASE,
             Region::Low => POOL_BASE,
             Region::High => self.high_base,
         }
@@ -196,6 +221,7 @@ impl PagePool {
     #[inline]
     fn is_used(&self, r: Region, i: usize) -> bool {
         let w = match r {
+            Region::Below1m => self.below1m_used[i / 64],
             Region::Low => self.used[i / 64],
             Region::High => self.high_used[i / 64],
         };
@@ -204,6 +230,7 @@ impl PagePool {
     #[inline]
     fn set_used(&mut self, r: Region, i: usize, on: bool) {
         let w = match r {
+            Region::Below1m => &mut self.below1m_used[i / 64],
             Region::Low => &mut self.used[i / 64],
             Region::High => &mut self.high_used[i / 64],
         };
@@ -216,6 +243,7 @@ impl PagePool {
     #[inline]
     fn typ_of(&self, r: Region, i: usize) -> u32 {
         u32::from(match r {
+            Region::Below1m => self.below1m_typ[i],
             Region::Low => self.typ[i],
             Region::High => self.high_typ[i],
         })
@@ -223,6 +251,7 @@ impl PagePool {
     #[inline]
     fn set_typ(&mut self, r: Region, i: usize, t: u32) {
         match r {
+            Region::Below1m => self.below1m_typ[i] = t as u8,
             Region::Low => self.typ[i] = t as u8,
             Region::High => self.high_typ[i] = t as u8,
         }
@@ -230,14 +259,22 @@ impl PagePool {
 
     fn used_in(&self, r: Region) -> usize {
         match r {
+            // Last bitmap word has spare bits past BELOW1M_PAGES; count live pages only.
+            Region::Below1m => (0..BELOW1M_PAGES)
+                .filter(|&i| self.is_used(Region::Below1m, i))
+                .count(),
             Region::Low => self.used.iter().map(|w| w.count_ones() as usize).sum(),
             Region::High => self.high_used.iter().map(|w| w.count_ones() as usize).sum(),
         }
     }
 
-    /// Free pages across both regions.
+    /// Free pages across every managed region (below-1M + slab pool + high).
     pub fn free_pages(&self) -> usize {
-        POOL_PAGES - self.used_in(Region::Low) + self.high_pages - self.used_in(Region::High)
+        BELOW1M_PAGES - self.used_in(Region::Below1m)
+            + POOL_PAGES
+            - self.used_in(Region::Low)
+            + self.high_pages
+            - self.used_in(Region::High)
     }
 
     /// Free pages in the low slab pool only.
@@ -257,6 +294,9 @@ impl PagePool {
     fn page_of(&self, addr: u64) -> Option<(Region, usize)> {
         if addr & 0xfff != 0 {
             return None;
+        }
+        if (BELOW1M_BASE..BELOW1M_END).contains(&addr) {
+            return Some((Region::Below1m, ((addr - BELOW1M_BASE) / 4096) as usize));
         }
         if (POOL_BASE..POOL_END).contains(&addr) {
             return Some((Region::Low, ((addr - POOL_BASE) / 4096) as usize));
@@ -308,9 +348,12 @@ impl PagePool {
     /// `AllocatePages`. `memory` is the in/out `*Memory` value. Returns
     /// `(status, new_memory)`.
     ///
-    /// `AllocateAnyPages` and `AllocateMaxAddress` try the low pool first so
-    /// firmware-internal allocations stay in the slab; a loader that wants
-    /// the big region gets it as soon as the slab pool cannot satisfy it.
+    /// `AllocateAnyPages` and `AllocateMaxAddress` (max ≥ 1 MiB) try the low
+    /// pool first so firmware-internal allocations stay in the slab; a loader
+    /// that wants the big region gets it as soon as the slab pool cannot
+    /// satisfy it. They never consume the below-1M trampoline window — that
+    /// must still be `EfiConventionalMemory` after `ExitBootServices` so
+    /// Linux `reserve_real_mode` can find it.
     pub fn allocate_pages(
         &mut self,
         alloc_type: u32,
@@ -318,7 +361,8 @@ impl PagePool {
         pages: u64,
         memory: u64,
     ) -> (u64, u64) {
-        if pages == 0 || pages as usize > POOL_PAGES.max(self.high_pages) {
+        let max_run = POOL_PAGES.max(self.high_pages).max(BELOW1M_PAGES);
+        if pages == 0 || pages as usize > max_run {
             return (EFI_INVALID_PARAMETER, memory);
         }
         if mem_type >= EFI_MAX_MEMORY_TYPE
@@ -329,15 +373,26 @@ impl PagePool {
             return (EFI_INVALID_PARAMETER, memory);
         }
         let n = pages as usize;
-        let regions = [Region::Low, Region::High];
+        // AnyPages / MaxAddress(≥1MiB) skip Below1m so the trampoline window
+        // is still conventional at EBS. MaxAddress with an explicit sub-1M
+        // cap is the only non-Address path that may use it.
+        let heap_regions = [Region::Low, Region::High];
         let found: Option<(Region, usize)> = match alloc_type {
-            ALLOCATE_ANY_PAGES => regions
+            ALLOCATE_ANY_PAGES => heap_regions
                 .iter()
                 .find_map(|&r| self.find_run(r, n, self.pages_in(r)).map(|p| (r, p))),
-            ALLOCATE_MAX_ADDRESS => regions.iter().find_map(|&r| {
-                let end = self.end_page_for_max(r, memory)?;
-                self.find_run(r, n, end).map(|p| (r, p))
-            }),
+            ALLOCATE_MAX_ADDRESS => {
+                if memory < 0x10_0000 {
+                    self.end_page_for_max(Region::Below1m, memory)
+                        .and_then(|end| self.find_run(Region::Below1m, n, end))
+                        .map(|p| (Region::Below1m, p))
+                } else {
+                    heap_regions.iter().find_map(|&r| {
+                        let end = self.end_page_for_max(r, memory)?;
+                        self.find_run(r, n, end).map(|p| (r, p))
+                    })
+                }
+            }
             ALLOCATE_ADDRESS => {
                 let Some((r, p)) = self.page_of(memory) else {
                     return (EFI_NOT_FOUND, memory);
@@ -407,11 +462,11 @@ impl PagePool {
         }
     }
 
-    /// Coalesced memory map in address order: the whole slab, then the high
-    /// region if configured. `slab_bytes` bounds the final slab run. Returns
-    /// the number of runs written.
+    /// Coalesced memory map in address order: PC-shaped low 1 MiB, then the
+    /// slab, then the high region if configured. `slab_bytes` bounds the
+    /// final slab run. Returns the number of runs written.
     ///
-    /// Slab bytes outside the pool window are firmware-owned
+    /// Slab bytes outside a managed pool window are firmware-owned
     /// (`EfiBootServicesData`) or `EfiReservedMemoryType` (live page tables,
     /// GDT) — never `EfiConventionalMemory`, because `AllocatePages` cannot
     /// hand them out (see module docs).
@@ -430,10 +485,16 @@ impl PagePool {
                 n += 1;
             }
         };
-        // Fixed windows below the pool (identity PTs, RayNu-F tables, app,
-        // stack+GDT). PTs and GDT are live for the guest: Reserved. The
-        // unused slack between them is ours, not the loader's.
-        push(EFI_RESERVED_MEMORY_TYPE, 0, F2_TABLES_BASE);
+        // PC-shaped low 1 MiB: IVT/BDA, conventional trampoline window,
+        // EBDA + VGA/ROM hole. Identity PTs are at 4 MiB, not here.
+        push(EFI_RESERVED_MEMORY_TYPE, 0, BELOW1M_BASE);
+        self.region_runs(Region::Below1m, &mut push);
+        push(EFI_RESERVED_MEMORY_TYPE, BELOW1M_END, 0x10_0000);
+        // Unused slack below the identity PTs is firmware-owned, not a
+        // conventional lie (AllocatePages cannot hand it out).
+        push(EFI_BOOT_SERVICES_DATA, 0x10_0000, F2_IDENTITY_PML4);
+        // Live identity PTs plus unused slack up to the firmware image.
+        push(EFI_RESERVED_MEMORY_TYPE, F2_IDENTITY_PML4, F2_TABLES_BASE);
         // The firmware image holds the service trampolines a kernel calls
         // after EBS (SetVirtualAddressMap, GetVariable): runtime code, kept
         // mapped and executable by the OS.
