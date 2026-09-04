@@ -57,7 +57,8 @@ iron-specific confirmation.
 |---|--------|-------|
 | F0 | **DONE** | `RAYNU-V-RAYNU-F-SCAFFOLD-OK` (host) |
 | F1 | **DONE (host)** | `RAYNU-V-RAYNU-F-TABLES-OK`: byte-exact UEFI 2.10 tables + valid CRC32s + trampolines round-trip + `ConOut.OutputString` lands on the sink; service port `0x5246` wired into `emulate_io_port`. No guest has run it. |
-| F2 | OPEN | PE32+ loader + long-mode launch; live guest `OutputString` → serial `RAYNU-V-RAYNU-F-CONOUT-OK` (guest VM-exit only; never host/CI). Proven on nested/QEMU first. |
+| F2a | **DONE (host)** | `RAYNU-V-RAYNU-F-LOADER-OK`: PE32+ loader with `DIR64` relocs; RayNu-F test app as a genuine PE32+ round-trips (relocated pointer verified at `0x900000`); F2 launch plan consistent (`RSP%16==8`, long-mode CRs/EFER). Nothing launched. |
+| F2b | OPEN | Long-mode launch of the loaded test app from the private guest-firmware VMCS behind an ESP opt-in flag; live guest `OutputString` → serial `RAYNU-V-RAYNU-F-CONOUT-OK` (guest VM-exit only; never host/CI). Nested/QEMU first. |
 | F3 | BLOCKED | memory services + owned timer tick |
 | F4 | BLOCKED | BlockIo over CD + virtio-blk |
 | F5 | BLOCKED | SimpleFileSystem + LoadImage/StartImage of the ISO's `BOOTX64.EFI` |
