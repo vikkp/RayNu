@@ -92,6 +92,8 @@ pub fn probe_bzimage() {
     if crate::boot::evidence_mode::is_active() {
         crate::boot::evidence_mode::emit_bundle_header("M0-pre-EBS");
     }
+    // ADR-016 F2b: raynuf.txt opts into the RayNu-F test-app launch.
+    crate::boot::raynu_f_flag::probe();
 
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {

@@ -121,6 +121,15 @@ if [[ "$EVIDENCE_MODE" == "1" ]]; then
   echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
 fi
 
+# ADR-016 F2b: RAYNU_F=1 stages EFI/RayNu/raynuf.txt so the EFI launches the
+# RayNu-F test app on the private VMCS after the OVMF leg stops. Default clean.
+rm -f "$ESP/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "${RAYNU_F:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/raynuf.txt"
+  echo "==> ADR-016 RayNu-F: staged $ESP/EFI/RayNu/raynuf.txt"
+fi
+
 # Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
 rm -f "$ESP/linux.iso" "$ESP/install.iso" \
   "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true

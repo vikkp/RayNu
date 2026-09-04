@@ -101,9 +101,11 @@ jobs:
             # (33574327641; 66 0f ae f1; cf8en= unchanged).
             # retrigger b0a3356 CI after nested ATAPI miss (33575225212
             # 7/7 ataio=0 packet=0; E4 SHELL/M4 still landed).
+            # ADR-016 F2b: RAYNU_F=1 runs the RayNu-F test app after the OVMF
+            # leg stops. Observational — the gate does not require its marker.
             ok=0
             for attempt in 1 2 3 4 5 6 7; do
-              if REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh; then
+              if RAYNU_F=1 REQUIRE_VMX=1 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh; then
                 ok=1
                 break
               fi

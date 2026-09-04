@@ -457,3 +457,20 @@ fn raynu_f_loader_testapp_and_plan() {
     #[cfg(not(target_os = "uefi"))]
     println!("{RAYNU_F_LOADER_OK_MARKER}");
 }
+
+#[test]
+fn raynu_f_launch_flag_is_opt_in() {
+    use crate::boot::raynu_f_flag::{
+        force_for_test, requested, RAYNU_F_FLAG_PATH, RAYNU_F_REQUESTED_MARKER,
+    };
+    // Default boot path: not requested. Host probe is a no-op.
+    crate::boot::raynu_f_flag::probe();
+    assert!(!requested());
+    assert_eq!(RAYNU_F_FLAG_PATH, "\\EFI\\RayNu\\raynuf.txt");
+    assert!(RAYNU_F_REQUESTED_MARKER.contains("ADR-016"));
+    assert!(RAYNU_F_REQUESTED_MARKER.contains("not ISO-INSTALL-OK"));
+    force_for_test(true);
+    assert!(requested());
+    force_for_test(false);
+    assert!(!requested());
+}

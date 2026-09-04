@@ -3589,6 +3589,15 @@ static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_CALLS: AtomicU32 = AtomicU32::new(0);
 /// One-shot `RAYNU-V-RAYNU-F-CONOUT-OK` on the first live guest OutputString.
 static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
+/// F2b: the private VMCS is running the RayNu-F test app (not OVMF). Routes
+/// `guest_uefi_vmexit` to the small RayNu-F fast path.
+static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
+/// F2b one-shot: the RayNu-F launch has been attempted on this boot.
+static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
+/// F2b exit counter (cap guards a runaway guest).
+static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
+/// F2b: stop after this many exits without a HLT.
+const RAYNU_F_EXIT_CAP: u32 = 65_536;
 #[cfg(target_os = "uefi")]
 static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -5289,6 +5298,11 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
     let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    // ADR-016 F2b: the RayNu-F test app owns the VMCS now — none of the OVMF
+    // heuristics below apply to a guest whose firmware we authored.
+    if RAYNU_F_MODE.load(Ordering::Acquire) {
+        raynu_f_vmexit(reason, qual, rip, intr);
+    }
     if guest_uefi_linux_earlycon_share_on_bootimg(
         crate::devices::ide_cdrom::product_iso_window_armed(),
         crate::devices::ide_cdrom::eltorito_boot_image_read(),
@@ -6031,7 +6045,333 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
+    // ADR-016 F2b: with the OVMF leg stopped and the slab/EPT/VMCS still
+    // owned, run the RayNu-F test app on the same VMCS before leaving to E4.
+    if crate::boot::raynu_f_flag::requested()
+        && !RAYNU_F_RAN.swap(true, Ordering::AcqRel)
+    {
+        raynu_f_launch_on_stopped_vmcs();
+    }
     leave_to_e4();
+}
+
+/// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
+/// test app in long mode. No new allocations: identity PTs, tables, app,
+/// stack, and a 3-entry GDT are written into the slab we already own.
+/// Never returns; failures print a reason and leave to E4.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
+    use crate::raynu_f::{
+        build_firmware_image, build_test_app, load_pe32plus, plan_f2, IMAGE_BYTES,
+        TESTAPP_FILE_BYTES,
+    };
+    let vmcs = SAVED_VMCS;
+    let ram_hpa = RAM_HPA.load(Ordering::Acquire);
+    if vmcs == 0 || ram_hpa == 0 {
+        serial::write_line("boot: RayNu-F launch skipped: no VMCS/slab (F2b)");
+        leave_to_e4();
+    }
+    if ops::vmclear(vmcs).is_err() || ops::vmptrld(vmcs).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: VMCLEAR/VMPTRLD (F2b)");
+        leave_to_e4();
+    }
+    let Ok(plan) = plan_f2(GUEST_UEFI_LOW_RAM_BYTES) else {
+        serial::write_line("boot: RayNu-F launch failed: plan (F2b)");
+        leave_to_e4();
+    };
+    // SAFETY: exclusive guest-firmware slab; the OVMF guest is halted and
+    // its VMCS was just cleared. Every write below stays inside the slab.
+    // KANI-TARGET: RayNu-F F2 slab image (outside Proven Core).
+    let slab = core::slice::from_raw_parts_mut(ram_hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    if crate::vmx::guest_pt::build_identity_4g(ram_hpa, GUEST_UEFI_LOW_RAM_BYTES, plan.cr3).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: identity PT (F2b)");
+        leave_to_e4();
+    }
+    let tb = plan.tables_base as usize;
+    if build_firmware_image(plan.tables_base, &mut slab[tb..tb + IMAGE_BYTES]).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: tables (F2b)");
+        leave_to_e4();
+    }
+    let mut file = [0u8; TESTAPP_FILE_BYTES];
+    if build_test_app(&mut file).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: test app (F2b)");
+        leave_to_e4();
+    }
+    let ab = plan.app_load_base as usize;
+    let loaded = match load_pe32plus(&file, plan.app_load_base, &mut slab[ab..ab + plan.app_size as usize]) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F launch failed: PE load (F2b)");
+            leave_to_e4();
+        }
+    };
+    // Stack (zeroed; RSP slot holds a 0 return address) and GDT just above it.
+    let sb = plan.stack_base as usize;
+    let st = plan.stack_top as usize;
+    for b in slab[sb..st + 4096].iter_mut() {
+        *b = 0;
+    }
+    // GDT: null, 64-bit code (G L P S code RA), flat data (G B P S data WA).
+    slab[st + 8..st + 16].copy_from_slice(&0x00AF_9B00_0000_FFFFu64.to_le_bytes());
+    slab[st + 16..st + 24].copy_from_slice(&0x00CF_9300_0000_FFFFu64.to_le_bytes());
+
+    // Long-mode guest state overlay on the already-programmed VMCS.
+    let cr0_fixed0 = cpu::rdmsr(IA32_VMX_CR0_FIXED0);
+    let cr0_fixed1 = cpu::rdmsr(IA32_VMX_CR0_FIXED1);
+    let cr0 = (plan.cr0 | cr0_fixed0) & cr0_fixed1;
+    let cr4 = guest_cr4_real() | plan.cr4;
+    let entry = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
+    let ok = [
+        ops::vmwrite(GUEST_CR0, cr0),
+        ops::vmwrite(GUEST_CR3, plan.cr3),
+        ops::vmwrite(GUEST_CR4, cr4),
+        ops::vmwrite(GUEST_IA32_EFER, plan.efer),
+        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry, true)),
+        ops::vmwrite(GUEST_CS_SELECTOR, 0x08),
+        ops::vmwrite(GUEST_SS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_DS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_ES_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_FS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_GS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_CS_BASE, 0),
+        ops::vmwrite(GUEST_SS_BASE, 0),
+        ops::vmwrite(GUEST_DS_BASE, 0),
+        ops::vmwrite(GUEST_ES_BASE, 0),
+        ops::vmwrite(GUEST_FS_BASE, 0),
+        ops::vmwrite(GUEST_GS_BASE, 0),
+        ops::vmwrite(GUEST_CS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_SS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_DS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_ES_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_FS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_GS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_CS_ACCESS_RIGHTS, plan.cs_ar),
+        ops::vmwrite(GUEST_SS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_DS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_ES_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_FS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_GS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_GDTR_BASE, plan.stack_top),
+        ops::vmwrite(GUEST_GDTR_LIMIT, 0x17),
+        ops::vmwrite(GUEST_IDTR_BASE, 0),
+        ops::vmwrite(GUEST_IDTR_LIMIT, 0),
+        ops::vmwrite(GUEST_RIP, loaded.entry),
+        ops::vmwrite(GUEST_RSP, plan.rsp),
+        ops::vmwrite(GUEST_RFLAGS, plan.rflags),
+        ops::vmwrite(GUEST_ACTIVITY_STATE, 0),
+        ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0),
+        ops::vmwrite(GUEST_PENDING_DBG_EXCEPTIONS, 0),
+        // Every guest exception exits to us for a precise first-fault dump.
+        ops::vmwrite(EXCEPTION_BITMAP, 0xFFFF_FFFF),
+        ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0),
+        ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS),
+    ];
+    if ok.iter().any(|r| r.is_err()) {
+        serial::write_line("boot: RayNu-F launch failed: VMWRITE overlay (F2b)");
+        let _ = ops::vmclear(vmcs);
+        leave_to_e4();
+    }
+    // MS x64 ABI entry: RCX = ImageHandle, RDX = *SystemTable.
+    SAVED_RAX = 0;
+    SAVED_RBX = 0;
+    SAVED_RCX = plan.rcx;
+    SAVED_RDX = plan.rdx;
+    SAVED_RSI = 0;
+    SAVED_RDI = 0;
+    SAVED_RBP = 0;
+    SAVED_R8 = 0;
+    SAVED_R9 = 0;
+    SAVED_R10 = 0;
+    SAVED_R11 = 0;
+    SAVED_R12 = 0;
+    SAVED_R13 = 0;
+    SAVED_R14 = 0;
+    SAVED_R15 = 0;
+    RAYNU_F_EXITS.store(0, Ordering::Release);
+    RAYNU_F_MODE.store(true, Ordering::Release);
+    serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
+    write_hex(loaded.entry);
+    serial::write_str(" system_table=0x");
+    write_hex(plan.rdx);
+    serial::write_str(" relocs=");
+    write_dec(u64::from(loaded.relocs_applied));
+    serial::write_line(" (F2b; not ISO-INSTALL-OK)");
+    raynu_f_vmlaunch();
+}
+
+/// Load the guest GPRs from the saved slots and VMLAUNCH (first entry does
+/// not pass through `guest_uefi_vmresume`, so RCX/RDX must be set here).
+#[cfg(target_os = "uefi")]
+#[unsafe(naked)]
+unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
+    core::arch::naked_asm!(
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
+        "vmlaunch",
+        "jmp {fail}",
+        slot_rax = sym SAVED_RAX,
+        slot_rbx = sym SAVED_RBX,
+        slot_rcx = sym SAVED_RCX,
+        slot_rdx = sym SAVED_RDX,
+        slot_rsi = sym SAVED_RSI,
+        slot_rdi = sym SAVED_RDI,
+        slot_rbp = sym SAVED_RBP,
+        slot_r8 = sym SAVED_R8,
+        slot_r9 = sym SAVED_R9,
+        slot_r10 = sym SAVED_R10,
+        slot_r11 = sym SAVED_R11,
+        slot_r12 = sym SAVED_R12,
+        slot_r13 = sym SAVED_R13,
+        slot_r14 = sym SAVED_R14,
+        slot_r15 = sym SAVED_R15,
+        fail = sym raynu_f_launch_failed,
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn raynu_f_launch_failed() -> ! {
+    let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F VMLAUNCH failed insn_error=0x");
+    write_hex_u32(ierr);
+    serial::write_line(" (F2b; guest-state or control check)");
+    leave_to_e4();
+}
+
+/// F2b stop: summarize and leave to E4. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stop(why: &str) -> ! {
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F stop ");
+    serial::write_str(why);
+    serial::write_str(" exits=");
+    write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
+    serial::write_str(" svc=");
+    write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
+    serial::write_str(" conout_ok=");
+    write_dec(u64::from(RAYNU_F_CONOUT_LOGGED.load(Ordering::Acquire)));
+    serial::write_line(" (F2b; not ISO-INSTALL-OK)");
+    leave_to_e4();
+}
+
+/// F2b vmexit fast path. Only what the test app can produce is handled; every
+/// other exit is dumped and stopped. No OVMF heuristics run here.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
+    let n = RAYNU_F_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
+    let basic = reason & 0xFFFF;
+    if reason & 0x8000_0000 != 0 {
+        serial::write_str("boot: RayNu-F VM-entry failure reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" qual=0x");
+        write_hex(qual);
+        serial::write_byte(b'\n');
+        raynu_f_stop("entry-fail");
+    }
+    if n > RAYNU_F_EXIT_CAP {
+        raynu_f_stop("exit-cap");
+    }
+    match basic {
+        EXIT_REASON_IO_INSTRUCTION => {
+            let size = (qual & 7) + 1;
+            let is_in = (qual & (1 << 3)) != 0;
+            let port = io_port_from_qual(qual);
+            if crate::raynu_f::is_service_call(port, is_in, size) {
+                handle_raynu_f_service();
+            } else if is_com_uart_port(port) {
+                handle_uart(port, is_in, size);
+            } else if is_debugcon_port(port) {
+                handle_debugcon(is_in, size);
+            } else {
+                if n < 16 {
+                    serial::write_str("boot: RayNu-F io unhandled port=0x");
+                    write_hex_u32(u32::from(port));
+                    serial::write_str(" in=");
+                    write_dec(is_in as u64);
+                    serial::write_byte(b'\n');
+                }
+                if is_in {
+                    SAVED_RAX |= if size == 1 { 0xff } else if size == 2 { 0xffff } else { 0xffff_ffff };
+                }
+            }
+            let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+            if len == 0 || ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
+                raynu_f_stop("io-skip");
+            }
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_HLT => {
+            serial::write_str("boot: RayNu-F guest HLT rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("hlt");
+        }
+        EXIT_REASON_PREEMPTION_TIMER => {
+            let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS);
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_EXTERNAL_INTERRUPT | EXIT_REASON_INTERRUPT_WINDOW => {
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_EXCEPTION_NMI => {
+            let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+            serial::write_str("boot: RayNu-F guest exception vec=0x");
+            write_hex_u32((intr & 0xff) as u32);
+            serial::write_str(" intr=0x");
+            write_hex(intr);
+            serial::write_str(" err=0x");
+            write_hex(err);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_str(" cr2=0x");
+            write_hex(cpu::read_cr2());
+            serial::write_str(" rsp=0x");
+            write_hex(ops::vmread(GUEST_RSP).unwrap_or(0));
+            serial::write_str(" insn=");
+            dump_low_ram_insn(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("exception");
+        }
+        EXIT_REASON_EPT_VIOLATION => {
+            serial::write_str("boot: RayNu-F EPT violation gpa=0x");
+            write_hex(ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0));
+            serial::write_str(" qual=0x");
+            write_hex(qual);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("ept");
+        }
+        EXIT_REASON_TRIPLE_FAULT => {
+            serial::write_str("boot: RayNu-F triple fault rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("triple-fault");
+        }
+        _ => {
+            serial::write_str("boot: RayNu-F unexpected exit reason=0x");
+            write_hex_u32(reason);
+            serial::write_str(" qual=0x");
+            write_hex(qual);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("unexpected");
+        }
+    }
 }
 
 #[cfg(target_os = "uefi")]
