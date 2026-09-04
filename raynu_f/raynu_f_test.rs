@@ -1774,6 +1774,181 @@ fn raynu_f_filesystem_loadimage_startimage() {
     println!("{}", super::RAYNU_F_IMAGE_GATE_MARKER);
 }
 
+/// F6-prep: what GRUB taught us on nested `7ee3a3b`. The allocator spans the
+/// slab pool plus the pre-mapped report-RAM; the memory map advertises as
+/// conventional exactly what `AllocatePages(AllocateAddress)` can hand out;
+/// and a directly-staged image gets `LoadedImage` published without
+/// `LoadImage`.
+#[test]
+fn raynu_f_high_ram_and_launch_loaded_image() {
+    use super::memory::{
+        MemRun, PagePool, ALLOCATE_ADDRESS, ALLOCATE_ANY_PAGES, ALLOCATE_MAX_ADDRESS,
+        EFI_BOOT_SERVICES_DATA, EFI_CONVENTIONAL_MEMORY, EFI_INVALID_PARAMETER, EFI_LOADER_CODE,
+        EFI_LOADER_DATA, EFI_NOT_FOUND, EFI_OUT_OF_RESOURCES, EFI_RESERVED_MEMORY_TYPE,
+        EFI_SUCCESS, HIGH_MAX_PAGES, MAX_DESCRIPTORS, POOL_BASE, POOL_END, POOL_PAGES,
+    };
+    use super::protocol::{
+        GUID_LOADED_IMAGE, HANDLE_IMAGE, LOADED_IMAGE_DEVICE_HANDLE_OFF,
+        LOADED_IMAGE_IMAGE_BASE_OFF, LOADED_IMAGE_PARENT_OFF, LOADED_IMAGE_REVISION,
+        LOADED_IMAGE_REVISION_OFF, LOADED_IMAGE_SYSTEM_TABLE_OFF,
+    };
+    use super::services::{dispatch, publish_loaded_image, FirmwareState, ServiceArgs, ServiceId};
+    use super::tables::{build_firmware_image, IMAGE_BYTES};
+
+    const HIGH_BASE: u64 = 0x0200_0000; // 32 MiB: PLATFORM_RAM_BYTES
+    let mut runs = [MemRun { typ: 0, start: 0, pages: 0 }; MAX_DESCRIPTORS];
+
+    // --- No high region: the map still never lies ---------------------------
+    let pool = PagePool::new();
+    assert_eq!(pool.high_region(), None);
+    let n = pool.memory_map(SLAB, &mut runs);
+    let mut cursor = 0;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor);
+        cursor = r.start + r.pages * 4096;
+        if r.typ == EFI_CONVENTIONAL_MEMORY {
+            // Only the pool window may be conventional.
+            assert!(r.start >= POOL_BASE && cursor <= POOL_END, "conventional outside pool: {r:?}");
+        }
+    }
+    assert_eq!(cursor, SLAB);
+    // The slab slack between our fixed windows is firmware-owned, not a lie.
+    assert!(runs[..n].iter().any(|r| r.typ == EFI_BOOT_SERVICES_DATA && r.start < POOL_BASE));
+    assert_eq!(runs[0].typ, EFI_RESERVED_MEMORY_TYPE);
+
+    // --- Configure a high region ---------------------------------------------
+    let mut pool = PagePool::new();
+    // Rejected: below the pool, unaligned, zero.
+    assert_eq!(pool.set_high_region(0x0100_0000, 16), 0);
+    assert_eq!(pool.set_high_region(HIGH_BASE + 1, 16), 0);
+    assert_eq!(pool.set_high_region(HIGH_BASE, 0), 0);
+    assert_eq!(pool.high_region(), None);
+    // 2 GiB pre-mapped is clamped to the 256 MiB we manage.
+    assert_eq!(pool.set_high_region(HIGH_BASE, (0x8000_0000 - 0x0200_0000) / 4096), HIGH_MAX_PAGES);
+    // Nested-size: 64 MiB of report-RAM.
+    let high_pages = (64 * 1024 * 1024) / 4096;
+    assert_eq!(pool.set_high_region(HIGH_BASE, high_pages), high_pages);
+    assert_eq!(pool.high_region(), Some((HIGH_BASE, high_pages)));
+    assert_eq!(pool.free_pages(), POOL_PAGES + high_pages);
+    assert_eq!(pool.free_low_pages(), POOL_PAGES);
+
+    // Map: slab, reserved tail, then the high region as one conventional run.
+    let n = pool.memory_map(SLAB, &mut runs);
+    let mut cursor = 0;
+    let mut high_conv = 0u64;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor, "gap before {r:?}");
+        cursor = r.start + r.pages * 4096;
+        if r.typ == EFI_CONVENTIONAL_MEMORY && r.start >= HIGH_BASE {
+            high_conv += r.pages;
+        }
+    }
+    assert_eq!(cursor, HIGH_BASE + high_pages as u64 * 4096);
+    assert_eq!(high_conv, high_pages as u64);
+
+    // --- GRUB mm_init pattern: AllocateAddress at every conventional run ----
+    // Every conventional descriptor must be allocatable in full at its own
+    // address; that is the contract GRUB relies on (else "too little memory"
+    // / AllocateAddress NOT_FOUND, nested 7ee3a3b lines 240/259).
+    let mut grabbed = 0u64;
+    let want = 8192u64; // GRUB DEFAULT_HEAP_SIZE 32 MiB in pages
+    for r in runs[..n].iter().filter(|r| r.typ == EFI_CONVENTIONAL_MEMORY) {
+        if grabbed >= want {
+            break;
+        }
+        let take = r.pages.min(want - grabbed);
+        let (s, at) = pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_DATA, take, r.start);
+        assert_eq!(s, EFI_SUCCESS, "AllocateAddress refused its own conventional run {r:?}");
+        assert_eq!(at, r.start);
+        grabbed += take;
+    }
+    assert_eq!(grabbed, want, "a 32 MiB heap fits");
+    // Firmware-internal pool allocation still works after the loader's grab
+    // (nested 7ee3a3b line 240 was OUT_OF_RESOURCES here).
+    let (s, p) = pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, 3, 0);
+    assert_eq!(s, EFI_SUCCESS);
+    assert!(p >= HIGH_BASE, "slab pool drained, fell through to high: {p:#x}");
+    // Freeing in the high region and re-allocating exactly there.
+    assert_eq!(pool.free_pages_at(p, 3), EFI_SUCCESS);
+    assert_eq!(pool.free_pages_at(p, 3), EFI_NOT_FOUND);
+    let (s, p2) = pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_CODE, 3, p);
+    assert_eq!((s, p2), (EFI_SUCCESS, p));
+    // AllocateAddress beyond the region end / outside both regions.
+    let end = HIGH_BASE + high_pages as u64 * 4096;
+    assert_eq!(pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_DATA, 1, end).0, EFI_NOT_FOUND);
+    assert_eq!(pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_DATA, 2, end - 4096).0, EFI_NOT_FOUND);
+    assert_eq!(pool.allocate_pages(ALLOCATE_ADDRESS, EFI_LOADER_DATA, 1, 0x0080_4000).0, EFI_NOT_FOUND);
+    // MaxAddress: a cap below 32 MiB never lands in the high region; a cap
+    // above it may. A cap under the pool finds nothing.
+    let (s, q) = pool.allocate_pages(ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, 1, HIGH_BASE - 1);
+    assert!(s == EFI_SUCCESS && q < HIGH_BASE || s == EFI_NOT_FOUND);
+    let (s, q) = pool.allocate_pages(ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, 1, end - 1);
+    assert_eq!(s, EFI_SUCCESS);
+    assert!(q + 4096 <= end);
+    assert_eq!(pool.allocate_pages(ALLOCATE_MAX_ADDRESS, EFI_LOADER_DATA, 1, POOL_BASE - 1).0, EFI_NOT_FOUND);
+    // Bigger than any region: invalid; bigger than what is left: exhausted.
+    assert_eq!(pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, high_pages as u64 + 1, 0).0, EFI_INVALID_PARAMETER);
+    assert_eq!(pool.allocate_pages(ALLOCATE_ANY_PAGES, EFI_LOADER_DATA, high_pages as u64, 0).0, EFI_OUT_OF_RESOURCES);
+    // The map now shows the loader's heap as LoaderData and stays contiguous.
+    let n = pool.memory_map(SLAB, &mut runs);
+    let mut cursor = 0;
+    let mut loader_pages = 0u64;
+    for r in &runs[..n] {
+        assert_eq!(r.start, cursor);
+        cursor = r.start + r.pages * 4096;
+        if r.typ == EFI_LOADER_DATA {
+            loader_pages += r.pages;
+        }
+    }
+    assert_eq!(cursor, end);
+    assert!(loader_pages >= want);
+
+    // --- Launcher-side LoadedImage publish ----------------------------------
+    let mut mem = vec![0u8; SLAB as usize];
+    let tb = 0x0080_0000usize;
+    let layout = build_firmware_image(tb as u64, &mut mem[tb..tb + IMAGE_BYTES]).unwrap();
+    let guest = MockGuest::new(0, mem);
+    let mut sink = CaptureSink::default();
+    let clk = ManualClock { now: Cell::new(1_000), step: 1_000 };
+    let mut st = FirmwareState::new();
+    // Not published yet: the protocol lookup GRUB makes first fails.
+    let p_guid = 0x00AF_0000u64;
+    let p_out = p_guid + 0x20;
+    guest.write(p_guid, &GUID_LOADED_IMAGE);
+    assert_eq!(
+        dispatch(ServiceId::OpenProtocol, ServiceArgs::regs(HANDLE_IMAGE, p_guid, p_out, 0), &guest, &mut sink, &mut st, &clk, SLAB).status,
+        EFI_NOT_FOUND
+    );
+    // Nothing to publish into / no image: honest false.
+    assert!(!publish_loaded_image(&mut st, &guest, 0));
+    st.loaded_image_proto = layout.loaded_image;
+    assert!(!publish_loaded_image(&mut st, &guest, 0)); // image_handle == 0
+    // What the F5 launcher sets before VMLAUNCH.
+    st.system_table = layout.system_table;
+    st.device_handle = super::HANDLE_CD;
+    st.device_path = layout.device_path;
+    st.image_handle = HANDLE_IMAGE;
+    st.image_base = 0x00BB_1000;
+    st.image_size = 724_992;
+    st.image_entry = 0x00BB_2000;
+    assert!(publish_loaded_image(&mut st, &guest, 0));
+    let li = layout.loaded_image;
+    let mut rev = [0u8; 4];
+    guest.read(li + LOADED_IMAGE_REVISION_OFF as u64, &mut rev);
+    assert_eq!(u32::from_le_bytes(rev), LOADED_IMAGE_REVISION);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_PARENT_OFF as u64), 0);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_SYSTEM_TABLE_OFF as u64), layout.system_table);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_IMAGE_BASE_OFF as u64), 0x00BB_1000);
+    assert_eq!(guest.u64_at(li + LOADED_IMAGE_DEVICE_HANDLE_OFF as u64), super::HANDLE_CD);
+    // Now GRUB's first call succeeds and returns our struct.
+    guest.put_u64(p_out, 0);
+    assert_eq!(
+        dispatch(ServiceId::OpenProtocol, ServiceArgs::regs(HANDLE_IMAGE, p_guid, p_out, 0), &guest, &mut sink, &mut st, &clk, SLAB).status,
+        EFI_SUCCESS
+    );
+    assert_eq!(guest.u64_at(p_out), li);
+}
+
 /// Opt-in integration test against a real distro ISO: set `RAYNU_F_REAL_ISO`
 /// to its path and run with `--ignored`. Walks exactly what the launcher's F5c
 /// path does: El Torito -> EFI FAT ESP -> \EFI\BOOT\BOOTX64.EFI -> PE32+ load.

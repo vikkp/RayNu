@@ -857,6 +857,32 @@ fn read_guest_path(mem: &dyn GuestMem, addr: u64, out: &mut [u8; MAX_PATH_BYTES]
 }
 
 /// `LoadImage(BootPolicy, Parent, DevicePath, SourceBuffer, SourceSize, *ImageHandle)`.
+/// Publish `EFI_LOADED_IMAGE_PROTOCOL` on `st.image_handle` for the image
+/// described by `st.image_*` (UEFI 2.10 §9.1). A loader's first call is
+/// `OpenProtocol(ImageHandle, LoadedImage)` to find the volume it booted
+/// from, so the launcher must call this for a directly-staged image too, not
+/// only `LoadImage` (GRUB on nested `7ee3a3b`: two `EFI_NOT_FOUND` before
+/// anything else). Returns `false` if the struct could not be written or no
+/// struct slot was published in the firmware tables.
+pub fn publish_loaded_image(st: &mut FirmwareState, mem: &dyn GuestMem, parent: u64) -> bool {
+    let li = st.loaded_image_proto;
+    if li == 0 || st.image_handle == 0 {
+        return false;
+    }
+    let ok = write_u32(mem, li + super::protocol::LOADED_IMAGE_REVISION_OFF as u64, super::protocol::LOADED_IMAGE_REVISION)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_PARENT_OFF as u64, parent)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_SYSTEM_TABLE_OFF as u64, st.system_table)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_BASE_OFF as u64, st.image_base)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_DEVICE_HANDLE_OFF as u64, st.device_handle)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_FILE_PATH_OFF as u64, st.device_path)
+        && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_SIZE_OFF as u64, st.image_size);
+    if !ok {
+        return false;
+    }
+    let _ = st.protocols.install(st.image_handle, super::protocol::GUID_LOADED_IMAGE, li);
+    true
+}
+
 /// Only the `SourceBuffer` form is supported; a `DevicePath`-only load needs
 /// device-path parsing we do not publish (honest `EFI_UNSUPPORTED`).
 fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u64, bool) {
@@ -904,25 +930,9 @@ fn load_image(st: &mut FirmwareState, mem: &dyn GuestMem, a: ServiceArgs) -> (u6
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = super::protocol::HANDLE_IMAGE;
-    // Publish EFI_LOADED_IMAGE_PROTOCOL for the started image.
-    if st.loaded_image_proto != 0 {
-        let li = st.loaded_image_proto;
-        let ok = write_u32(mem, li + super::protocol::LOADED_IMAGE_REVISION_OFF as u64, super::protocol::LOADED_IMAGE_REVISION)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_PARENT_OFF as u64, a.a2)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_SYSTEM_TABLE_OFF as u64, st.system_table)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_BASE_OFF as u64, st.image_base)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_DEVICE_HANDLE_OFF as u64, st.device_handle)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_FILE_PATH_OFF as u64, st.device_path)
-            && write_u64(mem, li + super::protocol::LOADED_IMAGE_IMAGE_SIZE_OFF as u64, st.image_size);
-        if !ok {
-            let _ = st.pool.free_pages_at(base, pages);
-            return (EFI_INVALID_PARAMETER, false);
-        }
-        let _ = st.protocols.install(
-            st.image_handle,
-            super::protocol::GUID_LOADED_IMAGE,
-            li,
-        );
+    if !publish_loaded_image(st, mem, a.a2) {
+        let _ = st.pool.free_pages_at(base, pages);
+        return (EFI_INVALID_PARAMETER, false);
     }
     if !write_u64(mem, p_handle, st.image_handle) {
         let _ = st.pool.free_pages_at(base, pages);

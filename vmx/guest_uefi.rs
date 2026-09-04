@@ -1829,6 +1829,33 @@ pub fn guest_uefi_report_ram_page_off(gpa: u64) -> u64 {
     gpa & (GUEST_UEFI_REPORT_RAM_PAGE - 1)
 }
 
+/// Bytes of report-RAM contiguously EPT-mapped from slot 0 upward, given
+/// each slot's recorded GPA (`u64::MAX` = not mapped). RayNu-F may only
+/// advertise this much as conventional memory: its exit path stops on the
+/// first EPT violation, so nothing lazily-mapped is allowed in its map.
+///
+/// INVARIANTS:
+/// - Result is a multiple of [`GUEST_UEFI_REPORT_RAM_PAGE`]
+/// - Stops at the first slot whose GPA is not the pre-map GPA for its index
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_report_ram_premapped_contiguous_bytes(
+    slot_gpa: impl Fn(usize) -> u64,
+    n: usize,
+) -> u64 {
+    let mut bytes = 0u64;
+    for i in 0..n {
+        let Some(want) = guest_uefi_report_ram_premap_gpa(i, n) else {
+            break;
+        };
+        if slot_gpa(i) != want {
+            break;
+        }
+        bytes = bytes.saturating_add(GUEST_UEFI_REPORT_RAM_PAGE);
+    }
+    bytes
+}
+
 /// GPA of the PML4E that maps `gva`. Iron `957e0ad`: CR3 `0x7fa01000`.
 pub fn guest_uefi_pt_pml4e_gpa(cr3: u64, gva: u64) -> u64 {
     (cr3 & GUEST_UEFI_PT_ADDR_MASK).wrapping_add(((gva >> 39) & 0x1ff) * 8)
@@ -6132,6 +6159,12 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
             leave_to_e4();
         }
     };
+    // F6-prep: hand the loader real RAM. The product-ISO path already EPT
+    // pre-mapped report-RAM contiguously from 32 MiB; RayNu-F's allocator
+    // owns exactly that much (capped) and its memory map advertises nothing
+    // it cannot allocate. Nested 7ee3a3b: GRUB's 32 MiB heap drained the
+    // 20 MiB slab pool and hit AllocateAddress NOT_FOUND on unmanaged gaps.
+    raynu_f_configure_high_ram();
     // F5: prefer the ISO's own \EFI\BOOT\BOOTX64.EFI when the retained
     // product ISO carries a FAT El Torito ESP. The built-in test app is the
     // fallback (no ISO, not FAT, or no loader present).
@@ -6238,6 +6271,37 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     });
     serial::write_line(" (F2b/F5; not ISO-INSTALL-OK)");
     raynu_f_vmlaunch();
+}
+
+/// F6-prep: give RayNu-F's allocator the report-RAM that is already
+/// EPT-mapped (WB, 2 MiB leaves) contiguously above the slab. Only
+/// pre-mapped slots count — the RayNu-F exit path stops on an EPT violation,
+/// so a lazily-mapped page must never appear in the guest's memory map.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_configure_high_ram() {
+    let n = report_ram_slots_alloc();
+    let bytes = guest_uefi_report_ram_premapped_contiguous_bytes(
+        |i| REPORT_RAM_GPA[i].load(Ordering::Acquire),
+        n,
+    );
+    // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+    // KANI-TARGET: RayNu-F high-RAM region configure (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    if bytes == 0 {
+        serial::write_line(
+            "boot: RayNu-F WARN no pre-mapped report-RAM; loader gets the slab pool only (F6-prep)",
+        );
+        return;
+    }
+    let base = crate::devices::guest_platform::PLATFORM_RAM_BYTES;
+    let pages = st.pool.set_high_region(base, (bytes / 4096) as usize);
+    serial::write_str("boot: RayNu-F high RAM base=0x");
+    write_hex(base);
+    serial::write_str(" bytes=");
+    write_dec((pages as u64) * 4096);
+    serial::write_str(" premapped=");
+    write_dec(bytes);
+    serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
 }
 
 /// F4: retained product ISO bytes (CD backing store), if any.
@@ -6526,6 +6590,12 @@ unsafe fn raynu_f_stage_iso_bootloader(
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
+    // The loader's first call is OpenProtocol(ImageHandle, LoadedImage) to
+    // find its boot volume; a directly-staged image must have it published
+    // exactly like a LoadImage'd one (nested 7ee3a3b: GRUB got NOT_FOUND).
+    if !crate::raynu_f::publish_loaded_image(st, &mem, 0) {
+        serial::write_line("boot: RayNu-F WARN LoadedImage publish failed (loader may not find its volume)");
+    }
     serial::write_str("boot: RayNu-F ISO bootloader staged base=0x");
     write_hex(loaded.load_base);
     serial::write_str(" entry=0x");
@@ -9756,6 +9826,47 @@ unsafe fn handle_raynu_f_service() -> bool {
         write_hex_u32(id.0);
         serial::write_str(" status=0x");
         write_hex(d.status);
+        if failed {
+            // The arguments name *what* the loader asked for (type, pages,
+            // address, GUID pointer) — that is the next thing to implement.
+            serial::write_str(" a1=0x");
+            write_hex(args.a1);
+            serial::write_str(" a2=0x");
+            write_hex(args.a2);
+            serial::write_str(" a3=0x");
+            write_hex(args.a3);
+            serial::write_str(" a4=0x");
+            write_hex(args.a4);
+            // Protocol lookups: name the GUID the loader wanted.
+            let guid_ptr = match id {
+                crate::raynu_f::ServiceId::LocateProtocol => Some(args.a1),
+                crate::raynu_f::ServiceId::HandleProtocol
+                | crate::raynu_f::ServiceId::OpenProtocol
+                | crate::raynu_f::ServiceId::LocateHandle
+                | crate::raynu_f::ServiceId::LocateHandleBuffer => Some(args.a2),
+                _ => None,
+            };
+            if let Some(p) = guid_ptr {
+                let mut g = [0u8; 16];
+                if p != 0 && crate::raynu_f::GuestMem::read(&Mem, p, &mut g) == 16 {
+                    // Canonical text form: LE u32, LE u16, LE u16, then bytes.
+                    serial::write_str(" guid=");
+                    for i in (0..4).rev() {
+                        write_hex2(g[i]);
+                    }
+                    serial::write_byte(b'-');
+                    write_hex2(g[5]);
+                    write_hex2(g[4]);
+                    serial::write_byte(b'-');
+                    write_hex2(g[7]);
+                    write_hex2(g[6]);
+                    serial::write_byte(b'-');
+                    for b in &g[8..16] {
+                        write_hex2(*b);
+                    }
+                }
+            }
+        }
         serial::write_line(" (ADR-016; not ISO-INSTALL-OK)");
     }
     if id == crate::raynu_f::ServiceId::ConOutOutputString

@@ -1,6 +1,6 @@
 use super::{
-    guest_uefi_report_ram_premap_gpa, guest_uefi_report_ram_should_premap,
-    GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
+    guest_uefi_report_ram_premap_gpa, guest_uefi_report_ram_premapped_contiguous_bytes,
+    guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
@@ -1445,6 +1445,32 @@ fn marker_and_residual_honest() {
     assert_eq!(
         guest_uefi_report_ram_premap_gpa(0, GUEST_UEFI_REPORT_RAM_SLOTS),
         Some(0x0200_0000)
+    );
+    // RayNu-F high RAM (F6-prep): only the contiguous pre-mapped prefix counts.
+    let all = |i: usize| guest_uefi_report_ram_premap_gpa(i, pre_n).unwrap_or(u64::MAX);
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(all, pre_n),
+        0x8000_0000 - 0x0200_0000
+    );
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(|_| u64::MAX, pre_n),
+        0
+    );
+    // Slot 5 unmapped (lazy) → 5 × 2 MiB, no matter what lies beyond.
+    let hole = |i: usize| if i == 5 { u64::MAX } else { all(i) };
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(hole, pre_n),
+        5 * 0x20_0000
+    );
+    // A slot mapped at a non-pre-map GPA (iron lazy map) also ends the run.
+    let moved = |i: usize| if i == 2 { 0x7BC0_0000 } else { all(i) };
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(moved, pre_n),
+        2 * 0x20_0000
+    );
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(all, GUEST_UEFI_REPORT_RAM_SLOTS),
+        32 * 0x20_0000
     );
     // cpu_flush leftover per walk (iron abfb008 skip n=944 then 64 heap slots hung).
     assert_eq!(GUEST_UEFI_CPU_FLUSH_HEAP_GPA, 0x7800_0000);

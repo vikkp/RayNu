@@ -37,7 +37,8 @@ mod raynu_f_test;
 
 pub use services::{
     decode_trampoline, dispatch, encode_trampoline, is_service_call, output_string,
-    trampoline_slot_gpa, write_trampolines, ConsoleSink, Dispatched, FirmwareState, GuestMem,
+    publish_loaded_image, trampoline_slot_gpa, write_trampolines, ConsoleSink, Dispatched,
+    FirmwareState, GuestMem,
     ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_NOT_READY, EFI_SUCCESS, EFI_UNSUPPORTED,
     OUTPUT_STRING_CAP_CHARS, RAYNU_F_SERVICE_PORT, TRAMPOLINE_SLOT_BYTES,
     TRAMPOLINE_SLOT_COUNT,
