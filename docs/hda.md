@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
-| Guest UEFI firmware blob | PARTIAL (RayNu-F boots Linux, nested) | ADR-016 RayNu-F: Alpine GRUB → EFI stub → EBS → Linux 6.12.13-virt `efi: EFI v2.10 by RayNu-F` on nested `raynuvsrv1` (`033bc0d`); paniced `init_real_mode` (no sub-1M conventional — host fix this slice); OVMF forcing family closed; not distro installer / not Everest E5 |
+| Guest UEFI firmware blob | PARTIAL (RayNu-F boots Linux, nested) | ADR-016 RayNu-F: Alpine GRUB → EFI stub → EBS → Linux 6.12.13-virt `efi: EFI v2.10 by RayNu-F` on nested `raynuvsrv1`; trampoline+LSTAR closed (`8f62fea`/`659bb41`); `#DF` now CPL3 CEA IDT[#PF] under PTI user CR3 (walk dump this slice); F6a ACPI + install-disk DevicePath open; not distro installer / not Everest E5 |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | **Nested `8f62fea` (run `33905004811`): trampoline closed** (e820 `[0x1000,0x9efff]` usable; past `init_real_mode`, PCI both virtio-blk, initrd unpack, ttyS0) then `#DF` `rip=0` `rsp=0x7fff…` `cr3=0x2e1f804` at X.509 — first usermode helper `syscall` with `LSTAR=0`. Guest-UEFI `handle_wrmsr` dropped firewall `HostPassthrough` (G0 `launch.rs` already writes STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX). Host fix: `cpu::wrmsr` those six; `#DF/#TS/#NP/#SS` stop+dump (CS/SS/RFLAGS/IDT_VECTORING + live LSTAR) instead of re-inject. Nested expect: `linux syscall WRMSR` then past X.509 / `/init`. F6a ACPI still open. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Host WRMSR passthrough; nested confirmation next. E5 closes only on iron `ISO-INSTALL-OK`. |
-| Gates touched | RayNu-F F6-prep: nested `8f62fea` trampoline OK, `#DF` at first `syscall`; syscall MSR passthrough host-proven. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Summary | **Nested `659bb41` (CI `33909234183`): syscall MSRs live** (`lstar=0xffffffffb7c00080` `star=0x23001000000000` `cs=0x33`). `#DF` is no longer LSTAR=0; it is CPL3 IDT[#PF] `cr2=0xfffffe00000000e0` `idtr=0xfffffe0000000000` under PTI user CR3 `0x2e1f804`. Host dump: 4-level PT walk `user-cr2`/`user-idtr`/`user-rip`/`user-rsp` vs `kern-cr2`/`kern-idtr`; syscall WRMSR logs nowait. Do not clone CEA into the user PGD. Do not `nopti` this cut. F6a ACPI still open. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Walk dump only; nested confirmation next. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Gates touched | RayNu-F F6-prep: nested `659bb41` LSTAR closed, `#DF` at CEA IDT under user CR3; PT walk dump host-proven. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -375,6 +375,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 659bb41 (CI 33909234183): trampoline+LSTAR closed (cs=0x33 lstar live) then #DF CPL3 IDT[#PF] cr2=0xfffffe00000000e0 under PTI user CR3 0x2e1f804; host 4-level PT walk dump user-idtr vs kern-idtr + nowait syscall WRMSR; do not clone CEA; do not nopti; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 8f62fea (run 33905004811): trampoline closed then #DF at X.509 (rip=0 user RSP LSTAR=0 — first usermode helper syscall); guest-UEFI handle_wrmsr now HostPassthrough cpu::wrmsr for STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX (mirror G0 launch.rs); #DF/#TS/#NP/#SS stop+dump not re-inject; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 033bc0d (run 33901852277): efi=noruntime skipped virtual mode; Linux 6.12.13-virt on RayNu-F reached start_kernel then paniced Real mode trampoline was not allocated (e820 usable from 0x803000 — map reserved [0, 8MiB)); host fix: conventional [0x1000, 0x9F000) 158 pages AllocateAddress-honest, AnyPages does not consume it; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested 5a9e8e4: NX panic gone (e820 reserves firmware image); kernel triple-faults inside efi_enter_virtual_mode before our SetVirtualAddressMap trampoline (no svc line; root cause open); GRUB linux line adds efi=noruntime (RayNu-F has no runtime services; grub.cfg Data Length 143→302); fatal-class exception inject logging + triple-fault CR/IDTR dump; F6a ACPI still open; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

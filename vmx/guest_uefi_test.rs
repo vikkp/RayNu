@@ -2893,3 +2893,26 @@ fn raynu_f_linux_syscall_wrmsr_passthrough() {
     assert_eq!(crate::vmx::fields::IDT_VECTORING_INFO, 0x0000_4408);
     assert_eq!(crate::vmx::fields::IDT_VECTORING_ERROR_CODE, 0x0000_440A);
 }
+
+/// Nested `659bb41`: `#DF` `cs=0x33` `cr2=0xfffffe00000000e0` is CEA IDT[#PF]
+/// under the PTI user CR3. Host-testable walk indices; dump is UEFI-only.
+#[test]
+fn raynu_f_linux_cea_idt_pt_walk() {
+    use super::{
+        guest_uefi_linux_cea_idt_entry_linear, guest_uefi_pt_pml4_index,
+        guest_uefi_pti_kernel_pgd_gpa, GUEST_UEFI_LINUX_CEA_IDT_BASE,
+    };
+    assert_eq!(GUEST_UEFI_LINUX_CEA_IDT_BASE, 0xfffffe0000000000);
+    assert_eq!(guest_uefi_linux_cea_idt_entry_linear(14), 0xfffffe00000000e0);
+    assert_eq!(guest_uefi_pt_pml4_index(0xfffffe00000000e0), 508);
+    assert_eq!(guest_uefi_pt_pml4_index(GUEST_UEFI_LINUX_CEA_IDT_BASE), 508);
+    assert_eq!(guest_uefi_pti_kernel_pgd_gpa(0x2e1f804), 0x2e1e000);
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("linux pt walk"));
+    assert!(src.contains("fn guest_uefi_linux_cea_idt_entry_linear"));
+    assert!(src.contains("fn guest_uefi_pti_kernel_pgd_gpa"));
+    assert!(src.contains("dump_linux_pt_walk_nowait"));
+    assert!(src.contains("user-idtr"));
+    assert!(src.contains("kern-idtr"));
+    assert!(src.contains("write_str_nowait(\"boot: guest-UEFI linux syscall WRMSR"));
+}

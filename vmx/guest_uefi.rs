@@ -1009,6 +1009,27 @@ pub fn guest_uefi_wrmsr_syscall_passthrough(msr: u32) -> bool {
     )
 }
 
+/// Linux 64-bit `cpu_entry_area` read-only IDT (`CPU_ENTRY_AREA_RO_IDT`).
+/// Nested `659bb41`: `#DF` `cs=0x33` `cr2=0xfffffe00000000e0` = IDT[#PF]
+/// under the PTI user CR3 after syscall MSRs were live.
+pub const GUEST_UEFI_LINUX_CEA_IDT_BASE: u64 = 0xfffffe0000000000;
+
+/// Linear address of `IDT[vec]` in the Linux CEA RO IDT page.
+pub fn guest_uefi_linux_cea_idt_entry_linear(vec: u8) -> u64 {
+    GUEST_UEFI_LINUX_CEA_IDT_BASE.wrapping_add(u64::from(vec) * 16)
+}
+
+/// 4-level PML4 index for a canonical linear address.
+pub fn guest_uefi_pt_pml4_index(linear: u64) -> u64 {
+    (linear >> 39) & 0x1ff
+}
+
+/// PTI 8K PGD pair: user CR3 is `kernel_pgd+0x1000` with PCID bit 11.
+/// Nested `659bb41` `cr3=0x2e1f804` → kernel PGD GPA `0x2e1e000`.
+pub fn guest_uefi_pti_kernel_pgd_gpa(user_cr3: u64) -> u64 {
+    (user_cr3 & !0xfff).wrapping_sub(0x1000)
+}
+
 /// EPT leaf memory type WB. Scratch/sink stay UC (`ept_leaf_large(..., 0)`).
 pub const GUEST_UEFI_EPT_MT_WB: u64 = 6;
 /// Iron `0bad45d`: first hole GPA that hit the shared zero sink.
@@ -7805,30 +7826,76 @@ unsafe fn handle_linux_nmi() -> bool {
     true
 }
 
+/// 4-level walk of a guest PGD for `linear`. Nested `659bb41`: user CR3
+/// vs kernel PGD pair shows whether PTI cloned `cpu_entry_area`.
+///
+/// SAFETY: VMX-root; `pgd` is a guest-physical PGD the EPT already maps.
+/// KANI-TARGET: guest-UEFI fatal-class PT walk dump (outside Proven Core).
+#[cfg(target_os = "uefi")]
+unsafe fn dump_linux_pt_walk_nowait(tag: &str, linear: u64, pgd: u64) {
+    serial::write_str_nowait("boot: guest-UEFI linux pt walk ");
+    serial::write_str_nowait(tag);
+    serial::write_str_nowait(" va=0x");
+    write_hex_nowait(linear);
+    serial::write_str_nowait(" pgd=0x");
+    write_hex_nowait(pgd);
+    let mut table = pgd & !0xfff;
+    let shifts = [39u64, 30, 21, 12];
+    let names = ["pml4e", "pdpte", "pde", "pte"];
+    for (i, &sh) in shifts.iter().enumerate() {
+        serial::write_str_nowait(" ");
+        serial::write_str_nowait(names[i]);
+        serial::write_str_nowait("=0x");
+        let slot = table.wrapping_add(8 * ((linear >> sh) & 0x1ff));
+        let Some(e) = read_guest_pte(slot) else {
+            serial::write_str_nowait("unmapped:");
+            write_hex_nowait(slot);
+            break;
+        };
+        write_hex_nowait(e);
+        if e & 1 == 0 {
+            break;
+        }
+        if i >= 1 && (e & (1 << 7)) != 0 {
+            break;
+        }
+        table = e & 0x000f_ffff_ffff_f000;
+    }
+    serial::write_byte_nowait(b'\n');
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
     if guest_uefi_linux_fatal_class_exc_stops(vec) {
         // Nested 8f62fea: re-inject #DF → triple fault. Dump and stop.
+        // Nested 659bb41: LSTAR live; #DF is IDT[#PF] under the user CR3.
+        let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+        let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+        let cr2 = cpu::read_cr2();
+        let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+        let idtr = ops::vmread(GUEST_IDTR_BASE).unwrap_or(0);
         serial::write_str_nowait("boot: guest-UEFI linux fatal-class exc vec=0x");
         write_hex_nowait(u64::from(vec));
         serial::write_str_nowait(" err=0x");
         write_hex_nowait(ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0));
         serial::write_str_nowait(" rip=0x");
-        write_hex_nowait(ops::vmread(GUEST_RIP).unwrap_or(0));
+        write_hex_nowait(rip);
         serial::write_str_nowait(" rsp=0x");
-        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
+        write_hex_nowait(rsp);
         serial::write_str_nowait(" cr2=0x");
-        write_hex_nowait(cpu::read_cr2());
+        write_hex_nowait(cr2);
         serial::write_str_nowait(" cr3=0x");
-        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
+        write_hex_nowait(cr3);
         serial::write_str_nowait(" idtr=0x");
-        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
+        write_hex_nowait(idtr);
         serial::write_str_nowait(" cs=0x");
         write_hex_nowait(ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0));
         serial::write_str_nowait(" ss=0x");
         write_hex_nowait(ops::vmread(GUEST_SS_SELECTOR).unwrap_or(0));
         serial::write_str_nowait(" rflags=0x");
         write_hex_nowait(ops::vmread(GUEST_RFLAGS).unwrap_or(0));
+        serial::write_str_nowait(" cr4=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR4).unwrap_or(0));
         serial::write_str_nowait(" idtv=0x");
         write_hex_nowait(ops::vmread(IDT_VECTORING_INFO).unwrap_or(0));
         serial::write_str_nowait(" idtverr=0x");
@@ -7846,6 +7913,14 @@ unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
         serial::write_str_nowait(" gsbase=0x");
         write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_KERNEL_GS_BASE));
         serial::write_byte_nowait(b'\n');
+        // Walk only. Do not clone CEA into the user PGD (ADR-016).
+        let kpgd = guest_uefi_pti_kernel_pgd_gpa(cr3);
+        dump_linux_pt_walk_nowait("user-cr2", cr2, cr3);
+        dump_linux_pt_walk_nowait("user-idtr", idtr, cr3);
+        dump_linux_pt_walk_nowait("user-rip", rip, cr3);
+        dump_linux_pt_walk_nowait("user-rsp", rsp, cr3);
+        dump_linux_pt_walk_nowait("kern-cr2", cr2, kpgd);
+        dump_linux_pt_walk_nowait("kern-idtr", idtr, kpgd);
         serial::write_line_nowait(
             "boot: guest-UEFI linux fatal-class stop (not inject; not ISO-INSTALL-OK)",
         );
@@ -12971,11 +13046,12 @@ unsafe fn handle_wrmsr() -> bool {
             // KANI-TARGET: guest-UEFI WRMSR HostPassthrough (outside Proven Core).
             cpu::wrmsr(msr, v);
             if guest_uefi_wrmsr_syscall_passthrough(msr) {
-                serial::write_str("boot: guest-UEFI linux syscall WRMSR index=0x");
-                write_hex(u64::from(msr));
-                serial::write_str(" val=0x");
-                write_hex(v);
-                serial::write_line(" (passthrough; not ISO-INSTALL-OK)");
+                // nowait: earlycon share hushes write_str (nested 659bb41).
+                serial::write_str_nowait("boot: guest-UEFI linux syscall WRMSR index=0x");
+                write_hex_nowait(u64::from(msr));
+                serial::write_str_nowait(" val=0x");
+                write_hex_nowait(v);
+                serial::write_line_nowait(" (passthrough; not ISO-INSTALL-OK)");
             }
         }
         _ => {}
