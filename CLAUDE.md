@@ -172,6 +172,16 @@ module/
 - **Explicit state machines.** Use enum-based states, not boolean flags.
 - **Clean ownership.** Every allocation has a documented owner. Every reference has a clear lifetime.
 - **Defensive code.** Early assertions, explicit error paths. Panic > silent corruption.
+- **No third-party firmware state mutation [ADR-016].** Never force or rewrite a
+  guest/foreign firmware's internal control state (stack frames, forced returns,
+  advancing RIP past a check, poking a gState, injecting a fault to steer flow)
+  to manufacture forward progress. We do not own its invariants; forcing one
+  violates the next. Drive guests only through **architected inputs**: interrupts,
+  device register/DMA responses, memory the spec says is ours, and documented ABI
+  returns. Tell for this smell in review/history: a fix described as "force X to
+  return / skip its check / poke its state / inject a fault to unstick it" — that
+  is a self-inflicted wound (see ADR-016, the `3k–3o` OVMF WaitForEvent chain).
+  If you own the firmware (RayNu-F), you signal the wait; you do not corrupt one.
 
 ### Invariant Documentation
 
@@ -288,6 +298,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 013   | Management Network Architecture        | Native NIC + smoltcp for lifetime HTTP (E3b); Stage 1 0–G closed; shared LOM accepted; SNP bring-up only |
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
 | 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed; 9474ab6 state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; firmware WFE event #PF; do not claim ISO-INSTALL-OK |
+| 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 

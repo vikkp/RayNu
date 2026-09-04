@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-03
+last_updated: 2026-09-04
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | Iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; #229 firmware WFE event #PF. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. State4 poke closed. |
-| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b–3n FAIL / 3o IN PROGRESS). Not Everest E5. |
+| Summary | Iron COM2 4e16b59 event #PF inject fired OVMF own #PF + CpuDeadLoop still ataio=0; confirmed 3k–3o was self-inflicted (forcing OVMF internal state). **Pivot ADR-016: be the guest firmware ourselves — RayNu-F** (own EFI system table + boot services; skeleton `raynu_f/`); 3k–3o forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); No third-party firmware state mutation. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. OVMF forcing family closed; RayNu-F scaffold (`RAYNU-V-RAYNU-F-SCAFFOLD-OK`), not the iron OK. |
+| Gates touched | Stage 46 OPEN (ladder 3a DONE / 3b–3o FAIL → pivot RayNu-F). ADR-016 + governance (No third-party firmware state mutation). Not Everest E5. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -369,12 +369,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
-| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return/ZeroMem-EPT/WFE-RIP-skip/state4-poke closed (`9474ab6` poke then `#PF cr2=-0x48` HV stop). Do not resume #231 for `COMMAND.IO`. Close path #229 firmware WFE event #PF. Do not F11 `33817483733` / `33815993163` / `33757018875` / `33753069821` / `33701350767` / `33699177232` / `33697154185` / `33695570769` / `33630723649` / `33627470674` / `33575888121` / `33573126367` / `33571164257` / `33569757025` / `33567464001` / `33562028442` / `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. |
+| H9 | PR #231 IdeBus/SCI fork | LOW | **Parked** 2026-09-01 (ADR-015). Tip `8024439` stays parked. COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return/ZeroMem-EPT/WFE-RIP-skip/state4-poke/event-#PF closed. **Pivot ADR-016: be the guest firmware ourselves (RayNu-F); whole OVMF forcing family closed after `4e16b59` inject fired OVMF own #PF + CpuDeadLoop; forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION).** Do not resume #231 for `COMMAND.IO`. Do not F11 `33820727776` / `33817483733` / `33815993163` / `33757018875` / `33753069821` / `33701350767` / `33699177232` / `33697154185` / `33695570769` / `33630723649` / `33627470674` / `33575888121` / `33573126367` / `33571164257` / `33569757025` / `33567464001` / `33562028442` / `33559849096` / `33558261624` / `33555104832` / `33440050729`. Do not flash `8024439`. |
 
 ---
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Iron COM2 4e16b59 event #PF inject fired OVMF own #PF + CpuDeadLoop still ataio=0; pivot ADR-016 be the guest firmware (RayNu-F scaffold); 3k–3o OVMF forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); No third-party firmware state mutation; do not F11 33820727776; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; #229 firmware WFE event #PF; do not F11 33817483733; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 d0e44d4 WFE skip len=12 rip=0x7ff0e7e8 still ataio=0 (mov rax,3); #229 firmware WFE state4 poke; do not F11 33815993163; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-03 | e5-stage46-iso | 0.5 | 95 | Iron COM2 c8d504d ZeroMem ept fill never printed (0x34 is preempt not EPT) still ataio=0; #229 firmware WFE preempt skip; do not F11 33757018875; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

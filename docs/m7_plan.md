@@ -296,8 +296,13 @@ cr2=0xffffffffffffffb8` `rip=0x7ff0e018`). Do not flash
 `6c4bfde` / `--run 33699177232`,
 `2d4ab51` / `--run 33697154185`, `27eda8c` / `--run 33695570769`,
 `118edcf`, `7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or `8024439`.
-Next is firmware WFE event #PF. 3b Linux `ACPI=` is blocked
-on `ataio>0`. Still not `ISO-INSTALL-OK`.
+`4e16b59` / `--run 33820727776` event `#PF` inject fired OVMF's own
+`#PF` + `CpuDeadLoop` — do not F11 it. **Pivot (ADR-016): be the guest
+firmware ourselves — RayNu-F** (own EFI system table + boot services
+over virtio-blk/CD; boot the ISO's `\EFI\BOOT\BOOTX64.EFI`). The
+`3k–3o` OVMF forcing is disabled (`RAYNU_F_NO_FW_STATE_MUTATION`);
+next proof is RayNu-F boot services on nested/QEMU, not an OVMF poke.
+Still not `ISO-INSTALL-OK`.
 
 Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
 (prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux

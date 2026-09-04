@@ -31,8 +31,32 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 
 ---
 
+## Pivot: RayNu-F (ADR-016)
+
+The `3k–3o` chain (`e0d5c55` → `4e16b59`) all shared one defect: **it mutated
+OVMF's own internal state to force progress** (force-return without `*Index`,
+gState poke, event-`#PF` inject). Each forced step created the next hang;
+`4e16b59` made OVMF's own handler `#PF` + `CpuDeadLoop`. That is a
+self-inflicted-wound generator (we do not own OVMF's invariants).
+
+**Decision (ADR-016): be the guest firmware ourselves — RayNu-F.** Present our
+own `EFI_SYSTEM_TABLE` + boot services (BlockIo/SimpleFileSystem over
+virtio-blk + CD, LoadImage/StartImage, serial ConIn/ConOut, memory services,
+an owned timer tick) and boot the ISO's own `\EFI\BOOT\BOOTX64.EFI`. We author
+every structure, so there is no third-party firmware state to corrupt, and
+every wait completes because *we* signal it. The retained-OVMF VMLAUNCH stays
+as a read-only diagnostic/fallback with forcing disabled
+(`RAYNU_F_NO_FW_STATE_MUTATION`). Skeleton: [`raynu_f/`](../raynu_f/mod.rs)
+(`RAYNU-V-RAYNU-F-SCAFFOLD-OK`, not `ISO-INSTALL-OK`). Fast harness is
+nested/QEMU (already reaches ATAPI-OK); reserve iron flashes for
+iron-specific confirmation.
+
 ## Stop rules
 
+- **Do not mutate third-party firmware internal state** (force returns, skip its
+  checks, poke gState, inject faults to steer flow). That is the `3k–3o` wound
+  (ADR-016). Own the firmware (RayNu-F) and signal the wait instead.
+- Do not F11 `4e16b59` / `--run 33820727776` (event `#PF` inject → OVMF own `#PF` + `CpuDeadLoop`; still `ataio=0`).
 - Do not F11 `9474ab6` / `--run 33817483733` (state4 poke `dest=0x7ff18340` then `#PF cr2=0xffffffffffffffb8` `rip=0x7ff0e018`; HV `#PF MMIO skip` stopped; still `ataio=0`).
 - Do not F11 `d0e44d4` / `--run 33815993163` (WFE skip `len=12 rip=0x7ff0e7e8` then same spin; skip lands on `mov rax,3`; still `ataio=0`).
 - Do not F11 `c8d504d` / `--run 33757018875` (ZeroMem ept fill never printed; `0x34` is preempt not EPT; noskip `endbr64+cmp [rip],4`; still `ataio=0`).
@@ -87,7 +111,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | 3l | **FAIL** | COM2 of `c8d504d` ZeroMem ept fill | Fill **never printed**. Last ticks are preempt `0x34` (`preempt noskip` `endbr64+cmp [rip],4` then `rip=0x7ec8f639`). Still `ataio=0`. |
 | 3m | **FAIL** | COM2 of `d0e44d4` WFE preempt skip | Skip **hit** (`len=12 rip=0x7ff0e7e8`). Same insn re-entered. Skip-12 is `mov rax,3` (not-ready). Still `ataio=0`. |
 | 3n | **FAIL** | COM2 of `9474ab6` state4 poke | Poke **hit** (`dest=0x7ff18340`). Then `#PF cr2=0xffffffffffffffb8` `rip=0x7ff0e018` (`cmp [r14-0x48], 'evnt'`). HV `#PF MMIO skip` stopped. Still `ataio=0`. |
-| 3o | **IN PROGRESS** | Deliver that firmware event `#PF` | Print `firmware WFE event #PF`. Do not Stop. Do not skip the signature cmp. |
+| 3o | **FAIL (pivot)** | COM2 of `4e16b59` event `#PF` inject | Inject **fired**: OVMF's own handler dumped a real `#PF cr2=0xffffffffffffffb8 rip=0x7ff0e018` then `CpuDeadLoop`. Still `ataio=0`. This confirmed the `3k–3o` chain was self-inflicted corruption (forcing OVMF internal state). **Pivot: RayNu-F (ADR-016).** Forcing disabled. |
 | 4 | BLOCKED | Linux stays up | `Linux version` then `/init` or `~#` |
 | 5 | BLOCKED | `setup-disk` sees the disk | `/dev/vda`, not `No disks available`. Fail here → virtio, not #231. |
 | 6 | OPEN | Installer writes GPT | COM2 `RAYNU-V-M7-ISO-INSTALL-OK` |
@@ -117,6 +141,7 @@ Host/CI never prints the iron marker. One SHA per failed COM2 step.
 | `c8d504d` | ZeroMem ept fill never printed (`0x34` is preempt, not EPT `0x30`). `preempt noskip` `endbr64+cmp [rip],4` then `rip=0x7ec8f639`. Still `ataio=0`. **ZeroMem EPT fill closed as diagnosis.** |
 | `d0e44d4` | WFE skip `len=12 rip=0x7ff0e7e8`. Same entry re-entered (`spin jmp skip`). Skip-12 lands on `mov rax,3`. Still `ataio=0`. **RIP skip of this cmp closed.** |
 | `9474ab6` | State4 poke `dest=0x7ff18340`. Then `#PF cr2=0xffffffffffffffb8` `rip=0x7ff0e018` (`cmp [r14-0x48], 'evnt'`). HV `#PF MMIO skip — RIP left 32MiB RAM` then stop. Still `ataio=0`. **State4 poke closed.** |
+| `4e16b59` | Event `#PF` inject fired: OVMF's own handler dumped a real `#PF cr2=0xffffffffffffffb8 rip=0x7ff0e018` then `CpuDeadLoop`. Still `ataio=0`. Confirmed `3k–3o` was self-inflicted (forcing OVMF internal state). **Whole forcing family closed — pivot to RayNu-F (ADR-016).** |
 
 HLT policy is exhausted. COMMAND is closed. CF8/ROM diagnostics are
 closed (`romwr=0xfffffffe`). Nested `cmdwr=0` / ParseBar is not the
@@ -159,9 +184,17 @@ RIP is report-RAM, not the 32 MiB hole). Still `ataio=0`. This
 Do not F11 `9474ab6`. Do not F11 `d0e44d4`. Do not F11 `c8d504d`.
 Do not F11 `e0d5c55`. Do not flash `3b1cf51`.
 
-Next proof: `firmware WFE event #PF cr2=0x……`, then `ataio>0` or a
-new hang. Still not `ISO-INSTALL-OK`. After step 6, E5 can close.
-TLS and guest console stay residual; they are not this ladder.
+`4e16b59` delivered that `#PF` to firmware: OVMF's own handler dumped a
+real `#PF` then `CpuDeadLoop`. That closed the whole forcing family —
+each forced step corrupted the next. **We pivoted to RayNu-F (ADR-016).**
+Do not F11 `4e16b59`, `9474ab6`, `d0e44d4`, `c8d504d`, `e0d5c55`.
+
+Next proof is **not** another OVMF poke. It is RayNu-F standing up its
+own boot services (system table → serial console → memory services →
+owned timer tick → BlockIo/SimpleFileSystem over virtio-blk+CD →
+LoadImage/StartImage of the ISO's `\EFI\BOOT\BOOTX64.EFI`), proven on
+nested/QEMU first, then iron. Still not `ISO-INSTALL-OK`. TLS and guest
+console stay residual; they are not this ladder.
 
 ---
 
