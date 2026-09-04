@@ -113,11 +113,13 @@ jobs:
             done
             [[ "$ok" -eq 1 ]]
           elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
-            echo "KVM without host VMX — boot gate allows VMXON-SKIP"
-            REQUIRE_VMX=0 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
+            # No nested VT-x on this runner: the guest-UEFI leg (and RayNu-F)
+            # cannot run. RAYNU_F=1 is still staged for consistency.
+            echo "KVM without host VMX — boot gate allows VMXON-SKIP (RayNu-F F2b not exercised)"
+            RAYNU_F=1 REQUIRE_VMX=0 QEMU_ACCEL=kvm ./tools/qemu-boot-test.sh
           else
-            echo "KVM not usable — TCG boot gate allows VMXON-SKIP"
-            REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
+            echo "KVM not usable — TCG boot gate allows VMXON-SKIP (RayNu-F F2b not exercised)"
+            RAYNU_F=1 REQUIRE_VMX=0 QEMU_ACCEL=tcg ./tools/qemu-boot-test.sh
           fi
       - name: Upload serial log
         if: always()
