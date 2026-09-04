@@ -3638,6 +3638,8 @@ static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
 static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
 /// Non-success service returns logged so far (bounded).
 static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
+/// CPUID exits taken on the RayNu-F path (first 8 are logged).
+static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
 /// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
 static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
@@ -6793,6 +6795,38 @@ unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
             guest_uefi_vmresume();
         }
         EXIT_REASON_EXTERNAL_INTERRUPT | EXIT_REASON_INTERRUPT_WINDOW => {
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_CPUID => {
+            // CPUID always exits under VMX (SDM 25.1.2). GRUB's first one is
+            // `grub_tsc_init` probing leaf 1 (nested 7ee3a3b+F6-prep stopped
+            // here at rip=0xbb8ef7). Same firmware-phase filter as the OVMF
+            // leg; this is a loader running on our tables, not Linux yet.
+            let leaf = SAVED_RAX as u32;
+            let sub = SAVED_RCX as u32;
+            let k = RAYNU_F_CPUID_LOGGED.fetch_add(1, Ordering::AcqRel);
+            if k < 8 {
+                serial::write_str("boot: RayNu-F CPUID leaf=0x");
+                write_hex(u64::from(leaf));
+                serial::write_str(" sub=0x");
+                write_hex(u64::from(sub));
+                serial::write_str(" rip=0x");
+                write_hex(rip);
+                serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+            }
+            let r = guest_uefi_filter_cpuid(leaf, sub);
+            SAVED_RAX = u64::from(r.eax);
+            SAVED_RBX = u64::from(r.ebx);
+            SAVED_RCX = u64::from(r.ecx);
+            SAVED_RDX = u64::from(r.edx);
+            // `0F A2` is two bytes; trust the VMCS length when it says so.
+            let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+                Ok(l) if (1..=15).contains(&l) => l,
+                _ => 2,
+            };
+            if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
+                raynu_f_stop("cpuid-skip");
+            }
             guest_uefi_vmresume();
         }
         EXIT_REASON_EXCEPTION_NMI => {
