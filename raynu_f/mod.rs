@@ -19,7 +19,9 @@
 //! a guest calls it. Not yet: a PE loader or a launch, so no guest has called
 //! it. It is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
 
+pub mod events;
 pub mod launch_plan;
+pub mod memory;
 pub mod pe;
 pub mod services;
 pub mod tables;
@@ -31,11 +33,31 @@ mod raynu_f_test;
 
 pub use services::{
     decode_trampoline, dispatch, encode_trampoline, is_service_call, output_string,
-    trampoline_slot_gpa, write_trampolines, ConsoleSink, Dispatched, GuestMem, ServiceArgs,
-    ServiceId, EFI_INVALID_PARAMETER, EFI_NOT_READY, EFI_SUCCESS, EFI_UNSUPPORTED,
+    trampoline_slot_gpa, write_trampolines, ConsoleSink, Dispatched, FirmwareState, GuestMem,
+    ServiceArgs, ServiceId, EFI_INVALID_PARAMETER, EFI_NOT_READY, EFI_SUCCESS, EFI_UNSUPPORTED,
     OUTPUT_STRING_CAP_CHARS, RAYNU_F_SERVICE_PORT, TRAMPOLINE_SLOT_BYTES,
     TRAMPOLINE_SLOT_COUNT,
 };
+pub use events::{TimeSource, WaitOutcome};
+pub use testapp::{TESTAPP_HLT_FAIL_OFF, TESTAPP_HLT_OK_OFF};
+
+/// Serial marker the hypervisor prints the first time a live guest's
+/// `WaitForEvent` returns because a **timer event fired on our clock**.
+/// Guest-exit-only — never printed by host/CI unit tests.
+pub const RAYNU_F_TIMER_OK_MARKER: &str = "RAYNU-V-RAYNU-F-TIMER-OK";
+
+/// Serial marker on the first live guest `AllocatePages`/`AllocatePool`
+/// success. Guest-exit-only.
+pub const RAYNU_F_MEM_OK_MARKER: &str = "RAYNU-V-RAYNU-F-MEM-OK";
+
+/// Serial marker when a live guest's `ExitBootServices` succeeds with a valid
+/// map key. Guest-exit-only. Reserved for a real loader/kernel (F5/F6).
+pub const RAYNU_F_EBS_OK_MARKER: &str = "RAYNU-V-RAYNU-F-EBS-OK";
+
+/// Host / CI marker when the F3 gate passes: memory services, events/timers,
+/// TPL, Stall, CopyMem/SetMem/CalculateCrc32 against a mock guest + manual
+/// clock, and the v2 test app round-trips. Host only.
+pub const RAYNU_F_SERVICES_OK_MARKER: &str = "RAYNU-V-RAYNU-F-SERVICES-OK";
 pub use tables::{
     build_firmware_image, crc32, header_crc_valid, BuildError, FirmwareImageLayout,
     IMAGE_BYTES,
@@ -65,7 +87,7 @@ pub const RAYNU_F_CONOUT_OK_MARKER: &str = "RAYNU-V-RAYNU-F-CONOUT-OK";
 
 /// Honest residual. RayNu-F Stage 1 is tables + console dispatcher; the E5
 /// path is being-the-firmware (ADR-016), not a shipped installer.
-pub const RAYNU_F_RESIDUAL_NOTE: &str = "RayNu-F Stage 1 (ADR-016): be the guest UEFI firmware ourselves; byte-exact UEFI 2.10 x64 EFI_SYSTEM_TABLE + EFI_BOOT_SERVICES (44) + EFI_RUNTIME_SERVICES (14) + SIMPLE_TEXT_OUTPUT/INPUT with valid header CRC32 and L\"RayNu-F\" vendor; every fn ptr is a 14-byte guest trampoline (mov r10,rdx; mov eax,id; mov dx,0x5246; out dx,eax; ret) so a call is an I/O exit handled outside the Proven Core (no VMCALL); host-side dispatcher implements ConOut.OutputString/Reset/TestString + no-op cursor/attribute; ConIn.ReadKeyStroke EFI_NOT_READY; boot/runtime services EFI_UNSUPPORTED (honest, not faked); wired into guest-firmware emulate_io_port; no PE loader yet; no launch yet; no guest has called it; RAYNU-V-RAYNU-F-CONOUT-OK prints only on a live guest call; drive guests only through architected inputs (No third-party firmware state mutation); retained-OVMF VMLAUNCH stays diagnostic with 3k-3o forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); not ISO-INSTALL-OK; last_commit stays 2b795a0";
+pub const RAYNU_F_RESIDUAL_NOTE: &str = "RayNu-F F3 (ADR-016): be the guest UEFI firmware ourselves; byte-exact UEFI 2.10 x64 EFI_SYSTEM_TABLE + EFI_BOOT_SERVICES (44) + EFI_RUNTIME_SERVICES (14) + SIMPLE_TEXT_OUTPUT/INPUT with valid header CRC32 and L\"RayNu-F\" vendor; every fn ptr is a 14-byte guest trampoline (mov r10,rdx; mov eax,id; mov dx,0x5246; out dx,eax; ret) so a call is an I/O exit handled outside the Proven Core (no VMCALL); F2b closed on nested VT-x raynuvsrv1 (RAYNU-V-RAYNU-F-CONOUT-OK, exits=2); F3 host-proven: AllocatePages/FreePages/AllocatePool/FreePool over a 20 MiB slab pool, coalesced GetMemoryMap + ExitBootServices map-key, CreateEvent/SetTimer/CheckEvent/WaitForEvent/SignalEvent/CloseEvent on an owned host-side firmware clock (TSC calibrated against a pre-EBS UEFI Stall; no guest IDT/PIT/LAPIC needed in the firmware phase), TPL, Stall, GetNextMonotonicCount, SetWatchdogTimer, CalculateCrc32, CopyMem, SetMem, ConIn.WaitForKey real event + ReadKeyStroke from host serial RX; notify-function dispatch, event groups, handles/protocols/LoadImage/StartImage and runtime services are EFI_UNSUPPORTED (honest, F4/F5); pool is page-granular; v2 test app Stall→CreateEvent→SetTimer→WaitForEvent→AllocatePages→OutputString with OK/FAIL hlt addresses; RAYNU-V-RAYNU-F-TIMER-OK / MEM-OK print only on a live guest call; drive guests only through architected inputs (No third-party firmware state mutation); retained-OVMF VMLAUNCH stays diagnostic with 3k-3o forcing disabled (RAYNU_F_NO_FW_STATE_MUTATION); not ISO-INSTALL-OK; last_commit stays 2b795a0";
 
 /// Boot-service surface RayNu-F must provide to an ISO's own EFI loader.
 /// Ordered roughly by bring-up dependency. This is the contract we own — the
@@ -100,12 +122,15 @@ pub const RAYNU_F_PLANNED_PROTOCOLS: [GuestFwProtocol; 7] = [
     GuestFwProtocol::LoadStartImage,
 ];
 
-/// Protocols whose **tables/dispatch** exist after Stage 1. "Implemented"
-/// here means host-testable code that a guest call would reach — not that a
-/// guest has run it. Everything else is still planned.
-pub const RAYNU_F_STAGE1_PROTOCOLS: [GuestFwProtocol; 2] = [
+/// Protocols whose **tables/dispatch** exist after F3. "Implemented" here
+/// means host-testable code that a guest call reaches. F2b proved
+/// SystemTable + ConsoleSerial on a live guest; MemoryServices + TimerTick
+/// are host-proven and await the F3 nested run.
+pub const RAYNU_F_STAGE1_PROTOCOLS: [GuestFwProtocol; 4] = [
     GuestFwProtocol::SystemTable,
     GuestFwProtocol::ConsoleSerial,
+    GuestFwProtocol::MemoryServices,
+    GuestFwProtocol::TimerTick,
 ];
 
 /// Whether a protocol has Stage 1 tables/dispatch behind it.

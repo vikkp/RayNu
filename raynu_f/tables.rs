@@ -113,10 +113,13 @@ pub enum BuildError {
     BaseUnaligned,
 }
 
-/// IEEE 802.3 CRC32 (reflected, poly `0xEDB88320`, init/xorout `0xFFFFFFFF`)
-/// — the same CRC UEFI table headers and `CalculateCrc32` use.
-pub fn crc32(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0xFFFF_FFFF;
+/// Incremental CRC32 state (IEEE 802.3, reflected, poly `0xEDB88320`).
+pub const fn crc32_start() -> u32 {
+    0xFFFF_FFFF
+}
+
+/// Feed bytes into an incremental CRC32.
+pub fn crc32_feed(mut crc: u32, data: &[u8]) -> u32 {
     for &b in data {
         crc ^= u32::from(b);
         for _ in 0..8 {
@@ -124,8 +127,21 @@ pub fn crc32(data: &[u8]) -> u32 {
             crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
         }
     }
+    crc
+}
+
+/// Finalize an incremental CRC32.
+pub const fn crc32_finish(crc: u32) -> u32 {
     !crc
 }
+
+/// IEEE 802.3 CRC32 — the same CRC UEFI table headers and `CalculateCrc32` use.
+pub fn crc32(data: &[u8]) -> u32 {
+    crc32_finish(crc32_feed(crc32_start(), data))
+}
+
+/// `ConIn->WaitForKey` is event slot 0 (pre-created in `FirmwareState`).
+pub const CONIN_WAIT_KEY_EVENT: u64 = super::events::EVENT_HANDLE_TAG;
 
 fn put_u32(buf: &mut [u8], off: usize, v: u32) {
     buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
@@ -235,8 +251,9 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
     }
     put_u64(buf, co + SIMPLE_TEXT_OUTPUT_MODE_PTR_OFF, layout.con_out_mode);
 
-    // SIMPLE_TEXT_INPUT_PROTOCOL (WaitForKey is a null event for now:
-    // RayNu-F owns event semantics later; a NULL here is honest, not a fake).
+    // SIMPLE_TEXT_INPUT_PROTOCOL. WaitForKey is a real (opaque, tagged)
+    // event handle: slot 0, pre-created in `FirmwareState::new()`, signaled
+    // when host serial RX has a byte.
     let ci = IMAGE_CONIN_OFF;
     put_u64(buf, ci, trampoline_slot_gpa(layout.trampolines, ServiceId::ConInReset));
     put_u64(
@@ -244,7 +261,7 @@ pub fn build_firmware_image(base: u64, buf: &mut [u8]) -> Result<FirmwareImageLa
         ci + 8,
         trampoline_slot_gpa(layout.trampolines, ServiceId::ConInReadKeyStroke),
     );
-    put_u64(buf, ci + 16, 0);
+    put_u64(buf, ci + 16, CONIN_WAIT_KEY_EVENT);
 
     // EFI_BOOT_SERVICES: every slot points at its own trampoline id so a
     // guest call is attributable even before the service is implemented.

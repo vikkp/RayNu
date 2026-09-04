@@ -8,9 +8,55 @@
 //!
 //! Pillar: [Z] · Proven Core: **outside** (ADR-002)
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 static REQUESTED: AtomicBool = AtomicBool::new(false);
+/// TSC ticks per second, calibrated pre-EBS against a UEFI `Stall`. 0 = none.
+static TSC_HZ: AtomicU64 = AtomicU64::new(0);
+
+/// Calibration window (microseconds) for the pre-EBS `Stall`.
+pub const TSC_CALIB_STALL_US: u64 = 10_000;
+/// Reject calibrations outside [200 MHz, 10 GHz] — a bad firmware Stall.
+pub const TSC_HZ_MIN: u64 = 200_000_000;
+pub const TSC_HZ_MAX: u64 = 10_000_000_000;
+
+/// RayNu-F's clock rate (TSC Hz), or 0 if never calibrated.
+#[inline]
+pub fn tsc_hz() -> u64 {
+    TSC_HZ.load(Ordering::Acquire)
+}
+
+/// Derive Hz from a TSC delta over `TSC_CALIB_STALL_US`; `None` if implausible.
+pub fn tsc_hz_from_delta(delta: u64) -> Option<u64> {
+    let hz = delta.saturating_mul(1_000_000 / TSC_CALIB_STALL_US);
+    if (TSC_HZ_MIN..=TSC_HZ_MAX).contains(&hz) {
+        Some(hz)
+    } else {
+        None
+    }
+}
+
+/// Host tests only.
+#[cfg(test)]
+pub fn force_tsc_hz_for_test(hz: u64) {
+    TSC_HZ.store(hz, Ordering::Release);
+}
+
+/// Decimal formatter for pre-EBS serial (no `alloc`).
+pub fn fmt_dec(mut v: u64, buf: &mut [u8; 20]) -> &str {
+    let mut i = buf.len();
+    if v == 0 {
+        i -= 1;
+        buf[i] = b'0';
+    }
+    while v > 0 {
+        i -= 1;
+        buf[i] = b'0' + (v % 10) as u8;
+        v /= 10;
+    }
+    // SAFETY-free: digits are ASCII.
+    core::str::from_utf8(&buf[i..]).unwrap_or("?")
+}
 
 /// Flag path (namespaced like `paperverbose.txt`, ADR-011).
 pub const RAYNU_F_FLAG_PATH: &str = "\\EFI\\RayNu\\raynuf.txt";
@@ -49,6 +95,26 @@ pub fn probe() {
     if fs.read(p.as_ref()).is_ok() {
         REQUESTED.store(true, Ordering::Release);
         crate::boot::serial::write_line(RAYNU_F_REQUESTED_MARKER);
+        // Owned firmware clock: calibrate TSC against the platform's Stall
+        // while boot services are still alive.
+        let t0 = crate::arch::cpu::rdtsc();
+        boot::stall(TSC_CALIB_STALL_US as usize);
+        let t1 = crate::arch::cpu::rdtsc();
+        match tsc_hz_from_delta(t1.wrapping_sub(t0)) {
+            Some(hz) => {
+                TSC_HZ.store(hz, Ordering::Release);
+                let mut buf = [0u8; 20];
+                let s = fmt_dec(hz, &mut buf);
+                crate::boot::serial::write_str("boot: RayNu-F tsc_hz=");
+                crate::boot::serial::write_str(s);
+                crate::boot::serial::write_line(" (pre-EBS Stall calibration)");
+            }
+            None => {
+                crate::boot::serial::write_line(
+                    "boot: RayNu-F WARN tsc calibration implausible; clock falls back to 1 GHz",
+                );
+            }
+        }
     }
 }
 
