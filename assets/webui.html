@@ -165,7 +165,8 @@ function show(p){document.querySelectorAll("[data-pg]").forEach(function(el){el.
 document.querySelectorAll("nav [data-go]").forEach(function(el){el.onclick=function(){show(el.getAttribute("data-go"))}});
 async function listVms(){
 setS("Listing…");
-const res=await api("GET",A);hostOk=res.ok;
+let res;try{res=await api("GET",A)}catch(e){hostOk=false;setS("List failed");paint();return}
+hostOk=res.ok;
 if(!res.ok){setS("List failed ("+res.status+")");paint();return}
 const out=[];
 for(let i=0;i<known.length;i++){
