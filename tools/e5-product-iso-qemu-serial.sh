@@ -104,6 +104,10 @@ grep -E -n 'Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|l
   "$SERIAL_LOG" | grep -v -E 'failed to rename' | head -n 60 || true
 tail -n 40 "$SERIAL_LOG" || true
 
+if grep -qF 'Installation is complete. Please reboot.' "$SERIAL_LOG"; then
+  echo "==> nested Alpine sys install completed to the RayNu-F virtio-blk disk (not ISO-INSTALL-OK; iron gate untouched; reboot-to-disk is F7)"
+fi
+
 if grep -qF 'RAYNU-V-M7-ISO-INSTALL-OK' "$SERIAL_LOG"; then
   echo "error: nested/host printed iron ISO-INSTALL-OK" >&2
   exit 1
