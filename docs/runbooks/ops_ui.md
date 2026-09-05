@@ -7,12 +7,14 @@
 
 M7.4 / E4 upgrades the embedded SPA for operator MVP over lab HTTP:
 
-1. Form: guest id, CPU, RAM MiB, disk MiB, ISO id, image type (`linux_iso` / `windows_iso` / `generic_uefi`; none = E4 SHELL)  
-2. REST: `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}` and optional `/{linux_iso|windows_iso|generic_uefi}` (ADR-014 Stage 0; `iso=0` stays SHELL)  
-3. Media: `GET /images`, `POST /iso/{id}/deploy` (extract-boot), `POST /iso/{id}/install`  
-4. Start / stop  
-5. **Host serial log:** `GET /logs/serial` + SPA panel (HV UART ring — not guest console)  
-6. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present  
+1. **Menus:** Overview · Guests · Media · Activity · Settings (Bearer token). Firmware-debug POSTs are not on the home screen.  
+2. **Status strip (plain language):** Host (API reachable) · RayNu-V (this control panel) · Guest (running / stopped / none) · Install media (idle / loading / attached). Green = working, yellow = in progress, red = could not answer.  
+3. Form: guest id, CPU, RAM MiB, disk MiB, ISO id, image type (`linux_iso` / `windows_iso` / `generic_uefi`; none = E4 SHELL)  
+4. REST: `POST /vms/{id}/spec/{cpu}/{ram}/{disk}/{iso}` and optional `/{linux_iso|windows_iso|generic_uefi}` (ADR-014 Stage 0; `iso=0` stays SHELL)  
+5. Media: `GET /images`, `POST /iso/{id}/deploy` (extract-boot), `POST /iso/{id}/install`  
+6. Start / stop  
+7. **Host serial log:** `GET /logs/serial` + SPA panel (HV UART ring — not guest console)  
+8. **Auth:** Bearer token field; ESP `EFI/RayNu/auth.token` overrides bring-up when present  
 
 ## Host smoke
 

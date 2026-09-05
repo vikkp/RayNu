@@ -44,7 +44,7 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
-| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
+| **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SPA menus + status strip; SHELL stub not distro; TLS/console residual |
 | **Deploy Linux ISO** | ~99% | Nested RayNu-F alpine-extended install + reboot-to-disk (`fe4785a`); iron `ISO-INSTALL-OK` open |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
@@ -111,11 +111,12 @@ All must be true (no hand-waving):
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
 | Embedded SPA list/start/stop | DONE | `assets/webui.html`, M5.2 |
+| Operator SPA (menus + status lights) | DONE (host) | Overview/Guests/Media/Activity; Host/RayNu-V/Guest/ISO lights; firmware-debug farm removed; not TLS / not guest console |
 | In-process REST shapes + auth token | DONE | `mgmt/api.rs` M5.1/M6.4 |
 | HTTP/1.1 codec + Bearer wire | DONE | `mgmt/http.rs` (M7.1 Latitude) |
 | Host TCP proof (loopback) | DONE | `mgmt/http_listen.rs` (M7.1 Latitude) |
 | Create-VM fields (CPU/RAM/disk/ISO) | DONE (host) | M7.4 SPA + `POST /vms/{id}/spec/...` Latitude smoke |
-| Datastore / ISO media buttons | DONE (host) | SPA → `/images`, `/iso/{id}/deploy` + install |
+| Datastore / ISO media | DONE (host) | SPA Media → `/images`, `/iso/{id}/deploy` + install + attach |
 | **UEFI NIC HTTP listen** | DONE (M7.6 iron) | `RAYNU-V-M7-UEFI-HTTP-OK` R640 SNP residual; [2026-08-16-uefi-http-ok.md](evidence/r640/2026-08-16-uefi-http-ok.md) |
 | PRE-EBS durable mgmt tables | DONE | `pre_ebs_mgmt` shared across HTTP exchanges |
 | TLS | DEFERRED | plaintext lab HTTP (ADR-009) |
@@ -349,10 +350,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-stage46-iso |
-| Summary | **F7 nested reboot-to-disk re-proven with reset lines (`088ab25`, raynuvsrv1).** `guest reset requested src=kbc n=1` → `relaunch after reset` → GPT ESP `lba=2048` → whole-disk Vendor path → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second `Linux version` with `root=UUID=ddf8714c-2542-4469-958c-3e439b1c669f` → second shell + `cat /proc/cmdline`. Alpine rebooted via i8042 `0x64<-0xFE` (KBC), not `0xCF9`/FADT (kernel runs `efi=noruntime`). Harness: `nested reboot-to-disk reached a second Linux boot`. Nested QEMU ≠ R640. E5 closes only on iron `ISO-INSTALL-OK`. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested-only evidence must not drop months. |
-| Gates touched | RayNu-F F7 host surfaces (`RAYNU-V-M7-E5-RAYNU-F-F7-OK`); F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Commit | spa-sleek-status |
+| Summary | **Operator SPA restyle.** Menus (Overview/Guests/Media/Activity/Settings); Host / RayNu-V / Guest / Install-media lights + plain-language story; firmware-debug button farm removed. Size still `webui_len()+256 ≤ 16384`. Not TLS; not guest console; not `ISO-INSTALL-OK`. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. UI polish does not close E5 or TLS. |
+| Gates touched | M5.2 / M7.4 SPA string + size gates (`RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M7-UI-OK`). |
 | Months Δ | 0.5→0.5 |
 
 
@@ -376,6 +377,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-05 | spa-sleek-status | 0.5 | 95 | Operator SPA restyle: menus + Host/RayNu-V/Guest/ISO status lights; firmware-debug farm removed; `webui_len()+256 ≤ 16384`; not TLS / not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `088ab25` F7 re-run on raynuvsrv1: `guest reset requested src=kbc n=1` + `relaunch after reset` now visible; Alpine `reboot` used i8042 `0x64<-0xFE` (not CF9/FADT; `efi=noruntime`); GPT ESP lba=2048 → `DISK-BOOT-OK` → second Linux `root=UUID=ddf8714c-…` → second `localhost:~#`; evidence file added; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `fe4785a` F7 reboot-to-disk on raynuvsrv1: `DISK-BOOT-OK` + second Linux `root=UUID=698a922a-…` (ext4 /dev/vda2, ESP /dev/vda1, second localhost:~#); harness nested reboot-to-disk line; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
