@@ -149,6 +149,100 @@ pub fn pick_conventional_region_prefer(
     best_pref.or(best_any)
 }
 
+/// Largest conventional span whose usable start is at or above `above`.
+///
+/// Stage 46 iron product-ISO: CMOS reports 2 GiB LowMemory but the HV pool
+/// stays in `[1MiB, PRECISE)` so E4 identity is unchanged. Leftover
+/// conventional DRAM above PRECISE backs guest-UEFI report-RAM (GPA≠HPA,
+/// ADR-004). Nested / `iso=0` do not call this.
+pub fn pick_conventional_region_above(
+    regions: &[(u64, u64)],
+    min_pages: u64,
+    above: u64,
+) -> Option<(u64, u64)> {
+    const ONE_MIB: u64 = 1024 * 1024;
+    let floor = core::cmp::max(above, ONE_MIB);
+    let mut best: Option<(u64, u64)> = None;
+    for &(start, pages) in regions {
+        let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
+        let usable_start = core::cmp::max(start, floor);
+        if usable_start >= end {
+            continue;
+        }
+        let usable_pages = (end - usable_start) / PAGE_SIZE;
+        if usable_pages < min_pages {
+            continue;
+        }
+        match best {
+            None => best = Some((usable_start, usable_pages)),
+            Some((_, best_pages)) if usable_pages > best_pages => {
+                best = Some((usable_start, usable_pages));
+            }
+            _ => {}
+        }
+    }
+    best
+}
+
+/// Like [`pick_conventional_region_above`], but among spans ≥ `want_pages`
+/// pick the **lowest** usable start (leftover just above PRECISE, not the
+/// 4 GiB+ 61 GiB region). If none that large, pick the largest ≥ `min_pages`.
+pub fn pick_conventional_region_above_prefer(
+    regions: &[(u64, u64)],
+    want_pages: u64,
+    min_pages: u64,
+    above: u64,
+) -> Option<(u64, u64)> {
+    const ONE_MIB: u64 = 1024 * 1024;
+    let floor = core::cmp::max(above, ONE_MIB);
+    let mut best_want: Option<(u64, u64)> = None;
+    let mut best_min: Option<(u64, u64)> = None;
+    for &(start, pages) in regions {
+        let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
+        let usable_start = core::cmp::max(start, floor);
+        if usable_start >= end {
+            continue;
+        }
+        let usable_pages = (end - usable_start) / PAGE_SIZE;
+        if usable_pages < min_pages {
+            continue;
+        }
+        match best_min {
+            None => best_min = Some((usable_start, usable_pages)),
+            Some((_, best_pages)) if usable_pages > best_pages => {
+                best_min = Some((usable_start, usable_pages));
+            }
+            _ => {}
+        }
+        if usable_pages >= want_pages {
+            match best_want {
+                None => best_want = Some((usable_start, usable_pages)),
+                Some((best_start, _)) if usable_start < best_start => {
+                    best_want = Some((usable_start, usable_pages));
+                }
+                _ => {}
+            }
+        }
+    }
+    best_want.or(best_min)
+}
+
+/// Sum of conventional pages whose usable start is at or above `above`.
+pub fn conventional_pages_above(regions: &[(u64, u64)], above: u64) -> u64 {
+    const ONE_MIB: u64 = 1024 * 1024;
+    let floor = core::cmp::max(above, ONE_MIB);
+    let mut n = 0u64;
+    for &(start, pages) in regions {
+        let end = start.saturating_add(pages.saturating_mul(PAGE_SIZE));
+        let usable_start = core::cmp::max(start, floor);
+        if usable_start >= end {
+            continue;
+        }
+        n = n.saturating_add((end - usable_start) / PAGE_SIZE);
+    }
+    n
+}
+
 #[cfg(test)]
 #[path = "mem_test.rs"]
 mod mem_test;

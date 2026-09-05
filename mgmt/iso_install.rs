@@ -10,6 +10,8 @@
 //! [`M7_ISO_BOOTED_FROM_DISK_MARKER`] on COM2 (documented equivalent of
 //! [`M7_ISO_INSTALL_OK_MARKER`]; host/CI must **never** print the iron OK).
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
@@ -38,6 +40,710 @@ pub const ISO_INSTALL_MVP_NOTE: &str =
 /// Honesty: scaffold cannot invent iron install evidence.
 pub const ISO_INSTALL_HOST_LIMIT_NOTE: &str =
     "Latitude/QEMU host smoke cannot close RAYNU-V-M7-ISO-INSTALL-OK; real install proof required";
+
+/// Stage 46: El Torito on a product CD continues; not install-OK.
+///
+/// INVARIANTS:
+/// - `true` only when El Torito evidence ran **and** the CD is not the lab stub
+/// - Never implies [`M7_ISO_INSTALL_OK_MARKER`]
+pub fn product_iso_continues_past_eltorito(lab_stub: bool, eltorito_ran: bool) -> bool {
+    eltorito_ran && !lab_stub
+}
+
+/// Host/CI must never print the iron Everest E5 marker.
+pub fn stage46_host_never_prints_iso_install_ok() -> bool {
+    M7_ISO_INSTALL_OK_MARKER == "RAYNU-V-M7-ISO-INSTALL-OK"
+        && M7_ISO_INSTALL_SCAFFOLD_MARKER != M7_ISO_INSTALL_OK_MARKER
+        && M7_ISO_BOOTED_FROM_DISK_MARKER != M7_ISO_INSTALL_OK_MARKER
+}
+
+/// True when `len` arms the product ISO ATAPI window (not the 72 KiB lab stub).
+pub fn product_iso_len_is_window(len: usize) -> bool {
+    len > crate::devices::ide_cdrom::GUEST_CD_ISO_CAP && len <= PRODUCT_ISO_MAX_BYTES
+}
+
+/// After guest-UEFI, stay there instead of packed-bzImage E4.
+///
+/// INVARIANTS:
+/// - `true` only when the product ISO window is armed
+/// - Lab 73728 stub / `iso=0` stays `false` (E4 `LINUX-EARLY` still runs)
+pub fn stage46_hold_e4_shell() -> bool {
+    crate::devices::ide_cdrom::product_iso_window_armed()
+}
+
+/// ESP paths probed PRE-EBS for a distro ISO (not the 1 KiB persist stamp).
+pub const PRODUCT_ISO_ESP_PATHS: &[&str] = &[
+    "\\EFI\\RayNu\\linux.iso",
+    "\\linux.iso",
+    "\\EFI\\RayNu\\install.iso",
+];
+
+/// Cap a product ISO so PRE-EBS AllocatePages cannot consume the map.
+pub const PRODUCT_ISO_MAX_BYTES: usize = 0x8000_0000;
+
+/// Serial when ESP retained a window-sized ISO. Not `ISO-INSTALL-OK`.
+pub const M7_STAGE46_PRODUCT_ISO_ESP_NOTE: &str =
+    "boot: Stage 46 product ISO retained from ESP (not ISO-INSTALL-OK)";
+
+/// Serial when ESP has no window-sized ISO — lab El Torito stub.
+pub const M7_STAGE46_PRODUCT_ISO_MISSING_NOTE: &str =
+    "boot: Stage 46 no product ISO on ESP — lab El Torito stub";
+
+/// Serial when product ISO is armed and E4 SHELL is not entered.
+pub const M7_STAGE46_HOLD_E4_NOTE: &str =
+    "boot: Stage 46 product ISO hold (not ISO-INSTALL-OK); not E4 SHELL";
+
+static mut PRODUCT_ISO_PTR: *const u8 = core::ptr::null();
+static mut PRODUCT_ISO_LEN: usize = 0;
+
+/// Same-length swap so Alpine/GRUB gets serial + virtio-blk, and still loads squashfs.
+/// `squashfs,sd-mod,usb-storage quiet` → `squashfs,virtio_blk console=ttyS0`
+/// `modules=loop,squashfs,virtio_blk` stays a valid list (Alpine mkinitfs needs
+/// squashfs in `modules=` to mount the live root / modloop; virtio_blk so
+/// `/dev/vda` and `/dev/vdb` appear when the virt drivers are modules).
+/// `console=ttyS0` is a kernel param. Product ISO xAPIC is trap-and-emulate
+/// (`lapic_virt` CUR_COUNT + EOI), so `nolapic` is no longer required.
+/// Device IRQs stay on IOAPIC GSI 17/18 and PCI line 11. Optional
+/// `console=tty0` → `noapic` when that string exists. alpine-virt media is
+/// `/dev/vdb`. Does not grow the ISO. Does not print [`M7_ISO_INSTALL_OK_MARKER`].
+pub const ISO_SERIAL_CONSOLE_FROM: &[u8] = b"squashfs,sd-mod,usb-storage quiet";
+pub const ISO_SERIAL_CONSOLE_TO: &[u8] = b"squashfs,virtio_blk console=ttyS0";
+const _: () = assert!(ISO_SERIAL_CONSOLE_FROM.len() == ISO_SERIAL_CONSOLE_TO.len());
+/// alpine-virt GRUB `"Linux virt"` stanza. Grow the linux line into the
+/// ISO9660 NUL pad after `}\n` so the E4 timer skip fits:
+/// `lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll`
+/// plus `earlycon=uart8250,io,0x3f8` plus `usbdelay=30` plus
+/// `virtio_pci` in `modules=` so initramfs loads the PCI transport before
+/// `nlplug-findfs` plus `initcall_blacklist=piix_init` so the
+/// built-in `ata_piix` `module_init(piix_init)` device_initcall does not
+/// `ata_msleep` after `Freeing initrd` if PCI hide/floating-bus miss.
+/// Linux 6.12 `drivers/ata/ata_piix.c` registers `piix_init`, not
+/// `ata_piix_init` (`initcall_blacklist=` matches kallsyms). Four trailing
+/// FROM/TO length 277 / Data Length 302 (was 269/294 before `efi=noruntime`). linux-line virtio_pci.
+/// linux-line efi=noruntime: RayNu-F (ADR-016) has no runtime services after
+/// EBS; nested `5a9e8e4` triple-faulted inside `efi_enter_virtual_mode`
+/// before reaching our `SetVirtualAddressMap` trampoline. Linux keeps the
+/// EFI memory map and config tables (ACPI later) and skips virtual mode.
+/// linux-line ata_piix blacklist. linux-line piix_init blacklist. Same-length 33-byte swap
+/// cannot add those without dropping `loop` or `virtio_blk`.
+/// Nested `f1afc27` sat in `delay_loop` (`48ffc875fb`); iron COM2 after
+/// leftover+#PF froze HPET during the 0x4000 CPUID walk, so a preemption
+/// skip may never fire and `time_init` / TSC vs HPET calibrate would hang
+/// even after hypervisor-hide. Iron `73c2cab` logged `hypervisor-scan bump`
+/// then COM2 ended with no `Linux version` — `console=ttyS0` is late;
+/// earlycon prints through the 16550 from `start_kernel`. alpine-virt 3.21.3
+/// `grub.cfg` ISO9660 Data Length is 143; the sector has ~1905 NULs after
+/// `}\n`. Growing into that pad without bumping Data Length truncates
+/// GRUB's read at `tsc=` (unclosed `{`, no `initrd`) → `out of memory` /
+/// `syntax error` / rescue `grub>` (iron COM2 after El Torito
+/// `bootimg=1`). [`bump_iso9660_grub_cfg_size`] raises PVD + Joliet
+/// length to [`ISO_GRUB_CFG_PATCHED_SIZE`]. linux-line alpine_dev=vdb.
+/// linux-line usbdelay.
+/// Iron COM2 cmdline after
+/// El Torito had `modules=loop,squashfs,virtio_blk console=ttyS0 lpj=`
+/// `earlycon=` and **no** `alpine_dev=` — alpine-virt `grub.cfg` never
+/// contains `alpine_dev=cdrom` so that 16-byte swap is 0 hits. After
+/// linux high-half hides PIIX, `nlplug-findfs` without `-b vdb` can wait
+/// on ATAPI/`sr0`. alpine-virt 3.21 mkinitfs 3.11 `myopts` has `usbdelay`
+/// not `alpine_dev`; `nlplug-findfs -b` is the repositories file. Same-length
+/// swap `alpine_dev=vdb` → `usbdelay=30   ` (14 bytes) so the media wait is
+/// 30s not 5s. Initramfs
+/// `modules=` is `loop,squashfs,virtio_pci,virtio_blk` so `virtio_pci`
+/// binds `00:02.0`/`00:03.0` before `virtio_blk` creates `/dev/vdb`.
+/// Media is virtio-iso `00:03.0`. linux-line ata_piix blacklist.
+/// linux-line piix_init blacklist.
+/// flashcruzer reject 2d6b109 dest skip (`6fc742b0` / run `33321642509` is not F11).
+/// auto-answer / # without login (3.21 `/init` emergency shell has no getty).
+/// product ISO POST_DXE_TAIL skip (iron `2d6b109` `stop n=33297` `sectors=0`).
+/// emergency mount+exit (initramfs has no `setup-disk`).
+/// linux-line usbdelay (3.21 mkinitfs `myopts` has no `alpine_dev`).
+/// 0xAF00 PM timer (iron `8663f56` dest_ok then `IN EAX,DX` Delay).
+/// flash 084430f (CI run `33337287432`; do not F11 `8663f56`).
+/// 0xB000 dword timer (Delay after SCI_EN may be IoRead32 of PMBA+0).
+/// firmware PIC before GSI 2 (BDS CpuSleep needs PIC IRQ 0).
+/// HLT stall quiet tick print-only (iron `084430f` BOTH-OK then HLT `0x7f0680d0` `ataio=0`; nested `9ce65ae` ATAPI-OK missing after quiet skipped `cpu_flush`).
+/// firmware HLT ignores TPR (iron `084430f` inject `vec=0x20` only after CR8).
+/// firmware HLT stall waits for IRQ (inject on HLT stall after BOTH-OK `ataio=0`).
+/// firmware virtual-wire PIC (iron `beb1576` `pic=0 gsi2=0` IF=1 TPR=0).
+/// firmware virtual-wire AEOI (OVMF IDT[0x20] EOIs LAPIC not PIC; do not F11 `eac424b`).
+/// firmware virtual-wire GSI 2 (iron `eac424b` PIC inject then CR8 CpuSleep).
+/// firmware HLT force IF (CpuSleep is `hlt` without `sti`).
+/// firmware HLT skip after inject (hardware wakeup; iron COM2 eac424b IRET-to-HLT; do not F11 `8e81c2e`).
+/// firmware HLT activity active (skip RIP while activity HLT parks RET; do not F11 `daf3195`).
+/// firmware LAPIC timer expiry (HLT-exiting never lets CUR_COUNT hit 0; do not F11 `b26c86a`).
+/// flash 2ae4544 (CI run `33345731636`; do not F11 `b26c86a` / `084430f`).
+/// IOAPIC I/O over PIT (virtual-wire pin 2 would starve ATA 14 after CpuSleep).
+/// firmware virtual-wire GSI 14 (PACKET IRQ 14 unmasked to vec 0x2E).
+/// flash 5c0f7a2 (CI run `33347766697`; do not F11 `2ae4544`).
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// flash d61dc7e (CI run `33349142609`; do not F11 `5c0f7a2`).
+/// flash b824789 (CI run 33387614559; do not F11 d61dc7e).
+/// flash ea30da1 (CI run 33389381409; do not F11 b824789).
+/// flash 56f31d3 (CI run 33392055961; do not F11 ea30da1 / a2acfc8).
+/// do not F11 56f31d3 (scsi@3 first was not an El Torito boot option).
+/// flash 90da03d (CI run 33394776080; El Torito ide@ first).
+/// firmware HLT skip after ataio (PACKET HLT after ataio>0 still skips + Active).
+/// firmware skip PIT inject (ATA 14 / virtio INTx still inject; not PIT 0x20).
+/// do not F11 90da03d (ataio==0 skip parked PACKET HLT at RET).
+/// do not F11 e70a295 (skip-without-inject blocked ATA 14).
+/// flash 77f5866 (CI run 33399209557; firmware skip PIT inject).
+/// firmware force IF for inject (PACKET nIEN=0 after ataio>0 still needs IF).
+/// do not F11 77f5866 (skip-PIT IF=0 after PACKET never injected ATA 14).
+/// retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199).
+/// flash 5227ad9 (CI run 33404368817; firmware force IF for inject).
+/// firmware arm ATA GSI 14 (wait_for_irq false never unmasked pin 14).
+/// flash 489d938 (CI run 33408594472; firmware arm ATA GSI 14).
+/// firmware prefer ATA IRR (PACKET 0x2E ignores TPR; not take_highest_irr).
+/// firmware ATA over PIC (HLT raise_pit PIC IRQ 0 must not skip pin 14 or latched 0x2E).
+/// firmware ATA IRR only (do not take_highest_irr LVT 0xEF before PACKET).
+/// firmware take IOAPIC ATA (do not latch virtio/UART into IRR that ata_irr_only will not inject).
+/// IOAPIC edge no remote IRR (PACKET after IDENTIFY without IOAPIC EOI).
+/// retrigger cdbee39 CI after nested-KVM kill-init (33417361559).
+/// flash bce5bbb (CI run 33411580450; firmware prefer ATA IRR).
+/// flash eaa580d (CI run 33413425759; firmware ATA over PIC).
+/// flash 12926eb (CI run 33415083012; firmware ATA over PIC keeps latched 0x2E).
+/// flash 0bb06a2 (CI run 33418246409; firmware ATA IRR only).
+/// flash 30b78a0 (CI run 33422323257; firmware take IOAPIC ATA).
+/// flash 8e581c7 (CI run 33424573770; IOAPIC edge no remote IRR).
+/// flash d7d63ca (CI run 33426291731; firmware PIC ATA).
+/// flash e4faceb (CI run 33429494930; firmware OVMF ATA vector).
+/// flash a14223f (CI run 33436232227; do not clobber PIC ICW2).
+/// flash 3b7bbac (CI run 33433126839; leftover IOAPIC 0x2E).
+/// retrigger 5a69de2 CI after nested-KVM kill-init (33430294210).
+/// retrigger 0d36b53 CI after nested ATAPI miss (33437881901).
+/// do not F11 3b7bbac (PIC ICW2 clobber IRQ 14 0x26).
+/// do not F11 e4faceb (leftover IOAPIC 0x2E after PIC remap).
+/// do not F11 d7d63ca (PIC ATA clobbers IOAPIC ATA to 0x2E).
+/// do not F11 8e581c7 (PIC unmask never reached take_pic).
+/// firmware PIC ATA (take PIC 0x2E when the 8259 can deliver it).
+/// firmware PIC ATA ICW2. firmware PIC ATA AEOI.
+/// firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E.
+/// do not clobber PIC ICW2.
+/// PIC ATA vector follows ICW2.
+/// firmware HLT insn_len 0 skip.
+/// do not F11 30b78a0 (take IOAPIC ATA with edge remote IRR).
+/// do not F11 0bb06a2 (ATA IRR only without take IOAPIC ATA).
+/// do not F11 12926eb (take_highest_irr LVT 0xEF before PACKET).
+/// do not F11 eaa580d (same-cycle ATA over PIC; next HLT steals PIC 0x20).
+/// do not F11 bce5bbb (prefer ATA IRR; PIC IRQ 0 starves 0x2E).
+/// do not F11 489d938 (arm GSI 14 TPR-stuck 0x2E).
+/// do not F11 5227ad9 (force-IF pin 14 still masked).
+/// flash e70a295 (CI run 33397104645; firmware HLT skip after ataio).
+/// skip-after-inject uses pci_ready (hide-IDE virtio enum).
+/// product ISO HLT stall before n=16384 (do not F11 ea30da1 / a2acfc8).
+/// firmware HLT skip without inject (iron COM2 ea30da1 inject vec=0x20 timer ISR;
+/// do not F11 a2acfc8 / --run 33391068937).
+/// product ISO hides PIIX IDE (iron COM2 `d61dc7e` ConnectAll CpuSleep; un-hidden).
+/// Not `ISO-INSTALL-OK`.
+pub const ISO_GRUB_LINUX_FROM: &[u8] =
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+pub const ISO_GRUB_LINUX_TO: &[u8] =
+    b"\"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime \ninitrd\t/boot/initramfs-virt\n}\n";
+const _: () = assert!(ISO_GRUB_LINUX_FROM.len() == ISO_GRUB_LINUX_TO.len());
+const fn trailing_zero_count(s: &[u8]) -> usize {
+    let mut n = 0usize;
+    let mut i = s.len();
+    while i > 0 {
+        i -= 1;
+        if s[i] == 0 {
+            n += 1;
+        } else {
+            break;
+        }
+    }
+    n
+}
+/// Copy `s` into a NUL-padded `[u8; N]` (ISO9660 sector tail after `}\n`).
+const fn nul_pad<const N: usize>(s: &[u8]) -> [u8; N] {
+    assert!(s.len() <= N);
+    let mut out = [0u8; N];
+    let mut i = 0usize;
+    while i < s.len() {
+        out[i] = s[i];
+        i += 1;
+    }
+    out
+}
+/// alpine-standard 3.21.3 GRUB `"Linux lts"` stanza (`vmlinuz-lts` /
+/// `initramfs-lts`). Same grow as [`ISO_GRUB_LINUX_TO`] with the same kernel
+/// params; only the kernel/initrd names differ (3 bytes shorter per name,
+/// so Data Length 140 → 299 rather than 143 → 302). Nested proof of
+/// `USE_EFI=1 BOOTLOADER=grub` uses alpine-standard because alpine-virt's
+/// on-media `apks` lacks `grub-efi` / `dosfstools`; without this variant the
+/// grow is 0 hits and the kernel boots with only the 33-byte same-length swap
+/// (no `virtio_pci`, no `initcall_blacklist=piix_init`, no `efi=noruntime`)
+/// and stalls after `Freeing initrd`. linux-line lts stanza.
+pub const ISO_GRUB_LINUX_LTS_TO: &[u8] =
+    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll earlycon=uart8250,io,0x3f8 usbdelay=30 initcall_blacklist=piix_init efi=noruntime \ninitrd\t/boot/initramfs-lts\n}\n";
+const ISO_GRUB_LINUX_LTS_STANZA: &[u8] =
+    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-lts\n}\n";
+pub const ISO_GRUB_LINUX_LTS_FROM: &[u8] =
+    &nul_pad::<{ ISO_GRUB_LINUX_LTS_TO.len() }>(ISO_GRUB_LINUX_LTS_STANZA);
+const _: () = assert!(ISO_GRUB_LINUX_LTS_FROM.len() == ISO_GRUB_LINUX_LTS_TO.len());
+const _: () = assert!(ISO_GRUB_LINUX_LTS_TO.len() == ISO_GRUB_LINUX_TO.len() - 3);
+/// alpine-extended 3.21.3 GRUB `"Linux lts"` stanza: same kernel, but the
+/// initrd line is `/boot/intel-ucode.img /boot/amd-ucode.img
+/// /boot/initramfs-lts` (Data Length 182, LBA 385833). The grow rewrites it
+/// to [`ISO_GRUB_LINUX_LTS_TO`] (Data Length 182 → 299): the two ucode
+/// cpios are dropped because Linux skips early microcode when
+/// `X86_FEATURE_HYPERVISOR` is set and a guest must not WRMSR 0x79 anyway.
+/// alpine-extended is the only official x86_64 ISO whose on-media `apks`
+/// carries `grub-efi` + `dosfstools` (+ `grub`, `efibootmgr`, `mtools`);
+/// alpine-standard 3.21.3 does **not** (nested `a0a824d`: lts grow applied,
+/// shell + SETUP + `setup-disk` ran, apk `no such package` for both).
+/// linux-line extended stanza.
+const ISO_GRUB_LINUX_EXT_STANZA: &[u8] =
+    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-lts\n}\n";
+pub const ISO_GRUB_LINUX_EXT_FROM: &[u8] =
+    &nul_pad::<{ ISO_GRUB_LINUX_LTS_TO.len() }>(ISO_GRUB_LINUX_EXT_STANZA);
+const _: () = assert!(ISO_GRUB_LINUX_EXT_FROM.len() == ISO_GRUB_LINUX_LTS_TO.len());
+const _: () = assert!(ISO_GRUB_LINUX_EXT_STANZA.len() > ISO_GRUB_LINUX_LTS_STANZA.len());
+/// alpine-virt 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
+pub const ISO_GRUB_CFG_ORIG_SIZE: u32 = 143;
+/// After the linux-line grow consumes the NUL pad past the original `}\n`.
+pub const ISO_GRUB_CFG_PATCHED_SIZE: u32 =
+    ISO_GRUB_CFG_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_FROM) as u32;
+/// alpine-standard 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length
+/// (LBA 8181; the sector has 1908 NULs after `}\n`).
+pub const ISO_GRUB_CFG_LTS_ORIG_SIZE: u32 = 140;
+/// alpine-standard Data Length after the lts linux-line grow.
+pub const ISO_GRUB_CFG_LTS_PATCHED_SIZE: u32 =
+    ISO_GRUB_CFG_LTS_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_LTS_FROM) as u32;
+/// alpine-extended 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
+pub const ISO_GRUB_CFG_EXT_ORIG_SIZE: u32 = 182;
+/// alpine-extended Data Length after the grow (same TO as standard → 299).
+pub const ISO_GRUB_CFG_EXT_PATCHED_SIZE: u32 =
+    ISO_GRUB_CFG_EXT_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_EXT_FROM) as u32;
+const _: () = assert!(ISO_GRUB_CFG_EXT_PATCHED_SIZE == ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+/// `set timeout=1\n\nmenuentry ` (same length as `set timeout=0\n\nmenuentry `).
+const ISO_GRUB_CFG_PREFIX_LEN: usize = 25;
+const _: () = assert!(ISO_GRUB_LINUX_TO[ISO_GRUB_LINUX_TO.len() - 1] == b'\n');
+const _: () = assert!(ISO_GRUB_CFG_PATCHED_SIZE > ISO_GRUB_CFG_ORIG_SIZE);
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_TO.len() == ISO_GRUB_CFG_PATCHED_SIZE as usize
+);
+const _: () = assert!(ISO_GRUB_LINUX_LTS_TO[ISO_GRUB_LINUX_LTS_TO.len() - 1] == b'\n');
+const _: () = assert!(ISO_GRUB_CFG_LTS_PATCHED_SIZE > ISO_GRUB_CFG_LTS_ORIG_SIZE);
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_LTS_TO.len()
+        == ISO_GRUB_CFG_LTS_PATCHED_SIZE as usize
+);
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_LTS_STANZA.len()
+        == ISO_GRUB_CFG_LTS_ORIG_SIZE as usize
+);
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_EXT_STANZA.len()
+        == ISO_GRUB_CFG_EXT_ORIG_SIZE as usize
+);
+const _: () = assert!(ISO_GRUB_CFG_EXT_PATCHED_SIZE > ISO_GRUB_CFG_EXT_ORIG_SIZE);
+pub const ISO_GRUB_CFG_ISO9660_NAME: &[u8] = b"GRUB.CFG;1";
+/// Joliet UTF-16BE `grub.cfg` (no `;1` on this alpine-virt).
+pub const ISO_GRUB_CFG_JOLIET_NAME: &[u8] = b"\x00g\x00r\x00u\x00b\x00.\x00c\x00f\x00g";
+/// Exact alpine-virt 3.21.3 `grub.cfg` (ISO9660 Data Length 143).
+pub const ISO_GRUB_CFG_ALPINE_VIRT: &[u8] =
+    b"set timeout=1\n\nmenuentry \"Linux virt\" {\nlinux\t/boot/vmlinuz-virt modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-virt\n}\n";
+const _: () = assert!(ISO_GRUB_CFG_ALPINE_VIRT.len() == ISO_GRUB_CFG_ORIG_SIZE as usize);
+/// Exact alpine-standard 3.21.3 `grub.cfg` (ISO9660 Data Length 140, LBA 8181).
+pub const ISO_GRUB_CFG_ALPINE_STANDARD: &[u8] =
+    b"set timeout=1\n\nmenuentry \"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-lts\n}\n";
+const _: () = assert!(ISO_GRUB_CFG_ALPINE_STANDARD.len() == ISO_GRUB_CFG_LTS_ORIG_SIZE as usize);
+/// Exact alpine-extended 3.21.3 `grub.cfg` (ISO9660 Data Length 182, LBA 385833).
+pub const ISO_GRUB_CFG_ALPINE_EXTENDED: &[u8] =
+    b"set timeout=1\n\nmenuentry \"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-lts\n}\n";
+const _: () = assert!(ISO_GRUB_CFG_ALPINE_EXTENDED.len() == ISO_GRUB_CFG_EXT_ORIG_SIZE as usize);
+/// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
+pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";
+pub const ISO_TTY0_TO: &[u8] = b"noapic      ";
+const _: () = assert!(ISO_TTY0_FROM.len() == ISO_TTY0_TO.len());
+pub const ISO_GRUB_TIMEOUT_FROM: &[u8] = b"timeout=10";
+pub const ISO_GRUB_TIMEOUT_TO: &[u8] = b"timeout=0 ";
+const _: () = assert!(ISO_GRUB_TIMEOUT_FROM.len() == ISO_GRUB_TIMEOUT_TO.len());
+/// Modern alpine-virt GRUB is `set timeout=1`, not `timeout=10`.
+/// Apply **after** `timeout=10` so `set timeout=10` does not become `set timeout=00`.
+pub const ISO_GRUB_TIMEOUT1_FROM: &[u8] = b"set timeout=1";
+pub const ISO_GRUB_TIMEOUT1_TO: &[u8] = b"set timeout=0";
+const _: () = assert!(ISO_GRUB_TIMEOUT1_FROM.len() == ISO_GRUB_TIMEOUT1_TO.len());
+/// After an sr-mod swap (other ISOs): load PIIX IDE so `/dev/sr0` can attach.
+/// 0 hits on alpine-virt after the `noapic` swap — that path uses virtio-iso.
+pub const ISO_ATA_PIIX_FROM: &[u8] = b"loop,squashfs,sr-mod";
+pub const ISO_ATA_PIIX_TO: &[u8] = b"ata_piix,loop,sr-mod";
+const _: () = assert!(ISO_ATA_PIIX_FROM.len() == ISO_ATA_PIIX_TO.len());
+/// GRUB EFI often binds GOP (`gfxterm`) and never prints `GNU GRUB` on COM1.
+/// Same-length swap onto `serial` when those strings exist (0 hits is fine).
+pub const ISO_GRUB_GFXTERM_FROM: &[u8] = b"terminal_output gfxterm";
+pub const ISO_GRUB_GFXTERM_TO: &[u8] = b"terminal_output serial ";
+/// Some alpine-virt GRUB cfg uses `console` rather than `gfxterm`. 0 hits OK.
+pub const ISO_GRUB_TERM_CONSOLE_FROM: &[u8] = b"terminal_output console";
+pub const ISO_GRUB_TERM_CONSOLE_TO: &[u8] = b"terminal_output serial ";
+const _: () = assert!(ISO_GRUB_TERM_CONSOLE_FROM.len() == ISO_GRUB_TERM_CONSOLE_TO.len());
+const _: () = assert!(ISO_GRUB_GFXTERM_FROM.len() == ISO_GRUB_GFXTERM_TO.len());
+pub const ISO_GRUB_INSMOD_GFX_FROM: &[u8] = b"insmod gfxterm";
+pub const ISO_GRUB_INSMOD_GFX_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_GFX_FROM.len() == ISO_GRUB_INSMOD_GFX_TO.len());
+/// GRUB EFI `load_video` pulls GOP/UGA. Guest-UEFI has no GOP; insmod can stall.
+/// 0 hits is fine. Same length as `insmod gfxterm`.
+pub const ISO_GRUB_INSMOD_GOP_FROM: &[u8] = b"insmod efi_gop";
+pub const ISO_GRUB_INSMOD_GOP_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_GOP_FROM.len() == ISO_GRUB_INSMOD_GOP_TO.len());
+pub const ISO_GRUB_INSMOD_UGA_FROM: &[u8] = b"insmod efi_uga";
+pub const ISO_GRUB_INSMOD_UGA_TO: &[u8] = b"insmod serial ";
+const _: () = assert!(ISO_GRUB_INSMOD_UGA_FROM.len() == ISO_GRUB_INSMOD_UGA_TO.len());
+/// GRUB `load_video` may `insmod all_video` instead of efi_gop. 0 hits OK.
+pub const ISO_GRUB_INSMOD_ALLVID_FROM: &[u8] = b"insmod all_video";
+pub const ISO_GRUB_INSMOD_ALLVID_TO: &[u8] = b"insmod serial   ";
+const _: () = assert!(ISO_GRUB_INSMOD_ALLVID_FROM.len() == ISO_GRUB_INSMOD_ALLVID_TO.len());
+/// alpine-virt `nlplug-findfs -b cdrom` waits for ATAPI. Point it at virtio
+/// ISO `/dev/vdb` when that string exists on other ISOs. alpine-virt 3.21.3
+/// `grub.cfg` has no `alpine_dev=cdrom` (0 hits); the grown linux line
+/// carries `alpine_dev=vdb` instead. Not `ISO-INSTALL-OK`.
+pub const ISO_ALPINE_DEV_FROM: &[u8] = b"alpine_dev=cdrom";
+pub const ISO_ALPINE_DEV_TO: &[u8] = b"alpine_dev=vdb  ";
+const _: () = assert!(ISO_ALPINE_DEV_FROM.len() == ISO_ALPINE_DEV_TO.len());
+
+/// Patch a product ISO so the installer kernel uses `console=ttyS0`, PIC, and virtio media.
+///
+/// INVARIANTS:
+/// - Replacements are the same length as the originals
+/// - Hits must sit in an ASCII neighborhood (do not rewrite gzip in vmlinuz).
+///   ISO9660 NUL padding is allowed on either side; some printable cfg text
+///   must sit next to the needle.
+/// - Returns the number of replacements (0 = nothing patched)
+pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
+    let grown = patch_same(bytes, ISO_GRUB_LINUX_FROM, ISO_GRUB_LINUX_TO);
+    let bumped = if grown > 0 {
+        bump_iso9660_grub_cfg_size(bytes, ISO_GRUB_CFG_ORIG_SIZE, ISO_GRUB_CFG_PATCHED_SIZE)
+    } else {
+        0
+    };
+    let grown_lts = patch_same(bytes, ISO_GRUB_LINUX_LTS_FROM, ISO_GRUB_LINUX_LTS_TO);
+    let bumped_lts = if grown_lts > 0 {
+        bump_iso9660_grub_cfg_size(
+            bytes,
+            ISO_GRUB_CFG_LTS_ORIG_SIZE,
+            ISO_GRUB_CFG_LTS_PATCHED_SIZE,
+        )
+    } else {
+        0
+    };
+    let grown_ext = patch_same(bytes, ISO_GRUB_LINUX_EXT_FROM, ISO_GRUB_LINUX_LTS_TO);
+    let bumped_ext = if grown_ext > 0 {
+        bump_iso9660_grub_cfg_size(
+            bytes,
+            ISO_GRUB_CFG_EXT_ORIG_SIZE,
+            ISO_GRUB_CFG_EXT_PATCHED_SIZE,
+        )
+    } else {
+        0
+    };
+    grown
+        .saturating_add(bumped)
+        .saturating_add(grown_lts)
+        .saturating_add(bumped_lts)
+        .saturating_add(grown_ext)
+        .saturating_add(bumped_ext)
+        .saturating_add(patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO))
+        .saturating_add(patch_same(bytes, ISO_ATA_PIIX_FROM, ISO_ATA_PIIX_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT1_FROM, ISO_GRUB_TIMEOUT1_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_GFXTERM_FROM, ISO_GRUB_GFXTERM_TO))
+        .saturating_add(patch_same(
+            bytes,
+            ISO_GRUB_TERM_CONSOLE_FROM,
+            ISO_GRUB_TERM_CONSOLE_TO,
+        ))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GFX_FROM, ISO_GRUB_INSMOD_GFX_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_GOP_FROM, ISO_GRUB_INSMOD_GOP_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_UGA_FROM, ISO_GRUB_INSMOD_UGA_TO))
+        .saturating_add(patch_same(bytes, ISO_GRUB_INSMOD_ALLVID_FROM, ISO_GRUB_INSMOD_ALLVID_TO))
+        .saturating_add(patch_same(bytes, ISO_ALPINE_DEV_FROM, ISO_ALPINE_DEV_TO))
+        .saturating_add(patch_same(bytes, ISO_TTY0_FROM, ISO_TTY0_TO))
+}
+
+fn iso_text_byte(b: u8) -> bool {
+    b == b'\t' || b == b'\n' || b == b'\r' || (0x20..=0x7e).contains(&b)
+}
+
+/// True when `from` sits in an ASCII neighborhood (GRUB/syslinux cfg).
+/// Whole-ISO search otherwise rewrites gzip inside `vmlinuz` and the EFI
+/// stub fails with `Decompression failed: uncompression error` (iron COM2
+/// after BdsDxe Start Boot0002 / `Linux virt`).
+///
+/// ISO9660 NUL padding may sit on **either** side (alpine-virt `grub.cfg`
+/// starts at a sector boundary after NULs, so `set timeout=1` has a NUL
+/// prefix). Non-NUL bytes must be printable ASCII. At least one printable
+/// byte must sit outside the needle so a hit in a sea of NULs is skipped.
+fn iso_text_context(bytes: &[u8], start: usize, len: usize) -> bool {
+    if start >= bytes.len() || start.saturating_add(len) > bytes.len() {
+        return false;
+    }
+    let lo = start.saturating_sub(16);
+    let hi = start.saturating_add(len).saturating_add(16).min(bytes.len());
+    let prefix = &bytes[lo..start];
+    let suffix = &bytes[start + len..hi];
+    let neigh_ok = prefix
+        .iter()
+        .chain(suffix.iter())
+        .copied()
+        .all(|b| iso_text_byte(b) || b == 0);
+    let has_text = prefix
+        .iter()
+        .chain(suffix.iter())
+        .copied()
+        .any(iso_text_byte);
+    neigh_ok && has_text
+}
+
+fn patch_same(bytes: &mut [u8], from: &[u8], to: &[u8]) -> u32 {
+    if from.len() != to.len() || from.is_empty() {
+        return 0;
+    }
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i + from.len() <= bytes.len() {
+        if bytes[i..i + from.len()] == *from && iso_text_context(bytes, i, from.len()) {
+            bytes[i..i + to.len()].copy_from_slice(to);
+            n = n.saturating_add(1);
+            i = i.saturating_add(to.len());
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    n
+}
+
+fn iso_dir_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
+    let b = bytes.get(off..off.saturating_add(4))?;
+    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+fn iso_dir_record_points_at_grub_cfg(bytes: &[u8], rec: usize) -> bool {
+    let Some(lba) = iso_dir_u32_le(bytes, rec.saturating_add(2)) else {
+        return false;
+    };
+    let off = (lba as usize).saturating_mul(2048);
+    let Some(head) = bytes.get(off..off.saturating_add(13)) else {
+        return false;
+    };
+    head == b"set timeout=1" || head == b"set timeout=0"
+}
+
+/// Raise `grub.cfg` ISO9660 + Joliet Data Length after the linux line grew
+/// into the sector NUL pad. GRUB reads `Data Length` bytes, not the whole
+/// sector, so a 143-byte (virt) / 140-byte (standard) record hides `initrd`
+/// / `}` and drops to rescue `grub>`.
+///
+/// INVARIANTS:
+/// - Only records named [`ISO_GRUB_CFG_ISO9660_NAME`] / Joliet
+///   [`ISO_GRUB_CFG_JOLIET_NAME`] whose size is exactly `orig`
+///   ([`ISO_GRUB_CFG_ORIG_SIZE`], [`ISO_GRUB_CFG_LTS_ORIG_SIZE`] or
+///   [`ISO_GRUB_CFG_EXT_ORIG_SIZE`])
+///   and whose LBA starts with `set timeout=`
+/// - Writes both little-endian and big-endian size fields with `patched`
+/// - Does not print [`M7_ISO_INSTALL_OK_MARKER`]
+fn bump_iso9660_grub_cfg_size(bytes: &mut [u8], orig: u32, patched: u32) -> u32 {
+    debug_assert!(patched > orig);
+    let names: [&[u8]; 2] = [ISO_GRUB_CFG_ISO9660_NAME, ISO_GRUB_CFG_JOLIET_NAME];
+    let mut n = 0u32;
+    let mut i = 0usize;
+    while i.saturating_add(34) <= bytes.len() {
+        let namelen = bytes[i + 32] as usize;
+        let rec_len = bytes[i] as usize;
+        let name_off = i.saturating_add(33);
+        let matched = namelen > 0
+            && rec_len >= 33usize.saturating_add(namelen)
+            && i.saturating_add(rec_len) <= bytes.len()
+            && name_off.saturating_add(namelen) <= bytes.len()
+            && names.iter().any(|nm| *nm == &bytes[name_off..name_off + namelen])
+            && iso_dir_u32_le(bytes, i.saturating_add(10)) == Some(orig)
+            && iso_dir_record_points_at_grub_cfg(bytes, i);
+        if matched {
+            let new = patched.to_le_bytes();
+            let new_be = patched.to_be_bytes();
+            bytes[i + 10..i + 14].copy_from_slice(&new);
+            bytes[i + 14..i + 18].copy_from_slice(&new_be);
+            n = n.saturating_add(1);
+            i = i.saturating_add(rec_len.max(1));
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    n
+}
+
+/// Remember a window-sized ISO. Caller keeps `bytes` alive across EBS.
+///
+/// INVARIANTS:
+/// - Rejects lab stub size (`<= GUEST_CD_ISO_CAP`) and oversize
+/// - Does not print [`M7_ISO_INSTALL_OK_MARKER`]
+pub fn retain_product_iso_bytes(bytes: &[u8]) -> bool {
+    if !product_iso_len_is_window(bytes.len()) {
+        return false;
+    }
+    // SAFETY: single-threaded boot / host-test lock.
+    unsafe {
+        PRODUCT_ISO_PTR = bytes.as_ptr();
+        PRODUCT_ISO_LEN = bytes.len();
+    }
+    true
+}
+
+/// Bytes retained by [`retain_product_iso_bytes`] / PRE-EBS ESP probe.
+pub fn product_iso_retained_bytes() -> Option<&'static [u8]> {
+    // SAFETY: single-threaded boot / host-test lock; written once PRE-EBS.
+    unsafe {
+        if PRODUCT_ISO_LEN == 0 || PRODUCT_ISO_PTR.is_null() {
+            None
+        } else {
+            Some(core::slice::from_raw_parts(PRODUCT_ISO_PTR, PRODUCT_ISO_LEN))
+        }
+    }
+}
+
+/// Clear ESP retain (host tests).
+pub fn clear_product_iso_retain() {
+    // SAFETY: single-threaded boot / host-test lock.
+    unsafe {
+        PRODUCT_ISO_PTR = core::ptr::null();
+        PRODUCT_ISO_LEN = 0;
+    }
+}
+
+/// Present retained product ISO on the guest ATAPI function (no placeholder).
+pub fn present_product_iso_if_retained() -> bool {
+    let Some(bytes) = product_iso_retained_bytes() else {
+        return false;
+    };
+    crate::devices::ide_cdrom::present(bytes, 1)
+}
+
+/// Iron product-ISO virtio-blk (1 GiB). Nested prefers
+/// [`DEFAULT_INSTALL_DISK_BYTES`] (64 MiB) — lab ESP arm stays
+/// [`LAB_INSTALL_DISK_BYTES`].
+pub const PRODUCT_ISO_INSTALL_DISK_IRON_BYTES: usize = 1024 * 1024 * 1024;
+
+/// Install-disk size for the guest-UEFI virtio-pci backend when the window is armed.
+pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
+    if host_hypervisor {
+        // Nested RayNu-F / product-ISO: GPT + Alpine ESP need ≥64 MiB.
+        // Lab `isoinstall.txt` ESP arm still uses [`LAB_INSTALL_DISK_BYTES`].
+        DEFAULT_INSTALL_DISK_BYTES as usize
+    } else {
+        PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
+    }
+}
+
+/// Leftover-DRAM install disk (above PRECISE), carved **before** the
+/// report-RAM extra seed so the guest never sees these HPAs as RAM (they are
+/// reached only through virtio-blk / RayNu-F BlockIo; ADR-004 exclusivity).
+/// Host CR3 is the UEFI identity map, so the HV can back the disk there
+/// without growing the 512 MiB precise pool, where 64 MiB was the most a
+/// nested run could land (nested `c751fbe` alpine-extended: apk resolved
+/// grub-efi + dosfstools, `setup-disk` partitioned, then `No space left on
+/// device` on a 64 MiB disk with a 48 MiB ESP).
+static LEFTOVER_DISK_HPA: AtomicU64 = AtomicU64::new(0);
+static LEFTOVER_DISK_BYTES: AtomicU64 = AtomicU64::new(0);
+
+/// Sizes to carve from leftover DRAM, largest first.
+pub const LEFTOVER_DISK_TRY_BYTES: &[u64] = &[
+    1024 * 1024 * 1024,
+    512 * 1024 * 1024,
+    256 * 1024 * 1024,
+];
+/// Leftover that must remain for guest report-RAM after the carve. Alpine
+/// live root + modloop + apk cache sit in RAM alongside the 256 MiB high
+/// RAM; q35 below-4G conventional above PRECISE is ~1.44 GiB at `-m 4096M`,
+/// which yields a 512 MiB disk (1 GiB + 768 MiB does not fit).
+pub const LEFTOVER_DISK_GUEST_FLOOR_BYTES: u64 = 768 * 1024 * 1024;
+const LEFTOVER_DISK_ALIGN: u64 = 2 * 1024 * 1024;
+
+/// Split a leftover conventional span `[start, start+bytes)` into an install
+/// disk and the remainder for report-RAM.
+///
+/// Returns `(disk_hpa, disk_bytes, rest_start, rest_bytes)`; `disk_bytes == 0`
+/// (and the span unchanged) when no ladder size fits with the guest floor.
+///
+/// INVARIANTS:
+/// - `disk_hpa` is 2 MiB aligned and inside the span
+/// - `rest_start == disk_hpa + disk_bytes`; `rest_bytes >= LEFTOVER_DISK_GUEST_FLOOR_BYTES`
+/// - Never invents an HPA outside the span
+pub fn carve_leftover_install_disk(start: u64, bytes: u64) -> (u64, u64, u64, u64) {
+    let end = start.saturating_add(bytes);
+    let aligned = start
+        .saturating_add(LEFTOVER_DISK_ALIGN - 1)
+        & !(LEFTOVER_DISK_ALIGN - 1);
+    if aligned == 0 || aligned >= end {
+        return (0, 0, start, bytes);
+    }
+    let avail = end - aligned;
+    for &want in LEFTOVER_DISK_TRY_BYTES {
+        if avail >= want.saturating_add(LEFTOVER_DISK_GUEST_FLOOR_BYTES) {
+            let rest_start = aligned + want;
+            return (aligned, want, rest_start, end - rest_start);
+        }
+    }
+    (0, 0, start, bytes)
+}
+
+/// Record the carved disk for [`take_leftover_install_disk`]. `bytes == 0` clears.
+pub fn reserve_leftover_install_disk(hpa: u64, bytes: u64) {
+    LEFTOVER_DISK_HPA.store(hpa, Ordering::Release);
+    LEFTOVER_DISK_BYTES.store(bytes, Ordering::Release);
+}
+
+/// One-shot: hand the carved leftover disk to the virtio-blk attach, or `None`.
+pub fn take_leftover_install_disk() -> Option<(u64, usize)> {
+    let bytes = LEFTOVER_DISK_BYTES.swap(0, Ordering::AcqRel);
+    let hpa = LEFTOVER_DISK_HPA.swap(0, Ordering::AcqRel);
+    if hpa == 0 || bytes == 0 {
+        return None;
+    }
+    Some((hpa, bytes as usize))
+}
+
+/// HV frame-pool cap. `iso=0` / nested stay `[1MiB,256MiB)` so E4 BAR/shell
+/// stays free. Iron product-ISO **holds** (no E4 SHELL), so the pool can use
+/// the precise 512 MiB identity window and a 256 MiB virtio-blk fits.
+pub fn product_iso_frame_pool_prefer_end(product_iso: bool, host_hypervisor: bool) -> u64 {
+    if product_iso && !host_hypervisor {
+        crate::memory::PRECISE_BYTES
+    } else {
+        crate::guest::linux_boot::GUEST_RAM_BYTES
+    }
+}
+
+/// Contiguous sizes to try for the product-ISO virtio-blk, largest first.
+///
+/// Iron COM2: 1 GiB / 256 MiB / 64 MiB all failed after greedy 2 MiB
+/// report-RAM ate the `[1MiB,256MiB)` pool; only 1 MiB landed. Alpine
+/// sys-mode cannot write a usable GPT on 1 MiB. Guest-UEFI must reserve
+/// this disk **before** report-RAM so 64 MiB (the REST default) fits.
+/// Iron product-ISO raises the pool to 512 MiB. A 256 MiB disk lands when
+/// leftover DRAM backs report-RAM (scratch-only leave); a tighter precise
+/// pool still falls to 64 MiB. Nested (RayNu-F after Alpine shell) tries
+/// 256/64/32/16 then 1 MiB fallback — not locked at lab 1 MiB. iso=0 does
+/// not use this.
+pub fn product_iso_install_disk_try_sizes(host_hypervisor: bool) -> &'static [usize] {
+    if host_hypervisor {
+        &[
+            256 * 1024 * 1024,
+            DEFAULT_INSTALL_DISK_BYTES as usize,
+            32 * 1024 * 1024,
+            16 * 1024 * 1024,
+            LAB_INSTALL_DISK_BYTES as usize,
+        ]
+    } else {
+        &[
+            PRODUCT_ISO_INSTALL_DISK_IRON_BYTES,
+            256 * 1024 * 1024,
+            DEFAULT_INSTALL_DISK_BYTES as usize,
+            32 * 1024 * 1024,
+            16 * 1024 * 1024,
+            LAB_INSTALL_DISK_BYTES as usize,
+        ]
+    }
+}
 
 /// Phases toward E5 close (management-plane bookkeeping).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -385,6 +1091,70 @@ pub fn probe_iso_install_lab_flag() {
         serial::write_line(M7_ISO_INSTALL_LAB_ARM_NOTE);
     }
 }
+
+/// Probe ESP for a window-sized Linux/distro ISO (PRE-EBS).
+///
+/// Paths: [`PRODUCT_ISO_ESP_PATHS`]. Rejects the 72 KiB lab stub.
+/// Copies into `LOADER_DATA` so the bytes survive ExitBootServices
+/// (handoff takes CONVENTIONAL; LoaderData is not in the FrameAllocator pool).
+#[cfg(target_os = "uefi")]
+pub fn probe_product_linux_iso() {
+    use crate::boot::serial;
+    use uefi::boot::{self, AllocateType, MemoryType};
+    use uefi::fs::FileSystem;
+    use uefi::CString16;
+
+    // UEFI 2.10 §7.5.5: BDS arms a 5-minute watchdog before starting a boot
+    // option; expiry resets the platform. Reading + copying + patching a
+    // ~1 GiB alpine-extended from the ESP can exceed that (nested TCG
+    // `5043864` reset twice right after `M3-ASSETS-OK`). Disable it for the
+    // rest of the PRE-EBS phase; ExitBootServices clears it anyway.
+    // Best-effort: a firmware without the service still probes.
+    let _ = boot::set_watchdog_timer(0, 0x1_0000, None);
+    let image = boot::image_handle();
+    let Ok(sfs) = boot::get_image_file_system(image) else {
+        serial::write_line(M7_STAGE46_PRODUCT_ISO_MISSING_NOTE);
+        return;
+    };
+    let mut fs = FileSystem::new(sfs);
+    for path in PRODUCT_ISO_ESP_PATHS {
+        let Ok(p) = CString16::try_from(*path) else {
+            continue;
+        };
+        let Ok(data) = fs.read(p.as_ref()) else {
+            continue;
+        };
+        if !product_iso_len_is_window(data.len()) {
+            continue;
+        }
+        let pages = data.len().div_ceil(4096);
+        let Ok(ptr) =
+            boot::allocate_pages(AllocateType::AnyPages, MemoryType::LOADER_DATA, pages)
+        else {
+            continue;
+        };
+        // SAFETY: exclusive LOADER_DATA pages; copy then drop the Vec.
+        // Conventional leak would be reclaimed at ExitBootServices.
+        let leaked: &'static mut [u8] = unsafe {
+            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
+            core::slice::from_raw_parts_mut(ptr.as_ptr(), data.len())
+        };
+        let patched = patch_iso_linux_serial_console(leaked);
+        if retain_product_iso_bytes(leaked) {
+            serial::write_line(M7_STAGE46_PRODUCT_ISO_ESP_NOTE);
+            if patched != 0 {
+                serial::write_line(
+                    "boot: Stage 46 ISO serial console patched (not ISO-INSTALL-OK)",
+                );
+            }
+            return;
+        }
+    }
+    serial::write_line(M7_STAGE46_PRODUCT_ISO_MISSING_NOTE);
+}
+
+#[cfg(not(target_os = "uefi"))]
+pub fn probe_product_linux_iso() {}
 
 /// Second boot without `isoreboot.txt`: `installdisk.bin` and no write-flag.
 #[cfg(target_os = "uefi")]

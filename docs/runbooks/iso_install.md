@@ -139,6 +139,138 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
   installer is UEFI guest firmware + virtio ([ADR-014](../adr/ADR-014.md)), not
   another bzImage extract. Windows ISO is later; do not paint a Linux-only corner.
 
+## Stage 46 product ISO (OPEN — Everest E5)
+
+Not persist-detect `ISO-BOOTED-FROM-DISK`. Not the 72 KiB lab El Torito stub.
+Not extract-boot bzImage.
+
+Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
+(fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
+bytes. Nested `USE_EFI=1 BOOTLOADER=grub` proof: use `alpine-extended-*-x86_64.iso` (994 MiB) — listed from the ISOs, it is the only official x86_64 flavour whose on-media `apks` ships `grub-efi` + `dosfstools` (+ `grub`, `efibootmgr`, `mtools`). `alpine-virt` (63 MiB) and `alpine-standard` (245 MiB) do **not** (nested `a0a824d` on standard: patched cmdline, kernel → shell → SETUP → `setup-disk`, then apk `no such package` for both). Bare `…/apks` is the correct repo path; path alone cannot fix missing pkgs. The patcher handles three `grub.cfg` layouts: alpine-virt `"Linux virt"` / `vmlinuz-virt` (Data Length 143→302), alpine-standard `"Linux lts"` / `vmlinuz-lts` (140→299, LBA 8181) and alpine-extended `"Linux lts"` with `intel-ucode.img amd-ucode.img initramfs-lts` initrds (182→299, LBA 385833; the ucode cpios are dropped — Linux skips early microcode under a hypervisor). `tools/run-qemu.sh` puts an ESP above QEMU vvfat’s ~516 MB cap on a real FAT32 image (`mkfs.vfat -F 32` + `mcopy`, or sudo loop mount); `tools/e5-product-iso-qemu-serial.sh` defaults `ALPINE_FLAVOR=extended`, `RAYNU_F=1`, `QEMU_MEM=4096M`. Install disk: nested `c751fbe` (extended) got past apk and partitioning, then `No space left on device` on the 64 MiB pool disk (48 MiB ESP); `boot/handoff.rs` now carves the virtio-blk backing from leftover DRAM above PRECISE before the report-RAM seed (`boot: Stage 46 leftover install disk hpa=… bytes=…`; 512 MiB at `-m 4096M`, 1 GiB when ≥ 1.75 GiB is left; 768 MiB always stays for guest RAM), so `setup-disk -m sys` has room for `linux-lts` + `grub-efi`. Nested `499492c` reached `Installation is complete. Please reboot.` (512 MiB disk, 25 packages, initramfs, `grub-mkconfig`); the harness prints `nested Alpine sys install completed …` when it sees that line. F7 (ADR-017) now sends `reboot` after that prompt, recognises CF9/KBC/TF, relaunches RayNu-F with the disk preserved (`reset_keep_disk`), and prefers the disk GPT ESP over El Torito. Nested proof command: `TIMEOUT_SECS=1800 ./tools/e5-product-iso-qemu-serial.sh` (install + second boot). Grep: `guest reset requested`, `relaunch after reset`, `GPT ESP`, `RAYNU-V-RAYNU-F-DISK-BOOT-OK`, `root=UUID`. Nested second Linux boot is not yet claimed; not `ISO-INSTALL-OK`. Iron: the Cruzer is a 977.5 MiB stick, so extended does not fit at all; staging this path on iron needs a larger stick (or a trimmed ISO). The ISO lives next to
+`flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
+from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
+`~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.
+The Cruzer FAT already fills the 977.5 MiB RAYNUV stick after
+`--refat-cruzer` (do **not** pass it again). `git fetch origin NAME` only
+writes `FETCH_HEAD`; checkout `-B` onto `origin/NAME` then
+`--wait --require-head --no-git` (do **not** `git checkout` a SHA). Do **not** flash
+`ea30da1` / `--run 33389381409` (hide-IDE + inject `vec=0x20` livelocked the timer ISR
+to n=16777216 `rip=0x7f03fbe5` `pci_ide=0` `hlt=0`). Do **not** flash `a2acfc8` /
+`--run 33391068937` (n>16384 would not have changed that HLT at n~32768). firmware HLT skip without inject. flash 56f31d3. product ISO HLT stall before n=16384. do not F11 ea30da1. do not F11 56f31d3.
+flash 56f31d3 (CI run `33392055961`). Do **not** F11 `56f31d3` / `--run 33392055961` (scsi@3 first, no El Torito boot option). product ISO fw_cfg bootorder El Torito ide@ first. flash 90da03d (CI run `33394776080`). firmware HLT skip after ataio. do not F11 90da03d (`ataio==0` skip parks PACKET HLT at RET). flash e70a295 (CI run `33397104645`). flash 77f5866 (CI run `33399209557`). firmware force IF for inject. do not F11 77f5866 (`skip-PIT` IF=0 after PACKET). retrigger 9df52c5. `9df52c5` CI run `33402411199` failed nested-KVM SHELL after GTIMER2 (iso=0 flake 5/5; not force-IF). flash 5227ad9 (CI run `33404368817`). firmware arm ATA GSI 14. flash 489d938 (CI run `33408594472`). firmware prefer ATA IRR. firmware ATA over PIC. flash bce5bbb (CI run `33411580450`). flash eaa580d (CI run `33413425759`). flash 12926eb (CI run `33415083012`). `--wait --require-head --no-git` after this pin, or `--run 33415083012` for the `12926eb` EFI. do not F11 eaa580d (`--run 33413425759` same-cycle only). do not F11 bce5bbb (`--run 33411580450` PIC IRQ 0 starves `0x2E`). do not F11 489d938 (`--run 33408594472` TPR-stuck `0x2E`). do not F11 5227ad9 (`--run 33404368817` pin 14 still masked). Do **not** F11 `b824789` / `--run 33387614559` (skip-after-inject raw pci_ide). Do **not** F11 `d61dc7e` / `--run 33349142609` (ConnectAll IdeBus CpuSleep). Do **not** F11 `5c0f7a2` / `--run 33347766697` (ATAPI-first bootorder without skip-without-inject). flash ea30da1.
+product ISO fw_cfg bootorder virtio-iso scsi@3 first; product ISO fw_cfg bootorder El Torito ide@ first; flash ea30da1; do not F11 b824789; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash d61dc7e; do not F11 5c0f7a2 (empty scsi@2 last; iso=0 stays CD then disk). Iron COM2 after F11 of `d61dc7e` is ConnectAll Started PIIX IDE (`pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no virtio-iso IN). product ISO hides PIIX IDE. skip-after-inject uses pci_ready. firmware HLT skip without inject. product ISO HLT stall before n=16384. `8336a06` CI run `33387083800` failed nested-KVM kill-init after GTIMER2 (iso=0 still CDROM-OK BOTH-OK). Do **not** F11 `d61dc7e` / `8336a06` / `6c53fb0` / `b824789` / `ea30da1` / `a2acfc8` / `56f31d3` / `90da03d` / `e70a295` / `77f5866`. do not F11 ea30da1. Do **not** flash `ea30da1` pin `--run 33389381409` (inject `vec=0x20` timer ISR). flash 56f31d3. flash 90da03d. firmware HLT skip after ataio. do not F11 90da03d. flash e70a295. flash 77f5866. do not F11 e70a295. firmware force IF for inject. do not F11 77f5866. retrigger 9df52c5 CI after nested-KVM SHELL flake (33402411199). flash 5227ad9. firmware arm ATA GSI 14. flash 489d938. firmware prefer ATA IRR. firmware ATA over PIC. flash bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866.
+Do **not** F11 `2ae4544` / `--run 33345731636` (LAPIC expiry without I/O-over-PIT).
+Do **not** F11 `084430f` / `--run 33337287432` (Delay then HLT stall).
+Do **not** F11 `8663f56` / `--run 33333506987` (dest_ok then 0xAF00 Delay).
+`FLASHCRUZER-OK` for `2d6b109` / run `33321642509` / EFI prefix `6fc742b0`
+(checkout `cursor/e5-stage46-iso-a623`) is **not** F11. `2d6b109` IoReadFifo8 still
+skips dest `0x205f18` inside identity `0x200000` (iron COM2 `3d6eba0`); that
+SHA cannot install ACPI. Iron COM2 after F11 of that Cruzer is **`2d6b109`**: `pde0=0x20b027` (HV PT still `0x20B000`, identity `0x200000`), no `dest_ok fill`, `io string port=0x511 n=4 (rep insw)` only, DXE n=529 then `stop n=33297` `reason=0xc` `sectors=0` `catalog=0` `ataio=0` (POST_DXE_TAIL 32768, never PACKET). HPET froze at 11800 while `IN AL,DX` at `rip=0x7f020492`. That is not `8663f56` (`pde0` would be `0x40b027` plus `dest_ok fill`). Iron COM2 after F11 of `8663f56` **is** that SHA: `pde0=0x40b027`, `fw_cfg dest_ok fill dest=0x81ec98 n=56` x8, BOTH-OK, ACPI MADT, then `IN EAX,DX` at `rip=0x7f01f988` `stop n=33297` `sectors=0` `unh=4` after unhandled `0xAF00`/`0xAF05` (0xAF00 PM timer; do **not** F11 `8663f56` again). `unh=4` means later Delay I/Os were handled but `acpi` stayed 288 (not `0xB008`). 0xB000 dword timer firmware PIC before GSI 2; HLT stall quiet tick print-only; firmware HLT ignores TPR; firmware HLT stall waits for IRQ; iron COM2 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d; do not F11 9ce65ae; firmware virtual-wire PIC; firmware virtual-wire AEOI; firmware virtual-wire GSI 2; firmware HLT force IF; firmware HLT skip after inject; firmware HLT activity active; firmware LAPIC timer expiry; IOAPIC I/O over PIT; firmware virtual-wire GSI 14; flash 5c0f7a2; do not F11 2ae4544; product ISO fw_cfg bootorder virtio-iso scsi@3 first; flash ea30da1; do not F11 b824789; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash d61dc7e; do not F11 5c0f7a2; iron COM2 eac424b IRET-to-HLT; iron COM2 eac424b pic=1 sparse inject; iron COM2 beb1576 HLT if=1 tpr=0x0 pic=0 gsi2=0; do not F11 eac424b; do not F11 8e81c2e; do not F11 daf3195; do not F11 b26c86a. is in-tree for `IoRead32(0xB000)` after SCI_EN; **do not F11** `c08a13d` / `9ce65ae` (nested QEMU lost ATAPI-OK when quiet skipped leftover `cpu_flush`; EFI follows the run after the print-only SHA). flash 084430f. flash 2ae4544. flashcruzer reject 2d6b109 dest skip. auto-answer / # without login. product ISO POST_DXE_TAIL skip (armed Stage 46 does not stop at n=33297 `sectors=0`; lab iso=0 still uses the tail). emergency mount+exit (3.21 `/init` has no `setup-disk`). linux-line usbdelay (mkinitfs 3.11 `myopts` has no `alpine_dev`; nlplug `-b` is the repositories  product ISO HLT stall before n=16384; do not F11 ea30da1. file). io string (rep insb); 0xAF00 PM timer. 0xAF00 PM timer. Do not flash `fc03715` / `34b5767` / `3c95261` / `27de5f2` / `d0735bd` again
+unless that SOL is still live. Iron COM2 after `d0735bd` (deliver line has no `err=`)
+reached `#PF linux deliver n=1` then CPUID `rip=0xffffffffb8081783` `insn=`
+empty — that is not `ISO-INSTALL-OK`. Do not flash `34b5767` (QEMU boot
+gate `#UD` at CLWB), `d0735bd`, `40f1ada`,
+`27de5f2`, `4a62e06`, or `e40bee0` again unless that SOL is still live. Leftover DRAM
+`pool=1008 extra=846 no-zero` and `#PF linux deliver` are proven. Want
+`report-RAM extra hpa=` / `pool=` near 1008 with
+`extra=` `no-zero` then `#PF linux deliver` `err=` `linux cpuid` /
+`linux skip-2` / `linux skip-1` then `Linux version`. INVLPG `0F 01 /7` is
+skip-decoded; empty fetch logs `linux invlpg miss` and does not guess.
+ISO serial patches allow ISO9660 NUL padding on
+either side so alpine-virt `grub.cfg` `set timeout=1` still patches;
+the linux-line grow into that pad also bumps ISO9660 + Joliet Data
+Length 143→294 so GRUB sees `initrd` / `}` and `alpine_dev=vdb` / `virtio_pci` / `initcall_blacklist=piix_init` (a 143-byte read truncated
+at `tsc=` and dropped to rescue `grub>` on iron COM2 after El Torito
+`bootimg=1`); gzip `vmlinuz` is not rewritten; skip 256 MiB disk when leftover would
+starve OVMF report-RAM; 64 MiB still GPT; port `0x61` TMR2_OUT; arm
+product ISO before disk attach. Last iron COM2 on `faeaf38` after Boot0002
+`Linux virt`: EFI stub gzip + `Loaded initrd` (`install disk bytes=67108864`
+`report-RAM pool=162` `ram=` 59; not `uncompression error`). Not
+`ISO-INSTALL-OK`. Do not flash `8a71596`. Never PERC.
+Never `sda`/`sdb`. `--no-linux-iso` still strips leftovers so `iso=0` E4 SHELL
+stays valid.
+
+```bash
+ls -l /home/vikkp/projects/raynuv/alpine-virt-*-x86_64.iso 2>/dev/null || \
+  wget -O /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso \
+    https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-virt-3.21.3-x86_64.iso
+cd ~/projects/raynu
+# Do not checkout cursor/e5-stage46-iso-a623 (that is 2d6b109 dest skip).
+# FETCH_HEAD-only is not a checkout. Point HEAD at origin, then pin the ACPI EFI.
+# FLASHCRUZER-OK for 2d6b109 / 33321642509 / 6fc742b0 is not F11.
+git fetch origin refs/heads/cursor/e5-pm1-sci-a623:refs/remotes/origin/cursor/e5-pm1-sci-a623
+git checkout -B cursor/e5-pm1-sci-a623 origin/cursor/e5-pm1-sci-a623
+git log -1 --oneline   # want this SHA (flash a14223f pin 33436232227).
+# Pin --run 33436232227 (a14223f do not clobber PIC ICW2). do not F11 3b7bbac.
+# Do not pin --run 33433126839 (3b7bbac PIC ICW2 clobber IRQ 14 0x26). do not F11 3b7bbac.
+# Do not pin --run 33429494930 (e4faceb leftover IOAPIC 0x2E). do not F11 e4faceb.
+# Do not pin --run 33426291731 (d7d63ca PIC ATA clobbers IOAPIC to 0x2E). do not F11 d7d63ca.
+# Pin --run 33426291731 (d7d63ca firmware PIC ATA). do not F11 8e581c7.
+# Do not pin --run 33424573770 (8e581c7 PIC unmask never reached take_pic). do not F11 8e581c7.
+# firmware PIC ATA. firmware PIC ATA ICW2. firmware PIC ATA AEOI.
+# Do not pin --run 33422323257 (30b78a0 take IOAPIC ATA with edge remote IRR). do not F11 30b78a0.
+# Pin --run 33422323257 (30b78a0 firmware take IOAPIC ATA). do not F11 0bb06a2.
+# Do not pin --run 33418246409 (0bb06a2 ATA IRR only without take IOAPIC ATA). do not F11 0bb06a2.
+# Do not pin --run 33415083012 (12926eb take_highest_irr LVT 0xEF). do not F11 12926eb.
+# Pin --run 33415083012 (12926eb firmware ATA over PIC keeps latched 0x2E). do not F11 eaa580d.
+# Do not pin --run 33413425759 (eaa580d same-cycle ATA over PIC). do not F11 eaa580d.
+# Pin --run 33413425759 (eaa580d firmware ATA over PIC). do not F11 bce5bbb.
+# Do not pin --run 33411580450 (bce5bbb prefer ATA IRR; PIC IRQ 0 starves 0x2E). do not F11 bce5bbb.
+# Pin --run 33411580450 (bce5bbb firmware prefer ATA IRR). do not F11 489d938.
+# Do not pin --run 33408594472 (489d938 TPR-stuck 0x2E). do not F11 489d938.
+# Do not pin --run 33404368817 (5227ad9 force-IF pin 14 still masked). do not F11 5227ad9.
+# Do not pin --run 33438918646 (9299888 retrigger nested ATAPI miss ataio=0). firmware HLT insn_len 0 skip.
+# Do not pin --run 33437881901 (0d36b53 nested ATAPI miss ataio=0 packet=0). retrigger 0d36b53. PIC ATA vector follows ICW2.
+# Do not pin --run 33430294210 (5a69de2 nested-KVM kill-init after GTIMER2). retrigger 5a69de2. firmware OVMF ATA vector.
+# Do not pin --run 33417361559 (cdbee39 nested-KVM kill-init after GTIMER2). retrigger cdbee39. firmware ATA IRR only.
+# Do not pin --run 33402411199 (9df52c5 nested-KVM SHELL flake 5/5). firmware force IF for inject.
+# Do not pin --run 33399209557 (77f5866 skip-PIT IF=0 after PACKET). do not F11 77f5866.
+# Do not pin --run 33397104645 (e70a295 skip-without-inject blocked ATA 14). do not F11 e70a295.
+# Pin --run 33394776080 (90da03d El Torito ide@ first). do not F11 90da03d.
+# Do not pin --run 33392055961 (56f31d3 scsi@3 first, no El Torito boot option). do not F11 56f31d3.
+# Do not pin --run 33389381409 (ea30da1 inject vec=0x20 timer ISR).
+# Do not pin --run 33391068937 (a2acfc8 n>16384 after that boot ended).
+lsusb | grep -i 0781:5151
+./tools/flashcruzer.sh --no-git --run 33436232227 \
+  --linux-iso /home/vikkp/projects/raynuv/alpine-virt-3.21.3-x86_64.iso
+# --wait --require-head --no-git stays valid on this branch after a green HEAD
+# artifact; do not use it on e5-stage46-iso-a623.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. firmware OVMF ATA vector. do not clobber IOAPIC ATA vector. do not inject leftover 0x2E. do not clobber PIC ICW2. PIC ATA vector follows ICW2. firmware HLT insn_len 0 skip. IOAPIC edge no remote IRR. firmware arm ATA GSI 14. firmware force IF for inject. firmware skip PIT inject. flash bce5bbb. flash eaa580d. flash 12926eb. flash 0bb06a2. flash 30b78a0. flash 8e581c7. flash d7d63ca. flash e4faceb. flash 3b7bbac. flash a14223f.
+# firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. firmware PIC ATA. IOAPIC edge no remote IRR. F11 pin is --run 33436232227.
+# --run 33436232227 is F11. --run 33433126839 is not F11. --run 33429494930 is not F11. --run 33426291731 is not F11. --run 33424573770 is not F11. --run 33422323257 is not F11. --run 33418246409 is not F11. --run 33415083012 is not F11. --run 33417361559 is not F11. --run 33413425759 is not F11. --run 33411580450 is not F11. --run 33408594472 is not F11. --run 33404368817 is not F11.
+# do not F11 3b7bbac. do not F11 d7d63ca. do not F11 8e581c7. do not F11 30b78a0. do not F11 0bb06a2. do not F11 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. do not F11 5227ad9. do not F11 77f5866. do not F11 e70a295.
+```
+
+`--no-linux-iso` removes a leftover product ISO so `iso=0` E4 `LINUX-EARLY`
+still runs. QEMU: `PRODUCT_ISO=/path/to.iso ./tools/run-qemu.sh` (default ESP
+strips leftovers so the boot gate does not HOLD). PRE-EBS copies the ISO into
+`LOADER_DATA`. Guest OVMF boots that CD, virtio-pci queues target an empty
+install disk at `00:02.0` (`/dev/vda`; 1 GiB want on iron, 64 MiB reserved before greedy report-RAM, 1 MiB nested) and a
+read-only virtio-blk at `00:03.0` (`/dev/vdb`) serving the same ISO bytes
+(alpine-virt finds ISO9660 without `ata_piix`), virtio GPA copies stop at
+4 KiB so report-RAM 2 MiB slots are not overrun, product ISO PIC/IOAPIC injects
+ATA IRQ 14 and virtio INTx (GSI 17/18 plus PCI line 11 as IOAPIC pin 11;
+lab 8259 stays RAZ/WI), PIT IRQ 0 on HLT/preemption so Linux `noapic` jiffies
+advance, i8253 channel 0 is a 16-bit lo/hi + latch counter (`raise_pit` steps it), product ISO COM1 is a
+scratch/FIFO 16550 (lab UART stays stub), host COM2/COM1 RX is copied into
+guest COM1 RBR, Alpine `login:` / `~# ` on that console is auto-answered
+with `BOOTLOADER=grub USE_EFI=1 setup-disk -m sys -s 0 /dev/vda` after discovering `/media/*/apks` (nlplug often mounts at `/media/vdb`) or falling back to `mkdir -p /media/cdrom; mount -t iso9660 /dev/vdb /media/cdrom || mount -t iso9660 /dev/sr0 /media/cdrom` then `[ -d $R ] && echo $R >/etc/apk/repositories` (and `grub` if `bootloader?`
+appears, `/dev/vda` if `Which disk`, `sys` if `How would you like`, `n` if `No disks available` then `(y/n)`, or `y` if `[y/N]` / `(y/n)` erase confirm; not ISO-INSTALL-OK), the ISO cmdline is patched to
+`squashfs,virtio_blk console=ttyS0` (`modules=loop,squashfs,virtio_blk` stays valid so Alpine
+can mount the live root and load virtio-blk; `console=` is a kernel param; product ISO xAPIC is
+trap-and-emulate so CUR_COUNT/EOI move and `nolapic` is not required; optional `console=tty0` → `noapic`; GRUB
+`timeout=10` → `timeout=0` then `set timeout=1` → `set timeout=0`; linux-line NUL-pad grow also bumps ISO9660 + Joliet `grub.cfg` Data Length 143→294 so GRUB sees `initrd`/`}` and `alpine_dev=vdb` / `virtio_pci` / `initcall_blacklist=piix_init` (do not leave Data Length at 143; Linux 6.12 `ata_piix.c` is `module_init(piix_init)`, not `ata_piix_init`); `gfxterm` / `efi_gop` / `efi_uga` / `all_video` / `terminal_output console` → `serial` when present;
+`alpine_dev=cdrom` → `alpine_dev=vdb` when present) when it
+contains `squashfs,sd-mod,usb-storage quiet`, ATAPI PIO DRQ is 31 CD sectors (Linux `sr` READ(10) is not completed short at 4), dest-reg ALU (`02`/`03` ADD r, r/m through `32`/`33` XOR) plus INC/DEC/NOT/NEG update RFLAGS so virtio/xAPIC RMW does not spin, BT/BTS/BTR/BTC so `lock bts` on a BAR does not spin, CMPXCHG/XADD so `lock cmpxchg` does not spin, guest-UEFI CR8-load/store exiting so Linux `mov cr8` syncs `lapic_virt` TPR (E4 SHELL does not request CR8 exiting), ADC/SBB so `adc`/`sbb` on a BAR consume CF, group-2 SHL/SHR/SAR/ROL/ROR/RCL/RCR so bitfield ops on a BAR do not spin, CMOVcc/SETcc so conditional moves/sets on a BAR do not spin, PREFETCH/NOP/CLFLUSH so compiler hints on a BAR skip without access, BSF/BSR so bit-scan on a BAR does not spin, IMUL so signed multiply of a BAR does not spin, F6/F7 MUL/IMUL so DX:AX product of a BAR does not spin, F6/F7 DIV/IDIV so DX:AX quotient of a BAR does not spin (#DE on 0/overflow), MOVNTI so a non-temporal store to a BAR does not spin, SHLD/SHRD so a double-precision shift of a BAR does not spin, CMPXCHG8B so `lock cmpxchg8b` on a BAR does not spin, TZCNT/LZCNT/POPCNT so BMI1 `tzcnt`/`lzcnt`/`popcnt` of a BAR does not decode as BSF/BSR, PUSH/POP r/m so `push`/`pop` of a BAR does not decode-fail, MOVS/STOS/LODS so memcpy/memset of a BAR does not decode-fail, CALL/JMP r/m so `call`/`jmp` of a BAR does not decode-fail, CMPS/SCAS so memcmp/memchr of a BAR does not decode-fail, MOVUPS/MOVDQU so SSE memcpy of a BAR does not decode-fail, firmware-RIP insn fetch from the OVMF flash HPA so xAPIC SVR (`0xFEE000F0`) at `rip=0xFFFCFxxx` is not `insn=` empty, install disk reserved before greedy scratch and report-RAM, iron product-ISO frame pool 512 MiB so Alpine can get a 256 MiB disk (`iso=0`/nested stay 256 MiB BAR/shell), MMIO fetch uses CS.base+RIP unless 64-bit CS, virtqueue GPA lazy-maps report-RAM, IOAPIC vectors latch LAPIC IRR (remote IRR / level EOI retry; not a bare VM-entry inject), and guest-UEFI **holds**
+(does not fail-soft to E4). Armed product ISO uses the 16 777 216 resume cap
+on nested QEMU too (lab stub / `iso=0` nested stays 65536). Iron COM2 close is `RAYNU-V-M7-ISO-INSTALL-OK` after the
+installer writes a partition table. Host/CI never prints that marker. `iso=0`
+/ lab stub still E4 `LINUX-EARLY`. Keep `windows_iso` / `generic_uefi`. Iron
+P0-14 `last_commit` stays `2b795a0` until this gate actually closes.
+Linux virtio/IOAPIC MMIO retries decode from fetched bytes when VMCS length is 0
+(`ioread` is `"=r"`, not EAX); empty-peek Linux EAX fallback skips 3. iso=0 still
+stops on decode fail. Not `ISO-INSTALL-OK`.
+
 ## Next
 
 1. ~~Wire `InstallLaunchContract` → guest launch (extract-boot + install-sized virtio-blk).~~
@@ -235,4 +367,4 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
    (`RAYNU-V-M7-E5-OVMF-ELTORITO-OK`). `RN-ELT` n=197992 catalog=1 bootimg=1
    magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8. Not installer.
    Not Everest E5.
-   Next: Stage 46 `ISO-INSTALL-OK`. M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.
+   Next: Stage 46 `ISO-INSTALL-OK` (OPEN; ESP product ISO + virtio-pci queues + PIC/IOAPIC inject + 16550/`ttyS0` + hold when armed; virtio BAR trap over scratch + PIIX3 ISA BAR RAZ + packed virtio common cfg + virtio MMIO raises PIT + virtio MMIO eax fallback size; packed virtio common cfg write; virtio MMIO polls lapic; linux I/O does not raise PIT (iron MADT stop); linux xAPIC EPT insn_len 0; linux preempt deadloop noskip; linux PIT prefer once; linux PIT prefer until DRIVER_OK; UART reassert RX not THRE; virtio drain every resume; product ISO fw_cfg ACPI MADT (iso=0 named files stay 3); linux PIC before LAPIC; linux PIC IRQ0; MADT IRQ0 ISO GSI 2; PIT skips IOAPIC pin 0; linux GSI 2 before PIC; fw_cfg IoReadFifo8 fills RAM (skip HV identity PML4 dest); PIIX4 PM1 SCI_EN; PM1 SCI_EN at reset; DSDT PCI0 _PRT; DSDT PCI0 _CRS; linux hides duplicate slot0 IDE; product ISO hides duplicate slot0 IDE; do not F11 118edcf; do not F11 27eda8c; print HLT retaddr; do not F11 2d4ab51; firmware ConIn CR; do not F11 6c4bfde; print HLT callsite; do not F11 0b770cd; firmware WaitForEvent return; do not F11 e0d5c55; firmware ZeroMem ept fill; do not F11 e0d5c55; firmware ZeroMem ept fill; do not F11 c8d504d; firmware WFE preempt skip; do not F11 d0e44d4; firmware WFE state4 poke; do not F11 d0e44d4; firmware WFE event #PF; do not F11 9474ab6; linux hides PIIX IDE; linux high-half hides PIIX; linux-line alpine_dev=vdb; linux-line virtio_pci; linux ATA floating bus; fw_cfg skip dest n=; fw_cfg identity overlay; HV identity PML4 0x400000; PEI dest holds ACPI tables; fw_cfg dest_ok fill dest=; dest_ok fill log cap 8; ACPI tables ZONE_FSEG; FSEG dest holds ACPI tables; linux-line ata_piix blacklist; linux-line piix_init blacklist; FADT FACS; flashcruzer reject 2d6b109 dest skip; auto-answer / # without login; product ISO POST_DXE_TAIL skip; emergency mount+exit; linux-line usbdelay; io string (rep insb); 0xAF00 PM timer; 0xB000 dword timer; firmware PIC before GSI 2; HLT stall quiet tick print-only; firmware HLT ignores TPR; firmware HLT stall waits for IRQ; iron COM2 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d; do not F11 9ce65ae; firmware virtual-wire PIC; firmware virtual-wire AEOI; firmware virtual-wire GSI 2; firmware HLT force IF; firmware HLT skip after inject; firmware HLT activity active; firmware LAPIC timer expiry; IOAPIC I/O over PIT; firmware virtual-wire GSI 14; flash 5c0f7a2; do not F11 2ae4544; product ISO fw_cfg bootorder virtio-iso scsi@3 first; product ISO fw_cfg bootorder El Torito ide@ first; flash ea30da1; do not F11 b824789; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash d61dc7e; do not F11 5c0f7a2; iron COM2 eac424b IRET-to-HLT; iron COM2 eac424b pic=1 sparse inject; iron COM2 beb1576 HLT if=1 tpr=0x0 pic=0 gsi2=0; do not F11 eac424b; do not F11 8e81c2e; do not F11 daf3195; do not F11 b26c86a; flash 2ae4544; lab stub still E4; not clo firmware HLT skip without inject; product ISO HLT stall before n=16384; do not F11 ea30da1; do not F11 a2acfc8; not closed). M4.3 host-slab closed on iron after `22e28d0` (`M4-BLK-OK` `0x10c00000`). `ISO-BOOTED-FROM-DISK` is persist-detect, not the installer.

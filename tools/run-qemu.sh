@@ -5,6 +5,9 @@
 # Force TCG: QEMU_ACCEL=tcg ./tools/run-qemu.sh
 # ADR-011 evidence mode: EVIDENCE_MODE=1 stages paperverbose.txt on the ESP.
 # E5 ISO install lab: ISO_INSTALL_LAB=1 stages isoinstall.txt (1MiB virtio disk).
+# Stage 46: PRODUCT_ISO=/path/to/distro.iso stages EFI/RayNu/linux.iso (not default).
+# Product ISO defaults QEMU_MEM=2560M so leftover DRAM exists above PRECISE
+# (512MiB). iso=0 / boot gate stay 512M. Not ISO-INSTALL-OK.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -118,6 +121,42 @@ if [[ "$EVIDENCE_MODE" == "1" ]]; then
   echo "==> ADR-011 evidence mode: staged $ESP/EFI/RayNu/paperverbose.txt"
 fi
 
+# ADR-016 F2b: RAYNU_F=1 stages EFI/RayNu/raynuf.txt so the EFI launches the
+# RayNu-F test app on the private VMCS after the OVMF leg stops. Default clean.
+rm -f "$ESP/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "${RAYNU_F:-0}" == "1" ]]; then
+  mkdir -p "$ESP/EFI/RayNu"
+  : >"$ESP/EFI/RayNu/raynuf.txt"
+  echo "==> ADR-016 RayNu-F: staged $ESP/EFI/RayNu/raynuf.txt"
+fi
+
+# Stage 46: leftover product ISO would HOLD guest-UEFI instead of E4 LINUX-EARLY.
+rm -f "$ESP/linux.iso" "$ESP/install.iso" \
+  "$ESP/EFI/RayNu/linux.iso" "$ESP/EFI/RayNu/install.iso" 2>/dev/null || true
+PRODUCT_ISO="${PRODUCT_ISO:-}"
+if [[ -n "$PRODUCT_ISO" ]]; then
+  if [[ ! -f "$PRODUCT_ISO" ]]; then
+    echo "error: PRODUCT_ISO not found: $PRODUCT_ISO" >&2
+    exit 1
+  fi
+  psz=$(wc -c <"$PRODUCT_ISO" | tr -d ' ')
+  if (( psz <= 73728 )); then
+    echo "error: PRODUCT_ISO is lab-stub sized ($psz); need >73728" >&2
+    exit 1
+  fi
+  mkdir -p "$ESP/EFI/RayNu"
+  cp "$PRODUCT_ISO" "$ESP/EFI/RayNu/linux.iso"
+  echo "==> Stage 46 product ISO: $ESP/EFI/RayNu/linux.iso ($psz bytes) (not ISO-INSTALL-OK)"
+fi
+
+# Leftover DRAM for report-RAM extras lives above PRECISE (512MiB). Product
+# ISO HOLDS nested guest-UEFI, so seed those HPAs; -m 512M has none.
+if [[ -n "$PRODUCT_ISO" ]]; then
+  QEMU_MEM="${QEMU_MEM:-2560M}"
+else
+  QEMU_MEM="${QEMU_MEM:-512M}"
+fi
+
 # E5 lab: stage isoinstall.txt → arm 1MiB install-sized virtio-blk (no curl).
 ISO_INSTALL_LAB="${ISO_INSTALL_LAB:-0}"
 ISO_REBOOT_LAB="${ISO_REBOOT_LAB:-0}"
@@ -201,15 +240,42 @@ else
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
 fi
 
-echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); guest exits via isa-debug-exit"
+# QEMU vvfat (`fat:rw:`) is capped at ~516 MB ("Directory does not fit in
+# FAT16/FAT32 (capacity 516.06 MB)"), so a product ISO above that
+# (alpine-extended 994 MiB, the only official x86_64 ISO with on-media
+# grub-efi + dosfstools) must ride a real FAT32 image. Built fresh per run;
+# mtools when present, else sudo loop mount (the harness already sudo's kvm).
+ESP_DRIVE="fat:rw:$ESP"
+esp_bytes=$(du -sb "$ESP" | cut -f1)
+if (( esp_bytes > 480 * 1024 * 1024 )); then
+  ESP_IMG="${ESP_IMG:-$ROOT/target/esp-fat32.img}"
+  img_mib=$(( esp_bytes / 1048576 + 128 ))
+  rm -f "$ESP_IMG"
+  truncate -s "${img_mib}M" "$ESP_IMG"
+  mkfs.vfat -F 32 -n RAYNUV "$ESP_IMG" >/dev/null
+  if command -v mcopy >/dev/null 2>&1; then
+    MTOOLS_SKIP_CHECK=1 mcopy -i "$ESP_IMG" -s "$ESP"/* ::/
+  else
+    mnt=$(mktemp -d)
+    sudo mount -o loop,uid="$(id -u)",gid="$(id -g)" "$ESP_IMG" "$mnt"
+    cp -r "$ESP"/. "$mnt"/
+    sync
+    sudo umount "$mnt"
+    rmdir "$mnt"
+  fi
+  ESP_DRIVE="$ESP_IMG"
+  echo "==> ESP ${esp_bytes} bytes exceeds vvfat; FAT32 image $ESP_IMG (${img_mib} MiB)"
+fi
+
+echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_MEM}; guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
   "${ACCEL_ARGS[@]}" \
-  -m 512M \
+  -m "$QEMU_MEM" \
   -display none \
   -serial "$SERIAL_CHARDEV" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${FW_ARGS[@]}" \
-  -drive format=raw,file=fat:rw:"$ESP" \
+  -drive format=raw,file="$ESP_DRIVE" \
   "${HOST_NIC_ARGS[@]}" \
   "$@"

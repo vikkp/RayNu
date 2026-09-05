@@ -273,13 +273,347 @@ scheduler quantum on COM2 (E4 bring-up debug). Next EFI logs the first G0
 re-entry, first SPA re-entry, first restore per slot, then one HINT and stays
 quiet except HTTP/WARN/markers.
 
-**First action (Stage 46 `ISO-INSTALL-OK` — Everest E5):**
+**First action (Stage 46 `ISO-INSTALL-OK` — Everest E5, OPEN):**
+**Option 2 (2026-09-02):** living ladder
+[`docs/stage46_everest_plan.md`](stage46_everest_plan.md).
+Park later IdeBus on #231 (`8024439`, ADR-015). Close path is #229.
+3a dest_ok + ACPI MADT **DONE**. COMMAND closed. CF8/ROM closed.
+Hide-slot0 **FAIL** (`27eda8c` CDROM-OK via PIIX, still `ataio=0`).
+HLT retaddr **FAIL** (`2d4ab51` `ret=0x7ff0e055` DxeCore, still
+`ataio=0`). ConIn CR **FAIL** (`6c4bfde` CR fired; timer Wait still
+`ataio=0`). Callsite **FAIL** (`0b770cd` `rethx=0xe056ff41b84d8b48`
+`call [r14-0x20]`, still `ataio=0`). WFE return **FAIL**
+(`e0d5c55` `caller=0x7feffe28` then preempt `0x34` `rip=0x7ec8f6ff`,
+still `ataio=0`). ZeroMem ept fill **FAIL** (`c8d504d`: fill never
+printed; `0x34` is preempt not EPT). WFE preempt skip **FAIL**
+(`d0e44d4` `len=12 rip=0x7ff0e7e8` then `mov rax,3`). State4 poke
+**FAIL** (`9474ab6` poke `dest=0x7ff18340` then `#PF
+cr2=0xffffffffffffffb8` `rip=0x7ff0e018`). Do not flash
+`2d6b109`, `9474ab6` / `--run 33817483733`,
+`d0e44d4` / `--run 33815993163`,
+`c8d504d` / `--run 33757018875`,
+`e0d5c55` / `--run 33753069821`, `0b770cd` / `--run 33701350767`,
+`6c4bfde` / `--run 33699177232`,
+`2d4ab51` / `--run 33697154185`, `27eda8c` / `--run 33695570769`,
+`118edcf`, `7ba1ccf`, `5de9e1c`, `61991be`, `3b1cf51`, or `8024439`.
+`4e16b59` / `--run 33820727776` event `#PF` inject fired OVMF's own
+`#PF` + `CpuDeadLoop` — do not F11 it. **Pivot (ADR-016): be the guest
+firmware ourselves — RayNu-F** (own EFI system table + boot services
+over virtio-blk/CD; boot the ISO's `\EFI\BOOT\BOOTX64.EFI`). The
+`3k–3o` OVMF forcing is disabled (`RAYNU_F_NO_FW_STATE_MUTATION`);
+next proof is RayNu-F boot services on nested/QEMU, not an OVMF poke.
+Still not `ISO-INSTALL-OK`.
+
+Eighty-seventh slice (historical): skip-decode INVLPG `0F 01 /7`
+(prefixes + ModRM/SIB/disp) when VMCS `insn_len` is 0 after Linux
+`#PF` deliver. Empty fetch does not guess a length (COM2
+`linux invlpg miss`). Do not clear primary INVLPG-exiting (Xeon
+allowed0=1). Keep CLFLUSHOPT/CLWB hidden and high-half skip-2/skip-1.
+Flash this HEAD after CI 49/49 (do not flash `34b5767`). Want COM2
+`#PF linux deliver` `err=` `linux skip-2` / `linux skip-1` then
+`Linux version` / installer / `ISO-INSTALL-OK`.
+Eighty-sixth slice: hide CLFLUSHOPT/CLWB in guest CPUID
+(leaf 7 EBX) so nested/G0 Linux does not `clwb` into `#UD` (CI `34b5767`
+Oops `66 0F AE F1` then kill-init; `flashcruzer --wait` will not flash
+that SHA). Keep high-half HLT skip-1.
+Eighty-fourth slice: RDTSC/INVD/WBINVD/PAUSE skip 2 on high-half.
+Eighty-third slice: iron COM2 after `d0735bd` (no `err=` on
+the deliver line) reached `#PF linux deliver n=1` then high-half CPUID
+`rip=0xffffffffb8081783` `insn=` empty. Walk guest CR3 for insn dump,
+skip CPUID/RDMSR/WRMSR by 2 if VMCS `insn_len` is 0 (still skip 2 on
+fetch miss / extra-DRAM CR3), tick every 256 after deliver. Keep G0
+Linux exception bitmap + VM-entry `#PF` inject. Not `ISO-INSTALL-OK`.
+Eighty-second slice: on high-half `#PF` switch to G0
+`LINUX_EXCEPTION_BITMAP` (drop `#UD`/`#GP` intercept; M3.10 skipped
+`ud2` / alternatives) then VM-entry inject vector 14. PIC/LAPIC waits.
+Eighty-first slice: Drop `#PF` exiting, restore CR2, and **VM-entry inject**
+vector 14 so PIC/LAPIC cannot steal the entry or clobber CR2.
+Eightieth slice: deliver high-half `#PF` to the guest IDT and stop
+intercepting `#PF` so `early_make_pgtable` can run. Not
+`ISO-INSTALL-OK`. Want COM2
+`#PF linux deliver` then `Linux version` / installer /
+`ISO-INSTALL-OK`.
+Seventy-ninth slice (this EFI): prefer leftover conventional just
+above PRECISE when it can hold 1008×2 MiB (not the 4 GiB+ 61 GiB
+region). Extra frames are not eager-zeroed (host CR3 identity `#PF`
+risk). Skip logs still print. Do not flash `4a62e06` again. Flash this
+HEAD after CI is green. Want COM2 `extra hpa=` below 4 GiB if the map
+allows, `pool=` near 1008 with `extra=` `no-zero`, then `Linux version`
+/ installer / `ISO-INSTALL-OK`.
+Seventy-eighth slice (this EFI): iron COM2 after `4a62e06` reached
+`post-CD non-io` + gzip + `Loaded initrd` with `pool=162` and **no**
+`report-RAM extra hpa=` (that EFI predates leftover DRAM). Extra seed
+now logs `conventional above PRECISE pages=` and skip
+`nested`/`none`/`align` so a miss cannot be silent. Flash this HEAD
+after CI is green — do not flash `4a62e06` again. Want COM2
+`report-RAM extra hpa=` and `pool=` near 1008 with `extra=`, then
+`Linux version` / installer / `ISO-INSTALL-OK`.
+Seventy-seventh slice: leftover conventional DRAM above
+PRECISE backs the 2 GiB CMOS lie (1008×2 MiB report-RAM extra; not an
+expanded precise window; not invented HPA). Iron COM2 `faeaf38` reached
+EFI stub gzip + `Loaded initrd` with `pool=162` (~324 MiB) — that is
+not enough for `[32MiB, 2GiB)`. Nested / `iso=0` stay 32 slots and do
+not seed extra. Want COM2 `report-RAM extra hpa=` and `pool=` near 1008
+with `extra=`, then `Linux version` / installer / `ISO-INSTALL-OK`.
+Pin this HEAD until CI is green, then `--wait --branch
+cursor/e5-stage46-iso-a623` (do not `git checkout` a SHA).
+Seventy-third slice: alpine-virt `grub.cfg` starts after
+ISO9660 NULs, so `set timeout=1` had a NUL prefix and slice 72 skipped
+it. Neighborhood now allows NUL padding on either side when some
+printable cfg text sits next to the needle. `flashcruzer.sh` infers
+the origin branch from a detached SHA (do not `git checkout` a SHA;
+`--branch` still works). 64 MiB leave + ASCII gzip skip still in this
+EFI. If a `46a1f43` flash already started, let it finish. Else pin this
+HEAD until CI is green, then `--wait --branch cursor/e5-stage46-iso-a623`.
+Seventy-second slice: iron COM2 after BdsDxe Start Boot0002
+booted `Linux virt` then EFI stub `Decompression failed: uncompression
+error` (`start_image` `0x8000000000000001`). That stick was 256 MiB
+disk / `report-RAM pool=66`. Whole-ISO same-length swaps now require an
+ASCII neighborhood so gzip inside `vmlinuz` is not rewritten. 64 MiB
+disk leave + TMR2_OUT still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not
+flash `8a71596` / `eddae01` after this lands — 256 MiB starved GCD;
+whole-ISO patch can corrupt gzip).
+Seventy-first slice: skip a 256 MiB virtio-blk when leftover
+would starve OVMF report-RAM (iron `pool=194` ~388 MiB). 64 MiB still
+fits Alpine GPT (`BOOT_SIZE=48`). TMR2_OUT (`0x61` bit 5) + arm ISO
+before disk attach still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not
+flash `8a71596` after this lands — 256 MiB-first can starve GCD).
+Seventieth slice: iron COM2 after BdsDxe Start `UEFI RAYNU-V CD`
+spins on `in al,0x61; test al,0x20; jz` (`rip=0x7e149fb9`, HPET frozen).
+Port `0x61` now toggles TMR2_OUT (bit 5) as well as refresh (bit 4).
+Also arm the product-ISO window *before* the early disk attach so the
+512 MiB pool can give 256 MiB virtio-blk (iron still logged 1 MiB because
+the first attach was a no-op). FAT already fills Cruzer; no `--refat-cruzer`.
+Pin this HEAD until CI is green, then flash (do not flash `0c67b58` after
+this lands).
+Sixty-ninth slice: MMIO insn fetch peeks `GUEST_RIP` when
+`CS.base+RIP` is outside the 4 MiB flash window but RIP is inside
+(leftover real-mode `CS.base`; iron `rip=0xfffcfc86`). EAX n>0 fallback +
+`BOOT_SIZE=48` + skip-len still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not flash
+`65ff115` after this lands).
+Sixty-eighth slice: xAPIC decode-fail still does a 32-bit EAX MOV
+when skip-len is 1–15, even if flash peek returned bytes (`n>0`). Slice 64
+required `n==0`; LocalApicLib is still `mov [svr], eax`. Do not skip a
+16-byte peek. `BOOT_SIZE=48` + skip-len + 512 MiB pool still in this EFI.
+FAT already fills Cruzer; no `--refat-cruzer`. Pin this HEAD until CI is
+green, then flash (do not flash `88abad7` after this lands).
+Sixty-seventh slice: Alpine `setup-disk` `find_efi_size` wants a
+160 MiB ESP, which does not fit a 64 MiB fallback disk and leaves ~96 MiB
+root on 256 MiB. `BOOT_SIZE=48` so GPT+ESP still land. Skip-len + 512 MiB
+pool + disk-before-scratch still in this EFI. FAT already fills Cruzer; no
+`--refat-cruzer`. Pin this HEAD until CI is green, then flash (do not flash
+`12859ff` after this lands).
+Sixty-sixth slice: when flash peek returns bytes (`n>0`) but VMCS
+`insn_len` is 0, decode and skip use the length from those bytes. Do not skip
+the 16-byte peek. Prefer a valid VMCS 1–15 (EAX fallback still works when
+`n=0`). Iron 512 MiB pool + disk-before-scratch + CS.base+RIP fetch still in
+this EFI. FAT already fills Cruzer; no `--refat-cruzer`. Pin this HEAD until
+CI is green, then flash (do not flash `9446a6c` after this lands).
+Sixty-fifth slice: iron product-ISO raises the HV frame pool to
+512 MiB (`PRECISE`) so a 256 MiB virtio-blk fits; `iso=0` / nested stay
+256 MiB (E4 BAR/shell free). Reserve the install disk before greedy 2 MiB
+scratch as well as report-RAM. MMIO insn fetch uses `CS.base+RIP` unless
+64-bit CS (raw `GUEST_RIP` missed a non-flat CS). EAX fallback + flash-RIP
+peek still in this EFI. FAT already fills Cruzer; no `--refat-cruzer`.
+Pin this HEAD until CI is green, then flash.
+Sixty-fourth slice: iron COM2 xAPIC SVR `insn=` empty. If flash
+peek still returns 0 bytes but VMCS `insn_len` is 1–15, complete a 32-bit
+EAX MOV and skip (LocalApicLib `mov [svr], eax`). Do not guess when bytes
+were fetched.
+CI green on `6d94682` (EAX fallback). `ba3face` docs CI hit
+the nested-KVM `/init` flake.
+Sixty-third slice (this EFI): iron COM2 `virtio-blk install disk bytes=1048576`
+because greedy 2 MiB report-RAM ate the `[1MiB,256MiB)` pool. Reserve the
+install disk **before** report-RAM so 64 MiB (REST default) fits; leftover
+2 MiB slots still back CMOS 2 GiB. Do not invent HPA. Nested tries 256/64/32/16/1 MiB (leave scratch; typically lands 64 MiB).
+Sixty-second slice (this EFI): iron COM2 `xAPIC MMIO decode fail
+gpa=0xfee000f0 insn=` at `rip=0xfffcfc86` (OVMF flash). Identity peek
+only covered 32 MiB RAM; copy instruction bytes from the private flash
+HPA. Product ISO hold, not E4 SHELL. SSE MOVUPS still in this EFI.
+Sixty-first slice (this EFI): guest-UEFI trampoline `movdqu` saves XMM0–15
+into 16-byte-aligned `SAVED_XMM`; MMIO decode covers MOVUPS/MOVUPD/MOVSS/MOVSD
+(`0F 10`/`11`), MOVDQU (`F3 0F 6F`/`7F`), MOVDQA (`66 0F 6F`/`7F`),
+MOVAPS/MOVAPD (`0F 28`/`29`). Do not hide SSE2. Iron stick already has
+`e3f56aa`; this is the next EFI after COM2 or CI.
+Sixtieth slice (this EFI): iron `fsck.vfat` proved the 64 MiB FAT is
+healthy (`131072` sectors, `26 files`, `17063/129022` clusters). Retry
+without `--refat-cruzer` still fails (`free=57323008 need=67108864`).
+Skip remount/fsck when FAT size < need. Whole-disk `mkfs.vfat -I`.
+Fifty-ninth slice (this EFI): Cruzer FAT is a 64 MiB image (`131072`
+sectors) on 977.5 MiB media, so alpine-virt `linux.iso` (63 MiB) cannot
+fit with EFI+OVMF. `--refat-cruzer` copies `installdisk.bin`/`auth.token`
+off, `mkfs.vfat -I -F 32 -n RAYNUV` on the identified stick, restores keep
+files. Never PERC. Never `sda`/`sdb`.
+Fifty-eighth slice (this EFI): Cruzer flash remounts and `fsck.vfat -a`
+to reclaim stale FAT32 FSInfo / orphaned clusters after ENOSPC (`df`
+showed 54 MiB free while `du` was 8.4 MiB on a 977.5 MiB stick). Never
+`mkfs` / format. Keep `installdisk.bin` / `auth.token`.
+Fifty-seventh slice (this EFI): Cruzer ESP flash prunes leftover/partial
+`*.iso` then `df`-checks before staging alpine-virt `linux.iso` (~63 MiB
+on the 977.5 MiB RAYNUV stick). Keep `installdisk.bin` / `auth.token`.
+Fifty-sixth slice (this EFI): Alpine auto-answer waits for `/dev/vda`
+(`mdev -s` each second, up to 5s) so a slow virtio probe is a block
+device before `setup-disk` opens it. `mdev -s` then `sleep 1` left the
+node missing if the driver bound during the sleep. Fifty-fifth slice (this EFI): Alpine auto-answer `modprobe isofs` and
+`mount -t iso9660` so BusyBox mounts ISO9660 on virtio-blk `/dev/vdb` (and
+ATAPI `/dev/sr0`) instead of probing a disk without `iso9660` in
+`/proc/filesystems`. Fifty-fourth slice (this EFI): Alpine auto-answer `modprobe sr_mod` so `/dev/sr0`
+exists when the live image booted from virtio-iso. Fifty-third slice (this EFI): Alpine auto-answer `mount /dev/vdb ... || mount /dev/sr0`
+so apk still sees ISO9660 when virtio-iso is not ready. Fifty-second slice (this EFI): MMIO CMPS/SCAS (`A6`/`A7`/`AE`/`AF`, F3 REPE /
+F2 REPNE) so memcmp/memchr of virtio/IOAPIC/xAPIC sets RFLAGS instead of
+decode-fail spinning. RAM GPA miss does not invent HPA. Fifty-first slice (this EFI): Alpine auto-answer `sleep 1` after `mdev -s` so a
+slow virtio probe is visible before `setup-disk` `find_disks`. Fiftieth slice (this EFI): Alpine auto-answer `modprobe virtio_pci` and
+`mdev -s` before `setup-disk` so `find_disks` sees `/sys/block/vda` (otherwise
+`No disks available` answers n and the installer exits). Forty-ninth slice (this EFI): Alpine auto-answer **overwrites** `/etc/apk/repositories`
+with `/media/cdrom/apks` (does not append) so `apk update` does not hang on
+network mirrors, and answers `sys` on `How would you like` (not the shorter
+`like to use`, which also matches `Which disk(s) would you like to use?`).
+Forty-eighth slice (this EFI): Alpine auto-answer appends `/media/cdrom/apks` to
+apk repos and `apk update` before `setup-disk`, and answers `sys` to
+`like to use` when `-m sys` did not stick. MMIO near CALL/JMP r/m (`FF /2`,
+`FF /4`) so a BAR `call`/`jmp` sets RIP (CALL pushes RIP+len; long mode
+defaults to 64-bit like PUSH; far CALLF/JMPF stay decode-fail; stack GPA
+miss does not invent HPA). Forty-seventh slice (this EFI): Alpine auto-answer `setup-disk -s 0` (no swap),
+`Which disk` → `/dev/vda`, and `No disks available` answers `n` to the
+following boot-media `(y/n)` instead of `y`. Virtqueue/stack/MOVS GPA
+translate lazy-maps report-RAM 2 MiB (same pool as an EPT miss; does not
+invent a non-pool HPA). Forty-sixth slice (this EFI): MMIO MOVS/STOS/LODS (`A4`/`A5`/`AA`/`AB`/`AC`/`AD`,
+optional F3 REP) so memcpy/memset of virtio/IOAPIC/xAPIC writes one
+element per EPT (RAM GPA miss does not invent HPA; REP with RCX left
+keeps RIP). CMPS/SCAS stay decode-fail. Forty-fifth slice (this EFI): MMIO PUSH/POP r/m (`FF /6`, `8F /0`) so a BAR
+`push`/`pop` writes the stack (long mode defaults to 64-bit even without
+REX.W; 66h is 16-bit) instead of decode-fail spinning. Stack GPA miss
+does not invent HPA (virtio/xAPIC retry the EPT; IOAPIC skips).
+Forty-fourth slice (this EFI): MMIO TZCNT/LZCNT/POPCNT (`F3 0F BC`/`BD`/`B8`)
+so BMI1 `tzcnt`/`lzcnt` and `popcnt` of virtio/IOAPIC/xAPIC write the
+count into the GPR (src 0 writes bitwidth and CF for TZCNT/LZCNT) instead
+of decoding as BSF/BSR. Forty-third slice (this EFI): MMIO CMPXCHG8B (`0F C7 /1`) compares
+EDX:EAX to the 64-bit BAR and stores ECX:EBX on match so Linux
+`cmpxchg8b` of virtio/IOAPIC/xAPIC does not spin. CMPXCHG16B (REX.W)
+is not emulated. Forty-second slice (this EFI): MMIO SHLD/SHRD (`0F A4`/`A5`/`AC`/`AD`)
+writes the double-precision shift into the BAR (fill from the GPR, count
+imm8 or CL) so Linux `shld`/`shrd` of virtio/IOAPIC/xAPIC does not spin.
+Forty-first slice (this EFI): an armed product ISO uses the 16 777 216
+resume cap on nested KVM too (`PRODUCT_ISO=` QEMU can pass OVMF
+StartImage). Lab 72 KiB / `iso=0` nested stays 65536 so CI E4 SHELL
+is unchanged. Nested still never prints `ISO-INSTALL-OK`.
+Fortieth slice (this EFI): MMIO DIV/IDIV (`F6`/`F7` /6 /7) writes AX or
+DX:AX so Linux `div`/`idiv` of virtio/IOAPIC/xAPIC does not spin; divisor 0
+or quotient overflow injects #DE at the faulting RIP (no skip). MOVNTI
+(`0F C3`) stores 32/64-bit GPR to the BAR (no 16-bit form).
+Thirty-ninth slice (this EFI): MMIO one-operand MUL/IMUL (`F6`/`F7` /4 /5)
+writes AX or DX:AX so Linux `mul`/`imul` of virtio/IOAPIC/xAPIC does not
+spin. Thirty-eighth slice (this EFI): MMIO IMUL (`0F AF` r, r/m and `69`/`6B`
+r, r/m, imm) so Linux signed multiply of virtio/IOAPIC/xAPIC does not
+spin. Thirty-seventh slice (this EFI): Alpine auto-answer `mkdir -p /media/cdrom`
+before `mount /dev/vdb` so apk still sees ISO9660 when nlplug never created
+the mountpoint (virtio-iso, not ATAPI). Reply queue is 160 bytes.
+Thirty-sixth slice (this EFI): MMIO PREFETCH (`0F 18`/`0F 0D`), multi-byte
+NOP (`0F 1F`/`0F 19`), and CLFLUSH (`0F AE` /7) skip without touching the
+BAR so a compiler hint on virtio/IOAPIC/xAPIC does not spin; BSF/BSR
+(`0F BC`/`0F BD`) write the bit index into the GPR and set ZF.
+Thirty-fifth slice (this EFI): MMIO CMOVcc (`0F 40`–`4F`) and SETcc
+(`0F 90`–`9F`) so Linux conditional moves/sets on virtio/IOAPIC/xAPIC
+do not spin. Thirty-fourth slice (this EFI): MMIO group-2 shifts (`C0`/`C1` imm8,
+`D0`/`D1` 1, `D2`/`D3` CL) — SHL/SHR/SAR/ROL/ROR/RCL/RCR — so Linux
+bitfield ops on virtio/IOAPIC/xAPIC do not spin. Thirty-third slice (this EFI): MMIO ADC (`10`/`11`/`12`/`13`, group-1 `/2`)
+and SBB (`18`/`19`/`1A`/`1B`, group-1 `/3`) consume RFLAGS.CF so Linux
+`adc`/`sbb` on virtio/IOAPIC/xAPIC does not spin. Thirty-second slice (this EFI): guest-UEFI CR8-load/store exiting so
+Linux `mov cr8` (TPR) syncs `lapic_virt` after `nolapic` was dropped.
+No VMCS GUEST_CR8; store writes `APIC_TPR = (val & 0xF) << 4`. E4 SHELL
+VMCS does not request CR8 exiting. Thirty-first slice (this EFI): MMIO CMPXCHG (`0F B0`/`B1`) and XADD
+(`0F C0`/`C1`) so Linux `lock cmpxchg` on virtio/IOAPIC/xAPIC does not
+spin. Thirtieth slice (this EFI): MMIO BT/BTS/BTR/BTC (`0F BA` /4–7 imm8 and
+`0F A3`/`AB`/`B3`/`BB`) so Linux `lock bts` on virtio/IOAPIC/xAPIC does
+not spin; CF = old bit. Twenty-ninth slice (this EFI): product ISO IOAPIC vectors latch into
+`lapic_virt` IRR and inject IRR→ISR so Linux `ack_APIC_irq` EOI matches
+(M3.12: bare VM-entry inject with empty ISR is `Fatal exception in
+interrupt`); remote IRR + level-triggered retry after EOI while the line
+is still high. PIC stays a direct inject for noapic/early 8259.
+Twenty-eighth slice (this EFI): MMIO dest-reg ALU (`02`/`03` ADD r, r/m,
+`0A`/`0B` OR, `22`/`23` AND, `2A`/`2B` SUB, `32`/`33` XOR) writes the GPR
+and updates RFLAGS; INC/DEC (`FE`/`FF`) and NOT/NEG (`F6`/`F7` /2 /3)
+RMW the BAR so a decode-fail does not spin. Twenty-seventh slice (this EFI): auto-answer mounts virtio-iso `/dev/vdb` on
+`/media/cdrom` before `setup-disk`; MMIO CMP `3A`/`3B` is `reg - mem`;
+group-1 / register-form SUB. Twenty-sixth slice (this EFI): MMIO TEST/CMP update RFLAGS (virtio ISR poll
+does not spin); serial auto-answer stays in CONFIRM after `[y/N]` so a later
+`bootloader?` still gets `grub`. Twenty-fifth slice (this EFI): product ISO xAPIC 4 KiB EPT trap + `lapic_virt`
+CUR_COUNT/EOI (IRR inject on preempt/HLT); same-length ISO patch puts
+`virtio_blk` in `modules=` (`squashfs,sd-mod,usb-storage quiet` →
+`squashfs,virtio_blk console=ttyS0`) and drops `nolapic` now that CUR_COUNT
+moves; `terminal_output console` → `serial` when present; MMIO decode adds
+register-form AND/OR/XOR/ADD and group-1 ADD. Twenty-fourth slice (this EFI): i8253 lo/hi access (`0x34`) returns lo then hi
+on unlatched `inb 0x40`; 8-bit MMIO without REX uses AH/CH/DH/BH not SPL.
+Twenty-third slice (this EFI): virtio/IOAPIC MMIO decode adds group-1
+AND/OR/XOR (`80/81/83`) so a RMW does not spin on decode-fail. Twenty-second slice (this EFI): virtio/IOAPIC MMIO decode adds XCHG, MOVSX,
+and moffs (decode-fail spins virtio); GRUB `insmod all_video` → `serial`
+when present. Twenty-first slice: serial auto-answer matches alpine-conf
+`confirm_erase` `[y/N]: ` (not only `(y/n)`), so an ISO that does not skip
+via `ERASE_DISKS` still gets `y`. Twentieth slice: Alpine auto-answer exports `USE_EFI=1` with
+`BOOTLOADER=grub` so UEFI `setup-disk` does not try syslinux/MBR; same-length
+ISO patch `set timeout=1` → `set timeout=0` (after `timeout=10`) and
+`insmod efi_gop` / `insmod efi_uga` → `insmod serial` when present so GRUB
+EFI does not wait on GOP. The linux-line grow into ISO9660 NUL pad also
+bumps PVD + Joliet `grub.cfg` Data Length 143→294 (a 143-byte read hid
+`initrd`/`}` and dropped to rescue `grub>` on iron COM2 after El Torito
+`bootimg=1`). Linux `hypervisor_cpuid_base` callee-saved GPR bump to
+`0x4000FF00` so each vendor is one CPUID (iron COM2 `90c85d5` still
+walked `n=256 leaf=0x4000bd00` after `Loaded initrd`). alpine-virt 6.12.13
+keeps that `base` in EBX; `native_cpuid` `push %rbx` before CPUID so the
+loop copy is the 8-byte RSP slot (not R12). Nineteenth slice: i8253 channel 0 is a 16-bit lo/hi + latch
+counter so Linux `nolapic` `inb 0x40` sees a real count; `raise_pit` steps it.
+The old stub wrote `val | 0x00FF` and never returned a high byte. Eighteenth slice: same-length ISO patch keeps `squashfs` in
+`modules=` (`squashfs,sd-mod,usb-storage quiet` → `squashfs console=ttyS0 nolapic  `;
+twenty-fifth slice swapped in `virtio_blk` and dropped `nolapic` after the xAPIC trap)
+so Alpine mkinitfs can mount the live root; optional `console=tty0` → `noapic`;
+MMIO insn fetch loops across 4 KiB pages; decode skips segment prefixes and
+zero-extends MOVZX / 32-bit MOV into r8–r15. Seventeenth slice: Alpine
+auto-answer sets `BOOTLOADER=grub` on `setup-disk` and replies `grub` to a
+`bootloader?` prompt so the picker cannot stall the install. Sixteenth slice:
+ISO patch also sets `nolapic` so Linux does not program the guest-UEFI static
+xAPIC page (CUR_COUNT never moves) and then disable PIT. Fifteenth slice:
+product ISO PIT IRQ 0 on HLT/preemption so Linux jiffies advance and HLT
+wakes; UART/virtio PIC still beat the timer. Fourteenth slice: same-length ISO
+patch added `console=ttyS0` / `noapic` (later restored squashfs in slice 18);
+`alpine_dev=cdrom` → `alpine_dev=vdb` when present so alpine-virt
+`nlplug-findfs` looks at virtio-iso `/dev/vdb` (0 hits OK).
+Thirteenth slice: virtio INTx also raises IOAPIC pin 11 (PCI
+interrupt line) so Linux without ACPI `_PRT` can complete virtio-blk.
+Twelfth slice: virtio GPA copies stop at 4 KiB so lazy report-RAM
+2 MiB slots (non-contiguous HPA) are not overrun. Eleventh slice: product ISO window reveals a read-only virtio-blk
+at `00:03.0` (`/dev/vdb`) backed by the ISO bytes so alpine-virt (virtio
+initramfs, often without `ata_piix`) can find ISO9660 media; packed
+common-cfg 32-bit read at `0x10` includes `num_queues`; slot-3 INTA is GSI 18.
+Tenth slice: virtio-blk OUT walks every data descriptor in the
+chain (Linux blk-mq bio_vec), not only the first. Ninth slice: ATAPI PIO DRQ is 31 CD sectors so Linux `sr` READ(10)
+is not completed short at 4; IDENTIFY is PIO-only; nIEN masks IRQ 14.
+Eighth slice: ISO patch loads `ata_piix` + `sr-mod` + `console=ttyS0`
+(squashfs stays in initramfs), GRUB `gfxterm` → `serial` when present, BusyBox
+`/ # ` auto-answer, 64-bit virtqueue GPA writes keep the high half. Seventh slice: virtio-blk OUT copies the full request (not a 4 KiB
+cap), ISO patch loads `sr-mod` + `console=ttyS0` and zeros GRUB timeout, virtio
+PCI INTA line is IRQ 11. Sixth slice: Alpine serial auto-answer — `login:` → `root`, `~# `
+→ `setup-disk -m sys /dev/vda` (with virtio modprobe). Fifth slice: host COM2 (iDRAC SOL) then COM1 RX is copied into
+guest COM1 RBR so the installer can take serial input. 16550 loopback so
+Linux 8250 autoconfig can bind. Fourth slice: product ISO 16550 (scratch/FIFO, COM1 GSI 4) so
+Linux 8250 can bind `ttyS0`, plus a same-length ISO cmdline patch
+(`sd-mod,usb-storage quiet` → `sd-mod console=ttyS0`). Lab UART stays
+stub. Third slice: product ISO PIC + IOAPIC (ATA GSI 14, virtio slot-2
+INTA GSI 17) and VM-entry inject so a Linux installer can complete virtio-blk
+/ ATAPI instead of polling. Lab 8259 stays RAZ/WI. PRE-EBS ESP probe for
+`\EFI\RayNu\linux.iso` (then `\linux.iso`, `\EFI\RayNu\install.iso`) copies a
+window-sized ISO into `LOADER_DATA`. Guest-UEFI presents that ISO, arms
+virtio-pci queues only when the window is armed, and **holds** instead of
+packed-bzImage E4. Lab 72 KiB stub / `iso=0` still enum-only and fail-softs
+to E4 `LINUX-EARLY`. Product resume cap is 16 777 216 on iron **and** nested
+when the window is armed (lab-stub nested still 65536). Not `ISO-INSTALL-OK`. Keep
+`windows_iso` / `generic_uefi`. `ISO-BOOTED-FROM-DISK` is persist-detect.
 M4.3 host-slab closed on iron COM2 after `22e28d0`: `M4.3 blk probe host
 slab HPA=0x10c00000`; `guest_code=0x10c00000`; `RAYNU-V-M4-BLK-OK`; then
 `M4-NET-OK` / `M4-SMP-OK` / `R640-BOOT-OK` / Phase F coexist on
-`10.99.99.126:8443`. `ISO-BOOTED-FROM-DISK` on that paste is persist-detect
-(M7.7 LBA stamp), not a distro installer. Stage 45, P0-60, and G0 relocate
-stay CLOSED. Next is Stage 46: Linux ISO install to virtio-blk.
+`10.99.99.126:8443`. Stage 45, P0-60, and G0 relocate stay CLOSED.
 Accepted sequence ([ADR-014](adr/ADR-014.md)): Stage 45 (closed) → P0-60
 (closed) → G0 VMCS relocate (closed) → M4.3 blk host-slab (closed) → Stage 46 `ISO-INSTALL-OK`.
 Do not number G1 as Stage 46.
@@ -325,7 +659,10 @@ Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (**closed** iron COM2 `0be7283`:
 scsi=0x28 port=0x3f8; 2048-byte FAT + ISO9660 BOOTX64; 262144-exit cap).
 
 **Next after Stage 45 + P0-60 + G0 relocate + M4.3:** Stage 46
-`ISO-INSTALL-OK` (not `sectors>0` alone; G1 is not Stage 46).
+`ISO-INSTALL-OK` (OPEN; PIC/IOAPIC inject + ESP retain + virtio-pci queues +
+read-only ISO virtio at `00:03.0` + hold when the product window is armed;
+lab stub still E4; not `sectors>0`
+alone; G1 is not Stage 46).
 Product ISO is
 [ADR-014](adr/ADR-014.md) (UEFI+virtio, typed; not bzImage-only). Optional: skip
 `VMCLEAR` when launch-state is launched and `VMRESUME` instead. Keep

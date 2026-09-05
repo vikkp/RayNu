@@ -49,6 +49,9 @@ pub mod arch;
 #[path = "../guest/mod.rs"]
 pub mod guest;
 
+#[path = "../raynu_f/mod.rs"]
+pub mod raynu_f;
+
 /// Product identity banner printed on serial at boot.
 pub const BOOT_BANNER: &str =
     "RayNu-V r640-hypervisor — formally verified bare-metal hypervisor";

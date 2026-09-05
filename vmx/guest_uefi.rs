@@ -54,7 +54,7 @@ pub const M7_E5_OVMF_VMLAUNCH_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK"
 
 /// Honest residual. First guest-UEFI entry is not Everest E5.
 pub const E5_OVMF_VMLAUNCH_RESIDUAL_NOTE: &str =
-    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI 00:00.0 DID is i440FX 0x1237 (PlatformMemMapInitialization VGA IoMemory HOB at 0xA0000-1MiB, stock QEMU map, not merged [0, LowMemory)); 00:00.0 stays i440FX so CpuDxe AcpiTimerLibConstructor HostBridgeDevId matches 0x1237 (PIIX4_PMBA_VALUE 0xB000) not ASSERT(FALSE) on virtio 0x1042; DXE latches virtio 0x1042 at 00:02.0 on other-BDF CF8 (PciBus/BOTH-OK); virtio Header Type is multifunction so a walk finds IDE fn1; slot-0 Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:02.0; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi@2 not scsi@0); ACPI PM timer (port 0 dword + PIIX 0x408 + 0xB008) so AcpiTimerLib Delay can end; iron 2cbf9e8 retcmp= cmp ax,0x1237/0x29C0/0x0D57 then mov word 0xB000/0x0600 default call DebugAssert (AcpiTimerLibConstructor; 00:00.0 was virtio 0x1042); post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; 8042 KBC 0x60/0x64; KeyboardWaitForValue; nested c19b91f BOTH-OK then n=32768 ataio=0 acpi=14903 port=0x64 (OBF never set after 0xAA); self-test 0x55 plus command ACK; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; iron aee545f DXE assert skip caller=0x1d25193 then #UD linear=0x109d stop n=5364 sectors=0; revert iron ebec skip; MTRR power-on E=0 VCNT=8 no UC hole (firmware programs); iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000 noskip flood; VCNT=32 power-on no hole plus mtrr1/mtrrv dump; iron a9ffaa5 VCNT=32 power-on mtrr0=0x80000000 lastmsr=EFER still ASSERT; DxeCore CoreStartImage call EntryPoint (c6401801ff5020) loc2=ldri CpuDxe; MTRR GetAllMtrrs then paging refresh IsExecuteDisableEnabled; hide NX/1G/TME and strip EFER.NXE so CpuDxe does not ASSERT_EFI_ERROR SetMemorySpaceAttributes XP; dump ldri ImageBase; 80000008 subleaf 0; iron 5f59c86 efer=0x500 lastmsr=0x23f imgentry CpuDxe NXE-off still ASSERT (MtrrGetMemoryAttributes not XP); MAXPHYADDR [36,48] not clip-36; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; iron d5fceb1 MAXPHYADDR unclip past CpuDxe then #PF err=0 CR2 0x80B000 MEMFD mov al,[disp32] (linear dump was RIP not CR2); identity_map_not_present NP 2M/4K in guest PT via ram_hpa; iron 3311ff3 #PF cr3=0x0 fail=alloc; build_identity_4g SEC PML4 0x800000; iron 7ea62ea fail=present SEC already mapped CR2 still VMWRITE CR3; iron 13e8bd2 CR3 identity then same #PF fail=present (walker present, CPU NP); rebuild SEC 4G identity once; hide LA57; iron COM2 after CR3 load #PF err=0x9 cr2=0xa027c8 (P+RSVD; NX-in-PTE with NXE=0); rebuild 4G on reserved-bit #PF; iron 101b8ec 4G n=1 n=2 then fail=present cr2=0x1ae7078 pde=0x30646870 (MEMFD heap clobber); HV identity PML4 at 0x200000 not 0x800000; e820 reserved 36KiB; always rebuild 4G; iron cc7d78a HV PML4 4G n=1 cr3=0x200000 then EPT violation gpa=0xc01df1b7 reason=0x30 (PCI hole; 4G identity present, EPT sink stopped at 1GiB); sink-resume PCI hole 0xC0000000; iron fdf07ba maps=4 EPT sink worked then #PF err=0x2 cr2=0x1e9000 pde=0xc0000083 4G n=2 then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 (4G WB identity vs MTRR UC 2-4GiB); RAM-only identity leaves plus UC 2MiB sink #PF; nested 5db28e3 #PF cr2=0xffc00000 after RAM-only (flash NP) stop n=1007 BOTH missing; identity also maps flash 0xFFC00000 plus xAPIC 0xFEE00000; iron eb4b27d flash+xAPIC identity then #PF cr2=0x80000008 err=0xb pde=0xc0400083 (RSVD 1GiB PDPTE in MTRR UC hole); iron 73576cc bulk UC 2MiB identity then #PF cr2=0x1e9000 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f (PAT UC- vs MTRR UC); iron a428202 on-demand mmio then #PF cr2=0x80000008 err=0xb pde=0xc0400083 identity MMIO fail (1GiB PDPTE after retargeted PDPT); split RSVD 1GiB into SEC PD even when PML4[0] is not pml4+0x1000; rebuild 4G then retry one PAT-UC 2MiB; hole stays NP at 4G rebuild; iron 124c1a8 identity MMIO n=2 then #PF cr2=0xffffffff96808086 err=0x2 pde=0 rip=0x300000 insn=afafafaf (sign-extended 32-bit 0x96808086 walks PML4[511] not low 4G); map high-half 2MiB to zero-extended GPA; e820 reserved 44KiB; iron b25d75b identity MMIO n=3 then #PF cr2=0x80000008 rip=0x30108e #UD linear=0x301093 insn=82bf (firmware PT stores at 0x80000008 hit shared HPET EPT sink); dedicated 2MiB UC scratch HPA for GPA 0x80000000 not zero sink; iron 577c9eb scratch 0x80000000 then EPT sink gpa=0xc0200000 then #PF cr2=0x9896808086 err=0x2 pde=0 rip=0x300001 insn=afafafaf (leftover-high 32-bit hole; PT stores at 0xC0200000 hit shared zero sink); scratch pool for hole PT pages except live HPET 2MiB; leftover-high CR2 overflow PML4[1]; poison-fill RIP not resume; iron 471391f pool=8 maps=2 then #PF cr2=0x1e9000 err=0x2 pde=0xc0000083 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f; split 1GiB RAM PDPTE do not rebuild 4G; pre-scratch 0xC0000000+0xFCE00000; iron d757a0a SPLIT n=2 cr2=0x1e9000 then #PF err=0x9 pde=0xafafafafafafafaf cr2=0x1d1e6cb (firmware 0xAF-filled SEC PD after 1GiB); identity_refill_low4g_pd; stop n=1172 err=0x3 pde=0x1c000e7 rip=0x1de592 then E4 R640-BOOT-OK not Stage 44; iron 0bad45d refill then #PF 0x80000008 MMIO n=2 EPT scratch 0x80000000 plus 0xC0200000..0xC0A00000 then EPT sink gpa=0xc0c00000 leftover CR2 0x9896808086 rip=0xd00001 firmware-serial #DE RIP 0xCFFF9E DIV RCX=0 ASSERT ebec noskip; scratch pool 32 plus pre-scratch 0xC0000000..0xC0E00000 and 0x80000000; iron 5837243 pool=32 then EPT scratch walk 0xC1000000..0xC3A00000 then scratch cap gpa=0xc3c00000 sink RIP 0x3d00001 pci_ide=0; guest_uefi_ept_scratch_on_qual write/fetch only; EPT hole ro R+X sink for hole reads so a later store can upgrade; pre-scratch only 0x80000000; iron da2c9c4 pool=32 then EPT scratch 0xC0000000 plus 0x80000000 plus 0xC0200000..0xC3C00000 then scratch cap gpa=0xc3e00000 qual=0x184 RIP 0x3dfffff pci_ide=0; SDM bit 8 walk bits 2:0 are original access; guest_uefi_ept_scratch_on_qual is data-write only (not fetch); EPT hole ro R+X sink for hole reads so a later store can upgrade; iron f93caee write-only scratch then EPT hole ro gpa=0xc0000000 qual=0x184 plus scratch 0x80000000 plus hole ro 0xc0200000 plus scratch 0xc0000000 qual=0x1ab then #PF cr2=0x9896808086 rip=0x300001 insn=afafafaf poison fill (hole RO mapped live HPET SINK_HPA as PTEs); dedicated zero 2MiB for hole RO not SINK_HPA; HPET stays on SINK_HPA at 0xFEC00000/0xFED00000 only; not bulk 2-4GiB (73576cc ASSERT); not WB RAM (fdf07ba ASSERT); iron 06b011a hole-zero then #PF err=0x3 cr2=0x1d1abb8 pde=0x1c000e7 rip=0x1de592 (CR0.WP stack push in 2MiB identity; not leftover-high 0x9896808086); identity SPLIT4K 2MiB to 4K RW; nested Intel 06b011a BOTH-OK ataio=236 packet=0 (skip_insn after one word of rep insw); string/REP PIO so IDENTIFY lands; nested Intel 1e0f4a7 io string fw_cfg 0x511 then #PF cr2=0x205f18 4G n=2 cr2=-1 stop rip=0x28f402 BOTH missing; iron COM2 1e0f4a7 io string 0x511 n=4 then identity 4G n=1 cr2=0x80b000 ticks rip=0x3d2be4 ASSERT noskip callerrip=0x1f21193 lastmsr=0x23f mtrr0=0x80000000 imgentry=0x1dd97d3 pci_ide=0 (never SPLIT n=2); string RAM fill is ATA-only; iron COM2 54a8708 no 0x511 then identity SPLIT n=2 then SPLIT4K n=3 cr2=0x1d1abb8 pde=0x219067 then AlreadyPresent loop to identity cap n=256 stop n=1421 rip=0x1de592 pci_ide=0; SPLIT4K MOV CR3 after split; do not resume already-RW; iron COM2 19b0c11 hole-zero then identity MMIO n=2 cr2=0x80000008 then tick reason=0x34 rip=0x27e22d5 insn empty (RIP left 32MiB); hole RO was R+X so fetch executed dedicated zeros; leftover CR2 0x9896808086 rip=0x3ed00001 identity MMIO n=4..256 2MiB walk identity cap stop n=5687 pci_ide=0 then E4 R640-BOOT-OK not Stage 44; hole RO is R only (no X); do not identity-map [32MiB, 0x80000000); split PDPT[0] 1GiB on EPT, MOV CR3, and preemption while RIP is in 32MiB; iron COM2 89c3731 SPLIT PDPT0 then identity 4G n=1 hole ro then SPLIT4K n=2 cr2=0x1d1abb8 pde=0x219027 pte=0x1d1a067 already RW stop n=1168 rip=0x1de592 pci_ide=0 (RIP stayed in 32MiB; not 0x27e22d5); CR0.WP ANDs R/W through PML4/PDPT so OR walk R/W not only the 4K leaf; iron COM2 7413554 SPLIT4K n=2 resumed pml4e=0x5a6d (RO) pdpte=0x202067 then tick rip=0x1df1b5; then #PF cr2=0xfee00020 err=0x9 pdpte=0xc0600083 pml4e=0x5a6f stop n=1395 rip=0x1d84c7 pci_ide=0 (firmware 1GiB RSVD over xAPIC; not already-RW; not 0x27e22d5); map_mmio xAPIC RSVD 1GiB; iron COM2 32ee302 identity MMIO n=3 cr2=0xfee00020 then tick rip=0x1d6be4 then ASSERT noskip callerrip=0x1d25193 lastmsr=0x23f mtrrdef=0xc06 mtrr0=0x80000000 mtrr1=0x3fff80000800 imgentry=0x1bdd7d3 pci_ide=0 (WB xAPIC/flash 2MiB in MTRR UC 2-4GiB; not already-RW); PAT-UC PCD+PWT on flash+xAPIC identity; nested Intel 48c598a BOTH-OK ataio=1308 packet=0 insn=ef then edc9c3 (SET FEATURES 0xEF ABRT then IN EAX,DX poll; never PACKET); SET FEATURES succeeds DRDY not ABRT; iron COM2 855ba1c/48c598a PAT-UC then identity MMIO n=3 cr2=0xfee00020 ASSERT noskip callerrip=0x1d25193 lastmsr=0x23f mtrr1=0x3fff80000800 pci_ide=0 (PDPT[3] RSVD split; PDPT[2] 1GiB WB over 2-3GiB MTRR UC, no #PF); split sibling 1GiB in the UC hole; dump pdpte2; nested Intel 73ed589 BOTH-OK ATAPI-OK sectors=1 packet=9 scsi=0x28 ata=0xa0 ataio=982 then E4 Linux #DF vec=8 after BZIMAGE (OVMF XSETBV left host XCR0; E4 copies host CR4.OSXSAVE); restore host XCR0 and CR4.OSXSAVE after guest-UEFI before E4; iron COM2 pdpte2=0xc0400083 then MMIO n=4 pde=0xfee000ff ASSERT callerrip=0x1d25193 pci_ide=0 (CpuDxe software-walks 1GiB WB PDPT[2]; RAM SPLIT n=2 pdpt_i=0 never split the hole); identity_split_mtrr_uc_hole PDPT[2]+[3] on every identity map including 0x1e9000; dump pdpte2 after MMIO; iron COM2 8df2793 SPLIT PDPT0 then 4G n=1 then EPT hole ro gpa=0xc0000000 then SPLIT4K n=2 pdpte2=0x204067 (PD not 1GiB WB) no xAPIC #PF then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 pci_ide=0 ataio=0 (CpuDxe software-walks NP 2-4GiB vs MTRR UC); PAT-UC 2-4GiB hole PCD+PWT at 4G rebuild not 73576cc UC-; dump pde8000 after 4G; iron COM2 d7bfb23 4G pde8000=0x800000ff SPLIT4K pml4e=0x5a6d pdpte2=0x204067 no xAPIC #PF still ASSERT callerrip=0x1d25193 (firmware PDPT 0x5000; PDPT[3] can stay 1GiB WB); identity_sync_live_mtrr_uc_hole live PDPT on SPLIT4K/4G/MMIO (not GPA 0x5000 until PML4[0] points there; not tick); dump pdpte3; iron COM2 1de9389 pdpte3=0x205067 PS clear pde8000=0x800000ff still ASSERT callerrip=0x1d25193 lastmsr=0x23f (1GiB PDPT[3] disproved); dump pml4e/pde8000/pdefee/pdeffc/pat at ASSERT; iron COM2 44c56db pde8000=0x800000ff pdpte3=0x205067 pdefee=0xfee000ff pdeffc=0xffc000ff pat=0x0 still ASSERT callerrip=0x1d25193 lastmsr=0x23f (VMCLEAR GUEST_IA32_PAT=0; Xeon VM-entry LOAD_PAT; PA0=UC vs MTRR WB RAM); init GUEST_IA32_PAT SDM reset 0x0007040600070406 plus HOST_IA32_PAT like E4 launch.rs; dump entry=; nested Intel 1a93cb8 ATAPI-OK sectors=1 then E4 #DF vec=8 cr4=0x2060 (startup_64 cr4&=0x1060 cleared OSFXSR); host-own OSFXSR+OSXMMEXCPT like VMXE; nested Intel ab25682 ATAPI-OK then ERROR unexpected CR-access rip=0x8400276 qual=0x4 cr4=0x2668 (startup_64 mov cr4 intercepted); emulate MOV CR4 keep VMXE+OSFXSR; iron COM2 1a93cb8 IA32_PAT guest=0x7010600070406 host=0x7010600070406 entry=0xd1fb then ASSERT pat=0x7010600070406 entry=0xd3fb pde8000=0x800000ff pdpte3=0x205067 lastmsr=0x23f mtrrdef=0xc06 mtrr0=0x80000000 (PAT WB proved; NP [32MiB, 2GiB) vs MTRR WB); guest PT WB [32MiB, 2GiB); do not EPT-map that window (89c3731); dump pde20; iron COM2 28f42d2 pde20=0x20000e7 pde8000=0x800000ff pat=0x7010600070406 still ASSERT callerrip=0x1d25193 lastmsr=0x23f (PDPT[0] mid-gap WB proved; live firmware PDPT[1] 1-2GiB NP vs MTRR WB); identity_ensure_pdpt_2m PDPT[1]; dump pde4000 pdpte1; iron COM2 be1b028 pde20=0x20000e7 pde4000=0x400000e7 pdpte1=0x203067 pde8000=0x800000ff pat=0x7010600070406 still ASSERT callerrip=0x1d25193 lastmsr=0x23f maxpa=46 mtrrdef=0xc06 pml4e=0x5a6f (0-4GiB guest PT matches MTRR WB+UC; NP [4GiB, 2^46) vs default WB; PML4E PWT); cap iron MAXPHYADDR 32 so GCD equals 4GiB identity (clip-36 left 4-64GiB NP); nested 36/40 stays; identity_clear_table_pwt_pcd live PML4E; iron COM2 162809f maxpa=32 mtrr1=0x80000800 pml4e=0x1a02023 (PWT clear) pde20=0x2000083 pde4000=0x400000e7 still ASSERT callerrip=0x1d25193 lastmsr=0x23f imgentry=0x6e87d3 no 4G n=1 (firmware PDPT 0x1a02000 sparse PDPT[0] NP vs MTRR WB); identity_refill_low4g_pd_keep_4k PDPT[0]; dump pde40 pdpte0 cr3; nested Intel 1b587dd BOTH-OK ataio=0 (ensure_pdpt_2m(0) on 1GiB retargeted SEC PD); keep_4k NP-only, do not split PDPT[0] 1GiB on sync; iron COM2 1b587dd/55d4dc6 keep_4k pde20=0x20000e7 pde40=0x40000e7 pde4000=0x400000e7 pde8000=0x800000ff maxpa=32 pml4e=0x1a02023 (no PWT) mtrr1=0x80000800 still ASSERT callerrip=0x1d25193 lastmsr=0x23f imgentry=0x6e87d3 pci_ide=0 ataio=0 (0-4GiB PT matches MTRR WB+UC; 2MiB at GPA 0 spans 1MiB fixed-MTRR); identity_split_gpa0_fixed_mtrr 4K at 0-2MiB; identity_clear_table_pwt_pcd also TABLE_FLAGS USER; dump pde0 pte0 pdpte2; iron COM2 659e7de SPLIT PDPT0 flood tick n=256 rip=0xfffcd6d6 (identity_map_mmio_2m 0x1E9000 smashed GPA0 4K every preempt); mmio 2m keeps 4K tables; nested Intel 61f84c6 GPA0 SPLIT4K then BOTH-OK pci_ide=1 ataio=0 3/3 (ATAPI-OK missing); guest_uefi_gpa0_fixed_mtrr_split iron maxpa=32 only; nested 36/40 keeps 2MiB at GPA 0; iron COM2 84171aa SPLIT4K GPA0 pde0=0x20b027 pte0=0x67 pde20=0x2000083 pde40=0x4000083 still ASSERT callerrip=0x1d25193 (GPA0 4K plus table USER proved; firmware 2MiB no USER); keep_4k OR LARGE_2M_FLAGS onto WB 2MiB (0x83 to 0xE7); dump pde6e; nested Intel 5811368 SPLIT4K GPA0 then BOTH-OK pci_ide=1 ataio=0 3/3 (host 46+ capped to 32); guest_uefi_gpa0_split_now skips GPA0 when host CPUID hypervisor bit is set; iron COM2 489d118 GPA0 4K pte0=0x67 pte1m=0x100067 pml4e1=0x0 pde20=0x20000e7 still ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 mtrr1=0x80000800 (0-4GiB PT matches MTRR; leftover-high NP; GCD untested spans PEI Uc32Base WB+UC); fw_cfg etc/e820 reserved PCI UC [2GiB,4GiB) so PlatformAddHobCB splits GCD at MTRR UC; iron COM2 38481d9 e820 type-2 reserved PCI UC still ASSERT pde8000=0x800000ff callerrip=0x1d25193 (GCD untested [32MiB,4GiB) mixed mid-gap WB + 4G PAT-UC; this OVMF.fd ignores type-2 below 4GiB); identity_set_pat_uc_hole WB 2-4GiB until firmware UC MTRR live then PAT-UC (not fdf07ba WB-while-UC-live; not 8df2793 NP); iron COM2 f07a597 PAT-UC+MTRR match still ASSERT pde8000=0x800000ff mtrr0=0x80000000 callerrip=0x1d25193 (guest PT family exhausted; GCD mixed range); hold valid UC variable MTRRs so CpuDxe RefreshGcd sees default WB (MTRR UC held (GCD)); guest_uefi_mtrr_set_admit_uc; iron COM2 22e0cb2 MTRR UC held mtrrv=0 pde8000=E7 still ASSERT callerrip=0x1d25193 (mixed MTRR disproved); e820 type-2 reserved [32MiB, 2GiB) mid-gap so GCD splits before Uc32Base (P3; 38481d9 PCI-hole type-2 ignored); iron COM2 f9a08c9 mid-gap reserved still ASSERT callerrip=0x1d25193 mtrrv=0 pde8000=E7 (e820 ignored); CMOS+fw_cfg LowMemory 2GiB so PEI HOB ends at Uc32Base (not EPT-map [32MiB, 2GiB)); iron COM2 fad19b2 CMOS 2GiB then EPT unbacked report-RAM gpa=0x7bddd000 reason=0x30 stop n=600 (firmware heap at top of LowMemory; ASSERT 0x1d25193 gone); lazy 2MiB WB EPT report-RAM pool (not identity 2GiB; not 89c3731); iron COM2 32e7d46 report-RAM pool=32 mapped gpa=0x7bddd000 then high heap; tick rip=0x7f8e21ca reason=0x34 same=376 lastmsr=0x23f insn empty (32MiB peek); peek report-RAM HPA for skip/ASSERT dump (do not skip ebecc9c3); iron COM2 957e0ad insn=ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f cr3=0x7fa01000 pml4e=0 pci_ide=0 (CpuDxe ASSERT relocated into report-RAM; 32MiB PT walk missed high CR3); P2 MTRR UC admitted (GCD) (hold left mtrrv=0 vs GCD UC at 2GiB); dump-walk CR3 via report-RAM peek; E4 hide LA57 (nested Intel ATAPI-OK then #DF trampoline 0x9e036); iron COM2 c70768b MTRR UC admitted mtrrv=1 mtrr0=0x80000000 pde8000=0x80000083 cr3=0x7fa01000 pml4e=0x7fa02023 insn=ebecc9c3 callerrip=0x7fd25193 pci_ide=0 (live report-RAM CR3 WB 2MiB vs admitted UC; 32MiB identity_sync missed pml4>=ram_len); guest_uefi_pt_paint_live_uc_hole peek/poke PAT-UC on high CR3 (CMOS 2GiB GCD split; not f07a597 low-CR3 paint; not skip ebecc9c3); iron COM2 4ae87de painted n=1029 pde8000=0x800000ff mtrrv=1 then ASSERT insn=ebecc9c3 pde0=0xe3 pte0=0 (PAT-UC+MTRR match on live CR3; 2MiB GPA0 spans 1MiB fixed-MTRR; identity_split_gpa0 TableOutOfRam); guest_uefi_pt_split_gpa0 peek/poke HV PT 0x20B000 on live PD[0]; iron COM2 7e5d70f GPA0 4K live CR3 n=513 pde0=0x20b027 pte0=0x67 pte1m=0x100067 pde8000=0x800000ff still ASSERT insn=ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pci_ide=0 (PT matches MTRR on live high CR3; stop PT peek/poke; CpuDxe RefreshGcd GCD/HOB); do not lower CMOS 2GiB (32MiB LowMemory already ASSERTed); do not retry P3 mid-gap type-2; iron c1476d3 hypervisor etc/e820 VGA hole logged but PEI never opened the file (CMOS size to HOBs to GCD, not ScanE820); PEI 00:00.0 DID i440FX 0x1237 so PlatformMemMapInitialization adds IoMemory 0xA0000-1MiB; DXE latches virtio 0x1042 on other-BDF CF8; do not remap cmp bx 0x1237 while PEI captures HostBridgeDevId; dump e820= fwdir= pei_did=; iron f7620f6 PEI pci cfg=0x80000002 val=0x1237 pei_did=1 DXE virtio DID latch 00:01.03 then virtio 0x1042 VIRTIO-OK DXE-OK sectors=0 plat=1 e820=0 fwdir=0 remap n=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pde0=0x20b027 pte0=0x67 pte1m=0x100067 (DID fork closed); iron d6b012a pte_a0000=0xa0067 pte_c0000=0xc0067 (GPA0 identity WB; firmware FIX 0x250-0x26f are 0x06 WB; not GCD VGA punch; do not PAT-UC VGA); filehex test r9d jnz wbinvd mov rax EFI_UNSUPPORTED is CpuFlush FlushType!=0; nop jnz in live report-RAM so every FlushType WBINVD; dump r9=; iron f0781bb CpuFlush FlushType-any WBINVD n=2 filehex jnz-nop 9090 r9 leftover 0x21 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f (CpuFlush leftover File dump not the ASSERT; P1 22e0cb2 hold ran while FIX was power-on 0 UC; firmware now FIX 0x06 WB); hold variable UC after FIX WB so GetMemoryAttributes is uniform on a spanning GCD (MTRR UC held after FIX WB (GCD)); scan every report-RAM CpuFlush copy (do not return after the first slot); dump flushjnz=; iron 6334704 MTRR UC held after FIX WB mtrrv=0 mtrr1=0x0 pde8000=0x80000083 flushjnz=0 filehex 9090 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f (mixed variable-UC disproved with FIX WB; PEI i440FX VGA IoMemory HOB is GCD UC while firmware FIX 0x259-0x26f are WB 0x06; hold also left Uc32Base GCD UC vs default WB); admit variable UC again so the 2GiB hole matches; coerce FIX 0x259 and 0x268-0x26F to packed UC (MTRR VGA FIX UC (GCD)) so VGA GCD IoMemory matches; keep 0x250/0x258 WB; dump mtrr259=; iron ddbd866 MTRR UC admitted mtrrv=1 mtrr0=0x80000000 mtrr259=0x0 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pte_a0000=0xa0067 pte_c0000=0xc0067 (GCD/MTRR VGA+hole matched; live GPA0 VGA PTEs still WB vs coerced FIX UC); PAT-UC 4K VGA leaves on live CR3 (guest_uefi_pt_paint_vga_uc; pte_a0000=0xa007f); dump calltgt=; iron e368e86 VGA 4K live PT PAT-UC n=96 cr3=0x800000 pte_a0000=0xa007f pte_c0000=0xc007f mtrr259=0x0 mtrrv=1 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f calltgt=0x7f8e21a5 tgthex=554889e54883ec10 (DebugAssert prologue, not RefreshGcd) pml4e=0x7fa02027 (PWT already clear); option-ROM C0000 PAT-UC vs firmware FIX 0x268-0x26F WB 0x06; coerce only FIX 0x259 (A0000-BFFFF packed UC); leave 0x268-0x26F firmware WB; PAT-UC only [0xA0000, 0xC0000); dump mtrr268=; expect pte_c0000=0xc0067 mtrr268=0x606060606060606; iron fd041bb VGA 4K live PT PAT-UC n=32 pte_a0000=0xa007f pte_c0000=0xc0067 then ASSERT mtrr259=0x0 mtrr268=0x0 (CpuDxe UC'd option-ROM after firmware WB) still ebecc9c3 calltgt=0x7f8e21a5; e368e86 full VGA UC matched and ASSERTed (GCD SystemMemory WB-only; SetMemorySpaceAttributes UC fails); hold FIX 0x259 and 0x268-0x26F WB after firmware 0x06 (MTRR VGA FIX WB held (GCD)); GPA0 4K leaves stay WB (pte_a0000=0xa0067); dump prehex=; iron 96ef961 MTRR VGA FIX WB held mtrr259=0x606060606060606 mtrr268=0x606060606060606 pte_a0000=0xa0067 pte_c0000=0xc0067 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 calltgt=0x7f8e21a5 prehex=66c705b30800000006eb05e85ff8ffff (mov word CacheWriteBack 6; jmp skip; call DebugAssert); VGA UC-match e368e86 and VGA WB-match 96ef961 both ASSERT at the same DebugAssert; dump 32-byte prehex immediately before call at 0x7fd25193 plus rax (EFI_STATUS); retpre= 32 bytes at CpuDxe ret-32 (ASSERT_EFI_ERROR site); keep PEI i440FX 0x1237 / DXE virtio 0x1042; keep FIX WB hold; no DID flip; no new PAT-UC; iron 6f077a3 prehex at 0x7fd25193 is DxeCore call [rax+0x20] rax=0 leftover (CpuDxe never returned); retpre switch stores UINT16 0x0600/0xB000 then jmp; default call DebugAssert (ASSERT(FALSE) not ASSERT_EFI_ERROR); dump retcmp= at ret-64 plus rbx rsi rdi g16=; iron 2cbf9e8 retcmp=000000e855f8ffff663d37127417663dc029741c663d570d752166c705cb0800 (cmp ax,0x1237 je PIIX4; cmp ax,0x29C0 je Q35; cmp ax,0x0D57 jne ASSERT; stores PIIX4_PMBA_VALUE 0xB000 / ICH9_PMBASE_VALUE 0x0600); g16=0000 rbx=0 rsi=0x7f6e1042 (virtio DID leftover) pci cfg=0x80000002 val=0x1042 after latch; keep 00:00.0 i440FX 0x1237; virtio at 00:02.0; do not skip ebecc9c3; iron bf696ca COM2 ATAPI-OK sectors=1 packet=9 scsi=0x28 ata=0xa0 ataio=982 stop n=30769 pci_ide=1 virtio=1 BOTH-OK n=12411 no AcpiTimerLib ASSERT; not El Torito; not installer; E4 SHELL then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 44; Stage 45 keeps VMCS after first ATAPI sector until catalog+load READ plus payload COM RN-ELT or 131072-exit cap (post_atapi_should_stop does not apply the 32768 post-ATAPI tail after first ATAPI or after catalog+load READ; first sector is often LBA 0 dummy not catalog; maybe_print_eltorito; BAR-relocated ATA data-port rep insw fills RAM); El Torito catalog checksum plus FAT12 ESP EFI/BOOT/BOOTX64.EFI (not raw PE at load LBA); eltorito-progress catalog= bootimg=; iron COM2 ATAPI-OK n=30769 then catalog=1 bootimg=0 (Stage 45 kept VMCS; not ELTORITO-OK); nested 8881cdd catalog=1 bootimg=1 elt=0 at 131072-exit cap (DxeCore LoadImage SectionAlignment 0x1000 so ProtectUefiImage can set X); iron COM2 df7d158 catalog=1 bootimg=1 elt=0 com=0 sectors=107 packet=318 ataio=120786 stop n=131072 rip=0x7ee8786d port=0x1f7 scsi=0x0 (BDS ATA PIO; 131072-exit cap; not ELTORITO-OK; 512-byte FAT BPB then PVD root zeros last READ LBA 17; not 1a2b088 4K PE; E4 LINUX-EARLY then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 45); 2048-byte FAT plus ISO9660 EFI/BOOT/BOOTX64.EFI; 262144-exit cap after iron+nested hit 131072-exit cap still in ATA/PCI; iron COM2 0be7283 firmware-serial RN-ELT RAYNU-V-M7-E5-OVMF-ELTORITO-OK n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6; E4 LINUX-EARLY then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 45; not ISO-INSTALL-OK; VMLAUNCH insn issued only when presence is true";
+    "residual: private guest-UEFI VMCS + EPT VMLAUNCH of retained ESP OVMF.fd; CR4.VMXE host-owned + CR4.OSXSAVE host-owned so OVMF SEC mov cr4,0x640 does not #GP and CpuDxe mov cr4,0x668 does not clear OSXSAVE; COM1/COM2 forwarded; past-SEC when linear leaves last 64KiB and PEI PCI or firmware serial or HLT; attach_cdrom_uefi after FirmwareArmed is GuestVisible (PCI IDE/ATAPI; IDE at 00:00.1); unarmed stays UnsupportedOnFirmware; CMOS/fw_cfg/i440fx platform; i440FX host at 00:08.0; PEI 00:00.0 DID is i440FX 0x1237 (PlatformMemMapInitialization VGA IoMemory HOB at 0xA0000-1MiB, stock QEMU map, not merged [0, LowMemory)); 00:00.0 stays i440FX so CpuDxe AcpiTimerLibConstructor HostBridgeDevId matches 0x1237 (PIIX4_PMBA_VALUE 0xB000) not ASSERT(FALSE) on virtio 0x1042; DXE latches virtio 0x1042 at 00:02.0 on other-BDF CF8 (PciBus/BOTH-OK); virtio Header Type is multifunction so a walk finds IDE fn1; slot-0 Header Type is multifunction so a walk finds IDE fn1; PIIX 00:01.1 is the same CD; PIIX4 PM at 00:01.3; remap i440FX DID in guest-private OVMF copy (cmp bx, not LZMA 37 12); CF8|CFC byte offset matches QEMU pci_host_data_read; EPT sink-resume for high MMIO; 4MiB flash window (VARS gap at 0xFFC00000); empty VARS _FVH; live HPET; HPET 1s step; stop RIP insn dump; spin jmp skip; past-PEI/DXE or CD boot attempt; empty virtio-blk at 00:02.0; product ISO virtio-pci queues gated on window; lab stub stays enum-only; fw_cfg bootorder CD then disk (PIIX ide@1,1 then virtio-fn1 ide@0,1, master drive@0, not slave drive@1; scsi@2 not scsi@0); ACPI PM timer (port 0 dword + PIIX 0x408 + 0xB008) so AcpiTimerLib Delay can end; iron 2cbf9e8 retcmp= cmp ax,0x1237/0x29C0/0x0D57 then mov word 0xB000/0x0600 default call DebugAssert (AcpiTimerLibConstructor; 00:00.0 was virtio 0x1042); post-DXE spends the 32768-exit cap until ATAPI sectors>0 (not virtio-alone; not both-enum-alone; 1b07692 n=1111 BOTH then stopped with sectors=0; 8e55abf n=2048 ata=0 unh=0 still PciBus cf8=0x80000838 ISA 00:01.0 offset 0x38; 5d9e346 n=8192 ataio=0 unh=3 port=0xcf8 empty-slot walk + KBC; 8192-exit cap ended on CF8; 2674629 n=32768 ataio=0 acpi=16612 port=0 in eax,dx); PIIX3 ISA PIRQ 0x60-0x63 default 0x80; HPET 1s on preemption/HLT not PCI I/O; HPET 1ms on CPUID/MSR/EPT; HPET TSC-delta on UART COM I/O cap 4us (not 1ms/byte; not PCI/ATA); Linux printk ticks every 4096 after #PF deliver (iron 115e5ee every-256 UART split PAT); guest UART nowait (do not clear COM2_LIVE); iron 115e5ee PAT freeze; Linux CPUID GenuineIntel + NX; guest UART TX ring drain; guest UART TX ring drain 4/exit (iron 45aec97 GenuineIntEl + NX missing then PAT); linux earlycon share TX ring (iron 202312f readable Linux version then e820 cut); linux earlycon quiet ticks; linux earlycon hush HV; linux earlycon share product ISO; cpu_flush on tick cadence even when share; linux earlycon share first CPUID; linux earlycon share first high-half; linux earlycon share first bootimg; guest UART TX drain COM2 independent; linux earlycon pace LSR THRE; linux earlycon skip #PF dump; linux earlycon skip exc deliver; poll ISO-INSTALL-OK every resume; EFER NXE after high-half; 8042 KBC 0x60/0x64; KeyboardWaitForValue; nested c19b91f BOTH-OK then n=32768 ataio=0 acpi=14903 port=0x64 (OBF never set after 0xAA); self-test 0x55 plus command ACK; ACPI PM 1s step; iron COM2 #UD RIP 0x109D pci_ide=0; iron 0ca02e6 skipped eb ec then #UD RIP 0x109D CR4=0x668 DebugLib dumped COM1 until cap; #UD intercept XSAVE retry/UD2 skip; iron d5f9431 #UD gone then n=1280..8192 reason=0x34 rip=0x6e81ca (pause CpuDeadLoop, no BOTH-OK); preempt pause/jcc skip; e2af81e missed GCC eb fc / 0F 84 rel32 (iron COM2 insn=ebec jmp -20); preempt eb/jcc32 skip; iron 891eb5b OSXSAVE CR4 intercept then skipped ebecc9c3 leave; ret then #UD 0x109D DAA PE header; do not skip jmp whose fallthrough is leave; ret; dump ASSERT retaddr; iron 17449e2 ASSERT noskip ret=0x6e8946 rip=0x6e81ca after host CPUID (Xeon topology+VMX); guest-UEFI CPUID uniprocessor hide VMX/x2APIC; FEATURE_CONTROL lock no VMX; iron ad78f12 CPUID uniprocessor then ASSERT ret=0x6e8946 after seven RDMSR 0x1B and CPUID 0x1cf11b5; xAPIC 2MiB was sink zeros (version 0); xAPIC 4K version 0x50014 not sink; iron 3f417ca xAPIC 4K mapped still ASSERT after MTRR walk 0xFE/0x2FF/0x250 (host MTRR passthrough + fixed reads 0); MTRR shadow VCNT=32 FIX WB VGA UC plus PCI hole UC 1GB at 0xC0000000; iron 408788c MTRR walk completed then still ASSERT ret=0x6e8946 after CPUID 0x1cf11b5 (not GetAllMtrrs); nested KVM sets hypervisor CPUID bit 31 plus KVMKVMKVM leaves, iron passthrough did not; guest-UEFI CPUID hypervisor present plus KVM signature; Linux high-half hides hypervisor bit plus 0x4000 scan (iron COM2 n=128 leaf=0x40003d00 n=256 leaf=0x4000bd00); Linux hypervisor_cpuid_base callee-saved GPR bump to 0x4000FF00 so each vendor is one CPUID (90c85d5 Loaded initrd then 0x4000 walk, HPET climbing); alpine-virt native_cpuid push rbx RSP slot (base in EBX, not R12); IA32_MISC_ENABLE shadowed not host; ASSERT dump callerrip plus home slots; unique RDMSR val=; iron 8700cbb hypervisor CPUID still ASSERT callerrip=0x1d25193 after WRMSR then RDMSR spin (MtrrLib WorkingRangeCount vs VCNT=8); fw_cfg bootorder NUL so ConnectDevicesFromQemu is not INVALID_PARAMETER; unique WRMSR; iron 0b7d647 VCNT=32 0xfe=0x520 PCI UC hole then firmware zeroed 0x200 still ASSERT callerrip=0x1d25193 lastmsr=EFER file=@B is pointer bytes; QEMU BOTH-OK skipped ebf3c9c3 (not ASSERT gone); EFER.LMA equals LME and CR0.PG plus IA-32e entry matches LMA; iron b4b4847 efer=0xd00 pg=1 csl=1 still ASSERT callerrip=0x1d25193 r8 is gPcdDataBaseSignatureGuid; debugcon 0x402 tee; unique CPUID; iron c40f4a8 pcdsig=1 after 32-pair MTRR walk still ASSERT; iron aee545f DXE assert skip caller=0x1d25193 then #UD linear=0x109d stop n=5364 sectors=0; revert iron ebec skip; MTRR power-on E=0 VCNT=8 no UC hole (firmware programs); iron 10cb881 VCNT=8 power-on still ASSERT callerrip=0x1d25193 mtrrdef=0xc06 mtrr0=0x80000000 noskip flood; VCNT=32 power-on no hole plus mtrr1/mtrrv dump; iron a9ffaa5 VCNT=32 power-on mtrr0=0x80000000 lastmsr=EFER still ASSERT; DxeCore CoreStartImage call EntryPoint (c6401801ff5020) loc2=ldri CpuDxe; MTRR GetAllMtrrs then paging refresh IsExecuteDisableEnabled; hide NX/1G/TME and strip EFER.NXE so CpuDxe does not ASSERT_EFI_ERROR SetMemorySpaceAttributes XP; dump ldri ImageBase; 80000008 subleaf 0; iron 5f59c86 efer=0x500 lastmsr=0x23f imgentry CpuDxe NXE-off still ASSERT (MtrrGetMemoryAttributes not XP); MAXPHYADDR [36,48] not clip-36; QEMU CI 17449e2 stuck ebf3c9c3 (jmp -13 leave;ret) — keep that skip (nested BOTH-OK); unguarded ebec skip was 891eb5b #UD; preempt noskip dump; guest-UEFI INVPCID/RDTSCP/XSAVES; XSETBV executes XCR0 (not skip_insn); fw_cfg etc/boot-menu-wait 0ms skip BdsWait; HLT skip so DXE can walk PCI; CR-access resume; firmware-simultaneous PCI enum; 8259 PIC RAZ/WI; fw_cfg etc/e820 32MiB; exception insn dump; ATAPI signature + PACKET interrupt-reason so firmware can READ(10); 8-byte IDE command BAR and BAR-relocated ATA; EXECUTE DEVICE DIAGNOSTIC 0x90 restores 0xEB14; BMIDE BAR4 RAZ/WI; first unhandled I/O traced; not firmware El Torito boot; not installer; not ISO-INSTALL-OK; no guest UEFI distro; iron d5fceb1 MAXPHYADDR unclip past CpuDxe then #PF err=0 CR2 0x80B000 MEMFD mov al,[disp32] (linear dump was RIP not CR2); identity_map_not_present NP 2M/4K in guest PT via ram_hpa; iron 3311ff3 #PF cr3=0x0 fail=alloc; build_identity_4g SEC PML4 0x800000; iron 7ea62ea fail=present SEC already mapped CR2 still VMWRITE CR3; iron 13e8bd2 CR3 identity then same #PF fail=present (walker present, CPU NP); rebuild SEC 4G identity once; hide LA57; iron COM2 after CR3 load #PF err=0x9 cr2=0xa027c8 (P+RSVD; NX-in-PTE with NXE=0); rebuild 4G on reserved-bit #PF; iron 101b8ec 4G n=1 n=2 then fail=present cr2=0x1ae7078 pde=0x30646870 (MEMFD heap clobber); HV identity PML4 at 0x200000 not 0x800000; e820 reserved 36KiB; always rebuild 4G; iron cc7d78a HV PML4 4G n=1 cr3=0x200000 then EPT violation gpa=0xc01df1b7 reason=0x30 (PCI hole; 4G identity present, EPT sink stopped at 1GiB); sink-resume PCI hole 0xC0000000; iron fdf07ba maps=4 EPT sink worked then #PF err=0x2 cr2=0x1e9000 pde=0xc0000083 4G n=2 then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 (4G WB identity vs MTRR UC 2-4GiB); RAM-only identity leaves plus UC 2MiB sink #PF; nested 5db28e3 #PF cr2=0xffc00000 after RAM-only (flash NP) stop n=1007 BOTH missing; identity also maps flash 0xFFC00000 plus xAPIC 0xFEE00000; iron eb4b27d flash+xAPIC identity then #PF cr2=0x80000008 err=0xb pde=0xc0400083 (RSVD 1GiB PDPTE in MTRR UC hole); iron 73576cc bulk UC 2MiB identity then #PF cr2=0x1e9000 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f (PAT UC- vs MTRR UC); iron a428202 on-demand mmio then #PF cr2=0x80000008 err=0xb pde=0xc0400083 identity MMIO fail (1GiB PDPTE after retargeted PDPT); split RSVD 1GiB into SEC PD even when PML4[0] is not pml4+0x1000; rebuild 4G then retry one PAT-UC 2MiB; hole stays NP at 4G rebuild; iron 124c1a8 identity MMIO n=2 then #PF cr2=0xffffffff96808086 err=0x2 pde=0 rip=0x300000 insn=afafafaf (sign-extended 32-bit 0x96808086 walks PML4[511] not low 4G); map high-half 2MiB to zero-extended GPA; e820 reserved 44KiB; iron b25d75b identity MMIO n=3 then #PF cr2=0x80000008 rip=0x30108e #UD linear=0x301093 insn=82bf (firmware PT stores at 0x80000008 hit shared HPET EPT sink); dedicated 2MiB UC scratch HPA for GPA 0x80000000 not zero sink; iron 577c9eb scratch 0x80000000 then EPT sink gpa=0xc0200000 then #PF cr2=0x9896808086 err=0x2 pde=0 rip=0x300001 insn=afafafaf (leftover-high 32-bit hole; PT stores at 0xC0200000 hit shared zero sink); scratch pool for hole PT pages except live HPET 2MiB; leftover-high CR2 overflow PML4[1]; poison-fill RIP not resume; iron 471391f pool=8 maps=2 then #PF cr2=0x1e9000 err=0x2 pde=0xc0000083 4G n=2 ASSERT callerrip=0x1d25193 lastmsr=0x23f; split 1GiB RAM PDPTE do not rebuild 4G; pre-scratch 0xC0000000+0xFCE00000; iron d757a0a SPLIT n=2 cr2=0x1e9000 then #PF err=0x9 pde=0xafafafafafafafaf cr2=0x1d1e6cb (firmware 0xAF-filled SEC PD after 1GiB); identity_refill_low4g_pd; stop n=1172 err=0x3 pde=0x1c000e7 rip=0x1de592 then E4 R640-BOOT-OK not Stage 44; iron 0bad45d refill then #PF 0x80000008 MMIO n=2 EPT scratch 0x80000000 plus 0xC0200000..0xC0A00000 then EPT sink gpa=0xc0c00000 leftover CR2 0x9896808086 rip=0xd00001 firmware-serial #DE RIP 0xCFFF9E DIV RCX=0 ASSERT ebec noskip; scratch pool 32 plus pre-scratch 0xC0000000..0xC0E00000 and 0x80000000; iron 5837243 pool=32 then EPT scratch walk 0xC1000000..0xC3A00000 then scratch cap gpa=0xc3c00000 sink RIP 0x3d00001 pci_ide=0; guest_uefi_ept_scratch_on_qual write/fetch only; EPT hole ro R+X sink for hole reads so a later store can upgrade; pre-scratch only 0x80000000; iron da2c9c4 pool=32 then EPT scratch 0xC0000000 plus 0x80000000 plus 0xC0200000..0xC3C00000 then scratch cap gpa=0xc3e00000 qual=0x184 RIP 0x3dfffff pci_ide=0; SDM bit 8 walk bits 2:0 are original access; guest_uefi_ept_scratch_on_qual is data-write only (not fetch); EPT hole ro R+X sink for hole reads so a later store can upgrade; iron f93caee write-only scratch then EPT hole ro gpa=0xc0000000 qual=0x184 plus scratch 0x80000000 plus hole ro 0xc0200000 plus scratch 0xc0000000 qual=0x1ab then #PF cr2=0x9896808086 rip=0x300001 insn=afafafaf poison fill (hole RO mapped live HPET SINK_HPA as PTEs); dedicated zero 2MiB for hole RO not SINK_HPA; HPET stays on SINK_HPA at 0xFEC00000/0xFED00000 only; not bulk 2-4GiB (73576cc ASSERT); not WB RAM (fdf07ba ASSERT); iron 06b011a hole-zero then #PF err=0x3 cr2=0x1d1abb8 pde=0x1c000e7 rip=0x1de592 (CR0.WP stack push in 2MiB identity; not leftover-high 0x9896808086); identity SPLIT4K 2MiB to 4K RW; nested Intel 06b011a BOTH-OK ataio=236 packet=0 (skip_insn after one word of rep insw); string/REP PIO so IDENTIFY lands; nested Intel 1e0f4a7 io string fw_cfg 0x511 then #PF cr2=0x205f18 4G n=2 cr2=-1 stop rip=0x28f402 BOTH missing; iron COM2 1e0f4a7 io string 0x511 n=4 then identity 4G n=1 cr2=0x80b000 ticks rip=0x3d2be4 ASSERT noskip callerrip=0x1f21193 lastmsr=0x23f mtrr0=0x80000000 imgentry=0x1dd97d3 pci_ide=0 (never SPLIT n=2); string RAM fill is ATA-only; iron COM2 54a8708 no 0x511 then identity SPLIT n=2 then SPLIT4K n=3 cr2=0x1d1abb8 pde=0x219067 then AlreadyPresent loop to identity cap n=256 stop n=1421 rip=0x1de592 pci_ide=0; SPLIT4K MOV CR3 after split; do not resume already-RW; iron COM2 19b0c11 hole-zero then identity MMIO n=2 cr2=0x80000008 then tick reason=0x34 rip=0x27e22d5 insn empty (RIP left 32MiB); hole RO was R+X so fetch executed dedicated zeros; leftover CR2 0x9896808086 rip=0x3ed00001 identity MMIO n=4..256 2MiB walk identity cap stop n=5687 pci_ide=0 then E4 R640-BOOT-OK not Stage 44; hole RO is R only (no X); do not identity-map [32MiB, 0x80000000); split PDPT[0] 1GiB on EPT, MOV CR3, and preemption while RIP is in 32MiB; iron COM2 89c3731 SPLIT PDPT0 then identity 4G n=1 hole ro then SPLIT4K n=2 cr2=0x1d1abb8 pde=0x219027 pte=0x1d1a067 already RW stop n=1168 rip=0x1de592 pci_ide=0 (RIP stayed in 32MiB; not 0x27e22d5); CR0.WP ANDs R/W through PML4/PDPT so OR walk R/W not only the 4K leaf; iron COM2 7413554 SPLIT4K n=2 resumed pml4e=0x5a6d (RO) pdpte=0x202067 then tick rip=0x1df1b5; then #PF cr2=0xfee00020 err=0x9 pdpte=0xc0600083 pml4e=0x5a6f stop n=1395 rip=0x1d84c7 pci_ide=0 (firmware 1GiB RSVD over xAPIC; not already-RW; not 0x27e22d5); map_mmio xAPIC RSVD 1GiB; iron COM2 32ee302 identity MMIO n=3 cr2=0xfee00020 then tick rip=0x1d6be4 then ASSERT noskip callerrip=0x1d25193 lastmsr=0x23f mtrrdef=0xc06 mtrr0=0x80000000 mtrr1=0x3fff80000800 imgentry=0x1bdd7d3 pci_ide=0 (WB xAPIC/flash 2MiB in MTRR UC 2-4GiB; not already-RW); PAT-UC PCD+PWT on flash+xAPIC identity; nested Intel 48c598a BOTH-OK ataio=1308 packet=0 insn=ef then edc9c3 (SET FEATURES 0xEF ABRT then IN EAX,DX poll; never PACKET); SET FEATURES succeeds DRDY not ABRT; iron COM2 855ba1c/48c598a PAT-UC then identity MMIO n=3 cr2=0xfee00020 ASSERT noskip callerrip=0x1d25193 lastmsr=0x23f mtrr1=0x3fff80000800 pci_ide=0 (PDPT[3] RSVD split; PDPT[2] 1GiB WB over 2-3GiB MTRR UC, no #PF); split sibling 1GiB in the UC hole; dump pdpte2; nested Intel 73ed589 BOTH-OK ATAPI-OK sectors=1 packet=9 scsi=0x28 ata=0xa0 ataio=982 then E4 Linux #DF vec=8 after BZIMAGE (OVMF XSETBV left host XCR0; E4 copies host CR4.OSXSAVE); restore host XCR0 and CR4.OSXSAVE after guest-UEFI before E4; iron COM2 pdpte2=0xc0400083 then MMIO n=4 pde=0xfee000ff ASSERT callerrip=0x1d25193 pci_ide=0 (CpuDxe software-walks 1GiB WB PDPT[2]; RAM SPLIT n=2 pdpt_i=0 never split the hole); identity_split_mtrr_uc_hole PDPT[2]+[3] on every identity map including 0x1e9000; dump pdpte2 after MMIO; iron COM2 8df2793 SPLIT PDPT0 then 4G n=1 then EPT hole ro gpa=0xc0000000 then SPLIT4K n=2 pdpte2=0x204067 (PD not 1GiB WB) no xAPIC #PF then ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 pci_ide=0 ataio=0 (CpuDxe software-walks NP 2-4GiB vs MTRR UC); PAT-UC 2-4GiB hole PCD+PWT at 4G rebuild not 73576cc UC-; dump pde8000 after 4G; iron COM2 d7bfb23 4G pde8000=0x800000ff SPLIT4K pml4e=0x5a6d pdpte2=0x204067 no xAPIC #PF still ASSERT callerrip=0x1d25193 (firmware PDPT 0x5000; PDPT[3] can stay 1GiB WB); identity_sync_live_mtrr_uc_hole live PDPT on SPLIT4K/4G/MMIO (not GPA 0x5000 until PML4[0] points there; not tick); dump pdpte3; iron COM2 1de9389 pdpte3=0x205067 PS clear pde8000=0x800000ff still ASSERT callerrip=0x1d25193 lastmsr=0x23f (1GiB PDPT[3] disproved); dump pml4e/pde8000/pdefee/pdeffc/pat at ASSERT; iron COM2 44c56db pde8000=0x800000ff pdpte3=0x205067 pdefee=0xfee000ff pdeffc=0xffc000ff pat=0x0 still ASSERT callerrip=0x1d25193 lastmsr=0x23f (VMCLEAR GUEST_IA32_PAT=0; Xeon VM-entry LOAD_PAT; PA0=UC vs MTRR WB RAM); init GUEST_IA32_PAT SDM reset 0x0007040600070406 plus HOST_IA32_PAT like E4 launch.rs; dump entry=; nested Intel 1a93cb8 ATAPI-OK sectors=1 then E4 #DF vec=8 cr4=0x2060 (startup_64 cr4&=0x1060 cleared OSFXSR); host-own OSFXSR+OSXMMEXCPT like VMXE; nested Intel ab25682 ATAPI-OK then ERROR unexpected CR-access rip=0x8400276 qual=0x4 cr4=0x2668 (startup_64 mov cr4 intercepted); emulate MOV CR4 keep VMXE+OSFXSR; iron COM2 1a93cb8 IA32_PAT guest=0x7010600070406 host=0x7010600070406 entry=0xd1fb then ASSERT pat=0x7010600070406 entry=0xd3fb pde8000=0x800000ff pdpte3=0x205067 lastmsr=0x23f mtrrdef=0xc06 mtrr0=0x80000000 (PAT WB proved; NP [32MiB, 2GiB) vs MTRR WB); guest PT WB [32MiB, 2GiB); do not EPT-map that window (89c3731); dump pde20; iron COM2 28f42d2 pde20=0x20000e7 pde8000=0x800000ff pat=0x7010600070406 still ASSERT callerrip=0x1d25193 lastmsr=0x23f (PDPT[0] mid-gap WB proved; live firmware PDPT[1] 1-2GiB NP vs MTRR WB); identity_ensure_pdpt_2m PDPT[1]; dump pde4000 pdpte1; iron COM2 be1b028 pde20=0x20000e7 pde4000=0x400000e7 pdpte1=0x203067 pde8000=0x800000ff pat=0x7010600070406 still ASSERT callerrip=0x1d25193 lastmsr=0x23f maxpa=46 mtrrdef=0xc06 pml4e=0x5a6f (0-4GiB guest PT matches MTRR WB+UC; NP [4GiB, 2^46) vs default WB; PML4E PWT); cap iron MAXPHYADDR 32 so GCD equals 4GiB identity (clip-36 left 4-64GiB NP); nested 36/40 stays; identity_clear_table_pwt_pcd live PML4E; iron COM2 162809f maxpa=32 mtrr1=0x80000800 pml4e=0x1a02023 (PWT clear) pde20=0x2000083 pde4000=0x400000e7 still ASSERT callerrip=0x1d25193 lastmsr=0x23f imgentry=0x6e87d3 no 4G n=1 (firmware PDPT 0x1a02000 sparse PDPT[0] NP vs MTRR WB); identity_refill_low4g_pd_keep_4k PDPT[0]; dump pde40 pdpte0 cr3; nested Intel 1b587dd BOTH-OK ataio=0 (ensure_pdpt_2m(0) on 1GiB retargeted SEC PD); keep_4k NP-only, do not split PDPT[0] 1GiB on sync; iron COM2 1b587dd/55d4dc6 keep_4k pde20=0x20000e7 pde40=0x40000e7 pde4000=0x400000e7 pde8000=0x800000ff maxpa=32 pml4e=0x1a02023 (no PWT) mtrr1=0x80000800 still ASSERT callerrip=0x1d25193 lastmsr=0x23f imgentry=0x6e87d3 pci_ide=0 ataio=0 (0-4GiB PT matches MTRR WB+UC; 2MiB at GPA 0 spans 1MiB fixed-MTRR); identity_split_gpa0_fixed_mtrr 4K at 0-2MiB; identity_clear_table_pwt_pcd also TABLE_FLAGS USER; dump pde0 pte0 pdpte2; iron COM2 659e7de SPLIT PDPT0 flood tick n=256 rip=0xfffcd6d6 (identity_map_mmio_2m 0x1E9000 smashed GPA0 4K every preempt); mmio 2m keeps 4K tables; nested Intel 61f84c6 GPA0 SPLIT4K then BOTH-OK pci_ide=1 ataio=0 3/3 (ATAPI-OK missing); guest_uefi_gpa0_fixed_mtrr_split iron maxpa=32 only; nested 36/40 keeps 2MiB at GPA 0; iron COM2 84171aa SPLIT4K GPA0 pde0=0x20b027 pte0=0x67 pde20=0x2000083 pde40=0x4000083 still ASSERT callerrip=0x1d25193 (GPA0 4K plus table USER proved; firmware 2MiB no USER); keep_4k OR LARGE_2M_FLAGS onto WB 2MiB (0x83 to 0xE7); dump pde6e; nested Intel 5811368 SPLIT4K GPA0 then BOTH-OK pci_ide=1 ataio=0 3/3 (host 46+ capped to 32); guest_uefi_gpa0_split_now skips GPA0 when host CPUID hypervisor bit is set; iron COM2 489d118 GPA0 4K pte0=0x67 pte1m=0x100067 pml4e1=0x0 pde20=0x20000e7 still ASSERT callerrip=0x1d25193 lastmsr=0x23f mtrr0=0x80000000 mtrr1=0x80000800 (0-4GiB PT matches MTRR; leftover-high NP; GCD untested spans PEI Uc32Base WB+UC); fw_cfg etc/e820 reserved PCI UC [2GiB,4GiB) so PlatformAddHobCB splits GCD at MTRR UC; iron COM2 38481d9 e820 type-2 reserved PCI UC still ASSERT pde8000=0x800000ff callerrip=0x1d25193 (GCD untested [32MiB,4GiB) mixed mid-gap WB + 4G PAT-UC; this OVMF.fd ignores type-2 below 4GiB); identity_set_pat_uc_hole WB 2-4GiB until firmware UC MTRR live then PAT-UC (not fdf07ba WB-while-UC-live; not 8df2793 NP); iron COM2 f07a597 PAT-UC+MTRR match still ASSERT pde8000=0x800000ff mtrr0=0x80000000 callerrip=0x1d25193 (guest PT family exhausted; GCD mixed range); hold valid UC variable MTRRs so CpuDxe RefreshGcd sees default WB (MTRR UC held (GCD)); guest_uefi_mtrr_set_admit_uc; iron COM2 22e0cb2 MTRR UC held mtrrv=0 pde8000=E7 still ASSERT callerrip=0x1d25193 (mixed MTRR disproved); e820 type-2 reserved [32MiB, 2GiB) mid-gap so GCD splits before Uc32Base (P3; 38481d9 PCI-hole type-2 ignored); iron COM2 f9a08c9 mid-gap reserved still ASSERT callerrip=0x1d25193 mtrrv=0 pde8000=E7 (e820 ignored); CMOS+fw_cfg LowMemory 2GiB so PEI HOB ends at Uc32Base (not EPT-map [32MiB, 2GiB)); iron COM2 fad19b2 CMOS 2GiB then EPT unbacked report-RAM gpa=0x7bddd000 reason=0x30 stop n=600 (firmware heap at top of LowMemory; ASSERT 0x1d25193 gone); lazy 2MiB WB EPT report-RAM pool (not identity 2GiB; not 89c3731); iron COM2 32e7d46 report-RAM pool=32 mapped gpa=0x7bddd000 then high heap; tick rip=0x7f8e21ca reason=0x34 same=376 lastmsr=0x23f insn empty (32MiB peek); peek report-RAM HPA for skip/ASSERT dump (do not skip ebecc9c3); iron COM2 957e0ad insn=ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f cr3=0x7fa01000 pml4e=0 pci_ide=0 (CpuDxe ASSERT relocated into report-RAM; 32MiB PT walk missed high CR3); P2 MTRR UC admitted (GCD) (hold left mtrrv=0 vs GCD UC at 2GiB); dump-walk CR3 via report-RAM peek; E4 hide LA57 (nested Intel ATAPI-OK then #DF trampoline 0x9e036); iron COM2 c70768b MTRR UC admitted mtrrv=1 mtrr0=0x80000000 pde8000=0x80000083 cr3=0x7fa01000 pml4e=0x7fa02023 insn=ebecc9c3 callerrip=0x7fd25193 pci_ide=0 (live report-RAM CR3 WB 2MiB vs admitted UC; 32MiB identity_sync missed pml4>=ram_len); guest_uefi_pt_paint_live_uc_hole peek/poke PAT-UC on high CR3 (CMOS 2GiB GCD split; not f07a597 low-CR3 paint; not skip ebecc9c3); iron COM2 4ae87de painted n=1029 pde8000=0x800000ff mtrrv=1 then ASSERT insn=ebecc9c3 pde0=0xe3 pte0=0 (PAT-UC+MTRR match on live CR3; 2MiB GPA0 spans 1MiB fixed-MTRR; identity_split_gpa0 TableOutOfRam); guest_uefi_pt_split_gpa0 peek/poke HV PT 0x20B000 on live PD[0]; iron COM2 7e5d70f GPA0 4K live CR3 n=513 pde0=0x20b027 pte0=0x67 pte1m=0x100067 pde8000=0x800000ff still ASSERT insn=ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pci_ide=0 (PT matches MTRR on live high CR3; stop PT peek/poke; CpuDxe RefreshGcd GCD/HOB); do not lower CMOS 2GiB (32MiB LowMemory already ASSERTed); do not retry P3 mid-gap type-2; iron c1476d3 hypervisor etc/e820 VGA hole logged but PEI never opened the file (CMOS size to HOBs to GCD, not ScanE820); PEI 00:00.0 DID i440FX 0x1237 so PlatformMemMapInitialization adds IoMemory 0xA0000-1MiB; DXE latches virtio 0x1042 on other-BDF CF8; do not remap cmp bx 0x1237 while PEI captures HostBridgeDevId; dump e820= fwdir= pei_did=; iron f7620f6 PEI pci cfg=0x80000002 val=0x1237 pei_did=1 DXE virtio DID latch 00:01.03 then virtio 0x1042 VIRTIO-OK DXE-OK sectors=0 plat=1 e820=0 fwdir=0 remap n=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pde0=0x20b027 pte0=0x67 pte1m=0x100067 (DID fork closed); iron d6b012a pte_a0000=0xa0067 pte_c0000=0xc0067 (GPA0 identity WB; firmware FIX 0x250-0x26f are 0x06 WB; not GCD VGA punch; do not PAT-UC VGA); filehex test r9d jnz wbinvd mov rax EFI_UNSUPPORTED is CpuFlush FlushType!=0; nop jnz in live report-RAM so every FlushType WBINVD; dump r9=; iron f0781bb CpuFlush FlushType-any WBINVD n=2 filehex jnz-nop 9090 r9 leftover 0x21 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f (CpuFlush leftover File dump not the ASSERT; P1 22e0cb2 hold ran while FIX was power-on 0 UC; firmware now FIX 0x06 WB); hold variable UC after FIX WB so GetMemoryAttributes is uniform on a spanning GCD (MTRR UC held after FIX WB (GCD)); scan every report-RAM CpuFlush copy (do not return after the first slot); dump flushjnz=; iron 6334704 MTRR UC held after FIX WB mtrrv=0 mtrr1=0x0 pde8000=0x80000083 flushjnz=0 filehex 9090 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f (mixed variable-UC disproved with FIX WB; PEI i440FX VGA IoMemory HOB is GCD UC while firmware FIX 0x259-0x26f are WB 0x06; hold also left Uc32Base GCD UC vs default WB); admit variable UC again so the 2GiB hole matches; coerce FIX 0x259 and 0x268-0x26F to packed UC (MTRR VGA FIX UC (GCD)) so VGA GCD IoMemory matches; keep 0x250/0x258 WB; dump mtrr259=; iron ddbd866 MTRR UC admitted mtrrv=1 mtrr0=0x80000000 mtrr259=0x0 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f pte_a0000=0xa0067 pte_c0000=0xc0067 (GCD/MTRR VGA+hole matched; live GPA0 VGA PTEs still WB vs coerced FIX UC); PAT-UC 4K VGA leaves on live CR3 (guest_uefi_pt_paint_vga_uc; pte_a0000=0xa007f); dump calltgt=; iron e368e86 VGA 4K live PT PAT-UC n=96 cr3=0x800000 pte_a0000=0xa007f pte_c0000=0xc007f mtrr259=0x0 mtrrv=1 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 lastmsr=0x23f calltgt=0x7f8e21a5 tgthex=554889e54883ec10 (DebugAssert prologue, not RefreshGcd) pml4e=0x7fa02027 (PWT already clear); option-ROM C0000 PAT-UC vs firmware FIX 0x268-0x26F WB 0x06; coerce only FIX 0x259 (A0000-BFFFF packed UC); leave 0x268-0x26F firmware WB; PAT-UC only [0xA0000, 0xC0000); dump mtrr268=; expect pte_c0000=0xc0067 mtrr268=0x606060606060606; iron fd041bb VGA 4K live PT PAT-UC n=32 pte_a0000=0xa007f pte_c0000=0xc0067 then ASSERT mtrr259=0x0 mtrr268=0x0 (CpuDxe UC'd option-ROM after firmware WB) still ebecc9c3 calltgt=0x7f8e21a5; e368e86 full VGA UC matched and ASSERTed (GCD SystemMemory WB-only; SetMemorySpaceAttributes UC fails); hold FIX 0x259 and 0x268-0x26F WB after firmware 0x06 (MTRR VGA FIX WB held (GCD)); GPA0 4K leaves stay WB (pte_a0000=0xa0067); dump prehex=; iron 96ef961 MTRR VGA FIX WB held mtrr259=0x606060606060606 mtrr268=0x606060606060606 pte_a0000=0xa0067 pte_c0000=0xc0067 pde8000=0x800000ff flushjnz=0 still ASSERT ebecc9c3 callerrip=0x7fd25193 calltgt=0x7f8e21a5 prehex=66c705b30800000006eb05e85ff8ffff (mov word CacheWriteBack 6; jmp skip; call DebugAssert); VGA UC-match e368e86 and VGA WB-match 96ef961 both ASSERT at the same DebugAssert; dump 32-byte prehex immediately before call at 0x7fd25193 plus rax (EFI_STATUS); retpre= 32 bytes at CpuDxe ret-32 (ASSERT_EFI_ERROR site); keep PEI i440FX 0x1237 / DXE virtio 0x1042; keep FIX WB hold; no DID flip; no new PAT-UC; iron 6f077a3 prehex at 0x7fd25193 is DxeCore call [rax+0x20] rax=0 leftover (CpuDxe never returned); retpre switch stores UINT16 0x0600/0xB000 then jmp; default call DebugAssert (ASSERT(FALSE) not ASSERT_EFI_ERROR); dump retcmp= at ret-64 plus rbx rsi rdi g16=; iron 2cbf9e8 retcmp=000000e855f8ffff663d37127417663dc029741c663d570d752166c705cb0800 (cmp ax,0x1237 je PIIX4; cmp ax,0x29C0 je Q35; cmp ax,0x0D57 jne ASSERT; stores PIIX4_PMBA_VALUE 0xB000 / ICH9_PMBASE_VALUE 0x0600); g16=0000 rbx=0 rsi=0x7f6e1042 (virtio DID leftover) pci cfg=0x80000002 val=0x1042 after latch; keep 00:00.0 i440FX 0x1237; virtio at 00:02.0; do not skip ebecc9c3; iron bf696ca COM2 ATAPI-OK sectors=1 packet=9 scsi=0x28 ata=0xa0 ataio=982 stop n=30769 pci_ide=1 virtio=1 BOTH-OK n=12411 no AcpiTimerLib ASSERT; not El Torito; not installer; E4 SHELL then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 44; Stage 45 keeps VMCS after first ATAPI sector until catalog+load READ plus payload COM RN-ELT or 131072-exit cap (post_atapi_should_stop does not apply the 32768 post-ATAPI tail after first ATAPI or after catalog+load READ; first sector is often LBA 0 dummy not catalog; maybe_print_eltorito; BAR-relocated ATA data-port rep insw fills RAM); El Torito catalog checksum plus FAT12 ESP EFI/BOOT/BOOTX64.EFI (not raw PE at load LBA); eltorito-progress catalog= bootimg=; iron COM2 ATAPI-OK n=30769 then catalog=1 bootimg=0 (Stage 45 kept VMCS; not ELTORITO-OK); nested 8881cdd catalog=1 bootimg=1 elt=0 at 131072-exit cap (DxeCore LoadImage SectionAlignment 0x1000 so ProtectUefiImage can set X); iron COM2 df7d158 catalog=1 bootimg=1 elt=0 com=0 sectors=107 packet=318 ataio=120786 stop n=131072 rip=0x7ee8786d port=0x1f7 scsi=0x0 (BDS ATA PIO; 131072-exit cap; not ELTORITO-OK; 512-byte FAT BPB then PVD root zeros last READ LBA 17; not 1a2b088 4K PE; E4 LINUX-EARLY then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 45); 2048-byte FAT plus ISO9660 EFI/BOOT/BOOTX64.EFI; 262144-exit cap after iron+nested hit 131072-exit cap still in ATA/PCI; iron COM2 0be7283 firmware-serial RN-ELT RAYNU-V-M7-E5-OVMF-ELTORITO-OK n=197992 catalog=1 bootimg=1 magic=1 sectors=183 elt=1 packet=533 scsi=0x28 port=0x3f8 com=6; E4 LINUX-EARLY then M4.2 G1 EPT GPA=0x10403000 fail-soft not Stage 45; not ISO-INSTALL-OK; VMLAUNCH insn issued only when presence is true; Stage 46 product ISO PIC/IOAPIC inject (lab 8259 PIC RAZ/WI stays); Stage 46 product ISO 16550 + ttyS0 cmdline; Stage 46 product ISO SOL RX to guest COM1; Stage 46 product ISO Alpine serial auto-answer; 256MiB disk leftover report-RAM; report-RAM EPT pre-map; cpu_flush skip leftover pre-map; cpu_flush leftover per walk; linux unhandled nowait stop; virtio MMIO eax fallback; linux NMI inject; iron 1a2544d Freeing initrd then restore host xcr0; share hushes stop n=; virtio BAR trap over scratch (iron df0c118 Freeing initrd then silent; Linux BAR 0x80000000/0x80001000 on 2MiB UC scratch); PIIX3 ISA BAR RAZ; packed virtio common cfg; virtio MMIO raises PIT; virtio MMIO off=; virtio MMIO eax fallback size; packed virtio common cfg write; virtio MMIO polls lapic; linux I/O does not raise PIT (iron MADT stop); linux xAPIC EPT insn_len 0; linux preempt deadloop noskip; linux PIT prefer once; linux PIT prefer until DRIVER_OK; UART reassert RX not THRE; virtio drain every resume; linux virtio DRIVER_OK; product ISO fw_cfg ACPI MADT (iso=0 named files stay 3); linux PIC before LAPIC; linux PIC IRQ0; MADT IRQ0 ISO GSI 2; PIT skips IOAPIC pin 0; linux GSI 2 before PIC; fw_cfg IoReadFifo8 fills RAM (iron COM2 efi: no ACPI=; QemuFwCfgInitialize rep insb skipped); skip HV identity PML4 dest 0x205f18; fw_cfg string skip HV identity dest=; PIIX4 PM1 SCI_EN; PM1 SCI_EN at reset; DSDT PCI0 _PRT; DSDT PCI0 _CRS; linux hides duplicate slot0 IDE; linux hides PIIX IDE; product ISO hides PIIX IDE; flash b824789; do not F11 d61dc7e; skip-after-inject uses pci_ready; flash ea30da1; do not F11 b824789; linux high-half hides PIIX; linux ATA floating bus; fw_cfg identity overlay; HV identity PML4 0x400000 (not 0x200000 PEI stack); PEI dest holds ACPI tables; fw_cfg dest_ok fill dest=; dest_ok fill log cap 8; ACPI tables ZONE_FSEG; FSEG dest holds ACPI tables; linux-line ata_piix blacklist; linux-line piix_init blacklist; FADT FACS; flashcruzer reject 2d6b109 dest skip; auto-answer / # without login; product ISO POST_DXE_TAIL skip; emergency mount+exit; linux-line usbdelay; io string (rep insb); 0xAF00 PM timer; tick port=; flash 084430f; 0xB000 dword timer; firmware PIC before GSI 2; HLT stall quiet tick print-only; firmware HLT ignores TPR; firmware HLT stall waits for IRQ; iron COM2 084430f Delay via 0xB008 then HLT 0x7f0680d0 ataio=0; do not F11 c08a13d; nested 9ce65ae ATAPI-OK missing after quiet skipped cpu_flush; do not F11 9ce65ae; firmware virtual-wire PIC; firmware virtual-wire AEOI; firmware virtual-wire GSI 2; firmware HLT force IF; iron COM2 eac424b pic=1 sparse inject; iron COM2 beb1576 HLT if=1 tpr=0x0 pic=0 gsi2=0; do not F11 eac424b; firmware HLT skip after inject; iron COM2 eac424b IRET-to-HLT; do not F11 8e81c2e; firmware HLT activity active; do not F11 daf3195; firmware LAPIC timer expiry; do not F11 b26c86a; flash 2ae4544; IOAPIC I/O over PIT; firmware virtual-wire GSI 14; flash 5c0f7a2; do not F11 2ae4544; product ISO fw_cfg bootorder virtio-iso scsi@3 first; flash d61dc7e; do not F11 5c0f7a2; product ISO HLT stall before n=16384; firmware HLT skip without inject; flash 56f31d3; do not F11 ea30da1; product ISO fw_cfg bootorder El Torito ide@ first; do not F11 56f31d3; flash 90da03d; firmware HLT skip after ataio; do not F11 90da03d; flash e70a295; firmware skip PIT inject; do not F11 e70a295; flash 77f5866; firmware force IF for inject; do not F11 77f5866; flash 5227ad9; firmware arm ATA GSI 14; flash 489d938; firmware prefer ATA IRR; flash bce5bbb; do not F11 489d938; firmware ATA over PIC; flash eaa580d; do not F11 bce5bbb; flash 12926eb; do not F11 eaa580d; firmware ATA IRR only; flash 0bb06a2; firmware take IOAPIC ATA; flash 30b78a0; IOAPIC edge no remote IRR; flash 8e581c7; firmware PIC ATA; firmware PIC ATA ICW2; firmware PIC ATA AEOI; firmware OVMF ATA vector; do not clobber IOAPIC ATA vector; do not inject leftover 0x2E; do not clobber PIC ICW2; PIC ATA vector follows ICW2; firmware HLT insn_len 0 skip; flash a14223f; flash 3b7bbac; do not F11 3b7bbac; do not F11 e4faceb; flash e4faceb; do not F11 d7d63ca; flash d7d63ca; do not F11 8e581c7; flash 8e581c7; do not F11 30b78a0; do not F11 0bb06a2; do not F11 12926eb; firmware PIT one-shot after first wake; do not F11 24c5fa6; iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock; firmware HLT skip after PIT one-shot; do not F11 e3cbfa5; iron COM2 e3cbfa5 PIT one-shot then HLT hang; iron COM2 21dc562 HLT skip after PIT one-shot then same CpuSleep; do not F11 21dc562; Stage 46 IDE pci cmdwr; iron COM2 184ee61 cmdwr=6 wr=0x0 pcicmd=0x1; do not F11 184ee61; honor IDE pci cmd (no OR 0x0001); iron COM2 abba969 honor pcicmd=0 wr=0 cmdwr=6 ataio=0; do not F11 abba969; print IDE pci cmdwr seq; iron COM2 060c504 seq=0,0,0,0,0,0; do not F11 060c504; EnableAttributes 0x0005 after write-0; iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0; do not F11 c144001; print last PCI CF8 on HLT; iron COM2 61991be HLT cf8=0x0; do not F11 61991be; print last enabled CF8; iron COM2 5de9e1c HLT cf8en=0x80004008 (00:08.0+08 host class) still ataio=0; do not F11 5de9e1c; print last IDE CF8; iron COM2 7ba1ccf HLT cf8ide=0x80000930 (00:01.1+30 Expansion ROM) still ataio=0; do not F11 7ba1ccf; print last IDE ROM BAR write; iron COM2 118edcf HLT romwr=0xfffffffe (size probe, enable bit clear) still ataio=0; do not F11 118edcf; product ISO hides duplicate slot0 IDE; iron COM2 27eda8c hide-slot0 still ataio=0; do not F11 27eda8c; print HLT retaddr; iron COM2 2d4ab51 HLT ret=0x7ff0e055 still ataio=0; do not F11 2d4ab51; firmware ConIn CR; iron COM2 6c4bfde ConIn CR still ataio=0; do not F11 6c4bfde; print HLT callsite; iron COM2 0b770cd HLT rethx=0xe056ff41b84d8b48 still ataio=0; do not F11 0b770cd; firmware WaitForEvent return; iron COM2 e0d5c55 WaitForEvent return caller=0x7feffe28 then EPT 0x34 rip=0x7ec8f6ff still ataio=0; do not F11 e0d5c55; firmware ZeroMem ept fill; iron COM2 c8d504d ZeroMem ept fill never printed (reason=0x34 is preempt not EPT 0x30) still ataio=0; do not F11 c8d504d; firmware WFE preempt skip; iron COM2 d0e44d4 WFE preempt skip len=12 rip=0x7ff0e7e8 still ataio=0; do not F11 d0e44d4; firmware WFE state4 poke; iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; do not F11 9474ab6; firmware WFE event #PF; iron COM2 4e16b59 firmware WFE event #PF inject fired OVMF own #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 then CpuDeadLoop still ataio=0; do not F11 4e16b59; RayNu-F be-the-firmware pivot (ADR-016); RAYNU_F_NO_FW_STATE_MUTATION disables 3k-3o forcing (No third-party firmware state mutation); not ISO-INSTALL-OK";
 
 /// QEMU / serial marker when OVMF ran past the first triple-fault.
 pub const M7_E5_OVMF_ALIVE_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-ALIVE-OK";
@@ -103,18 +103,27 @@ pub const GUEST_UEFI_SEC_TAIL_GPA: u64 = 0xFFFF_0000;
 /// 262144 keeps the private VMCS until `RN-ELT` or the hard cap. Stage 45
 /// does not apply the 32768 post-ATAPI tail after PACKET.
 pub const GUEST_UEFI_RESUME_CAP: u32 = 262144;
-/// Nested KVM only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
+/// Product ISO (Stage 46): stay in guest-UEFI past the lab RN-ELT stop.
+/// Used whenever the window is armed (iron **and** nested QEMU `PRODUCT_ISO=`).
+/// Lab-stub nested still uses [`GUEST_UEFI_NESTED_RESUME_CAP`]. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_PRODUCT_ISO_RESUME_CAP: u32 = 16_777_216;
+/// Nested KVM **lab stub** only. Iron ATAPI is n≈30769; El Torito StartImage is n=197992.
 /// Nested CI that walks El Torito then Linux init SIGSEGV (CR2 in freed
 /// report-RAM). 65536 keeps BOTH+ATAPI and returns to E4 before StartImage.
 /// Cap alone is not enough: nested `4225b4d` still mapped 32 report-RAM
 /// slots, freed them, then `load kernel=0x8200000`. See
 /// [`report_ram_return_to_e4`]. Iron bit-31 clear still uses
-/// [`GUEST_UEFI_RESUME_CAP`].
+/// [`GUEST_UEFI_RESUME_CAP`]. Armed product ISO does **not** use this cap.
 pub const GUEST_UEFI_NESTED_RESUME_CAP: u32 = 65536;
 
-/// Resume cap: iron 262144 (Stage 45 El Torito); nested KVM 65536 (CI SHELL).
+/// Resume cap: iron lab stub 262144; nested lab stub 65536 (CI SHELL);
+/// armed product ISO uses [`GUEST_UEFI_PRODUCT_ISO_RESUME_CAP`] on iron and
+/// nested so QEMU `PRODUCT_ISO=` can pass OVMF StartImage. Lab `iso=0`
+/// nested stays 65536.
 pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
-    if host_hypervisor {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        GUEST_UEFI_PRODUCT_ISO_RESUME_CAP
+    } else if host_hypervisor {
         GUEST_UEFI_NESTED_RESUME_CAP
     } else {
         GUEST_UEFI_RESUME_CAP
@@ -124,6 +133,8 @@ pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
 /// After DXE evidence, spend this many exits unless firmware read an ATAPI
 /// sector. Nested VT-x `1b07692`: BOTH-OK at n=1111 then the private VMCS
 /// stopped with `sectors=0` — PciBus never reached PACKET.
+/// product ISO POST_DXE_TAIL skip: armed Stage 46 does not apply this
+/// (iron COM2 `2d6b109` `stop n=33297` `sectors=0` never PACKET).
 pub const GUEST_UEFI_POST_DXE_TAIL: u32 = 32768;
 
 /// Named Stage 44 window (32768). Stage 45 live stop does **not** apply this
@@ -143,10 +154,25 @@ const VMX_PREEMPTION_TIMER_TICKS: u64 = 0x0010_0000;
 #[cfg(target_os = "uefi")]
 const EXIT_REASON_PREEMPTION_TIMER: u32 = 52;
 
+/// ADR-016: RayNu-F does not mutate a third-party firmware's internal control
+/// state to manufacture progress. The Stage 46 `3k–3o` OVMF forcing
+/// (WaitForEvent force-return, gState=4 poke, event-#PF inject) self-inflicted
+/// the NULL-event `#PF cr2=0xffffffffffffffb8` + `CpuDeadLoop` on iron
+/// `9474ab6` / `4e16b59`. Those mutations are disabled; the retained-OVMF
+/// VMLAUNCH stays only as a read-only diagnostic/fallback. The E5 close path is
+/// RayNu-F (be the guest firmware ourselves), not puppeting OVMF.
+/// Not `ISO-INSTALL-OK`.
+const RAYNU_F_NO_FW_STATE_MUTATION: bool = true;
+
 /// Guest-UEFI HLT must skip/resume. Stopping on HLT aborts the post-DXE
 /// PciBus walk of IDE `00:00.1`. Not a timer inject. Not ATAPI.
 pub fn hlt_should_resume() -> bool {
     true
+}
+
+/// Exit qualification for `MOV CR8` (SDM: CR number in bits 3:0).
+pub fn cr_access_is_cr8(qual: u64) -> bool {
+    (qual & 0xf) == 8
 }
 
 /// DebugLib `CpuDeadLoop` is `jmp rel8` −13 (`eb f3`) or `jmp $` (`eb fe`).
@@ -222,6 +248,15 @@ pub fn preempt_deadloop_guarded_assert_skip_len(bytes: &[u8], rip: u64, caller: 
 /// Bytes to advance guest RIP on a preemption CpuDeadLoop match.
 /// 2: `pause` / backward `jmp rel8` / backward `jcc rel8` (including QEMU
 ///    `eb f3` + `leave; ret`).
+/// 5: Linux `delay_loop` inner or outer `REX.W DEC rax; JNZ rel8`
+///    (`48 FF C8 75 xx`, rel8 < 0). Nested `f1afc27` after leftover DRAM:
+///    `rip=0xffffffffb7ae5940` `insn=48ffc875fb` `preempt noskip` (identity
+///    peek empty on high-half). Skip-5 alone lands on `3: dec; jnz 1b`,
+///    which re-enters the inner loop. Pair with
+///    [`preempt_deadloop_delay_loop_sets_rax_one`] so `3:` falls through.
+/// 10: inner `75 FB` plus outer `48 FF C8 75 xx` in one fetch — skip to the
+///     compiler `ret`. Do not skip DEC alone (RAX unchanged → infinite
+///     `jnz`).
 /// 6: near `jcc` (`0F 8x` rel32) with a small backward displacement.
 /// 0: unknown, or iron `eb ec` + `leave; ret` without the DXE-RAM guard
 ///    ([`preempt_deadloop_guarded_assert_skip_len`]).
@@ -231,6 +266,9 @@ pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
     }
     if preempt_deadloop_is_assert_epilogue(bytes) {
         return 0;
+    }
+    if let Some(n) = preempt_deadloop_delay_loop_skip_len(bytes) {
+        return n;
     }
     if preempt_deadloop_should_skip(bytes[0], bytes[1]) {
         return 2;
@@ -242,6 +280,37 @@ pub fn preempt_deadloop_skip_len(bytes: &[u8]) -> u8 {
         }
     }
     0
+}
+
+/// Linux `arch/x86/lib/delay.c` `delay_loop`: inner `2: dec %rax; jnz 2b`
+/// (`48 FF C8 75 FB`) then outer `3: dec %rax; jnz 1b`. Not `ISO-INSTALL-OK`.
+pub fn preempt_deadloop_delay_loop_skip_len(bytes: &[u8]) -> Option<u8> {
+    if bytes.len() < 5
+        || bytes[0] != 0x48
+        || bytes[1] != 0xFF
+        || bytes[2] != 0xC8
+        || bytes[3] != 0x75
+        || (bytes[4] as i8) >= 0
+    {
+        return None;
+    }
+    if bytes.len() >= 10
+        && bytes[4] == 0xFB
+        && bytes[5] == 0x48
+        && bytes[6] == 0xFF
+        && bytes[7] == 0xC8
+        && bytes[8] == 0x75
+        && (bytes[9] as i8) < 0
+    {
+        return Some(10);
+    }
+    Some(5)
+}
+
+/// True when a delay_loop skip must leave `RAX=1` so `3: dec; jnz` falls
+/// through instead of re-entering the inner loop. Not `ISO-INSTALL-OK`.
+pub fn preempt_deadloop_delay_loop_sets_rax_one(bytes: &[u8]) -> bool {
+    preempt_deadloop_delay_loop_skip_len(bytes).is_some()
 }
 
 /// XSETBV only accepts XCR0. Other XCRs would #GP; we skip those.
@@ -284,6 +353,12 @@ pub const GUEST_UEFI_FEATURE_CONTROL_VALUE: u64 = 1;
 
 /// CPUID.1:EDX bit 28 — HTT / multi-thread package.
 pub const CPUID_EDX_HTT: u32 = 1 << 28;
+
+/// Linux `cpuid_count(4, i)` terminator. Subleaf >= this returns type 0.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_CPUID_LEAF4_LAST_SUB: u32 = 4;
+/// Cap CPUID.0 EAX so identify_cpu cannot walk a bogus max-leaf.
+pub const GUEST_UEFI_CPUID_LEAF0_MAX: u32 = 0x1F;
 
 /// KVM hypervisor CPUID leaf. Nested `-cpu host` exposes this; iron does not.
 pub const GUEST_UEFI_KVM_CPUID_LEAF: u32 = 0x4000_0000;
@@ -372,10 +447,49 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
             r.edx &= !CPUID_EDX_HTT;
             r.ecx |= CPUID_ECX_HYPERVISOR;
         }
-        4 => r.eax &= !(0x3F << 26),
+        // Linux `intel_cacheinfo` loops `cpuid_count(4, i)` until EAX[4:0]=0.
+        // If ECX is stale (MSR leftover `0xc0000101` on n=1) every probe
+        // returns a live cache type and identify_cpu never leaves native_cpuid.
+        // Iron COM2 a8b3547: ticks 437248/437504 reason=0xa same helper.
+        4 => {
+            let stale = subleaf >= GUEST_UEFI_CPUID_LEAF4_LAST_SUB;
+            #[cfg(target_os = "uefi")]
+            let too_many = PF_LINUX_DELIVER.load(Ordering::Acquire) != 0
+                && LINUX_LEAF4.fetch_add(1, Ordering::AcqRel) >= GUEST_UEFI_CPUID_LEAF4_LAST_SUB;
+            #[cfg(not(target_os = "uefi"))]
+            let too_many = false;
+            if stale || too_many {
+                r.eax = 0;
+                r.ebx = 0;
+                r.ecx = 0;
+                r.edx = 0;
+            } else {
+                r.eax &= !(0x3F << 26);
+            }
+        }
         7 if subleaf == 0 => {
+            if r.eax > 1 {
+                r.eax = 1;
+            }
             r.ebx &= !((1 << 2) | (1 << 12) | (1 << 15));
-            r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57);
+            r.ebx &= !(CPUID_LEAF7_EBX_CLFLUSHOPT | CPUID_LEAF7_EBX_CLWB);
+            r.ecx &= !(CPUID_LEAF7_ECX_TME_EN | CPUID_LEAF7_ECX_LA57 | CPUID_LEAF7_ECX_WAITPKG);
+        }
+        7 if subleaf > 1 => {
+            r.eax = 0;
+            r.ebx = 0;
+            r.ecx = 0;
+            r.edx = 0;
+        }
+        0 => {
+            if r.eax > GUEST_UEFI_CPUID_LEAF0_MAX {
+                r.eax = GUEST_UEFI_CPUID_LEAF0_MAX;
+            }
+        }
+        0x8000_0000 => {
+            if r.eax > 0x8000_0008 {
+                r.eax = 0x8000_0008;
+            }
         }
         0x8000_0001 => {
             r.edx &= !(CPUID_80000001_EDX_NX | CPUID_80000001_EDX_PAGE1GB);
@@ -399,6 +513,92 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
     r
 }
 
+/// Linux `hypervisor_cpuid_base()` walks `[0x40000000, 0x40010000)` step `0x100`
+/// (256 leaves per vendor: Xen, VMware, Hyper-V, KVM, …). Firmware still uses
+/// [`guest_uefi_filter_cpuid`] so OVMF sees `KVMKVMKVM`. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_cpuid_leaf_is_hypervisor_scan(leaf: u32) -> bool {
+    (GUEST_UEFI_KVM_CPUID_LEAF..GUEST_UEFI_KVM_CPUID_LEAF + 0x1_0000).contains(&leaf)
+}
+
+/// Last `base` in `hypervisor_cpuid_base` so the next `base += 0x100` exits.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST: u32 =
+    GUEST_UEFI_KVM_CPUID_LEAF + 0x1_0000 - 0x100;
+
+/// Snap a callee-saved GPR that still holds the scan `base` (CPUID clobbers
+/// EAX–EDX) to [`GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST`]. Zero leaves do not
+/// exit the C loop; iron COM2 `90c85d5` still walked `n=256 leaf=0x4000bd00`
+/// after `Loaded initrd` with HPET climbing. Firmware CPUID is unchanged.
+///
+/// alpine-virt 6.12.13 `hypervisor_cpuid_base.constprop.0` keeps `base` in
+/// **EBX** and `native_cpuid` `push %rbx` before `0F A2` (iron RIP
+/// `0xffffffffba081783` = KASLR of `ffffffff81081783`). The live RBX at
+/// CPUID is the CPUID output (must stay 0); the loop copy is the 8-byte
+/// slot at RSP. [`guest_uefi_linux_hypervisor_scan_bump_gpr`] also applies
+/// to that stack word.
+///
+/// Match the **zero-extended** `u32` leaf only. Iron `73c2cab` logged
+/// `hypervisor-scan bump leaf=0x40000000` then COM2 ended — a high-half
+/// direct-map pointer `0xffff_8880_4000_0000` (GPA 1GiB) must not become
+/// `0xffff_8880_4000_ff00`. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_hypervisor_scan_bump_gpr(leaf: u32, gpr: u64) -> u64 {
+    if !guest_uefi_cpuid_leaf_is_hypervisor_scan(leaf) {
+        return gpr;
+    }
+    if gpr != u64::from(leaf) {
+        return gpr;
+    }
+    u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+}
+
+/// Apply [`guest_uefi_linux_hypervisor_scan_bump_gpr`] to callee-saved GPRs.
+/// Returns true when any register changed. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_hypervisor_scan_bump_gprs(leaf: u32, gprs: &mut [u64]) -> bool {
+    let mut hit = false;
+    for g in gprs.iter_mut() {
+        let next = guest_uefi_linux_hypervisor_scan_bump_gpr(leaf, *g);
+        if next != *g {
+            *g = next;
+            hit = true;
+        }
+    }
+    hit
+}
+
+/// Linux `detect_hypervisor` ORs CPUID.1 ECX bit 31 then scans every
+/// `0x4000_xx00` leaf per vendor. Iron COM2 after leftover+#PF: skip-2 works
+/// (`rip=` / `n=16`/`32`/`64`) then `linux cpuid n=128 leaf=0x40003d00` and
+/// `n=256 leaf=0x4000bd00` at frozen HPET -- looks dead, is an 8x256 walk.
+/// Hide the hypervisor bit and return zeros in that range so `identify_cpu`
+/// can leave `native_cpuid`. Firmware still uses [`guest_uefi_filter_cpuid`].
+/// Iron `45aec97`: Linux printed `GenuineIntEl` unknown + `NX missing` then
+/// froze at PAT — force GenuineIntel and restore NX on this path only.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_filter_cpuid_for_linux(leaf: u32, subleaf: u32) -> CpuidRegs {
+    if guest_uefi_cpuid_leaf_is_hypervisor_scan(leaf) {
+        return CpuidRegs {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: 0,
+        };
+    }
+    let mut r = guest_uefi_filter_cpuid(leaf, subleaf);
+    if leaf == 1 {
+        r.ecx &= !CPUID_ECX_HYPERVISOR;
+    }
+    if leaf == 0 {
+        r.ebx = CPUID_GENUINEINTEL_EBX;
+        r.edx = CPUID_GENUINEINTEL_EDX;
+        r.ecx = CPUID_GENUINEINTEL_ECX;
+    }
+    if leaf == 0x8000_0001 {
+        r.edx |= CPUID_80000001_EDX_NX;
+        r.edx &= !CPUID_80000001_EDX_PAGE1GB;
+    }
+    r
+}
+
 /// IA32_EFER LME / LMA. Guest-UEFI launch is unrestricted real mode
 /// (`GUEST_IA32_EFER=0`, IA-32e entry off). SEC WRMSR `val=0x100` sets
 /// LME only. CR0.PG writes do not exit (mask 0). Architectural LMA is
@@ -408,9 +608,14 @@ pub fn guest_uefi_filter_cpuid(leaf: u32, subleaf: u32) -> CpuidRegs {
 /// CpuDxe `RefreshGcdMemoryAttributesFromPaging` / `IsExecuteDisableEnabled`.
 pub const GUEST_UEFI_EFER_LME: u64 = 1 << 8;
 pub const GUEST_UEFI_EFER_LMA: u64 = 1 << 10;
-/// IA32_EFER.NXE (SDM 2.2.1 bit 11). CpuDxe paging refresh ORs
+/// CPUID.0 "GenuineIntel" (EBX `Genu`, EDX `ineI`, ECX `ntel`).
+/// Iron `45aec97` printed `GenuineIntEl` unknown / generic init then PAT freeze.
+pub const CPUID_GENUINEINTEL_EBX: u32 = 0x756e6547;
+pub const CPUID_GENUINEINTEL_EDX: u32 = 0x49656e69;
+pub const CPUID_GENUINEINTEL_ECX: u32 = 0x6c65746e;
+/// IA32_EFER.NXE (SDM 2.2.1 bit 11). Firmware CpuDxe paging refresh ORs
 /// `EFI_MEMORY_XP` into GCD when NXE=1, then `ASSERT_EFI_ERROR` on
-/// `SetMemorySpaceAttributes`. Guest-UEFI does not need NX.
+/// `SetMemorySpaceAttributes`. Linux after high-half `#PF` keeps NXE.
 pub const GUEST_UEFI_EFER_NXE: u64 = 1 << 11;
 /// CPUID.80000001 EDX.NX (bit 20) and 1G pages (bit 26).
 pub const CPUID_80000001_EDX_NX: u32 = 1 << 20;
@@ -421,6 +626,15 @@ pub const CPUID_LEAF7_ECX_TME_EN: u32 = 1 << 13;
 /// CPUID.7.0 ECX.LA57 (bit 16). Guest-UEFI is 4-level only; 5-level walks
 /// would disagree with [`crate::vmx::guest_pt::identity_map_not_present`].
 pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
+/// CPUID.7.0 EBX.CLFLUSHOPT (bit 23) / CLWB (bit 24). Nested KVM #UD at
+/// `66 0F AE F1` while host CPUID still advertises them (CI `34b5767`).
+pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
+pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
+/// CPUID.7.0 ECX.WAITPKG (bit 5). `TPAUSE`/`UMWAIT`/`UMONITOR` #UD in VMX
+/// non-root without the user-wait-and-pause control (SDM 26.1.3); the
+/// `66 0F AE F1` Oops (CI `34b5767`, `9511d4c`) is register-form `tpause`,
+/// which Linux uses only when this bit is visible. Hide it on every leg.
+pub const CPUID_LEAF7_ECX_WAITPKG: u32 = crate::arch::cpu::CPUID_LEAF7_ECX_WAITPKG;
 /// i440FX / nested QEMU floor. Clip-36 (`5f59c86`) still left
 /// `[4GiB, 64GiB)` NP vs MTRR default WB.
 pub const GUEST_UEFI_PHYS_BITS_MIN: u32 = 36;
@@ -487,7 +701,12 @@ pub fn guest_uefi_mtrr_var_mask_sanitize(value: u64, phys_bits: u32) -> u64 {
 pub const GUEST_UEFI_MEMFD_BASE: u64 = 0x800000;
 /// Hypervisor 4 GiB identity PML4. Below MEMFD so CpuDxe heap cannot clobber
 /// CR3 (iron `101b8ec` `pde=0x30646870` at `0x800000`).
-pub const GUEST_UEFI_HV_PML4: u64 = 0x200000;
+/// HV identity PML4 0x400000 (not 0x200000 PEI stack).
+pub const GUEST_UEFI_HV_PML4: u64 = 0x400000;
+const _: () = {
+    assert!(GUEST_UEFI_HV_PML4 == crate::devices::guest_platform::HV_IDENTITY_PML4);
+    assert!(GUEST_UEFI_HV_PML4 == crate::vmx::guest_pt::IDENTITY_HV_PML4);
+};
 /// Iron `d5fceb1`: `mov al,[0x80B000]` after CpuDxe. Dump `linear=` was RIP.
 pub const GUEST_UEFI_IRON_PF_CR2: u64 = 0x80B000;
 /// Iron COM2 after `13e8bd2` CR3 load: `#PF` `err=0x9` (P+RSVD) at MEMFD+0x2027c8.
@@ -536,8 +755,30 @@ pub const GUEST_UEFI_MMIO_SCRATCH_SLOTS: usize = 32;
 /// identity-map. Iron `fad19b2`: PEI used the 2 GiB lie, then EPT-stopped
 /// at `gpa=0x7bddd000` (`reason=0x30` `n=600`; ASSERT `0x1d25193` gone).
 /// 32 slots = 64 MiB. Do **not** identity-map `[32MiB, 2GiB)` (`89c3731`).
+/// Product ISO retains extra 2 MiB WB slots (installer RAM); `iso=0` stays 32.
 pub const GUEST_UEFI_REPORT_RAM_SLOTS: usize = 32;
+/// Extra report-RAM slots when PRE-EBS retained a window-sized ISO.
+/// `[32MiB, 2GiB)` is 1008×2 MiB; `iso=0` still allocates only 32.
+/// Iron and nested product-ISO fill extras from leftover DRAM above PRECISE
+/// (not invented HPA). Nested `iso=0` does not seed leftover (E4 SHELL).
+pub const GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA: usize = 976;
+const REPORT_RAM_ARRAY: usize =
+    GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
+
+fn report_ram_slots_alloc() -> usize {
+    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+        REPORT_RAM_ARRAY
+    } else {
+        GUEST_UEFI_REPORT_RAM_SLOTS
+    }
+}
 pub const GUEST_UEFI_REPORT_RAM_PAGE: u64 = 0x20_0000;
+const _: () = assert!(
+    (GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA) as u64
+        * GUEST_UEFI_REPORT_RAM_PAGE
+        == crate::devices::guest_platform::PLATFORM_REPORT_RAM_BYTES
+            - crate::devices::guest_platform::PLATFORM_RAM_BYTES
+);
 /// Iron `fad19b2` first unbacked report-RAM GPA (top of 2 GiB LowMemory).
 pub const GUEST_UEFI_IRON_REPORT_RAM_GPA: u64 = 0x7BDD_D000;
 /// Iron `32e7d46`: after lazy WB map, CpuDeadLoop at top of LowMemory
@@ -629,6 +870,17 @@ pub const GUEST_UEFI_CPU_FLUSH_UNSUPPORTED: &[u8] = &[
 pub const GUEST_UEFI_CPU_FLUSH_JNZ_OFF: usize = 3;
 /// Iron `d6b012a` decompressed CpuFlush in report-RAM.
 pub const GUEST_UEFI_IRON_CPU_FLUSH_GPA: u64 = 0x7EE6_8FA0;
+/// OVMF GCD heap floor for CpuFlush scans (128 MiB below 2 GiB).
+/// Iron `f0eb84e`: pre-map `n=1008` then tick `n=256` scanned ~2 GiB of
+/// leftover DRAM for `jnz` (byte walk) and COM2 died. CpuFlush lives
+/// here (`0x7EE68FA0`). Keep EPT pre-map leaves. iso=0 stays lazy.
+/// cpu_flush skip leftover pre-map.
+pub const GUEST_UEFI_CPU_FLUSH_HEAP_GPA: u64 = 0x7800_0000;
+const _: () = assert!(GUEST_UEFI_IRON_CPU_FLUSH_GPA >= GUEST_UEFI_CPU_FLUSH_HEAP_GPA);
+/// Leftover 2 MiB slots byte-scanned per CpuFlush walk (high GPA first).
+/// Iron `abfb008`: skip `n=944` still scanned 64 heap leftover slots
+/// (~128 MiB) on tick `n=256` and hung. cpu_flush leftover per walk.
+pub const GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK: u32 = 2;
 
 /// Nop `jnz` so CpuFlush WBINVD for every FlushType (EFI_UNSUPPORTED → SUCCESS).
 ///
@@ -672,6 +924,144 @@ pub fn guest_uefi_count_cpu_flush_jnz(buf: &[u8]) -> u32 {
         }
     }
     n
+}
+
+/// Skip leftover/pre-mapped report-RAM CpuFlush walks that hung iron `f0eb84e`.
+///
+/// INVARIANTS:
+/// - GPA below [`GUEST_UEFI_LOW_RAM_BYTES`] is never skipped (identity slab)
+/// - After `patched`, every report-RAM GPA is skipped
+/// - Unpatched leftover is not skipped here; the walk caps
+///   [`GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK`] (iron `abfb008` 64×2 MiB hang)
+///
+/// VERIFICATION: L1 (host tests)
+/// Keep EPT pre-map leaves. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_cpu_flush_skip_mapped(gpa: u64, patched: bool) -> bool {
+    if gpa < GUEST_UEFI_LOW_RAM_BYTES {
+        return false;
+    }
+    patched
+}
+
+/// Product-ISO pre-map tick must not byte-scan leftover (iron `abfb008`).
+///
+/// iso=0 stays on the tick cadence (`maps<=32`). cpu_flush skip leftover
+/// pre-map on tick.
+pub fn guest_uefi_cpu_flush_tick_scans_mapped(maps: u32) -> bool {
+    maps <= GUEST_UEFI_REPORT_RAM_SLOTS as u32
+}
+
+/// Product-ISO Linux is in the private VMCS (share, high-half RIP, or a
+/// delivered `#PF`). iso=0 never latches share. linux unhandled nowait stop.
+pub fn guest_uefi_linux_guest_active(share: bool, high_half: bool, pf_delivered: bool) -> bool {
+    share || high_half || pf_delivered
+}
+
+/// Skip an unhandled VM-exit when Linux is active and VMCS length is 1–15.
+///
+/// Iron `1a2544d`: PAT / initrd then `restore host xcr0` with no
+/// `guest-UEFI stop n=` (share hushes HV `write_str`). MOV DR / GDTR /
+/// other mandatory exits must not drop to E4 hold. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_unhandled_should_skip(linux: bool, insn_len: u64) -> bool {
+    linux && insn_len >= 1 && insn_len <= 15
+}
+
+/// Try skip on unhandled Linux exits, including VMCS length 0 (high-half
+/// fetch via [`skip_insn`] / [`guest_uefi_linux_fixed_skip_len`]).
+/// Triple-fault and VM-entry failure still stop. linux MOV DR skip.
+pub fn guest_uefi_linux_unhandled_try_skip(linux: bool, insn_len: u64, reason: u32) -> bool {
+    if !linux {
+        return false;
+    }
+    if reason == crate::vmx::fields::EXIT_REASON_TRIPLE_FAULT
+        || reason == crate::vmx::fields::EXIT_REASON_VMENTRY_GUEST_STATE
+        || reason == crate::vmx::fields::EXIT_REASON_VMENTRY_MSR_LOAD
+    {
+        return false;
+    }
+    guest_uefi_linux_unhandled_should_skip(linux, insn_len) || insn_len == 0
+}
+
+/// Hardware exceptions that push an error code (SDM 6.13).
+pub fn guest_uefi_linux_exc_error_code(vec: u8) -> bool {
+    matches!(vec, 8 | 10 | 11 | 12 | 14 | 17)
+}
+
+/// `#DF/#TS/#NP/#SS` must stop, not re-inject. Nested `8f62fea`: LSTAR=0
+/// `syscall` → RIP=0 + user RSP → `#DF` → inject → triple fault `reason=0x2`.
+/// `#DE/#AC/#XF` still inject (iron `1a2544d` must not silent-stop after initrd).
+pub fn guest_uefi_linux_fatal_class_exc_stops(vec: u8) -> bool {
+    matches!(vec, 8 | 10 | 11 | 12)
+}
+
+/// Syscall-path MSRs Linux `syscall_init` writes. Guest-UEFI `handle_wrmsr`
+/// must `cpu::wrmsr` them (G0 `launch.rs` already does). Nested `8f62fea`:
+/// silent `_ => {}` left `LSTAR=0`; first user `syscall` landed at RIP 0.
+pub fn guest_uefi_wrmsr_syscall_passthrough(msr: u32) -> bool {
+    matches!(
+        msr,
+        msr_firewall::MSR_STAR
+            | msr_firewall::MSR_LSTAR
+            | msr_firewall::MSR_CSTAR
+            | msr_firewall::MSR_SFMASK
+            | msr_firewall::MSR_KERNEL_GS_BASE
+            | msr_firewall::MSR_TSC_AUX
+    )
+}
+
+/// Linux 64-bit `cpu_entry_area` read-only IDT (`CPU_ENTRY_AREA_RO_IDT`).
+/// Nested `659bb41`: `#DF` `cs=0x33` `cr2=0xfffffe00000000e0` = IDT[#PF]
+/// under the PTI user CR3 after syscall MSRs were live.
+pub const GUEST_UEFI_LINUX_CEA_IDT_BASE: u64 = 0xfffffe0000000000;
+
+/// Linear address of `IDT[vec]` in the Linux CEA RO IDT page.
+pub fn guest_uefi_linux_cea_idt_entry_linear(vec: u8) -> u64 {
+    GUEST_UEFI_LINUX_CEA_IDT_BASE.wrapping_add(u64::from(vec) * 16)
+}
+
+/// 4-level PML4 index for a canonical linear address.
+pub fn guest_uefi_pt_pml4_index(linear: u64) -> u64 {
+    (linear >> 39) & 0x1ff
+}
+
+/// PTI 8K PGD pair: user CR3 is `kernel_pgd+0x1000` with PCID bit 11.
+/// Nested `659bb41` `cr3=0x2e1f804` → kernel PGD GPA `0x2e1e000`.
+pub fn guest_uefi_pti_kernel_pgd_gpa(user_cr3: u64) -> u64 {
+    (user_cr3 & !0xfff).wrapping_sub(0x1000)
+}
+
+/// Nested `2bebea7` CEA IDT[#PF] leaf: P=1 W=0 U=0 A=1 G=1 NX=1 GPA `0x708f000`.
+pub const GUEST_UEFI_LINUX_CEA_IDT_LEAF_NESTED_2BEBEA7: u64 = 0x8000_0000_0708_f121;
+
+pub fn guest_uefi_pte_present(pte: u64) -> bool {
+    (pte & 1) != 0
+}
+
+pub fn guest_uefi_pte_writable(pte: u64) -> bool {
+    (pte & (1 << 1)) != 0
+}
+
+pub fn guest_uefi_pte_user(pte: u64) -> bool {
+    (pte & (1 << 2)) != 0
+}
+
+pub fn guest_uefi_pte_nx(pte: u64) -> bool {
+    (pte & (1u64 << 63)) != 0
+}
+
+pub fn guest_uefi_pte_gpa(pte: u64) -> u64 {
+    pte & 0x000f_ffff_ffff_f000
+}
+
+/// Nested `2bebea7`: CEA IDT leaf is NX; userspace VM-exit stripped NXE
+/// because `allow_nx` was high-half RIP only (RayNu-F never intercepts `#PF`,
+/// so `PF_LINUX_DELIVER` stays 0). Keep NXE after Linux handoff / once held.
+pub fn guest_uefi_efer_nx_should_hold(
+    high_half_rip: bool,
+    linux_sticky: bool,
+    prev_hold: bool,
+) -> bool {
+    high_half_rip || linux_sticky || prev_hold
 }
 
 /// EPT leaf memory type WB. Scratch/sink stay UC (`ept_leaf_large(..., 0)`).
@@ -730,6 +1120,744 @@ pub fn guest_uefi_mmio_needs_scratch(gpa: u64) -> bool {
         && (g & !0x1F_FFFF) != crate::devices::guest_platform::HPET_SINK_PAGE
 }
 
+/// True when a virtio BAR sits in the 2 MiB UC scratch at [`GUEST_UEFI_IRON_MMIO_SCRATCH_GPA`].
+///
+/// Iron `df0c118`: Linux assigned `00:02.0`/`00:03.0` BAR0 to
+/// `0x80001000`/`0x80000000` (PCI hole start). That 2 MiB was already a
+/// present scratch leaf for firmware PT stores (`b25d75b`), so virtio MMIO
+/// was RAM and `handle_virtio_bar_ept` never ran (`Freeing initrd` then
+/// silent; no `stop n=`). virtio BAR trap over scratch.
+/// iso=0 default BAR stays `0xFE000000` (unmapped). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_virtio_bar_overlaps_scratch(bar: u64) -> bool {
+    bar != 0 && (bar & !0x1F_FFFF) == GUEST_UEFI_IRON_MMIO_SCRATCH_GPA
+}
+
+/// 4 KiB-aligned programmed BAR that should become an EPT trap.
+pub fn guest_uefi_virtio_bar_should_trap(bar: u64) -> bool {
+    bar != 0
+        && (bar & 0xfff) == 0
+        && bar != u64::from(crate::devices::guest_virtio_blk::GUEST_VIRTIO_BAR0_SIZE_MASK)
+}
+
+/// Linux `virtio_reset` / `msleep(1)` needs PIT IRQ 0. `idle=poll` never
+/// HLT; VMX preempt is the only PIT source and is starved by tight BAR EPT.
+/// Raise PIT on each Linux virtio MMIO so jiffies can move. iso=0 does not.
+/// virtio MMIO raises PIT. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_virtio_mmio_raises_pit(linux: bool, product_iso: bool) -> bool {
+    linux && product_iso
+}
+
+/// Linux `clocksource=tsc` still uses the LAPIC timer for `jiffies` /
+/// `msleep`. Tight virtio BAR EPT resets the VMX preemption timer, so
+/// `poll_timer_expiry` on HLT/preempt never runs. Poll on each Linux
+/// product-ISO virtio MMIO. iso=0 does not.
+/// virtio MMIO polls lapic. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_virtio_mmio_polls_lapic(linux: bool, product_iso: bool) -> bool {
+    linux && product_iso
+}
+
+/// VM-entry injects PIC IRQ 0 before leftover IOAPIC→LAPIC **unless**
+/// Linux has programmed MADT GSI 2 (ACPI timer). PIC-first while GSI 2 is
+/// armed injects vector 0x20 into an IOAPIC IDT. linux PIC before LAPIC.
+/// linux GSI 2 before PIC. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_pic_before_lapic(pic_ready: bool, gsi2_armed: bool) -> bool {
+    pic_ready && !gsi2_armed
+}
+
+/// Firmware BDS keeps PIC-first when leftover IOAPIC pin 2 is unmasked
+/// **unless** we armed virtual-wire GSI 2 (iron `eac424b`: PIC inject hits
+/// an APIC-mode IDT that writes CR8 and returns to CpuSleep). Linux after
+/// MADT still uses [`guest_uefi_linux_pic_before_lapic`] so GSI 2 wins.
+/// firmware PIC before GSI 2. firmware virtual-wire GSI 2. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_pic_before_lapic(pic_ready: bool, gsi2_armed: bool, linux: bool) -> bool {
+    if linux {
+        guest_uefi_linux_pic_before_lapic(pic_ready, gsi2_armed)
+    } else if crate::devices::guest_irq::firmware_virtual_wire_armed() && gsi2_armed {
+        false
+    } else {
+        pic_ready
+    }
+}
+
+/// HLT `CpuSleep` after BOTH-OK with no ATA I/O floods SOL (resume cap
+/// 16_777_216; tick every 4096). Keep a sparse beat so the stall is still
+/// visible. Print-only: leftover `cpu_flush` stays on the tick cadence
+/// (nested `9ce65ae` ATAPI-OK missing after quiet skipped `cpu_flush`).
+/// HLT stall quiet tick print-only. iso=0 keeps `n > 16384` (past Delay /
+/// PCI enum). Product ISO hides PIIX IDE, so virtio enum and virtio-iso
+/// CpuSleep happen at `n << 16384`; waiting for that floor parks `HLT; RET`
+/// without inject. product ISO HLT stall before n=16384. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_hlt_stall_quiet_tick(n: u32, reason: u32, pci_ide: bool, ataio: u32) -> bool {
+    reason == crate::vmx::fields::EXIT_REASON_HLT
+        && pci_ide
+        && ataio == 0
+        && (n > 16384 || crate::devices::ide_cdrom::product_iso_window_armed())
+}
+
+/// CpuSleep is `hlt; ret` (`f4c3`). `[RSP]` is the caller.
+/// Iron COM2 `27eda8c` hid slot-0 (CDROM-OK via PIIX) and still hung
+/// `rip=0x7f0680d0` `ataio=0`. BAR conflict is closed. print HLT retaddr.
+/// Iron COM2 `2d4ab51` `ret=0x7ff0e055` (DxeCore-range; AcpiTimer at
+/// `0x7ff635d2`, not PciBus `0x7f01`) still `ataio=0`. firmware ConIn CR.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_cpusleep_retaddr(slot: u64, long_mode: bool) -> u64 {
+    if long_mode {
+        slot
+    } else {
+        slot & 0xffff_ffff
+    }
+}
+
+pub fn last_hlt_retaddr() -> u64 {
+    LAST_HLT_RET.load(Ordering::Acquire)
+}
+
+/// 8 bytes immediately before CpuSleep return (`ret-8`).
+/// Iron COM2 `6c4bfde` ConIn CR fired; HLT `ret=0x7ff0e055` still
+/// `ataio=0`. DxeCore WaitForEvent is a timer wait, not serial ConIn.
+/// print HLT callsite. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_cpusleep_callsite(bytes: [u8; 8]) -> u64 {
+    u64::from_le_bytes(bytes)
+}
+
+pub fn last_hlt_callsite() -> u64 {
+    LAST_HLT_CALL.load(Ordering::Acquire)
+}
+
+/// Iron COM2 `2d4ab51` HLT `ret=0x7ff0e055` is DxeCore WaitForEvent
+/// (same image as AcpiTimer `0x7ff635d2`), not PciBus `0x7f01xxxx`.
+/// EnableAttributes + ROM probe already ran; IdeBus never issued ATA.
+/// One CR into guest COM1 so a serial ConIn wait can return. Not HLT
+/// policy. Not PIT. iso=0 does not push. firmware ConIn CR.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_conin_cr_on_hlt(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    already: bool,
+) -> bool {
+    product_iso && pci_ide && ataio == 0 && !already
+}
+
+/// Iron COM2 `0b770cd` `rethx=0xe056ff41b84d8b48` =
+/// `48 8b 4d b8 41 ff 56 e0` = `mov rcx,[rbp-0x48]; call [r14-0x20]`.
+/// DxeCore WaitForEvent invokes CpuSleep that way. CpuSleep returns
+/// (HLT skip after one-shot) and the wait loops — the event never
+/// signals. PIT `0x20` and ConIn CR did not complete it.
+pub const GUEST_UEFI_WFE_HLT_RET: u64 = 0x7ff0_e055;
+pub const GUEST_UEFI_WFE_CALLSITE: u64 = 0xe056_ff41_b84d_8b48;
+
+/// One-shot: unwind that WaitForEvent as `EFI_SUCCESS` (`xor eax,eax;
+/// leave; ret`). Not HLT policy. Not another print. iso=0 does not
+/// unwind. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_waitforevent_force_return(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    already: bool,
+    retaddr: u64,
+) -> bool {
+    product_iso && pci_ide && ataio == 0 && !already && retaddr == GUEST_UEFI_WFE_HLT_RET
+}
+
+/// Iron COM2 `e0d5c55` WaitForEvent return `caller=0x7feffe28`, then
+/// EPT `reason=0x34` `rip=0x7ec8f6ff`
+/// `insn=31c031ff8903eb0348ffc7493b7e1873` still `ataio=0`.
+/// `xor eax,eax; xor edi,edi; mov [rbx],eax` is firmware ZeroMem.
+/// Not a second unwind. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_WFE_CALLER: u64 = 0x7fef_fe28;
+pub const GUEST_UEFI_ZEROMEM_EPT_RIP: u64 = 0x7ec8_f6ff;
+pub const GUEST_UEFI_ZEROMEM_FILL_CAP: u64 = 16 * 1024 * 1024;
+
+/// COM2 when the post-WFE ZeroMem EPT is filled host-side.
+pub const GUEST_UEFI_ZEROMEM_EPT_PREFIX: &str = "boot: guest-UEFI firmware ZeroMem ept gpa=0x";
+
+/// Named iron RIP after `e0d5c55` WFE return. iso=0 does not fill.
+pub fn guest_uefi_firmware_zeromem_ept(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    wfe_done: bool,
+    rip: u64,
+) -> bool {
+    product_iso && pci_ide && ataio == 0 && wfe_done && rip == GUEST_UEFI_ZEROMEM_EPT_RIP
+}
+
+/// `31 c0 31 ff 89 03` = `xor eax,eax; xor edi,edi; mov [rbx],eax`.
+pub fn guest_uefi_firmware_zeromem_insn(b: [u8; 6]) -> bool {
+    b == [0x31, 0xc0, 0x31, 0xff, 0x89, 0x03]
+}
+
+/// Dest must be low identity or leftover report-RAM. Cap 16 MiB so a
+/// smashed `rbx` / `[r14+0x18]` cannot wipe the pool. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_zeromem_dest_ok(dest: u64, count: u64) -> bool {
+    if dest == 0 || count == 0 || count > GUEST_UEFI_ZEROMEM_FILL_CAP {
+        return false;
+    }
+    let end = dest.saturating_add(count);
+    if end < dest || end == dest {
+        return false;
+    }
+    if dest < GUEST_UEFI_LOW_RAM_BYTES {
+        return end <= GUEST_UEFI_LOW_RAM_BYTES;
+    }
+    guest_uefi_report_ram_should_map(dest) && guest_uefi_report_ram_should_map(end.saturating_sub(1))
+}
+
+/// Iron COM2 `c8d504d`: after WFE return, preemption timer (`reason=0x34`,
+/// not EPT `0x30`) at firmware report-RAM. Noskip
+/// `insn=f30f1efa48833d4c9b00000448b80300` =
+/// `endbr64; cmp qword [rip+disp], 4; mov rax, …`. Existing
+/// [`preempt_deadloop_skip_len`] only skips pause / backward jcc /
+/// delay_loop (`cmp [rip], 0`). Forward `je +0x6c` at `0x7ec8f639`
+/// is not skipped. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_WFE_PREEMPT_SKIP_PREFIX: &str =
+    "boot: guest-UEFI firmware WFE preempt skip len=";
+
+/// Bytes to advance after WFE when the named noskip pattern matches.
+///
+/// INVARIANTS:
+/// - 0 unless product ISO + IDE enumerated + `ataio==0` + WFE already returned
+/// - 12: `endbr64` + `cmp qword [rip+disp32], imm8`
+/// - 4: `endbr64` alone
+/// - 8: `cmp qword [rip+disp32], imm8` alone
+/// - never a forward `jcc`
+pub fn guest_uefi_firmware_wfe_preempt_skip_len(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    wfe_done: bool,
+    bytes: &[u8],
+) -> u8 {
+    if !(product_iso && pci_ide && ataio == 0 && wfe_done) {
+        return 0;
+    }
+    if bytes.len() >= 12
+        && bytes[0] == 0xF3
+        && bytes[1] == 0x0F
+        && bytes[2] == 0x1E
+        && bytes[3] == 0xFA
+        && bytes[4] == 0x48
+        && bytes[5] == 0x83
+        && bytes[6] == 0x3D
+    {
+        return 12;
+    }
+    if bytes.len() >= 4
+        && bytes[0] == 0xF3
+        && bytes[1] == 0x0F
+        && bytes[2] == 0x1E
+        && bytes[3] == 0xFA
+    {
+        return 4;
+    }
+    if bytes.len() >= 8 && bytes[0] == 0x48 && bytes[1] == 0x83 && bytes[2] == 0x3D {
+        return 8;
+    }
+    0
+}
+
+/// Iron COM2 `d0e44d4`: WFE preempt skip **hit**
+/// (`len=12 rip=0x7ff0e7e8`) then the same `endbr64+cmp [rip],4`
+/// re-entered (`spin jmp skip` ×8) still `ataio=0`. Skip-12 lands on
+/// `mov rax, 3` (not-ready). Do not skip RIP. Host-store `4` at the
+/// RIP-relative dest so the cmp can succeed. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_WFE_STATE4_RIP: u64 = 0x7ff0_e7e8;
+pub const GUEST_UEFI_WFE_STATE4_DEST: u64 = 0x7ff1_8340;
+pub const GUEST_UEFI_WFE_STATE4_VAL: u64 = 4;
+pub const GUEST_UEFI_WFE_STATE4_POKE_PREFIX: &str =
+    "boot: guest-UEFI firmware WFE state4 poke dest=0x";
+
+/// Dest of `endbr64; cmp qword [rip+disp32], 4`. `None` if the bytes
+/// are not that encoding. Iron `d0e44d4` `rip=0x7ff0e7e8` → `0x7ff18340`.
+pub fn guest_uefi_firmware_wfe_state4_dest(rip: u64, bytes: &[u8]) -> Option<u64> {
+    if bytes.len() < 12 {
+        return None;
+    }
+    if bytes[0] != 0xF3 || bytes[1] != 0x0F || bytes[2] != 0x1E || bytes[3] != 0xFA {
+        return None;
+    }
+    if bytes[4] != 0x48 || bytes[5] != 0x83 || bytes[6] != 0x3D || bytes[11] != 0x04 {
+        return None;
+    }
+    let disp = i32::from_le_bytes([bytes[7], bytes[8], bytes[9], bytes[10]]);
+    Some(rip.wrapping_add(12).wrapping_add(disp as i64 as u64))
+}
+
+/// Iron COM2 `9474ab6`: `cr2=0xffffffffffffffb8` is `[r14-0x48]` with
+/// `r14=0` (`cmp qword [r14-0x48], 'evnt'`). `identity_signext32_gpa`
+/// would treat this as hole GPA `0xffffffb8`. Not a 32-bit MMIO leftover.
+pub fn guest_uefi_pf_is_null_relative(cr2: u64) -> bool {
+    let s = cr2 as i64;
+    s < 0 && s > -0x1000
+}
+
+/// Iron COM2 `9474ab6` after state4 poke: HV printed
+/// `#PF MMIO skip — RIP left 32MiB RAM` then stopped. RIP `0x7ff0e018`
+/// is DxeCore in report-RAM (same image as WaitForEvent `0x7ff0e055`).
+/// `insn=49817eb865766e74` = `cmp qword [r14-0x48], 0x746e7665` (`evnt`).
+/// Deliver `#PF` to the guest IDT. Do not MMIO-map. Do not skip RIP.
+/// Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_WFE_EVENT_PF_CR2: u64 = 0xffff_ffff_ffff_ffb8;
+pub const GUEST_UEFI_WFE_EVENT_PF_RIP: u64 = 0x7ff0_e018;
+pub const GUEST_UEFI_EVENT_SIG: u32 = 0x746e_7665;
+pub const GUEST_UEFI_WFE_EVENT_PF_PREFIX: &str =
+    "boot: guest-UEFI firmware WFE event #PF cr2=0x";
+
+/// `cmp qword [r14-0x48], imm32` (CoreCheckEvent signature).
+pub fn guest_uefi_firmware_wfe_event_pf_insn(b: [u8; 4]) -> bool {
+    b == [0x49, 0x81, 0x7e, 0xb8]
+}
+
+/// Exception bitmap bit 14 (`#PF`). Firmware inject drops this so the
+/// VM-entry event reaches the guest IDT; restore it on the next non-#PF
+/// exit so later MMIO / identity-map `#PF`s still hit the HV.
+pub const GUEST_UEFI_EXC_BITMAP_PF: u64 = 1 << 14;
+
+/// Exception bitmap installed at the RayNu-F → Linux hand-off (F6b, ADR-016).
+///
+/// INVARIANTS:
+/// - `#PF` (14), `#UD` (6), `#GP` (13) are **not** intercepted: the kernel
+///   owns its faults; the firmware-phase `#PF` repair path (OVMF identity
+///   rebuild at `0x400000`) must never run against a kernel we launched
+/// - `#DF` (8) stays intercepted so a dead kernel is dumped, not silent
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_raynu_f_handoff_exception_bitmap() -> u32 {
+    guest_uefi_linux_exception_bitmap()
+}
+
+/// `EXIT_REASON_EXCEPTION_NMI` (0) with valid vector 14.
+pub fn guest_uefi_exit_is_page_fault(basic: u32, intr: u64) -> bool {
+    basic == 0 && (intr & (1u64 << 31)) != 0 && (intr & 0xff) == 14
+}
+
+/// After the one-shot firmware event `#PF` inject, OR bit 14 back.
+pub fn guest_uefi_firmware_wfe_event_pf_restore_bitmap(
+    event_pf_done: bool,
+    exit_is_pf: bool,
+    bitmap: u64,
+) -> Option<u64> {
+    if event_pf_done && !exit_is_pf && (bitmap & GUEST_UEFI_EXC_BITMAP_PF) == 0 {
+        Some(bitmap | GUEST_UEFI_EXC_BITMAP_PF)
+    } else {
+        None
+    }
+}
+
+/// One-shot after WFE+state4. iso=0 does not deliver. RIP must be
+/// leftover report-RAM (DxeCore), not the 32 MiB identity hole.
+pub fn guest_uefi_firmware_wfe_event_pf(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    wfe_done: bool,
+    state4_done: bool,
+    cr2: u64,
+    rip: u64,
+) -> bool {
+    product_iso
+        && pci_ide
+        && ataio == 0
+        && wfe_done
+        && state4_done
+        && guest_uefi_pf_is_null_relative(cr2)
+        && guest_uefi_report_ram_should_map(rip)
+}
+
+/// One-shot after WFE. Dest must already be a valid report-RAM / low-RAM
+/// qword. iso=0 does not poke. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_wfe_state4_poke(
+    product_iso: bool,
+    pci_ide: bool,
+    ataio: u32,
+    wfe_done: bool,
+    already: bool,
+    dest: u64,
+) -> bool {
+    product_iso
+        && pci_ide
+        && ataio == 0
+        && wfe_done
+        && !already
+        && dest != 0
+        && guest_uefi_firmware_zeromem_dest_ok(dest, 8)
+}
+
+/// WaitForEvent frame: `[RBP]=prev`, `[RBP+8]=caller`, `leave` →
+/// `RSP=RBP+16`. Reject a smashed or null frame.
+pub fn guest_uefi_waitforevent_leave(rbp: u64, prev_rbp: u64, caller: u64) -> Option<(u64, u64)> {
+    if rbp < 16 || prev_rbp == 0 || caller < 0x1000 {
+        None
+    } else {
+        Some((caller, rbp.wrapping_add(16)))
+    }
+}
+
+/// Firmware BDS CpuSleep after BOTH-OK: leftover IOAPIC pin 2 is often
+/// latched into LAPIC IRR while CR8/TPR blocks `take_deliverable_vector`.
+/// Iron COM2 `084430f` inject `vec=0x20` only after `CR access cr=8`.
+/// PIC-first needs `pic_has_deliverable`; if the 8259 is still masked,
+/// ignore TPR so the IOAPIC timer IRQ can enter. Linux keeps TPR.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_ignores_tpr(linux: bool, pci_ide: bool, ataio: u32) -> bool {
+    !linux && pci_ide && ataio == 0
+}
+
+/// After BOTH-OK, `skip_hlt` without inject turns CpuSleep into a busy
+/// `RET` loop so the timer ISR never runs as a wait (iron COM2 `b5c3a9c`:
+/// `HLT skip-after-inject` `ataio=0` `cmd=0x00` through `n≈1.8M`).
+/// Inject without skip IRETed to HLT until virtual-wire AEOI (`eac424b`).
+/// `ea30da1` skip AND inject `vec=0x20` livelocked the timer ISR
+/// (`pci_ide=0`). Product ISO + `pci_ide` + `ataio==0` waits in HLT
+/// until the first PIT. Iron COM2 `e3cbfa5` / `--run 33558261624`:
+/// one-shot `0x20` printed, firmware IRET'd to `rip=0x7f0680d0`
+/// (`reason=0xc` `insn=f4c3` `inj=1` `ataio=0` through n>800k). Waiting
+/// after that is a deadlock (further PIT is skipped). After the first
+/// wake, do not wait — skip HLT without more PIT. Nested iso=0
+/// (`pci_ide` false) still skips without inject. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_wait_for_irq(
+    product_iso: bool,
+    n: u32,
+    reason: u32,
+    pci_ide: bool,
+    ataio: u32,
+) -> bool {
+    guest_uefi_firmware_hlt_wait_for_irq_oneshot(
+        product_iso,
+        n,
+        reason,
+        pci_ide,
+        ataio,
+        FIRMWARE_PIT_ONESHOT.load(Ordering::Acquire),
+    )
+}
+
+/// Wait only before the first firmware PIT. `pit_oneshot` is iron
+/// COM2 `e3cbfa5` (one inject, then HLT hang).
+pub fn guest_uefi_firmware_hlt_wait_for_irq_oneshot(
+    product_iso: bool,
+    _n: u32,
+    reason: u32,
+    pci_ide: bool,
+    ataio: u32,
+    pit_oneshot: bool,
+) -> bool {
+    product_iso
+        && reason == crate::vmx::fields::EXIT_REASON_HLT
+        && pci_ide
+        && ataio == 0
+        && !pit_oneshot
+}
+
+/// Skip CpuSleep `HLT` and set activity Active so ConnectAll continues
+/// **after** PACKET (`ataio>0`): IdeBus may HLT waiting for IRQ 14.
+/// Iron COM2 `b5c3a9c` skipped before ATA (`ataio=0` `cmd=0x00`) and never
+/// issued IDENTIFY. `skip_hlt` without activity Active parks at RET
+/// (`daf3195`). Quiet tick stays `ataio==0` (print-only). Do not skip
+/// before first ATA: wait-for-IRQ + PIT. `ea30da1` skip+inject was
+/// `pci_ide=0`. skip-after-inject uses pci_ready. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_skip_after_inject(
+    product_iso: bool,
+    n: u32,
+    reason: u32,
+    pci_ide: bool,
+    ataio: u32,
+) -> bool {
+    product_iso
+        && reason == crate::vmx::fields::EXIT_REASON_HLT
+        && pci_ide
+        && ataio > 0
+        && (n > 16384 || crate::devices::ide_cdrom::product_iso_window_armed())
+}
+
+/// Firmware BDS must not take PIT `vec=0x20`. Linux after MADT still injects.
+/// Iron COM2 `ea30da1` stop n=16777216 `rip=0x7f03fbe5` `pci_ide=0` `hlt=0`.
+/// Per-vector filter is [`guest_uefi_firmware_skip_pit_inject`]: ATA 14
+/// (`0x2E`) and virtio INTx still inject when those pins are unmasked.
+/// firmware HLT skip without inject. firmware skip PIT inject.
+/// do not F11 ea30da1. do not F11 e70a295. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_skip_without_inject(linux: bool) -> bool {
+    !linux
+}
+
+/// Drop firmware PIT `vec=0x20` after the first wake, or after ATA starts.
+/// Iron COM2 `b5c3a9c` skip-PIT from the start left BDS in CpuSleep
+/// (`ataio=0`). Allow the **first** `0x20` so virtual-wire can leave HLT.
+/// Iron COM2 `24c5fa6` / `--run 33555104832`: wait-for-irq woke
+/// `rip=0x7f0680d0`, then stacked `vec=0x20` livelocked APIC/CR8
+/// (`rip=0x7f03f641` / `0x7f03fbe5` / `0x7f0697a9`, `ataio=0` through
+/// `n>2.5M`). After that one wake, drop further PIT until PACKET.
+/// After `ataio>0`, keep dropping PIT (`ea30da1` was `pci_ide=0`).
+/// Linux still injects 0x20. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_skip_pit_inject(linux: bool, vec: u32, ataio: u32) -> bool {
+    guest_uefi_firmware_skip_pit_inject_oneshot(
+        linux,
+        vec,
+        ataio,
+        FIRMWARE_PIT_ONESHOT.load(Ordering::Acquire),
+    )
+}
+
+/// Pure PIT-skip predicate. `pit_oneshot` is the first firmware `0x20`
+/// already injected while `ataio==0` (iron COM2 `24c5fa6` storm).
+pub fn guest_uefi_firmware_skip_pit_inject_oneshot(
+    linux: bool,
+    vec: u32,
+    ataio: u32,
+    pit_oneshot: bool,
+) -> bool {
+    if linux || !crate::devices::guest_irq::firmware_is_pit_vec(vec as u8) {
+        return false;
+    }
+    if ataio > 0 {
+        return guest_uefi_firmware_hlt_skip_without_inject(linux);
+    }
+    pit_oneshot
+}
+
+/// Latch after the first firmware PIT inject before ATA. Host tests use
+/// the pure [`guest_uefi_firmware_skip_pit_inject_oneshot`] flag.
+pub fn guest_uefi_firmware_note_pit_injected(linux: bool, vec: u32, ataio: u32) -> bool {
+    if linux || ataio != 0 || !crate::devices::guest_irq::firmware_is_pit_vec(vec as u8) {
+        return false;
+    }
+    FIRMWARE_PIT_ONESHOT
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// CpuSleep is `hlt; ret` (`f4c3`). Skip 1 byte when wait-for-IRQ skip
+/// must advance past HLT even if VMCS `insn_len` is 0 (firmware RIP is
+/// not Linux high-half). firmware HLT skip after inject. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_skip_len(wait: bool) -> u64 {
+    if wait {
+        1
+    } else {
+        0
+    }
+}
+
+/// Nested iso=0 does not take skip_after_inject. skip_hlt uses VMCS
+/// insn_len; when that is 0, firmware RIP is not Linux high-half so
+/// linux_hlt_skip returns 0 and CpuSleep parks at `f4c3` (CI 33437881901
+/// / 33438918646 `ataio=0 packet=0`). Skip 1 so Delay re-reads 0xB008.
+/// firmware HLT insn_len 0 skip. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_insn_len0_skip(linux: bool) -> u64 {
+    guest_uefi_firmware_hlt_skip_len(!linux)
+}
+
+/// Hardware HLT completion: activity Active (0), not HLT (1).
+/// Skip RIP while leaving activity HLT keeps the vCPU halted at `RET`
+/// (no further HLT exits; only preempt). Iron COM2 `eac424b` injected on
+/// 6 of 16M HLT exits — skip without Active parks the rest at `RET`.
+/// firmware HLT activity active. do not F11 daf3195. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_activity_active() -> u64 {
+    0
+}
+
+/// HLT-exiting spends no guest time, so the virtual APIC countdown never
+/// expires during CpuSleep. Force LVT expiry (vec 0x20 if still masked).
+/// firmware LAPIC timer expiry. do not F11 b26c86a. flash 2ae4544.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. flash 5c0f7a2.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// flash 90da03d. do not F11 56f31d3.
+/// flash e70a295. do not F11 90da03d.
+/// firmware skip PIT inject. do not F11 e70a295.
+/// flash 77f5866. firmware force IF for inject. do not F11 77f5866.
+/// flash 5227ad9.
+/// flash d61dc7e. do not F11 5c0f7a2.
+/// flash b824789. do not F11 d61dc7e.
+/// flash ea30da1. do not F11 b824789.
+/// product ISO hides PIIX IDE.
+/// product ISO HLT stall before n=16384. do not F11 ea30da1.
+/// do not F11 56f31d3.
+/// do not F11 2ae4544. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_lapic_timer_expiry(linux: bool, pci_ide: bool, ataio: u32) -> bool {
+    guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio)
+}
+
+/// Virtual-wire unmasks IOAPIC pin 2 and `raise_pit` latches it on every
+/// product-ISO HLT. Sequential peek 0..23 would always inject PIT and
+/// starve ATA 14 after CpuSleep returns. Prefer I/O pins.
+/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. flash 5c0f7a2.
+/// product ISO fw_cfg bootorder virtio-iso scsi@3 first.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// flash 90da03d. do not F11 56f31d3.
+/// flash e70a295. do not F11 90da03d.
+/// flash d61dc7e. do not F11 5c0f7a2.
+/// flash b824789. do not F11 d61dc7e.
+/// flash ea30da1. do not F11 b824789.
+/// product ISO hides PIIX IDE.
+/// product ISO HLT stall before n=16384. do not F11 ea30da1.
+/// do not F11 56f31d3.
+/// do not F11 2ae4544. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_ioapic_io_over_pit() -> bool {
+    true
+}
+
+/// Firmware BDS never ICW2/unmasks the 8259 (`pic=0`) and never unmasks
+/// IOAPIC pin 2 (`gsi2=0`). Iron COM2 `beb1576`: `HLT if=1 tpr=0x0 pic=0 gsi2=0`
+/// then CpuSleep `rip=0x7f0680d0` `ataio=0` through the 16_777_216 cap.
+/// PIC-first and TPR-ignore cannot inject: nothing is deliverable.
+/// Arm 8259 virtual-wire (IRQ 0 → vec 0x20) so `raise_pit` on HLT/preempt
+/// can `take_pic_vector`. AEOI so ISR[0] does not stick: OVMF IDT[0x20]
+/// EOIs LAPIC, not PIC OCW2 (`eac424b` would inject once then HLT forever).
+/// Linux keeps TPR/GSI2 and programs its own PIC.
+/// firmware virtual-wire PIC. firmware virtual-wire AEOI.
+/// firmware virtual-wire GSI 2. firmware HLT force IF. Not `ISO-INSTALL-OK`.
+/// do not F11 eac424b. iron COM2 eac424b.
+pub fn guest_uefi_firmware_virtual_wire_pic(linux: bool, pci_ide: bool, ataio: u32) -> bool {
+    !linux && pci_ide && ataio == 0
+}
+
+/// Iron COM2 `d61dc7e`: scsi@3 first, then ConnectAll still Started PIIX
+/// IDE (`pci_ide=1`, CpuSleep `rip=0x7f0680d0` `ataio=0`, no virtio-iso
+/// IN). Product ISO hides both IDE functions so IdeBus cannot Start.
+/// Virtual-wire then arms on virtio-blk `00:02.0` enum, not pci_ide.
+/// iso=0 still uses pci_ide. product ISO hides PIIX IDE.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_product_iso_pci_ready(pci_ide: bool, virtio_enum: bool) -> bool {
+    pci_ide || (crate::devices::ide_cdrom::product_iso_window_armed() && virtio_enum)
+}
+
+/// OVMF CpuSleep is `hlt` without `sti`. Iron COM2 `eac424b`: first inject
+/// `vec=0x20` then CR8 and later HLT exits never take IRQ 0 (IF dropped).
+/// Set RFLAGS.IF so VM-entry inject can enter. Linux keeps guest IF.
+/// firmware HLT force IF. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_hlt_force_if(
+    linux: bool,
+    pci_ide: bool,
+    ataio: u32,
+    rflags: u64,
+) -> u64 {
+    if guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio) {
+        rflags | (1 << 9)
+    } else {
+        rflags
+    }
+}
+
+/// PACKET HLT with nIEN=0 needs VM-entry ATA 14. CpuSleep is `hlt` without
+/// `sti` (iron `eac424b`). [`guest_uefi_firmware_hlt_force_if`] is gated on
+/// virtual-wire + `ataio==0`, so IF stays 0 after PACKET starts and
+/// `77f5866` never injects `0x2E`. Force IF for firmware inject without
+/// arming virtual-wire and without injecting PIT. Linux keeps guest IF.
+/// `wait_for_irq` stays false. firmware force IF for inject.
+/// firmware arm ATA GSI 14. do not F11 77f5866. flash 5227ad9. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_force_if_for_inject(linux: bool, rflags: u64) -> u64 {
+    if !linux {
+        rflags | (1 << 9)
+    } else {
+        rflags
+    }
+}
+
+/// Unmask firmware ATA GSI 14 without arming PIT virtual-wire.
+/// `wait_for_irq` stays false (no IRQ 0). Linux programs its own RTEs.
+/// firmware arm ATA GSI 14. flash 489d938. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_arm_ata_gsi14(linux: bool) -> bool {
+    !linux
+}
+
+/// Take ATA `0x2E` from IRR ignoring TPR whenever firmware has it latched.
+/// `hlt_ignores_tpr` is false after ataio, so `take_ioapic_vector` consumes
+/// pin 14 then `has_deliverable_irr` drops class `0x20` while CR8>=2
+/// (iron `084430f`). Do not `take_highest_irr`: LVT `0xEF` beats `0x2E`
+/// (iron `ea30da1` timer ISR). Gating on `ataio>0` left IDENTIFY `0x2E`
+/// under ignore-TPR `take_highest_irr`. wait_for_irq stays false. Linux
+/// keeps TPR. firmware prefer ATA IRR. flash 489d938. flash bce5bbb.
+/// flash eaa580d. flash 12926eb. do not F11 eaa580d. do not F11 bce5bbb. do not F11 489d938. firmware ATA over PIC. firmware ATA IRR only. firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_prefer_ata_irr(linux: bool, _ataio: u32) -> bool {
+    !linux
+}
+
+/// Firmware: ATA `0x2E` beats PIC IRQ 0.
+/// Product HLT/`PREEMPT` always `raise_pit`. OVMF that unmasks PIC IRQ 0
+/// while masking IRQ 14 makes `pic_before_lapic` skip `take_ioapic_vector`;
+/// `skip_pit_inject` then drops `0x20` and PACKET never sees `0x2E`.
+/// After `take_ioapic` accepts pin 14, IRR holds `0x2E` but pin 14 is no
+/// longer ready: the next HLT `raise_pit` would steal PIC `0x20` unless
+/// latched `0x2E` also counts. Linux keeps PIC-first / GSI 2.
+/// wait_for_irq stays false. firmware ATA over PIC. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_ata_over_pic(linux: bool, ata_ready: bool) -> bool {
+    !linux && ata_ready
+}
+
+/// Firmware: inject ATA `0x2E` only; do not `take_highest_irr` LVT `0xEF`.
+///
+/// `prefer_ata` or_else took `take_highest_irr` when pin 14 was not ready
+/// (`ataio==0`, `ignore_tpr`). Product HLT/`PREEMPT` `poll_timer_expiry`
+/// latches LVT `0xEF`; `skip_pit` only drops `0x20`. That is iron `ea30da1`
+/// timer ISR with a different vector, before IDENTIFY, so `ataio` stays 0.
+/// `skip_after_inject` already returns CpuSleep. Linux still takes LVT.
+/// wait_for_irq stays false. firmware ATA IRR only. flash 12926eb.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_ata_irr_only(linux: bool) -> bool {
+    !linux
+}
+
+/// Firmware: `take_ioapic` pin 14 only.
+///
+/// `take_ioapic_vector` prefers ATA when pin 14 is ready, else virtio/UART.
+/// `ata_irr_only` then skips `take_highest_irr`, so a virtio latch is never
+/// injected and the cycle falls through to PIC `0x20` / skip_pit. Pin 14
+/// stays pending until a later exit. Linux still takes any IOAPIC pin.
+/// wait_for_irq stays false. firmware take IOAPIC ATA. flash 0bb06a2. flash 30b78a0.
+/// firmware PIC ATA. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_take_ioapic_ata(linux: bool) -> bool {
+    !linux
+}
+
+/// Firmware: take PIC `0x2E` when the 8259 can deliver it.
+///
+/// `ata_over_pic` forced `use_pic=false` whenever IOAPIC pin 14 was ready,
+/// so `arm_firmware_ata_gsi14`'s PIC IRQ 14 unmask never reached
+/// `take_pic_vector`. IdeBus EOIs the 8259, not the IOAPIC. wait_for_irq
+/// stays false. Linux keeps PIC-first / GSI 2. firmware PIC ATA.
+/// firmware PIC ATA ICW2. firmware PIC ATA AEOI. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_firmware_pic_ata(linux: bool, pic_ata: bool) -> bool {
+    !linux && pic_ata
+}
+
+/// Linux programmed IOAPIC pin 2 (MADT IRQ0 ISO). Prefer that path.
+/// linux GSI 2 before PIC. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_gsi2_before_pic(gsi2_armed: bool) -> bool {
+    gsi2_armed
+}
+
+/// Linux PIC ICW2 0x20 + IRQ 0. COM2 one-shot through earlycon hush.
+/// linux PIC IRQ0. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_pic_irq0_vec(vec: u32) -> bool {
+    vec == 0x20
+}
+
+/// PIT is PIC IRQ 0 + MADT GSI 2, never IOAPIC pin 0 (OVMF leftover RTE).
+/// PIT skips IOAPIC pin 0. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_pit_skips_ioapic_pin0() -> bool {
+    true
+}
+
+/// Do not raise PIT on general Linux I/O / CPUID / MSR / EPT / PAUSE.
+///
+/// Iron `bc6fb70`: `APIC: ACPI MADT or MP tables are not detected` then
+/// `restore host xcr0` (PIC ICW2 + PIT IRR injects vector 0x20 before IDT
+/// is ready). `4b0d96a` reached `Freeing initrd` without this flood.
+/// virtio MMIO / HLT / VMX preemption still raise. iso=0 does not.
+/// linux I/O does not raise PIT (iron MADT stop). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_io_raises_pit(linux: bool, product_iso: bool) -> bool {
+    let _ = (linux, product_iso);
+    false
+}
+
+/// OVMF CpuDeadLoop skip stays. Linux `pause` / `delay_loop` must run so
+/// `msleep` and `poll_idle` are not rewritten. iso=0 firmware still skips.
+/// linux preempt deadloop noskip. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_preempt_deadloop_noskip(linux: bool, product_iso: bool) -> bool {
+    linux && product_iso
+}
+
 /// GPA in the 2 GiB LowMemory lie that launch does not identity-map.
 ///
 /// INVARIANTS:
@@ -739,14 +1867,88 @@ pub fn guest_uefi_report_ram_should_map(gpa: u64) -> bool {
     crate::devices::guest_platform::is_unbacked_report_ram_gpa(gpa)
 }
 
+/// `rep insw` / string INS into reported LowMemory that is not the 32 MiB
+/// identity slab. The guest never EPT-walks that GPA; the emulator writes
+/// host-side. An unmapped slot used to drop the FIFO bytes (zeros → EFI
+/// stub `uncompression error`). Virtqueue already lazy-maps via
+/// [`guest_uefi_gpa_to_hpa`]; string I/O must do the same.
+///
+/// INVARIANTS:
+/// - Iron `fad19b2` `0x7bddd000` is true
+/// - Low 32 MiB identity is false (already backed)
+pub fn guest_uefi_string_ins_needs_report_ram_map(linear: u64) -> bool {
+    linear >= GUEST_UEFI_LOW_RAM_BYTES && guest_uefi_report_ram_should_map(linear)
+}
+
 /// 2 MiB-align a report-RAM GPA. Iron `fad19b2`: `0x7bddd000` → `0x7BC00000`.
 pub fn guest_uefi_report_ram_gpa_2m(gpa: u64) -> u64 {
     gpa & !(GUEST_UEFI_REPORT_RAM_PAGE - 1)
 }
 
+/// Product ISO pre-maps leftover-backed report-RAM EPT at launch.
+///
+/// Iron `113a08a`: hush-on-bootimg + LSR pacing printed a complete PAT
+/// line, then COM2 went quiet. Linux `init_mem_mapping` after
+/// `pat_bp_init` walks ~2 GiB; each first touch was an EPT miss, and an
+/// EPT cap stop is hushed. Not GPA=HPA identity (`89c3731`). iso=0 stays
+/// lazy. report-RAM EPT pre-map. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_report_ram_should_premap(product_iso: bool) -> bool {
+    product_iso
+}
+
+/// GPA for report-RAM slot `i` covering `[32MiB, 2GiB)` in order.
+///
+/// INVARIANTS:
+/// - Slot 0 is [`crate::devices::guest_platform::PLATFORM_RAM_BYTES`]
+/// - Last valid slot is 2 MiB below
+///   [`crate::devices::guest_platform::PLATFORM_REPORT_RAM_BYTES`]
+/// - `iso=0` (`n==32`) only covers `[32MiB, 96MiB)`
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_report_ram_premap_gpa(slot: usize, n: usize) -> Option<u64> {
+    if slot >= n {
+        return None;
+    }
+    let gpa = crate::devices::guest_platform::PLATFORM_RAM_BYTES.saturating_add(
+        (slot as u64).saturating_mul(GUEST_UEFI_REPORT_RAM_PAGE),
+    );
+    if gpa < crate::devices::guest_platform::PLATFORM_REPORT_RAM_BYTES {
+        Some(gpa)
+    } else {
+        None
+    }
+}
+
 /// Offset within a 2 MiB report-RAM leaf. Iron `32e7d46`: `0x7f8e21ca` → `0xE21CA`.
 pub fn guest_uefi_report_ram_page_off(gpa: u64) -> u64 {
     gpa & (GUEST_UEFI_REPORT_RAM_PAGE - 1)
+}
+
+/// Bytes of report-RAM contiguously EPT-mapped from slot 0 upward, given
+/// each slot's recorded GPA (`u64::MAX` = not mapped). RayNu-F may only
+/// advertise this much as conventional memory: its exit path stops on the
+/// first EPT violation, so nothing lazily-mapped is allowed in its map.
+///
+/// INVARIANTS:
+/// - Result is a multiple of [`GUEST_UEFI_REPORT_RAM_PAGE`]
+/// - Stops at the first slot whose GPA is not the pre-map GPA for its index
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_report_ram_premapped_contiguous_bytes(
+    slot_gpa: impl Fn(usize) -> u64,
+    n: usize,
+) -> u64 {
+    let mut bytes = 0u64;
+    for i in 0..n {
+        let Some(want) = guest_uefi_report_ram_premap_gpa(i, n) else {
+            break;
+        };
+        if slot_gpa(i) != want {
+            break;
+        }
+        bytes = bytes.saturating_add(GUEST_UEFI_REPORT_RAM_PAGE);
+    }
+    bytes
 }
 
 /// GPA of the PML4E that maps `gva`. Iron `957e0ad`: CR3 `0x7fa01000`.
@@ -872,7 +2074,8 @@ where
     n
 }
 
-/// HV SPLIT4K PT for GPA 0 (`0x20B000`). Live high CR3 points PD[0] here.
+/// HV SPLIT4K PT for GPA 0 (`GUEST_UEFI_HV_PML4+IDENTITY_4G_BYTES`, `0x40B000`).
+/// Live high CR3 points PD[0] here. Was `0x20B000` when identity lived at 2 MiB.
 pub fn guest_uefi_gpa0_split_pt_gpa() -> u64 {
     crate::vmx::guest_pt::identity_split_pt_gpa(GUEST_UEFI_HV_PML4, 0)
 }
@@ -1110,12 +2313,104 @@ pub fn guest_uefi_io_string_count(qual: u64, rcx: u64) -> u64 {
 /// `cr2=-1`, stop `rip=0x28f402` `BOTH` missing. Iron COM2 same commit:
 /// `io string 0x511` then CpuDxe ASSERT `callerrip=0x1f21193`
 /// `lastmsr=0x23f` `mtrr0=0x80000000` `imgentry=0x1dd97d3` `rip=0x3d2be4`
-/// `pci_ide=0` (never `identity SPLIT n=2`). Only ATA data-register
-/// FIFOs (`IoReadFifo16` IDENTIFY / PACKET), including BAR-relocated
-/// command blocks. Other string I/O stays one-shot + `skip_insn`
-/// (same as `06b011a`). Status/control ports are not FIFOs.
+/// `pci_ide=0` (never `identity SPLIT n=2`). ATA data-register FIFOs
+/// (`IoReadFifo16` IDENTIFY / PACKET), including BAR-relocated command
+/// blocks. Status/control ports are not FIFOs.
+///
+/// Iron COM2 after product-ISO ACPI files: Linux `efi:` had no `ACPI=`
+/// and `ACPI: OSL: System description tables not found` because OVMF
+/// `QemuFwCfgInitialize` is `IoReadFifo8` (`rep insb` from `0x511`).
+/// One-shot + `skip_insn` left the signature buffer as zeros, so
+/// `mQemuFwCfgSupported=FALSE` and `InstallQemuFwCfgTables` never
+/// selected `etc/table-loader`. fw_cfg IoReadFifo8 fills RAM. Dest
+/// overlapping HV identity PML4 is still skipped. Nested `1e0f4a7`
+/// dest `0x205f18` is ordinary RAM after HV identity PML4 0x400000.
+/// PEI dest holds ACPI tables (overlay n<=16 cannot). Not `ISO-INSTALL-OK`.
 pub fn guest_uefi_io_string_fills_ram(port: u16) -> bool {
     crate::devices::ide_cdrom::is_ata_data_port(port)
+        || guest_uefi_fwcfg_string_fills_ram(port)
+}
+
+/// OVMF `IoReadFifo8` / `QemuFwCfgReadBytes` from fw_cfg data `0x511`.
+/// fw_cfg IoReadFifo8. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_fwcfg_string_fills_ram(port: u16) -> bool {
+    crate::devices::guest_platform::is_fwcfg_data_port(port)
+}
+
+/// Do not DMA fw_cfg FIFO bytes onto the HV identity PML4 (iron `1e0f4a7`
+/// `cr2=0x205f18` was inside the old 2 MiB window). skip HV identity PML4 dest.
+/// COM2 prints dest= and n= so a 2d6b109 boot shows whether
+/// QemuFwCfgInitialize's signature was skipped. n<=16 can overlay then
+/// restore on the next VM-exit (dest still in the reserved window; PD[3]
+/// is not on the compare walk). HV identity PML4 0x400000 puts PEI stack
+/// dest `0x205f18` in ordinary RAM so file-dir / ACPI blobs fill without
+/// overlay. fw_cfg string skip HV identity dest. fw_cfg identity overlay.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_io_string_dest_ok(linear: u64) -> bool {
+    let start = crate::devices::guest_platform::HV_IDENTITY_PML4;
+    let end = start.saturating_add(crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES);
+    linear < start || linear >= end
+}
+
+/// COM2 prefix when [`guest_uefi_io_string_dest_ok`] is false and overlay
+/// cannot run. fw_cfg string skip HV identity dest. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX: &str =
+    "boot: guest-UEFI fw_cfg string skip HV identity dest=0x";
+
+/// QemuFwCfgInitialize signature is 4 bytes. Cap keeps PD[3] smash tiny.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP: u64 = 16;
+
+/// COM2 prefix when overlay fills dest then restores PTEs on the next exit.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX: &str =
+    "boot: guest-UEFI fw_cfg identity overlay dest=0x";
+
+/// True when a fw_cfg `rep insb` dest is inside the HV identity PML4 and
+/// small enough to overlay then restore. DF must be clear (OVMF IoReadFifo8).
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_fwcfg_identity_overlay(port: u16, dest: u64, nbytes: u64, df: bool) -> bool {
+    if df || nbytes == 0 || nbytes > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP {
+        return false;
+    }
+    if !guest_uefi_fwcfg_string_fills_ram(port) {
+        return false;
+    }
+    if guest_uefi_io_string_dest_ok(dest) {
+        return false;
+    }
+    let start = crate::devices::guest_platform::HV_IDENTITY_PML4;
+    let end = start.saturating_add(crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES);
+    let dest_end = dest.saturating_add(nbytes);
+    dest >= start && dest_end <= end && dest_end >= dest
+}
+
+/// COM2 when dest_ok fw_cfg `IoReadFifo8` n>overlay cap fills ordinary RAM
+/// (file dir / table-loader / ACPI tables). Overlay cannot hold those.
+/// fw_cfg dest_ok fill dest. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX: &str =
+    "boot: guest-UEFI fw_cfg dest_ok fill dest=0x";
+
+/// First file dir, table-loader, ACPI tables ZONE_FSEG, and copies.
+/// FSEG dest holds ACPI tables (conventional 640KiB, not PEI stack).
+/// FADT FACS. dest_ok fill log cap 8. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP: u32 = 8;
+
+/// True when a fw_cfg string INS dest is ordinary RAM and larger than overlay.
+/// PEI dest holds ACPI tables. fw_cfg dest_ok fill dest. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_fwcfg_dest_ok_fill(port: u16, dest: u64, nbytes: u64, df: bool) -> bool {
+    if df || nbytes <= GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP {
+        return false;
+    }
+    if !guest_uefi_fwcfg_string_fills_ram(port) {
+        return false;
+    }
+    guest_uefi_io_string_dest_ok(dest)
+}
+
+/// COM2 dest_ok fill after at least one byte stored. dest_ok fill log cap 8.
+pub fn guest_uefi_fwcfg_dest_ok_fill_should_log(logged: u32) -> bool {
+    logged < GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP
 }
 
 /// Compatibility/protected mode uses EDI/ESI/ECX, not the 64-bit regs.
@@ -1155,6 +2450,154 @@ pub fn guest_uefi_pf_error_is_not_present(err: u64) -> bool {
 /// SDM 27.2.1 #PF error bit 3 is RSVD (reserved PTE bit, including NX when NXE=0).
 pub fn guest_uefi_pf_error_is_reserved(err: u64) -> bool {
     (err & GUEST_UEFI_PF_ERR_RSVD) != 0
+}
+
+/// Iron `e40bee0`: extra DRAM `pool=1008 extra=846 no-zero` then
+/// `Loaded initrd` then long-mode `#PF` `rip=0xffffffffbee19755`
+/// `cr2=0xffff88807e2a3000` `err=0` `cr3=0xdeee000`. OVMF identity
+/// fixup does not apply. Not `ISO-INSTALL-OK`.
+pub const GUEST_UEFI_IRON_LINUX_PF_CR2: u64 = 0xffff_8880_7e2a_3000;
+pub const GUEST_UEFI_IRON_LINUX_PF_RIP: u64 = 0xffff_ffff_bee1_9755;
+/// Iron COM2 after `#PF linux deliver` `err=0x0`: `native_cpuid` helper.
+pub const GUEST_UEFI_IRON_LINUX_CPUID_RIP: u64 = 0xffff_ffff_8408_1783;
+/// Linux 4-level `PAGE_OFFSET` direct map. Not a sign-extended 32-bit hole.
+pub const GUEST_UEFI_LINUX_DIRECT_MAP: u64 = 0xffff_8880_0000_0000;
+pub const GUEST_UEFI_LINUX_DIRECT_MAP_MASK: u64 = 0xffff_fff0_0000_0000;
+
+/// Linux 4-level direct-map CR2 (`0xffff8880_…`).
+pub fn guest_uefi_pf_is_linux_direct_map(cr2: u64) -> bool {
+    (cr2 & GUEST_UEFI_LINUX_DIRECT_MAP_MASK) == GUEST_UEFI_LINUX_DIRECT_MAP
+}
+
+/// High-half RIP: Linux kernel, not OVMF identity (`0x7ee…` / `0x3xxxxx`).
+///
+/// Deliver `#PF` to the guest IDT (`early_make_pgtable`) instead of
+/// stopping or rebuilding SEC page tables.
+pub fn guest_uefi_pf_should_deliver_to_guest(rip: u64) -> bool {
+    (rip & (1u64 << 63)) != 0
+}
+
+/// SDM 24.8.3: VM-entry interruption type = NMI.
+pub const GUEST_UEFI_INTR_TYPE_NMI: u32 = 2;
+/// SDM 24.8.3: VM-entry interruption type = hardware exception.
+pub const GUEST_UEFI_INTR_TYPE_HW_EXCEPTION: u32 = 3;
+/// SDM 24.8.3: deliver error code with the injected exception.
+pub const GUEST_UEFI_INTR_DELIVER_CODE: u32 = 1 << 11;
+/// SDM 24.8.3: valid bit in VM-entry interruption-information.
+pub const GUEST_UEFI_INTR_INFO_VALID: u32 = 1 << 31;
+/// Packed VM-entry interruption-info for guest `#PF` (vector 14).
+///
+/// Drop exception-bitmap bit 14 **before** this inject: an injected `#PF`
+/// that is still intercepted immediately VM-exits (SDM 26.5).
+pub const GUEST_UEFI_LINUX_PF_ENTRY_INFO: u32 = 14
+    | (GUEST_UEFI_INTR_TYPE_HW_EXCEPTION << 8)
+    | GUEST_UEFI_INTR_DELIVER_CODE
+    | GUEST_UEFI_INTR_INFO_VALID;
+
+/// Packed VM-entry interruption-info for a guest NMI (vector 2, type 2).
+///
+/// Pin-based NMI exiting delivers `reason=0` `vec=2`. Inject as NMI, not a
+/// hardware exception (type 3 would #UD-entry). linux NMI inject.
+pub fn guest_uefi_nmi_entry_info() -> u32 {
+    2 | (GUEST_UEFI_INTR_TYPE_NMI << 8) | GUEST_UEFI_INTR_INFO_VALID
+}
+
+/// Product-ISO Linux: re-inject a pin-exited NMI. iso=0 firmware resumes.
+pub fn guest_uefi_linux_nmi_should_inject(linux: bool, vec: u8) -> bool {
+    linux && vec == 2
+}
+
+/// virtio MMIO eax fallback (iron `1a2544d` Freeing initrd then xcr0).
+/// `virtio_pci` is a `device_initcall` after `populate_rootfs`; decode fail
+/// stopped the private VMCS (IOAPIC skips; xAPIC EAX-fallbacks). Same skip
+/// window as [`xapic_fetch_miss_eax_fallback`]. iso=0 decode fail still stops
+/// so E4 SHELL is not starved of leftover DRAM (nested `1a4b687` `/init`
+/// SIGSEGV `exitcode=0xb` CR2 `ffff888000000413`). Empty peek + VMCS len 0
+/// still EAX-fallbacks with skip 3 on Linux only (linux EAX fallback skip 3).
+pub fn virtio_mmio_eax_fallback(linux: bool, fetched_n: usize, insn_len: u64) -> bool {
+    virtio_mmio_eax_fallback_len(linux, fetched_n, insn_len) != 0
+}
+
+/// When VMCS/effective length is 0 or longer than the peek, decode with
+/// `min(fetched, 15)` so Linux `movl mem, %reg` (`"=r"` not `"=a"`) is not
+/// an EAX guess. A 16-byte peek still decodes with cap 15. linux MMIO decode retry.
+pub fn virtio_mmio_retry_decode_len(fetched_n: usize, insn_len: u64) -> u64 {
+    if insn_len >= 1 && insn_len <= 15 && insn_len <= fetched_n as u64 {
+        0
+    } else {
+        let cap = fetched_n.min(15) as u64;
+        if cap >= 1 {
+            cap
+        } else {
+            0
+        }
+    }
+}
+
+/// Linux EAX fallback skip length after decode still fails.
+///
+/// Prefer a valid VMCS 1–15, else fetched 1–15 (not a 16-byte peek), else
+/// skip 3 when the peek is empty (`movl r/m32, r32`). iso=0 stays 0.
+pub fn virtio_mmio_eax_fallback_len(linux: bool, fetched_n: usize, insn_len: u64) -> u64 {
+    if !linux {
+        return 0;
+    }
+    if insn_len >= 1 && insn_len <= 15 {
+        insn_len
+    } else if fetched_n >= 1 && fetched_n <= 15 {
+        fetched_n as u64
+    } else if fetched_n == 0 && (insn_len == 0 || insn_len > 15) {
+        3
+    } else {
+        0
+    }
+}
+
+/// Access width for Linux EAX fallback (virtio-pci packed common cfg).
+///
+/// Status `0x14` is a byte. A 32-bit store of stale EAX after a failed
+/// `movb $0` leaves `virtio_reset` spinning on nonzero status.
+/// virtio MMIO eax fallback size. Not `ISO-INSTALL-OK`.
+pub fn virtio_mmio_eax_fallback_size(off: u16) -> u8 {
+    match off {
+        0x10 | 0x12 | 0x16 | 0x18 | 0x1A | 0x1C | 0x1E => 2,
+        0x14 | 0x15 => 1,
+        0x100 => 1,
+        _ => 4,
+    }
+}
+
+/// Pack VM-entry interruption-info for a hardware exception.
+pub fn guest_uefi_hw_exception_entry_info(vector: u8, deliver_code: bool) -> u32 {
+    let mut info = u32::from(vector)
+        | (GUEST_UEFI_INTR_TYPE_HW_EXCEPTION << 8)
+        | GUEST_UEFI_INTR_INFO_VALID;
+    if deliver_code {
+        info |= GUEST_UEFI_INTR_DELIVER_CODE;
+    }
+    info
+}
+
+/// Pack VM-entry interruption-info for a Linux `#PF` inject.
+pub fn guest_uefi_linux_pf_entry_info() -> u32 {
+    guest_uefi_hw_exception_entry_info(14, true)
+}
+
+/// After high-half Linux takes over, use G0's bitmap: do not intercept
+/// `#PF` / `#UD` / `#GP` (M3.10 `#UD` at serial8250). Keep `#DF`.
+pub fn guest_uefi_linux_exception_bitmap() -> u32 {
+    crate::vmx::fields::LINUX_EXCEPTION_BITMAP
+}
+
+/// PIC/LAPIC must not steal `VM_ENTRY_INTERRUPTION_INFO` while a Linux
+/// exception inject is pending (that would clobber CR2 in the IRQ handler).
+pub fn guest_uefi_linux_pf_blocks_irq(pending_cr2: u64) -> bool {
+    pending_cr2 != 0
+}
+
+/// Same as [`guest_uefi_linux_pf_blocks_irq`] plus a non-#PF inject (e.g. `#UD`).
+pub fn guest_uefi_linux_exc_blocks_irq(pending_cr2: u64, inject: bool) -> bool {
+    pending_cr2 != 0 || inject
 }
 
 /// Identity-map a not-present or reserved-bit #PF in guest-UEFI low RAM.
@@ -1210,6 +2653,10 @@ pub fn guest_uefi_pf_gpa32(cr2: u64) -> u64 {
 
 pub fn guest_uefi_pf_should_map_mmio(err: u64, cr2: u64) -> bool {
     if !(guest_uefi_pf_error_is_not_present(err) || guest_uefi_pf_error_is_reserved(err)) {
+        return false;
+    }
+    // Iron 9474ab6: `cr2=0xffffffffffffffb8` is NULL-relative, not hole MMIO.
+    if guest_uefi_pf_is_null_relative(cr2) {
         return false;
     }
     let gpa = guest_uefi_pf_gpa32(cr2);
@@ -1283,15 +2730,39 @@ pub fn guest_uefi_cr0_is_paging(cr0: u64) -> bool {
     (cr0 & GUEST_UEFI_CR0_PG) != 0
 }
 
+pub fn guest_uefi_cpuid_is_genuine_intel(ebx: u32, edx: u32, ecx: u32) -> bool {
+    ebx == CPUID_GENUINEINTEL_EBX
+        && edx == CPUID_GENUINEINTEL_EDX
+        && ecx == CPUID_GENUINEINTEL_ECX
+}
+
+/// Linux after high-half `#PF` / high-half RIP / RayNu-F EBS hold may keep
+/// EFER.NXE. Firmware always strips it (CpuDxe `EFI_MEMORY_XP` ASSERT).
+pub fn guest_uefi_efer_allow_nx(linux: bool) -> bool {
+    linux
+}
+
 /// Keep EFER.LMA consistent with LME && CR0.PG (SDM 9.8.5).
-/// Strip NXE so CpuDxe paging refresh does not advertise `EFI_MEMORY_XP`.
-pub fn guest_uefi_efer_with_lma(efer: u64, paging: bool) -> u64 {
-    let efer = efer & !GUEST_UEFI_EFER_NXE;
+/// Firmware strips NXE so CpuDxe paging refresh does not advertise
+/// `EFI_MEMORY_XP`. Linux (`allow_nx`) keeps NXE so PAT / kernel maps
+/// are not `NX missing` (iron `45aec97`).
+pub fn guest_uefi_efer_with_lma_allow_nx(efer: u64, paging: bool, allow_nx: bool) -> u64 {
+    let efer = if allow_nx {
+        efer
+    } else {
+        efer & !GUEST_UEFI_EFER_NXE
+    };
     if (efer & GUEST_UEFI_EFER_LME) != 0 && paging {
         efer | GUEST_UEFI_EFER_LMA
     } else {
         efer & !GUEST_UEFI_EFER_LMA
     }
+}
+
+/// Keep EFER.LMA consistent with LME && CR0.PG (SDM 9.8.5).
+/// Strip NXE so CpuDxe paging refresh does not advertise `EFI_MEMORY_XP`.
+pub fn guest_uefi_efer_with_lma(efer: u64, paging: bool) -> u64 {
+    guest_uefi_efer_with_lma_allow_nx(efer, paging, false)
 }
 
 /// VM-entry IA-32e control must equal EFER.LMA or the next VMRESUME fails.
@@ -1372,18 +2843,125 @@ pub fn eltorito_payload_ran(matched: u8) -> bool {
     (matched as usize) >= crate::devices::ide_cdrom::ELTORITO_PAYLOAD_MAGIC.len()
 }
 
+/// When to print a guest-UEFI tick on COM2.
+///
+/// Dense through BOTH/ATAPI (`n<=16384`), then every 4096 so RN-ELT stays
+/// readable. After El Torito bootimg, every 1024 so EFI stub / kernel
+/// ExitBootServices is not a 4096-exit blind spot (iron COM2 `Loaded initrd`
+/// with no further tick). After Linux high-half `#PF` deliver, every 4096
+/// (iron `115e5ee` every-256 UART ticks split `Linux version` / PAT) unless
+/// `share` — linux earlycon quiet ticks so HV tick lines do not fill the
+/// guest UART TX ring (iron `202312f` `n=438272` interleaved e820; `9a3cbfa`
+/// still printed ticks into the same FIFO as printk). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_tick_should_print(n: u32, bootimg: bool, linux: bool, share: bool) -> bool {
+    if share {
+        return false;
+    }
+    if n == 0 || n % 256 != 0 {
+        return false;
+    }
+    if linux {
+        return n % 4096 == 0;
+    }
+    n <= 16384 || n % 4096 == 0 || (bootimg && n % 1024 == 0)
+}
+
+/// Bytes to drain from the guest UART TX ring on a VM-exit.
+///
+/// iso=0 / firmware keep [`GUEST_TX_DRAIN_EXIT`] (nested `be0f1cd` `/init`
+/// SIGSEGV at 64/exit). Do not linux earlycon drain CHUNK on every exit
+/// during share (SOL flood). Hush HV `write_byte` instead. `share` is
+/// accepted so call sites stay uniform. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_earlycon_drain(_share: bool) -> usize {
+    crate::boot::serial::GUEST_TX_DRAIN_EXIT
+}
+
+/// Latch HV hush / quiet ticks only on product-ISO Linux.
+///
+/// iso=0 / lab stub must not hush `write_byte` after a high-half RIP `#PF`
+/// (OVMF also runs high-half). Nested QEMU `e0019a3` / `4f875d6` `/init`
+/// SIGSEGV 3/3 after quiet ticks skipped `cpu_flush`. linux earlycon share product ISO.
+/// Iron `9a3cbfa`: `linux cpuid n=1` ran **before** `#PF linux deliver`; latch
+/// on that CPUID too (linux earlycon share first CPUID). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_earlycon_share_on_linux_deliver(linux: bool, product_iso: bool) -> bool {
+    linux && product_iso
+}
+
+/// Latch HV hush on the first product-ISO Linux high-half VM-exit.
+///
+/// Iron `202312f`: readable `Linux version` then e820 cut by a blocking
+/// hypervisor-scan bump; ticks interleaved before share (share waited for
+/// CPUID / `#PF`). Iron `9a3cbfa`: printk shredded by HV `write_byte`.
+/// Firmware RIP `0xFFFCFxxx` does not set bit 63. iso=0 does not latch.
+/// linux earlycon share first high-half. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_earlycon_share_on_vmexit(rip: u64, product_iso: bool) -> bool {
+    guest_uefi_linux_earlycon_share_on_linux_deliver(
+        guest_uefi_pf_should_deliver_to_guest(rip),
+        product_iso,
+    )
+}
+
+/// Latch HV hush after El Torito bootimg on product ISO.
+///
+/// Iron `b983ef8`: 256MiB disk, `Loaded initrd`, then readable
+/// `Linux version 6.12.13-0-virt` / e820 while ticks still used blocking
+/// `write_byte` at OVMF RIP `0x7ee5dbe4`. Identity-map earlycon does not
+/// set bit 63, so share-on-high-half waits until after printk has already
+/// started. linux earlycon share first bootimg.
+/// iso=0 does not latch. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_earlycon_share_on_bootimg(product_iso: bool, bootimg: bool) -> bool {
+    product_iso && bootimg
+}
+
+/// Nested KVM never prints the iron marker. Iron polls every resume so a
+/// GPT write is not missed if later exits are virtio IN-only.
+/// poll ISO-INSTALL-OK every resume. Not `ISO-INSTALL-OK` by itself.
+pub fn guest_uefi_poll_iso_install_ok(nested: bool) -> bool {
+    !nested
+}
+
+/// Drain virtio notifies on every product-ISO resume so a missed BAR kick
+/// still completes IN/OUT (GPT write can be IN-only later). iso=0 does not.
+/// virtio drain every resume. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_virtio_drain_every_resume(product_iso: bool) -> bool {
+    product_iso
+}
+
+/// First non-I/O VM-exit after the El Torito boot image was read.
+///
+/// Iron COM2 after gzip: last line was EFI stub `Loaded initrd` (often the
+/// last ConOut before ExitBootServices). A CR/CPUID/EPT/HLT after that is
+/// kernel/stub past PIO. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_post_cd_non_io(bootimg: bool, already: bool, io_exit: bool) -> bool {
+    bootimg && !already && !io_exit
+}
+
+/// True when El Torito evidence should stop the private guest-UEFI VMCS.
+///
+/// Stage 45 lab stub (72 KiB RN-ELT) stops so E4 `LINUX-EARLY` still runs.
+/// Stage 46 product ISO (`len > GUEST_CD_ISO_CAP`) continues. Not installer.
+pub fn eltorito_stops_guest_uefi(eltorito: bool) -> bool {
+    eltorito && crate::devices::ide_cdrom::is_lab_eltorito_media()
+}
+
 /// Stage 45 live stop: El Torito boot, or post-ATAPI tail, or post-DXE tail if no PACKET.
 ///
 /// INVARIANTS:
 /// - `false` until DXE printed
 /// - first ATAPI sector does **not** stop (Stage 44 did)
-/// - `true` when [`eltorito_boot_evidence`] holds
+/// - `true` when [`eltorito_boot_evidence`] holds **and** the CD is the lab stub
+/// - product ISO does not stop on El Torito evidence (Stage 46)
 /// - after PACKET, does **not** apply the 32768 post-ATAPI tail (first
 ///   sector is often LBA 0 dummy; BDS catalog/FatDxe/StartImage still
 ///   needs the 131072-exit cap, then 262144 after iron `df7d158` hit
 ///   n=131072 still in ATA PIO). `atapi_at` / catalog / boot_image are
 ///   live-serial evidence, not a short-tail trigger. first ATAPI is often LBA 0 dummy.
 /// - `true` after [`GUEST_UEFI_POST_DXE_TAIL`] past DXE if `sectors==0`
+///   **and** the CD is the lab stub. product ISO POST_DXE_TAIL skip:
+///   iron COM2 `2d6b109` `stop n=33297` `sectors=0` never issued PACKET
+///   (DXE 529 + 32768). Armed product ISO uses
+///   [`GUEST_UEFI_PRODUCT_ISO_RESUME_CAP`] (16M). Lab `iso=0` still
+///   applies the tail.
 pub fn post_atapi_should_stop(
     dxe_printed: bool,
     exit_n: u32,
@@ -1398,10 +2976,14 @@ pub fn post_atapi_should_stop(
     if !dxe_printed {
         return false;
     }
-    if eltorito {
+    if eltorito_stops_guest_uefi(eltorito) {
         return true;
     }
     if atapi_read_evidence(sectors) {
+        return false;
+    }
+    // product ISO POST_DXE_TAIL skip
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
         return false;
     }
     exit_n.saturating_sub(dxe_at) >= GUEST_UEFI_POST_DXE_TAIL
@@ -1550,6 +3132,343 @@ pub fn copy_report_ram_at(page: &[u8], gpa: u64, out: &mut [u8]) -> usize {
     n
 }
 
+/// Offset into the 4 MiB pflash window, or `None` if `gpa` is not flash.
+///
+/// Iron COM2: xAPIC SVR `gpa=0xfee000f0` `rip=0xfffcfc86` `insn=` empty —
+/// identity peek only covered 32 MiB RAM, so firmware RIP fetched 0 bytes.
+pub fn guest_uefi_flash_off(gpa: u64) -> Option<u64> {
+    if gpa >= GUEST_UEFI_FLASH_BASE
+        && gpa < GUEST_UEFI_FLASH_BASE + GUEST_UEFI_FLASH_WINDOW
+    {
+        Some(gpa - GUEST_UEFI_FLASH_BASE)
+    } else {
+        None
+    }
+}
+
+/// Copy instruction bytes from the guest-private OVMF flash HPA.
+pub fn copy_flash_at(flash: &[u8], gpa: u64, out: &mut [u8]) -> usize {
+    let Some(start) = guest_uefi_flash_off(gpa) else {
+        return 0;
+    };
+    let start = start as usize;
+    if out.is_empty() || start >= flash.len() {
+        return 0;
+    }
+    let n = out.len().min(flash.len() - start);
+    out[..n].copy_from_slice(&flash[start..start + n]);
+    n
+}
+
+/// When decode fails, still finish a 32-bit EAX MOV if skip-len is 1–15 even if peek got bytes.
+/// LocalApicLib is `mov [svr], eax` / `mov eax, [svr]`. Peek `n=0` is a
+/// fetch-miss; `n>0` is bytes we could not decode (VMCS or `mmio_decoded_len`
+/// still yielded a skip). Do not skip a 16-byte peek. `fetched_n` is kept
+/// for the COM2 `n=` log at the call site.
+///
+/// Iron COM2 `e3f56aa`: `gpa=0xfee000f0 insn=` empty at `rip=0xfffcfc86`.
+/// Linux high-half APIC MMIO often has VMCS `insn_len` 0 (EPT); skip 3.
+pub fn xapic_eax_fallback_skip_len(insn_len: u64) -> u64 {
+    if insn_len >= 1 && insn_len <= 15 {
+        insn_len
+    } else if insn_len == 0 {
+        3
+    } else {
+        0
+    }
+}
+
+/// Iron COM2 `e3f56aa`: `gpa=0xfee000f0 insn=` empty at `rip=0xfffcfc86`.
+/// Empty peek + `insn_len` 0 still EAX-fallbacks (linux xAPIC EPT insn_len 0).
+pub fn xapic_fetch_miss_eax_fallback(fetched_n: usize, insn_len: u64) -> bool {
+    if insn_len >= 1 && insn_len <= 15 {
+        return true;
+    }
+    fetched_n == 0 && insn_len == 0
+}
+
+/// RIP skip length after MMIO emulate. Prefer a valid VMCS 1–15; else the
+/// length decoded from fetched bytes. Never skip a 16-byte peek (`fetched_n`).
+///
+/// Iron COM2 may fetch flash bytes (`n>0`) while VMCS `insn_len` is 0, so
+/// decode and skip both need the decoded length.
+pub fn guest_uefi_mmio_skip_len(vmcs_len: u64, fetched_len: u64) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        vmcs_len
+    } else if fetched_len >= 1 && fetched_len <= 15 {
+        fetched_len
+    } else {
+        0
+    }
+}
+
+/// High-half Linux: VMCS `insn_len` can be 0 while identity peek is empty.
+/// Two-byte exits: CPUID `0F A2`, WRMSR `0F 30`, RDTSC `0F 31`, RDMSR
+/// `0F 32`, INVD `0F 08`, WBINVD `0F 09`. PAUSE `F3 90`. HLT `F4` is one
+/// byte. INVLPG `0F 01 /7` is variable (ModRM/SIB/disp); empty fetch stays 0.
+///
+/// Iron `d0735bd` after `#PF linux deliver`: tick `reason=0xa`
+/// `rip=0xffffffffb8081783` `insn=` empty. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_fixed_skip_len(bytes: &[u8]) -> u64 {
+    if !bytes.is_empty() && bytes[0] == 0xF4 {
+        return 1;
+    }
+    if bytes.len() >= 2 && bytes[0] == 0xF3 && bytes[1] == 0x90 {
+        return 2;
+    }
+    let invlpg = guest_uefi_linux_invlpg_len(bytes);
+    if invlpg != 0 {
+        return invlpg;
+    }
+    let mov_dr = guest_uefi_linux_mov_dr_len(bytes);
+    if mov_dr != 0 {
+        return mov_dr;
+    }
+    if bytes.len() >= 2
+        && bytes[0] == 0x0F
+        && matches!(bytes[1], 0xA2 | 0x30 | 0x31 | 0x32 | 0x08 | 0x09)
+    {
+        2
+    } else {
+        0
+    }
+}
+
+/// MOV DR `0F 21 /r` / `0F 23 /r` (optional REX). Register form is 3 bytes
+/// plus REX. Empty fetch stays 0 (do not guess). linux MOV DR skip.
+pub fn guest_uefi_linux_mov_dr_len(bytes: &[u8]) -> u64 {
+    let mut i = 0usize;
+    if let Some(&b) = bytes.first() {
+        if (0x40..=0x4F).contains(&b) {
+            i = 1;
+        }
+    }
+    if bytes.len() >= i + 3 && bytes[i] == 0x0F && (bytes[i + 1] == 0x21 || bytes[i + 1] == 0x23) {
+        (i + 3) as u64
+    } else {
+        0
+    }
+}
+
+/// INVLPG `0F 01 /7` memory operand (SDM). Not `SWAPGS` (`0F 01 F8`).
+///
+/// Variable length: prefixes + 0F 01 + ModRM [+ SIB] [+ disp]. Empty
+/// fetch stays 0 (do not guess). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_invlpg_len(bytes: &[u8]) -> u64 {
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if (0x40..=0x4F).contains(&b)
+            || matches!(
+                b,
+                0x26 | 0x2E | 0x36 | 0x3E | 0x64 | 0x65 | 0x66 | 0x67 | 0xF0 | 0xF2 | 0xF3
+            )
+        {
+            i += 1;
+            continue;
+        }
+        break;
+    }
+    if bytes.len().saturating_sub(i) < 3 {
+        return 0;
+    }
+    if bytes[i] != 0x0F || bytes[i + 1] != 0x01 {
+        return 0;
+    }
+    let modrm = bytes[i + 2];
+    if (modrm >> 3) & 7 != 7 {
+        return 0;
+    }
+    let mod_ = modrm >> 6;
+    let rm = modrm & 7;
+    if mod_ == 3 {
+        return 0;
+    }
+    let mut n = i + 3;
+    let sib = rm == 4;
+    if sib {
+        if n >= bytes.len() {
+            return 0;
+        }
+        n += 1;
+    }
+    let disp = match mod_ {
+        0 => {
+            if rm == 5
+                || (sib && {
+                    let sib_b = bytes[n - 1];
+                    (sib_b & 7) == 5
+                })
+            {
+                4
+            } else {
+                0
+            }
+        }
+        1 => 1,
+        2 => 4,
+        _ => 0,
+    };
+    n += disp;
+    if n > bytes.len() {
+        0
+    } else {
+        n as u64
+    }
+}
+
+/// Fallback skip after a 2-byte intercept (CPUID / RDMSR / WRMSR / RDTSC /
+/// INVD / WBINVD / PAUSE).
+///
+/// Prefer VMCS 1–15 (caller already skipped). Else decode those opcodes.
+/// Else high-half RIP + `insn_len` 0 still skip 2 (iron `d0735bd` fetch
+/// miss / extra-DRAM CR3). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_msr_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        return 0;
+    }
+    let decoded = guest_uefi_linux_fixed_skip_len(bytes);
+    if decoded != 0 {
+        return decoded;
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        2
+    } else {
+        0
+    }
+}
+
+/// Iron COM2 after leftover DRAM + `#PF linux deliver` `err=0x0`: ticks
+/// `n=437248`/`437504` `reason=0xa` `rip=0xffffffff84081783`
+/// `insn=0fa24189…` (Linux `native_cpuid`). Same helper RIP is expected
+/// while skip advances; if GUEST_RIP is still the exit RIP after
+/// [`guest_uefi_linux_cpuid_msr_skip`], force +2. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_force_skip(rip_before: u64, rip_after: u64) -> u64 {
+    if guest_uefi_pf_should_deliver_to_guest(rip_before) && rip_after == rip_before {
+        2
+    } else {
+        0
+    }
+}
+
+/// Linux `native_cpuid` is `0F A2` (2 bytes, no prefix on iron COM2).
+/// Always skip 2 on high-half; do not fail-closed if VMCS `insn_len` is 0.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_exit_skip(rip: u64) -> u64 {
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        2
+    } else {
+        0
+    }
+}
+
+/// Log the first 8 Linux CPUIDs, then powers of two and every 256 so a
+/// short COM2 paste shows whether leaves are changing. `n` is 1-based.
+/// Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_cpuid_should_log(n: u32) -> bool {
+    n > 0 && (n <= 8 || n.is_power_of_two() || n % 256 == 0)
+}
+
+/// Fallback skip after HLT. One byte (`F4`). High-half + `insn_len` 0
+/// still skip 1 (iron `d0735bd` fetch miss). Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_linux_hlt_skip(rip: u64, vmcs_len: u64, bytes: &[u8]) -> u64 {
+    if vmcs_len >= 1 && vmcs_len <= 15 {
+        return 0;
+    }
+    if !bytes.is_empty() && bytes[0] == 0xF4 {
+        return 1;
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Linear address of the instruction to emulate. 64-bit CS ignores CS.base
+/// (SDM); 16/32-bit CS uses `CS.base + RIP`. MMIO handlers must not peek
+/// raw `GUEST_RIP` while the exit log uses `cs_base + rip`.
+pub fn guest_uefi_insn_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64 {
+    if cs_long {
+        rip
+    } else {
+        cs_base.wrapping_add(rip)
+    }
+}
+
+/// Peek GPA for MMIO insn fetch. Prefer CS.base+RIP (or RIP in 64-bit).
+/// If that is outside the 4 MiB flash window but `GUEST_RIP` is inside
+/// (iron `e3f56aa` `rip=0xfffcfc86` with leftover real-mode CS.base),
+/// peek RIP so xAPIC SVR is not `insn=` empty.
+pub fn guest_uefi_mmio_peek_linear(rip: u64, cs_base: u64, cs_long: bool) -> u64 {
+    let linear = guest_uefi_insn_linear(rip, cs_base, cs_long);
+    if guest_uefi_flash_off(linear).is_some() || guest_uefi_flash_off(rip).is_none() {
+        linear
+    } else {
+        rip
+    }
+}
+
+/// 2 MiB slots to leave after a disk larger than 64 MiB. Scratch-only
+/// (32×2 MiB). Iron `9a3cbfa` leftover DRAM `extra=846` already fills
+/// report-RAM above PRECISE, so the old 96 precise-pool GCD floor
+/// (`pool=194`) starved a 256 MiB disk on a ~480 MiB post-fw window.
+/// 256MiB disk leftover report-RAM. Do not steal leftover for the disk
+/// (Linux report-RAM; ADR-004). Do not invent HPA.
+pub const PRODUCT_ISO_DISK_LEAVE_2M_SLOTS: usize = GUEST_UEFI_MMIO_SCRATCH_SLOTS;
+
+pub fn product_iso_disk_leave_pages() -> u64 {
+    (PRODUCT_ISO_DISK_LEAVE_2M_SLOTS as u64) * (GUEST_UEFI_REPORT_RAM_PAGE / 4096)
+}
+
+/// Allocate a contiguous install-disk run. Largest size that still leaves
+/// scratch wins (leftover DRAM backs report-RAM). Sizes ≤64 MiB skip the
+/// floor so a tight pool still gets a GPT-capable disk.
+///
+/// INVARIANTS:
+/// - Does not invent an HPA; only [`FrameAllocator::allocate_contiguous`]
+/// - Nested + iron both leave scratch for report-RAM when trying >64 MiB
+/// - Nested tries 256/64/32/16/1 MiB; iron tries 1 GiB then that ladder
+///
+/// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
+///
+/// Leftover DRAM above PRECISE is preferred (256 MiB–1 GiB, carved by
+/// `handoff` **before** the report-RAM seed; not an invented HPA, and never
+/// handed to the guest as RAM). Nested `c751fbe` alpine-extended: apk
+/// resolved grub-efi + dosfstools, `setup-disk` partitioned, then `No space
+/// left on device` on the 64 MiB pool disk (48 MiB of it ESP). Pool ladder
+/// stays as the fallback. leftover install disk.
+pub fn try_alloc_product_iso_install_disk(
+    alloc: &mut FrameAllocator,
+    nested: bool,
+) -> Option<(PhysFrame, usize)> {
+    if let Some((hpa, bytes)) = crate::mgmt::iso_install::take_leftover_install_disk() {
+        return Some((PhysFrame::from_phys(hpa), bytes));
+    }
+    // Nested used to leave=0 + only 1 MiB. After Alpine shell on RayNu-F,
+    // nested must land a GPT-capable disk; leave scratch so a 256 MiB
+    // try cannot starve report-RAM on a ~256 MiB pool (falls to 64 MiB).
+    let leave = product_iso_disk_leave_pages();
+    let keep = crate::mgmt::iso::DEFAULT_INSTALL_DISK_BYTES as usize;
+    for &want in crate::mgmt::iso_install::product_iso_install_disk_try_sizes(nested) {
+        let pages = (want / 4096) as u64;
+        if pages == 0 {
+            continue;
+        }
+        let remaining = alloc.capacity().saturating_sub(alloc.allocated_count());
+        if remaining < pages {
+            continue;
+        }
+        if want > keep && remaining - pages < leave {
+            continue;
+        }
+        if let Some(frame) = alloc.allocate_contiguous(pages) {
+            return Some((frame, want));
+        }
+    }
+    None
+}
+
 /// Store a little-endian PTE into a 2 MiB report-RAM window (8 bytes).
 pub fn store_report_ram_u64(page: &mut [u8], gpa: u64, val: u64) -> bool {
     let start = guest_uefi_report_ram_page_off(gpa) as usize;
@@ -1638,6 +3557,55 @@ pub fn load_low_ram_at(ram: &[u8], linear: u64, size: u8) -> Option<u64> {
     Some(v)
 }
 
+/// Copy `buf.len()` bytes out of low RAM. fw_cfg identity overlay.
+pub fn copy_low_ram_bytes(ram: &[u8], linear: u64, buf: &mut [u8]) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+    let start = linear as usize;
+    if start.saturating_add(buf.len()) > ram.len() {
+        return false;
+    }
+    buf.copy_from_slice(&ram[start..start + buf.len()]);
+    true
+}
+
+/// Copy `buf` into low RAM. fw_cfg identity overlay.
+pub fn write_low_ram_bytes(ram: &mut [u8], linear: u64, buf: &[u8]) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+    let start = linear as usize;
+    if start.saturating_add(buf.len()) > ram.len() {
+        return false;
+    }
+    ram[start..start + buf.len()].copy_from_slice(buf);
+    true
+}
+
+/// Save dest then write overlay data. Host-testable; UEFI uses the RAM slab.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_fwcfg_identity_overlay_apply(
+    ram: &mut [u8],
+    dest: u64,
+    data: &[u8],
+    saved: &mut [u8],
+) -> bool {
+    if data.is_empty() || saved.len() < data.len() {
+        return false;
+    }
+    if !copy_low_ram_bytes(ram, dest, &mut saved[..data.len()]) {
+        return false;
+    }
+    write_low_ram_bytes(ram, dest, data)
+}
+
+/// Restore saved PTEs after the guest compared the fw_cfg signature.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+pub fn guest_uefi_fwcfg_identity_overlay_restore(ram: &mut [u8], dest: u64, saved: &[u8]) -> bool {
+    write_low_ram_bytes(ram, dest, saved)
+}
+
 static LAUNCH_ENTERED: AtomicBool = AtomicBool::new(false);
 static MARKER_PRINTED: AtomicBool = AtomicBool::new(false);
 static LAST_EXIT_REASON: AtomicU32 = AtomicU32::new(0);
@@ -1645,6 +3613,22 @@ static LAST_GUEST_RIP: AtomicU64 = AtomicU64::new(0);
 static LAST_LINEAR: AtomicU64 = AtomicU64::new(0);
 static LAST_GUEST_PHYS: AtomicU64 = AtomicU64::new(0);
 static LAST_INSN_ERROR: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static FWCFG_OVERLAY_PENDING: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static FWCFG_OVERLAY_GPA: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static FWCFG_OVERLAY_N: AtomicU64 = AtomicU64::new(0);
+/// Single-vCPU guest-UEFI overlay slot. Firmware is halted in VMX; only
+/// [`save_fwcfg_identity_overlay`] / [`restore_fwcfg_identity_overlay`]
+/// touch this buffer. fw_cfg identity overlay.
+#[cfg(target_os = "uefi")]
+static mut FWCFG_OVERLAY_SAVED: [u8; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize] =
+    [0; GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize];
+/// Decoded MMIO instruction length for this exit. Zeroed at each
+/// [`guest_uefi_vmexit`] so HLT/INVD cannot skip a stale length.
+#[cfg(target_os = "uefi")]
+static MMIO_INSN_LEN: AtomicU64 = AtomicU64::new(0);
 static EXIT_COUNT: AtomicU32 = AtomicU32::new(0);
 static NON_TF_EXITS: AtomicU32 = AtomicU32::new(0);
 static ALIVE_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -1662,6 +3646,7 @@ static ATAPI_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_CATALOG_PRINTED: AtomicBool = AtomicBool::new(false);
 static ELTORITO_BOOTIMG_PRINTED: AtomicBool = AtomicBool::new(false);
+static POST_CD_NON_IO: AtomicBool = AtomicBool::new(false);
 static ELTORITO_COM_MATCH: AtomicU8 = AtomicU8::new(0);
 #[cfg(target_os = "uefi")]
 static GPA0_SPLIT_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -1676,12 +3661,13 @@ static MMIO_SCRATCH_HPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] =
     [const { AtomicU64::new(0) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS];
 static MMIO_SCRATCH_GPA: [AtomicU64; GUEST_UEFI_MMIO_SCRATCH_SLOTS] =
     [const { AtomicU64::new(u64::MAX) }; GUEST_UEFI_MMIO_SCRATCH_SLOTS];
-static REPORT_RAM_HPA: [AtomicU64; GUEST_UEFI_REPORT_RAM_SLOTS] =
-    [const { AtomicU64::new(0) }; GUEST_UEFI_REPORT_RAM_SLOTS];
-static REPORT_RAM_GPA: [AtomicU64; GUEST_UEFI_REPORT_RAM_SLOTS] =
-    [const { AtomicU64::new(u64::MAX) }; GUEST_UEFI_REPORT_RAM_SLOTS];
+static REPORT_RAM_HPA: [AtomicU64; REPORT_RAM_ARRAY] =
+    [const { AtomicU64::new(0) }; REPORT_RAM_ARRAY];
+static REPORT_RAM_GPA: [AtomicU64; REPORT_RAM_ARRAY] =
+    [const { AtomicU64::new(u64::MAX) }; REPORT_RAM_ARRAY];
 static REPORT_RAM_MAPS: AtomicU32 = AtomicU32::new(0);
 static CPU_FLUSH_PATCHED: AtomicU32 = AtomicU32::new(0);
+static CPU_FLUSH_SKIP_LOG: AtomicBool = AtomicBool::new(false);
 static LIVE_UC_PT_PAINTED: AtomicU32 = AtomicU32::new(0);
 static LIVE_GPA0_SPLIT: AtomicU32 = AtomicU32::new(0);
 static LIVE_VGA_PT_PAINTED: AtomicU32 = AtomicU32::new(0);
@@ -1690,6 +3676,17 @@ static PCI_DID_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_HT_TRACE: AtomicU32 = AtomicU32::new(0);
 static PCI_BAR_TRACE: AtomicU32 = AtomicU32::new(0);
 static HLT_SKIPS: AtomicU32 = AtomicU32::new(0);
+static HLT_STALL_LOGGED: AtomicBool = AtomicBool::new(false);
+static SKIP_AFTER_INJECT_LOGGED: AtomicBool = AtomicBool::new(false);
+static WAIT_FOR_IRQ_LOGGED: AtomicBool = AtomicBool::new(false);
+static SKIP_AFTER_ONESHOT_LOGGED: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_PIT_ONESHOT: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_CONIN_CR: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_WFE_RETURN: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_WFE_STATE4: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_WFE_EVENT_PF: AtomicBool = AtomicBool::new(false);
+static FIRMWARE_ZEROMEM_EPT: AtomicBool = AtomicBool::new(false);
+static INJECT_N: AtomicU32 = AtomicU32::new(0);
 static SPIN_JMP_SKIPS: AtomicU32 = AtomicU32::new(0);
 static LAST_PREEMPT_RIP: AtomicU64 = AtomicU64::new(u64::MAX);
 static PREEMPT_SAME_RIP: AtomicU32 = AtomicU32::new(0);
@@ -1700,12 +3697,98 @@ static PCI_BDF_SEEN2: AtomicU64 = AtomicU64::new(0);
 static PCI_BDF_SEEN3: AtomicU64 = AtomicU64::new(0);
 static LAST_IO_PORT: AtomicU32 = AtomicU32::new(0);
 static LAST_CF8: AtomicU32 = AtomicU32::new(0);
+/// Last CF8 with CONFIG_ADDRESS enable (bit 31). Iron COM2 `61991be`
+/// HLT `cf8=0x0` (deselect). Need the last live BDF before that write.
+static LAST_CF8_EN: AtomicU32 = AtomicU32::new(0);
+/// Last enabled CF8 that selected IDE `00:00.1` / `00:01.1`.
+/// Iron COM2 `5de9e1c` `cf8en=0x80004008` is i440FX host `00:08.0+08`.
+static LAST_CF8_IDE: AtomicU32 = AtomicU32::new(0);
+/// CpuSleep `[RSP]` return address. Iron COM2 `6c4bfde` ConIn CR still
+/// `ret=0x7ff0e055` `ataio=0`. print HLT callsite.
+static LAST_HLT_RET: AtomicU64 = AtomicU64::new(0);
+static LAST_HLT_CALL: AtomicU64 = AtomicU64::new(0);
 static RAM_HPA: AtomicU64 = AtomicU64::new(0);
+/// Exclusive 4 MiB guest-private OVMF copy (`alias_gpa=0xFFC00000`).
+static FLASH_HPA: AtomicU64 = AtomicU64::new(0);
+static FLASH_LEN: AtomicU64 = AtomicU64::new(0);
 static RAM_REMAP_N: AtomicU32 = AtomicU32::new(0);
 static RAM_REMAP_TRIES: AtomicU32 = AtomicU32::new(0);
 static HPET_TICKS: AtomicU32 = AtomicU32::new(0);
+static LAST_HPET_TSC: AtomicU64 = AtomicU64::new(0);
 static PREEMPT_RELOAD: AtomicU32 = AtomicU32::new(0);
 static IO_UNHANDLED_N: AtomicU32 = AtomicU32::new(0);
+/// RayNu-F service calls seen (ADR-016). First few are logged.
+static RAYNU_F_CALLS: AtomicU32 = AtomicU32::new(0);
+/// One-shot `RAYNU-V-RAYNU-F-CONOUT-OK` on the first live guest OutputString.
+static RAYNU_F_CONOUT_LOGGED: AtomicBool = AtomicBool::new(false);
+/// F2b: the private VMCS is running the RayNu-F test app (not OVMF). Routes
+/// `guest_uefi_vmexit` to the small RayNu-F fast path.
+static RAYNU_F_MODE: AtomicBool = AtomicBool::new(false);
+/// F2b one-shot: the RayNu-F launch has been attempted on this boot.
+static RAYNU_F_RAN: AtomicBool = AtomicBool::new(false);
+/// F2b exit counter (cap guards a runaway guest).
+static RAYNU_F_EXITS: AtomicU32 = AtomicU32::new(0);
+/// F2b/F5: stop after this many exits without a HLT. The built-in test app
+/// needs 2; a real ISO bootloader (GRUB / Linux EFI stub) does far more
+/// through our services, so the cap is generous but still bounded.
+const RAYNU_F_EXIT_CAP: u32 = 1_048_576;
+/// F2b: entry RIP of the launched app (decodes the HLT path on stop).
+static RAYNU_F_ENTRY: AtomicU64 = AtomicU64::new(0);
+/// F3 one-shot markers.
+static RAYNU_F_TIMER_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_MEM_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_EBS_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_BLOCKIO_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_FS_LOGGED: AtomicBool = AtomicBool::new(false);
+static RAYNU_F_START_IMAGE_LOGGED: AtomicBool = AtomicBool::new(false);
+/// Non-success service returns logged so far (bounded).
+static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
+/// CPUID exits taken on the RayNu-F path (first 8 are logged).
+static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
+/// F6b: `ExitBootServices` on RayNu-F handed the VMCS to the Linux exit path.
+static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
+/// F7: staged `\EFI\BOOT\BOOTX64.EFI` came from the install-disk GPT ESP.
+static RAYNU_F_STAGED_FROM_DISK: AtomicBool = AtomicBool::new(false);
+/// F7: Linux asked for a reset (CF9/KBC); consumed by relaunch or TF.
+static RAYNU_F_RESET_PENDING: AtomicBool = AtomicBool::new(false);
+/// F7: resets taken this QEMU session. Cap [`RAYNU_F_RESET_MAX`].
+static RAYNU_F_RESET_N: AtomicU32 = AtomicU32::new(0);
+/// Sticky EFER.NXE after Linux was allowed NX this boot. Nested `2bebea7`:
+/// RayNu-F never intercepts `#PF`, so `PF_LINUX_DELIVER` stays 0 and a
+/// userspace RIP would otherwise strip NXE on the next VM-exit.
+static LINUX_EFER_NX_HOLD: AtomicBool = AtomicBool::new(false);
+/// `StartImage` caller context for `Exit`: guest RSP at the `out` (points at
+/// the caller's return address) and the MS x64 callee-saved GPRs.
+struct RaynuFStartCtx {
+    rsp: AtomicU64,
+    rbx: AtomicU64,
+    rbp: AtomicU64,
+    rsi: AtomicU64,
+    rdi: AtomicU64,
+    r12: AtomicU64,
+    r13: AtomicU64,
+    r14: AtomicU64,
+    r15: AtomicU64,
+}
+static RAYNU_F_START_CTX: RaynuFStartCtx = RaynuFStartCtx {
+    rsp: AtomicU64::new(0),
+    rbx: AtomicU64::new(0),
+    rbp: AtomicU64::new(0),
+    rsi: AtomicU64::new(0),
+    rdi: AtomicU64::new(0),
+    r12: AtomicU64::new(0),
+    r13: AtomicU64::new(0),
+    r14: AtomicU64::new(0),
+    r15: AtomicU64::new(0),
+};
+static RAYNU_F_CLOCK_WARNED: AtomicBool = AtomicBool::new(false);
+/// One byte of host serial RX buffered for `ConIn` (`0x100` = none).
+static RAYNU_F_PENDING_RX: AtomicU32 = AtomicU32::new(0x100);
+/// RayNu-F firmware state (pool, events, TPL). Single BSP-owned instance;
+/// touched only from the guest-firmware VM-exit path while the guest is
+/// halted, so no lock is needed (same discipline as the SAVED_* GPR slots).
+#[cfg(target_os = "uefi")]
+static mut RAYNU_F_STATE: crate::raynu_f::FirmwareState = crate::raynu_f::FirmwareState::new();
 #[cfg(target_os = "uefi")]
 static IO_STRING_N: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
@@ -1720,6 +3803,34 @@ static UD2_SKIPS: AtomicU32 = AtomicU32::new(0);
 static ASSERT_DEADLOOP_DUMP: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static PF_FIXUPS: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static PF_LINUX_DELIVER: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static PF_LINUX_CR2: AtomicU64 = AtomicU64::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_EXC_INJECT: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_CPUID: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_HV_SCAN_BUMP: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_DELAY_LOOP_SKIP: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static UART_HPET_LOG: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_VIRTIO_DRIVER_OK_LOG: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_PIC_IRQ0_LOG: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_GSI2_LOG: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "uefi")]
+static LINUX_LEAF4: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_SKIP2: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_UNHANDLED_SKIP: AtomicU32 = AtomicU32::new(0);
+#[cfg(target_os = "uefi")]
+static LINUX_INVLPG_MISS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "uefi")]
 static SEC_IDENTITY_REBUILT: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "uefi")]
@@ -1775,6 +3886,14 @@ static mut SAVED_R13: u64 = 0;
 static mut SAVED_R14: u64 = 0;
 #[cfg(target_os = "uefi")]
 static mut SAVED_R15: u64 = 0;
+
+/// 16-byte-aligned XMM0–15 snapshot. Host trampoline `movdqu` after GPRs.
+#[cfg(target_os = "uefi")]
+#[repr(align(16))]
+struct SavedXmm([u8; 256]);
+
+#[cfg(target_os = "uefi")]
+static mut SAVED_XMM: SavedXmm = SavedXmm([0; 256]);
 
 static mut SAVED_VMCS: u64 = 0;
 static mut E4_ALLOC: *mut FrameAllocator = core::ptr::null_mut();
@@ -1909,6 +4028,37 @@ pub const GUEST_UEFI_MTRR_VAR_MSRS: usize = 64;
 /// Iron `44c56db`: VMCLEAR left `GUEST_IA32_PAT=0`; Xeon VM-entry LOAD_PAT
 /// then PA0=UC vs MTRR WB and CpuDxe ASSERTs `callerrip=0x1d25193`.
 pub const IA32_PAT_RESET: u64 = 0x0007_0406_0007_0406;
+
+/// F7: GDT limit with null + 64-bit code + data + 16-byte TSS descriptor.
+pub const RAYNU_F_GDT_LIMIT: u64 = 0x27;
+/// F7: TR selector — TSS descriptor at GDT offset 0x18.
+pub const RAYNU_F_TR_SELECTOR: u64 = 0x18;
+/// F7: 64-bit TSS body lives at `stack_top + this`.
+pub const RAYNU_F_TSS_OFF: u64 = 0x40;
+/// F7: TSS limit (104-byte 64-bit TSS).
+pub const RAYNU_F_TSS_LIMIT: u32 = 0x67;
+/// F7: VMCS TR access rights — busy 32/64-bit TSS (type 11).
+pub const RAYNU_F_TR_AR: u64 = 0x008B;
+/// F7: at most one guest reset per QEMU session.
+pub const RAYNU_F_RESET_MAX: u32 = 1;
+
+/// F7: 16-byte IA-32e TSS descriptor (P=1, DPL=0, type=11 busy). Host-tested.
+pub fn raynu_f_tss64_desc(base: u64, limit: u32) -> [u8; 16] {
+    let mut d = [0u8; 16];
+    d[0] = limit as u8;
+    d[1] = (limit >> 8) as u8;
+    d[2] = base as u8;
+    d[3] = (base >> 8) as u8;
+    d[4] = (base >> 16) as u8;
+    d[5] = 0x8B;
+    d[6] = ((limit >> 16) & 0x0F) as u8;
+    d[7] = (base >> 24) as u8;
+    d[8] = (base >> 32) as u8;
+    d[9] = (base >> 40) as u8;
+    d[10] = (base >> 48) as u8;
+    d[11] = (base >> 56) as u8;
+    d
+}
 
 /// PAT memory type at `pa_index` 0..7 (3 bits each, 8-bit stride).
 pub fn ia32_pat_memory_type(pat: u64, pa_index: u32) -> u64 {
@@ -2188,6 +4338,12 @@ pub fn reset_guest_uefi_launch() {
     LAST_LINEAR.store(0, Ordering::Release);
     LAST_GUEST_PHYS.store(0, Ordering::Release);
     LAST_INSN_ERROR.store(0, Ordering::Release);
+    #[cfg(target_os = "uefi")]
+    {
+        FWCFG_OVERLAY_PENDING.store(false, Ordering::Release);
+        FWCFG_OVERLAY_GPA.store(0, Ordering::Release);
+        FWCFG_OVERLAY_N.store(0, Ordering::Release);
+    }
     EXIT_COUNT.store(0, Ordering::Release);
     NON_TF_EXITS.store(0, Ordering::Release);
     ALIVE_PRINTED.store(false, Ordering::Release);
@@ -2205,6 +4361,7 @@ pub fn reset_guest_uefi_launch() {
     ELTORITO_PRINTED.store(false, Ordering::Release);
     ELTORITO_CATALOG_PRINTED.store(false, Ordering::Release);
     ELTORITO_BOOTIMG_PRINTED.store(false, Ordering::Release);
+    POST_CD_NON_IO.store(false, Ordering::Release);
     ELTORITO_COM_MATCH.store(0, Ordering::Release);
     DXE_AT_N.store(0, Ordering::Release);
     ATAPI_AT_N.store(0, Ordering::Release);
@@ -2215,17 +4372,29 @@ pub fn reset_guest_uefi_launch() {
         MMIO_SCRATCH_HPA[i].store(0, Ordering::Release);
         MMIO_SCRATCH_GPA[i].store(u64::MAX, Ordering::Release);
     }
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    for i in 0..REPORT_RAM_ARRAY {
         REPORT_RAM_HPA[i].store(0, Ordering::Release);
         REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
     }
     REPORT_RAM_MAPS.store(0, Ordering::Release);
     CPU_FLUSH_PATCHED.store(0, Ordering::Release);
+    CPU_FLUSH_SKIP_LOG.store(false, Ordering::Release);
     SINK_MAPS.store(0, Ordering::Release);
     PCI_DID_TRACE.store(0, Ordering::Release);
     PCI_HT_TRACE.store(0, Ordering::Release);
     PCI_BAR_TRACE.store(0, Ordering::Release);
     HLT_SKIPS.store(0, Ordering::Release);
+    HLT_STALL_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_INJECT_LOGGED.store(false, Ordering::Release);
+    WAIT_FOR_IRQ_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_ONESHOT_LOGGED.store(false, Ordering::Release);
+    FIRMWARE_PIT_ONESHOT.store(false, Ordering::Release);
+    FIRMWARE_CONIN_CR.store(false, Ordering::Release);
+    FIRMWARE_WFE_RETURN.store(false, Ordering::Release);
+    FIRMWARE_WFE_STATE4.store(false, Ordering::Release);
+    FIRMWARE_WFE_EVENT_PF.store(false, Ordering::Release);
+    FIRMWARE_ZEROMEM_EPT.store(false, Ordering::Release);
+    INJECT_N.store(0, Ordering::Release);
     SPIN_JMP_SKIPS.store(0, Ordering::Release);
     LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
     PREEMPT_SAME_RIP.store(0, Ordering::Release);
@@ -2236,15 +4405,25 @@ pub fn reset_guest_uefi_launch() {
     PCI_BDF_SEEN3.store(0, Ordering::Release);
     LAST_IO_PORT.store(0, Ordering::Release);
     LAST_CF8.store(0, Ordering::Release);
+    LAST_CF8_EN.store(0, Ordering::Release);
+    LAST_CF8_IDE.store(0, Ordering::Release);
     RAM_HPA.store(0, Ordering::Release);
+    FLASH_HPA.store(0, Ordering::Release);
+    FLASH_LEN.store(0, Ordering::Release);
     RAM_REMAP_N.store(0, Ordering::Release);
     RAM_REMAP_TRIES.store(0, Ordering::Release);
     HPET_TICKS.store(0, Ordering::Release);
+    LAST_HPET_TSC.store(0, Ordering::Release);
     PREEMPT_RELOAD.store(0, Ordering::Release);
     IO_UNHANDLED_N.store(0, Ordering::Release);
     guest_uefi_mtrr_reset();
+    crate::boot::serial::guest_tx_clear();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
     crate::devices::guest_platform::reset();
     crate::devices::guest_virtio_blk::reset();
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
 }
 
 /// Exits after a successful entry that were not triple-fault / VM-entry fail.
@@ -2338,6 +4517,31 @@ pub unsafe fn run_retained_ovmf_vmlaunch(
     }
 }
 
+/// Product-ISO virtio-blk backing. No-op when the window is idle or a disk
+/// is already attached. `warn` prints only when this call is the last chance.
+#[cfg(target_os = "uefi")]
+unsafe fn attach_product_iso_install_disk(alloc: &mut FrameAllocator, warn: bool) {
+    if !crate::devices::ide_cdrom::product_iso_window_armed() {
+        return;
+    }
+    if crate::devices::guest_virtio_blk::disk_bytes() != 0 {
+        return;
+    }
+    let nested = guest_uefi_host_hypervisor_present();
+    let Some((frame, disk_bytes)) = try_alloc_product_iso_install_disk(alloc, nested) else {
+        if warn {
+            serial::write_line("boot: WARN — Stage 46 virtio-blk install disk alloc failed");
+        }
+        return;
+    };
+    // SAFETY: exclusive FrameAllocator pages; guest-UEFI owns them until stop.
+    // KANI-TARGET: product ISO virtio-blk attach (outside Proven Core).
+    let _ = crate::devices::guest_virtio_blk::attach_disk(frame.to_phys(), disk_bytes);
+    serial::write_str("boot: Stage 46 virtio-blk install disk bytes=");
+    write_dec(crate::devices::guest_virtio_blk::disk_bytes());
+    serial::write_line(" (not ISO-INSTALL-OK)");
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn launch_uefi(
     alloc: &mut FrameAllocator,
@@ -2407,6 +4611,8 @@ unsafe fn launch_uefi(
     let ram_hpa = ram_frame.to_phys();
     core::ptr::write_bytes(ram_hpa as *mut u8, 0, GUEST_UEFI_LOW_RAM_BYTES as usize);
     RAM_HPA.store(ram_hpa, Ordering::Release);
+    FLASH_HPA.store(fw_hpa, Ordering::Release);
+    FLASH_LEN.store(fw_len, Ordering::Release);
 
     let ept_need = frames_required_firmware_alias(gpa, fw_len);
     if ept_need > 8 {
@@ -2467,6 +4673,13 @@ unsafe fn launch_uefi(
         } else {
             serial::write_line("boot: guest-UEFI WARN — no hole-zero frame (will not RO-sink onto HPET)");
         }
+        // Arm the product ISO window *before* disk attach. Iron COM2: first
+        // attach was a no-op (window idle), then report-RAM ate the 512 MiB
+        // pool and the late attach got 1 MiB.
+        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
+        // Reserve the install disk first (before scratch *and* report-RAM).
+        // Do not invent HPA on GPA miss (ADR-004).
+        attach_product_iso_install_disk(alloc, false);
         let mut scratch_n = 0u64;
         let mut scratch0 = 0u64;
         for i in 0..GUEST_UEFI_MMIO_SCRATCH_SLOTS {
@@ -2494,20 +4707,33 @@ unsafe fn launch_uefi(
         // Preallocate 2MiB WB frames; map on EPT. GPA need not equal HPA
         // (ADR-004). Separate from UC scratch. Do not identity-map 2GiB.
         let mut report_n = 0u64;
-        for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
-            if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512) {
-                let report_hpa = report_frame.to_phys();
+        let mut extra_n = 0u64;
+        let report_slots = report_ram_slots_alloc();
+        for i in 0..report_slots {
+            let (report_hpa, extra) =
+                if let Some(report_frame) = alloc.allocate_contiguous_aligned(512, 512) {
+                    (report_frame.to_phys(), false)
+                } else if let Some(h) = crate::boot::handoff::take_report_ram_extra_2m() {
+                    extra_n += 1;
+                    (h, true)
+                } else {
+                    break;
+                };
+            if !extra {
                 core::ptr::write_bytes(report_hpa as *mut u8, 0, 2 * 1024 * 1024);
-                REPORT_RAM_HPA[i].store(report_hpa, Ordering::Release);
-                REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
-                report_n += 1;
-            } else {
-                break;
             }
+            REPORT_RAM_HPA[i].store(report_hpa, Ordering::Release);
+            REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
+            report_n += 1;
         }
         if report_n != 0 {
             serial::write_str("boot: guest-UEFI report-RAM pool=");
             write_dec(report_n);
+            if extra_n != 0 {
+                serial::write_str(" extra=");
+                write_dec(extra_n);
+                serial::write_str(" no-zero");
+            }
             serial::write_byte(b'\n');
         }
         // Do not 2MiB-sink 0xFEE00000: OVMF GetApicVersion() reads 0 and
@@ -2521,6 +4747,39 @@ unsafe fn launch_uefi(
                 let _ = ept_link_empty_pd(i as usize, pd);
             }
         }
+        // report-RAM EPT pre-map: product ISO fills `[32MiB, 2GiB)` WB
+        // leaves from leftover HPA so Linux `init_mem_mapping` after PAT
+        // is not ~1000 EPT misses (iron `113a08a`). iso=0 stays lazy.
+        if guest_uefi_report_ram_should_premap(
+            crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
+        ) {
+            let mut pre = 0u64;
+            for i in 0..report_n as usize {
+                let Some(gpa) = guest_uefi_report_ram_premap_gpa(i, report_n as usize) else {
+                    break;
+                };
+                let hpa = REPORT_RAM_HPA[i].load(Ordering::Acquire);
+                if hpa == 0 {
+                    break;
+                }
+                REPORT_RAM_GPA[i].store(gpa, Ordering::Release);
+                if ept_map_2m_hpa_mt(gpa, hpa, false, true, GUEST_UEFI_EPT_MT_WB, false) {
+                    pre += 1;
+                } else {
+                    REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
+                }
+            }
+            if pre != 0 {
+                crate::memory::ept_hw::invept_global();
+                REPORT_RAM_MAPS.store(pre as u32, Ordering::Release);
+                serial::write_str("boot: guest-UEFI report-RAM EPT pre-map n=");
+                write_dec(pre);
+                serial::write_byte(b'\n');
+            }
+        }
+        // Stage 46: present the retained product ISO before the HPET 2 MiB
+        // leaf so IOAPIC can be a 4 KiB trap instead of sink zeros.
+        let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
         // Present EPT leaves so early hole walks do not EPT-fault.
         // Iron 5837243: pre-scratch of 0xC0000000..0xC0E00000 plus a
         // read-walk of 0xC1000000..0xC3A00000 filled pool=32; cap at
@@ -2528,9 +4787,22 @@ unsafe fn launch_uefi(
         // known PT-store GPA. Hole reads are R-only dedicated zero (not HPET
         // SINK_HPA; iron f93caee). Do not bulk 2–4GiB (73576cc).
         let _ = ept_map_2m_scratch(0x8000_0000);
-        for &mm in &[0xFEC0_0000u64, 0xFED0_0000] {
-            if ept_map_2m_sink(mm) {
-                SINK_MAPS.fetch_add(1, Ordering::AcqRel);
+        let mut hpet_2m = true;
+        if crate::devices::ide_cdrom::product_iso_window_armed() {
+            if let Some(pt) = alloc_phys(alloc) {
+                if ept_install_ioapic_trap(pt) {
+                    hpet_2m = false;
+                    serial::write_line(
+                        "boot: guest-UEFI IOAPIC trap 4K (Stage 46; not ISO-INSTALL-OK)",
+                    );
+                }
+            }
+        }
+        if hpet_2m {
+            for &mm in &[0xFEC0_0000u64, 0xFED0_0000] {
+                if ept_map_2m_sink(mm) {
+                    SINK_MAPS.fetch_add(1, Ordering::AcqRel);
+                }
             }
         }
         serial::write_str("boot: guest-UEFI platform sink_hpa=0x");
@@ -2547,12 +4819,19 @@ unsafe fn launch_uefi(
             crate::devices::lapic_virt::fill_xapic_page(unsafe {
                 core::slice::from_raw_parts_mut(lapic as *mut u8, 4096)
             });
-            if ept_install_xapic_4k(pt, lapic) {
-                serial::write_str("boot: guest-UEFI xAPIC 4K hpa=0x");
-                write_hex(lapic);
-                serial::write_str(" ver=0x");
-                write_hex(u64::from(crate::devices::lapic_virt::XAPIC_VERSION));
-                serial::write_byte(b'\n');
+            let trap = crate::devices::ide_cdrom::product_iso_window_armed();
+            if ept_install_xapic_4k(pt, lapic, trap) {
+                if trap {
+                    serial::write_line(
+                        "boot: guest-UEFI xAPIC 4K trap (Stage 46; not ISO-INSTALL-OK)",
+                    );
+                } else {
+                    serial::write_str("boot: guest-UEFI xAPIC 4K hpa=0x");
+                    write_hex(lapic);
+                    serial::write_str(" ver=0x");
+                    write_hex(u64::from(crate::devices::lapic_virt::XAPIC_VERSION));
+                    serial::write_byte(b'\n');
+                }
             } else {
                 serial::write_line("boot: guest-UEFI WARN — xAPIC 4K EPT map failed");
             }
@@ -2597,15 +4876,33 @@ unsafe fn launch_uefi(
     write_dec(fw_len);
     serial::write_byte(b'\n');
 
+    let _ = crate::mgmt::iso_install::present_product_iso_if_retained();
     if crate::devices::ide_cdrom::present_placeholder_if_idle() {
         serial::write_str("boot: guest-UEFI CD GuestVisible iso=");
         write_dec(crate::devices::ide_cdrom::retained_iso_id());
         serial::write_str(" bytes=");
         write_dec(crate::devices::ide_cdrom::retained_len() as u64);
         serial::write_byte(b'\n');
+        if crate::devices::ide_cdrom::product_iso_window_armed() {
+            serial::write_line(
+                "boot: guest-UEFI product ISO window (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
     }
+    attach_product_iso_install_disk(alloc, true);
     if crate::devices::guest_virtio_blk::present() {
-        serial::write_line("boot: guest-UEFI virtio-blk empty CD→disk order");
+        if crate::devices::guest_virtio_blk::queues_armed() {
+            serial::write_line(
+                "boot: guest-UEFI virtio-pci queues (Stage 46; not ISO-INSTALL-OK)",
+            );
+            if crate::devices::guest_virtio_blk::iso_visible() {
+                serial::write_line(
+                    "boot: Stage 46 virtio-iso 00:03.0 read-only (not ISO-INSTALL-OK)",
+                );
+            }
+        } else {
+            serial::write_line("boot: guest-UEFI virtio-blk empty CD→disk order");
+        }
     }
     if crate::devices::guest_platform::e820_splits_gcd_mid_gap() {
         serial::write_line("boot: guest-UEFI e820 mid-gap reserved (GCD)");
@@ -2697,10 +4994,14 @@ unsafe fn setup_guest_uefi_vmcs(
         PIN_BASED_EXTERNAL_INTERRUPT_EXITING | PIN_BASED_VMX_PREEMPTION_TIMER,
         pin_msr,
     );
-    // Same wanted bits as E4, then drop unconditional I/O if bitmaps won
-    // (SDM: the two I/O-exit controls must not both be 1).
+    // Same wanted bits as E4, plus CR8 load/store exiting so Linux
+    // `write_cr8`/`read_cr8` syncs `lapic_virt` TPR (no VMCS GUEST_CR8).
+    // Do not OR CR8 bits into the E4 SHELL VMCS. Then drop unconditional
+    // I/O if bitmaps won (SDM: the two I/O-exit controls must not both be 1).
     let mut primary = adjust_vmx_controls(
         CPU_BASED_HLT_EXITING
+            | CPU_BASED_CR8_LOAD_EXITING
+            | CPU_BASED_CR8_STORE_EXITING
             | CPU_BASED_USE_IO_BITMAPS
             | CPU_BASED_UNCONDITIONAL_IO
             | CPU_BASED_USE_MSR_BITMAPS
@@ -2711,7 +5012,12 @@ unsafe fn setup_guest_uefi_vmcs(
         primary &= !CPU_BASED_UNCONDITIONAL_IO;
     }
     if primary & CPU_BASED_USE_TPR_SHADOW != 0 {
-        serial::write_line("boot: guest-UEFI WARN — TPR shadow forced (no virt-APIC)");
+        serial::write_line("boot: guest-UEFI WARN — TPR shadow forced (no virt-APIC; CR8 may not exit)");
+    }
+    if primary & CPU_BASED_CR8_LOAD_EXITING == 0
+        || primary & CPU_BASED_CR8_STORE_EXITING == 0
+    {
+        serial::write_line("boot: guest-UEFI WARN — CR8 load/store exiting not allowed");
     }
     if primary & CPU_BASED_ACTIVATE_SECONDARY == 0 {
         serial::write_line("boot: guest-UEFI secondary controls not allowed");
@@ -3006,6 +5312,26 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         "mov [rip + {slot_r13}], r13",
         "mov [rip + {slot_r14}], r14",
         "mov [rip + {slot_r15}], r15",
+        "mov rax, cr4",
+        "or rax, {osfxsr}",
+        "mov cr4, rax",
+        "lea rax, [rip + {xmm}]",
+        "movdqu [rax], xmm0",
+        "movdqu [rax + 16], xmm1",
+        "movdqu [rax + 32], xmm2",
+        "movdqu [rax + 48], xmm3",
+        "movdqu [rax + 64], xmm4",
+        "movdqu [rax + 80], xmm5",
+        "movdqu [rax + 96], xmm6",
+        "movdqu [rax + 112], xmm7",
+        "movdqu [rax + 128], xmm8",
+        "movdqu [rax + 144], xmm9",
+        "movdqu [rax + 160], xmm10",
+        "movdqu [rax + 176], xmm11",
+        "movdqu [rax + 192], xmm12",
+        "movdqu [rax + 208], xmm13",
+        "movdqu [rax + 224], xmm14",
+        "movdqu [rax + 240], xmm15",
         "jmp {cont}",
         slot_rax = sym SAVED_RAX,
         slot_rbx = sym SAVED_RBX,
@@ -3022,6 +5348,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
         slot_r13 = sym SAVED_R13,
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
+        xmm = sym SAVED_XMM,
+        osfxsr = const crate::arch::cpu::CR4_OSFXSR,
         cont = sym guest_uefi_vmexit,
     );
 }
@@ -3030,6 +5358,23 @@ pub unsafe extern "C" fn guest_uefi_vmexit_landing() -> ! {
 #[unsafe(naked)]
 unsafe extern "C" fn guest_uefi_vmresume() -> ! {
     core::arch::naked_asm!(
+        "lea rax, [rip + {xmm}]",
+        "movdqu xmm0, [rax]",
+        "movdqu xmm1, [rax + 16]",
+        "movdqu xmm2, [rax + 32]",
+        "movdqu xmm3, [rax + 48]",
+        "movdqu xmm4, [rax + 64]",
+        "movdqu xmm5, [rax + 80]",
+        "movdqu xmm6, [rax + 96]",
+        "movdqu xmm7, [rax + 112]",
+        "movdqu xmm8, [rax + 128]",
+        "movdqu xmm9, [rax + 144]",
+        "movdqu xmm10, [rax + 160]",
+        "movdqu xmm11, [rax + 176]",
+        "movdqu xmm12, [rax + 192]",
+        "movdqu xmm13, [rax + 208]",
+        "movdqu xmm14, [rax + 224]",
+        "movdqu xmm15, [rax + 240]",
         "mov rax, [rip + {slot_rax}]",
         "mov rbx, [rip + {slot_rbx}]",
         "mov rcx, [rip + {slot_rcx}]",
@@ -3062,6 +5407,7 @@ unsafe extern "C" fn guest_uefi_vmresume() -> ! {
         slot_r13 = sym SAVED_R13,
         slot_r14 = sym SAVED_R14,
         slot_r15 = sym SAVED_R15,
+        xmm = sym SAVED_XMM,
         fail = sym guest_uefi_resume_failed,
     );
 }
@@ -3072,25 +5418,78 @@ unsafe extern "C" fn guest_uefi_resume_failed() -> ! {
     leave_to_e4();
 }
 
+/// HPET main-counter step for this VM-exit.
+///
+/// INVARIANTS:
+/// - Preemption / HLT / ACPI PM / HPET-EPT use [`crate::devices::guest_platform::HPET_MAIN_STEP`] (~1s)
+/// - CPUID / RDMSR / WRMSR / non-HPET EPT use [`crate::devices::guest_platform::HPET_INSN_STEP`] (~1ms)
+/// - UART COM I/O uses [`guest_uefi_hpet_uart_tsc_step`] (host TSC delta, capped)
+/// - PCI config and ATA I/O stay 0
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_hpet_step_for_exit(basic: u32, hpet_ept: bool, acpi_io: bool) -> u64 {
+    const CPUID: u32 = 10;
+    const HLT: u32 = 12;
+    const MSR_READ: u32 = 31;
+    const MSR_WRITE: u32 = 32;
+    const EPT: u32 = 48;
+    const PREEMPT: u32 = 52;
+    if basic == PREEMPT || basic == HLT || acpi_io || (basic == EPT && hpet_ept) {
+        crate::devices::guest_platform::HPET_MAIN_STEP
+    } else if basic == CPUID || basic == MSR_READ || basic == MSR_WRITE || basic == EPT {
+        crate::devices::guest_platform::HPET_INSN_STEP
+    } else {
+        0
+    }
+}
+
+/// HPET ticks for a COM1/COM2 I/O VM-exit from host TSC delta.
+///
+/// INVARIANTS:
+/// - Not a fixed 1 ms (`HPET_INSN_STEP`); printk does several in/out per char
+/// - One exit injects at most [`crate::devices::guest_platform::HPET_UART_IO_STEP_CAP`]
+/// - PCI/ATA I/O does not call this
+///
+/// VERIFICATION: L1 (host tests)
+pub fn guest_uefi_hpet_uart_tsc_step(tsc_delta: u64) -> u64 {
+    crate::devices::guest_platform::hpet_ticks_from_tsc_delta(tsc_delta)
+}
+
 #[cfg(target_os = "uefi")]
 fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     let sink = SINK_HPA.load(Ordering::Acquire);
     if sink == 0 {
         return;
     }
-    let acpi_io = basic == EXIT_REASON_IO_INSTRUCTION && {
-        let port = io_port_from_qual(qual);
-        let size = ((qual & 7) + 1) as u8;
-        crate::devices::guest_platform::is_acpi_pm_timer_io(port, size)
-    };
-    let step = if basic == EXIT_REASON_PREEMPTION_TIMER
-        || basic == EXIT_REASON_HLT
-        || acpi_io
-        || (basic == EXIT_REASON_EPT_VIOLATION && crate::devices::guest_platform::is_hpet_gpa(gpa))
-    {
-        crate::devices::guest_platform::HPET_MAIN_STEP
-    } else {
+    let now = cpu::rdtsc();
+    let prev = LAST_HPET_TSC.swap(now, Ordering::AcqRel);
+    let tsc_delta = if prev == 0 {
         0
+    } else {
+        now.wrapping_sub(prev)
+    };
+    let port = io_port_from_qual(qual);
+    let size = ((qual & 7) + 1) as u8;
+    let acpi_io = basic == EXIT_REASON_IO_INSTRUCTION
+        && crate::devices::guest_platform::is_acpi_pm_timer_io(port, size);
+    let uart_io = basic == EXIT_REASON_IO_INSTRUCTION && is_com_uart_port(port);
+    let step = if uart_io {
+        let s = guest_uefi_hpet_uart_tsc_step(tsc_delta);
+        if UART_HPET_LOG
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            serial::write_line(
+                "boot: guest-UEFI UART HPET TSC delta (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
+        s
+    } else {
+        guest_uefi_hpet_step_for_exit(
+            basic,
+            crate::devices::guest_platform::is_hpet_gpa(gpa),
+            acpi_io,
+        )
     };
     // SAFETY: 2 MiB exclusive sink allocated at launch.
     // KANI-TARGET: HPET tick in guest-UEFI sink (outside Proven Core).
@@ -3101,29 +5500,96 @@ fn tick_hpet_on_exit(basic: u32, gpa: u64, qual: u64) {
     if step != 0 && v != 0 {
         HPET_TICKS.fetch_add(1, Ordering::AcqRel);
     }
+    if crate::devices::ide_cdrom::product_iso_window_armed()
+        && (basic == EXIT_REASON_PREEMPTION_TIMER || basic == EXIT_REASON_HLT)
+    {
+        let _ = crate::devices::lapic_virt::poll_timer_expiry();
+        crate::devices::guest_irq::raise_pit();
+        if serial::linux_earlycon_share() {
+            linux_prefer_pit_until_driver_ok();
+        }
+    }
 }
 
 /// HOST_RIP continuation for the private guest-UEFI VMCS. Not the E4 SHELL landing.
 #[cfg(target_os = "uefi")]
 pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     LAUNCH_ENTERED.store(true, Ordering::Release);
+    MMIO_INSN_LEN.store(0, Ordering::Relaxed);
     let reason = ops::vmread(EXIT_REASON).unwrap_or(0xFFFF) as u32;
     let qual = ops::vmread(EXIT_QUALIFICATION).unwrap_or(0);
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
     let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
     let gpa = ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0);
     let intr = ops::vmread(VM_EXIT_INTR_INFO).unwrap_or(0);
+    // ADR-016 F2b: the RayNu-F test app owns the VMCS now — none of the OVMF
+    // heuristics below apply to a guest whose firmware we authored.
+    if RAYNU_F_MODE.load(Ordering::Acquire) {
+        raynu_f_vmexit(reason, qual, rip, intr);
+    }
+    if guest_uefi_linux_earlycon_share_on_bootimg(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        crate::devices::ide_cdrom::eltorito_boot_image_read(),
+    ) || guest_uefi_linux_earlycon_share_on_vmexit(
+        rip,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        // linux earlycon share first bootimg (iron b983ef8 Loaded initrd
+        // then `[` at identity RIP; high-half share was too late).
+        // linux earlycon share first high-half (iron 202312f e820 tick /
+        // scan bump before share; 9a3cbfa printk vs HV write_byte).
+        // linux earlycon pace LSR THRE (iron 029ac8f/3dc7d11 hush-on-bootimg
+        // still cut at `[` after two e820 lines; guest LSR always THRE).
+        serial::set_linux_earlycon_share(true);
+    }
+    if guest_uefi_linux_earlycon_share_on_vmexit(
+        rip,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        // GRUB still needs PIIX ATAPI at bootimg share. Hide PIIX only
+        // after Linux high-half. linux high-half hides PIIX.
+        serial::set_linux_high_half(true);
+    }
     tick_hpet_on_exit(reason & 0xFFFF, gpa, qual);
+    // linux earlycon hush HV (do not drain CHUNK on every exit).
+    let _ = serial::drain_guest_tx(guest_uefi_linux_earlycon_drain(
+        serial::linux_earlycon_share(),
+    ));
     LAST_EXIT_REASON.store(reason, Ordering::Release);
     LAST_GUEST_RIP.store(rip, Ordering::Release);
     LAST_GUEST_PHYS.store(gpa, Ordering::Release);
+    restore_fwcfg_identity_overlay();
 
     let n = EXIT_COUNT.fetch_add(1, Ordering::AcqRel) + 1;
     let basic = reason & 0xFFFF;
+    if let Some(bmp) = guest_uefi_firmware_wfe_event_pf_restore_bitmap(
+        FIRMWARE_WFE_EVENT_PF.load(Ordering::Acquire),
+        guest_uefi_exit_is_page_fault(basic, intr),
+        ops::vmread(EXCEPTION_BITMAP).unwrap_or(0),
+    ) {
+        let _ = ops::vmwrite(EXCEPTION_BITMAP, bmp);
+    }
+    let quiet_hlt_tick = guest_uefi_hlt_stall_quiet_tick(
+        n,
+        basic,
+        guest_uefi_product_iso_pci_ready(
+            crate::devices::ide_cdrom::pci_enumerated(),
+            crate::devices::guest_virtio_blk::pci_enumerated(),
+        ),
+        crate::devices::ide_cdrom::ata_io_accesses(),
+    );
     let entry_fail = (reason & 0x8000_0000) != 0
         || basic == EXIT_REASON_VMENTRY_GUEST_STATE
         || basic == EXIT_REASON_VMENTRY_MSR_LOAD;
     let tf = basic == EXIT_REASON_TRIPLE_FAULT;
+    if tf
+        && RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire)
+        && crate::devices::ide_cdrom::product_iso_window_armed()
+        && RAYNU_F_RESET_PENDING.load(Ordering::Acquire)
+    {
+        // Linux tried KBC/CF9 then triple-faulted. Treat as the reset, not a dump.
+        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Tf);
+    }
     let fetch_fail = basic == EXIT_REASON_EPT_VIOLATION && gpa == GUEST_UEFI_RESET_VECTOR_GPA;
     let linear = cs_base.wrapping_add(rip);
     LAST_LINEAR.store(linear, Ordering::Release);
@@ -3158,11 +5624,21 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             write_hex(intr);
         }
         serial::write_byte(b'\n');
-    } else if n % 256 == 0 && (n <= 16384 || n % 4096 == 0) {
+    } else if (!quiet_hlt_tick || n % 65_536 == 0)
+        && guest_uefi_tick_should_print(
+            n,
+            crate::devices::ide_cdrom::eltorito_boot_image_read(),
+            PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+            serial::linux_earlycon_share(),
+        )
+    {
         // Iron COM2 0be7283 flooded SOL with a tick every 256 I/O exits
         // (same=1 PCI/ATA poll). Keep dense ticks through BOTH/ATAPI, then
-        // every 4096 so RN-ELT / ELTORITO-OK stay readable. Do not skip
-        // ebecc9c3.
+        // every 4096 so RN-ELT / ELTORITO-OK stay readable. After bootimg
+        // every 1024 (iron Loaded initrd had no further tick). After Linux
+        // #PF deliver, every 4096 (iron 115e5ee every-256 UART split PAT)
+        // unless share (linux earlycon quiet ticks).
+        // Do not skip ebecc9c3.
         serial::write_str("boot: guest-UEFI tick n=");
         write_dec(n as u64);
         serial::write_str(" reason=0x");
@@ -3179,12 +5655,84 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         write_dec(SPIN_JMP_SKIPS.load(Ordering::Acquire) as u64);
         serial::write_str(" same=");
         write_dec(PREEMPT_SAME_RIP.load(Ordering::Acquire) as u64);
+        serial::write_str(" ram=");
+        write_dec(REPORT_RAM_MAPS.load(Ordering::Acquire) as u64);
         serial::write_str(" msr=0x");
         write_hex(u64::from(LAST_GUEST_MSR.load(Ordering::Acquire)));
+        // tick port=: iron 8663f56 stop only had last port=0xcf8 while Delay
+        // was IN EAX,DX (0xAF00 PM timer / 0xB000 dword timer). Print this
+        // exit's I/O port.
+        if basic == EXIT_REASON_IO_INSTRUCTION {
+            serial::write_str(" port=0x");
+            write_hex_u32(u32::from(io_port_from_qual(qual)));
+        }
+        if basic == EXIT_REASON_EPT_VIOLATION {
+            serial::write_str(" gpa=0x");
+            write_hex(gpa);
+            serial::write_str(" qual=0x");
+            write_hex(qual);
+        }
+        if basic == EXIT_REASON_HLT {
+            let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+            serial::write_str(" if=");
+            write_dec(((rflags & (1 << 9)) != 0) as u64);
+            serial::write_str(" inj=");
+            write_dec(INJECT_N.load(Ordering::Acquire) as u64);
+            serial::write_str(" pic=");
+            write_dec(crate::devices::guest_irq::pic_has_deliverable() as u64);
+            serial::write_str(" gsi2=");
+            write_dec(crate::devices::guest_irq::ioapic_gsi2_armed() as u64);
+            serial::write_str(" pin14=");
+            write_dec(crate::devices::guest_irq::ioapic_ata_ready() as u64);
+            serial::write_str(" nien=");
+            write_dec(crate::devices::ide_cdrom::ata_nien() as u64);
+            serial::write_str(" cmd=0x");
+            write_hex_u8(crate::devices::ide_cdrom::last_ata_cmd());
+            serial::write_str(" irr2e=");
+            write_dec(
+                crate::devices::lapic_virt::has_irr_vec(
+                    crate::devices::guest_irq::firmware_ata_vec(),
+                ) as u64,
+            );
+            serial::write_str(" ata_vec=0x");
+            write_hex_u8(crate::devices::guest_irq::firmware_ata_vec());
+        }
         serial::write_str(" insn=");
         dump_low_ram_insn(linear);
         serial::write_byte(b'\n');
+        let _ = serial::drain_guest_tx(serial::GUEST_TX_DRAIN_CHUNK);
+    }
+    // cpu_flush on tick cadence even when share (nested e0019a3 / 4f875d6
+    // skipped CpuFlush patches after a high-half RIP latched share).
+    // cpu_flush skip leftover pre-map on tick (iron `abfb008` scanned
+    // 64 leftover heap slots after skip n=944 and hung at tick n=256).
+    // HLT stall quiet tick is print-only: nested 9ce65ae lost ATAPI-OK
+    // when quiet also skipped leftover CpuFlush after BOTH-OK HLT.
+    if guest_uefi_tick_should_print(
+        n,
+        crate::devices::ide_cdrom::eltorito_boot_image_read(),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+        false,
+    ) && guest_uefi_cpu_flush_tick_scans_mapped(REPORT_RAM_MAPS.load(Ordering::Acquire))
+    {
         guest_uefi_patch_cpu_flush_all_mapped();
+    }
+
+    if guest_uefi_post_cd_non_io(
+        crate::devices::ide_cdrom::eltorito_boot_image_read(),
+        POST_CD_NON_IO.load(Ordering::Acquire),
+        basic == EXIT_REASON_IO_INSTRUCTION,
+    ) && !POST_CD_NON_IO.swap(true, Ordering::AcqRel)
+    {
+        serial::write_str("boot: guest-UEFI post-CD non-io n=");
+        write_dec(n as u64);
+        serial::write_str(" reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" ram=");
+        write_dec(REPORT_RAM_MAPS.load(Ordering::Acquire) as u64);
+        serial::write_byte(b'\n');
     }
 
     if !entry_fail && !fetch_fail {
@@ -3208,7 +5756,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             maybe_print_past_sec(basic == EXIT_REASON_HLT);
         }
     } else {
-        serial::write_line("boot: guest-UEFI VM-entry/fetch failed — marker not claimed");
+        serial::write_line_nowait("boot: guest-UEFI VM-entry/fetch failed — marker not claimed");
     }
 
     let mut resume = false;
@@ -3224,11 +5772,244 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 // Skip, do not stop: a firmware HLT would otherwise cut the
                 // post-DXE tail before PciBus walks IDE `00:00.1`.
                 if hlt_should_resume() {
-                    let k = HLT_SKIPS.fetch_add(1, Ordering::AcqRel);
-                    if k < 4 {
-                        serial::write_line("boot: guest-UEFI HLT skip");
+                    let linux = guest_uefi_linux_guest_active(
+                        serial::linux_earlycon_share(),
+                        guest_uefi_pf_should_deliver_to_guest(rip),
+                        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+                    );
+                    let pci_ide = guest_uefi_product_iso_pci_ready(
+                        crate::devices::ide_cdrom::pci_enumerated(),
+                        crate::devices::guest_virtio_blk::pci_enumerated(),
+                    );
+                    let ataio = crate::devices::ide_cdrom::ata_io_accesses();
+                    if guest_uefi_firmware_conin_cr_on_hlt(
+                        crate::devices::ide_cdrom::product_iso_window_armed(),
+                        pci_ide,
+                        ataio,
+                        FIRMWARE_CONIN_CR.load(Ordering::Acquire),
+                    ) && FIRMWARE_CONIN_CR
+                        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                        .is_ok()
+                    {
+                        let _ = crate::devices::guest_uart::push_host_rx(b'\r');
+                        serial::write_line(
+                            "boot: guest-UEFI firmware ConIn CR (Stage 46; not ISO-INSTALL-OK)",
+                        );
                     }
-                    skip_insn()
+                    let wait_irq = guest_uefi_firmware_hlt_wait_for_irq(
+                        crate::devices::ide_cdrom::product_iso_window_armed(),
+                        n,
+                        basic,
+                        pci_ide,
+                        ataio,
+                    );
+                    if guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio) && wait_irq
+                    {
+                        crate::devices::guest_irq::arm_firmware_virtual_wire();
+                        if guest_uefi_firmware_lapic_timer_expiry(linux, pci_ide, ataio)
+                        {
+                            let _ = crate::devices::lapic_virt::force_firmware_lapic_timer_expiry();
+                        }
+                        let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+                        let _ = ops::vmwrite(
+                            GUEST_RFLAGS,
+                            guest_uefi_firmware_hlt_force_if(linux, pci_ide, ataio, rflags),
+                        );
+                        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+                    }
+                    let mut wfe_ok = false;
+                    // ADR-016: do not force OVMF's WaitForEvent to return
+                    // (unwinding without writing *Index self-inflicted the
+                    // NULL-event #PF on 9474ab6). note_hlt_retaddr() is a
+                    // read-only peek and stays for diagnostics.
+                    let _ = note_hlt_retaddr();
+                    if !RAYNU_F_NO_FW_STATE_MUTATION
+                        && guest_uefi_waitforevent_force_return(
+                        crate::devices::ide_cdrom::product_iso_window_armed(),
+                        pci_ide,
+                        ataio,
+                        FIRMWARE_WFE_RETURN.load(Ordering::Acquire),
+                        note_hlt_retaddr(),
+                    ) && FIRMWARE_WFE_RETURN
+                        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                        .is_ok()
+                    {
+                        // SAFETY: guest-UEFI is VMX-halted in CpuSleep;
+                        // RBP is the WaitForEvent frame (callsite uses
+                        // [rbp-0x48]). Unwind is leave+ret + RAX=0.
+                        // KANI-TARGET: WaitForEvent force return
+                        // (outside Proven Core).
+                        let caller = unsafe { apply_waitforevent_return() };
+                        match caller {
+                            Some(rip) => {
+                                serial::write_str(
+                                    "boot: guest-UEFI firmware WaitForEvent return caller=0x",
+                                );
+                                write_hex(rip);
+                                serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+                                wfe_ok = true;
+                            }
+                            None => {
+                                serial::write_line(
+                                    "boot: guest-UEFI firmware WaitForEvent return miss (Stage 46; not ISO-INSTALL-OK)",
+                                );
+                            }
+                        }
+                    }
+                    if pci_ide
+                        && HLT_STALL_LOGGED
+                            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                            .is_ok()
+                    {
+                        let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+                        serial::write_str("boot: guest-UEFI HLT if=");
+                        write_dec(((rflags & (1 << 9)) != 0) as u64);
+                        serial::write_str(" tpr=0x");
+                        write_hex(u64::from(crate::devices::lapic_virt::tpr()));
+                        serial::write_str(" pic=");
+                        write_dec(crate::devices::guest_irq::pic_has_deliverable() as u64);
+                        serial::write_str(" gsi2=");
+                        write_dec(crate::devices::guest_irq::ioapic_gsi2_armed() as u64);
+                        serial::write_str(" pin14=");
+                        write_dec(crate::devices::guest_irq::ioapic_ata_ready() as u64);
+                        serial::write_str(" nien=");
+                        write_dec(crate::devices::ide_cdrom::ata_nien() as u64);
+                        serial::write_str(" cmd=0x");
+                        write_hex_u8(crate::devices::ide_cdrom::last_ata_cmd());
+                        serial::write_str(" irr2e=");
+                        write_dec(
+                            crate::devices::lapic_virt::has_irr_vec(
+                                crate::devices::guest_irq::firmware_ata_vec(),
+                            ) as u64,
+                        );
+                        serial::write_str(" ata_vec=0x");
+                        write_hex_u8(crate::devices::guest_irq::firmware_ata_vec());
+                        serial::write_str(" cmdwr=");
+                        write_dec(crate::devices::ide_cdrom::pci_cmd_writes() as u64);
+                        serial::write_str(" pcicmd=0x");
+                        write_hex(u64::from(crate::devices::ide_cdrom::pci_cmd()));
+                        serial::write_str(" wr=0x");
+                        write_hex(u64::from(crate::devices::ide_cdrom::last_pci_cmd_wr()));
+                        serial::write_str(" seq=");
+                        let seq_n = crate::devices::ide_cdrom::pci_cmd_writes().min(8);
+                        for i in 0..seq_n {
+                            if i > 0 {
+                                serial::write_str(",");
+                            }
+                            write_hex(u64::from(crate::devices::ide_cdrom::pci_cmd_wr_at(
+                                i as usize,
+                            )));
+                        }
+                        // Iron COM2 61991be: HLT cf8=0x0 (CONFIG_ADDRESS
+                        // cleared). Print last enabled CF8 (bit 31).
+                        serial::write_str(" cf8=0x");
+                        write_hex_u32(LAST_CF8.load(Ordering::Acquire));
+                        serial::write_str(" cf8en=0x");
+                        write_hex_u32(LAST_CF8_EN.load(Ordering::Acquire));
+                        serial::write_str(" cf8ide=0x");
+                        write_hex_u32(LAST_CF8_IDE.load(Ordering::Acquire));
+                        serial::write_str(" romwr=0x");
+                        write_hex_u32(crate::devices::ide_cdrom::last_pci_rom_wr());
+                        serial::write_str(" ret=0x");
+                        write_hex(note_hlt_retaddr());
+                        serial::write_str(" rethx=0x");
+                        write_hex(note_hlt_callsite());
+                        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+                    }
+                    if wfe_ok {
+                        true
+                    } else if guest_uefi_firmware_hlt_skip_after_inject(
+                        crate::devices::ide_cdrom::product_iso_window_armed(),
+                        n,
+                        basic,
+                        pci_ide,
+                        ataio,
+                    ) {
+                        // firmware HLT skip after ataio. Skip HLT +
+                        // activity Active so ConnectAll and PACKET continue
+                        // after ataio>0. Do not inject PIT: iron COM2
+                        // ea30da1 vec=0x20 livelock. firmware HLT skip
+                        // without inject. iron COM2 eac424b IRET-to-HLT.
+                        // do not F11 90da03d. do not F11 8e81c2e.
+                        if !skip_hlt() {
+                            let hlt_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+                            let extra = guest_uefi_firmware_hlt_skip_len(true);
+                            let _ = ops::vmwrite(GUEST_RIP, hlt_rip.wrapping_add(extra));
+                        }
+                        // firmware HLT activity active. HLT completed.
+                        let _ = ops::vmwrite(
+                            GUEST_ACTIVITY_STATE,
+                            guest_uefi_firmware_hlt_activity_active(),
+                        );
+                        if SKIP_AFTER_INJECT_LOGGED
+                            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                            .is_ok()
+                        {
+                            let after = ops::vmread(GUEST_RIP).unwrap_or(0);
+                            serial::write_str("boot: guest-UEFI HLT skip-after-inject rip=0x");
+                            write_hex(after);
+                            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+                        }
+                        true
+                    } else if wait_irq {
+                        // Iron COM2 b5c3a9c: skip-after-inject + skip-PIT
+                        // burned CpuSleep at rip=0x7f0680d0 ataio=0. Stay
+                        // halted; virtual-wire + PIT wake BDS so ATA can
+                        // start. Do not set activity Active (that RET-parks).
+                        if WAIT_FOR_IRQ_LOGGED
+                            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                            .is_ok()
+                        {
+                            serial::write_str("boot: guest-UEFI HLT wait-for-irq rip=0x");
+                            write_hex(ops::vmread(GUEST_RIP).unwrap_or(0));
+                            serial::write_str(" cf8=0x");
+                            write_hex_u32(LAST_CF8.load(Ordering::Acquire));
+                            serial::write_str(" cf8en=0x");
+                            write_hex_u32(LAST_CF8_EN.load(Ordering::Acquire));
+                            serial::write_str(" cf8ide=0x");
+                            write_hex_u32(LAST_CF8_IDE.load(Ordering::Acquire));
+                            serial::write_str(" romwr=0x");
+                            write_hex_u32(crate::devices::ide_cdrom::last_pci_rom_wr());
+                            serial::write_str(" ret=0x");
+                            write_hex(note_hlt_retaddr());
+                            serial::write_str(" rethx=0x");
+                            write_hex(note_hlt_callsite());
+                            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+                        }
+                        true
+                    } else {
+                        // Iron COM2 e3cbfa5: after PIT one-shot, wait-for-irq
+                        // stayed true and CpuSleep hung (reason=0xc same RIP).
+                        // Skip HLT without more PIT so ConnectAll can move.
+                        if FIRMWARE_PIT_ONESHOT.load(Ordering::Acquire)
+                            && SKIP_AFTER_ONESHOT_LOGGED
+                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                                .is_ok()
+                        {
+                            serial::write_line(
+                                "boot: guest-UEFI HLT skip after PIT one-shot (Stage 46; not ISO-INSTALL-OK)",
+                            );
+                        }
+                        let k = HLT_SKIPS.fetch_add(1, Ordering::AcqRel);
+                        if k < 4 {
+                            serial::write_line("boot: guest-UEFI HLT skip");
+                        }
+                        // firmware HLT insn_len 0 skip: nested iso=0
+                        // skip_after_inject is false; skip_hlt alone
+                        // parked CpuSleep at f4c3 (ataio=0).
+                        if !skip_hlt() {
+                            let hlt_rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+                            let extra = guest_uefi_firmware_hlt_insn_len0_skip(linux);
+                            let _ = ops::vmwrite(GUEST_RIP, hlt_rip.wrapping_add(extra));
+                        }
+                        if !linux {
+                            let _ = ops::vmwrite(
+                                GUEST_ACTIVITY_STATE,
+                                guest_uefi_firmware_hlt_activity_active(),
+                            );
+                        }
+                        true
+                    }
                 } else {
                     false
                 }
@@ -3237,6 +6018,7 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             EXIT_REASON_CR_ACCESS => handle_cr(qual),
             EXIT_REASON_EXCEPTION_NMI => handle_exception_nmi(intr, rip, linear, qual),
             EXIT_REASON_EXTERNAL_INTERRUPT => true,
+            EXIT_REASON_INTERRUPT_WINDOW => true,
             EXIT_REASON_PREEMPTION_TIMER => {
                 // Iron 19b0c11: between tick 1024 (RIP still 0x1f6ba35 in
                 // 32MiB) and 1280 (RIP 0x27e22d5 execute-from-zero) firmware
@@ -3249,9 +6031,42 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 true
             }
             EXIT_REASON_XSETBV => handle_xsetbv(),
-            // INVD / INVLPG / RDTSC / PAUSE / WBINVD — skip, keep PEI moving.
-            13 | 14 | 16 | 40 | 54 => skip_insn(),
-            _ => false,
+            // INVD / RDTSC / PAUSE / WBINVD — 2 bytes. INVLPG is skip-decoded
+            // (variable length); empty fetch does not guess. Do not clear
+            // CPU_BASED_INVLPG_EXITING (Xeon allowed0=1). Do not raise PIT on
+            // Linux PAUSE (iron MADT stop). virtio MMIO / HLT / preempt still
+            // raise so poll_idle jiffies can move after DRIVER_OK.
+            13 | 16 | 40 | 54 => skip_cpuid_msr(),
+            14 => skip_invlpg(),
+            // linux unhandled nowait stop: MOV DR (29) / GDTR-IDTR (46) /
+            // LDTR-TR (47) / INVPCID (58) / XSAVES (63) / XRSTORS (64)
+            // skip via VMCS length so iron 1a2544d does not drop to E4 hold.
+            // VMCS len 0 still tries skip_insn (high-half MOV DR).
+            _ => {
+                let linux = guest_uefi_linux_guest_active(
+                    serial::linux_earlycon_share(),
+                    guest_uefi_pf_should_deliver_to_guest(rip),
+                    PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+                );
+                let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+                if guest_uefi_linux_unhandled_try_skip(linux, len, basic) {
+                    let k = LINUX_UNHANDLED_SKIP.fetch_add(1, Ordering::AcqRel);
+                    if k < 8 {
+                        serial::write_str_nowait(
+                            "boot: guest-UEFI linux unhandled resume reason=0x",
+                        );
+                        write_hex_u32_nowait(reason);
+                        serial::write_str_nowait(" len=");
+                        write_dec_nowait(len);
+                        serial::write_str_nowait(" rip=0x");
+                        write_hex_nowait(rip);
+                        serial::write_byte_nowait(b'\n');
+                    }
+                    skip_insn()
+                } else {
+                    false
+                }
+            }
         };
         if resume {
             // Preemption (and any other resume) is not always an instruction
@@ -3264,7 +6079,23 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
             let skipped = if basic == EXIT_REASON_EXCEPTION_NMI {
                 false
             } else if basic == EXIT_REASON_PREEMPTION_TIMER {
-                skip_preempt_deadloop(linear, rip)
+                let linux = guest_uefi_linux_guest_active(
+                    serial::linux_earlycon_share(),
+                    guest_uefi_pf_should_deliver_to_guest(rip),
+                    PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+                );
+                if guest_uefi_linux_preempt_deadloop_noskip(
+                    linux,
+                    crate::devices::ide_cdrom::product_iso_window_armed(),
+                ) {
+                    false
+                } else {
+                    skip_preempt_deadloop(linear, rip)
+                }
+            } else if guest_uefi_pf_should_deliver_to_guest(rip) {
+                // Identity peek of high-half is empty or leftover DRAM.
+                // Do not let firmware `eb f3` skip rewrite Linux RIP.
+                false
             } else {
                 skip_spin_short_jmp(linear, rip)
             };
@@ -3281,6 +6112,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
                 {
                     serial::write_str("boot: guest-UEFI preempt noskip same=");
                     write_dec(same as u64);
+                    serial::write_str(" rip=0x");
+                    write_hex(rip);
                     serial::write_str(" insn=");
                     dump_low_ram_insn(linear);
                     serial::write_byte(b'\n');
@@ -3308,13 +6141,68 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     if resume {
+        drain_virtio_product_iso();
+        try_inject_guest_irq();
+        if guest_uefi_poll_iso_install_ok(guest_uefi_host_hypervisor_present())
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
         let reload = PREEMPT_RELOAD.load(Ordering::Acquire);
         if reload != 0 {
             let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, u64::from(reload));
         }
+        let linux_cr2 = PF_LINUX_CR2.swap(0, Ordering::AcqRel);
+        if linux_cr2 != 0 {
+            // SAFETY: VMX-root; restore guest #PF linear after any host walk.
+            // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
+            cpu::write_cr2(linux_cr2);
+        }
         CONTINUE_GUEST.store(true, Ordering::Release);
         guest_uefi_vmresume();
     }
+    if serial::linux_earlycon_share() {
+        serial::write_line_nowait("boot: guest-UEFI stop during earlycon share");
+    }
+    // linux unhandled nowait stop (iron 1a2544d Freeing initrd then
+    // restore host xcr0; share hushes HV `write_str` stop n=).
+    serial::write_str_nowait("boot: guest-UEFI stop n=");
+    write_dec_nowait(n as u64);
+    serial::write_str_nowait(" reason=0x");
+    write_hex_u32_nowait(reason);
+    serial::write_str_nowait(" rip=0x");
+    write_hex_nowait(rip);
+    serial::write_str_nowait(" tf=");
+    write_dec_nowait(u64::from(tf));
+    serial::write_str_nowait(" entry=");
+    write_dec_nowait(u64::from(entry_fail));
+    serial::write_str_nowait(" intr=0x");
+    write_hex_nowait(intr);
+    if tf {
+        // Triple fault: the guest could not deliver its own #DF. Print the
+        // state that decides deliverability (nested 5a9e8e4 after EBS).
+        serial::write_str_nowait(" cr0=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR0).unwrap_or(0));
+        serial::write_str_nowait(" cr3=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR3).unwrap_or(0));
+        serial::write_str_nowait(" cr4=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR4).unwrap_or(0));
+        serial::write_str_nowait(" cr2=0x");
+        write_hex_nowait(cpu::read_cr2());
+        serial::write_str_nowait(" rsp=0x");
+        write_hex_nowait(ops::vmread(GUEST_RSP).unwrap_or(0));
+        serial::write_str_nowait(" idtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_BASE).unwrap_or(0));
+        serial::write_str_nowait("/0x");
+        write_hex_nowait(ops::vmread(GUEST_IDTR_LIMIT).unwrap_or(0));
+        serial::write_str_nowait(" gdtr=0x");
+        write_hex_nowait(ops::vmread(GUEST_GDTR_BASE).unwrap_or(0));
+        serial::write_str_nowait(" tr=0x");
+        write_hex_nowait(ops::vmread(GUEST_TR_BASE).unwrap_or(0));
+        serial::write_str_nowait(" efer=0x");
+        write_hex_nowait(ops::vmread(GUEST_IA32_EFER).unwrap_or(0));
+    }
+    serial::write_byte_nowait(b'\n');
     serial::write_str("boot: guest-UEFI stop n=");
     write_dec(n as u64);
     serial::write_str(" reason=0x");
@@ -3353,6 +6241,20 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_hex_u32(u32::from(crate::devices::ide_cdrom::last_ata_cmd()));
     serial::write_str(" ataio=");
     write_dec(crate::devices::ide_cdrom::ata_io_accesses() as u64);
+    serial::write_str(" cmdwr=");
+    write_dec(crate::devices::ide_cdrom::pci_cmd_writes() as u64);
+    serial::write_str(" pcicmd=0x");
+    write_hex(u64::from(crate::devices::ide_cdrom::pci_cmd()));
+    serial::write_str(" wr=0x");
+    write_hex(u64::from(crate::devices::ide_cdrom::last_pci_cmd_wr()));
+    serial::write_str(" seq=");
+    let seq_n = crate::devices::ide_cdrom::pci_cmd_writes().min(8);
+    for i in 0..seq_n {
+        if i > 0 {
+            serial::write_str(",");
+        }
+        write_hex(u64::from(crate::devices::ide_cdrom::pci_cmd_wr_at(i as usize)));
+    }
     serial::write_str(" unh=");
     write_dec(IO_UNHANDLED_N.load(Ordering::Acquire) as u64);
     serial::write_str(" plat=");
@@ -3361,6 +6263,16 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     write_dec(DXE_PRINTED.load(Ordering::Acquire) as u64);
     serial::write_str(" cf8=0x");
     write_hex_u32(LAST_CF8.load(Ordering::Acquire));
+    serial::write_str(" cf8en=0x");
+    write_hex_u32(LAST_CF8_EN.load(Ordering::Acquire));
+    serial::write_str(" cf8ide=0x");
+    write_hex_u32(LAST_CF8_IDE.load(Ordering::Acquire));
+    serial::write_str(" romwr=0x");
+    write_hex_u32(crate::devices::ide_cdrom::last_pci_rom_wr());
+    serial::write_str(" ret=0x");
+    write_hex(note_hlt_retaddr());
+    serial::write_str(" rethx=0x");
+    write_hex(note_hlt_callsite());
     serial::write_str(" port=0x");
     write_hex_u32(LAST_IO_PORT.load(Ordering::Acquire));
     serial::write_str(" bdfs=");
@@ -3389,7 +6301,1293 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
+    // ADR-016 F2b: with the OVMF leg stopped and the slab/EPT/VMCS still
+    // owned, run the RayNu-F test app on the same VMCS before leaving to E4.
+    if crate::boot::raynu_f_flag::requested()
+        && !RAYNU_F_RAN.swap(true, Ordering::AcqRel)
+    {
+        raynu_f_launch_on_stopped_vmcs();
+    }
     leave_to_e4();
+}
+
+/// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
+/// test app in long mode. No new allocations: identity PTs, tables, app,
+/// stack, and a GDT (null + 64-bit code + data + 16-byte TSS) are written
+/// into the slab we already own. Never returns; failures print a reason
+/// and leave to E4.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
+    use crate::raynu_f::{
+        build_firmware_image, build_test_app, load_pe32plus, plan_f2, IMAGE_BYTES,
+        TESTAPP_FILE_BYTES,
+    };
+    let vmcs = SAVED_VMCS;
+    let ram_hpa = RAM_HPA.load(Ordering::Acquire);
+    if vmcs == 0 || ram_hpa == 0 {
+        serial::write_line("boot: RayNu-F launch skipped: no VMCS/slab (F2b)");
+        leave_to_e4();
+    }
+    if ops::vmclear(vmcs).is_err() || ops::vmptrld(vmcs).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: VMCLEAR/VMPTRLD (F2b)");
+        leave_to_e4();
+    }
+    let Ok(plan) = plan_f2(GUEST_UEFI_LOW_RAM_BYTES) else {
+        serial::write_line("boot: RayNu-F launch failed: plan (F2b)");
+        leave_to_e4();
+    };
+    // SAFETY: exclusive guest-firmware slab; the OVMF guest is halted and
+    // its VMCS was just cleared. Every write below stays inside the slab.
+    // KANI-TARGET: RayNu-F F2 slab image (outside Proven Core).
+    let slab = core::slice::from_raw_parts_mut(ram_hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    if crate::vmx::guest_pt::build_identity_4g(ram_hpa, GUEST_UEFI_LOW_RAM_BYTES, plan.cr3).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: identity PT (F2b)");
+        leave_to_e4();
+    }
+    let tb = plan.tables_base as usize;
+    let layout = match build_firmware_image(plan.tables_base, &mut slab[tb..tb + IMAGE_BYTES]) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F launch failed: tables (F2b)");
+            leave_to_e4();
+        }
+    };
+    {
+        // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+        // KANI-TARGET: RayNu-F table GPAs into state (outside Proven Core).
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.system_table = layout.system_table;
+        st.config_table = layout.config_table;
+    }
+    // F4: publish BlockIo for the retained CD and the virtio-blk install
+    // target, with real media geometry, then bind the backing stores.
+    raynu_f_publish_block_devices(&layout, &mut slab[tb..tb + IMAGE_BYTES]);
+    let mut file = [0u8; TESTAPP_FILE_BYTES];
+    if build_test_app(&mut file).is_err() {
+        serial::write_line("boot: RayNu-F launch failed: test app (F2b)");
+        leave_to_e4();
+    }
+    let ab = plan.app_load_base as usize;
+    let loaded = match load_pe32plus(&file, plan.app_load_base, &mut slab[ab..ab + plan.app_size as usize]) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F launch failed: PE load (F2b)");
+            leave_to_e4();
+        }
+    };
+    // F6-prep: hand the loader real RAM. The product-ISO path already EPT
+    // pre-mapped report-RAM contiguously from 32 MiB; RayNu-F's allocator
+    // owns exactly that much (capped) and its memory map advertises nothing
+    // it cannot allocate. Nested 7ee3a3b: GRUB's 32 MiB heap drained the
+    // 20 MiB slab pool and hit AllocateAddress NOT_FOUND on unmanaged gaps.
+    raynu_f_configure_high_ram();
+    serial::write_str("boot: RayNu-F below-1M conventional base=0x");
+    write_hex(crate::raynu_f::memory::BELOW1M_BASE);
+    serial::write_str(" pages=");
+    write_dec(crate::raynu_f::memory::BELOW1M_PAGES as u64);
+    serial::write_line(" (Linux trampoline; not ISO-INSTALL-OK)");
+    // F7: prefer the install disk's GPT ESP when present (second boot after
+    // setup-disk). First boot the disk is zeros, so El Torito still wins.
+    // `raynu_f_boot_source` is the pure decision; the stager still runs on a
+    // written non-GPT disk so it can print one honest F7 line.
+    RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 });
+    let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
+        == crate::raynu_f::BootSource::Disk
+        || crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
+    let disk_entry = if try_disk {
+        raynu_f_stage_disk_bootloader(&layout, ram_hpa)
+    } else {
+        None
+    };
+    let iso_entry = if disk_entry.is_none() {
+        raynu_f_stage_iso_bootloader(&layout, ram_hpa)
+    } else {
+        None
+    };
+    let (entry, image_handle) = match (disk_entry, iso_entry) {
+        (Some(e), _) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+        (None, Some(e)) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+        (None, None) => (loaded.entry, plan.rcx),
+    };
+    // Stack (zeroed; RSP slot holds a 0 return address) and GDT just above it.
+    let sb = plan.stack_base as usize;
+    let st = plan.stack_top as usize;
+    for b in slab[sb..st + 4096].iter_mut() {
+        *b = 0;
+    }
+    // GDT: null, 64-bit code (G L P S code RA), flat data (G B P S data WA),
+    // 16-byte busy TSS at 0x18 (F7: leftover Linux TR is invalid vs a 3-entry GDT).
+    slab[st + 8..st + 16].copy_from_slice(&0x00AF_9B00_0000_FFFFu64.to_le_bytes());
+    slab[st + 16..st + 24].copy_from_slice(&0x00CF_9300_0000_FFFFu64.to_le_bytes());
+    let tss_base = plan.stack_top + RAYNU_F_TSS_OFF;
+    let tss_desc = raynu_f_tss64_desc(tss_base, RAYNU_F_TSS_LIMIT);
+    slab[st + 24..st + 40].copy_from_slice(&tss_desc);
+
+    // Long-mode guest state overlay on the already-programmed VMCS.
+    if !raynu_f_reset_vmcs_guest_state(&plan, entry) {
+        serial::write_line("boot: RayNu-F launch failed: VMWRITE overlay (F2b)");
+        let _ = ops::vmclear(vmcs);
+        leave_to_e4();
+    }
+    // MS x64 ABI entry: RCX = ImageHandle, RDX = *SystemTable.
+    SAVED_RAX = 0;
+    SAVED_RBX = 0;
+    SAVED_RCX = image_handle;
+    SAVED_RDX = plan.rdx;
+    SAVED_RSI = 0;
+    SAVED_RDI = 0;
+    SAVED_RBP = 0;
+    SAVED_R8 = 0;
+    SAVED_R9 = 0;
+    SAVED_R10 = 0;
+    SAVED_R11 = 0;
+    SAVED_R12 = 0;
+    SAVED_R13 = 0;
+    SAVED_R14 = 0;
+    SAVED_R15 = 0;
+    RAYNU_F_EXITS.store(0, Ordering::Release);
+    RAYNU_F_ENTRY.store(entry, Ordering::Release);
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
+    RAYNU_F_MODE.store(true, Ordering::Release);
+    serial::write_str("boot: RayNu-F VMLAUNCH entry=0x");
+    write_hex(entry);
+    serial::write_str(" system_table=0x");
+    write_hex(plan.rdx);
+    serial::write_str(" relocs=");
+    write_dec(u64::from(loaded.relocs_applied));
+    serial::write_str(if disk_entry.is_some() {
+        " image=DISK-BOOTX64"
+    } else if iso_entry.is_some() {
+        " image=ISO-BOOTX64"
+    } else {
+        " image=test-app"
+    });
+    serial::write_line(" (F2b/F5; not ISO-INSTALL-OK)");
+    raynu_f_vmlaunch();
+}
+
+/// F6-prep: give RayNu-F's allocator the report-RAM that is already
+/// EPT-mapped (WB, 2 MiB leaves) contiguously above the slab. Only
+/// pre-mapped slots count — the RayNu-F exit path stops on an EPT violation,
+/// so a lazily-mapped page must never appear in the guest's memory map.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_configure_high_ram() {
+    let n = report_ram_slots_alloc();
+    let bytes = guest_uefi_report_ram_premapped_contiguous_bytes(
+        |i| REPORT_RAM_GPA[i].load(Ordering::Acquire),
+        n,
+    );
+    // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+    // KANI-TARGET: RayNu-F high-RAM region configure (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    if bytes == 0 {
+        serial::write_line(
+            "boot: RayNu-F WARN no pre-mapped report-RAM; loader gets the slab pool only (F6-prep)",
+        );
+        return;
+    }
+    let base = crate::devices::guest_platform::PLATFORM_RAM_BYTES;
+    let pages = st.pool.set_high_region(base, (bytes / 4096) as usize);
+    serial::write_str("boot: RayNu-F high RAM base=0x");
+    write_hex(base);
+    serial::write_str(" bytes=");
+    write_dec((pages as u64) * 4096);
+    serial::write_str(" premapped=");
+    write_dec(bytes);
+    serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+}
+
+/// F6b: the guest called `ExitBootServices` on RayNu-F — the firmware phase
+/// is over and a kernel owns the machine. Hand the VMCS to the Stage-46
+/// Linux exit path (MSR/CR/xAPIC/virtio/PIT emulation that already booted
+/// Alpine on iron under the OVMF leg) and retire the RayNu-F fast path.
+///
+/// Nested `449f638`: `EBS-OK` then `unexpected exit reason=0x20` (WRMSR) at
+/// `rip=0x300013f` — the kernel's relocated entry code.
+///
+/// Exception intercepts drop to the Linux bitmap first: the firmware-phase
+/// `#PF` handler repairs OVMF's identity tables at `0x400000` (our own CR3
+/// region), which must never run against a kernel we launched.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_linux_handoff() {
+    let _ = ops::vmwrite(
+        EXCEPTION_BITMAP,
+        u64::from(guest_uefi_raynu_f_handoff_exception_bitmap()),
+    );
+    // Kernel printk (earlycon on the guest UART) and hypervisor lines now
+    // share COM; identity-RIP earlycon would otherwise be cut (iron b983ef8).
+    serial::set_linux_earlycon_share(true);
+    RAYNU_F_LINUX_HANDOFF.store(true, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F EBS hand-off to Stage-46 Linux exit path exits=");
+    write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
+    serial::write_str(" svc=");
+    write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
+    serial::write_line(" (F6b; not ISO-INSTALL-OK)");
+}
+
+/// F7: classify a Linux reset request, print the serial line, cap at one
+/// relaunch, then jump to [`raynu_f_reset_relaunch`].
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_on_guest_reset(src: crate::devices::guest_platform::ResetSrc) -> ! {
+    RAYNU_F_RESET_PENDING.store(true, Ordering::Release);
+    let n = RAYNU_F_RESET_N.fetch_add(1, Ordering::AcqRel) + 1;
+    // Linux earlycon share is still on here: blocking HV writes are dropped
+    // (nested `fe4785a` lost this line and the relaunch banner), so use the
+    // nowait path like ISO-INSTALL-OK does.
+    serial::write_str_nowait("boot: RayNu-F guest reset requested src=");
+    serial::write_str_nowait(src.as_str());
+    serial::write_str_nowait(" n=");
+    write_dec_nowait(u64::from(n));
+    serial::write_line_nowait(" (F7; not ISO-INSTALL-OK)");
+    if n > RAYNU_F_RESET_MAX {
+        raynu_f_stop("reset-cap");
+    }
+    raynu_f_reset_relaunch(src);
+}
+
+/// F7: VMCS guest-state overlay for RayNu-F long-mode entry.
+///
+/// First launch ran on a VMCS left by halted OVMF (TR selector 0 was
+/// tolerated). After 64-bit Linux the leftover TR/GDT/EFER/exception
+/// bitmap/CR masks are illegal vs the firmware GDT we install. This
+/// writes every field launch assumes. Called from the one launch path
+/// (first boot and F7 relaunch).
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reset_vmcs_guest_state(plan: &crate::raynu_f::LaunchPlan, entry: u64) -> bool {
+    let cr0_fixed0 = cpu::rdmsr(IA32_VMX_CR0_FIXED0);
+    let cr0_fixed1 = cpu::rdmsr(IA32_VMX_CR0_FIXED1);
+    let cr0 = (plan.cr0 | cr0_fixed0) & cr0_fixed1;
+    let cr4 = guest_cr4_real() | plan.cr4;
+    let entry_ctls = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
+    let tss_base = plan.stack_top + RAYNU_F_TSS_OFF;
+    let ok = [
+        ops::vmwrite(GUEST_CR0, cr0),
+        ops::vmwrite(GUEST_CR3, plan.cr3),
+        ops::vmwrite(GUEST_CR4, cr4),
+        ops::vmwrite(GUEST_IA32_EFER, plan.efer),
+        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry_ctls, true)),
+        ops::vmwrite(GUEST_CS_SELECTOR, 0x08),
+        ops::vmwrite(GUEST_SS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_DS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_ES_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_FS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_GS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_CS_BASE, 0),
+        ops::vmwrite(GUEST_SS_BASE, 0),
+        ops::vmwrite(GUEST_DS_BASE, 0),
+        ops::vmwrite(GUEST_ES_BASE, 0),
+        ops::vmwrite(GUEST_FS_BASE, 0),
+        ops::vmwrite(GUEST_GS_BASE, 0),
+        ops::vmwrite(GUEST_CS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_SS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_DS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_ES_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_FS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_GS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_CS_ACCESS_RIGHTS, plan.cs_ar),
+        ops::vmwrite(GUEST_SS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_DS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_ES_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_FS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_GS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_LDTR_SELECTOR, 0),
+        ops::vmwrite(GUEST_LDTR_BASE, 0),
+        ops::vmwrite(GUEST_LDTR_LIMIT, 0),
+        ops::vmwrite(GUEST_LDTR_ACCESS_RIGHTS, 1 << 16),
+        ops::vmwrite(GUEST_TR_SELECTOR, RAYNU_F_TR_SELECTOR),
+        ops::vmwrite(GUEST_TR_BASE, tss_base),
+        ops::vmwrite(GUEST_TR_LIMIT, u64::from(RAYNU_F_TSS_LIMIT)),
+        ops::vmwrite(GUEST_TR_ACCESS_RIGHTS, RAYNU_F_TR_AR),
+        ops::vmwrite(GUEST_GDTR_BASE, plan.stack_top),
+        ops::vmwrite(GUEST_GDTR_LIMIT, RAYNU_F_GDT_LIMIT),
+        ops::vmwrite(GUEST_IDTR_BASE, 0),
+        ops::vmwrite(GUEST_IDTR_LIMIT, 0),
+        ops::vmwrite(GUEST_RIP, entry),
+        ops::vmwrite(GUEST_RSP, plan.rsp),
+        ops::vmwrite(GUEST_RFLAGS, plan.rflags),
+        ops::vmwrite(GUEST_DR7, 0x400),
+        ops::vmwrite(GUEST_IA32_PAT, IA32_PAT_RESET),
+        ops::vmwrite(GUEST_IA32_SYSENTER_CS, 0),
+        ops::vmwrite(GUEST_IA32_SYSENTER_ESP, 0),
+        ops::vmwrite(GUEST_IA32_SYSENTER_EIP, 0),
+        ops::vmwrite(GUEST_ACTIVITY_STATE, 0),
+        ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0),
+        ops::vmwrite(GUEST_PENDING_DBG_EXCEPTIONS, 0),
+        ops::vmwrite(EXCEPTION_BITMAP, 0xFFFF_FFFF),
+        ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0),
+        ops::vmwrite(CR0_GUEST_HOST_MASK, 0),
+        ops::vmwrite(CR4_GUEST_HOST_MASK, GUEST_UEFI_CR4_HOST_OWNED),
+        ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS),
+    ];
+    ok.iter().all(|r| r.is_ok())
+}
+
+/// F7: re-apply captured host XCR0/CR4.OSXSAVE without marking restored.
+/// `leave_to_e4` still needs [`restore_host_xsave_after_guest_uefi`].
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reapply_host_xsave() {
+    if !HOST_XSAVE_CAPTURED.load(Ordering::Acquire) {
+        return;
+    }
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    let want = e4_restore_xcr0_value(HOST_XCR0_SAVED.load(Ordering::Acquire), true, host_mask);
+    let had_osxsave = HOST_OSXSAVE_SAVED.load(Ordering::Acquire) != 0;
+    let cr4 = cpu::read_cr4();
+    if cr4 & cpu::CR4_OSXSAVE == 0 {
+        // SAFETY: OSXSAVE is not CR4-fixed0-forbidden; required for XSETBV.
+        // KANI-TARGET: RayNu-F F7 reapply host OSXSAVE (outside Proven Core).
+        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
+    }
+    // SAFETY: CR4.OSXSAVE is set; want is masked to CPUID.0D:0 with x87 set.
+    // KANI-TARGET: RayNu-F F7 reapply host XCR0 (outside Proven Core).
+    cpu::xsetbv(0, want);
+    let after = e4_restore_cr4_osxsave(cpu::read_cr4(), had_osxsave);
+    if after != cpu::read_cr4() {
+        // SAFETY: OSXSAVE restored to the captured host value.
+        // KANI-TARGET: RayNu-F F7 reapply host CR4.OSXSAVE (outside Proven Core).
+        cpu::write_cr4(after);
+    }
+}
+
+/// F7: guest reset → RayNu-F relaunch with the install disk preserved.
+///
+/// RESET / KEEP / N/A for `vmx/guest_uefi.rs` statics (~3609–3906) and
+/// device globals:
+///
+/// | Symbol | Class | Why |
+/// |---|---|---|
+/// | `RAYNU_F_STATE` | RESET | `FirmwareState::new()` — firmware phase starts over |
+/// | `RAYNU_F_MODE` | RESET | launch sets true |
+/// | `RAYNU_F_LINUX_HANDOFF` | RESET | false until next EBS |
+/// | `LINUX_EFER_NX_HOLD` | RESET | false until next EBS |
+/// | `RAYNU_F_EXITS/CALLS/SVC_ERRS/ENTRY` | RESET | firmware counters |
+/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE) | RESET | DISK-BOOT-OK must print again |
+/// | `RAYNU_F_STAGED_FROM_DISK` | RESET | launch decides disk vs ISO |
+/// | `RAYNU_F_START_CTX` / `PENDING_RX` / `CLOCK_WARNED` | RESET | StartImage/ConIn latches |
+/// | `RAYNU_F_CPUID_LOGGED` | RESET | firmware CPUID log cap |
+/// | `SAVED_RAX`…`SAVED_R15` / `SAVED_XMM` | RESET | launch preloads RCX/RDX |
+/// | `EXIT_COUNT` / `NON_TF_EXITS` / `DXE_AT_N` / `ATAPI_AT_N` | RESET | product-ISO resume cap headroom |
+/// | Linux latches (`PF_LINUX_*`, `LINUX_*`, `UART_HPET_LOG`) | RESET | second boot logs |
+/// | `FIRMWARE_*` WFE/ConIn/PIT | RESET | leftover OVMF forcing |
+/// | `INJECT_N` / `HLT_*` / `SPIN_*` / `CR_ACCESSES` / `PCI_BDF_*` / `LAST_*` | RESET | diagnostics |
+/// | `IO_UNHANDLED_N` / `HPET_TICKS` / `PREEMPT_*` / `IO_STRING_N` / `KBC_WR_N` | RESET | diagnostics |
+/// | `MSR_SEEN*` / `WRMSR_SEEN*` / `CPUID_SEEN*` / `DBG_*` / `LAST_EFER` | RESET | diagnostics |
+/// | `CONTINUE_GUEST` | RESET | not mid-resume |
+/// | `RAYNU_F_RESET_PENDING` | RESET | consumed |
+/// | `MTRR`/`MISC_ENABLE` shadows | RESET | `guest_uefi_mtrr_reset` |
+/// | `guest_uart` / `guest_irq` / `guest_platform` | RESET | `guest_platform::reset` (does not drop ide_cdrom window or PCI BAR we need for virtio re-enum) |
+/// | `lapic_virt` | RESET | `lapic_virt::reset` |
+/// | virtio queues/PCI | RESET | `reset_keep_disk` then `present` |
+/// | `guest_serial_answer` | RESET | then `begin_second_boot` (never SETUP on second boot) |
+/// | `serial` earlycon/high-half share | RESET | false until next Linux |
+/// | `SAVED_VMCS` | KEEP | same private VMCS |
+/// | `RAM_HPA` | KEEP | same 32 MiB slab (contents zeroed, then launch rebuilds) |
+/// | `EPT_PML4` / `SINK_HPA` / `HOLE_ZERO_HPA` / `MMIO_SCRATCH_*` / `REPORT_RAM_*` | KEEP | EPT maps; do not zero 1 GiB extra |
+/// | `FLASH_HPA`/`FLASH_LEN` | KEEP | retained OVMF copy unused on this path |
+/// | `E4_ALLOC`/`E4_LIFE`/`E4_RSP`/`E4_RESUME` | KEEP | leave_to_e4 continuation |
+/// | `HOST_XCR0_SAVED` / `HOST_OSXSAVE_SAVED` / `HOST_XSAVE_CAPTURED` | KEEP | do **not** set `HOST_XSAVE_RESTORED` |
+/// | `RAYNU_F_RAN` | KEEP | relaunch calls launch directly |
+/// | `RAYNU_F_RESET_N` | KEEP | cap across the session |
+/// | `MARKER_PRINTED` / El Torito / DXE/BOTH/ATAPI one-shots | KEEP | do not re-print OVMF markers |
+/// | `SEC_IDENTITY_REBUILT` / `CPU_FLUSH_*` / `LIVE_*_PT` | KEEP | EPT already painted |
+/// | `ide_cdrom` product-ISO window | KEEP | do not call `ide_cdrom::reset` |
+/// | `DISK_HPA`/`DISK_LEN`/`BYTES_WRITTEN` / `ISO_PTR`/`ISO_LEN`/`ISO_OK` | KEEP | `reset_keep_disk` |
+/// | `guest_virtio_blk::reset` | N/A | **must not** call — it clears the disk |
+/// | Proven Core / EPT builders | N/A | not touched |
+///
+/// Zeroes the low-RAM slab (`GUEST_UEFI_LOW_RAM_BYTES`) then
+/// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
+    // Leave Linux share mode first or this banner is dropped (nested `fe4785a`).
+    serial::set_linux_earlycon_share(false);
+    serial::set_linux_high_half(false);
+    serial::write_line("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)");
+    RAYNU_F_RESET_PENDING.store(false, Ordering::Release);
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
+    RAYNU_F_EXITS.store(0, Ordering::Release);
+    RAYNU_F_CALLS.store(0, Ordering::Release);
+    RAYNU_F_SVC_ERRS.store(0, Ordering::Release);
+    RAYNU_F_ENTRY.store(0, Ordering::Release);
+    RAYNU_F_CONOUT_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_TIMER_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_MEM_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_START_IMAGE_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
+    RAYNU_F_CPUID_LOGGED.store(0, Ordering::Release);
+    RAYNU_F_CLOCK_WARNED.store(false, Ordering::Release);
+    RAYNU_F_PENDING_RX.store(0x100, Ordering::Release);
+    RAYNU_F_START_CTX.rsp.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rbx.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rbp.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rsi.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rdi.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r12.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r13.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r14.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r15.store(0, Ordering::Release);
+    EXIT_COUNT.store(0, Ordering::Release);
+    NON_TF_EXITS.store(0, Ordering::Release);
+    DXE_AT_N.store(0, Ordering::Release);
+    ATAPI_AT_N.store(0, Ordering::Release);
+    CONTINUE_GUEST.store(false, Ordering::Release);
+    INJECT_N.store(0, Ordering::Release);
+    HLT_SKIPS.store(0, Ordering::Release);
+    HLT_STALL_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_INJECT_LOGGED.store(false, Ordering::Release);
+    WAIT_FOR_IRQ_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_ONESHOT_LOGGED.store(false, Ordering::Release);
+    FIRMWARE_PIT_ONESHOT.store(false, Ordering::Release);
+    FIRMWARE_CONIN_CR.store(false, Ordering::Release);
+    FIRMWARE_WFE_RETURN.store(false, Ordering::Release);
+    FIRMWARE_WFE_STATE4.store(false, Ordering::Release);
+    FIRMWARE_WFE_EVENT_PF.store(false, Ordering::Release);
+    FIRMWARE_ZEROMEM_EPT.store(false, Ordering::Release);
+    SPIN_JMP_SKIPS.store(0, Ordering::Release);
+    LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
+    PREEMPT_SAME_RIP.store(0, Ordering::Release);
+    CR_ACCESSES.store(0, Ordering::Release);
+    PCI_BDF_SEEN0.store(0, Ordering::Release);
+    PCI_BDF_SEEN1.store(0, Ordering::Release);
+    PCI_BDF_SEEN2.store(0, Ordering::Release);
+    PCI_BDF_SEEN3.store(0, Ordering::Release);
+    LAST_IO_PORT.store(0, Ordering::Release);
+    LAST_CF8.store(0, Ordering::Release);
+    LAST_CF8_EN.store(0, Ordering::Release);
+    LAST_CF8_IDE.store(0, Ordering::Release);
+    LAST_HLT_RET.store(0, Ordering::Release);
+    LAST_HLT_CALL.store(0, Ordering::Release);
+    HPET_TICKS.store(0, Ordering::Release);
+    LAST_HPET_TSC.store(0, Ordering::Release);
+    PREEMPT_RELOAD.store(0, Ordering::Release);
+    IO_UNHANDLED_N.store(0, Ordering::Release);
+    MMIO_INSN_LEN.store(0, Ordering::Relaxed);
+    FWCFG_OVERLAY_PENDING.store(false, Ordering::Release);
+    FWCFG_OVERLAY_GPA.store(0, Ordering::Release);
+    FWCFG_OVERLAY_N.store(0, Ordering::Release);
+    IO_STRING_N.store(0, Ordering::Release);
+    KBC_WR_N.store(0, Ordering::Release);
+    XSETBV_N.store(0, Ordering::Release);
+    UD_XSAVE_RETRY.store(0, Ordering::Release);
+    UD2_SKIPS.store(0, Ordering::Release);
+    ASSERT_DEADLOOP_DUMP.store(0, Ordering::Release);
+    PF_FIXUPS.store(0, Ordering::Release);
+    PF_LINUX_DELIVER.store(0, Ordering::Release);
+    PF_LINUX_CR2.store(0, Ordering::Release);
+    LINUX_EXC_INJECT.store(false, Ordering::Release);
+    LINUX_CPUID.store(0, Ordering::Release);
+    LINUX_HV_SCAN_BUMP.store(false, Ordering::Release);
+    LINUX_DELAY_LOOP_SKIP.store(false, Ordering::Release);
+    UART_HPET_LOG.store(false, Ordering::Release);
+    LINUX_VIRTIO_DRIVER_OK_LOG.store(false, Ordering::Release);
+    LINUX_PIC_IRQ0_LOG.store(false, Ordering::Release);
+    LINUX_GSI2_LOG.store(false, Ordering::Release);
+    LINUX_LEAF4.store(0, Ordering::Release);
+    LINUX_SKIP2.store(0, Ordering::Release);
+    LINUX_UNHANDLED_SKIP.store(0, Ordering::Release);
+    LINUX_INVLPG_MISS.store(0, Ordering::Release);
+    MSR_SEEN_N.store(0, Ordering::Release);
+    WRMSR_SEEN_N.store(0, Ordering::Release);
+    LAST_GUEST_MSR.store(0, Ordering::Release);
+    LAST_EFER.store(0, Ordering::Release);
+    CPUID_SEEN_N.store(0, Ordering::Release);
+    DBG_LEN.store(0, Ordering::Release);
+    DBG_LINES.store(0, Ordering::Release);
+    SAVED_RAX = 0;
+    SAVED_RBX = 0;
+    SAVED_RCX = 0;
+    SAVED_RDX = 0;
+    SAVED_RSI = 0;
+    SAVED_RDI = 0;
+    SAVED_RBP = 0;
+    SAVED_R8 = 0;
+    SAVED_R9 = 0;
+    SAVED_R10 = 0;
+    SAVED_R11 = 0;
+    SAVED_R12 = 0;
+    SAVED_R13 = 0;
+    SAVED_R14 = 0;
+    SAVED_R15 = 0;
+    SAVED_XMM = SavedXmm([0; 256]);
+    // SAFETY: BSP-only firmware state; guest is halted for relaunch.
+    // KANI-TARGET: RayNu-F F7 FirmwareState reset (outside Proven Core).
+    RAYNU_F_STATE = crate::raynu_f::FirmwareState::new();
+    guest_uefi_mtrr_reset();
+    crate::devices::guest_platform::reset();
+    crate::devices::lapic_virt::reset();
+    crate::devices::guest_virtio_blk::reset_keep_disk();
+    crate::devices::guest_serial_answer::begin_second_boot();
+    raynu_f_reapply_host_xsave();
+    let ram_hpa = RAM_HPA.load(Ordering::Acquire);
+    if ram_hpa != 0 {
+        // SAFETY: exclusive guest-firmware slab; guest is halted.
+        // KANI-TARGET: RayNu-F F7 slab zero (outside Proven Core).
+        core::ptr::write_bytes(
+            ram_hpa as *mut u8,
+            0,
+            GUEST_UEFI_LOW_RAM_BYTES as usize,
+        );
+    }
+    raynu_f_launch_on_stopped_vmcs();
+}
+
+/// F4: retained product ISO bytes (CD backing store), if any.
+#[cfg(target_os = "uefi")]
+fn raynu_f_cd_bytes() -> Option<&'static [u8]> {
+    crate::mgmt::iso_install::product_iso_retained_bytes()
+}
+
+/// F4 backing-store reader. `media_id` selects CD vs install disk; `off` is a
+/// byte offset the dispatcher already validated against media geometry.
+#[cfg(target_os = "uefi")]
+fn raynu_f_read_backing(media_id: u32, off: u64, buf: &mut [u8]) -> bool {
+    match media_id {
+        crate::raynu_f::MEDIA_ID_CD => {
+            let Some(iso) = raynu_f_cd_bytes() else {
+                return false;
+            };
+            let Ok(start) = usize::try_from(off) else {
+                return false;
+            };
+            let Some(end) = start.checked_add(buf.len()) else {
+                return false;
+            };
+            if end > iso.len() {
+                return false;
+            }
+            buf.copy_from_slice(&iso[start..end]);
+            true
+        }
+        crate::raynu_f::MEDIA_ID_DISK => {
+            crate::devices::guest_virtio_blk::raynu_f_disk_read(off, buf)
+        }
+        _ => false,
+    }
+}
+
+/// F4 backing-store writer. The CD is read-only (the dispatcher already
+/// rejects writes via `EFI_WRITE_PROTECTED`).
+#[cfg(target_os = "uefi")]
+fn raynu_f_write_backing(media_id: u32, off: u64, buf: &[u8]) -> bool {
+    match media_id {
+        crate::raynu_f::MEDIA_ID_DISK => {
+            crate::devices::guest_virtio_blk::raynu_f_disk_write(off, buf)
+        }
+        _ => false,
+    }
+}
+
+/// `VolumeRead` over the retained ISO, offset to the El Torito boot image.
+#[cfg(target_os = "uefi")]
+struct IsoFatVol<'a> {
+    iso: &'a [u8],
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for IsoFatVol<'_> {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        let Ok(start) = usize::try_from(self.base.saturating_add(off)) else {
+            return false;
+        };
+        let Some(end) = start.checked_add(buf.len()) else {
+            return false;
+        };
+        if end > self.iso.len() {
+            return false;
+        }
+        buf.copy_from_slice(&self.iso[start..end]);
+        true
+    }
+}
+
+/// `VolumeRead` over the virtio-blk install disk. `base` is a byte offset
+/// (0 for GPT, ESP start for FAT).
+#[cfg(target_os = "uefi")]
+struct DiskFatVol {
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for DiskFatVol {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        crate::devices::guest_virtio_blk::raynu_f_disk_read(self.base.saturating_add(off), buf)
+    }
+}
+
+/// `GuestMem` over the identity-mapped guest slab (F5 launch-time loading).
+#[cfg(target_os = "uefi")]
+struct SlabMem {
+    hpa: u64,
+    len: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::GuestMem for SlabMem {
+    fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
+        let Some(end) = addr.checked_add(buf.len() as u64) else {
+            return 0;
+        };
+        if end > self.len {
+            return 0;
+        }
+        // SAFETY: exclusive guest slab; range checked against its length.
+        // KANI-TARGET: RayNu-F slab read (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                (self.hpa + addr) as *const u8,
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        buf.len()
+    }
+    fn write(&self, addr: u64, buf: &[u8]) -> usize {
+        let Some(end) = addr.checked_add(buf.len() as u64) else {
+            return 0;
+        };
+        if end > self.len {
+            return 0;
+        }
+        // SAFETY: exclusive guest slab; range checked against its length.
+        // KANI-TARGET: RayNu-F slab write (outside Proven Core).
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                (self.hpa + addr) as *mut u8,
+                buf.len(),
+            );
+        }
+        buf.len()
+    }
+}
+
+/// Stage a resolved FAT file into pool pages and `load_pe32plus`. Shared by
+/// the ISO El Torito path and the F7 disk ESP path.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRead>(
+    vol: &crate::raynu_f::fat::FatVolume,
+    reader: &R,
+    entry: crate::raynu_f::fat::FatEntry,
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+    kind: &str,
+    note: &str,
+) -> Option<u64> {
+    let size = u64::from(entry.size);
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F bootloader stage (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let mem = SlabMem {
+        hpa: ram_hpa,
+        len: GUEST_UEFI_LOW_RAM_BYTES,
+    };
+    let file_pages = (size + 4095) / 4096;
+    let (s1, file_gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_DATA,
+        file_pages,
+        0,
+    );
+    if s1 != 0 {
+        serial::write_line("boot: RayNu-F WARN no pool pages for BOOTX64.EFI (test app stays)");
+        return None;
+    }
+    let mut tmp = [0u8; 4096];
+    let mut off = 0u64;
+    while off < size {
+        let chunk = ((size - off).min(4096)) as usize;
+        match crate::raynu_f::fat::read_chain(
+            vol,
+            reader,
+            entry.first_cluster,
+            off,
+            &mut tmp[..chunk],
+        ) {
+            Ok(n) if n == chunk => {}
+            _ => {
+                serial::write_line("boot: RayNu-F WARN BOOTX64.EFI read failed (test app stays)");
+                return None;
+            }
+        }
+        if crate::raynu_f::GuestMem::write(&mem, file_gpa + off, &tmp[..chunk]) != chunk {
+            serial::write_line("boot: RayNu-F WARN staging write failed (test app stays)");
+            return None;
+        }
+        off += chunk as u64;
+    }
+    let mut hdr = [0u8; 4096];
+    let take = (size as usize).min(hdr.len());
+    if crate::raynu_f::GuestMem::read(&mem, file_gpa, &mut hdr[..take]) != take {
+        return None;
+    }
+    let pe = match crate::raynu_f::parse_pe32plus(&hdr[..take]) {
+        Ok(p) => p,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F BOOTX64.EFI is not PE32+ x64 (test app stays)");
+            return None;
+        }
+    };
+    let img_pages = (u64::from(pe.size_of_image) + 4095) / 4096;
+    let (s2, img_gpa) = st.pool.allocate_pages(
+        crate::raynu_f::memory::ALLOCATE_ANY_PAGES,
+        crate::raynu_f::memory::EFI_LOADER_CODE,
+        img_pages,
+        0,
+    );
+    if s2 != 0 {
+        serial::write_line("boot: RayNu-F WARN no pool pages for the image (test app stays)");
+        return None;
+    }
+    let loaded = match crate::raynu_f::pe::load_pe32plus_guest(
+        &mem,
+        file_gpa,
+        size,
+        img_gpa,
+        img_pages * 4096,
+    ) {
+        Ok(l) => l,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F WARN BOOTX64.EFI load failed (test app stays)");
+            return None;
+        }
+    };
+    st.image_base = loaded.load_base;
+    st.image_size = u64::from(loaded.size_of_image);
+    st.image_entry = loaded.entry;
+    st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
+    if !crate::raynu_f::publish_loaded_image(st, &mem, 0) {
+        serial::write_line(
+            "boot: RayNu-F WARN LoadedImage publish failed (loader may not find its volume)",
+        );
+    }
+    serial::write_str("boot: RayNu-F ");
+    serial::write_str(kind);
+    serial::write_str(" bootloader staged base=0x");
+    write_hex(loaded.load_base);
+    serial::write_str(" entry=0x");
+    write_hex(loaded.entry);
+    serial::write_str(" size=");
+    write_dec(u64::from(loaded.size_of_image));
+    serial::write_str(" relocs=");
+    write_dec(u64::from(loaded.relocs_applied));
+    serial::write_str(" ");
+    serial::write_line(note);
+    let _ = layout;
+    Some(loaded.entry)
+}
+
+/// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
+/// (fallback `\EFI\alpine\grubx64.efi`). Publishes a Hardware/Vendor whole-disk
+/// path on `HANDLE_DISK` (not Media/HardDrive — GRUB `efidisk` would skip
+/// that as a partition child). `None` leaves El Torito / test app.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_disk_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    let disk = DiskFatVol { base: 0 };
+    let written = crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
+    let esp = match crate::raynu_f::find_esp(&disk) {
+        Ok(e) => e,
+        Err(_) => {
+            if written {
+                serial::write_line(
+                    "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+                );
+            }
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F GPT ESP lba=");
+    write_dec(esp.start_lba);
+    serial::write_str(" sectors=");
+    write_dec(esp.size_lba());
+    serial::write_str(" part=");
+    write_dec(u64::from(esp.partition_number));
+    serial::write_line(" (F7; not ISO-INSTALL-OK)");
+    let fat_off = esp.start_lba.saturating_mul(512);
+    let vol_reader = DiskFatVol { base: fat_off };
+    let mut boot = [0u8; 512];
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line(
+            "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+        );
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+            );
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F disk FS mount (outside Proven Core).
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.fs.volume = Some(vol);
+        st.fat_volume_off = fat_off;
+        st.fat_media_id = crate::raynu_f::MEDIA_ID_DISK;
+        st.file_proto_base = layout.file_proto_base;
+        st.sfs = layout.sfs;
+        st.loaded_image_proto = layout.loaded_image;
+        st.system_table = layout.system_table;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_DISK,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            layout.sfs,
+        );
+        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+        crate::raynu_f::protocol::encode_whole_disk_device_path(&mut dp);
+        let mem_dp = SlabMem {
+            hpa: ram_hpa,
+            len: GUEST_UEFI_LOW_RAM_BYTES,
+        };
+        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+            st.device_path = layout.device_path;
+            st.device_handle = crate::raynu_f::HANDLE_DISK;
+            let _ = st.protocols.install(
+                crate::raynu_f::HANDLE_DISK,
+                crate::raynu_f::protocol::GUID_DEVICE_PATH,
+                layout.device_path,
+            );
+            serial::write_line(
+                "boot: RayNu-F disk whole-disk path (F7; not ISO-INSTALL-OK)",
+            );
+        }
+    }
+    let paths: [&[u8]; 2] = [b"\\EFI\\BOOT\\BOOTX64.EFI", b"\\EFI\\alpine\\grubx64.efi"];
+    let mut found = None;
+    for p in paths {
+        match crate::raynu_f::fat::resolve_path(&vol, &vol_reader, p) {
+            Ok(e) => {
+                found = Some((e, p));
+                break;
+            }
+            Err(_) => {}
+        }
+    }
+    let (entry, path) = match found {
+        Some(v) => v,
+        None => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the disk ESP (F7; not ISO-INSTALL-OK)",
+            );
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F found ");
+    for &b in path {
+        serial::write_byte(b);
+    }
+    serial::write_str(" bytes=");
+    write_dec(u64::from(entry.size));
+    serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+    let loaded = raynu_f_stage_bootloader_from_volume(
+        &vol,
+        &vol_reader,
+        entry,
+        layout,
+        ram_hpa,
+        "disk",
+        "(F7; not ISO-INSTALL-OK)",
+    )?;
+    RAYNU_F_STAGED_FROM_DISK.store(true, Ordering::Release);
+    Some(loaded)
+}
+
+/// F5: mount the FAT ESP inside the retained ISO's El Torito boot image and
+/// stage its `\EFI\BOOT\BOOTX64.EFI` as the guest image. Returns the loaded
+/// entry point on success; `None` leaves the built-in test app as the guest.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_iso_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    let iso = raynu_f_cd_bytes()?;
+    let et = match crate::mgmt::el_torito::parse_el_torito(iso) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F no El Torito catalog in ISO (test app stays)");
+            return None;
+        }
+    };
+    let fat_off = u64::from(et.load_lba) * crate::mgmt::el_torito::ISO_SECTOR as u64;
+    let mut boot = [0u8; 512];
+    let vol_reader = IsoFatVol { iso, base: fat_off };
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line("boot: RayNu-F El Torito extent outside ISO (test app stays)");
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_str("boot: RayNu-F El Torito image is not FAT lba=");
+            write_dec(u64::from(et.load_lba));
+            serial::write_line(" (test app stays)");
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F FS mount (outside Proven Core).
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.fs.volume = Some(vol);
+        st.fat_volume_off = fat_off;
+        st.fat_media_id = crate::raynu_f::MEDIA_ID_CD;
+        st.file_proto_base = layout.file_proto_base;
+        st.sfs = layout.sfs;
+        st.loaded_image_proto = layout.loaded_image;
+        st.system_table = layout.system_table;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_CD,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            layout.sfs,
+        );
+        // A loader reads LoadedImage->DeviceHandle and its device path to find the
+        // volume it booted from; publish a well-formed Media/CD-ROM path.
+        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+        crate::raynu_f::protocol::encode_cd_device_path(
+            1,
+            u64::from(et.load_lba),
+            u64::from(et.sector_count),
+            &mut dp,
+        );
+        let mem_dp = SlabMem { hpa: ram_hpa, len: GUEST_UEFI_LOW_RAM_BYTES };
+        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+            st.device_path = layout.device_path;
+            st.device_handle = crate::raynu_f::HANDLE_CD;
+            let _ = st.protocols.install(
+                crate::raynu_f::HANDLE_CD,
+                crate::raynu_f::protocol::GUID_DEVICE_PATH,
+                layout.device_path,
+            );
+        }
+    }
+    serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
+    write_dec(u64::from(et.load_lba));
+    serial::write_str(" efi=");
+    write_dec(et.efi as u64);
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+
+    let entry = match crate::raynu_f::fat::resolve_path(
+        &vol,
+        &vol_reader,
+        b"\\EFI\\BOOT\\BOOTX64.EFI",
+    ) {
+        Ok(e) => e,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the ESP (test app stays)",
+            );
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F found \\EFI\\BOOT\\BOOTX64.EFI bytes=");
+    write_dec(u64::from(entry.size));
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+    raynu_f_stage_bootloader_from_volume(
+        &vol,
+        &vol_reader,
+        entry,
+        layout,
+        ram_hpa,
+        "ISO",
+        "(F5; not ISO-INSTALL-OK)",
+    )
+}
+
+/// F4: fill in real media geometry and publish `BlockIo` on the CD and disk
+/// handles so a loader can find them the architected way.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_publish_block_devices(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    img: &mut [u8],
+) {
+    let iso_bytes = raynu_f_cd_bytes().map_or(0, |b| b.len() as u64);
+    let disk_bytes = crate::devices::guest_virtio_blk::disk_bytes();
+    let media_cd = crate::raynu_f::BlockMedia::cd(iso_bytes);
+    let media_disk = crate::raynu_f::BlockMedia::disk(disk_bytes);
+    crate::raynu_f::write_block_media(
+        img,
+        crate::raynu_f::tables::IMAGE_MEDIA_CD_OFF,
+        &media_cd,
+    );
+    crate::raynu_f::write_block_media(
+        img,
+        crate::raynu_f::tables::IMAGE_MEDIA_DISK_OFF,
+        &media_disk,
+    );
+    // SAFETY: BSP-only firmware state; guest not yet launched (see decl).
+    // KANI-TARGET: RayNu-F block device publish (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    st.media_cd = media_cd;
+    st.media_disk = media_disk;
+    st.blockio_cd = layout.blockio_cd;
+    st.blockio_disk = layout.blockio_disk;
+    st.read_blocks = Some(raynu_f_read_backing);
+    st.write_blocks = Some(raynu_f_write_backing);
+    let _ = st
+        .protocols
+        .install(crate::raynu_f::HANDLE_CD, crate::raynu_f::GUID_BLOCK_IO, layout.blockio_cd);
+    let _ = st.protocols.install(
+        crate::raynu_f::HANDLE_DISK,
+        crate::raynu_f::GUID_BLOCK_IO,
+        layout.blockio_disk,
+    );
+    serial::write_str("boot: RayNu-F BlockIo cd_bytes=");
+    write_dec(iso_bytes);
+    serial::write_str(" cd_last_lba=");
+    write_dec(media_cd.last_block);
+    serial::write_str(" disk_bytes=");
+    write_dec(disk_bytes);
+    serial::write_str(" disk_last_lba=");
+    write_dec(media_disk.last_block);
+    serial::write_line(" (F4; not ISO-INSTALL-OK)");
+}
+
+/// Load the guest GPRs from the saved slots and VMLAUNCH (first entry does
+/// not pass through `guest_uefi_vmresume`, so RCX/RDX must be set here).
+#[cfg(target_os = "uefi")]
+#[unsafe(naked)]
+unsafe extern "C" fn raynu_f_vmlaunch() -> ! {
+    core::arch::naked_asm!(
+        "mov rax, [rip + {slot_rax}]",
+        "mov rbx, [rip + {slot_rbx}]",
+        "mov rcx, [rip + {slot_rcx}]",
+        "mov rdx, [rip + {slot_rdx}]",
+        "mov rsi, [rip + {slot_rsi}]",
+        "mov rdi, [rip + {slot_rdi}]",
+        "mov rbp, [rip + {slot_rbp}]",
+        "mov r8, [rip + {slot_r8}]",
+        "mov r9, [rip + {slot_r9}]",
+        "mov r10, [rip + {slot_r10}]",
+        "mov r11, [rip + {slot_r11}]",
+        "mov r12, [rip + {slot_r12}]",
+        "mov r13, [rip + {slot_r13}]",
+        "mov r14, [rip + {slot_r14}]",
+        "mov r15, [rip + {slot_r15}]",
+        "vmlaunch",
+        "jmp {fail}",
+        slot_rax = sym SAVED_RAX,
+        slot_rbx = sym SAVED_RBX,
+        slot_rcx = sym SAVED_RCX,
+        slot_rdx = sym SAVED_RDX,
+        slot_rsi = sym SAVED_RSI,
+        slot_rdi = sym SAVED_RDI,
+        slot_rbp = sym SAVED_RBP,
+        slot_r8 = sym SAVED_R8,
+        slot_r9 = sym SAVED_R9,
+        slot_r10 = sym SAVED_R10,
+        slot_r11 = sym SAVED_R11,
+        slot_r12 = sym SAVED_R12,
+        slot_r13 = sym SAVED_R13,
+        slot_r14 = sym SAVED_R14,
+        slot_r15 = sym SAVED_R15,
+        fail = sym raynu_f_launch_failed,
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe extern "C" fn raynu_f_launch_failed() -> ! {
+    let ierr = ops::vmread(VM_INSTRUCTION_ERROR).unwrap_or(0xFFFF) as u32;
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F VMLAUNCH failed insn_error=0x");
+    write_hex_u32(ierr);
+    serial::write_line(" (F2b; guest-state or control check)");
+    leave_to_e4();
+}
+
+/// F2b stop: summarize and leave to E4. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stop(why: &str) -> ! {
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    serial::write_str("boot: RayNu-F stop ");
+    serial::write_str(why);
+    serial::write_str(" exits=");
+    write_dec(u64::from(RAYNU_F_EXITS.load(Ordering::Acquire)));
+    serial::write_str(" svc=");
+    write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
+    serial::write_str(" svc_err=");
+    write_dec(u64::from(RAYNU_F_SVC_ERRS.load(Ordering::Acquire)));
+    serial::write_str(" conout_ok=");
+    write_dec(u64::from(RAYNU_F_CONOUT_LOGGED.load(Ordering::Acquire)));
+    // SAFETY: BSP-only firmware state; the guest is stopped (see decl).
+    // KANI-TARGET: RayNu-F stop summary read (outside Proven Core).
+    let st = unsafe { &*core::ptr::addr_of!(RAYNU_F_STATE) };
+    serial::write_str(" blk_rd=");
+    write_dec(u64::from(st.block_reads));
+    serial::write_str(" blk_wr=");
+    write_dec(u64::from(st.block_writes));
+    serial::write_str(" allocs=");
+    write_dec(u64::from(st.pool.allocs));
+    serial::write_str(" free_pages=");
+    write_dec(st.pool.free_pages() as u64);
+    serial::write_line(" (F2b; not ISO-INSTALL-OK)");
+    leave_to_e4();
+}
+
+/// F2b vmexit fast path. Only what the test app can produce is handled; every
+/// other exit is dumped and stopped. No OVMF heuristics run here.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_vmexit(reason: u32, qual: u64, rip: u64, intr: u64) -> ! {
+    let n = RAYNU_F_EXITS.fetch_add(1, Ordering::AcqRel) + 1;
+    let basic = reason & 0xFFFF;
+    if reason & 0x8000_0000 != 0 {
+        serial::write_str("boot: RayNu-F VM-entry failure reason=0x");
+        write_hex_u32(reason);
+        serial::write_str(" qual=0x");
+        write_hex(qual);
+        serial::write_byte(b'\n');
+        raynu_f_stop("entry-fail");
+    }
+    if n > RAYNU_F_EXIT_CAP {
+        raynu_f_stop("exit-cap");
+    }
+    match basic {
+        EXIT_REASON_IO_INSTRUCTION => {
+            let size = (qual & 7) + 1;
+            let is_in = (qual & (1 << 3)) != 0;
+            let port = io_port_from_qual(qual);
+            let mut redirected = false;
+            if crate::raynu_f::is_service_call(port, is_in, size) {
+                redirected = handle_raynu_f_service();
+            } else if is_com_uart_port(port) {
+                handle_uart(port, is_in, size);
+            } else if is_debugcon_port(port) {
+                handle_debugcon(is_in, size);
+            } else {
+                if n < 16 {
+                    serial::write_str("boot: RayNu-F io unhandled port=0x");
+                    write_hex_u32(u32::from(port));
+                    serial::write_str(" in=");
+                    write_dec(is_in as u64);
+                    serial::write_byte(b'\n');
+                }
+                if is_in {
+                    SAVED_RAX |= if size == 1 { 0xff } else if size == 2 { 0xffff } else { 0xffff_ffff };
+                }
+            }
+            if !redirected {
+                let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+                if len == 0 || ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
+                    raynu_f_stop("io-skip");
+                }
+            }
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_HLT => {
+            let entry = RAYNU_F_ENTRY.load(Ordering::Acquire);
+            serial::write_str("boot: RayNu-F guest HLT rip=0x");
+            write_hex(rip);
+            if rip == entry.wrapping_add(crate::raynu_f::TESTAPP_HLT_OK_OFF) {
+                serial::write_str(" path=OK");
+            } else if rip == entry.wrapping_add(crate::raynu_f::TESTAPP_HLT_FAIL_OFF) {
+                serial::write_str(" path=FAIL (a service returned an error)");
+            }
+            serial::write_byte(b'\n');
+            raynu_f_stop("hlt");
+        }
+        EXIT_REASON_PREEMPTION_TIMER => {
+            let _ = ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS);
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_EXTERNAL_INTERRUPT | EXIT_REASON_INTERRUPT_WINDOW => {
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_CPUID => {
+            // CPUID always exits under VMX (SDM 25.1.2). GRUB's first one is
+            // `grub_tsc_init` probing leaf 1 (nested 7ee3a3b+F6-prep stopped
+            // here at rip=0xbb8ef7). Same firmware-phase filter as the OVMF
+            // leg; this is a loader running on our tables, not Linux yet.
+            let leaf = SAVED_RAX as u32;
+            let sub = SAVED_RCX as u32;
+            let k = RAYNU_F_CPUID_LOGGED.fetch_add(1, Ordering::AcqRel);
+            if k < 8 {
+                serial::write_str("boot: RayNu-F CPUID leaf=0x");
+                write_hex(u64::from(leaf));
+                serial::write_str(" sub=0x");
+                write_hex(u64::from(sub));
+                serial::write_str(" rip=0x");
+                write_hex(rip);
+                serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+            }
+            let r = guest_uefi_filter_cpuid(leaf, sub);
+            SAVED_RAX = u64::from(r.eax);
+            SAVED_RBX = u64::from(r.ebx);
+            SAVED_RCX = u64::from(r.ecx);
+            SAVED_RDX = u64::from(r.edx);
+            // `0F A2` is two bytes; trust the VMCS length when it says so.
+            let len = match ops::vmread(VM_EXIT_INSTRUCTION_LEN) {
+                Ok(l) if (1..=15).contains(&l) => l,
+                _ => 2,
+            };
+            if ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_err() {
+                raynu_f_stop("cpuid-skip");
+            }
+            guest_uefi_vmresume();
+        }
+        EXIT_REASON_EXCEPTION_NMI => {
+            let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+            serial::write_str("boot: RayNu-F guest exception vec=0x");
+            write_hex_u32((intr & 0xff) as u32);
+            serial::write_str(" intr=0x");
+            write_hex(intr);
+            serial::write_str(" err=0x");
+            write_hex(err);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_str(" cr2=0x");
+            write_hex(cpu::read_cr2());
+            serial::write_str(" rsp=0x");
+            write_hex(ops::vmread(GUEST_RSP).unwrap_or(0));
+            serial::write_str(" insn=");
+            dump_low_ram_insn(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("exception");
+        }
+        EXIT_REASON_EPT_VIOLATION => {
+            serial::write_str("boot: RayNu-F EPT violation gpa=0x");
+            write_hex(ops::vmread(GUEST_PHYSICAL_ADDRESS).unwrap_or(0));
+            serial::write_str(" qual=0x");
+            write_hex(qual);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("ept");
+        }
+        EXIT_REASON_TRIPLE_FAULT => {
+            serial::write_str("boot: RayNu-F triple fault rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("triple-fault");
+        }
+        _ => {
+            serial::write_str("boot: RayNu-F unexpected exit reason=0x");
+            write_hex_u32(reason);
+            serial::write_str(" qual=0x");
+            write_hex(qual);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_byte(b'\n');
+            raynu_f_stop("unexpected");
+        }
+    }
 }
 
 #[cfg(target_os = "uefi")]
@@ -3734,10 +7932,21 @@ unsafe fn copy_guest_identity_bytes(linear: u64, buf: &mut [u8]) -> usize {
         let ram = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
         return copy_low_ram_at(ram, linear, buf);
     }
+    if guest_uefi_flash_off(linear).is_some() {
+        let hpa = FLASH_HPA.load(Ordering::Acquire);
+        let len = FLASH_LEN.load(Ordering::Acquire) as usize;
+        if hpa == 0 || len == 0 {
+            return 0;
+        }
+        // SAFETY: exclusive 4 MiB guest-private OVMF copy; VMX-root peek.
+        // KANI-TARGET: identity peek flash (outside Proven Core).
+        let flash = core::slice::from_raw_parts(hpa as *const u8, len);
+        return copy_flash_at(flash, linear, buf);
+    }
     if !guest_uefi_report_ram_should_map(linear) {
         return 0;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return 0;
     }
@@ -3745,6 +7954,367 @@ unsafe fn copy_guest_identity_bytes(linear: u64, buf: &mut [u8]) -> usize {
     // KANI-TARGET: identity peek report-RAM (outside Proven Core).
     let page = core::slice::from_raw_parts(hpa as *const u8, GUEST_UEFI_REPORT_RAM_PAGE as usize);
     copy_report_ram_at(page, linear, buf)
+}
+
+/// One page of instruction bytes: identity GPA, then guest CR3 walk.
+/// Linux virtio/IOAPIC runs with high-half RIP (not identity).
+#[cfg(target_os = "uefi")]
+unsafe fn copy_guest_linear_one_page(linear: u64, buf: &mut [u8]) -> usize {
+    let n = copy_guest_identity_bytes(linear, buf);
+    if n != 0 {
+        return n;
+    }
+    let Some(gpa) = guest_linear_to_gpa(linear) else {
+        return 0;
+    };
+    copy_guest_gpa_bytes(gpa, buf)
+}
+
+/// Instruction fetch for MMIO emulate. Loops across 4 KiB pages so a
+/// `movl` that straddles a page is not truncated (`insn_len` then fails
+/// decode and the EPT handler would spin).
+#[cfg(target_os = "uefi")]
+unsafe fn copy_guest_linear_bytes(linear: u64, buf: &mut [u8]) -> usize {
+    let mut done = 0usize;
+    while done < buf.len() {
+        let n = copy_guest_linear_one_page(linear.wrapping_add(done as u64), &mut buf[done..]);
+        if n == 0 {
+            break;
+        }
+        done = done.saturating_add(n);
+    }
+    done
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn copy_guest_gpa_bytes(gpa: u64, buf: &mut [u8]) -> usize {
+    let Some(hpa) = guest_uefi_gpa_to_hpa(gpa) else {
+        return 0;
+    };
+    let off = (gpa & 0xfff) as usize;
+    let n = buf.len().min(4096 - off);
+    if n == 0 {
+        return 0;
+    }
+    // SAFETY: translate returned a host pointer in guest-UEFI RAM / report-RAM.
+    // KANI-TARGET: MMIO insn fetch from GPA (outside Proven Core).
+    core::ptr::copy_nonoverlapping(hpa as *const u8, buf.as_mut_ptr(), n);
+    n
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_identity_bytes(linear: u64, buf: &[u8]) -> usize {
+    let page_left = (0x1000 - (linear & 0xfff)) as usize;
+    let want = buf.len().min(page_left);
+    if want == 0 {
+        return 0;
+    }
+    if linear < GUEST_UEFI_LOW_RAM_BYTES {
+        let hpa = RAM_HPA.load(Ordering::Acquire);
+        if hpa == 0 {
+            return 0;
+        }
+        let start = linear as usize;
+        if start >= GUEST_UEFI_LOW_RAM_BYTES as usize {
+            return 0;
+        }
+        let n = want.min(GUEST_UEFI_LOW_RAM_BYTES as usize - start);
+        // SAFETY: exclusive guest-UEFI 32 MiB slab; firmware is VMX-halted.
+        // KANI-TARGET: identity poke low RAM for PUSH/POP (outside Proven Core).
+        core::ptr::copy_nonoverlapping(buf.as_ptr(), (hpa as *mut u8).add(start), n);
+        return n;
+    }
+    if !guest_uefi_report_ram_should_map(linear) {
+        return 0;
+    }
+    let hpa = report_ram_hpa_lookup_or_map(linear);
+    if hpa == 0 {
+        return 0;
+    }
+    let off = guest_uefi_report_ram_page_off(linear) as usize;
+    let n = want.min(GUEST_UEFI_REPORT_RAM_PAGE as usize - off);
+    if n == 0 {
+        return 0;
+    }
+    // SAFETY: exclusive 2 MiB report-RAM HPA already mapped for this GPA.
+    // KANI-TARGET: identity poke report-RAM for PUSH/POP (outside Proven Core).
+    core::ptr::copy_nonoverlapping(buf.as_ptr(), (hpa as *mut u8).add(off), n);
+    n
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_gpa_bytes(gpa: u64, buf: &[u8]) -> usize {
+    let Some(hpa) = guest_uefi_gpa_to_hpa(gpa) else {
+        return 0;
+    };
+    let off = (gpa & 0xfff) as usize;
+    let n = buf.len().min(4096 - off);
+    if n == 0 {
+        return 0;
+    }
+    // SAFETY: translate returned a host pointer in guest-UEFI RAM / report-RAM.
+    // KANI-TARGET: MMIO PUSH/POP store to GPA (outside Proven Core).
+    core::ptr::copy_nonoverlapping(buf.as_ptr(), hpa as *mut u8, n);
+    n
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_linear_one_page(linear: u64, buf: &[u8]) -> usize {
+    let n = write_guest_identity_bytes(linear, buf);
+    if n != 0 {
+        return n;
+    }
+    let Some(gpa) = guest_linear_to_gpa(linear) else {
+        return 0;
+    };
+    write_guest_gpa_bytes(gpa, buf)
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn write_guest_linear_bytes(linear: u64, buf: &[u8]) -> bool {
+    let mut done = 0usize;
+    while done < buf.len() {
+        let n = write_guest_linear_one_page(linear.wrapping_add(done as u64), &buf[done..]);
+        if n == 0 {
+            return false;
+        }
+        done = done.saturating_add(n);
+    }
+    true
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_op_size(op: crate::devices::guest_virtio_blk::MmioInsn) -> u8 {
+    crate::devices::guest_virtio_blk::mmio_stack_width(
+        op.size,
+        guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0)),
+    )
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_push(val: u64, size: u8) -> bool {
+    let n = usize::from(size);
+    if n == 0 || n > 8 {
+        return false;
+    }
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let new_rsp = rsp.wrapping_sub(n as u64);
+    let bytes = val.to_le_bytes();
+    if !write_guest_linear_bytes(new_rsp, &bytes[..n]) {
+        return false;
+    }
+    ops::vmwrite(GUEST_RSP, new_rsp).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_stack_pop(size: u8) -> Option<u64> {
+    let n = usize::from(size);
+    if n == 0 || n > 8 {
+        return None;
+    }
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let mut buf = [0u8; 8];
+    if copy_guest_linear_bytes(rsp, &mut buf[..n]) < n {
+        return None;
+    }
+    let mut tmp = [0u8; 8];
+    tmp[..n].copy_from_slice(&buf[..n]);
+    let val = u64::from_le_bytes(tmp);
+    if ops::vmwrite(GUEST_RSP, rsp.wrapping_add(n as u64)).is_err() {
+        return None;
+    }
+    Some(val)
+}
+
+/// Near CALL (`FF /2`) or JMP (`FF /4`) through MMIO. Sets RIP to `target`.
+/// CALL pushes RIP+len first. True = RIP already written (do not skip_insn).
+/// False = stack GPA miss or VMWRITE fail (do not invent HPA).
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_near_xfer(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    target: u64,
+    is_call: bool,
+) -> bool {
+    let size = mmio_stack_op_size(op);
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if is_call {
+        let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+        if !mmio_stack_push(rip.wrapping_add(len), size) {
+            return false;
+        }
+    }
+    let new_rip = if size == 2 {
+        (rip & !0xFFFFu64) | (target & 0xFFFF)
+    } else if size == 4 {
+        target & 0xFFFF_FFFF
+    } else {
+        target
+    };
+    ops::vmwrite(GUEST_RIP, new_rip).is_ok()
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_set_addr_gpr(idx: u8, val: u64, long: bool) {
+    if long {
+        set_cr_gpr(idx, val);
+    } else {
+        set_cr_gpr(idx, (cr_gpr(idx) & !0xFFFF_FFFF) | (val & 0xFFFF_FFFF));
+    }
+}
+
+/// One MOVS/STOS/LODS/CMPS/SCAS element. `op.has_imm` is REP.
+/// CMPS/SCAS: `op.imm != 0` is F2 REPNE; else F3 REPE. Stop on ZF.
+/// None = RAM GPA miss (do not invent HPA).
+/// Some(true) = insn done (skip). Some(false) = REP remaining (keep RIP).
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_string_step(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    ept_write: bool,
+    read_bar: impl FnOnce() -> u64,
+    write_bar: impl FnOnce(u64),
+    gpa: u64,
+) -> Option<bool> {
+    let size = op.size;
+    if size == 0 || size > 8 {
+        return None;
+    }
+    let n = usize::from(size);
+    let long = guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0));
+    let rcx = guest_uefi_io_addr_reg(cr_gpr(1), long);
+    if op.has_imm && rcx == 0 {
+        return Some(true);
+    }
+    let df = (ops::vmread(GUEST_RFLAGS).unwrap_or(0x2) & (1 << 10)) != 0;
+    let rsi = guest_uefi_io_addr_reg(cr_gpr(6), long);
+    let rdi = guest_uefi_io_addr_reg(cr_gpr(7), long);
+    let mut newf: Option<u64> = None;
+    if crate::devices::guest_virtio_blk::mmio_alu_is_movs(op.alu) {
+        if ept_write {
+            let mut buf = [0u8; 8];
+            if copy_guest_linear_bytes(rsi, &mut buf[..n]) < n {
+                return None;
+            }
+            let mut tmp = [0u8; 8];
+            tmp[..n].copy_from_slice(&buf[..n]);
+            write_bar(u64::from_le_bytes(tmp));
+        } else {
+            let val = read_bar();
+            let bytes = val.to_le_bytes();
+            if !write_guest_linear_bytes(rdi, &bytes[..n]) {
+                return None;
+            }
+        }
+        mmio_set_addr_gpr(6, guest_uefi_io_string_advance(rsi, size, df), long);
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_stos(op.alu) {
+        write_bar(mmio_gpr_in(op));
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_lods(op.alu) {
+        mmio_gpr_out(op, read_bar());
+        mmio_set_addr_gpr(6, guest_uefi_io_string_advance(rsi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_cmps(op.alu) {
+        let rsi_g = guest_linear_to_gpa(rsi);
+        let rdi_g = guest_linear_to_gpa(rdi);
+        let rsi_bar = rsi_g == Some(gpa);
+        let rdi_bar = rdi_g == Some(gpa);
+        let (left, right) = if rsi_bar || (!rdi_bar && !ept_write) {
+            let mut buf = [0u8; 8];
+            if copy_guest_linear_bytes(rdi, &mut buf[..n]) < n {
+                return None;
+            }
+            let mut tmp = [0u8; 8];
+            tmp[..n].copy_from_slice(&buf[..n]);
+            (read_bar(), u64::from_le_bytes(tmp))
+        } else {
+            let mut buf = [0u8; 8];
+            if copy_guest_linear_bytes(rsi, &mut buf[..n]) < n {
+                return None;
+            }
+            let mut tmp = [0u8; 8];
+            tmp[..n].copy_from_slice(&buf[..n]);
+            (u64::from_le_bytes(tmp), read_bar())
+        };
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let f = crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, size);
+        let _ = ops::vmwrite(GUEST_RFLAGS, f);
+        newf = Some(f);
+        mmio_set_addr_gpr(6, guest_uefi_io_string_advance(rsi, size, df), long);
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
+    } else if crate::devices::guest_virtio_blk::mmio_alu_is_scas(op.alu) {
+        let left = mmio_gpr_in(op);
+        let right = read_bar();
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let f = crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, size);
+        let _ = ops::vmwrite(GUEST_RFLAGS, f);
+        newf = Some(f);
+        mmio_set_addr_gpr(7, guest_uefi_io_string_advance(rdi, size, df), long);
+    } else {
+        return None;
+    }
+    if op.has_imm {
+        let left = rcx.saturating_sub(1);
+        mmio_set_addr_gpr(1, left, long);
+        let keep = if left == 0 {
+            false
+        } else if crate::devices::guest_virtio_blk::mmio_alu_is_cmps(op.alu)
+            || crate::devices::guest_virtio_blk::mmio_alu_is_scas(op.alu)
+        {
+            let zf = newf.map(|f| (f & (1 << 6)) != 0).unwrap_or(false);
+            if op.imm != 0 {
+                !zf
+            } else {
+                zf
+            }
+        } else {
+            true
+        };
+        if keep {
+            return Some(false);
+        }
+    }
+    Some(true)
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn read_guest_pte(gpa: u64) -> Option<u64> {
+    let hpa = guest_uefi_gpa_to_hpa(gpa)?;
+    // SAFETY: 8-byte PTE in guest-UEFI RAM / report-RAM.
+    Some(core::ptr::read_unaligned(hpa as *const u64))
+}
+
+/// 4-level walk of the live guest CR3 (Linux high-half RIP → GPA).
+#[cfg(target_os = "uefi")]
+unsafe fn guest_linear_to_gpa(linear: u64) -> Option<u64> {
+    let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0) & !0xfff;
+    if cr3 == 0 {
+        return None;
+    }
+    let pml4e = read_guest_pte(cr3 + 8 * ((linear >> 39) & 0x1ff))?;
+    if pml4e & 1 == 0 {
+        return None;
+    }
+    let pdpt = pml4e & 0x000f_ffff_ffff_f000;
+    let pdpte = read_guest_pte(pdpt + 8 * ((linear >> 30) & 0x1ff))?;
+    if pdpte & 1 == 0 {
+        return None;
+    }
+    if pdpte & (1 << 7) != 0 {
+        return Some((pdpte & 0x000f_ffff_c000_0000) | (linear & 0x3fff_ffff));
+    }
+    let pd = pdpte & 0x000f_ffff_ffff_f000;
+    let pde = read_guest_pte(pd + 8 * ((linear >> 21) & 0x1ff))?;
+    if pde & 1 == 0 {
+        return None;
+    }
+    if pde & (1 << 7) != 0 {
+        return Some((pde & 0x000f_ffff_ffe0_0000) | (linear & 0x1f_ffff));
+    }
+    let pt = pde & 0x000f_ffff_ffff_f000;
+    let pte = read_guest_pte(pt + 8 * ((linear >> 12) & 0x1ff))?;
+    if pte & 1 == 0 {
+        return None;
+    }
+    Some((pte & 0x000f_ffff_ffff_f000) | (linear & 0xfff))
 }
 
 #[cfg(target_os = "uefi")]
@@ -3792,15 +8362,192 @@ unsafe fn handle_ud(rip: u64, linear: u64) -> bool {
     false
 }
 
+/// Re-inject a pin-exited NMI into product-ISO Linux (type 2, not HW #2).
+///
+/// Iron `1a2544d`: `Freeing initrd` then `restore host xcr0`. linux NMI
+/// inject. Share hushes a `write_str` dump. iso=0 does not take this path.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_linux_nmi() -> bool {
+    LINUX_EXC_INJECT.store(true, Ordering::Release);
+    let _ = ops::vmwrite(
+        VM_ENTRY_INTERRUPTION_INFO,
+        u64::from(guest_uefi_nmi_entry_info()),
+    );
+    true
+}
+
+/// 4-level walk of a guest PGD for `linear`. Nested `2bebea7`: CEA is
+/// present in both user and kernel PGDs; the IDT leaf is NX supervisor.
+///
+/// SAFETY: VMX-root; `pgd` is a guest-physical PGD the EPT already maps.
+/// KANI-TARGET: guest-UEFI fatal-class PT walk dump (outside Proven Core).
+#[cfg(target_os = "uefi")]
+unsafe fn dump_linux_pt_walk_nowait(tag: &str, linear: u64, pgd: u64) {
+    serial::write_str_nowait("boot: guest-UEFI linux pt walk ");
+    serial::write_str_nowait(tag);
+    serial::write_str_nowait(" va=0x");
+    write_hex_nowait(linear);
+    serial::write_str_nowait(" pgd=0x");
+    write_hex_nowait(pgd);
+    let mut table = pgd & !0xfff;
+    let shifts = [39u64, 30, 21, 12];
+    let names = ["pml4e", "pdpte", "pde", "pte"];
+    for (i, &sh) in shifts.iter().enumerate() {
+        serial::write_str_nowait(" ");
+        serial::write_str_nowait(names[i]);
+        serial::write_str_nowait("=0x");
+        let slot = table.wrapping_add(8 * ((linear >> sh) & 0x1ff));
+        let Some(e) = read_guest_pte(slot) else {
+            serial::write_str_nowait("unmapped:");
+            write_hex_nowait(slot);
+            break;
+        };
+        write_hex_nowait(e);
+        if e & 1 == 0 {
+            break;
+        }
+        if i >= 1 && (e & (1 << 7)) != 0 {
+            break;
+        }
+        table = e & 0x000f_ffff_ffff_f000;
+    }
+    serial::write_byte_nowait(b'\n');
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_linux_hw_exception(vec: u8, deliver_code: bool) -> bool {
+    if guest_uefi_linux_fatal_class_exc_stops(vec) {
+        // Nested 8f62fea: re-inject #DF → triple fault. Dump and stop.
+        // Nested 659bb41: LSTAR live; #DF is IDT[#PF] under the user CR3.
+        let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+        let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+        let cr2 = cpu::read_cr2();
+        let cr3 = ops::vmread(GUEST_CR3).unwrap_or(0);
+        let idtr = ops::vmread(GUEST_IDTR_BASE).unwrap_or(0);
+        serial::write_str_nowait("boot: guest-UEFI linux fatal-class exc vec=0x");
+        write_hex_nowait(u64::from(vec));
+        serial::write_str_nowait(" err=0x");
+        write_hex_nowait(ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0));
+        serial::write_str_nowait(" rip=0x");
+        write_hex_nowait(rip);
+        serial::write_str_nowait(" rsp=0x");
+        write_hex_nowait(rsp);
+        serial::write_str_nowait(" cr2=0x");
+        write_hex_nowait(cr2);
+        serial::write_str_nowait(" cr3=0x");
+        write_hex_nowait(cr3);
+        serial::write_str_nowait(" idtr=0x");
+        write_hex_nowait(idtr);
+        serial::write_str_nowait(" cs=0x");
+        write_hex_nowait(ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0));
+        serial::write_str_nowait(" ss=0x");
+        write_hex_nowait(ops::vmread(GUEST_SS_SELECTOR).unwrap_or(0));
+        serial::write_str_nowait(" rflags=0x");
+        write_hex_nowait(ops::vmread(GUEST_RFLAGS).unwrap_or(0));
+        serial::write_str_nowait(" cr4=0x");
+        write_hex_nowait(ops::vmread(GUEST_CR4).unwrap_or(0));
+        serial::write_str_nowait(" idtv=0x");
+        write_hex_nowait(ops::vmread(IDT_VECTORING_INFO).unwrap_or(0));
+        serial::write_str_nowait(" idtverr=0x");
+        write_hex_nowait(ops::vmread(IDT_VECTORING_ERROR_CODE).unwrap_or(0));
+        // SAFETY: STAR/LSTAR/SFMASK/KERNEL_GS_BASE are the syscall-path
+        // allow-list; Linux programs them via WRMSR HostPassthrough so host
+        // RDMSR is the guest's live value. Nested 8f62fea #DF dump.
+        // KANI-TARGET: guest-UEFI fatal-class syscall MSR dump (outside Proven Core).
+        serial::write_str_nowait(" lstar=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_LSTAR));
+        serial::write_str_nowait(" star=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_STAR));
+        serial::write_str_nowait(" sfmask=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_SFMASK));
+        serial::write_str_nowait(" gsbase=0x");
+        write_hex_nowait(cpu::rdmsr(msr_firewall::MSR_KERNEL_GS_BASE));
+        // After `sync_guest_efer_lma` (every VM-exit). Nested `2bebea7` stripped
+        // NXE on userspace RIP; post-hold dump must still show NXE.
+        serial::write_str_nowait(" efer=0x");
+        write_hex_nowait(ops::vmread(GUEST_IA32_EFER).unwrap_or(0));
+        serial::write_byte_nowait(b'\n');
+        // Walk only. Do not clone CEA into the user PGD (ADR-016).
+        let kpgd = guest_uefi_pti_kernel_pgd_gpa(cr3);
+        dump_linux_pt_walk_nowait("user-cr2", cr2, cr3);
+        dump_linux_pt_walk_nowait("user-idtr", idtr, cr3);
+        dump_linux_pt_walk_nowait("user-rip", rip, cr3);
+        dump_linux_pt_walk_nowait("user-rsp", rsp, cr3);
+        dump_linux_pt_walk_nowait("kern-cr2", cr2, kpgd);
+        dump_linux_pt_walk_nowait("kern-idtr", idtr, kpgd);
+        serial::write_line_nowait(
+            "boot: guest-UEFI linux fatal-class stop (not inject; not ISO-INSTALL-OK)",
+        );
+        return false;
+    }
+    LINUX_EXC_INJECT.store(true, Ordering::Release);
+    let mut bmp = guest_uefi_linux_exception_bitmap();
+    if vec < 32 {
+        bmp &= !(1u32 << vec);
+    }
+    let _ = ops::vmwrite(EXCEPTION_BITMAP, u64::from(bmp));
+    if deliver_code {
+        let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
+        let _ = ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, err);
+    }
+    let _ = ops::vmwrite(
+        VM_ENTRY_INTERRUPTION_INFO,
+        u64::from(guest_uefi_hw_exception_entry_info(vec, deliver_code)),
+    );
+    let n = PF_LINUX_DELIVER.fetch_add(1, Ordering::AcqRel);
+    if n == 0
+        && guest_uefi_linux_earlycon_share_on_linux_deliver(
+            true,
+            crate::devices::ide_cdrom::product_iso_window_armed(),
+        )
+    {
+        // linux earlycon share TX ring: HV ticks / scan bump enqueue so they
+        // do not wait THR_WAIT_SPINS while guest printk is live.
+        serial::set_linux_earlycon_share(true);
+    }
+    let linux_iso = guest_uefi_linux_earlycon_share_on_linux_deliver(
+        true,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    );
+    if n < 4 && !linux_iso {
+        // linux earlycon skip exc deliver (same hush as skip #PF dump).
+        serial::write_str("boot: guest-UEFI linux exc deliver n=");
+        write_dec(u64::from(n) + 1);
+        serial::write_str(" vec=0x");
+        write_hex(u64::from(vec));
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    true
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn handle_exception_nmi(intr: u64, rip: u64, linear: u64, qual: u64) -> bool {
     let valid = (intr & (1u64 << 31)) != 0;
     let vec = (intr & 0xff) as u8;
     if valid && vec == 6 {
+        if guest_uefi_pf_should_deliver_to_guest(rip) {
+            return handle_linux_hw_exception(6, false);
+        }
         return handle_ud(rip, linear);
+    }
+    if valid && vec == 13 && guest_uefi_pf_should_deliver_to_guest(rip) {
+        return handle_linux_hw_exception(13, true);
     }
     if valid && vec == 14 {
         return handle_pf(rip, linear, qual);
+    }
+    let linux = guest_uefi_linux_guest_active(
+        serial::linux_earlycon_share(),
+        guest_uefi_pf_should_deliver_to_guest(rip),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+    );
+    if valid && guest_uefi_linux_nmi_should_inject(linux, vec) {
+        return handle_linux_nmi();
+    }
+    if valid && linux {
+        // #DE/#AC/#XF inject (iron 1a2544d must not silent-stop after initrd).
+        // #DF/#TS/#NP/#SS stop: nested 8f62fea re-inject #DF → triple fault.
+        return handle_linux_hw_exception(vec, guest_uefi_linux_exc_error_code(vec));
     }
     let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
     let cs = ops::vmread(GUEST_CS_SELECTOR).unwrap_or(0);
@@ -3822,7 +8569,7 @@ unsafe fn handle_exception_nmi(intr: u64, rip: u64, linear: u64, qual: u64) -> b
 }
 
 /// Iron `101b8ec`: two 4G rebuilds at MEMFD then `fail=present` `pde=0x30646870`.
-/// Build at [`GUEST_UEFI_HV_PML4`] (`0x200000`), always (`force`).
+/// Build at [`GUEST_UEFI_HV_PML4`] (`0x400000`), always (`force`).
 #[cfg(target_os = "uefi")]
 unsafe fn guest_uefi_rebuild_sec_identity(
     ram_hpa: u64,
@@ -3884,6 +8631,38 @@ unsafe fn guest_uefi_split_low_ram_1g(walk: u64, ram_hpa: u64) {
     }
 }
 
+/// Inject the named post-WFE+state4 NULL-event `#PF` into firmware.
+/// Drop bitmap bit 14 so the inject does not re-exit. Park PIC/LAPIC
+/// via `PF_LINUX_CR2` only (do not set linux guest-active). Not
+/// `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn deliver_firmware_wfe_event_pf(cr2: u64, err: u64, rip: u64) -> bool {
+    // SAFETY: VMX-root; cr2 is the guest #PF linear (canonical -0x48).
+    // KANI-TARGET: firmware WFE event #PF inject (outside Proven Core).
+    cpu::write_cr2(cr2);
+    PF_LINUX_CR2.store(cr2, Ordering::Release);
+    let bmp = ops::vmread(EXCEPTION_BITMAP).unwrap_or(0);
+    let _ = ops::vmwrite(EXCEPTION_BITMAP, bmp & !GUEST_UEFI_EXC_BITMAP_PF);
+    let _ = ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, err);
+    let _ = ops::vmwrite(
+        VM_ENTRY_INTERRUPTION_INFO,
+        u64::from(guest_uefi_linux_pf_entry_info()),
+    );
+    if FIRMWARE_WFE_EVENT_PF
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        serial::write_str(GUEST_UEFI_WFE_EVENT_PF_PREFIX);
+        write_hex(cr2);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" r14=0x");
+        write_hex(SAVED_R14);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    true
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
     let err = ops::vmread(VM_EXIT_INTR_ERROR_CODE).unwrap_or(0);
@@ -3904,6 +8683,15 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
     } else {
         0
     };
+    let linux_iso = guest_uefi_linux_earlycon_share_on_linux_deliver(
+        guest_uefi_pf_should_deliver_to_guest(rip),
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    );
+    if linux_iso {
+        // linux earlycon skip #PF dump (iron 9a3cbfa dump + cpuid shredded printk).
+        serial::set_linux_earlycon_share(true);
+    }
+    if !linux_iso {
     serial::write_str("boot: guest-UEFI #PF cr2=0x");
     write_hex(cr2);
     serial::write_str(" err=0x");
@@ -3980,6 +8768,70 @@ unsafe fn handle_pf(rip: u64, linear: u64, cr2: u64) -> bool {
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
+    }
+    // ADR-016: injecting this #PF (steering firmware control flow) is a
+    // foreign-firmware state mutation. On iron 4e16b59 it made OVMF's own
+    // handler dump a real #PF then CpuDeadLoop. Disabled; the `#PF cr2=` dump
+    // above already records the fault read-only, and the guest then stops
+    // honestly instead of being steered into a NULL-event walk.
+    if !RAYNU_F_NO_FW_STATE_MUTATION
+        && guest_uefi_firmware_wfe_event_pf(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        guest_uefi_product_iso_pci_ready(
+            crate::devices::ide_cdrom::pci_enumerated(),
+            crate::devices::guest_virtio_blk::pci_enumerated(),
+        ),
+        crate::devices::ide_cdrom::ata_io_accesses(),
+        FIRMWARE_WFE_RETURN.load(Ordering::Acquire),
+        FIRMWARE_WFE_STATE4.load(Ordering::Acquire),
+        cr2,
+        rip,
+    ) {
+        return deliver_firmware_wfe_event_pf(cr2, err, rip);
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        // Iron e40bee0: long-mode Linux #PF on the direct map after extra
+        // DRAM + Loaded initrd. Do not rebuild OVMF identity tables.
+        // Drop #PF/#UD/#GP intercept first (injected #PF would re-exit;
+        // M3.10: leftover #UD intercept skips Linux ud2 / alternatives).
+        // Restore CR2, then VM-entry inject vector 14 so PIC/LAPIC cannot
+        // steal the entry. early_make_pgtable stays in the guest after this.
+        // SAFETY: VMX-root; cr2 is the guest #PF linear (canonical).
+        // KANI-TARGET: guest-UEFI Linux #PF CR2 restore (outside Proven Core).
+        cpu::write_cr2(cr2);
+        PF_LINUX_CR2.store(cr2, Ordering::Release);
+        LINUX_EXC_INJECT.store(true, Ordering::Release);
+        let _ = ops::vmwrite(
+            EXCEPTION_BITMAP,
+            u64::from(guest_uefi_linux_exception_bitmap()),
+        );
+        let _ = ops::vmwrite(VM_ENTRY_EXCEPTION_ERROR_CODE, err);
+        let _ = ops::vmwrite(
+            VM_ENTRY_INTERRUPTION_INFO,
+            u64::from(guest_uefi_linux_pf_entry_info()),
+        );
+        let n = PF_LINUX_DELIVER.fetch_add(1, Ordering::AcqRel);
+        if n == 0
+            && guest_uefi_linux_earlycon_share_on_linux_deliver(
+                true,
+                crate::devices::ide_cdrom::product_iso_window_armed(),
+            )
+        {
+            // linux earlycon share TX ring (iron 202312f e820 cut after
+            // blocking hypervisor-scan bump).
+            serial::set_linux_earlycon_share(true);
+        }
+        if n < 4 && !linux_iso {
+            serial::write_str("boot: guest-UEFI #PF linux deliver n=");
+            write_dec(u64::from(n) + 1);
+            serial::write_str(" cr2=0x");
+            write_hex(cr2);
+            serial::write_str(" err=0x");
+            write_hex(err);
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+        return true;
+    }
     if ram_hpa == 0 {
         return false;
     }
@@ -4329,6 +9181,9 @@ unsafe fn handle_cr(qual: u64) -> bool {
         (0, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR0).unwrap_or(0)),
         (3, 1) => set_cr_gpr(gpr, ops::vmread(GUEST_CR3).unwrap_or(0)),
         (4, 1) => set_cr_gpr(gpr, ops::vmread(CR4_READ_SHADOW).unwrap_or(0)),
+        // CR8 is emulated (no VMCS GUEST_CR8). Store: APIC_TPR = (val&0xF)<<4.
+        (8, 0) => crate::devices::lapic_virt::set_cr8(cr_gpr(gpr)),
+        (8, 1) => set_cr_gpr(gpr, crate::devices::lapic_virt::cr8()),
         _ => {}
     }
     skip_insn()
@@ -4383,6 +9238,353 @@ unsafe fn set_cr_gpr(idx: u8, val: u64) {
 }
 
 #[cfg(target_os = "uefi")]
+unsafe fn mmio_gpr_in(op: crate::devices::guest_virtio_blk::MmioInsn) -> u64 {
+    if op.size == 1 && !op.rex && (4..8).contains(&op.reg) {
+        (cr_gpr(op.reg - 4) >> 8) & 0xff
+    } else {
+        cr_gpr(op.reg)
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_gpr_out(op: crate::devices::guest_virtio_blk::MmioInsn, val: u64) {
+    if op.size == 1 && !op.rex && (4..8).contains(&op.reg) {
+        let g = op.reg - 4;
+        let old = cr_gpr(g);
+        set_cr_gpr(g, (old & !0xFF00) | ((val & 0xff) << 8));
+        return;
+    }
+    set_cr_gpr(
+        op.reg,
+        merge_mmio_gpr(cr_gpr(op.reg), val, op.size, op.zero_ext, op.sign_ext),
+    );
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_xmm_in(reg: u8) -> u128 {
+    let i = (reg as usize) & 15;
+    // SAFETY: SAVED_XMM is 16-byte aligned; VMX-root exclusive after trampoline.
+    // KANI-TARGET: guest-UEFI XMM snapshot (outside Proven Core).
+    core::ptr::read(SAVED_XMM.0.as_ptr().cast::<u128>().add(i))
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_xmm_out(reg: u8, val: u128) {
+    let i = (reg as usize) & 15;
+    // SAFETY: SAVED_XMM is 16-byte aligned; VMX-root exclusive before resume.
+    // KANI-TARGET: guest-UEFI XMM snapshot (outside Proven Core).
+    core::ptr::write(SAVED_XMM.0.as_mut_ptr().cast::<u128>().add(i), val);
+}
+
+/// TEST/CMP: update GUEST_RFLAGS, do not store. Returns true when handled.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_test_cmp(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> bool {
+    if !op.test && !op.cmp {
+        return false;
+    }
+    let rhs = if op.has_imm {
+        op.imm
+    } else {
+        mmio_gpr_in(op)
+    };
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let newf = if op.cmp {
+        let (left, right) = if op.cmp_reg_left {
+            (rhs, cur)
+        } else {
+            (cur, rhs)
+        };
+        crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, left, right, op.size)
+    } else {
+        crate::devices::guest_virtio_blk::mmio_test_rflags(oldf, cur & rhs, op.size)
+    };
+    let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+    true
+}
+
+/// ALU RMW: dest is MMIO (`left = mem`) or GPR (`alu_reg_left`). Updates RFLAGS.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_alu_result(op: crate::devices::guest_virtio_blk::MmioInsn, mem: u64) -> u64 {
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let cf = (oldf & 1) != 0;
+    if crate::devices::guest_virtio_blk::mmio_alu_is_scan(op.alu) {
+        let (idx, src_zero) = crate::devices::guest_virtio_blk::mmio_scan_apply(
+            mem,
+            op.size,
+            op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_BSR,
+        );
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_scan_rflags(oldf, src_zero),
+        );
+        if src_zero {
+            return mmio_gpr_in(op);
+        }
+        return idx;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_count_zero(op.alu) {
+        let (idx, src_zero) = if op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_TZCNT {
+            crate::devices::guest_virtio_blk::mmio_tzcnt_apply(mem, op.size)
+        } else {
+            crate::devices::guest_virtio_blk::mmio_lzcnt_apply(mem, op.size)
+        };
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_tzcnt_rflags(oldf, idx, src_zero),
+        );
+        return idx;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_popcnt(op.alu) {
+        let result = crate::devices::guest_virtio_blk::mmio_popcnt_apply(mem, op.size);
+        let src_zero = crate::devices::guest_virtio_blk::mmio_eq(mem, 0, op.size);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_popcnt_rflags(oldf, src_zero),
+        );
+        return result;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_shift(op.alu) {
+        let count = if op.has_imm {
+            op.imm
+        } else {
+            cr_gpr(1) & 0xff
+        };
+        let result = crate::devices::guest_virtio_blk::mmio_shift_apply(
+            mem, count, op.alu, op.size, cf,
+        );
+        let newf = crate::devices::guest_virtio_blk::mmio_shift_rflags(
+            oldf, mem, count, result, op.alu, op.size,
+        );
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        return result;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_double_shift(op.alu) {
+        let count = if op.has_imm {
+            op.imm
+        } else {
+            cr_gpr(1) & 0xff
+        };
+        let src = mmio_gpr_in(op);
+        let result = crate::devices::guest_virtio_blk::mmio_double_shift_apply(
+            mem, src, count, op.alu, op.size,
+        );
+        let newf = crate::devices::guest_virtio_blk::mmio_double_shift_rflags(
+            oldf, mem, src, count, result, op.alu, op.size,
+        );
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        return result;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+        let mut ax_src = op;
+        ax_src.reg = 0;
+        let ax = mmio_gpr_in(ax_src);
+        let signed = op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_IMUL1;
+        let (lo, hi, overflow) =
+            crate::devices::guest_virtio_blk::mmio_mul_pair_apply(ax, mem, op.size, signed);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_imul_rflags(oldf, overflow),
+        );
+        let mut dest = op;
+        dest.reg = 0;
+        dest.size = if op.size == 1 { 2 } else { op.size };
+        dest.zero_ext = dest.size == 4;
+        dest.rex = true;
+        mmio_gpr_out(dest, lo);
+        if op.size > 1 {
+            dest.reg = 2;
+            mmio_gpr_out(dest, hi);
+        }
+        return lo;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_imul(op.alu) {
+        let gpr = mmio_gpr_in(op);
+        let (left, right) = if op.has_imm {
+            (mem, op.imm)
+        } else {
+            (gpr, mem)
+        };
+        let (result, overflow) =
+            crate::devices::guest_virtio_blk::mmio_imul_apply(left, right, op.size);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            crate::devices::guest_virtio_blk::mmio_imul_rflags(oldf, overflow),
+        );
+        return result;
+    }
+    let other = if op.has_imm {
+        op.imm
+    } else {
+        mmio_gpr_in(op)
+    };
+    let (left, right) = if op.alu_reg_left {
+        (other, mem)
+    } else {
+        (mem, other)
+    };
+    let result =
+        crate::devices::guest_virtio_blk::mmio_alu_apply_cf(left, right, op.alu, cf);
+    let newf = crate::devices::guest_virtio_blk::mmio_alu_rflags(
+        oldf, left, right, result, op.alu, op.size,
+    );
+    let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+    result
+}
+
+/// DIV/IDIV into AX or DX:AX. Returns false when the guest must take #DE.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_div_pair_commit(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    mem: u64,
+) -> bool {
+    let mut ax_src = op;
+    ax_src.reg = 0;
+    let ax = mmio_gpr_in(ax_src);
+    let dx = if op.size > 1 {
+        let mut dx_src = op;
+        dx_src.reg = 2;
+        mmio_gpr_in(dx_src)
+    } else {
+        0
+    };
+    let signed = op.alu == crate::devices::guest_virtio_blk::MMIO_ALU_IDIV;
+    let Some((lo, hi)) =
+        crate::devices::guest_virtio_blk::mmio_div_apply(ax, dx, mem, op.size, signed)
+    else {
+        return false;
+    };
+    let mut dest = op;
+    dest.reg = 0;
+    dest.size = if op.size == 1 { 2 } else { op.size };
+    dest.zero_ext = dest.size == 4;
+    dest.rex = true;
+    mmio_gpr_out(dest, lo);
+    if op.size > 1 {
+        dest.reg = 2;
+        mmio_gpr_out(dest, hi);
+    }
+    true
+}
+
+/// Inject #DE at the faulting RIP. Do not skip the insn (SDM: #DE has no error code).
+#[cfg(target_os = "uefi")]
+unsafe fn inject_mmio_div_de() -> bool {
+    let _ = ops::vmwrite(
+        VM_ENTRY_INTERRUPTION_INFO,
+        crate::devices::guest_virtio_blk::MMIO_DIV_DE_INTR_INFO,
+    );
+    true
+}
+
+/// BT/BTS/BTR/BTC: CF = old bit; store for all but BT. Returns new mem value.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_bt(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> u64 {
+    let bit = if op.has_imm {
+        op.imm
+    } else {
+        mmio_gpr_in(op)
+    };
+    let (new, was) =
+        crate::devices::guest_virtio_blk::mmio_bt_apply(cur, bit, op.size, op.bt);
+    let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let _ = ops::vmwrite(
+        GUEST_RFLAGS,
+        crate::devices::guest_virtio_blk::mmio_bt_rflags(oldf, was),
+    );
+    new
+}
+
+/// CMPXCHG / XADD / CMPXCHG8B. Returns `Some(new_mem)` when MMIO must be stored.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_atomic(
+    op: crate::devices::guest_virtio_blk::MmioInsn,
+    cur: u64,
+) -> Option<u64> {
+    if op.atomic == crate::devices::guest_virtio_blk::MMIO_CMPXCHG {
+        let mut acc = op;
+        acc.reg = 0;
+        acc.zero_ext = op.size == 4;
+        let a = mmio_gpr_in(acc);
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let newf =
+            crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, a, cur, op.size);
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        if crate::devices::guest_virtio_blk::mmio_eq(a, cur, op.size) {
+            Some(mmio_gpr_in(op))
+        } else {
+            mmio_gpr_out(acc, cur);
+            None
+        }
+    } else if op.atomic == crate::devices::guest_virtio_blk::MMIO_XADD {
+        let r = mmio_gpr_in(op);
+        let sum = crate::devices::guest_virtio_blk::mmio_alu_apply(
+            cur,
+            r,
+            crate::devices::guest_virtio_blk::MMIO_ALU_ADD,
+        );
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let newf = crate::devices::guest_virtio_blk::mmio_alu_rflags(
+            oldf,
+            cur,
+            r,
+            sum,
+            crate::devices::guest_virtio_blk::MMIO_ALU_ADD,
+            op.size,
+        );
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        mmio_gpr_out(op, cur);
+        Some(sum)
+    } else if op.atomic == crate::devices::guest_virtio_blk::MMIO_CMPXCHG8B {
+        let mut half = op;
+        half.size = 4;
+        half.zero_ext = true;
+        half.rex = true;
+        half.reg = 0;
+        let eax = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 2;
+        let edx = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 3;
+        let ebx = mmio_gpr_in(half) & 0xffff_ffff;
+        half.reg = 1;
+        let ecx = mmio_gpr_in(half) & 0xffff_ffff;
+        let acc = (edx << 32) | eax;
+        let desired = (ecx << 32) | ebx;
+        let (out, matched) =
+            crate::devices::guest_virtio_blk::mmio_cmpxchg8b_apply(cur, acc, desired);
+        let oldf = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+        let newf =
+            crate::devices::guest_virtio_blk::mmio_cmp_rflags(oldf, acc, cur, 8);
+        let _ = ops::vmwrite(GUEST_RFLAGS, newf);
+        if matched {
+            Some(out)
+        } else {
+            half.reg = 0;
+            mmio_gpr_out(half, cur);
+            half.reg = 2;
+            mmio_gpr_out(half, cur >> 32);
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// CMOVcc: GPR = mem if taken. SETcc: Some(0/1) to store.
+#[cfg(target_os = "uefi")]
+unsafe fn mmio_apply_cc(op: crate::devices::guest_virtio_blk::MmioInsn, cur: u64) -> Option<u64> {
+    let flags = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
+    let taken = crate::devices::guest_virtio_blk::mmio_cc_taken(op.cc, flags);
+    if op.is_write {
+        Some(if taken { 1 } else { 0 })
+    } else {
+        if taken {
+            mmio_gpr_out(op, cur);
+        }
+        None
+    }
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn skip_rel8_if(linear: u64, rip: u64, pred: fn(u8, u8) -> bool) -> bool {
     let mut buf = [0u8; 2];
     if copy_guest_identity_bytes(linear, &mut buf) < 2 {
@@ -4420,6 +9622,100 @@ unsafe fn peek_low_u64(linear: u64) -> u64 {
     u64::from_le_bytes(le)
 }
 
+/// Peek CpuSleep caller at `[RSP]`. `hlt; ret` so the slot is the return
+/// address. Iron COM2 `2d4ab51` `ret=0x7ff0e055`. firmware ConIn CR.
+#[cfg(target_os = "uefi")]
+unsafe fn peek_hlt_retaddr() -> u64 {
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let mut buf = [0u8; 8];
+    let n = copy_guest_linear_bytes(rsp, &mut buf);
+    if n < 4 {
+        return 0;
+    }
+    let long = guest_uefi_cs_ar_is_long(ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0));
+    let slot = if n >= 8 {
+        u64::from_le_bytes(buf)
+    } else {
+        u64::from(u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]))
+    };
+    guest_uefi_cpusleep_retaddr(slot, long)
+}
+
+fn note_hlt_retaddr() -> u64 {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: guest-UEFI is VMX-halted on this HLT exit; RSP is the
+        // firmware CpuSleep frame (`hlt; ret`).
+        // KANI-TARGET: HLT retaddr peek (outside Proven Core).
+        let v = unsafe { peek_hlt_retaddr() };
+        LAST_HLT_RET.store(v, Ordering::Release);
+        v
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        LAST_HLT_RET.load(Ordering::Acquire)
+    }
+}
+
+/// Peek 8 bytes at `ret-8` (call site before CpuSleep return).
+/// Iron COM2 `6c4bfde` ConIn CR still `ataio=0`. print HLT callsite.
+#[cfg(target_os = "uefi")]
+unsafe fn peek_hlt_callsite() -> u64 {
+    let ret = LAST_HLT_RET.load(Ordering::Acquire);
+    if ret < 8 {
+        return 0;
+    }
+    let mut buf = [0u8; 8];
+    let n = copy_guest_linear_bytes(ret - 8, &mut buf);
+    if n < 8 {
+        return 0;
+    }
+    guest_uefi_cpusleep_callsite(buf)
+}
+
+fn note_hlt_callsite() -> u64 {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: guest-UEFI is VMX-halted; retaddr already peeked.
+        // KANI-TARGET: HLT callsite peek (outside Proven Core).
+        let v = unsafe { peek_hlt_callsite() };
+        LAST_HLT_CALL.store(v, Ordering::Release);
+        v
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        LAST_HLT_CALL.load(Ordering::Acquire)
+    }
+}
+
+/// Unwind DxeCore WaitForEvent as EFI_SUCCESS. Iron COM2 `0b770cd`
+/// `rethx=0xe056ff41b84d8b48` still `ataio=0`. firmware WaitForEvent
+/// return. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn apply_waitforevent_return() -> Option<u64> {
+    let rbp = SAVED_RBP;
+    let mut buf = [0u8; 8];
+    if copy_guest_linear_bytes(rbp, &mut buf) < 8 {
+        return None;
+    }
+    let prev_rbp = u64::from_le_bytes(buf);
+    if copy_guest_linear_bytes(rbp.wrapping_add(8), &mut buf) < 8 {
+        return None;
+    }
+    let caller = u64::from_le_bytes(buf);
+    let (rip, rsp) = guest_uefi_waitforevent_leave(rbp, prev_rbp, caller)?;
+    SAVED_RAX = 0;
+    SAVED_RBP = prev_rbp;
+    if ops::vmwrite(GUEST_RIP, rip).is_err() || ops::vmwrite(GUEST_RSP, rsp).is_err() {
+        return None;
+    }
+    let _ = ops::vmwrite(
+        GUEST_ACTIVITY_STATE,
+        guest_uefi_firmware_hlt_activity_active(),
+    );
+    Some(rip)
+}
+
 /// Store an 8-byte PTE into 32 MiB identity or a mapped report-RAM window.
 #[cfg(target_os = "uefi")]
 unsafe fn poke_guest_u64(linear: u64, val: u64) -> bool {
@@ -4437,7 +9733,7 @@ unsafe fn poke_guest_u64(linear: u64, val: u64) -> bool {
     if !guest_uefi_report_ram_should_map(linear) {
         return false;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return false;
     }
@@ -4867,8 +10163,10 @@ unsafe fn dump_assert_deadloop_once(linear: u64) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
-    let mut buf = [0u8; 8];
-    let n = copy_guest_identity_bytes(linear, &mut buf);
+    let mut buf = [0u8; 16];
+    // High-half Linux RIP is not identity (nested f1afc27 delay_loop).
+    // Walk guest CR3 the same as the tick insn dump.
+    let n = copy_guest_linear_bytes(linear, &mut buf);
     if n == 0 {
         return false;
     }
@@ -4876,17 +10174,74 @@ unsafe fn skip_preempt_deadloop(linear: u64, rip: u64) -> bool {
         dump_assert_deadloop_once(linear);
         return false;
     }
+    // Iron d0e44d4: skip-12 of endbr64+cmp [rip],4 is a no-op
+    // (falls into mov rax,3). The gState=4 poke is a foreign-firmware state
+    // mutation — disabled per ADR-016 (it fed the 9474ab6 NULL-event #PF).
+    if !RAYNU_F_NO_FW_STATE_MUTATION {
+        let _ = try_firmware_wfe_state4_poke(rip, &buf[..n]);
+    }
     let len = u64::from(preempt_deadloop_skip_len(&buf[..n]));
     if len == 0 {
         return false;
     }
+    // Inner skip-5 lands on `3: dec %rax; jnz 1b`. RAX=1 → 3: becomes 0
+    // and falls through to ret. Skip-10 already lands on ret.
+    if preempt_deadloop_delay_loop_sets_rax_one(&buf[..n]) {
+        SAVED_RAX = 1;
+        if LINUX_DELAY_LOOP_SKIP
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            serial::write_line(
+                "boot: guest-UEFI linux delay_loop skip (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
+    }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
+}
+
+/// Host-store 4 at the RIP-relative `cmp [rip],4` dest after WFE.
+/// Do not skip RIP. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn try_firmware_wfe_state4_poke(rip: u64, bytes: &[u8]) -> bool {
+    let Some(dest) = guest_uefi_firmware_wfe_state4_dest(rip, bytes) else {
+        return false;
+    };
+    if !guest_uefi_firmware_wfe_state4_poke(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        guest_uefi_product_iso_pci_ready(
+            crate::devices::ide_cdrom::pci_enumerated(),
+            crate::devices::guest_virtio_blk::pci_enumerated(),
+        ),
+        crate::devices::ide_cdrom::ata_io_accesses(),
+        FIRMWARE_WFE_RETURN.load(Ordering::Acquire),
+        FIRMWARE_WFE_STATE4.load(Ordering::Acquire),
+        dest,
+    ) {
+        return false;
+    }
+    if FIRMWARE_WFE_STATE4
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return false;
+    }
+    if !poke_guest_u64(dest, GUEST_UEFI_WFE_STATE4_VAL) {
+        FIRMWARE_WFE_STATE4.store(false, Ordering::Release);
+        return false;
+    }
+    serial::write_str(GUEST_UEFI_WFE_STATE4_POKE_PREFIX);
+    write_hex(dest);
+    serial::write_str(" rip=0x");
+    write_hex(rip);
+    serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    true
 }
 
 #[cfg(target_os = "uefi")]
 unsafe fn dump_low_ram_insn(linear: u64) {
     let mut buf = [0u8; 16];
-    let n = copy_guest_identity_bytes(linear, &mut buf);
+    let n = copy_guest_linear_bytes(linear, &mut buf);
     for i in 0..n {
         write_hex2(buf[i]);
     }
@@ -4966,15 +10321,186 @@ fn write_hex2(b: u8) {
 #[cfg(target_os = "uefi")]
 unsafe fn skip_insn() -> bool {
     let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
-    let len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
-    if len == 0 || len > 15 {
+    let vmcs = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    // Prefer VMCS 1-15, then this-exit MMIO scratch (zeroed at vmexit so
+    // CPUID/HLT/INVLPG cannot consume a prior BAR length). High-half
+    // virtio MMIO still skips via that scratch when copy_mmio_insn ran.
+    let mut len = guest_uefi_mmio_skip_len(vmcs, MMIO_INSN_LEN.load(Ordering::Relaxed));
+    if len == 0 && guest_uefi_pf_should_deliver_to_guest(rip) {
+        let mut buf = [0u8; 16];
+        let n = copy_guest_linear_bytes(rip, &mut buf);
+        len = guest_uefi_linux_fixed_skip_len(&buf[..n]);
+    }
+    if len == 0 {
         return false;
     }
     ops::vmwrite(GUEST_RIP, rip.wrapping_add(len)).is_ok()
 }
 
+/// 2-byte intercept skip: VMCS len, else decode, else high-half +2.
+/// CPUID / RDMSR / WRMSR / RDTSC / INVD / WBINVD / PAUSE.
 #[cfg(target_os = "uefi")]
-unsafe fn store_guest_io(linear: u64, size: u8, val: u64) -> bool {
+unsafe fn skip_cpuid_msr() -> bool {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let mut skipped = skip_insn();
+    if !skipped {
+        let extra = guest_uefi_linux_cpuid_msr_skip(rip, 0, &[]);
+        if extra != 0 {
+            let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+            if k < 8 {
+                serial::write_str("boot: guest-UEFI linux skip-2 n=");
+                write_dec(u64::from(k) + 1);
+                serial::write_str(" rip=0x");
+                write_hex(rip);
+                serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+            }
+            skipped = ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok();
+        }
+    }
+    let after = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let force = guest_uefi_linux_cpuid_force_skip(rip, after);
+    if force != 0 {
+        let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+        if k < 8 {
+            serial::write_str("boot: guest-UEFI linux skip-2 force n=");
+            write_dec(u64::from(k) + 1);
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+        return ops::vmwrite(GUEST_RIP, rip.wrapping_add(force)).is_ok();
+    }
+    skipped
+}
+
+/// HLT: skip VMCS len, else `F4`, else high-half +1.
+#[cfg(target_os = "uefi")]
+unsafe fn skip_hlt() -> bool {
+    if skip_insn() {
+        return true;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let extra = guest_uefi_linux_hlt_skip(rip, 0, &[]);
+    if extra == 0 {
+        return false;
+    }
+    let k = LINUX_SKIP2.fetch_add(1, Ordering::AcqRel);
+    if k < 8 {
+        serial::write_str("boot: guest-UEFI linux skip-1 n=");
+        write_dec(u64::from(k) + 1);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra)).is_ok()
+}
+
+/// INVLPG: VMCS len, else decode `0F 01 /7`. Empty fetch does not guess.
+#[cfg(target_os = "uefi")]
+unsafe fn skip_invlpg() -> bool {
+    if skip_insn() {
+        return true;
+    }
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let k = LINUX_INVLPG_MISS.fetch_add(1, Ordering::AcqRel);
+    if k < 8 {
+        serial::write_str("boot: guest-UEFI linux invlpg miss n=");
+        write_dec(u64::from(k) + 1);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    false
+}
+
+/// Fetch MMIO instruction bytes at CS.base+RIP (or RIP in 64-bit CS).
+/// If that miss is outside flash but GUEST_RIP is inside, peek RIP.
+/// Returns `(fetched_n, effective_len)` where `effective_len` is VMCS 1–15
+/// or the length decoded from those bytes when VMCS `insn_len` is 0.
+#[cfg(target_os = "uefi")]
+unsafe fn copy_mmio_insn(buf: &mut [u8]) -> (usize, u64) {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let cs_base = ops::vmread(GUEST_CS_BASE).unwrap_or(0);
+    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
+    let long64 = guest_uefi_cs_ar_is_long(ar);
+    let peek = guest_uefi_mmio_peek_linear(rip, cs_base, long64);
+    let mut n = copy_guest_linear_bytes(peek, buf);
+    if n == 0 && rip != peek {
+        n = copy_guest_linear_bytes(rip, buf);
+    }
+    let vmcs_len = ops::vmread(VM_EXIT_INSTRUCTION_LEN).unwrap_or(0);
+    let effective = crate::devices::guest_virtio_blk::mmio_effective_len(
+        &buf[..n],
+        vmcs_len,
+        long64,
+    );
+    MMIO_INSN_LEN.store(effective, Ordering::Relaxed);
+    (n, effective)
+}
+
+/// Save identity dest bytes then latch restore for the next VM-exit.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn save_fwcfg_identity_overlay(dest: u64, nbytes: usize) -> bool {
+    if nbytes == 0 || nbytes > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize {
+        return false;
+    }
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 {
+        return false;
+    }
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: fw_cfg identity overlay save (outside Proven Core).
+    let ram = core::slice::from_raw_parts_mut(hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    // SAFETY: exclusive overlay slot; single vCPU; firmware halted in VMX.
+    let saved = unsafe { &mut FWCFG_OVERLAY_SAVED[..nbytes] };
+    if !copy_low_ram_bytes(ram, dest, saved) {
+        return false;
+    }
+    FWCFG_OVERLAY_GPA.store(dest, Ordering::Release);
+    FWCFG_OVERLAY_N.store(nbytes as u64, Ordering::Release);
+    FWCFG_OVERLAY_PENDING.store(true, Ordering::Release);
+    true
+}
+
+/// Restore PTEs smashed by a 4-byte QEMU signature overlay.
+/// fw_cfg identity overlay. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn restore_fwcfg_identity_overlay() {
+    if !FWCFG_OVERLAY_PENDING.swap(false, Ordering::AcqRel) {
+        return;
+    }
+    let dest = FWCFG_OVERLAY_GPA.load(Ordering::Acquire);
+    let n = FWCFG_OVERLAY_N.load(Ordering::Acquire) as usize;
+    if n == 0 || n > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP as usize {
+        return;
+    }
+    let hpa = RAM_HPA.load(Ordering::Acquire);
+    if hpa == 0 {
+        return;
+    }
+    // SAFETY: exclusive guest-UEFI 32 MiB RAM slab; firmware is halted in VMX.
+    // KANI-TARGET: fw_cfg identity overlay restore (outside Proven Core).
+    let ram = core::slice::from_raw_parts_mut(hpa as *mut u8, GUEST_UEFI_LOW_RAM_BYTES as usize);
+    // SAFETY: exclusive overlay slot; single vCPU; firmware halted in VMX.
+    let saved = unsafe { &FWCFG_OVERLAY_SAVED[..n] };
+    let _ = guest_uefi_fwcfg_identity_overlay_restore(ram, dest, saved);
+    static RESTORED: AtomicBool = AtomicBool::new(false);
+    if !RESTORED.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: guest-UEFI fw_cfg identity overlay restore dest=0x");
+        write_hex(dest);
+        serial::write_str(" n=");
+        write_dec(n as u64);
+        serial::write_str(" (not ISO-INSTALL-OK)");
+        serial::write_byte(b'\n');
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn store_guest_io(linear: u64, size: u8, val: u64, allow_identity: bool) -> bool {
+    if !allow_identity && !guest_uefi_io_string_dest_ok(linear) {
+        return false;
+    }
     if linear < GUEST_UEFI_LOW_RAM_BYTES {
         let hpa = RAM_HPA.load(Ordering::Acquire);
         if hpa == 0 {
@@ -4988,7 +10514,11 @@ unsafe fn store_guest_io(linear: u64, size: u8, val: u64) -> bool {
     if !guest_uefi_report_ram_should_map(linear) {
         return false;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    // Iron COM2: GRUB `rep insw` into GCD heap never EPT-walks, so an
+    // unmapped report-RAM GPA silently dropped ATAPI bytes (EFI stub
+    // gzip Z_DATA_ERROR with a full-looking PIO). PUSH/POP / virtqueue
+    // share [`report_ram_hpa_lookup_or_map`]. Do not invent HPA (ADR-004).
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return false;
     }
@@ -5014,7 +10544,7 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     if !guest_uefi_report_ram_should_map(linear) {
         return None;
     }
-    let hpa = report_ram_hpa_lookup(linear);
+    let hpa = report_ram_hpa_lookup_or_map(linear);
     if hpa == 0 {
         return None;
     }
@@ -5024,8 +10554,266 @@ unsafe fn load_guest_io(linear: u64, size: u8) -> Option<u64> {
     load_report_ram_at(page, linear, size)
 }
 
+/// RayNu-F service call (ADR-016): `out dx, eax` to port `0x5246` from a
+/// trampoline in **our own** firmware tables. EAX = service id; args are
+/// `RCX / R10 / R8 / R9` (the stub moved RDX to R10 before loading DX).
+/// We perform the service against guest memory we own and return
+/// `EFI_STATUS` in RAX. This is our contract, not a foreign firmware's —
+/// nothing here forces another firmware's internal state.
+#[cfg(target_os = "uefi")]
+unsafe fn handle_raynu_f_service() -> bool {
+    struct Mem;
+    impl crate::raynu_f::GuestMem for Mem {
+        fn read(&self, addr: u64, buf: &mut [u8]) -> usize {
+            // SAFETY: the guest is VMX-halted on this I/O exit; the walk uses
+            // its live CR3 the same way the insn-dump path does.
+            // KANI-TARGET: RayNu-F guest CHAR16 read (outside Proven Core).
+            unsafe { copy_guest_linear_bytes(addr, buf) }
+        }
+        fn write(&self, addr: u64, buf: &[u8]) -> usize {
+            // SAFETY: same walk as `read`; only RayNu-F-owned guest RAM.
+            // KANI-TARGET: RayNu-F guest OUT-param write (outside Proven Core).
+            if unsafe { write_guest_linear_bytes(addr, buf) } {
+                buf.len()
+            } else {
+                0
+            }
+        }
+    }
+    struct Sink;
+    impl crate::raynu_f::ConsoleSink for Sink {
+        fn write_byte(&mut self, b: u8) {
+            serial::write_byte(b);
+        }
+        fn has_input(&self) -> bool {
+            if RAYNU_F_PENDING_RX.load(Ordering::Acquire) != 0x100 {
+                return true;
+            }
+            if let Some(b) = serial::try_read_byte() {
+                RAYNU_F_PENDING_RX.store(u32::from(b), Ordering::Release);
+                return true;
+            }
+            false
+        }
+        fn read_input(&mut self) -> Option<u8> {
+            if !self.has_input() {
+                return None;
+            }
+            let b = RAYNU_F_PENDING_RX.swap(0x100, Ordering::AcqRel);
+            Some(b as u8)
+        }
+    }
+    /// Owned firmware clock: TSC over the pre-EBS calibrated rate.
+    struct Tsc {
+        hz: u64,
+    }
+    impl crate::raynu_f::TimeSource for Tsc {
+        fn now_100ns(&self) -> u64 {
+            // ticks * 10_000_000 / hz, without overflow for ~5 years of TSC.
+            let t = cpu::rdtsc();
+            (t / self.hz).saturating_mul(10_000_000)
+                + ((t % self.hz).saturating_mul(10_000_000)) / self.hz
+        }
+    }
+    let mut hz = crate::boot::raynu_f_flag::tsc_hz();
+    if hz == 0 {
+        hz = 1_000_000_000;
+        if !RAYNU_F_CLOCK_WARNED.swap(true, Ordering::AcqRel) {
+            serial::write_line("boot: RayNu-F WARN clock uncalibrated; assuming 1 GHz TSC");
+        }
+    }
+    let clock = Tsc { hz };
+    let id = crate::raynu_f::ServiceId(SAVED_RAX as u32);
+    let args = crate::raynu_f::ServiceArgs {
+        a1: SAVED_RCX,
+        a2: SAVED_R10,
+        a3: SAVED_R8,
+        a4: SAVED_R9,
+        rsp: ops::vmread(GUEST_RSP).unwrap_or(0),
+    };
+    // SAFETY: BSP-only firmware state; guest halted on this exit (see decl).
+    // KANI-TARGET: RayNu-F firmware state mutation (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+    let d = crate::raynu_f::dispatch(
+        id,
+        args,
+        &Mem,
+        &mut Sink,
+        st,
+        &clock,
+        GUEST_UEFI_LOW_RAM_BYTES,
+    );
+    SAVED_RAX = d.status;
+    if d.alloc_ok && !RAYNU_F_MEM_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_MEM_OK_MARKER);
+    }
+    if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::TimerFired(_)))
+        && !RAYNU_F_TIMER_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(crate::raynu_f::RAYNU_F_TIMER_OK_MARKER);
+    }
+    if d.block_io_ok && !RAYNU_F_BLOCKIO_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_BLOCKIO_OK_MARKER);
+    }
+    if matches!(d.wait, Some(crate::raynu_f::WaitOutcome::Stuck)) {
+        serial::write_line("boot: RayNu-F WARN WaitForEvent had nothing that could signal (EFI_TIMEOUT)");
+    }
+    if d.exited_boot_services && !RAYNU_F_EBS_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_EBS_OK_MARKER);
+        raynu_f_linux_handoff();
+    }
+    let n = RAYNU_F_CALLS.fetch_add(1, Ordering::AcqRel);
+    // Log the opening sequence, then every non-success (capped) — that is the
+    // diagnostic that names which service a real bootloader needs next.
+    // A key poll returning EFI_NOT_READY is the loader waiting, not a
+    // failure; do not let it burn the error-log budget (nested 2d34fff:
+    // GRUB's "Press any key" loop was 524k of them).
+    let key_poll = id == crate::raynu_f::ServiceId::ConInReadKeyStroke
+        && d.status == crate::raynu_f::EFI_NOT_READY;
+    let failed = d.status != crate::raynu_f::EFI_SUCCESS && !key_poll;
+    let show = n < 24
+        || (failed && RAYNU_F_SVC_ERRS.fetch_add(1, Ordering::AcqRel) < 32);
+    if show {
+        serial::write_str("boot: RayNu-F svc=");
+        serial::write_str(id.name());
+        serial::write_str(" id=0x");
+        write_hex_u32(id.0);
+        serial::write_str(" status=0x");
+        write_hex(d.status);
+        if failed {
+            // The arguments name *what* the loader asked for (type, pages,
+            // address, GUID pointer) — that is the next thing to implement.
+            serial::write_str(" a1=0x");
+            write_hex(args.a1);
+            serial::write_str(" a2=0x");
+            write_hex(args.a2);
+            serial::write_str(" a3=0x");
+            write_hex(args.a3);
+            serial::write_str(" a4=0x");
+            write_hex(args.a4);
+            // Protocol lookups: name the GUID the loader wanted.
+            let guid_ptr = match id {
+                crate::raynu_f::ServiceId::LocateProtocol => Some(args.a1),
+                crate::raynu_f::ServiceId::HandleProtocol
+                | crate::raynu_f::ServiceId::OpenProtocol
+                | crate::raynu_f::ServiceId::LocateHandle
+                | crate::raynu_f::ServiceId::LocateHandleBuffer => Some(args.a2),
+                _ => None,
+            };
+            if let Some(p) = guid_ptr {
+                let mut g = [0u8; 16];
+                if p != 0 && crate::raynu_f::GuestMem::read(&Mem, p, &mut g) == 16 {
+                    // Canonical text form: LE u32, LE u16, LE u16, then bytes.
+                    serial::write_str(" guid=");
+                    for i in (0..4).rev() {
+                        write_hex2(g[i]);
+                    }
+                    serial::write_byte(b'-');
+                    write_hex2(g[5]);
+                    write_hex2(g[4]);
+                    serial::write_byte(b'-');
+                    write_hex2(g[7]);
+                    write_hex2(g[6]);
+                    serial::write_byte(b'-');
+                    for b in &g[8..16] {
+                        write_hex2(*b);
+                    }
+                }
+            }
+        }
+        serial::write_line(" (ADR-016; not ISO-INSTALL-OK)");
+    }
+    if id == crate::raynu_f::ServiceId::ConOutOutputString
+        && d.status == crate::raynu_f::EFI_SUCCESS
+        && d.chars_out > 0
+        && !RAYNU_F_CONOUT_LOGGED.swap(true, Ordering::AcqRel)
+    {
+        serial::write_line(crate::raynu_f::RAYNU_F_CONOUT_OK_MARKER);
+    }
+    if d.file_read_ok && !RAYNU_F_FS_LOGGED.swap(true, Ordering::AcqRel) {
+        serial::write_line(crate::raynu_f::RAYNU_F_FS_OK_MARKER);
+    }
+    // StartImage: hand control to the loaded image instead of returning. The
+    // caller's return address is still at [RSP] (the stub only did mov/mov/
+    // out), so the image's own `ret` lands back after the StartImage call.
+    // Exit: the started image is done (the Linux EFI stub calls this when
+    // efi_stub_entry() fails). Unwind to the StartImage caller: its RSP still
+    // points at the return address it pushed, its callee-saved GPRs were
+    // snapshotted at StartImage, and ExitStatus goes back in RAX.
+    if let Some(status) = d.exit_image {
+        let ctx = &RAYNU_F_START_CTX;
+        let rsp = ctx.rsp.load(Ordering::Acquire);
+        let mut ret = [0u8; 8];
+        if rsp != 0 && crate::raynu_f::GuestMem::read(&Mem, rsp, &mut ret) == 8 {
+            let ret = u64::from_le_bytes(ret);
+            SAVED_RAX = status;
+            SAVED_RBX = ctx.rbx.load(Ordering::Acquire);
+            SAVED_RBP = ctx.rbp.load(Ordering::Acquire);
+            SAVED_RSI = ctx.rsi.load(Ordering::Acquire);
+            SAVED_RDI = ctx.rdi.load(Ordering::Acquire);
+            SAVED_R12 = ctx.r12.load(Ordering::Acquire);
+            SAVED_R13 = ctx.r13.load(Ordering::Acquire);
+            SAVED_R14 = ctx.r14.load(Ordering::Acquire);
+            SAVED_R15 = ctx.r15.load(Ordering::Acquire);
+            if ops::vmwrite(GUEST_RSP, rsp.wrapping_add(8)).is_ok()
+                && ops::vmwrite(GUEST_RIP, ret).is_ok()
+            {
+                serial::write_str("boot: RayNu-F Exit status=0x");
+                write_hex(status);
+                serial::write_str(" -> StartImage caller rip=0x");
+                write_hex(ret);
+                serial::write_line(" (F6-prep; not ISO-INSTALL-OK)");
+                return true;
+            }
+        }
+        serial::write_line("boot: RayNu-F WARN Exit could not unwind to the StartImage caller");
+    }
+    if let Some((entry, handle)) = d.start_image {
+        let ctx = &RAYNU_F_START_CTX;
+        ctx.rsp.store(args.rsp, Ordering::Release);
+        ctx.rbx.store(SAVED_RBX, Ordering::Release);
+        ctx.rbp.store(SAVED_RBP, Ordering::Release);
+        ctx.rsi.store(SAVED_RSI, Ordering::Release);
+        ctx.rdi.store(SAVED_RDI, Ordering::Release);
+        ctx.r12.store(SAVED_R12, Ordering::Release);
+        ctx.r13.store(SAVED_R13, Ordering::Release);
+        ctx.r14.store(SAVED_R14, Ordering::Release);
+        ctx.r15.store(SAVED_R15, Ordering::Release);
+        SAVED_RCX = handle;
+        SAVED_RDX = st.system_table;
+        if ops::vmwrite(GUEST_RIP, entry).is_ok() {
+            if !RAYNU_F_START_IMAGE_LOGGED.swap(true, Ordering::AcqRel) {
+                serial::write_str("boot: RayNu-F StartImage entry=0x");
+                write_hex(entry);
+                serial::write_str(" handle=0x");
+                write_hex(handle);
+                serial::write_line(" (F5; not ISO-INSTALL-OK)");
+                serial::write_line(crate::raynu_f::RAYNU_F_START_IMAGE_OK_MARKER);
+                if RAYNU_F_STAGED_FROM_DISK.load(Ordering::Acquire) {
+                    serial::write_line(crate::raynu_f::RAYNU_F_DISK_BOOT_OK_MARKER);
+                }
+            }
+            return true;
+        }
+        serial::write_line("boot: RayNu-F WARN StartImage VMWRITE(RIP) failed");
+    }
+    false
+}
+
 #[cfg(target_os = "uefi")]
 unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
+    if RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire)
+        && crate::devices::ide_cdrom::product_iso_window_armed()
+    {
+        if let Some(src) = crate::devices::guest_platform::reset_request_from_io(
+            port,
+            is_in,
+            size,
+            SAVED_RAX,
+        ) {
+            raynu_f_on_guest_reset(src);
+        }
+    }
     if is_pci_config_port(port) || crate::devices::ide_cdrom::is_pci_data_port(port) {
         PCI_CONFIG_SEEN.store(true, Ordering::Release);
         maybe_print_past_sec(false);
@@ -5081,6 +10869,10 @@ unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
         handle_debugcon(is_in, size);
         return;
     }
+    if crate::raynu_f::is_service_call(port, is_in, size) {
+        let _ = handle_raynu_f_service();
+        return;
+    }
     let k = IO_UNHANDLED_N.fetch_add(1, Ordering::AcqRel);
     if k < 12 {
         serial::write_str("boot: guest-UEFI io unhandled port=0x");
@@ -5110,15 +10902,41 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
     let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0x2);
     let df = (rflags & (1 << 10)) != 0;
     let mut addr = guest_uefi_io_addr_reg(if is_in { SAVED_RDI } else { SAVED_RSI }, long);
+    let nbytes = count.saturating_mul(u64::from(size));
+    let dest0 = addr;
+    let dest_ok_fill = is_in && guest_uefi_fwcfg_dest_ok_fill(port, dest0, nbytes, df);
+    let overlay = is_in
+        && guest_uefi_fwcfg_identity_overlay(port, addr, nbytes, df)
+        && save_fwcfg_identity_overlay(addr, nbytes as usize);
+    if overlay {
+        static OV: AtomicBool = AtomicBool::new(false);
+        if !OV.swap(true, Ordering::AcqRel) {
+            serial::write_str(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX);
+            write_hex(addr);
+            serial::write_str(" n=");
+            write_dec(nbytes);
+            serial::write_str(" (not ISO-INSTALL-OK)");
+            serial::write_byte(b'\n');
+        }
+    }
     let nlog = IO_STRING_N.fetch_add(1, Ordering::AcqRel);
     if nlog < 4 {
         serial::write_str("boot: guest-UEFI io string port=0x");
         write_hex_u32(u32::from(port));
         serial::write_str(" n=");
         write_dec(count);
-        serial::write_str(" (rep insw)");
+        // io string (rep insb): OVMF IoReadFifo8 is size=1; do not hardcode insw.
+        serial::write_str(" (rep ");
+        serial::write_str(if size == 1 {
+            "insb)"
+        } else if size == 2 {
+            "insw)"
+        } else {
+            "insd)"
+        });
         serial::write_byte(b'\n');
     }
+    let mut filled = 0u64;
     for _ in 0..count {
         if !is_in {
             if let Some(v) = load_guest_io(addr, size) {
@@ -5134,7 +10952,35 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
         }
         emulate_io_port(port, is_in, u64::from(size));
         if is_in {
-            let _ = store_guest_io(addr, size, SAVED_RAX);
+            if overlay {
+                if !store_guest_io(addr, size, SAVED_RAX, true) {
+                    static DROP: AtomicBool = AtomicBool::new(false);
+                    if !DROP.swap(true, Ordering::AcqRel) {
+                        serial::write_str("boot: guest-UEFI string INS drop gpa=0x");
+                        write_hex(addr);
+                        serial::write_byte(b'\n');
+                    }
+                }
+            } else if !guest_uefi_io_string_dest_ok(addr) {
+                static HV: AtomicBool = AtomicBool::new(false);
+                if !HV.swap(true, Ordering::AcqRel) {
+                    serial::write_str(GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX);
+                    write_hex(addr);
+                    serial::write_str(" n=");
+                    write_dec(count);
+                    serial::write_str(" (not ISO-INSTALL-OK)");
+                    serial::write_byte(b'\n');
+                }
+            } else if !store_guest_io(addr, size, SAVED_RAX, false) {
+                static DROP: AtomicBool = AtomicBool::new(false);
+                if !DROP.swap(true, Ordering::AcqRel) {
+                    serial::write_str("boot: guest-UEFI string INS drop gpa=0x");
+                    write_hex(addr);
+                    serial::write_byte(b'\n');
+                }
+            } else if dest_ok_fill {
+                filled = filled.saturating_add(1);
+            }
         }
         addr = guest_uefi_io_string_advance(addr, size, df);
     }
@@ -5154,7 +11000,84 @@ unsafe fn handle_io_string(qual: u64, port: u16, is_in: bool, size: u8) -> bool 
             return true;
         }
     }
+    if dest_ok_fill && filled != 0 {
+        static FILL: AtomicU32 = AtomicU32::new(0);
+        let n = FILL.fetch_add(1, Ordering::AcqRel);
+        if guest_uefi_fwcfg_dest_ok_fill_should_log(n) {
+            serial::write_str(GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX);
+            write_hex(dest0);
+            serial::write_str(" n=");
+            write_dec(nbytes);
+            serial::write_str(" (not ISO-INSTALL-OK)");
+            serial::write_byte(b'\n');
+        }
+    }
     skip_insn()
+}
+
+/// Drain pending virtio kicks then log OUT/IN. Called every product-ISO
+/// resume so ISO-INSTALL-OK is not missed after an IN-only exit.
+/// virtio drain every resume. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn drain_virtio_product_iso() {
+    if !guest_uefi_virtio_drain_every_resume(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        return;
+    }
+    let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+    if wrote != 0 {
+        serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+        write_dec(u64::from(wrote));
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    }
+    if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+        serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+        write_dec(n);
+        serial::write_line(" (not ISO-INSTALL-OK)");
+    }
+}
+
+/// Prefer PIT over UART only while virtio probe still needs kworker.
+/// After both `00:02.0` and `00:03.0` reach DRIVER_OK, UART beats PIT.
+/// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+fn linux_prefer_pit_until_driver_ok() {
+    let need = crate::devices::guest_virtio_blk::virtio_needs_pit_over_uart();
+    crate::devices::guest_irq::prefer_pit_until_driver_ok(need);
+    if !need
+        && crate::devices::guest_virtio_blk::queues_armed()
+        && LINUX_VIRTIO_DRIVER_OK_LOG
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    {
+        serial::write_line(
+            "boot: guest-UEFI linux virtio DRIVER_OK (Stage 46; not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+/// Linux product-ISO general I/O does not raise PIT (iron MADT stop).
+/// virtio MMIO / HLT / preempt still raise. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn linux_product_iso_raise_pit(uart: bool) {
+    if uart {
+        return;
+    }
+    let linux = guest_uefi_linux_guest_active(
+        serial::linux_earlycon_share(),
+        guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+    );
+    if !guest_uefi_linux_io_raises_pit(
+        linux,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        return;
+    }
+    crate::devices::guest_irq::raise_pit();
+    linux_prefer_pit_until_driver_ok();
+    let _ = crate::devices::lapic_virt::poll_timer_expiry();
 }
 
 #[cfg(target_os = "uefi")]
@@ -5163,6 +11086,7 @@ unsafe fn handle_io(qual: u64) -> bool {
     let is_in = (qual & (1 << 3)) != 0;
     let port = io_port_from_qual(qual);
     LAST_IO_PORT.store(u32::from(port), Ordering::Release);
+    linux_product_iso_raise_pit(is_com_uart_port(port));
     if guest_uefi_io_qual_is_string(qual) && guest_uefi_io_string_fills_ram(port) {
         return handle_io_string(qual, port, is_in, size as u8);
     }
@@ -5237,6 +11161,12 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             crate::devices::guest_platform::pci_write_addr(addr);
             crate::devices::guest_virtio_blk::pci_write_addr(addr);
             LAST_CF8.store(addr, Ordering::Release);
+            if (addr & 0x8000_0000) != 0 {
+                LAST_CF8_EN.store(addr, Ordering::Release);
+                if crate::devices::ide_cdrom::pci_addr_selects_cd(addr) {
+                    LAST_CF8_IDE.store(addr, Ordering::Release);
+                }
+            }
             note_pci_cf8(addr);
         }
         return;
@@ -5270,17 +11200,1073 @@ unsafe fn handle_pci(port: u16, is_in: bool, size: u8) {
             let cfg = crate::devices::ide_cdrom::pci_read_addr()
                 | u32::from(port.wrapping_sub(0xCFC) & 3);
             trace_pci_cfg(cfg, SAVED_RAX as u32, size, true);
+            // virtio BAR trap over scratch: OVMF/Linux BAR0 write onto the
+            // 0x80000000 UC 2MiB leaf must unmap 4K so MMIO EPT-traps.
+            let bar_off = crate::devices::guest_platform::pci_cfg_offset(
+                crate::devices::guest_virtio_blk::pci_read_addr(),
+                port,
+            );
+            if (bar_off & 0xFC) == 0x10 {
+                ept_trap_programmed_virtio_bars();
+            }
         }
     }
 }
 
 #[cfg(target_os = "uefi")]
+fn merge_mmio_gpr(old: u64, val: u64, size: u8, zero_ext: bool, sign_ext: bool) -> u64 {
+    if sign_ext {
+        return match size {
+            1 => val as i8 as i64 as u64,
+            2 => val as i16 as i64 as u64,
+            4 => val as i32 as i64 as u64,
+            _ => val,
+        };
+    }
+    if zero_ext {
+        return match size {
+            1 => val & 0xff,
+            2 => val & 0xffff,
+            4 => val & 0xffff_ffff,
+            _ => val,
+        };
+    }
+    match size {
+        1 => (old & !0xff) | (val & 0xff),
+        2 => (old & !0xffff) | (val & 0xffff),
+        4 => val & 0xffff_ffff,
+        _ => val,
+    }
+}
+
+/// Decode BAR/IOAPIC/xAPIC MMIO. If VMCS length is 0 or longer than the
+/// peek, retry with [`virtio_mmio_retry_decode_len`] so Linux `ioread`
+/// (`"=r"`) is not an EAX guess. linux MMIO decode retry.
+#[cfg(target_os = "uefi")]
+unsafe fn decode_mmio_or_retry(
+    buf: &[u8],
+    n: usize,
+    insn_len: u64,
+) -> Option<crate::devices::guest_virtio_blk::MmioInsn> {
+    let slice = &buf[..n];
+    if let Some(op) =
+        crate::devices::guest_virtio_blk::decode_mmio_insn(slice, insn_len as usize)
+    {
+        return Some(op);
+    }
+    let cap = virtio_mmio_retry_decode_len(n, insn_len);
+    if cap == 0 {
+        return None;
+    }
+    let op = crate::devices::guest_virtio_blk::decode_mmio_insn(slice, cap as usize)?;
+    let ar = ops::vmread(GUEST_CS_ACCESS_RIGHTS).unwrap_or(0);
+    let long64 = guest_uefi_cs_ar_is_long(ar);
+    let skip = crate::devices::guest_virtio_blk::mmio_decoded_len(slice, long64)
+        .map(|d| d as u64)
+        .filter(|d| *d >= 1 && *d <= 15)
+        .unwrap_or(cap);
+    MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
+    Some(op)
+}
+
+/// Trap-and-emulate virtio-pci BAR MMIO (product ISO queues only).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_virtio_bar_ept(gpa: u64, qual: u64) -> bool {
+    let is_write = (qual & 2) != 0;
+    let Some(bar) = crate::devices::guest_virtio_blk::mmio_bar_base_for_gpa(gpa) else {
+        return false;
+    };
+    let linux = guest_uefi_linux_guest_active(
+        serial::linux_earlycon_share(),
+        guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+    );
+    if guest_uefi_virtio_mmio_raises_pit(
+        linux,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        crate::devices::guest_irq::raise_pit();
+        linux_prefer_pit_until_driver_ok();
+    }
+    if guest_uefi_virtio_mmio_polls_lapic(
+        linux,
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        let _ = crate::devices::lapic_virt::poll_timer_expiry();
+    }
+    static HIT_N: AtomicU32 = AtomicU32::new(0);
+    let n = HIT_N.fetch_add(1, Ordering::AcqRel);
+    if n < 32 || n % 256 == 0 {
+        serial::write_str_nowait("boot: guest-UEFI virtio MMIO gpa=0x");
+        write_hex_nowait(gpa);
+        serial::write_str_nowait(" off=0x");
+        write_hex_nowait(gpa.wrapping_sub(bar));
+        serial::write_str_nowait(" wr=");
+        write_dec_nowait(u64::from(is_write));
+        if n >= 32 {
+            serial::write_str_nowait(" n=");
+            write_dec_nowait(u64::from(n) + 1);
+        }
+        serial::write_byte_nowait(b'\n');
+    }
+    let mut buf = [0u8; 16];
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str_nowait("boot: guest-UEFI virtio MMIO decode fail gpa=0x");
+            write_hex_nowait(gpa);
+            serial::write_str_nowait(" n=");
+            write_dec_nowait(n as u64);
+            serial::write_str_nowait(" len=");
+            write_dec_nowait(insn_len);
+            serial::write_byte_nowait(b'\n');
+        }
+        let skip = virtio_mmio_eax_fallback_len(linux, n, insn_len);
+        if skip != 0 {
+            if FAIL_N.load(Ordering::Acquire) <= 8 {
+                serial::write_line_nowait(
+                    "boot: guest-UEFI virtio MMIO eax fallback (not ISO-INSTALL-OK)",
+                );
+            }
+            MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
+            let sz = virtio_mmio_eax_fallback_size((gpa.wrapping_sub(bar)) as u16);
+            if is_write {
+                crate::devices::guest_virtio_blk::mmio_write_at(gpa, sz, cr_gpr(0));
+                let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+                if wrote != 0 {
+                    serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                    write_dec(u64::from(wrote));
+                    serial::write_line(" (not ISO-INSTALL-OK)");
+                }
+                if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                    serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                    write_dec(n);
+                    serial::write_line(" (not ISO-INSTALL-OK)");
+                }
+                if !guest_uefi_host_hypervisor_present()
+                    && crate::devices::guest_virtio_blk::take_iso_install_ok()
+                {
+                    serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+                }
+            } else {
+                let mem = crate::devices::guest_virtio_blk::mmio_read_at(gpa, sz);
+                set_cr_gpr(0, mem);
+            }
+            return skip_insn();
+        }
+        return false;
+    };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            crate::devices::guest_virtio_blk::mmio_write_sse_at(gpa, mmio_xmm_in(op.reg), op.size);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        } else {
+            let mem = crate::devices::guest_virtio_blk::mmio_read_sse_at(gpa, op.size);
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size),
+            );
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {
+        let ept_write = is_write;
+        let Some(done) = mmio_string_step(
+            op,
+            ept_write,
+            || crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size),
+            |val| crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val),
+            gpa,
+        ) else {
+            return false;
+        };
+        let bar_write = crate::devices::guest_virtio_blk::mmio_alu_is_stos(op.alu)
+            || (crate::devices::guest_virtio_blk::mmio_alu_is_movs(op.alu) && ept_write);
+        if bar_write {
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        }
+        if done {
+            return skip_insn();
+        }
+        return true;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, size);
+        if !mmio_stack_push(val, size) {
+            return false;
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let Some(val) = mmio_stack_pop(size) else {
+            return false;
+        };
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, size, val);
+        let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+        if wrote != 0 {
+            serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+            write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if !guest_uefi_host_hypervisor_present()
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let size = mmio_stack_op_size(op);
+        let target = crate::devices::guest_virtio_blk::mmio_read_at(gpa, size);
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return false;
+        }
+        return true;
+    }
+    if op.xchg {
+        let oldr = mmio_gpr_in(op);
+        let oldm = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, oldr);
+        mmio_gpr_out(op, oldm);
+        let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+        if wrote != 0 {
+            serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+            write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if !guest_uefi_host_hypervisor_present()
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
+        return skip_insn();
+    }
+    if op.atomic != 0 {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if let Some(val) = mmio_apply_atomic(op, cur) {
+            crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        }
+        return skip_insn();
+    }
+    if op.cc != 0 {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if let Some(val) = mmio_apply_cc(op, cur) {
+            crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        }
+        return skip_insn();
+    }
+    if op.test || op.cmp {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
+    }
+    if op.bt != 0 {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        let val = mmio_apply_bt(op, cur);
+        if op.is_write {
+            crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
+            let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+            if wrote != 0 {
+                serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+                write_dec(u64::from(wrote));
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+                serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+                write_dec(n);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            if !guest_uefi_host_hypervisor_present()
+                && crate::devices::guest_virtio_blk::take_iso_install_ok()
+            {
+                serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+            }
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
+    }
+    if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
+        let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        let val = mmio_alu_result(op, cur);
+        if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+            mmio_gpr_out(op, val);
+        }
+        return skip_insn();
+    }
+    if op.is_write != is_write {
+        return false;
+    }
+    if is_write {
+        let val = if op.alu != 0 {
+            let cur = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+            mmio_alu_result(op, cur)
+        } else if op.has_imm {
+            op.imm
+        } else {
+            mmio_gpr_in(op)
+        };
+        crate::devices::guest_virtio_blk::mmio_write_at(gpa, op.size, val);
+        let wrote = crate::devices::guest_virtio_blk::drain_queue(guest_uefi_gpa_to_hpa);
+        if wrote != 0 {
+            serial::write_str("boot: Stage 46 virtio-blk OUT bytes=");
+            write_dec(u64::from(wrote));
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if let Some(n) = crate::devices::guest_virtio_blk::take_iso_read_note() {
+            serial::write_str("boot: Stage 46 virtio-iso IN bytes=");
+            write_dec(n);
+            serial::write_line(" (not ISO-INSTALL-OK)");
+        }
+        if !guest_uefi_host_hypervisor_present()
+            && crate::devices::guest_virtio_blk::take_iso_install_ok()
+        {
+            serial::write_line_nowait(crate::mgmt::iso_install::M7_ISO_INSTALL_OK_MARKER);
+        }
+    } else {
+        let val = crate::devices::guest_virtio_blk::mmio_read_at(gpa, op.size);
+        mmio_gpr_out(op, val);
+    }
+    skip_insn()
+}
+
+/// Trap-and-emulate IOAPIC MMIO (product ISO only).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_ioapic_ept(gpa: u64, qual: u64) -> bool {
+    let is_write = (qual & 2) != 0;
+    let off = (gpa.wrapping_sub(crate::devices::guest_irq::IOAPIC_GPA)) as u16;
+    let mut buf = [0u8; 16];
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len) else {
+        // IOAPIC decode fail nowait (share hushes write_str).
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str_nowait("boot: guest-UEFI IOAPIC decode fail gpa=0x");
+            write_hex_nowait(gpa);
+            serial::write_str_nowait(" n=");
+            write_dec_nowait(n as u64);
+            serial::write_str_nowait(" len=");
+            write_dec_nowait(insn_len);
+            serial::write_byte_nowait(b'\n');
+        }
+        let linux = guest_uefi_linux_guest_active(
+            serial::linux_earlycon_share(),
+            guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+            PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+        );
+        let skip = virtio_mmio_eax_fallback_len(linux, n, insn_len);
+        if skip != 0 {
+            MMIO_INSN_LEN.store(skip, Ordering::Relaxed);
+            if is_write {
+                crate::devices::guest_irq::ioapic_write(off, cr_gpr(0) as u32);
+            } else {
+                set_cr_gpr(0, u64::from(crate::devices::guest_irq::ioapic_read(off)));
+            }
+            return skip_insn();
+        }
+        return skip_insn();
+    };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            crate::devices::guest_irq::ioapic_write(off, mmio_xmm_in(op.reg) as u32);
+        } else {
+            let mem = u128::from(crate::devices::guest_irq::ioapic_read(off));
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size.min(4)),
+            );
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {
+        let Some(done) = mmio_string_step(
+            op,
+            is_write,
+            || u64::from(crate::devices::guest_irq::ioapic_read(off)),
+            |val| crate::devices::guest_irq::ioapic_write(off, val as u32),
+            gpa,
+        ) else {
+            return skip_insn();
+        };
+        if done {
+            return skip_insn();
+        }
+        return true;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if !mmio_stack_push(val, size) {
+            return skip_insn();
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        if let Some(val) = mmio_stack_pop(size) {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let target = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return skip_insn();
+        }
+        return true;
+    }
+    if op.xchg {
+        let oldr = mmio_gpr_in(op);
+        let oldm = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        crate::devices::guest_irq::ioapic_write(off, oldr as u32);
+        mmio_gpr_out(op, oldm);
+        return skip_insn();
+    }
+    if op.atomic != 0 {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if let Some(val) = mmio_apply_atomic(op, cur) {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.cc != 0 {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if let Some(val) = mmio_apply_cc(op, cur) {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.test || op.cmp {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
+    }
+    if op.bt != 0 {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        let val = mmio_apply_bt(op, cur);
+        if op.is_write {
+            crate::devices::guest_irq::ioapic_write(off, val as u32);
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
+    }
+    if op.alu != 0 && (op.alu_reg_left || !op.is_write) {
+        let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        let val = mmio_alu_result(op, cur);
+        if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+            mmio_gpr_out(op, val);
+        }
+        return skip_insn();
+    }
+    if op.is_write != is_write {
+        return skip_insn();
+    }
+    if is_write {
+        let val = if op.alu != 0 {
+            let cur = u64::from(crate::devices::guest_irq::ioapic_read(off));
+            mmio_alu_result(op, cur)
+        } else if op.has_imm {
+            op.imm
+        } else {
+            mmio_gpr_in(op)
+        };
+        crate::devices::guest_irq::ioapic_write(off, val as u32);
+    } else {
+        let val = u64::from(crate::devices::guest_irq::ioapic_read(off));
+        mmio_gpr_out(op, val);
+    }
+    skip_insn()
+}
+
+/// Trap-and-emulate local APIC MMIO (product ISO 4 KiB hole).
+#[cfg(target_os = "uefi")]
+unsafe fn handle_xapic_ept(gpa: u64, qual: u64) -> bool {
+    if crate::devices::lapic_virt::mmio_access(gpa, false, 0).is_none() {
+        return false;
+    }
+    let is_write = (qual & 2) != 0;
+    let mut buf = [0u8; 16];
+    let (n, insn_len) = copy_mmio_insn(&mut buf);
+    let Some(op) = decode_mmio_or_retry(&buf, n, insn_len)
+    else {
+        static FAIL_N: AtomicU32 = AtomicU32::new(0);
+        if FAIL_N.fetch_add(1, Ordering::AcqRel) < 8 {
+            serial::write_str("boot: guest-UEFI xAPIC MMIO decode fail gpa=0x");
+            write_hex(gpa);
+            serial::write_str(" insn=");
+            let show = n.min(8);
+            let mut i = 0usize;
+            while i < show {
+                write_hex_u8(buf[i]);
+                i += 1;
+            }
+            serial::write_str(" n=");
+            write_dec(n as u64);
+            serial::write_str(" len=");
+            write_dec(insn_len);
+            serial::write_byte(b'\n');
+        }
+        if xapic_fetch_miss_eax_fallback(n, insn_len) {
+            if is_write {
+                let val = cr_gpr(0) as u32;
+                let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val);
+            } else {
+                let mem = crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                    .and_then(|v| v)
+                    .unwrap_or(0);
+                set_cr_gpr(0, u64::from(mem));
+            }
+            if FAIL_N.load(Ordering::Acquire) <= 8 {
+                serial::write_line("boot: guest-UEFI xAPIC MMIO eax fallback (not ISO-INSTALL-OK)");
+            }
+            if skip_insn() {
+                return true;
+            }
+            let skip = xapic_eax_fallback_skip_len(insn_len);
+            if skip != 0 {
+                let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+                return ops::vmwrite(GUEST_RIP, rip.wrapping_add(skip)).is_ok();
+            }
+        }
+        serial::write_str_nowait("boot: guest-UEFI xAPIC decode fail stop gpa=0x");
+        write_hex_nowait(gpa);
+        serial::write_str_nowait(" len=");
+        write_dec_nowait(insn_len);
+        serial::write_byte_nowait(b'\n');
+        return false;
+    };
+    if crate::devices::guest_virtio_blk::mmio_alu_is_hint(op.alu) {
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_sse(op.alu) {
+        if op.is_write {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, mmio_xmm_in(op.reg) as u32);
+        } else {
+            let mem = u128::from(
+                crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                    .and_then(|v| v)
+                    .unwrap_or(0),
+            );
+            mmio_xmm_out(
+                op.reg,
+                crate::devices::guest_virtio_blk::mmio_sse_from_mem(mem, op.size.min(4)),
+            );
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_string(op.alu) {
+        let Some(done) = mmio_string_step(
+            op,
+            is_write,
+            || {
+                u64::from(
+                    crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                        .and_then(|v| v)
+                        .unwrap_or(0),
+                )
+            },
+            |val| {
+                let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+            },
+            gpa,
+        ) else {
+            return false;
+        };
+        if done {
+            return skip_insn();
+        }
+        return true;
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_push(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let val = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if !mmio_stack_push(val, size) {
+            return false;
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_pop(op.alu) {
+        let size = mmio_stack_op_size(op);
+        let Some(val) = mmio_stack_pop(size) else {
+            return false;
+        };
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu)
+        || crate::devices::guest_virtio_blk::mmio_alu_is_jmp(op.alu)
+    {
+        let target = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if !mmio_near_xfer(
+            op,
+            target,
+            crate::devices::guest_virtio_blk::mmio_alu_is_call(op.alu),
+        ) {
+            return false;
+        }
+        return true;
+    }
+    if op.xchg {
+        let oldr = mmio_gpr_in(op) as u32;
+        let oldm = crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+            .and_then(|v| v)
+            .unwrap_or(0);
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, oldr);
+        mmio_gpr_out(op, u64::from(oldm));
+        return skip_insn();
+    }
+    if op.atomic != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if let Some(val) = mmio_apply_atomic(op, cur) {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.cc != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if let Some(val) = mmio_apply_cc(op, cur) {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.test || op.cmp {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if mmio_apply_test_cmp(op, cur) {
+            return skip_insn();
+        }
+    }
+    if op.bt != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        let val = mmio_apply_bt(op, cur);
+        if op.is_write {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
+        return skip_insn();
+    }
+    if crate::devices::guest_virtio_blk::mmio_alu_is_div_pair(op.alu) {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        if mmio_div_pair_commit(op, cur) {
+            return skip_insn();
+        }
+        return inject_mmio_div_de();
+    }
+    if op.alu != 0 {
+        let cur = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        let val = mmio_alu_result(op, cur);
+        if op.alu_reg_left || !op.is_write {
+            if !crate::devices::guest_virtio_blk::mmio_alu_is_mul_pair(op.alu) {
+                mmio_gpr_out(op, val);
+            }
+        } else {
+            let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+        }
+        return skip_insn();
+    }
+    if op.is_write != is_write {
+        return false;
+    }
+    if is_write {
+        let val = if op.has_imm {
+            op.imm
+        } else {
+            mmio_gpr_in(op)
+        };
+        let _ = crate::devices::lapic_virt::mmio_access(gpa, true, val as u32);
+    } else {
+        let val = u64::from(
+            crate::devices::lapic_virt::mmio_access(gpa, false, 0)
+                .and_then(|v| v)
+                .unwrap_or(0),
+        );
+        mmio_gpr_out(op, val);
+    }
+    skip_insn()
+}
+
+/// VM-entry inject of virtio INTx / ATA IRQ 14 / LAPIC LVT when the product ISO is armed.
+#[cfg(target_os = "uefi")]
+unsafe fn try_inject_guest_irq() {
+    if guest_uefi_linux_exc_blocks_irq(
+        PF_LINUX_CR2.load(Ordering::Acquire),
+        LINUX_EXC_INJECT.swap(false, Ordering::AcqRel),
+    ) {
+        return;
+    }
+    if !crate::devices::ide_cdrom::product_iso_window_armed() {
+        return;
+    }
+    crate::devices::guest_uart::poll_host_rx();
+    crate::devices::guest_uart::reassert_irq();
+    // Firmware PIC before leftover IOAPIC pin 2 (BDS CpuSleep needs PIC IRQ 0).
+    // Linux after MADT still prefers GSI 2 (iron `a525340`: PIC 0x20 into the
+    // IOAPIC IDT at rest_init). firmware PIC before GSI 2.
+    // linux GSI 2 before PIC. linux PIC before LAPIC. Not `ISO-INSTALL-OK`.
+    // Arm virtual-wire only from the HLT handler so PciBus walks after BOTH-OK
+    // do not take IRQ 0 mid-CF8. firmware virtual-wire PIC.
+    // firmware virtual-wire AEOI. firmware virtual-wire GSI 2.
+    // firmware HLT force IF. firmware HLT skip after inject.
+    // firmware HLT activity active. firmware LAPIC timer expiry.
+    // IOAPIC I/O over PIT. firmware virtual-wire GSI 14.
+    // do not F11 daf3195. do not F11 b26c86a.
+    // do not F11 eac424b. do not F11 8e81c2e. iron COM2 eac424b. iron COM2 eac424b IRET-to-HLT.
+    let linux = guest_uefi_linux_guest_active(
+        serial::linux_earlycon_share(),
+        guest_uefi_pf_should_deliver_to_guest(ops::vmread(GUEST_RIP).unwrap_or(0)),
+        PF_LINUX_DELIVER.load(Ordering::Acquire) != 0,
+    );
+    // firmware skip PIT inject: do not early-return all firmware inject.
+    // skip_without_inject stays true for firmware (no PIT wakeup) but ATA
+    // 14 / virtio INTx must still VM-entry when unmasked. wait_for_irq
+    // stays false (no virtual-wire). do not F11 e70a295.
+    let pci_ide = guest_uefi_product_iso_pci_ready(
+        crate::devices::ide_cdrom::pci_enumerated(),
+        crate::devices::guest_virtio_blk::pci_enumerated(),
+    );
+    let ataio = crate::devices::ide_cdrom::ata_io_accesses();
+    if guest_uefi_firmware_virtual_wire_pic(linux, pci_ide, ataio)
+        && crate::devices::guest_irq::firmware_virtual_wire_armed()
+    {
+        let rflags = ops::vmread(GUEST_RFLAGS).unwrap_or(0);
+        let _ = ops::vmwrite(
+            GUEST_RFLAGS,
+            guest_uefi_firmware_hlt_force_if(linux, pci_ide, ataio, rflags),
+        );
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    }
+    // firmware arm ATA GSI 14. wait_for_irq stays false so virtual-wire
+    // never unmasks pin 14; force-IF cannot inject 0x2E while masked.
+    // Do not arm PIT GSI 2 / IRQ 0. do not F11 77f5866.
+    if guest_uefi_firmware_arm_ata_gsi14(linux) {
+        crate::devices::guest_irq::arm_firmware_ata_gsi14();
+    }
+    // firmware OVMF ATA vector: EDK2 8259 0x70+6=0x76, not leftover 0x2E.
+    // do not inject leftover 0x2E. do not clobber PIC ICW2.
+    let ata_vec = crate::devices::guest_irq::firmware_ata_vec();
+    let gsi2_armed = crate::devices::guest_irq::ioapic_gsi2_armed();
+    let pic_ready = crate::devices::guest_irq::pic_has_deliverable();
+    let mut use_pic = guest_uefi_pic_before_lapic(pic_ready, gsi2_armed, linux);
+    let ignore_tpr = guest_uefi_firmware_hlt_ignores_tpr(linux, pci_ide, ataio);
+    let prefer_ata = guest_uefi_firmware_prefer_ata_irr(linux, ataio);
+    // firmware ATA over PIC: HLT raise_pit PIC IRQ 0 must not skip pin 14
+    // or ATA already latched into IRR after take_ioapic.
+    let ata_ready = crate::devices::guest_irq::ioapic_ata_ready()
+        || crate::devices::lapic_virt::has_irr_vec(ata_vec);
+    // firmware PIC ATA: IdeBus EOIs the 8259. Do not skip take_pic when
+    // IRQ 14 is the PIC vector (8e581c7 unmask was dead in try_inject).
+    if guest_uefi_firmware_ata_over_pic(linux, ata_ready)
+        && !guest_uefi_firmware_pic_ata(linux, crate::devices::guest_irq::pic_ata_ready())
+    {
+        use_pic = false;
+    }
+    if !use_pic {
+        if prefer_ata && guest_uefi_firmware_take_ioapic_ata(linux) {
+        // firmware take IOAPIC ATA: do not latch virtio/UART into IRR
+        // that ata_irr_only will not inject. IOAPIC edge no remote IRR:
+        // PACKET after IDENTIFY must take pin 14 again without IOAPIC EOI.
+            if let Some(vec) = crate::devices::guest_irq::take_ioapic_ata_vector() {
+                crate::devices::lapic_virt::latch_irr(vec);
+            }
+        } else if let Some(vec) = crate::devices::guest_irq::take_ioapic_vector() {
+            crate::devices::lapic_virt::latch_irr(vec);
+        }
+    }
+    // firmware prefer ATA IRR: pin 14 is already accepted; 0x2E sits in
+    // IRR while CR8>=2 blocks has_deliverable_irr. Do not take_highest_irr
+    // (LVT 0xEF). wait_for_irq stays false. flash 489d938.
+    let lapic = if prefer_ata && crate::devices::lapic_virt::has_irr_vec(ata_vec) {
+        true
+    } else if prefer_ata && guest_uefi_firmware_ata_irr_only(linux) {
+        // firmware ATA IRR only: LVT 0xEF in IRR is not a firmware inject.
+        false
+    } else if ignore_tpr {
+        crate::devices::lapic_virt::has_pending_irr()
+    } else {
+        crate::devices::lapic_virt::has_deliverable_irr()
+    };
+    if !use_pic && !lapic {
+        if pic_ready {
+            use_pic = true;
+        } else {
+            let _ = set_guest_uefi_interrupt_window(false);
+            return;
+        }
+    }
+    // firmware force IF for inject. PACKET nIEN=0 after ataio>0 still
+    // needs IF so ATA 14 / virtio can VM-entry. Do not arm virtual-wire.
+    // skip_pit still drops 0x20. do not F11 77f5866.
+    let rflags = guest_uefi_firmware_force_if_for_inject(
+        linux,
+        ops::vmread(GUEST_RFLAGS).unwrap_or(0),
+    );
+    if !linux {
+        let _ = ops::vmwrite(GUEST_RFLAGS, rflags);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+    }
+    let int_state = ops::vmread(GUEST_INTERRUPTIBILITY_STATE).unwrap_or(0);
+    if (rflags & (1 << 9)) == 0 || (int_state & 0x3) != 0 {
+        let _ = set_guest_uefi_interrupt_window(true);
+        return;
+    }
+    let Some(vec) = (if use_pic {
+        crate::devices::guest_irq::take_pic_vector().map(u32::from)
+    } else if prefer_ata {
+        crate::devices::lapic_virt::take_irr_vec(ata_vec, true).or_else(|| {
+            if guest_uefi_firmware_ata_irr_only(linux) {
+                // firmware ATA IRR only. Do not take_highest_irr (LVT 0xEF).
+                None
+            } else if ignore_tpr {
+                crate::devices::lapic_virt::take_highest_irr()
+            } else {
+                crate::devices::lapic_virt::take_deliverable_vector()
+            }
+        })
+    } else if ignore_tpr {
+        crate::devices::lapic_virt::take_highest_irr()
+    } else {
+        crate::devices::lapic_virt::take_deliverable_vector()
+    }) else {
+        let _ = set_guest_uefi_interrupt_window(false);
+        return;
+    };
+    if guest_uefi_firmware_skip_pit_inject(linux, vec, ataio) {
+        // firmware skip PIT inject. Consumed vec=0x20; do not VM-entry it.
+        // PIC prefers slave IRQ 14 over PIT when both pending. Linux still
+        // injects 0x20. firmware force IF for inject. do not F11 77f5866.
+        // flash 5227ad9. flash 489d938. flash bce5bbb. flash eaa580d. flash 12926eb.
+        // firmware prefer ATA IRR. firmware ATA over PIC. firmware ATA IRR only.
+        // firmware take IOAPIC ATA. firmware PIC ATA. do not F11 eaa580d.
+        // do not F11 bce5bbb.
+        // do not F11 489d938. do not F11 e70a295.
+        // firmware PIT one-shot after first wake. do not F11 24c5fa6.
+        // Not ISO-INSTALL-OK.
+        let _ = set_guest_uefi_interrupt_window(false);
+        return;
+    }
+    if let Ok(info) = crate::sched::interrupt::prepare_external_inject(vec) {
+        let _ = set_guest_uefi_interrupt_window(false);
+        let _ = ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, info as u64);
+        let _ = ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0);
+        let _ = ops::vmwrite(GUEST_ACTIVITY_STATE, 0);
+        if guest_uefi_firmware_note_pit_injected(linux, vec, ataio) {
+            serial::write_line_nowait(
+                "boot: Stage 46 PIT one-shot (not ISO-INSTALL-OK)",
+            );
+        }
+        let n = INJECT_N.fetch_add(1, Ordering::AcqRel);
+        if n < 8 {
+            serial::write_str_nowait("boot: Stage 46 inject vec=0x");
+            write_hex_nowait(u64::from(vec));
+            serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+        }
+        if linux
+            && use_pic
+            && guest_uefi_linux_pic_irq0_vec(vec)
+            && LINUX_PIC_IRQ0_LOG
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            serial::write_line_nowait(
+                "boot: guest-UEFI linux PIC IRQ0 (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
+        if linux
+            && gsi2_armed
+            && guest_uefi_linux_gsi2_before_pic(true)
+            && LINUX_GSI2_LOG
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            serial::write_line_nowait(
+                "boot: guest-UEFI linux PIT GSI 2 (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
+    } else {
+        let _ = set_guest_uefi_interrupt_window(true);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn set_guest_uefi_interrupt_window(on: bool) -> Result<(), ()> {
+    let cur = ops::vmread(PRIMARY_PROC_BASED_VM_EXEC_CONTROL).map_err(|_| ())? as u32;
+    let next = if on {
+        cur | CPU_BASED_INTERRUPT_WINDOW_EXITING
+    } else {
+        cur & !CPU_BASED_INTERRUPT_WINDOW_EXITING
+    };
+    ops::vmwrite(PRIMARY_PROC_BASED_VM_EXEC_CONTROL, next as u64).map_err(|_| ())
+}
+
+#[cfg(target_os = "uefi")]
 unsafe fn handle_ept(gpa: u64, qual: u64) -> bool {
+    if crate::devices::guest_virtio_blk::is_virtio_bar_gpa(gpa) {
+        return handle_virtio_bar_ept(gpa, qual);
+    }
+    if crate::devices::guest_irq::is_ioapic_gpa(gpa) {
+        return handle_ioapic_ept(gpa, qual);
+    }
+    if crate::devices::lapic_virt::is_xapic_mmio_gpa(gpa) {
+        return handle_xapic_ept(gpa, qual);
+    }
     if crate::devices::guest_platform::is_xapic_2m_gpa(gpa) {
         serial::write_str("boot: guest-UEFI EPT xAPIC gpa=0x");
         write_hex(gpa);
         serial::write_byte(b'\n');
         return false;
+    }
+    // Iron COM2 e0d5c55: WFE return hit, then EPT 0x34 at ZeroMem
+    // rip=0x7ec8f6ff. Host-zero dest + RWE-replace report-RAM so the
+    // dword loop does not stall. Not a second WaitForEvent unwind.
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let pci_ide = guest_uefi_product_iso_pci_ready(
+        crate::devices::ide_cdrom::pci_enumerated(),
+        crate::devices::guest_virtio_blk::pci_enumerated(),
+    );
+    if guest_uefi_firmware_zeromem_ept(
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+        pci_ide,
+        crate::devices::ide_cdrom::ata_io_accesses(),
+        FIRMWARE_WFE_RETURN.load(Ordering::Acquire),
+        rip,
+    ) {
+        firmware_zeromem_ept_fill(gpa, qual, rip);
     }
     // Iron b25d75b / 577c9eb: firmware PT stores in the MTRR/PCI hole must
     // land on a dedicated scratch HPA. Iron da2c9c4: bit 2 fetch + bit 8
@@ -5357,9 +12343,15 @@ unsafe fn handle_ept(gpa: u64, qual: u64) -> bool {
             guest_uefi_patch_cpu_flush_all_mapped();
             return true;
         }
-        serial::write_str("boot: guest-UEFI EPT report-RAM cap gpa=0x");
-        write_hex(gpa);
-        serial::write_byte(b'\n');
+        // linux earlycon EPT cap nowait (share hushes write_str; iron
+        // `113a08a` PAT then quiet would hide a cap stop).
+        if serial::linux_earlycon_share() {
+            serial::write_line_nowait("boot: guest-UEFI EPT report-RAM cap");
+        } else {
+            serial::write_str("boot: guest-UEFI EPT report-RAM cap gpa=0x");
+            write_hex(gpa);
+            serial::write_byte(b'\n');
+        }
         return false;
     }
     // Iron cc7d78a: PCI-hole store (gpa=0xC01DF1B7) after 4G identity. Sink-resume
@@ -5374,19 +12366,26 @@ unsafe fn handle_ept(gpa: u64, qual: u64) -> bool {
         maybe_print_dxe();
         return true;
     }
-    serial::write_str("boot: guest-UEFI EPT violation gpa=0x");
-    write_hex(gpa);
-    serial::write_byte(b'\n');
+    if serial::linux_earlycon_share() {
+        serial::write_line_nowait("boot: guest-UEFI EPT violation");
+    } else {
+        serial::write_str("boot: guest-UEFI EPT violation gpa=0x");
+        write_hex(gpa);
+        serial::write_byte(b'\n');
+    }
     false
 }
 
 /// Map a 4 KiB xAPIC page at `0xFEE00000` (rest of the 2 MiB → sink zeros).
+/// Product ISO: PTE[0] stays empty so GetApicVersion / CUR_COUNT / EOI trap
+/// into [`handle_xapic_ept`]. Lab stub keeps the filled static page.
 ///
 /// INVARIANTS:
 /// - Does not clobber an existing PD leaf (2 MiB sink must not already be there)
-/// - Version register in `lapic_hpa` is [`crate::devices::lapic_virt::XAPIC_VERSION`]
+/// - Lab: version register in `lapic_hpa` is [`crate::devices::lapic_virt::XAPIC_VERSION`]
+/// - Product: 4 KiB[0] unmapped (trap); not a zero sink (iron `ad78f12`)
 #[cfg(target_os = "uefi")]
-unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64) -> bool {
+unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64, trap: bool) -> bool {
     let pml4 = EPT_PML4.load(Ordering::Acquire);
     let sink = SINK_HPA.load(Ordering::Acquire);
     let gpa = crate::devices::lapic_virt::APIC_GPA;
@@ -5414,12 +12413,146 @@ unsafe fn ept_install_xapic_4k(pt_hpa: u64, lapic_hpa: u64) -> bool {
     let pt = pt_hpa as *mut u64;
     let zero_hpa = if sink != 0 { sink } else { lapic_hpa };
     for i in 0..512u64 {
+        if i == 0 && trap {
+            continue;
+        }
         let hpa = if i == 0 { lapic_hpa } else { zero_hpa };
         core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
     crate::memory::ept_hw::invept_global();
     true
+}
+
+/// Split the HPET 2 MiB sink: 4 KiB[0] unmapped (IOAPIC trap), rest UC sink.
+///
+/// INVARIANTS:
+/// - Product ISO only; lab keeps the 2 MiB HPET leaf
+/// - PD leaf at `0xFEC00000` must be empty (do not map 2 MiB first)
+/// - HPET at `0xFED00000` stays on `SINK_HPA + HPET_SINK_OFF`
+#[cfg(target_os = "uefi")]
+unsafe fn ept_install_ioapic_trap(pt_hpa: u64) -> bool {
+    let pml4 = EPT_PML4.load(Ordering::Acquire);
+    let sink = SINK_HPA.load(Ordering::Acquire);
+    let gpa = crate::devices::guest_platform::HPET_SINK_PAGE;
+    if pml4 == 0 || sink == 0 || (pt_hpa & 0xfff) != 0 || (sink & 0x1F_FFFF) != 0 {
+        return false;
+    }
+    let pml4_i = ((gpa >> 39) & 0x1ff) as usize;
+    let e0 = core::ptr::read_volatile((pml4 as *const u64).add(pml4_i));
+    if e0 & 0b111 == 0 {
+        return false;
+    }
+    let pdpt = e0 & !0xfff;
+    let pdpt_i = ((gpa >> 30) & 0x1ff) as usize;
+    let e1 = core::ptr::read_volatile((pdpt as *const u64).add(pdpt_i));
+    if e1 & 0b111 == 0 || (e1 & (1 << 7)) != 0 {
+        return false;
+    }
+    let pd = e1 & !0xfff;
+    let pd_i = ((gpa >> 21) & 0x1ff) as usize;
+    let e2 = core::ptr::read_volatile((pd as *const u64).add(pd_i));
+    if e2 & 0b111 != 0 {
+        return false;
+    }
+    core::ptr::write_bytes(pt_hpa as *mut u8, 0, 4096);
+    let pt = pt_hpa as *mut u64;
+    for i in 1..512u64 {
+        let hpa = sink + i * 4096;
+        core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, 0));
+    }
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
+    crate::memory::ept_hw::invept_global();
+    true
+}
+
+/// Unmap the 4 KiB virtio BAR inside a present 2 MiB EPT leaf (scratch).
+///
+/// INVARIANTS:
+/// - Empty PD leaf already traps (return true)
+/// - Large page is split to 4 KiB; BAR index is not-present
+/// - Existing PT: only that PTE is cleared
+/// - iso=0 never calls this (queues off → BAR GPA 0)
+///
+/// virtio BAR trap over scratch. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn ept_split_2m_trap_4k(gpa: u64) -> bool {
+    let pml4 = EPT_PML4.load(Ordering::Acquire);
+    if pml4 == 0 || !guest_uefi_virtio_bar_should_trap(gpa) {
+        return false;
+    }
+    let pml4_i = ((gpa >> 39) & 0x1ff) as usize;
+    let e0 = core::ptr::read_volatile((pml4 as *const u64).add(pml4_i));
+    if e0 & 0b111 == 0 {
+        return true;
+    }
+    let pdpt = e0 & !0xfff;
+    let pdpt_i = ((gpa >> 30) & 0x1ff) as usize;
+    let e1 = core::ptr::read_volatile((pdpt as *const u64).add(pdpt_i));
+    if e1 & 0b111 == 0 || (e1 & (1 << 7)) != 0 {
+        return false;
+    }
+    let pd = e1 & !0xfff;
+    let pd_i = ((gpa >> 21) & 0x1ff) as usize;
+    let e2 = core::ptr::read_volatile((pd as *const u64).add(pd_i));
+    let pt_i = ((gpa >> 12) & 0x1ff) as usize;
+    if e2 & 0b111 == 0 {
+        return true;
+    }
+    if (e2 & (1 << 7)) == 0 {
+        let pt = e2 & !0xfff;
+        core::ptr::write_volatile((pt as *mut u64).add(pt_i), 0);
+        crate::memory::ept_hw::invept_global();
+        return true;
+    }
+    let alloc = e4_alloc();
+    if alloc.is_null() {
+        return false;
+    }
+    let Some(pt_hpa) = alloc_phys(&mut *alloc) else {
+        return false;
+    };
+    if (pt_hpa & 0xfff) != 0 {
+        return false;
+    }
+    let hpa_2m = e2 & !0x1F_FFFF;
+    let mt = (e2 >> 3) & 7;
+    core::ptr::write_bytes(pt_hpa as *mut u8, 0, 4096);
+    let pt = pt_hpa as *mut u64;
+    for i in 0..512u64 {
+        if i as usize == pt_i {
+            continue;
+        }
+        let hpa = hpa_2m + i * 4096;
+        core::ptr::write_volatile(pt.add(i as usize), crate::memory::ept_hw::ept_leaf_4k(hpa, mt));
+    }
+    core::ptr::write_volatile((pd as *mut u64).add(pd_i), crate::memory::ept_hw::ept_link(pt_hpa));
+    crate::memory::ept_hw::invept_global();
+    true
+}
+
+/// Trap programmed virtio BAR0 pages so Linux ioremap is not scratch RAM.
+#[cfg(target_os = "uefi")]
+unsafe fn ept_trap_programmed_virtio_bars() {
+    if !crate::devices::guest_virtio_blk::queues_armed() {
+        return;
+    }
+    for bar in crate::devices::guest_virtio_blk::mmio_programmed_bar_gpas() {
+        if !guest_uefi_virtio_bar_should_trap(bar) {
+            continue;
+        }
+        let ok = ept_split_2m_trap_4k(bar);
+        if guest_uefi_virtio_bar_overlaps_scratch(bar) {
+            static N: AtomicU32 = AtomicU32::new(0);
+            if N.fetch_add(1, Ordering::AcqRel) < 4 {
+                serial::write_str_nowait("boot: guest-UEFI virtio BAR trap gpa=0x");
+                write_hex_nowait(bar);
+                serial::write_str_nowait(" ok=");
+                write_dec_nowait(u64::from(ok));
+                serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+            }
+        }
+    }
 }
 
 /// Link an empty PD under `pdpt_i` so 2 MiB sink-resume can fill leaves.
@@ -5460,12 +12593,20 @@ unsafe fn ept_map_2m_hpa(gpa: u64, hpa: u64, replace: bool) -> bool {
 /// `write=false` is R only (no W, no X). Iron `19b0c11` R+X executed zeros.
 #[cfg(target_os = "uefi")]
 unsafe fn ept_map_2m_hpa_rwe(gpa: u64, hpa: u64, replace: bool, write: bool) -> bool {
-    ept_map_2m_hpa_mt(gpa, hpa, replace, write, 0)
+    ept_map_2m_hpa_mt(gpa, hpa, replace, write, 0, true)
 }
 
 /// `mt` is the EPT leaf memory type (0 = UC scratch/sink; 6 = WB RAM).
+/// `invept=false` batches product-ISO report-RAM EPT pre-map (one INVEPT).
 #[cfg(target_os = "uefi")]
-unsafe fn ept_map_2m_hpa_mt(gpa: u64, hpa: u64, replace: bool, write: bool, mt: u64) -> bool {
+unsafe fn ept_map_2m_hpa_mt(
+    gpa: u64,
+    hpa: u64,
+    replace: bool,
+    write: bool,
+    mt: u64,
+    invept: bool,
+) -> bool {
     let pml4 = EPT_PML4.load(Ordering::Acquire);
     if pml4 == 0 || hpa == 0 || (hpa & ((1 << 21) - 1)) != 0 {
         return false;
@@ -5498,7 +12639,9 @@ unsafe fn ept_map_2m_hpa_mt(gpa: u64, hpa: u64, replace: bool, write: bool, mt: 
         }
     }
     core::ptr::write_volatile((pd as *mut u64).add(pd_i), want);
-    crate::memory::ept_hw::invept_global();
+    if invept {
+        crate::memory::ept_hw::invept_global();
+    }
     true
 }
 
@@ -5572,21 +12715,51 @@ unsafe fn guest_uefi_patch_cpu_flush_mapped(hpa: u64) {
 
 #[cfg(target_os = "uefi")]
 unsafe fn guest_uefi_patch_cpu_flush_all_mapped() {
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    // cpu_flush leftover per walk; high GPA first (heap / iron 0x7EE68FA0).
+    let mut patched = CPU_FLUSH_PATCHED.load(Ordering::Acquire) != 0;
+    let mut budget = if patched {
+        0
+    } else {
+        GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK
+    };
+    let mut skipped = 0u32;
+    for i in (0..REPORT_RAM_ARRAY).rev() {
         let hpa = REPORT_RAM_HPA[i].load(Ordering::Acquire);
-        if hpa == 0 || REPORT_RAM_GPA[i].load(Ordering::Acquire) == u64::MAX {
+        let gpa = REPORT_RAM_GPA[i].load(Ordering::Acquire);
+        if hpa == 0 || gpa == u64::MAX {
             continue;
         }
+        if guest_uefi_cpu_flush_skip_mapped(gpa, patched) || budget == 0 {
+            skipped = skipped.saturating_add(1);
+            continue;
+        }
+        budget = budget.saturating_sub(1);
         guest_uefi_patch_cpu_flush_mapped(hpa);
+        if CPU_FLUSH_PATCHED.load(Ordering::Acquire) != 0 {
+            patched = true;
+            budget = 0;
+        }
+    }
+    if skipped != 0 && !CPU_FLUSH_SKIP_LOG.swap(true, Ordering::AcqRel) {
+        serial::write_str("boot: guest-UEFI cpu-flush skip leftover pre-map n=");
+        write_dec(u64::from(skipped));
+        serial::write_byte(b'\n');
     }
 }
 
 #[cfg(target_os = "uefi")]
 unsafe fn guest_uefi_count_cpu_flush_jnz_mapped() -> u32 {
     let mut n = 0u32;
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    let patched = CPU_FLUSH_PATCHED.load(Ordering::Acquire) != 0;
+    for i in 0..REPORT_RAM_ARRAY {
         let hpa = REPORT_RAM_HPA[i].load(Ordering::Acquire);
-        if hpa == 0 || REPORT_RAM_GPA[i].load(Ordering::Acquire) == u64::MAX {
+        let gpa = REPORT_RAM_GPA[i].load(Ordering::Acquire);
+        if hpa == 0 || gpa == u64::MAX {
+            continue;
+        }
+        if guest_uefi_cpu_flush_skip_mapped(gpa, patched)
+            || gpa < GUEST_UEFI_CPU_FLUSH_HEAP_GPA
+        {
             continue;
         }
         // SAFETY: exclusive 2 MiB report-RAM HPA already EPT-mapped WB.
@@ -5613,17 +12786,161 @@ unsafe fn ept_map_2m_report_ram(gpa: u64) -> bool {
     if hpa == 0 {
         return false;
     }
-    ept_map_2m_hpa_mt(g, hpa, false, true, GUEST_UEFI_EPT_MT_WB)
+    ept_map_2m_hpa_mt(g, hpa, false, true, GUEST_UEFI_EPT_MT_WB, true)
+}
+
+/// Iron `e0d5c55`: already-present report-RAM fetch/write may lack X.
+/// Replace the 2 MiB WB leaf with RWE. firmware ZeroMem ept fill.
+#[cfg(target_os = "uefi")]
+unsafe fn ept_map_2m_report_ram_replace(gpa: u64) -> bool {
+    if !guest_uefi_report_ram_should_map(gpa) {
+        return false;
+    }
+    let g = guest_uefi_report_ram_gpa_2m(gpa);
+    let hpa = report_ram_hpa_for(g);
+    if hpa == 0 {
+        return false;
+    }
+    ept_map_2m_hpa_mt(g, hpa, true, true, GUEST_UEFI_EPT_MT_WB, true)
+}
+
+/// Host-zero firmware ZeroMem dest after WFE. Print once. Map dest and
+/// the fault GPA as RWE report-RAM. Existing handle_ept still runs.
+/// Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn firmware_zeromem_ept_fill(gpa: u64, qual: u64, rip: u64) {
+    let dest = SAVED_RBX;
+    let mut cntb = [0u8; 8];
+    let npeek = copy_guest_linear_bytes(SAVED_R14.wrapping_add(0x18), &mut cntb);
+    let count = if npeek >= 8 {
+        u64::from_le_bytes(cntb)
+    } else {
+        0
+    };
+    if FIRMWARE_ZEROMEM_EPT
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        serial::write_str(GUEST_UEFI_ZEROMEM_EPT_PREFIX);
+        write_hex(gpa);
+        serial::write_str(" qual=0x");
+        write_hex(qual);
+        serial::write_str(" rip=0x");
+        write_hex(rip);
+        serial::write_str(" rbx=0x");
+        write_hex(dest);
+        serial::write_str(" n=0x");
+        write_hex(count);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    if guest_uefi_firmware_zeromem_dest_ok(dest, count) {
+        let _ = firmware_zeromem_store_zeros(dest, count);
+        let mut page = dest;
+        let end = dest.saturating_add(count);
+        while page < end {
+            if guest_uefi_report_ram_should_map(page) {
+                let _ = ept_map_2m_report_ram_replace(page);
+            }
+            page = page.saturating_add(GUEST_UEFI_REPORT_RAM_PAGE);
+        }
+    }
+    if guest_uefi_report_ram_should_map(gpa) {
+        let _ = ept_map_2m_report_ram_replace(gpa);
+    }
+    if dest != 0 && guest_uefi_report_ram_should_map(dest) {
+        let _ = ept_map_2m_report_ram_replace(dest);
+    }
+}
+
+/// Zero `count` bytes at guest dest (identity or leftover report-RAM).
+#[cfg(target_os = "uefi")]
+unsafe fn firmware_zeromem_store_zeros(dest: u64, count: u64) -> u64 {
+    let mut done = 0u64;
+    while done < count {
+        let gpa = dest.wrapping_add(done);
+        let Some(hpa) = guest_uefi_gpa_to_hpa(gpa) else {
+            break;
+        };
+        let chunk = (4096 - (gpa & 0xfff)).min(count - done);
+        if chunk == 0 {
+            break;
+        }
+        // SAFETY: dest_ok restricted this GPA to guest-UEFI RAM / report-RAM
+        // already translated to an exclusive HPA.
+        // KANI-TARGET: firmware ZeroMem host fill (outside Proven Core).
+        core::ptr::write_bytes(hpa as *mut u8, 0, chunk as usize);
+        done = done.saturating_add(chunk);
+    }
+    done
 }
 
 fn report_ram_hpa_lookup(gpa: u64) -> u64 {
     let key = guest_uefi_report_ram_gpa_2m(gpa);
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    for i in 0..REPORT_RAM_ARRAY {
         if REPORT_RAM_GPA[i].load(Ordering::Acquire) == key {
             return REPORT_RAM_HPA[i].load(Ordering::Acquire);
         }
     }
     0
+}
+
+/// Resolve a report-RAM HPA. Lazy 2MiB WB map like an EPT miss.
+///
+/// String INS, PUSH/POP, insn peek, and virtqueue do not EPT-walk the GPA.
+/// A lookup miss used to drop bytes (iron EFI stub gzip zeros). Do not
+/// invent HPA (ADR-004).
+fn report_ram_hpa_lookup_or_map(gpa: u64) -> u64 {
+    let existing = report_ram_hpa_lookup(gpa);
+    if existing != 0 {
+        return existing;
+    }
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: exclusive report-RAM pool; guest is VM-exited.
+        // KANI-TARGET: lazy report-RAM for string/PUSH/virtqueue (outside Proven Core).
+        if unsafe { ept_map_2m_report_ram(gpa) } {
+            let hpa = report_ram_hpa_lookup(gpa);
+            if hpa != 0 {
+                let n = REPORT_RAM_MAPS.fetch_add(1, Ordering::AcqRel);
+                if n < 8 {
+                    serial::write_str("boot: guest-UEFI lazy report-RAM gpa=0x");
+                    write_hex(gpa);
+                    serial::write_str(" hpa=0x");
+                    write_hex(hpa);
+                    serial::write_byte(b'\n');
+                }
+                return hpa;
+            }
+        }
+    }
+    0
+}
+
+/// GPA → HPA for guest-UEFI low RAM, OVMF flash, and mapped report-RAM.
+pub fn guest_uefi_gpa_to_hpa(gpa: u64) -> Option<u64> {
+    if gpa < GUEST_UEFI_LOW_RAM_BYTES {
+        let hpa = RAM_HPA.load(Ordering::Acquire);
+        if hpa == 0 {
+            return None;
+        }
+        return Some(hpa + gpa);
+    }
+    if let Some(off) = guest_uefi_flash_off(gpa) {
+        let hpa = FLASH_HPA.load(Ordering::Acquire);
+        let len = FLASH_LEN.load(Ordering::Acquire);
+        if hpa == 0 || off >= len {
+            return None;
+        }
+        return Some(hpa + off);
+    }
+    if guest_uefi_report_ram_should_map(gpa) {
+        let base = report_ram_hpa_lookup_or_map(gpa);
+        if base != 0 {
+            return Some(base + guest_uefi_report_ram_page_off(gpa));
+        }
+        return None;
+    }
+    None
 }
 
 fn report_ram_hpa_for(gpa: u64) -> u64 {
@@ -5632,7 +12949,7 @@ fn report_ram_hpa_for(gpa: u64) -> u64 {
         return existing;
     }
     let key = guest_uefi_report_ram_gpa_2m(gpa);
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    for i in 0..REPORT_RAM_ARRAY {
         if REPORT_RAM_GPA[i].load(Ordering::Acquire) == u64::MAX {
             let hpa = REPORT_RAM_HPA[i].load(Ordering::Acquire);
             if hpa == 0 {
@@ -5668,7 +12985,7 @@ pub fn report_ram_return_to_e4(host_hypervisor: bool) -> bool {
 /// `0xc400000` then `#DF` `rip=0x9e036`. Guest-UEFI has finished.
 pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator, return_to_e4: bool) -> u32 {
     let mut n = 0u32;
-    for i in 0..GUEST_UEFI_REPORT_RAM_SLOTS {
+    for i in 0..REPORT_RAM_ARRAY {
         let hpa = REPORT_RAM_HPA[i].swap(0, Ordering::AcqRel);
         REPORT_RAM_GPA[i].store(u64::MAX, Ordering::Release);
         if hpa == 0 {
@@ -5682,7 +12999,7 @@ pub fn release_report_ram_for_e4(alloc: &mut FrameAllocator, return_to_e4: bool)
                 core::ptr::write_bytes(hpa as *mut u8, 0, GUEST_UEFI_REPORT_RAM_PAGE as usize);
             }
         }
-        if return_to_e4 {
+        if return_to_e4 && alloc.owns_phys_range(hpa, GUEST_UEFI_REPORT_RAM_PAGE) {
             let mut off = 0u64;
             while off < GUEST_UEFI_REPORT_RAM_PAGE {
                 let _ = alloc.free_frame(PhysFrame::from_phys(hpa + off));
@@ -5729,9 +13046,18 @@ unsafe fn guest_uefi_rip_is_poison_fill(rip: u64) -> bool {
     n >= 4 && guest_uefi_insn_is_poison_fill(buf[0], buf[1], buf[2], buf[3])
 }
 
-/// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence).
+/// 16550-compatible COM1/COM2. THR bytes go to host serial (firmware evidence)
+/// via [`crate::boot::serial::write_byte_nowait`] so a guest `out` cannot stall
+/// the HV on iDRAC SOL THRE (guest UART nowait; do not clear COM2_LIVE).
+/// Iron `f423d03`: enqueue + drain (guest UART TX ring drain) so HV ticks
+/// do not drop Linux printk.
+/// Product ISO uses a scratch/FIFO 16550 so Linux 8250 autoconfig can bind ttyS0.
 #[cfg(target_os = "uefi")]
 unsafe fn handle_uart(port: u16, is_in: bool, size: u64) {
+    if crate::devices::ide_cdrom::product_iso_window_armed() {
+        handle_uart_product(port, is_in, size);
+        return;
+    }
     let off = port & 7;
     let com1 = (0x03F8..=0x03FF).contains(&port);
     let lcr_slot: &AtomicU8 = if com1 { &UART_LCR_COM1 } else { &UART_LCR_COM2 };
@@ -5752,23 +13078,131 @@ unsafe fn handle_uart(port: u16, is_in: bool, size: u64) {
     } else if off == 3 {
         lcr_slot.store(SAVED_RAX as u8, Ordering::Release);
     } else if off == 0 && (lcr_slot.load(Ordering::Acquire) & 0x80) == 0 {
-        let b = SAVED_RAX as u8;
-        if !COM_BANNER.swap(true, Ordering::AcqRel) {
-            serial::write_line("boot: guest-UEFI firmware-serial begin");
-        }
-        serial::write_byte(b);
-        COM_BYTES.fetch_add(1, Ordering::AcqRel);
-        let m = eltorito_com_match_step(ELTORITO_COM_MATCH.load(Ordering::Acquire), b);
-        ELTORITO_COM_MATCH.store(m, Ordering::Release);
-        maybe_print_past_sec(false);
-        maybe_print_eltorito();
+        emit_guest_uart_byte(SAVED_RAX as u8);
     }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn handle_uart_product(port: u16, is_in: bool, size: u64) {
+    let mask = if size == 1 {
+        0xffu64
+    } else if size == 2 {
+        0xffff
+    } else {
+        0xffff_ffff
+    };
+    let (out, thr, _) = crate::devices::guest_uart::pio(port, is_in, SAVED_RAX as u8);
+    if is_in {
+        SAVED_RAX = (SAVED_RAX & !mask) | (u64::from(out) & mask);
+    } else if let Some(b) = thr {
+        emit_guest_uart_byte(b);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+unsafe fn emit_guest_uart_byte(b: u8) {
+    if !COM_BANNER.swap(true, Ordering::AcqRel) {
+        serial::write_line("boot: guest-UEFI firmware-serial begin");
+    }
+    // Guest UART nowait (do not clear COM2_LIVE): iron 115e5ee froze SOL
+    // at PAT after blocking THR wait on this tee. Iron f423d03 dropped
+    // Linux printk (guest UART TX ring drain retries when THRE returns).
+    serial::write_byte_nowait(b);
+    COM_BYTES.fetch_add(1, Ordering::AcqRel);
+    let m = eltorito_com_match_step(ELTORITO_COM_MATCH.load(Ordering::Acquire), b);
+    ELTORITO_COM_MATCH.store(m, Ordering::Release);
+    maybe_print_past_sec(false);
+    maybe_print_eltorito();
+}
+
+/// CPUID clobbers EAX–EDX; alpine-virt keeps `base` in EBX and
+/// `native_cpuid` pushes it. Patch the 8-byte RSP slot (not live RBX —
+/// that is the CPUID EBX output). Also snap RBP/R10–R15 for inlined
+/// scans. Firmware CPUID (low RIP) is not touched. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn linux_hypervisor_scan_bump_callee_gprs(leaf: u32) -> bool {
+    let mut gprs = [
+        SAVED_RBP, SAVED_R10, SAVED_R11, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15,
+    ];
+    let gpr_hit = guest_uefi_linux_hypervisor_scan_bump_gprs(leaf, &mut gprs);
+    if gpr_hit {
+        SAVED_RBP = gprs[0];
+        SAVED_R10 = gprs[1];
+        SAVED_R11 = gprs[2];
+        SAVED_R12 = gprs[3];
+        SAVED_R13 = gprs[4];
+        SAVED_R14 = gprs[5];
+        SAVED_R15 = gprs[6];
+    }
+    let stack_hit = linux_hypervisor_scan_bump_native_cpuid_rbx_slot(leaf);
+    if !(gpr_hit || stack_hit) {
+        return false;
+    }
+    if LINUX_HV_SCAN_BUMP
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        serial::write_str("boot: guest-UEFI linux hypervisor-scan bump leaf=0x");
+        write_hex(u64::from(leaf));
+        serial::write_str(" gpr=");
+        write_dec(gpr_hit as u64);
+        serial::write_str(" stack=");
+        write_dec(stack_hit as u64);
+        serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+    }
+    true
+}
+
+/// alpine-virt `native_cpuid`: `push %rbx; …; cpuid`. RSP is the saved
+/// `base`. Do not write SAVED_RBX (that stores into signature[0]).
+/// Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn linux_hypervisor_scan_bump_native_cpuid_rbx_slot(leaf: u32) -> bool {
+    if !guest_uefi_cpuid_leaf_is_hypervisor_scan(leaf) {
+        return false;
+    }
+    let rsp = ops::vmread(GUEST_RSP).unwrap_or(0);
+    let mut buf = [0u8; 8];
+    if copy_guest_linear_bytes(rsp, &mut buf) < 8 {
+        return false;
+    }
+    let word = u64::from_le_bytes(buf);
+    let next = guest_uefi_linux_hypervisor_scan_bump_gpr(leaf, word);
+    if next == word {
+        return false;
+    }
+    write_guest_linear_bytes(rsp, &next.to_le_bytes())
 }
 
 #[cfg(target_os = "uefi")]
 unsafe fn handle_cpuid() -> bool {
     let leaf = SAVED_RAX as u32;
     let sub = SAVED_RCX as u32;
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    if guest_uefi_linux_earlycon_share_on_linux_deliver(
+        guest_uefi_pf_should_deliver_to_guest(rip),
+        crate::devices::ide_cdrom::product_iso_window_armed(),
+    ) {
+        // linux earlycon share first CPUID (iron 9a3cbfa n=1 before #PF;
+        // blocking write_byte while printk is live).
+        serial::set_linux_earlycon_share(true);
+    }
+    if guest_uefi_pf_should_deliver_to_guest(rip) {
+        let k = LINUX_CPUID.fetch_add(1, Ordering::AcqRel);
+        let n = k.saturating_add(1);
+        if guest_uefi_linux_cpuid_should_log(n) {
+            serial::write_str("boot: guest-UEFI linux cpuid n=");
+            write_dec(u64::from(n));
+            serial::write_str(" leaf=0x");
+            write_hex(u64::from(leaf));
+            serial::write_str(" sub=0x");
+            write_hex(u64::from(sub));
+            serial::write_str(" rip=0x");
+            write_hex(rip);
+            serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+        }
+        linux_hypervisor_scan_bump_callee_gprs(leaf);
+    }
     if note_unique_cpuid(leaf, sub) {
         serial::write_str("boot: guest-UEFI CPUID leaf=0x");
         write_hex(u64::from(leaf));
@@ -5776,12 +13210,21 @@ unsafe fn handle_cpuid() -> bool {
         write_hex(u64::from(sub));
         serial::write_byte(b'\n');
     }
-    let r = guest_uefi_filter_cpuid(leaf, sub);
+    let r = if guest_uefi_pf_should_deliver_to_guest(rip) {
+        guest_uefi_filter_cpuid_for_linux(leaf, sub)
+    } else {
+        guest_uefi_filter_cpuid(leaf, sub)
+    };
     SAVED_RAX = r.eax as u64;
     SAVED_RBX = r.ebx as u64;
     SAVED_RCX = r.ecx as u64;
     SAVED_RDX = r.edx as u64;
-    skip_insn()
+    let extra = guest_uefi_linux_cpuid_exit_skip(rip);
+    if extra != 0 {
+        let _ = ops::vmwrite(GUEST_RIP, rip.wrapping_add(extra));
+        return true;
+    }
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]
@@ -5883,6 +13326,9 @@ fn capture_host_xsave_before_guest_uefi() {}
 ///
 /// VERIFICATION: L1 (host tests on the value helpers)
 pub unsafe fn restore_host_xsave_after_guest_uefi() {
+    crate::boot::serial::guest_tx_clear();
+    crate::boot::serial::set_linux_earlycon_share(false);
+    crate::boot::serial::set_linux_high_half(false);
     #[cfg(target_os = "uefi")]
     {
         restore_host_xsave_after_guest_uefi_inner();
@@ -5926,6 +13372,10 @@ unsafe fn restore_host_xsave_after_guest_uefi_inner() {
     write_hex(want);
     serial::write_str(" osxsave=");
     write_dec(u64::from(had_osxsave));
+    serial::write_str(" reason=0x");
+    write_hex_u32(LAST_EXIT_REASON.load(Ordering::Acquire));
+    serial::write_str(" rip=0x");
+    write_hex(LAST_GUEST_RIP.load(Ordering::Acquire));
     serial::write_byte(b'\n');
     // Nested Intel 1a93cb8: after ATAPI-OK, E4 Linux `#DF` cr4=0x2060
     // (PAE+MCE+VMXE, no OSFXSR). Keep SSE on the host so E4 copies it.
@@ -5964,6 +13414,22 @@ unsafe fn handle_xsetbv() -> bool {
     skip_insn()
 }
 
+/// High-half Linux, RayNu-F EBS handoff, `#PF` deliver, or a prior hold
+/// may keep EFER.NXE. Firmware (all false) still strips NXE.
+#[cfg(target_os = "uefi")]
+unsafe fn guest_uefi_linux_allow_efer_nx() -> bool {
+    let rip = ops::vmread(GUEST_RIP).unwrap_or(0);
+    let high_half_rip = guest_uefi_pf_should_deliver_to_guest(rip);
+    let linux_sticky = PF_LINUX_DELIVER.load(Ordering::Acquire) != 0
+        || RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire);
+    let prev_hold = LINUX_EFER_NX_HOLD.load(Ordering::Acquire);
+    let allow = guest_uefi_efer_nx_should_hold(high_half_rip, linux_sticky, prev_hold);
+    if allow {
+        LINUX_EFER_NX_HOLD.store(true, Ordering::Release);
+    }
+    guest_uefi_efer_allow_nx(allow)
+}
+
 /// CR0.PG does not exit. On every VM-exit, set LMA = LME && PG and match
 /// the IA-32e VM-entry control so RDMSR EFER is architectural and the
 /// next VMRESUME is legal (KVM vmx_set_efer).
@@ -5971,7 +13437,11 @@ unsafe fn handle_xsetbv() -> bool {
 unsafe fn sync_guest_efer_lma() {
     let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
     let efer = ops::vmread(GUEST_IA32_EFER).unwrap_or(0);
-    let with = guest_uefi_efer_with_lma(efer, guest_uefi_cr0_is_paging(cr0));
+    let with = guest_uefi_efer_with_lma_allow_nx(
+        efer,
+        guest_uefi_cr0_is_paging(cr0),
+        guest_uefi_linux_allow_efer_nx(),
+    );
     LAST_EFER.store(with, Ordering::Release);
     let lma = (with & GUEST_UEFI_EFER_LMA) != 0;
     if with != efer {
@@ -5999,7 +13469,11 @@ unsafe fn handle_rdmsr() -> bool {
     let mut v = guest_uefi_rdmsr(msr);
     if msr == 0xC000_0080 {
         let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
-        v = guest_uefi_efer_with_lma(v, guest_uefi_cr0_is_paging(cr0));
+        v = guest_uefi_efer_with_lma_allow_nx(
+            v,
+            guest_uefi_cr0_is_paging(cr0),
+            guest_uefi_linux_allow_efer_nx(),
+        );
         LAST_EFER.store(v, Ordering::Release);
     }
     if msr != 0x10 && note_unique_rdmsr(msr) {
@@ -6014,7 +13488,7 @@ unsafe fn handle_rdmsr() -> bool {
     }
     SAVED_RAX = v as u32 as u64;
     SAVED_RDX = (v >> 32) as u32 as u64;
-    skip_insn()
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]
@@ -6092,7 +13566,11 @@ unsafe fn handle_wrmsr() -> bool {
     let mut v = (SAVED_RAX & 0xffff_ffff) | ((SAVED_RDX & 0xffff_ffff) << 32);
     if msr == 0xC000_0080 {
         let cr0 = ops::vmread(GUEST_CR0).unwrap_or(0);
-        v = guest_uefi_efer_with_lma(v, guest_uefi_cr0_is_paging(cr0));
+        v = guest_uefi_efer_with_lma_allow_nx(
+            v,
+            guest_uefi_cr0_is_paging(cr0),
+            guest_uefi_linux_allow_efer_nx(),
+        );
         LAST_EFER.store(v, Ordering::Release);
     }
     if msr != 0x10 && note_unique_wrmsr(msr) {
@@ -6103,13 +13581,13 @@ unsafe fn handle_wrmsr() -> bool {
         serial::write_byte(b'\n');
     }
     if crate::devices::lapic_virt::wrmsr(msr, v).is_some() {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     if guest_uefi_misc_enable_write(msr, v) {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     if guest_uefi_mtrr_write(msr, v) {
-        return skip_insn();
+        return skip_cpuid_msr();
     }
     match msr_firewall::classify_msr(msr, msr_firewall::MsrAccess::Write) {
         msr_firewall::MsrAction::VmcsEfer => {
@@ -6135,9 +13613,25 @@ unsafe fn handle_wrmsr() -> bool {
             let _ = ops::vmwrite(GUEST_GS_BASE, v);
         }
         msr_firewall::MsrAction::Shadow => msr_firewall::shadow_write(msr, v),
+        msr_firewall::MsrAction::HostPassthrough => {
+            // SAFETY: firewall allow-list (STAR/LSTAR/CSTAR/SFMASK/KERNEL_GS_BASE/TSC_AUX).
+            // `syscall`/`sysret`/`swapgs` read these from hardware, not the VMCS.
+            // Nested 8f62fea: silent `_ => {}` left LSTAR=0 → user helper
+            // `syscall` at RIP=0 + user RSP → #DF. Mirror launch.rs.
+            // KANI-TARGET: guest-UEFI WRMSR HostPassthrough (outside Proven Core).
+            cpu::wrmsr(msr, v);
+            if guest_uefi_wrmsr_syscall_passthrough(msr) {
+                // nowait: earlycon share hushes write_str (nested 659bb41).
+                serial::write_str_nowait("boot: guest-UEFI linux syscall WRMSR index=0x");
+                write_hex_nowait(u64::from(msr));
+                serial::write_str_nowait(" val=0x");
+                write_hex_nowait(v);
+                serial::write_line_nowait(" (passthrough; not ISO-INSTALL-OK)");
+            }
+        }
         _ => {}
     }
-    skip_insn()
+    skip_cpuid_msr()
 }
 
 #[cfg(target_os = "uefi")]
@@ -6229,6 +13723,53 @@ fn write_dec(mut n: u64) {
     }
     for &b in &buf[i..] {
         serial::write_byte(b);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex_inner_nowait(mut n: u64) {
+    let mut buf = [0u8; 16];
+    let mut i = 16;
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    while n > 0 && i > 0 {
+        i -= 1;
+        let d = (n & 0xF) as u8;
+        buf[i] = if d < 10 { b'0' + d } else { b'a' + (d - 10) };
+        n >>= 4;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte_nowait(b);
+    }
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex_nowait(n: u64) {
+    write_hex_inner_nowait(n);
+}
+
+#[cfg(target_os = "uefi")]
+fn write_hex_u32_nowait(n: u32) {
+    write_hex_inner_nowait(n as u64);
+}
+
+#[cfg(target_os = "uefi")]
+fn write_dec_nowait(mut n: u64) {
+    if n == 0 {
+        serial::write_byte_nowait(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 20;
+    while n > 0 && i > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    for &b in &buf[i..] {
+        serial::write_byte_nowait(b);
     }
 }
 

@@ -360,7 +360,8 @@ pub const IDENTITY_XAPIC_GPA: u64 = 0xFEE0_0000;
 /// Iron `mtrr0=0x80000000` UC hole. Not RAM (ADR-004 / `fdf07ba` ASSERT).
 pub const IDENTITY_MTRR_UC_FLOOR: u64 = 0x8000_0000;
 /// Same GPA as guest-UEFI `GUEST_UEFI_HV_PML4` (not MEMFD `0x800000`).
-pub const IDENTITY_HV_PML4: u64 = 0x200000;
+/// HV identity PML4 0x400000 (not 0x200000 PEI stack).
+pub const IDENTITY_HV_PML4: u64 = 0x400000;
 
 /// Iron `124c1a8`: long-mode CR2 `0xffffffff96808086` is sign-extended
 /// `0x96808086`. The CPU walks PML4[511], not the low 4G PDPT.
@@ -773,7 +774,8 @@ pub fn identity_clear_table_pwt_pcd(e: u64) -> u64 {
 
 /// SPLIT4K PT for the GPA-0 4K split. HV/SEC CR3 uses the reserved pool
 /// next to that PML4. Firmware CR3 (`0x1a01000`) uses the HV pool at
-/// `0x20B000` so we never store a PT at `firmware_cr3+0xB000`.
+/// `IDENTITY_HV_PML4+IDENTITY_4G_BYTES` (`0x40B000`; was `0x20B000`) so we
+/// never store a PT at `firmware_cr3+0xB000`.
 fn identity_gpa0_split_pt_gpa(cr3: u64) -> u64 {
     let pml4 = cr3 & ADDR_MASK;
     if pml4 == 0 || pml4 == IDENTITY_HV_PML4 {
@@ -1222,6 +1224,10 @@ pub unsafe fn identity_fix_ram_wp(
 mod guest_pt_test {
     use super::*;
 
+    /// Host-test slab covering HV identity tables at [`IDENTITY_HV_PML4`].
+    const IDENTITY_TEST_RAM: usize =
+        (IDENTITY_HV_PML4 + IDENTITY_RESERVED_BYTES) as usize;
+
     #[repr(C, align(4096))]
     struct PageTable([u64; 512]);
 
@@ -1434,7 +1440,7 @@ mod guest_pt_test {
         // Iron a428202: CR3=0x200000, pde=0xc0400083, identity MMIO fail.
         // PML4[0] pointed at a PDPT that was not pml4+0x1000.
         identity_set_pat_uc_hole(true);
-        let mut ram = vec![0u8; 0x210000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
@@ -1451,8 +1457,8 @@ mod guest_pt_test {
                 "{r:?}"
             );
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x8000, 2).unwrap();
-            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
-            let pde = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
+            assert_eq!(pdpt2, (IDENTITY_HV_PML4 + 0x4000) | LEAF_FLAGS);
+            let pde = read_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4 + 0x4000, 0).unwrap();
             assert_eq!(pde, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
             identity_set_pat_uc_hole(false);
         }
@@ -1463,7 +1469,7 @@ mod guest_pt_test {
         // Iron 7413554: after SPLIT4K resumed, #PF cr2=0xfee00020 err=0x9
         // pml4e=0x5a6f (PDPT at 0x5000) pdpte=0xc0600083 (1GiB + RSVD).
         identity_set_pat_uc_hole(true);
-        let mut ram = vec![0u8; 0x210000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         let cr2 = 0xFEE0_0020u64;
@@ -1489,12 +1495,12 @@ mod guest_pt_test {
                 "{r:?}"
             );
             let pdpt3 = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
-            assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
+            assert_eq!(pdpt3, (IDENTITY_HV_PML4 + 0x5000) | LEAF_FLAGS);
             assert_eq!((pdpt3 & LARGE), 0);
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x5000, 2).unwrap();
-            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
+            assert_eq!(pdpt2, (IDENTITY_HV_PML4 + 0x4000) | LEAF_FLAGS);
             assert_eq!((pdpt2 & LARGE), 0);
-            let hole2 = read_entry_ram(ram_hpa, ram_len, 0x204000, 0).unwrap();
+            let hole2 = read_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4 + 0x4000, 0).unwrap();
             assert_eq!(
                 hole2,
                 IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS,
@@ -1512,30 +1518,30 @@ mod guest_pt_test {
         // PDPT at 0x5000. PDPT[2] can already be a table while PDPT[3] is
         // still 1GiB WB (CpuDxe software-walk, no extra #PF).
         identity_set_pat_uc_hole(true);
-        let mut ram = vec![0u8; 0x220000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
             let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
             assert_eq!(cr3, IDENTITY_HV_PML4);
             write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, 0x5000 | PRESENT);
-            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x202000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, (IDENTITY_HV_PML4 + 0x2000) | LEAF_FLAGS);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 2, 0xC040_0083);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
             let n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
             assert!(n >= 2, "split both hole 1GiB PDPTEs, n={n}");
             let pdpt3 = read_entry_ram(ram_hpa, ram_len, 0x5000, 3).unwrap();
-            assert_eq!(pdpt3, 0x205000 | LEAF_FLAGS);
+            assert_eq!(pdpt3, (IDENTITY_HV_PML4 + 0x5000) | LEAF_FLAGS);
             assert_eq!((pdpt3 & LARGE), 0);
             let pde3 = read_entry_ram(ram_hpa, ram_len, pdpt3 & !0xFFF, 0).unwrap();
             assert_eq!(pde3, IDENTITY_MTRR_UC_3G | LARGE_2M_UC_FLAGS);
             let pdpt2 = read_entry_ram(ram_hpa, ram_len, 0x5000, 2).unwrap();
-            assert_eq!(pdpt2, 0x204000 | LEAF_FLAGS);
+            assert_eq!(pdpt2, (IDENTITY_HV_PML4 + 0x4000) | LEAF_FLAGS);
             assert_eq!((pdpt2 & LARGE), 0);
             let hole2 = read_entry_ram(ram_hpa, ram_len, pdpt2 & !0xFFF, 0).unwrap();
             assert_eq!(hole2, IDENTITY_MTRR_UC_FLOOR | LARGE_2M_UC_FLAGS);
             let pdpt1 = read_entry_ram(ram_hpa, ram_len, 0x5000, 1).unwrap();
-            assert_eq!(pdpt1, 0x203000 | LEAF_FLAGS, "live PDPT[1] NP vs MTRR WB");
+            assert_eq!(pdpt1, (IDENTITY_HV_PML4 + 0x3000) | LEAF_FLAGS, "live PDPT[1] NP vs MTRR WB");
             assert_eq!(
                 identity_walk_pde(IDENTITY_HV_PML4, IDENTITY_WB_1G, ram_hpa, ram_len),
                 IDENTITY_WB_1G | LARGE_2M_FLAGS
@@ -1562,14 +1568,14 @@ mod guest_pt_test {
         // Iron COM2 after keep_4k: pml4e=0x1a02023 pdpte1=0x1a04003 (no USER).
         assert_eq!(identity_clear_table_pwt_pcd(0x1A0_2023), 0x1A0_2027);
         assert_eq!(identity_clear_table_pwt_pcd(0x1A0_4003), 0x1A0_4007);
-        let mut ram = vec![0u8; 0x220000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
             let cr3 = build_identity_4g(ram_hpa, ram_len, IDENTITY_HV_PML4).expect("build 4G");
             assert_eq!(cr3, IDENTITY_HV_PML4);
             write_entry_ram(ram_hpa, ram_len, IDENTITY_HV_PML4, 0, IDENTITY_IRON_PML4E_PWT);
-            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, 0x202000 | LEAF_FLAGS);
+            write_entry_ram(ram_hpa, ram_len, 0x5000, 0, (IDENTITY_HV_PML4 + 0x2000) | LEAF_FLAGS);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 2, 0xC040_0083);
             write_entry_ram(ram_hpa, ram_len, 0x5000, 3, 0xC060_0083);
             let _n = identity_sync_live_mtrr_uc_hole(ram_hpa, ram_len, IDENTITY_HV_PML4);
@@ -1590,7 +1596,7 @@ mod guest_pt_test {
         assert_eq!(IDENTITY_VGA_A0000, 0xA_0000);
         assert_eq!(IDENTITY_VGA_C0000, 0xC_0000);
         assert_eq!(IDENTITY_PML4E1_GVA, 1 << 39);
-        let mut ram = vec![0u8; 0x220000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
@@ -1632,7 +1638,7 @@ mod guest_pt_test {
     fn identity_split_gpa0_fixed_mtrr_breaks_1m_leaf() {
         // Iron COM2 after keep_4k: 0-4GiB PT matches MTRR WB+UC then ASSERT
         // callerrip=0x1d25193. 2MiB at GPA 0 spans the 1MiB fixed-MTRR.
-        let mut ram = vec![0u8; 0x220000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {
@@ -1684,7 +1690,7 @@ mod guest_pt_test {
     fn identity_sync_skips_gpa_5000_until_pml4_retarget() {
         // Do not treat low-RAM 0x5000 as a PDPT while PML4[0] still walks
         // pml4+0x1000 (iron 4G window before CpuDxe retarget).
-        let mut ram = vec![0u8; 0x220000];
+        let mut ram = vec![0u8; IDENTITY_TEST_RAM];
         let ram_hpa = ram.as_mut_ptr() as u64;
         let ram_len = 32 * 1024 * 1024;
         unsafe {

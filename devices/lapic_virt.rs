@@ -78,10 +78,15 @@ fn reg_from_msr(index: u32) -> u32 {
 }
 
 fn reg_from_gpa(gpa: u64) -> Option<u32> {
-    if gpa < APIC_GPA || gpa >= APIC_GPA + 0x1000 {
+    if !is_xapic_mmio_gpa(gpa) {
         return None;
     }
     Some((gpa - APIC_GPA) as u32)
+}
+
+/// Guest-UEFI product ISO leaves this 4 KiB unmapped (trap-and-emulate).
+pub fn is_xapic_mmio_gpa(gpa: u64) -> bool {
+    gpa >= APIC_GPA && gpa < APIC_GPA + 0x1000
 }
 
 fn divide_value(dcr: u32) -> u32 {
@@ -138,8 +143,47 @@ fn highest_bit(regs: *const [u32; 8]) -> Option<u8> {
     }
 }
 
+fn bit_is_set(regs: *const [u32; 8], vec: u8) -> bool {
+    // SAFETY: caller passes APIC_IRR/ISR pointer on VMEXIT path.
+    unsafe {
+        let w = (*regs)[(vec / 32) as usize];
+        (w & (1u32 << (vec % 32))) != 0
+    }
+}
+
 fn set_irr(vec: u8) {
     bit_set(core::ptr::addr_of_mut!(APIC_IRR), vec)
+}
+
+/// APIC TPR (8-bit). CR8 is bits 7:4.
+pub fn tpr() -> u32 {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe { APIC_TPR & 0xFF }
+}
+
+pub fn set_tpr(val: u32) {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        APIC_TPR = val & 0xFF;
+    }
+}
+
+/// Guest CR8 (TPR class 0..15). Linux `write_cr8` / `read_cr8`.
+pub fn cr8() -> u64 {
+    u64::from((tpr() >> 4) & 0xF)
+}
+
+pub fn set_cr8(val: u64) {
+    set_tpr(((val as u32) & 0xF) << 4);
+}
+
+/// Latch a device IRQ (IOAPIC vector) into IRR. Stage 46 product ISO uses
+/// this so Linux `ack_APIC_irq` EOI matches; bare VM-entry inject of the
+/// same vector is the M3.12 `Fatal exception in interrupt` path.
+pub fn latch_irr(vec: u8) {
+    if vec >= 16 {
+        set_irr(vec);
+    }
 }
 
 fn processor_priority() -> u32 {
@@ -223,6 +267,7 @@ fn current_count_raw() -> u32 {
 fn handle_eoi() {
     if let Some(v) = highest_bit(core::ptr::addr_of!(APIC_ISR)) {
         bit_clear(core::ptr::addr_of_mut!(APIC_ISR), v);
+        crate::devices::guest_irq::ioapic_eoi(v);
     }
 }
 
@@ -298,6 +343,48 @@ pub fn host_timer_armed_for_guest() -> bool {
     unsafe { HOST_TIMER_FOR_GUEST }
 }
 
+/// Guest-UEFI has no host LAPIC one-shot. Poll CUR_COUNT on VMX preempt/HLT
+/// and latch IRR when the virtual countdown reaches zero. Does not inject.
+pub fn poll_timer_expiry() -> bool {
+    // SAFETY: VMEXIT path.
+    unsafe {
+        if !HOST_TIMER_FOR_GUEST || !TIMER_RUNNING || APIC_INIT_COUNT == 0 {
+            return false;
+        }
+        if elapsed_counts() < APIC_INIT_COUNT as u64 {
+            return false;
+        }
+    }
+    on_host_timer_fire()
+}
+
+/// HLT-exiting spends no guest time, so `poll_timer_expiry` never sees
+/// CUR_COUNT hit 0 while BDS CpuSleeps. Force LVT expiry into IRR.
+/// If LVT is still masked (reset `0xEF`), use vec 0x20 (iron `eac424b`
+/// IDT[0x20] writes CR8). If OVMF already unmasked, keep that vector.
+/// firmware LAPIC timer expiry. Not `ISO-INSTALL-OK`.
+pub fn force_firmware_lapic_timer_expiry() -> bool {
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        let masked = (APIC_LVT_TIMER & LVT_MASKED) != 0;
+        if masked {
+            APIC_LVT_TIMER =
+                (APIC_LVT_TIMER & !0xFF & !LVT_MASKED) | 0x20 | LVT_PERIODIC;
+        } else {
+            APIC_LVT_TIMER = (APIC_LVT_TIMER & !LVT_MASKED) | LVT_PERIODIC;
+        }
+        APIC_SVR |= SVR_ENABLED;
+        if APIC_INIT_COUNT == 0 {
+            APIC_INIT_COUNT = 1;
+        }
+        TIMER_START_TSC = 0;
+        TIMER_RUNNING = true;
+        HOST_TIMER_FOR_GUEST = true;
+        PENDING_VECTOR = Some(lvt_timer_vector());
+    }
+    on_host_timer_fire()
+}
+
 /// True when IRR holds a vector deliverable against the current PPR.
 pub fn has_deliverable_irr() -> bool {
     let Some(vec) = highest_bit(core::ptr::addr_of!(APIC_IRR)) else {
@@ -305,6 +392,21 @@ pub fn has_deliverable_irr() -> bool {
     };
     let ppr = processor_priority() & 0xF0;
     ((vec as u32) & 0xF0) > ppr
+}
+
+/// True when IRR has any latched vector, ignoring TPR/PPR.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn has_pending_irr() -> bool {
+    highest_bit(core::ptr::addr_of!(APIC_IRR)).is_some()
+}
+
+/// True when IRR holds `vec` (does not consult TPR/PPR).
+/// firmware prefer ATA IRR. Not `ISO-INSTALL-OK`.
+pub fn has_irr_vec(vec: u8) -> bool {
+    if vec < 16 {
+        return false;
+    }
+    bit_is_set(core::ptr::addr_of!(APIC_IRR), vec)
 }
 
 /// Host LAPIC one-shot expired for a guest-armed virtual timer.
@@ -337,18 +439,62 @@ pub fn on_host_timer_fire() -> bool {
     }
 }
 
-/// Move the highest deliverable IRR bit into ISR and return its vector.
-pub fn take_deliverable_vector() -> Option<u32> {
+fn take_irr_vector(ignore_tpr: bool) -> Option<u32> {
     // SAFETY: VMEXIT path.
     unsafe {
         let vec = highest_bit(core::ptr::addr_of!(APIC_IRR))?;
-        let ppr = processor_priority() & 0xF0;
-        if ((vec as u32) & 0xF0) <= ppr {
-            return None;
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
         }
         bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
         bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
         // Timer LVT vector (typically 0xEF) → M3.12 APIC-OK.
+        if vec == lvt_timer_vector() || vec == 0xEF {
+            if !APIC_OK {
+                APIC_OK = true;
+                APIC_OK_PRINT = true;
+            }
+        }
+        Some(vec as u32)
+    }
+}
+
+/// Move the highest deliverable IRR bit into ISR and return its vector.
+pub fn take_deliverable_vector() -> Option<u32> {
+    take_irr_vector(false)
+}
+
+/// IRR→ISR ignoring TPR/PPR. Firmware BDS CpuSleep after BOTH-OK.
+/// firmware HLT ignores TPR. Not `ISO-INSTALL-OK`.
+pub fn take_highest_irr() -> Option<u32> {
+    take_irr_vector(true)
+}
+
+/// Move one chosen IRR bit into ISR. Firmware PACKET prefers ATA `0x2E`
+/// over LVT `0xEF` so ignore-TPR does not livelock the timer ISR
+/// (iron `ea30da1`). After ataio, `has_deliverable_irr` drops class `0x20`
+/// while CR8>=2 (iron `084430f`). firmware prefer ATA IRR.
+/// Not `ISO-INSTALL-OK`.
+pub fn take_irr_vec(vec: u8, ignore_tpr: bool) -> Option<u32> {
+    if vec < 16 {
+        return None;
+    }
+    // SAFETY: VMEXIT / host-test path.
+    unsafe {
+        if !bit_is_set(core::ptr::addr_of!(APIC_IRR), vec) {
+            return None;
+        }
+        if !ignore_tpr {
+            let ppr = processor_priority() & 0xF0;
+            if ((vec as u32) & 0xF0) <= ppr {
+                return None;
+            }
+        }
+        bit_clear(core::ptr::addr_of_mut!(APIC_IRR), vec);
+        bit_set(core::ptr::addr_of_mut!(APIC_ISR), vec);
         if vec == lvt_timer_vector() || vec == 0xEF {
             if !APIC_OK {
                 APIC_OK = true;
@@ -439,6 +585,31 @@ pub fn mmio_access(gpa: u64, is_write: bool, write_val: u32) -> Option<Option<u3
         Some(None)
     } else {
         Some(Some(read_reg(reg)))
+    }
+}
+
+/// F7: restore power-on LAPIC statics for a RayNu-F relaunch. Does not
+/// touch EPT or the xAPIC MMIO GPA. Not `ISO-INSTALL-OK`.
+pub fn reset() {
+    // SAFETY: BSP-only guest-UEFI path; the guest is halted for relaunch.
+    // KANI-TARGET: guest-UEFI LAPIC reset (outside Proven Core).
+    unsafe {
+        APIC_ID = 0;
+        APIC_TPR = 0;
+        APIC_SVR = 0xFF | SVR_ENABLED;
+        APIC_LVT_TIMER = LVT_MASKED | 0xEF;
+        APIC_DIVIDE = 0b0011;
+        APIC_INIT_COUNT = 0;
+        APIC_ISR = [0; 8];
+        APIC_IRR = [0; 8];
+        HOST_TIMER_FOR_GUEST = false;
+        GTIMER3_OK = false;
+        GTIMER3_PRINT = false;
+        APIC_OK = false;
+        APIC_OK_PRINT = false;
+        PENDING_VECTOR = None;
+        TIMER_START_TSC = 0;
+        TIMER_RUNNING = false;
     }
 }
 

@@ -26,6 +26,17 @@ pub const CR4_VMXE: u64 = 1 << 13;
 /// CPUID.7.0:ECX bit 16 — LA57. Nested Intel `957e0ad` ATAPI-OK then
 /// `#DF` `rip=0x9e036` (compressed `paging_prepare` trampoline).
 pub const CPUID_LEAF7_ECX_LA57: u32 = 1 << 16;
+/// CPUID.7.0:EBX bit 23 — CLFLUSHOPT. Nested KVM may #UD while host CPUID
+/// still sets it (CI `34b5767` Oops `66 0F AE F1`).
+pub const CPUID_LEAF7_EBX_CLFLUSHOPT: u32 = 1 << 23;
+/// CPUID.7.0:EBX bit 24 — CLWB. Same nested #UD; Linux then kill-init.
+pub const CPUID_LEAF7_EBX_CLWB: u32 = 1 << 24;
+/// CPUID.7.0:ECX bit 5 — WAITPKG (`UMONITOR`/`UMWAIT`/`TPAUSE`). Those #UD in
+/// VMX non-root unless the "enable user wait and pause" control is set (SDM
+/// 26.1.3), which we do not do. CI `34b5767` / `9511d4c` Oops `66 0F AE F1`
+/// is register-form `tpause ecx` in `delay_halt_tpause`, not CLWB; Linux
+/// takes that path only when this bit is visible. Hide it.
+pub const CPUID_LEAF7_ECX_WAITPKG: u32 = 1 << 5;
 /// CR4 bit 18 — OSXSAVE (required before host `xsetbv`).
 pub const CR4_OSXSAVE: u64 = 1 << 18;
 
@@ -97,6 +108,13 @@ pub fn vmx_supported() -> bool {
     // SAFETY: CPUID leaf 1 is architecturally defined.
     let r = unsafe { cpuid(1, 0) };
     (r.ecx & CPUID_ECX_VMX) != 0
+}
+
+/// True if CPUID.1:ECX.hypervisor is set (KVM nested). Bare-metal iron is clear.
+pub fn host_hypervisor_present() -> bool {
+    // SAFETY: CPUID leaf 1 is architecturally defined.
+    let r = unsafe { cpuid(1, 0) };
+    (r.ecx & CPUID_ECX_HYPERVISOR) != 0
 }
 
 #[inline]
@@ -244,6 +262,17 @@ pub unsafe fn read_cr2() -> u64 {
     let v: u64;
     core::arch::asm!("mov {}, cr2", out(reg) v, options(nostack, nomem, preserves_flags));
     v
+}
+
+/// Restore guest CR2 before VM-entry. VMCS does not save CR2; a `#PF`
+/// exit keeps the linear in `EXIT_QUALIFICATION` (CR2 may be stale after
+/// a host walk). Linux `early_make_pgtable` reads CR2.
+///
+/// SAFETY: VMX-root; `v` is a canonical linear when the guest has paging.
+/// KANI-TARGET: guest-UEFI write CR2 (outside Proven Core).
+#[inline]
+pub unsafe fn write_cr2(v: u64) {
+    core::arch::asm!("mov cr2, {}", in(reg) v, options(nostack, preserves_flags));
 }
 
 pub unsafe fn read_cr3() -> u64 {
@@ -476,6 +505,9 @@ mod cpu_test {
         assert_eq!(CR4_LA57, 1 << 12);
         assert_eq!(CR4_VMXE, 1 << 13);
         assert_eq!(CPUID_LEAF7_ECX_LA57, 1 << 16);
+        assert_eq!(CPUID_LEAF7_EBX_CLFLUSHOPT, 1 << 23);
+        assert_eq!(CPUID_LEAF7_EBX_CLWB, 1 << 24);
+        assert_eq!(CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
         assert_eq!(CR4_OSXSAVE, 1 << 18);
         assert_eq!(IA32_EFER, 0xC000_0080);
     }

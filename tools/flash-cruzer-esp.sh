@@ -8,8 +8,10 @@
 #
 # Run on raynuvsrv1 (Ubuntu on the R640 PERC), with the Cruzer left in
 # front USB 2. Identifies the stick by FAT label RAYNUV + USB + Cruzer
-# model. Never uses a hardcoded /dev/sdc. Never dd, never format, never
-# touches PERC volumes (sda/sdb).
+# model. Never uses a hardcoded /dev/sdc. Never dd. Never format PERC.
+# Cruzer --refat-cruzer is opt-in after RAYNUV+serial+Cruzer identity:
+# copy installdisk.bin/auth.token off, mkfs.vfat -I -F 32 -n RAYNUV, restore.
+# Never touches PERC volumes (sda/sdb).
 #
 # Usage:
 #   ./tools/flash-cruzer-esp.sh --self-test
@@ -17,6 +19,16 @@
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --sha256 <hex>
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --ovmf /path/to/OVMF.fd
 #   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-ovmf
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --linux-iso /path/alpine.iso --refat-cruzer
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso
+#   sudo ./tools/flash-cruzer-esp.sh --efi ./r640-hypervisor.efi --no-linux-iso --raynu-f   # ADR-016 F2b
+#
+# Stage 46: alpine-virt linux.iso is ~63 MiB. The Cruzer media is 977.5 MiB
+# but the FAT may be a 64 MiB image (131072 sectors) that cannot hold ISO+
+# EFI+OVMF. Pass --refat-cruzer to mkfs.vfat -I -F 32 -n RAYNUV on that
+# identified whole-disk stick after copying installdisk.bin/auth.token off.
+# Never PERC. fsck.vfat cannot grow a 64 MiB volume.
 #
 # Optional: CRUZER_SERIAL (default 200524441218e7503e33) must match lsblk
 # SERIAL when the device reports one. GUEST_OVMF overrides the host search.
@@ -31,11 +43,17 @@ EFI_PATH=""
 EXPECT_SHA=""
 OVMF_SRC=""
 NO_OVMF=0
+LINUX_ISO=""
+NO_LINUX_ISO=0
+# ADR-016 F2b: --raynu-f stages EFI/RayNu/raynuf.txt (RayNu-F test-app launch
+# after the OVMF leg stops). Default removes a stale flag so it never rides along.
+RAYNU_F_FLAG=0
+REFAT=0
 SELFTEST=0
 DRY=0
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -111,7 +129,113 @@ self_test() {
     return 1
   fi
   rm -f "$tmp"
+  fat_bytes_too_small 66059264 67108864 || return 1
+  fat_bytes_too_small 1024966656 67108864 && return 1
   echo "RAYNU-V-CRUZER-FLASH-SELFTEST-OK"
+}
+
+esp_avail_bytes() {
+  df -B1 --output=avail "$MNT" | tail -n1 | tr -d ' '
+}
+
+esp_size_bytes() {
+  df -B1 --output=size "$MNT" | tail -n1 | tr -d ' '
+}
+
+# Host-testable: 64MiB FAT (66059264) cannot hold alpine-virt need (67108864).
+fat_bytes_too_small() {
+  local fs_size="$1" need="$2"
+  [[ "$fs_size" =~ ^[0-9]+$ && "$need" =~ ^[0-9]+$ ]] && (( fs_size < need ))
+}
+
+remount_cruzer_vfat() {
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+}
+
+# Reclaim leaked FAT clusters / stale FSInfo after ENOSPC. Never mkfs.
+# If the FAT volume itself is smaller than need (64MiB image on 977.5MiB
+# media), skip remount/fsck — those cannot grow the volume.
+reclaim_fat_free_if_needed() {
+  local need="$1"
+  local avail fs_size
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need"
+    return 0
+  fi
+  fs_size="$(esp_size_bytes)"
+  if fat_bytes_too_small "$fs_size" "$need"; then
+    echo "==> ESP FAT size=$fs_size free=${avail:-?} need=$need disk=${SIZE_BYTES:-?} — volume too small (not FSInfo)"
+    echo "error: 64MiB FAT cannot hold alpine-virt linux.iso; re-run with --refat-cruzer" >&2
+    return 1
+  fi
+  echo "==> ESP free=${avail:-?} need=$need — remount to flush FAT32 FSInfo (not format)"
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  if [[ "$avail" =~ ^[0-9]+$ ]] && (( avail >= need )); then
+    echo "==> ESP free=$avail need=$need (after remount)"
+    return 0
+  fi
+  if ! command -v fsck.vfat >/dev/null; then
+    echo "error: fsck.vfat missing (apt install dosfstools); not formatting" >&2
+    return 1
+  fi
+  echo "==> fsck.vfat -a $RAW to reclaim orphaned clusters (not format)"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  set +e
+  sudo fsck.vfat -a "$RAW"
+  fsck_rc=$?
+  set -e
+  if (( fsck_rc > 1 )); then
+    echo "error: fsck.vfat rc=$fsck_rc (not format)" >&2
+    return 1
+  fi
+  remount_cruzer_vfat
+  avail="$(esp_avail_bytes)"
+  echo "==> ESP free=${avail:-?} need=$need (after fsck.vfat)"
+  if [[ ! "$avail" =~ ^[0-9]+$ ]] || (( avail < need )); then
+    local fs_size
+    fs_size="$(df -B1 --output=size "$MNT" | tail -n1 | tr -d ' ')"
+    echo "error: Cruzer FAT size=${fs_size:-?} free=${avail:-?} need=$need disk=$SIZE_BYTES" >&2
+    echo "       64MiB FAT on 977.5MiB Cruzer cannot hold alpine-virt linux.iso" >&2
+    echo "       re-run with --refat-cruzer (mkfs.vfat -I -F 32 -n RAYNUV on this identified stick)" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Opt-in: identified RAYNUV Cruzer only. 64MiB FAT on 977.5MiB media cannot
+# hold alpine-virt (~63MiB) plus EFI+OVMF. Copy keep files, mkfs.vfat the
+# whole stick, restore installdisk.bin/auth.token. Never PERC.
+refat_identified_cruzer() {
+  local keep token
+  keep="$(mktemp -d /tmp/raynuv-refat.XXXXXX)"
+  sudo cp "$MNT/EFI/RayNu/installdisk.bin" "$keep/installdisk.bin"
+  token=0
+  if [[ -f "$MNT/EFI/RayNu/auth.token" ]]; then
+    sudo cp "$MNT/EFI/RayNu/auth.token" "$keep/auth.token"
+    token=1
+  fi
+  echo "==> --refat-cruzer: keep installdisk.bin bytes=$(wc -c <"$keep/installdisk.bin" | tr -d ' ') auth.token=$token"
+  sudo umount "$MNT" || true
+  DID_MOUNT=0
+  echo "==> --refat-cruzer: mkfs.vfat -I -F 32 -n $LABEL $RAW (identified whole-disk Cruzer; not PERC)"
+  sudo mkfs.vfat -I -F 32 -n "$LABEL" "$RAW"
+  sudo mkdir -p "$MNT"
+  sudo mount -t vfat -o rw,flush "$RAW" "$MNT"
+  DID_MOUNT=1
+  sudo mkdir -p "$MNT/EFI/BOOT" "$MNT/EFI/RayNu"
+  sudo cp "$keep/installdisk.bin" "$MNT/EFI/RayNu/installdisk.bin"
+  if [[ "$token" -eq 1 ]]; then
+    sudo cp "$keep/auth.token" "$MNT/EFI/RayNu/auth.token"
+  fi
+  rm -rf "$keep"
+  echo "==> --refat-cruzer: FAT now fills the Cruzer (not ISO-INSTALL-OK)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -123,6 +247,10 @@ while [[ $# -gt 0 ]]; do
     --sha256) EXPECT_SHA="${2:-}"; shift 2 ;;
     --ovmf) OVMF_SRC="${2:-}"; shift 2 ;;
     --no-ovmf) NO_OVMF=1; shift ;;
+    --linux-iso) LINUX_ISO="${2:-}"; shift 2 ;;
+    --no-linux-iso) NO_LINUX_ISO=1; shift ;;
+    --raynu-f) RAYNU_F_FLAG=1; shift ;;
+    --refat-cruzer) REFAT=1; shift ;;
     --label) LABEL="${2:-}"; shift 2 ;;
     *)
       echo "error: unknown arg: $1" >&2
@@ -138,6 +266,10 @@ fi
 
 if [[ "$NO_OVMF" == "1" && -n "$OVMF_SRC" ]]; then
   echo "error: --ovmf and --no-ovmf are mutually exclusive" >&2
+  exit 1
+fi
+if [[ "$NO_LINUX_ISO" == "1" && -n "$LINUX_ISO" ]]; then
+  echo "error: --linux-iso and --no-linux-iso are mutually exclusive" >&2
   exit 1
 fi
 
@@ -270,6 +402,11 @@ if [[ ! -f "$MNT/EFI/RayNu/installdisk.bin" ]]; then
 fi
 INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
 
+if [[ "$REFAT" -eq 1 ]]; then
+  refat_identified_cruzer
+  INSTALL_BEFORE="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"
+fi
+
 echo "==> installdisk.bin bytes=$INSTALL_BEFORE (unchanged)"
 echo "==> copying $EFI_ABS ($EFI_BYTES bytes, sha256=$GOT_SHA)"
 sudo cp --remove-destination "$EFI_ABS" "$MNT/EFI/BOOT/BOOTX64.EFI"
@@ -306,6 +443,59 @@ else
     exit 1
   fi
   echo "==> OVMF.fd bytes=$DEST_OVMF_BYTES _FVH=ok"
+fi
+
+if [[ "$NO_LINUX_ISO" == "1" ]]; then
+  sudo rm -f "$MNT/linux.iso" "$MNT/EFI/RayNu/linux.iso" "$MNT/EFI/RayNu/install.iso"
+  echo "==> --no-linux-iso: removed product ISO (E4 LINUX-EARLY)"
+elif [[ -n "$LINUX_ISO" ]]; then
+  if [[ ! -f "$LINUX_ISO" ]]; then
+    echo "error: --linux-iso not found: $LINUX_ISO" >&2
+    exit 1
+  fi
+  LINUX_ABS="$(readlink -f "$LINUX_ISO")"
+  LINUX_BYTES="$(wc -c <"$LINUX_ABS" | tr -d ' ')"
+  if (( LINUX_BYTES <= 73728 )); then
+    echo "error: --linux-iso is lab-stub sized ($LINUX_BYTES); need >73728" >&2
+    exit 1
+  fi
+  if [[ "$LINUX_ABS" == /mnt/usb/* || "$LINUX_ABS" == "$RAW"* || "$LINUX_ABS" == "$MNT"* ]]; then
+    echo "error: --linux-iso must not live on the Cruzer itself" >&2
+    exit 1
+  fi
+  # Failed cp leaves a partial linux.iso that consumes the last free clusters.
+  echo "==> pruning leftover ESP ISOs (partial ENOSPC + extras) before linux.iso"
+  sudo find "$MNT" -iname '*.iso' -print -delete || true
+  sudo sync -f "$MNT" 2>/dev/null || sudo sync
+  NEED=$((LINUX_BYTES + 1048576))
+  if ! reclaim_fat_free_if_needed "$NEED"; then
+    echo "error: Cruzer ESP has $(esp_avail_bytes) bytes free; need $NEED for linux.iso" >&2
+    echo "       keep EFI/BOOT/BOOTX64.EFI EFI/RayNu/OVMF.fd EFI/RayNu/installdisk.bin EFI/RayNu/auth.token" >&2
+    echo "       64MiB FAT cannot grow via fsck; re-run with --refat-cruzer" >&2
+    sudo du -ah "$MNT" | sort -h | tail -20 >&2 || true
+    exit 1
+  fi
+  echo "==> staging EFI/RayNu/linux.iso ($LINUX_BYTES bytes) from $LINUX_ABS"
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo cp --remove-destination "$LINUX_ABS" "$MNT/EFI/RayNu/linux.iso"
+  sudo sync -f "$MNT/EFI/RayNu/linux.iso" 2>/dev/null || sudo sync
+  DEST_LINUX_BYTES="$(wc -c <"$MNT/EFI/RayNu/linux.iso" | tr -d ' ')"
+  if [[ "$DEST_LINUX_BYTES" != "$LINUX_BYTES" ]]; then
+    echo "error: staged linux.iso size $DEST_LINUX_BYTES != $LINUX_BYTES" >&2
+    exit 1
+  fi
+  echo "==> linux.iso bytes=$DEST_LINUX_BYTES (Stage 46; not ISO-INSTALL-OK)"
+fi
+
+# ADR-016 F2b: RayNu-F launch opt-in. Presence is the signal; content empty.
+sudo rm -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || true
+if [[ "$RAYNU_F_FLAG" == "1" ]]; then
+  sudo mkdir -p "$MNT/EFI/RayNu"
+  sudo touch "$MNT/EFI/RayNu/raynuf.txt"
+  sudo sync -f "$MNT/EFI/RayNu/raynuf.txt" 2>/dev/null || sudo sync
+  echo "==> --raynu-f: staged EFI/RayNu/raynuf.txt (RayNu-F F2b; not ISO-INSTALL-OK)"
+else
+  echo "==> RayNu-F flag not staged (pass --raynu-f to run the F2b test app)"
 fi
 
 INSTALL_AFTER="$(wc -c <"$MNT/EFI/RayNu/installdisk.bin" | tr -d ' ')"

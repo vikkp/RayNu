@@ -7,12 +7,42 @@
 //! PCI IDE at `00:00.1` (virtio `00:00.0` fn1) **and** PIIX `00:01.1`.
 //! PEI only `inw`s DID of `00:00.0` (virtio). A walk of that multifunction
 //! slot finds fn1; a PIIX walk finds `00:01.1`. Same ATAPI backend.
+//! linux hides duplicate slot0 IDE after Linux earlycon (iron COM2 BAR
+//! conflict `00:00.1`/`00:01.1`; `ata_piix` secondary `-22`). linux hides
+//! PIIX IDE after Linux high-half so built-in `ata_piix` does not
+//! SRST-`msleep` past `Freeing initrd` (iron COM2 silence). Bootimg earlycon
+//! share is too early: GRUB still needs PIIX ATAPI on iso=0. Product ISO
+//! hid PIIX IDE (`8336a06` / `ea30da1`) so ConnectAll would not Start
+//! IdeBus CpuSleep (iron COM2 `d61dc7e`: scsi@3 first, then `pci_ide=1`,
+//! HLT `rip=0x7f0680d0` `ataio=0`, no virtio-iso IN). Hide plus
+//! skip-after-inject `vec=0x20` livelocked the timer ISR through the
+//! 16_777_216 cap (`pci_ide=0` `hlt=0` stop `rip=0x7f03fbe5`). OVMF El
+//! Torito needs PIIX ATAPI (Stage 45 / nested iso=0); `product_iso_hides_ide`
+//! stays in the model and returns false. Iron COM2 `118edcf` HLT
+//! `romwr=0xfffffffe` (standard ROM size probe, enable bit clear) then
+//! the same CpuSleep `ataio=0`. Both IDE functions share I/O BARs
+//! (`0x1f1`/`0x3f5`/`0x171`/`0x375`). product ISO hides duplicate slot0
+//! IDE (`00:00.1` → `0xFFFFFFFF`) so PciBus does not assign the same
+//! ports twice; PIIX `00:01.1` stays for El Torito. iso=0 keeps both.
+//! firmware HLT skip without inject.
+//! product ISO fw_cfg bootorder El Torito ide@ first.
+//! windows_iso / generic_uefi stay in
+//! the model. Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after
+//! PCI hide; linux ATA floating bus returns `0xFF` after Linux high-half
+//! so leftover `ata_piix` SRST skips without `ata_msleep`.
+//! Not `ISO-INSTALL-OK`.
 //! After reset the ATAPI signature is LBA mid=`0x14` high=`0xEB` so firmware
 //! sends PACKET (`0xA0`). Interrupt reason in sector-count is CDB `0x01`,
 //! data-in `0x02`, complete `0x03`. Cylinder holds the PACKET byte count.
 //! EXECUTE DEVICE DIAGNOSTIC (`0x90`) restores `0xEB14` (OVMF detect).
 //! IDENTIFY PACKET word 0 is `0x85C0` (ATAPI CD-ROM, removable, 12-byte).
-//! SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
+//! Product ISO IDENTIFY is PIO-only (LBA + PIO3/4, no MWDMA/UDMA) so Linux
+//! `ata_piix` does not start BMIDE. PACKET DRQ is up to 31 CD sectors
+//! (16-bit ATAPI byte count) **per DRQ**, not per CDB. READ(10)/READ(12)
+//! continues DRQs until the CDB count is complete (QEMU-style). A 4-sector
+//! DRQ used to complete Linux READ(10) short; a 31-sector cap without
+//! continuation still dropped sector 32 of a 64 KiB `sr`/GRUB BlockIo.
+//! nIEN (device-control bit 1) suppresses IRQ 14. SET FEATURES (`0xEF`) succeeds with DRDY (QEMU-compatible). Nested
 //! Intel `48c598a`: BOTH-OK `ataio=1308` `packet=0` (`insn=ef` then
 //! `edc9c3` IN EAX,DX poll) because ABRT never reached PACKET `0xA0`.
 //! Slave (DEV bit 4) is absent so a 4-drive probe does not see four CDs
@@ -22,11 +52,13 @@
 //! 16-byte I/O RAZ/WI so a bus-master probe is not `0xFF`.
 //! CD stays GuestVisible.
 //! Media is a retained ISO prefix (mock EFI catalog in host tests; placeholder
-//! on QEMU if the operator has not called [`present`] yet).
+//! on QEMU if the operator has not called [`present`] yet). Bytes larger than
+//! [`GUEST_CD_ISO_CAP`] stay in a product ISO window (pointer + length) so
+//! ATAPI READ does not truncate a distro image into the 72 KiB lab stub.
 //! Not virtio-in-guest. Not a distro installer. Not Everest E5.
 
 use crate::devices::guest_platform::pci_cfg_offset;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
 /// ECMA-119 / El Torito sector size.
 pub const ISO_SECTOR: usize = 2048;
@@ -59,7 +91,7 @@ pub const ELTORITO_PAYLOAD_MAGIC: &[u8] = b"RN-ELT";
 /// QEMU / serial marker when the guest-UEFI VMCS can see CD media.
 pub const M7_E5_OVMF_CDROM_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-CDROM-OK";
 
-/// Cap matches [`MOCK_EFI_ISO_BYTES`].
+/// Cap of the in-BSS lab stub. Product ISO bytes use [`retain`]'s window.
 pub const GUEST_CD_ISO_CAP: usize = MOCK_EFI_ISO_BYTES;
 
 pub const GUEST_CD_PCI_BUS: u8 = 0;
@@ -80,6 +112,8 @@ const ATA_CMD_IDENTIFY_PACKET: u8 = 0xA1;
 const ATA_CMD_PACKET: u8 = 0xA0;
 const ATA_CMD_SET_FEATURES: u8 = 0xEF;
 const ATA_DEVCTL_SRST: u8 = 0x04;
+/// Device Control bit 1: nIEN — 1 = do not assert IRQ.
+const ATA_DEVCTL_NIEN: u8 = 0x02;
 /// ATAPI interrupt reason (sector-count): CDB write.
 const ATAPI_INT_CD: u8 = 0x01;
 /// ATAPI interrupt reason: data-in to host.
@@ -100,7 +134,10 @@ const SCSI_MODE_SENSE10: u8 = 0x5A;
 const SCSI_READ12: u8 = 0xA8;
 const SCSI_SENSE_ILLEGAL: u8 = 0x05;
 const SCSI_ASC_INVALID_OPCODE: u8 = 0x20;
-const XFER_CAP: usize = 4 * ISO_SECTOR;
+/// ATAPI cylinder is 16-bit, so one DRQ is at most 31 × 2048 = 63488 bytes.
+/// Linux `sr` READ(10) is typically 32 KiB–64 KiB (32 CD sectors = two DRQs).
+const XFER_CAP: usize = 31 * ISO_SECTOR;
+const XFER_SEC: usize = XFER_CAP / ISO_SECTOR;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AtaXfer {
@@ -113,6 +150,9 @@ enum AtaXfer {
 struct CdMedia {
     iso: [u8; GUEST_CD_ISO_CAP],
     len: usize,
+    /// Product ISO bytes when `len > GUEST_CD_ISO_CAP`. Null for the lab stub.
+    ext_ptr: *const u8,
+    ext_len: usize,
     iso_id: u64,
     visible: bool,
     pci_enum: bool,
@@ -142,6 +182,10 @@ struct CdMedia {
     xfer_end: usize,
     cdb: [u8; 12],
     cdb_got: usize,
+    /// Remaining READ(10)/READ(12) LBA after the current DRQ is filled.
+    pkt_lba: u32,
+    /// Remaining CD sectors for this CDB. Zero when the packet is not a READ.
+    pkt_left: u32,
     data: [u8; XFER_CAP],
 }
 
@@ -150,6 +194,8 @@ impl CdMedia {
         Self {
             iso: [0u8; GUEST_CD_ISO_CAP],
             len: 0,
+            ext_ptr: core::ptr::null(),
+            ext_len: 0,
             iso_id: 0,
             visible: false,
             pci_enum: false,
@@ -179,6 +225,8 @@ impl CdMedia {
             xfer_end: 0,
             cdb: [0; 12],
             cdb_got: 0,
+            pkt_lba: 0,
+            pkt_left: 0,
             data: [0; XFER_CAP],
         }
     }
@@ -208,15 +256,42 @@ fn with_cd<R>(f: impl FnOnce(&mut CdMedia) -> R) -> R {
 
 static VISIBLE: AtomicBool = AtomicBool::new(false);
 static PCI_ENUM: AtomicBool = AtomicBool::new(false);
+static HIDE_SLOT0: AtomicBool = AtomicBool::new(false);
+static HIDE_PIIX: AtomicBool = AtomicBool::new(false);
+static HIDE_PRODUCT: AtomicBool = AtomicBool::new(false);
+static HIDE_PRODUCT_SLOT0: AtomicBool = AtomicBool::new(false);
+static ATA_FLOAT: AtomicBool = AtomicBool::new(false);
 static SECTORS: AtomicU32 = AtomicU32::new(0);
 static ISO_ID: AtomicU64 = AtomicU64::new(0);
-static ISO_LEN: AtomicU32 = AtomicU32::new(0);
+static ISO_LEN: AtomicU64 = AtomicU64::new(0);
 static MARKER: AtomicBool = AtomicBool::new(false);
 static PACKET_N: AtomicU32 = AtomicU32::new(0);
 static LAST_SCSI: AtomicU8 = AtomicU8::new(0);
 static ATA_CMD_N: AtomicU32 = AtomicU32::new(0);
 static LAST_ATA_CMD: AtomicU8 = AtomicU8::new(0);
 static ATA_IO_N: AtomicU32 = AtomicU32::new(0);
+static PCI_CMD_WRITES: AtomicU32 = AtomicU32::new(0);
+static LAST_PCI_CMD_WR: AtomicU16 = AtomicU16::new(0);
+static PCI_CMD_ENABLE_PRINTED: AtomicBool = AtomicBool::new(false);
+/// Last write to IDE Expansion ROM (offset `0x30`). Iron COM2 `7ba1ccf`
+/// HLT `cf8ide=0x80000930` (`00:01.1+30`). No option ROM (QEMU PIIX).
+static LAST_PCI_ROM_WR: AtomicU32 = AtomicU32::new(0);
+static PCI_ROM_WR_PRINTED: AtomicBool = AtomicBool::new(false);
+/// PciBus EnableAttributes IO+BusMaster. Iron COM2 `c144001` restored
+/// this after write-0 (`pcicmd=0x5`) and still `ataio=0`. COMMAND closed.
+/// Do not OR `0x0001`.
+const IDE_PCI_CMD_ENABLE: u16 = 0x0005;
+const PCI_CMD_WR_SEQ_CAP: usize = 8;
+static PCI_CMD_WR_SEQ: [AtomicU16; PCI_CMD_WR_SEQ_CAP] = [
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+    AtomicU16::new(0),
+];
 static CATALOG_READ: AtomicBool = AtomicBool::new(false);
 static BOOT_IMAGE_READ: AtomicBool = AtomicBool::new(false);
 static LAST_READ_LBA: AtomicU32 = AtomicU32::new(0);
@@ -237,6 +312,66 @@ pub fn pci_addr_selects_cd(addr: u32) -> bool {
     let (bus, dev, fun, _) = pci_bdf(addr);
     // Objective: virtio fn1 `00:00.1`. PIIX fn1 `00:01.1` is the same CD.
     bus == 0 && fun == 1 && (dev == 0 || dev == 1)
+}
+
+/// Firmware needs slot-0 fn1. Linux PCI scan of both IDE functions BAR-conflicts
+/// (iron COM2 `ata_piix` secondary `-22`). linux hides duplicate slot0 IDE.
+pub fn linux_hides_duplicate_slot0_ide(linux: bool, addr: u32) -> bool {
+    if !linux || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 0 && fun == 1
+}
+
+/// Firmware already booted the El Torito CD. Built-in alpine-virt `ata_piix`
+/// is a device_initcall after `Freeing initrd` and `ata_msleep`s on SRST
+/// (iron COM2 then silent). Do **not** use earlycon share (bootimg): GRUB
+/// still reads the kernel from PIIX ATAPI. linux hides PIIX IDE after
+/// Linux high-half. Media is virtio-iso `00:03.0`. Not `ISO-INSTALL-OK`.
+pub fn linux_hides_piix_ide(linux_high_half: bool, addr: u32) -> bool {
+    if !linux_high_half || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 1 && fun == 1
+}
+
+/// Iron COM2 `d61dc7e`: product `bootorder` scsi@3 first was served, then
+/// PciBus ConnectAll still Started AtaAtapiPassThru (`pci select 00:01.01`,
+/// `pci_ide=1`, HLT `rip=0x7f0680d0` `ataio=0`, inj climbing, no
+/// `virtio-iso IN`). Hide-IDE (`8336a06` / `ea30da1`) then skip-after-inject
+/// `vec=0x20` livelocked the timer ISR through the 16_777_216 cap
+/// (`pci_ide=0` `ataio=0` `hlt=0`, no virtio-iso IN, stop `rip=0x7f03fbe5`).
+/// OVMF El Torito needs PIIX ATAPI (Stage 45 / nested iso=0). Do not hide.
+/// firmware HLT skip without inject. product ISO hides PIIX IDE.
+/// product ISO fw_cfg bootorder El Torito ide@ first.
+/// Not `ISO-INSTALL-OK`.
+pub fn product_iso_hides_ide(_addr: u32) -> bool {
+    false
+}
+
+/// Product ISO presents the same ATAPI at `00:00.1` and PIIX `00:01.1`
+/// with the same I/O BARs. Iron COM2 `118edcf` finished the PCI walk
+/// (`romwr=0xfffffffe` size probe) then CpuSleep `ataio=0`. Hide only
+/// the slot-0 duplicate so PciBus cannot conflict the ports. Keep PIIX
+/// for El Torito (`ea30da1` hide-PIIX + skip-after-inject livelocked,
+/// `pci_ide=0`). iso=0 / lab stub keeps both. Not `ISO-INSTALL-OK`.
+pub fn product_iso_hides_duplicate_slot0_ide(addr: u32) -> bool {
+    if !product_iso_window_armed() || (addr & 0x8000_0000) == 0 {
+        return false;
+    }
+    let (bus, dev, fun, _) = pci_bdf(addr);
+    bus == 0 && dev == 0 && fun == 1
+}
+
+/// Compatibility-mode ISA `0x1F0`/`0x170` stays decoded after PCI hide.
+/// `ata_piix` SRST-`msleep`s while BSY/DRDY look live (iron COM2 after
+/// `Freeing initrd`). Return floating-bus `0xFF` after Linux high-half so
+/// libata skips the port without a timer wait. linux ATA floating bus.
+/// Not `ISO-INSTALL-OK`.
+pub fn linux_ata_floating_bus(linux_high_half: bool) -> bool {
+    linux_high_half
 }
 
 /// PCI config address for the guest IDE function (`00:00.1`).
@@ -372,6 +507,42 @@ pub fn retained_len() -> usize {
     ISO_LEN.load(Ordering::Acquire) as usize
 }
 
+/// True when ATAPI media is larger than the 72 KiB lab El Torito stub.
+///
+/// INVARIANTS:
+/// - `false` for idle CD and for [`present_placeholder`]
+/// - `true` only after [`retain`] / [`present`] of `len > GUEST_CD_ISO_CAP`
+/// - Does not imply a distro installer or `ISO-INSTALL-OK`
+pub fn product_iso_window_armed() -> bool {
+    retained_len() > GUEST_CD_ISO_CAP
+}
+
+/// Product ISO window pointer (not the 72 KiB lab stub).
+///
+/// INVARIANTS:
+/// - `None` when idle or lab El Torito
+/// - Pointer stays valid until [`reset`]
+/// - Does not imply `ISO-INSTALL-OK`
+pub fn product_iso_window_ptr() -> Option<(*const u8, usize)> {
+    with_cd(|m| {
+        if m.ext_len > GUEST_CD_ISO_CAP && !m.ext_ptr.is_null() {
+            Some((m.ext_ptr, m.ext_len))
+        } else {
+            None
+        }
+    })
+}
+
+/// Lab 72 KiB RN-ELT CD (Stage 45). Product ISO continues past El Torito.
+pub fn is_lab_eltorito_media() -> bool {
+    !product_iso_window_armed()
+}
+
+/// Pure size check used by host tests and the Stage 46 stop policy.
+pub fn is_lab_eltorito_stub_len(cd_len: usize) -> bool {
+    cd_len == MOCK_EFI_ISO_BYTES || cd_len == 0
+}
+
 pub fn is_retained_for(iso_id: u64) -> bool {
     iso_id != 0 && retained_iso_id() == iso_id && retained_len() >= ISO_SECTOR
 }
@@ -384,6 +555,11 @@ pub fn reset() {
     with_cd(|m| *m = CdMedia::empty());
     VISIBLE.store(false, Ordering::Release);
     PCI_ENUM.store(false, Ordering::Release);
+    HIDE_SLOT0.store(false, Ordering::Release);
+    HIDE_PIIX.store(false, Ordering::Release);
+    HIDE_PRODUCT.store(false, Ordering::Release);
+    HIDE_PRODUCT_SLOT0.store(false, Ordering::Release);
+    ATA_FLOAT.store(false, Ordering::Release);
     SECTORS.store(0, Ordering::Release);
     ISO_ID.store(0, Ordering::Release);
     ISO_LEN.store(0, Ordering::Release);
@@ -393,9 +569,18 @@ pub fn reset() {
     ATA_CMD_N.store(0, Ordering::Release);
     LAST_ATA_CMD.store(0, Ordering::Release);
     ATA_IO_N.store(0, Ordering::Release);
+    PCI_CMD_WRITES.store(0, Ordering::Release);
+    LAST_PCI_CMD_WR.store(0, Ordering::Release);
+    PCI_CMD_ENABLE_PRINTED.store(false, Ordering::Release);
+    LAST_PCI_ROM_WR.store(0, Ordering::Release);
+    PCI_ROM_WR_PRINTED.store(false, Ordering::Release);
+    for slot in PCI_CMD_WR_SEQ.iter() {
+        slot.store(0, Ordering::Release);
+    }
     CATALOG_READ.store(false, Ordering::Release);
     BOOT_IMAGE_READ.store(false, Ordering::Release);
     LAST_READ_LBA.store(0, Ordering::Release);
+    crate::devices::guest_irq::reset();
 }
 
 /// PACKET commands issued since last reset (firmware ATAPI activity).
@@ -418,28 +603,81 @@ pub fn last_ata_cmd() -> u8 {
     LAST_ATA_CMD.load(Ordering::Acquire)
 }
 
+/// Device-control nIEN (1 = do not assert IRQ 14).
+/// firmware take IOAPIC ATA. Not `ISO-INSTALL-OK`.
+pub fn ata_nien() -> bool {
+    with_cd(|m| (m.ata_devctl & ATA_DEVCTL_NIEN) != 0)
+}
+
 /// ATA PIO accesses (status polls and commands). Nested VT-x `8e55abf`
 /// `ata=0x0` only counted command-register writes.
 pub fn ata_io_accesses() -> u32 {
     ATA_IO_N.load(Ordering::Acquire)
 }
 
+/// Live IDE PCI command (offset 0x04). Default `0x0005` (IO+BusMaster).
+/// Iron COM2 `21dc562` never printed this; ADR-015 needs `cmdwr`/`pcicmd`.
+pub fn pci_cmd() -> u16 {
+    with_cd(|m| m.pci_cmd)
+}
+
+/// Count of firmware writes to IDE PCI command. Iron COM2 `060c504`:
+/// six writes all `0` (`seq=0,0,0,0,0,0`). EnableAttributes never
+/// set IO. After write-0, restore `0x0005`. Do not OR `0x0001`.
+pub fn pci_cmd_writes() -> u32 {
+    PCI_CMD_WRITES.load(Ordering::Acquire)
+}
+
+/// Last firmware value written to IDE PCI command (stored as written).
+pub fn last_pci_cmd_wr() -> u16 {
+    LAST_PCI_CMD_WR.load(Ordering::Acquire)
+}
+
+/// Firmware COMMAND write `i` (0-based, first eight). Iron `060c504`:
+/// `seq=0,0,0,0,0,0` (EnableAttributes never wrote `0x5`).
+pub fn pci_cmd_wr_at(i: usize) -> u16 {
+    PCI_CMD_WR_SEQ
+        .get(i)
+        .map(|slot| slot.load(Ordering::Acquire))
+        .unwrap_or(0)
+}
+
+/// Last firmware write to IDE Expansion ROM (`0x30`). Iron `7ba1ccf`
+/// last IDE CF8 is `00:01.1+30`. Reads stay 0 (no option ROM).
+pub fn last_pci_rom_wr() -> u32 {
+    LAST_PCI_ROM_WR.load(Ordering::Acquire)
+}
+
 /// Retain ISO bytes without making the PCI device live.
+///
+/// INVARIANTS:
+/// - `iso.len() <= GUEST_CD_ISO_CAP`: copy into the BSS stub (lab)
+/// - `iso.len() > GUEST_CD_ISO_CAP`: prefix copy + product window on `iso`
+///   (caller keeps the slice alive for the guest-UEFI CD life)
+/// - Advertised ATAPI size is `iso.len()`, not truncated to 72 KiB
 pub fn retain(iso: &[u8], iso_id: u64) -> bool {
     if iso_id == 0 || iso.len() < ISO_SECTOR {
         return false;
     }
-    let n = core::cmp::min(iso.len(), GUEST_CD_ISO_CAP);
+    let n = iso.len();
     with_cd(|m| {
-        m.iso[..n].copy_from_slice(&iso[..n]);
-        if n < GUEST_CD_ISO_CAP {
-            m.iso[n..].fill(0);
+        let copy_n = core::cmp::min(n, GUEST_CD_ISO_CAP);
+        m.iso[..copy_n].copy_from_slice(&iso[..copy_n]);
+        if copy_n < GUEST_CD_ISO_CAP {
+            m.iso[copy_n..].fill(0);
+        }
+        if n > GUEST_CD_ISO_CAP {
+            m.ext_ptr = iso.as_ptr();
+            m.ext_len = n;
+        } else {
+            m.ext_ptr = core::ptr::null();
+            m.ext_len = 0;
         }
         m.len = n;
         m.iso_id = iso_id;
     });
     ISO_ID.store(iso_id, Ordering::Release);
-    ISO_LEN.store(n as u32, Ordering::Release);
+    ISO_LEN.store(n as u64, Ordering::Release);
     true
 }
 
@@ -484,6 +722,8 @@ pub fn present_placeholder() -> bool {
     let ok = with_cd(|m| {
         m.iso.fill(0);
         write_placeholder_iso(&mut m.iso);
+        m.ext_ptr = core::ptr::null();
+        m.ext_len = 0;
         m.len = MOCK_EFI_ISO_BYTES;
         m.iso_id = 1;
         true
@@ -492,7 +732,7 @@ pub fn present_placeholder() -> bool {
         return false;
     }
     ISO_ID.store(1, Ordering::Release);
-    ISO_LEN.store(MOCK_EFI_ISO_BYTES as u32, Ordering::Release);
+    ISO_LEN.store(MOCK_EFI_ISO_BYTES as u64, Ordering::Release);
     make_visible()
 }
 
@@ -1294,6 +1534,24 @@ pub fn present_placeholder_if_idle() -> bool {
     present_placeholder()
 }
 
+fn write_hex16_nowait(v: u16) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_str_nowait("0x");
+    for shift in [12, 8, 4, 0] {
+        let nibble = ((v >> shift) & 0xf) as usize;
+        crate::boot::serial::write_byte_nowait(HEX[nibble]);
+    }
+}
+
+fn write_hex32_nowait(v: u32) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    crate::boot::serial::write_str_nowait("0x");
+    for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
+        let nibble = ((v >> shift) & 0xf) as usize;
+        crate::boot::serial::write_byte_nowait(HEX[nibble]);
+    }
+}
+
 pub fn pci_write_addr(addr: u32) {
     with_cd(|m| m.pci_addr = addr);
 }
@@ -1315,8 +1573,43 @@ fn config_dword(m: &CdMedia, off: u8) -> u32 {
         0x1C => m.bar3,
         0x20 => m.bar4,
         0x2C => 0x0000_0000,
+        // Iron COM2 `7ba1ccf` last IDE CF8 is `00:01.1+30`. QEMU PIIX
+        // has no option ROM. Size-probe write of `0xFFFFFFFF` stays WI.
+        0x30 => 0,
         0x3C => 0x0000_010E, // pin 1, IRQ 14
         _ => 0,
+    }
+}
+
+fn note_hide_slot0() {
+    if !HIDE_SLOT0.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux hides duplicate slot0 IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+fn note_hide_piix() {
+    if !HIDE_PIIX.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux hides PIIX IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+fn note_hide_product() {
+    if !HIDE_PRODUCT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO hides PIIX IDE (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
+fn note_hide_product_slot0() {
+    if !HIDE_PRODUCT_SLOT0.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: product ISO hides duplicate slot0 IDE (not ISO-INSTALL-OK)",
+        );
     }
 }
 
@@ -1326,6 +1619,23 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
             return 0xFFFF_FFFF;
         }
         let addr = m.pci_addr;
+        if product_iso_hides_ide(addr) {
+            note_hide_product();
+            return 0xFFFF_FFFF;
+        }
+        if product_iso_hides_duplicate_slot0_ide(addr) {
+            note_hide_product_slot0();
+            return 0xFFFF_FFFF;
+        }
+        let linux = crate::boot::serial::linux_earlycon_share();
+        if linux_hides_duplicate_slot0_ide(linux, addr) {
+            note_hide_slot0();
+            return 0xFFFF_FFFF;
+        }
+        if linux_hides_piix_ide(crate::boot::serial::linux_high_half(), addr) {
+            note_hide_piix();
+            return 0xFFFF_FFFF;
+        }
         if !pci_addr_selects_cd(addr) {
             return 0xFFFF_FFFF;
         }
@@ -1348,13 +1658,48 @@ pub fn pci_read_data(port: u16, size: u8) -> u32 {
 
 pub fn pci_write_data(port: u16, _size: u8, val: u32) {
     with_cd(|m| {
+        if product_iso_hides_ide(m.pci_addr)
+            || product_iso_hides_duplicate_slot0_ide(m.pci_addr)
+            || linux_hides_duplicate_slot0_ide(
+                crate::boot::serial::linux_earlycon_share(),
+                m.pci_addr,
+            )
+            || linux_hides_piix_ide(crate::boot::serial::linux_high_half(), m.pci_addr)
+        {
+            return;
+        }
         if !m.visible || !pci_addr_selects_cd(m.pci_addr) {
             return;
         }
         let off = pci_cfg_offset(m.pci_addr, port);
         let aligned = off & 0xFC;
         if off == 0x04 {
-            m.pci_cmd = (val as u16) | 0x0001;
+            // Iron COM2 060c504: wr=0 six times, seq=0,0,0,0,0,0.
+            // EnableAttributes never wrote 0x5. ADR-015: after that
+            // dump, restore IO+BM. Do not OR 0x0001 (184ee61).
+            let wr = val as u16;
+            LAST_PCI_CMD_WR.store(wr, Ordering::Release);
+            let n = PCI_CMD_WRITES.fetch_add(1, Ordering::AcqRel);
+            if (n as usize) < PCI_CMD_WR_SEQ_CAP {
+                PCI_CMD_WR_SEQ[n as usize].store(wr, Ordering::Release);
+            }
+            if wr == 0 {
+                m.pci_cmd = IDE_PCI_CMD_ENABLE;
+                if !PCI_CMD_ENABLE_PRINTED.swap(true, Ordering::AcqRel) {
+                    crate::boot::serial::write_line_nowait(
+                        "boot: Stage 46 IDE pci EnableAttributes (not ISO-INSTALL-OK)",
+                    );
+                }
+            } else {
+                m.pci_cmd = wr;
+            }
+            crate::boot::serial::write_str_nowait(
+                "boot: Stage 46 IDE pci cmdwr honor wr=",
+            );
+            write_hex16_nowait(wr);
+            crate::boot::serial::write_str_nowait(" n=");
+            crate::boot::serial::write_byte_nowait(b'0' + (n.min(9) as u8));
+            crate::boot::serial::write_line_nowait(" (not ISO-INSTALL-OK)");
         } else if aligned == 0x10 {
             // 8-byte I/O BAR (legacy 0x1F0). Probe 0xFFFFFFFF → 0xFFFFFFF9.
             m.bar0 = (val & 0xFFFF_FFF8) | 1;
@@ -1367,6 +1712,17 @@ pub fn pci_write_data(port: u16, _size: u8, val: u32) {
         } else if aligned == 0x20 {
             // 16-byte I/O BMIDE. Probe 0xFFFFFFFF → 0xFFFFFFF1.
             m.bar4 = (val & 0xFFFF_FFF0) | 1;
+        } else if aligned == 0x30 {
+            // Expansion ROM RAZ/WI. Iron COM2 `7ba1ccf` HLT
+            // `cf8ide=0x80000930` still `ataio=0`. Do not map a ghost ROM.
+            LAST_PCI_ROM_WR.store(val, Ordering::Release);
+            if !PCI_ROM_WR_PRINTED.swap(true, Ordering::AcqRel) {
+                crate::boot::serial::write_str_nowait(
+                    "boot: Stage 46 IDE pci rombar wr=",
+                );
+                write_hex32_nowait(val);
+                crate::boot::serial::write_line_nowait(" (not ISO-INSTALL-OK)");
+            }
         }
     });
 }
@@ -1381,22 +1737,42 @@ fn apply_atapi_signature(m: &mut CdMedia) {
     m.xfer_off = 0;
     m.xfer_end = 0;
     m.cdb_got = 0;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
+}
+
+fn raise_ata_irq(m: &CdMedia) {
+    if product_iso_window_armed() && (m.ata_devctl & ATA_DEVCTL_NIEN) == 0 {
+        crate::devices::guest_irq::raise_ata();
+    }
+}
+
+fn lower_ata_irq() {
+    if product_iso_window_armed() {
+        crate::devices::guest_irq::lower_ata();
+    }
 }
 
 fn packet_ok(m: &mut CdMedia) {
     m.xfer = AtaXfer::Idle;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
     m.ata_err = 0;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+    raise_ata_irq(m);
 }
 
 fn packet_error(m: &mut CdMedia, sense: u8, asc: u8) {
     m.sense_key = sense;
     m.sense_asc = asc;
     m.xfer = AtaXfer::Idle;
+    m.pkt_lba = 0;
+    m.pkt_left = 0;
     m.ata_err = sense << 4;
     m.ata_count = ATAPI_INT_IO | ATAPI_INT_CD;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+    raise_ata_irq(m);
 }
 
 fn begin_packet_data(m: &mut CdMedia, n: usize) {
@@ -1405,7 +1781,7 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     if limit == 0 || limit == 0xffff {
         limit = n;
     }
-    let size = n.min(limit).max(2);
+    let size = n.min(limit).max(2).min(XFER_CAP).min(0xFFFE);
     m.xfer = AtaXfer::PacketData;
     m.xfer_off = 0;
     // Advertise and complete the same byte count (ATAPI cylinder). A larger
@@ -1416,6 +1792,7 @@ fn begin_packet_data(m: &mut CdMedia, n: usize) {
     m.ata_lba[2] = (size >> 8) as u8;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+    raise_ata_irq(m);
 }
 
 fn start_identify(m: &mut CdMedia) {
@@ -1436,11 +1813,18 @@ fn start_identify(m: &mut CdMedia) {
             m.data[word * 2] = b;
         }
     }
+    // Word 49: LBA (bit 9). No DMA (bit 8) — BMIDE stays RAZ/WI.
+    m.data[49 * 2] = 0x00;
+    m.data[49 * 2 + 1] = 0x02;
+    // Word 53: words 64–70 valid. Word 64: PIO3 + PIO4.
+    m.data[53 * 2] = 0x02;
+    m.data[64 * 2] = 0x03;
     m.xfer = AtaXfer::Identify;
     m.xfer_off = 0;
     m.xfer_end = 512;
     m.ata_err = 0;
     m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+    raise_ata_irq(m);
 }
 
 fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
@@ -1448,15 +1832,50 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
         packet_ok(m);
         return true;
     }
-    let nsec = (count as usize).min(XFER_CAP / ISO_SECTOR).max(1);
+    let start = (lba as usize).saturating_mul(ISO_SECTOR);
+    let total = (count as usize).saturating_mul(ISO_SECTOR);
+    if start.saturating_add(total) > m.len {
+        packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
+        return false;
+    }
+    m.pkt_lba = lba;
+    m.pkt_left = count;
+    fill_read_drq(m);
+    true
+}
+
+/// Fill the next ATAPI data-in DRQ from `pkt_lba` / `pkt_left`.
+///
+/// INVARIANTS:
+/// - One DRQ is at most [`XFER_SEC`] CD sectors (16-bit cylinder)
+/// - `pkt_left` after return is the CDB remainder, not silently truncated
+/// - Guest cylinder `byte_limit` (0 / 0xFFFF = full DRQ) caps this DRQ only
+fn fill_read_drq(m: &mut CdMedia) {
+    if m.pkt_left == 0 {
+        packet_ok(m);
+        return;
+    }
+    let mut max_bytes = m.byte_limit as usize;
+    if max_bytes == 0 || max_bytes == 0xffff {
+        max_bytes = XFER_CAP;
+    }
+    let max_sec = (max_bytes / ISO_SECTOR).clamp(1, XFER_SEC);
+    let nsec = (m.pkt_left as usize).min(max_sec);
+    let lba = m.pkt_lba;
     let start = (lba as usize).saturating_mul(ISO_SECTOR);
     let bytes = nsec.saturating_mul(ISO_SECTOR);
     let end = start.saturating_add(bytes);
     if end > m.len {
         packet_error(m, SCSI_SENSE_ILLEGAL, 0x21);
-        return false;
+        return;
     }
-    m.data[..bytes].copy_from_slice(&m.iso[start..end]);
+    let ext_ptr = m.ext_ptr;
+    let ext_len = m.ext_len;
+    if ext_len > GUEST_CD_ISO_CAP && !ext_ptr.is_null() {
+        copy_product_iso_range(ext_ptr, start, bytes, &mut m.data[..bytes]);
+    } else {
+        m.data[..bytes].copy_from_slice(&m.iso[start..start + bytes]);
+    }
     m.sectors_read = m.sectors_read.saturating_add(nsec as u32);
     SECTORS.store(m.sectors_read, Ordering::Release);
     m.last_read_lba = lba;
@@ -1470,8 +1889,29 @@ fn load_sectors(m: &mut CdMedia, lba: u32, count: u32) -> bool {
         m.boot_image_read = true;
         BOOT_IMAGE_READ.store(true, Ordering::Release);
     }
+    m.pkt_lba = end_lba;
+    m.pkt_left = m.pkt_left.saturating_sub(nsec as u32);
+    // Advertise this DRQ's sector count. Temporarily clear cylinder so
+    // `begin_packet_data` does not trim below a full-sector multiple.
+    let prev_limit = m.byte_limit;
+    m.byte_limit = 0;
     begin_packet_data(m, bytes);
-    true
+    m.byte_limit = prev_limit;
+}
+
+/// Copy `bytes` from the product ISO window into `dst`.
+fn copy_product_iso_range(ext_ptr: *const u8, start: usize, bytes: usize, dst: &mut [u8]) {
+    if bytes == 0 {
+        return;
+    }
+    // SAFETY: product ISO window is the retained operator/host slice;
+    // host tests keep that Vec until [`reset`]. Guest-UEFI CD life is
+    // single-threaded after EBS.
+    // KANI-TARGET: ATAPI READ from product ISO window (outside Proven Core).
+    unsafe {
+        let src = core::slice::from_raw_parts(ext_ptr.add(start), bytes);
+        dst[..bytes].copy_from_slice(src);
+    }
 }
 
 fn alloc_len(cdb: &[u8; 12], off: usize, wide: bool) -> usize {
@@ -1591,9 +2031,25 @@ fn finish_packet(m: &mut CdMedia) {
     }
 }
 
+fn note_ata_float() {
+    if !ATA_FLOAT.swap(true, Ordering::AcqRel) {
+        crate::boot::serial::write_line_nowait(
+            "boot: guest-UEFI linux ATA floating bus (not ISO-INSTALL-OK)",
+        );
+    }
+}
+
 /// ATA primary PIO. Returns the value to merge into RAX on IN.
 pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     with_cd(|m| {
+        if linux_ata_floating_bus(crate::boot::serial::linux_high_half()) {
+            note_ata_float();
+            if is_in {
+                let mask = io_mask(size);
+                return (rax & !mask) | (0xffu64 & mask);
+            }
+            return rax;
+        }
         if !m.visible {
             return if is_in { rax | 0xff } else { rax };
         }
@@ -1622,6 +2078,9 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                     _ => u64::from(m.ata_status),
                 }
             };
+            if !ata_is_slave(m) && reg == 7 {
+                lower_ata_irq();
+            }
             let mask = io_mask(size);
             (rax & !mask) | (val & mask)
         } else {
@@ -1672,10 +2131,13 @@ pub fn ata_io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
                             m.xfer = AtaXfer::PacketCdb;
                             m.cdb_got = 0;
                             m.cdb.fill(0);
+                            m.pkt_lba = 0;
+                            m.pkt_left = 0;
                             m.byte_limit = u16::from(m.ata_lba[1]) | (u16::from(m.ata_lba[2]) << 8);
                             m.ata_err = 0;
                             m.ata_count = ATAPI_INT_CD;
                             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK | ATA_STATUS_DRQ;
+                            raise_ata_irq(m);
                         }
                         ATA_CMD_DEVICE_RESET | ATA_CMD_DIAGNOSTIC => apply_atapi_signature(m),
                         ATA_CMD_IDENTIFY => {
@@ -1737,10 +2199,15 @@ fn read_data(m: &mut CdMedia, size: u8) -> u64 {
     }
     if m.xfer_off >= m.xfer_end {
         if m.xfer == AtaXfer::PacketData {
-            packet_ok(m);
+            if m.pkt_left > 0 {
+                fill_read_drq(m);
+            } else {
+                packet_ok(m);
+            }
         } else {
             m.xfer = AtaXfer::Idle;
             m.ata_status = ATA_STATUS_DRDY | ATA_STATUS_SEEK;
+            raise_ata_irq(m);
         }
     }
     v

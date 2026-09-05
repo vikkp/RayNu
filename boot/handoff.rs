@@ -9,6 +9,7 @@
 //! OVMF identity maps remain valid for QEMU bring-up.
 
 use crate::boot::mem;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(target_os = "uefi")]
 use crate::boot::serial;
@@ -19,6 +20,60 @@ use uefi::mem::memory_map::{MemoryMap, MemoryType};
 
 /// Distinctive M1.0 gate marker — must appear on COM1 *after* ExitBootServices.
 pub const M1_EBS_OK_MARKER: &str = "RAYNU-V-M1-EBS-OK";
+
+/// Cap leftover DRAM taken for guest-UEFI report-RAM (2 GiB CMOS lie).
+/// Does not expand [`crate::memory::PRECISE_BYTES`]. Not invented HPA (ADR-004).
+pub const REPORT_RAM_EXTRA_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// 1008×2 MiB = `[32MiB, 2GiB)`. Prefer a span this large just above PRECISE.
+pub const REPORT_RAM_EXTRA_WANT_PAGES: u64 = 1008 * 512;
+const REPORT_RAM_EXTRA_2M: u64 = 2 * 1024 * 1024;
+
+static REPORT_RAM_EXTRA_NEXT: AtomicU64 = AtomicU64::new(0);
+static REPORT_RAM_EXTRA_END: AtomicU64 = AtomicU64::new(0);
+
+/// Seed a 2 MiB-aligned bump from unused conventional DRAM above PRECISE.
+///
+/// Host CR3 is still the UEFI identity map, so these HPAs are reachable
+/// without expanding the 512 MiB precise window. Product ISO HOLDS
+/// (iron and nested; no E4 SHELL), so leftover is safe to seed.
+/// Nested `4225b4d` SIGSEGV was leftover returned to E4; product ISO
+/// never fail-softs, and nested still withholds leftover HPA from E4.
+/// `iso=0` does not retain a window ISO, so this stays empty.
+/// Returns the 2 MiB-aligned HPA, or 0 if the span cannot yield a frame.
+pub fn seed_report_ram_extra(start: u64, bytes: u64) -> u64 {
+    let aligned = start.saturating_add(REPORT_RAM_EXTRA_2M - 1) & !(REPORT_RAM_EXTRA_2M - 1);
+    let end = start.saturating_add(bytes);
+    let cap_end = aligned.saturating_add(REPORT_RAM_EXTRA_MAX_BYTES);
+    let use_end = core::cmp::min(end, cap_end);
+    if aligned == 0 || aligned.saturating_add(REPORT_RAM_EXTRA_2M) > use_end {
+        REPORT_RAM_EXTRA_NEXT.store(0, Ordering::Release);
+        REPORT_RAM_EXTRA_END.store(0, Ordering::Release);
+        return 0;
+    }
+    REPORT_RAM_EXTRA_NEXT.store(aligned, Ordering::Release);
+    REPORT_RAM_EXTRA_END.store(use_end, Ordering::Release);
+    aligned
+}
+
+/// Take one exclusive 2 MiB HPA from the leftover-DRAM bump, or `None`.
+pub fn take_report_ram_extra_2m() -> Option<u64> {
+    loop {
+        let n = REPORT_RAM_EXTRA_NEXT.load(Ordering::Acquire);
+        let end = REPORT_RAM_EXTRA_END.load(Ordering::Acquire);
+        if n == 0 || n.saturating_add(REPORT_RAM_EXTRA_2M) > end {
+            return None;
+        }
+        match REPORT_RAM_EXTRA_NEXT.compare_exchange(
+            n,
+            n + REPORT_RAM_EXTRA_2M,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return Some(n),
+            Err(_) => core::hint::spin_loop(),
+        }
+    }
+}
 
 /// Result of leaving UEFI boot services.
 pub struct Handoff {
@@ -76,10 +131,16 @@ pub unsafe fn leave_firmware() -> Handoff {
     // holes + shell slabs need free 2MiB leaves in [GUEST_RAM, PRECISE) that the
     // FrameAllocator does **not** own. Cap the HV pool at GUEST_RAM so that
     // window stays free (R640 previously filled pool to 512MiB → no BAR hole).
+    // Stage 46 iron product-ISO holds (no E4 SHELL): prefer PRECISE so a
+    // 256 MiB virtio-blk plus report-RAM fit. Nested / iso=0 stay GUEST_RAM.
     const MIN_PREF_PAGES: u64 = 256; // 1 MiB
     const MIN_POOL_PAGES: u64 = 16;
-    let prefer_end = crate::guest::linux_boot::GUEST_RAM_BYTES;
+    let prefer_end = crate::mgmt::iso_install::product_iso_frame_pool_prefer_end(
+        crate::mgmt::iso_install::product_iso_retained_bytes().is_some(),
+        crate::arch::cpu::host_hypervisor_present(),
+    );
     let precise_end = crate::memory::PRECISE_BYTES;
+    let guest_ram = crate::guest::linux_boot::GUEST_RAM_BYTES;
     let (pool_start, pool_pages, in_window) = if let Some(p) =
         mem::pick_conventional_region_prefer(&regions[..region_count], MIN_PREF_PAGES, prefer_end)
     {
@@ -102,7 +163,11 @@ pub unsafe fn leave_firmware() -> Handoff {
 
     let frames = if pool_pages > 0 {
         let pool_end = pool_start.saturating_add(pool_pages.saturating_mul(mem::PAGE_SIZE));
-        if in_window && pool_end <= prefer_end {
+        if in_window && pool_end <= prefer_end && prefer_end > guest_ram {
+            serial::write_line(
+                "boot: frame pool product-ISO iron [1MiB,512MiB); Stage 46 hold (not E4 BAR/shell)",
+            );
+        } else if in_window && pool_end <= prefer_end {
             serial::write_line(
                 "boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free",
             );
@@ -125,6 +190,57 @@ pub unsafe fn leave_firmware() -> Handoff {
         serial::write_line("boot: WARNING — no conventional pool ≥16 pages; empty bump");
         mem::FrameBump::new(0, 0)
     };
+
+    if crate::mgmt::iso_install::product_iso_retained_bytes().is_some() {
+        let above_pages =
+            mem::conventional_pages_above(&regions[..region_count], precise_end);
+        serial::write_str("boot: conventional above PRECISE pages=");
+        write_u64(above_pages);
+        serial::write_byte(b'\n');
+        // Nested product-ISO HOLDS (no E4 SHELL). Seed leftover DRAM the
+        // same as iron so QEMU `PRODUCT_ISO=` can walk the 2 GiB CMOS lie.
+        // `iso=0` never enters this block. Nested `-m 512M` has no
+        // conventional above PRECISE (`skip none`); product-ISO QEMU uses
+        // 2560 MiB so leftover exists.
+        if let Some((hs, hp)) = mem::pick_conventional_region_above_prefer(
+            &regions[..region_count],
+            REPORT_RAM_EXTRA_WANT_PAGES,
+            512,
+            precise_end,
+        )
+        {
+            let bytes = hp.saturating_mul(mem::PAGE_SIZE);
+            // Carve the install disk first so those HPAs never enter the
+            // report-RAM bump (guest sees them only via virtio-blk).
+            let (disk_hpa, disk_bytes, rest_start, rest_bytes) =
+                crate::mgmt::iso_install::carve_leftover_install_disk(hs, bytes);
+            if disk_bytes != 0 {
+                crate::mgmt::iso_install::reserve_leftover_install_disk(disk_hpa, disk_bytes);
+                serial::write_str("boot: Stage 46 leftover install disk hpa=0x");
+                write_u64_hex(disk_hpa);
+                serial::write_str(" bytes=");
+                write_u64(disk_bytes);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            let (hs, bytes) = (rest_start, rest_bytes);
+            let extra_hpa = seed_report_ram_extra(hs, bytes);
+            if extra_hpa != 0 {
+                serial::write_str("boot: report-RAM extra hpa=0x");
+                write_u64_hex(extra_hpa);
+                serial::write_str(" bytes=");
+                write_u64(bytes.min(REPORT_RAM_EXTRA_MAX_BYTES));
+                serial::write_line(" (Stage 46; not ISO-INSTALL-OK)");
+            } else {
+                serial::write_line(
+                    "boot: report-RAM extra skip align (Stage 46; not ISO-INSTALL-OK)",
+                );
+            }
+        } else {
+            serial::write_line(
+                "boot: report-RAM extra skip none (Stage 46; not ISO-INSTALL-OK)",
+            );
+        }
+    }
 
     // Prove COM1 works with boot services gone (M1.0 gate).
     serial::write_line(M1_EBS_OK_MARKER);
@@ -188,5 +304,31 @@ mod handoff_test {
     #[test]
     fn marker_stable() {
         assert_eq!(M1_EBS_OK_MARKER, "RAYNU-V-M1-EBS-OK");
+    }
+
+    #[test]
+    fn extra_2m_bump_aligns_and_exhausts() {
+        assert_eq!(
+            seed_report_ram_extra(0x2000_1000, 8 * 1024 * 1024),
+            0x2020_0000
+        );
+        let a = take_report_ram_extra_2m().expect("first");
+        assert_eq!(a, 0x2020_0000);
+        let b = take_report_ram_extra_2m().expect("second");
+        assert_eq!(b, 0x2040_0000);
+        let c = take_report_ram_extra_2m().expect("third");
+        assert_eq!(c, 0x2060_0000);
+        assert!(take_report_ram_extra_2m().is_none());
+        seed_report_ram_extra(0, 0);
+        assert!(take_report_ram_extra_2m().is_none());
+    }
+
+    #[test]
+    fn nested_product_iso_may_seed_leftover() {
+        let src = include_str!("handoff.rs");
+        assert!(src.contains("nested product-ISO HOLDS"));
+        assert!(src.contains("report-RAM extra skip none"));
+        assert!(src.contains("report-RAM extra skip align"));
+        assert!(src.contains("2560"));
     }
 }

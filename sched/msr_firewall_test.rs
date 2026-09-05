@@ -42,6 +42,14 @@ fn allow_list_early_linux() {
         MsrAction::HostPassthrough
     );
     assert_eq!(
+        classify_msr(MSR_CSTAR, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
+        classify_msr(MSR_TSC_AUX, MsrAccess::Write),
+        MsrAction::HostPassthrough
+    );
+    assert_eq!(
         classify_msr(MSR_APIC_BASE, MsrAccess::Read),
         MsrAction::Shadow
     );
@@ -86,4 +94,7 @@ fn filter_leaf0_passthrough_vendor() {
 fn filter_leaf7_hides_la57() {
     let r = filter_cpuid(7, 0);
     assert_eq!(r.ecx & crate::arch::cpu::CPUID_LEAF7_ECX_LA57, 0);
+    assert_eq!(r.ebx & crate::arch::cpu::CPUID_LEAF7_EBX_CLFLUSHOPT, 0);
+    assert_eq!(r.ebx & crate::arch::cpu::CPUID_LEAF7_EBX_CLWB, 0);
+    assert_eq!(r.ecx & crate::arch::cpu::CPUID_LEAF7_ECX_WAITPKG, 0);
 }

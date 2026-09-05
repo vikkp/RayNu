@@ -7,7 +7,7 @@
   "hda_version": 1,
   "last_commit": "2b795a0bef4ae5a5c356a0131205f9de439ffe57",
   "last_commit_short": "2b795a0",
-  "last_updated": "2026-08-28",
+  "last_updated": "2026-09-05",
   "months_to_everest": 0.5,
   "months_to_everest_prev": 0.5,
   "mount_everest_path": [
@@ -29,6 +29,6 @@
     "ui": 96
   },
   "updated_by": "cursor",
-  "velocity_commits_30d": 368,
+  "velocity_commits_30d": 376,
   "velocity_gates_30d": 61
 }

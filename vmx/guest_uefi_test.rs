@@ -1,16 +1,39 @@
 use super::{
-    apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_low_ram_at, dxe_or_cd_boot_evidence,
-    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
+    guest_uefi_report_ram_premap_gpa, guest_uefi_report_ram_premapped_contiguous_bytes,
+    guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
+};
+use super::{
+    apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
+    xapic_fetch_miss_eax_fallback,
+    xapic_eax_fallback_skip_len,
+    guest_uefi_insn_linear,
+    guest_uefi_mmio_peek_linear,
+    guest_uefi_mmio_skip_len,
+    guest_uefi_linux_fixed_skip_len,
+    guest_uefi_linux_invlpg_len,
+    guest_uefi_linux_cpuid_msr_skip,
+    guest_uefi_linux_cpuid_force_skip,
+    guest_uefi_linux_cpuid_exit_skip,
+    guest_uefi_linux_cpuid_should_log,
+    guest_uefi_linux_hlt_skip,
+    eltorito_boot_evidence, eltorito_com_match_step, eltorito_payload_ran, guest_uefi_tick_should_print, guest_uefi_linux_earlycon_drain, guest_uefi_linux_earlycon_share_on_linux_deliver, guest_uefi_linux_earlycon_share_on_vmexit, guest_uefi_linux_earlycon_share_on_bootimg, guest_uefi_poll_iso_install_ok, guest_uefi_post_cd_non_io, exec_from_low_ram, flash_window_gpa_and_pad, guest_cr4_read_shadow, guest_uefi_alive, guest_uefi_atapi,
     guest_uefi_both, guest_uefi_com_bytes, guest_uefi_dxe, guest_uefi_eltorito, guest_uefi_non_tf_exits,
     guest_uefi_past_sec, guest_uefi_vmlaunch_entered, hlt_should_resume, io_port_from_qual,
     is_com_uart_port, is_pci_config_port, last_exit_reason, linear_left_sec_tail,
     live_firmware_alias_gpa, past_sec_evidence, pci_bdf_bit, post_atapi_should_stop,
     post_dxe_should_stop,
     run_retained_ovmf_vmlaunch, spin_short_jmp_should_skip, stamp_empty_ovmf_vars,
+    cr_access_is_cr8,
     preempt_deadloop_should_skip, preempt_deadloop_skip_len, preempt_deadloop_is_assert_epilogue,
+    preempt_deadloop_delay_loop_skip_len, preempt_deadloop_delay_loop_sets_rax_one,
     preempt_deadloop_guarded_assert_skip_len, guest_uefi_assert_caller_is_dxe_ram,
     insn_fallthrough_is_leave_ret, assert_deadloop_return_gpa, guest_uefi_cpuid_leaf1_is_uniprocessor,
-    guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_filter_cpuid,
+    guest_uefi_cpuid_has_hypervisor, guest_uefi_cpuid_is_kvm, guest_uefi_cpuid_leaf_is_hypervisor_scan,
+    guest_uefi_filter_cpuid, guest_uefi_filter_cpuid_for_linux,
+    guest_uefi_cpuid_is_genuine_intel,
+    guest_uefi_linux_hypervisor_scan_bump_gpr, guest_uefi_linux_hypervisor_scan_bump_gprs,
+    GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST,
+    guest_uefi_hpet_step_for_exit, guest_uefi_hpet_uart_tsc_step,
     guest_uefi_xapic_is_not_sink, guest_uefi_is_mtrr_msr, guest_uefi_is_misc_enable,
     guest_uefi_misc_enable_read, guest_uefi_misc_enable_write,
     guest_uefi_mtrr_read, guest_uefi_mtrr_reset, guest_uefi_mtrr_write, guest_uefi_mtrr_pci_uc_hole,
@@ -18,17 +41,21 @@ use super::{
     guest_uefi_mtrr_set_admit_uc, guest_uefi_mtrr_uc_held,
     guest_uefi_mtrr_fixed_is_vga_hole, GUEST_UEFI_MTRR_UC_PACKED,
     guest_uefi_phys_bits, guest_uefi_gpa0_fixed_mtrr_split, guest_uefi_gpa0_split_now, guest_uefi_cpuid_80000008_eax, guest_uefi_mtrr_var_mask_sanitize,
-    guest_uefi_pf_should_identity_map, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma,
+    guest_uefi_flash_off, guest_uefi_gpa_to_hpa,
+    try_alloc_product_iso_install_disk,
+    guest_uefi_pf_should_identity_map, guest_uefi_pf_should_deliver_to_guest, guest_uefi_pf_is_linux_direct_map, guest_uefi_linux_pf_entry_info, guest_uefi_linux_pf_blocks_irq, guest_uefi_linux_exc_blocks_irq, guest_uefi_linux_exception_bitmap, guest_uefi_hw_exception_entry_info, GUEST_UEFI_LINUX_PF_ENTRY_INFO, GUEST_UEFI_INTR_TYPE_HW_EXCEPTION, GUEST_UEFI_INTR_DELIVER_CODE, GUEST_UEFI_INTR_INFO_VALID, guest_uefi_pf_sec_cr3, guest_uefi_pf_should_load_sec_cr3, guest_uefi_pf_should_rebuild_sec_cr3, guest_uefi_pf_error_is_reserved, guest_uefi_pf_should_map_mmio, guest_uefi_pf_gpa32, guest_uefi_mmio_needs_scratch, guest_uefi_report_ram_should_map, guest_uefi_string_ins_needs_report_ram_map, guest_uefi_report_ram_gpa_2m, guest_uefi_report_ram_page_off, copy_report_ram_at, store_report_ram_at, load_report_ram_at, guest_uefi_ept_scratch_on_qual, guest_uefi_ept_qual_is_walk, guest_uefi_ept_qual_is_fetch, guest_uefi_ept_hole_ro_on_qual, guest_uefi_ept_hole_ro_allows_execute, guest_uefi_rip_is_hole_execute, guest_uefi_hole_ro_uses_dedicated_zero, guest_uefi_insn_is_poison_fill, guest_uefi_pf_should_split_ram_1g, guest_uefi_pde_is_large, guest_uefi_pde_is_poison, guest_uefi_pf_should_fix_ram_wp, guest_uefi_pf_split4k_resume_already_rw, guest_uefi_pf_error_is_present_write, guest_uefi_io_qual_is_string, guest_uefi_io_qual_is_rep, guest_uefi_io_string_count, guest_uefi_io_string_advance, guest_uefi_io_string_fills_ram, guest_uefi_fwcfg_string_fills_ram, guest_uefi_io_string_dest_ok, GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX, guest_uefi_fwcfg_identity_overlay, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX, GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, guest_uefi_fwcfg_dest_ok_fill, guest_uefi_fwcfg_dest_ok_fill_should_log, GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX, GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP, copy_low_ram_bytes, write_low_ram_bytes, guest_uefi_fwcfg_identity_overlay_apply, guest_uefi_fwcfg_identity_overlay_restore, guest_uefi_io_addr_reg, store_low_ram_at, load_low_ram_at, guest_uefi_cs_ar_is_long, guest_uefi_cr0_is_paging, guest_uefi_efer_with_lma, guest_uefi_efer_with_lma_allow_nx, guest_uefi_efer_allow_nx,
     guest_uefi_ia32e_entry_ctls, guest_uefi_is_pcd_database_sig, guest_uefi_is_ldri_sig, is_debugcon_port,
     ia32_pat_memory_type, IA32_PAT_RESET,
-    ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
+    ud_is_ud2, ud_xsave_family, xsetbv_accepts_xcr, xsetbv_masked_xcr0, e4_restore_xcr0_value, e4_restore_cr4_osxsave, E5_OVMF_SEC_CR4_VALUE, E5_OVMF_VMLAUNCH_RESIDUAL_NOTE, guest_uefi_cpusleep_retaddr, last_hlt_retaddr, guest_uefi_cpusleep_callsite, last_hlt_callsite, guest_uefi_firmware_conin_cr_on_hlt, guest_uefi_waitforevent_force_return, guest_uefi_waitforevent_leave, guest_uefi_firmware_zeromem_ept, guest_uefi_firmware_zeromem_insn, guest_uefi_firmware_zeromem_dest_ok, guest_uefi_firmware_wfe_preempt_skip_len, guest_uefi_firmware_wfe_state4_dest, guest_uefi_firmware_wfe_state4_poke, guest_uefi_pf_is_null_relative, guest_uefi_firmware_wfe_event_pf, guest_uefi_firmware_wfe_event_pf_insn, guest_uefi_exit_is_page_fault, guest_uefi_firmware_wfe_event_pf_restore_bitmap, GUEST_UEFI_EXC_BITMAP_PF, GUEST_UEFI_WFE_HLT_RET, GUEST_UEFI_WFE_PREEMPT_SKIP_PREFIX, GUEST_UEFI_WFE_STATE4_RIP, GUEST_UEFI_WFE_STATE4_DEST, GUEST_UEFI_WFE_STATE4_VAL, GUEST_UEFI_WFE_STATE4_POKE_PREFIX, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP, GUEST_UEFI_WFE_EVENT_PF_PREFIX, GUEST_UEFI_EVENT_SIG, GUEST_UEFI_WFE_CALLSITE, GUEST_UEFI_WFE_CALLER, GUEST_UEFI_ZEROMEM_EPT_RIP, GUEST_UEFI_ZEROMEM_FILL_CAP, GUEST_UEFI_ZEROMEM_EPT_PREFIX, GUEST_UEFI_CR4_HOST_OWNED, GUEST_UEFI_CR4_OSXSAVE, GUEST_UEFI_CR4_VMXE, GUEST_UEFI_FEATURE_CONTROL_VALUE, GUEST_UEFI_FLASH_BASE,
     GUEST_UEFI_DEBUGCON_PORT, GUEST_UEFI_DXE_RAM_FLOOR, GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE, GUEST_UEFI_CR0_PG,
-    GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IO_STRING_CAP, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
+    GUEST_UEFI_IRON_EPT_PCI_HOLE_GPA, GUEST_UEFI_IRON_PF_CR2, GUEST_UEFI_IRON_LINUX_PF_CR2, GUEST_UEFI_IRON_LINUX_PF_RIP, GUEST_UEFI_IRON_LINUX_CPUID_RIP, GUEST_UEFI_LINUX_DIRECT_MAP, GUEST_UEFI_IRON_PF_RSVD_CR2, GUEST_UEFI_IRON_PF_HEAP_CR2, GUEST_UEFI_IRON_PF_HEAP_WR_CR2, GUEST_UEFI_IRON_PF_POISON_CR2, GUEST_UEFI_IRON_PF_POISON_PDE, GUEST_UEFI_IRON_PF_MTRR_UC_CR2, GUEST_UEFI_IRON_PF_SIGNEXT_CR2, GUEST_UEFI_IRON_PF_TRUNC32_CR2, GUEST_UEFI_IRON_MMIO_SCRATCH_GPA, GUEST_UEFI_IRON_SINK_PT_GPA, GUEST_UEFI_IRON_SCRATCH_CAP_GPA, GUEST_UEFI_IRON_SCRATCH_WALK_GPA, GUEST_UEFI_IRON_SCRATCH_FETCH_WALK_GPA, GUEST_UEFI_IRON_EPT_QUAL_FETCH_WALK, GUEST_UEFI_IRON_EPT_QUAL_AD_WALK, GUEST_UEFI_IRON_HOLE_RO_HPET_RIP, GUEST_UEFI_IRON_HOLE_X_RIP, GUEST_UEFI_IRON_ZERO_FILL_RIP, GUEST_UEFI_IRON_PF_WP_CR2, GUEST_UEFI_IRON_PF_WP_RIP, GUEST_UEFI_IRON_PF_WP_ERR, GUEST_UEFI_IRON_PF_WP_PDE, GUEST_UEFI_IRON_PF_WP_SPLIT_PDE, GUEST_UEFI_IRON_PF_WP_PML4E_RO, GUEST_UEFI_IRON_PF_XAPIC_CR2, GUEST_UEFI_IRON_PF_XAPIC_ERR, GUEST_UEFI_IRON_PF_XAPIC_PDPTE, GUEST_UEFI_IRON_PF_XAPIC_RIP, GUEST_UEFI_IO_QUAL_REP_INSW_1F0, GUEST_UEFI_IO_STRING_CAP, GUEST_UEFI_HV_PML4, GUEST_UEFI_MEMFD_BASE, GUEST_UEFI_MMIO_SCRATCH_SLOTS, GUEST_UEFI_REPORT_RAM_SLOTS, GUEST_UEFI_IRON_REPORT_RAM_GPA, GUEST_UEFI_EPT_MT_WB, GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, GUEST_UEFI_PF_IDENTITY_CAP, GUEST_UEFI_PF_ERR_RSVD,
     GUEST_UEFI_PCD_DATABASE_SIG, GUEST_UEFI_LDRI_SIG, GUEST_UEFI_LDRI_IMAGEBASE_OFF, GUEST_UEFI_VM_ENTRY_IA32E,
     CPUID_80000001_EDX_NX, CPUID_80000001_EDX_PAGE1GB, CPUID_LEAF7_ECX_TME_EN, CPUID_LEAF7_ECX_LA57,
+    CPUID_LEAF7_EBX_CLFLUSHOPT, CPUID_LEAF7_EBX_CLWB,
+    GUEST_UEFI_CPUID_LEAF4_LAST_SUB, GUEST_UEFI_CPUID_LEAF0_MAX,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
-    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4, eltorito_stops_guest_uefi,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_ELTORITO_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
@@ -46,8 +73,47 @@ use super::{
     GUEST_UEFI_PT_PRESENT, GUEST_UEFI_IRON_PDE8000_WB, GUEST_UEFI_PT_LARGE_2M_UC,
     GUEST_UEFI_IRON_PDE0_2M, GUEST_UEFI_PT_LEAF_4K, GUEST_UEFI_PT_LEAF_4K_UC, GUEST_UEFI_PT_TABLE,
     guest_uefi_patch_cpu_flush_unsupported, guest_uefi_count_cpu_flush_jnz,
+    guest_uefi_cpu_flush_skip_mapped,
+    guest_uefi_cpu_flush_tick_scans_mapped,
+    guest_uefi_linux_guest_active, guest_uefi_linux_unhandled_should_skip,
+    guest_uefi_linux_unhandled_try_skip, guest_uefi_linux_exc_error_code, guest_uefi_nmi_entry_info,
+    guest_uefi_linux_nmi_should_inject, virtio_mmio_eax_fallback, virtio_mmio_eax_fallback_len,
+    virtio_mmio_eax_fallback_size,
+    virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
+    guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
+    guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
+    guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
+    guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_firmware_hlt_ignores_tpr,
+    guest_uefi_firmware_hlt_wait_for_irq,
+    guest_uefi_firmware_hlt_wait_for_irq_oneshot,
+    guest_uefi_firmware_hlt_skip_after_inject,
+    guest_uefi_firmware_hlt_skip_without_inject,
+    guest_uefi_firmware_skip_pit_inject,
+    guest_uefi_firmware_skip_pit_inject_oneshot,
+    guest_uefi_firmware_hlt_skip_len,
+    guest_uefi_firmware_hlt_insn_len0_skip,
+    guest_uefi_firmware_hlt_activity_active,
+    guest_uefi_firmware_lapic_timer_expiry,
+    guest_uefi_ioapic_io_over_pit,
+    guest_uefi_firmware_virtual_wire_pic,
+    guest_uefi_product_iso_pci_ready,
+    guest_uefi_firmware_hlt_force_if,
+    guest_uefi_firmware_force_if_for_inject,
+    guest_uefi_firmware_arm_ata_gsi14,
+    guest_uefi_firmware_prefer_ata_irr,
+    guest_uefi_firmware_ata_over_pic,
+    guest_uefi_firmware_ata_irr_only,
+    guest_uefi_firmware_take_ioapic_ata,
+    guest_uefi_firmware_pic_ata,
+    guest_uefi_hlt_stall_quiet_tick, guest_uefi_linux_pic_irq0_vec,
+    guest_uefi_linux_gsi2_before_pic,
+    guest_uefi_pit_skips_ioapic_pin0,
+    guest_uefi_virtio_drain_every_resume,
+    GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
+    GUEST_UEFI_CPU_FLUSH_HEAP_GPA, GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK,
     GUEST_UEFI_IRON_PTE_A0000_WB,
 };
 use crate::boot::ovmf_esp::{
@@ -99,6 +165,9 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_SEC_TAIL_GPA, 0xFFFF_0000);
     assert_eq!(GUEST_UEFI_RESUME_CAP, 262144);
     assert_eq!(GUEST_UEFI_NESTED_RESUME_CAP, 65536);
+    assert_eq!(GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, 16_777_216);
+    assert_eq!(GUEST_UEFI_REPORT_RAM_SLOTS, 32);
+    assert_eq!(super::GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA, 976);
     assert_eq!(guest_uefi_resume_cap(false), 262144);
     assert_eq!(guest_uefi_resume_cap(true), 65536);
     assert!(GUEST_UEFI_NESTED_RESUME_CAP > 30769);
@@ -125,6 +194,31 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("post-DXE spends the 32768-exit cap"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8192-exit cap ended on CF8"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1s on preemption/HLT not PCI I/O"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET 1ms on CPUID/MSR/EPT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HPET TSC-delta on UART COM I/O"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux printk ticks every 4096"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART nowait (do not clear COM2_LIVE)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Linux CPUID GenuineIntel + NX"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX ring drain 4/exit"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share TX ring"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon quiet ticks"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon hush HV"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share product ISO"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush on tick cadence even when share"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first CPUID"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first high-half"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon share first bootimg"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("guest UART TX drain COM2 independent"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon pace LSR THRE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip #PF dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux earlycon skip exc deliver"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("poll ISO-INSTALL-OK every resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("256MiB disk leftover report-RAM"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("report-RAM EPT pre-map"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush skip leftover pre-map"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cpu_flush leftover per walk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux unhandled nowait stop"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8042 KBC"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("KeyboardWaitForValue"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("c19b91f"));
@@ -151,6 +245,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x80000838"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("past-PEI/DXE or CD boot attempt"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("empty virtio-blk at 00:02.0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO virtio-pci queues gated on window"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg bootorder CD then disk"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("drive@0"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ide@1,1"));
@@ -168,6 +263,10 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("remap i440FX DID"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("cmp bx"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("8259 PIC RAZ/WI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO PIC/IOAPIC inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO 16550 + ttyS0 cmdline"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO SOL RX to guest COM1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 product ISO Alpine serial auto-answer"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg etc/e820"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("exception insn dump"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("4MiB flash window"));
@@ -197,6 +296,25 @@ fn marker_and_residual_honest() {
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xFC]), 2);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xEC, 0xC9, 0xC3]), 0);
     assert_eq!(preempt_deadloop_skip_len(&[0xEB, 0xF3, 0xC9, 0xC3]), 2);
+    assert_eq!(
+        preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB, 0x48, 0xFF, 0xC8]),
+        5
+    );
+    assert_eq!(
+        preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB, 0x48, 0xFF, 0xC8, 0x75, 0xE0]),
+        10
+    );
+    assert_eq!(preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xE0]), 5);
+    assert_eq!(
+        preempt_deadloop_delay_loop_skip_len(&[0x48, 0xFF, 0xC8, 0x75, 0xFB]),
+        Some(5)
+    );
+    assert!(preempt_deadloop_delay_loop_sets_rax_one(&[
+        0x48, 0xFF, 0xC8, 0x75, 0xFB
+    ]));
+    assert!(!preempt_deadloop_delay_loop_sets_rax_one(&[0x48, 0xFF, 0xC8]));
+    assert_eq!(preempt_deadloop_skip_len(&[0x48, 0xFF, 0xC8]), 0);
+    assert_eq!(preempt_deadloop_skip_len(&[0x75, 0xFB]), 2);
     assert_eq!(GUEST_UEFI_DXE_RAM_FLOOR, 0x10_0000);
     assert!(guest_uefi_assert_caller_is_dxe_ram(0x6e81ca));
     assert!(guest_uefi_assert_caller_is_dxe_ram(0x1d25193));
@@ -253,6 +371,9 @@ fn marker_and_residual_honest() {
     );
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("73ed589"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("restore host XCR0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x40003d00"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x4000bd00"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("push rbx RSP slot"));
     assert_eq!(GUEST_UEFI_FEATURE_CONTROL_VALUE, 1);
     let leaf1 = guest_uefi_filter_cpuid(1, 0);
     assert_eq!(leaf1.ecx & crate::arch::cpu::CPUID_ECX_VMX, 0);
@@ -262,6 +383,109 @@ fn marker_and_residual_honest() {
     let kvm = guest_uefi_filter_cpuid(GUEST_UEFI_KVM_CPUID_LEAF, 0);
     assert!(guest_uefi_cpuid_is_kvm(kvm.ebx, kvm.ecx, kvm.edx));
     assert_eq!(kvm.eax, GUEST_UEFI_KVM_CPUID_LEAF + 1);
+    let linux1 = guest_uefi_filter_cpuid_for_linux(1, 0);
+    assert!(!guest_uefi_cpuid_has_hypervisor(linux1.ecx));
+    assert!(guest_uefi_cpuid_leaf1_is_uniprocessor(linux1.ebx, linux1.edx));
+    let linux_kvm = guest_uefi_filter_cpuid_for_linux(GUEST_UEFI_KVM_CPUID_LEAF, 0);
+    assert_eq!(linux_kvm.eax, 0);
+    assert_eq!(linux_kvm.ebx, 0);
+    assert_eq!(linux_kvm.ecx, 0);
+    assert_eq!(linux_kvm.edx, 0);
+    assert!(!guest_uefi_cpuid_is_kvm(linux_kvm.ebx, linux_kvm.ecx, linux_kvm.edx));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_3d00));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4000_bd00));
+    assert!(guest_uefi_cpuid_leaf_is_hypervisor_scan(GUEST_UEFI_KVM_CPUID_LEAF));
+    assert!(!guest_uefi_cpuid_leaf_is_hypervisor_scan(1));
+    assert!(!guest_uefi_cpuid_leaf_is_hypervisor_scan(0x4001_0000));
+    let linux_scan = guest_uefi_filter_cpuid_for_linux(0x4000_3d00, 0);
+    assert_eq!(linux_scan.eax | linux_scan.ebx | linux_scan.ecx | linux_scan.edx, 0);
+    let linux0 = guest_uefi_filter_cpuid_for_linux(0, 0);
+    assert!(guest_uefi_cpuid_is_genuine_intel(
+        linux0.ebx, linux0.edx, linux0.ecx
+    ));
+    let linux_nx = guest_uefi_filter_cpuid_for_linux(0x8000_0001, 0);
+    assert_ne!(linux_nx.edx & CPUID_80000001_EDX_NX, 0);
+    assert_eq!(linux_nx.edx & CPUID_80000001_EDX_PAGE1GB, 0);
+    let fw_nx = guest_uefi_filter_cpuid(0x8000_0001, 0);
+    assert_eq!(fw_nx.edx & CPUID_80000001_EDX_NX, 0);
+    assert_eq!(fw_nx.edx & CPUID_80000001_EDX_PAGE1GB, 0);
+    assert_eq!(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST, 0x4000_ff00);
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x4000_3d00),
+        u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+    );
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_bd00, 0x4000_bd00),
+        u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST)
+    );
+    // alpine-virt native_cpuid: push %rbx with base in EBX (not R12).
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_3d00, 0x7fff_ffff_8abc_def0),
+        0x7fff_ffff_8abc_def0
+    );
+    // Iron 73c2cab: do not snap a direct-map pointer at GPA 0x40000000.
+    assert_eq!(
+        guest_uefi_linux_hypervisor_scan_bump_gpr(0x4000_0000, 0xffff_8880_4000_0000),
+        0xffff_8880_4000_0000
+    );
+    assert_eq!(guest_uefi_linux_hypervisor_scan_bump_gpr(1, 1), 1);
+    let mut gprs = [0x4000_0000u64, 0x7, 0x4000_0000];
+    assert!(guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut gprs));
+    assert_eq!(gprs[0], u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST));
+    assert_eq!(gprs[1], 0x7);
+    assert_eq!(gprs[2], u64::from(GUEST_UEFI_LINUX_HYPERVISOR_SCAN_LAST));
+    let mut none = [0x10u64, 0x20];
+    assert!(!guest_uefi_linux_hypervisor_scan_bump_gprs(0x4000_0000, &mut none));
+    assert_eq!(none, [0x10, 0x20]);
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(10, false, false),
+        crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(31, false, false),
+        crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(32, false, false),
+        crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(12, false, false),
+        crate::devices::guest_platform::HPET_MAIN_STEP
+    );
+    assert_eq!(guest_uefi_hpet_step_for_exit(30, false, false), 0);
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(30, false, true),
+        crate::devices::guest_platform::HPET_MAIN_STEP
+    );
+    assert_eq!(guest_uefi_hpet_uart_tsc_step(0), 0);
+    assert_eq!(
+        guest_uefi_hpet_uart_tsc_step(crate::devices::guest_platform::TSC_PER_HPET_TICK),
+        1
+    );
+    assert_eq!(
+        guest_uefi_hpet_uart_tsc_step(
+            crate::devices::guest_platform::TSC_PER_HPET_TICK
+                * crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+        ),
+        crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+    );
+    assert_eq!(
+        guest_uefi_hpet_uart_tsc_step(u64::MAX),
+        crate::devices::guest_platform::HPET_UART_IO_STEP_CAP
+    );
+    assert!(
+        guest_uefi_hpet_uart_tsc_step(u64::MAX)
+            < crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(48, false, false),
+        crate::devices::guest_platform::HPET_INSN_STEP
+    );
+    assert_eq!(
+        guest_uefi_hpet_step_for_exit(48, true, false),
+        crate::devices::guest_platform::HPET_MAIN_STEP
+    );
     let phys = guest_uefi_filter_cpuid(0x8000_0008, 0);
     let pa = phys.eax & 0xFF;
     assert!(pa >= GUEST_UEFI_PHYS_BITS_IRON_CAP && pa <= GUEST_UEFI_PHYS_BITS_MAX);
@@ -273,12 +497,58 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_PHYS_BITS_MIN, 36);
     assert_eq!(GUEST_UEFI_IRON_PF_CR2, 0x80B000);
     assert_eq!(GUEST_UEFI_MEMFD_BASE, 0x800000);
-    assert_eq!(GUEST_UEFI_HV_PML4, 0x200000);
+    assert_eq!(GUEST_UEFI_HV_PML4, 0x400000);
     assert_eq!(
         GUEST_UEFI_HV_PML4,
         crate::devices::guest_platform::HV_IDENTITY_PML4
     );
     assert_eq!(GUEST_UEFI_PF_IDENTITY_CAP, 256);
+    assert_eq!(GUEST_UEFI_IRON_LINUX_PF_CR2, 0xffff_8880_7e2a_3000);
+    assert_eq!(GUEST_UEFI_IRON_LINUX_PF_RIP, 0xffff_ffff_bee1_9755);
+    assert_eq!(GUEST_UEFI_IRON_LINUX_CPUID_RIP, 0xffff_ffff_8408_1783);
+    assert!(guest_uefi_pf_should_deliver_to_guest(GUEST_UEFI_IRON_LINUX_CPUID_RIP));
+    assert!(guest_uefi_pf_is_linux_direct_map(GUEST_UEFI_IRON_LINUX_PF_CR2));
+    assert!(guest_uefi_pf_is_linux_direct_map(GUEST_UEFI_LINUX_DIRECT_MAP));
+    assert!(!guest_uefi_pf_is_linux_direct_map(GUEST_UEFI_IRON_PF_SIGNEXT_CR2));
+    assert!(guest_uefi_pf_should_deliver_to_guest(GUEST_UEFI_IRON_LINUX_PF_RIP));
+    assert!(!guest_uefi_pf_should_deliver_to_guest(0x7ee5_dbe4));
+    assert!(!guest_uefi_pf_should_deliver_to_guest(GUEST_UEFI_IRON_HOLE_X_RIP));
+    assert_eq!(GUEST_UEFI_LINUX_PF_ENTRY_INFO, 0x8000_0B0E);
+    assert_eq!(guest_uefi_linux_pf_entry_info(), 0x8000_0B0E);
+    assert_eq!(guest_uefi_linux_pf_entry_info() & 0xff, 14);
+    assert_eq!(
+        (guest_uefi_linux_pf_entry_info() >> 8) & 7,
+        GUEST_UEFI_INTR_TYPE_HW_EXCEPTION
+    );
+    assert_ne!(
+        guest_uefi_linux_pf_entry_info() & GUEST_UEFI_INTR_DELIVER_CODE,
+        0
+    );
+    assert_ne!(
+        guest_uefi_linux_pf_entry_info() & GUEST_UEFI_INTR_INFO_VALID,
+        0
+    );
+    assert!(guest_uefi_linux_pf_blocks_irq(GUEST_UEFI_IRON_LINUX_PF_CR2));
+    assert!(!guest_uefi_linux_pf_blocks_irq(0));
+    assert!(guest_uefi_linux_exc_blocks_irq(0, true));
+    assert!(!guest_uefi_linux_exc_blocks_irq(0, false));
+    assert_eq!(
+        guest_uefi_linux_exception_bitmap(),
+        crate::vmx::fields::LINUX_EXCEPTION_BITMAP
+    );
+    assert_eq!(guest_uefi_linux_exception_bitmap() & (1 << 14), 0);
+    assert_eq!(guest_uefi_linux_exception_bitmap() & (1 << 6), 0);
+    assert_eq!(guest_uefi_linux_exception_bitmap() & (1 << 13), 0);
+    assert_ne!(guest_uefi_linux_exception_bitmap() & (1 << 8), 0);
+    assert_eq!(guest_uefi_hw_exception_entry_info(6, false), 0x8000_0306);
+    assert_eq!(guest_uefi_hw_exception_entry_info(13, true), 0x8000_0B0D);
+    assert_eq!(GUEST_UEFI_INTR_TYPE_NMI, 2);
+    assert_eq!(guest_uefi_nmi_entry_info(), 0x8000_0202);
+    assert_ne!(guest_uefi_nmi_entry_info(), guest_uefi_hw_exception_entry_info(2, false));
+    assert!(guest_uefi_linux_nmi_should_inject(true, 2));
+    assert!(!guest_uefi_linux_nmi_should_inject(false, 2));
+    assert!(!guest_uefi_linux_nmi_should_inject(true, 8));
+    assert!(!guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_LINUX_PF_CR2));
     assert!(guest_uefi_pf_should_identity_map(0, GUEST_UEFI_IRON_PF_CR2));
     assert_eq!(guest_uefi_pf_sec_cr3(), GUEST_UEFI_HV_PML4);
     assert_ne!(guest_uefi_pf_sec_cr3(), GUEST_UEFI_MEMFD_BASE);
@@ -427,7 +697,177 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_io_string_fills_ram(0x1F0));
     assert!(guest_uefi_io_string_fills_ram(0x170));
     assert!(!guest_uefi_io_string_fills_ram(0x1F7));
-    assert!(!guest_uefi_io_string_fills_ram(0x511));
+    assert!(guest_uefi_io_string_fills_ram(0x511));
+    assert!(guest_uefi_fwcfg_string_fills_ram(0x511));
+    assert!(!guest_uefi_fwcfg_string_fills_ram(0x510));
+    assert!(guest_uefi_io_string_dest_ok(0x205f18));
+    assert!(GUEST_UEFI_FWCFG_SKIP_HV_IDENTITY_PREFIX.contains("fw_cfg string skip HV identity dest="));
+    assert!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_PREFIX.contains("fw_cfg identity overlay dest="));
+    assert_eq!(GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP, 16);
+    let overlay_dest = GUEST_UEFI_HV_PML4 + 0x5f18;
+    assert!(!guest_uefi_io_string_dest_ok(overlay_dest));
+    assert!(guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 4, true));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, overlay_dest, 17, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x1F0, overlay_dest, 4, false));
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x205f18, 4, false));
+    assert!(
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN)
+            > GUEST_UEFI_FWCFG_IDENTITY_OVERLAY_CAP
+    );
+    assert!(!guest_uefi_fwcfg_identity_overlay(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(GUEST_UEFI_FWCFG_DEST_OK_FILL_PREFIX.contains("fw_cfg dest_ok fill dest="));
+    assert_eq!(GUEST_UEFI_FWCFG_DEST_OK_FILL_LOG_CAP, 8);
+    assert!(guest_uefi_fwcfg_dest_ok_fill_should_log(0));
+    assert!(guest_uefi_fwcfg_dest_ok_fill_should_log(7));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill_should_log(8));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_LOADER_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(0x511, 0x205f18, 4, false));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        overlay_dest,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x1F0,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        false
+    ));
+    assert!(!guest_uefi_fwcfg_dest_ok_fill(
+        0x511,
+        0x205f18,
+        u64::from(crate::devices::guest_acpi::ACPI_TABLES_LEN),
+        true
+    ));
+    {
+        // Nested 1e0f4a7 dest is now ordinary RAM. Overlay cannot hold
+        // etc/acpi/tables; dest_ok fill must. PEI dest holds ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x205f18usize;
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        assert_eq!(
+            ram[dest],
+            crate::devices::guest_acpi::acpi_tables_byte(0)
+        );
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
+    {
+        // ZONE_FSEG AllocateMaxAddress dest is conventional 640KiB, not
+        // PEI stack 0x205f18 and not ZONE_HIGH leftover. FSEG dest holds
+        // ACPI tables.
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        let n = crate::devices::guest_acpi::ACPI_TABLES_LEN as usize;
+        let dest = 0x9E000usize;
+        assert!(dest < crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(dest + n <= crate::devices::guest_platform::E820_VGA_BASE as usize);
+        assert!(guest_uefi_io_string_dest_ok(dest as u64));
+        assert!(guest_uefi_fwcfg_dest_ok_fill(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        assert!(!guest_uefi_fwcfg_identity_overlay(
+            0x511,
+            dest as u64,
+            n as u64,
+            false
+        ));
+        let mut blob = vec![0u8; n];
+        let _ = crate::devices::guest_platform::io(
+            0x510,
+            false,
+            2,
+            u64::from(crate::devices::guest_acpi::FW_CFG_ACPI_TABLES_SEL),
+        );
+        for i in 0..n {
+            blob[i] = crate::devices::guest_platform::io(0x511, true, 1, 0) as u8;
+        }
+        assert_eq!(&blob[..4], b"RSDT");
+        let mut ram = vec![0u8; dest + n];
+        assert!(write_low_ram_bytes(&mut ram, dest as u64, &blob));
+        assert_eq!(&ram[dest..dest + 4], b"RSDT");
+        crate::devices::ide_cdrom::reset();
+        crate::devices::guest_platform::reset();
+    }
+    assert!(!guest_uefi_fwcfg_identity_overlay(0x511, 0x100000, 4, false));
+    {
+        let mut ram = vec![0u8; (GUEST_UEFI_HV_PML4
+            + crate::devices::guest_platform::HV_IDENTITY_PML4_BYTES)
+            as usize];
+        let d = overlay_dest as usize;
+        ram[d] = 0xAA;
+        ram[d + 1] = 0xBB;
+        ram[d + 2] = 0xCC;
+        ram[d + 3] = 0xDD;
+        let mut saved = [0u8; 4];
+        assert!(guest_uefi_fwcfg_identity_overlay_apply(
+            &mut ram,
+            overlay_dest,
+            b"QEMU",
+            &mut saved
+        ));
+        assert_eq!(&saved, &[0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(&ram[d..d + 4], b"QEMU");
+        assert!(guest_uefi_fwcfg_identity_overlay_restore(
+            &mut ram, overlay_dest, &saved
+        ));
+        assert_eq!(&ram[d..d + 4], &[0xAA, 0xBB, 0xCC, 0xDD]);
+        let mut tmp = [0u8; 4];
+        assert!(copy_low_ram_bytes(&ram, overlay_dest, &mut tmp));
+        assert!(write_low_ram_bytes(&mut ram, overlay_dest, b"QEMU"));
+    }
+    assert!(guest_uefi_io_string_dest_ok(0x100000));
+    assert!(guest_uefi_io_string_dest_ok(0x7bddd000));
     assert!(!guest_uefi_io_string_fills_ram(0xCF8));
     crate::devices::ide_cdrom::reset();
     assert!(crate::devices::ide_cdrom::present_placeholder());
@@ -442,6 +882,313 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x511"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x205f18"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ATA-only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg IoReadFifo8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip HV identity PML4 dest"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg string skip HV identity dest="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg identity overlay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HV identity PML4 0x400000"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PEI dest holds ACPI tables"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("fw_cfg dest_ok fill dest="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("dest_ok fill log cap 8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("ACPI tables ZONE_FSEG"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FSEG dest holds ACPI tables"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line ata_piix blacklist"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line piix_init blacklist"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("FADT FACS"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flashcruzer reject 2d6b109 dest skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("auto-answer / # without login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO POST_DXE_TAIL skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("emergency mount+exit"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line usbdelay"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("io string (rep insb)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xAF00 PM timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("tick port="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 084430f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 2ae4544"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2ae4544"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0xB000 dword timer"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIC before GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("HLT stall quiet tick print-only"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT ignores TPR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT stall waits for IRQ"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire PIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire AEOI"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT force IF"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT activity active"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware LAPIC timer expiry"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("IOAPIC I/O over PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware virtual-wire GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder virtio-iso scsi@3 first"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg bootorder El Torito ide@ first"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 56f31d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d61dc7e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5c0f7a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash ea30da1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 56f31d3"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 90da03d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash e70a295"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 77f5866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 5227ad9"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 489d938"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash bce5bbb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash eaa580d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 12926eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eaa580d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 0bb06a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 30b78a0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 8e581c7"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash d7d63ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash e4faceb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash a14223f"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash 3b7bbac"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 3b7bbac"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e4faceb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d7d63ca"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware OVMF ATA vector"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber IOAPIC ATA vector"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not inject leftover 0x2E"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not clobber PIC ICW2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIC ATA vector follows ICW2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT insn_len 0 skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e581c7"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 30b78a0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0bb06a2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 12926eb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware PIT one-shot after first wake"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 24c5fa6"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 24c5fa6 HLT wait-for-irq then PIT livelock")
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after PIT one-shot"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e3cbfa5"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 e3cbfa5 PIT one-shot then HLT hang")
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 21dc562"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE
+            .contains("iron COM2 21dc562 HLT skip after PIT one-shot then same CpuSleep")
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("Stage 46 IDE pci cmdwr"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 184ee61"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 184ee61 cmdwr=6 wr=0x0 pcicmd=0x1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("honor IDE pci cmd (no OR 0x0001)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 abba969"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE
+            .contains("iron COM2 abba969 honor pcicmd=0 wr=0 cmdwr=6 ataio=0")
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print IDE pci cmdwr seq"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 060c504"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 060c504 seq=0,0,0,0,0,0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("EnableAttributes 0x0005 after write-0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c144001"));
+    assert!(
+        E5_OVMF_VMLAUNCH_RESIDUAL_NOTE
+            .contains("iron COM2 c144001 EnableAttributes pcicmd=0x5 still ataio=0")
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last PCI CF8 on HLT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 61991be"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 61991be HLT cf8=0x0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last enabled CF8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 5de9e1c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 5de9e1c HLT cf8en=0x80004008"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last IDE CF8"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 7ba1ccf"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 7ba1ccf HLT cf8ide=0x80000930"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print last IDE ROM BAR write"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 118edcf"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 118edcf HLT romwr=0xfffffffe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides duplicate slot0 IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 27eda8c"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 27eda8c hide-slot0 still ataio=0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print HLT retaddr"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 2d4ab51 HLT ret=0x7ff0e055 still ataio=0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 2d4ab51"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ConIn CR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 6c4bfde ConIn CR still ataio=0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 6c4bfde"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("print HLT callsite"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 0b770cd HLT rethx=0xe056ff41b84d8b48 still ataio=0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 0b770cd"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WaitForEvent return"));
+    assert_eq!(guest_uefi_cpusleep_retaddr(0x7F03_FBE5, true), 0x7F03_FBE5);
+    assert_eq!(guest_uefi_cpusleep_retaddr(0x1_0000_1234, false), 0x1234);
+    assert_eq!(last_hlt_retaddr(), 0);
+    assert_eq!(guest_uefi_cpusleep_callsite([0xe8, 0x12, 0x34, 0x56, 0x78, 0x90, 0x90, 0x90]), 0x9090_9078_5634_12e8);
+    assert_eq!(last_hlt_callsite(), 0);
+    assert_eq!(GUEST_UEFI_WFE_HLT_RET, 0x7ff0_e055);
+    assert_eq!(GUEST_UEFI_WFE_CALLSITE, 0xe056_ff41_b84d_8b48);
+    assert_eq!(
+        guest_uefi_cpusleep_callsite([0x48, 0x8b, 0x4d, 0xb8, 0x41, 0xff, 0x56, 0xe0]),
+        GUEST_UEFI_WFE_CALLSITE
+    );
+    assert!(guest_uefi_waitforevent_force_return(true, true, 0, false, 0x7ff0_e055));
+    assert!(!guest_uefi_waitforevent_force_return(true, true, 0, false, 0x7f01_fc0f));
+    assert!(!guest_uefi_waitforevent_force_return(true, true, 0, true, 0x7ff0_e055));
+    assert_eq!(GUEST_UEFI_WFE_CALLER, 0x7fef_fe28);
+    assert_eq!(GUEST_UEFI_ZEROMEM_EPT_RIP, 0x7ec8_f6ff);
+    assert_eq!(GUEST_UEFI_ZEROMEM_FILL_CAP, 16 * 1024 * 1024);
+    assert!(GUEST_UEFI_ZEROMEM_EPT_PREFIX.contains("firmware ZeroMem ept gpa=0x"));
+    assert!(guest_uefi_firmware_zeromem_insn([0x31, 0xc0, 0x31, 0xff, 0x89, 0x03]));
+    assert!(!guest_uefi_firmware_zeromem_insn([0x0f, 0xa2, 0x00, 0x00, 0x00, 0x00]));
+    assert!(guest_uefi_firmware_zeromem_ept(true, true, 0, true, 0x7ec8_f6ff));
+    assert!(!guest_uefi_firmware_zeromem_ept(true, true, 0, false, 0x7ec8_f6ff));
+    assert!(!guest_uefi_firmware_zeromem_ept(true, true, 1, true, 0x7ec8_f6ff));
+    assert!(!guest_uefi_firmware_zeromem_ept(true, true, 0, true, 0x7f01_fc0f));
+    assert!(guest_uefi_firmware_zeromem_dest_ok(0x7ec8_0000, 4096));
+    assert!(!guest_uefi_firmware_zeromem_dest_ok(0, 4096));
+    assert!(!guest_uefi_firmware_zeromem_dest_ok(0x7ec8_0000, GUEST_UEFI_ZEROMEM_FILL_CAP + 1));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ZeroMem ept fill"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 e0d5c55"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 e0d5c55 WaitForEvent return caller=0x7feffe28"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c8d504d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE preempt skip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 c8d504d ZeroMem ept fill never printed"));
+    assert!(GUEST_UEFI_WFE_PREEMPT_SKIP_PREFIX.contains("firmware WFE preempt skip len="));
+    let noskip = [
+        0xf3, 0x0f, 0x1e, 0xfa, 0x48, 0x83, 0x3d, 0x4c, 0x9b, 0x00, 0x00, 0x04, 0x48, 0xb8,
+    ];
+    assert_eq!(preempt_deadloop_skip_len(&noskip), 0);
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(true, true, 0, true, &noskip),
+        12
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(true, true, 0, false, &noskip),
+        0
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(true, true, 1, true, &noskip),
+        0
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(true, true, 0, true, &[0xf3, 0x0f, 0x1e, 0xfa]),
+        4
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(
+            true,
+            true,
+            0,
+            true,
+            &[0x48, 0x83, 0x3d, 0x4c, 0x9b, 0x00, 0x00, 0x04]
+        ),
+        8
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_preempt_skip_len(true, true, 0, true, &[0x74, 0x6c, 0x55, 0x48]),
+        0
+    );
+    assert_eq!(GUEST_UEFI_WFE_STATE4_RIP, 0x7ff0_e7e8);
+    assert_eq!(GUEST_UEFI_WFE_STATE4_DEST, 0x7ff1_8340);
+    assert_eq!(GUEST_UEFI_WFE_STATE4_VAL, 4);
+    assert!(GUEST_UEFI_WFE_STATE4_POKE_PREFIX.contains("firmware WFE state4 poke dest=0x"));
+    assert_eq!(
+        guest_uefi_firmware_wfe_state4_dest(0x7ff0_e7e8, &noskip),
+        Some(0x7ff1_8340)
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_state4_dest(0x7ff0_e7e8, &[0x74, 0x6c, 0x55, 0x48]),
+        None
+    );
+    assert!(guest_uefi_firmware_wfe_state4_poke(
+        true, true, 0, true, false, 0x7ff1_8340
+    ));
+    assert!(!guest_uefi_firmware_wfe_state4_poke(
+        true, true, 0, true, true, 0x7ff1_8340
+    ));
+    assert!(!guest_uefi_firmware_wfe_state4_poke(
+        true, true, 0, false, false, 0x7ff1_8340
+    ));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d0e44d4"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE state4 poke"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 d0e44d4 WFE preempt skip len=12 rip=0x7ff0e7e8"));
+    assert_eq!(GUEST_UEFI_WFE_EVENT_PF_CR2, 0xffff_ffff_ffff_ffb8);
+    assert_eq!(GUEST_UEFI_WFE_EVENT_PF_RIP, 0x7ff0_e018);
+    assert_eq!(GUEST_UEFI_EVENT_SIG, 0x746e_7665);
+    assert!(GUEST_UEFI_WFE_EVENT_PF_PREFIX.contains("firmware WFE event #PF cr2=0x"));
+    assert!(guest_uefi_pf_is_null_relative(GUEST_UEFI_WFE_EVENT_PF_CR2));
+    assert!(!guest_uefi_pf_is_null_relative(GUEST_UEFI_IRON_PF_SIGNEXT_CR2));
+    assert!(!guest_uefi_pf_should_map_mmio(0, GUEST_UEFI_WFE_EVENT_PF_CR2));
+    assert!(guest_uefi_firmware_wfe_event_pf_insn([0x49, 0x81, 0x7e, 0xb8]));
+    assert!(!guest_uefi_firmware_wfe_event_pf_insn([0xf3, 0x0f, 0x1e, 0xfa]));
+    assert!(guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, false, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 1, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, GUEST_UEFI_WFE_EVENT_PF_RIP
+    ));
+    assert!(!guest_uefi_firmware_wfe_event_pf(
+        true, true, 0, true, true, GUEST_UEFI_WFE_EVENT_PF_CR2, 0x1000
+    ));
+    assert!(guest_uefi_report_ram_should_map(GUEST_UEFI_WFE_EVENT_PF_RIP));
+    assert!(guest_uefi_exit_is_page_fault(0, 0x8000_000e));
+    assert!(!guest_uefi_exit_is_page_fault(0x1e, 0x8000_000e));
+    assert_eq!(
+        guest_uefi_firmware_wfe_event_pf_restore_bitmap(true, false, 0),
+        Some(GUEST_UEFI_EXC_BITMAP_PF)
+    );
+    assert_eq!(
+        guest_uefi_firmware_wfe_event_pf_restore_bitmap(true, true, 0),
+        None
+    );
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9474ab6"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware WFE event #PF"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 9474ab6 WFE state4 poke dest=0x7ff18340"));
+    assert_eq!(
+        guest_uefi_waitforevent_leave(0x2000, 0x1000, 0x7f01_0000),
+        Some((0x7f01_0000, 0x2010))
+    );
+    assert_eq!(guest_uefi_waitforevent_leave(8, 1, 0x1000), None);
+    assert!(guest_uefi_firmware_conin_cr_on_hlt(true, true, 0, false));
+    assert!(!guest_uefi_firmware_conin_cr_on_hlt(false, true, 0, false));
+    assert!(!guest_uefi_firmware_conin_cr_on_hlt(true, false, 0, false));
+    assert!(!guest_uefi_firmware_conin_cr_on_hlt(true, true, 1, false));
+    assert!(!guest_uefi_firmware_conin_cr_on_hlt(true, true, 0, true));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 bce5bbb"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 489d938"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware prefer ATA IRR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware ATA over PIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware force IF for inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 77f5866"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware arm ATA GSI 14"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b824789"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("flash b824789"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 d61dc7e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("skip-after-inject uses pci_ready"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO HLT stall before n=16384"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip without inject"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("firmware HLT skip after ataio"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 90da03d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 ea30da1"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO hides PIIX IDE"));
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    assert!(guest_uefi_product_iso_pci_ready(true, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 daf3195"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 b26c86a"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b IRET-to-HLT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 8e81c2e"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("iron COM2 eac424b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 eac424b"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 c08a13d"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("do not F11 9ce65ae"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX4 PM1 SCI_EN"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PM1 SCI_EN at reset"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _PRT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("DSDT PCI0 _CRS"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides duplicate slot0 IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux hides PIIX IDE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux high-half hides PIIX"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux ATA floating bus"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1f21193"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x1dd97d3"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("0x3d2be4"));
@@ -565,10 +1312,477 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_IRON_REPORT_RAM_GPA, 0x7BDD_D000);
     assert_eq!(GUEST_UEFI_EPT_MT_WB, 6);
     assert!(guest_uefi_report_ram_should_map(GUEST_UEFI_IRON_REPORT_RAM_GPA));
+    assert!(guest_uefi_string_ins_needs_report_ram_map(GUEST_UEFI_IRON_REPORT_RAM_GPA));
+    assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1000));
+    assert!(!guest_uefi_string_ins_needs_report_ram_map(0x1F0_0000));
+    assert!(guest_uefi_tick_should_print(256, false, false, false));
+    assert!(guest_uefi_tick_should_print(16384, false, false, false));
+    assert!(!guest_uefi_tick_should_print(16640, false, false, false));
+    assert!(!guest_uefi_tick_should_print(17408, false, false, false));
+    assert!(guest_uefi_tick_should_print(17408, true, false, false));
+    assert!(guest_uefi_tick_should_print(20480, false, false, false));
+    // Iron 115e5ee: linux=true used to print every 256 and split printk.
+    assert!(!guest_uefi_tick_should_print(437248, true, true, false));
+    assert!(!guest_uefi_tick_should_print(16640, false, true, false));
+    assert!(!guest_uefi_tick_should_print(256, false, true, false));
+    assert!(guest_uefi_tick_should_print(4096, false, true, false));
+    assert!(guest_uefi_tick_should_print(438272, true, true, false));
+    // linux earlycon quiet ticks: share suppresses every-4096 Linux ticks.
+    assert!(!guest_uefi_tick_should_print(4096, false, true, true));
+    assert!(!guest_uefi_tick_should_print(438272, true, true, true));
+    // linux earlycon share product ISO: iso=0 must not latch share.
+    assert!(!guest_uefi_linux_earlycon_share_on_linux_deliver(true, false));
+    assert!(!guest_uefi_linux_earlycon_share_on_linux_deliver(false, true));
+    assert!(guest_uefi_linux_earlycon_share_on_linux_deliver(true, true));
+    // linux earlycon share first CPUID: iso=0 still must not latch.
+    // linux earlycon share first high-half: UART printk / e820 I/O, not only CPUID.
+    assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0xfffc_f000, true));
+    assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0xffff_8880_7e2a_3000, false));
+    assert!(guest_uefi_linux_earlycon_share_on_vmexit(0xffff_8880_7e2a_3000, true));
+    // linux earlycon share first bootimg: identity-map `[` (iron b983ef8
+    // OVMF RIP 0x7ee5dbe4) is not bit 63; iso=0 still must not latch.
+    assert!(!guest_uefi_linux_earlycon_share_on_bootimg(true, false));
+    assert!(!guest_uefi_linux_earlycon_share_on_bootimg(false, true));
+    assert!(guest_uefi_linux_earlycon_share_on_bootimg(true, true));
+    assert!(!guest_uefi_linux_earlycon_share_on_vmexit(0x7ee5_dbe4, true));
+    // linux earlycon skip #PF dump: same predicate.
+    // linux earlycon skip exc deliver: same predicate.
+    // poll ISO-INSTALL-OK every resume: iron only.
+    assert!(guest_uefi_poll_iso_install_ok(false));
+    assert!(!guest_uefi_poll_iso_install_ok(true));
+    assert!(guest_uefi_virtio_drain_every_resume(true), "virtio drain every resume");
+    assert!(!guest_uefi_virtio_drain_every_resume(false), "iso=0 no virtio drain");
+    assert_eq!(guest_uefi_linux_earlycon_drain(false), 4);
+    assert_eq!(guest_uefi_linux_earlycon_drain(true), 4);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF4]), 1);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0xA2]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x32]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x30]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x31]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x08]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x09]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0xF3, 0x90]), 2);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x01]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x01, 0x38]), 3);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x90]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x38]), 3);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3F]), 3);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3C, 0x24]), 4);
+    assert_eq!(
+        guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x3D, 0, 0, 0, 0]),
+        7
+    );
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x41, 0x0F, 0x01, 0x38]), 4);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x78, 0x10]), 4);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0xF8]), 0);
+    assert_eq!(guest_uefi_linux_invlpg_len(&[0x0F, 0x01, 0x10]), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[]),
+        2
+    );
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 2, &[]),
+        0
+    );
+    assert_eq!(guest_uefi_linux_cpuid_msr_skip(0x7ee8_7e18, 0, &[]), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_msr_skip(0xffff_ffff_b808_1783, 0, &[0x0F, 0xA2]),
+        2
+    );
+    assert_eq!(
+        guest_uefi_linux_cpuid_force_skip(GUEST_UEFI_IRON_LINUX_CPUID_RIP, GUEST_UEFI_IRON_LINUX_CPUID_RIP),
+        2
+    );
+    assert_eq!(
+        guest_uefi_linux_cpuid_force_skip(
+            GUEST_UEFI_IRON_LINUX_CPUID_RIP,
+            GUEST_UEFI_IRON_LINUX_CPUID_RIP.wrapping_add(2)
+        ),
+        0
+    );
+    assert_eq!(guest_uefi_linux_cpuid_force_skip(0x7ee8_7e18, 0x7ee8_7e18), 0);
+    assert_eq!(
+        guest_uefi_linux_cpuid_exit_skip(GUEST_UEFI_IRON_LINUX_CPUID_RIP),
+        2
+    );
+    assert_eq!(guest_uefi_linux_cpuid_exit_skip(0x7ee8_7e18), 0);
+    assert_eq!(GUEST_UEFI_CPUID_LEAF4_LAST_SUB, 4);
+    assert_eq!(guest_uefi_filter_cpuid(4, GUEST_UEFI_CPUID_LEAF4_LAST_SUB).eax, 0);
+    assert_eq!(guest_uefi_filter_cpuid(4, 0xc000_0101).eax, 0);
+    assert!(guest_uefi_filter_cpuid(0, 0).eax <= GUEST_UEFI_CPUID_LEAF0_MAX);
+    assert!(guest_uefi_linux_cpuid_should_log(1));
+    assert!(guest_uefi_linux_cpuid_should_log(8));
+    assert!(!guest_uefi_linux_cpuid_should_log(9));
+    assert!(guest_uefi_linux_cpuid_should_log(16));
+    assert!(guest_uefi_linux_cpuid_should_log(256));
+    assert!(!guest_uefi_linux_cpuid_should_log(257));
+    assert!(!guest_uefi_linux_cpuid_should_log(0));
+    assert_eq!(guest_uefi_linux_hlt_skip(0xffff_ffff_b808_1783, 0, &[]), 1);
+    assert_eq!(guest_uefi_linux_hlt_skip(0xffff_ffff_b808_1783, 1, &[]), 0);
+    assert_eq!(guest_uefi_linux_hlt_skip(0x7ee8_7e18, 0, &[]), 0);
+    assert_eq!(guest_uefi_linux_hlt_skip(0xffff_ffff_b808_1783, 0, &[0xF4]), 1);
+    assert!(guest_uefi_post_cd_non_io(true, false, false));
+    assert!(!guest_uefi_post_cd_non_io(true, false, true));
+    assert!(!guest_uefi_post_cd_non_io(false, false, false));
+    assert!(!guest_uefi_post_cd_non_io(true, true, false));
     assert_eq!(
         guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
         0x7BC0_0000
     );
+    // report-RAM EPT pre-map: [32MiB, 2GiB) is 1008×2MiB (iron 113a08a PAT then quiet).
+    let pre_n = GUEST_UEFI_REPORT_RAM_SLOTS + GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA;
+    assert_eq!(pre_n, 1008);
+    assert_eq!(guest_uefi_report_ram_premap_gpa(0, pre_n), Some(0x0200_0000));
+    assert_eq!(
+        guest_uefi_report_ram_premap_gpa(pre_n - 1, pre_n),
+        Some(0x7FE0_0000)
+    );
+    assert!(guest_uefi_report_ram_premap_gpa(pre_n, pre_n).is_none());
+    assert!(guest_uefi_report_ram_should_premap(true));
+    assert!(!guest_uefi_report_ram_should_premap(false));
+    assert_eq!(
+        guest_uefi_report_ram_premap_gpa(0, GUEST_UEFI_REPORT_RAM_SLOTS),
+        Some(0x0200_0000)
+    );
+    // RayNu-F → Linux hand-off (F6b): the kernel owns #PF/#UD/#GP; #DF still exits.
+    let hb = super::guest_uefi_raynu_f_handoff_exception_bitmap();
+    assert_eq!(hb & (1 << 14), 0, "#PF must not run the OVMF identity repair");
+    assert_eq!(hb & (1 << 6), 0, "#UD is Linux alternatives");
+    assert_eq!(hb & (1 << 13), 0, "#GP stays in the guest");
+    assert_ne!(hb & (1 << 8), 0, "#DF is dumped, not silent");
+    assert!(super::guest_uefi_linux_fatal_class_exc_stops(8));
+    assert_eq!(hb, crate::vmx::fields::LINUX_EXCEPTION_BITMAP);
+    // RayNu-F high RAM (F6-prep): only the contiguous pre-mapped prefix counts.
+    let all = |i: usize| guest_uefi_report_ram_premap_gpa(i, pre_n).unwrap_or(u64::MAX);
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(all, pre_n),
+        0x8000_0000 - 0x0200_0000
+    );
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(|_| u64::MAX, pre_n),
+        0
+    );
+    // Slot 5 unmapped (lazy) → 5 × 2 MiB, no matter what lies beyond.
+    let hole = |i: usize| if i == 5 { u64::MAX } else { all(i) };
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(hole, pre_n),
+        5 * 0x20_0000
+    );
+    // A slot mapped at a non-pre-map GPA (iron lazy map) also ends the run.
+    let moved = |i: usize| if i == 2 { 0x7BC0_0000 } else { all(i) };
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(moved, pre_n),
+        2 * 0x20_0000
+    );
+    assert_eq!(
+        guest_uefi_report_ram_premapped_contiguous_bytes(all, GUEST_UEFI_REPORT_RAM_SLOTS),
+        32 * 0x20_0000
+    );
+    // cpu_flush leftover per walk (iron abfb008 skip n=944 then 64 heap slots hung).
+    assert_eq!(GUEST_UEFI_CPU_FLUSH_HEAP_GPA, 0x7800_0000);
+    assert_eq!(GUEST_UEFI_CPU_FLUSH_LEFTOVER_PER_WALK, 2);
+    assert!(!guest_uefi_cpu_flush_skip_mapped(0x0200_0000, false));
+    assert!(guest_uefi_cpu_flush_skip_mapped(0x0200_0000, true));
+    assert!(!guest_uefi_cpu_flush_skip_mapped(0x1000, false));
+    let flush_gpa = guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_CPU_FLUSH_GPA);
+    assert!(!guest_uefi_cpu_flush_skip_mapped(flush_gpa, false));
+    assert!(guest_uefi_cpu_flush_skip_mapped(flush_gpa, true));
+    assert!(!guest_uefi_cpu_flush_skip_mapped(
+        guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
+        false,
+    ));
+    assert!(guest_uefi_cpu_flush_skip_mapped(
+        guest_uefi_report_ram_gpa_2m(GUEST_UEFI_IRON_REPORT_RAM_GPA),
+        true,
+    ));
+    assert!(guest_uefi_cpu_flush_tick_scans_mapped(32));
+    assert!(!guest_uefi_cpu_flush_tick_scans_mapped(1008));
+    // linux unhandled nowait stop (iron 1a2544d Freeing initrd then xcr0 restore).
+    assert!(!guest_uefi_linux_guest_active(false, false, false));
+    assert!(guest_uefi_linux_guest_active(true, false, false));
+    assert!(guest_uefi_linux_guest_active(false, true, false));
+    assert!(guest_uefi_linux_guest_active(false, false, true));
+    assert!(!guest_uefi_linux_unhandled_should_skip(false, 3));
+    assert!(!guest_uefi_linux_unhandled_should_skip(true, 0));
+    assert!(!guest_uefi_linux_unhandled_should_skip(true, 16));
+    assert!(guest_uefi_linux_unhandled_should_skip(true, 3));
+    assert!(guest_uefi_linux_unhandled_try_skip(true, 0, 29));
+    assert!(!guest_uefi_linux_unhandled_try_skip(true, 0, 2), "triple fault still stops");
+    assert!(!guest_uefi_linux_unhandled_try_skip(false, 0, 29));
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x0F, 0x23, 0xC0]), 3);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x0F, 0x21, 0xC0]), 3);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[0x4C, 0x0F, 0x23, 0xC0]), 4);
+    assert_eq!(guest_uefi_linux_mov_dr_len(&[]), 0);
+    assert_eq!(guest_uefi_linux_fixed_skip_len(&[0x0F, 0x23, 0xC0]), 3);
+    assert_eq!(virtio_mmio_retry_decode_len(16, 0), 15, "linux MMIO decode retry");
+    assert_eq!(virtio_mmio_retry_decode_len(4, 7), 4, "insn_len longer than peek");
+    assert_eq!(virtio_mmio_retry_decode_len(8, 3), 0, "first decode already had len");
+    assert_eq!(virtio_mmio_retry_decode_len(0, 0), 0);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 0, 0), 3, "linux EAX fallback skip 3");
+    assert_eq!(virtio_mmio_eax_fallback_len(false, 0, 0), 0, "iso=0 decode fail still stops");
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 0, 6), 6);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 4, 0), 4);
+    assert_eq!(virtio_mmio_eax_fallback_len(true, 16, 0), 0, "do not skip 16-byte peek");
+    assert_eq!(virtio_mmio_eax_fallback_size(0x14), 1, "virtio MMIO eax fallback size");
+    assert_eq!(virtio_mmio_eax_fallback_size(0x18), 2);
+    assert_eq!(virtio_mmio_eax_fallback_size(0x00), 4);
+    assert!(virtio_mmio_eax_fallback(true, 0, 3));
+    assert!(virtio_mmio_eax_fallback(true, 4, 6));
+    assert!(virtio_mmio_eax_fallback(true, 0, 0), "linux EAX fallback skip 3");
+    assert!(!virtio_mmio_eax_fallback(false, 0, 3), "iso=0 decode fail still stops");
+    assert!(!virtio_mmio_eax_fallback(false, 0, 0), "iso=0 decode fail still stops");
+    assert!(guest_uefi_virtio_bar_overlaps_scratch(0x8000_1000), "virtio BAR trap over scratch");
+    assert!(guest_uefi_virtio_bar_overlaps_scratch(0x8000_0000));
+    assert!(!guest_uefi_virtio_bar_overlaps_scratch(0xFE00_0000));
+    assert!(guest_uefi_virtio_bar_should_trap(0x8000_1000));
+    assert!(!guest_uefi_virtio_bar_should_trap(0));
+    assert!(guest_uefi_virtio_mmio_raises_pit(true, true), "virtio MMIO raises PIT");
+    assert!(!guest_uefi_virtio_mmio_raises_pit(false, true), "iso=0 firmware no extra PIT");
+    assert!(!guest_uefi_virtio_mmio_raises_pit(true, false));
+    assert!(guest_uefi_virtio_mmio_polls_lapic(true, true), "virtio MMIO polls lapic");
+    assert!(!guest_uefi_virtio_mmio_polls_lapic(false, true), "iso=0 firmware no extra lapic poll");
+    assert!(!guest_uefi_virtio_mmio_polls_lapic(true, false));
+    assert!(!guest_uefi_linux_io_raises_pit(true, true), "linux I/O does not raise PIT (iron MADT stop)");
+    assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
+    assert!(!guest_uefi_linux_io_raises_pit(true, false));
+    assert!(
+        guest_uefi_linux_preempt_deadloop_noskip(true, true),
+        "linux preempt deadloop noskip"
+    );
+    assert!(
+        !guest_uefi_linux_preempt_deadloop_noskip(false, true),
+        "iso=0 firmware still skips CpuDeadLoop"
+    );
+    assert!(!guest_uefi_linux_preempt_deadloop_noskip(true, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio BAR trap over scratch"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIIX3 ISA BAR RAZ"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO raises PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO off="));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO eax fallback size"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("packed virtio common cfg write"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO polls lapic"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux I/O does not raise PIT (iron MADT stop)"));
+    assert!(include_str!("guest_uefi.rs").contains("linux I/O does not raise PIT (iron MADT stop)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux xAPIC EPT insn_len 0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART reassert RX not THRE"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain every resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("product ISO fw_cfg ACPI MADT (iso=0 named files stay 3)"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC before LAPIC"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("MADT IRQ0 ISO GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("PIT skips IOAPIC pin 0"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux GSI 2 before PIC"));
+    assert!(guest_uefi_pit_skips_ioapic_pin0());
+    assert!(guest_uefi_linux_gsi2_before_pic(true));
+    assert!(!guest_uefi_linux_gsi2_before_pic(false));
+    assert!(guest_uefi_linux_pic_before_lapic(true, false));
+    assert!(!guest_uefi_linux_pic_before_lapic(true, true));
+    assert!(!guest_uefi_linux_pic_before_lapic(false, false));
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    assert!(!guest_uefi_pic_before_lapic(true, true, true));
+    assert!(!guest_uefi_pic_before_lapic(false, false, false));
+    assert!(guest_uefi_firmware_hlt_ignores_tpr(false, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(true, true, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, false, 0));
+    assert!(!guest_uefi_firmware_hlt_ignores_tpr(false, true, 1));
+    crate::devices::ide_cdrom::reset();
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 0),
+        "iron b5c3a9c: product ISO HLT before ATA waits for PIT"
+    );
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(false, 16385, 12, true, 0));
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq(true, 16384, 12, true, 0),
+        "wait-for-irq is not gated on n>16384"
+    );
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, false, 0));
+    assert!(!guest_uefi_firmware_hlt_wait_for_irq(true, 16385, 12, true, 1));
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq_oneshot(true, 16385, 12, true, 0, false),
+        "first HLT still waits for PIT"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_wait_for_irq_oneshot(true, 16385, 12, true, 0, true),
+        "iron e3cbfa5: do not wait after PIT one-shot"
+    );
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0),
+        "do not skip CpuSleep before first ATA"
+    );
+    assert!(
+        guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 1),
+        "firmware HLT skip after ataio"
+    );
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(false, 16385, 12, true, 0));
+    assert_eq!(
+        guest_uefi_firmware_hlt_insn_len0_skip(false),
+        1,
+        "firmware HLT insn_len 0 skip"
+    );
+    assert_eq!(guest_uefi_firmware_hlt_insn_len0_skip(true), 0);
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16384, 12, true, 0));
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 1));
+    assert!(
+        guest_uefi_firmware_hlt_skip_without_inject(false),
+        "firmware HLT skip without inject"
+    );
+    assert!(!guest_uefi_firmware_hlt_skip_without_inject(true));
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x20, 0),
+        "allow first PIT before ATA so BDS leaves CpuSleep"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x20, 0, false),
+        "first PIT still injects before ATA"
+    );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x20, 0, true),
+        "iron 24c5fa6: drop stacked PIT after the first wake"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(false, 0x2E, 0, true),
+        "oneshot PIT does not drop ATA 14"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject_oneshot(true, 0x20, 0, true),
+        "linux still injects PIT 0x20"
+    );
+    assert!(
+        guest_uefi_firmware_skip_pit_inject(false, 0x20, 1),
+        "firmware skip PIT inject after PACKET"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x2E, 1),
+        "firmware skip PIT inject: ATA 14 still injects"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(true, 0x20, 1),
+        "linux still injects PIT 0x20"
+    );
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(false, 0x2),
+        0x2 | (1 << 9),
+        "firmware force IF for inject"
+    );
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(true, 0x2),
+        0x2,
+        "linux keeps guest IF"
+    );
+    assert!(
+        guest_uefi_firmware_arm_ata_gsi14(false),
+        "firmware arm ATA GSI 14"
+    );
+    assert!(
+        !guest_uefi_firmware_arm_ata_gsi14(true),
+        "linux programs its own RTEs"
+    );
+    assert!(
+        guest_uefi_firmware_prefer_ata_irr(false, 1),
+        "firmware prefer ATA IRR after PACKET"
+    );
+    assert!(
+        guest_uefi_firmware_prefer_ata_irr(false, 0),
+        "firmware prefer ATA IRR before PACKET when 0x2E is latched"
+    );
+    assert!(
+        !guest_uefi_firmware_prefer_ata_irr(true, 1),
+        "linux keeps TPR"
+    );
+    assert!(
+        guest_uefi_firmware_ata_over_pic(false, true),
+        "firmware ATA over PIC"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(true, true),
+        "linux keeps PIC-first"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_over_pic(false, false),
+        "firmware ATA over PIC only when pin 14 or latched 0x2E is ready"
+    );
+    assert!(
+        guest_uefi_firmware_ata_irr_only(false),
+        "firmware ATA IRR only"
+    );
+    assert!(
+        !guest_uefi_firmware_ata_irr_only(true),
+        "linux still takes LVT"
+    );
+    assert!(
+        guest_uefi_firmware_take_ioapic_ata(false),
+        "firmware take IOAPIC ATA"
+    );
+    assert!(
+        guest_uefi_firmware_pic_ata(false, true),
+        "firmware PIC ATA"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(true, true),
+        "linux keeps PIC-first / GSI 2"
+    );
+    assert!(
+        !guest_uefi_firmware_pic_ata(false, false),
+        "firmware PIC ATA only when PIC peek is 0x2E"
+    );
+    assert!(
+        !guest_uefi_firmware_take_ioapic_ata(true),
+        "linux still takes any IOAPIC pin"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(false, true, 1, 0x2),
+        0x2,
+        "virtual-wire force IF stays ataio==0"
+    );
+    assert_eq!(guest_uefi_firmware_hlt_skip_len(true), 1, "firmware HLT skip after inject");
+    assert_eq!(guest_uefi_firmware_hlt_skip_len(false), 0, "nested iso=0 keeps skip_hlt");
+    assert_eq!(
+        guest_uefi_firmware_hlt_activity_active(),
+        0,
+        "firmware HLT activity active"
+    );
+    assert!(guest_uefi_firmware_lapic_timer_expiry(false, true, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(true, true, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(false, false, 0));
+    assert!(!guest_uefi_firmware_lapic_timer_expiry(false, true, 1));
+    assert!(
+        guest_uefi_ioapic_io_over_pit(),
+        "IOAPIC I/O over PIT"
+    );
+    assert!(guest_uefi_firmware_virtual_wire_pic(false, true, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(true, true, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(false, false, 0));
+    assert!(!guest_uefi_firmware_virtual_wire_pic(false, true, 1));
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(false, true, 0, 0x2),
+        0x2 | (1 << 9),
+        "firmware HLT force IF"
+    );
+    assert_eq!(
+        guest_uefi_firmware_hlt_force_if(true, true, 0, 0x2),
+        0x2,
+        "linux keeps guest IF"
+    );
+    assert!(guest_uefi_pic_before_lapic(true, true, false));
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16384, 12, true, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, false, 0));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 1));
+    assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 0x1e, true, 0));
+    assert!(guest_uefi_linux_pic_irq0_vec(0x20));
+    assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
+    assert!(guest_uefi_linux_exc_error_code(8));
+    assert!(guest_uefi_linux_exc_error_code(14));
+    assert!(!guest_uefi_linux_exc_error_code(6));
+    assert!(!guest_uefi_linux_exc_error_code(0));
     assert!(!guest_uefi_report_ram_should_map(0x1F0_0000));
     assert!(!guest_uefi_report_ram_should_map(0x8000_0000));
     assert_eq!(GUEST_UEFI_IRON_HIGH_DEADLOOP_RIP, 0x7F8E_21CA);
@@ -749,11 +1963,14 @@ fn marker_and_residual_honest() {
     assert_eq!(GUEST_UEFI_IRON_PDE0_2M, 0xE3);
     assert!(guest_uefi_pt_pde0_is_2m(GUEST_UEFI_IRON_PDE0_2M));
     assert!(!guest_uefi_pt_pde0_is_2m(0x7FA0_00E7));
-    assert_eq!(guest_uefi_gpa0_split_pt_gpa(), 0x20B000);
+    assert_eq!(
+        guest_uefi_gpa0_split_pt_gpa(),
+        GUEST_UEFI_HV_PML4 + crate::vmx::guest_pt::IDENTITY_4G_BYTES
+    );
     {
         // Iron 4ae87de: live CR3 GPA0 is still 2MiB (pde0=0xE3) spanning
         // the 1MiB fixed-MTRR boundary. Peek/poke fills HV SPLIT4K PT at
-        // 0x20B000 and points PD[0] at it.
+        // GUEST_UEFI_HV_PML4+0xB000 and points PD[0] at it.
         use core::cell::RefCell;
         let high = RefCell::new([0u8; 0x4000]);
         let pt = RefCell::new([0u8; 4096]);
@@ -899,6 +2116,10 @@ fn marker_and_residual_honest() {
     let leaf7 = guest_uefi_filter_cpuid(7, 0);
     assert_eq!(leaf7.ecx & CPUID_LEAF7_ECX_TME_EN, 0);
     assert_eq!(leaf7.ecx & CPUID_LEAF7_ECX_LA57, 0);
+    assert_eq!(leaf7.ebx & CPUID_LEAF7_EBX_CLFLUSHOPT, 0);
+    assert_eq!(leaf7.ebx & CPUID_LEAF7_EBX_CLWB, 0);
+    assert_eq!(leaf7.ecx & super::CPUID_LEAF7_ECX_WAITPKG, 0);
+    assert_eq!(super::CPUID_LEAF7_ECX_WAITPKG, 1 << 5);
     let top = guest_uefi_filter_cpuid(0xB, 0);
     assert_eq!(top.eax, 0);
     assert_eq!(top.ebx, 0);
@@ -983,6 +2204,24 @@ fn marker_and_residual_honest() {
     );
     assert_eq!(
         guest_uefi_efer_with_lma(GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_NXE, true),
+        GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA
+    );
+    assert!(guest_uefi_efer_allow_nx(true));
+    assert!(!guest_uefi_efer_allow_nx(false));
+    assert_eq!(
+        guest_uefi_efer_with_lma_allow_nx(
+            GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_NXE,
+            true,
+            true
+        ),
+        GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA | GUEST_UEFI_EFER_NXE
+    );
+    assert_eq!(
+        guest_uefi_efer_with_lma_allow_nx(
+            GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_NXE,
+            true,
+            false
+        ),
         GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA
     );
     assert_eq!(GUEST_UEFI_EFER_NXE, 1 << 11);
@@ -1161,6 +2400,19 @@ fn past_sec_predicates_are_honest() {
         true, 115, 115, 0, 0, false, false, false
     ));
     assert!(
+        post_atapi_should_stop(
+            true,
+            115 + GUEST_UEFI_POST_DXE_TAIL,
+            115,
+            0,
+            0,
+            false,
+            false,
+            false
+        ),
+        "lab stub still applies POST_DXE_TAIL when sectors==0"
+    );
+    assert!(
         !post_atapi_should_stop(true, 30769, 115, 30769, 1, false, false, false),
         "first ATAPI sector must not stop Stage 45"
     );
@@ -1203,6 +2455,46 @@ fn past_sec_predicates_are_honest() {
     assert!(post_atapi_should_stop(
         true, 200, 115, 180, 4, true, true, true
     ));
+    assert!(eltorito_stops_guest_uefi(true));
+    assert!(!eltorito_stops_guest_uefi(false));
+    {
+        let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES
+            + crate::devices::ide_cdrom::ISO_SECTOR;
+        let mut iso = vec![0u8; extra];
+        crate::devices::ide_cdrom::write_placeholder_iso(
+            &mut iso[..crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES],
+        );
+        assert!(crate::devices::ide_cdrom::present(&iso, 9));
+        assert!(
+            !eltorito_stops_guest_uefi(true),
+            "product ISO must not stop on RN-ELT"
+        );
+        assert!(
+            !post_atapi_should_stop(true, 200, 115, 180, 4, true, true, true),
+            "Stage 46 product CD continues past El Torito"
+        );
+        assert!(
+            !post_atapi_should_stop(
+                true,
+                115 + GUEST_UEFI_POST_DXE_TAIL,
+                115,
+                0,
+                0,
+                false,
+                false,
+                false
+            ),
+            "product ISO POST_DXE_TAIL skip (iron 2d6b109 stop n=33297 sectors=0)"
+        );
+        assert_eq!(guest_uefi_resume_cap(false), GUEST_UEFI_PRODUCT_ISO_RESUME_CAP);
+        assert_eq!(
+            guest_uefi_resume_cap(true),
+            GUEST_UEFI_PRODUCT_ISO_RESUME_CAP,
+            "armed product ISO uses the product cap on nested too (QEMU PRODUCT_ISO=)"
+        );
+        crate::devices::ide_cdrom::reset();
+    }
+    assert!(eltorito_stops_guest_uefi(true));
     assert!(hlt_should_resume());
 }
 
@@ -1279,6 +2571,184 @@ fn copy_low_ram_at_identity_window() {
 }
 
 #[test]
+fn copy_flash_at_firmware_rip() {
+    assert_eq!(guest_uefi_flash_off(0xfffc_fc86), Some(0x3c_fc86));
+    assert_eq!(guest_uefi_flash_off(0xfee0_00f0), None);
+    assert_eq!(guest_uefi_flash_off(GUEST_UEFI_FLASH_BASE), Some(0));
+    assert_eq!(
+        guest_uefi_flash_off(GUEST_UEFI_FLASH_BASE + GUEST_UEFI_FLASH_WINDOW),
+        None
+    );
+    let mut flash = [0u8; 32];
+    flash[0] = 0x8b;
+    flash[1] = 0x04;
+    flash[2] = 0x25;
+    flash[3] = 0xf0;
+    let mut out = [0u8; 4];
+    assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE, &mut out), 4);
+    assert_eq!(out, [0x8b, 0x04, 0x25, 0xf0]);
+    assert_eq!(copy_flash_at(&flash, 0xfee0_00f0, &mut out), 0);
+    assert_eq!(copy_flash_at(&flash, GUEST_UEFI_FLASH_BASE + 100, &mut out), 0);
+    assert!(guest_uefi_gpa_to_hpa(0xfffc_fc86).is_none());
+}
+
+#[test]
+fn xapic_fetch_miss_eax_fallback_when_skip_len_valid() {
+    assert!(xapic_fetch_miss_eax_fallback(0, 6));
+    assert!(xapic_fetch_miss_eax_fallback(0, 1));
+    assert!(xapic_fetch_miss_eax_fallback(0, 15));
+    assert!(
+        xapic_fetch_miss_eax_fallback(4, 6),
+        "decode-fail with peek still EAX when skip-len is 1-15"
+    );
+    assert!(
+        xapic_fetch_miss_eax_fallback(0, 0),
+        "linux xAPIC EPT insn_len 0"
+    );
+    assert_eq!(xapic_eax_fallback_skip_len(0), 3);
+    assert_eq!(xapic_eax_fallback_skip_len(6), 6);
+    assert_eq!(xapic_eax_fallback_skip_len(16), 0);
+    assert!(!xapic_fetch_miss_eax_fallback(0, 16));
+    assert!(!xapic_fetch_miss_eax_fallback(4, 0));
+    assert!(!xapic_fetch_miss_eax_fallback(16, 16), "do not skip 16-byte peek");
+}
+
+#[test]
+fn insn_linear_adds_cs_base_unless_long_mode() {
+    assert_eq!(guest_uefi_insn_linear(0x3c_fc86, 0xFFC0_0000, false), 0xfffc_fc86);
+    assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0, false), 0xfffc_fc86);
+    assert_eq!(guest_uefi_insn_linear(0xfffc_fc86, 0xFFFF_0000, true), 0xfffc_fc86);
+}
+
+#[test]
+fn mmio_peek_uses_flash_rip_when_cs_base_plus_rip_misses_window() {
+    // Leftover real-mode CS.base: GUEST_RIP is already the flash linear
+    // (iron e3f56aa rip=0xfffcfc86). CS.base+RIP wraps out of the 4MiB window.
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0xFFFF_0000, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0x3c_fc86, 0xFFC0_0000, false),
+        0xfffc_fc86
+    );
+    assert_eq!(
+        guest_uefi_mmio_peek_linear(0xfffc_fc86, 0xFFFF_0000, true),
+        0xfffc_fc86
+    );
+    assert_eq!(guest_uefi_mmio_peek_linear(0x1000, 0, false), 0x1000);
+}
+
+#[test]
+fn mmio_skip_len_uses_decoded_when_vmcs_len_is_zero() {
+    assert_eq!(guest_uefi_mmio_skip_len(6, 0), 6);
+    assert_eq!(guest_uefi_mmio_skip_len(0, 6), 6);
+    assert_eq!(guest_uefi_mmio_skip_len(4, 6), 4, "prefer valid VMCS");
+    assert_eq!(guest_uefi_mmio_skip_len(0, 0), 0);
+    assert_eq!(guest_uefi_mmio_skip_len(0, 16), 0, "do not skip 16-byte peek");
+    assert_eq!(guest_uefi_mmio_skip_len(99, 6), 6);
+}
+
+#[test]
+fn greedy_report_ram_leaves_only_1mib_for_disk() {
+    // Iron leftover after fw+ram+sink+zero+scratch in [1MiB,256MiB).
+    const PAGES: u64 = (151 * 1024 * 1024) / 4096;
+    let mut words = [0u64; 1024];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let mut slots = 0u64;
+    while alloc.allocate_contiguous_aligned(512, 512).is_some() {
+        slots += 1;
+    }
+    assert!(slots >= 32);
+    assert!(alloc
+        .allocate_contiguous((64 * 1024 * 1024) / 4096)
+        .is_none());
+    assert!(alloc.allocate_contiguous((1024 * 1024) / 4096).is_some());
+}
+
+#[test]
+fn try_alloc_product_iso_install_disk_reserves_64mib() {
+    const PAGES: u64 = (151 * 1024 * 1024) / 4096;
+    let mut words = [0u64; 1024];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 64 * 1024 * 1024);
+    assert!(alloc.allocate_contiguous_aligned(512, 512).is_some());
+}
+
+#[test]
+fn try_alloc_product_iso_install_disk_256mib_when_pool_allows() {
+    // 256 MiB disk + 64 MiB scratch leave (leftover DRAM fills report-RAM).
+    const PAGES: u64 = (512 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
+}
+
+#[test]
+fn try_alloc_256mib_when_leftover_backs_report_ram() {
+    // Iron after fw/sink/hole is ~480 MiB. Scratch-only leave (64 MiB)
+    // lets 256 MiB land; leftover DRAM extra=846 fills report-RAM.
+    const PAGES: u64 = (480 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
+    assert_eq!(super::PRODUCT_ISO_DISK_LEAVE_2M_SLOTS, 32);
+    assert_eq!(super::product_iso_disk_leave_pages(), 32 * 512);
+}
+
+#[test]
+fn try_alloc_skips_256mib_when_scratch_would_starve() {
+    // ~280 MiB precise pool: 256 MiB disk would leave ~24 MiB (< 64 MiB
+    // scratch). 64 MiB still fits Alpine GPT. Do not steal leftover.
+    const PAGES: u64 = (280 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, false).unwrap();
+    assert_eq!(bytes, 64 * 1024 * 1024);
+}
+
+#[test]
+fn try_alloc_nested_prefers_64mib_on_typical_pool() {
+    // Nested pool ~256 MiB: leave blocks 256 MiB disk, so 64 MiB lands.
+    const PAGES: u64 = (256 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, true).unwrap();
+    assert_eq!(bytes, 64 * 1024 * 1024);
+}
+
+#[test]
+fn try_alloc_nested_256mib_when_pool_and_leave_allow() {
+    // Nested with room for 256 MiB disk + 64 MiB leave.
+    const PAGES: u64 = (512 * 1024 * 1024) / 4096;
+    let mut words = vec![0u64; 4096];
+    let mut alloc = unsafe {
+        FrameAllocator::new(0x10_0000, PAGES, words.as_mut_ptr() as u64).unwrap()
+    };
+    let (_frame, bytes) = try_alloc_product_iso_install_disk(&mut alloc, true).unwrap();
+    assert_eq!(bytes, 256 * 1024 * 1024);
+}
+
+#[test]
 fn flash_window_pads_code_only_image_to_4mib() {
     assert_eq!(GUEST_UEFI_FLASH_BASE, 0xFFC0_0000);
     assert_eq!(GUEST_UEFI_FLASH_WINDOW, 4 * 1024 * 1024);
@@ -1335,6 +2805,54 @@ fn stamp_empty_ovmf_vars_matches_debian_4m_template() {
 }
 
 #[test]
+fn product_iso_pci_ready_arms_on_virtio_enum_not_ide() {
+    crate::devices::ide_cdrom::reset();
+    assert!(!guest_uefi_product_iso_pci_ready(false, true));
+    let extra = crate::devices::ide_cdrom::MOCK_EFI_ISO_BYTES + crate::devices::ide_cdrom::ISO_SECTOR;
+    let iso = vec![0u8; extra];
+    assert!(crate::devices::ide_cdrom::present(&iso, 9));
+    assert!(guest_uefi_product_iso_pci_ready(false, true));
+    assert!(
+        !guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, true, 0),
+        "do not skip CpuSleep before first ATA"
+    );
+    assert!(!guest_uefi_firmware_hlt_skip_after_inject(true, 16385, 12, false, 0));
+    assert!(
+        guest_uefi_firmware_hlt_skip_after_inject(true, 1, 12, true, 1),
+        "product ISO skip CpuSleep only after PACKET"
+    );
+    assert!(
+        guest_uefi_firmware_hlt_wait_for_irq(true, 1, 12, true, 0),
+        "iron b5c3a9c: wait for PIT before ATA"
+    );
+    assert!(
+        !guest_uefi_firmware_skip_pit_inject(false, 0x20, 0),
+        "allow PIT before first ATA"
+    );
+    assert!(!guest_uefi_firmware_skip_pit_inject(false, 0x2E, 0));
+    assert_eq!(
+        guest_uefi_firmware_force_if_for_inject(false, 0),
+        1 << 9,
+        "firmware force IF for inject after ataio"
+    );
+    assert!(guest_uefi_firmware_arm_ata_gsi14(false));
+    assert!(guest_uefi_firmware_prefer_ata_irr(false, 1));
+    assert!(guest_uefi_firmware_ata_irr_only(false));
+    assert!(!guest_uefi_firmware_ata_irr_only(true));
+    assert!(guest_uefi_firmware_take_ioapic_ata(false));
+    assert!(!guest_uefi_firmware_take_ioapic_ata(true));
+    assert!(guest_uefi_firmware_pic_ata(false, true));
+    assert!(!guest_uefi_firmware_pic_ata(true, true));
+    assert!(!guest_uefi_firmware_pic_ata(false, false));
+    assert!(
+        guest_uefi_hlt_stall_quiet_tick(1, 12, true, 0),
+        "product ISO quiet tick arms with the window, not n>16384"
+    );
+    assert!(!guest_uefi_product_iso_pci_ready(false, false));
+    crate::devices::ide_cdrom::reset();
+}
+
+#[test]
 fn rep_insw_fills_identify_word0() {
     crate::devices::ide_cdrom::reset();
     assert!(crate::devices::ide_cdrom::present_placeholder());
@@ -1357,4 +2875,109 @@ fn rep_insw_fills_identify_word0() {
     assert_eq!(addr, 512);
     assert_eq!(load_low_ram_at(&buf, 0, 2), Some(0x85C0));
     crate::devices::ide_cdrom::reset();
+}
+
+#[test]
+fn cr_access_qual_cr8() {
+    assert!(cr_access_is_cr8(8));
+    assert!(cr_access_is_cr8(8 | (1 << 4)));
+    assert!(!cr_access_is_cr8(4));
+    assert!(!cr_access_is_cr8(0));
+}
+
+#[test]
+fn raynu_f_linux_syscall_wrmsr_passthrough() {
+    use crate::sched::msr_firewall::{
+        classify_msr, MsrAccess, MsrAction, MSR_CSTAR, MSR_EFER, MSR_KERNEL_GS_BASE, MSR_LSTAR,
+        MSR_SFMASK, MSR_STAR, MSR_TSC_AUX,
+    };
+    use super::{guest_uefi_linux_fatal_class_exc_stops, guest_uefi_wrmsr_syscall_passthrough};
+    for msr in [
+        MSR_STAR,
+        MSR_LSTAR,
+        MSR_CSTAR,
+        MSR_SFMASK,
+        MSR_KERNEL_GS_BASE,
+        MSR_TSC_AUX,
+    ] {
+        assert!(guest_uefi_wrmsr_syscall_passthrough(msr));
+        assert_eq!(
+            classify_msr(msr, MsrAccess::Write),
+            MsrAction::HostPassthrough
+        );
+    }
+    assert!(!guest_uefi_wrmsr_syscall_passthrough(MSR_EFER));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(8));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(10));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(11));
+    assert!(guest_uefi_linux_fatal_class_exc_stops(12));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(0));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(14));
+    assert!(!guest_uefi_linux_fatal_class_exc_stops(19));
+    assert_eq!(crate::vmx::fields::IDT_VECTORING_INFO, 0x0000_4408);
+    assert_eq!(crate::vmx::fields::IDT_VECTORING_ERROR_CODE, 0x0000_440A);
+}
+
+/// Nested `659bb41`: `#DF` `cs=0x33` `cr2=0xfffffe00000000e0` is CEA IDT[#PF]
+/// under the PTI user CR3. Nested `2bebea7` walk: CEA present both PGDs;
+/// leaf NX GPA `0x708f000`. Userspace VM-exit stripped NXE (high-half-only
+/// allow). Host-testable walk indices + NXE hold; dump is UEFI-only.
+#[test]
+fn raynu_f_linux_cea_idt_pt_walk() {
+    use super::{
+        guest_uefi_efer_nx_should_hold, guest_uefi_efer_with_lma_allow_nx,
+        guest_uefi_linux_cea_idt_entry_linear, guest_uefi_pt_pml4_index,
+        guest_uefi_pte_gpa, guest_uefi_pte_nx, guest_uefi_pte_present, guest_uefi_pte_user,
+        guest_uefi_pte_writable, guest_uefi_pti_kernel_pgd_gpa,
+        GUEST_UEFI_EFER_LMA, GUEST_UEFI_EFER_LME, GUEST_UEFI_EFER_NXE,
+        GUEST_UEFI_LINUX_CEA_IDT_BASE, GUEST_UEFI_LINUX_CEA_IDT_LEAF_NESTED_2BEBEA7,
+    };
+    assert_eq!(GUEST_UEFI_LINUX_CEA_IDT_BASE, 0xfffffe0000000000);
+    assert_eq!(guest_uefi_linux_cea_idt_entry_linear(14), 0xfffffe00000000e0);
+    assert_eq!(guest_uefi_pt_pml4_index(0xfffffe00000000e0), 508);
+    assert_eq!(guest_uefi_pt_pml4_index(GUEST_UEFI_LINUX_CEA_IDT_BASE), 508);
+    assert_eq!(guest_uefi_pti_kernel_pgd_gpa(0x2e1f804), 0x2e1e000);
+    let leaf = GUEST_UEFI_LINUX_CEA_IDT_LEAF_NESTED_2BEBEA7;
+    assert_eq!(leaf, 0x8000_0000_0708_f121);
+    assert!(guest_uefi_pte_present(leaf));
+    assert!(!guest_uefi_pte_writable(leaf));
+    assert!(!guest_uefi_pte_user(leaf));
+    assert!(guest_uefi_pte_nx(leaf));
+    assert_eq!(guest_uefi_pte_gpa(leaf), 0x708f000);
+    assert!(guest_uefi_efer_nx_should_hold(true, false, false));
+    assert!(guest_uefi_efer_nx_should_hold(false, true, false));
+    assert!(guest_uefi_efer_nx_should_hold(false, false, true));
+    assert!(!guest_uefi_efer_nx_should_hold(false, false, false));
+    assert_eq!(
+        guest_uefi_efer_with_lma_allow_nx(
+            GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_NXE,
+            true,
+            false
+        ),
+        GUEST_UEFI_EFER_LME | GUEST_UEFI_EFER_LMA
+    );
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("linux pt walk"));
+    assert!(src.contains("fn guest_uefi_linux_cea_idt_entry_linear"));
+    assert!(src.contains("fn guest_uefi_pti_kernel_pgd_gpa"));
+    assert!(src.contains("fn guest_uefi_efer_nx_should_hold"));
+    assert!(src.contains("RAYNU_F_LINUX_HANDOFF.load"));
+    assert!(src.contains("dump_linux_pt_walk_nowait"));
+    assert!(src.contains("user-idtr"));
+    assert!(src.contains("kern-idtr"));
+    assert!(src.contains("write_str_nowait(\"boot: guest-UEFI linux syscall WRMSR"));
+    assert!(src.contains("write_str_nowait(\" efer=0x\")"));
+    assert_eq!(super::RAYNU_F_RESET_MAX, 1);
+    assert_eq!(super::RAYNU_F_GDT_LIMIT, 0x27);
+    assert_eq!(super::RAYNU_F_TR_SELECTOR, 0x18);
+    let tss = super::raynu_f_tss64_desc(0x00A1_0040, super::RAYNU_F_TSS_LIMIT);
+    assert_eq!(tss[0], 0x67);
+    assert_eq!(tss[5], 0x8B, "busy 64-bit TSS");
+    assert_eq!(&tss[2..5], &[0x40, 0x00, 0xA1]);
+    assert!(src.contains("fn raynu_f_reset_relaunch"));
+    assert!(src.contains("fn raynu_f_on_guest_reset"));
+    assert!(src.contains("fn raynu_f_reset_vmcs_guest_state"));
+    assert!(src.contains("begin_second_boot"));
+    assert!(src.contains("boot: RayNu-F guest reset requested src="));
+    assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
 }
