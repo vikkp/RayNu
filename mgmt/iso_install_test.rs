@@ -605,3 +605,59 @@ fn patch_in_tree_alpine_extended_iso_grub_cfg_size_if_present() {
     assert!(s.ends_with("initrd\t/boot/initramfs-lts\n}\n"));
     assert!(!s.contains("ucode"));
 }
+
+#[test]
+fn carve_leftover_install_disk_nested_4g_gets_512mib() {
+    // Nested `c751fbe` -m 4096M: leftover above PRECISE hpa=0x20000000
+    // bytes=1542381568 (~1.44 GiB). 1 GiB + 768 MiB floor does not fit; 512 MiB does.
+    const MIB: u64 = 1024 * 1024;
+    let (hpa, bytes, rest, rest_bytes) = carve_leftover_install_disk(0x2000_0000, 1_542_381_568);
+    assert_eq!(hpa, 0x2000_0000);
+    assert_eq!(bytes, 512 * MIB);
+    assert_eq!(rest, 0x2000_0000 + 512 * MIB);
+    assert_eq!(rest_bytes, 1_542_381_568 - 512 * MIB);
+    assert!(rest_bytes >= LEFTOVER_DISK_GUEST_FLOOR_BYTES);
+}
+
+#[test]
+fn carve_leftover_install_disk_iron_gets_1gib_and_aligns() {
+    const MIB: u64 = 1024 * 1024;
+    // Unaligned start rounds up to 2 MiB; iron ~2.5 GiB leftover → 1 GiB disk.
+    let start = 0x2000_1000u64;
+    let span = 2560 * MIB;
+    let (hpa, bytes, rest, rest_bytes) = carve_leftover_install_disk(start, span);
+    assert_eq!(hpa, 0x2020_0000);
+    assert_eq!(bytes, 1024 * MIB);
+    assert_eq!(rest, hpa + bytes);
+    assert_eq!(rest + rest_bytes, start + span);
+    assert!(rest_bytes >= LEFTOVER_DISK_GUEST_FLOOR_BYTES);
+}
+
+#[test]
+fn carve_leftover_install_disk_keeps_guest_floor_or_skips() {
+    const MIB: u64 = 1024 * 1024;
+    // 1 GiB leftover: 256 MiB + 768 MiB floor exactly fits.
+    let (hpa, bytes, _, rest_bytes) = carve_leftover_install_disk(0x2000_0000, 1024 * MIB);
+    assert_eq!(hpa, 0x2000_0000);
+    assert_eq!(bytes, 256 * MIB);
+    assert_eq!(rest_bytes, 768 * MIB);
+    // Below that the span is untouched so report-RAM keeps all of it.
+    let (hpa, bytes, rest, rest_bytes) = carve_leftover_install_disk(0x2000_0000, 1000 * MIB);
+    assert_eq!((hpa, bytes), (0, 0));
+    assert_eq!((rest, rest_bytes), (0x2000_0000, 1000 * MIB));
+    // Degenerate spans never invent an HPA.
+    assert_eq!(carve_leftover_install_disk(0, 4096), (0, 0, 0, 4096));
+    assert_eq!(carve_leftover_install_disk(u64::MAX - 4096, 8192).1, 0);
+}
+
+#[test]
+fn leftover_install_disk_reserve_is_one_shot() {
+    reserve_leftover_install_disk(0x2000_0000, 512 * 1024 * 1024);
+    assert_eq!(
+        take_leftover_install_disk(),
+        Some((0x2000_0000, 512 * 1024 * 1024usize))
+    );
+    assert_eq!(take_leftover_install_disk(), None);
+    reserve_leftover_install_disk(0x2000_0000, 0);
+    assert_eq!(take_leftover_install_disk(), None);
+}

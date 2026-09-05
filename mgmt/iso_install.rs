@@ -10,6 +10,8 @@
 //! [`M7_ISO_BOOTED_FROM_DISK_MARKER`] on COM2 (documented equivalent of
 //! [`M7_ISO_INSTALL_OK_MARKER`]; host/CI must **never** print the iron OK).
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use super::api::{
     auth_allows, ApiReply, RestMethod, RestRequest, RestResponse, BRINGUP_AUTH_TOKEN,
 };
@@ -630,6 +632,74 @@ pub fn product_iso_install_disk_bytes(host_hypervisor: bool) -> usize {
     } else {
         PRODUCT_ISO_INSTALL_DISK_IRON_BYTES
     }
+}
+
+/// Leftover-DRAM install disk (above PRECISE), carved **before** the
+/// report-RAM extra seed so the guest never sees these HPAs as RAM (they are
+/// reached only through virtio-blk / RayNu-F BlockIo; ADR-004 exclusivity).
+/// Host CR3 is the UEFI identity map, so the HV can back the disk there
+/// without growing the 512 MiB precise pool, where 64 MiB was the most a
+/// nested run could land (nested `c751fbe` alpine-extended: apk resolved
+/// grub-efi + dosfstools, `setup-disk` partitioned, then `No space left on
+/// device` on a 64 MiB disk with a 48 MiB ESP).
+static LEFTOVER_DISK_HPA: AtomicU64 = AtomicU64::new(0);
+static LEFTOVER_DISK_BYTES: AtomicU64 = AtomicU64::new(0);
+
+/// Sizes to carve from leftover DRAM, largest first.
+pub const LEFTOVER_DISK_TRY_BYTES: &[u64] = &[
+    1024 * 1024 * 1024,
+    512 * 1024 * 1024,
+    256 * 1024 * 1024,
+];
+/// Leftover that must remain for guest report-RAM after the carve. Alpine
+/// live root + modloop + apk cache sit in RAM alongside the 256 MiB high
+/// RAM; q35 below-4G conventional above PRECISE is ~1.44 GiB at `-m 4096M`,
+/// which yields a 512 MiB disk (1 GiB + 768 MiB does not fit).
+pub const LEFTOVER_DISK_GUEST_FLOOR_BYTES: u64 = 768 * 1024 * 1024;
+const LEFTOVER_DISK_ALIGN: u64 = 2 * 1024 * 1024;
+
+/// Split a leftover conventional span `[start, start+bytes)` into an install
+/// disk and the remainder for report-RAM.
+///
+/// Returns `(disk_hpa, disk_bytes, rest_start, rest_bytes)`; `disk_bytes == 0`
+/// (and the span unchanged) when no ladder size fits with the guest floor.
+///
+/// INVARIANTS:
+/// - `disk_hpa` is 2 MiB aligned and inside the span
+/// - `rest_start == disk_hpa + disk_bytes`; `rest_bytes >= LEFTOVER_DISK_GUEST_FLOOR_BYTES`
+/// - Never invents an HPA outside the span
+pub fn carve_leftover_install_disk(start: u64, bytes: u64) -> (u64, u64, u64, u64) {
+    let end = start.saturating_add(bytes);
+    let aligned = start
+        .saturating_add(LEFTOVER_DISK_ALIGN - 1)
+        & !(LEFTOVER_DISK_ALIGN - 1);
+    if aligned == 0 || aligned >= end {
+        return (0, 0, start, bytes);
+    }
+    let avail = end - aligned;
+    for &want in LEFTOVER_DISK_TRY_BYTES {
+        if avail >= want.saturating_add(LEFTOVER_DISK_GUEST_FLOOR_BYTES) {
+            let rest_start = aligned + want;
+            return (aligned, want, rest_start, end - rest_start);
+        }
+    }
+    (0, 0, start, bytes)
+}
+
+/// Record the carved disk for [`take_leftover_install_disk`]. `bytes == 0` clears.
+pub fn reserve_leftover_install_disk(hpa: u64, bytes: u64) {
+    LEFTOVER_DISK_HPA.store(hpa, Ordering::Release);
+    LEFTOVER_DISK_BYTES.store(bytes, Ordering::Release);
+}
+
+/// One-shot: hand the carved leftover disk to the virtio-blk attach, or `None`.
+pub fn take_leftover_install_disk() -> Option<(u64, usize)> {
+    let bytes = LEFTOVER_DISK_BYTES.swap(0, Ordering::AcqRel);
+    let hpa = LEFTOVER_DISK_HPA.swap(0, Ordering::AcqRel);
+    if hpa == 0 || bytes == 0 {
+        return None;
+    }
+    Some((hpa, bytes as usize))
 }
 
 /// HV frame-pool cap. `iso=0` / nested stay `[1MiB,256MiB)` so E4 BAR/shell

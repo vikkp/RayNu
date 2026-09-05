@@ -210,6 +210,19 @@ pub unsafe fn leave_firmware() -> Handoff {
         )
         {
             let bytes = hp.saturating_mul(mem::PAGE_SIZE);
+            // Carve the install disk first so those HPAs never enter the
+            // report-RAM bump (guest sees them only via virtio-blk).
+            let (disk_hpa, disk_bytes, rest_start, rest_bytes) =
+                crate::mgmt::iso_install::carve_leftover_install_disk(hs, bytes);
+            if disk_bytes != 0 {
+                crate::mgmt::iso_install::reserve_leftover_install_disk(disk_hpa, disk_bytes);
+                serial::write_str("boot: Stage 46 leftover install disk hpa=0x");
+                write_u64_hex(disk_hpa);
+                serial::write_str(" bytes=");
+                write_u64(disk_bytes);
+                serial::write_line(" (not ISO-INSTALL-OK)");
+            }
+            let (hs, bytes) = (rest_start, rest_bytes);
             let extra_hpa = seed_report_ram_extra(hs, bytes);
             if extra_hpa != 0 {
                 serial::write_str("boot: report-RAM extra hpa=0x");

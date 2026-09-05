@@ -97,11 +97,11 @@ if [[ ! -s "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> marker scan (not ISO-INSTALL-OK):"
-grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|stop n=|#PF linux|preempt noskip|RAYNU-F' \
+grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|leftover install disk|virtio-blk install disk|stop n=|#PF linux|preempt noskip|RAYNU-F' \
   "$SERIAL_LOG" | grep -v -E 'RayNu-F svc=|RayNu-F CPUID|fw_cfg dest_ok fill' | head -n 200 || true
 echo "==> Linux tail (not ISO-INSTALL-OK):"
-grep -E -n 'Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|localhost login|/ #|RN-SETUP|setup-disk|grub-efi|dosfstools|panic|Oops:|BUG:' \
-  "$SERIAL_LOG" | head -n 60 || true
+grep -E -n 'Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|localhost login|/ #|RN-SETUP|setup-disk|grub-efi|dosfstools|No space left|Installation is complete|Installing packages|ERROR:|panic|Oops:|BUG:' \
+  "$SERIAL_LOG" | grep -v -E 'failed to rename' | head -n 60 || true
 tail -n 40 "$SERIAL_LOG" || true
 
 if grep -qF 'RAYNU-V-M7-ISO-INSTALL-OK' "$SERIAL_LOG"; then

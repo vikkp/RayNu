@@ -3431,10 +3431,20 @@ pub fn product_iso_disk_leave_pages() -> u64 {
 /// - Nested tries 256/64/32/16/1 MiB; iron tries 1 GiB then that ladder
 ///
 /// Call **before** greedy 2 MiB report-RAM so Alpine sys-mode gets ≥64 MiB.
+///
+/// Leftover DRAM above PRECISE is preferred (256 MiB–1 GiB, carved by
+/// `handoff` **before** the report-RAM seed; not an invented HPA, and never
+/// handed to the guest as RAM). Nested `c751fbe` alpine-extended: apk
+/// resolved grub-efi + dosfstools, `setup-disk` partitioned, then `No space
+/// left on device` on the 64 MiB pool disk (48 MiB of it ESP). Pool ladder
+/// stays as the fallback. leftover install disk.
 pub fn try_alloc_product_iso_install_disk(
     alloc: &mut FrameAllocator,
     nested: bool,
 ) -> Option<(PhysFrame, usize)> {
+    if let Some((hpa, bytes)) = crate::mgmt::iso_install::take_leftover_install_disk() {
+        return Some((PhysFrame::from_phys(hpa), bytes));
+    }
     // Nested used to leave=0 + only 1 MiB. After Alpine shell on RayNu-F,
     // nested must land a GPT-capable disk; leave scratch so a 256 MiB
     // try cannot starve report-RAM on a ~256 MiB pool (falls to 64 MiB).
