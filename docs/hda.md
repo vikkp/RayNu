@@ -351,9 +351,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | spa-sleek-status |
-| Summary | **Operator SPA restyle.** Menus (Overview/Guests/Media/Activity/Settings); Host / RayNu-V / Guest / Install-media lights + plain-language story; firmware-debug button farm removed. Size still `webui_len()+256 ≤ 16384`. Not TLS; not guest console; not `ISO-INSTALL-OK`. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. UI polish does not close E5 or TLS. |
-| Gates touched | M5.2 / M7.4 SPA string + size gates (`RAYNU-V-M5-WEBUI-OK`, `RAYNU-V-M7-UI-OK`). |
+| Summary | **SPA chrome restored to published sea-glass + Palatino.** Menus + status lights kept; dark mint theme reverted so the lockup matches the social post (`#dce8ee` / `#1a6b7c` / `#0e3d48`). Not TLS; not `ISO-INSTALL-OK`. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. |
+| Gates touched | M5.2 / M7.4 SPA string + size gates. |
 | Months Δ | 0.5→0.5 |
 
 
@@ -377,6 +377,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-05 | spa-sleek-status | 0.5 | 95 | SPA chrome restored to published sea-glass + Palatino (`#dce8ee` / `#1a6b7c`); menus + status lights kept; not TLS / not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | spa-sleek-status | 0.5 | 95 | Operator SPA restyle: menus + Host/RayNu-V/Guest/ISO status lights; firmware-debug farm removed; `webui_len()+256 ≤ 16384`; not TLS / not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `088ab25` F7 re-run on raynuvsrv1: `guest reset requested src=kbc n=1` + `relaunch after reset` now visible; Alpine `reboot` used i8042 `0x64<-0xFE` (not CF9/FADT; `efi=noruntime`); GPT ESP lba=2048 → `DISK-BOOT-OK` → second Linux `root=UUID=ddf8714c-…` → second `localhost:~#`; evidence file added; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
