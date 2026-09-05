@@ -50,11 +50,31 @@ echo "==> host virt flags: ${cpu_virt:-none}"
 rm -f "$SERIAL_LOG"
 : >"$SERIAL_LOG"
 
-echo "==> product ISO nested serial timeout=${TIMEOUT_SECS}s iso=$psz bytes (not ISO-INSTALL-OK)"
+# ADR-016: the product-ISO Linux walk runs on RayNu-F. Without raynuf.txt
+# run-qemu.sh boots the parked retained-OVMF leg, which stops at
+# reason=0x30 rip=0xfffdxxxx (n~1043) before any kernel runs, and the
+# grub.cfg patch is never exercised. RAYNU_F=0 only for that OVMF leg.
+RAYNU_F="${RAYNU_F:-1}"
+if [[ "$RAYNU_F" != "1" ]]; then
+  echo "==> RAYNU_F=$RAYNU_F: retained-OVMF leg only; Linux walk will NOT run"
+fi
+# run-qemu.sh only builds when the EFI is missing; a stale target/ EFI
+# would test the previous commit's patcher.
+if [[ "${REBUILD_EFI:-1}" == "1" ]]; then
+  echo "==> building EFI (REBUILD_EFI=0 to skip)"
+  cargo build --release --features uefi-bin --target x86_64-unknown-uefi \
+    >"$ROOT/target/e5-iso-build.log" 2>&1 || {
+    echo "error: EFI build failed; see target/e5-iso-build.log" >&2
+    tail -n 30 "$ROOT/target/e5-iso-build.log" >&2 || true
+    exit 1
+  }
+fi
+
+echo "==> product ISO nested serial timeout=${TIMEOUT_SECS}s iso=$psz bytes RAYNU_F=$RAYNU_F (not ISO-INSTALL-OK)"
 set +e
 timeout --signal=KILL "$TIMEOUT_SECS" \
   env PRODUCT_ISO="$ISO_PATH" ESP="$ESP" SERIAL_CHARDEV="file:$SERIAL_LOG" \
-  QEMU_ACCEL="${QEMU_ACCEL:-kvm}" \
+  QEMU_ACCEL="${QEMU_ACCEL:-kvm}" RAYNU_F="$RAYNU_F" \
   "$ROOT/tools/run-qemu.sh" \
   >"$ROOT/target/e5-iso-qemu-stdout.log" 2>"$ROOT/target/e5-iso-qemu-stderr.log"
 QEMU_STATUS=$?
@@ -68,7 +88,7 @@ if [[ ! -s "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> marker scan (not ISO-INSTALL-OK):"
-grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|stop n=|#PF linux|preempt noskip' \
+grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|stop n=|#PF linux|preempt noskip|RAYNU-F' \
   "$SERIAL_LOG" | head -n 80 || true
 
 if grep -qF 'RAYNU-V-M7-ISO-INSTALL-OK' "$SERIAL_LOG"; then

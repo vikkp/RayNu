@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-04
+last_updated: 2026-09-05
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `788930c` run booted the parked retained-OVMF leg (`stop n=1043 reason=0x30 rip=0xfffd4739`; no kernel) because the E5 script never staged `raynuf.txt`; script now defaults `RAYNU_F=1` and rebuilds the EFI; lts grow still unproven nested; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested alpine-standard stalled after `Freeing initrd` (grow 0 hits on `Linux lts`); add lts linux-line grow + Data Length 140→299; size copy 245 MiB / 64 MiB refat FAT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Revert `4536b72` apks/main→bare `…/apks`; guard repo write; nested path alpine-standard for grub-efi/dosfstools; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `1b48e26` setup-disk: apk missing dosfstools/grub-efi on bare `…/apks`; SETUP now uses `/media/*/apks/main`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
