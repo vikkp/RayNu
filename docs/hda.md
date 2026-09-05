@@ -352,7 +352,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Commit | e5-stage46-iso |
 | Summary | **alpine-standard proved insufficient; pivot nested proof to alpine-extended.** Nested `a0a824d` (RayNu-F, lts grow live): cmdline `virtio_pci,virtio_blk console=ttyS0 lpj=… initcall_blacklist=piix_init efi=noruntime`, `6.12.13-0-lts` → OpenRC → `login:` auto-answer → SETUP → `setup-disk`, then apk `no such package` for `dosfstools` + `grub-efi`. Listed the ISOs: standard (245 MiB) does not ship them; only alpine-extended (994 MiB) does. This cut: extended `grub.cfg` grow (`"Linux lts"` + ucode initrds → `initramfs-lts` only; Data Length 182→299, LBA 385833; host test on the real ISO), `run-qemu.sh` FAT32 ESP image above vvfat’s ~516 MB cap, E5 script defaults `ALPINE_FLAVOR=extended` / `QEMU_MEM=4096M`. Cruzer (977.5 MiB) cannot hold extended — iron needs a larger stick. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested alpine-extended run next (expect `setup-disk` past apk to partition/mkfs.vfat/grub-install, GPT on `/dev/vda`); F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`, which now also needs media larger than the Cruzer. |
-| Gates touched | RayNu-F F6-prep: nested Linux lts → shell → setup-disk on RayNu-F (first time past `Freeing initrd` on a non-virt kernel); extended grub.cfg grow + FAT32 ESP harness. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Gates touched | RayNu-F F6-prep: nested Linux lts → shell → setup-disk on RayNu-F (first time past `Freeing initrd` on a non-virt kernel); extended grub.cfg grow + FAT32 ESP harness + BDS watchdog off (sandbox TCG: 994 MiB ISO retained + patched, VMXON-SKIP). F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
 | Months Δ | 0.5→0.5 |
 
 
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Disable UEFI BDS 5-min watchdog before the PRE-EBS ISO read (sandbox TCG `5043864` reset twice after `M3-ASSETS-OK` with the 994 MiB extended ISO); with it off, TCG retained + patched extended from the FAT32 ESP image and reached leftover seed / VMXON-SKIP (no VT-x in sandbox); not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `a0a824d`: lts grow live, kernel→login→SETUP→setup-disk, apk still lacks dosfstools/grub-efi — alpine-standard does not ship them (ISO listed); pivot to alpine-extended (994 MiB): ucode grub.cfg grow 182→299, FAT32 ESP image (vvfat 516 MB cap), QEMU_MEM 4096M; Cruzer too small for extended; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `788930c` run booted the parked retained-OVMF leg (`stop n=1043 reason=0x30 rip=0xfffd4739`; no kernel) because the E5 script never staged `raynuf.txt`; script now defaults `RAYNU_F=1` and rebuilds the EFI; lts grow still unproven nested; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested alpine-standard stalled after `Freeing initrd` (grow 0 hits on `Linux lts`); add lts linux-line grow + Data Length 140→299; size copy 245 MiB / 64 MiB refat FAT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
