@@ -1803,8 +1803,8 @@ fn raynu_f_filesystem_loadimage_startimage() {
         assert!(dp[CD_DEVICE_PATH_BYTES..].iter().all(|&b| b == 0));
         {
             use super::protocol::{
-                encode_hd_device_path, DP_HD_LEN, DP_MBR_TYPE_GPT, DP_SIG_TYPE_GUID,
-                DP_SUBTYPE_HD, HD_DEVICE_PATH_BYTES,
+                device_path_is_grub_partition_child, encode_hd_device_path, DP_HD_LEN,
+                DP_MBR_TYPE_GPT, DP_SIG_TYPE_GUID, DP_SUBTYPE_HD, HD_DEVICE_PATH_BYTES,
             };
             let sig = [
                 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
@@ -1829,7 +1829,34 @@ fn raynu_f_filesystem_loadimage_startimage() {
                 u16::from_le_bytes([hd[DP_HD_LEN + 2], hd[DP_HD_LEN + 3]]),
                 4
             );
+            assert!(device_path_is_grub_partition_child(&hd));
         }
+        {
+            use super::protocol::{
+                device_path_is_grub_partition_child, encode_whole_disk_device_path,
+                DP_SUBTYPE_VENDOR, DP_TYPE_HARDWARE, DP_VENDOR_LEN, GUID_RAYNU_F_DISK,
+                WHOLE_DISK_DEVICE_PATH_BYTES,
+            };
+            let mut whole = [0u8; DEVICE_PATH_BYTES];
+            encode_whole_disk_device_path(&mut whole);
+            assert_eq!(WHOLE_DISK_DEVICE_PATH_BYTES, 24);
+            assert_eq!(whole[0], DP_TYPE_HARDWARE);
+            assert_eq!(whole[1], DP_SUBTYPE_VENDOR);
+            assert_eq!(
+                u16::from_le_bytes([whole[2], whole[3]]) as usize,
+                DP_VENDOR_LEN
+            );
+            assert_eq!(&whole[4..20], &GUID_RAYNU_F_DISK);
+            assert_eq!(whole[DP_VENDOR_LEN], DP_TYPE_END);
+            assert_eq!(whole[DP_VENDOR_LEN + 1], DP_SUBTYPE_END_ENTIRE);
+            assert_eq!(
+                u16::from_le_bytes([whole[DP_VENDOR_LEN + 2], whole[DP_VENDOR_LEN + 3]]),
+                4
+            );
+            assert!(whole[WHOLE_DISK_DEVICE_PATH_BYTES..].iter().all(|&b| b == 0));
+            assert!(!device_path_is_grub_partition_child(&whole));
+        }
+        assert!(super::protocol::device_path_is_grub_partition_child(&dp));
         assert_eq!(layout.device_path, tb as u64 + IMAGE_DEVICE_PATH_OFF as u64);
         // Publish it the way the launcher does, then re-run LoadImage so
         // LoadedImage picks the fields up.

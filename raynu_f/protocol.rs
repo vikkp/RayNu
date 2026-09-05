@@ -42,6 +42,9 @@ pub const GUID_LOAD_FILE2: Guid = [
 
 /// Handles RayNu-F publishes. Tagged like the console handles in `tables.rs`.
 pub const HANDLE_CD: u64 = 0x5246_0000_0000_0020;
+/// Whole-disk BlockIo (`MEDIA_LOGICAL_PARTITION=0`). Device path must be a
+/// Hardware/Vendor node, **not** Media/HardDrive — GRUB `efidisk` skips
+/// HD/CDROM nodes as partition children (nested `3492ebc`: `disk `,gpt2'`).
 pub const HANDLE_DISK: u64 = 0x5246_0000_0000_0021;
 /// Handle for the image `LoadImage` staged (F5).
 pub const HANDLE_IMAGE: u64 = 0x5246_0000_0000_0022;
@@ -80,6 +83,11 @@ pub const DP_SUBTYPE_CDROM: u8 = 0x02;
 /// header(4) + PartitionNumber u32 + PartitionStart u64 + PartitionSize u64
 /// + Signature[16] + MBRType u8 + SignatureType u8.
 pub const DP_SUBTYPE_HD: u8 = 0x01;
+/// Hardware Device Path (type 1) / Vendor (subtype 4), length 20:
+/// header(4) + GUID[16] (UEFI 2.10 Table 10-3).
+pub const DP_TYPE_HARDWARE: u8 = 0x01;
+pub const DP_SUBTYPE_VENDOR: u8 = 0x04;
+pub const DP_VENDOR_LEN: usize = 0x14;
 pub const DP_TYPE_END: u8 = 0x7F;
 pub const DP_SUBTYPE_END_ENTIRE: u8 = 0xFF;
 pub const DP_CDROM_LEN: usize = 0x18;
@@ -87,6 +95,13 @@ pub const DP_HD_LEN: usize = 0x2A;
 pub const DP_END_LEN: usize = 0x04;
 pub const CD_DEVICE_PATH_BYTES: usize = DP_CDROM_LEN + DP_END_LEN;
 pub const HD_DEVICE_PATH_BYTES: usize = DP_HD_LEN + DP_END_LEN;
+pub const WHOLE_DISK_DEVICE_PATH_BYTES: usize = DP_VENDOR_LEN + DP_END_LEN;
+/// RayNu-F whole-disk vendor GUID `{52464E55-00F7-11D2-BA4B-5241594E5546}`
+/// (`RFNU` + F7 + `RAYNUF`). Distinguishes `HANDLE_DISK` from a CDROM /
+/// HardDrive *partition* node so GRUB `efidisk` names the disk `hd0`.
+pub const GUID_RAYNU_F_DISK: Guid = [
+    0x55, 0x4E, 0x46, 0x52, 0xF7, 0x00, 0xD2, 0x11, 0xBA, 0x4B, 0x52, 0x41, 0x59, 0x4E, 0x55, 0x46,
+];
 /// Firmware image slot is the max of CD (0x1C) and HD (0x2E) paths.
 pub const DEVICE_PATH_BYTES: usize = HD_DEVICE_PATH_BYTES;
 /// GPT (UEFI `MBRType`).
@@ -121,6 +136,13 @@ pub fn encode_cd_device_path(
 
 /// Serialize a GPT HardDrive device path (Media/HardDrive + End).
 /// `signature` is the partition unique GUID. Byte-exact vs UEFI 2.10.
+///
+/// Do **not** install this on [`HANDLE_DISK`]. That handle's BlockIo is the
+/// whole disk (`MEDIA_LOGICAL_PARTITION=0`). GRUB `efidisk` treats a
+/// Media/HardDrive node as a partition child and skips it unless a parent
+/// whole-disk handle exists. Nested `3492ebc` then printed
+/// `disk `,gpt2' not found` / `grub rescue>`. Keep this encoder for tests
+/// and a future partition handle.
 pub fn encode_hd_device_path(
     partition_number: u32,
     start_lba: u64,
@@ -143,6 +165,44 @@ pub fn encode_hd_device_path(
     out[DP_HD_LEN] = DP_TYPE_END;
     out[DP_HD_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
     out[DP_HD_LEN + 2..DP_HD_LEN + 4].copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
+/// Whole-disk device path for [`HANDLE_DISK`]: Hardware/Vendor + End Entire.
+/// Extra bytes in the HD-sized slot stay zero (same as the CD encoding).
+pub fn encode_whole_disk_device_path(out: &mut [u8; DEVICE_PATH_BYTES]) {
+    for b in out.iter_mut() {
+        *b = 0;
+    }
+    out[0] = DP_TYPE_HARDWARE;
+    out[1] = DP_SUBTYPE_VENDOR;
+    out[2..4].copy_from_slice(&(DP_VENDOR_LEN as u16).to_le_bytes());
+    out[4..20].copy_from_slice(&GUID_RAYNU_F_DISK);
+    out[DP_VENDOR_LEN] = DP_TYPE_END;
+    out[DP_VENDOR_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
+    out[DP_VENDOR_LEN + 2..DP_VENDOR_LEN + 4]
+        .copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
+/// Walk `path` looking for a Media/HardDrive or Media/CDROM node. GRUB
+/// `efidisk` skips those handles as partition children (needs a parent).
+pub fn device_path_is_grub_partition_child(path: &[u8]) -> bool {
+    let mut off = 0usize;
+    while off + 4 <= path.len() {
+        let ty = path[off];
+        let sub = path[off + 1];
+        let len = u16::from_le_bytes([path[off + 2], path[off + 3]]) as usize;
+        if len < 4 || off + len > path.len() {
+            break;
+        }
+        if ty == DP_TYPE_MEDIA && (sub == DP_SUBTYPE_HD || sub == DP_SUBTYPE_CDROM) {
+            return true;
+        }
+        if ty == DP_TYPE_END {
+            break;
+        }
+        off += len;
+    }
+    false
 }
 
 /// `EFI_LOCATE_SEARCH_TYPE`.

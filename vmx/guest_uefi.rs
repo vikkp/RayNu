@@ -7086,7 +7086,9 @@ unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRea
 }
 
 /// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
-/// (fallback `\EFI\alpine\grubx64.efi`). `None` leaves El Torito / test app.
+/// (fallback `\EFI\alpine\grubx64.efi`). Publishes a Hardware/Vendor whole-disk
+/// path on `HANDLE_DISK` (not Media/HardDrive — GRUB `efidisk` would skip
+/// that as a partition child). `None` leaves El Torito / test app.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_stage_disk_bootloader(
     layout: &crate::raynu_f::FirmwareImageLayout,
@@ -7109,6 +7111,8 @@ unsafe fn raynu_f_stage_disk_bootloader(
     write_dec(esp.start_lba);
     serial::write_str(" sectors=");
     write_dec(esp.size_lba());
+    serial::write_str(" part=");
+    write_dec(u64::from(esp.partition_number));
     serial::write_line(" (F7; not ISO-INSTALL-OK)");
     let fat_off = esp.start_lba.saturating_mul(512);
     let vol_reader = DiskFatVol { base: fat_off };
@@ -7145,13 +7149,7 @@ unsafe fn raynu_f_stage_disk_bootloader(
             layout.sfs,
         );
         let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
-        crate::raynu_f::protocol::encode_hd_device_path(
-            esp.partition_number,
-            esp.start_lba,
-            esp.size_lba(),
-            esp.unique_guid,
-            &mut dp,
-        );
+        crate::raynu_f::protocol::encode_whole_disk_device_path(&mut dp);
         let mem_dp = SlabMem {
             hpa: ram_hpa,
             len: GUEST_UEFI_LOW_RAM_BYTES,
@@ -7163,6 +7161,9 @@ unsafe fn raynu_f_stage_disk_bootloader(
                 crate::raynu_f::HANDLE_DISK,
                 crate::raynu_f::protocol::GUID_DEVICE_PATH,
                 layout.device_path,
+            );
+            serial::write_line(
+                "boot: RayNu-F disk whole-disk path (F7; not ISO-INSTALL-OK)",
             );
         }
     }
