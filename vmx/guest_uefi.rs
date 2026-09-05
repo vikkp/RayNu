@@ -6535,11 +6535,14 @@ unsafe fn raynu_f_linux_handoff() {
 unsafe fn raynu_f_on_guest_reset(src: crate::devices::guest_platform::ResetSrc) -> ! {
     RAYNU_F_RESET_PENDING.store(true, Ordering::Release);
     let n = RAYNU_F_RESET_N.fetch_add(1, Ordering::AcqRel) + 1;
-    serial::write_str("boot: RayNu-F guest reset requested src=");
-    serial::write_str(src.as_str());
-    serial::write_str(" n=");
-    write_dec(u64::from(n));
-    serial::write_line(" (F7; not ISO-INSTALL-OK)");
+    // Linux earlycon share is still on here: blocking HV writes are dropped
+    // (nested `fe4785a` lost this line and the relaunch banner), so use the
+    // nowait path like ISO-INSTALL-OK does.
+    serial::write_str_nowait("boot: RayNu-F guest reset requested src=");
+    serial::write_str_nowait(src.as_str());
+    serial::write_str_nowait(" n=");
+    write_dec_nowait(u64::from(n));
+    serial::write_line_nowait(" (F7; not ISO-INSTALL-OK)");
     if n > RAYNU_F_RESET_MAX {
         raynu_f_stop("reset-cap");
     }
@@ -6703,13 +6706,14 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
+    // Leave Linux share mode first or this banner is dropped (nested `fe4785a`).
+    serial::set_linux_earlycon_share(false);
+    serial::set_linux_high_half(false);
     serial::write_line("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)");
     RAYNU_F_RESET_PENDING.store(false, Ordering::Release);
     RAYNU_F_MODE.store(false, Ordering::Release);
     RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
     LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
-    serial::set_linux_earlycon_share(false);
-    serial::set_linux_high_half(false);
     RAYNU_F_EXITS.store(0, Ordering::Release);
     RAYNU_F_CALLS.store(0, Ordering::Release);
     RAYNU_F_SVC_ERRS.store(0, Ordering::Release);

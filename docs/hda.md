@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `fe4785a` F7 reboot-to-disk on raynuvsrv1: `DISK-BOOT-OK` + second Linux `root=UUID=698a922a-…` (ext4 /dev/vda2, ESP /dev/vda1, second localhost:~#); harness nested reboot-to-disk line; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `3492ebc` F7 relaunch reached disk GRUB then rescue `disk `,gpt2' not found` (HD node on HANDLE_DISK; GRUB skipped the only BlockIo); HANDLE_DISK now Hardware/Vendor whole-disk path so GRUB names hd0; nested second Linux boot unclaimed; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 guest reset→RayNu-F relaunch **wired host-only**: CF9/KBC/TF, FADT RESET_REG 0xCF9, serial reboot after Please reboot, reset_keep_disk, disk-before-ISO GPT ESP, VMCS overlay+TSS, cap=1; nested second Linux boot not run; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
