@@ -1034,6 +1034,13 @@ pub fn probe_product_linux_iso() {
     use uefi::fs::FileSystem;
     use uefi::CString16;
 
+    // UEFI 2.10 §7.5.5: BDS arms a 5-minute watchdog before starting a boot
+    // option; expiry resets the platform. Reading + copying + patching a
+    // ~1 GiB alpine-extended from the ESP can exceed that (nested TCG
+    // `5043864` reset twice right after `M3-ASSETS-OK`). Disable it for the
+    // rest of the PRE-EBS phase; ExitBootServices clears it anyway.
+    // Best-effort: a firmware without the service still probes.
+    let _ = boot::set_watchdog_timer(0, 0x1_0000, None);
     let image = boot::image_handle();
     let Ok(sfs) = boot::get_image_file_system(image) else {
         serial::write_line(M7_STAGE46_PRODUCT_ISO_MISSING_NOTE);
