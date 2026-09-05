@@ -76,14 +76,28 @@ pub const LOADED_IMAGE_REVISION: u32 = 0x1000;
 /// header(4) + BootEntry u32 + PartitionStart u64 + PartitionSize u64.
 pub const DP_TYPE_MEDIA: u8 = 0x04;
 pub const DP_SUBTYPE_CDROM: u8 = 0x02;
+/// Media / HardDrive (subtype 1), length 0x2A (UEFI 2.10 Table 10-12):
+/// header(4) + PartitionNumber u32 + PartitionStart u64 + PartitionSize u64
+/// + Signature[16] + MBRType u8 + SignatureType u8.
+pub const DP_SUBTYPE_HD: u8 = 0x01;
 pub const DP_TYPE_END: u8 = 0x7F;
 pub const DP_SUBTYPE_END_ENTIRE: u8 = 0xFF;
 pub const DP_CDROM_LEN: usize = 0x18;
+pub const DP_HD_LEN: usize = 0x2A;
 pub const DP_END_LEN: usize = 0x04;
-pub const DEVICE_PATH_BYTES: usize = DP_CDROM_LEN + DP_END_LEN;
+pub const CD_DEVICE_PATH_BYTES: usize = DP_CDROM_LEN + DP_END_LEN;
+pub const HD_DEVICE_PATH_BYTES: usize = DP_HD_LEN + DP_END_LEN;
+/// Firmware image slot is the max of CD (0x1C) and HD (0x2E) paths.
+pub const DEVICE_PATH_BYTES: usize = HD_DEVICE_PATH_BYTES;
+/// GPT (UEFI `MBRType`).
+pub const DP_MBR_TYPE_GPT: u8 = 0x02;
+/// GUID signature (UEFI `SignatureType`).
+pub const DP_SIG_TYPE_GUID: u8 = 0x02;
 
 /// Serialize the CD device path (`boot_entry`, and the El Torito extent in
-/// 2048-byte CD blocks).
+/// 2048-byte CD blocks). The End node stays at [`DP_CDROM_LEN`]; extra bytes
+/// in the (HD-sized) slot are left zero so existing CD encodings stay
+/// byte-exact through the End node.
 pub fn encode_cd_device_path(
     boot_entry: u32,
     partition_start: u64,
@@ -103,6 +117,32 @@ pub fn encode_cd_device_path(
     out[DP_CDROM_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
     out[DP_CDROM_LEN + 2..DP_CDROM_LEN + 4]
         .copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
+}
+
+/// Serialize a GPT HardDrive device path (Media/HardDrive + End).
+/// `signature` is the partition unique GUID. Byte-exact vs UEFI 2.10.
+pub fn encode_hd_device_path(
+    partition_number: u32,
+    start_lba: u64,
+    size_lba: u64,
+    signature: [u8; 16],
+    out: &mut [u8; DEVICE_PATH_BYTES],
+) {
+    for b in out.iter_mut() {
+        *b = 0;
+    }
+    out[0] = DP_TYPE_MEDIA;
+    out[1] = DP_SUBTYPE_HD;
+    out[2..4].copy_from_slice(&(DP_HD_LEN as u16).to_le_bytes());
+    out[4..8].copy_from_slice(&partition_number.to_le_bytes());
+    out[8..16].copy_from_slice(&start_lba.to_le_bytes());
+    out[16..24].copy_from_slice(&size_lba.to_le_bytes());
+    out[24..40].copy_from_slice(&signature);
+    out[40] = DP_MBR_TYPE_GPT;
+    out[41] = DP_SIG_TYPE_GUID;
+    out[DP_HD_LEN] = DP_TYPE_END;
+    out[DP_HD_LEN + 1] = DP_SUBTYPE_END_ENTIRE;
+    out[DP_HD_LEN + 2..DP_HD_LEN + 4].copy_from_slice(&(DP_END_LEN as u16).to_le_bytes());
 }
 
 /// `EFI_LOCATE_SEARCH_TYPE`.

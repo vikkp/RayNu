@@ -23,6 +23,7 @@ pub mod blockio;
 pub mod events;
 pub mod fat;
 pub mod filesystem;
+pub mod gpt;
 pub mod launch_plan;
 pub mod memory;
 pub mod pe;
@@ -71,6 +72,10 @@ pub const RAYNU_F_IMAGE_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-IMAGE-GATE-OK";
 /// image. Guest-exit-only.
 pub const RAYNU_F_START_IMAGE_OK_MARKER: &str = "RAYNU-V-RAYNU-F-START-IMAGE-OK";
 
+/// Serial marker when `StartImage` ran an image staged from the install
+/// disk GPT ESP (F7). Guest-exit-only. Not `ISO-INSTALL-OK`.
+pub const RAYNU_F_DISK_BOOT_OK_MARKER: &str = "RAYNU-V-RAYNU-F-DISK-BOOT-OK";
+
 /// Host / CI marker when the F4 gate passes: handle/protocol database +
 /// `BlockIo` media/validation/transfer against a mock guest. Host only.
 pub const RAYNU_F_BLOCKIO_GATE_MARKER: &str = "RAYNU-V-RAYNU-F-BLOCKIO-GATE-OK";
@@ -96,6 +101,9 @@ pub const RAYNU_F_SERVICES_OK_MARKER: &str = "RAYNU-V-RAYNU-F-SERVICES-OK";
 pub use tables::{
     build_firmware_image, crc32, header_crc_valid, BuildError, FirmwareImageLayout,
     IMAGE_BYTES,
+};
+pub use gpt::{
+    disk_has_gpt_esp, find_esp, raynu_f_boot_source, BootSource, EspPartition, ESP_TYPE_GUID,
 };
 pub use launch_plan::{plan_f2, LaunchPlan, PlanError};
 pub use pe::{load_pe32plus, parse_pe32plus, Loaded, PeError, PeImage};

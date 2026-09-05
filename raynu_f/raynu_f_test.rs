@@ -139,6 +139,22 @@ fn raynu_f_scaffold_is_honest() {
     assert_eq!(RAYNU_F_SCAFFOLD_OK_MARKER, "RAYNU-V-RAYNU-F-SCAFFOLD-OK");
     assert_ne!(RAYNU_F_SCAFFOLD_OK_MARKER, "RAYNU-V-M7-ISO-INSTALL-OK");
     assert_ne!(RAYNU_F_TABLES_OK_MARKER, RAYNU_F_CONOUT_OK_MARKER);
+    assert_eq!(
+        super::RAYNU_F_DISK_BOOT_OK_MARKER,
+        "RAYNU-V-RAYNU-F-DISK-BOOT-OK"
+    );
+    assert_ne!(
+        super::RAYNU_F_DISK_BOOT_OK_MARKER,
+        "RAYNU-V-M7-ISO-INSTALL-OK"
+    );
+    assert_ne!(
+        super::RAYNU_F_DISK_BOOT_OK_MARKER,
+        "RAYNU-V-M7-ISO-BOOTED-FROM-DISK"
+    );
+    assert_ne!(
+        super::RAYNU_F_DISK_BOOT_OK_MARKER,
+        super::RAYNU_F_START_IMAGE_OK_MARKER
+    );
 
     assert!(!raynu_f_is_functional());
     assert!(!raynu_f_boots_iso());
@@ -1766,8 +1782,8 @@ fn raynu_f_filesystem_loadimage_startimage() {
     // there would strand it, so both must be populated and well-formed.
     {
         use super::protocol::{
-            encode_cd_device_path, DEVICE_PATH_BYTES, DP_CDROM_LEN, DP_SUBTYPE_CDROM,
-            DP_SUBTYPE_END_ENTIRE, DP_TYPE_END, DP_TYPE_MEDIA, GUID_DEVICE_PATH,
+            encode_cd_device_path, CD_DEVICE_PATH_BYTES, DEVICE_PATH_BYTES, DP_CDROM_LEN,
+            DP_SUBTYPE_CDROM, DP_SUBTYPE_END_ENTIRE, DP_TYPE_END, DP_TYPE_MEDIA, GUID_DEVICE_PATH,
             LOADED_IMAGE_DEVICE_HANDLE_OFF, LOADED_IMAGE_FILE_PATH_OFF,
         };
         use super::tables::IMAGE_DEVICE_PATH_OFF;
@@ -1783,6 +1799,37 @@ fn raynu_f_filesystem_loadimage_startimage() {
         assert_eq!(dp[DP_CDROM_LEN], DP_TYPE_END);
         assert_eq!(dp[DP_CDROM_LEN + 1], DP_SUBTYPE_END_ENTIRE);
         assert_eq!(u16::from_le_bytes([dp[DP_CDROM_LEN + 2], dp[DP_CDROM_LEN + 3]]), 4);
+        // Slot is HD-sized; bytes after the CD End node stay zero.
+        assert!(dp[CD_DEVICE_PATH_BYTES..].iter().all(|&b| b == 0));
+        {
+            use super::protocol::{
+                encode_hd_device_path, DP_HD_LEN, DP_MBR_TYPE_GPT, DP_SIG_TYPE_GUID,
+                DP_SUBTYPE_HD, HD_DEVICE_PATH_BYTES,
+            };
+            let sig = [
+                0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+                0xFF, 0x00,
+            ];
+            let mut hd = [0u8; DEVICE_PATH_BYTES];
+            encode_hd_device_path(1, 34, 128, sig, &mut hd);
+            assert_eq!(HD_DEVICE_PATH_BYTES, 0x2E);
+            assert_eq!(dp.len(), HD_DEVICE_PATH_BYTES);
+            assert_eq!(hd[0], DP_TYPE_MEDIA);
+            assert_eq!(hd[1], DP_SUBTYPE_HD);
+            assert_eq!(u16::from_le_bytes([hd[2], hd[3]]) as usize, DP_HD_LEN);
+            assert_eq!(u32::from_le_bytes(hd[4..8].try_into().unwrap()), 1);
+            assert_eq!(u64::from_le_bytes(hd[8..16].try_into().unwrap()), 34);
+            assert_eq!(u64::from_le_bytes(hd[16..24].try_into().unwrap()), 128);
+            assert_eq!(&hd[24..40], &sig);
+            assert_eq!(hd[40], DP_MBR_TYPE_GPT);
+            assert_eq!(hd[41], DP_SIG_TYPE_GUID);
+            assert_eq!(hd[DP_HD_LEN], DP_TYPE_END);
+            assert_eq!(hd[DP_HD_LEN + 1], DP_SUBTYPE_END_ENTIRE);
+            assert_eq!(
+                u16::from_le_bytes([hd[DP_HD_LEN + 2], hd[DP_HD_LEN + 3]]),
+                4
+            );
+        }
         assert_eq!(layout.device_path, tb as u64 + IMAGE_DEVICE_PATH_OFF as u64);
         // Publish it the way the launcher does, then re-run LoadImage so
         // LoadedImage picks the fields up.

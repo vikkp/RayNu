@@ -100,7 +100,9 @@ pub const IMAGE_SFS_OFF: usize = 0x1740;
 pub const IMAGE_GUID_FILE_INFO_OFF: usize = 0x1760;
 pub const IMAGE_LOADED_IMAGE_OFF: usize = 0x1780;
 pub const IMAGE_DEVICE_PATH_OFF: usize = 0x17E0;
-pub const IMAGE_FILE_PROTO_OFF: usize = 0x1800;
+/// Room for the max of CD (0x1C) and HD (0x2E) device paths (F7).
+pub const IMAGE_DEVICE_PATH_CAP: usize = 0x40;
+pub const IMAGE_FILE_PROTO_OFF: usize = 0x1820;
 /// Stride per file-protocol instance (0x58 rounded up for alignment).
 pub const IMAGE_FILE_PROTO_STRIDE: usize = 0x60;
 /// `EFI_CONFIGURATION_TABLE` array behind `SystemTable->ConfigurationTable`
@@ -114,6 +116,8 @@ pub const CONFIG_TABLE_MAX_ENTRIES: usize = 16;
 /// Total bytes the image needs (three 4 KiB pages: tables + 16 file protos +
 /// the configuration table array).
 pub const IMAGE_BYTES: usize = 0x3000;
+const _: () = assert!(IMAGE_DEVICE_PATH_OFF + IMAGE_DEVICE_PATH_CAP <= IMAGE_FILE_PROTO_OFF);
+const _: () = assert!(IMAGE_DEVICE_PATH_OFF + super::protocol::DEVICE_PATH_BYTES <= IMAGE_FILE_PROTO_OFF);
 const _: () = assert!(IMAGE_FILE_PROTO_OFF + 16 * IMAGE_FILE_PROTO_STRIDE <= IMAGE_CONFIG_TABLE_OFF);
 const _: () = assert!(
     IMAGE_CONFIG_TABLE_OFF + CONFIG_TABLE_MAX_ENTRIES * CONFIG_TABLE_ENTRY_BYTES <= IMAGE_BYTES

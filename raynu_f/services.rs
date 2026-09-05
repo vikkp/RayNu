@@ -418,9 +418,11 @@ pub struct FirmwareState {
     /// Base GPA of the per-slot `EFI_FILE_PROTOCOL` array, and the SFS struct.
     pub file_proto_base: u64,
     pub sfs: u64,
-    /// Byte offset of the FAT volume inside the CD backing store (the El
-    /// Torito boot image extent).
+    /// Byte offset of the FAT volume inside the backing store (El Torito
+    /// boot image on the CD, or GPT ESP start on the install disk).
     pub fat_volume_off: u64,
+    /// `MEDIA_ID_CD` or `MEDIA_ID_DISK` for FAT `VolumeRead` through BlockIo.
+    pub fat_media_id: u32,
     /// F5: the one image `LoadImage` has staged, if any.
     pub loaded_image_proto: u64,
     /// Device path published for the boot volume, and the handle owning it.
@@ -459,6 +461,7 @@ impl FirmwareState {
             file_proto_base: 0,
             sfs: 0,
             fat_volume_off: 0,
+            fat_media_id: super::blockio::MEDIA_ID_CD,
             loaded_image_proto: 0,
             device_path: 0,
             device_handle: 0,
@@ -1117,8 +1120,8 @@ fn block_transfer(
     EFI_SUCCESS
 }
 
-/// A `VolumeRead` over the CD backing store, offset by the FAT volume's
-/// extent inside the ISO (the El Torito boot image).
+/// A `VolumeRead` over the FAT volume's backing store, offset by
+/// [`FirmwareState::fat_volume_off`] (El Torito extent or GPT ESP).
 struct FatVolumeReader<'a> {
     read: BlockReadFn,
     base: u64,
@@ -1598,7 +1601,7 @@ pub fn dispatch(
             let r = FatVolumeReader {
                 read,
                 base: st.fat_volume_off,
-                media_id: super::blockio::MEDIA_ID_CD,
+                media_id: st.fat_media_id,
                 _mem: &(),
             };
             let this_handle = FileSystem::handle_for(slot);
@@ -1635,7 +1638,7 @@ pub fn dispatch(
             let r = FatVolumeReader {
                 read,
                 base: st.fat_volume_off,
-                media_id: super::blockio::MEDIA_ID_CD,
+                media_id: st.fat_media_id,
                 _mem: &(),
             };
             let h = FileSystem::handle_for(slot);

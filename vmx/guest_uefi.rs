@@ -3747,6 +3747,8 @@ static RAYNU_F_SVC_ERRS: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
 /// F6b: `ExitBootServices` on RayNu-F handed the VMCS to the Linux exit path.
 static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
+/// F7: staged `\EFI\BOOT\BOOTX64.EFI` came from the install-disk GPT ESP.
+static RAYNU_F_STAGED_FROM_DISK: AtomicBool = AtomicBool::new(false);
 /// Sticky EFER.NXE after Linux was allowed NX this boot. Nested `2bebea7`:
 /// RayNu-F never intercepts `#PF`, so `PF_LINUX_DELIVER` stays 0 and a
 /// userspace RIP would otherwise strip NXE on the next VM-exit.
@@ -6340,13 +6342,29 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     serial::write_str(" pages=");
     write_dec(crate::raynu_f::memory::BELOW1M_PAGES as u64);
     serial::write_line(" (Linux trampoline; not ISO-INSTALL-OK)");
-    // F5: prefer the ISO's own \EFI\BOOT\BOOTX64.EFI when the retained
-    // product ISO carries a FAT El Torito ESP. The built-in test app is the
-    // fallback (no ISO, not FAT, or no loader present).
-    let iso_entry = raynu_f_stage_iso_bootloader(&layout, ram_hpa);
-    let (entry, image_handle) = match iso_entry {
-        Some(e) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
-        None => (loaded.entry, plan.rcx),
+    // F7: prefer the install disk's GPT ESP when present (second boot after
+    // setup-disk). First boot the disk is zeros, so El Torito still wins.
+    // `raynu_f_boot_source` is the pure decision; the stager still runs on a
+    // written non-GPT disk so it can print one honest F7 line.
+    RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
+    let disk_has = crate::raynu_f::disk_has_gpt_esp(&DiskFatVol { base: 0 });
+    let try_disk = crate::raynu_f::raynu_f_boot_source(disk_has)
+        == crate::raynu_f::BootSource::Disk
+        || crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
+    let disk_entry = if try_disk {
+        raynu_f_stage_disk_bootloader(&layout, ram_hpa)
+    } else {
+        None
+    };
+    let iso_entry = if disk_entry.is_none() {
+        raynu_f_stage_iso_bootloader(&layout, ram_hpa)
+    } else {
+        None
+    };
+    let (entry, image_handle) = match (disk_entry, iso_entry) {
+        (Some(e), _) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+        (None, Some(e)) => (e, crate::raynu_f::protocol::HANDLE_IMAGE),
+        (None, None) => (loaded.entry, plan.rcx),
     };
     // Stack (zeroed; RSP slot holds a 0 return address) and GDT just above it.
     let sb = plan.stack_base as usize;
@@ -6441,7 +6459,9 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     write_hex(plan.rdx);
     serial::write_str(" relocs=");
     write_dec(u64::from(loaded.relocs_applied));
-    serial::write_str(if iso_entry.is_some() {
+    serial::write_str(if disk_entry.is_some() {
+        " image=DISK-BOOTX64"
+    } else if iso_entry.is_some() {
         " image=ISO-BOOTX64"
     } else {
         " image=test-app"
@@ -6581,6 +6601,20 @@ impl crate::raynu_f::fat::VolumeRead for IsoFatVol<'_> {
     }
 }
 
+/// `VolumeRead` over the virtio-blk install disk. `base` is a byte offset
+/// (0 for GPT, ESP start for FAT).
+#[cfg(target_os = "uefi")]
+struct DiskFatVol {
+    base: u64,
+}
+
+#[cfg(target_os = "uefi")]
+impl crate::raynu_f::fat::VolumeRead for DiskFatVol {
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> bool {
+        crate::devices::guest_virtio_blk::raynu_f_disk_read(self.base.saturating_add(off), buf)
+    }
+}
+
 /// `GuestMem` over the identity-mapped guest slab (F5 launch-time loading).
 #[cfg(target_os = "uefi")]
 struct SlabMem {
@@ -6628,96 +6662,22 @@ impl crate::raynu_f::GuestMem for SlabMem {
     }
 }
 
-/// F5: mount the FAT ESP inside the retained ISO's El Torito boot image and
-/// stage its `\EFI\BOOT\BOOTX64.EFI` as the guest image. Returns the loaded
-/// entry point on success; `None` leaves the built-in test app as the guest.
+/// Stage a resolved FAT file into pool pages and `load_pe32plus`. Shared by
+/// the ISO El Torito path and the F7 disk ESP path.
 #[cfg(target_os = "uefi")]
-unsafe fn raynu_f_stage_iso_bootloader(
+unsafe fn raynu_f_stage_bootloader_from_volume<R: crate::raynu_f::fat::VolumeRead>(
+    vol: &crate::raynu_f::fat::FatVolume,
+    reader: &R,
+    entry: crate::raynu_f::fat::FatEntry,
     layout: &crate::raynu_f::FirmwareImageLayout,
     ram_hpa: u64,
+    kind: &str,
+    note: &str,
 ) -> Option<u64> {
-    let iso = raynu_f_cd_bytes()?;
-    let et = match crate::mgmt::el_torito::parse_el_torito(iso) {
-        Ok(v) => v,
-        Err(_) => {
-            serial::write_line("boot: RayNu-F no El Torito catalog in ISO (test app stays)");
-            return None;
-        }
-    };
-    let fat_off = u64::from(et.load_lba) * crate::mgmt::el_torito::ISO_SECTOR as u64;
-    let mut boot = [0u8; 512];
-    let vol_reader = IsoFatVol { iso, base: fat_off };
-    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
-        serial::write_line("boot: RayNu-F El Torito extent outside ISO (test app stays)");
-        return None;
-    }
-    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
-        Ok(v) => v,
-        Err(_) => {
-            serial::write_str("boot: RayNu-F El Torito image is not FAT lba=");
-            write_dec(u64::from(et.load_lba));
-            serial::write_line(" (test app stays)");
-            return None;
-        }
-    };
-    // SAFETY: BSP-only firmware state; guest not yet launched.
-    // KANI-TARGET: RayNu-F FS mount (outside Proven Core).
-    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
-    st.fs.volume = Some(vol);
-    st.fat_volume_off = fat_off;
-    st.file_proto_base = layout.file_proto_base;
-    st.sfs = layout.sfs;
-    st.loaded_image_proto = layout.loaded_image;
-    st.system_table = layout.system_table;
-    let _ = st.protocols.install(
-        crate::raynu_f::HANDLE_CD,
-        crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
-        layout.sfs,
-    );
-    // A loader reads LoadedImage->DeviceHandle and its device path to find the
-    // volume it booted from; publish a well-formed Media/CD-ROM path.
-    let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
-    crate::raynu_f::protocol::encode_cd_device_path(
-        1,
-        u64::from(et.load_lba),
-        u64::from(et.sector_count),
-        &mut dp,
-    );
-    let mem_dp = SlabMem { hpa: ram_hpa, len: GUEST_UEFI_LOW_RAM_BYTES };
-    if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
-        st.device_path = layout.device_path;
-        st.device_handle = crate::raynu_f::HANDLE_CD;
-        let _ = st.protocols.install(
-            crate::raynu_f::HANDLE_CD,
-            crate::raynu_f::protocol::GUID_DEVICE_PATH,
-            layout.device_path,
-        );
-    }
-    serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
-    write_dec(u64::from(et.load_lba));
-    serial::write_str(" efi=");
-    write_dec(et.efi as u64);
-    serial::write_line(" (F5; not ISO-INSTALL-OK)");
-
-    let entry = match crate::raynu_f::fat::resolve_path(
-        &vol,
-        &vol_reader,
-        b"\\EFI\\BOOT\\BOOTX64.EFI",
-    ) {
-        Ok(e) => e,
-        Err(_) => {
-            serial::write_line(
-                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the ESP (test app stays)",
-            );
-            return None;
-        }
-    };
     let size = u64::from(entry.size);
-    serial::write_str("boot: RayNu-F found \\EFI\\BOOT\\BOOTX64.EFI bytes=");
-    write_dec(size);
-    serial::write_line(" (F5; not ISO-INSTALL-OK)");
-
-    // Stage the file, then load the image — both out of our own pool.
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F bootloader stage (outside Proven Core).
+    let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
     let mem = SlabMem {
         hpa: ram_hpa,
         len: GUEST_UEFI_LOW_RAM_BYTES,
@@ -6738,8 +6698,8 @@ unsafe fn raynu_f_stage_iso_bootloader(
     while off < size {
         let chunk = ((size - off).min(4096)) as usize;
         match crate::raynu_f::fat::read_chain(
-            &vol,
-            &vol_reader,
+            vol,
+            reader,
             entry.first_cluster,
             off,
             &mut tmp[..chunk],
@@ -6756,7 +6716,6 @@ unsafe fn raynu_f_stage_iso_bootloader(
         }
         off += chunk as u64;
     }
-    // Size the image, allocate, and load with relocations.
     let mut hdr = [0u8; 4096];
     let take = (size as usize).min(hdr.len());
     if crate::raynu_f::GuestMem::read(&mem, file_gpa, &mut hdr[..take]) != take {
@@ -6797,13 +6756,14 @@ unsafe fn raynu_f_stage_iso_bootloader(
     st.image_size = u64::from(loaded.size_of_image);
     st.image_entry = loaded.entry;
     st.image_handle = crate::raynu_f::protocol::HANDLE_IMAGE;
-    // The loader's first call is OpenProtocol(ImageHandle, LoadedImage) to
-    // find its boot volume; a directly-staged image must have it published
-    // exactly like a LoadImage'd one (nested 7ee3a3b: GRUB got NOT_FOUND).
     if !crate::raynu_f::publish_loaded_image(st, &mem, 0) {
-        serial::write_line("boot: RayNu-F WARN LoadedImage publish failed (loader may not find its volume)");
+        serial::write_line(
+            "boot: RayNu-F WARN LoadedImage publish failed (loader may not find its volume)",
+        );
     }
-    serial::write_str("boot: RayNu-F ISO bootloader staged base=0x");
+    serial::write_str("boot: RayNu-F ");
+    serial::write_str(kind);
+    serial::write_str(" bootloader staged base=0x");
     write_hex(loaded.load_base);
     serial::write_str(" entry=0x");
     write_hex(loaded.entry);
@@ -6811,8 +6771,232 @@ unsafe fn raynu_f_stage_iso_bootloader(
     write_dec(u64::from(loaded.size_of_image));
     serial::write_str(" relocs=");
     write_dec(u64::from(loaded.relocs_applied));
-    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+    serial::write_str(" ");
+    serial::write_line(note);
+    let _ = layout;
     Some(loaded.entry)
+}
+
+/// F7: mount the GPT ESP on the install disk and stage `\EFI\BOOT\BOOTX64.EFI`
+/// (fallback `\EFI\alpine\grubx64.efi`). `None` leaves El Torito / test app.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_disk_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    let disk = DiskFatVol { base: 0 };
+    let written = crate::devices::guest_virtio_blk::disk_bytes_written() != 0;
+    let esp = match crate::raynu_f::find_esp(&disk) {
+        Ok(e) => e,
+        Err(_) => {
+            if written {
+                serial::write_line(
+                    "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+                );
+            }
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F GPT ESP lba=");
+    write_dec(esp.start_lba);
+    serial::write_str(" sectors=");
+    write_dec(esp.size_lba());
+    serial::write_line(" (F7; not ISO-INSTALL-OK)");
+    let fat_off = esp.start_lba.saturating_mul(512);
+    let vol_reader = DiskFatVol { base: fat_off };
+    let mut boot = [0u8; 512];
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line(
+            "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+        );
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no GPT / no ESP / no FAT on install disk (F7; not ISO-INSTALL-OK)",
+            );
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F disk FS mount (outside Proven Core).
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.fs.volume = Some(vol);
+        st.fat_volume_off = fat_off;
+        st.fat_media_id = crate::raynu_f::MEDIA_ID_DISK;
+        st.file_proto_base = layout.file_proto_base;
+        st.sfs = layout.sfs;
+        st.loaded_image_proto = layout.loaded_image;
+        st.system_table = layout.system_table;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_DISK,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            layout.sfs,
+        );
+        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+        crate::raynu_f::protocol::encode_hd_device_path(
+            esp.partition_number,
+            esp.start_lba,
+            esp.size_lba(),
+            esp.unique_guid,
+            &mut dp,
+        );
+        let mem_dp = SlabMem {
+            hpa: ram_hpa,
+            len: GUEST_UEFI_LOW_RAM_BYTES,
+        };
+        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+            st.device_path = layout.device_path;
+            st.device_handle = crate::raynu_f::HANDLE_DISK;
+            let _ = st.protocols.install(
+                crate::raynu_f::HANDLE_DISK,
+                crate::raynu_f::protocol::GUID_DEVICE_PATH,
+                layout.device_path,
+            );
+        }
+    }
+    let paths: [&[u8]; 2] = [b"\\EFI\\BOOT\\BOOTX64.EFI", b"\\EFI\\alpine\\grubx64.efi"];
+    let mut found = None;
+    for p in paths {
+        match crate::raynu_f::fat::resolve_path(&vol, &vol_reader, p) {
+            Ok(e) => {
+                found = Some((e, p));
+                break;
+            }
+            Err(_) => {}
+        }
+    }
+    let (entry, path) = match found {
+        Some(v) => v,
+        None => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the disk ESP (F7; not ISO-INSTALL-OK)",
+            );
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F found ");
+    for &b in path {
+        serial::write_byte(b);
+    }
+    serial::write_str(" bytes=");
+    write_dec(u64::from(entry.size));
+    serial::write_line(" (F7 disk; not ISO-INSTALL-OK)");
+    let loaded = raynu_f_stage_bootloader_from_volume(
+        &vol,
+        &vol_reader,
+        entry,
+        layout,
+        ram_hpa,
+        "disk",
+        "(F7; not ISO-INSTALL-OK)",
+    )?;
+    RAYNU_F_STAGED_FROM_DISK.store(true, Ordering::Release);
+    Some(loaded)
+}
+
+/// F5: mount the FAT ESP inside the retained ISO's El Torito boot image and
+/// stage its `\EFI\BOOT\BOOTX64.EFI` as the guest image. Returns the loaded
+/// entry point on success; `None` leaves the built-in test app as the guest.
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_stage_iso_bootloader(
+    layout: &crate::raynu_f::FirmwareImageLayout,
+    ram_hpa: u64,
+) -> Option<u64> {
+    let iso = raynu_f_cd_bytes()?;
+    let et = match crate::mgmt::el_torito::parse_el_torito(iso) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_line("boot: RayNu-F no El Torito catalog in ISO (test app stays)");
+            return None;
+        }
+    };
+    let fat_off = u64::from(et.load_lba) * crate::mgmt::el_torito::ISO_SECTOR as u64;
+    let mut boot = [0u8; 512];
+    let vol_reader = IsoFatVol { iso, base: fat_off };
+    if !crate::raynu_f::fat::VolumeRead::read_at(&vol_reader, 0, &mut boot) {
+        serial::write_line("boot: RayNu-F El Torito extent outside ISO (test app stays)");
+        return None;
+    }
+    let vol = match crate::raynu_f::fat::parse_bpb(&boot) {
+        Ok(v) => v,
+        Err(_) => {
+            serial::write_str("boot: RayNu-F El Torito image is not FAT lba=");
+            write_dec(u64::from(et.load_lba));
+            serial::write_line(" (test app stays)");
+            return None;
+        }
+    };
+    // SAFETY: BSP-only firmware state; guest not yet launched.
+    // KANI-TARGET: RayNu-F FS mount (outside Proven Core).
+    {
+        let st = unsafe { &mut *core::ptr::addr_of_mut!(RAYNU_F_STATE) };
+        st.fs.volume = Some(vol);
+        st.fat_volume_off = fat_off;
+        st.fat_media_id = crate::raynu_f::MEDIA_ID_CD;
+        st.file_proto_base = layout.file_proto_base;
+        st.sfs = layout.sfs;
+        st.loaded_image_proto = layout.loaded_image;
+        st.system_table = layout.system_table;
+        let _ = st.protocols.install(
+            crate::raynu_f::HANDLE_CD,
+            crate::raynu_f::protocol::GUID_SIMPLE_FILE_SYSTEM,
+            layout.sfs,
+        );
+        // A loader reads LoadedImage->DeviceHandle and its device path to find the
+        // volume it booted from; publish a well-formed Media/CD-ROM path.
+        let mut dp = [0u8; crate::raynu_f::protocol::DEVICE_PATH_BYTES];
+        crate::raynu_f::protocol::encode_cd_device_path(
+            1,
+            u64::from(et.load_lba),
+            u64::from(et.sector_count),
+            &mut dp,
+        );
+        let mem_dp = SlabMem { hpa: ram_hpa, len: GUEST_UEFI_LOW_RAM_BYTES };
+        if crate::raynu_f::GuestMem::write(&mem_dp, layout.device_path, &dp) == dp.len() {
+            st.device_path = layout.device_path;
+            st.device_handle = crate::raynu_f::HANDLE_CD;
+            let _ = st.protocols.install(
+                crate::raynu_f::HANDLE_CD,
+                crate::raynu_f::protocol::GUID_DEVICE_PATH,
+                layout.device_path,
+            );
+        }
+    }
+    serial::write_str("boot: RayNu-F FAT ESP mounted lba=");
+    write_dec(u64::from(et.load_lba));
+    serial::write_str(" efi=");
+    write_dec(et.efi as u64);
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+
+    let entry = match crate::raynu_f::fat::resolve_path(
+        &vol,
+        &vol_reader,
+        b"\\EFI\\BOOT\\BOOTX64.EFI",
+    ) {
+        Ok(e) => e,
+        Err(_) => {
+            serial::write_line(
+                "boot: RayNu-F no \\EFI\\BOOT\\BOOTX64.EFI on the ESP (test app stays)",
+            );
+            return None;
+        }
+    };
+    serial::write_str("boot: RayNu-F found \\EFI\\BOOT\\BOOTX64.EFI bytes=");
+    write_dec(u64::from(entry.size));
+    serial::write_line(" (F5; not ISO-INSTALL-OK)");
+    raynu_f_stage_bootloader_from_volume(
+        &vol,
+        &vol_reader,
+        entry,
+        layout,
+        ram_hpa,
+        "ISO",
+        "(F5; not ISO-INSTALL-OK)",
+    )
 }
 
 /// F4: fill in real media geometry and publish `BlockIo` on the CD and disk
@@ -10292,6 +10476,9 @@ unsafe fn handle_raynu_f_service() -> bool {
                 write_hex(handle);
                 serial::write_line(" (F5; not ISO-INSTALL-OK)");
                 serial::write_line(crate::raynu_f::RAYNU_F_START_IMAGE_OK_MARKER);
+                if RAYNU_F_STAGED_FROM_DISK.load(Ordering::Acquire) {
+                    serial::write_line(crate::raynu_f::RAYNU_F_DISK_BOOT_OK_MARKER);
+                }
             }
             return true;
         }
