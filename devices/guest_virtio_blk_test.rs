@@ -6,6 +6,8 @@ use super::{
     pci_addr_selects_virtio_iso, pci_config_addr, pci_config_addr_iso, pci_config_addr_slot0,
     pci_enumerated, pci_read_data, pci_write_addr, pci_write_data, pei_host_bridge_did, present,
     process_blk_queue_in, process_iso_queue_in, queues_armed, reset, take_marker,
+    attach_disk, raynu_f_disk_read, raynu_f_disk_write, reset_keep_disk, disk_bytes,
+    disk_bytes_written,
     virtio_disk_evidence, virtio_needs_pit_over_uart, GUEST_VIRTIO_BAR0_DEFAULT,
     GUEST_VIRTIO_BAR0_SIZE_MASK, GUEST_VIRTIO_ISO_BAR0_DEFAULT, GUEST_VIRTIO_PCI_DEVICE,
     GUEST_VIRTIO_PCI_VENDOR, M7_E5_OVMF_VIRTIO_OK_MARKER, VIRTIO_BLK_F_RO, VIRTIO_BLK_S_IOERR,
@@ -1016,4 +1018,27 @@ fn mmio_decoded_len_from_bytes_when_vmcs_len_is_zero() {
         mmio_decoded_len(&[0x40, 0x89, 0x05, 0, 0, 0, 0], true),
         Some(7)
     );
+}
+
+#[test]
+fn reset_keep_disk_preserves_written_gpt() {
+    reset();
+    let mut mem = vec![0u8; 1024 * 1024];
+    // SAFETY: `mem` is exclusive for this test; attach_disk zeros then we write.
+    unsafe {
+        assert!(attach_disk(mem.as_mut_ptr() as u64, mem.len()));
+    }
+    let sig = b"EFI PART";
+    assert!(raynu_f_disk_write(512, sig));
+    let written = disk_bytes_written();
+    let len = disk_bytes();
+    assert_eq!(len, 1024 * 1024);
+    assert!(written >= 8);
+    reset_keep_disk();
+    assert_eq!(disk_bytes(), len, "DISK_LEN must survive reset_keep_disk");
+    assert_eq!(disk_bytes_written(), written);
+    let mut buf = [0u8; 8];
+    assert!(raynu_f_disk_read(512, &mut buf));
+    assert_eq!(&buf, sig);
+    reset();
 }

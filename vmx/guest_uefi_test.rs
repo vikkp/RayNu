@@ -2967,4 +2967,16 @@ fn raynu_f_linux_cea_idt_pt_walk() {
     assert!(src.contains("kern-idtr"));
     assert!(src.contains("write_str_nowait(\"boot: guest-UEFI linux syscall WRMSR"));
     assert!(src.contains("write_str_nowait(\" efer=0x\")"));
+    assert_eq!(super::RAYNU_F_RESET_MAX, 1);
+    assert_eq!(super::RAYNU_F_GDT_LIMIT, 0x27);
+    assert_eq!(super::RAYNU_F_TR_SELECTOR, 0x18);
+    let tss = super::raynu_f_tss64_desc(0x00A1_0040, super::RAYNU_F_TSS_LIMIT);
+    assert_eq!(tss[0], 0x67);
+    assert_eq!(tss[5], 0x8B, "busy 64-bit TSS");
+    assert_eq!(&tss[2..5], &[0x40, 0x00, 0xA1]);
+    assert!(src.contains("fn raynu_f_reset_relaunch"));
+    assert!(src.contains("fn raynu_f_on_guest_reset"));
+    assert!(src.contains("fn raynu_f_reset_vmcs_guest_state"));
+    assert!(src.contains("boot: RayNu-F guest reset requested src="));
+    assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
 }

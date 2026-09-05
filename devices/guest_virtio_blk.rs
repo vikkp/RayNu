@@ -337,6 +337,23 @@ pub fn reset() {
     PEI_I440FX_DID.store(true, Ordering::Release);
 }
 
+/// F7: clear virtio PCI/queue state for a guest reset while **keeping** the
+/// install disk (`DISK_HPA`/`DISK_LEN`/`BYTES_WRITTEN`) and the retained ISO
+/// (`ISO_PTR`/`ISO_LEN`/`ISO_OK`). Never call [`reset`] on this path — that
+/// drops the disk. Then [`present`] so queues re-arm if the product ISO
+/// window is still live. Not `ISO-INSTALL-OK`.
+pub fn reset_keep_disk() {
+    with_box(|b| *b = VirtioBox::empty());
+    VISIBLE.store(false, Ordering::Release);
+    PCI_ENUM.store(false, Ordering::Release);
+    MARKER.store(false, Ordering::Release);
+    QUEUES.store(false, Ordering::Release);
+    ISO_READ.store(0, Ordering::Release);
+    ISO_VISIBLE.store(false, Ordering::Release);
+    PEI_I440FX_DID.store(true, Ordering::Release);
+    let _ = present();
+}
+
 /// Mark the empty virtio-blk function live on the private guest-UEFI VMCS.
 ///
 /// Queues and modern virtio-pci caps arm only when the product ISO window

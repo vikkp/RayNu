@@ -588,6 +588,31 @@ pub fn mmio_access(gpa: u64, is_write: bool, write_val: u32) -> Option<Option<u3
     }
 }
 
+/// F7: restore power-on LAPIC statics for a RayNu-F relaunch. Does not
+/// touch EPT or the xAPIC MMIO GPA. Not `ISO-INSTALL-OK`.
+pub fn reset() {
+    // SAFETY: BSP-only guest-UEFI path; the guest is halted for relaunch.
+    // KANI-TARGET: guest-UEFI LAPIC reset (outside Proven Core).
+    unsafe {
+        APIC_ID = 0;
+        APIC_TPR = 0;
+        APIC_SVR = 0xFF | SVR_ENABLED;
+        APIC_LVT_TIMER = LVT_MASKED | 0xEF;
+        APIC_DIVIDE = 0b0011;
+        APIC_INIT_COUNT = 0;
+        APIC_ISR = [0; 8];
+        APIC_IRR = [0; 8];
+        HOST_TIMER_FOR_GUEST = false;
+        GTIMER3_OK = false;
+        GTIMER3_PRINT = false;
+        APIC_OK = false;
+        APIC_OK_PRINT = false;
+        PENDING_VECTOR = None;
+        TIMER_START_TSC = 0;
+        TIMER_RUNNING = false;
+    }
+}
+
 /// Trap x2APIC MSRs in a zeroed MSR bitmap page (read + write maps).
 ///
 /// SAFETY: `bitmap` is a writable zeroed 4K frame.

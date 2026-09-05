@@ -3749,6 +3749,10 @@ static RAYNU_F_CPUID_LOGGED: AtomicU32 = AtomicU32::new(0);
 static RAYNU_F_LINUX_HANDOFF: AtomicBool = AtomicBool::new(false);
 /// F7: staged `\EFI\BOOT\BOOTX64.EFI` came from the install-disk GPT ESP.
 static RAYNU_F_STAGED_FROM_DISK: AtomicBool = AtomicBool::new(false);
+/// F7: Linux asked for a reset (CF9/KBC); consumed by relaunch or TF.
+static RAYNU_F_RESET_PENDING: AtomicBool = AtomicBool::new(false);
+/// F7: resets taken this QEMU session. Cap [`RAYNU_F_RESET_MAX`].
+static RAYNU_F_RESET_N: AtomicU32 = AtomicU32::new(0);
 /// Sticky EFER.NXE after Linux was allowed NX this boot. Nested `2bebea7`:
 /// RayNu-F never intercepts `#PF`, so `PF_LINUX_DELIVER` stays 0 and a
 /// userspace RIP would otherwise strip NXE on the next VM-exit.
@@ -4024,6 +4028,37 @@ pub const GUEST_UEFI_MTRR_VAR_MSRS: usize = 64;
 /// Iron `44c56db`: VMCLEAR left `GUEST_IA32_PAT=0`; Xeon VM-entry LOAD_PAT
 /// then PA0=UC vs MTRR WB and CpuDxe ASSERTs `callerrip=0x1d25193`.
 pub const IA32_PAT_RESET: u64 = 0x0007_0406_0007_0406;
+
+/// F7: GDT limit with null + 64-bit code + data + 16-byte TSS descriptor.
+pub const RAYNU_F_GDT_LIMIT: u64 = 0x27;
+/// F7: TR selector — TSS descriptor at GDT offset 0x18.
+pub const RAYNU_F_TR_SELECTOR: u64 = 0x18;
+/// F7: 64-bit TSS body lives at `stack_top + this`.
+pub const RAYNU_F_TSS_OFF: u64 = 0x40;
+/// F7: TSS limit (104-byte 64-bit TSS).
+pub const RAYNU_F_TSS_LIMIT: u32 = 0x67;
+/// F7: VMCS TR access rights — busy 32/64-bit TSS (type 11).
+pub const RAYNU_F_TR_AR: u64 = 0x008B;
+/// F7: at most one guest reset per QEMU session.
+pub const RAYNU_F_RESET_MAX: u32 = 1;
+
+/// F7: 16-byte IA-32e TSS descriptor (P=1, DPL=0, type=11 busy). Host-tested.
+pub fn raynu_f_tss64_desc(base: u64, limit: u32) -> [u8; 16] {
+    let mut d = [0u8; 16];
+    d[0] = limit as u8;
+    d[1] = (limit >> 8) as u8;
+    d[2] = base as u8;
+    d[3] = (base >> 8) as u8;
+    d[4] = (base >> 16) as u8;
+    d[5] = 0x8B;
+    d[6] = ((limit >> 16) & 0x0F) as u8;
+    d[7] = (base >> 24) as u8;
+    d[8] = (base >> 32) as u8;
+    d[9] = (base >> 40) as u8;
+    d[10] = (base >> 48) as u8;
+    d[11] = (base >> 56) as u8;
+    d
+}
 
 /// PAT memory type at `pa_index` 0..7 (3 bits each, 8-bit stride).
 pub fn ia32_pat_memory_type(pat: u64, pa_index: u32) -> u64 {
@@ -5547,6 +5582,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         || basic == EXIT_REASON_VMENTRY_GUEST_STATE
         || basic == EXIT_REASON_VMENTRY_MSR_LOAD;
     let tf = basic == EXIT_REASON_TRIPLE_FAULT;
+    if tf
+        && RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire)
+        && crate::devices::ide_cdrom::product_iso_window_armed()
+        && RAYNU_F_RESET_PENDING.load(Ordering::Acquire)
+    {
+        // Linux tried KBC/CF9 then triple-faulted. Treat as the reset, not a dump.
+        raynu_f_reset_relaunch(crate::devices::guest_platform::ResetSrc::Tf);
+    }
     let fetch_fail = basic == EXIT_REASON_EPT_VIOLATION && gpa == GUEST_UEFI_RESET_VECTOR_GPA;
     let linear = cs_base.wrapping_add(rip);
     LAST_LINEAR.store(linear, Ordering::Release);
@@ -6270,8 +6313,9 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
 
 /// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
 /// test app in long mode. No new allocations: identity PTs, tables, app,
-/// stack, and a 3-entry GDT are written into the slab we already own.
-/// Never returns; failures print a reason and leave to E4.
+/// stack, and a GDT (null + 64-bit code + data + 16-byte TSS) are written
+/// into the slab we already own. Never returns; failures print a reason
+/// and leave to E4.
 #[cfg(target_os = "uefi")]
 unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     use crate::raynu_f::{
@@ -6372,62 +6416,16 @@ unsafe fn raynu_f_launch_on_stopped_vmcs() -> ! {
     for b in slab[sb..st + 4096].iter_mut() {
         *b = 0;
     }
-    // GDT: null, 64-bit code (G L P S code RA), flat data (G B P S data WA).
+    // GDT: null, 64-bit code (G L P S code RA), flat data (G B P S data WA),
+    // 16-byte busy TSS at 0x18 (F7: leftover Linux TR is invalid vs a 3-entry GDT).
     slab[st + 8..st + 16].copy_from_slice(&0x00AF_9B00_0000_FFFFu64.to_le_bytes());
     slab[st + 16..st + 24].copy_from_slice(&0x00CF_9300_0000_FFFFu64.to_le_bytes());
+    let tss_base = plan.stack_top + RAYNU_F_TSS_OFF;
+    let tss_desc = raynu_f_tss64_desc(tss_base, RAYNU_F_TSS_LIMIT);
+    slab[st + 24..st + 40].copy_from_slice(&tss_desc);
 
     // Long-mode guest state overlay on the already-programmed VMCS.
-    let cr0_fixed0 = cpu::rdmsr(IA32_VMX_CR0_FIXED0);
-    let cr0_fixed1 = cpu::rdmsr(IA32_VMX_CR0_FIXED1);
-    let cr0 = (plan.cr0 | cr0_fixed0) & cr0_fixed1;
-    let cr4 = guest_cr4_real() | plan.cr4;
-    let entry_ctls = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
-    let ok = [
-        ops::vmwrite(GUEST_CR0, cr0),
-        ops::vmwrite(GUEST_CR3, plan.cr3),
-        ops::vmwrite(GUEST_CR4, cr4),
-        ops::vmwrite(GUEST_IA32_EFER, plan.efer),
-        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry_ctls, true)),
-        ops::vmwrite(GUEST_CS_SELECTOR, 0x08),
-        ops::vmwrite(GUEST_SS_SELECTOR, 0x10),
-        ops::vmwrite(GUEST_DS_SELECTOR, 0x10),
-        ops::vmwrite(GUEST_ES_SELECTOR, 0x10),
-        ops::vmwrite(GUEST_FS_SELECTOR, 0x10),
-        ops::vmwrite(GUEST_GS_SELECTOR, 0x10),
-        ops::vmwrite(GUEST_CS_BASE, 0),
-        ops::vmwrite(GUEST_SS_BASE, 0),
-        ops::vmwrite(GUEST_DS_BASE, 0),
-        ops::vmwrite(GUEST_ES_BASE, 0),
-        ops::vmwrite(GUEST_FS_BASE, 0),
-        ops::vmwrite(GUEST_GS_BASE, 0),
-        ops::vmwrite(GUEST_CS_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_SS_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_DS_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_ES_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_FS_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_GS_LIMIT, 0xFFFF_FFFF),
-        ops::vmwrite(GUEST_CS_ACCESS_RIGHTS, plan.cs_ar),
-        ops::vmwrite(GUEST_SS_ACCESS_RIGHTS, plan.ds_ar),
-        ops::vmwrite(GUEST_DS_ACCESS_RIGHTS, plan.ds_ar),
-        ops::vmwrite(GUEST_ES_ACCESS_RIGHTS, plan.ds_ar),
-        ops::vmwrite(GUEST_FS_ACCESS_RIGHTS, plan.ds_ar),
-        ops::vmwrite(GUEST_GS_ACCESS_RIGHTS, plan.ds_ar),
-        ops::vmwrite(GUEST_GDTR_BASE, plan.stack_top),
-        ops::vmwrite(GUEST_GDTR_LIMIT, 0x17),
-        ops::vmwrite(GUEST_IDTR_BASE, 0),
-        ops::vmwrite(GUEST_IDTR_LIMIT, 0),
-        ops::vmwrite(GUEST_RIP, entry),
-        ops::vmwrite(GUEST_RSP, plan.rsp),
-        ops::vmwrite(GUEST_RFLAGS, plan.rflags),
-        ops::vmwrite(GUEST_ACTIVITY_STATE, 0),
-        ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0),
-        ops::vmwrite(GUEST_PENDING_DBG_EXCEPTIONS, 0),
-        // Every guest exception exits to us for a precise first-fault dump.
-        ops::vmwrite(EXCEPTION_BITMAP, 0xFFFF_FFFF),
-        ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0),
-        ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS),
-    ];
-    if ok.iter().any(|r| r.is_err()) {
+    if !raynu_f_reset_vmcs_guest_state(&plan, entry) {
         serial::write_line("boot: RayNu-F launch failed: VMWRITE overlay (F2b)");
         let _ = ops::vmclear(vmcs);
         leave_to_e4();
@@ -6529,6 +6527,317 @@ unsafe fn raynu_f_linux_handoff() {
     serial::write_str(" svc=");
     write_dec(u64::from(RAYNU_F_CALLS.load(Ordering::Acquire)));
     serial::write_line(" (F6b; not ISO-INSTALL-OK)");
+}
+
+/// F7: classify a Linux reset request, print the serial line, cap at one
+/// relaunch, then jump to [`raynu_f_reset_relaunch`].
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_on_guest_reset(src: crate::devices::guest_platform::ResetSrc) -> ! {
+    RAYNU_F_RESET_PENDING.store(true, Ordering::Release);
+    let n = RAYNU_F_RESET_N.fetch_add(1, Ordering::AcqRel) + 1;
+    serial::write_str("boot: RayNu-F guest reset requested src=");
+    serial::write_str(src.as_str());
+    serial::write_str(" n=");
+    write_dec(u64::from(n));
+    serial::write_line(" (F7; not ISO-INSTALL-OK)");
+    if n > RAYNU_F_RESET_MAX {
+        raynu_f_stop("reset-cap");
+    }
+    raynu_f_reset_relaunch(src);
+}
+
+/// F7: VMCS guest-state overlay for RayNu-F long-mode entry.
+///
+/// First launch ran on a VMCS left by halted OVMF (TR selector 0 was
+/// tolerated). After 64-bit Linux the leftover TR/GDT/EFER/exception
+/// bitmap/CR masks are illegal vs the firmware GDT we install. This
+/// writes every field launch assumes. Called from the one launch path
+/// (first boot and F7 relaunch).
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reset_vmcs_guest_state(plan: &crate::raynu_f::LaunchPlan, entry: u64) -> bool {
+    let cr0_fixed0 = cpu::rdmsr(IA32_VMX_CR0_FIXED0);
+    let cr0_fixed1 = cpu::rdmsr(IA32_VMX_CR0_FIXED1);
+    let cr0 = (plan.cr0 | cr0_fixed0) & cr0_fixed1;
+    let cr4 = guest_cr4_real() | plan.cr4;
+    let entry_ctls = ops::vmread(VM_ENTRY_CONTROLS).unwrap_or(0);
+    let tss_base = plan.stack_top + RAYNU_F_TSS_OFF;
+    let ok = [
+        ops::vmwrite(GUEST_CR0, cr0),
+        ops::vmwrite(GUEST_CR3, plan.cr3),
+        ops::vmwrite(GUEST_CR4, cr4),
+        ops::vmwrite(GUEST_IA32_EFER, plan.efer),
+        ops::vmwrite(VM_ENTRY_CONTROLS, guest_uefi_ia32e_entry_ctls(entry_ctls, true)),
+        ops::vmwrite(GUEST_CS_SELECTOR, 0x08),
+        ops::vmwrite(GUEST_SS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_DS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_ES_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_FS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_GS_SELECTOR, 0x10),
+        ops::vmwrite(GUEST_CS_BASE, 0),
+        ops::vmwrite(GUEST_SS_BASE, 0),
+        ops::vmwrite(GUEST_DS_BASE, 0),
+        ops::vmwrite(GUEST_ES_BASE, 0),
+        ops::vmwrite(GUEST_FS_BASE, 0),
+        ops::vmwrite(GUEST_GS_BASE, 0),
+        ops::vmwrite(GUEST_CS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_SS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_DS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_ES_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_FS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_GS_LIMIT, 0xFFFF_FFFF),
+        ops::vmwrite(GUEST_CS_ACCESS_RIGHTS, plan.cs_ar),
+        ops::vmwrite(GUEST_SS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_DS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_ES_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_FS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_GS_ACCESS_RIGHTS, plan.ds_ar),
+        ops::vmwrite(GUEST_LDTR_SELECTOR, 0),
+        ops::vmwrite(GUEST_LDTR_BASE, 0),
+        ops::vmwrite(GUEST_LDTR_LIMIT, 0),
+        ops::vmwrite(GUEST_LDTR_ACCESS_RIGHTS, 1 << 16),
+        ops::vmwrite(GUEST_TR_SELECTOR, RAYNU_F_TR_SELECTOR),
+        ops::vmwrite(GUEST_TR_BASE, tss_base),
+        ops::vmwrite(GUEST_TR_LIMIT, u64::from(RAYNU_F_TSS_LIMIT)),
+        ops::vmwrite(GUEST_TR_ACCESS_RIGHTS, RAYNU_F_TR_AR),
+        ops::vmwrite(GUEST_GDTR_BASE, plan.stack_top),
+        ops::vmwrite(GUEST_GDTR_LIMIT, RAYNU_F_GDT_LIMIT),
+        ops::vmwrite(GUEST_IDTR_BASE, 0),
+        ops::vmwrite(GUEST_IDTR_LIMIT, 0),
+        ops::vmwrite(GUEST_RIP, entry),
+        ops::vmwrite(GUEST_RSP, plan.rsp),
+        ops::vmwrite(GUEST_RFLAGS, plan.rflags),
+        ops::vmwrite(GUEST_DR7, 0x400),
+        ops::vmwrite(GUEST_IA32_PAT, IA32_PAT_RESET),
+        ops::vmwrite(GUEST_IA32_SYSENTER_CS, 0),
+        ops::vmwrite(GUEST_IA32_SYSENTER_ESP, 0),
+        ops::vmwrite(GUEST_IA32_SYSENTER_EIP, 0),
+        ops::vmwrite(GUEST_ACTIVITY_STATE, 0),
+        ops::vmwrite(GUEST_INTERRUPTIBILITY_STATE, 0),
+        ops::vmwrite(GUEST_PENDING_DBG_EXCEPTIONS, 0),
+        ops::vmwrite(EXCEPTION_BITMAP, 0xFFFF_FFFF),
+        ops::vmwrite(VM_ENTRY_INTERRUPTION_INFO, 0),
+        ops::vmwrite(CR0_GUEST_HOST_MASK, 0),
+        ops::vmwrite(CR4_GUEST_HOST_MASK, GUEST_UEFI_CR4_HOST_OWNED),
+        ops::vmwrite(VMX_PREEMPTION_TIMER_VALUE, VMX_PREEMPTION_TIMER_TICKS),
+    ];
+    ok.iter().all(|r| r.is_ok())
+}
+
+/// F7: re-apply captured host XCR0/CR4.OSXSAVE without marking restored.
+/// `leave_to_e4` still needs [`restore_host_xsave_after_guest_uefi`].
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reapply_host_xsave() {
+    if !HOST_XSAVE_CAPTURED.load(Ordering::Acquire) {
+        return;
+    }
+    let host_mask = {
+        let r = cpu::cpuid(0xD, 0);
+        ((r.edx as u64) << 32) | (r.eax as u64)
+    };
+    let want = e4_restore_xcr0_value(HOST_XCR0_SAVED.load(Ordering::Acquire), true, host_mask);
+    let had_osxsave = HOST_OSXSAVE_SAVED.load(Ordering::Acquire) != 0;
+    let cr4 = cpu::read_cr4();
+    if cr4 & cpu::CR4_OSXSAVE == 0 {
+        // SAFETY: OSXSAVE is not CR4-fixed0-forbidden; required for XSETBV.
+        // KANI-TARGET: RayNu-F F7 reapply host OSXSAVE (outside Proven Core).
+        cpu::write_cr4(cr4 | cpu::CR4_OSXSAVE);
+    }
+    // SAFETY: CR4.OSXSAVE is set; want is masked to CPUID.0D:0 with x87 set.
+    // KANI-TARGET: RayNu-F F7 reapply host XCR0 (outside Proven Core).
+    cpu::xsetbv(0, want);
+    let after = e4_restore_cr4_osxsave(cpu::read_cr4(), had_osxsave);
+    if after != cpu::read_cr4() {
+        // SAFETY: OSXSAVE restored to the captured host value.
+        // KANI-TARGET: RayNu-F F7 reapply host CR4.OSXSAVE (outside Proven Core).
+        cpu::write_cr4(after);
+    }
+}
+
+/// F7: guest reset → RayNu-F relaunch with the install disk preserved.
+///
+/// RESET / KEEP / N/A for `vmx/guest_uefi.rs` statics (~3609–3906) and
+/// device globals:
+///
+/// | Symbol | Class | Why |
+/// |---|---|---|
+/// | `RAYNU_F_STATE` | RESET | `FirmwareState::new()` — firmware phase starts over |
+/// | `RAYNU_F_MODE` | RESET | launch sets true |
+/// | `RAYNU_F_LINUX_HANDOFF` | RESET | false until next EBS |
+/// | `LINUX_EFER_NX_HOLD` | RESET | false until next EBS |
+/// | `RAYNU_F_EXITS/CALLS/SVC_ERRS/ENTRY` | RESET | firmware counters |
+/// | `RAYNU_F_*_LOGGED` (CONOUT/TIMER/MEM/EBS/BLOCKIO/FS/START_IMAGE) | RESET | DISK-BOOT-OK must print again |
+/// | `RAYNU_F_STAGED_FROM_DISK` | RESET | launch decides disk vs ISO |
+/// | `RAYNU_F_START_CTX` / `PENDING_RX` / `CLOCK_WARNED` | RESET | StartImage/ConIn latches |
+/// | `RAYNU_F_CPUID_LOGGED` | RESET | firmware CPUID log cap |
+/// | `SAVED_RAX`…`SAVED_R15` / `SAVED_XMM` | RESET | launch preloads RCX/RDX |
+/// | `EXIT_COUNT` / `NON_TF_EXITS` / `DXE_AT_N` / `ATAPI_AT_N` | RESET | product-ISO resume cap headroom |
+/// | Linux latches (`PF_LINUX_*`, `LINUX_*`, `UART_HPET_LOG`) | RESET | second boot logs |
+/// | `FIRMWARE_*` WFE/ConIn/PIT | RESET | leftover OVMF forcing |
+/// | `INJECT_N` / `HLT_*` / `SPIN_*` / `CR_ACCESSES` / `PCI_BDF_*` / `LAST_*` | RESET | diagnostics |
+/// | `IO_UNHANDLED_N` / `HPET_TICKS` / `PREEMPT_*` / `IO_STRING_N` / `KBC_WR_N` | RESET | diagnostics |
+/// | `MSR_SEEN*` / `WRMSR_SEEN*` / `CPUID_SEEN*` / `DBG_*` / `LAST_EFER` | RESET | diagnostics |
+/// | `CONTINUE_GUEST` | RESET | not mid-resume |
+/// | `RAYNU_F_RESET_PENDING` | RESET | consumed |
+/// | `MTRR`/`MISC_ENABLE` shadows | RESET | `guest_uefi_mtrr_reset` |
+/// | `guest_uart` / `guest_irq` / `guest_platform` | RESET | `guest_platform::reset` (does not drop ide_cdrom window or PCI BAR we need for virtio re-enum) |
+/// | `lapic_virt` | RESET | `lapic_virt::reset` |
+/// | virtio queues/PCI | RESET | `reset_keep_disk` then `present` |
+/// | `guest_serial_answer` | RESET | `reset` (uart reset also calls this; second-boot flag is Step D) |
+/// | `serial` earlycon/high-half share | RESET | false until next Linux |
+/// | `SAVED_VMCS` | KEEP | same private VMCS |
+/// | `RAM_HPA` | KEEP | same 32 MiB slab (contents zeroed, then launch rebuilds) |
+/// | `EPT_PML4` / `SINK_HPA` / `HOLE_ZERO_HPA` / `MMIO_SCRATCH_*` / `REPORT_RAM_*` | KEEP | EPT maps; do not zero 1 GiB extra |
+/// | `FLASH_HPA`/`FLASH_LEN` | KEEP | retained OVMF copy unused on this path |
+/// | `E4_ALLOC`/`E4_LIFE`/`E4_RSP`/`E4_RESUME` | KEEP | leave_to_e4 continuation |
+/// | `HOST_XCR0_SAVED` / `HOST_OSXSAVE_SAVED` / `HOST_XSAVE_CAPTURED` | KEEP | do **not** set `HOST_XSAVE_RESTORED` |
+/// | `RAYNU_F_RAN` | KEEP | relaunch calls launch directly |
+/// | `RAYNU_F_RESET_N` | KEEP | cap across the session |
+/// | `MARKER_PRINTED` / El Torito / DXE/BOTH/ATAPI one-shots | KEEP | do not re-print OVMF markers |
+/// | `SEC_IDENTITY_REBUILT` / `CPU_FLUSH_*` / `LIVE_*_PT` | KEEP | EPT already painted |
+/// | `ide_cdrom` product-ISO window | KEEP | do not call `ide_cdrom::reset` |
+/// | `DISK_HPA`/`DISK_LEN`/`BYTES_WRITTEN` / `ISO_PTR`/`ISO_LEN`/`ISO_OK` | KEEP | `reset_keep_disk` |
+/// | `guest_virtio_blk::reset` | N/A | **must not** call — it clears the disk |
+/// | Proven Core / EPT builders | N/A | not touched |
+///
+/// Zeroes the low-RAM slab (`GUEST_UEFI_LOW_RAM_BYTES`) then
+/// [`raynu_f_launch_on_stopped_vmcs`] (it `vmclear`s/`vmptrld`s first).
+#[cfg(target_os = "uefi")]
+unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc) -> ! {
+    serial::write_line("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)");
+    RAYNU_F_RESET_PENDING.store(false, Ordering::Release);
+    RAYNU_F_MODE.store(false, Ordering::Release);
+    RAYNU_F_LINUX_HANDOFF.store(false, Ordering::Release);
+    LINUX_EFER_NX_HOLD.store(false, Ordering::Release);
+    serial::set_linux_earlycon_share(false);
+    serial::set_linux_high_half(false);
+    RAYNU_F_EXITS.store(0, Ordering::Release);
+    RAYNU_F_CALLS.store(0, Ordering::Release);
+    RAYNU_F_SVC_ERRS.store(0, Ordering::Release);
+    RAYNU_F_ENTRY.store(0, Ordering::Release);
+    RAYNU_F_CONOUT_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_TIMER_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_MEM_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_EBS_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_BLOCKIO_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_FS_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_START_IMAGE_LOGGED.store(false, Ordering::Release);
+    RAYNU_F_STAGED_FROM_DISK.store(false, Ordering::Release);
+    RAYNU_F_CPUID_LOGGED.store(0, Ordering::Release);
+    RAYNU_F_CLOCK_WARNED.store(false, Ordering::Release);
+    RAYNU_F_PENDING_RX.store(0x100, Ordering::Release);
+    RAYNU_F_START_CTX.rsp.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rbx.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rbp.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rsi.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.rdi.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r12.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r13.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r14.store(0, Ordering::Release);
+    RAYNU_F_START_CTX.r15.store(0, Ordering::Release);
+    EXIT_COUNT.store(0, Ordering::Release);
+    NON_TF_EXITS.store(0, Ordering::Release);
+    DXE_AT_N.store(0, Ordering::Release);
+    ATAPI_AT_N.store(0, Ordering::Release);
+    CONTINUE_GUEST.store(false, Ordering::Release);
+    INJECT_N.store(0, Ordering::Release);
+    HLT_SKIPS.store(0, Ordering::Release);
+    HLT_STALL_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_INJECT_LOGGED.store(false, Ordering::Release);
+    WAIT_FOR_IRQ_LOGGED.store(false, Ordering::Release);
+    SKIP_AFTER_ONESHOT_LOGGED.store(false, Ordering::Release);
+    FIRMWARE_PIT_ONESHOT.store(false, Ordering::Release);
+    FIRMWARE_CONIN_CR.store(false, Ordering::Release);
+    FIRMWARE_WFE_RETURN.store(false, Ordering::Release);
+    FIRMWARE_WFE_STATE4.store(false, Ordering::Release);
+    FIRMWARE_WFE_EVENT_PF.store(false, Ordering::Release);
+    FIRMWARE_ZEROMEM_EPT.store(false, Ordering::Release);
+    SPIN_JMP_SKIPS.store(0, Ordering::Release);
+    LAST_PREEMPT_RIP.store(u64::MAX, Ordering::Release);
+    PREEMPT_SAME_RIP.store(0, Ordering::Release);
+    CR_ACCESSES.store(0, Ordering::Release);
+    PCI_BDF_SEEN0.store(0, Ordering::Release);
+    PCI_BDF_SEEN1.store(0, Ordering::Release);
+    PCI_BDF_SEEN2.store(0, Ordering::Release);
+    PCI_BDF_SEEN3.store(0, Ordering::Release);
+    LAST_IO_PORT.store(0, Ordering::Release);
+    LAST_CF8.store(0, Ordering::Release);
+    LAST_CF8_EN.store(0, Ordering::Release);
+    LAST_CF8_IDE.store(0, Ordering::Release);
+    LAST_HLT_RET.store(0, Ordering::Release);
+    LAST_HLT_CALL.store(0, Ordering::Release);
+    HPET_TICKS.store(0, Ordering::Release);
+    LAST_HPET_TSC.store(0, Ordering::Release);
+    PREEMPT_RELOAD.store(0, Ordering::Release);
+    IO_UNHANDLED_N.store(0, Ordering::Release);
+    MMIO_INSN_LEN.store(0, Ordering::Relaxed);
+    FWCFG_OVERLAY_PENDING.store(false, Ordering::Release);
+    FWCFG_OVERLAY_GPA.store(0, Ordering::Release);
+    FWCFG_OVERLAY_N.store(0, Ordering::Release);
+    IO_STRING_N.store(0, Ordering::Release);
+    KBC_WR_N.store(0, Ordering::Release);
+    XSETBV_N.store(0, Ordering::Release);
+    UD_XSAVE_RETRY.store(0, Ordering::Release);
+    UD2_SKIPS.store(0, Ordering::Release);
+    ASSERT_DEADLOOP_DUMP.store(0, Ordering::Release);
+    PF_FIXUPS.store(0, Ordering::Release);
+    PF_LINUX_DELIVER.store(0, Ordering::Release);
+    PF_LINUX_CR2.store(0, Ordering::Release);
+    LINUX_EXC_INJECT.store(false, Ordering::Release);
+    LINUX_CPUID.store(0, Ordering::Release);
+    LINUX_HV_SCAN_BUMP.store(false, Ordering::Release);
+    LINUX_DELAY_LOOP_SKIP.store(false, Ordering::Release);
+    UART_HPET_LOG.store(false, Ordering::Release);
+    LINUX_VIRTIO_DRIVER_OK_LOG.store(false, Ordering::Release);
+    LINUX_PIC_IRQ0_LOG.store(false, Ordering::Release);
+    LINUX_GSI2_LOG.store(false, Ordering::Release);
+    LINUX_LEAF4.store(0, Ordering::Release);
+    LINUX_SKIP2.store(0, Ordering::Release);
+    LINUX_UNHANDLED_SKIP.store(0, Ordering::Release);
+    LINUX_INVLPG_MISS.store(0, Ordering::Release);
+    MSR_SEEN_N.store(0, Ordering::Release);
+    WRMSR_SEEN_N.store(0, Ordering::Release);
+    LAST_GUEST_MSR.store(0, Ordering::Release);
+    LAST_EFER.store(0, Ordering::Release);
+    CPUID_SEEN_N.store(0, Ordering::Release);
+    DBG_LEN.store(0, Ordering::Release);
+    DBG_LINES.store(0, Ordering::Release);
+    SAVED_RAX = 0;
+    SAVED_RBX = 0;
+    SAVED_RCX = 0;
+    SAVED_RDX = 0;
+    SAVED_RSI = 0;
+    SAVED_RDI = 0;
+    SAVED_RBP = 0;
+    SAVED_R8 = 0;
+    SAVED_R9 = 0;
+    SAVED_R10 = 0;
+    SAVED_R11 = 0;
+    SAVED_R12 = 0;
+    SAVED_R13 = 0;
+    SAVED_R14 = 0;
+    SAVED_R15 = 0;
+    SAVED_XMM = SavedXmm([0; 256]);
+    // SAFETY: BSP-only firmware state; guest is halted for relaunch.
+    // KANI-TARGET: RayNu-F F7 FirmwareState reset (outside Proven Core).
+    RAYNU_F_STATE = crate::raynu_f::FirmwareState::new();
+    guest_uefi_mtrr_reset();
+    crate::devices::guest_platform::reset();
+    crate::devices::lapic_virt::reset();
+    crate::devices::guest_virtio_blk::reset_keep_disk();
+    // Step D replaces this with `begin_second_boot` (second-boot flag).
+    crate::devices::guest_serial_answer::reset();
+    raynu_f_reapply_host_xsave();
+    let ram_hpa = RAM_HPA.load(Ordering::Acquire);
+    if ram_hpa != 0 {
+        // SAFETY: exclusive guest-firmware slab; guest is halted.
+        // KANI-TARGET: RayNu-F F7 slab zero (outside Proven Core).
+        core::ptr::write_bytes(
+            ram_hpa as *mut u8,
+            0,
+            GUEST_UEFI_LOW_RAM_BYTES as usize,
+        );
+    }
+    raynu_f_launch_on_stopped_vmcs();
 }
 
 /// F4: retained product ISO bytes (CD backing store), if any.
@@ -10489,6 +10798,18 @@ unsafe fn handle_raynu_f_service() -> bool {
 
 #[cfg(target_os = "uefi")]
 unsafe fn emulate_io_port(port: u16, is_in: bool, size: u64) {
+    if RAYNU_F_LINUX_HANDOFF.load(Ordering::Acquire)
+        && crate::devices::ide_cdrom::product_iso_window_armed()
+    {
+        if let Some(src) = crate::devices::guest_platform::reset_request_from_io(
+            port,
+            is_in,
+            size,
+            SAVED_RAX,
+        ) {
+            raynu_f_on_guest_reset(src);
+        }
+    }
     if is_pci_config_port(port) || crate::devices::ide_cdrom::is_pci_data_port(port) {
         PCI_CONFIG_SEEN.store(true, Ordering::Release);
         maybe_print_past_sec(false);

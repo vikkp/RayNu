@@ -20,6 +20,17 @@ fn mmio_version_readable() {
 }
 
 #[test]
+fn reset_restores_masked_lvt_and_version() {
+    assert!(wrmsr(0x80F, 0x1FF).is_some());
+    assert!(wrmsr(0x832, 0x20).is_some());
+    reset();
+    let r = mmio_access(APIC_GPA + 0x30, false, 0).unwrap().unwrap();
+    assert_eq!(r & 0xFF, 0x14);
+    let lvt = mmio_access(APIC_GPA + 0x320, false, 0).unwrap().unwrap();
+    assert_eq!(lvt & (1 << 16), 1 << 16, "LVT timer masked after reset");
+}
+
+#[test]
 fn fill_xapic_page_version_not_zero() {
     let mut page = [0u8; 4096];
     fill_xapic_page(&mut page);
