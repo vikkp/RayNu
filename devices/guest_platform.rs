@@ -1678,6 +1678,42 @@ pub fn io(port: u16, is_in: bool, size: u8, rax: u64) -> u64 {
     })
 }
 
+/// F7: architected guest-reset request (Linux `reboot=` path).
+///
+/// `0xCF9` OUT with bit 2 set (`0x04`/`0x06`/`0x0E`) or KBC `0x64` OUT `0xFE`.
+/// Not `ISO-INSTALL-OK`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetSrc {
+    Cf9,
+    Kbc,
+    Tf,
+}
+
+impl ResetSrc {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ResetSrc::Cf9 => "cf9",
+            ResetSrc::Kbc => "kbc",
+            ResetSrc::Tf => "tf",
+        }
+    }
+}
+
+/// Classify a guest I/O as a reset request. Pure; host-tested.
+pub fn reset_request_from_io(port: u16, is_in: bool, size: u64, value: u64) -> Option<ResetSrc> {
+    if is_in || size == 0 {
+        return None;
+    }
+    let lo = value as u8;
+    if port == 0xCF9 && (lo & 0x04) != 0 {
+        return Some(ResetSrc::Cf9);
+    }
+    if port == 0x64 && lo == 0xFE {
+        return Some(ResetSrc::Kbc);
+    }
+    None
+}
+
 #[cfg(test)]
 #[path = "guest_platform_test.rs"]
 mod guest_platform_test;

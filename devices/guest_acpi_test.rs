@@ -18,7 +18,7 @@ fn tables_contain_madt_with_pcat_compat() {
     assert_eq!(acpi_tables_byte(1), b'S');
     assert_eq!(acpi_tables_byte(2), b'D');
     assert_eq!(acpi_tables_byte(3), b'T');
-    let madt = 0xC0u16;
+    let madt = 0xD0u16;
     assert_eq!(acpi_tables_byte(madt), b'A');
     assert_eq!(acpi_tables_byte(madt + 1), b'P');
     assert_eq!(acpi_tables_byte(madt + 2), b'I');
@@ -36,7 +36,7 @@ fn tables_contain_madt_with_pcat_compat() {
     assert_eq!(acpi_tables_byte(madt + 65), 10);
     assert_eq!(acpi_tables_byte(madt + 67), 0, "ISA IRQ 0");
     assert_eq!(acpi_tables_byte(madt + 68), 2, "GSI 2");
-    assert_eq!(ACPI_TABLES_LEN, 0x240);
+    assert_eq!(ACPI_TABLES_LEN, 0x280);
 }
 
 #[test]
@@ -46,34 +46,83 @@ fn facp_points_at_dsdt_offset_until_linker() {
     assert_eq!(acpi_tables_byte(facp + 1), b'A');
     assert_eq!(acpi_tables_byte(facp + 2), b'C');
     assert_eq!(acpi_tables_byte(facp + 3), b'P');
-    let dsdt = u32::from(0x110u16).to_le_bytes();
+    let dsdt = u32::from(0x120u16).to_le_bytes();
     for i in 0..4 {
         assert_eq!(acpi_tables_byte(facp + 40 + i as u16), dsdt[i]);
     }
     assert_eq!(acpi_tables_byte(facp + 48), 0, "FADT SMI_CMD 0 already ACPI");
     assert_eq!(acpi_tables_byte(facp + 52), 0, "ACPI_ENABLE 0");
     assert_eq!(acpi_tables_byte(facp + 53), 0, "ACPI_DISABLE 0");
-    assert_eq!(acpi_tables_byte(0x110), b'D');
-    assert_eq!(acpi_tables_byte(0x111), b'S');
-    assert_eq!(acpi_tables_byte(0x112), b'D');
-    assert_eq!(acpi_tables_byte(0x113), b'T');
-    let facs = u32::from(0x200u16).to_le_bytes();
+    assert_eq!(acpi_tables_byte(0x120), b'D');
+    assert_eq!(acpi_tables_byte(0x121), b'S');
+    assert_eq!(acpi_tables_byte(0x122), b'D');
+    assert_eq!(acpi_tables_byte(0x123), b'T');
+    let facs = u32::from(0x240u16).to_le_bytes();
     for i in 0..4 {
         assert_eq!(acpi_tables_byte(facp + 36 + i as u16), facs[i], "FADT FACS");
     }
-    assert_eq!(acpi_tables_byte(0x200), b'F');
-    assert_eq!(acpi_tables_byte(0x201), b'A');
-    assert_eq!(acpi_tables_byte(0x202), b'C');
-    assert_eq!(acpi_tables_byte(0x203), b'S');
-    assert_eq!(acpi_tables_byte(0x204), 64, "FACS length 64");
-    assert_eq!(acpi_tables_byte(0x1F1), 0, "pad before 64-byte FACS");
+    assert_eq!(acpi_tables_byte(0x240), b'F');
+    assert_eq!(acpi_tables_byte(0x241), b'A');
+    assert_eq!(acpi_tables_byte(0x242), b'C');
+    assert_eq!(acpi_tables_byte(0x243), b'S');
+    assert_eq!(acpi_tables_byte(0x244), 64, "FACS length 64");
+    assert_eq!(acpi_tables_byte(0x201), 0, "pad before 64-byte FACS");
+}
+
+#[test]
+fn fadt_reset_register_cf9() {
+    const FACP: u16 = 0x40;
+    assert_eq!(
+        u32::from_le_bytes([
+            acpi_tables_byte(FACP + 4),
+            acpi_tables_byte(FACP + 5),
+            acpi_tables_byte(FACP + 6),
+            acpi_tables_byte(FACP + 7),
+        ]),
+        129,
+        "ACPI 2.0 FADT length covers RESET_REG + RESET_VALUE"
+    );
+    assert_eq!(acpi_tables_byte(FACP + 8), 3, "FADT revision 3");
+    let flags = u32::from_le_bytes([
+        acpi_tables_byte(FACP + 112),
+        acpi_tables_byte(FACP + 113),
+        acpi_tables_byte(FACP + 114),
+        acpi_tables_byte(FACP + 115),
+    ]);
+    assert_eq!(flags & (1 << 10), 1 << 10, "RESET_REG_SUP");
+    assert_eq!(acpi_tables_byte(FACP + 116), 1, "GAS SpaceId SystemIO");
+    assert_eq!(acpi_tables_byte(FACP + 117), 8, "GAS BitWidth");
+    assert_eq!(acpi_tables_byte(FACP + 118), 0, "GAS BitOffset");
+    assert_eq!(acpi_tables_byte(FACP + 119), 1, "GAS AccessSize byte");
+    let addr = u64::from_le_bytes([
+        acpi_tables_byte(FACP + 120),
+        acpi_tables_byte(FACP + 121),
+        acpi_tables_byte(FACP + 122),
+        acpi_tables_byte(FACP + 123),
+        acpi_tables_byte(FACP + 124),
+        acpi_tables_byte(FACP + 125),
+        acpi_tables_byte(FACP + 126),
+        acpi_tables_byte(FACP + 127),
+    ]);
+    assert_eq!(addr, 0xCF9);
+    assert_eq!(acpi_tables_byte(FACP + 128), 0x06, "RESET_VALUE");
+    assert!(FACP + 129 <= 0xD0, "129-byte FACP must not overlap MADT");
+    assert_eq!(ACPI_TABLES_LEN, 0x280);
+}
+
+#[test]
+fn acpi_tables_cover_all_offsets() {
+    assert_eq!(ACPI_TABLES_LEN, 0x280);
+    assert_eq!(acpi_tables_byte(0x240), b'F');
+    assert_eq!(acpi_tables_byte(0xD0), b'A');
+    assert_eq!(acpi_tables_byte(0x120), b'D');
 }
 
 #[test]
 fn dsdt_pci0_prt_virtio_gsi() {
     let mut body = [0u8; 225];
     for i in 0..225u16 {
-        body[i as usize] = acpi_tables_byte(0x110 + i);
+        body[i as usize] = acpi_tables_byte(0x120 + i);
     }
     assert_eq!(&body[0..4], b"DSDT");
     assert_eq!(u32::from_le_bytes(body[4..8].try_into().unwrap()), 225);

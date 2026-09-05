@@ -654,3 +654,32 @@ fn kbc_self_test_and_reset_set_obf() {
     assert_eq!(io(0x60, true, 1, 0) as u8, 0xFA);
     assert_eq!(io(0x60, true, 1, 0) as u8, 0xAA);
 }
+
+#[test]
+fn reset_request_from_io_cf9_and_kbc() {
+    use super::{reset_request_from_io, ResetSrc};
+    assert_eq!(
+        reset_request_from_io(0xCF9, false, 1, 0x06),
+        Some(ResetSrc::Cf9)
+    );
+    assert_eq!(
+        reset_request_from_io(0xCF9, false, 1, 0x0E),
+        Some(ResetSrc::Cf9)
+    );
+    assert_eq!(
+        reset_request_from_io(0xCF9, false, 1, 0x04),
+        Some(ResetSrc::Cf9)
+    );
+    assert_eq!(reset_request_from_io(0x64, false, 1, 0xFE), Some(ResetSrc::Kbc));
+    assert_eq!(reset_request_from_io(0xCF9, true, 1, 0x06), None, "IN is not reset");
+    assert_eq!(
+        reset_request_from_io(0xCF9, false, 1, 0x02),
+        None,
+        "bit 2 clear is not SYS_RST"
+    );
+    assert_eq!(reset_request_from_io(0x64, false, 1, 0xAA), None);
+    assert_eq!(reset_request_from_io(0x60, false, 1, 0xFE), None);
+    assert_eq!(ResetSrc::Cf9.as_str(), "cf9");
+    assert_eq!(ResetSrc::Kbc.as_str(), "kbc");
+    assert_eq!(ResetSrc::Tf.as_str(), "tf");
+}

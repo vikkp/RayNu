@@ -32,10 +32,12 @@ pub const ACPI_LOADER_LEN: u16 = (ACPI_LOADER_ENTRIES * 128) as u16;
 const RSDT_OFF: u16 = 0;
 const RSDT_LEN: u16 = 44;
 const FACP_OFF: u16 = 0x40;
-const FACP_LEN: u16 = 116;
-const MADT_OFF: u16 = 0xC0;
+/// ACPI 2.0 FADT (RESET_REG GAS + RESET_VALUE). ACPI 1.0 was 116 and
+/// overlapped a 129-byte FACP onto MADT at 0xC0.
+const FACP_LEN: u16 = 129;
+const MADT_OFF: u16 = 0xD0;
 const MADT_LEN: u16 = 74;
-const DSDT_OFF: u16 = 0x110;
+const DSDT_OFF: u16 = 0x120;
 /// iasl AML: PCI0 PNP0A03 + _PRT + _CRS. DSDT PCI0 _PRT. DSDT PCI0 _CRS.
 /// Not `ISO-INSTALL-OK`.
 const DSDT_LEN: u16 = 225;
@@ -121,13 +123,13 @@ fn rsdt_byte(off: u16) -> u8 {
 }
 
 fn facp_byte(off: u16) -> u8 {
-    if let Some(b) = hdr_byte(off, b"FACP", FACP_LEN, 1) {
+    if let Some(b) = hdr_byte(off, b"FACP", FACP_LEN, 3) {
         return b;
     }
     match off {
         36..=39 => u32::from(FACS_OFF).to_le_bytes()[off as usize - 36],
         40..=43 => u32::from(DSDT_OFF).to_le_bytes()[off as usize - 40],
-        44 => 1, // dual 8259
+        44 => 1, // dual 8259 / Preferred_PM_Profile
         46 => 9, // SCI
         47 => 0,
         // SMI_CMD / ACPI_ENABLE / ACPI_DISABLE stay 0 (already ACPI).
@@ -138,6 +140,15 @@ fn facp_byte(off: u16) -> u8 {
         88 => 4,
         89 => 2,
         91 => 4,
+        // Flags: RESET_REG_SUP (bit 10) so Linux `reboot=acpi` hits 0xCF9.
+        112..=115 => (1u32 << 10).to_le_bytes()[off as usize - 112],
+        // RESET_REG: Generic Address (SystemIO, 8-bit, 0xCF9).
+        116 => 1,
+        117 => 8,
+        118 => 0,
+        119 => 1,
+        120..=127 => 0xCF9u64.to_le_bytes()[off as usize - 120],
+        128 => 0x06, // RESET_VALUE
         _ => 0,
     }
 }
