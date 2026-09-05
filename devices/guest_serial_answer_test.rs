@@ -1,6 +1,6 @@
 use super::{
-    note_tx, queued, reset, take_rx, BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, ROOT, SETUP,
-    SYS, YES,
+    begin_second_boot, note_tx, queued, reset, second_boot, take_rx, BOOTLOADER, DISK, GRUB_ENTER,
+    MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SYS, YES,
 };
 
 #[test]
@@ -41,7 +41,11 @@ fn login_queues_root_then_setup_disk() {
         got.push(b);
     }
     assert_eq!(got, SETUP);
-    assert!(SETUP.len() <= 448);
+    assert!(SETUP.len() <= 768);
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("KERNELOPTS="));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("console=ttyS0"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("earlycon=uart8250,io,0x3f8"));
+    assert!(core::str::from_utf8(SETUP).unwrap().contains("efi=noruntime"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("/dev/vda"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("virtio_pci"));
     assert!(core::str::from_utf8(SETUP).unwrap().contains("sr_mod"));
@@ -327,6 +331,91 @@ fn no_disks_available_answers_n_not_y() {
     }
     assert_eq!(got, NO);
     reset();
+}
+
+#[test]
+fn please_reboot_then_shell_queues_reboot_once() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Installation is complete. Please reboot." {
+        note_tx(b);
+    }
+    assert_eq!(queued(), 0, "Please reboot itself does not enqueue");
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, REBOOT);
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    assert_eq!(take_rx(), None, "reboot once");
+    reset();
+}
+
+#[test]
+fn please_reboot_after_bootloader_prompt() {
+    reset();
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"~# " {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Which bootloader?" {
+        note_tx(b);
+    }
+    while take_rx().is_some() {}
+    for &b in b"Please reboot." {
+        note_tx(b);
+    }
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, REBOOT);
+    reset();
+}
+
+#[test]
+fn second_boot_answers_root_then_prove_never_setup() {
+    begin_second_boot();
+    assert!(second_boot());
+    for &b in b"localhost login:" {
+        note_tx(b);
+    }
+    let mut got = Vec::new();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, ROOT);
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    got.clear();
+    while let Some(b) = take_rx() {
+        got.push(b);
+    }
+    assert_eq!(got, PROVE);
+    assert!(core::str::from_utf8(PROVE).unwrap().contains("/proc/cmdline"));
+    assert!(!got.windows(SETUP.len()).any(|w| w == SETUP));
+    reset();
+    assert!(!second_boot());
 }
 
 #[test]

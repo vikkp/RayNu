@@ -6682,7 +6682,7 @@ unsafe fn raynu_f_reapply_host_xsave() {
 /// | `guest_uart` / `guest_irq` / `guest_platform` | RESET | `guest_platform::reset` (does not drop ide_cdrom window or PCI BAR we need for virtio re-enum) |
 /// | `lapic_virt` | RESET | `lapic_virt::reset` |
 /// | virtio queues/PCI | RESET | `reset_keep_disk` then `present` |
-/// | `guest_serial_answer` | RESET | `reset` (uart reset also calls this; second-boot flag is Step D) |
+/// | `guest_serial_answer` | RESET | then `begin_second_boot` (never SETUP on second boot) |
 /// | `serial` earlycon/high-half share | RESET | false until next Linux |
 /// | `SAVED_VMCS` | KEEP | same private VMCS |
 /// | `RAM_HPA` | KEEP | same 32 MiB slab (contents zeroed, then launch rebuilds) |
@@ -6824,8 +6824,7 @@ unsafe fn raynu_f_reset_relaunch(_src: crate::devices::guest_platform::ResetSrc)
     crate::devices::guest_platform::reset();
     crate::devices::lapic_virt::reset();
     crate::devices::guest_virtio_blk::reset_keep_disk();
-    // Step D replaces this with `begin_second_boot` (second-boot flag).
-    crate::devices::guest_serial_answer::reset();
+    crate::devices::guest_serial_answer::begin_second_boot();
     raynu_f_reapply_host_xsave();
     let ram_hpa = RAM_HPA.load(Ordering::Acquire);
     if ram_hpa != 0 {

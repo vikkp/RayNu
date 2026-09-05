@@ -25,7 +25,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-TIMEOUT_SECS="${TIMEOUT_SECS:-480}"
+TIMEOUT_SECS="${TIMEOUT_SECS:-1800}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/e5-iso-serial.log}"
 ESP="${ESP:-$ROOT/target/e5-iso-esp}"
 ALPINE_FLAVOR="${ALPINE_FLAVOR:-extended}"
@@ -97,7 +97,7 @@ if [[ ! -s "$SERIAL_LOG" ]]; then
 fi
 
 echo "==> marker scan (not ISO-INSTALL-OK):"
-grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|leftover install disk|virtio-blk install disk|stop n=|#PF linux|preempt noskip|RAYNU-F' \
+grep -E -n 'VMLAUNCH-OK|OVMF-ELTORITO-OK|RN-ELT|Loaded initrd|linux deliver|linux cpuid|linux skip-|invlpg miss|Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|setup-disk|invalid opcode|Oops:|ISO-INSTALL-OK|report-RAM extra|leftover install disk|virtio-blk install disk|stop n=|#PF linux|preempt noskip|RAYNU-F|guest reset requested|relaunch after reset|GPT ESP|root=UUID|reset-cap' \
   "$SERIAL_LOG" | grep -v -E 'RayNu-F svc=|RayNu-F CPUID|fw_cfg dest_ok fill' | head -n 200 || true
 echo "==> Linux tail (not ISO-INSTALL-OK):"
 grep -E -n 'Linux version|Kernel command line|Freeing initrd|Welcome to Alpine|localhost login|/ #|RN-SETUP|setup-disk|grub-efi|dosfstools|No space left|Installation is complete|Installing packages|ERROR:|panic|Oops:|BUG:' \
@@ -106,6 +106,13 @@ tail -n 40 "$SERIAL_LOG" || true
 
 if grep -qF 'Installation is complete. Please reboot.' "$SERIAL_LOG"; then
   echo "==> nested Alpine sys install completed to the RayNu-F virtio-blk disk (not ISO-INSTALL-OK; iron gate untouched; reboot-to-disk is F7)"
+fi
+echo "==> F7 reset/relaunch scan (not ISO-INSTALL-OK):"
+grep -E -n 'guest reset requested|relaunch after reset|GPT ESP|RAYNU-F-DISK-BOOT-OK|root=UUID|reset-cap' \
+  "$SERIAL_LOG" | head -n 40 || true
+linux_n=$(grep -c 'Linux version' "$SERIAL_LOG" || true)
+if (( linux_n >= 2 )) && grep -qF 'RAYNU-V-RAYNU-F-DISK-BOOT-OK' "$SERIAL_LOG"; then
+  echo "==> nested reboot-to-disk reached a second Linux boot (not ISO-INSTALL-OK)"
 fi
 
 if grep -qF 'RAYNU-V-M7-ISO-INSTALL-OK' "$SERIAL_LOG"; then

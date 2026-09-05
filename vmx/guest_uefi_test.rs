@@ -2977,6 +2977,7 @@ fn raynu_f_linux_cea_idt_pt_walk() {
     assert!(src.contains("fn raynu_f_reset_relaunch"));
     assert!(src.contains("fn raynu_f_on_guest_reset"));
     assert!(src.contains("fn raynu_f_reset_vmcs_guest_state"));
+    assert!(src.contains("begin_second_boot"));
     assert!(src.contains("boot: RayNu-F guest reset requested src="));
     assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
 }

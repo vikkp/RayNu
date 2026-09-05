@@ -11,7 +11,7 @@
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 const WIN: usize = 24;
-const QCAP: usize = 448;
+const QCAP: usize = 768;
 const YES_MAX: u8 = 4;
 
 const LOGIN: &[u8] = b"login:";
@@ -78,7 +78,7 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// `setup-disk` and apk said `no such package` for both). Cruzer (977.5 MiB
 /// stick) cannot hold extended; iron needs a larger stick.
 pub(crate) const SETUP: &[u8] =
-    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*/apks;do [ -d $d ]&&R=$d&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks; };[ -d $R ]&&echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
+    b"modprobe -a virtio_pci virtio_blk sr_mod isofs;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*/apks;do [ -d $d ]&&R=$d&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks; };[ -d $R ]&&echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 KERNELOPTS=\"console=ttyS0 earlycon=uart8250,io,0x3f8 lpj=4194304 no_timer_check tsc=reliable clocksource=tsc idle=poll initcall_blacklist=piix_init efi=noruntime\" setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
 /// alpine-virt 3.21 `/init` emergency shell has busybox + modprobe, **no**
 /// `setup-disk`. If `/media/*/apks` already exists, `exit` so `/init`
@@ -94,11 +94,19 @@ pub(crate) const DISK: &[u8] = b"/dev/vda\r";
 pub(crate) const SYS: &[u8] = b"sys\r";
 pub(crate) const GRUB_ENTER: &[u8] = b"\r";
 pub(crate) const BOOTLOADER: &[u8] = b"grub\r";
+/// F7: after `Installation is complete. Please reboot.` enqueue once.
+pub(crate) const REBOOT: &[u8] = b"reboot\r";
+/// F7 second boot: prove root is on the installed ext4, not modloop.
+pub(crate) const PROVE: &[u8] = b"cat /proc/cmdline; mount | head -3\r";
+const _: () = assert!(REBOOT.len() <= QCAP);
+const _: () = assert!(PROVE.len() <= QCAP);
+const PLEASE_REBOOT: &[u8] = b"Please reboot.";
 
 const PHASE_LOGIN: u8 = 0;
 const PHASE_SHELL: u8 = 1;
 const PHASE_CONFIRM: u8 = 2;
 const PHASE_DONE: u8 = 3;
+const PHASE_INSTALLED: u8 = 4;
 
 struct Answer {
     win: [u8; WIN],
@@ -134,6 +142,10 @@ static GRUB_SENT: AtomicBool = AtomicBool::new(false);
 static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
 /// Initramfs `/ # ` already queued [`MOUNT_EXIT`]. Stay PHASE_LOGIN.
 static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
+/// F7: `reboot\r` queued after the install completed.
+static REBOOT_SENT: AtomicBool = AtomicBool::new(false);
+/// F7: second Linux boot after RayNu-F relaunch. `reset()` does not clear this.
+static SECOND_BOOT: AtomicBool = AtomicBool::new(false);
 
 fn with<R>(f: impl FnOnce(&mut Answer) -> R) -> R {
     while LOCK.swap(true, Ordering::Acquire) {
@@ -153,6 +165,22 @@ pub fn reset() {
     GRUB_SENT.store(false, Ordering::Release);
     NEXT_YES_IS_NO.store(false, Ordering::Release);
     MOUNT_SENT.store(false, Ordering::Release);
+    REBOOT_SENT.store(false, Ordering::Release);
+    // SECOND_BOOT is sticky on UEFI so a uart reset after `begin_second_boot`
+    // cannot re-arm SETUP. Host tests start from a clean first-boot flag.
+    #[cfg(test)]
+    SECOND_BOOT.store(false, Ordering::Release);
+}
+
+/// F7: after RayNu-F relaunch, answer `login:` with `root` and never send SETUP.
+pub fn begin_second_boot() {
+    reset();
+    SECOND_BOOT.store(true, Ordering::Release);
+}
+
+/// Host tests: second-boot flag.
+pub fn second_boot() -> bool {
+    SECOND_BOOT.load(Ordering::Acquire)
 }
 
 fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
@@ -194,9 +222,7 @@ fn enqueue(a: &mut Answer, bytes: &[u8]) {
 /// Observe one guest COM1 THR byte. May queue a reply for RBR.
 pub fn note_tx(b: u8) {
     let phase = PHASE.load(Ordering::Acquire);
-    if phase == PHASE_DONE {
-        return;
-    }
+    let second = SECOND_BOOT.load(Ordering::Acquire);
     with(|a| {
         if a.wlen < WIN {
             a.win[a.wlen] = b;
@@ -214,19 +240,32 @@ pub fn note_tx(b: u8) {
                 enqueue(a, ROOT);
                 PHASE.store(PHASE_SHELL, Ordering::Release);
             }
-            PHASE_LOGIN if ends_with(&a.win, a.wlen, SHELL_ROOT) => {
+            PHASE_LOGIN if !second && ends_with(&a.win, a.wlen, SHELL_ROOT) => {
                 if !MOUNT_SENT.swap(true, Ordering::AcqRel) {
                     enqueue(a, MOUNT_EXIT);
                 }
                 // Stay PHASE_LOGIN so later getty `login:` still matches.
             }
-            PHASE_LOGIN if ends_with(&a.win, a.wlen, SHELL) => {
+            PHASE_LOGIN if !second && ends_with(&a.win, a.wlen, SHELL) => {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
             }
-            PHASE_SHELL if is_shell_prompt(&a.win, a.wlen) => {
+            PHASE_SHELL if second && is_shell_prompt(&a.win, a.wlen) => {
+                enqueue(a, PROVE);
+                PHASE.store(PHASE_DONE, Ordering::Release);
+            }
+            PHASE_SHELL if !second && is_shell_prompt(&a.win, a.wlen) => {
                 enqueue(a, SETUP);
                 PHASE.store(PHASE_CONFIRM, Ordering::Release);
+            }
+            PHASE_CONFIRM | PHASE_DONE if ends_with(&a.win, a.wlen, PLEASE_REBOOT) => {
+                PHASE.store(PHASE_INSTALLED, Ordering::Release);
+            }
+            PHASE_INSTALLED if is_shell_prompt(&a.win, a.wlen) => {
+                if !REBOOT_SENT.swap(true, Ordering::AcqRel) {
+                    enqueue(a, REBOOT);
+                }
+                PHASE.store(PHASE_DONE, Ordering::Release);
             }
             PHASE_CONFIRM if ends_with(&a.win, a.wlen, NODISK) => {
                 NEXT_YES_IS_NO.store(true, Ordering::Release);
