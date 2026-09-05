@@ -319,6 +319,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("iso_install.rs").contains("ISO_GRUB_LINUX_LTS_FROM")
         && include_str!("iso_install.rs").contains("ISO_GRUB_CFG_LTS_PATCHED_SIZE")
         && include_str!("iso_install.rs").contains("linux-line lts stanza")
+        && include_str!("iso_install.rs").contains("ISO_GRUB_LINUX_EXT_FROM")
+        && include_str!("iso_install.rs").contains("linux-line extended stanza")
         && include_str!("iso_install.rs").contains("lpj=4194304")
         && include_str!("iso_install.rs").contains("no_timer_check")
         && include_str!("iso_install.rs").contains("tsc=reliable")

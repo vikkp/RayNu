@@ -240,6 +240,33 @@ else
   ACCEL_ARGS+=(-machine q35,accel=tcg -cpu qemu64)
 fi
 
+# QEMU vvfat (`fat:rw:`) is capped at ~516 MB ("Directory does not fit in
+# FAT16/FAT32 (capacity 516.06 MB)"), so a product ISO above that
+# (alpine-extended 994 MiB, the only official x86_64 ISO with on-media
+# grub-efi + dosfstools) must ride a real FAT32 image. Built fresh per run;
+# mtools when present, else sudo loop mount (the harness already sudo's kvm).
+ESP_DRIVE="fat:rw:$ESP"
+esp_bytes=$(du -sb "$ESP" | cut -f1)
+if (( esp_bytes > 480 * 1024 * 1024 )); then
+  ESP_IMG="${ESP_IMG:-$ROOT/target/esp-fat32.img}"
+  img_mib=$(( esp_bytes / 1048576 + 128 ))
+  rm -f "$ESP_IMG"
+  truncate -s "${img_mib}M" "$ESP_IMG"
+  mkfs.vfat -F 32 -n RAYNUV "$ESP_IMG" >/dev/null
+  if command -v mcopy >/dev/null 2>&1; then
+    MTOOLS_SKIP_CHECK=1 mcopy -i "$ESP_IMG" -s "$ESP"/* ::/
+  else
+    mnt=$(mktemp -d)
+    sudo mount -o loop,uid="$(id -u)",gid="$(id -g)" "$ESP_IMG" "$mnt"
+    cp -r "$ESP"/. "$mnt"/
+    sync
+    sudo umount "$mnt"
+    rmdir "$mnt"
+  fi
+  ESP_DRIVE="$ESP_IMG"
+  echo "==> ESP ${esp_bytes} bytes exceeds vvfat; FAT32 image $ESP_IMG (${img_mib} MiB)"
+fi
+
 echo "==> QEMU boot (COM1 → ${SERIAL_CHARDEV}); mem=${QEMU_MEM}; guest exits via isa-debug-exit"
 
 exec qemu-system-x86_64 \
@@ -249,6 +276,6 @@ exec qemu-system-x86_64 \
   -serial "$SERIAL_CHARDEV" \
   -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
   "${FW_ARGS[@]}" \
-  -drive format=raw,file=fat:rw:"$ESP" \
+  -drive format=raw,file="$ESP_DRIVE" \
   "${HOST_NIC_ARGS[@]}" \
   "$@"

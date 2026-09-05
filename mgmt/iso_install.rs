@@ -280,6 +280,23 @@ pub const ISO_GRUB_LINUX_LTS_FROM: &[u8] =
     &nul_pad::<{ ISO_GRUB_LINUX_LTS_TO.len() }>(ISO_GRUB_LINUX_LTS_STANZA);
 const _: () = assert!(ISO_GRUB_LINUX_LTS_FROM.len() == ISO_GRUB_LINUX_LTS_TO.len());
 const _: () = assert!(ISO_GRUB_LINUX_LTS_TO.len() == ISO_GRUB_LINUX_TO.len() - 3);
+/// alpine-extended 3.21.3 GRUB `"Linux lts"` stanza: same kernel, but the
+/// initrd line is `/boot/intel-ucode.img /boot/amd-ucode.img
+/// /boot/initramfs-lts` (Data Length 182, LBA 385833). The grow rewrites it
+/// to [`ISO_GRUB_LINUX_LTS_TO`] (Data Length 182 → 299): the two ucode
+/// cpios are dropped because Linux skips early microcode when
+/// `X86_FEATURE_HYPERVISOR` is set and a guest must not WRMSR 0x79 anyway.
+/// alpine-extended is the only official x86_64 ISO whose on-media `apks`
+/// carries `grub-efi` + `dosfstools` (+ `grub`, `efibootmgr`, `mtools`);
+/// alpine-standard 3.21.3 does **not** (nested `a0a824d`: lts grow applied,
+/// shell + SETUP + `setup-disk` ran, apk `no such package` for both).
+/// linux-line extended stanza.
+const ISO_GRUB_LINUX_EXT_STANZA: &[u8] =
+    b"\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-lts\n}\n";
+pub const ISO_GRUB_LINUX_EXT_FROM: &[u8] =
+    &nul_pad::<{ ISO_GRUB_LINUX_LTS_TO.len() }>(ISO_GRUB_LINUX_EXT_STANZA);
+const _: () = assert!(ISO_GRUB_LINUX_EXT_FROM.len() == ISO_GRUB_LINUX_LTS_TO.len());
+const _: () = assert!(ISO_GRUB_LINUX_EXT_STANZA.len() > ISO_GRUB_LINUX_LTS_STANZA.len());
 /// alpine-virt 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
 pub const ISO_GRUB_CFG_ORIG_SIZE: u32 = 143;
 /// After the linux-line grow consumes the NUL pad past the original `}\n`.
@@ -291,6 +308,12 @@ pub const ISO_GRUB_CFG_LTS_ORIG_SIZE: u32 = 140;
 /// alpine-standard Data Length after the lts linux-line grow.
 pub const ISO_GRUB_CFG_LTS_PATCHED_SIZE: u32 =
     ISO_GRUB_CFG_LTS_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_LTS_FROM) as u32;
+/// alpine-extended 3.21.3 `/boot/grub/grub.cfg` ISO9660 / Joliet Data Length.
+pub const ISO_GRUB_CFG_EXT_ORIG_SIZE: u32 = 182;
+/// alpine-extended Data Length after the grow (same TO as standard → 299).
+pub const ISO_GRUB_CFG_EXT_PATCHED_SIZE: u32 =
+    ISO_GRUB_CFG_EXT_ORIG_SIZE + trailing_zero_count(ISO_GRUB_LINUX_EXT_FROM) as u32;
+const _: () = assert!(ISO_GRUB_CFG_EXT_PATCHED_SIZE == ISO_GRUB_CFG_LTS_PATCHED_SIZE);
 /// `set timeout=1\n\nmenuentry ` (same length as `set timeout=0\n\nmenuentry `).
 const ISO_GRUB_CFG_PREFIX_LEN: usize = 25;
 const _: () = assert!(ISO_GRUB_LINUX_TO[ISO_GRUB_LINUX_TO.len() - 1] == b'\n');
@@ -308,6 +331,11 @@ const _: () = assert!(
     ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_LTS_STANZA.len()
         == ISO_GRUB_CFG_LTS_ORIG_SIZE as usize
 );
+const _: () = assert!(
+    ISO_GRUB_CFG_PREFIX_LEN + ISO_GRUB_LINUX_EXT_STANZA.len()
+        == ISO_GRUB_CFG_EXT_ORIG_SIZE as usize
+);
+const _: () = assert!(ISO_GRUB_CFG_EXT_PATCHED_SIZE > ISO_GRUB_CFG_EXT_ORIG_SIZE);
 pub const ISO_GRUB_CFG_ISO9660_NAME: &[u8] = b"GRUB.CFG;1";
 /// Joliet UTF-16BE `grub.cfg` (no `;1` on this alpine-virt).
 pub const ISO_GRUB_CFG_JOLIET_NAME: &[u8] = b"\x00g\x00r\x00u\x00b\x00.\x00c\x00f\x00g";
@@ -319,6 +347,10 @@ const _: () = assert!(ISO_GRUB_CFG_ALPINE_VIRT.len() == ISO_GRUB_CFG_ORIG_SIZE a
 pub const ISO_GRUB_CFG_ALPINE_STANDARD: &[u8] =
     b"set timeout=1\n\nmenuentry \"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/initramfs-lts\n}\n";
 const _: () = assert!(ISO_GRUB_CFG_ALPINE_STANDARD.len() == ISO_GRUB_CFG_LTS_ORIG_SIZE as usize);
+/// Exact alpine-extended 3.21.3 `grub.cfg` (ISO9660 Data Length 182, LBA 385833).
+pub const ISO_GRUB_CFG_ALPINE_EXTENDED: &[u8] =
+    b"set timeout=1\n\nmenuentry \"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage quiet \ninitrd\t/boot/intel-ucode.img /boot/amd-ucode.img /boot/initramfs-lts\n}\n";
+const _: () = assert!(ISO_GRUB_CFG_ALPINE_EXTENDED.len() == ISO_GRUB_CFG_EXT_ORIG_SIZE as usize);
 /// Drop VGA console and request PIC-only IRQs when the ISO still has tty0.
 pub const ISO_TTY0_FROM: &[u8] = b"console=tty0";
 pub const ISO_TTY0_TO: &[u8] = b"noapic      ";
@@ -393,10 +425,22 @@ pub fn patch_iso_linux_serial_console(bytes: &mut [u8]) -> u32 {
     } else {
         0
     };
+    let grown_ext = patch_same(bytes, ISO_GRUB_LINUX_EXT_FROM, ISO_GRUB_LINUX_LTS_TO);
+    let bumped_ext = if grown_ext > 0 {
+        bump_iso9660_grub_cfg_size(
+            bytes,
+            ISO_GRUB_CFG_EXT_ORIG_SIZE,
+            ISO_GRUB_CFG_EXT_PATCHED_SIZE,
+        )
+    } else {
+        0
+    };
     grown
         .saturating_add(bumped)
         .saturating_add(grown_lts)
         .saturating_add(bumped_lts)
+        .saturating_add(grown_ext)
+        .saturating_add(bumped_ext)
         .saturating_add(patch_same(bytes, ISO_SERIAL_CONSOLE_FROM, ISO_SERIAL_CONSOLE_TO))
         .saturating_add(patch_same(bytes, ISO_ATA_PIIX_FROM, ISO_ATA_PIIX_TO))
         .saturating_add(patch_same(bytes, ISO_GRUB_TIMEOUT_FROM, ISO_GRUB_TIMEOUT_TO))
@@ -491,7 +535,8 @@ fn iso_dir_record_points_at_grub_cfg(bytes: &[u8], rec: usize) -> bool {
 /// INVARIANTS:
 /// - Only records named [`ISO_GRUB_CFG_ISO9660_NAME`] / Joliet
 ///   [`ISO_GRUB_CFG_JOLIET_NAME`] whose size is exactly `orig`
-///   ([`ISO_GRUB_CFG_ORIG_SIZE`] or [`ISO_GRUB_CFG_LTS_ORIG_SIZE`])
+///   ([`ISO_GRUB_CFG_ORIG_SIZE`], [`ISO_GRUB_CFG_LTS_ORIG_SIZE`] or
+///   [`ISO_GRUB_CFG_EXT_ORIG_SIZE`])
 ///   and whose LBA starts with `set timeout=`
 /// - Writes both little-endian and big-endian size fields with `patched`
 /// - Does not print [`M7_ISO_INSTALL_OK_MARKER`]

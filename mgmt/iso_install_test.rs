@@ -207,6 +207,9 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), 274);
     assert_eq!(ISO_GRUB_CFG_LTS_ORIG_SIZE, 140);
     assert_eq!(ISO_GRUB_CFG_LTS_PATCHED_SIZE, 299);
+    assert_eq!(ISO_GRUB_LINUX_EXT_FROM.len(), 274);
+    assert_eq!(ISO_GRUB_CFG_EXT_ORIG_SIZE, 182);
+    assert_eq!(ISO_GRUB_CFG_EXT_PATCHED_SIZE, 299);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -309,6 +312,17 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!l.contains("vmlinuz-virt"));
     assert!(!l.contains("usb-storage"));
     assert_eq!(patch_iso_linux_serial_console(&mut lts), 0);
+    // alpine-extended: ucode initrd line collapses to initramfs-lts only.
+    let mut ext = b"menuentry ".to_vec();
+    ext.extend_from_slice(ISO_GRUB_LINUX_EXT_FROM);
+    ext.extend_from_slice(&[0u8; 8]);
+    assert_eq!(patch_iso_linux_serial_console(&mut ext), 1);
+    let e = core::str::from_utf8(&ext[..10 + ISO_GRUB_LINUX_LTS_TO.len()]).unwrap();
+    assert!(e.contains("vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
+    assert!(e.contains(" efi=noruntime \ninitrd\t/boot/initramfs-lts\n}\n"));
+    assert!(!e.contains("ucode"));
+    assert!(ext[10 + ISO_GRUB_LINUX_LTS_TO.len()..].iter().all(|b| *b == 0));
+    assert_eq!(patch_iso_linux_serial_console(&mut ext), 0);
 }
 
 fn write_iso9660_dir_record(buf: &mut [u8], rec: usize, name: &[u8], lba: u32, size: u32) {
@@ -439,6 +453,37 @@ fn patch_iso_linux_grows_alpine_standard_grub_cfg_iso9660_data_length() {
 }
 
 #[test]
+fn patch_iso_linux_grows_alpine_extended_grub_cfg_iso9660_data_length() {
+    assert_eq!(ISO_GRUB_CFG_ALPINE_EXTENDED.len(), ISO_GRUB_CFG_EXT_ORIG_SIZE as usize);
+    let lba = 2u32;
+    let data = (lba as usize) * 2048;
+    let mut iso = vec![0u8; data + 2048];
+    iso[data..data + ISO_GRUB_CFG_ALPINE_EXTENDED.len()]
+        .copy_from_slice(ISO_GRUB_CFG_ALPINE_EXTENDED);
+    let pvd = 64usize;
+    let joliet = 128usize;
+    write_iso9660_dir_record(&mut iso, pvd, ISO_GRUB_CFG_ISO9660_NAME, lba, ISO_GRUB_CFG_EXT_ORIG_SIZE);
+    write_iso9660_dir_record(&mut iso, joliet, ISO_GRUB_CFG_JOLIET_NAME, lba, ISO_GRUB_CFG_EXT_ORIG_SIZE);
+    // ext grow (1) + PVD bump (1) + Joliet bump (1) + set timeout=1 (1);
+    // virt / standard grows and their 143 / 140 bumps are 0 hits here.
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 4);
+    assert_eq!(iso_dir_size_le(&iso, pvd), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, pvd), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_le(&iso, joliet), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, joliet), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+    let patched = &iso[data..data + ISO_GRUB_CFG_EXT_PATCHED_SIZE as usize];
+    let s = core::str::from_utf8(patched).unwrap();
+    assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime \n"));
+    assert!(s.ends_with("initrd\t/boot/initramfs-lts\n}\n"));
+    assert!(!s.contains("ucode"));
+    assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
+    assert_eq!(s.bytes().filter(|b| *b == b'}').count(), 1);
+    assert!(iso[data + ISO_GRUB_CFG_EXT_PATCHED_SIZE as usize..data + 2048].iter().all(|b| *b == 0));
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 0);
+}
+
+#[test]
 fn bump_iso9660_grub_cfg_size_skips_gzip_false_positive() {
     let mut buf = vec![0xFFu8; 256];
     write_iso9660_dir_record(
@@ -522,4 +567,41 @@ fn patch_in_tree_alpine_standard_iso_grub_cfg_size_if_present() {
     assert!(s.contains("initcall_blacklist=piix_init efi=noruntime"));
     assert!(s.contains("initrd\t/boot/initramfs-lts"));
     assert!(s.ends_with("}\n"));
+}
+
+#[test]
+fn patch_in_tree_alpine_extended_iso_grub_cfg_size_if_present() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/alpine-extended-3.21.3-x86_64.iso"
+    );
+    let Ok(mut iso) = std::fs::read(path) else {
+        return;
+    };
+    if iso.len() < 2048 {
+        return;
+    }
+    let n = patch_iso_linux_serial_console(&mut iso);
+    assert!(n >= 4, "expected ext grow + 2 dir bumps + timeout, got {n}");
+    let mut found = 0u32;
+    let mut i = 0usize;
+    while i + 34 <= iso.len() {
+        if iso[i + 32] as usize == ISO_GRUB_CFG_ISO9660_NAME.len()
+            && iso[i + 33..i + 33 + ISO_GRUB_CFG_ISO9660_NAME.len()] == *ISO_GRUB_CFG_ISO9660_NAME
+        {
+            assert_eq!(iso_dir_size_le(&iso, i), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+            assert_eq!(iso_dir_size_be(&iso, i), ISO_GRUB_CFG_EXT_PATCHED_SIZE);
+            found += 1;
+        }
+        i += 1;
+    }
+    assert!(found >= 1);
+    let cfg_off = 385833usize * 2048;
+    let s = core::str::from_utf8(&iso[cfg_off..cfg_off + ISO_GRUB_CFG_EXT_PATCHED_SIZE as usize])
+        .unwrap();
+    assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
+    assert!(s.contains("modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime"));
+    assert!(s.ends_with("initrd\t/boot/initramfs-lts\n}\n"));
+    assert!(!s.contains("ucode"));
 }

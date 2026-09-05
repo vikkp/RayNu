@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Nested QEMU serial capture of Stage 46 product ISO (alpine-standard).
-# alpine-virt on-media repo lacks grub-efi + dosfstools needed for
-# USE_EFI=1 BOOTLOADER=grub. Nested proof uses alpine-standard (245 MiB;
-# grub.cfg "Linux lts" / vmlinuz-lts, Data Length 140 -> 299 after the
-# ISO_GRUB_LINUX_LTS grow). Cruzer ESP still stages alpine-virt (63 MiB):
-# the stick is 977.5 MiB but --refat-cruzer made a 64 MiB FAT; refat
-# larger before staging alpine-standard on iron.
+# Nested QEMU serial capture of Stage 46 product ISO (alpine-extended).
+# USE_EFI=1 BOOTLOADER=grub needs grub-efi + dosfstools from the on-media
+# apks. Listed from the ISOs: alpine-virt (63 MiB) and alpine-standard
+# (245 MiB) do NOT ship them (nested a0a824d on standard: lts grow applied,
+# kernel -> shell -> SETUP -> setup-disk, then apk "no such package" for
+# both). alpine-extended (994 MiB) ships grub, grub-efi, dosfstools,
+# efibootmgr, mtools. Its grub.cfg is "Linux lts" with intel/amd ucode
+# initrds (Data Length 182 -> 299 after ISO_GRUB_LINUX_EXT grow; ucode
+# dropped). run-qemu.sh puts an ESP above vvfat's ~516 MB cap on a real
+# FAT32 image. QEMU_MEM defaults 4096M for it (ISO is retained PRE-EBS).
+# Cruzer (977.5 MiB stick) cannot hold extended: iron needs a larger
+# stick (or a trimmed ISO) before this path is flashed.
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
 # above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
@@ -23,13 +28,14 @@ cd "$ROOT"
 TIMEOUT_SECS="${TIMEOUT_SECS:-480}"
 SERIAL_LOG="${SERIAL_LOG:-$ROOT/target/e5-iso-serial.log}"
 ESP="${ESP:-$ROOT/target/e5-iso-esp}"
-ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-standard-3.21.3-x86_64.iso}"
-ISO_PATH="${PRODUCT_ISO:-$ROOT/target/alpine-standard-3.21.3-x86_64.iso}"
+ALPINE_FLAVOR="${ALPINE_FLAVOR:-extended}"
+ISO_URL="${ALPINE_ISO_URL:-https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
+ISO_PATH="${PRODUCT_ISO:-$ROOT/target/alpine-${ALPINE_FLAVOR}-3.21.3-x86_64.iso}"
 
 mkdir -p "$(dirname "$SERIAL_LOG")" "$ESP" "$(dirname "$ISO_PATH")"
 
 if [[ ! -f "$ISO_PATH" ]]; then
-  echo "==> fetching alpine-standard ISO to $ISO_PATH"
+  echo "==> fetching alpine-${ALPINE_FLAVOR} ISO to $ISO_PATH"
   curl -fsSL -o "$ISO_PATH" "$ISO_URL"
 fi
 psz=$(wc -c <"$ISO_PATH" | tr -d ' ')
@@ -70,11 +76,14 @@ if [[ "${REBUILD_EFI:-1}" == "1" ]]; then
   }
 fi
 
-echo "==> product ISO nested serial timeout=${TIMEOUT_SECS}s iso=$psz bytes RAYNU_F=$RAYNU_F (not ISO-INSTALL-OK)"
+if (( psz > 512 * 1024 * 1024 )); then
+  QEMU_MEM="${QEMU_MEM:-4096M}"
+fi
+echo "==> product ISO nested serial timeout=${TIMEOUT_SECS}s iso=$psz bytes RAYNU_F=$RAYNU_F mem=${QEMU_MEM:-default} (not ISO-INSTALL-OK)"
 set +e
 timeout --signal=KILL "$TIMEOUT_SECS" \
   env PRODUCT_ISO="$ISO_PATH" ESP="$ESP" SERIAL_CHARDEV="file:$SERIAL_LOG" \
-  QEMU_ACCEL="${QEMU_ACCEL:-kvm}" RAYNU_F="$RAYNU_F" \
+  QEMU_ACCEL="${QEMU_ACCEL:-kvm}" RAYNU_F="$RAYNU_F" ${QEMU_MEM:+QEMU_MEM="$QEMU_MEM"} \
   "$ROOT/tools/run-qemu.sh" \
   >"$ROOT/target/e5-iso-qemu-stdout.log" 2>"$ROOT/target/e5-iso-qemu-stderr.log"
 QEMU_STATUS=$?

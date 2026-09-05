@@ -72,9 +72,11 @@ pub(crate) const ROOT: &[u8] = b"root\r";
 /// not `apk update` first — that can hang on a missing index and never
 /// reach `setup-disk`. setup-disk before apk update. Nested proof for
 /// `USE_EFI=1 BOOTLOADER=grub` needs an ISO whose on-media repo ships
-/// `grub-efi` + `dosfstools` (alpine-standard / alpine-extended); alpine-virt
-/// lacks them. Cruzer ESP still stages alpine-virt (~63 MiB) until larger
-/// media.
+/// `grub-efi` + `dosfstools`: of the official 3.21.3 x86_64 ISOs only
+/// alpine-extended (994 MiB) does; alpine-virt (63 MiB) and alpine-standard
+/// (245 MiB) do not (nested `a0a824d` on standard ran this SETUP through
+/// `setup-disk` and apk said `no such package` for both). Cruzer (977.5 MiB
+/// stick) cannot hold extended; iron needs a larger stick.
 pub(crate) const SETUP: &[u8] =
     b"modprobe -a virtio_pci virtio_blk sr_mod isofs;for i in 0 1 2 3 4;do mdev -s;[ -b /dev/vda ]&&break;sleep 1;done;R=;for d in /media/*/apks;do [ -d $d ]&&R=$d&&break;done;[ $R ]||{ mkdir -p /media/cdrom;mount -t iso9660 /dev/vdb /media/cdrom||mount -t iso9660 /dev/sr0 /media/cdrom;R=/media/cdrom/apks; };[ -d $R ]&&echo $R>/etc/apk/repositories;ERASE_DISKS=/dev/vda BOOTLOADER=grub USE_EFI=1 BOOT_SIZE=48 setup-disk -m sys -s 0 /dev/vda\r";
 const _: () = assert!(SETUP.len() <= QCAP);
