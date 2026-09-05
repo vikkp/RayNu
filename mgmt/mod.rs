@@ -389,6 +389,7 @@ pub mod m7_e5_ovmf_esp_gate;
 pub mod m7_e5_ovmf_probe_gate;
 pub mod m7_e5_ovmf_slot_gate;
 pub mod m7_e5_reset_vec_gate;
+pub mod m7_e5_raynu_f_f7_gate;
 pub mod m7_host_nic_gate;
 pub mod m7_http_gate;
 pub mod m7_iso_gate;
@@ -531,6 +532,7 @@ pub use m7_e5_ovmf_esp_gate::{run_m7_e5_ovmf_esp_gate, M7_E5_OVMF_ESP_OK_MARKER}
 pub use m7_e5_ovmf_probe_gate::{run_m7_e5_ovmf_probe_gate, M7_E5_OVMF_PROBE_OK_MARKER};
 pub use m7_e5_ovmf_slot_gate::{run_m7_e5_ovmf_slot_gate, M7_E5_OVMF_SLOT_OK_MARKER};
 pub use m7_e5_reset_vec_gate::{run_m7_e5_reset_vec_gate, M7_E5_RESET_VEC_OK_MARKER};
+pub use m7_e5_raynu_f_f7_gate::{run_m7_e5_raynu_f_f7_gate, M7_E5_RAYNU_F_F7_OK_MARKER};
 pub use m7_host_nic_gate::{run_m7_host_nic_scaffold_gate, M7_HOST_NIC_GATE_MARKER};
 pub use m7_http_gate::{run_m7_http_gate, M7_HTTP_GATE_MARKER};
 pub use m7_iso_gate::{run_m7_iso_gate, M7_ISO_GATE_MARKER};

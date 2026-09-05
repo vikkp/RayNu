@@ -299,6 +299,7 @@ All ADRs live in `docs/adr/`. Format: numbered, dated, context/decision/rational
 | 014   | Multi-guest-OS image and install path  | Typed ISO (`linux_iso`/`windows_iso`/`generic_uefi`); UEFI+virtio product boot; bzImage = lab G0 only |
 | 015   | Stage 46 close path is PR #229         | Park PR #231; Stage 46 closes on #229 only; COMMAND/CF8/ROM/hide-slot0/retaddr/ConIn/callsite/WFE-return closed; 9474ab6 state4 poke dest=0x7ff18340 then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018 still ataio=0; firmware WFE event #PF; do not claim ISO-INSTALL-OK |
 | 016   | RayNu-F — be the guest firmware for E5 | Be the guest UEFI boot env ourselves (own EFI system table + boot services over virtio-blk/CD) instead of puppeting OVMF; RayNu-F is a subsystem in the single binary, outside Proven Core; disable the 3k–3o OVMF forcing (self-inflicted the 9474ab6/4e16b59 NULL-event #PF + CpuDeadLoop); **No third-party firmware state mutation**; do not claim ISO-INSTALL-OK |
+| 017   | Guest reset under RayNu-F (F7)        | Disk-before-ISO boot order; preserve virtio-blk disk across reset (`reset_keep_disk`); CF9/KBC/TF reset; cap=1 (`reset-cap`); do not claim ISO-INSTALL-OK |
 
 **Rule:** Any new ADR is added here AND to `docs/adr/ADR-NNN.md`.
 
