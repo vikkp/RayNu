@@ -6,6 +6,9 @@
 //!
 //! Host/CI: F7 surfaces exist. Nested `fe4785a` on `raynuvsrv1` reached
 //! reboot-to-disk (second `Linux version`, `root=UUID=`, `DISK-BOOT-OK`).
+//! Nested `088ab25` showed the reset lines: Alpine `reboot` pulsed the i8042
+//! (`src=kbc`), not `0xCF9` / FADT — the kernel runs `efi=noruntime`, so the
+//! CF9 and triple-fault classifiers stay host-tested only.
 //! Never prints `RAYNU-V-M7-ISO-INSTALL-OK`. Iron E5 stays open.
 
 /// Host / CI marker when the F7 surface gate passes.

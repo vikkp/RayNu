@@ -14,6 +14,7 @@
 #
 # Nested fe4785a (raynuvsrv1): F7 reboot-to-disk reached a second Linux
 # (`RAYNU-V-RAYNU-F-DISK-BOOT-OK`, root=UUID=698a922a-..., /dev/vda2 ext4).
+# Nested 088ab25: reset lines visible; Alpine rebooted via `src=kbc`.
 # Not ISO-INSTALL-OK. Nested QEMU is not R640.
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
