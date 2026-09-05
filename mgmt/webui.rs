@@ -167,6 +167,32 @@ pub fn webui_html_wires_api() -> bool {
         && s.contains("f-iso")
 }
 
+/// Operator SPA (menus + status lights). Firmware-debug button labels are
+/// not required on the home screen — those POSTs stay on REST `/fw/*`.
+pub fn spa_operator_surface_present() -> bool {
+    let Ok(s) = core::str::from_utf8(webui_raw_bytes()) else {
+        return false;
+    };
+    s.contains("data-raynu-webui")
+        && s.contains("data-raynu-m7-ui")
+        && s.contains("data-raynu-e4")
+        && s.contains("linux_iso")
+        && s.contains("windows_iso")
+        && s.contains("generic_uefi")
+        && s.contains("f-image")
+        && s.contains("UEFI-first")
+        && s.contains("extract-boot is lab")
+        && s.contains("not guest UEFI")
+        && s.contains("Attach CD")
+        && s.contains("Host attach")
+        && s.contains("Arm firmware")
+        && s.contains("Firmware arm")
+        && s.contains("not OVMF")
+        && s.contains("/iso/")
+        && s.contains("Install media")
+        && webui_len().saturating_add(256) <= 16384
+}
+
 /// Host-testable: lazy load + list/start/stop against one guest.
 pub fn prop_webui_list_start_stop() -> bool {
     #[cfg(test)]

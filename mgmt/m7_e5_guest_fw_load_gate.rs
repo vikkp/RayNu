@@ -114,17 +114,11 @@ pub fn prop_rest_guest_fw_load() -> bool {
 
 /// SPA + ADR-014 Stage 4 phrases. Stub load is not OVMF.
 pub fn guest_fw_load_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let http = include_str!("http.rs");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Load guest FW")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && http.contains("is_guest_fw_path")
         && adr.contains("Stage 4")
         && adr.contains("load_guest_firmware")

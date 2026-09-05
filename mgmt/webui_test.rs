@@ -5,6 +5,7 @@ fn webui_embedded_and_branded() {
     assert!(webui_present());
     assert!(webui_len() > 500);
     assert!(webui_html_wires_api());
+    assert!(spa_operator_surface_present());
     assert_eq!(SECTION_WEBUI, ".aswebui");
     assert!(SECTION_WEBUI.len() <= 8);
 }

@@ -174,16 +174,9 @@ pub fn prop_el_torito_parse_not_attach() -> bool {
 
 /// SPA + ADR-014 phrases. Product path is UEFI-first, not extract-and-jump.
 pub fn boot_spec_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let api = include_str!("api.rs");
-    spa.contains("linux_iso")
-        && spa.contains("windows_iso")
-        && spa.contains("generic_uefi")
-        && spa.contains("f-image")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && api.contains("linux_iso|windows_iso|generic_uefi")
         && adr.contains("Stage 0")
         && adr.contains("boot spec on the wire")

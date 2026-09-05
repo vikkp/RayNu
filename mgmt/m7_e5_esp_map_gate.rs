@@ -216,19 +216,10 @@ pub fn prop_rest_esp_map() -> bool {
 
 /// SPA + ADR-014 Stage 13 phrases. Live map recorded; VMLAUNCH insn not issued.
 pub fn esp_map_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Map live ESP")
-        && spa.contains("Arm ESP launch")
-        && spa.contains("Stage EDK2")
-        && spa.contains("Stage FW floor")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 13")
         && adr.contains("map_live_esp_ovmf")
         && adr.contains("LiveMappedNotLaunched")

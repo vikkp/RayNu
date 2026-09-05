@@ -174,16 +174,10 @@ pub fn prop_rest_firmware_arm() -> bool {
 
 /// SPA + ADR-014 Stage 2 phrases. No OVMF guest blob.
 pub fn firmware_cd_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let http = include_str!("http.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Arm firmware")
-        && spa.contains("Firmware arm")
-        && spa.contains("not guest UEFI")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && http.contains("is_iso_firmware_path")
         && adr.contains("Stage 2")
         && adr.contains("FirmwareArmed")

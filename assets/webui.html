@@ -114,7 +114,7 @@ input.token{min-width:12rem}
 <button class="pri" id="btn-iso-attach" data-action="iso-attach">Attach CD</button>
 <button class="ghost" id="btn-iso-install" data-action="iso-install">Start installer</button>
 <button class="ghost" id="btn-iso-deploy" data-action="iso-deploy">Lab extract-boot</button>
-<button class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Lab firmware CD</button>
+<button class="ghost" id="btn-iso-firmware" data-action="iso-firmware">Arm firmware CD</button>
 </div>
 <div id="img-list" class="empty">No image list yet.</div>
 </section>
@@ -124,7 +124,7 @@ input.token{min-width:12rem}
 <pre id="serial-log" class="empty">No log loaded yet. GET /logs/serial</pre>
 </section>
 <p id="status"></p>
-<p class="note">Host serial is HV UART (not guest console). TLS deferred (lab HTTP). Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab. Auth: ESP or bring-up.</p>
+<p class="note">Host serial is HV UART (not guest console). TLS deferred (lab HTTP). Product ISO is UEFI-first + typed (linux_iso / windows_iso / generic_uefi). extract-boot is lab. Host attach is El Torito (not guest UEFI). Firmware arm is not VMLAUNCH. FW box/load is not OVMF. Auth: ESP or bring-up.</p>
 </main>
 <script>
 (function(){
