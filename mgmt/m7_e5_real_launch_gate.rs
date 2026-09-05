@@ -246,28 +246,10 @@ pub fn prop_rest_real_launch() -> bool {
 
 /// SPA + ADR-014 Stage 19 phrases. Insn path armed; VMLAUNCH insn not issued.
 pub fn real_launch_surface_present() -> bool {
-    let spa = include_str!("../assets/webui.html");
     let adr = include_str!("../docs/adr/ADR-014.md");
     let src = include_str!("guest_fw.rs");
     let launch = include_str!("../vmx/launch.rs");
-    spa.contains("Arm real launch")
-        && spa.contains("Qualify real ESP")
-        && spa.contains("Install FW EPT")
-        && spa.contains("Program alias EPT")
-        && spa.contains("Arm FW alias")
-        && spa.contains("Arm reset vec")
-        && spa.contains("Map live ESP")
-        && spa.contains("Arm ESP launch")
-        && spa.contains("Stage EDK2")
-        && spa.contains("Stage FW floor")
-        && spa.contains("not OVMF")
-        && spa.contains("UEFI-first")
-        && spa.contains("extract-boot is lab")
-        && spa.contains("not guest UEFI")
-        && spa.contains("Host attach")
-        && spa.contains("Firmware arm")
-        && spa.contains("Arm firmware")
-        && crate::mgmt::webui::webui_len().saturating_add(256) <= 16384
+    crate::mgmt::webui::spa_operator_surface_present()
         && adr.contains("Stage 19")
         && adr.contains("arm_ovmf_real_launch")
         && adr.contains("RealLaunchNotIssued")
