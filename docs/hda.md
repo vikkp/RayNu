@@ -350,9 +350,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | e5-stage46-iso |
-| Summary | **Revert `4536b72`:** bare `/media/*/apks` (ISO layout; apk appends arch). Only `echo $R` when `[ -d $R ]` so live-init repos survive failed discovery+mount. `4536b72` `…/apks/main` was mirror layout and a regression vs nested `1b48e26`. #3 remains: alpine-virt on-media lacks `dosfstools`/`grub-efi` — nested proof switches to alpine-standard; keep `USE_EFI=1 BOOTLOADER=grub`. Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested alpine-standard + bare `…/apks` next; F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`. |
-| Gates touched | RayNu-F F6-prep: ash-safe SETUP brace group. F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Summary | **alpine-standard `grub.cfg` patcher:** nested standard run booted `Linux version 6.12.13-0-lts` then stalled after `Freeing initrd` because the linux-line grow only matched `"Linux virt"` / `vmlinuz-virt` (0 hits on standard; only the 33-byte same-length swap applied — no `virtio_pci`, `initcall_blacklist=piix_init`, `efi=noruntime`). Added `ISO_GRUB_LINUX_LTS_FROM/TO` (`"Linux lts"` / `vmlinuz-lts`, 274 bytes) and generalized the ISO9660/Joliet Data Length bump (`140→299`, LBA 8181) alongside virt (`143→302`). Host test patches the real 245 MiB alpine-standard-3.21.3 ISO (4 hits: grow + PVD + Joliet + timeout). Size copy corrected: standard is 245 MiB not ~900; Cruzer stick is 977.5 MiB with a 64 MiB refat FAT (refat larger, not new media). Not ISO-INSTALL-OK. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested alpine-standard re-run with lts grow next (expect Alpine shell → SETUP → setup-disk with `grub-efi`/`dosfstools` on media); F6a ACPI follow-on. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Gates touched | RayNu-F F6-prep: alpine-standard lts grub.cfg grow + Data Length bump (host test on real ISO). F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
 | Months Δ | 0.5→0.5 |
 
 
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested alpine-standard stalled after `Freeing initrd` (grow 0 hits on `Linux lts`); add lts linux-line grow + Data Length 140→299; size copy 245 MiB / 64 MiB refat FAT; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Revert `4536b72` apks/main→bare `…/apks`; guard repo write; nested path alpine-standard for grub-efi/dosfstools; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `1b48e26` setup-disk: apk missing dosfstools/grub-efi on bare `…/apks`; SETUP now uses `/media/*/apks/main`; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-04 | e5-stage46-iso | 0.5 | 95 | Nested `50ed61c` Alpine root shell; SETUP ash `unexpected "}"` on `{mkdir`; spaces `{ mkdir`/`apks; }` so `/media/*/apks` discovery + setup-disk can run; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

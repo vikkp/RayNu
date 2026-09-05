@@ -203,6 +203,10 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), ISO_GRUB_LINUX_TO.len());
     assert_eq!(ISO_GRUB_LINUX_FROM.len(), 277);
     assert_eq!(ISO_GRUB_CFG_PATCHED_SIZE, 302);
+    assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), ISO_GRUB_LINUX_LTS_TO.len());
+    assert_eq!(ISO_GRUB_LINUX_LTS_FROM.len(), 274);
+    assert_eq!(ISO_GRUB_CFG_LTS_ORIG_SIZE, 140);
+    assert_eq!(ISO_GRUB_CFG_LTS_PATCHED_SIZE, 299);
     assert_eq!(ISO_ALPINE_DEV_FROM.len(), ISO_ALPINE_DEV_TO.len());
     assert_eq!(ISO_TTY0_FROM.len(), ISO_TTY0_TO.len());
     assert_eq!(ISO_GRUB_TIMEOUT1_FROM.len(), ISO_GRUB_TIMEOUT1_TO.len());
@@ -289,6 +293,22 @@ fn patch_iso_linux_serial_console_same_length_and_idempotent() {
     assert!(!g.contains("usb-storage"));
     assert!(!grub.windows(ISO_GRUB_LINUX_FROM.len()).any(|w| w == ISO_GRUB_LINUX_FROM));
     assert_eq!(patch_iso_linux_serial_console(&mut grub), 0);
+    // alpine-standard `"Linux lts"` stanza gets the same grow (nested
+    // USE_EFI=1 BOOTLOADER=grub proof; virt stanza is 0 hits there).
+    let mut lts = b"menuentry ".to_vec();
+    lts.extend_from_slice(ISO_GRUB_LINUX_LTS_FROM);
+    lts.extend_from_slice(&[0u8; 8]);
+    assert_eq!(patch_iso_linux_serial_console(&mut lts), 1);
+    let l = core::str::from_utf8(&lts[..10 + ISO_GRUB_LINUX_LTS_TO.len()]).unwrap();
+    assert!(l.contains("\"Linux lts\" {\nlinux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
+    assert!(l.contains("lpj=4194304"));
+    assert!(l.contains("initcall_blacklist=piix_init"));
+    assert!(l.contains(" efi=noruntime "));
+    assert!(l.contains("initrd\t/boot/initramfs-lts\n}\n"));
+    assert!(!l.contains("Linux virt"));
+    assert!(!l.contains("vmlinuz-virt"));
+    assert!(!l.contains("usb-storage"));
+    assert_eq!(patch_iso_linux_serial_console(&mut lts), 0);
 }
 
 fn write_iso9660_dir_record(buf: &mut [u8], rec: usize, name: &[u8], lba: u32, size: u32) {
@@ -373,6 +393,52 @@ fn patch_iso_linux_grows_grub_cfg_iso9660_data_length() {
 }
 
 #[test]
+fn patch_iso_linux_grows_alpine_standard_grub_cfg_iso9660_data_length() {
+    assert_eq!(ISO_GRUB_CFG_ALPINE_STANDARD.len(), ISO_GRUB_CFG_LTS_ORIG_SIZE as usize);
+    let lba = 2u32;
+    let data = (lba as usize) * 2048;
+    let mut iso = vec![0u8; data + 2048];
+    iso[data..data + ISO_GRUB_CFG_ALPINE_STANDARD.len()]
+        .copy_from_slice(ISO_GRUB_CFG_ALPINE_STANDARD);
+    let pvd = 64usize;
+    let joliet = 128usize;
+    write_iso9660_dir_record(
+        &mut iso,
+        pvd,
+        ISO_GRUB_CFG_ISO9660_NAME,
+        lba,
+        ISO_GRUB_CFG_LTS_ORIG_SIZE,
+    );
+    write_iso9660_dir_record(
+        &mut iso,
+        joliet,
+        ISO_GRUB_CFG_JOLIET_NAME,
+        lba,
+        ISO_GRUB_CFG_LTS_ORIG_SIZE,
+    );
+    // lts grow (1) + PVD bump (1) + Joliet bump (1) + set timeout=1 (1);
+    // virt grow / 143-byte bump are 0 hits on this layout.
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 4);
+    assert_eq!(iso_dir_size_le(&iso, pvd), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, pvd), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_le(&iso, joliet), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+    assert_eq!(iso_dir_size_be(&iso, joliet), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+    let orig_win = &iso[data..data + ISO_GRUB_CFG_LTS_ORIG_SIZE as usize];
+    assert!(!orig_win.contains(&b'}'));
+    let patched = &iso[data..data + ISO_GRUB_CFG_LTS_PATCHED_SIZE as usize];
+    let s = core::str::from_utf8(patched).unwrap();
+    assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
+    assert!(s.contains("linux\t/boot/vmlinuz-lts modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime \n"));
+    assert!(s.contains("initrd\t/boot/initramfs-lts"));
+    assert!(s.ends_with("}\n"));
+    assert_eq!(s.bytes().filter(|b| *b == b'{').count(), 1);
+    assert_eq!(s.bytes().filter(|b| *b == b'}').count(), 1);
+    assert_eq!(iso[data + ISO_GRUB_CFG_LTS_PATCHED_SIZE as usize], 0);
+    assert_eq!(patch_iso_linux_serial_console(&mut iso), 0);
+}
+
+#[test]
 fn bump_iso9660_grub_cfg_size_skips_gzip_false_positive() {
     let mut buf = vec![0xFFu8; 256];
     write_iso9660_dir_record(
@@ -418,5 +484,42 @@ fn patch_in_tree_alpine_virt_iso_grub_cfg_size_if_present() {
     let cfg_off = 8121usize * 2048;
     let s = core::str::from_utf8(&iso[cfg_off..cfg_off + ISO_GRUB_CFG_PATCHED_SIZE as usize]).unwrap();
     assert!(s.contains("initrd\t/boot/initramfs-virt"));
+    assert!(s.ends_with("}\n"));
+}
+
+#[test]
+fn patch_in_tree_alpine_standard_iso_grub_cfg_size_if_present() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/alpine-standard-3.21.3-x86_64.iso"
+    );
+    let Ok(mut iso) = std::fs::read(path) else {
+        return;
+    };
+    if iso.len() < 2048 {
+        return;
+    }
+    let n = patch_iso_linux_serial_console(&mut iso);
+    assert!(n >= 4, "expected lts grow + 2 dir bumps + timeout, got {n}");
+    let mut found = 0u32;
+    let mut i = 0usize;
+    while i + 34 <= iso.len() {
+        if iso[i + 32] as usize == ISO_GRUB_CFG_ISO9660_NAME.len()
+            && iso[i + 33..i + 33 + ISO_GRUB_CFG_ISO9660_NAME.len()] == *ISO_GRUB_CFG_ISO9660_NAME
+        {
+            assert_eq!(iso_dir_size_le(&iso, i), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+            assert_eq!(iso_dir_size_be(&iso, i), ISO_GRUB_CFG_LTS_PATCHED_SIZE);
+            found += 1;
+        }
+        i += 1;
+    }
+    assert!(found >= 1);
+    let cfg_off = 8181usize * 2048;
+    let s = core::str::from_utf8(&iso[cfg_off..cfg_off + ISO_GRUB_CFG_LTS_PATCHED_SIZE as usize])
+        .unwrap();
+    assert!(s.starts_with("set timeout=0\n\nmenuentry \"Linux lts\" {\n"));
+    assert!(s.contains("modules=loop,squashfs,virtio_pci,virtio_blk console=ttyS0"));
+    assert!(s.contains("initcall_blacklist=piix_init efi=noruntime"));
+    assert!(s.contains("initrd\t/boot/initramfs-lts"));
     assert!(s.ends_with("}\n"));
 }

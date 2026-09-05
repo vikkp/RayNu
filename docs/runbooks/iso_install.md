@@ -146,7 +146,7 @@ Not extract-boot bzImage.
 
 Copy a UEFI Linux distro ISO onto the Cruzer ESP as `\EFI\RayNu\linux.iso`
 (fallbacks `\linux.iso`, `\EFI\RayNu\install.iso`). Size must exceed 73728
-bytes. Nested `USE_EFI=1 BOOTLOADER=grub` proof: prefer `alpine-standard-*-x86_64.iso` (on-media `grub-efi` + `dosfstools`). `alpine-virt` fits Cruzer ESP (~63 MiB) but its on-media repo lacks those packages — bare `…/apks` is correct; path alone cannot fix missing pkgs. Standard needs larger media than the 977.5 MiB Cruzer FAT. The ISO lives next to
+bytes. Nested `USE_EFI=1 BOOTLOADER=grub` proof: prefer `alpine-standard-*-x86_64.iso` (245 MiB; on-media `grub-efi` + `dosfstools`). `alpine-virt` (63 MiB) fits the current Cruzer ESP but its on-media repo lacks those packages — bare `…/apks` is correct; path alone cannot fix missing pkgs. The Cruzer stick is 977.5 MiB; `--refat-cruzer` made a 64 MiB FAT, so refat larger before staging alpine-standard on iron. The patcher handles both `grub.cfg` layouts: alpine-virt `"Linux virt"` / `vmlinuz-virt` (Data Length 143→302) and alpine-standard `"Linux lts"` / `vmlinuz-lts` (140→299, LBA 8181); before the lts variant the grow was 0 hits on standard and the kernel stalled after `Freeing initrd` with no `virtio_pci` / `initcall_blacklist=piix_init` / `efi=noruntime`. The ISO lives next to
 `flashcruzer.sh` in `/home/vikkp/projects/raynuv`. Refresh the launcher
 from the clone first (`./tools/flashcruzer.sh --install-launcher`): the
 `~/projects/raynuv/flashcruzer.sh` copy is stale and rejects `--linux-iso`.

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Nested QEMU serial capture of Stage 46 product ISO (alpine-standard).
 # alpine-virt on-media repo lacks grub-efi + dosfstools needed for
-# USE_EFI=1 BOOTLOADER=grub. Nested proof uses alpine-standard (~900MiB).
-# Cruzer ESP still stages alpine-virt (~63MiB) until larger media.
+# USE_EFI=1 BOOTLOADER=grub. Nested proof uses alpine-standard (245 MiB;
+# grub.cfg "Linux lts" / vmlinuz-lts, Data Length 140 -> 299 after the
+# ISO_GRUB_LINUX_LTS grow). Cruzer ESP still stages alpine-virt (63 MiB):
+# the stick is 977.5 MiB but --refat-cruzer made a 64 MiB FAT; refat
+# larger before staging alpine-standard on iron.
 #
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
 # above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
