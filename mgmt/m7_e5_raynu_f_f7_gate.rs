@@ -4,17 +4,16 @@
 //! Proven Core: **outside** (ADR-002 / ADR-016 / ADR-017)
 //! VERIFICATION: N/A (host `include_str!` + unit tests)
 //!
-//! Host/CI: the F7 surfaces exist (GPT ESP, CF9/KBC classifier, FADT
-//! RESET_REG, `reset_keep_disk`, serial `reboot`, disk-before-ISO). Nested
-//! second Linux boot is not claimed here. Never prints
-//! `RAYNU-V-M7-ISO-INSTALL-OK`.
+//! Host/CI: F7 surfaces exist. Nested `fe4785a` on `raynuvsrv1` reached
+//! reboot-to-disk (second `Linux version`, `root=UUID=`, `DISK-BOOT-OK`).
+//! Never prints `RAYNU-V-M7-ISO-INSTALL-OK`. Iron E5 stays open.
 
 /// Host / CI marker when the F7 surface gate passes.
 pub const M7_E5_RAYNU_F_F7_OK_MARKER: &str = "RAYNU-V-M7-E5-RAYNU-F-F7-OK";
 
-/// Honest residual: host surfaces ≠ nested reboot-to-disk ≠ iron E5.
+/// Honest residual: nested reboot-to-disk ≠ iron E5.
 pub const E5_RAYNU_F_F7_RESIDUAL_NOTE: &str =
-    "residual: F7 reset/relaunch/disk-ESP surfaces are host-proven; nested second Linux boot and iron ISO-INSTALL-OK are not claimed";
+    "residual: nested fe4785a reboot-to-disk (DISK-BOOT-OK + second Linux root=UUID=) is proven on raynuvsrv1; iron ISO-INSTALL-OK is not claimed";
 
 /// True when F7 function names, markers, and honesty lines exist.
 pub fn raynu_f_f7_surface_present() -> bool {
@@ -59,11 +58,13 @@ pub fn raynu_f_f7_surface_present() -> bool {
         && rf.contains("RAYNU-V-RAYNU-F-DISK-BOOT-OK")
         && harness.contains("RAYNU-V-RAYNU-F-DISK-BOOT-OK")
         && harness.contains("nested reboot-to-disk reached a second Linux boot")
+        && harness.contains("Nested fe4785a (raynuvsrv1)")
         && harness.contains("TIMEOUT_SECS:-1800")
         && harness.contains("nested/host printed iron ISO-INSTALL-OK")
 }
 
-/// Full F7 host package. Not nested proof. Not iron `ISO-INSTALL-OK`.
+/// Full F7 host package. Nested reboot-to-disk proven on `raynuvsrv1`
+/// `fe4785a`. Not iron `ISO-INSTALL-OK`.
 pub fn run_m7_e5_raynu_f_f7_gate() -> bool {
     E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("not claimed")
         && M7_E5_RAYNU_F_F7_OK_MARKER == "RAYNU-V-M7-E5-RAYNU-F-F7-OK"

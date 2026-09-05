@@ -12,6 +12,10 @@
 # Cruzer (977.5 MiB stick) cannot hold extended: iron needs a larger
 # stick (or a trimmed ISO) before this path is flashed.
 #
+# Nested fe4785a (raynuvsrv1): F7 reboot-to-disk reached a second Linux
+# (`RAYNU-V-RAYNU-F-DISK-BOOT-OK`, root=UUID=698a922a-..., /dev/vda2 ext4).
+# Not ISO-INSTALL-OK. Nested QEMU is not R640.
+#
 # Not ISO-INSTALL-OK. Nested product-ISO HOLDS and seeds leftover DRAM
 # above PRECISE (run-qemu.sh defaults QEMU_MEM=2560M). iso=0 stays 512M
 # and does not seed. Host/CI must never print RAYNU-V-M7-ISO-INSTALL-OK.
