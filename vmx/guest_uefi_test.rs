@@ -55,7 +55,7 @@ use super::{
     GUEST_UEFI_CPUID_LEAF4_LAST_SUB, GUEST_UEFI_CPUID_LEAF0_MAX,
     GUEST_UEFI_PHYS_BITS_MAX, GUEST_UEFI_PHYS_BITS_MIN, GUEST_UEFI_PHYS_BITS_IRON_CAP,
     GUEST_UEFI_FLASH_WINDOW, GUEST_UEFI_KVM_CPUID_LEAF, GUEST_UEFI_MISC_ENABLE_DEFAULT,
-    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, guest_uefi_resume_cap, report_ram_return_to_e4, eltorito_stops_guest_uefi,
+    GUEST_UEFI_MISC_ENABLE_MSR, GUEST_UEFI_MTRRCAP, GUEST_UEFI_MTRR_DEF_DEFAULT, GUEST_UEFI_MTRR_WB_PACKED, GUEST_UEFI_POST_ATAPI_TAIL, GUEST_UEFI_POST_DXE_TAIL, GUEST_UEFI_RESUME_CAP, GUEST_UEFI_NESTED_RESUME_CAP, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP, GUEST_UEFI_RAYNU_F_DIRECT_CAP, M7_E5_RAYNU_F_DIRECT_NOTE, guest_uefi_resume_cap, guest_uefi_raynu_f_resume_cap, report_ram_return_to_e4, eltorito_stops_guest_uefi,
     GUEST_UEFI_SEC_TAIL_GPA, M7_E5_OVMF_ALIVE_OK_MARKER, M7_E5_OVMF_ATAPI_OK_MARKER,
     M7_E5_OVMF_BOTH_OK_MARKER, M7_E5_OVMF_CDROM_OK_MARKER, M7_E5_OVMF_DXE_OK_MARKER,
     M7_E5_OVMF_ELTORITO_OK_MARKER, M7_E5_OVMF_PAST_SEC_OK_MARKER, M7_E5_OVMF_VIRTIO_OK_MARKER,
@@ -2496,6 +2496,38 @@ fn past_sec_predicates_are_honest() {
     }
     assert!(eltorito_stops_guest_uefi(true));
     assert!(hlt_should_resume());
+}
+
+/// ADR-016: `raynuf.txt` must stop the retained-OVMF leg at its first exit
+/// on iron and nested. Iron OVMF never faults at SEC the way nested KVM did
+/// (`788930c` n=1043), so without this the leg parks in BDS CpuSleep until
+/// the 16_777_216 product cap (`ea30da1`; 2026-09-06 UDisk F7 attempt).
+#[test]
+fn raynu_f_flag_collapses_ovmf_leg_to_first_exit() {
+    assert_eq!(GUEST_UEFI_RAYNU_F_DIRECT_CAP, 1);
+    for cap in [
+        GUEST_UEFI_RESUME_CAP,
+        GUEST_UEFI_NESTED_RESUME_CAP,
+        GUEST_UEFI_PRODUCT_ISO_RESUME_CAP,
+    ] {
+        assert_eq!(
+            guest_uefi_raynu_f_resume_cap(true, cap),
+            GUEST_UEFI_RAYNU_F_DIRECT_CAP,
+            "raynuf.txt: OVMF leg stops at n=1 regardless of the lab/product cap"
+        );
+        assert_eq!(
+            guest_uefi_raynu_f_resume_cap(false, cap),
+            cap,
+            "no raynuf.txt: lab/product cap unchanged (parked OVMF leg)"
+        );
+    }
+    // The exit loop resumes while `n < cap`: the first exit (n=1) already
+    // stops, so OVMF never executes past its first trapped instruction.
+    let first_exit = 1u32;
+    assert!(!(first_exit < guest_uefi_raynu_f_resume_cap(true, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP)));
+    assert!(first_exit < guest_uefi_raynu_f_resume_cap(false, GUEST_UEFI_PRODUCT_ISO_RESUME_CAP));
+    assert!(M7_E5_RAYNU_F_DIRECT_NOTE.contains("OVMF leg bypassed"));
+    assert!(M7_E5_RAYNU_F_DIRECT_NOTE.contains("not ISO-INSTALL-OK"));
 }
 
 #[test]

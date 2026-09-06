@@ -130,6 +130,28 @@ pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
     }
 }
 
+/// ADR-016: with `raynuf.txt` the retained-OVMF leg is a scaffold only —
+/// RayNu-F is entered from the stop path (`raynu_f_launch_on_stopped_vmcs`
+/// reuses the halted VMCS + slab), so the leg **must stop** before RayNu-F
+/// can run. Nested KVM stopped it for free at SEC (`788930c` `stop n=1043`
+/// `reason=0x30` `rip=0xfffd4739`), which is why nested F7 `088ab25` went
+/// straight to `image=ISO-BOOTX64`. Iron OVMF has no such fault: it runs
+/// to BDS CpuSleep `rip=0x7f0680d0` `ataio=0` and only stops at the
+/// 16_777_216 product cap (`ea30da1`), which is where the 2026-09-06 UDisk
+/// F7 attempt sat printing ticks. Stop at the first exit instead. No OVMF
+/// state is read or written (ADR-016 no third-party firmware mutation).
+pub const GUEST_UEFI_RAYNU_F_DIRECT_CAP: u32 = 1;
+
+/// Resume cap actually applied: `raynuf.txt` collapses the OVMF leg to one
+/// exit on iron **and** nested; otherwise [`guest_uefi_resume_cap`].
+pub fn guest_uefi_raynu_f_resume_cap(raynu_f: bool, cap: u32) -> u32 {
+    if raynu_f {
+        GUEST_UEFI_RAYNU_F_DIRECT_CAP
+    } else {
+        cap
+    }
+}
+
 /// After DXE evidence, spend this many exits unless firmware read an ATAPI
 /// sector. Nested VT-x `1b07692`: BOTH-OK at n=1111 then the private VMCS
 /// stopped with `sectors=0` — PciBus never reached PACKET.
@@ -5760,7 +5782,11 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     let mut resume = false;
-    if !entry_fail && !tf && !fetch_fail && n < guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()) {
+    let resume_cap = guest_uefi_raynu_f_resume_cap(
+        crate::boot::raynu_f_flag::requested(),
+        guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()),
+    );
+    if !entry_fail && !tf && !fetch_fail && n < resume_cap {
         resume = match basic {
             EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
             EXIT_REASON_CPUID => handle_cpuid(),
@@ -6306,10 +6332,18 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     if crate::boot::raynu_f_flag::requested()
         && !RAYNU_F_RAN.swap(true, Ordering::AcqRel)
     {
+        if n <= GUEST_UEFI_RAYNU_F_DIRECT_CAP {
+            serial::write_line(M7_E5_RAYNU_F_DIRECT_NOTE);
+        }
         raynu_f_launch_on_stopped_vmcs();
     }
     leave_to_e4();
 }
+
+/// Printed when `raynuf.txt` stopped the OVMF leg at its first exit so
+/// RayNu-F takes the VMCS without waiting for OVMF to fault or hit the cap.
+pub const M7_E5_RAYNU_F_DIRECT_NOTE: &str =
+    "boot: RayNu-F direct — OVMF leg bypassed at first exit (ADR-016; not ISO-INSTALL-OK)";
 
 /// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
 /// test app in long mode. No new allocations: identity PTs, tables, app,
