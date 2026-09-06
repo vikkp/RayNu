@@ -32,6 +32,7 @@ abstract; that is still Thursday 17 Sep AoE.
 | [`ANONYMIZATION.md`](ANONYMIZATION.md) | What must not appear in the PDF |
 | [`ARTIFACT.md`](ARTIFACT.md) | Optional anonymized `ept_model` zip |
 | [`CHECKLIST.md`](CHECKLIST.md) | 17 Sep vs 24 Sep vs camera-ready |
+| [`REBUTTAL.md`](REBUTTAL.md) | Operator notes for 6–8 Jan; do not paste into the PDF |
 | [`supplement/README.md`](supplement/README.md) | Optional proofs file (reviewers may ignore) |
 
 ## Hard rules (do not skip)

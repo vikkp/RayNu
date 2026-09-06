@@ -46,7 +46,7 @@ Hypervisor access to virtio rings is not a second EPT owner.
 
 If included: strip product markers, hostnames, iDRAC addresses, and
 operator names. Keep enough to support each R640 row of the split table
-(VMXON, Linux shell, virtio-blk, virtio-net, SMP, four-VM probes, HTTP,
+(VMXON, Linux shell, virtio-blk, virtio-net, SMP, four-VM probes (one Linux, three stubs), HTTP,
 El Torito). Prefer excerpts over full SOL pastes.
 
 ## Do not include

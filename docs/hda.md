@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | eurosys-2027-fall kit |
-| Summary | Isolon v6: §6.5 scores SeKVM/seL4 on the artifact axis; draft-history eval; empty cells explained. Not a product gate. Iron P0-14 stays 2b795a0. |
+| Summary | Isolon v7: abstract names Linux+3 stubs; Isolon rows in Table 7; lesson 7.6 is a prescription; guest-density stated. Not a product gate. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Conference rewrite is not an iron close. |
 | Gates touched | none closed. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v7: Linux+3 stubs in abstract; Isolon in Table 7; 7.6 prescription; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v6: ladder scores SeKVM abstract vs overlay; seL4 C-to-binary as the axis; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v5: two-axis ladder on 7 systems; range path disjoint from ghost; Fonseca; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon PDF submission id 394. Not v1.0; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

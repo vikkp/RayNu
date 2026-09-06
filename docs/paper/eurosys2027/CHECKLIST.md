@@ -28,8 +28,9 @@ PDF is **not** required on the 17th.
 
 ## After reviews (6 Jan 2027) — rebuttal by 8 Jan
 
-- [ ] ≤500 words; facts and reviewer questions only
-- [ ] No new experiments, no “we will add X”
+- [ ] Paste from [`REBUTTAL.md`](REBUTTAL.md); ≤500 words; facts and reviewer questions only
+- [ ] No new experiments in the HotCRP box
+- [ ] If the R640 is free before 8 Jan, measure then and put numbers in the response; otherwise keep the camera-ready promise in the operator notes, not a new claim
 
 ## If accepted (notify 29 Jan 2027) — camera-ready 5 Mar 2027
 
