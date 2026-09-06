@@ -60,6 +60,7 @@ fn precise_range_claim() {
     let ranges = core::ptr::addr_of!(PRECISE_RANGES);
     // SAFETY: single-threaded test; ranges filled by claim above.
     unsafe {
+        assert_eq!((*ranges).len(), 1, "Linux-only precise window is one range row");
         assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0));
         assert!((*ranges).contains_gpa(
             M2_BRINGUP_GUEST_ID,
@@ -82,6 +83,8 @@ fn precise_range_claim_with_g1_hole() {
     let ranges = core::ptr::addr_of!(PRECISE_RANGES);
     // SAFETY: single-threaded test.
     unsafe {
+        // G0 [0, e820) + G1 2M hole + G0 remainder.
+        assert_eq!((*ranges).len(), 3);
         assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0));
         assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, guest_ram - 0x1000));
         assert!((*ranges).contains_gpa(M4_GUEST1_ID, g1));
@@ -109,11 +112,18 @@ fn precise_range_claim_with_shell_holes() {
     let ranges = core::ptr::addr_of!(PRECISE_RANGES);
     // SAFETY: single-threaded test.
     unsafe {
+        // G0 [0, e820) + three 2M shells + G0 remainder = 5 range rows.
+        // Pairwise HPA non-overlap is claim_range AlreadyOwned, not the 4K
+        // two-guest self-test on EptMap.
+        assert_eq!((*ranges).len(), 5);
         assert!((*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, 0));
         assert!((*ranges).contains_gpa(M4_GUEST1_ID, g1));
         assert!((*ranges).contains_gpa(M4_GUEST2_ID, g2));
         assert!((*ranges).contains_gpa(M4_GUEST3_ID, g3));
         assert!(!(*ranges).contains_gpa(M2_BRINGUP_GUEST_ID, g2));
+        assert!(!(*ranges).contains_gpa(M4_GUEST1_ID, g2));
+        assert!(!(*ranges).contains_gpa(M4_GUEST2_ID, g3));
+        assert!(!(*ranges).contains_gpa(M4_GUEST3_ID, g1));
     }
 }
 

@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-23
+last_updated: 2026-09-06
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -347,10 +347,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-virtio |
-| Summary | P0-57 CLOSED nested VT-x: OVMF-VIRTIO-OK val=0x1042 pci=1 virtio=1. CD GuestVisible. pci_ide=0 sectors=0. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | eurosys-2027-fall kit |
+| Summary | Isolon v10: §1 names disjointness; §10 closes on 7.6; seven-plus-Isolon count. Not a product gate. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Conference rewrite is not an iron close. |
+| Gates touched | none closed. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -372,7 +372,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v10: §1 disjointness; §10 retrofit closer; seven prior plus Isolon; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v9: abstract names seL4/SeKVM/own-draft findings; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v8: Table 2 for 7.2; Isolon last-three-rows in §6.4; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v7: Linux+3 stubs in abstract; Isolon in Table 7; 7.6 prescription; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v6: ladder scores SeKVM abstract vs overlay; seL4 C-to-binary as the axis; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v5: two-axis ladder on 7 systems; range path disjoint from ghost; Fonseca; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon PDF submission id 394. Not v1.0; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CLOSED nested VT-x DXE-OK + CDROM-OK pci_ide=1 sectors=0; not installer; iron P0-14 stays 2b795a0 |

@@ -1,0 +1,81 @@
+% Optional EuroSys supplement. Reviewers are not required to read this.
+% Keep identity-free. Paper must stand alone.
+\documentclass[sigplan,10pt,anonymous]{acmart}
+\setcopyright{none}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\settopmatter{printfolios=true,printccs=false,printacmref=false}
+\acmConference[EuroSys '27]{European Conference on Computer Systems}{April 19--24, 2027}{Morocco}
+
+\usepackage{booktabs}
+
+\begin{document}
+\title{Supplement: Isolon Exclusivity Proof Surface}
+\author{Anonymous}
+\maketitle
+
+This optional file lists named lemmas in the host-only Verus crate
+\texttt{ept\_model} (2{,}366 lines). The conference paper is self-contained
+without it. Live executable EPT is not in this list and is not L3.
+
+\section{How to replay}
+
+Pin Verus \texttt{release/0.2026.07.12.0b42f4c} (Linux zip SHA-256
+in \texttt{verus-version.toml}). Then
+\texttt{cargo verus verify -p ept\_model}. Expected:
+80 verified, 0 errors, including the $N$-guest CI alias. No \texttt{admit}
+on the exclusivity path. The theorem is guest-exclusivity, not hypervisor
+non-access.
+
+\section{Named theorems}
+
+\begin{tabular}{lp{6.8cm}}
+\toprule
+Identifier & Claim \\
+\midrule
+\texttt{theorem\_single\_guest\_4k\_map\_unmap\_exclusive} &
+  finite enabled 4K sequences preserve exclusive ownership \\
+\texttt{theorem\_n\_guest\_4k\_map\_unmap\_exclusive} &
+  same discharge; $N$-guest CI name \\
+\texttt{theorem\_concrete\_single\_guest\_4k\_refine} &
+  scoped ghost$\leftrightarrow$exec commute (one guest) \\
+\texttt{theorem\_concrete\_n\_guest\_4k\_refine} &
+  scoped refine for $N$ guests \\
+\texttt{theorem\_large\_page\_map\_unmap\_exclusive} &
+  2M/1G span map/unmap \\
+\texttt{theorem\_numa\_map\_unmap\_affinity} &
+  mapped frames recorded on ghost NUMA node \\
+\texttt{theorem\_hw\_2m\_leaf\_refines\_identity} &
+  2M leaf encoding vs identity intent \\
+\texttt{theorem\_ept\_violation\_preserves\_exclusive} &
+  emulate / reject / claim-map \\
+\texttt{theorem\_page\_transfer\_preserves\_exclusive} &
+  unmap source, map same HPA at dest \\
+\texttt{theorem\_alloc\_map\_unmap\_refines} &
+  frame pool + EPT refine \\
+\bottomrule
+\end{tabular}
+
+\section{Supporting lemmas (selected)}
+
+\texttt{lemma\_empty\_exclusive},
+\texttt{lemma\_map\_ok\_exclusive},
+\texttt{lemma\_unmap\_ok\_exclusive},
+\texttt{lemma\_apply\_step\_exclusive},
+\texttt{lemma\_two\_guests\_map\_distinct\_frames\_exclusive},
+\texttt{lemma\_map\_span\_exclusive},
+\texttt{lemma\_unmap\_span\_exclusive},
+\texttt{lemma\_2m\_map\_unmap\_exclusive},
+\texttt{lemma\_1g\_map\_unmap\_exclusive},
+\texttt{lemma\_violation\_noop\_preserves\_exclusive},
+\texttt{lemma\_violation\_claim\_preserves\_exclusive},
+\texttt{lemma\_transfer\_preserves\_exclusive}.
+
+The crate contains further span, NUMA, and hardware-decode lemmas. Count
+them with the verifier, not this list: the CI number is 80 functions.
+
+\section{What this supplement does not prove}
+
+The UEFI binary, live \texttt{memory/ept.rs}, device emulation, HTTP, SPA,
+ISO install, and guest firmware. Nested distro sysinstall is not iron.
+
+\end{document}
