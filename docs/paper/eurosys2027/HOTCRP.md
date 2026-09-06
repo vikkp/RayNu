@@ -44,7 +44,9 @@ Per-author limit: ≤3 papers this cycle. This is the one.
 ```
 Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary on a Dell PowerEdge R640. On that server it reaches unmodified Linux 6.12 and, on the same boot, virtio-blk, virtio-net, dual-vCPU SMP, and four-VM probes, then serves host-NIC HTTP.
 
-A machine-checked isolation theorem next to that binary is a labelling problem: the proved artifact and the mapping path the guests actually use need not be the same object. We propose a two-axis ladder—proof maturity (L0–L3) against artifact (ghost model, executable module, binary on the target)—and apply it to Isolon and to seven prior systems. Isolon's L3 result is guest-exclusivity in a host-only Verus crate. Linux's 512 MiB identity window is a 16-slot range registry with no ghost correspondence; the proved 4K table is the demand-fill and self-test path. Hypervisor non-access is an assumption. Virtio rings are guest frames the emulator touches. Nested VT-x completed a distro install-to-disk; that host is not the R640.
+A machine-checked isolation theorem next to that binary is a labelling problem: the proved artifact and the mapping path the guests actually use need not be the same object. We propose a two-axis ladder—proof maturity (L0–L3) against artifact (ghost model, executable module, binary on the target)—and apply it to Isolon and to seven prior systems. Six lessons generalized while shipping: pin the prover, keep SMT off UEFI, do not poke third-party firmware, firmware TCP is not a management plane, nested VT-x is not the production server, and a model written against working code inherits that code's blind spots.
+
+Isolon's L3 result is guest-exclusivity in a host-only Verus crate; the 512 MiB Linux window is a range registry with no ghost correspondence. Nested VT-x completed a distro install-to-disk; that host is not the R640.
 ```
 
 ---

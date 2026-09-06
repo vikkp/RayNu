@@ -61,13 +61,15 @@ A machine-checked isolation theorem next to that binary is a labelling
 problem: the proved artifact and the mapping path the guests actually use
 need not be the same object. We propose a two-axis ladder---proof
 maturity (L0--L3) against artifact (ghost model, executable module, binary
-on the target)---and apply it to Isolon and to seven prior systems. Isolon's
-L3 result is guest-exclusivity in a host-only Verus crate. Linux's 512~MiB
-identity window is a 16-slot range registry with no ghost correspondence;
-the proved 4K table is the demand-fill and self-test path. Hypervisor
-non-access is an assumption. Virtio rings are guest frames the emulator
-touches. Nested VT-x completed a distro install-to-disk; that host is not
-the R640.
+on the target)---and apply it to Isolon and to seven prior systems. Six
+lessons generalized while shipping: pin the prover, keep SMT off UEFI, do
+not poke third-party firmware, firmware TCP is not a management plane,
+nested VT-x is not the production server, and a model written against
+working code inherits that code's blind spots.
+
+Isolon's L3 result is guest-exclusivity in a host-only Verus crate; the
+512~MiB Linux window is a range registry with no ghost correspondence.
+Nested VT-x completed a distro install-to-disk; that host is not the R640.
 \end{abstract}
 
 \begin{CCSXML}
@@ -129,29 +131,29 @@ emulation, HTTP, the SPA, ISO handling, and guest firmware are outside the
 Proven Core. Claiming ``the hypervisor is proved'' would be proving the
 wrong thing~\cite{klein2014comprehensive}: a convenient proxy.
 
-This paper makes four contributions:
+This paper makes three contributions:
 
 \begin{enumerate}
 \item \textbf{A two-axis labelling ladder} (Section~\ref{sec:ladder}):
   proof maturity L0--L3 against artifact
   (ghost model / executable module / binary on the target). An L3 claim
   about a ghost model and an L3 claim about executable code are not
-  comparable. We apply the grid to Isolon and to seven systems from the
-  literature (Table~\ref{tab:ladder}).
+  comparable. Table~\ref{tab:ladder} shows the field already traversing
+  that axis (seL4 C, then seL4 binary) and resolves a SeKVM abstract that
+  otherwise reads as a proved binary.
 
-\item \textbf{Five lessons that generalized} while shipping the EFI
-  (Section~\ref{sec:lessons}): pin the prover, do not host SMT on a UEFI
-  target, do not poke third-party firmware control state, firmware TCP is
-  not a management plane, and nested VT-x is not the production server.
+\item \textbf{Six lessons that generalized} while shipping the EFI
+  (Section~\ref{sec:lessons}): pin the prover, keep SMT off the UEFI target,
+  do not poke third-party firmware, firmware TCP is not a management plane,
+  nested VT-x is not the production server, and a model written after
+  working code will not find that code's mapping bugs.
   Table~\ref{tab:neg} archives the negative results behind those lessons.
 
-\item \textbf{Guest-exclusivity in a ghost model} for 4K map/unmap, violation
-  dispositions, and page transfer. The modelling that was not free is
-  the emulate/reject/claim trichotomy and 2M/1G span encoding.
-
-\item \textbf{A split evaluation on one R640:} Linux~6.12 to a shell,
-  virtio-blk, virtio-net, dual-vCPU SMP, four-VM probes, host-NIC HTTP,
-  and El Torito CD EFI, with nested VT-x as a separate column.
+\item \textbf{A Type-1 that boots, and the gap report for its isolation
+  claim.} On one R640: Linux~6.12, virtio-blk, virtio-net, dual-vCPU SMP,
+  four-VM probes, host-NIC HTTP, and El Torito CD EFI. The L3 theorem is a
+  4K ghost model; production GPA coverage is an L1 range registry
+  (Section~\ref{sec:honest}).
 \end{enumerate}
 
 Isolon is not seL4 for hypervisors and is not a verified KVM. It is a
@@ -168,6 +170,10 @@ them matter if EPT can map the same host frame to two guests without anyone
 noticing. We therefore name \emph{exclusivity among guests} as the property
 we prove, not ``the guest seemed isolated in tests,'' and not ``the
 hypervisor never touches a guest frame.''
+On the R640, with four guests, that property is L1-enforced: hole arithmetic
+in a 16-slot range table plus runtime checks. The L3 theorem is a 4K ghost
+path that production Linux GPA coverage does not use
+(Section~\ref{sec:honest}).
 
 \subsection{In scope}
 
@@ -201,8 +207,8 @@ The adversary in this section is a malicious ring-0 guest. Such a guest
 can program DMA if a device is passed through, or if an emulated device can
 be driven to DMA outside the guest's frames. Isolon's product path has
 \textbf{no device passthrough}. Guest DMA is mediated by emulation executing
-in the hypervisor's address space. Exclusive ownership is \emph{conditional
-on that}: it is not a theorem against an IOMMU-less passthrough device.
+in the hypervisor's address space. Exclusive ownership is conditional on
+no passthrough: it is not a theorem against an IOMMU-less device.
 Unmodelled DMA is listed in Section~\ref{sec:assumptions}. Closing DMA as a
 lemma needs an IOMMU story we do not have.
 
@@ -309,8 +315,9 @@ The second axis is \emph{which artifact} the claim is about: a ghost
 model, an executable module, or a binary on the target. Table~\ref{tab:isolon-grid}
 places Isolon. An L3 claim about a ghost model and an L3 claim about
 executable code are not comparable; a one-axis label ``L3 isolation''
-would make Isolon's crate look like seL4's C kernel. Section~\ref{sec:ladder-eval}
-applies the same grid to seven prior systems.
+would make Isolon's crate look like seL4's C kernel. Isolon's cells are
+Table~\ref{tab:isolon-grid}. Section~\ref{sec:ladder-eval} applies the same
+grid to seven prior systems.
 
 \begin{table}[t]
   \caption{Isolon on two axes. Empty cells are not claimed.}
@@ -422,7 +429,7 @@ enabled steps preserves it. Guest ids are already a field of each step, so
 the sequence theorem is already an $N$-guest statement. A two-guest lemma
 maps two distinct non-zero guests onto distinct free frames.
 
-Large pages are spans of 4K frames (512 for 2M, $2^{18}$ for 1G). Span
+Large pages are spans of 4K frames (512 for 2M, 262{,}144 for 1G). Span
 map/unmap lemmas lift exclusivity to 2M/1G. Hardware 2M-leaf decode lemmas
 relate a leaf PTE encoding to an identity-map intent. A ghost SRAT/SLIT
 records which node a mapped frame sits on; SLIT distance never appears in
@@ -535,16 +542,14 @@ would not know that those 512 keys are \emph{one} leaf with the page-size
 bit, and would still be 512 ghost steps rather than one hardware PDE.
 What we wrote instead is a span predicate (every aligned 4K key in the
 region is free) followed by a bulk insert, plus an arithmetic lemma that
-512 aligned 4K frames constitute a 2M leaf ($2^{18}$ for 1G). Those
+512 aligned 4K frames constitute a 2M leaf (262{,}144 for 1G). Those
 facts are still not a hardware page-walk. They are why ``map 4K $k$
 times'' is not the 2M theorem.
 
 \paragraph{SMT as bug finder.}
-We did not catch an executable aliasing bug with Verus or Kani. The
-ghost model was written against a registry that already rejected
-double-map of the same HPA. Kani's bounded no-double-map and allocator
-no-alias harnesses pass. Runtime on
-iron found real bugs---Enable-XSAVES, INVPCID, WaitForEvent state pokes
+We did not catch an executable aliasing bug with Verus or Kani.
+Section~\ref{sec:model-after} is why. Runtime on iron found real
+bugs---Enable-XSAVES, INVPCID, WaitForEvent state pokes
 (Table~\ref{tab:neg})---none of which are exclusivity lemmas.
 
 Violation $\mathsf{ClaimMap}$ reuses the 4K map lemma. Emulate and reject
@@ -666,7 +671,8 @@ Until then, L3 names the ghost crate. The EFI is not L3.
 We evaluate five questions. (1)~Does the ghost model verify? (2)~How
 large is the proved surface? (3)~What covers guest-physical space at Linux
 boot? (4)~What does the runtime do on a lab host versus a real R640?
-(5)~Does the two-axis ladder change how landmark abstracts read?
+(5)~Does the two-axis ladder resolve abstract-level ambiguity in published
+systems?
 
 \subsection{Proofs}
 
@@ -676,7 +682,8 @@ Linux zip SHA-256 \texttt{f6f4f5d0\ldots fbd01c0} in-tree; CI never uses
 The exclusivity crate is verified with \texttt{cargo verus verify}.
 Against that pin the crate reports \textbf{80 verified, 0 errors},
 including the $N$-guest alias, with no \texttt{admit} on the exclusivity
-path. Wall-clock and peak RSS for that run are not in Table~\ref{tab:measure}.
+path. Wall-clock and peak RSS for that CI run were not logged
+(Section~\ref{sec:threats}).
 Kani covers bounded \texttt{unsafe} in the live engine
 (\texttt{MAP\_CAP}${}=8$ unwind). That is L1 on \texttt{unsafe}, not L3
 on exclusive ownership.
@@ -697,11 +704,13 @@ Range occupancy is from the host test of the same
 \texttt{claim\_precise\_*} function the boot path calls. Linux-only:
 one range row covering 512~MiB. Four-VM: five rows (G0 below e820, three
 2M shells, G0 remainder). Hardware uses 256$\times$2M leaves. Guest e820
-is 256~MiB. COM2 has no slot-counter dump. VM-exit cycles and boot-to-shell
-versus KVM on the R640 are empty cells.
+is 256~MiB. The R640 was not re-instrumented this cycle, so there is no
+COM2 slot-counter dump and no VM-exit cycle comparison
+(Section~\ref{sec:threats}).
 
 \begin{table}[t]
-  \caption{Measured quantities. Empty cells are unmeasured.}
+  \caption{Measured quantities. Dashes: R640 not re-instrumented this
+  cycle; Verus wall-clock not logged on CI (Section~\ref{sec:threats}).}
   \label{tab:measure}
   \small
   \begin{tabularx}{\linewidth}{@{}L L@{}}
@@ -805,49 +814,60 @@ theorem.
 \subsection{Labelling the literature}
 \label{sec:ladder-eval}
 
-Table~\ref{tab:ladder} applies the two-axis grid to seven prior systems
-plus Isolon. Cells are a reading of each paper's abstract and stated
-artifact, not a re-proof.
+The grid does two things a one-axis ``L3 isolation'' label cannot. It
+resolves abstract-level ambiguity in published systems, and it keeps three
+Isolon claims from fusing (Table~\ref{tab:isolon-grid}).
+Table~\ref{tab:ladder} is a reading of each paper's abstract against the
+stated artifact, not a re-proof. Isolon's cells stay in
+Table~\ref{tab:isolon-grid}.
 
-Landmark abstracts typically name an executable artifact: seL4's C
-kernel~\cite{klein2009sel4}, then the ARM binary via translation
-validation~\cite{sewell2013translation}; CertiKOS's C
-implementation~\cite{gu2016certikos}; Komodo's monitor~\cite{ferraiuolo2017komodo};
-Hyperkernel's simplified kernel~\cite{nelson2017hyperkernel}. XMHF and
-Verisoft XT name fragments of an executable hypervisor, not a whole
-binary~\cite{vasudevan2013xmhf,leinenbach2009verisoft}. SeKVM's abstract
-presents ``a formally verified Linux KVM hypervisor''; the Coq development
-is an overlay on commodity KVM~\cite{li2021varmour,li2021microhvisor}. That
-is the closest analogue to Isolon-shaped slippage: an L3 claim that a
-reader can place on the wrong artifact column. Even there the proved object
-is executable code, not a ghost crate.
+\paragraph{seL4 already walked the artifact axis.}
+The 2009 seL4 abstract names the C implementation of the
+kernel~\cite{klein2009sel4}: cell (L3, executable C). Sewell, Myreen, and
+Klein~\cite{sewell2013translation} then closed C-to-binary on ARM by
+translation validation: cell (L3, binary on the target). The field spent
+four years treating that distinction as worth a separate PLDI paper. It
+did not have a name for the axis. The ladder is that vocabulary.
 
-The finding is not that the literature's labels are systematically false. It
-is that a one-axis ``L3 isolation'' label would put Isolon's crate in the
-same cell as seL4's C kernel, which is the confusion the instrument exists
-to prevent. Isolon is the only row whose L3 result and whose shipped mapping
-path occupy different artifact columns.
+\paragraph{SeKVM's abstract is the detection.}
+SeKVM's abstract presents ``a formally verified Linux KVM
+hypervisor''~\cite{li2021varmour,li2021microhvisor}. That sentence reads as
+cell (L3, binary on the target). The Coq development is an overlay covering
+a module of commodity KVM: cell (L3, executable module). The grid does not
+need to accuse anyone of anything. It names the two cells so a reader can
+see they are not the same object.
+
+\paragraph{This paper's own drafts.}
+An earlier draft of this submission put ``belongs to neither the
+hypervisor nor any other guest'' in the abstract, next to a live
+ownership registry, with the R640 boot in the same paragraph. Under the
+grid that paragraph claims cell (L3, binary on the target). The evidence
+was cell (L3, ghost model). The instrument would have split the paragraph.
+That is the evaluation nobody else can run: the same project, before and
+after the label.
+
+XMHF and Verisoft XT name fragments of an executable hypervisor, not a
+whole binary~\cite{vasudevan2013xmhf,leinenbach2009verisoft}. CertiKOS,
+Komodo, and Hyperkernel name an executable artifact and the evidence
+matches~\cite{gu2016certikos,ferraiuolo2017komodo,nelson2017hyperkernel}.
 
 \begin{table*}[t]
-  \caption{Retrospective (maturity, artifact) reading. Isolon is the row
-  where L3 and the shipped mapping path are different cells.}
+  \caption{Retrospective (maturity, artifact) reading of landmark abstracts.
+  Isolon's three cells are Table~\ref{tab:isolon-grid}.}
   \label{tab:ladder}
   \small
-  \begin{tabularx}{\textwidth}{@{}l l l L@{}}
+  \begin{tabularx}{\textwidth}{@{}l l L L@{}}
     \toprule
-    System & Artifact & Mat. & What the abstract names \\
+    System & Mat. & Abstract reads as & Evidence artifact \\
     \midrule
-    seL4~\cite{klein2009sel4} & executable C & L3 & kernel C implementation \\
-    seL4 binary~\cite{sewell2013translation} & ARM binary & L3 & translation validation \\
-    CertiKOS~\cite{gu2016certikos} & executable C & L3 & C contextual refinement \\
-    Komodo~\cite{ferraiuolo2017komodo} & executable monitor & L3 & monitor implementation \\
-    Hyperkernel~\cite{nelson2017hyperkernel} & executable kernel & L3 & simplified syscall iface \\
-    SeKVM~\cite{li2021varmour} & executable overlay & L3 & Linux KVM (overlay in Coq) \\
-    XMHF~\cite{vasudevan2013xmhf} & executable fragments & mixed & core memory integrity \\
-    Verisoft XT~\cite{leinenbach2009verisoft} & selected C & mixed & Hyper-V components (VCC) \\
-    Isolon exclusivity & ghost model & L3 & this paper \\
-    Isolon \texttt{memory/ept.rs} & executable module & L2 & this paper \\
-    Isolon R640 boot & binary on target & L1 & this paper \\
+    seL4~\cite{klein2009sel4} & L3 & executable C kernel & executable C \\
+    seL4 binary~\cite{sewell2013translation} & L3 & ARM binary & ARM binary \\
+    CertiKOS~\cite{gu2016certikos} & L3 & C implementation & executable C \\
+    Komodo~\cite{ferraiuolo2017komodo} & L3 & monitor implementation & executable monitor \\
+    Hyperkernel~\cite{nelson2017hyperkernel} & L3 & simplified kernel & executable kernel \\
+    SeKVM~\cite{li2021varmour} & L3 & Linux KVM hypervisor & executable overlay \\
+    XMHF~\cite{vasudevan2013xmhf} & mixed & hypervisor framework & executable fragments \\
+    Verisoft XT~\cite{leinenbach2009verisoft} & mixed & Hyper-V & selected C (VCC) \\
     \bottomrule
   \end{tabularx}
 \end{table*}
@@ -860,13 +880,11 @@ or exact install command for that pin. Anonymized COM2 excerpts for every
 row of Table~\ref{tab:split}'s R640 column (product markers stripped) belong
 in the same zip. The paper stands alone if the reviewer ignores the zip.
 
-\section{Experience: Five Lessons that Generalized}
+\section{Experience: Six Lessons that Generalized}
 \label{sec:lessons}
 
-The following are the lessons we would tell a
-group starting a verified Type-1 hypervisor in Rust~\cite{eurosys2027cfp}.
-They are the spine of the paper. The ghost model is an artifact inside this
-story.
+The following are the lessons we would tell a group starting a verified
+Type-1 hypervisor in Rust. They are the spine of the paper.
 
 \subsection{Pin the prover or the proof is a diary}
 
@@ -923,6 +941,20 @@ A lab hypervisor that installs Linux under nested VT-x has not
 demonstrated ISO install on the machine in the rack.
 Table~\ref{tab:split} keeps those columns apart.
 
+\subsection{A model written after working code inherits its blind spots}
+\label{sec:model-after}
+
+Isolon's ghost exclusivity model was written against a live registry that
+already returned \texttt{AlreadyOwned} on a second map of the same HPA.
+SMT then found no mapping bug, because the model encodes the check the
+code already had. A model derived from existing code inherits that code's
+blind spots---here, that production GPA coverage is a range claim the
+ghost maps never see. This is the usual retrofit order: the system works,
+then someone asks for a proof. Anyone retrofitting verification onto a
+working hypervisor (or kernel, or overlay) should expect the prover to
+confirm the registry they already wrote, not to discover the path they
+did not model.
+
 \subsection{Negative results we archived}
 
 Table~\ref{tab:neg} lists failures we kept. None of them are L3.
@@ -965,8 +997,9 @@ interface of verified and unverified components---specifications, shims,
 and tools. That is this paper's thesis, at this venue, from the other
 direction: Isolon reports the same class of gap from inside one Type-1
 hypervisor and proposes a (maturity, artifact) label so an abstract cannot
-place an L3 ghost model on the binary that left the compiler. Table~\ref{tab:ladder}
-is the evaluation of that instrument.
+place an L3 overlay on a commodity binary, or an L3 ghost model on the EFI
+that left the compiler. Table~\ref{tab:ladder} is the evaluation of that
+instrument.
 
 \paragraph{Proved kernels and enclaves.}
 seL4~\cite{klein2009sel4,klein2014comprehensive,murray2013sel4} is the
@@ -1026,35 +1059,38 @@ Hyperkernel.
 \item Iron installer, TLS, and guest console remain product residuals.
 \item Verus upgrades can break proofs; pin maintenance forbids
   \texttt{latest}.
-\item SMT found no executable aliasing bug.
-\item No KVM cycle comparison on the R640; no \texttt{verus verify}
-  wall-clock in this PDF.
+\item SMT found no executable aliasing bug (Section~\ref{sec:model-after}).
+\item No KVM cycle comparison or \texttt{verus verify} wall-clock
+  (Section~\ref{sec:threats}).
 \end{itemize}
 
 \paragraph{Threats to validity.}
+\label{sec:threats}
 Iron evidence is one PowerEdge R640 and iDRAC virtual media, not a
 fleet. Nested VT-x is one lab host. The 80/0 line is one pin of one
 prover; we have not replayed under a second SMT solver. LOC counts are
 \texttt{wc -l}, not a proven TCB. Range occupancy is a host test of the boot
-claim function; COM2 has no slot-counter dump. Table~\ref{tab:ladder} is
-our reading of published abstracts, not a re-verification of those
-systems. Experience lessons (XSAVES, SNP, firmware pokes) are one
-implementation's failures; they follow from Intel VMX, UEFI
-ExitBootServices, and ``do not own that blob,'' not from Isolon-specific
-APIs.
+claim function. The R640 was not available for re-instrumentation during
+this submission cycle, so VM-exit cycle counts, a COM2 slot-counter dump,
+and a KVM comparison are absent. The 80/0 CI run did not log wall-clock or
+peak RSS, and this drafting environment does not have the pinned Verus
+binary. Table~\ref{tab:ladder} is our reading of published abstracts, not a
+re-verification of those systems. Experience lessons (XSAVES, SNP,
+firmware pokes) are one implementation's failures; they follow from Intel
+VMX, UEFI ExitBootServices, and ``do not own that blob,'' not from
+Isolon-specific APIs.
 
 \section{Conclusion}
 
 Isolon is a UEFI Type-1 hypervisor that boots unmodified Linux~6.12 with
 virtio and SMP on a PowerEdge R640, and an experience report about the gap
 between that binary and a machine-checked isolation claim. The two-axis
-ladder (maturity $\times$ artifact) is the instrument; Table~\ref{tab:ladder}
-applies it to Isolon and to seven prior systems. Isolon's L3 cell is a
-guest-exclusivity ghost model. Live EPT is L2. The R640 boot is L1. The
-512~MiB Linux window is a range registry with no ghost correspondence. Virtio
-rings are guest frames the emulator touches; the property is about
-mappings. Nested authored firmware completed a distro sysinstall. Nested
-is not iron.
+ladder is the instrument: it names the axis seL4 already walked from C to
+binary, and it splits a SeKVM abstract that otherwise reads as a proved
+hypervisor. Isolon's three cells are Table~\ref{tab:isolon-grid}. The
+512~MiB Linux window is a range registry with no ghost correspondence.
+Nested authored firmware completed a distro sysinstall. Nested is not
+iron.
 
 \begin{acks}
 Removed for double-blind review.

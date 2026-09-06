@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | eurosys-2027-fall kit |
-| Summary | Isolon v5 paper: two-axis ladder + literature table; range/ghost disjointness; Fonseca. Not a product gate. Iron P0-14 stays 2b795a0. |
+| Summary | Isolon v6: §6.5 scores SeKVM/seL4 on the artifact axis; draft-history eval; empty cells explained. Not a product gate. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Conference rewrite is not an iron close. |
 | Gates touched | none closed. |
 | Months Δ | 0.5→0.5 |
@@ -372,6 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v6: ladder scores SeKVM abstract vs overlay; seL4 C-to-binary as the axis; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon v5: two-axis ladder on 7 systems; range path disjoint from ghost; Fonseca; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon PDF submission id 394. Not v1.0; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
