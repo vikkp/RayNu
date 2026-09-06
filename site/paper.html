@@ -590,7 +590,8 @@
         <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
         <code>80 verified, 0 errors</code>). Iron: E2 BOOT-OK, E3 UEFI-HTTP-OK,
         E5 stamp persist (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>, 2026-08-16).
-        Residual: TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
+        Residual: nested sys-install complete; iron installer + TLS/console
+        (E3b + Phase F closed 2026-08-20;
         E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub) — see HDA.
       </p>
 
@@ -599,10 +600,11 @@
         <strong>Status:</strong> E2, E3, E3b + Phase F, E5 stamps, and E4 SPA
         VMLAUNCH closed on real R640 iron through 2026-08-21. Guest-UEFI
         (OVMF) chain closed on nested VT-x through 2026-08-23 (ADR-014 Stages
-        36–43) and on iron through 2026-08-27 (Stage 44 —
-        <code>OVMF-ATAPI-OK</code>, firmware READ(10) of a real CD sector).
-        Remaining: TLS/console, the El Torito CD boot, a real distro
-        installer, live Redfish, R640 soak.
+        36–43) and on iron through 2026-08-27 (Stage 44
+        <code>OVMF-ATAPI-OK</code>, Stage 45 <code>OVMF-ELTORITO-OK</code>).
+        Nested RayNu-F sys-install complete 2026-09-05
+        (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>). Nested ≠ iron. Remaining:
+        iron installer + TLS/console, live Redfish, R640 soak.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-20, run r640 BCM5720 :38, E3b + Phase F)</strong><br />
@@ -668,7 +670,7 @@
         <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
         <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
         <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> TLS/console, firmware El Torito CD boot, real distro installer, live Redfish, R640 soak. E2+E3+E3b+E5+P0-14 closed on iron through 2026-08-21 (<code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — SHELL stub, not a distro); P0-59 closed on iron 2026-08-27 (<code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — one CD sector read, not an OS boot). LBA stamps ≠ guest rootfs. Firmware SNP/Tcp4 stay dead after EBS.</li>
+        <li><strong>Mount Everest residual:</strong> nested sys-install complete 2026-09-05; iron installer + TLS/console, live Redfish, R640 soak. Last iron ISO gate is Stage 45 El Torito 2026-08-27. E2+E3+E3b+E4 closed on iron through 2026-08-21 (<code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — SHELL stub, not a distro). LBA stamps ≠ guest rootfs. Nested ≠ <code>ISO-INSTALL-OK</code>. Firmware SNP/Tcp4 stay dead after EBS.</li>
       </ul>
       <p>
         Any L2-only modules at the time of a public snapshot will be listed here

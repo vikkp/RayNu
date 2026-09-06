@@ -704,9 +704,10 @@
           QEMU. Real PowerEdge R640 has closed boot, UEFI-HTTP, native host-NIC
           HTTP beside VMX, E4 SPA VMLAUNCH (SHELL stub), guest-firmware ATAPI,
           and El Torito CD EFI. Nested RayNu-F completed an alpine-extended
-          install and reboot-to-disk — that is not the iron installer.
-          Residual work is explicit: TLS/console and a real distro installer
-          on the R640. We do not claim <code>ISO-INSTALL-OK</code>.
+          sys-install — Alpine printed <em>Installation is complete. Please
+          reboot.</em> then rebooted to that disk. That is not the iron
+          installer. Residual work is explicit: iron installer + TLS/console.
+          We do not claim <code>ISO-INSTALL-OK</code>.
         </p>
         <div class="cio-milestones">
           <div class="cio-ms">
@@ -746,12 +747,12 @@
           </div>
           <div class="cio-ms">
             <span class="cio-ms__gate">E5 · 46</span>
-            <span class="cio-ms__text">RayNu-F nested alpine-extended install + reboot-to-disk — <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Nested ≠ R640.</span>
+            <span class="cio-ms__text">RayNu-F nested alpine-extended sys-install complete — <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> (2026-09-05). Nested ≠ R640.</span>
             <span class="cio-ms__badge cio-ms__badge--nested">Nested</span>
           </div>
           <div class="cio-ms">
             <span class="cio-ms__gate">Residual</span>
-            <span class="cio-ms__text">TLS/console polish, and a real distro installer on iron (Cruzer still too small for alpine-extended)</span>
+            <span class="cio-ms__text">Iron installer + TLS/console polish (Cruzer still too small for alpine-extended). Nested sys-install is complete; Everest is not.</span>
             <span class="cio-ms__badge cio-ms__badge--open">Open</span>
           </div>
         </div>

@@ -275,9 +275,10 @@
           What actually happened on iron — not a roadmap slide. Each story is
           dated, marker-backed, and honest about residuals. Latest: Stage 46
           nested RayNu-F — Alpine printed <em>Please reboot</em>, then
-          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Iron
-          <code>ISO-INSTALL-OK</code> is still open. Stage 44 and 45 closed on
-          real R640 the same August afternoon: the CD answered, then El Torito
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Nested sys-install is
+          complete. Iron <code>ISO-INSTALL-OK</code> is still open. Residual:
+          iron installer + TLS/console. Stage 44 and 45 closed on real
+          R640 the same August afternoon: the CD answered, then El Torito
           booted.
         </p>
       </div>
@@ -555,10 +556,10 @@ Installation is complete. Please reboot.</pre>
         <p>
           We do <strong>not</strong> claim
           <code>RAYNU-V-M7-ISO-INSTALL-OK</code>. Nested VT-x is not a
-          PowerEdge. A 512 MiB leftover disk in QEMU is not a Cruzer. The
-          iron residual is still a real distro installer on metal — and a
-          stick large enough to hold alpine-extended. TLS and guest console
-          polish remain on the Everest list. HDA
+          PowerEdge. A 512 MiB leftover disk in QEMU is not a Cruzer. Nested
+          sys-install is complete. The iron residual is the same installer on
+          metal — and a stick large enough to hold alpine-extended — plus
+          TLS and guest console. HDA
           <code>last_commit</code> stays <code>2b795a0</code> (P0-14).
           Months stay 0.5. Prefer under-claiming.
         </p>
@@ -939,6 +940,8 @@ boot: E4 restore VMCS shadow slot=00000001 fields=98</pre>
           <code>VMCLEAR</code>’d), not <code>VMRESUME</code>. HTTP during
           the switch loop is not in the close paste. Residual is guest
           console / TLS and a real distro installer.
+          As of 2026-09-05 nested sys-install is complete; iron installer +
+          TLS/console remain.
         </p>
         <p>
           Ops side-win the same day:
@@ -1008,7 +1011,9 @@ RAYNU-V-M7-HOST-NIC-HTTP-OK</pre>
           stayed up. ADR-013 Stage 1 (Phases 0–G) is closed. Phase G is
           the accepted-risk note: host HTTP and guest virtio-net share the
           BCM5720 LOM <code>:38</code>. Not 802.1Q, not a second NIC.
-          Product next stays installer + TLS/console.
+          Product next on that day was installer + TLS/console. As of
+          2026-09-05 nested sys-install is complete; iron installer +
+          TLS/console remain.
         </p>
         <p>
           One TCP listen slot. A half-open SPA tab holds it; the next
@@ -1203,12 +1208,12 @@ RAYNU-V-M7-ISO-BOOTED-FROM-DISK
 RAYNU-V-R640-BOOT-OK</pre>
 
         <p>
-          That string is the iron close for HDA <strong>E5 stamp persist</strong>
-          (documented equivalent of <code>ISO-INSTALL-OK</code>; host/CI never
-          print that iron marker). It is still the <strong>LBA stamp
-          contract</strong>: 1 KiB of LBA0+LBA1 patterns on the ESP, not a guest
-          root filesystem and not a distro installer. Live 64 MiB virtio is RAM;
-          durability is the Cruzer file. Mount Everest stays open.
+          That string is the iron close for HDA <strong>E5 stamp persist</strong>.
+          Host/CI never print <code>ISO-INSTALL-OK</code>. It is still the
+          <strong>LBA stamp contract</strong>: 1 KiB of LBA0+LBA1 patterns on
+          the ESP, not a guest root filesystem and not a distro installer.
+          Live 64 MiB virtio is RAM; durability is the Cruzer file. Mount
+          Everest stays open.
         </p>
 
         <p>
@@ -1220,8 +1225,10 @@ RAYNU-V-R640-BOOT-OK</pre>
           <a href="#r640-2026-08-19-ape-phy">don’t take the APE PHY</a>.
           E4 SPA VMLAUNCH closed 2026-08-21 — see
           <a href="#r640-2026-08-21-e4-spa">the guest that came back</a>.
-          Residual now is TLS/console and a real distro installer
-          (not El Torito first).
+          Residual <em>that week</em> was TLS/console and a real distro
+          installer (not El Torito first). El Torito closed on iron
+          2026-08-27. Nested sys-install completed 2026-09-05. Today’s
+          residual is iron installer + TLS/console — not Everest.
         </p>
 
         <p class="story__aside">
@@ -1466,6 +1473,8 @@ boot: VMXOFF ok</pre>
           <a href="#r640-2026-08-21-e4-spa">the guest that came back</a>.
           Host CI still prints only
           <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron boot path.
+          Nested sys-install completed 2026-09-05; today’s residual is
+          iron installer + TLS/console.
         </p>
 
         <p class="story__aside">
