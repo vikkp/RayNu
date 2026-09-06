@@ -96,7 +96,7 @@ Options:
   --refat-cruzer      mkfs.vfat -I -F 32 -n RAYNUV on identified whole-disk Cruzer (64MiB FAT)
   --init-new-cruzer   first-flash unlabeled 4 GB USB Cruzer (exactly one 2–8 GiB stick)
   --allow-new-serial  skip Cruzer Micro serial pin (required for a new 4 GB stick)
-  --any-cruzer-usb    lsusb must show Cruzer; do not require VID 0781:5151
+  --any-cruzer-usb    lsusb/lsblk may be Cruzer or LogiLink UDisk (not VID 0781:5151)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -316,6 +316,9 @@ self_test() {
   grep -q '0781:5151' "$SCRIPT_PATH"
   grep -q -- '--any-cruzer-usb' "$SCRIPT_PATH"
   grep -q -- '--init-new-cruzer' "$SCRIPT_PATH"
+  grep -q 'UDisk' "$ESP"
+  grep -q 'abcd:1234' "$ESP"
+  grep -q '4026531840' "$ESP"
   grep -q 'RAYNU-V-CRUZER-FLASH-OK' "$ESP"
   grep -q 'installdisk.bin' "$ESP"
   grep -q 'target_is_lab_cruzer' "$ESP"
@@ -1259,27 +1262,27 @@ if [[ "$NO_FLASH" -eq 1 ]]; then
 fi
 
 if [[ "$ANY_CRUZER_USB" -eq 1 ]]; then
-  if ! lsusb | grep -qi cruzer; then
-    echo "error: lsusb did not show a Cruzer — plug front USB 2 (--any-cruzer-usb)" >&2
+  if ! lsusb | grep -qiE 'cruzer|udisk|logilink|abcd:1234'; then
+    echo "error: lsusb did not show a Cruzer or LogiLink UDisk — plug front USB 2 (--any-cruzer-usb)" >&2
     lsusb >&2 || true
     exit 1
   fi
-  lsusb | grep -i cruzer || true
+  lsusb | grep -iE 'cruzer|udisk|logilink|abcd:1234' || true
 else
   if ! lsusb | grep -qi "$USB_VIDPID"; then
     echo "error: lsusb did not show $USB_VIDPID (SanDisk Cruzer) — plug front USB 2" >&2
-    echo "       4 GB stick with a new VID: pass --any-cruzer-usb" >&2
+    echo "       4 GB LogiLink UDisk (abcd:1234): pass --any-cruzer-usb" >&2
     lsusb >&2 || true
     exit 1
   fi
   lsusb | grep -i "$USB_VIDPID" || true
 fi
-if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qi cruzer; then
-  echo "error: lsblk did not show a Cruzer — refusing (never guess /dev/sdc)" >&2
+if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qiE 'cruzer|udisk'; then
+  echo "error: lsblk did not show a Cruzer or UDisk — refusing (never guess /dev/sdc)" >&2
   lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE >&2 || true
   exit 1
 fi
-lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -i cruzer || true
+lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -iE 'cruzer|udisk' || true
 
 ESP_ARGS=(--efi "$EFI_OUT" --sha256 "$GOT")
 if [[ "$NO_OVMF" -eq 1 && -n "$OVMF_PATH" ]]; then

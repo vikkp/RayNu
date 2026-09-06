@@ -36,11 +36,12 @@ not this distro install.
 | Media | Size | alpine-extended (~994 MiB) |
 |-------|------|----------------------------|
 | Old Cruzer Micro (front USB 2) | 977.5 MiB | Does not fit |
-| New Cruzer (front USB 2) | ~4 GB | Fits EFI + `linux.iso` + `raynuf.txt` |
+| LogiLink UDisk (front USB 2, 2026-09-06) | 4026531840 bytes (~3.8 G), serial `General_UDisk-0:0`, `lsusb abcd:1234` | Fits |
 
 `flashcruzer.sh` still defaults to Micro identity (`lsusb 0781:5151`, serial
-`200524441218e7503e33`, existing `RAYNUV` + `installdisk.bin`). A new unlabeled
-4 GB stick **will refuse** those checks. First flash must use the flags below.
+`200524441218e7503e33`, existing `RAYNUV` + `installdisk.bin`). This UDisk is
+unlabeled and is not a Cruzer by model name. First flash uses `--init-new-cruzer`
+`--allow-new-serial` `--any-cruzer-usb` (UDisk / LogiLink accepted).
 
 ---
 
@@ -67,12 +68,13 @@ On `raynuvsrv1` (Ubuntu on the PERC), with the 4 GB Cruzer **already** in
 **front USB 2**:
 
 ```bash
-lsusb | grep -i cruzer
+lsusb | grep -iE 'cruzer|udisk|logilink|abcd:1234'
 lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE,TYPE,MOUNTPOINT
 ```
 
-Want: one USB Cruzer, ~4 G, **not** PERC `sda`/`sdb`, **not** the Ubuntu root.
-Unplug any other USB stick. Never hardcode `/dev/sdc`. Never format PERC.
+Want: one USB disk, model `UDisk` or `Cruzer`, ~4 G, **not** PERC `sda`/`sdb`,
+**not** the Ubuntu root. Unplug any other USB stick. Never hardcode `/dev/sdc`
+as the only check — match model + serial. Never format PERC.
 
 Refresh the launcher from this clone (the `~/projects/raynuv` copy goes stale):
 

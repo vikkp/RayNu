@@ -350,7 +350,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | iron-f7-4g-cruzer |
-| Summary | **4 GB Cruzer iron F7 path documented + first-flash flags.** Nested F7 (`088ab25`) is still the mechanism proof, not E5. New unlabeled ~4 GB front-USB2 Cruzer can hold alpine-extended; `flash-cruzer-esp.sh --init-new-cruzer --allow-new-serial` and `flashcruzer.sh --any-cruzer-usb` so Micro VID/serial/`installdisk.bin` identity does not refuse it. Runbook: `docs/runbooks/r640_f7_iso_iron.md`. Pin green EFI `--run 33978770315` (`088ab25`). Do not flash `2b795a0`. Nested QEMU ≠ R640. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Summary | **LogiLink UDisk on front USB 2 identified (not Cruzer Micro).** `sdc` `4026531840` serial `General_UDisk-0:0` `lsusb abcd:1234`; PERC `sda`/`sdb` untouched. Flash identity accepts model UDisk. Nested F7 is not E5. Do not flash `2b795a0`. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Media-size blocker lifted on paper; COM2 not yet run. Nested-only evidence must not drop months. |
 | Gates touched | none closed on iron. Flash self-test + F7 iron runbook. |
 | Months Δ | 0.5→0.5 |
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | Iron detect: front USB2 is LogiLink UDisk 4026531840 serial General_UDisk-0:0 lsusb abcd:1234 (not Cruzer Micro); flash identity accepts UDisk; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | 4 GB front-USB2 Cruzer unblocks alpine-extended iron attempt; `--init-new-cruzer` / `--allow-new-serial` / `--any-cruzer-usb`; runbook r640_f7_iso_iron.md; pin 088ab25 run 33978770315; do not flash 2b795a0; nested F7 ≠ ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `088ab25` F7 re-run on raynuvsrv1: `guest reset requested src=kbc n=1` + `relaunch after reset` now visible; Alpine `reboot` used i8042 `0x64<-0xFE` (not CF9/FADT; `efi=noruntime`); GPT ESP lba=2048 → `DISK-BOOT-OK` → second Linux `root=UUID=ddf8714c-…` → second `localhost:~#`; evidence file added; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |

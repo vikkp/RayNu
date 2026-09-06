@@ -31,9 +31,10 @@
 # identified whole-disk stick after copying installdisk.bin/auth.token off.
 # Never PERC. fsck.vfat cannot grow a 64 MiB volume.
 #
-# F7 iron: alpine-extended is ~994 MiB. A new ~4 GB Cruzer in front USB 2
-# is unlabeled and is not serial 200524441218e7503e33. Pass
-# --init-new-cruzer (exactly one USB Cruzer in [2 GiB, 8 GiB]; mkfs.vfat
+# F7 iron: alpine-extended is ~994 MiB. Front USB 2 may be a SanDisk Cruzer
+# or a LogiLink UDisk (lsusb abcd:1234, model UDisk, 4026531840 bytes,
+# serial General_UDisk-0:0). Both are USB 2–8 GiB lab sticks. Pass
+# --init-new-cruzer (exactly one matching USB disk; mkfs.vfat
 # -I -F 32 -n RAYNUV + EFI layout + 1 MiB installdisk.bin identity) and
 # --allow-new-serial. Never PERC. Never guess /dev/sdc.
 #
@@ -104,23 +105,19 @@ pick_host_ovmf() {
 # INVARIANTS:
 # - Label must be RAYNUV
 # - Transport must be usb
-# - Model must contain Cruzer (case-insensitive)
+# - Model must contain Cruzer or UDisk (LogiLink 4 GB lab stick)
 # - Model must not contain PERC / H740 / Virtual
 # - Size in [256 MiB, 8 GiB]
 # - Never panics
 target_is_lab_cruzer() {
   local model="$1" tran="$2" size_bytes="$3" label="$4"
-  local lc
   [[ "$label" == "$LABEL" ]] || return 1
   [[ "$tran" == "usb" ]] || return 1
   [[ "$size_bytes" =~ ^[0-9]+$ ]] || return 1
   if (( size_bytes < MIN_BYTES || size_bytes > MAX_BYTES )); then
     return 1
   fi
-  lc=$(printf '%s' "$model" | tr '[:upper:]' '[:lower:]')
-  [[ "$lc" == *cruzer* ]] || return 1
-  [[ "$lc" != *perc* && "$lc" != *h740* && "$lc" != *virtual* ]] || return 1
-  return 0
+  model_is_cruzer_not_perc "$model"
 }
 
 # Host-testable: unlabeled 4 GB Cruzer window (alpine-extended ~994 MiB).
@@ -137,7 +134,7 @@ size_is_4g_cruzer_window() {
 model_is_cruzer_not_perc() {
   local lc
   lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
-  [[ "$lc" == *cruzer* ]] || return 1
+  [[ "$lc" == *cruzer* || "$lc" == *udisk* ]] || return 1
   [[ "$lc" != *perc* && "$lc" != *h740* && "$lc" != *virtual* ]] || return 1
   return 0
 }
@@ -146,6 +143,7 @@ self_test() {
   local tmp
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 RAYNUV
   target_is_lab_cruzer "Cruzer" usb 4000000000 RAYNUV
+  target_is_lab_cruzer "UDisk" usb 4026531840 RAYNUV
   target_is_lab_cruzer "Cruzer Micro" usb 1024966656 WRONG && return 1
   target_is_lab_cruzer "PERC H740P Mini" usb 1024966656 RAYNUV && return 1
   target_is_lab_cruzer "Cruzer Micro" sas 1024966656 RAYNUV && return 1
@@ -156,7 +154,9 @@ self_test() {
   size_is_4g_cruzer_window 1024966656 && return 1
   size_is_4g_cruzer_window $((200 * 1024 * 1024 * 1024)) && return 1
   model_is_cruzer_not_perc "Cruzer Blade 4GB"
+  model_is_cruzer_not_perc "UDisk"
   model_is_cruzer_not_perc "PERC H740P Mini" && return 1
+  size_is_4g_cruzer_window 4026531840
   tmp="$(mktemp)"
   dd if=/dev/zero of="$tmp" bs=64 count=1 status=none
   printf '\x5f\x46\x56\x48' | dd of="$tmp" bs=1 seek=40 conv=notrunc status=none
@@ -290,7 +290,7 @@ find_one_4g_usb_cruzer() {
     hits+=("$name")
   done < <(lsblk -bdnpo NAME,TYPE,TRAN,SIZE 2>/dev/null)
   if (( ${#hits[@]} != 1 )); then
-    echo "error: --init-new-cruzer needs exactly one USB Cruzer in [2 GiB, 8 GiB] (found ${#hits[@]})" >&2
+    echo "error: --init-new-cruzer needs exactly one USB Cruzer/UDisk in [2 GiB, 8 GiB] (found ${#hits[@]})" >&2
     lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE,TYPE >&2 || true
     echo "       unplug other USB sticks; never PERC; never guess /dev/sdc" >&2
     return 1
