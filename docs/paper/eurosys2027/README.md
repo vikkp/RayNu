@@ -1,5 +1,16 @@
 # EuroSys 2027 fall — operator kit
 
+## Compiled PDF (open this)
+
+The GitHub PR diff does **not** preview binaries. The files are on branch
+`cursor/eurosys-2027-fall-b7a8`, **not** on `main`.
+
+- **Anonymous 9-page SIGPLAN PDF:** [`Isolon-eurosys2027-anon.pdf`](Isolon-eurosys2027-anon.pdf)
+  ([GitHub](https://github.com/vikkp/raynu/blob/cursor/eurosys-2027-fall-b7a8/docs/paper/eurosys2027/Isolon-eurosys2027-anon.pdf)
+  · [raw download](https://github.com/vikkp/raynu/raw/cursor/eurosys-2027-fall-b7a8/docs/paper/eurosys2027/Isolon-eurosys2027-anon.pdf))
+- Same bytes: [`paper/main.pdf`](paper/main.pdf)
+- Optional supplement: [`supplement/supplement.pdf`](supplement/supplement.pdf)
+
 You create the HotCRP account. Everything else for the **17 Sep title/abstract**
 deadline and a first **anonymous 12-page PDF** for **24 Sep** is in this
 directory.
@@ -13,7 +24,8 @@ abstract; that is still Thursday 17 Sep AoE.
 
 | File | You do |
 |------|--------|
-| [`HOTCRP.md`](HOTCRP.md) | Tomorrow: paste title, abstract, topics, keywords, conflicts, AI disclosure into the new account |
+| [`Isolon-eurosys2027-anon.pdf`](Isolon-eurosys2027-anon.pdf) | **Open/download the anonymous conference PDF** |
+| [`HOTCRP.md`](HOTCRP.md) | Paste title, abstract, topics, keywords, conflicts, AI disclosure into HotCRP |
 | [`paper/main.tex`](paper/main.tex) | Anonymous SIGPLAN draft (system name **Isolon**). Iterate before 24 Sep |
 | [`paper/paper.bib`](paper/paper.bib) | Real related-work BibTeX |
 | [`paper/Makefile`](paper/Makefile) | `make` → `main.pdf` + anonymity grep |

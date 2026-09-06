@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | eurosys-2027-fall kit |
-| Summary | Anonymous EuroSys 2027 fall submission kit (Isolon SIGPLAN draft + HotCRP paste fields). Not a product gate. Not `v1.0-preprint`. Not `ISO-INSTALL-OK`. Iron P0-14 stays 2b795a0. |
+| Summary | Isolon anonymous PDF copied to kit root (`Isolon-eurosys2027-anon.pdf`) so it is findable; GitHub PR diffs hide binaries. Not a product gate. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Conference rewrite is not an iron close. |
 | Gates touched | none closed. |
 | Months Δ | 0.5→0.5 |
@@ -372,7 +372,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
-| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Anonymous EuroSys 2027 fall kit (Isolon draft + HotCRP paste). Not v1.0-preprint; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | eurosys-2027-fall | 0.5 | 95 | Isolon PDF at kit root (`Isolon-eurosys2027-anon.pdf`); not v1.0-preprint; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-dxe | 0.5 | 95 | P0-56 CLOSED nested VT-x DXE-OK + CDROM-OK pci_ide=1 sectors=0; not installer; iron P0-14 stays 2b795a0 |
