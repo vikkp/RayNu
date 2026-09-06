@@ -42,11 +42,11 @@ Per-author limit: ≤3 papers this cycle. This is the one.
 ## Abstract (same as `paper/main.tex`)
 
 ```
-Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary on a Dell PowerEdge R640. On that server it reaches unmodified Linux 6.12 and, on the same boot, virtio-blk, virtio-net, dual-vCPU SMP, and four-VM probes (one Linux, three stubs), then serves host-NIC HTTP.
+Isolon is a clean-slate Type-1 hypervisor that boots as one UEFI binary on a Dell PowerEdge R640, where it runs unmodified Linux 6.12 with virtio-blk, virtio-net, dual-vCPU SMP, and three stub guests on the same boot, then serves HTTP from a host-owned NIC.
 
-A machine-checked isolation theorem next to that binary is a labelling problem: the proved artifact and the mapping path the guests actually use need not be the same object. We propose a two-axis ladder—proof maturity (L0–L3) against artifact (ghost model, executable module, binary on the target)—and apply it to Isolon and to seven prior systems. Six lessons generalized while shipping: pin the prover, keep SMT off UEFI, do not poke third-party firmware, firmware TCP is not a management plane, nested VT-x is not the production server, and derive ghost state from the threat model's domain rather than from live data structures.
+Attaching a machine-checked isolation theorem to that binary is a labelling problem before it is a proof problem: the artifact that is proved and the mapping path the guests actually use need not be the same object. Isolon's proved artifact is guest-exclusivity in a host-only Verus ghost model. Its production guest-physical coverage at Linux boot is a 16-slot range registry the ghost model never sees. The two are disjoint, not approximate, and no one-axis "verified" label makes that visible.
 
-Isolon's L3 result is guest-exclusivity in a host-only Verus crate; the 512 MiB Linux window is a range registry with no ghost correspondence. Nested VT-x completed a distro install-to-disk; that host is not the R640.
+We propose a two-axis ladder: proof maturity (L0–L3) against artifact (ghost model, executable module, binary on the target). Applied to eight systems, it names the axis the seL4 team crossed over four years from C to ARM binary, separates a SeKVM abstract that reads as a proved hypervisor from a Coq overlay on a KVM module, and would have split an earlier draft of this paper that put a ghost-model theorem beside a bare-metal boot. Six lessons generalized while shipping the binary; the sharpest is that a ghost model written against working code inherits that code's blind spots, so derive it from the threat model's domain instead.
 ```
 
 ---
