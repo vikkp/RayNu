@@ -1,5 +1,8 @@
 name: worker
 
+# raynuv.com production is the site-updater chrome on `main`.
+# Feature branches (ISO/E5/SPA) often carry a truncated site/ tree; Cloudflare
+# Git integration must not wrangler-deploy those over the live Worker.
 on:
   push:
     branches: [main]
@@ -7,6 +10,12 @@ on:
       - "site/**"
       - "wrangler.jsonc"
       - ".github/workflows/worker.yml"
+      - "tools/check-site-chrome.sh"
+      - "tools/lock-cloudflare-production-branch.sh"
+      - "tools/sync-hda-site.sh"
+  schedule:
+    # Heal if a preview-branch Git build overwrote production.
+    - cron: "23 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -22,8 +31,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: HDA tracker fresh
         run: ./tools/sync-hda-site.sh --check
+      - name: Site chrome (CIO / Stories / HDA)
+        run: ./tools/check-site-chrome.sh
+      - name: Pin Cloudflare Git production to main
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ./tools/lock-cloudflare-production-branch.sh
       - name: Deploy Worker with static assets
         uses: cloudflare/wrangler-action@v3
         with:

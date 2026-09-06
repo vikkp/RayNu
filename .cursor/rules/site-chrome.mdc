@@ -1,0 +1,34 @@
+---
+description: Public site chrome (raynuv.com) stays the Kimi site-updater look
+globs:
+  - "site/**"
+  - "wrangler.jsonc"
+  - ".github/workflows/worker.yml"
+  - ".github/workflows/pages.yml"
+alwaysApply: false
+---
+
+# Public site chrome (raynuv.com)
+
+The look and feel of `https://raynuv.com` is the **site-updater** design merged in PRs **#218–#226** (Syne + Source Serif, CIO View, Stories mast, COM2, HDA tracker). That chrome lives on **`main`**.
+
+## Do
+
+- Put **stories / CIO copy / HDA notes** on a **site PR against `main`** (not on ISO/E5/SPA feature branches).
+- Keep `site/hda.json` generated only by `./tools/sync-hda-site.sh` from `docs/hda.md` frontmatter.
+- On Everest-path feature branches, merge `origin/main -- site/` if Cloudflare might build that branch — never ship a truncated `site/` tree.
+- Production Worker deploys from **`main` only** (`.github/workflows/worker.yml` + `./tools/lock-cloudflare-production-branch.sh`).
+
+## Do not
+
+- Restyle `site/index.html`, `site/styles.css`, `site/stories.html`, `site/ciospeak.html`, or `site/com2.html` while working on hypervisor/ISO/SPA code.
+- Delete `ciospeak.html`, `com2.html`, responsive `site/assets/*.webp`, or the CIO/Stories nav.
+- Point Cloudflare Git production at a feature branch. Non-production builds must not `wrangler deploy` over the live Worker.
+- Claim `RAYNU-V-M7-ISO-INSTALL-OK` from nested QEMU, host tests, or CI. Nested RayNu-F reboot-to-disk is not iron E5.
+
+## Check
+
+```bash
+./tools/check-site-chrome.sh
+./tools/sync-hda-site.sh --check
+```

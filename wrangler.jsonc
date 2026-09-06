@@ -1,7 +1,12 @@
 {
+  // Production Worker (raynuv.com) deploys from `main` only.
+  // worker.yml + tools/lock-cloudflare-production-branch.sh:
+  //   - GitHub Action wrangler deploy is main-only (plus hourly heal).
+  //   - Cloudflare Git non-production builds must NOT `wrangler deploy`
+  //     over production — feature branches often carry a truncated site/
+  //     from before the site-updater PRs (#218–#226).
   // Redeploy trigger: bump this note to force a CI redeploy from main.
-  // worker.yml watches this file; deploy then purges the edge cache.
-  // Last trigger: 2026-08-26T18:35Z — Kimi Kleen sweep on request.
+  // Last trigger: 2026-09-05T23:48Z — Stage 44–46 stories + chrome lock.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "raynuv",
   "compatibility_date": "2026-07-19",

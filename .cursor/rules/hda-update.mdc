@@ -51,7 +51,11 @@ Update HDA in the **same change** (or a tight follow-up commit) when **any** of:
    ./tools/sync-hda-site.sh --check
    ```
    This regenerates `site/hda.json` from frontmatter. Stage **both** `docs/hda.md` and `site/hda.json`.
-   If summit copy on `site/hda.html` is wrong (notes/labels), fix HTML in the same commit.
+   If summit **notes** on `site/hda.html` are wrong, fix those note strings only.
+   Do **not** restyle `index.html` / `styles.css` / `stories.html` / `ciospeak.html` /
+   `com2.html` on an Everest-path branch — that chrome is the site-updater look on `main`
+   (see `.cursor/rules/site-chrome.mdc`). Feature-branch truncated `site/` trees are how
+   raynuv.com flip-flops.
 8. **Keep** structure/headings stable (Cursor + humans parse them). Do not delete Mount Everest definition.
 9. **Commit message** should mention HDA when scores move, e.g.  
    `docs(hda): months 4.5→4.0 after R640 serial bring-up`  
