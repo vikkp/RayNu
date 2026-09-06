@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-08-23
+last_updated: 2026-09-06
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -38,14 +38,14 @@ Authoritative gates: [`docs/progress.md`](progress.md) · plan: [`m7_plan.md`](m
 | Metric | Value | Δ vs previous HDA |
 |--------|------:|-------------------|
 | **Overall product readiness** | **95%** | +1 (P0-14 E4 SPA VMLAUNCH + re-entry on iron) |
-| **Months to Mount Everest** | **0.5** | held (TLS/console + distro remain) |
+| **Months to Mount Everest** | **0.5** | held (iron installer + TLS/console; nested sys-install does not shrink months) |
 | **ETA month** | **2026-09** | held |
-| **Confidence** | high | E2+E3+E3b+E5+Phase F+P0-14 stamps on COM2; SPA guest is SHELL stub; TLS/console + distro residual |
+| **Confidence** | high | E2+E3+E3b+E4+Stage 44/45 on COM2; last iron 2026-08-27 El Torito; nested RayNu-F sys-install 2026-09-05; SPA guest is SHELL stub; iron installer + TLS/console open |
 | **Hypervisor core (VMX/EPT/Linux/multi-VM)** | ~88% | proved on real R640 through M4 |
 | **Ship EFI artifact** | ~95% | M7.0 + iron kits under `releases/` |
 | **Real R640 boot** | ~98% | E2 closed; Redfish/soak follow-ons only |
 | **vSphere-like UI (network)** | ~96% | E3 + E3b + Phase F + P0-14 closed; SHELL stub not distro; TLS/console residual |
-| **Deploy Linux ISO** | ~99% | OVMF past SEC on private VMCS (QEMU/VMX); not installer; distro later |
+| **Deploy Linux ISO** | ~99% | Iron El Torito-OK (`0be7283`, 2026-08-27). Nested alpine-extended sys-install complete (`Please reboot` + F7 `RAYNU-V-RAYNU-F-DISK-BOOT-OK`, `fe4785a`, 2026-09-05). Iron Cruzer `BOOTED-FROM-DISK` is LBA stamps, not a rootfs. Iron `ISO-INSTALL-OK` open. Nested ≠ Everest. |
 | **Production bar (M6.8–M6.9)** | **100%** | soak + EXT closed on Latitude |
 
 ```
@@ -106,7 +106,7 @@ All must be true (no hand-waving):
 | Hardware CI on R640 | MISSING | optional in M6 plan |
 
 ### Summit C — vSphere-like UI
-**Status: NEAR · ~96% · ~0.5 months residual (TLS/console polish + distro waits on Summit D)**
+**Status: NEAR · ~96% · ~0.5 months residual (TLS/console polish; distro waits on iron Summit D)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -129,7 +129,7 @@ All must be true (no hand-waving):
 | E4 SPA VMLAUNCH (private EPT) | **DONE** | `RAYNU-V-M7-E4-SPA-LAUNCH-OK` + shadow re-entry; SHELL stub; [2026-08-21-e4-spa-shadow-reentry-ok.md](evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md) |
 
 ### Summit D — Deploy Linux ISO
-**Status: NEAR · ~90% · ~0.25–0.5 months residual (real distro installer)**
+**Status: NEAR · ~99% · ~0.25–0.5 months residual (iron installer; nested sys-install complete)**
 
 | Item | Status | Evidence / gap |
 |------|--------|----------------|
@@ -143,10 +143,12 @@ All must be true (no hand-waving):
 | Wire contract → guest launch | PARTIAL | PRE-EBS arm → post-EBS sized `virtio_blk::init`; guest FS installer open |
 | QEMU lab (1 MiB ESP flag) | DONE (host/TCG arm) | boot1 `isoinstall.txt` → `ISO-INSTALL-LAB-OK`; soft-pass arm-only on TCG |
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
-| ISO parse / El Torito / EFI boot img | PARTIAL (guest-visible CD) | Catalog parse + host attach + FirmwareArmed + GuestVisible PCI IDE/ATAPI; not DXE boot / not installer |
-| CD-ROM attach | PARTIAL (guest-visible) | `attach_cdrom_uefi` → GuestVisible + PCI IDE/ATAPI; firmware does not yet boot the CD |
-| Guest UEFI firmware blob | PARTIAL (ESP retained + past SEC) | Real ESP OVMF.fd retained; private VMCS past SEC on QEMU/VMX; not full DXE / not installer / not Everest E5 |
-| Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| ISO parse / El Torito / EFI boot img | **DONE (iron)** | Stage 45 `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` COM2 `0be7283`; not installer |
+| CD-ROM attach | **DONE (iron ATAPI)** | Stage 44 `RAYNU-V-M7-E5-OVMF-ATAPI-OK` `sectors=1`; El Torito boot closed Stage 45 |
+| Guest UEFI firmware blob | PARTIAL (RayNu-F nested F7; OVMF El Torito on iron) | ADR-016: nested alpine-extended reboot-to-disk; iron `ISO-INSTALL-OK` open |
+| Persistent LBA stamps (iron Cruzer) | **DONE (stamps)** | `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` 2026-08-16; **LBA not a rootfs**; not a guest FS |
+| Nested alpine-extended sys-install | **DONE (nested)** | `setup-disk -m sys` printed `Installation is complete. Please reboot.` then F7 `RAYNU-V-RAYNU-F-DISK-BOOT-OK` (`fe4785a`, 2026-09-05). Nested ≠ R640. Not Everest E5. |
+| Iron distro installer | **MISSING** | Cruzer too small for alpine-extended; `RAYNU-V-M7-ISO-INSTALL-OK` open |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
 | Multi-distro matrix | MISSING | — |
@@ -164,7 +166,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** |
+| M+4 | 2026-09 | TLS/console + iron installer | remaining Everest | **nested sys-install DONE (2026-09-05); iron installer + TLS/console open** |
 | M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
@@ -172,12 +174,12 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 ```
 2026-07 ████████  HDA + M6 closed (Latitude)
 2026-08 ████████  R640 boot (E2) + E3b HTTP-OK
-2026-09 ████░░░░  TLS/console + distro installer  ← months_to_everest ≈ 0.5
+2026-09 ████░░░░  nested sys-install complete; iron installer + TLS/console  ← months_to_everest ≈ 0.5
 2026-10 ░░░░░░░░  buffer
 2026-11 ░░░░░░░░  buffer
 ```
 
-**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**. Shrink further when a real distro installer lands. Document why in [Changelog](#hda-changelog).
+**Pull-forward rule:** E2 closed 2026-08-15; E3 bring-up closed 2026-08-16; **E3b closed 2026-08-20**; **P0-14 closed 2026-08-21**; **Stage 45 El Torito closed 2026-08-27** (last iron ISO gate); **nested sys-install complete 2026-09-05**. Nested does not shrink months. Shrink further when iron prints `RAYNU-V-M7-ISO-INSTALL-OK`. Document why in [Changelog](#hda-changelog).
 
 ---
 
@@ -234,11 +236,13 @@ Ordered for critical path (parallelize B with D design):
 | P0-52 | **E5 Stage 37** Private guest-UEFI VMLAUNCH | D | **DONE (host + QEMU)** | P0-51 | `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK`; retained bytes; private VMCS+EPT; not E4 SHELL; not installer; not Everest E5 |
 | P0-53 | **E5 Stage 38** OVMF past first triple-fault | D | **DONE (host + QEMU)** | P0-52 | `RAYNU-V-M7-E5-OVMF-ALIVE-OK`; CR4.VMXE host-owned; not full OVMF; not installer; not Everest E5 |
 | P0-54 | **E5 Stage 39** OVMF past SEC | D | **DONE (host + QEMU)** | P0-53 | `RAYNU-V-M7-E5-OVMF-PAST-SEC-OK`; left last 64 KiB + PEI PCI/COM/HLT; COM forwarded; not full DXE; not installer; not Everest E5 |
+| P0-59 | **E5 Stage 44** ATAPI READ(10) on iron | D | **DONE (iron)** | P0-54 | `RAYNU-V-M7-E5-OVMF-ATAPI-OK` COM2 2026-08-27 EFI `bf696ca`; sectors=1; not El Torito; not installer |
+| Stage 45 | **E5 El Torito CD EFI** | D | **DONE (iron)** | P0-59 | `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` COM2 2026-08-27 EFI `0be7283`; last iron ISO gate; not installer |
+| Stage 46 | **RayNu-F nested sys-install** | D | **DONE (nested)** | Stage 45 | alpine-extended `setup-disk -m sys` + F7 `RAYNU-V-RAYNU-F-DISK-BOOT-OK` (`fe4785a`, 2026-09-05). Nested ≠ R640. Not `ISO-INSTALL-OK`. |
 | P0-5 | **M7.2** Datastore on ESP/NVMe (images + ISOs) | C+D | 0.25 | P0-4 | **DONE host path**; UEFI persist residual |
-| P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | `mgmt/iso` wired; El Torito/CD-ROM residual |
-| P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | 0.5 | P0-5 | **DONE host extract-boot smoke**; El Torito/CD-ROM residual |
+| P0-6 | **M7.3** ISO register + CD-ROM or kernel-extract boot | D | **DONE (host + iron El Torito)** | P0-5 | Host extract-boot smoke; Stage 45 `OVMF-ELTORITO-OK` 2026-08-27; iron installer still open |
 | P0-7 | **M7.4** Create-VM API/UI (CPU/RAM/disk/ISO) | C+D | 0.25 | P0-5, P0-6 | **DONE host SPA smoke**; console/TLS/NIC residual |
-| P0-8 | Install-to-disk + reboot-to-disk path | D | **DONE (stamps)** | P0-6, P0-7 | Iron `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
+| P0-8 | Install-to-disk + reboot-to-disk path | D | **OPEN (iron)** | P0-6, P0-7 | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16 is **LBA stamps, not a rootfs**. Nested alpine-extended sys-install complete 2026-09-05 (`Please reboot` + `RAYNU-V-RAYNU-F-DISK-BOOT-OK`). Iron `ISO-INSTALL-OK` open. Nested ≠ Everest. |
 | P0-9 | M6.9 external audit + spec review | E6 | **DONE** | proofs green | `docs/`, `ept_model/`, `mgmt/ext` |
 | P0-10 | R640 soak / hardware confidence | E2 | 0.5 | P0-2 | `tools/`, `mgmt/soak` — post M7.5 |
 | P0-11 | **M8 sketch** vMotion-like / DRS-like / hot-add | — | — | M7 closed | deferred — not M7 critical path |
@@ -258,6 +262,9 @@ Ordered for critical path (parallelize B with D design):
 - **M7.8 / E3b iron closed:** `RAYNU-V-M7-HOST-NIC-HTTP-OK` after `BOOT-OK` on BCM5720 `:38` (2026-08-20)
 - **ADR-013 Phase F iron closed:** coexist HTTP while VMX on (`10.99.99.149:8443`, EFI `0d06297b`, 2026-08-20)
 - **P0-14 / E4 SPA VMLAUNCH iron closed:** `RAYNU-V-M7-E4-SPA-LAUNCH-OK` on `10.99.99.126:8443` (EFI `2b795a0`, 2026-08-21). SHELL stub + shadow re-entry; not distro / not TLS.
+- **Stage 44 iron closed:** `RAYNU-V-M7-E5-OVMF-ATAPI-OK` (2026-08-27, EFI `bf696ca`). ATAPI READ(10) `sectors=1`. Not an installer.
+- **Stage 45 iron closed:** `RAYNU-V-M7-E5-OVMF-ELTORITO-OK` (2026-08-27, EFI `0be7283`). Last iron ISO gate. Not an installer.
+- **Stage 46 nested sys-install complete:** alpine-extended `setup-disk -m sys` printed `Installation is complete. Please reboot.` then F7 `RAYNU-V-RAYNU-F-DISK-BOOT-OK` (`fe4785a`, 2026-09-05). Nested ≠ iron. Not `ISO-INSTALL-OK`.
 - **ADR-013 Stage 1 (0–G) closed:** Phase G is the 2026-08-21 accepted-risk note (shared LOM `:38` with virtio-net). Not VLAN / second NIC.
 - **P0-15 / E5 Stage 0 closed (host):** `RAYNU-V-M7-E5-BOOT-SPEC-OK` (#172, 2026-08-22). Boot spec on the wire + catalog parse.
 - **P0-16 / E5 Stage 1 closed (host):** `RAYNU-V-M7-E5-CDROM-ATTACH-OK` (#173). Host CD-ROM attach. Not guest UEFI.
@@ -347,10 +354,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-ovmf-virtio |
-| Summary | P0-57 CLOSED nested VT-x: OVMF-VIRTIO-OK val=0x1042 pci=1 virtio=1. CD GuestVisible. pci_ide=0 sectors=0. Not installer. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Virtio-blk visible ≠ installer. |
-| Gates touched | `RAYNU-V-M7-E5-OVMF-VIRTIO-OK` **CLOSED** nested VT-x. Not Everest E5 / not `ISO-INSTALL-OK`. |
+| Commit | site-cio-stories (this PR) |
+| Summary | Living verification paper v0.4.0-living: abstract/intro/threat/related/conclusion filled from M6 L3 + iron through El Torito + nested sys-install. Not `v1.0-preprint`. Not `ISO-INSTALL-OK`. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Paper is an audit artifact, not a new iron gate. |
+| Gates touched | none closed. ADR-010 living page completed. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -361,9 +368,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 |----|----------------|----------|-------------|
 | H1 | ~~R640 VMLAUNCH/guest path~~ | — | **Resolved** 2026-08-15 (`RAYNU-V-R640-BOOT-OK`) |
 | H2 | TLS / console polish | MED | Plaintext HTTP closed on iron (E3b); TLS deferred (ADR-009); guest VNC residual |
-| H3 | Guest UEFI CD not bootable | MED | Virtio-blk + CD→disk order presented (P0-57); firmware CD boot not completed; extract-boot is lab MVP only |
+| H3 | Iron distro installer | MED | Nested sys-install complete 2026-09-05; Stage 44/45 CD boot closed on iron 2026-08-27; Cruzer too small for alpine-extended; `ISO-INSTALL-OK` open |
 | H4 | ~~Firmware SNP unusable after EBS~~ | — | **Resolved** 2026-08-20 (`RAYNU-V-M7-HOST-NIC-HTTP-OK` on native BCM5720 after `BOOT-OK`) |
-| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14 stamps closed; SPA guest is SHELL CPUID stub; TLS/console + distro remain |
+| H5 | Latitude ≠ full product loop | MED | E2+E3+E3b+E5+Phase F+P0-14+Stage 44/45 stamps closed; SPA guest is SHELL CPUID stub; nested sys-install complete; iron installer + TLS/console remain |
 | H6 | Single-dev velocity (R10) | MED | Everest P0 only; defer Tier-2 / full parity |
 | H7 | Binary size if HTTP+ISO+UI grow | MED | ADR-003 checks; lazy assets; zstd webui GAP |
 | H8 | ~~Phase F coexist not closed on iron~~ | — | **Resolved** 2026-08-20 (`HOST-NIC coexist listening` + `HOST-NIC-HTTP-OK` while VMX on; G1–G3 parked) |
@@ -372,6 +379,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | site-cio-stories | 0.5 | 95 | Living paper v0.4.0 (not v1.0-preprint): public `paper.html` matches markdown; nested sys-install complete; iron installer + TLS/console open; iron P0-14 stays 2b795a0 |
+| 2026-09-06 | site-cio-stories | 0.5 | 95 | Residual honesty: nested sys-install complete (Please reboot + F7); last iron ISO=El Torito 2026-08-27; iron installer + TLS/console open; LBA stamps ≠ rootfs; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
+| 2026-09-05 | site-cio-stories | 0.5 | 95 | Site updater chrome lock + Stage 44/45/46 stories (nested RayNu-F F7; not ISO-INSTALL-OK); iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 virtio at 00:01.2; i440FX back at 00:00.0 after nested VT-x n=499 virtio=0; not installer; iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 empty virtio-blk 00:00.1 + bootorder CD then disk; not installer; iron P0-14 stays 2b795a0 |
@@ -513,13 +523,13 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ```
 Mount Everest:  Ship EFI → R640 → UI → Linux ISO  (M7)
-Now:           E2+E3+E3b+E5+Phase F stamps CLOSED; native BCM5720 HTTP after BOOT-OK with VMX on (`:38` / 10.99.99.126:8443)
+Now:           E2+E3+E3b+E4+Stage 44/45 CLOSED on iron (last iron ISO = El Torito 2026-08-27). Nested alpine-extended sys-install complete 2026-09-05 (Please reboot + RAYNU-V-RAYNU-F-DISK-BOOT-OK). Cruzer BOOTED-FROM-DISK is LBA stamps, not a rootfs.
 Months left:   0.5  (ETA ~ 2026-09)
-Next move:     On raynuvsrv1 run ~/projects/raynuv/flashcruzer.sh; F11 Cruzer; spec/start (WANT shadow restore, no error 7)
+Next move:     Iron installer on a stick that fits alpine-extended; TLS/console polish. Nested does not print ISO-INSTALL-OK.
 Tcp4 residual: Floppy publishes PXE/HTTP, not Tcp4 SB (platform limit)
 SNP after EBS: dead — native BCM5720 is the durable mgmt path (E3b closed 2026-08-20)
 Preserve:      releases/v0.1.0-adr013-baseline
-Do not claim:  Mount Everest / E4 closed (first SPA VMLAUNCH OK; slot 1 re-entry zeros/error 7 is not a close)
+Do not claim:  Mount Everest / RAYNU-V-M7-ISO-INSTALL-OK. Nested ≠ R640. last_commit stays 2b795a0 (P0-14).
 ```
 
 Public checklist: [`docs/runbooks/r640_iron_week.md`](runbooks/r640_iron_week.md) ·

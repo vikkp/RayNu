@@ -6,7 +6,7 @@
     <title>RayNu-V — Living Verification Paper</title>
     <meta
       name="description"
-      content="Living verification paper for RayNu-V: progressive formal proof of the Proven Core and the EPT Isolation Theorem. Evidence only from real runs."
+      content="Living verification paper v0.4.0 for RayNu-V: EPT Isolation Theorem in ept_model (80 verified, 0 errors). Not v1.0-preprint. Nested sys-install complete; iron installer open."
     />
     <meta property="og:title" content="RayNu-V · Living Verification Paper" />
     <meta
@@ -262,6 +262,25 @@
         padding-top: 1.5rem;
         border-top: 1px solid rgba(16, 24, 32, 0.12);
       }
+      .paper-body code {
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+      }
+      .paper-body pre {
+        overflow-x: auto;
+        padding: 0.9rem 1rem;
+        background: rgba(16, 24, 32, 0.04);
+        border: 1px solid rgba(16, 24, 32, 0.12);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.5;
+      }
+      .paper-body h4 {
+        margin: 1.25rem 0 0.45rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.02rem;
+      }
     </style>
   </head>
   <body class="page-paper">
@@ -285,37 +304,40 @@
           <span aria-hidden="true">·</span>
           <span>Living Verification Paper</span>
         </p>
-        <span class="paper-badge">Living Draft · v0.3.0-e3b-e4-iron</span>
+        <span class="paper-badge">Living Draft · v0.4.0-living · not v1.0-preprint</span>
         <h1 class="paper-mast__title">RayNu-V: A Formally Verified Bare-Metal Hypervisor</h1>
         <p class="paper-mast__subtitle">
           Optimized for Dell PowerEdge R640 / R650 / R660
         </p>
         <p class="paper-author">
-          Vikash Pandey ·
+          Vikash Pandey · RayNu Technologies ·
           <a href="https://orcid.org/0009-0001-2160-6357" rel="noopener"
             >ORCID 0009-0001-2160-6357</a
           >
         </p>
         <p class="paper-meta">
-          Last updated: 2026-08-23 · ADR-010 · iron COM2 evidence ·
+          Last updated: 2026-09-06 · ADR-010 · iron P0-14
+          <code>2b795a0</code> · Verus
+          <code>0.2026.07.12.0b42f4c</code> + Kani
+          <code>0.67.0</code> (ADR-008) ·
           <a href="https://github.com/vikkp/RayNu/blob/main/docs/paper/RayNu-V-Verification-Paper.md"
             >Source on GitHub</a
           >
-          · Toolchain: Verus + Kani (pinned, ADR-008)
         </p>
       </div>
     </header>
 
     <main class="paper-body">
       <div class="paper-note">
-        This page is a living audit artifact. Sections are filled only with
-        evidence from real runs, Verus/Kani outputs, and milestone gates.
-        Maturity claims never exceed the actual state of the Proven Core.
-        When L3 coverage and external review are sufficient, a frozen snapshot
-        becomes the conference / arXiv submission.
-        Iron COM2 archives for §6 live under
-        <code>docs/evidence/r640/logs/</code>
-        (xsavesfix close + confirming rebuild + keepconfix residual).
+        This page is a living audit artifact (ADR-010). Sections are filled
+        only with evidence from real runs, Verus/Kani outputs, and milestone
+        gates. Maturity claims never exceed the Proven Core. This version
+        <strong>completes the living draft</strong> against closed M6 L3 and
+        R640 iron through El Torito. It is <strong>not</strong>
+        <code>v1.0-preprint</code>. Nested sys-install is complete; iron
+        installer + TLS/console remain open. Nested QEMU is not PowerEdge.
+        Iron COM2 archives live under
+        <code>docs/evidence/r640/logs/</code>.
       </div>
 
       <nav class="paper-toc" aria-label="Table of contents">
@@ -323,30 +345,49 @@
         <ol>
           <li><a href="#abstract">Abstract</a></li>
           <li><a href="#intro">1. Introduction</a></li>
-          <li><a href="#threat">2. Background & Threat Model</a></li>
+          <li><a href="#threat">2. Background &amp; Threat Model</a></li>
           <li><a href="#arch">3. System Architecture</a></li>
           <li><a href="#approach">4. Formal Verification Approach</a></li>
           <li><a href="#ept">5. EPT Isolation Theorem</a></li>
           <li><a href="#milestones">6. Progressive Evaluation</a></li>
           <li><a href="#related">7. Related Work</a></li>
-          <li><a href="#limitations">8. Limitations & Open Proofs</a></li>
+          <li><a href="#limitations">8. Limitations &amp; Open Proofs</a></li>
           <li><a href="#conclusion">9. Conclusion</a></li>
+          <li><a href="#appendix-a">A. Evidence Format</a></li>
+          <li><a href="#appendix-b">B. LOC Snapshot</a></li>
+          <li><a href="#appendix-c">C. Version History</a></li>
         </ol>
       </nav>
 
       <h2 id="abstract">Abstract</h2>
       <p>
-        <em>[To be written at M3/M4 checkpoint. Placeholder only.]</em>
+        Type-1 hypervisors are trusted to isolate guest memory, yet production
+        hypervisors almost uniformly treat that isolation as a testing problem.
+        RayNu-V is a clean-slate Type-1 hypervisor, written in Rust, that boots as
+        a single UEFI binary on Dell PowerEdge R640-class servers and is designed
+        so the security-critical path can be machine-checked.
       </p>
       <p>
-        RayNu-V is a clean-slate Type-1 bare-metal hypervisor written in Rust and
-        optimized for Dell PowerEdge servers. Its security-critical path (VMX,
-        EPT, physical frame allocator, and related control planes) is designed
-        for formal verification with Verus and Kani. This paper reports the
-        progressive verification of the Proven Core, culminating in a
-        machine-checked proof of the EPT Isolation Theorem: every valid
-        guest-physical to host-physical mapping is exclusively owned by a single
-        guest and belongs to neither the hypervisor nor any other guest.
+        The Proven Core (ADR-002) is the only surface that receives Verus
+        specifications and proofs. Its headline property is the EPT Isolation
+        Theorem (ADR-004): every valid guest-physical to host-physical mapping is
+        exclusively owned by one guest and belongs to neither the hypervisor nor
+        any other guest. On Latitude/QEMU, the ghost model
+        <code>ept_model</code> discharges that property through map, unmap,
+        EPT-violation handling, and live-migration page transfer —
+        <strong>80 verified, 0 errors</strong> — and the M6.9 auditor path closed
+        (<code>RAYNU-V-M6-EXT-OK</code>). Live executable EPT remains
+        <strong>L2</strong> (runtime registry + asserts). Device emulation, the
+        management plane, and guest firmware are outside the Proven Core and are
+        not claimed as theorems.
+      </p>
+      <p>
+        On a real PowerEdge R640, COM2 archives close M0→Linux SHELL→M4 probes
+        (<code>RAYNU-V-R640-BOOT-OK</code>), PRE-EBS and post-EBS host-NIC HTTP,
+        E4 SPA VMLAUNCH of a SHELL stub, and firmware ATAPI + El Torito CD EFI.
+        Nested RayNu-F completed an alpine-extended sys-install
+        (<em>Please reboot</em>) and reboot-to-disk. That nested loop is not iron
+        E5. This paper reports those facts and stops there.
       </p>
       <p>
         <strong>Keywords:</strong> formal verification, Type-1 hypervisor, EPT,
@@ -355,35 +396,106 @@
 
       <h2 id="intro">1. Introduction</h2>
       <p>
-        <em>[Static until early content is ready.]</em>
+        A hypervisor’s job is to make one computer look like several, without
+        letting those several computers look at each other. The mechanism that
+        actually enforces that on modern Intel servers is Extended Page Tables. If
+        EPT is wrong, two guests share a frame, or a guest sees hypervisor memory,
+        and no amount of API polish repairs it.
       </p>
       <p>
-        Motivation, problem statement, the four pillars ([V], [Z], [D], [A]), and
-        the decision to treat formal verification as an architectural north star
-        rather than a post-hoc exercise.
+        Commercial Type-1 stacks (ESXi, Hyper-V, Xen, KVM) are large, mature, and
+        tested. They are not accompanied by a machine-checked isolation theorem for
+        the frames they hand to guests. Research systems that <em>are</em> proved
+        (seL4, CertiKOS, Komodo) target microkernels, verified kernels, or enclaves
+        — not a single-binary UEFI hypervisor aimed at the PowerEdge fleet already
+        in the rack.
+      </p>
+      <p>
+        RayNu-V takes four architectural bets, in priority order when they conflict:
+      </p>
+      <table>
+        <thead>
+          <tr><th>Tag</th><th>Pillar</th><th>Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>[V]</strong></td><td>Formally verified core</td><td>North star. Shape code so proofs remain possible.</td></tr>
+          <tr><td><strong>[Z]</strong></td><td>Zero-config single binary</td><td>One <code>r640-hypervisor.efi</code>. No host OS.</td></tr>
+          <tr><td><strong>[D]</strong></td><td>Dell iDRAC-native</td><td>Hardware we own and boot: R640 / R650 / R660.</td></tr>
+          <tr><td><strong>[A]</strong></td><td>Audit-first</td><td>Tamper-evident ring; SOX/ISO-shaped reports.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Formal verification here is not a post-hoc whitepaper. ADR-001 picked
+        Verus (SMT) plus Kani (bounded <code>unsafe</code>). ADR-006 defined
+        L0→L3 so the project can ship at L1/L2 when L3 is still in flight. ADR-010
+        required this page to exist from day one and to refuse narrative that runs
+        ahead of logs.
+      </p>
+      <p>
+        This living draft is complete against the evidence we have: M6 production
+        bar on Latitude, iron through El Torito, nested RayNu-F as a product
+        path. A frozen arXiv/conference snapshot (<code>v1.0-preprint</code>)
+        waits on iron <code>RAYNU-V-M7-ISO-INSTALL-OK</code> and a third-party
+        re-run of the auditor path that is not a bring-up self-review.
       </p>
       <div class="paper-evidence">
-        Evidence block template (fill only with real data):<br />
-        <strong>Evidence (YYYY-MM-DD, commit &lt;hash&gt;, run &lt;id&gt;)</strong><br />
-        – Maturity: Lx<br />
-        – Artifact: serial log / Verus transcript / audit-ring hash / gate checklist<br />
-        – Observation: one factual sentence
+        <strong>Evidence (2026-07-21, gate M6.9, run m6-ext-smoke)</strong><br />
+        Maturity: L3 (<code>ept_model</code>) + L0 gate docs · Artifact:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/reviews/m6_spec_review.md">m6_spec_review.md</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/findings/m6_external.md">m6_external.md</a><br />
+        Observation: R09 review accepted; findings register <strong>0 critical / 0 high</strong>;
+        marker <code>RAYNU-V-M6-EXT-OK</code>; <code>80 verified, 0 errors</code>.
       </div>
 
       <h2 id="threat">2. Background and Threat Model</h2>
+      <h3>2.1 Why memory isolation is the headline</h3>
+      <p>
+        A Type-1 hypervisor is the TCB for every guest it runs. CPUID and MSR
+        firewalls, interrupt injection, and the hypercall door all matter. None of
+        them matter if EPT can map the same host frame to two guests, or to a
+        guest and the hypervisor, without anyone noticing. ADR-004 therefore names
+        <strong>exclusive ownership of host frames</strong> as the property we
+        prove, not “the guest seemed isolated in tests.”
+      </p>
+      <h3>2.2 Threat model</h3>
+      <p>We assume:</p>
       <ul>
-        <li>Existing Type-1 hypervisors and their verification status (or lack thereof).</li>
-        <li>Why memory isolation is the headline property.</li>
-        <li>Threat model: malicious or compromised guest, buggy device emulation outside the Proven Core, operator error.</li>
-        <li>Assumptions that the proofs rely on (and that are therefore out of scope).</li>
+        <li>
+          A <strong>malicious or compromised guest</strong> (ring-0 Linux,
+          firmware, or installer) that may issue any architected VM exit: EPT
+          violation, CPUID, MSR, I/O, hypercall, HLT, exception.
+        </li>
+        <li>
+          <strong>Buggy device emulation</strong> outside the Proven Core (virtio,
+          IDE/ATAPI, UART). Bugs there can DoS a guest or confuse an installer;
+          they must not become a second EPT mapping of a Proven Core frame.
+        </li>
+        <li>
+          <strong>Operator error</strong> (wrong ISO, wrong NIC, exhausted Cruzer).
+          Audit events record what happened; they do not enlarge the theorem.
+        </li>
+      </ul>
+      <p>
+        We do <strong>not</strong> assume a correct third-party guest firmware.
+        Stage 46 taught that forcing OVMF’s internal WaitForEvent state is a
+        self-inflicted fault (ADR-016). Product ISO boot now uses RayNu-F, which
+        we author. RayNu-F is <strong>outside</strong> the Proven Core.
+      </p>
+      <h3>2.3 Assumptions out of scope for the theorems</h3>
+      <ul>
+        <li>The Intel SDM’s VMX/EPT hardware behaves as documented.</li>
+        <li>The frozen Verus/SMT stack (ADR-008 pin) is trusted for the ghost proofs.</li>
+        <li>Host physical memory given to the allocator is the memory the machine has.</li>
+        <li>DMA from devices we do not model (untrusted NICs, USB) is a future confinement problem, not a discharged lemma.</li>
+        <li>Nested VT-x on a lab server is not a proof about a PowerEdge R640.</li>
       </ul>
 
       <h2 id="arch">3. System Architecture</h2>
       <h3>3.1 Proven Core Boundary (ADR-002)</h3>
       <p>
-        Only the following modules receive Verus specifications and progressive
-        proofs. Everything else is verified by Rust’s type system, testing, and
-        code review only.
+        Only the following modules receive Verus specifications and progressive proofs.
+        Everything else is Rust’s type system, testing, and review.
       </p>
       <table>
         <thead>
@@ -406,46 +518,68 @@
           <tr><td>IPI confinement</td><td>~500</td><td>Unconfined IPIs enable cross-VM interference</td></tr>
         </tbody>
       </table>
-      <p><strong>Hard limit:</strong> 15,000 LOC including ~1,600 LOC of proof scaffolding.</p>
-
+      <p>
+        <strong>Hard limit:</strong> 15,000 LOC including ~1,600 LOC of proof
+        scaffolding. Promotion into the Proven Core requires an ADR.
+      </p>
+      <p>
+        <strong>Lived split (2026-09):</strong> the machine-checked exclusivity
+        theorems live in host-only crate <code>ept_model</code> (not linked into
+        the <code>.efi</code>). The executable EPT ownership registry in
+        <code>memory/ept.rs</code> is <strong>L2</strong>. Device emulation, HTTP,
+        SPA, ISO, RayNu-F, iDRAC, and migration are outside.
+      </p>
       <h3>3.2 Single-Binary Strategy (ADR-003)</h3>
       <p>
-        One <code>.efi</code> binary. All assets (kernel, initrd, Web UI, schemas)
-        embedded and zstd-compressed. Target size 15 MB, hard limit 20 MB.
-        Non-critical assets are lazy-decompressed.
+        One <code>.efi</code> binary. Kernel, initrd, Web UI, and schemas are
+        PE/COFF sections, zstd-compressed, lazy-decompressed. Target 15 MB, hard
+        limit 20 MB.
       </p>
-
-      <h3>3.3 Hardware Focus</h3>
+      <h3>3.3 Hardware Focus (ADR-005)</h3>
       <p>
-        Dell PowerEdge R640 / R650 / R660. Tier-1 iDRAC/Redfish integration is in
-        scope; Tier-2 (PERC deep health, predictive failure) is best-effort and
-        requires partnership.
+        Dell PowerEdge R640 / R650 / R660. Tier-1 (COM2 via iDRAC SOL, SMBIOS/ACPI,
+        BCM5720 LOM) is in scope. Tier-2 PERC OEM is not an M7 blocker.
       </p>
 
       <h2 id="approach">4. Formal Verification Approach</h2>
       <h3>4.1 Toolchain (ADR-001, ADR-008)</h3>
       <ul>
-        <li><strong>Verus</strong> — primary tool for functional correctness (SMT).</li>
-        <li><strong>Kani</strong> — bounded model checking of every <code>unsafe</code> block.</li>
-        <li>Fallback chain: Verus → Kani → runtime assertions + fuzzing. The architecture is always designed for Level 3 even when tooling is not yet ready.</li>
+        <li>
+          <strong>Verus</strong> — SMT proofs of ghost state. Frozen pin
+          <code>release/0.2026.07.12.0b42f4c</code> (<code>verus-version.toml</code>).
+          CI never uses <code>latest</code>.
+        </li>
+        <li>
+          <strong>Kani</strong> — bounded model checking of <code>unsafe</code>
+          (CI pin <code>0.67.0</code>, <code>RAYNU-V-M3-KANI-OK</code>).
+        </li>
+        <li>
+          Fallback: Verus → Kani → <code>assert!</code> + fuzz. Architecture is
+          always aimed at L3.
+        </li>
       </ul>
-
       <h3>4.2 Verification Maturity Model (ADR-006)</h3>
       <table>
         <thead>
           <tr><th>Level</th><th>Name</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td>L0</td><td>Documented</td><td>Invariants written as comments</td></tr>
+          <tr><td>L0</td><td>Documented</td><td>Invariants in comments</td></tr>
           <tr><td>L1</td><td>Runtime-enforced</td><td><code>assert!</code> / <code>debug_assert!</code> + Kani on unsafe</td></tr>
           <tr><td>L2</td><td>Spec-written</td><td>Verus <code>.spec.rs</code> with ghost state and contracts</td></tr>
           <tr><td>L3</td><td>Proof-complete</td><td><code>cargo verus --verify</code> succeeds</td></tr>
         </tbody>
       </table>
-      <p>Runtime assertions are retained even at L3 (defense-in-depth).</p>
-
-      <h3>4.3 File Convention for Proven Core Modules</h3>
-      <pre class="ship-code" style="margin-top:0.75rem"><code>module/
+      <p>Runtime assertions are kept at L3.</p>
+      <h3>4.3 File convention</h3>
+      <p>
+        Proven Core modules use four files (<code>module.rs</code>,
+        <code>_spec.rs</code>, <code>_proof.rs</code>, <code>_test.rs</code>).
+        The EPT exclusivity theorems of record live in
+        <code>ept_model/src/lib.rs</code> (<code>verus! { ... }</code>), verified
+        with <code>cargo verus verify -p ept_model</code>.
+      </p>
+      <pre><code>module/
 ├── module.rs           # executable code
 ├── module_spec.rs      # Verus specifications
 ├── module_proof.rs     # Verus proofs (gaps marked TODO)
@@ -466,10 +600,42 @@
       </p>
       <p>
         The theorem must hold across map, unmap, EPT-violation handling, and
-        (later) live-migration page transfer.
+        live-migration page transfer.
       </p>
-
-      <h3>5.1 Proof Progression (living)</h3>
+      <h3>5.1 Proofs of record (Latitude / CI)</h3>
+      <p>Named lemmas in <code>ept_model</code> (host-only; not in the EFI):</p>
+      <table>
+        <thead>
+          <tr><th>Lemma</th><th>Gate</th><th>Claim</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>theorem_single_guest_4k_map_unmap_exclusive</code></td><td>M3.17</td><td>4K, one guest</td></tr>
+          <tr><td><code>theorem_n_guest_4k_map_unmap_exclusive</code></td><td>M4.7</td><td>4K, N guests</td></tr>
+          <tr><td><code>theorem_concrete_single_guest_4k_refine</code> / <code>theorem_concrete_n_guest_4k_refine</code></td><td>M3.18 / M4.9</td><td>ghost↔exec refine (scoped)</td></tr>
+          <tr><td><code>theorem_large_page_map_unmap_exclusive</code></td><td>M5.7</td><td>2M/1G</td></tr>
+          <tr><td><code>theorem_numa_map_unmap_affinity</code></td><td>M6.2</td><td>NUMA affinity ghost</td></tr>
+          <tr><td><code>theorem_hw_2m_leaf_refines_identity</code></td><td>M6.1</td><td>HW PTE encode</td></tr>
+          <tr><td><code>theorem_ept_violation_preserves_exclusive</code></td><td>M6.0</td><td>violation disposition</td></tr>
+          <tr><td><code>theorem_page_transfer_preserves_exclusive</code></td><td>M6.3</td><td><code>PageTransferStep</code></td></tr>
+        </tbody>
+      </table>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-07-21, M6.3–M6.9, Latitude + CI)</strong><br />
+        Maturity: <strong>L3</strong> (ghost model) · Artifact:
+        <code>ept_model</code> verify transcript ·
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/reviews/m6_spec_review.md">m6_spec_review.md</a><br />
+        Observation: <code>80 verified, 0 errors</code>; no <code>admit</code> on
+        the exclusivity path; auditor smoke
+        <code>./tools/m6-ext-smoke.sh</code> → <code>RAYNU-V-M6-EXT-OK</code>.
+      </div>
+      <h3>5.2 What iron logs do and do not raise</h3>
+      <p>
+        Iron COM2 logs prove the <strong>runtime path</strong> (VMXON, EPT
+        identity, Linux SHELL, M4 probes) on a Xeon Silver 4110. They do not, by
+        themselves, raise Verus maturity. Latitude L3 and R640 L1 are both real;
+        they are not the same claim.
+      </p>
+      <h3>5.3 Proof progression (living)</h3>
       <table>
         <thead>
           <tr>
@@ -480,204 +646,404 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>M2</td><td>Spec written + runtime asserts + Kani</td><td>L1–L2 (Latitude)</td><td>Gate markers + Kani CI</td></tr>
-          <tr><td>M3</td><td>4K-page, single-guest proof attempt</td><td>L2 + scoped L3; iron SHELL</td><td>M3.17–M3.21; COM2 logs</td></tr>
-          <tr><td>M4</td><td>Extended to N guests (4K)</td><td>L3 N-guest (Latitude); iron probes</td><td>M4.6–M4.9; <code>M4-SMP-OK</code></td></tr>
-          <tr><td>M5</td><td>Large-page support attempted</td><td>L3 large-page + NUMA (Latitude)</td><td>M5.7–M5.9 / M6.2</td></tr>
-          <tr><td>M6</td><td>Full proof incl. live migration + external review</td><td>L3 migrate-xfer + EXT</td><td><code>80 verified, 0 errors</code></td></tr>
+          <tr><td>M2</td><td>Spec + asserts + Kani</td><td>L1–L2 live EPT; Kani CI</td><td><code>docs/progress.md</code>; <code>RAYNU-V-M3-KANI-OK</code></td></tr>
+          <tr><td>M3</td><td>4K single-guest proof</td><td>L3 ghost; iron SHELL</td><td>M3.17–M3.21; COM2 <code>M3-SHELL-OK</code></td></tr>
+          <tr><td>M4</td><td>N guests (4K)</td><td>L3 N-guest (Latitude); iron M4 probes</td><td>M4.6–M4.9; iron <code>M4-SMP-OK</code></td></tr>
+          <tr><td>M5</td><td>Large pages</td><td>L3 large-page + NUMA spec (Latitude)</td><td>M5.7–M5.9</td></tr>
+          <tr><td>M6</td><td>Violation + migrate-xfer + external review</td><td>L3 + EXT</td><td><code>80 verified, 0 errors</code>; <code>M6-EXT-OK</code></td></tr>
         </tbody>
       </table>
 
       <h2 id="milestones">6. Progressive Evaluation — Milestone Log</h2>
-      <p><em>This section is filled only with contemporaneous evidence from real runs.</em></p>
+      <p><em>Filled only with contemporaneous evidence from real runs.</em></p>
 
       <h3>6.1 Milestone 0 — “It Boots”</h3>
       <p>
-        <strong>Status:</strong> Closed on Latitude/QEMU; <strong>closed on real PowerEdge R640</strong> (2026-08-15).<br />
-        <strong>Target gate:</strong> Boots on R640 (or QEMU+OVMF), serial console works, Verus CI pipeline green.
+        <strong>Status:</strong> Closed on Latitude/QEMU;
+        <strong>closed on real PowerEdge R640</strong> (2026-08-15).<br />
+        <strong>Target:</strong> Boots on R640, serial works, Verus CI green.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, commit d7cc603, run r640-xsavesfix-com2)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
-        Observation: iDRAC Virtual Floppy printed <code>RAYNU-V-M0-BOOT-OK</code> … through
-        <code>RAYNU-V-M4-SMP-OK</code> / <code>boot: VMXOFF ok</code> on COM2; EFI SHA256 <code>c3a688d0…ba28d611</code>.
-        Confirming rebuild archive:
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt">confirm-rebuild-com2.txt</a>.
-        (Literal <code>RAYNU-V-R640-BOOT-OK</code> was docs-claim-only in those archives.)
+        Maturity: L1 (runtime / gate) · Artifact:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a>
+        · confirming rebuild
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt">confirm-rebuild-com2.txt</a><br />
+        Observation: iDRAC Virtual Floppy printed <code>RAYNU-V-M0-BOOT-OK</code>
+        on COM2; EFI SHA256 <code>c3a688d0…ba28d611</code>. The confirming rebuild
+        reproduced the M0→SHELL→M4 chain. The literal string
+        <code>RAYNU-V-R640-BOOT-OK</code> is the marker-build archive below, not
+        these two transcripts.
       </div>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, build r640-boot-ok-marker, run r640-boot-ok-marker-com2)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: serial log + operator Terminal.app SOL screenshot ·
+        Maturity: L1 · Artifact: serial log + operator screenshot ·
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt">boot-ok-marker-com2.txt</a>
         ·
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.png">boot-ok-marker-com2.png</a><br />
-        Observation: After M0→SHELL→M4→<code>VMXOFF</code>, COM2 printed
-        <code>boot: E2 marker build=r640-boot-ok-marker</code> and the literal
-        string <code>RAYNU-V-R640-BOOT-OK</code>.
+        Observation: After M0→SHELL→M4→<code>VMXOFF</code>, COM2 printed the
+        literal string <code>RAYNU-V-R640-BOOT-OK</code>.
       </div>
       <div class="paper-evidence">
-        <strong>Evidence (2026-08-15, kit keepconfix, run r640-keepconfix-com2)</strong><br />
-        Maturity: L1 (residual) · Artifact: serial log ·
+        <strong>Evidence (2026-08-15, kit v0.1.0-keepconfix)</strong><br />
+        Maturity: L1 (negative / residual) · Artifact:
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt">keepconfix-com2.txt</a><br />
-        Observation: Same M0 path green before XSAVES residual; archived for reproducibility.
+        Observation: Without secondary Enable XSAVES, <code>Run /init</code> hit
+        TASK stack guard on Xeon Silver 4110; archived as the pre-close failure
+        mode.
       </div>
 
       <h3>6.2 Milestone 1 — “VMX Works”</h3>
       <p>
-        <strong>Status:</strong> Closed on Latitude; <strong>reproduced on R640 iron</strong>.<br />
-        <strong>Target gate:</strong> VMLAUNCH / VMEXIT cycle, VMCS host/guest state configured.
+        <strong>Status:</strong> Closed on Latitude;
+        <strong>reproduced on R640 iron</strong>.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
-        Maturity: L1 · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
-        Observation: <code>RAYNU-V-M1-VMXON-OK</code>, <code>RAYNU-V-M1-VMEXIT-OK</code>; <code>secondary=0x0010100a</code> (EPT|RDTSCP|INVPCID|XSAVES).
+        Maturity: L1 · Artifact: same xsavesfix COM2 log<br />
+        Observation: <code>RAYNU-V-M1-VMXON-OK</code>,
+        <code>RAYNU-V-M1-VMEXIT-OK</code>; VMCS
+        <code>secondary=0x0010100a</code> (EPT|RDTSCP|INVPCID|XSAVES).
       </div>
 
       <h3>6.3 Milestone 2 — “Guest Executes Real Code”</h3>
       <p>
-        <strong>Status:</strong> Closed on Latitude; <strong>reproduced on R640 iron</strong>.<br />
-        <strong>Target gate:</strong> Guest code runs under EPT; timer/IRQ inject path.
+        <strong>Status:</strong> Closed on Latitude;
+        <strong>reproduced on R640 iron</strong>.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
-        Maturity: L1 · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
-        Observation: <code>RAYNU-V-M2-EPT-OK</code> … <code>RAYNU-V-M2-TIMER-OK</code> with precise EPT and distinct <code>HOST_CR3</code>.
+        Maturity: L1 (runtime); ADR-004 ownership selftest at boot · Artifact: same log<br />
+        Observation: <code>RAYNU-V-M2-EPT-OK</code> …
+        <code>RAYNU-V-M2-TIMER-OK</code> after precise EPT
+        <code>[0,512MiB)</code> with guest CR3 in-window and distinct
+        <code>HOST_CR3</code>.
       </div>
 
       <h3>6.4 Milestone 3 — “Linux Boots”</h3>
       <p>
-        <strong>Status:</strong> Closed on Latitude; <strong>closed on R640 iron</strong> (<code>RAYNU-V-M3-SHELL-OK</code>).<br />
-        <strong>Target gate:</strong> Unmodified Linux 6.x reaches a shell (init SHELL hypercall).
+        <strong>Status:</strong> Closed on Latitude;
+        <strong>closed on R640</strong> (<code>RAYNU-V-M3-SHELL-OK</code>).
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
-        Maturity: L1 · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
-        Observation: Linux 6.12.40 → <code>RAYNU-V-M3-SHELL-OK</code> / <code>RAYNU-V-M3-NOIRQ-OK</code>.
-      </div>
-      <div class="paper-evidence">
-        <strong>Evidence (2026-08-15, keepconfix residual)</strong><br />
-        Maturity: L1 (negative) · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-keepconfix-com2.txt">keepconfix-com2.txt</a><br />
-        Observation: Without Enable XSAVES, <code>Run /init</code> hit TASK stack guard / panic; fixed by <code>v0.1.0-xsavesfix</code>.
+        Maturity: L1 · Artifact: same log<br />
+        Observation: Linux 6.12.40 earlyprintk on COM2;
+        <code>RAYNU-V-M3-LINUX-EARLY-OK</code> → <code>Run /init</code> →
+        <code>RAYNU-V-M3-SHELL-OK</code> / <code>RAYNU-V-M3-NOIRQ-OK</code>.
       </div>
 
       <h3>6.5 Milestone 4 — “Usable VM Platform”</h3>
       <p>
-        <strong>Status:</strong> Closed on Latitude (M4.0–M4.9); <strong>M4.0–M4.5 probe chain on R640 iron</strong>.<br />
-        <strong>Target gate:</strong> ≥4 concurrent guests under credit scheduler; virtio-blk/net + SMP probes.
+        <strong>Status:</strong> Closed on Latitude (M4.0–M4.9 L3 N-guest);
+        <strong>M4.0–M4.5 probes on R640 iron</strong>.
       </p>
       <div class="paper-evidence">
         <strong>Evidence (2026-08-15, d7cc603, r640-xsavesfix-com2)</strong><br />
-        Maturity: L1 · Artifact: serial log ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-xsavesfix-com2.txt">xsavesfix-com2.txt</a><br />
-        Observation: <code>M4-SHELL-G1</code> / <code>2VM-OK</code> / <code>SCHED-OK</code> / <code>NVM-OK</code> / <code>BLK-OK</code> / <code>NET-OK</code> / <code>SMP-OK</code> → <code>VMXOFF ok</code>.
+        Maturity: L1 (iron runtime); L3 N-guest is Latitude/CI · Artifact: same log<br />
+        Observation: <code>RAYNU-V-M4-SHELL-G1</code>, <code>M4-2VM-OK</code>,
+        <code>M4-SCHED-OK</code>, <code>M4-NVM-OK</code>, <code>M4-BLK-OK</code>,
+        <code>M4-NET-OK</code>, <code>M4-SMP-OK</code>, then <code>VMXOFF ok</code>.
       </div>
       <div class="paper-evidence">
-        <strong>Iron close (M7.5 / HDA E2):</strong> <code>RAYNU-V-R640-BOOT-OK</code> —
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md">first-light evidence</a>
-        · confirming retest
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-confirm-rebuild-com2.txt">confirm-rebuild-com2.txt</a>
-        · literal marker
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt">boot-ok-marker-com2.txt</a>.
+        Iron close claim (M7.5 / HDA E2): <code>RAYNU-V-R640-BOOT-OK</code> —
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md">first-light evidence</a>.
       </div>
 
-      <h3>6.6 Milestone 5 / 5.5 / 6</h3>
+      <h3>6.6 Milestones 5, 5.5, and 6 (Latitude / CI)</h3>
       <p>
-        <strong>Status (Latitude/CI):</strong> M5–M6.9 closed (<code>RAYNU-V-M6-EXT-OK</code>;
-        <code>80 verified, 0 errors</code>). Iron: E2 BOOT-OK, E3 UEFI-HTTP-OK,
-        E5 stamp persist (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>, 2026-08-16).
-        Residual: TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
-        E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub) — see HDA.
-      </p>
-
-      <h3>6.7 Milestone 7 — Mount Everest iron track (living)</h3>
-      <p>
-        <strong>Status:</strong> E2, E3, E3b + Phase F, E5 stamps, and E4 SPA
-        VMLAUNCH closed on real R640 iron through 2026-08-21. Guest-UEFI
-        (OVMF) chain closed on nested VT-x through 2026-08-23 (ADR-014 Stages
-        36–43) and on iron through 2026-08-27 (Stage 44 —
-        <code>OVMF-ATAPI-OK</code>, firmware READ(10) of a real CD sector).
-        Remaining: TLS/console, the El Torito CD boot, a real distro
-        installer, live Redfish, R640 soak.
+        <strong>Status:</strong> M5–M6.9 <strong>closed on Latitude</strong>. Iron is
+        not claimed for soak, HA, or the Verus count.
       </p>
       <div class="paper-evidence">
-        <strong>Evidence (2026-08-20, run r640 BCM5720 :38, E3b + Phase F)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: serial log + evidence notes ·
+        <strong>Evidence (2026-07-21, M6.3, ept_model)</strong><br />
+        Maturity: L3 · Artifact: verify of
+        <code>theorem_page_transfer_preserves_exclusive</code><br />
+        Observation: <code>RAYNU-V-M6-MIGRATE-XFER-OK</code>;
+        <code>80 verified, 0 errors</code>.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-07-21, M6.8 soak)</strong><br />
+        Maturity: L0 harness (not a theorem) · Artifact:
+        <code>./tools/m6-soak-smoke.sh</code> → <code>RAYNU-V-M6-SOAK-OK</code><br />
+        Observation: 72-hour <em>metrics</em> gate on Latitude; not an R640 soak.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-07-21, M6.9)</strong><br />
+        Maturity: L3 proofs + L0 review docs · Artifact:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/reviews/m6_spec_review.md">m6_spec_review.md</a>,
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/findings/m6_external.md">m6_external.md</a>,
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/reviews/m6_proof_maintenance.md">m6_proof_maintenance.md</a>,
+        <a href="https://github.com/vikkp/RayNu/blob/main/verus-version.toml">verus-version.toml</a><br />
+        Observation: <code>RAYNU-V-M6-EXT-OK</code>. Bring-up self-review against
+        ADR-004; independent third-party <code>verus --verify</code> remains the
+        auditor re-run described in
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/runbooks/external_audit.md">external_audit.md</a>.
+      </div>
+
+      <h3>6.7 Milestone 7 — Mount Everest iron track (product, not Proven Core)</h3>
+      <p>
+        M7 is the operator product loop (ADR-009). HTTP, SPA, ISO, and RayNu-F
+        are <strong>outside</strong> the Proven Core. Evidence here is L1 runtime /
+        gate, never L3.
+      </p>
+      <p>
+        <strong>Status:</strong> last iron ISO gate is Stage 45 El Torito
+        (2026-08-27). Nested alpine-extended sys-install is complete
+        (<em>Please reboot</em> + F7 <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>,
+        2026-09-05). Residual: iron installer + TLS/console. Nested ≠ Everest.
+        Host/CI never print <code>RAYNU-V-M7-ISO-INSTALL-OK</code>.
+      </p>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-16, M7.6, R640 PRE-EBS HTTP)</strong><br />
+        Maturity: L1 · Artifact:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-uefi-http-ok.md">2026-08-16-uefi-http-ok.md</a><br />
+        Observation: <code>RAYNU-V-M7-UEFI-HTTP-OK</code> on
+        <code>10.99.99.127:8443</code> (SNP residual; Virtual Floppy has no Tcp4).
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-16, M7.7 stamps)</strong><br />
+        Maturity: L1 (persist-detect) · Artifact:
+        <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-16-e5-booted-from-disk-com2.txt">2026-08-16-e5-booted-from-disk-com2.txt</a><br />
+        Observation: <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> on Cruzer. LBA
+        stamps, <strong>not</strong> a guest rootfs.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-20, E3b + Phase F)</strong><br />
+        Maturity: L1 · Artifact:
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md">e3b-host-nic-http-ok.md</a>
         ·
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-phase-f-coexist-ok.md">phase-f-coexist-ok.md</a><br />
-        Observation: After <code>BOOT-OK</code>, the host-owned BCM5720 LOM
-        (<code>:38</code>) served SPA + Bearer REST as
-        <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>; Phase F repeated the listen
-        with VMX on (G0 scheduled, G1–G3 parked), 25× HTTP-OK on hold. Firmware
-        SNP/Tcp4 remain dead after EBS by design (ADR-013).
+        Observation: Host-owned BCM5720 <code>:38</code> served SPA+REST after
+        <code>BOOT-OK</code> (<code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>); Phase F
+        repeated the listen with VMX on.
       </div>
       <div class="paper-evidence">
-        <strong>Evidence (2026-08-21, run r640 SPA launch, E4)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: serial log + evidence note ·
+        <strong>Evidence (2026-08-21, P0-14, EFI 2b795a0)</strong><br />
+        Maturity: L1 · Artifact:
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md">e4-spa-shadow-reentry-ok.md</a><br />
-        Observation: SPA start launched a private-EPT SHELL guest and
-        re-entered it after shadow restore —
-        <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>. The guest is a SHELL stub,
-        not a distro.
+        Observation: <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — private-EPT SHELL
+        guest from SPA start + shadow re-entry. <strong>Not a distro.</strong>
       </div>
       <div class="paper-evidence">
-        <strong>Evidence (2026-08-22 → 2026-08-23, raynuvsrv1 nested VT-x, ADR-014 Stages 36–42)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: host + QEMU gate markers ·
+        <strong>Evidence (2026-08-22 → 2026-08-23, nested VT-x, ADR-014 Stages 36–42)</strong><br />
+        Maturity: L1 (nested / host). <strong>Not iron.</strong> · Artifact:
         <a href="https://github.com/vikkp/RayNu/blob/main/docs/progress.md">progress.md</a>
-        P0-51…P0-57 ·
-        <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md">ADR-014</a><br />
+        P0-51…P0-57<br />
         Observation: Retained ESP OVMF.fd VMLAUNCHed on a private VMCS
-        (<code>OVMF-VMLAUNCH-OK</code>), kept past the first triple-fault
-        (host owns CR4.VMXE), driven past SEC (<code>OVMF-PAST-SEC-OK</code>),
-        given a GuestVisible CD (<code>OVMF-CDROM-OK</code>), PEI/DXE platform
-        boot attempt (<code>OVMF-DXE-OK</code>), and an empty virtio-blk disk
-        with CD-then-disk boot order (<code>OVMF-VIRTIO-OK</code>). Not a
-        completed firmware CD boot; not an installer; not Everest E5.
+        (<code>OVMF-VMLAUNCH-OK</code>), kept past the first triple-fault (host owns
+        CR4.VMXE), driven past SEC, given a GuestVisible CD, PEI/DXE platform
+        attempt, and an empty virtio-blk with CD-then-disk boot order. Nested ≠
+        iron. Not El Torito. Not an installer.
       </div>
       <div class="paper-evidence">
-        <strong>Evidence (2026-08-23 → 2026-08-27, nested VT-x + R640 iron, ADR-014 Stages 43–44)</strong><br />
-        Maturity: L1 (runtime / gate) · Artifact: gate markers + iron COM2 log ·
-        <a href="https://github.com/vikkp/RayNu/pull/217">PR #217</a><br />
-        Observation: Stage 43 closed on nested VT-x
-        (<code>OVMF-BOTH-OK</code>: firmware-simultaneous virtio-blk
-        <code>00:00.0</code> + IDE <code>00:00.1</code> enumeration). Stage 44
-        closed on iron COM2 (EFI <code>bf696ca</code>, two boots):
-        <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — the guest firmware issued
-        ATAPI READ(10) (<code>scsi=0x28</code>) and read a real CD sector
-        (<code>sectors=1</code>, <code>packet=9</code>, stop n=30769).
-        Not an El Torito boot; not an installer; not Everest E5. Host tests
-        480/480.
+        <strong>Evidence (2026-08-23 → 2026-08-27, nested VT-x Stage 43,
+        <a href="https://github.com/vikkp/RayNu/pull/217">PR #217</a>)</strong><br />
+        Maturity: L1 (nested) · Artifact: PR #217 gate markers<br />
+        Observation: <code>OVMF-BOTH-OK</code> — firmware-simultaneous virtio-blk
+        + IDE enumeration. Not El Torito. Not an installer.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-27, Stage 44, EFI bf696ca)</strong><br />
+        Maturity: L1 · Artifact: iron COM2 via
+        <a href="https://github.com/vikkp/RayNu/pull/226">PR #226</a> / P0-59<br />
+        Observation: <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — ATAPI READ(10)
+        <code>scsi=0x28</code>, <code>sectors=1</code>, twice. Not El Torito. Not
+        an installer.
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-08-27, Stage 45, EFI 0be7283)</strong><br />
+        Maturity: L1 · Artifact: iron COM2 marker
+        <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code> (catalog=1, bootimg=1,
+        <code>sectors=183</code>); lived table on the E5 close path
+        (<a href="https://github.com/vikkp/RayNu/pull/229">PR #229</a>)<br />
+        Observation: Guest firmware booted CD EFI (El Torito) on real R640.
+        <strong>Not an installer. Not Everest E5.</strong>
+      </div>
+      <div class="paper-evidence">
+        <strong>Evidence (2026-09-05, Stage 46 nested RayNu-F, fe4785a)</strong><br />
+        Maturity: L1 (nested VT-x). <strong>Not iron. Not L3.</strong> · Artifact:
+        <a href="https://github.com/vikkp/RayNu/pull/229">PR #229</a>; ADR-016 /
+        ADR-017<br />
+        Observation: After OVMF WaitForEvent forcing produced
+        <code>#PF cr2=0xffffffffffffffb8</code> (<code>9474ab6</code>) and
+        <code>CpuDeadLoop</code> (<code>4e16b59</code>), RayNu-F became the guest
+        firmware. Nested alpine-extended <code>setup-disk -m sys</code>
+        completed (<em>Installation is complete. Please reboot.</em>); F7 reboot
+        printed <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Cruzer is too small for
+        alpine-extended. Host/CI never print
+        <code>RAYNU-V-M7-ISO-INSTALL-OK</code>.
       </div>
 
       <h2 id="related">7. Related Work</h2>
-      <p><em>[To be filled later with precise citations.]</em></p>
       <p>
-        Existing formally verified or heavily verified hypervisors / kernels
-        (seL4, CertiKOS, Komodo, Firecracker verification efforts, etc.).
-        Differences in scope, threat model, and hardware target.
+        <strong>seL4</strong> (Klein et al., SOSP 2009) is the landmark
+        machine-checked microkernel: functional correctness and, later,
+        integrity/information-flow. It is not a Type-1 hypervisor for unmodified
+        Linux on PowerEdge, and it is not a single UEFI binary. RayNu-V borrows
+        the <em>discipline</em> (small trusted core, explicit invariants, proofs
+        against a written theorem) and refuses seL4’s scope (we do not prove the
+        scheduler or device model).
+      </p>
+      <p>
+        <strong>CertiKOS</strong> (Gu et al., OSDI 2016) builds a certified
+        concurrent OS kernel with contextual refinement.
+        <strong>Komodo</strong> (Ferraiuolo et al., SOSP 2017) verifies a
+        software enclave monitor on ARM TrustZone.
+        <strong>Hyperkernel</strong> (Nelson et al., SOSP 2017) pushes a
+        hypervisor toward push-button verification with a simplified interface.
+        These systems show that isolation <em>can</em> be proved; they do not
+        ship as <code>BOOTX64.EFI</code> on iDRAC virtual media.
+      </p>
+      <p>
+        Production hypervisors — ESXi, Hyper-V, Xen, KVM/QEMU — isolate guests
+        with EPT/NPT and years of testing. We do not claim a larger feature set. We
+        claim a <em>smaller</em> trusted core whose exclusivity theorem is
+        machine-checked in <code>ept_model</code>, and we publish the gaps (live
+        EPT L2, iron installer open) instead of implying the theorem covers the SPA.
+      </p>
+      <p>
+        NOVA (Steinberg &amp; Kauer, EuroSys 2010) and related microhypervisor
+        designs similarly argue for a small TCB. RayNu-V’s TCB cut is ADR-002’s
+        Proven Core list, not a second kernel in the guest.
       </p>
 
       <h2 id="limitations">8. Limitations and Open Proofs</h2>
+      <h4>Proof surface</h4>
       <ul>
-        <li>Large-page / NUMA: Latitude closed L3 gates (M5.7 / M6.2); iron path not re-proven beyond M4.5 probes.</li>
-        <li>Live-migration page-transfer L3 closed on Latitude (M6.3); live vCenter product migrate remains polish.</li>
-        <li>Device emulation, scheduler algorithms, and the VMware migration engine are deliberately outside the Proven Core and are not claimed to be formally verified.</li>
-        <li>Verus / Rust toolchain evolution can break existing proofs (see ADR-008); a quarterly maintenance budget is allocated.</li>
-        <li><strong>Mount Everest residual:</strong> TLS/console, firmware El Torito CD boot, real distro installer, live Redfish, R640 soak. E2+E3+E3b+E5+P0-14 closed on iron through 2026-08-21 (<code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> — SHELL stub, not a distro); P0-59 closed on iron 2026-08-27 (<code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> — one CD sector read, not an OS boot). LBA stamps ≠ guest rootfs. Firmware SNP/Tcp4 stay dead after EBS.</li>
+        <li>
+          Live executable EPT (<code>memory/ept.rs</code>) is
+          <strong>L2</strong>. L3 is the host-only ghost model. Ghost↔exec refine
+          is scoped (M3.18 / M4.9), not a full bisimulation of the EFI.
+        </li>
+        <li>
+          VMX lifecycle, VMCS, hypercalls, MSR firewalls, audit integrity, and IPI
+          confinement are inside the Proven Core <em>budget</em> and are
+          <strong>not</strong> at L3 beside <code>ept_model</code>. Claiming “the
+          hypervisor is proved” would be R09.
+        </li>
+        <li>
+          Large-page and NUMA L3 are Latitude gates (M5.7 / M6.2). Iron stopped
+          at M4.5 probes for those surfaces.
+        </li>
+        <li>
+          <code>PageTransferStep</code> is a ghost migration primitive, not
+          vCenter vMotion.
+        </li>
+      </ul>
+      <h4>Product / iron</h4>
+      <ul>
+        <li>
+          Device emulation, SPA, HTTP, ISO, RayNu-F, iDRAC, and OVF import are
+          outside the Proven Core (ADR-002, ADR-007, ADR-016).
+        </li>
+        <li>
+          Firmware SNP/Tcp4 after ExitBootServices is a platform limit (ADR-013);
+          durable HTTP is the host-owned BCM5720.
+        </li>
+        <li>
+          <code>ISO-BOOTED-FROM-DISK</code> is persist-detect, not a rootfs.
+        </li>
+        <li>Stage 45 El Torito is CD EFI, not Alpine <code>setup-disk</code>.</li>
+        <li>
+          Nested alpine-extended sys-install is complete
+          (<em>Please reboot</em> + <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>).
+          Nested ≠ <code>RAYNU-V-M7-ISO-INSTALL-OK</code>.
+        </li>
+        <li>
+          Iron installer + TLS/console remain Everest residuals. Live Redfish
+          and R640 soak are not closed.
+        </li>
+        <li>
+          Verus upgrades can break proofs (ADR-008); quarterly maintenance is
+          budgeted.
+        </li>
       </ul>
       <p>
-        Any L2-only modules at the time of a public snapshot will be listed here
-        with an explicit statement of the residual risk and the runtime-enforcement
-        measures that remain in place.
+        Any future <code>v1.0-preprint</code> freeze will reprint this section with
+        the modules still at L2 and the iron gates still open.
       </p>
 
       <h2 id="conclusion">9. Conclusion</h2>
-      <p><em>[Written only when the work has reached a stable, externally reviewable state.]</em></p>
+      <p>
+        RayNu-V now has what ADR-010 asked the living paper to wait for before
+        <em>writing</em> the argument, not before <em>freezing</em> it.
+      </p>
+      <p>
+        On the proof side: the EPT Isolation Theorem is stated tightly (ADR-004),
+        implemented as a ghost model, and discharged through map, unmap,
+        violation, and page transfer under a frozen Verus pin —
+        <code>80 verified, 0 errors</code> — with an M6.9 spec review that asked
+        R09 out loud and did not find a proxy theorem. That is a verified
+        <em>core model</em>. It is not a verified <code>.efi</code>.
+      </p>
+      <p>
+        On the iron side: a PowerEdge R640 printed
+        <code>RAYNU-V-R640-BOOT-OK</code>, served HTTP on the operator LAN,
+        launched a SHELL guest from the SPA, and let guest firmware read a CD and
+        boot El Torito. Nested RayNu-F completed alpine-extended sys-install
+        (<em>Please reboot</em>) and reboot-to-disk. Nested is not iron. The
+        remaining sentence of Mount Everest is the same installer on metal, on a
+        stick that fits alpine-extended, plus TLS/console, without claiming a
+        marker we have not printed.
+      </p>
+      <p>
+        Memory isolation isn’t tested. The ghost exclusivity theorems are proved.
+        The product loop is not done. This page stays a living audit artifact
+        until those three sentences can be one.
+      </p>
+
+      <h2 id="appendix-a">Appendix A — Evidence Format</h2>
+      <p>Every claim in Sections 5–6 uses:</p>
+      <pre><code>**Evidence (YYYY-MM-DD, commit &lt;git-hash&gt;, run &lt;id&gt;)**
+- Maturity level claimed: Lx
+- Artifact type: serial log | Verus transcript | Kani report | audit-ring hash | gate checklist
+- Link or embedded excerpt: …
+- One-sentence factual observation: …</code></pre>
+      <p>
+        <strong>Generation of runtime evidence (ADR-011):</strong> Place
+        <code>paperverbose.txt</code> on the ESP. The EFI emits an L1 Evidence
+        Bundle on serial. Verus/Kani transcripts remain host-side. EFI-produced
+        maturity never exceeds L1.
+      </p>
+
+      <h2 id="appendix-b">Appendix B — Proven Core LOC Snapshot (2026-09-06)</h2>
+      <p>Measured with <code>wc -l</code> on this tree. Not an ADR-002 budget re-baseline.</p>
+      <table>
+        <thead>
+          <tr><th>Path</th><th>Lines</th><th>Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ept_model/src/lib.rs</code></td><td>2,366</td><td>L3 ghost + proofs of record (host-only crate)</td></tr>
+          <tr><td><code>memory/ept.rs</code></td><td>705</td><td>Live EPT engine (L2)</td></tr>
+          <tr><td><code>memory/ept_spec.rs</code> + <code>ept_proof.rs</code></td><td>357</td><td>Spec/proof notes beside live engine</td></tr>
+          <tr><td><code>memory/frame_allocator.rs</code> + <code>_spec.rs</code></td><td>362</td><td>Allocator + ghost allocated-set</td></tr>
+        </tbody>
+      </table>
+      <p>
+        The ten-module ADR-002 budget (~10,400 code + ~1,600 scaffolding) is a
+        <strong>cap</strong>, not a claim that every listed module is at L3.
+        <code>ept_model</code> is the proof-of-record crate; it is deliberately not
+        linked into <code>r640-hypervisor.efi</code>.
+      </p>
+
+      <h2 id="appendix-c">Appendix C — Version History of this Living Document</h2>
+      <table>
+        <thead>
+          <tr><th>Version</th><th>Date</th><th>Hypervisor commit</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>v0.4.0-living</td><td>2026-09-06</td><td>iron P0-14 <code>2b795a0</code></td><td>Complete living draft: abstract/intro/threat/related/conclusion; M6 L3 + iron through El Torito; nested F7 as product. <strong>Not v1.0-preprint.</strong></td></tr>
+          <tr><td>v0.3.0-e3b-e4-iron</td><td>2026-08-23</td><td><code>2b795a0</code></td><td>Site render: E3b/E4/ATAPI; placeholders left in §1, §2, §7, §9</td></tr>
+          <tr><td>v0.2.2-r640-boot-marker</td><td>2026-08-15</td><td><code>r640-boot-ok-marker</code></td><td>Literal <code>RAYNU-V-R640-BOOT-OK</code> on COM2</td></tr>
+          <tr><td>v0.2.1-r640-boot-confirm</td><td>2026-08-15</td><td>same EFI SHA</td><td>Confirming COM2 rebuild</td></tr>
+          <tr><td>v0.2.0-r640-boot</td><td>2026-08-15</td><td><code>d7cc603</code></td><td>Iron COM2 archives + §6 M0–M4</td></tr>
+          <tr><td>v0.1.2</td><td>2026-07-24</td><td>—</td><td>ADR-011 evidence mode flag</td></tr>
+          <tr><td>v0.1.1</td><td>2026-07-21</td><td>—</td><td>Author ORCID</td></tr>
+          <tr><td>v0.1-skeleton</td><td>2026-07-21</td><td>—</td><td>Initial skeleton</td></tr>
+        </tbody>
+      </table>
+      <p><em>End of living draft. This page is an audit artifact of RayNu-V development.</em></p>
 
       <div class="paper-footer-links">
         <div class="cta">
@@ -689,9 +1055,12 @@
           <a class="cta__secondary" href="index.html">Back to RayNu-V</a>
         </div>
         <p class="hda-sync-note" style="margin-top:1.5rem">
-          Governing decision: <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-010.md">ADR-010</a>.
-          In-repo source of truth: <code>docs/paper/RayNu-V-Verification-Paper.md</code>.
-          This page is a static render for RaynuV.com.
+          Governing decision:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-010.md">ADR-010</a>.
+          In-repo source of truth:
+          <code>docs/paper/RayNu-V-Verification-Paper.md</code>.
+          This page is a static render for RaynuV.com. Version
+          <code>v0.4.0-living</code> is not a conference freeze.
         </p>
       </div>
     </main>
@@ -699,7 +1068,7 @@
     <footer class="footer">
       <p>
         <span class="brand brand--footer">RayNu-V</span>
-        · Living Verification Paper
+        · Living Verification Paper · v0.4.0-living
       </p>
       <p class="footer__meta">
         <a href="index.html">Home</a>
