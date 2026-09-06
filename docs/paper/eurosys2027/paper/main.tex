@@ -1,7 +1,9 @@
 %% Isolon --- EuroSys 2027 Fall (anonymous SIGPLAN draft)
 %% Public living paper uses a different title and system name (CFP §concurrent).
 %% Do not put author names, affiliations, URLs, or unique product markers here.
-\documentclass[sigplan,10pt,anonymous,review]{acmart}
+%% anonymous: double-blind. No `review': that option turns on lineno,
+%% which overprints the right column in two-column acmart.
+\documentclass[sigplan,10pt,anonymous]{acmart}
 
 \setcopyright{none}
 \settopmatter{printfolios=true,printccs=true,printacmref=true}
@@ -15,8 +17,14 @@
 
 \usepackage{booktabs}
 \usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{microtype}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,calc}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\setlength{\tabcolsep}{3.5pt}
+\emergencystretch=1.5em
 
 %% Grayscale-safe tables (CFP: figures readable without color).
 \acmSubmissionID{eurosys27-fall-anon}
@@ -204,7 +212,8 @@ written architecture decision; the default answer is no. The hard cap is
 \begin{table}[t]
   \caption{Proven Core budget (cap, not an L3 claim per row).}
   \label{tab:core}
-    \begin{tabular}{lrp{3.4cm}}
+  \small
+  \begin{tabularx}{\linewidth}{@{}l r L@{}}
     \toprule
     Module & Est.\ LOC & Why inside \\
     \midrule
@@ -221,7 +230,7 @@ written architecture decision; the default answer is no. The hard cap is
     \midrule
     Cap (code + scaffolding) & 15{,}000 & --- \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 Lived split, as of this submission: the machine-checked exclusivity theorems
@@ -264,9 +273,8 @@ still open, provided the paper does not upgrade the label.
 Proven Core modules follow a four-file layout: executable Rust, a spec
 file, a proof file, and tests (Kani + unit). The exclusivity theorems of
 record do not use that layout. They live in one \texttt{verus!} block in
-\texttt{ept\_model/src/lib.rs}, verified with \texttt{cargo verus verify -p
-ept\_model}. Putting them beside live \texttt{memory/ept.rs} would imply
-the EFI crate is L3. It is not.
+\texttt{ept\_model}, verified with \texttt{cargo verus verify}. Putting them
+beside live \texttt{memory/ept.rs} would imply the EFI crate is L3. It is not.
 
 \section{Exclusive Ownership}
 
@@ -300,21 +308,23 @@ when that pair is present.
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
   font=\small,
   box/.style={draw,align=center,inner sep=4pt,minimum height=1.05cm},
   arr/.style={-{Latex},thick}
 ]
 \node[box] (owned) {\textbf{owned}\\[-1pt]{\scriptsize frame $\mapsto$ guest}};
-\node[box,right=1.6cm of owned] (bygpa) {\textbf{by\_gpa}\\[-1pt]{\scriptsize (guest, GPA) $\mapsto$ frame}};
-\node[box,below=0.85cm of owned] (guest) {guest $g\neq 0$};
-\node[box,below=0.85cm of bygpa] (frame) {frame $f$};
+\node[box,right=1.15cm of owned] (bygpa) {\textbf{by\_gpa}\\[-1pt]{\scriptsize (guest, GPA) $\mapsto$ frame}};
+\node[box,below=0.75cm of owned] (guest) {guest $g\neq 0$};
+\node[box,below=0.75cm of bygpa] (frame) {frame $f$};
 \draw[arr] (owned) -- (guest);
 \draw[arr] (bygpa) -- (frame);
 \draw[arr] (owned.east) -- node[above,font=\scriptsize]{same $f$} (bygpa.west);
-\node[below=0.15cm of guest, font=\scriptsize, text width=7.2cm, align=center]
+\node[below=0.12cm of guest, font=\scriptsize, text width=6.4cm, align=center]
   {Bijection: equal cardinalities; no two pairs share a frame unless they are the same pair.};
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{Ghost EPT ownership registry. Exclusive ownership is four
 conjuncts: every owned frame has a matching \texttt{by\_gpa} witness; every
 \texttt{by\_gpa} entry has a matching owner; a frame is the image of at most
@@ -323,21 +333,15 @@ one pair; the two maps have equal length.}
 \label{fig:maps}
 \end{figure}
 
-The predicate (verbatim from the crate, names only) is:
-
-\begin{verbatim}
-exclusive_ownership(m)  iff
-  forall f.  owned.contains(f)
-    ==> exists g,a. by_gpa[(g,a)] = f
-                 /\ owned[f] = g
-  /\ forall g,a. by_gpa.contains((g,a))
-    ==> owned.contains(by_gpa[(g,a)])
-        /\ owned[by_gpa[(g,a)]] = g
-  /\ forall g1,a1,g2,a2.
-       by_gpa[(g1,a1)] = by_gpa[(g2,a2)]
-         ==> g1=g2 /\ a1=a2
-  /\ owned.len() = by_gpa.len()
-\end{verbatim}
+The predicate (from the crate, names only) is:
+\begin{quote}
+\footnotesize
+$\mathsf{exclusive\_ownership}(m)$ iff
+every owned frame has a \texttt{by\_gpa} witness,
+every \texttt{by\_gpa} entry has a matching owner,
+a frame is the image of at most one pair,
+and the two maps have equal length.
+\end{quote}
 
 Empty maps satisfy it. A hypervisor frame is modelled as \emph{not} being
 in $\mathit{owned}$: the ghost registry only tracks guest-held frames. That
@@ -445,21 +449,22 @@ that sentence at L2.
 \begin{table}[t]
   \caption{Named exclusivity theorems in the host-only crate.}
   \label{tab:theorems}
-  \begin{tabular}{lp{4.6cm}}
+  \small
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.48\linewidth} L@{}}
     \toprule
     Theorem & Claim \\
     \midrule
     \texttt{single\_guest\_4k\_map\_unmap} & finite 4K sequences \\
     \texttt{n\_guest\_4k\_map\_unmap} & same discharge, $N$-guest name \\
-    \texttt{concrete\_single/n\_guest\_refine} & scoped ghost$\leftrightarrow$exec \\
+    \texttt{concrete\_*\_guest\_refine} & scoped ghost$\leftrightarrow$exec \\
     \texttt{large\_page\_map\_unmap} & 2M/1G spans \\
     \texttt{numa\_map\_unmap\_affinity} & node affinity ghost \\
-    \texttt{hw\_2m\_leaf\_refines\_identity} & 2M leaf encode \\
+    \texttt{hw\_2m\_leaf\_refines\_} & 2M leaf encode \\
     \texttt{ept\_violation\_preserves} & miss dispositions \\
     \texttt{page\_transfer\_preserves} & unmap$\rightarrow$map handoff \\
     \texttt{alloc\_map\_unmap\_refines} & pool + EPT refine \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \section{The Ghost / Executable Gap}
@@ -472,7 +477,7 @@ and asserts exclusive-ownership-shaped facts at map/unmap. Beside it sit
 357 lines of spec/proof notes. Those notes are not the 80-lemma crate. The
 host-only crate exists \emph{because} linking Verus into the UEFI target is
 the wrong packaging: proofs run on a Linux CI host under a pinned Verus
-release; the EFI is \texttt{x86\_64-unknown-uefi}.
+release; the EFI is a UEFI target, not a Linux sysroot.
 
 Scoped refinement lemmas show that a concrete map representation, under a
 restricted interpretation, commutes with ghost map/unmap for 4K (one
@@ -553,10 +558,10 @@ We evaluate three questions. (1)~Does the ghost model actually verify?
 
 \subsection{Proofs}
 
-Toolchain: Verus \texttt{release/0.2026.07.12.0b42f4c} (content-addressed
-Linux zip, SHA-256 pinned; CI never uses \texttt{latest}) and Kani 0.67.0.
-The exclusivity crate is verified with \texttt{cargo verus verify -p
-ept\_model}. The last closed host gate on that crate reported \textbf{80
+Toolchain: Verus pin \texttt{0.2026.07.12} (asset \texttt{0b42f4c};
+content-addressed Linux zip, SHA-256 pinned; CI never uses \texttt{latest})
+and Kani 0.67.0.
+The exclusivity crate is verified with \texttt{cargo verus verify}. The last closed host gate on that crate reported \textbf{80
 verified, 0 errors}. No \texttt{admit} on the exclusivity path. We do not
 invent a wall-clock for this PDF; the artifact is the crate plus the pin
 (supplement).
@@ -575,16 +580,17 @@ those rows are not at L3.
 \begin{table}[t]
   \caption{Line counts (\texttt{wc -l}) for the EPT-related surface.}
   \label{tab:loc}
-  \begin{tabular}{lrr}
+  \small
+  \begin{tabularx}{\linewidth}{@{}L r L@{}}
     \toprule
     Path & Lines & Role \\
     \midrule
-    \texttt{ept\_model/src/lib.rs} & 2{,}366 & L3 ghost + proofs \\
+    \texttt{ept\_model} crate & 2{,}366 & L3 ghost + proofs \\
     \texttt{memory/ept.rs} & 705 & live EPT (L2) \\
-    \texttt{ept\_spec.rs} + \texttt{ept\_proof.rs} & 357 & notes beside live \\
+    \texttt{ept\_spec} + \texttt{ept\_proof} & 357 & notes beside live \\
     frame allocator + spec & 362 & allocator + ghost set \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \subsection{Runtime: lab host versus R640}
@@ -597,22 +603,22 @@ operators (and reviewers) otherwise collapse it into iron.
   \caption{Split evaluation. Nested VT-x $\neq$ PowerEdge. Host Verus $\neq$ EFI.}
   \label{tab:split}
   \small
-  \begin{tabular}{lccc}
+  \begin{tabularx}{\textwidth}{@{}L ccc@{}}
     \toprule
-    Surface & Lab / CI host & Nested VT-x & PowerEdge R640 \\
+    Surface & Lab / CI & Nested VT-x & PowerEdge R640 \\
     \midrule
     Verus exclusivity (80 / 0) & yes (L3) & --- & not claimed \\
     Kani on \texttt{unsafe} & yes (CI pin) & --- & not claimed \\
     VMXON + VMEXIT & yes & yes & yes \\
     EPT identity + Linux 6.12 shell & yes & --- & yes \\
-    Multi-VM probes (sched/blk/net/SMP) & L3 $N$-guest on host & --- & probes on iron \\
-    Durable host-NIC HTTP after ExitBootServices & lab NIC & --- & onboard LOM \\
-    SPA launches a SHELL guest & host smoke & --- & yes (stub, not a distro) \\
+    Multi-VM probes & L3 $N$-guest & --- & probes on iron \\
+    Durable host-NIC HTTP after EBS & lab NIC & --- & onboard LOM \\
+    SPA launches a SHELL guest & host smoke & --- & stub, not a distro \\
     Guest firmware CD EFI (El Torito) & --- & CD+virtio & yes \\
     Distro sysinstall + reboot-to-disk & --- & yes & open \\
-    Persist-detect LBA stamps on USB & --- & --- & yes (not a rootfs) \\
+    Persist-detect LBA stamps on USB & --- & --- & stamps, not a rootfs \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table*}
 
 On the R640: iDRAC virtual media boots the EFI; COM2 archives VMXON, EPT
@@ -632,30 +638,6 @@ virtualization is not the R640. The USB stick used on iron is too small for
 that distro image. We do not print an install-complete marker from host CI or
 from nested runs.
 
-Table~\ref{tab:ms} compresses the runtime ladder. L3 appears only on the
-host crate. Iron never upgrades a Verus label.
-
-\begin{table}[t]
-  \caption{Runtime ladder. L3 is host-only. Iron is L1.}
-  \label{tab:ms}
-  \begin{tabular}{llp{3.2cm}}
-    \toprule
-    Step & Lab / CI & R640 \\
-    \midrule
-    EFI boots, serial & yes & yes \\
-    VMXON / VMEXIT & yes & yes \\
-    Guest code + EPT identity & yes & yes \\
-    Unmodified Linux shell & yes & yes \\
-    Multi-VM probes & L3 $N$-guest & probes \\
-    Large-page / NUMA proofs & L3 ghost & not claimed \\
-    Violation + page-transfer & L3 ghost & not claimed \\
-    Host-NIC HTTP & lab & LOM after EBS \\
-    CD EFI (El Torito) & nested+iron CD & yes \\
-    Distro sysinstall & nested yes & open \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
 \subsection{What we refuse to count as a theorem}
 
 72-hour soak metrics on a laptop, PDF audit-report templates, and a
@@ -674,17 +656,17 @@ the theorem. They are why the theorem is the size it is.
 
 \subsection{Pin the prover or the proof is a diary}
 
-Verus and its SMT backend move. We froze
-\texttt{release/0.2026.07.12.0b42f4c} with a SHA-256 of the Linux zip in-tree
-and forbade CI from fetching \texttt{latest}. The 80/0 line is replayable
+Verus and its SMT backend move. We froze the tagged Verus release
+\texttt{0.2026.07.12} (asset \texttt{0b42f4c}) with a SHA-256 of the Linux zip
+in-tree, and forbade CI from fetching \texttt{latest}. The 80/0 line is replayable
 only against that pin. Groups that verify ``on nightly'' will not be able
 to say, a quarter later, whether a new \texttt{admit} is a regression or a
 toolchain change. Budget pin maintenance as a first-class task, not as
 hope.
 
-\subsection{The UEFI target is the wrong place to run SMT}
+\subsection{The UEFI target cannot run SMT}
 
-Isolon's EFI target is \texttt{x86\_64-unknown-uefi}. Verus wants a host
+Isolon's EFI target is UEFI PE/COFF, not a Linux sysroot. Verus wants a host
 sysroot. We stopped trying to link proofs into the PE/COFF image. The
 2{,}366-line crate lives on the CI host; the 705-line engine lives in the
 EFI. That split is why L3 and L2 are different columns in
@@ -692,7 +674,7 @@ Table~\ref{tab:split}. A single-crate ``verified hypervisor'' that does
 not build on the target you ship will still be described as verified by
 someone; make the packaging match the claim first.
 
-\subsection{Do not mutate third-party firmware to unstick a guest}
+\subsection{Do not poke third-party firmware}
 
 When guest firmware blocked in WaitForEvent, a tempting fix is to poke
 its wait object, skip a check, or inject a fault. We did that on a
@@ -706,7 +688,7 @@ not an EPT exclusivity theorem---but it is no longer a self-inflicted
 one. This lesson is independent of Isolon: if you do not own the blob,
 do not rewrite its control state.
 
-\subsection{Firmware TCP after ExitBootServices is not a management plane}
+\subsection{Firmware TCP is not a management plane}
 
 iDRAC virtual floppy advertised PXE/HTTP but not a Tcp4 service binding.
 Firmware SNP that had accepted a listen before ExitBootServices did not
@@ -736,7 +718,8 @@ stopped us from claiming theorems we did not have.
 \begin{table}[t]
   \caption{Archived negative results. None of these are L3.}
   \label{tab:neg}
-  \begin{tabular}{lp{5.4cm}}
+  \small
+  \begin{tabularx}{\linewidth}{@{}L L@{}}
     \toprule
     Failure & What it blocked \\
     \midrule
@@ -753,7 +736,7 @@ stopped us from claiming theorems we did not have.
     USB stick capacity $<$ alpine-extended
       & iron sysinstall on that stick \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 The XSAVES miss is the most transferable: a VMCS secondary-control bit
@@ -781,7 +764,7 @@ ship as \texttt{BOOTX64.EFI} on iDRAC virtual media.
   the named property, not ``tests passed.''}
   \label{tab:cmp}
   \small
-  \begin{tabular}{lp{2.4cm}p{2.6cm}p{3.2cm}p{2.4cm}}
+  \begin{tabularx}{\textwidth}{@{}l LLLL@{}}
     \toprule
     System & What is proved & Guest / boot & Isolation property & This paper \\
     \midrule
@@ -789,12 +772,12 @@ ship as \texttt{BOOTX64.EFI} on iDRAC virtual media.
     CertiKOS & concurrent kernel refine & certified OS & contextual refine & not our TCB cut \\
     Komodo & enclave monitor & TrustZone & enclave isolation & different hardware \\
     Hyperkernel & push-button kernel & simplified HV iface & interface properties & we keep full VMX/EPT \\
-    SeKVM & KVM memory protection & Linux+KVM & hyp. memory protection & overlay vs clean-slate \\
+    SeKVM & KVM memory protection & Linux+KVM & hyp.\ memory protection & overlay vs clean-slate \\
     NOVA & (design) small TCB & microhypervisor & TCB size argument & our cut is Proven Core \\
     Xen/KVM/ESXi & --- & production guests & tested EPT/NPT & we claim a smaller theorem \\
     Isolon & EPT exclusive ownership (ghost) & UEFI \texttt{.efi}, Linux on R640 & exclusive frame ownership & L3 ghost, L2 live EPT \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table*}
 
 \paragraph{Hypervisors with a verification story.}

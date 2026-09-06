@@ -348,7 +348,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | eurosys-2027-fall kit |
-| Summary | Isolon anonymous PDF copied to kit root (`Isolon-eurosys2027-anon.pdf`) so it is findable; GitHub PR diffs hide binaries. Not a product gate. Iron P0-14 stays 2b795a0. |
+| Summary | Isolon PDF layout: drop review line-numbers; tables fit the column; no overfull hboxes. Not a product gate. Iron P0-14 stays 2b795a0. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Conference rewrite is not an iron close. |
 | Gates touched | none closed. |
 | Months Δ | 0.5→0.5 |
