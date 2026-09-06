@@ -139,9 +139,9 @@ This paper makes three contributions:
   proof maturity L0--L3 against artifact
   (ghost model / executable module / binary on the target). An L3 claim
   about a ghost model and an L3 claim about executable code are not
-  comparable. Table~\ref{tab:ladder} shows the field already traversing
-  that axis (seL4 C, then seL4 binary) and resolves a SeKVM abstract that
-  otherwise reads as a proved binary.
+  comparable. Table~\ref{tab:ladder}, with Section~\ref{sec:ladder-eval},
+  shows the field already traversing that axis (seL4 C, then seL4 binary)
+  and resolves a SeKVM abstract that otherwise reads as a proved binary.
 
 \item \textbf{Six lessons that generalized} while shipping the EFI
   (Section~\ref{sec:lessons}): pin the prover, keep SMT off the UEFI target,
@@ -815,8 +815,9 @@ marker.
 
 The grid does two things a one-axis ``L3 isolation'' label cannot. It
 resolves abstract-level ambiguity in published systems, and it keeps three
-Isolon claims from fusing. Table~\ref{tab:ladder} is a reading of each
-paper's abstract against the stated artifact, not a re-proof.
+Isolon claims from fusing (Table~\ref{tab:ladder}, last three rows).
+Table~\ref{tab:ladder} is a reading of each paper's abstract against the
+stated artifact, not a re-proof.
 
 \paragraph{seL4 already walked the artifact axis.}
 The 2009 seL4 abstract names the C implementation of the
@@ -905,7 +906,7 @@ Isolon's EFI target is UEFI PE/COFF, not a Linux sysroot. Verus wants a host
 sysroot. We stopped trying to link proofs into the PE/COFF image. The
 2{,}366-line crate lives on the CI host; the 705-line engine lives in the
 EFI. That split is why L3 and L2 are different columns in
-Table~\ref{tab:split}. A single-crate ``verified hypervisor'' that does
+Table~\ref{tab:isolon-grid}. A single-crate ``verified hypervisor'' that does
 not build on the target you ship will still be described as verified by
 someone; make the packaging match the claim first.
 
@@ -1057,8 +1058,8 @@ Hyperkernel.
   Ghost$\leftrightarrow$exec refine is scoped, not a full EFI bisimulation.
   The range registry that covers Linux GPA has no ghost correspondence.
 \item Most Proven Core modules in Table~\ref{tab:core} are not at L3.
-\item Large-page and NUMA L3 are lab/CI. Iron stopped at multi-VM probes for
-  those surfaces.
+\item Large-page and NUMA L3 are lab/CI. Iron stopped at Linux plus three
+  stub guests for those surfaces.
 \item \texttt{PageTransferStep} is a ghost primitive, not live migration
   product.
 \item DMA confinement and IOMMU are future work. Exclusive ownership is
@@ -1071,8 +1072,7 @@ Hyperkernel.
 \item Verus upgrades can break proofs; pin maintenance forbids
   \texttt{latest}.
 \item SMT found no executable aliasing bug (Section~\ref{sec:model-after}).
-\item No KVM cycle comparison or \texttt{verus verify} wall-clock
-  (Section~\ref{sec:threats}).
+\item No KVM cycle comparison or \texttt{verus verify} wall-clock.
 \end{itemize}
 
 \paragraph{Threats to validity.}
