@@ -110,6 +110,12 @@ Never hardcode `/dev/sdc`. Never write PERC `sda`/`sdb`. Never format. Leave
 WANT: `RAYNU-V-CRUZER-FLASH-OK` and `RAYNU-V-FLASHCRUZER-OK`.  
 Next: BIOS boot order stays Ubuntu on PERC; one-time **F11** Cruzer.
 
+A **4 GB** unlabeled Cruzer (alpine-extended / F7) is a different identity
+than Cruzer Micro `0781:5151` serial `200524441218e7503e33`. First flash:
+[`r640_f7_iso_iron.md`](r640_f7_iso_iron.md) (`--init-new-cruzer`
+`--allow-new-serial` `--any-cruzer-usb` `--linux-iso` `--raynu-f`). Do not
+reflash P0-14 `2b795a0` for that attempt.
+
 `--wait` polls until HEAD CI finishes. `--download-only` writes
 `~/r640-hypervisor.efi` without flashing. `--self-test` is host/CI only.
 

@@ -1,6 +1,6 @@
 ---
 hda_version: 1
-last_updated: 2026-09-05
+last_updated: 2026-09-06
 last_commit: 2b795a0bef4ae5a5c356a0131205f9de439ffe57
 last_commit_short: 2b795a0
 updated_by: cursor
@@ -145,7 +145,7 @@ All must be true (no hand-waving):
 | QEMU lab reboot-to-disk | DONE (host/TCG arm) | boot2 `isoreboot.txt` + synth img → `BOOTED-FROM-DISK`; soft-pass arm-only on TCG |
 | ISO parse / El Torito / EFI boot img | DONE (guest CD EFI) | Iron COM2 `0be7283` `OVMF-ELTORITO-OK` `RN-ELT` n=197992; not distro installer |
 | CD-ROM attach | DONE (firmware StartImage) | GuestVisible PCI IDE/ATAPI + El Torito FAT ESP BOOTX64; not `ISO-INSTALL-OK` |
-| Guest UEFI firmware blob | PARTIAL (RayNu-F nested F7 reboot-to-disk; iron E5 open) | ADR-016/017: nested `fe4785a` alpine-extended `setup-disk -m sys` → F7 relaunch → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=698a922a-3a7d-45ea-9da3-2b11403af82a` (ext4 `/dev/vda2`, FAT ESP `/dev/vda1`); nested `3492ebc` had GRUB rescue `disk `,gpt2' not found`; re-run `088ab25` shows the reset path (`src=kbc`, i8042 `0xFE`); not iron / not Everest E5. Evidence: [fe4785a](evidence/nested/2026-09-05-fe4785a-f7-reboot-to-disk.md), [088ab25](evidence/nested/2026-09-05-088ab25-f7-reset-src-kbc.md) |
+| Guest UEFI firmware blob | PARTIAL (RayNu-F nested F7 reboot-to-disk; iron E5 open) | ADR-016/017: nested `fe4785a` alpine-extended `setup-disk -m sys` → F7 relaunch → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=698a922a-3a7d-45ea-9da3-2b11403af82a` (ext4 `/dev/vda2`, FAT ESP `/dev/vda1`); nested `3492ebc` had GRUB rescue `disk `,gpt2' not found`; re-run `088ab25` shows the reset path (`src=kbc`, i8042 `0xFE`); not iron / not Everest E5. 4 GB front-USB2 Cruzer unblocks alpine-extended retain (977.5 MiB Micro cannot hold ~994 MiB). Operator: [r640_f7_iso_iron.md](runbooks/r640_f7_iso_iron.md). Evidence: [fe4785a](evidence/nested/2026-09-05-fe4785a-f7-reboot-to-disk.md), [088ab25](evidence/nested/2026-09-05-088ab25-f7-reset-src-kbc.md) |
 | Persistent install + reboot-to-disk | **DONE (stamps)** | Iron Cruzer `BOOTED-FROM-DISK` 2026-08-16; guest FS residual |
 | Upload ISO via API/UI | PARTIAL | REST `/iso/{id}/deploy` + `/install`; blob upload residual |
 | Multi-OS image types | **WIRED (host)** | REST/SPA `linux_iso` \| `windows_iso` \| `generic_uefi` ([ADR-014](adr/ADR-014.md) Stage 0); Windows install later |
@@ -164,7 +164,7 @@ When work finishes early, **pull rows upward** (shrink residual). When blocked, 
 | M+1 | 2026-08 | **R640 iron bring-up** → **E2 closed** | `RAYNU-V-R640-BOOT-OK` on COM2 | **DONE (M7.5 iron)** |
 | M+2 | 2026-09 | E3b native NIC lab (QEMU e1000) + ISO residual | ADR-013 Phase C | **Phase C DONE (QEMU)** |
 | M+3 | 2026-08 | E3b iron HTTP | `RAYNU-V-M7-HOST-NIC-HTTP-OK` | **DONE (M7.8 iron)** |
-| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** (nested F7 reboot-to-disk `fe4785a`; iron `ISO-INSTALL-OK` open) |
+| M+4 | 2026-09 | TLS/console + distro installer | remaining Everest | **ETA** (nested F7 `088ab25`; 4 GB Cruzer unblocks iron attempt; `ISO-INSTALL-OK` open) |
 | M+5 | 2026-10 | Buffer / M7 closed on all E1–E6 | **M7 Mount Everest** | BUFFER |
 
 ### Timeline burn-down
@@ -349,10 +349,10 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 | Field | Value |
 |-------|-------|
-| Commit | e5-stage46-iso |
-| Summary | **F7 nested reboot-to-disk re-proven with reset lines (`088ab25`, raynuvsrv1).** `guest reset requested src=kbc n=1` → `relaunch after reset` → GPT ESP `lba=2048` → whole-disk Vendor path → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second `Linux version` with `root=UUID=ddf8714c-2542-4469-958c-3e439b1c669f` → second shell + `cat /proc/cmdline`. Alpine rebooted via i8042 `0x64<-0xFE` (KBC), not `0xCF9`/FADT (kernel runs `efi=noruntime`). Harness: `nested reboot-to-disk reached a second Linux boot`. Nested QEMU ≠ R640. E5 closes only on iron `ISO-INSTALL-OK`. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested-only evidence must not drop months. |
-| Gates touched | RayNu-F F7 host surfaces (`RAYNU-V-M7-E5-RAYNU-F-F7-OK`); F6 iron `ISO-INSTALL-OK` remains the only E5 close. |
+| Commit | iron-f7-4g-cruzer |
+| Summary | **4 GB Cruzer iron F7 path documented + first-flash flags.** Nested F7 (`088ab25`) is still the mechanism proof, not E5. New unlabeled ~4 GB front-USB2 Cruzer can hold alpine-extended; `flash-cruzer-esp.sh --init-new-cruzer --allow-new-serial` and `flashcruzer.sh --any-cruzer-usb` so Micro VID/serial/`installdisk.bin` identity does not refuse it. Runbook: `docs/runbooks/r640_f7_iso_iron.md`. Pin green EFI `--run 33978770315` (`088ab25`). Do not flash `2b795a0`. Nested QEMU ≠ R640. E5 closes only on iron `ISO-INSTALL-OK`. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Media-size blocker lifted on paper; COM2 not yet run. Nested-only evidence must not drop months. |
+| Gates touched | none closed on iron. Flash self-test + F7 iron runbook. |
 | Months Δ | 0.5→0.5 |
 
 
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | iron-f7-4g-cruzer | 0.5 | 95 | 4 GB front-USB2 Cruzer unblocks alpine-extended iron attempt; `--init-new-cruzer` / `--allow-new-serial` / `--any-cruzer-usb`; runbook r640_f7_iso_iron.md; pin 088ab25 run 33978770315; do not flash 2b795a0; nested F7 ≠ ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `088ab25` F7 re-run on raynuvsrv1: `guest reset requested src=kbc n=1` + `relaunch after reset` now visible; Alpine `reboot` used i8042 `0x64<-0xFE` (not CF9/FADT; `efi=noruntime`); GPT ESP lba=2048 → `DISK-BOOT-OK` → second Linux `root=UUID=ddf8714c-…` → second `localhost:~#`; evidence file added; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | F7 review: nested `fe4785a` log lacked `guest reset requested src=` and `relaunch after reset` — both printed with blocking `write_str` while Linux earlycon share was still on (dropped); now `*_nowait` + share off before the banner, so the next run shows whether Linux reset via CF9 (ACPI), KBC or triple fault; no behaviour change; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | e5-stage46-iso | 0.5 | 95 | Nested `fe4785a` F7 reboot-to-disk on raynuvsrv1: `DISK-BOOT-OK` + second Linux `root=UUID=698a922a-…` (ext4 /dev/vda2, ESP /dev/vda1, second localhost:~#); harness nested reboot-to-disk line; nested QEMU ≠ R640; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
