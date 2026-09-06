@@ -355,9 +355,9 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | site-cio-stories (this PR) |
-| Summary | Honest residual: nested alpine-extended sys-install complete (2026-09-05); last iron ISO gate is El Torito 2026-08-27; iron installer + TLS/console open. Cruzer `BOOTED-FROM-DISK` stays LBA-not-rootfs. Not `ISO-INSTALL-OK`. Iron P0-14 stays 2b795a0. |
-| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Nested F7 ≠ iron E5. |
-| Gates touched | none closed. Residual copy only. |
+| Summary | Living verification paper v0.4.0-living: abstract/intro/threat/related/conclusion filled from M6 L3 + iron through El Torito + nested sys-install. Not `v1.0-preprint`. Not `ISO-INSTALL-OK`. Iron P0-14 stays 2b795a0. |
+| Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Paper is an audit artifact, not a new iron gate. |
+| Gates touched | none closed. ADR-010 living page completed. |
 | Months Δ | 0.5→0.5 |
 
 ---
@@ -379,6 +379,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-06 | site-cio-stories | 0.5 | 95 | Living paper v0.4.0 (not v1.0-preprint): public `paper.html` matches markdown; nested sys-install complete; iron installer + TLS/console open; iron P0-14 stays 2b795a0 |
 | 2026-09-06 | site-cio-stories | 0.5 | 95 | Residual honesty: nested sys-install complete (Please reboot + F7); last iron ISO=El Torito 2026-08-27; iron installer + TLS/console open; LBA stamps ≠ rootfs; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-05 | site-cio-stories | 0.5 | 95 | Site updater chrome lock + Stage 44/45/46 stories (nested RayNu-F F7; not ISO-INSTALL-OK); iron P0-14 stays 2b795a0 |
 | 2026-08-23 | e5-ovmf-virtio | 0.5 | 95 | P0-57 CLOSED nested VT-x VIRTIO-OK val=0x1042 pci=1 virtio=1; pci_ide=0 sectors=0; not installer; iron P0-14 stays 2b795a0 |
