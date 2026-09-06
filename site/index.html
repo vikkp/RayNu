@@ -6,12 +6,12 @@
     <title>RayNu-V — Single-binary hypervisor, designed for proof</title>
     <meta
       name="description"
-      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 closed BOOT-OK through E4 SPA VMLAUNCH (SHELL stub). Residual: TLS/console + distro installer."
+      content="RayNu-V is a commercially targeted, single-binary Type-1 hypervisor designed for formal verification from day one. Real PowerEdge R640 closed BOOT-OK through El Torito CD boot. Nested RayNu-F completed alpine-extended reboot-to-disk. Residual: TLS/console + iron distro installer."
     />
-    <meta property="og:title" content="RayNu-V — R640 BOOT-OK through E4 SPA VMLAUNCH" />
+    <meta property="og:title" content="RayNu-V — R640 iron through El Torito; nested RayNu-F" />
     <meta
       property="og:description"
-      content="PowerEdge R640: RAYNU-V-R640-BOOT-OK, HOST-NIC-HTTP-OK beside VMX, E4 SPA VMLAUNCH. Residual: TLS/console + distro. Not Everest."
+      content="PowerEdge R640: BOOT-OK, HOST-NIC-HTTP-OK, E4 SPA, ATAPI-OK, ELTORITO-OK. Nested RayNu-F Please reboot. Iron ISO-INSTALL-OK open. Not Everest."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://raynuv.com/" />
@@ -29,11 +29,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="RayNu-V — R640 BOOT-OK through E4 SPA VMLAUNCH"
+      content="RayNu-V — R640 iron through El Torito; nested RayNu-F"
     />
     <meta
       name="twitter:description"
-      content="PowerEdge R640: RAYNU-V-R640-BOOT-OK, HOST-NIC-HTTP-OK beside VMX, E4 SPA VMLAUNCH. Residual: TLS/console + distro. Not Everest."
+      content="ATAPI-OK + ELTORITO-OK on R640. Nested RayNu-F alpine-extended reboot-to-disk. Iron ISO-INSTALL-OK open."
     />
     <meta name="twitter:image" content="https://raynuv.com/assets/hero.jpg" />
     <link rel="canonical" href="https://raynuv.com/" />
@@ -135,8 +135,8 @@
     <main>
       <section class="section section--status" id="status">
         <div class="section__inner">
-          <p class="milestone-kicker" data-reveal>Milestones · August 2026</p>
-          <h2 class="section__title">R640 iron: BOOT-OK through E4 SPA VMLAUNCH.</h2>
+          <p class="milestone-kicker" data-reveal>Milestones · September 2026</p>
+          <h2 class="section__title">R640 iron through El Torito. Nested RayNu-F reboots to disk.</h2>
           <p class="section__lede">
             Real PowerEdge R640 (iDRAC9 SOL <code>console com2</code>) closed
             HDA <strong>E2</strong> —
@@ -148,15 +148,22 @@
             rootfs) —
             <strong>E3b</strong> + Phase F
             <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> beside VMX (BCM5720
-            <code>:38</code>, 2026-08-20) — and
+            <code>:38</code>, 2026-08-20) —
             <strong>P0-14</strong>
             <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (2026-08-21: private-EPT
-            SHELL guest from SPA start + shadow re-entry) — and
-            <strong>P0-59</strong>
-            <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> (2026-08-27: guest UEFI
-            firmware issued ATAPI READ(10) and got a real CD sector back,
-            twice, on iron). Mount Everest residual: TLS/console, the El
-            Torito CD boot, and a real distro installer. Not Everest.
+            SHELL guest from SPA start + shadow re-entry) —
+            <strong>Stage 44</strong>
+            <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code> (2026-08-27: ATAPI
+            READ(10), sectors=1, twice) — and
+            <strong>Stage 45</strong>
+            <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code> (same day: catalog,
+            boot image, CD EFI). <strong>Stage 46</strong> nested RayNu-F
+            (ADR-016) completed alpine-extended <code>setup-disk -m sys</code>
+            and reboot-to-disk
+            (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>). Nested is not iron.
+            Mount Everest residual: TLS/console and a real distro installer
+            on the R640. Not Everest. We do not print
+            <code>RAYNU-V-M7-ISO-INSTALL-OK</code>.
           </p>
           <figure class="milestone-shot" data-reveal>
             <picture>
@@ -193,6 +200,9 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             Evidence:
             <code>docs/evidence/r640/2026-08-16-uefi-http-ok.md</code>
             · <a href="stories.html">Stories</a>
+            · <a href="stories.html#raynu-f-2026-09-05-stage46">2026-09-05 Stage 46 RayNu-F</a>
+            · <a href="stories.html#ovmf-2026-08-27-eltorito-ok">2026-08-27 El Torito</a>
+            · <a href="stories.html#ovmf-2026-08-27-atapi-ok">2026-08-27 ATAPI</a>
             · <a href="stories.html#r640-2026-08-21-e4-spa">2026-08-21 E4 SPA</a>
             · <a href="stories.html#r640-2026-08-20-host-nic">2026-08-20 host NIC</a>
             · <a href="stories.html#r640-2026-08-17-snp-dead">2026-08-17 RSOD</a>
@@ -248,7 +258,7 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             </div>
             <div class="statband__item">
               <dt>Iron markers · real PowerEdge R640</dt>
-              <dd>6</dd>
+              <dd>7</dd>
             </div>
           </dl>
 
@@ -607,9 +617,11 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                 (<code>RAYNU-V-R640-BOOT-OK</code>) and UEFI HTTP
                 (<code>RAYNU-V-M7-UEFI-HTTP-OK</code>) closed 2026-08-15/16.
                 E5 stamp persist closed on Cruzer
-                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>). Residual:
-                TLS/console + distro installer (E3b + Phase F closed 2026-08-20;
-                E4 SPA VMLAUNCH closed 2026-08-21, SHELL stub).
+                (<code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code>).
+                E3b + Phase F closed 2026-08-20; E4 SPA VMLAUNCH closed
+                2026-08-21 (SHELL stub). Stage 44 ATAPI-OK and Stage 45
+                El Torito-OK closed on iron 2026-08-27. Stage 46 nested
+                RayNu-F reboot-to-disk is not iron E5.
               </p>
               <ol class="journey__list">
                 <li>
@@ -684,6 +696,23 @@ RAYNU-V-R640-BOOT-OK</code></pre>
                     >Guest firmware reads the CD — ATAPI READ(10),
                     sectors=1, on iron (2026-08-27) →
                     <code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 45</span>
+                  <span class="journey__text"
+                    >El Torito CD EFI on iron — catalog + boot image
+                    (2026-08-27) →
+                    <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code></span
+                  >
+                </li>
+                <li>
+                  <span class="journey__gate">E5 · 46</span>
+                  <span class="journey__text"
+                    >Nested RayNu-F alpine-extended install + reboot-to-disk
+                    (2026-09-05). Iron
+                    <code>ISO-INSTALL-OK</code> open →
+                    <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code></span
                   >
                 </li>
               </ol>
@@ -837,7 +866,10 @@ RAYNU-V-R640-BOOT-OK</code></pre>
             <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> (E5 stamps), and
             <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (E3b + Phase F, 2026-08-20),
             and <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> (P0-14, 2026-08-21,
-            SHELL stub). Mount Everest residual: TLS/console + distro installer. See
+            SHELL stub), Stage 44 <code>OVMF-ATAPI-OK</code> and Stage 45
+            <code>OVMF-ELTORITO-OK</code> (2026-08-27). Stage 46 nested
+            RayNu-F reboot-to-disk is not iron E5. Mount Everest residual:
+            TLS/console + distro installer on metal. See
             <a href="hda.html">HDA</a>.
           </p>
           <pre class="ship-code" data-reveal><code># Lab: Latitude / QEMU · R640 iron: E2 BOOT-OK + E3 UEFI-HTTP-OK + E5 stamps
@@ -910,8 +942,11 @@ cargo build --release --target x86_64-unknown-uefi --features uefi-bin
             stamp persist <code>RAYNU-V-M7-ISO-BOOTED-FROM-DISK</code> and
             durable HTTP <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> (2026-08-20)
             and E4 SPA VMLAUNCH <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>
-            (2026-08-21, SHELL stub);
-            Mount Everest residual is TLS/console and a
+            (2026-08-21, SHELL stub) and Stage 44/45
+            <code>OVMF-ATAPI-OK</code> / <code>OVMF-ELTORITO-OK</code>
+            (2026-08-27);
+            Stage 46 nested RayNu-F reboot-to-disk is not the iron
+            installer. Mount Everest residual is TLS/console and a
             real distro installer. See the
             <a href="paper.html">living verification paper</a>.
           </p>
