@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stories of RayNu — Stage 46 RayNu-F, El Torito, ATAPI</title>
+    <meta
+      name="description"
+      content="Field stories from RayNu-V: Stage 44 ATAPI-OK, Stage 45 El Torito on iron, and Stage 46 — the WaitForEvent wall, the pivot to RayNu-F, nested alpine-extended reboot-to-disk."
+    />
+    <meta property="og:title" content="Stories of RayNu — we became the firmware" />
+    <meta
+      property="og:description"
+      content="Stage 46: OVMF WaitForEvent would not yield. We stopped puppeting it, wrote RayNu-F, and nested Alpine said Please reboot. Iron ISO-INSTALL-OK remains open."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://raynuv.com/stories.html" />
+    <meta property="og:site_name" content="RayNu-V" />
+    <meta
+      property="og:image"
+      content="https://raynuv.com/assets/r640-boot-ok-com2.png"
+    />
+    <meta property="og:image:width" content="1556" />
+    <meta property="og:image:height" content="926" />
+    <meta
+      property="og:image:alt"
+      content="Operator Terminal showing RAYNU-V-R640-BOOT-OK over iDRAC SOL on a real PowerEdge R640"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Stories of RayNu — we became the firmware"
+    />
+    <meta
+      name="twitter:description"
+      content="Stage 46: WaitForEvent wall, RayNu-F pivot, nested Please reboot. Iron ISO-INSTALL-OK remains open."
+    />
+    <meta name="twitter:image" content="https://raynuv.com/assets/r640-boot-ok-com2.png" />
+    <link rel="canonical" href="https://raynuv.com/stories.html" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .page-stories .stories-mast {
+        padding: clamp(2.5rem, 8vh, 4.5rem) 0 clamp(1.75rem, 4vh, 2.5rem);
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+        background:
+          radial-gradient(90% 70% at 0% 0%, rgba(15, 110, 106, 0.12) 0%, transparent 55%),
+          radial-gradient(70% 50% at 100% 10%, rgba(184, 107, 52, 0.1) 0%, transparent 50%),
+          linear-gradient(180deg, rgba(26, 58, 74, 0.06) 0%, transparent 70%);
+        animation: stories-wash 0.8s ease-out both;
+      }
+      @keyframes stories-wash {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .stories-mast__inner {
+        width: min(100% - 2.5rem, 42rem);
+        margin: 0 auto;
+      }
+      .stories-mast__nav {
+        margin: 0 0 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .stories-mast__nav a {
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .stories-mast__nav a:hover {
+        color: var(--steel);
+      }
+      .stories-kicker {
+        margin: 0 0 0.75rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      .stories-mast__title {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-brand);
+        font-weight: 800;
+        font-size: clamp(2.2rem, 1.4rem + 3vw, 3.4rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        color: var(--steel);
+      }
+      .stories-mast__lede {
+        margin: 0;
+        max-width: 36rem;
+        font-size: 1.1rem;
+        color: var(--ink-soft);
+      }
+      .stories-body {
+        width: min(100% - 2.5rem, 42rem);
+        margin: 0 auto;
+        padding: clamp(2rem, 5vh, 3.5rem) 0 4rem;
+      }
+      .story {
+        margin: 0 0 clamp(2.5rem, 6vh, 4rem);
+        animation: stories-rise 0.65s ease-out both;
+      }
+      .story:nth-child(2) { animation-delay: 0.08s; }
+      .story:nth-child(3) { animation-delay: 0.14s; }
+      @keyframes stories-rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .story__date {
+        margin: 0 0 0.35rem;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .story__title {
+        margin: 0 0 0.85rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: clamp(1.45rem, 1.1rem + 1.2vw, 1.85rem);
+        line-height: 1.2;
+        color: var(--steel);
+      }
+      .story p {
+        margin: 0 0 1rem;
+        color: var(--ink-soft);
+      }
+      .story p:last-child {
+        margin-bottom: 0;
+      }
+      .story h3 {
+        margin: 1.75rem 0 0.55rem;
+        font-family: var(--font-brand);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--steel);
+      }
+      .story pre {
+        margin: 1rem 0;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: var(--steel);
+        background: rgba(16, 24, 32, 0.04);
+        border-left: 3px solid var(--teal);
+      }
+      .story ul {
+        margin: 0 0 1rem;
+        padding-left: 1.2rem;
+        color: var(--ink-soft);
+      }
+      .story li {
+        margin: 0.35rem 0;
+      }
+      .story__aside {
+        margin: 1.25rem 0 0;
+        padding: 0.85rem 1rem;
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+        border-top: 1px solid rgba(16, 24, 32, 0.1);
+      }
+      .story-shot {
+        margin: 1.25rem 0;
+      }
+      .story-shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .story:nth-child(4) { animation-delay: 0.2s; }
+      .story:nth-child(5) { animation-delay: 0.26s; }
+      .story:nth-child(6) { animation-delay: 0.32s; }
+      .story:nth-child(7) { animation-delay: 0.38s; }
+      .story:nth-child(8) { animation-delay: 0.44s; }
+      .story:nth-child(9) { animation-delay: 0.5s; }
+      .stories-index {
+        margin: 0 0 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(16, 24, 32, 0.1);
+      }
+      .stories-index__label {
+        margin: 0 0 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .stories-index a {
+        font-family: var(--font-display);
+        color: var(--teal);
+        text-decoration: none;
+      }
+      .stories-index a:hover {
+        color: var(--steel);
+        text-decoration: underline;
+      }
+      .stories-index__featured {
+        margin: 0 0 1.25rem;
+        padding: 0.95rem 1.05rem 1.05rem;
+        background:
+          linear-gradient(135deg, rgba(26, 58, 74, 0.1) 0%, transparent 55%),
+          linear-gradient(180deg, rgba(184, 107, 52, 0.1) 0%, transparent 70%);
+        border-left: 4px solid var(--copper);
+      }
+      .stories-index__featured .stories-index__label {
+        color: var(--copper);
+      }
+      .stories-index__featured p:last-child {
+        margin: 0.35rem 0 0;
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+      }
+      .story__kicker {
+        margin: 0 0 0.3rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--copper);
+      }
+      .story--featured {
+        padding: 1.4rem 1.2rem 1.55rem;
+        background:
+          radial-gradient(90% 70% at 0% 0%, rgba(15, 110, 106, 0.1) 0%, transparent 55%),
+          rgba(255, 255, 255, 0.42);
+        border: 1px solid rgba(16, 24, 32, 0.12);
+        border-left: 4px solid var(--copper);
+      }
+      .story--featured .story__title {
+        font-size: clamp(1.65rem, 1.15rem + 1.6vw, 2.15rem);
+      }
+    </style>
+  </head>
+  <body class="page-stories">
+    <nav class="site-nav site-nav--solid" aria-label="Site">
+      <a class="site-nav__brand" href="index.html">RayNu-V</a>
+      <div class="site-nav__links">
+        <a href="index.html#status" data-hide-sm>Status</a>
+        <a href="index.html#console" data-hide-sm>Console</a>
+        <a href="index.html#journey" data-hide-sm>Journey</a>
+        <a href="stories.html" aria-current="page">Stories</a>
+        <a href="hda.html">Everest</a>
+        <a href="paper.html">Paper</a>
+        <a href="ciospeak.html">CIO View</a>
+        <a href="https://github.com/vikkp/RayNu" data-hide-sm>GitHub</a>
+      </div>
+    </nav>
+    <header class="stories-mast">
+      <div class="stories-mast__inner">
+        <p class="stories-mast__nav">
+          <a href="index.html">RayNu-V</a>
+          <span aria-hidden="true">·</span>
+          <span>Stories</span>
+        </p>
+        <p class="stories-kicker">Field journal</p>
+        <h1 class="stories-mast__title">Stories of RayNu</h1>
+        <p class="stories-mast__lede">
+          What actually happened on iron — not a roadmap slide. Each story is
+          dated, marker-backed, and honest about residuals. Latest: Stage 46
+          nested RayNu-F — Alpine printed <em>Please reboot</em>, then
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. Nested sys-install is
+          complete. Iron <code>ISO-INSTALL-OK</code> is still open. Residual:
+          iron installer + TLS/console. Stage 44 and 45 closed on real
+          R640 the same August afternoon: the CD answered, then El Torito
+          booted.
+        </p>
+      </div>
+    </header>
+
+    <main class="stories-body">
+      <div class="stories-index">
+        <div class="stories-index__featured">
+          <p class="stories-index__label">Stage 46 · featured</p>
+          <p>
+            <a href="#raynu-f-2026-09-05-stage46"
+              >2026-09-05 — Please reboot: we became the firmware</a
+            >
+          </p>
+          <p>
+            WaitForEvent would not yield. We stopped forcing OVMF, wrote
+            RayNu-F, and nested Alpine installed to disk. Nested is not iron.
+          </p>
+        </div>
+        <p class="stories-index__label">In this volume</p>
+        <p>
+          <a href="#ovmf-2026-08-27-eltorito-ok"
+            >2026-08-27 — The catalog, then the boot image</a
+          >
+        </p>
+        <p>
+          <a href="#ovmf-2026-08-27-atapi-ok"
+            >2026-08-27 — The CD answers back</a
+          >
+        </p>
+        <p>
+          <a href="#ovmf-2026-08-23-atapi"
+            >2026-08-23 — The firmware asks for the CD</a
+          >
+        </p>
+        <p>
+          <a href="#ovmf-2026-08-23"
+            >2026-08-23 — A firmware of its own: OVMF on a private VMCS</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-21-e4-spa"
+            >2026-08-21 — E4 SPA VMLAUNCH: the guest that came back</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-20-host-nic"
+            >2026-08-20 — Native BCM5720 HTTP beside VMX</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-19-ape-phy"
+            >2026-08-19 — Don’t take the APE PHY</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-17-snp-dead"
+            >2026-08-17 — Firmware SNP after EBS: hang, timeout, RSOD</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-16-cruzer"
+            >2026-08-16 — Two boots on a Cruzer, stamps not a filesystem</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-16-http"
+            >2026-08-16 — UEFI-HTTP-OK on the operator LAN</a
+          >
+        </p>
+        <p>
+          <a href="#r640-boot-ok-marker"
+            >2026-08-15 — Literal RAYNU-V-R640-BOOT-OK on COM2</a
+          >
+        </p>
+        <p>
+          <a href="#r640-2026-08-15"
+            >2026-08-15 — First light on PowerEdge R640</a
+          >
+        </p>
+      </div>
+
+      <article class="story story--featured" id="raynu-f-2026-09-05-stage46">
+        <p class="story__kicker">Stage 46 · special listing</p>
+        <p class="story__date">2026-09-05 · nested VT-x raynuvsrv1 · ADR-015 / ADR-016 / ADR-017</p>
+        <h2 class="story__title">Please reboot: we became the firmware</h2>
+
+        <p>
+          Alpine said it first. After <code>setup-disk -m sys</code> packed
+          GRUB and the lts kernel onto a virtio disk we had carved from leftover
+          DRAM, the installer printed the oldest punchline in the book:
+        </p>
+        <pre>Installation is complete. Please reboot.</pre>
+        <p>
+          Then we actually rebooted it. F7 reset the guest, RayNu-F relaunched
+          against the <em>disk</em> instead of the ISO, GRUB found
+          <code>hd0</code>, and Linux came back with
+          <code>root=UUID=</code> — not the squashfs from the CD.
+          Serial printed <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. That is a
+          nested victory. It is not Everest E5. Host and CI still never print
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code>. The Cruzer on the R640 is still
+          too small for alpine-extended. Read this story for the wall we hit,
+          the pivot we made, and why the nested close matters anyway.
+        </p>
+
+        <h3>What Stage 46 was supposed to be</h3>
+        <p>
+          Everest E5 is one sentence: register a typed Linux ISO, boot its
+          UEFI installer onto virtio-blk, reboot to that disk. Stages 37–43
+          taught retained OVMF to live on a private VMCS. Stage 44 made the
+          CD answer. Stage 45 booted El Torito on iron. Stage 46 was supposed
+          to be the installer — on the same PowerEdge, over the same COM2.
+          ADR-015 named the close path: park PR #231, stay on #229, do not
+          claim the iron OK from nested, host, or CI.
+        </p>
+
+        <h3>The iron chase that closed every door except the one that mattered</h3>
+        <p>
+          Product-ISO OVMF on iron would VMLAUNCH, walk past SEC, light DXE,
+          and then sit in <code>CoreWaitForEvent</code> with
+          <code>ataio=0</code> — the ATA counter never moved. We treated that
+          hang like a PCI mystery, because that is what the last dozen hangs
+          had been.
+        </p>
+        <p>
+          COMMAND.IO closed: firmware wrote IDE COMMAND six times and
+          <code>ataio</code> stayed 0. CF8 closed: last enable was
+          <code>00:08.0</code>, still 0. Expansion ROM closed: size probe
+          <code>romwr=0xfffffffe</code>, still 0. Hide slot-0 closed:
+          CDROM-OK via PIIX, still 0. Return address closed:
+          <code>ret=0x7ff0e055</code> — DxeCore WaitForEvent, not PciBus.
+          ConIn CR closed: we pushed a carriage return; it printed; the hang
+          did not. Callsite closed: <code>call [r14-0x20]</code> into
+          CpuSleep. Each of those pins was a physical Cruzer flash. Mr. COM2
+          told the truth every time. The disc never started.
+        </p>
+
+        <h3>WaitForEvent, and the wound we inflicted</h3>
+        <p>
+          The remaining theory was a timer event that never signaled. The
+          remaining tactic — and this is the part we are not proud of — was
+          to <em>make</em> OVMF return. Force the WaitForEvent frame to
+          unwind. Skip the preemption. Poke <code>gState</code> at
+          <code>0x7ff18340</code>. Inject a page-fault to unstick BDS.
+        </p>
+        <pre>iron COM2 9474ab6
+WFE state4 poke dest=0x7ff18340
+then #PF cr2=0xffffffffffffffb8 rip=0x7ff0e018
+ataio=0
+
+iron COM2 4e16b59
+event #PF inject
+OVMF own #PF + CpuDeadLoop
+ataio=0</pre>
+        <p>
+          <code>CoreWaitForEvent(N, Events, OUT *Index)</code> must write
+          <code>*Index</code>. The force-return did not. BDS then walked a
+          NULL <code>EFI_EVENT</code> — <code>cmp [r14-0x48],'evnt'</code> —
+          and page-faulted at <code>cr2=0xffffffffffffffb8</code>. The next
+          five pins chased a fault <em>we</em> created. Nested QEMU still
+          reached ATAPI-OK where iron did not: the divergence was timer and
+          interrupt delivery behind our xAPIC/IOAPIC trap, not the boot
+          logic we thought we were debugging.
+        </p>
+        <p>
+          Two lessons, paid for in flashes:
+        </p>
+        <ul>
+          <li>
+            Reaching into another firmware's private state to force it forward
+            is a self-inflicted-wound generator. We do not own OVMF's
+            invariants. Forcing one (a return without its OUT parameter)
+            violates the next twenty.
+          </li>
+          <li>
+            We were reimplementing a PC by trial-and-error, one physical boot
+            per bit of information, to satisfy a third-party firmware whose
+            contract we only partially met.
+          </li>
+        </ul>
+
+        <h3>The pivot: be the firmware</h3>
+        <p>
+          ADR-016 is the adult decision. For the E5 product path, RayNu
+          presents a minimal, correct UEFI boot environment to the ISO's own
+          <code>\EFI\BOOT\BOOTX64.EFI</code> — GRUB, systemd-boot, the Linux
+          EFI stub — instead of relaunching and puppeting OVMF. We author
+          the <code>EFI_SYSTEM_TABLE</code>, the boot services, BlockIo over
+          the CD and the install disk, SimpleFileSystem, LoadImage /
+          StartImage, serial ConIn/ConOut, GetMemoryMap / ExitBootServices,
+          and a timer tick we deliver on our own schedule. Because we author
+          every structure, there is no third-party firmware internal state
+          to corrupt.
+        </p>
+        <p>
+          RayNu-<strong>V</strong> is the hypervisor. RayNu-<strong>F</strong>
+          is the guest boot firmware it presents to a typed ISO. Same single
+          <code>r640-hypervisor.efi</code>. Outside the Proven Core. The
+          <code>3k–3o</code> OVMF forcing family is gated off
+          (<code>RAYNU_F_NO_FW_STATE_MUTATION</code>). We still refuse to
+          claim the iron installer OK.
+        </p>
+
+        <h3>Building a UEFI that is ours</h3>
+        <p>
+          The ladder was honest scaffolding first, then nested proof.
+          Byte-exact UEFI 2.10 tables and CRC32. ConOut over a port-0x5246
+          trampoline. A PE32+ loader with DIR64 relocs. AllocatePages and a
+          coalesced GetMemoryMap whose map-key actually matches
+          ExitBootServices. WaitForEvent that writes <code>*Index</code>
+          and returns <code>EFI_TIMEOUT</code> instead of hanging. Two
+          EFI_BLOCK_IO_PROTOCOL instances: CD 2048-byte read-only from the
+          retained product ISO, install disk 512-byte read-write on
+          virtio-blk. FAT12/16/32, then LoadImage of the ISO's real
+          <code>BOOTX64.EFI</code>.
+        </p>
+        <p>
+          GRUB ran on our ConOut and complained it could not malloc — so we
+          grew the page pool across pre-mapped report-RAM. Then GRUB
+          loaded Alpine's kernel. Linux 6.12.13 printed
+          <code>efi: EFI v2.10 by RayNu-F</code>. It panicked that a real-mode
+          trampoline was not allocated — we had reserved too much of the
+          first megabyte — so we opened a conventional window
+          <code>[0x1000, 0x9F000)</code>. It triple-faulted in
+          <code>efi_enter_virtual_mode</code> — RayNu-F has no runtime
+          services — so the GRUB line grew <code>efi=noruntime</code>.
+          Syscall MSRs were zero at the first usermode helper; we started
+          writing STAR/LSTAR/CSTAR like the G0 path already did. NXE was
+          getting stripped on userspace RIP; we held it after the RayNu-F
+          handoff. None of that is iron. All of it is a firmware we own.
+        </p>
+
+        <h3>The installer, then the disk that was too small, then the disk that was not</h3>
+        <p>
+          Alpine-standard (245 MiB) reached <code>setup-disk</code> and then
+          apk said there was no <code>dosfstools</code>, no
+          <code>grub-efi</code>. Those packages are not on standard. They
+          are on alpine-extended (994 MiB). The Cruzer in the R640 cannot
+          hold that ISO next to the EFI. Nested can.
+        </p>
+        <p>
+          On extended, <code>setup-disk</code> finally resolved grub-efi,
+          partitioned <code>/dev/vda</code>, and ran out of space — because
+          the pool disk was 64 MiB with 48 MiB of it ESP. The fix was
+          architectural: carve the install disk from leftover DRAM
+          <em>above</em> the precise EPT window <em>before</em> seeding
+          report-RAM extra. Nested <code>-m 4096M</code> leftover became a
+          512 MiB virtio disk. Guest never sees those HPAs as RAM
+          (BlockIo only; ADR-004 still holds).
+        </p>
+        <pre>boot: Stage 46 leftover install disk hpa=0x20000000 bytes=536870912
+setup-disk -m sys
+25 packages
+Generating grub configuration file …
+Found linux image: /boot/vmlinuz-lts
+Installation is complete. Please reboot.</pre>
+        <p>
+          Nested <code>499492c</code> completed that install. F7 — reset
+          request, CF9/KBC, disk-before-ISO, then a Vendor whole-disk path
+          so GRUB's <code>hd0</code> is the install disk — brought Linux back
+          on the second boot (<code>fe4785a</code>). Later
+          <code>088ab25</code> switched the F7 reset lines to nowait serial
+          so they still print after Linux shares the UART. That is the
+          nested product loop: ISO → installer → disk → reboot → disk.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We claim a nested RayNu-F alpine-extended install and reboot to
+          that disk, under our own firmware tables, with
+          <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>. We claim Stage 44 and 45
+          remain closed on real R640 iron. We claim the OVMF forcing family
+          stays off.
+        </p>
+        <p>
+          We do <strong>not</strong> claim
+          <code>RAYNU-V-M7-ISO-INSTALL-OK</code>. Nested VT-x is not a
+          PowerEdge. A 512 MiB leftover disk in QEMU is not a Cruzer. Nested
+          sys-install is complete. The iron residual is the same installer on
+          metal — and a stick large enough to hold alpine-extended — plus
+          TLS and guest console. HDA
+          <code>last_commit</code> stays <code>2b795a0</code> (P0-14).
+          Months stay 0.5. Prefer under-claiming.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/pull/229"
+            >#229 — Stage 46 close path</a
+          >
+          · ADR-015 (park #231) · ADR-016 (RayNu-F) · ADR-017 (F7 reset)
+          · Nested stamps: <code>499492c</code> install,
+          <code>fe4785a</code> reboot-to-disk,
+          <code>088ab25</code> nowait F7 lines
+          · Tracker: <a href="hda.html">Mount Everest</a>
+          · CIO view: <a href="ciospeak.html">where the work stands</a>
+        </p>
+      </article>
+
+      <article class="story" id="ovmf-2026-08-27-eltorito-ok">
+        <p class="story__date">2026-08-27 · Dell PowerEdge R640 · iDRAC SOL com2 · ADR-014 Stage 45</p>
+        <h2 class="story__title">The catalog, then the boot image</h2>
+
+        <p>
+          Stage 44 got one sector. Stage 45 asked the firmware to treat that
+          disc as a bootable CD. Same afternoon, same COM2, same private
+          VMCS. The serial line grew a new dialect:
+        </p>
+        <pre>RN-ELT
+RAYNU-V-M7-E5-OVMF-ELTORITO-OK
+catalog=1 bootimg=1 magic=1 sectors=183 elt=1
+packet=533 scsi=0x28 port=0x3f8 com=6
+n=197992 insn=ee31c0c3</pre>
+        <p>
+          Read it the way we read ATAPI-OK. <code>catalog=1</code> means
+          OVMF found the El Torito catalog on the ISO.
+          <code>bootimg=1</code> means it found the no-emulation boot image.
+          <code>magic=1</code> is the validation that this is actually a
+          CD boot record, not a hopeful parse.
+          <code>sectors=183</code> is the boot image itself — a 2048-byte
+          FAT12 ESP with <code>\EFI\BOOT\BOOTX64.EFI</code>, PE
+          SectionAlignment <code>0x1000</code>. <code>packet=533</code>
+          is a lot of READ(10). The disc is no longer a single sector of
+          politeness. It is a boot path.
+        </p>
+        <p>
+          The ladder on COM2 is now a story we can tell without
+          hand-waving. ATAPI-OK at n=30769. Catalog hit around n=33280.
+          Boot image around n=38656. Then the long walk to
+          <code>OVMF-ELTORITO-OK</code> at n=197992. E4 Linux-early and the
+          M4.2 G1 EPT fail-soft still happen on that boot; they are not
+          Stage 45. P0-60 (G1 shell EPT) closed after this stamp. None of
+          that is an installer.
+        </p>
+
+        <h3>What we still don't claim</h3>
+        <p>
+          Not an installer. Not Everest E5. El Torito on iron means the
+          guest firmware can boot CD EFI. It does not mean Alpine
+          <code>setup-disk</code> ran on the R640, and it does not mean
+          we should keep forcing OVMF's WaitForEvent to get there. That
+          argument is Stage 46.
+        </p>
+
+        <p class="story__aside">
+          Evidence: iron COM2 <code>0be7283</code> ·
+          <code>RAYNU-V-M7-E5-OVMF-ELTORITO-OK</code>
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Next:
+          <a href="#raynu-f-2026-09-05-stage46">Stage 46 — Please reboot</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="ovmf-2026-08-27-atapi-ok">
+        <p class="story__date">2026-08-27 · Dell PowerEdge R640 · iDRAC SOL com2 · ADR-014 Stage 44</p>
+        <h2 class="story__title">The CD answers back</h2>
+
+        <p>
+          Four days ago the guest firmware learned to ask for the CD. Today,
+          on real iron, the CD answered. Two boots, same result:
+        </p>
+        <pre>RAYNU-V-M7-E5-OVMF-CDROM-OK
+RAYNU-V-M7-E5-OVMF-VIRTIO-OK
+RAYNU-V-M7-E5-OVMF-BOTH-OK
+RAYNU-V-M7-E5-OVMF-ATAPI-OK
+boot: guest-UEFI atapi sectors=1 packet=9 scsi=0x28
+RAYNU-V-AUDIT: OvmfGuestUefiAtapi exits=30769 sectors=1</pre>
+        <p>
+          Read the last line slowly. <code>scsi=0x28</code> is READ(10) — the
+          ten-byte SCSI read command that ATAPI packets carry. OVMF, running
+          on its own private VMCS, issued a packet command to the IDE CD at
+          <code>00:00.1</code> and got back one real sector.
+          <code>sectors=1</code>. The disc spins up. Data moves.
+        </p>
+
+        <h3>What it took since Sunday</h3>
+        <p>
+          The iron chase from the last story kept its teeth. Along the way:
+          holding the VGA frame-buffer window write-back while coercing the
+          FIX page to UC so the PAT repaint stopped fighting us; scanning
+          every CpuFlush copy for a <code>jnz</code> that needed to become
+          <code>nop</code>; an ASSERT call-target dump that needed a 32-byte
+          prehex buffer, not 16; and the standing rule from Sunday —
+          do <strong>not</strong> skip the <code>leave; ret</code> at
+          <code>0xebecc9c3</code>. Through all of it, <code>00:00.0</code>
+          stayed i440FX <code>8086:1237</code> so CpuDxe's AcpiTimerLib never
+          ASSERTs, and the virtio disk moved to <code>00:02.0</code> to keep
+          the peace.
+        </p>
+
+        <h3>What we still don't claim</h3>
+        <p>
+          One sector is not an operating system — but it is the firmware
+          reading the disc, on iron, twice in a row. Later the same day,
+          Stage 45 printed <code>OVMF-ELTORITO-OK</code>: the catalog, then
+          the boot image. That story is next. Not an installer. Not Everest
+          E5. Host tests at the close: 480/480.
+        </p>
+
+        <p class="story__aside">
+          Evidence: iron COM2 <code>bf696ca</code> ·
+          <a href="https://github.com/vikkp/RayNu/pull/226"
+            >#226 — Stage 44 closed, on the site</a
+          >
+          · P0-59 in <code>docs/progress.md</code>
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Next:
+          <a href="#ovmf-2026-08-27-eltorito-ok">Stage 45 — El Torito</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="ovmf-2026-08-23-atapi">
+        <p class="story__date">2026-08-23 · raynuvsrv1 nested VT-x + PowerEdge R640 · ADR-014 Stages 43–44</p>
+        <h2 class="story__title">The firmware asks for the CD</h2>
+
+        <p>
+          Yesterday left OVMF past SEC with a CD visible and a virtio disk
+          attached. Today the question got sharper: can the guest firmware
+          actually <em>read</em> the disc?
+        </p>
+
+        <h3>Stage 43: both at once</h3>
+        <p>
+          First the enumeration had to be firmware-simultaneous — OVMF seeing
+          the virtio disk at <code>00:00.0</code> and the IDE CD at
+          <code>00:00.1</code> in the same boot, not one or the other. A
+          CpuDeadLoop <code>eb f3</code> skip let PciBus walk
+          <code>00:00.1</code>, and nested VT-x build <code>1b07692</code>
+          printed it:
+        </p>
+        <pre>pci select 00:00.01  cfg=0x80000100  val=0x70108086
+RAYNU-V-M7-E5-OVMF-BOTH-OK
+stop n=1111  pci_ide=1 virtio=1  sectors=0</pre>
+        <p>
+          E4 Linux stayed fail-soft through it. Simultaneous enumeration is
+          not a firmware CD boot — but a boot order only means something when
+          the firmware can see both devices at once.
+        </p>
+
+        <h3>Stage 44: the iron chase</h3>
+        <p>
+          Then the operator loop moved to the R640: build EFI, flash, watch
+          COM2, fix, reflash. What iron taught today:
+        </p>
+        <ul>
+          <li>Host owns <code>CR4.OSXSAVE</code> too, and <code>#UD</code> gets
+            intercepted (build <code>891eb5b</code>) — OVMF's
+            <code>XSETBV</code> may not run bare.</li>
+          <li>Do not skip the <code>leave; ret</code> at
+            <code>0xebecc9c3</code> — skipping it let an escaped ASSERT run
+            into a PE header and <code>#UD</code> at <code>0x109D</code>.</li>
+          <li>CpuDeadLoop is not always dead: the <code>pause; jcc</code> at
+            <code>0x6e81ca</code> was a preemption artifact, not a halt.</li>
+          <li>The fw_cfg boot order is PIIX <code>ide@1,1</code> before virtio
+            scsi — and the CD is master <code>drive@0</code>, not slave.</li>
+        </ul>
+        <p>
+          On nested VT-x the same chain now walks past BOTH-OK into ACPI
+          <code>BdsWait</code> — boot device selection. On iron we are
+          chasing the last guest-internal stops.
+        </p>
+
+        <h3>Where it stands tonight</h3>
+        <p>
+          Stage 44 (<code>RAYNU-V-M7-E5-OVMF-ATAPI-OK</code>) is
+          <strong>open</strong>. Not an El Torito boot, not an installer, not
+          Everest E5. But the CD is no longer decoration: the firmware is
+          trying to read it.
+        </p>
+        <p class="story__aside">
+          <strong>Update, 2026-08-27:</strong> closed on iron —
+          <code>sectors=1</code>, READ(10) answered.
+          <a href="#ovmf-2026-08-27-atapi-ok">The CD answers back</a>.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a href="https://github.com/vikkp/RayNu/pull/215">#215 — Stage 43, in review</a>
+          ·
+          <a href="https://github.com/vikkp/RayNu/pull/217">#217 — Stage 44, draft</a>
+          (gate logs in the PR branches' <code>docs/progress.md</code>,
+          P0-58 / P0-59)
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="ovmf-2026-08-23">
+        <p class="story__date">2026-08-22 → 2026-08-23 · raynuvsrv1 (Ubuntu, nested VT-x) · ADR-014 Stages 36–42</p>
+        <h2 class="story__title">A firmware of its own</h2>
+
+        <p>
+          Everest E5 is a real distro ISO booting in a guest. Our Linux boots
+          so far came in through the zero-page path we control — no firmware
+          in the middle. A distro installer expects UEFI: OVMF, a CD it can
+          see, a disk it can install to. ADR-014 builds that on a
+          <strong>private VMCS</strong> — the guest gets its own firmware,
+          its own EPT, its own VMCS, separate from the E4 SHELL path.
+        </p>
+
+        <h3>The firmware's first act: kill the hypervisor</h3>
+        <p>
+          Stage 37 VMLAUNCHed the retained ESP OVMF.fd on the private VMCS
+          (<code>RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK</code>). Stage 38 found the
+          first wall: OVMF's SEC phase runs <code>mov cr4, 0x640</code> —
+          which <em>clears VMXE</em>. On a guest that shares CR4 with the
+          host, that is an instant <code>#GP</code> → triple-fault. The fix
+          is the same lesson E4 Linux taught: <strong>the host owns
+          CR4.VMXE</strong>. With 32 MiB of low RAM and a short resume,
+          OVMF stayed alive past the first triple-fault
+          (<code>RAYNU-V-M7-E5-OVMF-ALIVE-OK</code>).
+        </p>
+
+        <h3>Past SEC, then a CD and a disk</h3>
+        <p>
+          Stage 39 walked OVMF out of the SEC tail — PEI PCI config,
+          firmware COM, HLT, COM1/COM2 forwarded
+          (<code>RAYNU-V-M7-E5-OVMF-PAST-SEC-OK</code>). Stage 40 made the
+          attached CD guest-visible on PCI IDE/ATAPI
+          (<code>RAYNU-V-M7-E5-OVMF-CDROM-OK</code>). Stage 41 put i440FX
+          and IDE where PEI's Device-ID probe actually looks
+          (<code>00:00.0</code>, DID <code>0x7010</code>) for the DXE
+          platform boot attempt (<code>RAYNU-V-M7-E5-OVMF-DXE-OK</code>).
+          Stage 42 swapped in an empty virtio-blk disk (DID
+          <code>0x1042</code>) and set the boot order — CD, then disk:
+        </p>
+        <pre>RAYNU-V-M7-E5-OVMF-VIRTIO-OK  pci=1 boot=CD,disk  CD GuestVisible
+RAYNU-V-M7-E5-OVMF-DXE-OK     plat=1 ram_rip=1</pre>
+
+        <h3>What we still don't claim</h3>
+        <p>
+          This is <strong>not</strong> a completed firmware CD boot, not an
+          installer, and not Everest E5. No distro has booted. What is true:
+          guest UEFI now runs on its own VMCS, survives its own SEC, and
+          sees both a CD and a virtio disk in the right boot order — the
+          pieces a distro installer will need, closed one gate at a time on
+          nested VT-x before the next iron run.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/progress.md"
+            >progress.md P0-51…P0-57</a
+          >
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-014.md"
+            >ADR-014</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-21-e4-spa">
+        <p class="story__date">2026-08-21 · Dell PowerEdge R640 · Cruzer RAYNUV · front USB 2</p>
+        <h2 class="story__title">The guest that came back</h2>
+
+        <p>
+          After Phase F, the management SPA could list VMs while Linux was
+          already running. The next honest question was whether
+          <code>POST /vms/1/start</code> actually launched anything. Not a
+          table row. A private-EPT guest, on the same CPU, with VMX still on.
+        </p>
+        <p>
+          That took a day of iron, not a diagram.
+        </p>
+
+        <h3>The Mac, finally with straight quotes</h3>
+        <p>
+          Lease from COM2 — often <code>10.99.99.126</code>, never Ubuntu
+          <code>.124</code> on the PERC. Bearer
+          <code>raynu-v-bringup</code>. Spec, sleep two seconds, start:
+        </p>
+        <pre>HTTP/1.1 201 Created
+HTTP/1.1 200 OK</pre>
+        <p>
+          Curly quotes in the start URL once hung the Mac in a
+          <code>dquote&gt;</code> prompt. Start-only after that was 404 —
+          VM 1 had not been spec’d. The close used ASCII quotes and both
+          POSTs.
+        </p>
+
+        <h3>A ladder of EFIs that almost counted</h3>
+        <p>
+          Marker printed is not a close. Several Cruzer flashes proved that
+          the hard way:
+        </p>
+        <ul>
+          <li>
+            Hang-fix: first SPA <code>VMLAUNCH</code> then
+            <code>VMPTRLD failed slot=0</code> and <code>VMXOFF</code>.
+          </li>
+          <li>
+            G0 relocate by memcpy: Linux had scribbled the live VMCS;
+            identity-pool <code>VMPTRLD</code> looped forever.
+          </li>
+          <li>
+            Clone by VMREAD/VMWRITE (98 fields, RIP round-trip): G0 came back;
+            slot 1 <code>VMPTRLD</code> error 11 (wrong VMCS revision).
+          </li>
+          <li>
+            <code>VMCLEAR</code> plus rewrite of the <em>incoming</em> VMCS:
+            error 11 gone; slot 1 re-entry error 7.
+          </li>
+          <li>
+            Drop the incoming rewrite: first SPA
+            <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code>, then re-entry with
+            <strong>all-zero</strong> pin/primary/exit/entry/EPTP/RIP —
+            Intel error 7, invalid control field. Fail-soft parked SPA and
+            kept G0. SDM: do not assume <code>VMCLEAR</code> leaves VMCS
+            data unmodified.
+          </li>
+        </ul>
+        <p>
+          The EFI that closed it (<code>2b795a0</code>) snapshots those 98
+          fields into a software shadow <em>before</em> <code>VMCLEAR</code>,
+          then <code>VMWRITE</code>s them after <code>VMPTRLD</code> before
+          any clear-state <code>VMLAUNCH</code>. It also punches the SPA
+          2 MiB slab out of G0’s identity so Linux cannot scribble the
+          parked VMCS.
+        </p>
+
+        <h3>COM2 on the close</h3>
+        <pre>boot: E4 G0 VMCS clone fields=98 rip=0xffffffff81160299
+boot: E4 G0 VMCS relocated HPA=0x0000000010a00000
+RAYNU-V-M7-E4-SPA-LAUNCH-OK
+boot: E4 G0 VMLAUNCH (VMCS relocated; was VMCLEAR)
+boot: E4 restore VMCS shadow slot=00000000 fields=98
+boot: E4 SPA VMLAUNCH (VMCS was VMCLEAR; clear-state re-entry)
+boot: E4 restore VMCS shadow slot=00000001 fields=98</pre>
+        <p>
+          That pair repeated for many quanta. Paste truncated mid-loop.
+          No error 7. No error 11. No <code>VMXOFF</code>. That is P0-14 /
+          <code>RAYNU-V-M7-E4-SPA-LAUNCH-OK</code> closed on iron.
+          The repeating lines are E4 bring-up debug, not the production
+          console. ADR-011 default is quiet COM2. The next EFI logs the
+          first G0 re-entry, first SPA re-entry, first restore per slot,
+          then stays quiet except HTTP, WARN, and markers.
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We <strong>claim</strong> a private-EPT SHELL guest from SPA start,
+          and that it can leave and come back after <code>VMCLEAR</code>.
+          We do <strong>not</strong> claim Mount Everest. The SPA guest is
+          SHELL CPUID, not a second Linux, not a distro installer, not TLS.
+          Every switch is still <code>VMLAUNCH</code> (outgoing is
+          <code>VMCLEAR</code>’d), not <code>VMRESUME</code>. HTTP during
+          the switch loop is not in the close paste. Residual is guest
+          console / TLS and a real distro installer.
+          As of 2026-09-05 nested sys-install is complete; iron installer +
+          TLS/console remain.
+        </p>
+        <p>
+          Ops side-win the same day:
+          <code>~/projects/raynuv/flashcruzer.sh</code> pulls the latest
+          green CI EFI onto Cruzer <code>RAYNUV</code> (label + USB id, never
+          a hardcoded <code>/dev/sdc</code>). Keep APE PHY. Bind LOM
+          <code>:38</code>. Force Off; F11 Cruzer.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-21-e4-spa-shadow-reentry-ok.md"
+            >2026-08-21-e4-spa-shadow-reentry-ok.md</a
+          >
+          · Prior fail:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-21-e4-norewrite-spa-zeros.md"
+            >zeros / error 7</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-20-host-nic">
+        <p class="story__date">2026-08-20 · Dell PowerEdge R640 · BCM5720 :38 · iDRAC SOL com2</p>
+        <h2 class="story__title">HTTP beside VMX</h2>
+
+        <p>
+          ADR-013 said lifetime management HTTP would not come from firmware
+          SNP after EBS. It had to come from a host-owned NIC — MMIO, DMA,
+          our rings — with the APE PHY left alone so iDRAC NCSI stayed up.
+          2026-08-20 closed two gates on that stack.
+        </p>
+
+        <h3>E3b: listen after BOOT-OK</h3>
+        <p>
+          Census pick is Broadcom BCM5720 <code>14e4:165f</code>, dual-port.
+          Dedicated iDRAC NIC is not the host LOM. Host management is jack
+          <code>:38</code> / <code>01:00.0</code>, station
+          <code>b0:26:28:5c:5a:38</code>. Do not bind APE
+          <code>:3a</code>. COM2 after <code>BOOT-OK</code>:
+        </p>
+        <pre>boot: HOST-NIC BCM5720 link=up speed=1000 duplex=full
+boot: HOST-NIC BCM5720 rings armed (poll-mode, MSI-X off)
+RAYNU-V-M7-HOST-NIC-HTTP-OK</pre>
+        <p>
+          Mac on the same LAN as the LOM — not the iDRAC dedicated port —
+          reached SPA + Bearer. That is HDA <strong>E3b</strong> /
+          M7.8. Firmware SNP and Tcp4 stay dead after EBS; we do not chase
+          them.
+        </p>
+
+        <h3>Phase F: the same listen with VMX on</h3>
+        <p>
+          Durable HTTP after <code>BOOT-OK</code> is necessary. It is not
+          sufficient. The product loop needs HTTP <em>while guests run</em>.
+          EFI <code>0d06297b</code> polled the native Device on the credit
+          scheduler quantum. G0 Linux stayed scheduled. G1–G3 parked (their
+          VMCS regions were not safe to <code>VMPTRLD</code> from the
+          identity pool). Coexist listen:
+        </p>
+        <pre>boot: HOST-NIC coexist listening on 10.99.99.149:8443 (VMX on; ADR-013 Phase F)
+RAYNU-V-M7-HOST-NIC-HTTP-OK</pre>
+        <p>
+          Hold COM2 the same evening: twenty-five HTTP-OK exchanges, SOL
+          stayed up. ADR-013 Stage 1 (Phases 0–G) is closed. Phase G is
+          the accepted-risk note: host HTTP and guest virtio-net share the
+          BCM5720 LOM <code>:38</code>. Not 802.1Q, not a second NIC.
+          Product next on that day was installer + TLS/console. As of
+          2026-09-05 nested sys-install is complete; iron installer +
+          TLS/console remain.
+        </p>
+        <p>
+          One TCP listen slot. A half-open SPA tab holds it; the next
+          <code>curl</code> times out (<code>curl: (28)</code>). Close the
+          tabs. Use <code>curl -4 --noproxy '*'</code>.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-e3b-host-nic-http-ok.md"
+            >E3b HTTP-OK</a
+          >
+          ·
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-20-phase-f-coexist-ok.md"
+            >Phase F coexist</a
+          >
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-19-ape-phy">
+        <p class="story__date">2026-08-19 · Dell PowerEdge R640 · BCM5720 · APE NCSI</p>
+        <h2 class="story__title">Don’t take the APE PHY</h2>
+
+        <p>
+          The day before E3b closed, almost every native-NIC EFI printed the
+          same two letters: <code>bmsr=7949</code> — link down — then skipped
+          listen. COM2 looked busy. The jack had no carrier.
+        </p>
+        <p>
+          Broadcom’s APE firmware talks NCSI to iDRAC over the same copper
+          the host wants. A Linux-style <code>BMCR_RESET</code>, a PHY lock,
+          or a reset that drops APE’s phylock, and you steal the analog from
+          the BMC. Dedicated iDRAC stays up. Host LOM goes dark. SOL
+          <code>console com2</code> is not a substitute for a link on
+          <code>:38</code>.
+        </p>
+        <p>
+          Several Cruzer prefixes are retired for that reason
+          (<code>42b42c99</code>, <code>ec08c00f</code>,
+          <code>1404f055</code>, skip-CORECLK <code>26573eb1</code>, and
+          any take-PHY with <code>ape-nophylock=no</code>). The path that
+          later listened inherited the SNP analog, skipped BMCR when
+          <code>ape-ncsi=yes</code>, used <code>CORECLK_RESET</code> for DMA
+          only, and printed:
+        </p>
+        <pre>boot: HINT — keep APE PHY (iDRAC NCSI); will not take phylock
+boot: HOST-NIC BCM5720 inherit SNP analog; CORECLK_RESET for DMA (skip BMCR)
+boot: HOST-NIC BCM5720 ape-nophylock=yes keep-ape-phy=yes ape-lock=yes</pre>
+        <p>
+          That is not a gate close. It is the rule the next two days stood
+          on. Keep APE PHY. Bind LOM <code>:38</code>. Never write the PERC.
+        </p>
+
+        <p class="story__aside">
+          ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          · Census:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-17-phase0-census.md"
+            >Phase 0 BCM5720</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-17-snp-dead">
+        <p class="story__date">2026-08-17 · Dell PowerEdge R640 · Cruzer Micro · BIOS 2.2.11</p>
+        <h2 class="story__title">Reality after ExitBootServices</h2>
+
+        <p>
+          The day after Cruzer stamps closed, we tried to make the management
+          SPA live for the whole boot — not just the 45-second PRE-EBS window.
+          The idea was tidy: park SNP + smoltcp across
+          <code>ExitBootServices</code> (no CloseProtocol), skip the poll that
+          already hung, then listen after <code>BOOT-OK</code>. Firmware would
+          keep owning the NIC. We would keep owning HTTP.
+        </p>
+
+        <p>
+          Iron did not care about the diagram.
+        </p>
+
+        <h3>First EFI: the hang</h3>
+        <p>
+          Poll SNP immediately after EBS and COM2 stops at
+          <code>boot: smoke frame phys=0x1000000</code>. The first
+          <code>iface.poll</code> never returns. Guests never start. That
+          binary (SHA <code>924af894…</code>) is retired. Do not flash it
+          again.
+        </p>
+
+        <h3>Second EFI: the timeout, then the red screen</h3>
+        <p>
+          Skip the immediate poll. Guest path comes back — SHELL, M4,
+          <code>BOOTED-FROM-DISK</code>, <code>RAYNU-V-R640-BOOT-OK</code>.
+          Then the idle banner asks the Mac to curl the same lease that
+          worked an hour earlier in the PRE-EBS window
+          (<code>10.99.99.133:8443</code>, MAC <code>b0:26:28:5c:5a:3a</code>):
+        </p>
+        <pre>boot: mgmt HTTP listening on 10.99.99.133:8443 (POST-EBS SNP idle)
+boot: CURL NOW (post-EBS) → http://10.99.99.133:8443/</pre>
+        <p>
+          Same laptop, same LAN, same token:
+        </p>
+        <pre>curl: (28) Connection timed out after 5002 milliseconds</pre>
+        <p>
+          Then Dell’s red screen: invalid opcode (06), Software UEFI0004 on
+          the BSP, <strong>RIP = <code>0x17</code></strong> — a jump into
+          garbage. That is not a clean hang. That is firmware taking a
+          pointer we had no right to keep using.
+        </p>
+
+        <h3>What we still claim — and the ADR that follows</h3>
+        <p>
+          PRE-EBS <code>RAYNU-V-M7-UEFI-HTTP-OK</code> is still true. E2 and
+          E5 stamps are still true. We do <strong>not</strong> claim
+          <code>RAYNU-V-M7-POST-EBS-HTTP-OK</code>. We do not chase Tcp4 or
+          SNP after EBS.
+        </p>
+        <p>
+          The same evening Vignesh flashed the WARN-only EFI. COM2 ran through
+          M4.5, printed <code>RAYNU-V-R640-BOOT-OK</code> three times, then:
+        </p>
+        <pre>boot: WARN — POST-EBS SNP idle skipped; firmware SNP dead after EBS lease=10.99.99.133:8443 (PRE-EBS was the mgmt window; do not chase SNP/Tcp4)</pre>
+        <p>
+          <strong>No red screen.</strong> That is the close for ADR-013 Phase A
+          on iron. Lifetime management HTTP needs a <strong>host-owned
+          NIC</strong> (MMIO/DMA) and a dedicated mgmt heap. That architecture
+          is
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          (<strong>Accepted</strong>). HDA names it <strong>E3b</strong>.
+          Preserve kit:
+          <code>releases/v0.1.0-adr013-baseline</code>.
+          Mount Everest does not close on a 45-second window.
+          Two days later the host-owned NIC listened — see
+          <a href="#r640-2026-08-20-host-nic">2026-08-20</a>.
+          The SPA guest that actually launched is
+          <a href="#r640-2026-08-21-e4-spa">2026-08-21</a>.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-17-post-ebs-snp-dead.md"
+            >2026-08-17-post-ebs-snp-dead.md</a
+          >
+          · ADR:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/adr/ADR-013.md"
+            >ADR-013</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-16-cruzer">
+        <p class="story__date">2026-08-16 · Dell PowerEdge R640 · front USB 2 · Cruzer Micro</p>
+        <h2 class="story__title">Two boots on a Cruzer — stamps, not a filesystem</h2>
+
+        <p>
+          Virtual Floppy is often read-only. The E5 contract needed a stick the
+          hypervisor could write. Same R640, front USB 2, SanDisk Cruzer Micro:
+          boot 1 from the SPA Install arm, reboot, boot 2 from the same stick.
+        </p>
+
+        <p>
+          Boot 1 printed the persist write, sized the live virtio disk, and
+          latched reboot-pending:
+        </p>
+        <pre>boot: persist wrote installdisk.bin bytes=1024
+boot: E5 install disk bytes=67108864
+RAYNU-V-M7-ISO-DISK-WRITTEN
+RAYNU-V-M7-ISO-REBOOT-PENDING</pre>
+
+        <p>
+          An earlier boot 2 failed a prefix mismatch: 1 KiB ESP stamps into a
+          64 MiB virtio image looked like zeros at DRIVER_OK. The prefix-copy
+          EFI (SHA <code>2d931dcd…f4281eed</code>) loaded the stamps into the
+          front of the larger disk. Boot 2 then printed:
+        </p>
+        <pre>boot: E5 persist-detect armed (installdisk.bin)
+boot: E5 persist preload bytes=1024 prefix_into=67108864
+RAYNU-V-M4-BLK-OK
+RAYNU-V-M7-ISO-BOOTED-FROM-DISK
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          That string is the iron close for HDA <strong>E5 stamp persist</strong>.
+          Host/CI never print <code>ISO-INSTALL-OK</code>. It is still the
+          <strong>LBA stamp contract</strong>: 1 KiB of LBA0+LBA1 patterns on
+          the ESP, not a guest root filesystem and not a distro installer.
+          Live 64 MiB virtio is RAM; durability is the Cruzer file. Mount
+          Everest stays open.
+        </p>
+
+        <p>
+          E3b closed 2026-08-20 — <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code>
+          after <code>BOOT-OK</code> on native BCM5720 (Dedicated iDRAC + host
+          LOM <code>:38</code>). See
+          <a href="#r640-2026-08-20-host-nic">HTTP beside VMX</a>
+          and
+          <a href="#r640-2026-08-19-ape-phy">don’t take the APE PHY</a>.
+          E4 SPA VMLAUNCH closed 2026-08-21 — see
+          <a href="#r640-2026-08-21-e4-spa">the guest that came back</a>.
+          Residual <em>that week</em> was TLS/console and a real distro
+          installer (not El Torito first). El Torito closed on iron
+          2026-08-27. Nested sys-install completed 2026-09-05. Today’s
+          residual is iron installer + TLS/console — not Everest.
+        </p>
+
+        <p class="story__aside">
+          Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-e5-iso-install.md"
+            >2026-08-16-e5-iso-install.md</a
+          >
+          · Status: <code>STATUS-iso-install=closed</code>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-16-http">
+        <p class="story__date">2026-08-16 · Dell PowerEdge R640 · iDRAC9 · host NIC</p>
+        <h2 class="story__title">The floppy had no Tcp4 — so we used SNP</h2>
+
+        <p>
+          E2 proved the hypervisor boots on iron. E3 asks a different question:
+          can an operator on the LAN reach the management SPA without a host OS?
+          Virtual Floppy firmware on this R640 had <strong>no</strong> Tcp4 /
+          Ip4 / Dhcp4. PRE-EBS probes returned all zeros until
+          <code>ConnectController</code> brought SNP up (<code>snp=12</code>).
+        </p>
+
+        <p>
+          From there the residual path was SNP + smoltcp DHCP, then a PRE-EBS
+          listen on the leased address. COM2 printed the lease, the bind, and
+          the close marker:
+        </p>
+        <pre>boot: mgmt HTTP listening on 10.99.99.127:8443 (PRE-EBS SNP window)
+RAYNU-V-AUDIT: AuthAllowed method_tag=1
+RAYNU-V-M7-UEFI-HTTP-OK
+…
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          From the Mac on the same LAN:
+          <code>GET /</code> returned the SPA (HTTP 200), and Bearer
+          <code>raynu-v-bringup</code> on <code>/vms</code> returned
+          <code>{"ok":true,"listed":true}</code>. That is HDA <strong>E3</strong>
+          MVP — bring-up UI, not TLS, not lifetime listen, not a full console.
+          The day after, we learned SNP does not survive EBS — see
+          <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
+          Stamp persist on a writable stick closed the same day as HTTP —
+          see
+          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>.
+        </p>
+
+        <p class="story__aside">
+          Kit: <code>releases/v0.1.0-m76-snp-http/</code>
+          · Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-16-uefi-http-ok.md"
+            >2026-08-16-uefi-http-ok.md</a
+          >
+          · Tracker: <a href="hda.html">Mount Everest</a>
+        </p>
+      </article>
+
+      <article class="story" id="r640-boot-ok-marker">
+        <p class="story__date">2026-08-15 · evening · Dell PowerEdge R640 · iDRAC9</p>
+        <h2 class="story__title">The marker finally said its own name</h2>
+
+        <p>
+          Closing iron on substance is one thing. Watching COM2 print the claim
+          string you named the gate after — that is another. After
+          <code>finish_boot</code> started emitting
+          <code>RAYNU-V-R640-BOOT-OK</code> (and we stopped shipping a stale
+          floppy), the Virtual Floppy run ended like this:
+        </p>
+
+        <figure class="story-shot">
+          <picture>
+            <source
+              type="image/webp"
+              srcset="
+                assets/r640-boot-ok-com2-800.webp   800w,
+                assets/r640-boot-ok-com2-1556.webp 1556w
+              "
+              sizes="(max-width: 700px) 100vw, 42rem"
+            />
+            <img
+              src="assets/r640-boot-ok-com2.png"
+              alt="macOS Terminal: iDRAC SOL ending in RAYNU-V-R640-BOOT-OK"
+              width="1556"
+              height="926"
+              loading="lazy"
+            />
+          </picture>
+        </figure>
+
+        <pre>boot: VMXOFF ok
+boot: E2 marker build=r640-boot-ok-marker
+RAYNU-V-R640-BOOT-OK
+RAYNU-V-R640-BOOT-OK
+boot: M4.5 complete — SMP dual-vCPU path OK
+RAYNU-V-R640-BOOT-OK</pre>
+
+        <p>
+          Same path as the afternoon close — M0 through Linux SHELL, four
+          guests under the credit scheduler, virtio-blk/net, SMP BSP+AP, then
+          VMXOFF — plus the stamp <code>r640-boot-ok-marker</code> and the
+          literal E2 string, three times. That paste is archived as
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/2026-08-15-boot-ok-marker-com2.txt"
+            >2026-08-15-boot-ok-marker-com2.txt</a
+          >.
+        </p>
+      </article>
+
+      <article class="story" id="r640-2026-08-15">
+        <p class="story__date">2026-08-15 · Dell PowerEdge R640 · iDRAC9</p>
+        <h2 class="story__title">First light on PowerEdge R640</h2>
+
+        <p>
+          For months RayNu-V closed gates on a Latitude laptop under QEMU nested
+          KVM. Mount Everest’s hard gate is different: boot
+          <code>r640-hypervisor.efi</code> on a <strong>real</strong> R640 and
+          read the markers on serial. Today we closed that gate —
+          loudly, messily, and with the logs still warm.
+        </p>
+
+        <h3>Morning: an EFI you can pull</h3>
+        <p>
+          We built the release kit on the cloud agent, then put
+          <code>r640-hypervisor.efi</code> under <code>releases/</code> so a
+          normal <code>git pull</code> on the Mac dropped the binary — no Rust
+          toolchain required on the operator laptop. Media maker packed a FAT
+          image with <code>\EFI\BOOT\BOOTX64.EFI</code>. iDRAC Virtual Media
+          mapped the <code>.img</code> as a virtual floppy. One-shot boot.
+          Virtual console open.
+        </p>
+        <pre>Booting from Virtual Floppy Drive
+RayNu-V r640-hypervisor …
+RAYNU-V-M0-BOOT-OK</pre>
+        <p>
+          That was first light. The screen then sat on M0 with a blinking cursor.
+          ConOut had done its job; ExitBootServices was about to take it away.
+        </p>
+
+        <h3>The console that wasn’t COM2</h3>
+        <p>
+          HTML5 Virtual Console and BIOS serial redirect show
+          <strong>ConOut</strong>. Post-M0 RayNu-V prints with port I/O. We had
+          only written <strong>COM1 (0x3F8)</strong>. Dell iDRAC SOL is
+          <code>ssh …</code> then <code>console com2</code> — <strong>COM2
+          (0x2F8)</strong>. Same freeze on “serial,” different wire.
+        </p>
+        <p>
+          Kit <code>v0.1.0-com2</code> mirrored every host diagnostic byte to
+          both UARTs and added ConOut breadcrumbs through ExitBootServices.
+          Suddenly the story continued:
+        </p>
+        <pre>boot: M0 complete — entering M1.0 firmware handoff
+boot: PE assets embedded (.askern/.asinit) — prefer PE
+RAYNU-V-M3-ASSETS-OK
+boot: calling ExitBootServices — ConOut/video ends after this line
+RAYNU-V-M1-EBS-OK
+RAYNU-V-M1-VMXON-OK
+RAYNU-V-M3-LOAD-OK
+RAYNU-V-M3-BZIMAGE-OK</pre>
+
+        <h3>Three EPT lessons in one afternoon</h3>
+        <p>
+          Large-RAM iron does not forgive assumptions that QEMU’s
+          <code>-m 512M</code> hid.
+        </p>
+        <ul>
+          <li>
+            <strong>Pool at 5 GiB.</strong> The bump allocator picked the largest
+            conventional span. Guest code lived near <code>0x1402fd000</code>;
+            identity EPT only maps <code>[0, 512 MiB)</code>. Fix: clip the pool
+            into the precise window (<code>v0.1.0-eptfix</code>).
+          </li>
+          <li>
+            <strong>No virtio BAR hole.</strong> Clipping to 512 MiB filled the
+            whole window; <code>pick_shell_slab_hpa</code> found no unowned 2 MiB
+            leaf above guest RAM. Fix: cap the pool at 256 MiB so
+            <code>[256 MiB, 512 MiB)</code> stays free (<code>v0.1.0-barfix</code>).
+          </li>
+          <li>
+            <strong>Host CR3 outside EPT.</strong> VMLAUNCH ran; guest shared
+            host CR3 at <code>0x47e01000</code> (~1150 MiB). First page-table walk
+            EPT-faulted. Fix: build a guest CR3 that identity-maps the precise
+            window (<code>v0.1.0-cr3fix</code>).
+          </li>
+        </ul>
+        <pre>boot: frame pool clipped to guest RAM [1MiB,256MiB); BAR/shell window free
+boot: M4.3 virtio-blk BAR=0x10000000
+boot: VMLAUNCH → guest store+loop+HLT + IRQ inject (EPT)
+boot: ERROR — EPT violation GPA=0x47e01000
+boot: guest rip=0x1007000  cr3=0x47e01000</pre>
+        <p>
+          That was mid-afternoon edge: BAR window correct, guest RIP in-window,
+          CR3 still the UEFI table high in DRAM. The rest of the day was the
+          ladder — host CR3, RIP-relative GPRs, INVPCID, keep earlyprintk, then
+          Enable XSAVES — until <code>/init</code> stopped eating its own stack.
+        </p>
+
+        <h3>Evening: SHELL, M4, claim</h3>
+        <p>
+          Kit <code>v0.1.0-xsavesfix</code> printed
+          <code>secondary=0x0010100a</code> (XSAVES bit set). After
+          <code>Run /init as init process</code>:
+        </p>
+        <pre>RAYNU-V-M3-SHELL-OK
+RAYNU-V-M3-NOIRQ-OK
+RAYNU-V-M4-SHELL-G1
+RAYNU-V-M4-2VM-OK
+…
+RAYNU-V-M4-SMP-OK
+boot: VMXOFF ok</pre>
+        <p>
+          A confirming rebuild later the same day — same EFI SHA
+          <code>c3a688d0…ba28d611</code>, Virtual Floppy again — reproduced the
+          full chain on COM2. That is the close for
+          <code>RAYNU-V-R640-BOOT-OK</code> (HDA E2 / M7.5).
+        </p>
+
+        <h3>What we claim — and what we don’t</h3>
+        <p>
+          We <strong>claim</strong> <code>RAYNU-V-R640-BOOT-OK</code> on substance
+          from the xsavesfix / confirming rebuild archives: real R640 COM2 through
+          Linux SHELL and the M4 probe chain. Later the same day, the marker-fix
+          rebuild also printed the <strong>literal</strong> string on COM2 — see
+          <a href="#r640-boot-ok-marker">the next story</a>. The day after,
+          E3 MVP closed as <code>RAYNU-V-M7-UEFI-HTTP-OK</code> — see
+          <a href="#r640-2026-08-16-http">the HTTP story</a>.
+          We still do
+          <strong>not</strong> claim Mount Everest closed. E5 stamp persist
+          closed later the same weekend — see
+          <a href="#r640-2026-08-16-cruzer">the Cruzer story</a>.
+          The next morning, firmware SNP after EBS hit a hang and a red
+          screen — see
+          <a href="#r640-2026-08-17-snp-dead">2026-08-17</a>.
+          Residual at the time was HDA <strong>E3b</strong> (host-owned NIC, ADR-013),
+          then remaining E4 polish and a real distro installer. E3b and Phase F
+          closed 2026-08-20 — see
+          <a href="#r640-2026-08-20-host-nic">HTTP beside VMX</a>.
+          E4 SPA VMLAUNCH closed 2026-08-21 — see
+          <a href="#r640-2026-08-21-e4-spa">the guest that came back</a>.
+          Host CI still prints only
+          <code>RAYNU-V-M7-R640-SCAFFOLD-OK</code> for the iron boot path.
+          Nested sys-install completed 2026-09-05; today’s residual is
+          iron installer + TLS/console.
+        </p>
+
+        <p class="story__aside">
+          Kits:
+          <code>releases/v0.1.0-com2</code> …
+          <code>xsavesfix</code>
+          · Logs:
+          <a href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/logs/">COM2 archives</a>
+          · Tracker: <a href="hda.html">Mount Everest</a>
+          · Paper: <a href="paper.html">§6</a>
+          · Evidence:
+          <a
+            href="https://github.com/vikkp/RayNu/blob/main/docs/evidence/r640/2026-08-15-r640-first-light.md"
+            >first-light</a
+          >
+        </p>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <span class="brand brand--footer">RayNu-V</span>
+        · Stories from the field
+      </p>
+      <p class="footer__meta">
+        <a href="index.html">Home</a>
+        ·
+        <a href="hda.html">Mount Everest</a>
+        ·
+        <a href="paper.html">Verification Paper</a>
+        ·
+        <a href="ciospeak.html">CIO View</a>
+        ·
+        <a href="https://github.com/vikkp/RayNu">GitHub</a>
+      </p>
+    </footer>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>
