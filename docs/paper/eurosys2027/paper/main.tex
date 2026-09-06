@@ -26,6 +26,24 @@
 \setlength{\tabcolsep}{3.5pt}
 \emergencystretch=1.5em
 
+%% EuroSys CFP: all text and figures inside 178 x 229 mm (7 x 9in),
+%% columns >= 8 mm apart. Default acmart sigplan body is ~8.97in TeX;
+%% running headers + folios push PDF ink to ~9.43in (~4% over 9in),
+%% which HotCRP flags. `reset` drops acmart inner/outer so `width` sticks.
+%% `bp` is 1/72 in (HotCRP); LaTeX `in` is 72.27pt.
+\geometry{
+  reset,
+  letterpaper,
+  includehead,
+  includefoot,
+  width=500bp,
+  height=640bp,
+  columnsep=8.5mm,
+  hcentering,
+  vcentering,
+  heightrounded
+}
+
 %% Grayscale-safe tables (CFP: figures readable without color).
 \acmSubmissionID{eurosys27-fall-anon}
 

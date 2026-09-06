@@ -5,7 +5,7 @@
 The GitHub PR diff does **not** preview binaries. The files are on branch
 `cursor/eurosys-2027-fall-b7a8`, **not** on `main`.
 
-- **Anonymous 10-page SIGPLAN PDF:** [`Isolon-eurosys2027-anon.pdf`](Isolon-eurosys2027-anon.pdf)
+- **Anonymous 11-page SIGPLAN PDF:** [`Isolon-eurosys2027-anon.pdf`](Isolon-eurosys2027-anon.pdf)
   ([GitHub](https://github.com/vikkp/raynu/blob/cursor/eurosys-2027-fall-b7a8/docs/paper/eurosys2027/Isolon-eurosys2027-anon.pdf)
   · [raw download](https://github.com/vikkp/raynu/raw/cursor/eurosys-2027-fall-b7a8/docs/paper/eurosys2027/Isolon-eurosys2027-anon.pdf))
 - Same bytes: [`paper/main.pdf`](paper/main.pdf)

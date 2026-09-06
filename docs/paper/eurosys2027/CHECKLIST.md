@@ -16,6 +16,7 @@ PDF is **not** required on the 17th.
 
 - [ ] `cd paper && make` → `main.pdf`
 - [ ] Technical content ≤ 12 pages; references unlimited
+- [ ] Ink inside 7×9in (HotCRP: text height must not exceed 9in)
 - [ ] Pages numbered; two-column SIGPLAN; ≥10 pt / ≥12 pt leading
 - [ ] Figures readable in grayscale (tables only in this draft)
 - [ ] `make anonymity-check` clean; `pdftotext` grep empty
