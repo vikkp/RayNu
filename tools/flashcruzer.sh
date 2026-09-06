@@ -67,6 +67,10 @@ OVMF_PATH=""
 LINUX_ISO=""
 NO_LINUX_ISO=0
 REFAT=0
+INIT_NEW=0
+ALLOW_NEW_SERIAL=0
+ANY_CRUZER_USB=0
+RAYNU_F_FLAG=0
 
 usage() {
   cat <<'EOF'
@@ -88,8 +92,11 @@ Options:
   --no-ovmf           do not stage OVMF.fd (guest-UEFI will skip if missing)
   --linux-iso PATH    stage EFI/RayNu/linux.iso (Stage 46; size must exceed 73728)
   --no-linux-iso      remove leftover product ISO so E4 LINUX-EARLY still runs
-  --raynu-f           stage EFI/RayNu/raynuf.txt (ADR-016 F2b RayNu-F test app; default removes it)
+  --raynu-f           stage EFI/RayNu/raynuf.txt (ADR-016 F2b RayNu-F; default removes it)
   --refat-cruzer      mkfs.vfat -I -F 32 -n RAYNUV on identified whole-disk Cruzer (64MiB FAT)
+  --init-new-cruzer   first-flash unlabeled 4 GB USB Cruzer (exactly one 2–8 GiB stick)
+  --allow-new-serial  skip Cruzer Micro serial pin (required for a new 4 GB stick)
+  --any-cruzer-usb    lsusb/lsblk may be Cruzer or LogiLink UDisk (not VID 0781:5151)
   --run ID            pin a GitHub Actions run id
   --sha256 HEX        extra pin after download
   --require-head      refuse branch-fallback (artifact must match HEAD)
@@ -120,6 +127,9 @@ while [[ $# -gt 0 ]]; do
     --no-linux-iso) NO_LINUX_ISO=1; shift ;;
     --raynu-f) RAYNU_F_FLAG=1; shift ;;
     --refat-cruzer) REFAT=1; shift ;;
+    --init-new-cruzer) INIT_NEW=1; shift ;;
+    --allow-new-serial) ALLOW_NEW_SERIAL=1; shift ;;
+    --any-cruzer-usb) ANY_CRUZER_USB=1; shift ;;
     --ovmf) OVMF_PATH="${2:-}"; shift 2 ;;
     --no-git) NO_GIT=1; shift ;;
     *) echo "error: unknown arg: $1" >&2; usage; exit 2 ;;
@@ -304,6 +314,11 @@ self_test() {
   grep -q '33321642509' "$SCRIPT_PATH"
   grep -qi 'never hardcode' "$SCRIPT_PATH"
   grep -q '0781:5151' "$SCRIPT_PATH"
+  grep -q -- '--any-cruzer-usb' "$SCRIPT_PATH"
+  grep -q -- '--init-new-cruzer' "$SCRIPT_PATH"
+  grep -q 'UDisk' "$ESP"
+  grep -q 'abcd:1234' "$ESP"
+  grep -q '4026531840' "$ESP"
   grep -q 'RAYNU-V-CRUZER-FLASH-OK' "$ESP"
   grep -q 'installdisk.bin' "$ESP"
   grep -q 'target_is_lab_cruzer' "$ESP"
@@ -320,6 +335,9 @@ self_test() {
   grep -q 'fsck.vfat -a' "$ESP"
   grep -q 'not format' "$ESP"
   grep -q -- '--refat-cruzer' "$ESP"
+  grep -q -- '--init-new-cruzer' "$ESP"
+  grep -q -- '--allow-new-serial' "$ESP"
+  grep -q 'size_is_4g_cruzer_window' "$ESP"
   grep -q 'mkfs.vfat -I -F 32 -n' "$ESP"
   grep -q 'fat_bytes_too_small' "$ESP"
   grep -q 'do not git checkout a SHA' "$SCRIPT_PATH"
@@ -1243,18 +1261,28 @@ if [[ "$NO_FLASH" -eq 1 ]]; then
   exit 0
 fi
 
-if ! lsusb | grep -qi "$USB_VIDPID"; then
-  echo "error: lsusb did not show $USB_VIDPID (SanDisk Cruzer) — plug front USB 2" >&2
-  lsusb >&2 || true
-  exit 1
+if [[ "$ANY_CRUZER_USB" -eq 1 ]]; then
+  if ! lsusb | grep -qiE 'cruzer|udisk|logilink|abcd:1234'; then
+    echo "error: lsusb did not show a Cruzer or LogiLink UDisk — plug front USB 2 (--any-cruzer-usb)" >&2
+    lsusb >&2 || true
+    exit 1
+  fi
+  lsusb | grep -iE 'cruzer|udisk|logilink|abcd:1234' || true
+else
+  if ! lsusb | grep -qi "$USB_VIDPID"; then
+    echo "error: lsusb did not show $USB_VIDPID (SanDisk Cruzer) — plug front USB 2" >&2
+    echo "       4 GB LogiLink UDisk (abcd:1234): pass --any-cruzer-usb" >&2
+    lsusb >&2 || true
+    exit 1
+  fi
+  lsusb | grep -i "$USB_VIDPID" || true
 fi
-lsusb | grep -i "$USB_VIDPID" || true
-if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qi cruzer; then
-  echo "error: lsblk did not show a Cruzer — refusing (never guess /dev/sdc)" >&2
+if ! lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -qiE 'cruzer|udisk'; then
+  echo "error: lsblk did not show a Cruzer or UDisk — refusing (never guess /dev/sdc)" >&2
   lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE >&2 || true
   exit 1
 fi
-lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -i cruzer || true
+lsblk -o NAME,MODEL,TRAN,SIZE,LABEL,SERIAL,FSTYPE | grep -iE 'cruzer|udisk' || true
 
 ESP_ARGS=(--efi "$EFI_OUT" --sha256 "$GOT")
 if [[ "$NO_OVMF" -eq 1 && -n "$OVMF_PATH" ]]; then
@@ -1277,6 +1305,12 @@ elif [[ -n "$LINUX_ISO" ]]; then
 fi
 if [[ "$REFAT" -eq 1 ]]; then
   ESP_ARGS+=(--refat-cruzer)
+fi
+if [[ "$INIT_NEW" -eq 1 ]]; then
+  ESP_ARGS+=(--init-new-cruzer)
+fi
+if [[ "$ALLOW_NEW_SERIAL" -eq 1 ]]; then
+  ESP_ARGS+=(--allow-new-serial)
 fi
 if [[ "${RAYNU_F_FLAG:-0}" -eq 1 ]]; then
   ESP_ARGS+=(--raynu-f)

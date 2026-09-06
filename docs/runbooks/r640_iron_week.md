@@ -87,3 +87,12 @@ Latitude + QEMU nested KVM already proved the software path. The R640 is the
 judge for Mount Everest E2. If first light fails, keep evidence honest (what
 you saw, what residual remains) and fix forward — do not close the gate from a
 host smoke.
+
+## F7 / 4 GB Cruzer (E5 product ISO)
+
+E2 is closed. Everest E5 is not. Nested F7 is not iron.
+
+- [ ] 4 GB Cruzer in **front USB 2** (alpine-extended ~994 MiB does not fit the 977.5 MiB Micro)
+- [ ] Follow [`r640_f7_iso_iron.md`](r640_f7_iso_iron.md) — `--init-new-cruzer` first flash, pin `088ab25` / `--run 33978770315`, **F11** Cruzer with COM2 open
+- [ ] Do **not** flash P0-14 `2b795a0` for this attempt
+- [ ] Do **not** print `RAYNU-V-M7-ISO-INSTALL-OK` from nested/host/CI

@@ -114,6 +114,15 @@ Closed on Cruzer Micro (front USB 2), 2026-08-16 — see
 [2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md).
 `STATUS-iso-install=closed`. Floppy is often read-only; use writable USB.
 
+## Iron F7 product ISO (4 GB Cruzer) — OPEN
+
+The 2026-08-16 Cruzer close is **LBA stamp persist**, not alpine-extended.
+Nested F7 (`fe4785a` / `088ab25`) is **not** `RAYNU-V-M7-ISO-INSTALL-OK`.
+A 977.5 MiB Micro cannot hold alpine-extended (~994 MiB).
+
+Operator path for a **4 GB** front-USB2 Cruzer:
+[`r640_f7_iso_iron.md`](r640_f7_iso_iron.md).
+
 ## Honesty / residuals
 
 - **GAP(CLOSED M7.7)** — iron two-boot LBA stamp persist + reboot-to-disk (`BOOTED-FROM-DISK` on COM2).
