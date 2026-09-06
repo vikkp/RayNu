@@ -41,8 +41,9 @@ abstract; that is still Thursday 17 Sep AoE.
   non-archival work.
 - PDF is **anonymous**. No author name, ORCID, GitHub, `raynuv.com`,
   `RAYNU-V-*` markers.
-- Do **not** claim the EFI is proved. L3 is host-only `ept_model`.
-  Live EPT is L2. Nested sys-install is not iron. Do not claim
+- Do **not** claim the EFI is proved. L3 is host-only `ept_model` (ghost).
+  Live EPT is L2. The Linux 512 MiB window is the range registry (no ghost
+  correspondence). Nested sys-install is not iron. Do not claim
   `ISO-INSTALL-OK`.
 - This is **not** ADR-010 `v1.0-preprint`. It is a conference rewrite.
 - Spring 2026 cycle already closed; this is not a spring reject, so the
