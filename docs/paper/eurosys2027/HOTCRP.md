@@ -11,7 +11,7 @@ to chairs, not to reviewers).
 ## Title
 
 ```
-Exclusive Guest-Physical Isolation in a Type-1 Hypervisor: A Machine-Checked Ghost Model and a Bare-Metal Runtime
+Isolon: Keeping Isolation Claims Honest in a Bare-Metal Type-1 Hypervisor
 ```
 
 This is **not** the public living-paper title
@@ -20,7 +20,7 @@ This is **not** the public living-paper title
 Short title (if HotCRP asks):
 
 ```
-Exclusive Guest-Physical Isolation
+Keeping Isolation Claims Honest
 ```
 
 ---
@@ -42,11 +42,11 @@ Per-author limit: ≤3 papers this cycle. This is the one.
 ## Abstract (same as `paper/main.tex`)
 
 ```
-Type-1 hypervisors isolate guest memory with extended page tables, yet production stacks treat that isolation as a testing problem. This paper reports Isolon, a clean-slate Type-1 hypervisor that boots as a single UEFI binary on production two-socket Xeon servers and is designed so the security-critical path can be machine-checked.
+Attaching a machine-checked isolation theorem to a Type-1 hypervisor that ships as a UEFI binary creates a labelling problem the verification literature usually hides: the proved artifact and the binary that leaves the compiler are not the same object. This paper reports Isolon, a clean-slate Type-1 hypervisor written in Rust, and the discipline we used to keep that gap from becoming a false claim.
 
-Isolon confines formal proofs to a Proven Core. The headline property is exclusive ownership of host frames: every valid guest-physical to host-physical mapping is owned by exactly one guest and belongs to neither the hypervisor nor any other guest. We discharge that property in a host-only Verus ghost model through map, unmap, EPT-violation handling, and a page-transfer primitive—80 lemmas verified, 0 errors, with no admit on the exclusivity path—under a frozen SMT toolchain pin. Live executable EPT remains at spec-written maturity: a runtime ownership registry plus assertions, not a bisimulation of the EFI. Device emulation, the management plane, and guest firmware are outside the Proven Core and are not claimed as theorems.
+The instrument is a four-level maturity ladder (documented invariants, runtime-enforced, spec-written, proof-complete). We argue that verification papers should state which column a claim lives in. What Isolon actually discharges is exclusivity among guests in a host-only Verus ghost model: two finite maps forming a bijection, preserved under map, unmap, EPT-violation handling, and a page-transfer primitive. Hypervisor separation is a modelling assumption, not a theorem about hypervisor page tables. The property is about EPT mappings, not about hypervisor access: virtio emulation reads and writes guest-owned virtqueue frames without a second EPT owner. There is no device passthrough; guest DMA is emulation-mediated. The live engine is a 512-slot 4K table plus a 16-slot range registry; Linux bring-up covers a 512 MiB identity window with range claims and 2M hardware leaves, not 131,072 ghost 4K keys. SMT found no mapping bug in the executable; we say so.
 
-On a real PowerEdge R640 we reproduce VMX bring-up, EPT identity mapping, an unmodified Linux shell, multi-VM probes, durable host-NIC HTTP, and guest-firmware CD-ROM boot. Nested VT-x completed a Linux distro install-to-disk; nested virtualization is not that server. We report those facts, name the ghost/executable gap, and stop there.
+On a PowerEdge R640 the EFI reaches an unmodified Linux 6.12 shell and, on the same boot, virtio-blk, virtio-net, dual-vCPU SMP, and four-VM probes, then serves host-NIC HTTP. Nested VT-x completed a distro install-to-disk; that nested host is not the R640. Five lessons generalize: pin the prover, do not host SMT on UEFI, do not poke third-party firmware, firmware TCP is not a management plane, and nested is not iron.
 ```
 
 ---
@@ -70,7 +70,7 @@ Do not check AI/ML, databases, quantum, etc.
 ## Keywords
 
 ```
-formal verification, Type-1 hypervisor, EPT, Verus, exclusive ownership
+formal verification, Type-1 hypervisor, EPT, Verus, maturity ladder, experience
 ```
 
 ---

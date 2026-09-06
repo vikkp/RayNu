@@ -20,7 +20,7 @@ PDF is **not** required on the 17th.
 - [ ] Figures readable in grayscale (tables only in this draft)
 - [ ] `make anonymity-check` clean; `pdftotext` grep empty
 - [ ] Abstract in PDF matches HotCRP (or you update HotCRP)
-- [ ] Claim still honest: ghost L3, live EPT L2, nested ≠ iron
+- [ ] Claim still honest: guest-exclusivity L3, live EPT L2, nested ≠ iron
 - [ ] Optional supplement uploaded (proofs list / artifact zip)
 - [ ] Paper stands alone without the supplement
 

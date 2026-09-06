@@ -31,32 +31,38 @@
 
 \begin{document}
 
-\title[Exclusive Guest-Physical Isolation]{Exclusive Guest-Physical Isolation in a Type-1 Hypervisor: A Machine-Checked Ghost Model and a Bare-Metal Runtime}
+\title[Keeping Isolation Claims Honest]{Isolon: Keeping Isolation Claims Honest in a Bare-Metal Type-1 Hypervisor}
 
 \begin{abstract}
-Type-1 hypervisors isolate guest memory with extended page tables, yet
-production stacks treat that isolation as a testing problem. This paper
-reports Isolon, a clean-slate Type-1 hypervisor that boots as a single UEFI
-binary on production two-socket Xeon servers and is designed so the
-security-critical path can be machine-checked.
+Attaching a machine-checked isolation theorem to a Type-1 hypervisor that
+ships as a UEFI binary creates a labelling problem the verification
+literature usually hides: the proved artifact and the binary that leaves
+the compiler are not the same object. This paper reports Isolon, a
+clean-slate Type-1 hypervisor written in Rust, and the discipline we used
+to keep that gap from becoming a false claim.
 
-Isolon confines formal proofs to a Proven Core. The headline property is
-\emph{exclusive ownership} of host frames: every valid guest-physical to
-host-physical mapping is owned by exactly one guest and belongs to neither
-the hypervisor nor any other guest. We discharge that property in a
-host-only Verus ghost model through map, unmap, EPT-violation handling, and
-a page-transfer primitive---80 lemmas verified, 0 errors, with no
-\texttt{admit} on the exclusivity path---under a frozen SMT toolchain pin.
-Live executable EPT remains at spec-written maturity: a runtime ownership
-registry plus assertions, not a bisimulation of the EFI. Device emulation,
-the management plane, and guest firmware are outside the Proven Core and
-are not claimed as theorems.
+The instrument is a four-level maturity ladder (documented invariants,
+runtime-enforced, spec-written, proof-complete). We argue that verification
+papers should state which column a claim lives in. What Isolon actually
+discharges is \emph{exclusivity among guests} in a host-only Verus ghost
+model: two finite maps forming a bijection, preserved under map, unmap,
+EPT-violation handling, and a page-transfer primitive. Hypervisor
+separation is a modelling assumption, not a theorem about hypervisor page
+tables. The property is about EPT \emph{mappings}, not about hypervisor
+\emph{access}: virtio emulation reads and writes guest-owned virtqueue
+frames without a second EPT owner. There is no device passthrough; guest
+DMA is emulation-mediated. The live engine is a 512-slot 4K table plus a
+16-slot range registry; Linux bring-up covers a 512~MiB identity window
+with range claims and 2M hardware leaves, not 131{,}072 ghost 4K keys.
+SMT found no mapping bug in the executable; we say so.
 
-On a real PowerEdge R640 we reproduce VMX bring-up, EPT identity mapping, an
-unmodified Linux shell, multi-VM probes, durable host-NIC HTTP, and
-guest-firmware CD-ROM boot. Nested VT-x completed a Linux distro
-install-to-disk; nested virtualization is not that server. We report those
-facts, name the ghost/executable gap, and stop there.
+On a PowerEdge R640 the EFI reaches an unmodified Linux~6.12 shell and,
+on the same boot, virtio-blk, virtio-net, dual-vCPU SMP, and four-VM
+probes, then serves host-NIC HTTP. Nested VT-x completed a distro
+install-to-disk; that nested host is not the R640. Five lessons
+generalize: pin the prover, do not host SMT on UEFI, do not poke
+third-party firmware, firmware TCP is not a management plane, and nested
+is not iron.
 \end{abstract}
 
 \begin{CCSXML}
@@ -77,7 +83,7 @@ facts, name the ghost/executable gap, and stop there.
 \ccsdesc[500]{Software and its engineering~Virtual machines}
 \ccsdesc[300]{Security and privacy~Logic and verification}
 
-\keywords{formal verification, Type-1 hypervisor, EPT, Verus, exclusive ownership}
+\keywords{formal verification, Type-1 hypervisor, EPT, Verus, maturity ladder, experience}
 
 \maketitle
 
@@ -99,52 +105,61 @@ CertiKOS~\cite{gu2016certikos}, Komodo~\cite{ferraiuolo2017komodo}) target
 microkernels, certified kernels, or enclaves. They are not a single UEFI
 binary aimed at the PowerEdge fleet already in the rack.
 
-Isolon takes a narrower bet. It is a clean-slate Type-1 hypervisor written in
-Rust. It compiles to one \texttt{.efi}. It boots on hardware we own and can
-serial-log: Dell PowerEdge R640-class machines. Formal verification is an
-architectural constraint, not a post-hoc whitepaper. We picked
-Verus~\cite{lattuada2023verus,lattuada2024verus} for SMT proofs of ghost
-state and Kani~\cite{vanhattum2022kani} for bounded checking of
-\texttt{unsafe}, and we defined a four-level maturity ladder so the project
-can ship at runtime-enforced or spec-written maturity when a full proof is
-still in flight.
+Isolon is a clean-slate Type-1 hypervisor written in Rust. It compiles to
+one \texttt{.efi} and boots on Dell PowerEdge R640-class machines we serial-log.
+Formal verification is an architectural constraint, not a post-hoc
+whitepaper. We picked Verus~\cite{lattuada2023verus,lattuada2024verus} for
+SMT proofs of ghost state and Kani~\cite{delmas2026kani,kroening2014cbmc}
+for bounded checking of \texttt{unsafe}. The interesting problem is not
+that a bijection between two maps can be proved. It is that a project
+shipping a hypervisor will be tempted to put that bijection in the
+abstract and then spend the rest of the paper taking it back. We treated
+that temptation as the thing to study.
 
-The headline theorem is exclusive ownership of host frames. We prove it of a
-\emph{ghost model}, not of the EFI that leaves the compiler. That distinction
-is the paper. Claiming ``the hypervisor is proved'' would be proving the
-wrong thing~\cite{klein2014comprehensive}: a convenient proxy. We discharge 80
-Verus lemmas with 0 errors; live executable EPT is a 705-line ownership
-registry with contracts and assertions. Device emulation, HTTP, the SPA,
-ISO handling, and guest firmware are outside the Proven Core.
+The proved artifact, after every disclaimer a careful author would write,
+is exclusivity among guests in a host-only ghost model. Live executable
+EPT is a bounded ownership registry. Device emulation, HTTP, the SPA, ISO
+handling, and guest firmware are outside the Proven Core. Claiming ``the
+hypervisor is proved'' would be proving the wrong
+thing~\cite{klein2014comprehensive}: a convenient proxy. CI reports 80
+verified Verus functions with 0 errors and no \texttt{admit} on the
+exclusivity path; that count is a replayable obligation tally, not a
+difficulty metric, and one of the 80 is a CI alias of another.
 
-This paper makes three contributions:
+This paper makes four contributions:
 
 \begin{enumerate}
-\item \textbf{A tight isolation theorem and a discharged ghost model.}
-  Exclusive ownership is four conjuncts over two ghost maps (frame
-  $\rightarrow$ guest, and $(\mathrm{guest},\mathrm{GPA})\rightarrow$ frame).
-  Named theorems cover 4K map/unmap (one guest and $N$ guests), scoped
-  ghost$\leftrightarrow$executable refinement, 2M/1G spans, NUMA affinity,
-  hardware 2M-leaf decode, EPT-violation dispositions, and a page-transfer
-  primitive. Under a frozen Verus pin the crate reports 80 verified, 0
-  errors, with no \texttt{admit} on that path.
+\item \textbf{A maturity ladder as a labelling instrument}, not only as
+  internal process. L0 documented invariants, L1 runtime asserts plus
+  Kani, L2 spec-written, L3 proof-complete. We propose that verification
+  papers state which column each claim occupies. Isolon's ghost
+  exclusivity is L3; live EPT is L2; the R640 runtime is L1.
 
-\item \textbf{An architecture that keeps the proved surface small} while
-  still shipping a UEFI Type-1 hypervisor: a 15{,}000-line Proven Core
-  budget, a host-only proof crate that is deliberately not linked into the
-  \texttt{.efi}, and an explicit refusal to mutate third-party firmware
-  internals to manufacture forward progress.
+\item \textbf{Five lessons that generalized} while shipping the EFI
+  (Section~\ref{sec:lessons}): pin the prover, do not host SMT on a UEFI
+  target, do not poke third-party firmware control state, firmware TCP is
+  not a management plane, and nested VT-x is not the production server.
+  Table~\ref{tab:neg} archives the negative results behind those lessons.
 
-\item \textbf{A split evaluation.} Lab/CI hosts hold L3. A real PowerEdge
-  R640 holds L1 runtime through Linux shell, multi-VM probes, host-NIC
-  HTTP, and guest-firmware El Torito. Nested VT-x completed a distro
-  sysinstall. We do not collapse those three columns into one claim.
+\item \textbf{A guest-exclusivity ghost model} as the artifact we could
+  actually prove. Two finite maps, a bijection, preservation under map,
+  unmap, violation dispositions, and page transfer. Hypervisor
+  ``belongs to neither'' is true by construction of the registry and is
+  listed with the SDM and the SMT stack as an assumption. Modelling
+  choices that were not free: 2M/1G span encoding, the
+  emulate/reject/claim trichotomy, and NUMA affinity coupling.
+
+\item \textbf{A split, measured evaluation.} Tree-wide line counts and the
+  shipped \texttt{.efi} size against a 15~MB target. On one PowerEdge
+  R640, COM2 records Linux~6.12 to a shell, virtio-blk, virtio-net,
+  dual-vCPU SMP, four-VM probes, host-NIC HTTP, and El Torito CD EFI.
+  Nested VT-x completed a distro sysinstall. We do not collapse those
+  columns, and we do not invent a KVM cycle comparison we have not run.
 \end{enumerate}
 
 Isolon is not seL4 for hypervisors and is not a verified KVM. It is a
-small exclusive-ownership model that we actually discharge, sitting next to
-a hypervisor we actually boot on iron, with the gap named in the same
-breath.
+hypervisor we boot on iron, a ghost model we discharge, and a ladder
+that stops those two facts from being fused in a sentence.
 
 \section{Threat Model and Non-Goals}
 
@@ -152,10 +167,10 @@ breath.
 
 A Type-1 hypervisor is the TCB for every guest it runs. CPUID and MSR
 firewalls, interrupt injection, and the hypercall door all matter. None of
-them matter if EPT can map the same host frame to two guests, or to a guest
-and the hypervisor, without anyone noticing. We therefore name
-\emph{exclusive ownership of host frames} as the property we prove, not
-``the guest seemed isolated in tests.''
+them matter if EPT can map the same host frame to two guests without anyone
+noticing. We therefore name \emph{exclusivity among guests} as the property
+we prove, not ``the guest seemed isolated in tests,'' and not ``the
+hypervisor never touches a guest frame.''
 
 \subsection{In scope}
 
@@ -172,20 +187,47 @@ We assume:
   record what happened; they do not enlarge the theorem.
 \end{itemize}
 
+\paragraph{Access versus mapping (virtio).}
+Isolon ships virtio-blk and virtio-net. Virtqueue rings live in
+guest-allocated frames. Hypervisor emulation at VMX root \emph{must} read
+and write those frames. That is, by construction, a guest-owned frame
+touched by the hypervisor. Exclusive ownership in this paper is a
+statement about \emph{EPT mappings}: a frame in $\mathit{owned}$ has exactly
+one guest as EPT owner, and the hypervisor does not install a second EPT
+entry for that frame in another guest's EPT. Transient,
+emulation-mediated access from VMX root is not a second owner. If
+``belongs to neither the hypervisor'' is read as ``the hypervisor CPU never
+loads from that frame,'' the property is false of the product we ship.
+We do not claim that reading.
+
+\paragraph{DMA and passthrough.}
+The adversary in this section is a malicious ring-0 guest. Such a guest
+can program DMA if a device is passed through, or if an emulated device can
+be driven to DMA outside the guest's frames. Isolon's product path has
+\textbf{no device passthrough}. Guest DMA is mediated by emulation executing
+in the hypervisor's address space. Exclusive ownership is \emph{conditional
+on that}: it is not a theorem against an IOMMU-less passthrough device, and
+unmodelled DMA is listed in Section~\ref{sec:assumptions} rather than waved
+past. Closing DMA as a lemma needs an IOMMU story we do not have.
+
 We do \emph{not} assume a correct third-party guest firmware. Forcing a
 foreign firmware's WaitForEvent internals to skip a check produced a
 NULL-event page fault and a dead loop. Product ISO boot now uses firmware we
 author. That firmware is \textbf{outside} the Proven Core.
 
-\subsection{Out of scope for the theorems}
+\subsection{Assumptions, not theorems}
+\label{sec:assumptions}
 
 \begin{itemize}
 \item The Intel SDM's VMX/EPT hardware behaves as documented~\cite{intel-sdm}.
 \item The frozen Verus/SMT stack is trusted for the ghost proofs.
 \item Host physical memory given to the allocator is the memory the
   machine has.
-\item DMA from devices we do not model (untrusted NICs, USB) is a future
-  confinement problem, not a discharged lemma.
+\item Hypervisor frames are those \emph{absent} from the guest ownership
+  registry. We do not prove that the EFI's own page tables never map a
+  guest-owned frame, and we do not prove that a bug cannot install a guest
+  leaf pointing at hypervisor \texttt{.text}.
+\item No device passthrough; guest DMA is emulation-mediated, as above.
 \item Nested VT-x on a lab server is not a proof about a PowerEdge R640.
 \item Full x86 ISA / VMCS host-state correctness is inside the Proven Core
   \emph{budget} and is not at proof-complete maturity beside the EPT crate.
@@ -253,7 +295,8 @@ comment. We use explicit state machines rather than boolean flags. These
 rules are how a codebase stays L3-shaped when most modules are still L1:
 the later proof should not require a rewrite of ownership.
 
-\subsection{Maturity ladder}
+\subsection{Maturity ladder as a community instrument}
+\label{sec:ladder}
 
 We use four levels, kept even after a proof lands (runtime asserts stay):
 
@@ -270,6 +313,14 @@ Fallback is Verus $\rightarrow$ Kani $\rightarrow$ asserts and fuzz. The
 architecture always aims at L3; shipping is allowed at L1/L2 when L3 is
 still open, provided the paper does not upgrade the label.
 
+We offer the ladder as a \emph{proposal to the community}, not as Isolon
+process. A verification paper should be able to point at each of its
+claims and name the column. ``We proved isolation'' with an L3 ghost
+model, an L2 executable registry, and an L1 iron boot is three papers'
+worth of sentences; fusing them is how proxy theorems get into abstracts.
+Requiring the column is cheap, checkable, and would have caught our own
+drafts.
+
 Proven Core modules follow a four-file layout: executable Rust, a spec
 file, a proof file, and tests (Kani + unit). The exclusivity theorems of
 record do not use that layout. They live in one \texttt{verus!} block in
@@ -281,16 +332,23 @@ beside live \texttt{memory/ept.rs} would imply the EFI crate is L3. It is not.
 \subsection{Statement}
 
 \begin{quote}
-For every valid EPT mapping from a guest-physical address to a host-physical
-frame, that frame is exclusively owned by the mapping guest and belongs to
-neither the hypervisor nor any other guest.
+For every valid EPT mapping from a guest-physical address to a
+host-physical frame, that frame is owned by exactly one guest: no other
+guest holds a mapping to it.
 \end{quote}
 
 ``Exclusively owned'' means exactly one guest holds a mapping to that frame
-at any moment. ``Belongs to neither'' means the frame is absent from the
-hypervisor's page tables and from every other guest's EPT. The property
-must hold across map, unmap, EPT-violation handling, and live-migration page
-transfer.
+at any moment. The property must hold across map, unmap, EPT-violation
+handling, and live-migration page transfer.
+
+Hypervisor separation---the informal sentence ``belongs to neither the
+hypervisor nor any other guest''---is \emph{not} this theorem. Guest id
+$0$ is reserved; hypervisor frames are modelled as absent from
+$\mathit{owned}$. Absence is definitional. We list it in
+Section~\ref{sec:assumptions} next to the SDM and the SMT stack. The
+ghost crate never mentions the EFI's own page tables. A bug that
+installed a guest leaf pointing at \texttt{.text} would not be caught by
+these lemmas.
 
 \subsection{Ghost state}
 
@@ -344,18 +402,19 @@ and the two maps have equal length.
 \end{quote}
 
 Empty maps satisfy it. A hypervisor frame is modelled as \emph{not} being
-in $\mathit{owned}$: the ghost registry only tracks guest-held frames. That
-is the ``belongs to neither'' half, as a modelling choice---the EFI's own
-page tables are not in this crate.
+in $\mathit{owned}$: the ghost registry only tracks guest-held frames.
 
 \subsection{Steps}
 
 A 4K step is $\mathsf{Map}\{g,a,f\}$ or $\mathsf{Unmap}\{g,a\}$. Enabled
 steps preserve exclusive ownership (one-step lemma). Any finite sequence of
-enabled steps preserves it (the historical single-guest theorem, whose
-statement already allows distinct guest ids across steps; a second theorem
-is named so CI can assert the $N$-guest post). A two-guest lemma maps two
-distinct non-zero guests onto distinct free frames.
+enabled steps preserves it. Guest ids are already a field of each step, so
+the sequence theorem is already an $N$-guest statement. A second theorem,
+\texttt{n\_guest\_4k\_map\_unmap}, is the same induction under a CI-facing
+name; it does not quantify over guests in any way the first theorem does
+not. We do not count it as a distinct result. A two-guest lemma maps two
+distinct non-zero guests onto distinct free frames---that lemma \emph{is}
+distinct: it instantiates two concrete ids.
 
 Large pages are spans of 4K frames (512 for 2M, $2^{18}$ for 1G). Span
 map/unmap lemmas lift exclusivity to 2M/1G; unit lemmas record that 4K is a
@@ -393,7 +452,10 @@ outside the Proven Core.
 
 Table~\ref{tab:theorems} lists the named theorems. Supporting lemmas
 (empty-exclusive, map-already-owned-unchanged, span preservation, mock
-bring-up facts) are in the same crate. CI counts 80 verified functions.
+bring-up facts) are in the same crate. CI counts 80 verified functions,
+including the $N$-guest alias. That number is the Verus obligation
+tally against the pin; it is not a claim that 80 distinct ideas were
+hard.
 
 \subsection{Proof sketch: map preserves exclusivity}
 
@@ -420,31 +482,58 @@ Verus discharges this with map lemmas from \texttt{vstd} (broadcast
 lemma case-splits on $\mathsf{Map}$ vs $\mathsf{Unmap}$. The sequence
 theorem is induction on $\mathsf{Seq}$ length: the empty sequence is
 trivial; the inductive step applies the one-step lemma and recurses.
-The $N$-guest theorem is that same induction under a CI-facing name;
-guest ids are already a field of each step.
+The $N$-guest CI name is that same induction.
 
-\paragraph{What the SMT does not get for free.}
-Span (2M/1G) map is not ``map 4K $k$ times'' as an opaque loop in
-executable code. It is a ghost predicate that the 4K keys covering the
-span are all free, then a bulk insert. The 2M lemma records that 512
-aligned 4K frames constitute a 2M leaf; the 1G lemma records $2^{18}$.
-Those facts are arithmetic lemmas, not a hardware page-walk.
+This 4K case is a data-structures exercise. We do not pretend otherwise.
+The modelling that was not free is below.
+
+\subsection{What the obvious formulation gets wrong}
+
+\paragraph{2M/1G spans.}
+The obvious encoding of a 2M map is a loop of 512 4K maps. That is the
+wrong object. SMT would need a loop invariant over 512 iterations, still
+would not know that those 512 keys are \emph{one} leaf with the page-size
+bit, and would still be 512 ghost steps rather than one hardware PDE.
+What we wrote instead is a span predicate (every aligned 4K key in the
+region is free) followed by a bulk insert, plus an arithmetic lemma that
+512 aligned 4K frames constitute a 2M leaf ($2^{18}$ for 1G). Those
+facts are still not a hardware page-walk. They are why ``map 4K $k$
+times'' is not the 2M theorem.
+
+\paragraph{Violation dispositions.}
+The obvious miss handler is demand-fill: every EPT violation becomes
+$\mathsf{ClaimMap}$. That formulation installs a mapping for APIC and
+virtio MMIO GPAs, either aliasing device memory into the ownership
+registry or handing the guest a host frame for a region that should
+stay unmapped. The trichotomy
+($\mathsf{EmulateNoMap}$ / $\mathsf{Reject}$ / $\mathsf{ClaimMap}$) is the
+fix: MMIO is emulated with the registry unchanged; fail-closed is
+identity on the maps; demand-fill is enabled only when the 4K map
+step would be. Emulate-then-claim is a derived post.
+
+\paragraph{NUMA affinity.}
+Exclusivity over $\mathit{owned}$ and $\mathit{by\_gpa}$ cannot see
+sockets. A mapped frame on the wrong node is still exclusive. Coupling a
+ghost SRAT/SLIT so that a successful map is recorded on its node is extra
+state; without it, affinity is a comment.
+
+\paragraph{No bug-finding story from SMT.}
+We did not catch an executable aliasing bug with Verus or Kani. The
+ghost model was written against a registry that already rejected
+double-map of the same HPA. Kani's bounded harnesses
+(\texttt{no\_double\_map\_same\_hpa}, allocator no-alias) pass; they did
+not surprise us with a counterexample. Runtime on iron \emph{did} find
+real bugs---Enable-XSAVES, INVPCID, WaitForEvent state pokes
+(Table~\ref{tab:neg})---none of which are exclusivity lemmas. A
+verification paper with no SMT-found bug and no refinement to the
+binary has a thin claim; we prefer that sentence to a reconstructed
+catch.
 
 Violation $\mathsf{ClaimMap}$ reuses the 4K map lemma. Emulate and reject
 are identity on the registry; the proof is $m'=m$. Transfer is unmap then
 map of the \emph{same} frame: after unmap, $f$ is free, so the destination
 map is enabled. Posts are the destination owner and the absent source
 key.
-
-\paragraph{Modelling choice: hypervisor frames.}
-Conjuncts quantify over \texttt{owned} and \texttt{by\_gpa}, not over the
-EFI's own page tables. A hypervisor frame is exclusive in this model
-because it is \emph{absent} from $\mathit{owned}$. That is the right
-theorem for ``guests do not share guest frames.'' It is \emph{not} a
-theorem that an executable bug cannot install a guest leaf pointing at
-\texttt{.text}. Closing that would require the live EPT walker and the
-HV page tables in the same proved artifact. They are not. Section~5 is
-that sentence at L2.
 
 \begin{table}[t]
   \caption{Named exclusivity theorems in the host-only crate.}
@@ -455,7 +544,7 @@ that sentence at L2.
     Theorem & Claim \\
     \midrule
     \texttt{single\_guest\_4k\_map\_unmap} & finite 4K sequences \\
-    \texttt{n\_guest\_4k\_map\_unmap} & same discharge, $N$-guest name \\
+    \texttt{n\_guest\_4k\_map\_unmap} & CI alias of the previous row \\
     \texttt{concrete\_*\_guest\_refine} & scoped ghost$\leftrightarrow$exec \\
     \texttt{large\_page\_map\_unmap} & 2M/1G spans \\
     \texttt{numa\_map\_unmap\_affinity} & node affinity ghost \\
@@ -474,7 +563,7 @@ as a first-class result, not a footnote.
 
 Live EPT (\texttt{memory/ept.rs}, 705 lines) maintains an ownership registry
 and asserts exclusive-ownership-shaped facts at map/unmap. Beside it sit
-357 lines of spec/proof notes. Those notes are not the 80-lemma crate. The
+357 lines of spec/proof notes. Those notes are not the 80-function crate. The
 host-only crate exists \emph{because} linking Verus into the UEFI target is
 the wrong packaging: proofs run on a Linux CI host under a pinned Verus
 release; the EFI is a UEFI target, not a Linux sysroot.
@@ -497,39 +586,40 @@ Consequences we accept in print:
   the same claim.
 \end{itemize}
 
-A prior self-review asked whether exclusive ownership is the property an
-auditor cares about or a convenient proxy. The verdict was: in scope for
-map/unmap/violation/transfer; ops gates (auth, PDF reports, HA, soak
-metrics) correctly labelled outside. Independent third-party re-run of
-\texttt{verus --verify} under the pin remains the auditor path. Bring-up
-self-review is not a conference peer review.
-
 \subsection{Live registry versus ghost maps}
 
 The live engine is not a Verus \texttt{Map}. It is a bounded table:
 \texttt{EptMap} holds at most 512 explicit 4K claims in production builds
 (8 under Kani, so CBMC can unwind), plus a 16-slot range registry for the
-precise identity window used at Linux bring-up. Map fails with
-\texttt{AlreadyOwned} when a frame is taken. Invariants are checked with
-\texttt{debug\_assert!} after mutating operations. A boot self-test maps a
-bring-up guest, then asserts that a second guest cannot alias the same
-frame.
+precise identity window used at Linux bring-up.
 
-That is the right shape for L1/L2. It is a different datatype from the
-ghost model (finite maps of unbounded domain, no \texttt{MAP\_CAP}). The
-scoped refine lemmas interpret a concrete map into ghost maps; they do
-not prove that the 512-slot table implements those maps for every
-reachable EFI state. If a 513th distinct 4K claim is required, the live
-table saturates while the ghost theorem still holds of an abstract
+Collision and exhaustion are different errors. Map or range-claim of a
+taken frame or overlapping span returns \texttt{AlreadyOwned}. When every
+slot is occupied, both tables return \texttt{Full}. There is no silent
+drop and no fallback from 4K slots into range claims.
+
+Linux bring-up does not fill the 512-slot 4K table. Guest e820 is
+256~MiB; the precise identity window is $[\texttt{0},\texttt{PRECISE\_BYTES})$
+with $\texttt{PRECISE\_BYTES}=512$~MiB ($131{,}072$ 4K pages). Hardware
+identity uses 2M leaves (256 leaves). The executable counterpart of that
+window is the range registry: with no extra-guest holes, bring-up inserts
+\textbf{one} range covering the full 512~MiB for the Linux guest. Multi-VM
+probes punch private HPA holes and claim those spans for shell guests, still
+as range rows, not 4K rows. The 4K table is the demand-fill and self-test
+path (map a bring-up guest, then assert a second guest cannot alias the
+same frame). Scoped refinement lemmas interpret that 4K table into ghost
+maps. They do not interpret the range registry that actually covers
+Linux's 512~MiB. If a 513th distinct 4K claim is required, the live table
+returns \texttt{Full} while the ghost theorem still holds of an abstract
 \texttt{ghost\_map}. That mismatch is why we will not stamp L3 on
 \texttt{memory/ept.rs} from the 80/0 line.
 
-The range registry is another gap. Bring-up identity-maps a contiguous
-window (hundreds of megabytes) without inserting hundreds of thousands of
-4K ghost keys at runtime. The ghost large-page lemmas talk about spans;
-the live precise window is a range claim plus hardware identity PTEs.
-Correspondence is scoped (hardware 2M-leaf decode lemma + range
-self-test), not ``every live PTE has a ghost key.''
+The honest framing is that the ghost model corresponds to a demand-fill
+path currently exercised by the self-test and by MMIO-not-mapped misses
+that take $\mathsf{ClaimMap}$, while production Linux GPA coverage is a
+range claim plus 2M hardware leaves. Correspondence is scoped (hardware
+2M-leaf decode lemma + range self-test), not ``every live PTE has a ghost
+key.''
 
 \subsection{What would close the gap}
 
@@ -552,30 +642,73 @@ proved'' is false.
 
 \section{Evaluation}
 
-We evaluate three questions. (1)~Does the ghost model actually verify?
-(2)~How large is the proved surface relative to the hypervisor?
-(3)~What does the runtime do on a lab host versus a real R640?
+We evaluate four questions. (1)~Does the ghost model actually verify?
+(2)~How large is the proved surface relative to the hypervisor and the
+size budget? (3)~What covers guest-physical space at Linux boot?
+(4)~What does the runtime do on a lab host versus a real R640?
 
 \subsection{Proofs}
 
 Toolchain: Verus pin \texttt{0.2026.07.12} (asset \texttt{0b42f4c};
-content-addressed Linux zip, SHA-256 pinned; CI never uses \texttt{latest})
-and Kani 0.67.0.
-The exclusivity crate is verified with \texttt{cargo verus verify}. The last closed host gate on that crate reported \textbf{80
-verified, 0 errors}. No \texttt{admit} on the exclusivity path. We do not
-invent a wall-clock for this PDF; the artifact is the crate plus the pin
-(supplement).
+Linux zip SHA-256 \texttt{f6f4f5d0\ldots fbd01c0} in-tree; CI never uses
+\texttt{latest}) and Kani 0.67.0 (CBMC backend).
+The exclusivity crate is verified with \texttt{cargo verus verify}.
+Against that pin the crate reports \textbf{80 verified, 0 errors},
+including the $N$-guest alias, with no \texttt{admit} on the exclusivity
+path. We did not record a wall-clock or peak RSS for that run on named
+hardware in this draft; the artifact is the crate plus the pin
+(supplement). Kani covers bounded \texttt{unsafe} in the live engine
+(\texttt{MAP\_CAP}${}=8$ unwind). That is L1 on \texttt{unsafe}, not L3
+on exclusive ownership.
 
-Kani covers bounded \texttt{unsafe} in the live engine. That is L1 on
-\texttt{unsafe}, not L3 on exclusive ownership.
+\subsection{Size, occupancy, and what we did not measure}
 
-\subsection{Size}
+Table~\ref{tab:measure} is tree- and kit-measured. The iron EFI that
+reached Linux shell plus the M4 probe chain is 1{,}085{,}952 bytes
+(1.04~MiB), against a 15~MB target and a 20~MB hard limit. A later
+in-tree release build is 1.62~MiB; both are well under the cap. Rust
+sources in the tree total 64{,}140 lines (\texttt{wc -l} of \texttt{*.rs},
+excluding \texttt{target/}): about 40{,}500 product, 15{,}600 gate
+harnesses, 8{,}000 tests. The Proven Core \emph{budget} remains
+15{,}000 lines (Table~\ref{tab:core}); the surface actually at L3 is the
+2{,}366-line host-only crate. Table~\ref{tab:loc} is the EPT slice of
+that.
 
-Table~\ref{tab:loc} is a line count on the tree used for this draft, not a
-re-baseline of the 15{,}000-line cap. Ghost proofs of record are larger than
-the live EPT engine. That is expected: the theorem lives in the crate we
-can host-verify. The cap still applies to the Proven Core modules; most of
-those rows are not at L3.
+Linux occupancy is from the bring-up path, not from a COM2 dump of slot
+counters. One range covers 512~MiB; hardware uses 256$\times$2M leaves;
+guest e820 is 256~MiB. The 512-slot 4K table is not that window.
+
+We do not have VM-exit round-trip cycles (CPUID, EPT violation, HLT)
+versus KVM on the same R640, and we do not have a timed boot-to-shell
+versus KVM. COM2 archives of the iron boot have no usable timestamps for
+that interval. We will not invent those numbers.
+
+\begin{table}[t]
+  \caption{Measured quantities. Cycle-level KVM comparison is absent, not
+  estimated.}
+  \label{tab:measure}
+  \small
+  \begin{tabularx}{\linewidth}{@{}L L@{}}
+    \toprule
+    Quantity & Value \\
+    \midrule
+    Iron \texttt{.efi} (Linux+M4 boot) & 1{,}085{,}952 B (1.04~MiB) \\
+    In-tree release \texttt{.efi} & 1.62~MiB \\
+    Size target / hard limit & 15~MB / 20~MB \\
+    Tree Rust LOC (\texttt{*.rs}) & 64{,}140 \\
+    Proven Core budget / L3 crate & 15{,}000 / 2{,}366 \\
+    Verus pin zip SHA-256 & \texttt{f6f4f5d0\ldots fbd01c0} \\
+    Verus functions (incl.\ alias) & 80 verified, 0 errors \\
+    Linux identity window & 1 range, 512~MiB \\
+    Hardware 2M leaves in that window & 256 ($131{,}072$ 4K pages) \\
+    Guest e820 RAM & 256~MiB \\
+    4K table cap / range slots & 512 / 16; exhaustion $=$ \texttt{Full} \\
+    VM-exit cycles vs KVM on R640 & not measured \\
+    Boot-to-shell wall-clock vs KVM & not measured \\
+    \texttt{verus verify} wall-clock / RSS & not recorded for this PDF \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \begin{table}[t]
   \caption{Line counts (\texttt{wc -l}) for the EPT-related surface.}
@@ -610,8 +743,12 @@ operators (and reviewers) otherwise collapse it into iron.
     Verus exclusivity (80 / 0) & yes (L3) & --- & not claimed \\
     Kani on \texttt{unsafe} & yes (CI pin) & --- & not claimed \\
     VMXON + VMEXIT & yes & yes & yes \\
-    EPT identity + Linux 6.12 shell & yes & --- & yes \\
-    Multi-VM probes & L3 $N$-guest & --- & probes on iron \\
+    EPT identity + Linux 6.12 shell & yes & --- & yes (Xeon Silver 4110) \\
+    LAPIC timer re-entry / IRQ inject & yes & --- & yes (same boot) \\
+    virtio-blk probe & yes & CD+virtio & yes (same boot) \\
+    virtio-net + vSwitch probe & yes & --- & yes (same boot) \\
+    Dual-vCPU BSP+AP (shared EPT) & yes & --- & yes (same boot) \\
+    Four VMs: Linux + three SHELL stubs & yes & --- & yes (same boot) \\
     Durable host-NIC HTTP after EBS & lab NIC & --- & onboard LOM \\
     SPA launches a SHELL guest & host smoke & --- & stub, not a distro \\
     Guest firmware CD EFI (El Torito) & --- & CD+virtio & yes \\
@@ -621,9 +758,11 @@ operators (and reviewers) otherwise collapse it into iron.
   \end{tabularx}
 \end{table*}
 
-On the R640: iDRAC virtual media boots the EFI; COM2 archives VMXON, EPT
-identity over a precise window, unmodified Linux to a shell, then multi-VM
-probes and VMXOFF. Secondary Enable-XSAVES was required on Xeon Scalable;
+On the R640 (iDRAC virtual media, COM2, Intel Xeon Silver 4110): the EFI
+archives VMXON, a 512~MiB identity window, unmodified Linux~6.12 through
+\texttt{/init} to a shell, then---on that same boot---four-VM probes
+(Linux G0 plus three SHELL guests), virtio-blk, virtio-net, dual-vCPU
+SMP, and VMXOFF. Secondary Enable-XSAVES was required on Xeon Scalable;
 without it the guest init hit a stack guard. Firmware SNP/Tcp4 after
 ExitBootServices is a platform limit of the virtual-floppy path; durable
 HTTP is a host-owned Broadcom LOM. The SPA can VMLAUNCH a private-EPT SHELL
@@ -642,17 +781,26 @@ from nested runs.
 
 72-hour soak metrics on a laptop, PDF audit-report templates, and a
 bring-up spec review are operational gates. They closed on the lab host.
-They are L0/L1 process, not L3. A future freeze of this argument as a
-preprint still needs a third-party re-run of the verifier and a written
-external spec review. Iron distro install is a product gate. It is not
-required for the ghost theorem; claiming it would be a correctness reject.
+They are L0/L1 process, not L3. Iron distro install is a product gate. It is
+not required for the ghost theorem; claiming it would be a correctness
+reject.
+
+\subsection{Artifact}
+
+We commit to a supplementary zip: the \texttt{ept\_model} crate, the
+pinned Verus zip SHA-256, a README that reproduces 80/0, and a container
+or exact install command for that pin. Anonymized COM2 excerpts for every
+row of Table~\ref{tab:split}'s R640 column (product markers stripped) belong
+in the same zip. The paper stands alone if the reviewer ignores the zip.
 
 \section{Experience: Five Lessons that Generalized}
+\label{sec:lessons}
 
-EuroSys asks experience papers for lessons that are general and
-quantitative~\cite{steinberg2010nova}. The following are the ones we would
-tell a group starting a verified Type-1 hypervisor in Rust. They are not
-the theorem. They are why the theorem is the size it is.
+EuroSys invites experience papers whose lessons are general, supported by
+rigorous and quantitative analysis, and useful to the
+community~\cite{eurosys2027cfp}. The following are the ones we would tell a
+group starting a verified Type-1 hypervisor in Rust. They are the spine of
+the paper. The ghost model is an artifact inside this story.
 
 \subsection{Pin the prover or the proof is a diary}
 
@@ -775,7 +923,7 @@ ship as \texttt{BOOTX64.EFI} on iDRAC virtual media.
     SeKVM & KVM memory protection & Linux+KVM & hyp.\ memory protection & overlay vs clean-slate \\
     NOVA & (design) small TCB & microhypervisor & TCB size argument & our cut is Proven Core \\
     Xen/KVM/ESXi & --- & production guests & tested EPT/NPT & we claim a smaller theorem \\
-    Isolon & EPT exclusive ownership (ghost) & UEFI \texttt{.efi}, Linux on R640 & exclusive frame ownership & L3 ghost, L2 live EPT \\
+    Isolon & guest-exclusivity (ghost maps) & UEFI \texttt{.efi}, Linux on R640 & guest EPT exclusivity, not HV access & L3 ghost, L2 live EPT \\
     \bottomrule
   \end{tabularx}
 \end{table*}
@@ -804,10 +952,13 @@ installer open) instead of implying the theorem covers the SPA.
 
 \paragraph{Tooling.}
 Verus~\cite{lattuada2023verus,lattuada2024verus} is the SMT prover we pin.
-Kani~\cite{vanhattum2022kani} covers \texttt{unsafe}. Push-button
-verification of file systems~\cite{sigurbjarnarson2016pushbutton} is the
-methodological cousin of Hyperkernel; our exclusivity proofs are
-lemma-heavy rather than fully push-button across the EFI.
+Kani~\cite{delmas2026kani,kroening2014cbmc} covers \texttt{unsafe}; it
+compiles MIR to CBMC. VanHattum et al.~\cite{vanhattum2022kani} is the
+ICSE-SEIP paper on dynamic trait objects in that pipeline, not a
+substitute for the tool or for CBMC. Push-button verification of file
+systems~\cite{sigurbjarnarson2016pushbutton} is the methodological cousin of
+Hyperkernel; our exclusivity proofs are lemma-heavy rather than fully
+push-button across the EFI.
 
 \section{Limitations}
 
@@ -819,44 +970,45 @@ lemma-heavy rather than fully push-button across the EFI.
   those surfaces.
 \item \texttt{PageTransferStep} is a ghost primitive, not live migration
   product.
-\item DMA confinement, IOMMU, and untrusted-device memory are future work.
+\item DMA confinement and IOMMU are future work. Exclusive ownership is
+  conditional on no passthrough and emulation-mediated DMA.
 \item Nested distro sysinstall is complete and is not iron.
 \item Iron installer, TLS, and guest console remain product residuals.
 \item Verus upgrades can break proofs; we budget pin maintenance and refuse
   \texttt{latest}.
+\item SMT found no executable aliasing bug. We do not reconstruct one.
+\item We have no KVM cycle comparison on the R640.
 \end{itemize}
 
 \paragraph{Threats to validity.}
 Iron evidence is one PowerEdge R640 and iDRAC virtual media, not a
 fleet. Nested VT-x is one lab host. The 80/0 line is one pin of one
-prover; we have not replayed under a second SMT solver. The spec review
-was a bring-up self-review, not an external auditor. LOC counts are
-\texttt{wc -l}, not a proven TCB. Experience lessons (XSAVES, SNP, firmware
-pokes) are one implementation's failures; we argue they generalize because
-they follow from Intel VMX, UEFI ExitBootServices, and ``do not own that
-blob,'' not from Isolon-specific APIs. We may be wrong about that
-generalization.
+prover; we have not replayed under a second SMT solver. LOC counts are
+\texttt{wc -l}, not a proven TCB. Registry occupancy is from the bring-up
+code path, not from a per-boot slot dump on COM2. Experience lessons
+(XSAVES, SNP, firmware pokes) are one implementation's failures; we argue they
+generalize because they follow from Intel VMX, UEFI ExitBootServices, and
+``do not own that blob,'' not from Isolon-specific APIs. We may be wrong
+about that generalization.
 
 \section{Conclusion}
 
-Isolon now has what a living verification argument is supposed to wait for
-before \emph{writing} the claim, not before \emph{freezing} it.
+Isolon is an experience report about keeping a verification claim honest
+while shipping a UEFI Type-1 hypervisor. The maturity ladder is the
+instrument: L3 for a guest-exclusivity ghost model, L2 for the live
+registry, L1 for the R640 runtime. The theorem is exclusivity among guests,
+not hypervisor non-access, and not the EFI. Virtio rings are guest frames
+the emulator touches; the property is about mappings. DMA is out unless
+passthrough stays off.
 
-On the proof side: exclusive ownership is stated tightly, implemented as a
-ghost model, and discharged through map, unmap, violation, and page transfer
-under a frozen Verus pin---80 verified, 0 errors---with a spec review that
-asked ``are we proving the right thing?'' out loud and did not find a proxy
-theorem. That is a verified \emph{core model}. It is not a verified
-\texttt{.efi}.
+On iron: a PowerEdge R640 printed VMX, a 512~MiB identity window, Linux~6.12
+to a shell, virtio-blk and virtio-net, SMP, four-VM probes, host-NIC HTTP,
+a SHELL guest from the SPA, and El Torito CD EFI. Nested authored firmware
+completed a distro sysinstall. Nested is not iron.
 
-On the iron side: a PowerEdge R640 printed VMX, EPT, Linux shell, host-NIC
-HTTP, a SHELL guest from the SPA, and El Torito CD EFI. Nested authored
-firmware completed a distro sysinstall. Nested is not iron. The remaining
-product sentence is the same installer on metal, on a stick that fits the
-image, without claiming a marker we have not printed.
-
-Memory isolation isn't tested. The ghost exclusivity theorems are proved.
-The product loop is not done. Those three sentences are the paper.
+Lead with the claim: a hypervisor you can boot, a ghost model you can
+replay, and a ladder that forbids fusing those two sentences. The product
+loop is not done. That last fact is residual, not the title.
 
 \begin{acks}
 Removed for double-blind review.

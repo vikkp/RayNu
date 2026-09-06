@@ -1,6 +1,6 @@
 % Optional EuroSys supplement. Reviewers are not required to read this.
 % Keep identity-free. Paper must stand alone.
-\documentclass[sigplan,10pt,anonymous,review]{acmart}
+\documentclass[sigplan,10pt,anonymous]{acmart}
 \setcopyright{none}
 \renewcommand\footnotetextcopyrightpermission[1]{}
 \settopmatter{printfolios=true,printccs=false,printacmref=false}
@@ -19,9 +19,12 @@ without it. Live executable EPT is not in this list and is not L3.
 
 \section{How to replay}
 
-Pin Verus \texttt{release/0.2026.07.12.0b42f4c}. Then
-\texttt{cargo verus verify -p ept\_model}. Last closed host gate:
-80 verified, 0 errors. No \texttt{admit} on the exclusivity path.
+Pin Verus \texttt{release/0.2026.07.12.0b42f4c} (Linux zip SHA-256
+in \texttt{verus-version.toml}). Then
+\texttt{cargo verus verify -p ept\_model}. Expected:
+80 verified, 0 errors, including the $N$-guest CI alias. No \texttt{admit}
+on the exclusivity path. The theorem is guest-exclusivity, not hypervisor
+non-access.
 
 \section{Named theorems}
 

@@ -29,7 +29,7 @@ and system name** than the public living paper.
 | Venue | Title | System |
 |-------|--------|--------|
 | Public living paper | RayNu-V: A Formally Verified Bare-Metal Hypervisor | RayNu-V |
-| This submission | Exclusive Guest-Physical Isolation in a Type-1 Hypervisor: … | Isolon |
+| This submission | Isolon: Keeping Isolation Claims Honest in a Bare-Metal Type-1 Hypervisor | Isolon |
 
 Do not cite the living page as “our previous work.” If a reviewer googles
 Isolon phrases and finds the site, that is allowed public TR overlap; the
