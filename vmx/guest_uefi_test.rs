@@ -84,6 +84,7 @@ use super::{
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
     guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
+    guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
@@ -1587,6 +1588,14 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_uart_prefer_pit_during_apk(true, false, true));
     assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(true, false, false));
     assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(false, false, true));
+    assert!(guest_uefi_linux_prefer_pit_hold(false, true), "linux PIT hold until login");
+    crate::devices::guest_irq::reset();
+    assert!(!guest_uefi_linux_prefer_pit_hold(false, false));
+    assert!(guest_uefi_linux_raise_pit_on_resume(true, false), "linux PIT raise on overlay resume");
+    assert!(guest_uefi_linux_raise_pit_on_resume(false, true));
+    assert!(!guest_uefi_linux_raise_pit_on_resume(false, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold until login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise on overlay resume"));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));
     assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, false));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true, false));

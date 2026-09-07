@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (PIT-once on HLT + UART until `login:`). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34074349118` / `63c7e05` (iron 2026-09-07: `Installing packages` then last virtio `n=1345`, no `ISO-INSTALL-OK`) · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (PIT **hold** until `login:` + raise PIT on overlay resume). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34076175624` / `20e8b70` (iron 2026-09-07: `idle=poll` + PIT-once consumed, last virtio `n=1345`, no `ISO-INSTALL-OK`) · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -106,9 +106,10 @@ wc -c ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
 
 Pin the last **green** F7 EFI, not the docs-only `fa81f5e` push (M4.8 verus
 flake) and not P0-14 `2b795a0`. Replace `RUNID` with the numeric GitHub
-Actions run id of this branch **after** the HLT-PIT-until-login commit.
+Actions run id of this branch **after** the PIT-hold-until-login commit.
 Do **not** wrap it in angle brackets (bash treats `<…>` as a redirect).
-Do **not** flash `34074349118` (`63c7e05` froze at apk `n=1345`).
+Do **not** flash `34076175624` (`20e8b70` froze at apk `n=1345` under
+`idle=poll`) or `34074349118` (`63c7e05` same freeze).
 
 ```bash
 cd ~/projects/raynu
@@ -175,7 +176,7 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` |
-| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT once after DRIVER_OK` |
+| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT once after DRIVER_OK` then `linux PIT hold until login` |
 | apk overlay | `Installing packages to root filesystem...` with virtio MMIO `n=` continuing (heartbeat every 64) — **not** a freeze after `n=1281` or `n=1345` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
 | F7 reset | `guest reset requested src=` (`kbc` is what nested saw) · `relaunch after reset` |
@@ -204,14 +205,15 @@ for the Linux path too. Re-flash from the PIT-during-apk pin.
 If COM2 shows `Linux version 6.12.13-0-lts` and `Installing packages to root
 filesystem...` then goes silent after virtio MMIO `n=1281` with no
 `linux PIT once after DRIVER_OK`, you flashed `46fd345` / run `34069352671`.
-UART beat PIT after DRIVER_OK. Re-flash from this HLT-PIT-until-login pin. Do not
+UART beat PIT after DRIVER_OK. Re-flash from this PIT-hold-until-login pin. Do not
 F11 `34069352671` again expecting `ISO-INSTALL-OK`.
 
 If COM2 shows `linux PIT once after DRIVER_OK` and `Mounting boot media: ok`
 then `Installing packages` with last virtio MMIO `n=1345` and no further
-kernel timestamps, you flashed `63c7e05` / run `34074349118`. HLT after
-DRIVER_OK kept UART first so cpuidle/`sleep` never saw jiffies. Re-flash
-from this HLT-PIT-until-login pin. Do not F11 `34074349118` again.
+kernel timestamps, you flashed `63c7e05` / `20e8b70` (runs `34074349118` /
+`34076175624`). Product cmdline is `idle=poll` so Linux never HLTs; PIT-once
+is consumed and UART wins until the next virtio kick. Re-flash from this
+PIT-hold-until-login pin. Do not F11 `34074349118` or `34076175624` again.
 
 Capture the full SOL log into `docs/evidence/r640/logs/` and fill
 [`TEMPLATE-iso-install.md`](../evidence/r640/TEMPLATE-iso-install.md). Nested
@@ -231,10 +233,12 @@ or CI logs do not close the gate.
   `34069352671`): Alpine apk overlay stalled at `Installing packages` (last
   virtio MMIO `n=1281`). PIT-once on virtio MMIO + preempt was not enough:
   iron `63c7e05` / `34074349118` printed PIT-once, mounted media, then froze
-  at `n=1345` because HLT after DRIVER_OK kept UART first. This pin arms
-  PIT-once on HLT and UART LSR until `login:`. Do not permanently prefer PIT
-  after login — that starves auto-answer. Do not F11 `34074349118` or
-  `34069352671` again.
+  at `n=1345`. Iron `20e8b70` / `34076175624` armed PIT-once on HLT + UART LSR
+  but the product cmdline is `idle=poll` (never HLT); PIT-once is consumed so
+  UART wins until the next virtio kick. This pin holds PIT until `login:`
+  (`prefer_pit_hold`, not consumed) and raises PIT on every overlay resume.
+  Do not permanently prefer PIT after login — that starves auto-answer. Do
+  not F11 `34076175624`, `34074349118`, or `34069352671` again.
 - **OVMF scaffold leg on iron** (2026-09-06, `088ab25`): the leg is now capped
   at one exit when `raynuf.txt` is present (`GUEST_UEFI_RAYNU_F_DIRECT_CAP`).
   If RayNu-F still does not start, look for `RayNu-F launch skipped` /

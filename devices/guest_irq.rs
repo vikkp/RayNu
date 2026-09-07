@@ -139,31 +139,47 @@ fn product_live() -> bool {
     crate::devices::ide_cdrom::product_iso_window_armed()
 }
 
-static PREFER_PIT: AtomicBool = AtomicBool::new(false);
+static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
+static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 
 pub fn reset() {
-    PREFER_PIT.store(false, Ordering::Release);
+    PREFER_PIT_ONCE.store(false, Ordering::Release);
+    PREFER_PIT_HOLD.store(false, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
+fn prefer_pit_priority() -> bool {
+    PREFER_PIT_HOLD.load(Ordering::Acquire) || PREFER_PIT_ONCE.load(Ordering::Acquire)
+}
+
 /// Linux product-ISO I/O: deliver PIT once even if UART IRR is also set.
-/// UART still beats PIT after this inject so auto-answer is not starved.
-/// Used after virtio DRIVER_OK so apk overlay / `sleep` keep jiffies moving
-/// (virtio MMIO, preempt, HLT until login:, UART LSR poll).
+/// Consumed on the next PIT take. Overlay uses [`prefer_pit_hold`] instead
+/// (`idle=poll` never HLT; once is gone before the next kick).
 /// linux PIT prefer once. linux PIT once after DRIVER_OK.
 /// linux HLT PIT during apk. linux PIT after DRIVER_OK until login.
 /// Not `ISO-INSTALL-OK`.
 pub fn prefer_pit_once() {
-    PREFER_PIT.store(true, Ordering::Release);
+    PREFER_PIT_ONCE.store(true, Ordering::Release);
 }
 
-/// Prefer PIT over UART while virtio probe still needs kworker. Clear
-/// after both functions reach DRIVER_OK so COM1 auto-answer is not starved.
-/// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
+/// Hold PIT over UART until cleared. Not consumed on PIT take.
+/// Virtio probe and apk overlay (`idle=poll`) need this; getty `login:`
+/// clears it so auto-answer is not starved.
+/// linux PIT hold until login. linux PIT prefer until DRIVER_OK.
+/// Not `ISO-INSTALL-OK`.
+pub fn prefer_pit_hold(need: bool) {
+    PREFER_PIT_HOLD.store(need, Ordering::Release);
+}
+
+/// Prefer PIT over UART while virtio probe still needs kworker, or while
+/// apk overlay has not reached getty `login:`. Iron `20e8b70` /
+/// `34076175624` consumed PIT-once then froze at `n=1345`.
+/// linux PIT prefer until DRIVER_OK. linux PIT hold until login.
+/// Not `ISO-INSTALL-OK`.
 pub fn prefer_pit_until_driver_ok(need: bool) {
-    PREFER_PIT.store(need, Ordering::Release);
+    prefer_pit_hold(need);
 }
 
 /// True when GPA is the product-ISO IOAPIC 4 KiB window (not the HPET sink).
@@ -629,7 +645,7 @@ fn ioapic_pin_is_io(pin: u8) -> bool {
 /// Prefer ATA/virtio/UART over PIT pin 2 unless Linux latched prefer-once.
 /// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
 fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
-    if PREFER_PIT.load(Ordering::Acquire) {
+    if prefer_pit_priority() {
         if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
             return Some((PIT_IOAPIC_GSI, vec));
         }
@@ -668,7 +684,7 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
     // UART (IRQ 4) and other master devices beat PIT so timer ticks cannot
     // starve COM1 auto-answer. Linux I/O may latch prefer-once so jiffies
     // still move while THRE IRR is stuck.
-    if PREFER_PIT.load(Ordering::Acquire) && (master_req & 1) != 0 {
+    if prefer_pit_priority() && (master_req & 1) != 0 {
         return Some(0);
     }
     let master_dev = master_req & !1 & !(1 << PIC_SLAVE_IRQ);
@@ -695,7 +711,7 @@ fn pic_peek(c: &IrqChip) -> Option<u8> {
 fn pic_take(c: &mut IrqChip) -> Option<u8> {
     let irq = pic_pending_irq(c)?;
     if irq == 0 {
-        PREFER_PIT.store(false, Ordering::Release);
+        PREFER_PIT_ONCE.store(false, Ordering::Release);
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);

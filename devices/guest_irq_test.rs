@@ -882,6 +882,70 @@ fn product_iso_linux_hlt_pit_during_apk_until_login_then_uart() {
 }
 
 #[test]
+fn product_iso_linux_pit_hold_until_login_not_consumed() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, note_tx, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    assert!(apk_overlay_needs_pit());
+    pic_init_unmask_all();
+    assert!(guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    assert!(guest_uefi_linux_raise_pit_on_resume(
+        apk_overlay_needs_pit(),
+        virtio_needs_pit_over_uart(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIT hold until login"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "hold is not consumed — idle=poll still sees jiffies"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    assert!(!apk_overlay_needs_pit());
+    assert!(!guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "after login: UART beats PIT"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
 fn lab_stub_raise_pit_does_not_inject() {
     reset();
     reset_cd();
