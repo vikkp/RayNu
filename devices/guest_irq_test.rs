@@ -885,8 +885,9 @@ fn product_iso_linux_hlt_pit_during_apk_until_login_then_uart() {
 fn product_iso_linux_pit_hold_until_login_not_consumed() {
     use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, note_tx, reset as reset_ans};
     use crate::devices::guest_virtio_blk::{
-        mmio_write, mmio_write_iso, reset as reset_virtio,
-        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_both_driver_ok, virtio_linux_probe_started, virtio_needs_pit_over_uart,
+        VIRTIO_STATUS_DRIVER_OK,
     };
     use crate::vmx::guest_uefi::{
         guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
@@ -894,18 +895,25 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
     arm_product_iso();
     reset_virtio();
     reset_ans();
+    assert!(present_virtio());
     mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
     mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
     assert!(!virtio_needs_pit_over_uart());
+    assert!(virtio_linux_probe_started());
+    assert!(virtio_both_driver_ok());
     assert!(apk_overlay_needs_pit());
     pic_init_unmask_all();
     assert!(guest_uefi_linux_prefer_pit_hold(
         virtio_needs_pit_over_uart(),
         apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
     ));
     assert!(guest_uefi_linux_raise_pit_on_resume(
         apk_overlay_needs_pit(),
         virtio_needs_pit_over_uart(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
     ));
     raise_pit();
     raise_gsi(4);
@@ -930,6 +938,8 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
     assert!(!guest_uefi_linux_prefer_pit_hold(
         virtio_needs_pit_over_uart(),
         apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
     ));
     raise_pit();
     raise_gsi(4);
@@ -937,6 +947,75 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
         take_inject_vector(),
         Some(0x24),
         "after login: UART beats PIT"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_early_kernel_uart_beats_pit() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, present as present_virtio, reset as reset_virtio, virtio_both_driver_ok,
+        virtio_linux_probe_started, virtio_needs_pit_over_uart,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_pit_jiffies_now, guest_uefi_linux_prefer_pit_hold,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    assert!(present_virtio());
+    assert!(
+        virtio_needs_pit_over_uart(),
+        "firmware queue-arm still pending DRIVER_OK"
+    );
+    assert!(
+        !virtio_linux_probe_started(),
+        "linux PIT after virtio probe"
+    );
+    assert!(!virtio_both_driver_ok());
+    assert!(apk_overlay_needs_pit(), "PHASE_LOGIN from boot");
+    assert!(
+        !guest_uefi_linux_pit_jiffies_now(
+            virtio_needs_pit_over_uart(),
+            apk_overlay_needs_pit(),
+            virtio_linux_probe_started(),
+            virtio_both_driver_ok(),
+        ),
+        "iron c815ccc: do not inject PIT during APIC setup"
+    );
+    pic_init_unmask_all();
+    assert!(!guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "early kernel UART beats PIT"
+    );
+    mmio_write(0x14, 1, 1);
+    assert!(virtio_linux_probe_started(), "linux PIT after virtio probe");
+    assert!(guest_uefi_linux_prefer_pit_hold(
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+        virtio_linux_probe_started(),
+        virtio_both_driver_ok(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "after DEVICE_STATUS, PIT hold for virtio probe"
     );
     reset();
     reset_cd();

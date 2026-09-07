@@ -85,6 +85,7 @@ use super::{
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
     guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
     guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
+    guest_uefi_linux_pit_jiffies_now,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
@@ -1551,6 +1552,11 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_io_raises_pit(true, true), "linux I/O does not raise PIT (iron MADT stop)");
     assert!(!guest_uefi_linux_io_raises_pit(false, true), "iso=0 firmware no extra I/O PIT");
     assert!(!guest_uefi_linux_io_raises_pit(true, false));
+    // Iron `c815ccc` / `34078335291`: `restore host xcr0 reason=0x1e` is
+    // EXIT_REASON_IO_INSTRUCTION (30), not XSETBV (55). leave_to_e4 always
+    // prints LAST_EXIT_REASON next to the XCR0 restore.
+    assert_eq!(crate::vmx::fields::EXIT_REASON_IO_INSTRUCTION, 0x1e);
+    assert_eq!(crate::vmx::fields::EXIT_REASON_XSETBV, 0x37);
     assert!(
         guest_uefi_linux_preempt_deadloop_noskip(true, true),
         "linux preempt deadloop noskip"
@@ -1588,14 +1594,22 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_uart_prefer_pit_during_apk(true, false, true));
     assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(true, false, false));
     assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(false, false, true));
-    assert!(guest_uefi_linux_prefer_pit_hold(false, true), "linux PIT hold until login");
+    assert!(guest_uefi_linux_prefer_pit_hold(false, true, true, true), "linux PIT hold until login");
     crate::devices::guest_irq::reset();
-    assert!(!guest_uefi_linux_prefer_pit_hold(false, false));
-    assert!(guest_uefi_linux_raise_pit_on_resume(true, false), "linux PIT raise on overlay resume");
-    assert!(guest_uefi_linux_raise_pit_on_resume(false, true));
-    assert!(!guest_uefi_linux_raise_pit_on_resume(false, false));
+    assert!(!guest_uefi_linux_prefer_pit_hold(false, true, false, false), "linux PIT after virtio probe");
+    assert!(!guest_uefi_linux_prefer_pit_hold(true, true, false, false));
+    assert!(guest_uefi_linux_prefer_pit_hold(true, true, true, false));
+    assert!(!guest_uefi_linux_prefer_pit_hold(false, false, true, true));
+    assert!(guest_uefi_linux_pit_jiffies_now(false, true, true, true), "linux PIT hold after DRIVER_OK");
+    assert!(!guest_uefi_linux_pit_jiffies_now(true, true, false, false));
+    assert!(guest_uefi_linux_raise_pit_on_resume(true, false, true, true), "linux PIT raise on overlay resume");
+    assert!(guest_uefi_linux_raise_pit_on_resume(false, true, true, false));
+    assert!(!guest_uefi_linux_raise_pit_on_resume(true, true, false, false));
+    assert!(!guest_uefi_linux_raise_pit_on_resume(false, false, false, false));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold until login"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise on overlay resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after virtio probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold after DRIVER_OK"));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));
     assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, false));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true, false));

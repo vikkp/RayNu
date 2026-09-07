@@ -322,6 +322,25 @@ pub fn virtio_needs_pit_over_uart() -> bool {
     })
 }
 
+/// Linux has written DEVICE_STATUS (probe started). Firmware queue-arm at
+/// launch does not count. Iron `c815ccc` / `34078335291`: PHASE_LOGIN +
+/// queues-armed treated early kernel as virtio probe and injected PIT
+/// during APIC setup (`reason=0x1e` I/O then `restore host xcr0`).
+/// linux PIT after virtio probe. Not `ISO-INSTALL-OK`.
+pub fn virtio_linux_probe_started() -> bool {
+    with_box(|b| b.disk.status != 0 || b.iso.status != 0)
+}
+
+/// Both product-ISO virtio functions have DRIVER_OK. Overlay PIT hold
+/// starts here, not at PHASE_LOGIN. linux PIT hold after DRIVER_OK.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_both_driver_ok() -> bool {
+    with_box(|b| {
+        (b.disk.status & VIRTIO_STATUS_DRIVER_OK) != 0
+            && (b.iso.status & VIRTIO_STATUS_DRIVER_OK) != 0
+    })
+}
+
 pub fn reset() {
     with_box(|b| *b = VirtioBox::empty());
     VISIBLE.store(false, Ordering::Release);
