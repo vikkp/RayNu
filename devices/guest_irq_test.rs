@@ -779,6 +779,44 @@ fn product_iso_linux_pit_prefer_until_driver_ok_then_uart() {
 }
 
 #[test]
+fn product_iso_linux_pit_once_after_driver_ok_beats_uart_then_uart_wins() {
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::guest_uefi_linux_prefer_pit_during_apk;
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    pic_init_unmask_all();
+    assert!(
+        guest_uefi_linux_prefer_pit_during_apk(virtio_needs_pit_over_uart()),
+        "linux PIT once after DRIVER_OK"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "apk overlay PIT-once beats UART"
+    );
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "COM1 IRQ 4 must beat PIT after prefer-once is consumed"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
 fn lab_stub_raise_pit_does_not_inject() {
     reset();
     reset_cd();

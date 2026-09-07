@@ -166,7 +166,9 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
 /// Do not re-assert THRE. IER.ETBEI plus an always-empty THR keeps IRQ 4
 /// ahead of PIT on every resume, so `idle=poll` never sees jiffies and
 /// Alpine `sleep` after virtio DRIVER_OK hangs. THRE still latches on
-/// THR/IER writes via [`pio`]. UART reassert RX not THRE.
+/// THR/IER writes via [`pio`]. After DRIVER_OK, virtio MMIO and VMX preempt
+/// arm PIT-once so jiffies still move; HLT keeps UART first for auto-answer.
+/// UART reassert RX not THRE.
 /// Not `ISO-INSTALL-OK`.
 pub fn reassert_irq() {
     let pending = with_uart(|u| u.com1.rx_len > 0 && u.com1.ier & 1 != 0);

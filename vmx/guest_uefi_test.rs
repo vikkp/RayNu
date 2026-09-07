@@ -82,6 +82,8 @@ use super::{
     virtio_mmio_retry_decode_len, guest_uefi_linux_mov_dr_len,
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
+    guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
+    guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
     guest_uefi_firmware_hlt_ignores_tpr,
@@ -1570,6 +1572,22 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux preempt deadloop noskip"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT once after DRIVER_OK"));
+    assert!(guest_uefi_linux_prefer_pit_during_apk(true) == false);
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_linux_prefer_pit_during_apk(false));
+    crate::devices::guest_irq::reset();
+    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(false, true, false));
+    assert!(guest_uefi_virtio_mmio_heartbeat(0));
+    assert!(guest_uefi_virtio_mmio_heartbeat(31));
+    assert!(guest_uefi_virtio_mmio_heartbeat(64));
+    assert!(!guest_uefi_virtio_mmio_heartbeat(65));
+    assert!(guest_uefi_virtio_mmio_heartbeat(1280), "virtio MMIO heartbeat 64");
+    assert!(!guest_uefi_virtio_mmio_heartbeat(1281));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO heartbeat 64"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux HLT UART after DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART reassert RX not THRE"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain every resume"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio DRIVER_OK"));

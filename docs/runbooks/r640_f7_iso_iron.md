@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green CI run of `cursor/raynu-f-direct-iron-b7a8` after the Linux-cap restore (fill in the run id once CI is green). Superseded: `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34067879816` / `55a3602` (iron 2026-09-07: `EBS-OK` then `restore host xcr0 reason=0x20 rip=0xb00013f`) · `088ab25` for F7 (OVMF scaffold never stopped) · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green CI run of `cursor/pit-during-apk-b7a8` (PIT-once after virtio DRIVER_OK). Superseded: `46fd345` run `34069352671` (Linux reached apk overlay, then UART starved PIT) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34069352671` / `46fd345` (iron 2026-09-07: `Installing packages` then last virtio `n=1281`, no `ISO-INSTALL-OK`) · `34067879816` / `55a3602` (iron 2026-09-07: `EBS-OK` then `restore host xcr0 reason=0x20 rip=0xb00013f`) · `088ab25` for F7 (OVMF scaffold never stopped) · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -113,7 +113,7 @@ cd ~/projects/raynu
   --install-launcher \
   --branch cursor/e5-stage46-iso-a623 \
   --no-git \
-  --run <green CI run id of cursor/raynu-f-direct-iron-b7a8> \
+  --run <green CI run id of cursor/pit-during-apk-b7a8> \
   --any-cruzer-usb \
   --init-new-cruzer \
   --allow-new-serial \
@@ -170,6 +170,8 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` |
+| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT once after DRIVER_OK` |
+| apk overlay | `Installing packages to root filesystem...` with virtio MMIO `n=` continuing (heartbeat every 64) — **not** a freeze after `n=1281` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
 | F7 reset | `guest reset requested src=` (`kbc` is what nested saw) · `relaunch after reset` |
 | Disk boot | `GPT ESP` · `disk whole-disk path` · `image=DISK-BOOTX64` |
@@ -192,7 +194,13 @@ stream, you flashed `088ab25` (or older). Re-flash from the Linux-cap-restore pi
 If COM2 shows `RAYNU-V-RAYNU-F-EBS-OK` then `restore host xcr0 … reason=0x20
 rip=0xb00013f` and `Stage 46 product ISO hold` with no `Linux version`, you
 flashed `55a3602` / run `34067879816`. That pin collapsed the resume cap to 1
-for the Linux path too. Re-flash from the Linux-cap-restore pin.
+for the Linux path too. Re-flash from the PIT-during-apk pin.
+
+If COM2 shows `Linux version 6.12.13-0-lts` and `Installing packages to root
+filesystem...` then goes silent after virtio MMIO `n=1281` with no
+`linux PIT once after DRIVER_OK`, you flashed `46fd345` / run `34069352671`.
+UART beat PIT after DRIVER_OK. Re-flash from this PIT-during-apk pin. Do not
+F11 `34069352671` again expecting `ISO-INSTALL-OK`.
 
 Capture the full SOL log into `docs/evidence/r640/logs/` and fill
 [`TEMPLATE-iso-install.md`](../evidence/r640/TEMPLATE-iso-install.md). Nested
@@ -208,6 +216,11 @@ or CI logs do not close the gate.
 - **ESP retain** of a ~1 GiB ISO PRE-EBS (watchdog-off path is already in-tree).
 - **UART / SOL** vs Linux earlycon share (F7 reset lines must be nowait —
   that is why the pin is at or after `088ab25`, not `fe4785a`).
+- **UART beats PIT after virtio DRIVER_OK** (2026-09-07, `46fd345` /
+  `34069352671`): Alpine apk overlay stalled at `Installing packages` (last
+  virtio MMIO `n=1281`). This pin arms PIT-once on virtio MMIO and VMX preempt
+  after DRIVER_OK. Do not permanently prefer PIT — that starves `login:` /
+  auto-answer. Do not F11 `34069352671` again.
 - **OVMF scaffold leg on iron** (2026-09-06, `088ab25`): the leg is now capped
   at one exit when `raynuf.txt` is present (`GUEST_UEFI_RAYNU_F_DIRECT_CAP`).
   If RayNu-F still does not start, look for `RayNu-F launch skipped` /
