@@ -840,6 +840,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIT hold until login")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_raise_pit_on_resume")
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIT raise on overlay resume")
+        && include_str!("../vmx/guest_uefi.rs").contains("linux PIT raise after DRIVER_OK not probe")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_pit_jiffies_now")
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIT after virtio probe")
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIT hold after DRIVER_OK")

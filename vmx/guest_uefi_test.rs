@@ -1603,11 +1603,15 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_pit_jiffies_now(false, true, true, true), "linux PIT hold after DRIVER_OK");
     assert!(!guest_uefi_linux_pit_jiffies_now(true, true, false, false));
     assert!(guest_uefi_linux_raise_pit_on_resume(true, false, true, true), "linux PIT raise on overlay resume");
-    assert!(guest_uefi_linux_raise_pit_on_resume(false, true, true, false));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume(false, true, true, false),
+        "linux PIT raise after DRIVER_OK not probe"
+    );
     assert!(!guest_uefi_linux_raise_pit_on_resume(true, true, false, false));
     assert!(!guest_uefi_linux_raise_pit_on_resume(false, false, false, false));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold until login"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise on overlay resume"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise after DRIVER_OK not probe"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after virtio probe"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold after DRIVER_OK"));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));

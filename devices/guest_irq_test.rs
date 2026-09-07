@@ -964,6 +964,7 @@ fn product_iso_linux_early_kernel_uart_beats_pit() {
     };
     use crate::vmx::guest_uefi::{
         guest_uefi_linux_pit_jiffies_now, guest_uefi_linux_prefer_pit_hold,
+        guest_uefi_linux_raise_pit_on_resume,
     };
     arm_product_iso();
     reset_virtio();
@@ -1010,6 +1011,15 @@ fn product_iso_linux_early_kernel_uart_beats_pit() {
         virtio_linux_probe_started(),
         virtio_both_driver_ok(),
     ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume(
+            apk_overlay_needs_pit(),
+            virtio_needs_pit_over_uart(),
+            virtio_linux_probe_started(),
+            virtio_both_driver_ok(),
+        ),
+        "linux PIT raise after DRIVER_OK not probe"
+    );
     raise_pit();
     raise_gsi(4);
     assert_eq!(

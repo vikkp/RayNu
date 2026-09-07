@@ -455,6 +455,7 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("linux PIT hold until login")
         && guest.contains("fn guest_uefi_linux_raise_pit_on_resume")
         && guest.contains("linux PIT raise on overlay resume")
+        && guest.contains("linux PIT raise after DRIVER_OK not probe")
         && guest.contains("fn guest_uefi_linux_pit_jiffies_now")
         && guest.contains("linux PIT after virtio probe")
         && guest.contains("linux PIT hold after DRIVER_OK")
