@@ -142,11 +142,16 @@ fn product_live() -> bool {
 static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
 static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
+/// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
+/// count — that leftover made iron `c61942b` skip PIC virtio (no
+/// `linux PIC IRQ0`, apk `n=1345`). linux PIC before leftover GSI 2.
+static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
 
 pub fn reset() {
     PREFER_PIT_ONCE.store(false, Ordering::Release);
     PREFER_PIT_HOLD.store(false, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
+    LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -504,10 +509,33 @@ pub fn ioapic_pin_unmasked(pin: u8) -> bool {
     })
 }
 
-/// MADT IRQ0 ISO pin is live (Linux programmed GSI 2).
+/// MADT IRQ0 ISO pin is live (unmasked RTE). Firmware virtual-wire leftover
+/// also unmasks pin 2; Linux that skipped IO-APIC still needs PIC.
+/// Use [`linux_ioapic_gsi2_programmed`] for the Linux inject path.
 /// linux GSI 2 before PIC. Not `ISO-INSTALL-OK`.
 pub fn ioapic_gsi2_armed() -> bool {
     ioapic_pin_unmasked(PIT_IOAPIC_GSI)
+}
+
+/// Linux guest wrote IOAPIC pin 2 (MADT IRQ0 ISO). Firmware leftover is not
+/// this. linux PIC before leftover GSI 2. Not `ISO-INSTALL-OK`.
+pub fn linux_ioapic_gsi2_programmed() -> bool {
+    LINUX_IOAPIC_GSI2.load(Ordering::Acquire)
+}
+
+/// Latch a Linux IOAPIC window write that programs pin 2.
+/// linux PIC before leftover GSI 2. Not `ISO-INSTALL-OK`.
+pub fn note_linux_ioapic_write(off: u16) {
+    if (off & 0xff) != 0x10 {
+        return;
+    }
+    with_irq(|c| {
+        let n = c.ioapic.sel & 0xff;
+        let pin_lo = 0x10 + 2 * u32::from(PIT_IOAPIC_GSI);
+        if n == pin_lo || n == pin_lo.wrapping_add(1) {
+            LINUX_IOAPIC_GSI2.store(true, Ordering::Release);
+        }
+    });
 }
 
 /// Consume one PIC vector. Does not touch IOAPIC.
@@ -642,22 +670,31 @@ fn ioapic_pin_is_io(pin: u8) -> bool {
         || pin == UART_GSI
 }
 
-/// Prefer ATA/virtio/UART over PIT pin 2 unless Linux latched prefer-once.
-/// IOAPIC I/O over PIT. firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
+/// Prefer ATA/virtio over PIT pin 2. Hold/once beats UART only (apk jiffies
+/// vs ttyS0), not virtio INTx — iron `c61942b` / `34135448354` froze apk at
+/// `n=1345` when leftover GSI 2 + hold stole PIC virtio.
+/// IOAPIC I/O over PIT. linux PIT hold UART not virtio.
+/// firmware virtual-wire GSI 14. Not `ISO-INSTALL-OK`.
 fn ioapic_peek_pin(c: &IrqChip) -> Option<(u8, u8)> {
-    if prefer_pit_priority() {
-        if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
-            return Some((PIT_IOAPIC_GSI, vec));
-        }
-    }
     for pin in IOAPIC_IO_PINS {
+        if prefer_pit_priority() && pin == UART_GSI {
+            continue;
+        }
         if let Some(vec) = ioapic_pin_ready(c, pin) {
             return Some((pin, vec));
         }
     }
+    if let Some(vec) = ioapic_pin_ready(c, PIT_IOAPIC_GSI) {
+        return Some((PIT_IOAPIC_GSI, vec));
+    }
+    if prefer_pit_priority() {
+        if let Some(vec) = ioapic_pin_ready(c, UART_GSI) {
+            return Some((UART_GSI, vec));
+        }
+    }
     for pin in 0..IOAPIC_PINS {
         let pin = pin as u8;
-        if ioapic_pin_is_io(pin) {
+        if ioapic_pin_is_io(pin) || pin == PIT_IOAPIC_GSI {
             continue;
         }
         if let Some(vec) = ioapic_pin_ready(c, pin) {

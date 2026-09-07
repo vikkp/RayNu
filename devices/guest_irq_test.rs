@@ -6,7 +6,7 @@
     firmware_ata_vec, firmware_is_pit_vec,
     ATA_GSI, IOAPIC_GPA,
     IOAPIC_VERSION, PIT_IOAPIC_GSI, PIT_IRQ, VIRTIO_GSI, VIRTIO_ISO_GSI, VIRTIO_PIC_IRQ,
-    ioapic_gsi2_armed,
+    ioapic_gsi2_armed, linux_ioapic_gsi2_programmed, note_linux_ioapic_write, prefer_pit_hold,
 };
 use crate::devices::guest_platform::{self, is_platform_sink_gpa};
 use crate::devices::ide_cdrom::{
@@ -195,6 +195,10 @@ fn product_iso_firmware_virtual_wire_gsi2_repeats() {
     assert!(firmware_virtual_wire_armed());
     assert!(ioapic_gsi2_armed(), "firmware virtual-wire GSI 2");
     assert!(
+        !linux_ioapic_gsi2_programmed(),
+        "linux PIC before leftover GSI 2"
+    );
+    assert!(
         !crate::vmx::guest_uefi::guest_uefi_pic_before_lapic(true, true, false),
         "firmware virtual-wire GSI 2 beats PIC-first"
     );
@@ -208,6 +212,44 @@ fn product_iso_firmware_virtual_wire_gsi2_repeats() {
         take_ioapic_vector(),
         Some(0x20),
         "firmware virtual-wire GSI 2 AEOI"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_ioapic_gsi2_programmed_not_firmware_leftover() {
+    arm_product_iso();
+    arm_firmware_virtual_wire();
+    assert!(ioapic_gsi2_armed());
+    assert!(!linux_ioapic_gsi2_programmed(), "linux PIC before leftover GSI 2");
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    note_linux_ioapic_write(0);
+    assert!(!linux_ioapic_gsi2_programmed());
+    ioapic_write(0x10, 0x31);
+    note_linux_ioapic_write(0x10);
+    assert!(linux_ioapic_gsi2_programmed(), "linux PIC before leftover GSI 2");
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_hold_virtio_ioapic_beats_pit() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    ioapic_write(0, 0x10 + 2 * u32::from(PIT_IOAPIC_GSI));
+    ioapic_write(0x10, 0x31);
+    ioapic_write(0, 0x10 + 2 * u32::from(VIRTIO_GSI));
+    ioapic_write(0x10, 0x51);
+    prefer_pit_hold(true);
+    raise_pit();
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x51),
+        "linux PIT hold UART not virtio"
     );
     reset();
     reset_cd();
@@ -951,6 +993,14 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
         "hold is not consumed — idle=poll still sees jiffies"
     );
     let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    raise_virtio();
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIT hold UART not virtio"
+    );
+    crate::devices::guest_irq::lower_virtio();
     for &b in b"login:" {
         note_tx(b);
     }

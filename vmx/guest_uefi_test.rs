@@ -89,7 +89,8 @@ use super::{
     guest_uefi_linux_pit_jiffies_now, LINUX_PIT_RESUME_MIN_TSC,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
-    guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
+    guest_uefi_linux_pic_before_lapic, guest_uefi_linux_pic_before_leftover_gsi2,
+    guest_uefi_pic_before_lapic,
     guest_uefi_firmware_hlt_ignores_tpr,
     guest_uefi_firmware_hlt_wait_for_irq,
     guest_uefi_firmware_hlt_wait_for_irq_oneshot,
@@ -1671,6 +1672,14 @@ fn marker_and_residual_honest() {
     assert!(guest_uefi_linux_pic_before_lapic(true, false));
     assert!(!guest_uefi_linux_pic_before_lapic(true, true));
     assert!(!guest_uefi_linux_pic_before_lapic(false, false));
+    assert!(
+        guest_uefi_linux_pic_before_leftover_gsi2(true, true, false),
+        "linux PIC before leftover GSI 2"
+    );
+    assert!(!guest_uefi_linux_pic_before_leftover_gsi2(true, true, true));
+    assert!(!guest_uefi_linux_pic_before_leftover_gsi2(false, true, false));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC before leftover GSI 2"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold UART not virtio"));
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
     assert!(!guest_uefi_pic_before_lapic(false, false, false));
