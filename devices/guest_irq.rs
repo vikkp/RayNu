@@ -150,8 +150,11 @@ pub fn reset() {
 
 /// Linux product-ISO I/O: deliver PIT once even if UART IRR is also set.
 /// UART still beats PIT after this inject so auto-answer is not starved.
-/// Used after virtio DRIVER_OK so apk overlay / `sleep` keep jiffies moving.
-/// linux PIT prefer once. linux PIT once after DRIVER_OK. Not `ISO-INSTALL-OK`.
+/// Used after virtio DRIVER_OK so apk overlay / `sleep` keep jiffies moving
+/// (virtio MMIO, preempt, HLT until login:, UART LSR poll).
+/// linux PIT prefer once. linux PIT once after DRIVER_OK.
+/// linux HLT PIT during apk. linux PIT after DRIVER_OK until login.
+/// Not `ISO-INSTALL-OK`.
 pub fn prefer_pit_once() {
     PREFER_PIT.store(true, Ordering::Release);
 }

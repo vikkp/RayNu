@@ -1,6 +1,6 @@
 use super::{
-    begin_second_boot, note_tx, queued, reset, second_boot, take_rx, BOOTLOADER, DISK, GRUB_ENTER,
-    MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SYS, YES,
+    apk_overlay_needs_pit, begin_second_boot, note_tx, queued, reset, second_boot, take_rx,
+    BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SYS, YES,
 };
 
 #[test]
@@ -93,6 +93,40 @@ fn login_queues_root_then_setup_disk() {
     assert!(core::str::from_utf8(SETUP).unwrap().contains("-s 0"));
     reset();
     assert_eq!(queued(), 0);
+}
+
+#[test]
+fn apk_overlay_needs_pit_until_login() {
+    reset();
+    assert!(
+        apk_overlay_needs_pit(),
+        "linux PIT after DRIVER_OK until login"
+    );
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    assert!(
+        !apk_overlay_needs_pit(),
+        "getty login: UART first for auto-answer"
+    );
+    reset();
+    assert!(apk_overlay_needs_pit());
+    for &b in b"/ # " {
+        note_tx(b);
+    }
+    assert!(
+        apk_overlay_needs_pit(),
+        "emergency / # stays PHASE_LOGIN so overlay still needs PIT"
+    );
+    reset();
+    for &b in b"localhost:~# " {
+        note_tx(b);
+    }
+    assert!(
+        !apk_overlay_needs_pit(),
+        "live ~# SETUP: UART first"
+    );
+    reset();
 }
 
 #[test]

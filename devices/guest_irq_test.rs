@@ -817,6 +817,71 @@ fn product_iso_linux_pit_once_after_driver_ok_beats_uart_then_uart_wins() {
 }
 
 #[test]
+fn product_iso_linux_hlt_pit_during_apk_until_login_then_uart() {
+    use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, note_tx, reset as reset_ans};
+    use crate::devices::guest_virtio_blk::{
+        mmio_write, mmio_write_iso, present as present_virtio, reset as reset_virtio,
+        virtio_needs_pit_over_uart, VIRTIO_STATUS_DRIVER_OK,
+    };
+    use crate::vmx::guest_uefi::{
+        guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
+        guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
+    };
+    arm_product_iso();
+    reset_virtio();
+    reset_ans();
+    assert!(present_virtio());
+    mmio_write(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    mmio_write_iso(0x14, 1, u64::from(VIRTIO_STATUS_DRIVER_OK));
+    assert!(!virtio_needs_pit_over_uart());
+    assert!(apk_overlay_needs_pit());
+    pic_init_unmask_all();
+    assert!(guest_uefi_linux_hlt_prefer_pit_during_apk(
+        true,
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    assert!(guest_uefi_linux_uart_prefer_pit_during_apk(
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    assert!(guest_uefi_linux_prefer_pit_during_apk(
+        virtio_needs_pit_over_uart()
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux HLT PIT during apk"
+    );
+    for &b in b"login:" {
+        note_tx(b);
+    }
+    assert!(!apk_overlay_needs_pit());
+    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(
+        true,
+        true,
+        virtio_needs_pit_over_uart(),
+        apk_overlay_needs_pit(),
+    ));
+    raise_pit();
+    raise_gsi(4);
+    assert_eq!(
+        take_inject_vector(),
+        Some(0x24),
+        "after login: UART beats PIT"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
 fn lab_stub_raise_pit_does_not_inject() {
     reset();
     reset_cd();

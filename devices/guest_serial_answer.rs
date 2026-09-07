@@ -316,6 +316,14 @@ pub fn queued() -> usize {
     with(|a| a.qn)
 }
 
+/// Alpine init overlay (`Installing packages to root filesystem`) runs
+/// before getty `login:`. Keep PIT preferred on HLT / UART poll so
+/// cpuidle `sleep` jiffies move. After `login:` UART wins auto-answer.
+/// linux PIT after DRIVER_OK until login. Not `ISO-INSTALL-OK`.
+pub fn apk_overlay_needs_pit() -> bool {
+    PHASE.load(Ordering::Acquire) == PHASE_LOGIN
+}
+
 #[cfg(test)]
 #[path = "guest_serial_answer_test.rs"]
 mod guest_serial_answer_test;

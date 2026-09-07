@@ -83,6 +83,7 @@ use super::{
     guest_uefi_virtio_bar_overlaps_scratch, guest_uefi_virtio_bar_should_trap,
     guest_uefi_virtio_mmio_raises_pit, guest_uefi_virtio_mmio_polls_lapic,
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
+    guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
@@ -1573,13 +1574,23 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer once"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT prefer until DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT once after DRIVER_OK"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux HLT PIT during apk"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after DRIVER_OK until login"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux UART PIT during apk"));
     assert!(guest_uefi_linux_prefer_pit_during_apk(true) == false);
     crate::devices::guest_irq::reset();
     assert!(guest_uefi_linux_prefer_pit_during_apk(false));
     crate::devices::guest_irq::reset();
-    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false));
-    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true));
-    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(false, true, false));
+    assert!(guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, false, true));
+    assert!(!guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, false, false));
+    assert!(!guest_uefi_linux_hlt_prefer_pit_during_apk(true, true, true, true));
+    assert!(guest_uefi_linux_uart_prefer_pit_during_apk(true, false, true));
+    assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(true, false, false));
+    assert!(!guest_uefi_linux_uart_prefer_pit_during_apk(false, false, true));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));
+    assert!(guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, false));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, true, false));
+    assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(false, true, false, false));
     assert!(guest_uefi_virtio_mmio_heartbeat(0));
     assert!(guest_uefi_virtio_mmio_heartbeat(31));
     assert!(guest_uefi_virtio_mmio_heartbeat(64));

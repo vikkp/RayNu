@@ -310,7 +310,8 @@ pub const VIRTIO_STATUS_DRIVER_OK: u8 = 4;
 /// virtio-blk functions (`00:02.0` install disk, `00:03.0` ISO) reach
 /// DRIVER_OK. After that, UART must beat PIT so ttyS0 TX and Alpine
 /// serial auto-answer work — except one-shot PIT on virtio MMIO / preempt
-/// so apk overlay reads keep jiffies moving. Lab / iso=0 (queues off) is false.
+/// / HLT-until-login / UART LSR so apk overlay reads keep jiffies moving.
+/// Lab / iso=0 (queues off) is false.
 /// linux PIT prefer until DRIVER_OK. Not `ISO-INSTALL-OK`.
 pub fn virtio_needs_pit_over_uart() -> bool {
     with_box(|b| {

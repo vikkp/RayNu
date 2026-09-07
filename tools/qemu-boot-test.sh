@@ -35,12 +35,18 @@
 # M4.5: RAYNU-V-M4-SMP-OK (dual-vCPU BSP+AP shared-EPT probe)
 # E5.36: RAYNU-V-M7-E5-LIVE-BYTES-PRESENT-OK (real ESP OVMF.fd retain; always)
 # E5.37: RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK (required when VMXON succeeds)
-# E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds)
-# E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds)
-# E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds)
-# E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds)
-# E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds)
-# E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds)
+# E5.38: RAYNU-V-M7-E5-OVMF-ALIVE-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.39: RAYNU-V-M7-E5-OVMF-PAST-SEC-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.40: RAYNU-V-M7-E5-OVMF-CDROM-OK (required when VMXON succeeds; GuestVisible
+#        fallback still counts)
+# E5.41: RAYNU-V-M7-E5-OVMF-DXE-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.42: RAYNU-V-M7-E5-OVMF-VIRTIO-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
+# E5.43: RAYNU-V-M7-E5-OVMF-BOTH-OK (required when VMXON succeeds, unless
+#        RayNu-F CONOUT-OK — then informational)
 # E5.44: RAYNU-V-M7-E5-OVMF-ATAPI-OK (required when VMXON succeeds, unless
 #        the ADR-016 RayNu-F leg ran — then informational)
 # F2b:   RAYNU-V-RAYNU-F-CONOUT-OK (required when RAYNU_F=1 and VMXON succeeds)
@@ -233,14 +239,22 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
     echo "error: marker '$MARKER_OVMF_VMLAUNCH' not found after VMXON (need real VMLAUNCH of retained OVMF)" >&2
     fail=1
   fi
+  raynu_f_ran=0
+  if grep -qF "$MARKER_RAYNU_F_CONOUT" "$SERIAL_LOG"; then
+    raynu_f_ran=1
+  fi
   if grep -qF "$MARKER_OVMF_ALIVE" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI ran past first triple-fault"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF ALIVE not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_ALIVE' not found after VMXON (OVMF died at first triple-fault)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_PAST_SEC" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI left SEC tail (PEI-style PCI/COM/HLT)"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF PAST-SEC not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_PAST_SEC' not found after VMXON (still inside SEC window)" >&2
     fail=1
@@ -255,25 +269,27 @@ if grep -qF "$MARKER_VMXON" "$SERIAL_LOG"; then
   fi
   if grep -qF "$MARKER_OVMF_DXE" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI past-PEI/DXE or CD boot attempt"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF DXE not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_DXE' not found after VMXON (no past-PEI/DXE or CD boot attempt)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_VIRTIO" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI virtio-blk + boot order CD then disk"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF VIRTIO not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_VIRTIO' not found after VMXON (virtio-blk not visible to this guest)" >&2
     fail=1
   fi
   if grep -qF "$MARKER_OVMF_BOTH" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI simultaneous virtio 00:02.0 + IDE 00:00.1"
+  elif [[ "$raynu_f_ran" == "1" ]]; then
+    echo "==> E5 OVMF BOTH not in this serial (OVMF progress informational when RayNu-F ran; ADR-016; not ISO-INSTALL-OK)"
   else
     echo "error: marker '$MARKER_OVMF_BOTH' not found after VMXON (firmware did not enum both PCI functions on this boot)" >&2
     fail=1
-  fi
-  raynu_f_ran=0
-  if grep -qF "$MARKER_RAYNU_F_CONOUT" "$SERIAL_LOG"; then
-    raynu_f_ran=1
   fi
   if grep -qF "$MARKER_OVMF_ATAPI" "$SERIAL_LOG"; then
     echo "==> E5 guest-UEFI ATAPI sector read (sectors>0)"
