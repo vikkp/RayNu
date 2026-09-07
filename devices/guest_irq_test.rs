@@ -1026,6 +1026,37 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
 }
 
 #[test]
+fn product_iso_virtio_shared_intx_survives_sibling_isr_read() {
+    use crate::devices::guest_virtio_blk::{
+        drain_queue, mmio_read, mmio_read_iso, mmio_write, mmio_write_iso, present as present_virtio,
+        reset as reset_virtio, virtio_isr_latched,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    pic_init_unmask_all();
+    mmio_write(0x300, 2, 1);
+    mmio_write_iso(0x300, 2, 1);
+    let _ = drain_queue(|_| None);
+    assert!(virtio_isr_latched(), "virtio shared INTx");
+    assert_eq!(mmio_read(0x100, 1), 1, "disk ISR read-to-clear");
+    assert!(
+        virtio_isr_latched(),
+        "ISO ISR still latched after disk ISR read"
+    );
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "shared PIC 11 stays pending for the sibling"
+    );
+    assert_eq!(mmio_read_iso(0x100, 1), 1);
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_linux_early_kernel_uart_beats_pit() {
     use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, reset as reset_ans};
     use crate::devices::guest_virtio_blk::{

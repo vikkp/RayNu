@@ -694,6 +694,25 @@ pub fn mmio_read_iso(off: u16, size: u8) -> u64 {
     mmio_read_dev(true, off, size)
 }
 
+/// Either product-ISO virtio function still has ISR=1 (INTx asserted).
+/// linux virtio INTx reassert. Not `ISO-INSTALL-OK`.
+pub fn virtio_isr_latched() -> bool {
+    with_box(|b| b.disk.isr != 0 || b.iso.isr != 0)
+}
+
+/// After one function's ISR read dropped shared PIC IRQ 11, keep the line
+/// high if the sibling still has ISR=1. apk overlay uses vda+vdb on the
+/// same INTx. virtio shared INTx. Not `ISO-INSTALL-OK`.
+pub fn reassert_virtio_shared_intx() {
+    let (disk, iso) = with_box(|b| (b.disk.isr != 0, b.iso.isr != 0));
+    if disk {
+        crate::devices::guest_irq::raise_virtio();
+    }
+    if iso {
+        crate::devices::guest_irq::raise_virtio_iso();
+    }
+}
+
 fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
     let val = if iso {
         with_iso(|v| mmio_read_locked(v, off, size))
@@ -706,6 +725,8 @@ fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
         } else {
             crate::devices::guest_irq::lower_virtio();
         }
+        // virtio shared INTx: ISR read-to-clear is per-function; PIC 11 is not.
+        reassert_virtio_shared_intx();
     }
     val
 }
@@ -1323,7 +1344,7 @@ pub fn take_iso_read_note() -> Option<u64> {
     }
 }
 
-fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
+fn take_queue(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
     let p = v.notify_pending;
     v.notify_pending = false;
     if p {
@@ -1331,7 +1352,7 @@ fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
     }
     (
         p,
-        p && v.queue_enable != 0,
+        v.queue_enable != 0,
         v.queue_size,
         v.last_avail,
         v.queue_desc,
@@ -1340,10 +1361,9 @@ fn take_notify(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
     )
 }
 
-/// Drain pending notifies using `translate` (GPA → HPA).
-///
-/// Returns install-disk OUT bytes. ISO IN is counted separately
-/// ([`take_iso_read_note`]).
+/// Drain published avail idx using `translate` (GPA → HPA). Kick/notify is
+/// optional (virtio drain without notify). Returns install-disk OUT bytes.
+/// ISO IN is counted separately ([`take_iso_read_note`]).
 pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
     let disk_n = drain_disk(translate);
     drain_iso(translate);
@@ -1351,16 +1371,19 @@ pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
 }
 
 fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
-    let (notified, pending, qsize, last, desc, avail, used) = with_virtio(|v| take_notify(v));
-    if notified {
-        crate::devices::guest_irq::raise_virtio();
-    }
-    if !pending {
+    let (notified, enabled, qsize, last, desc, avail, used) = with_virtio(|v| take_queue(v));
+    if !enabled {
+        if notified {
+            crate::devices::guest_irq::raise_virtio();
+        }
         return 0;
     }
     let hpa = DISK_HPA.load(Ordering::Acquire);
     let dlen = DISK_LEN.load(Ordering::Acquire) as usize;
     if hpa == 0 || dlen == 0 {
+        if notified {
+            crate::devices::guest_irq::raise_virtio();
+        }
         return 0;
     }
     // SAFETY: attach_disk installed exclusive disk frames.
@@ -1376,7 +1399,15 @@ fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
         &translate,
         false,
     );
-    with_virtio(|v| v.last_avail = last_avail);
+    with_virtio(|v| {
+        v.last_avail = last_avail;
+        if n > 0 {
+            v.isr = 1;
+        }
+    });
+    if notified || n > 0 {
+        crate::devices::guest_irq::raise_virtio();
+    }
     if n > 0 {
         BYTES_WRITTEN.fetch_add(u64::from(n), Ordering::AcqRel);
     }
@@ -1384,16 +1415,19 @@ fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
 }
 
 fn drain_iso(translate: fn(u64) -> Option<u64>) {
-    let (notified, pending, qsize, last, desc, avail, used) = with_iso(|v| take_notify(v));
-    if notified {
-        crate::devices::guest_irq::raise_virtio_iso();
-    }
-    if !pending {
+    let (notified, enabled, qsize, last, desc, avail, used) = with_iso(|v| take_queue(v));
+    if !enabled {
+        if notified {
+            crate::devices::guest_irq::raise_virtio_iso();
+        }
         return;
     }
     let ptr = ISO_PTR.load(Ordering::Acquire);
     let ilen = ISO_LEN.load(Ordering::Acquire) as usize;
     if ptr == 0 || ilen == 0 {
+        if notified {
+            crate::devices::guest_irq::raise_virtio_iso();
+        }
         return;
     }
     // SAFETY: product ISO window is retained until reset; readonly rejects OUT.
@@ -1410,7 +1444,15 @@ fn drain_iso(translate: fn(u64) -> Option<u64>) {
         &translate,
         true,
     );
-    with_iso(|v| v.last_avail = last_avail);
+    with_iso(|v| {
+        v.last_avail = last_avail;
+        if n > 0 {
+            v.isr = 1;
+        }
+    });
+    if notified || n > 0 {
+        crate::devices::guest_irq::raise_virtio_iso();
+    }
     if n > 0 {
         ISO_READ.fetch_add(u64::from(n), Ordering::AcqRel);
     }

@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (Linux PIC despite leftover firmware GSI 2; paced overlay PIT; virtio beats PIT hold). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (shared virtio INTx reassert; drain without notify; MMIO PIT until DRIVER_OK; paced overlay PIT). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -179,7 +179,7 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` — past MADT / FPU / `Freeing initrd` **without** `restore host xcr0 reason=0x1e` |
-| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT hold until login` then `linux PIT resume paced` then `linux PIC before leftover GSI 2` / `linux PIC IRQ0` — **no** `soft lockup` in `modprobe` |
+| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT hold until login` then `linux PIT resume paced` then `linux virtio INTx reassert` / `linux virtio PIC 11` — **no** `soft lockup` in `modprobe` |
 | apk overlay | `Installing packages to root filesystem...` with virtio MMIO `n=` continuing (heartbeat every 64) — **not** a freeze after `n=1281` or `n=1345` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
 | F7 reset | `guest reset requested src=` (`kbc` is what nested saw) · `relaunch after reset` |
@@ -207,10 +207,12 @@ for the Linux path too. Re-flash from the PIT-during-apk pin.
 
 If COM2 shows `linux virtio DRIVER_OK` then `linux PIT hold until login` then
 `linux PIT resume paced` then `Installing packages` with last virtio MMIO
-`n=1345` and **no** `linux PIC IRQ0` / **no** `linux PIC before leftover GSI 2`,
-you flashed `c61942b` / run `34135448354`. Slice 1 (paced resume) lived;
-leftover firmware GSI 2 stole PIC virtio. Re-flash from this leftover-GSI2
-pin. Do not F11 `34135448354` again expecting `ISO-INSTALL-OK`.
+`n=1345` and **no** `linux virtio PIC 11` / **no** `linux virtio INTx reassert`,
+you flashed `0a9b552` / run `34141401594` or `c61942b` / run `34135448354`.
+Slice 1 (paced resume) lived; leftover GSI 2 was a no-op on RayNu-F (never
+armed pin 2). Shared vda+vdb INTx + missed kicks starved apk. Re-flash from
+this shared-INTx pin. Do not F11 `34141401594` or `34135448354` again
+expecting `ISO-INSTALL-OK`.
 
 If COM2 shows `linux virtio DRIVER_OK` then `linux PIT hold until login` /
 `linux PIT once after DRIVER_OK` then `watchdog: BUG: soft lockup` in
@@ -270,10 +272,11 @@ or CI logs do not close the gate.
   `iowrite8` / `handle_softirqs` lockup because resume still raised PIT
   on every VM-entry. `c61942b` / `34135448354` paced resume (~1 ms) and
   probe lived, then apk froze at `n=1345` with no `linux PIC IRQ0`
-  (`MADT or MP tables are not detected`; leftover GSI 2 stole PIC).
-  This pin keeps paced overlay PIT but injects Linux PIC until Linux
-  writes pin 2 (`linux PIC before leftover GSI 2`). Do not F11
-  `34135448354`, `34131274237`, or `34080595540`.
+  (`MADT or MP tables are not detected`). `0a9b552` / `34141401594` was
+  a no-op (RayNu-F never armed leftover GSI 2). This pin keeps paced
+  overlay PIT, reasserts shared virtio INTx while ISR is latched, and
+  drains avail without a kick. Do not F11 `34141401594`, `34135448354`,
+  `34131274237`, or `34080595540`.
 - **PIT hold from firmware queue-arm during APIC setup** (2026-09-07,
   `c815ccc` / `34078335291`): Linux reached `APIC: ACPI MADT or MP tables
   are not detected`, then 8× `inject vec=0x30`, then `restore host xcr0
