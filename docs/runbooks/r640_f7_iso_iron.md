@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the green CI run of `cursor/raynu-f-direct-iron-b7a8` (RayNu-F direct; fill in the run id once CI is green). Superseded: `088ab25` run `33978770315`.  
-**Do not flash:** `088ab25` for F7 (iron 2026-09-06: OVMF scaffold leg never stopped, RayNu-F never entered) · P0-14 `2b795a0` (E4 SHELL stub) · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green CI run of `cursor/raynu-f-direct-iron-b7a8` after the Linux-cap restore (fill in the run id once CI is green). Superseded: `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34067879816` / `55a3602` (iron 2026-09-07: `EBS-OK` then `restore host xcr0 reason=0x20 rip=0xb00013f`) · `088ab25` for F7 (OVMF scaffold never stopped) · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -167,7 +167,7 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | Step | COM2 |
 |------|------|
 | Product ISO retained | `Stage 46 product ISO retained from ESP` · `iso=` ~1 GiB |
-| RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood |
+| RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
@@ -187,12 +187,12 @@ state (ADR-016).
 
 If COM2 shows `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK` followed by `OVMF-PAST-SEC` /
 `DXE` / `BOTH-OK` and then an endless `guest-UEFI tick ... rip=0x7f0680d0`
-stream, you flashed `088ab25` (or older). That EFI only enters RayNu-F after
-the OVMF leg stops, and iron OVMF does not fault at SEC the way nested KVM did
-(`788930c` `stop n=1043 reason=0x30 rip=0xfffd4739`); it parks in BDS CpuSleep
-until the 16_777_216 cap (`ea30da1`). Re-flash from the RayNu-F-direct pin.
-Waiting for the cap is also valid (RayNu-F does start after `stop n=16777216`)
-but it is tens of minutes of tick output on SOL.
+stream, you flashed `088ab25` (or older). Re-flash from the Linux-cap-restore pin.
+
+If COM2 shows `RAYNU-V-RAYNU-F-EBS-OK` then `restore host xcr0 … reason=0x20
+rip=0xb00013f` and `Stage 46 product ISO hold` with no `Linux version`, you
+flashed `55a3602` / run `34067879816`. That pin collapsed the resume cap to 1
+for the Linux path too. Re-flash from the Linux-cap-restore pin.
 
 Capture the full SOL log into `docs/evidence/r640/logs/` and fill
 [`TEMPLATE-iso-install.md`](../evidence/r640/TEMPLATE-iso-install.md). Nested
