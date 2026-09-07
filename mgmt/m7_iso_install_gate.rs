@@ -854,6 +854,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("linux virtio PIC level INTx")
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIC IRQ11 unmask")
         && include_str!("../vmx/guest_uefi.rs").contains("linux PIC IRQ0 vec 0x30")
+        && include_str!("../vmx/guest_uefi.rs").contains("linux PIC IRQ11 yield PIT")
+        && include_str!("../devices/guest_irq.rs").contains("linux PIC IRQ11 yield PIT")
         && include_str!("../devices/guest_irq.rs").contains("fn pic_level_intx")
         && include_str!("../devices/guest_irq.rs").contains("linux virtio PIC level INTx")
         && include_str!("../devices/guest_irq.rs").contains("linux PIC IRQ11 unmask")

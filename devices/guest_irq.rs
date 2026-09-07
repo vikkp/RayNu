@@ -141,6 +141,11 @@ fn product_live() -> bool {
 
 static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
 static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
+/// After PIC 11 is taken, the next peek/take prefers PIT if both are
+/// pending. Iron `fc3053a` / `34148045050`: `linux virtio PIC 11` then
+/// freeze at mount `n=1089` (`usbdelay=30`) because level INTx kept IRQ 11
+/// ahead of IRQ0 so jiffies never finished. linux PIC IRQ11 yield PIT.
+static IRQ11_YIELD_PIT: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 /// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
 /// count — that leftover made iron `c61942b` skip PIC virtio (no
@@ -150,6 +155,7 @@ static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
 pub fn reset() {
     PREFER_PIT_ONCE.store(false, Ordering::Release);
     PREFER_PIT_HOLD.store(false, Ordering::Release);
+    IRQ11_YIELD_PIT.store(false, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
     LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
@@ -734,16 +740,32 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
     if master_req == 0 {
         return None;
     }
-    if master_req & (1 << PIC_SLAVE_IRQ) != 0 && c.slave.ready && c.slave.vector >= 16 {
+    let slave_irq = if master_req & (1 << PIC_SLAVE_IRQ) != 0
+        && c.slave.ready
+        && c.slave.vector >= 16
+    {
         let slave_req = c.slave.irr & !c.slave.imr & !c.slave.isr;
         if slave_req != 0 {
-            return Some(8 + slave_req.trailing_zeros() as u8);
+            Some(8 + slave_req.trailing_zeros() as u8)
+        } else {
+            None
         }
+    } else {
+        None
+    };
+    let pit = prefer_pit_priority() && (master_req & 1) != 0;
+    // linux PIC IRQ11 yield PIT. Level INTx + unmask made IRQ 11 live
+    // (`fc3053a`) then starved IRQ0 during `usbdelay=30` (n=1089).
+    if slave_irq == Some(VIRTIO_PIC_IRQ) && pit && IRQ11_YIELD_PIT.load(Ordering::Acquire) {
+        return Some(0);
+    }
+    if let Some(irq) = slave_irq {
+        return Some(irq);
     }
     // UART (IRQ 4) and other master devices beat PIT so timer ticks cannot
     // starve COM1 auto-answer. Linux I/O may latch prefer-once so jiffies
     // still move while THRE IRR is stuck.
-    if prefer_pit_priority() && (master_req & 1) != 0 {
+    if pit {
         return Some(0);
     }
     let master_dev = master_req & !1 & !(1 << PIC_SLAVE_IRQ);
@@ -771,6 +793,9 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
     let irq = pic_pending_irq(c)?;
     if irq == 0 {
         PREFER_PIT_ONCE.store(false, Ordering::Release);
+        IRQ11_YIELD_PIT.store(false, Ordering::Release);
+    } else if irq == VIRTIO_PIC_IRQ {
+        IRQ11_YIELD_PIT.store(true, Ordering::Release);
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);

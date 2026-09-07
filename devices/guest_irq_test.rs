@@ -1084,6 +1084,37 @@ fn product_iso_virtio_pic_level_intx_retriggers_after_eoi() {
 }
 
 #[test]
+fn product_iso_virtio_pic_irq11_yields_pit_during_hold() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    prefer_pit_hold(true);
+    raise_virtio();
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "first collision still delivers virtio PIC 11"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIC IRQ11 yield PIT"
+    );
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "after PIT turn, level INTx still pending"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_linux_x86_64_unmasks_virtio_pic_irq11() {
     arm_product_iso();
     // Linux x86_64 IRQ0_VECTOR 0x30 / slave 0x38. Leave IRQ 11 masked.

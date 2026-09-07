@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (level virtio PIC INTx; IRQ11 unmask; Linux x86_64 PIC vec 0x30/0x3b). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34145652767` / `fcac0cd` · `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (PIC IRQ 11 yields PIT so `usbdelay=30` jiffies move). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `fc3053a` run `34148045050` (`linux PIC IRQ0` + `linux virtio PIC 11` then freeze at mount virtio `n=1089` / `usbdelay=30`; level INTx starved IRQ0) · `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34148045050` / `fc3053a` · `34145652767` / `fcac0cd` · `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -205,6 +205,12 @@ rip=0xb00013f` and `Stage 46 product ISO hold` with no `Linux version`, you
 flashed `55a3602` / run `34067879816`. That pin collapsed the resume cap to 1
 for the Linux path too. Re-flash from the PIT-during-apk pin.
 
+If COM2 shows `linux PIC IRQ0` and `linux virtio PIC 11` then `Mounting boot
+media` with last virtio MMIO `n=1089` and **no** `Mounting boot media: ok`,
+you flashed `fc3053a` / run `34148045050`. Level INTx + unmask made IRQ 11
+live; it then starved PIT so `usbdelay=30` jiffies never finished. Re-flash
+from this yield-PIT pin. Do not F11 `34148045050` again expecting `ISO-INSTALL-OK`.
+
 If COM2 shows `linux virtio INTx reassert` then `Installing packages` with last
 virtio MMIO `n=1345` and **no** `linux virtio PIC 11`, you flashed `fcac0cd` /
 run `34145652767`. Shared INTx reassert ran; eight `inject vec=0x30` is Linux
@@ -282,10 +288,11 @@ or CI logs do not close the gate.
   (`MADT or MP tables are not detected`). `0a9b552` / `34141401594` was
   a no-op (RayNu-F never armed leftover GSI 2). `fcac0cd` / `34145652767`
   printed `linux virtio INTx reassert` then froze at `n=1345`; `vec=0x30`
-  is Linux PIC IRQ0. This pin keeps PCI INTx level on PIC 11, unmasks IRQ 11
-  on raise, and matches Linux x86_64 vectors 0x30/0x3b. Do not F11
-  `34145652767`, `34141401594`, `34135448354`, `34131274237`, or
-  `34080595540`.
+  is Linux PIC IRQ0. `fc3053a` / `34148045050` printed `linux PIC IRQ0` and
+  `linux virtio PIC 11` then froze at mount `n=1089` (`usbdelay=30`); level
+  INTx starved IRQ0. This pin yields PIT after PIC 11 while both are pending.
+  Do not F11 `34148045050`, `34145652767`, `34141401594`, `34135448354`,
+  `34131274237`, or `34080595540`.
 - **PIT hold from firmware queue-arm during APIC setup** (2026-09-07,
   `c815ccc` / `34078335291`): Linux reached `APIC: ACPI MADT or MP tables
   are not detected`, then 8× `inject vec=0x30`, then `restore host xcr0

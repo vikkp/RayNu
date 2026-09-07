@@ -469,6 +469,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("linux virtio PIC level INTx")
         && guest.contains("linux PIC IRQ11 unmask")
         && guest.contains("linux PIC IRQ0 vec 0x30")
+        && guest.contains("linux PIC IRQ11 yield PIT")
+        && include_str!("../devices/guest_irq.rs").contains("linux PIC IRQ11 yield PIT")
         && include_str!("../devices/guest_irq.rs").contains("fn pic_level_intx")
         && include_str!("../devices/guest_irq.rs").contains("linux virtio PIC level INTx")
         && include_str!("../devices/guest_irq.rs").contains("linux PIC IRQ11 unmask")
