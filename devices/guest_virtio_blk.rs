@@ -1098,6 +1098,7 @@ pub fn process_blk_queue_in(
     process_blk_queue(
         qsize, last_avail, desc_gpa, avail_gpa, used_gpa, disk, &translate, false,
     )
+    .0
 }
 
 /// Walk a split virtqueue against a read-only backing (product ISO `/dev/vdb`).
@@ -1122,6 +1123,7 @@ pub fn process_iso_queue_in(
     process_blk_queue(
         qsize, last_avail, desc_gpa, avail_gpa, used_gpa, disk, &translate, true,
     )
+    .0
 }
 
 fn page_left(gpa: u64) -> usize {
@@ -1234,14 +1236,15 @@ fn process_blk_queue(
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
     readonly: bool,
-) -> u32 {
+) -> (u32, u16) {
     if qsize == 0 {
-        return 0;
+        return (0, 0);
     }
     let Some(avail_idx) = read_u16(translate, avail_gpa + 2) else {
-        return 0;
+        return (0, 0);
     };
     let mut written = 0u32;
+    let mut nreq = 0u16;
     while *last_avail != avail_idx {
         let slot = (*last_avail as usize) % (qsize as usize);
         let Some(head) = read_u16(translate, avail_gpa + 4 + (slot as u64) * 2) else {
@@ -1330,8 +1333,9 @@ fn process_blk_queue(
         let _ = write_bytes(translate, used_gpa + 4 + (uslot as u64) * 8, &used_elt);
         let _ = write_u16(translate, used_gpa + 2, used_idx.wrapping_add(1));
         *last_avail = last_avail.wrapping_add(1);
+        nreq = nreq.saturating_add(1);
     }
-    written
+    (written, nreq)
 }
 
 /// Bytes the guest read from the ISO virtio since last take (iron serial).
@@ -1364,13 +1368,16 @@ fn take_queue(v: &mut VirtioPci) -> (bool, bool, u16, u16, u64, u64, u64) {
 /// Drain published avail idx using `translate` (GPA → HPA). Kick/notify is
 /// optional (virtio drain without notify). Returns install-disk OUT bytes.
 /// ISO IN is counted separately ([`take_iso_read_note`]).
-pub fn drain_queue(translate: fn(u64) -> Option<u64>) -> u32 {
-    let disk_n = drain_disk(translate);
-    drain_iso(translate);
+/// A completed FLUSH has 0 data bytes; still latch ISR and raise INTx
+/// (iron `9652262` / `34149809660`: apk overlay froze at virtio `n=1345`
+/// after a disk ISR ACK). virtio drain FLUSH. Not `ISO-INSTALL-OK`.
+pub fn drain_queue(translate: impl Fn(u64) -> Option<u64>) -> u32 {
+    let disk_n = drain_disk(&translate);
+    drain_iso(&translate);
     disk_n
 }
 
-fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
+fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
     let (notified, enabled, qsize, last, desc, avail, used) = with_virtio(|v| take_queue(v));
     if !enabled {
         if notified {
@@ -1389,23 +1396,24 @@ fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
     // SAFETY: attach_disk installed exclusive disk frames.
     let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
     let mut last_avail = last;
-    let n = process_blk_queue(
+    let (n, nreq) = process_blk_queue(
         qsize,
         &mut last_avail,
         desc,
         avail,
         used,
         disk,
-        &translate,
+        translate,
         false,
     );
     with_virtio(|v| {
         v.last_avail = last_avail;
-        if n > 0 {
+        // virtio drain FLUSH: used-idx moved even when OUT bytes are 0.
+        if nreq > 0 {
             v.isr = 1;
         }
     });
-    if notified || n > 0 {
+    if notified || nreq > 0 {
         crate::devices::guest_irq::raise_virtio();
     }
     if n > 0 {
@@ -1414,7 +1422,7 @@ fn drain_disk(translate: fn(u64) -> Option<u64>) -> u32 {
     n
 }
 
-fn drain_iso(translate: fn(u64) -> Option<u64>) {
+fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     let (notified, enabled, qsize, last, desc, avail, used) = with_iso(|v| take_queue(v));
     if !enabled {
         if notified {
@@ -1434,23 +1442,23 @@ fn drain_iso(translate: fn(u64) -> Option<u64>) {
     // KANI-TARGET: virtio-iso IN from product window (outside Proven Core).
     let disk = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, ilen) };
     let mut last_avail = last;
-    let n = process_blk_queue(
+    let (n, nreq) = process_blk_queue(
         qsize,
         &mut last_avail,
         desc,
         avail,
         used,
         disk,
-        &translate,
+        translate,
         true,
     );
     with_iso(|v| {
         v.last_avail = last_avail;
-        if n > 0 {
+        if nreq > 0 {
             v.isr = 1;
         }
     });
-    if notified || n > 0 {
+    if notified || nreq > 0 {
         crate::devices::guest_irq::raise_virtio_iso();
     }
     if n > 0 {

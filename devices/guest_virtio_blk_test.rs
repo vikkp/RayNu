@@ -322,6 +322,36 @@ fn blk_queue_out_writes_full_8k() {
 }
 
 #[test]
+fn blk_queue_flush_completes_zero_bytes() {
+    let mut guest = vec![0u8; 4096];
+    let qsize = 4u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; 4096];
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 0, "FLUSH has no data bytes");
+    assert_eq!(last, 1, "virtio drain FLUSH still advances used idx");
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+}
+
+#[test]
 fn blk_queue_out_writes_split_data_descriptors() {
     let mut guest = vec![0u8; 4096];
     let qsize = 8u16;

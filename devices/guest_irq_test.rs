@@ -1057,6 +1057,64 @@ fn product_iso_virtio_shared_intx_survives_sibling_isr_read() {
 }
 
 #[test]
+fn product_iso_virtio_flush_without_notify_raises_intx() {
+    use crate::devices::guest_virtio_blk::{
+        attach_disk, drain_queue, mmio_write, present as present_virtio, reset as reset_virtio,
+        virtio_isr_latched, VIRTIO_BLK_T_FLUSH,
+    };
+    arm_product_iso();
+    reset_virtio();
+    assert!(present_virtio());
+    pic_init_unmask_all();
+    let mut disk = vec![0u8; 4096];
+    // SAFETY: host test owns `disk` until reset_virtio.
+    assert!(unsafe { attach_disk(disk.as_mut_ptr() as u64, disk.len()) });
+    let mut guest = vec![0u8; 4096];
+    mmio_write(0x16, 2, 0);
+    mmio_write(0x18, 2, 4);
+    mmio_write(0x20, 8, 0);
+    mmio_write(0x28, 8, 256);
+    mmio_write(0x30, 8, 512);
+    mmio_write(0x1C, 2, 1);
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4]
+        .copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    guest[0x700] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, 0x700, 1, 2, 0);
+    guest[256 + 2..256 + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[256 + 4..256 + 6].copy_from_slice(&0u16.to_le_bytes());
+    let base = guest.as_ptr() as u64;
+    let glen = guest.len() as u64;
+    let n = drain_queue(|gpa| {
+        if gpa < glen {
+            Some(base + gpa)
+        } else {
+            None
+        }
+    });
+    assert_eq!(n, 0, "FLUSH has no OUT bytes");
+    assert_eq!(guest[0x700], 0, "FLUSH status OK");
+    assert!(virtio_isr_latched(), "virtio drain FLUSH");
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "apk overlay FLUSH without kick still raises PIC 11"
+    );
+    reset();
+    reset_cd();
+    reset_virtio();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_virtio_pic_level_intx_retriggers_after_eoi() {
     arm_product_iso();
     pic_init_unmask_all();

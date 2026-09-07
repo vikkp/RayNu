@@ -1709,6 +1709,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 yield PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio MMIO PIT until DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain without notify"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain FLUSH"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio shared INTx"));
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
