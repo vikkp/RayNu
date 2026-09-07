@@ -85,7 +85,8 @@ use super::{
     guest_uefi_linux_prefer_pit_during_apk, guest_uefi_linux_hlt_uart_after_driver_ok,
     guest_uefi_linux_hlt_prefer_pit_during_apk, guest_uefi_linux_uart_prefer_pit_during_apk,
     guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
-    guest_uefi_linux_pit_jiffies_now,
+    guest_uefi_linux_raise_pit_on_resume_due, guest_uefi_linux_pit_resume_elapsed,
+    guest_uefi_linux_pit_jiffies_now, LINUX_PIT_RESUME_MIN_TSC,
     guest_uefi_virtio_mmio_heartbeat,
     guest_uefi_linux_io_raises_pit, guest_uefi_linux_preempt_deadloop_noskip,
     guest_uefi_linux_pic_before_lapic, guest_uefi_pic_before_lapic,
@@ -1609,9 +1610,38 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_linux_raise_pit_on_resume(true, true, false, false));
     assert!(!guest_uefi_linux_raise_pit_on_resume(false, false, false, false));
+    assert!(guest_uefi_linux_pit_resume_elapsed(0, 0, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(!guest_uefi_linux_pit_resume_elapsed(1, 1, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(guest_uefi_linux_pit_resume_elapsed(
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert!(guest_uefi_linux_pit_resume_elapsed(2_000_001, 1, LINUX_PIT_RESUME_MIN_TSC));
+    assert!(guest_uefi_linux_raise_pit_on_resume_due(
+        true,
+        true,
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume_due(true, true, 100, 1, LINUX_PIT_RESUME_MIN_TSC),
+        "linux PIT resume paced"
+    );
+    assert!(!guest_uefi_linux_raise_pit_on_resume_due(
+        true,
+        false,
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC
+    ));
+    assert_eq!(LINUX_PIT_RESUME_MIN_TSC, 2_000_000, "linux PIT resume min tsc");
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold until login"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise on overlay resume"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT raise after DRIVER_OK not probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT resume paced"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT resume min tsc"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT after virtio probe"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIT hold after DRIVER_OK"));
     assert!(!guest_uefi_linux_hlt_uart_after_driver_ok(true, true, false, true));

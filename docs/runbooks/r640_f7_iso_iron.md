@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (raise PIT on resume only after both DRIVER_OK; hold during probe without resume-raise). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34080595540` / `69102aa` (iron 2026-09-07: virtio_pci_probe soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (pace PIT on overlay resume ~1 ms TSC after both DRIVER_OK; virtio MMIO / HLT / preempt still raise). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -106,9 +106,10 @@ wc -c ~/projects/raynuv/alpine-extended-3.21.3-x86_64.iso
 
 Pin the last **green** F7 EFI, not the docs-only `fa81f5e` push (M4.8 verus
 flake) and not P0-14 `2b795a0`. Replace `RUNID` with the numeric GitHub
-Actions run id of this branch **after** the raise-PIT-on-resume-after-DRIVER_OK commit.
+Actions run id of this branch **after** the paced-resume-PIT commit.
 Do **not** wrap it in angle brackets (bash treats `<…>` as a redirect).
-Do **not** flash `34080595540` (`69102aa` virtio_pci_probe soft lockup)
+Do **not** flash `34131274237` (`896424f` DRIVER_OK then virtblk_probe soft lockup)
+or `34080595540` (`69102aa` virtio_pci_probe soft lockup)
 or `34078335291` (`c815ccc` MADT then I/O `reason=0x1e` hold)
 or `34076175624` (`20e8b70` froze at apk `n=1345` under `idle=poll`) or
 `34074349118` (`63c7e05` same freeze).
@@ -178,7 +179,7 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` — past MADT / FPU / `Freeing initrd` **without** `restore host xcr0 reason=0x1e` |
-| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT hold until login` (PIT arms after Linux DEVICE_STATUS, not firmware queue-arm) |
+| Virtio probe | nowait `linux virtio DRIVER_OK` then `linux PIT hold until login` then `linux PIT resume paced` — **no** `soft lockup` in `modprobe` |
 | apk overlay | `Installing packages to root filesystem...` with virtio MMIO `n=` continuing (heartbeat every 64) — **not** a freeze after `n=1281` or `n=1345` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
 | F7 reset | `guest reset requested src=` (`kbc` is what nested saw) · `relaunch after reset` |
@@ -204,12 +205,20 @@ rip=0xb00013f` and `Stage 46 product ISO hold` with no `Linux version`, you
 flashed `55a3602` / run `34067879816`. That pin collapsed the resume cap to 1
 for the Linux path too. Re-flash from the PIT-during-apk pin.
 
+If COM2 shows `linux virtio DRIVER_OK` then `linux PIT hold until login` /
+`linux PIT once after DRIVER_OK` then `watchdog: BUG: soft lockup` in
+`modprobe` `virtblk_probe` / `vp_set_status` / `iowrite8` then `restore host
+xcr0 … reason=0x1e`, you flashed `896424f` / run `34131274237`. Raise-PIT on
+every resume after DRIVER_OK nested IRQ0 inside the last DEVICE_STATUS write.
+Re-flash from this paced-resume pin (`linux PIT resume paced`). Do not F11
+`34131274237` again expecting `ISO-INSTALL-OK`.
+
 If COM2 shows `Linux version 6.12.13-0-lts` past MADT / FPU / `Freeing initrd`
 then Alpine Init `Loading boot drivers` then `virtio MMIO … off=0x14` then
 `watchdog: BUG: soft lockup` in `modprobe` `vp_set_status`/`iowrite8` then
 `restore host xcr0 … reason=0x1e`, you flashed `69102aa` / run `34080595540`.
 The first DEVICE_STATUS write armed raise-PIT-on-every-resume and IRQ0
-stormed virtio_pci_probe. Re-flash from this raise-after-DRIVER_OK pin. Do
+stormed virtio_pci_probe. Re-flash from this paced-resume pin. Do
 not F11 `34080595540` again expecting `ISO-INSTALL-OK`.
 
 If COM2 shows `Linux version 6.12.13-0-lts` then `APIC: ACPI MADT or MP tables
@@ -248,13 +257,13 @@ or CI logs do not close the gate.
 - **ESP retain** of a ~1 GiB ISO PRE-EBS (watchdog-off path is already in-tree).
 - **UART / SOL** vs Linux earlycon share (F7 reset lines must be nowait —
   that is why the pin is at or after `088ab25`, not `fe4785a`).
-- **virtio_pci_probe IRQ0 storm** (2026-09-07, `69102aa` / `34080595540`):
-  MADT/FPU/`Freeing initrd`/Alpine Init lived. Then Linux `modprobe virtio_pci`
-  wrote DEVICE_STATUS (`off=0x14`); raise-on-every-resume + hold injected IRQ0
-  until `soft lockup` (26s/52s/78s) in `vp_set_status`/`iowrite8`, then I/O
-  `reason=0x1e` hold. This pin raises PIT on resume only after both DRIVER_OK
-  (overlay `idle=poll`). Virtio MMIO / HLT / preempt still raise during probe.
-  Do not F11 `34080595540` again.
+- **virtio_pci_probe / virtblk_probe IRQ0 storm** (2026-09-07):
+  `69102aa` / `34080595540` stormed at first DEVICE_STATUS. `896424f` /
+  `34131274237` lived to `linux virtio DRIVER_OK` then the same
+  `iowrite8` / `handle_softirqs` lockup because resume still raised PIT
+  on every VM-entry. This pin keeps hold-until-login but paces overlay
+  resume/UART PIT to ~1 ms TSC (`linux PIT resume paced`). Virtio MMIO /
+  HLT / preempt still raise. Do not F11 `34131274237` or `34080595540`.
 - **PIT hold from firmware queue-arm during APIC setup** (2026-09-07,
   `c815ccc` / `34078335291`): Linux reached `APIC: ACPI MADT or MP tables
   are not detected`, then 8× `inject vec=0x30`, then `restore host xcr0

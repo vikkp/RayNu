@@ -891,6 +891,8 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
     };
     use crate::vmx::guest_uefi::{
         guest_uefi_linux_prefer_pit_hold, guest_uefi_linux_raise_pit_on_resume,
+        guest_uefi_linux_raise_pit_on_resume_due, guest_uefi_linux_pit_resume_elapsed,
+        LINUX_PIT_RESUME_MIN_TSC,
     };
     arm_product_iso();
     reset_virtio();
@@ -915,6 +917,24 @@ fn product_iso_linux_pit_hold_until_login_not_consumed() {
         virtio_linux_probe_started(),
         virtio_both_driver_ok(),
     ));
+    assert!(guest_uefi_linux_raise_pit_on_resume_due(
+        apk_overlay_needs_pit(),
+        virtio_both_driver_ok(),
+        LINUX_PIT_RESUME_MIN_TSC,
+        0,
+        LINUX_PIT_RESUME_MIN_TSC,
+    ));
+    assert!(
+        !guest_uefi_linux_raise_pit_on_resume_due(
+            apk_overlay_needs_pit(),
+            virtio_both_driver_ok(),
+            100,
+            1,
+            LINUX_PIT_RESUME_MIN_TSC,
+        ),
+        "linux PIT resume paced"
+    );
+    assert!(guest_uefi_linux_pit_resume_elapsed(0, 0, LINUX_PIT_RESUME_MIN_TSC));
     raise_pit();
     raise_gsi(4);
     assert_eq!(
