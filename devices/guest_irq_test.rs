@@ -1057,6 +1057,58 @@ fn product_iso_virtio_shared_intx_survives_sibling_isr_read() {
 }
 
 #[test]
+fn product_iso_virtio_pic_level_intx_retriggers_after_eoi() {
+    arm_product_iso();
+    pic_init_unmask_all();
+    raise_virtio();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux virtio PIC level INTx"
+    );
+    // Linux handle_edge_irq EOIs before vp_interrupt reads ISR.
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "level INTx stays pending until device ISR read"
+    );
+    crate::devices::guest_irq::lower_virtio();
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    assert!(take_pic_vector().is_none(), "lower_virtio deasserts INTx");
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_linux_x86_64_unmasks_virtio_pic_irq11() {
+    arm_product_iso();
+    // Linux x86_64 IRQ0_VECTOR 0x30 / slave 0x38. Leave IRQ 11 masked.
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x30);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x38);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xFB); // unmask cascade only
+    let _ = pic_io(0xA1, false, 1, 0xFF); // all slave masked
+    raise_virtio();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x38 + VIRTIO_PIC_IRQ - 8),
+        "linux PIC IRQ11 unmask; linux PIC IRQ0 vec 0x30"
+    );
+    reset();
+    reset_cd();
+    guest_platform::reset();
+}
+
+#[test]
 fn product_iso_linux_early_kernel_uart_beats_pit() {
     use crate::devices::guest_serial_answer::{apk_overlay_needs_pit, reset as reset_ans};
     use crate::devices::guest_virtio_blk::{

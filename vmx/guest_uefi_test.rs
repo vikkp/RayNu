@@ -1699,9 +1699,13 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_linux_reassert_virtio_intx(false, true, true));
     assert!(!guest_uefi_linux_reassert_virtio_intx(true, false, true));
     assert!(guest_uefi_linux_virtio_pic_vec(0x2b), "linux virtio PIC 11");
+    assert!(guest_uefi_linux_virtio_pic_vec(0x3b), "linux x86_64 IRQ11 0x3b");
     assert!(!guest_uefi_linux_virtio_pic_vec(0x20));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio INTx reassert"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC 11"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio PIC level INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ11 unmask"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux PIC IRQ0 vec 0x30"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux virtio MMIO PIT until DRIVER_OK"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain without notify"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio shared INTx"));
@@ -1898,6 +1902,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 12, true, 1));
     assert!(!guest_uefi_hlt_stall_quiet_tick(16385, 0x1e, true, 0));
     assert!(guest_uefi_linux_pic_irq0_vec(0x20));
+    assert!(guest_uefi_linux_pic_irq0_vec(0x30), "linux PIC IRQ0 vec 0x30");
     assert!(!guest_uefi_linux_pic_irq0_vec(0x24));
     assert!(guest_uefi_linux_exc_error_code(8));
     assert!(guest_uefi_linux_exc_error_code(14));

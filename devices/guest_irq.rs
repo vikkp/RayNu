@@ -284,12 +284,34 @@ pub fn lower_gsi(gsi: u8) {
     });
 }
 
+/// PCI INTx (virtio IRQ 11) is level. Edge INTA drops IRR before Linux
+/// `handle_edge_irq` EOIs and `vp_interrupt` reads ISR.
+/// linux virtio PIC level INTx. Not `ISO-INSTALL-OK`.
+fn pic_level_intx(irq: u8) -> bool {
+    irq == VIRTIO_PIC_IRQ
+}
+
+fn unmask_pic_locked(c: &mut IrqChip, irq: u8) {
+    if irq < 8 {
+        c.master.imr &= !(1 << irq);
+    } else {
+        c.slave.imr &= !(1 << (irq - 8));
+        c.master.imr &= !(1 << PIC_SLAVE_IRQ);
+    }
+}
+
 fn raise_pic_locked(c: &mut IrqChip, irq: u8) {
     if irq < 8 {
         c.master.irr |= 1 << irq;
     } else {
         c.slave.irr |= 1 << (irq - 8);
         c.master.irr |= 1 << PIC_SLAVE_IRQ;
+    }
+    if pic_level_intx(irq) {
+        // linux PIC IRQ11 unmask. Linux x86_64 skipped IO-APIC
+        // (`MADT or MP tables are not detected`); IRQ 11 stays masked
+        // unless a device `request_irq`s. apk overlay still needs INTx.
+        unmask_pic_locked(c, irq);
     }
 }
 
@@ -758,7 +780,9 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
         Some(c.master.vector.wrapping_add(irq))
     } else {
         let s = irq - 8;
-        c.slave.irr &= !(1 << s);
+        if !pic_level_intx(irq) {
+            c.slave.irr &= !(1 << s);
+        }
         if !c.slave.aeoi {
             c.slave.isr |= 1 << s;
             c.master.isr |= 1 << PIC_SLAVE_IRQ;
