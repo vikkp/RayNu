@@ -130,6 +130,40 @@ pub fn guest_uefi_resume_cap(host_hypervisor: bool) -> u32 {
     }
 }
 
+/// ADR-016: with `raynuf.txt` the retained-OVMF leg is a scaffold only —
+/// RayNu-F is entered from the stop path (`raynu_f_launch_on_stopped_vmcs`
+/// reuses the halted VMCS + slab), so the leg **must stop** before RayNu-F
+/// can run. Nested KVM stopped it for free at SEC (`788930c` `stop n=1043`
+/// `reason=0x30` `rip=0xfffd4739`), which is why nested F7 `088ab25` went
+/// straight to `image=ISO-BOOTX64`. Iron OVMF has no such fault: it runs
+/// to BDS CpuSleep `rip=0x7f0680d0` `ataio=0` and only stops at the
+/// 16_777_216 product cap (`ea30da1`), which is where the 2026-09-06 UDisk
+/// F7 attempt sat printing ticks. Stop at the first exit instead. No OVMF
+/// state is read or written (ADR-016 no third-party firmware mutation).
+pub const GUEST_UEFI_RAYNU_F_DIRECT_CAP: u32 = 1;
+
+/// Collapse the OVMF scaffold cap only **before** RayNu-F has taken the VMCS.
+/// Iron 2026-09-07 (`55a3602`): `raynuf.txt` collapsed to 1 for the whole
+/// guest-UEFI loop, so after `RAYNU-V-RAYNU-F-EBS-OK` the first Linux WRMSR
+/// (`reason=0x20` `rip=0xb00013f`) saw `n=2 < cap=1` and `leave_to_e4`
+/// (`restore host xcr0` + `product ISO hold`). Nested never hit this because
+/// OVMF had already spent ~1043 exits. After `RAYNU_F_RAN` the Linux path
+/// must get [`guest_uefi_resume_cap`] again (16M product ISO). F7 relaunch
+/// calls `raynu_f_launch_on_stopped_vmcs` directly and is unaffected.
+pub fn guest_uefi_raynu_f_collapse_ovmf_leg(requested: bool, already_launched: bool) -> bool {
+    requested && !already_launched
+}
+
+/// Resume cap actually applied: collapse to 1 only while
+/// [`guest_uefi_raynu_f_collapse_ovmf_leg`] is true; otherwise `cap`.
+pub fn guest_uefi_raynu_f_resume_cap(collapse_ovmf: bool, cap: u32) -> u32 {
+    if collapse_ovmf {
+        GUEST_UEFI_RAYNU_F_DIRECT_CAP
+    } else {
+        cap
+    }
+}
+
 /// After DXE evidence, spend this many exits unless firmware read an ATAPI
 /// sector. Nested VT-x `1b07692`: BOTH-OK at n=1111 then the private VMCS
 /// stopped with `sectors=0` — PciBus never reached PACKET.
@@ -5760,7 +5794,14 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     }
 
     let mut resume = false;
-    if !entry_fail && !tf && !fetch_fail && n < guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()) {
+    let resume_cap = guest_uefi_raynu_f_resume_cap(
+        guest_uefi_raynu_f_collapse_ovmf_leg(
+            crate::boot::raynu_f_flag::requested(),
+            RAYNU_F_RAN.load(Ordering::Acquire),
+        ),
+        guest_uefi_resume_cap(guest_uefi_host_hypervisor_present()),
+    );
+    if !entry_fail && !tf && !fetch_fail && n < resume_cap {
         resume = match basic {
             EXIT_REASON_IO_INSTRUCTION => handle_io(qual),
             EXIT_REASON_CPUID => handle_cpuid(),
@@ -6168,6 +6209,8 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     // restore host xcr0; share hushes HV `write_str` stop n=).
     serial::write_str_nowait("boot: guest-UEFI stop n=");
     write_dec_nowait(n as u64);
+    serial::write_str_nowait(" cap=");
+    write_dec_nowait(resume_cap as u64);
     serial::write_str_nowait(" reason=0x");
     write_hex_u32_nowait(reason);
     serial::write_str_nowait(" rip=0x");
@@ -6203,6 +6246,11 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
         write_hex_nowait(ops::vmread(GUEST_IA32_EFER).unwrap_or(0));
     }
     serial::write_byte_nowait(b'\n');
+    // Iron 2026-09-07: EBS hand-off turns earlycon share on, so this
+    // blocking dump is dropped (COM2 went `oo` + `restore host xcr0` with
+    // no `stop n=`). Skip it when share is on; the nowait line above is
+    // the diagnostic. iso=0 / firmware keep the full dump.
+    if !serial::linux_earlycon_share() {
     serial::write_str("boot: guest-UEFI stop n=");
     write_dec(n as u64);
     serial::write_str(" reason=0x");
@@ -6301,15 +6349,24 @@ pub unsafe extern "C" fn guest_uefi_vmexit() -> ! {
     serial::write_str(" insn=");
     dump_low_ram_insn(linear);
     serial::write_byte(b'\n');
+    }
     // ADR-016 F2b: with the OVMF leg stopped and the slab/EPT/VMCS still
     // owned, run the RayNu-F test app on the same VMCS before leaving to E4.
     if crate::boot::raynu_f_flag::requested()
         && !RAYNU_F_RAN.swap(true, Ordering::AcqRel)
     {
+        if n <= GUEST_UEFI_RAYNU_F_DIRECT_CAP {
+            serial::write_line(M7_E5_RAYNU_F_DIRECT_NOTE);
+        }
         raynu_f_launch_on_stopped_vmcs();
     }
     leave_to_e4();
 }
+
+/// Printed when `raynuf.txt` stopped the OVMF leg at its first exit so
+/// RayNu-F takes the VMCS without waiting for OVMF to fault or hit the cap.
+pub const M7_E5_RAYNU_F_DIRECT_NOTE: &str =
+    "boot: RayNu-F direct — OVMF leg bypassed at first exit (ADR-016; not ISO-INSTALL-OK)";
 
 /// F2b: reuse the halted private VMCS + identity slab to enter the RayNu-F
 /// test app in long mode. No new allocations: identity PTs, tables, app,

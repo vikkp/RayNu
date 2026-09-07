@@ -2,8 +2,8 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** `088ab25` (green CI run `33978770315`) on `cursor/e5-stage46-iso-a623`  
-**Do not flash:** P0-14 `2b795a0` (E4 SHELL stub) · parked OVMF pins · PR #231  
+**EFI pin:** the **next** green CI run of `cursor/raynu-f-direct-iron-b7a8` after the Linux-cap restore (fill in the run id once CI is green). Superseded: `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34067879816` / `55a3602` (iron 2026-09-07: `EBS-OK` then `restore host xcr0 reason=0x20 rip=0xb00013f`) · `088ab25` for F7 (OVMF scaffold never stopped) · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -113,7 +113,7 @@ cd ~/projects/raynu
   --install-launcher \
   --branch cursor/e5-stage46-iso-a623 \
   --no-git \
-  --run 33978770315 \
+  --run <green CI run id of cursor/raynu-f-direct-iron-b7a8> \
   --any-cruzer-usb \
   --init-new-cruzer \
   --allow-new-serial \
@@ -167,7 +167,7 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | Step | COM2 |
 |------|------|
 | Product ISO retained | `Stage 46 product ISO retained from ESP` · `iso=` ~1 GiB |
-| RayNu-F, not OVMF | `RayNu-F launch requested` / `image=ISO-BOOTX64` · **no** WFE state4 poke |
+| RayNu-F, not OVMF | `RayNu-F launch requested` → one OVMF `VMLAUNCH-OK` → `guest-UEFI stop n=1` → `RayNu-F direct — OVMF leg bypassed at first exit` → `image=ISO-BOOTX64` · **no** WFE state4 poke · **no** `guest-UEFI tick` flood · after `EBS-OK` expect `Linux version`, **not** `restore host xcr0 reason=0x20` |
 | Leftover disk | `leftover install disk` `bytes=` (iron targets 1 GiB when leftover ≥ 1.75 GiB) |
 | First Linux | `Linux version 6.12.13-0-lts` with `modules=loop,squashfs,virtio_pci,virtio_blk` |
 | Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
@@ -185,6 +185,15 @@ If COM2 shows OVMF `WaitForEvent` / `state4 poke` / `#PF cr2=0xffffffffffffffb8`
 you lost `raynuf.txt` or you flashed a parked OVMF pin. Stop. Do not poke firmware
 state (ADR-016).
 
+If COM2 shows `RAYNU-V-M7-E5-OVMF-VMLAUNCH-OK` followed by `OVMF-PAST-SEC` /
+`DXE` / `BOTH-OK` and then an endless `guest-UEFI tick ... rip=0x7f0680d0`
+stream, you flashed `088ab25` (or older). Re-flash from the Linux-cap-restore pin.
+
+If COM2 shows `RAYNU-V-RAYNU-F-EBS-OK` then `restore host xcr0 … reason=0x20
+rip=0xb00013f` and `Stage 46 product ISO hold` with no `Linux version`, you
+flashed `55a3602` / run `34067879816`. That pin collapsed the resume cap to 1
+for the Linux path too. Re-flash from the Linux-cap-restore pin.
+
 Capture the full SOL log into `docs/evidence/r640/logs/` and fill
 [`TEMPLATE-iso-install.md`](../evidence/r640/TEMPLATE-iso-install.md). Nested
 or CI logs do not close the gate.
@@ -198,7 +207,11 @@ or CI logs do not close the gate.
   ≥ 1.75 GiB (768 MiB guest floor).
 - **ESP retain** of a ~1 GiB ISO PRE-EBS (watchdog-off path is already in-tree).
 - **UART / SOL** vs Linux earlycon share (F7 reset lines must be nowait —
-  that is why the pin is `088ab25`, not `fe4785a` alone).
+  that is why the pin is at or after `088ab25`, not `fe4785a`).
+- **OVMF scaffold leg on iron** (2026-09-06, `088ab25`): the leg is now capped
+  at one exit when `raynuf.txt` is present (`GUEST_UEFI_RAYNU_F_DIRECT_CAP`).
+  If RayNu-F still does not start, look for `RayNu-F launch skipped` /
+  `RayNu-F launch failed` — those are RayNu-F-side reasons, not OVMF.
 - **Virtio BARs** under the real RAM map.
 - **New Cruzer VID/PID** (hence `--any-cruzer-usb`).
 - **F11 vs Ubuntu-on-PERC** (do not leave Cruzer as the standing boot order).
