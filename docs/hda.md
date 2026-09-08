@@ -350,7 +350,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 | Field | Value |
 |-------|-------|
 | Commit | pit-during-apk |
-| Summary | **Iron COM2 (UDisk, `a580299` / run `34227607779`):** shared INTx hold lived past `n=1345`; second stall dump `last==used==avail` `isr=0` `kick=0` `n=1373` during apk (empty rings). Do not wait. This pin raises PIT on that dump and prints live avail.idx. Do not F11 `34227607779`. Host-tested; not ISO-INSTALL-OK. |
+| Summary | **Iron COM2 (UDisk, `a580299` / run `34227607779`):** operator paste confirmed INTx hold lived past `n=1345`; second stall dump `disk_last=1152 iso_last=1125 … isr=0 kick=0 n=1373` during apk (empty rings). Do not wait. Flash `ba5bf8f` / `34290078274` (UEFI-release green). Do not F11 `34227607779`. Not ISO-INSTALL-OK. |
 | Everest impact | months 0.5 held; overall 95 held; ETA 2026-09 held. Iron apk overlay still open; do not drop months. |
 | Gates touched | none. Host `cargo test --no-default-features -- --test-threads=1`. virtio stall dump PIT. |
 | Months Δ | 0.5→0.5 |
@@ -376,6 +376,7 @@ everest_eta_month = today + months_to_everest  (first of month or YYYY-MM)
 
 ## HDA changelog
 
+| 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron COM2 confirmed `a580299` / 34227607779 empty-ring dump n=1373; flash ba5bf8f / 34290078274 (UEFI-release green); do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `a580299` / run `34227607779`: INTx hold lived past n=1345 then empty-ring dump n=1373; virtio stall dump PIT; do not F11 34227607779; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `34968f7` / run `34224368343`: used.idx + stall dump lived (usbdelay n=1118) then apk n=1345; virtio shared INTx hold; do not F11 34224368343; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
 | 2026-09-08 | pit-during-apk | 0.5 | 95 | Iron UDisk `e717fb4` / run `34220740109`: DATA_SEGS=128 still apk n=1345; do not wait; virtio used idx + drain on ISR + stall dump + GET_ID; do not F11 34220740109; not ISO-INSTALL-OK; iron P0-14 stays 2b795a0 |
