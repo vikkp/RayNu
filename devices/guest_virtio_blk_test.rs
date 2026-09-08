@@ -451,6 +451,95 @@ fn blk_queue_in_twenty_data_segs() {
 }
 
 #[test]
+fn blk_queue_used_write_fail_retries() {
+    // virtio used idx. Iron `e717fb4` / `34220740109`: apk `n=1345`.
+    let mut guest = vec![0u8; 4096];
+    let qsize = 8u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_FLUSH.to_le_bytes());
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let base = guest.as_ptr() as u64;
+    let glen = guest.len() as u64;
+    let translate = |gpa: u64| {
+        if gpa >= used && gpa < used + 16 {
+            None
+        } else if gpa < glen {
+            Some(base + gpa)
+        } else {
+            None
+        }
+    };
+    let mut last = 0u16;
+    let mut used_idx = 0u16;
+    let mut disk = vec![0u8; 4096];
+    let (_n, nreq) = super::process_blk_queue(
+        qsize,
+        &mut last,
+        &mut used_idx,
+        desc,
+        avail,
+        used,
+        &mut disk,
+        &translate,
+        false,
+    );
+    assert_eq!(last, 0, "virtio used idx");
+    assert_eq!(used_idx, 0, "virtio used idx shadow");
+    assert_eq!(nreq, 0);
+}
+
+#[test]
+fn blk_queue_get_id_ok() {
+    // virtio GET_ID. Linux type 8 is not IOERR.
+    let mut guest = vec![0u8; 4096];
+    let qsize = 8u16;
+    let desc = 0u64;
+    let avail = 256u64;
+    let used = 512u64;
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4]
+        .copy_from_slice(&super::VIRTIO_BLK_T_GET_ID.to_le_bytes());
+    let id_gpa = 0x400u64;
+    guest[id_gpa as usize..id_gpa as usize + 20].fill(0xAA);
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 0, hdr_gpa, 16, 1, 1);
+    put_desc(&mut guest, 1, id_gpa, 20, 3, 2);
+    put_desc(&mut guest, 2, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&0u16.to_le_bytes());
+    let mut last = 0u16;
+    let mut disk = vec![0u8; 4096];
+    let n = process_blk_queue_in(&mut guest, &mut disk, qsize, &mut last, desc, avail, used);
+    assert_eq!(n, 0);
+    assert_eq!(last, 1);
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK, "virtio GET_ID");
+    assert_eq!(&guest[id_gpa as usize..id_gpa as usize + 20], &[0u8; 20]);
+}
+
+#[test]
 fn install_disk_partition_table_gpt_and_mbr() {
     use super::install_disk_has_partition_table;
     let mut z = vec![0u8; 4096];

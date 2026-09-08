@@ -119,6 +119,8 @@ use super::{
     guest_uefi_linux_gsi2_before_pic,
     guest_uefi_pit_skips_ioapic_pin0,
     guest_uefi_virtio_drain_every_resume,
+    guest_uefi_virtio_drain_on_isr,
+    guest_uefi_virtio_stall_dump,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
     GUEST_UEFI_CPU_FLUSH_UNSUPPORTED, GUEST_UEFI_CPU_FLUSH_JNZ_OFF, GUEST_UEFI_IRON_CPU_FLUSH_GPA,
@@ -1713,7 +1715,22 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain without notify"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain FLUSH"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio chain all segs"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio used idx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio drain on ISR"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio GET_ID"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio shared INTx"));
+    assert!(
+        guest_uefi_virtio_drain_on_isr(false),
+        "virtio drain on ISR"
+    );
+    assert!(!guest_uefi_virtio_drain_on_isr(true));
+    assert!(
+        guest_uefi_virtio_stall_dump(4_000_000_001, 1, false),
+        "virtio stall dump"
+    );
+    assert!(!guest_uefi_virtio_stall_dump(4_000_000_001, 1, true));
+    assert!(!guest_uefi_virtio_stall_dump(4_000_000_000, 1, false));
     assert!(guest_uefi_pic_before_lapic(true, true, false));
     assert!(!guest_uefi_pic_before_lapic(true, true, true));
     assert!(!guest_uefi_pic_before_lapic(false, false, false));
