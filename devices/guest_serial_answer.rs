@@ -142,6 +142,10 @@ static GRUB_SENT: AtomicBool = AtomicBool::new(false);
 static NEXT_YES_IS_NO: AtomicBool = AtomicBool::new(false);
 /// Initramfs `/ # ` already queued [`MOUNT_EXIT`]. Stay PHASE_LOGIN.
 static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
+/// Alpine `Mounting boot media: ok.` — usbdelay finished. PIC 11 must
+/// stop yielding PIT so apk overlay INTx can complete.
+/// linux PIC IRQ11 yield until mount. Not `ISO-INSTALL-OK`.
+static MEDIA_MOUNTED: AtomicBool = AtomicBool::new(false);
 /// F7: `reboot\r` queued after the install completed.
 static REBOOT_SENT: AtomicBool = AtomicBool::new(false);
 /// F7: second Linux boot after RayNu-F relaunch. `reset()` does not clear this.
@@ -165,6 +169,7 @@ pub fn reset() {
     GRUB_SENT.store(false, Ordering::Release);
     NEXT_YES_IS_NO.store(false, Ordering::Release);
     MOUNT_SENT.store(false, Ordering::Release);
+    MEDIA_MOUNTED.store(false, Ordering::Release);
     REBOOT_SENT.store(false, Ordering::Release);
     // SECOND_BOOT is sticky on UEFI so a uart reset after `begin_second_boot`
     // cannot re-arm SETUP. Host tests start from a clean first-boot flag.
@@ -188,6 +193,13 @@ fn ends_with(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
         return false;
     }
     &win[wlen - needle.len()..wlen] == needle
+}
+
+fn window_contains(win: &[u8], wlen: usize, needle: &[u8]) -> bool {
+    if needle.is_empty() || wlen < needle.len() {
+        return false;
+    }
+    win[..wlen].windows(needle.len()).any(|w| w == needle)
 }
 
 fn is_yes_prompt(win: &[u8], wlen: usize) -> bool {
@@ -230,6 +242,11 @@ pub fn note_tx(b: u8) {
         } else {
             a.win.copy_within(1..WIN, 0);
             a.win[WIN - 1] = b;
+        }
+        if !MEDIA_MOUNTED.load(Ordering::Acquire)
+            && window_contains(&a.win, a.wlen, b"media: ok")
+        {
+            MEDIA_MOUNTED.store(true, Ordering::Release);
         }
         match phase {
             PHASE_LOGIN if !GRUB_SENT.load(Ordering::Acquire) && ends_with(&a.win, a.wlen, GRUB) => {
@@ -322,6 +339,14 @@ pub fn queued() -> usize {
 /// linux PIT hold until login. Not `ISO-INSTALL-OK`.
 pub fn apk_overlay_needs_pit() -> bool {
     PHASE.load(Ordering::Acquire) == PHASE_LOGIN
+}
+
+/// True after guest COM1 printed `Mounting boot media: ok`.
+/// Iron `6692898` / `34170268004`: yield-PIT finished `usbdelay=30` then
+/// apk froze at virtio `n=1345` because PIC 11 kept yielding to PIT.
+/// linux PIC IRQ11 yield until mount. Not `ISO-INSTALL-OK`.
+pub fn apk_media_mounted() -> bool {
+    MEDIA_MOUNTED.load(Ordering::Acquire)
 }
 
 #[cfg(test)]

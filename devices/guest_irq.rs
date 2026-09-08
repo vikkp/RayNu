@@ -142,9 +142,11 @@ fn product_live() -> bool {
 static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
 static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
 /// After PIC 11 is taken, the next peek/take prefers PIT if both are
-/// pending. Iron `fc3053a` / `34148045050`: `linux virtio PIC 11` then
-/// freeze at mount `n=1089` (`usbdelay=30`) because level INTx kept IRQ 11
-/// ahead of IRQ0 so jiffies never finished. linux PIC IRQ11 yield PIT.
+/// pending **until** Alpine prints `Mounting boot media: ok`.
+/// Iron `fc3053a` / `34148045050`: level INTx starved IRQ0 during
+/// `usbdelay=30` (`n=1089`). Iron `6692898` / `34170268004`: yield then
+/// starved PIC 11 at apk `n=1345`. linux PIC IRQ11 yield PIT.
+/// linux PIC IRQ11 yield until mount.
 static IRQ11_YIELD_PIT: AtomicBool = AtomicBool::new(false);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 /// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
@@ -754,9 +756,15 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
         None
     };
     let pit = prefer_pit_priority() && (master_req & 1) != 0;
-    // linux PIC IRQ11 yield PIT. Level INTx + unmask made IRQ 11 live
-    // (`fc3053a`) then starved IRQ0 during `usbdelay=30` (n=1089).
-    if slave_irq == Some(VIRTIO_PIC_IRQ) && pit && IRQ11_YIELD_PIT.load(Ordering::Acquire) {
+    // linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
+    // Level INTx starved IRQ0 during usbdelay (`fc3053a`). After
+    // `Mounting boot media: ok` (`6692898` / `34170268004`) the same
+    // yield starved PIC 11 at apk `n=1345`.
+    if slave_irq == Some(VIRTIO_PIC_IRQ)
+        && pit
+        && IRQ11_YIELD_PIT.load(Ordering::Acquire)
+        && !crate::devices::guest_serial_answer::apk_media_mounted()
+    {
         return Some(0);
     }
     if let Some(irq) = slave_irq {
@@ -795,7 +803,9 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
         PREFER_PIT_ONCE.store(false, Ordering::Release);
         IRQ11_YIELD_PIT.store(false, Ordering::Release);
     } else if irq == VIRTIO_PIC_IRQ {
-        IRQ11_YIELD_PIT.store(true, Ordering::Release);
+        if !crate::devices::guest_serial_answer::apk_media_mounted() {
+            IRQ11_YIELD_PIT.store(true, Ordering::Release);
+        }
     }
     if irq < 8 {
         c.master.irr &= !(1 << irq);

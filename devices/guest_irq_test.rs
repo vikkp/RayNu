@@ -1143,7 +1143,9 @@ fn product_iso_virtio_pic_level_intx_retriggers_after_eoi() {
 
 #[test]
 fn product_iso_virtio_pic_irq11_yields_pit_during_hold() {
+    use crate::devices::guest_serial_answer::reset as reset_ans;
     arm_product_iso();
+    reset_ans();
     pic_init_unmask_all();
     prefer_pit_hold(true);
     raise_virtio();
@@ -1169,6 +1171,41 @@ fn product_iso_virtio_pic_irq11_yields_pit_during_hold() {
     );
     reset();
     reset_cd();
+    reset_ans();
+    guest_platform::reset();
+}
+
+#[test]
+fn product_iso_virtio_pic_irq11_no_yield_after_mount() {
+    use crate::devices::guest_serial_answer::{
+        apk_media_mounted, note_tx, reset as reset_ans,
+    };
+    arm_product_iso();
+    reset_ans();
+    pic_init_unmask_all();
+    prefer_pit_hold(true);
+    for &b in b"Mounting boot media: ok." {
+        note_tx(b);
+    }
+    assert!(apk_media_mounted(), "linux PIC IRQ11 yield until mount");
+    raise_virtio();
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "first collision still delivers virtio PIC 11"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "after mount, PIC 11 does not yield PIT"
+    );
+    reset();
+    reset_cd();
+    reset_ans();
     guest_platform::reset();
 }
 
