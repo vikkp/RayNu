@@ -869,6 +869,8 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../devices/guest_virtio_blk.rs").contains("virtio shared INTx")
         && include_str!("../devices/guest_virtio_blk.rs").contains("virtio drain without notify")
         && include_str!("../devices/guest_virtio_blk.rs").contains("virtio drain FLUSH")
+        && include_str!("../devices/guest_virtio_blk.rs").contains("virtio chain all segs")
+        && include_str!("../vmx/guest_uefi.rs").contains("virtio chain all segs")
         && include_str!("../devices/guest_irq.rs").contains("linux PIT hold UART not virtio")
         && include_str!("../devices/guest_irq.rs").contains("fn linux_ioapic_gsi2_programmed")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_linux_pit_jiffies_now")

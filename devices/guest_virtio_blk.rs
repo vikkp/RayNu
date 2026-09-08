@@ -94,8 +94,11 @@ const QUEUE_MAX: u16 = 128;
 const SECTOR: usize = 512;
 const VRING_DESC_F_NEXT: u16 = 1;
 const VRING_DESC_F_WRITE: u16 = 2;
-/// Linux blk-mq maps each bio_vec as a descriptor. Cap the chain.
-const DATA_SEGS: usize = 16;
+/// Linux blk-mq maps each bio_vec as a descriptor. Cap at the vq size so
+/// apk overlay ISO reads (many 4K pages) are not truncated with status OK.
+/// Iron `6cfabee` / `34218742196`: 3:1 latch lived (`yield until mount`)
+/// then apk froze at virtio `n=1345`. `DATA_SEGS` was 16. virtio chain all segs.
+const DATA_SEGS: usize = QUEUE_MAX as usize;
 
 struct VirtioPci {
     visible: bool,
