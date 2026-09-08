@@ -487,7 +487,7 @@ fn blk_queue_used_write_fail_retries() {
     let mut last = 0u16;
     let mut used_idx = 0u16;
     let mut disk = vec![0u8; 4096];
-    let (_n, nreq) = super::process_blk_queue(
+    let (_n, nreq, _avail) = super::process_blk_queue(
         qsize,
         &mut last,
         &mut used_idx,

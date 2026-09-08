@@ -127,6 +127,8 @@ struct VirtioPci {
     used_idx: u16,
     isr: u8,
     notify_pending: bool,
+    /// Last guest avail.idx seen by drain (COM2 stall dump).
+    seen_avail: u16,
     readonly: bool,
 }
 
@@ -154,6 +156,7 @@ impl VirtioPci {
             used_idx: 0,
             isr: 0,
             notify_pending: false,
+            seen_avail: 0,
             readonly: false,
         }
     }
@@ -717,6 +720,8 @@ pub struct VirtioStallSnap {
     pub iso_last: u16,
     pub disk_used: u16,
     pub iso_used: u16,
+    pub disk_avail: u16,
+    pub iso_avail: u16,
     pub disk_isr: u8,
     pub iso_isr: u8,
     pub disk_kick: bool,
@@ -729,6 +734,8 @@ pub fn virtio_stall_snap() -> VirtioStallSnap {
         iso_last: b.iso.last_avail,
         disk_used: b.disk.used_idx,
         iso_used: b.iso.used_idx,
+        disk_avail: b.disk.seen_avail,
+        iso_avail: b.iso.seen_avail,
         disk_isr: b.disk.isr,
         iso_isr: b.iso.isr,
         disk_kick: b.disk.notify_pending,
@@ -749,6 +756,15 @@ pub fn reassert_virtio_shared_intx() {
     }
 }
 
+/// Do not drop PIC 11 while a sibling virtio function still has ISR=1.
+/// Iron `34968f7` / `34224368343`: used.idx lived (usbdelay stall dump
+/// last==used isr=0) then apk froze at `n=1345` after disk ISR ACK with
+/// no ISO ISR read after ISO notify `n=1281`. virtio shared INTx hold.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_shared_intx_hold(sibling_isr: bool) -> bool {
+    sibling_isr
+}
+
 fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
     let val = if iso {
         with_iso(|v| mmio_read_locked(v, off, size))
@@ -756,13 +772,15 @@ fn mmio_read_dev(iso: bool, off: u16, size: u8) -> u64 {
         with_virtio(|v| mmio_read_locked(v, off, size))
     };
     if off == OFF_ISR {
-        if iso {
+        // virtio shared INTx hold: ISR read-to-clear is per-function;
+        // PIC 11 is the OR of both. Do not lower while the sibling is latched.
+        if virtio_shared_intx_hold(virtio_isr_latched()) {
+            reassert_virtio_shared_intx();
+        } else if iso {
             crate::devices::guest_irq::lower_virtio_iso();
         } else {
             crate::devices::guest_irq::lower_virtio();
         }
-        // virtio shared INTx: ISR read-to-clear is per-function; PIC 11 is not.
-        reassert_virtio_shared_intx();
     }
     val
 }
@@ -917,6 +935,7 @@ fn common_cfg_write_byte(v: &mut VirtioPci, off: u16, b: u8) {
                 v.used_idx = 0;
                 v.notify_pending = false;
                 v.isr = 0;
+                v.seen_avail = 0;
             }
         }
         0x16 | 0x17 => {
@@ -1292,12 +1311,12 @@ fn process_blk_queue(
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
     readonly: bool,
-) -> (u32, u16) {
+) -> (u32, u16, u16) {
     if qsize == 0 {
-        return (0, 0);
+        return (0, 0, 0);
     }
     let Some(avail_idx) = read_u16(translate, avail_gpa + 2) else {
-        return (0, 0);
+        return (0, 0, 0);
     };
     let mut written = 0u32;
     let mut nreq = 0u16;
@@ -1425,7 +1444,7 @@ fn process_blk_queue(
         *last_avail = last_avail.wrapping_add(1);
         nreq = nreq.saturating_add(1);
     }
-    (written, nreq)
+    (written, nreq, avail_idx)
 }
 
 /// Bytes the guest read from the ISO virtio since last take (iron serial).
@@ -1489,7 +1508,7 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
     let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
     let mut last_avail = last;
     let mut used_idx = used_i;
-    let (n, nreq) = process_blk_queue(
+    let (n, nreq, avail) = process_blk_queue(
         qsize,
         &mut last_avail,
         &mut used_idx,
@@ -1503,6 +1522,7 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
     with_virtio(|v| {
         v.last_avail = last_avail;
         v.used_idx = used_idx;
+        v.seen_avail = avail;
         // virtio drain FLUSH: used-idx moved even when OUT bytes are 0.
         if nreq > 0 {
             v.isr = 1;
@@ -1539,7 +1559,7 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     let disk = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, ilen) };
     let mut last_avail = last;
     let mut used_idx = used_i;
-    let (n, nreq) = process_blk_queue(
+    let (n, nreq, avail_seen) = process_blk_queue(
         qsize,
         &mut last_avail,
         &mut used_idx,
@@ -1553,6 +1573,7 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     with_iso(|v| {
         v.last_avail = last_avail;
         v.used_idx = used_idx;
+        v.seen_avail = avail_seen;
         if nreq > 0 {
             v.isr = 1;
         }

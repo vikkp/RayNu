@@ -2,7 +2,7 @@
 
 **Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
 **Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (virtio used idx / drain on ISR). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `e717fb4` run `34220740109` (DATA_SEGS=128 still froze at apk `n=1345`; do not wait) · `6cfabee` run `34218742196` (`linux PIC IRQ11 yield until mount` lived, then apk freeze at virtio `n=1345`; 3:1 is not the bottleneck) · `c2cd099` run `34172103709` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; stopping yield after `media: ok` did not move apk) · `6692898` run `34170268004` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; FLUSH drain did not help; yield starved PIC 11) · `9652262` run `34149809660` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345` after disk ISR ACK; yield-PIT unblocked `usbdelay=30`; drain ignored FLUSH) · `fc3053a` run `34148045050` (`linux PIC IRQ0` + `linux virtio PIC 11` then freeze at mount virtio `n=1089` / `usbdelay=30`; level INTx starved IRQ0) · `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (virtio shared INTx hold). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Superseded: `34968f7` run `34224368343` (used.idx lived; usbdelay stall dump `disk_last=1048 iso_last=542 disk_used=1048 iso_used=542 disk_isr=0 iso_isr=0 n=1118` then apk freeze at `n=1345` after ISO notify `n=1281` + disk ISR ACK; stall dump one-shot fired too early) · `e717fb4` run `34220740109` (DATA_SEGS=128 still froze at apk `n=1345`; do not wait) · `6cfabee` run `34218742196` (`linux PIC IRQ11 yield until mount` lived, then apk freeze at virtio `n=1345`; 3:1 is not the bottleneck) · `c2cd099` run `34172103709` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; stopping yield after `media: ok` did not move apk) · `6692898` run `34170268004` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; FLUSH drain did not help; yield starved PIC 11) · `9652262` run `34149809660` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345` after disk ISR ACK; yield-PIT unblocked `usbdelay=30`; drain ignored FLUSH) · `fc3053a` run `34148045050` (`linux PIC IRQ0` + `linux virtio PIC 11` then freeze at mount virtio `n=1089` / `usbdelay=30`; level INTx starved IRQ0) · `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
 **Do not flash:** `34220740109` / `e717fb4` · `34218742196` / `6cfabee` · `34172103709` / `c2cd099` · `34170268004` / `6692898` · `34149809660` / `9652262` · `34148045050` / `fc3053a` · `34145652767` / `fcac0cd` · `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
@@ -111,7 +111,8 @@ Do **not** wrap it in angle brackets (bash treats `<…>` as a redirect).
 Do **not** flash `34131274237` (`896424f` DRIVER_OK then virtblk_probe soft lockup)
 or `34080595540` (`69102aa` virtio_pci_probe soft lockup)
 or `34078335291` (`c815ccc` MADT then I/O `reason=0x1e` hold)
-or `34220740109` (`e717fb4` DATA_SEGS=128, same apk `n=1345`) or
+or `34224368343` (`34968f7` used.idx, usbdelay stall dump then apk `n=1345`) or
+`34220740109` (`e717fb4` DATA_SEGS=128, same apk `n=1345`) or
 `34218742196` (`6cfabee` 3:1 latch lived, same apk `n=1345`) or
 `34172103709` (`c2cd099` stop-yield after mount, same apk `n=1345`) or
 `34170268004` (`6692898` FLUSH drain, same apk `n=1345`) or
@@ -215,12 +216,14 @@ for the Linux path too. Re-flash from the PIT-during-apk pin.
 If COM2 shows `linux PIC IRQ0` and `linux virtio PIC 11` and `Mounting boot
 media: ok.` then `Installing packages` with last virtio MMIO `n=1345` (disk
 ISR `off=0x100 wr=0`) and no further `n=1409` / `n=1473`, you flashed
-`e717fb4` / run `34220740109` (DATA_SEGS=128 did not move the freeze) or
-`6cfabee` / run `34218742196` (or `c2cd099` / `34172103709` / `6692898` /
-`9652262`). `linux PIC IRQ11 yield until mount` on `6cfabee` proves the 3:1
-latch fired; IRQ ratio is not the apk stall. **Do not wait** — guest time
-stays at `Installing packages`. Re-flash from this virtio-used-idx pin.
-Do not F11 `34220740109` or `34218742196` again expecting `ISO-INSTALL-OK`.
+`34968f7` / run `34224368343` (used.idx + stall dump; dump at usbdelay
+`n=1118` then same apk freeze) or `e717fb4` / run `34220740109` (DATA_SEGS=128
+did not move the freeze) or `6cfabee` / run `34218742196` (or `c2cd099` /
+`34172103709` / `6692898` / `9652262`). `linux PIC IRQ11 yield until mount` on
+`6cfabee` proves the 3:1 latch fired; IRQ ratio is not the apk stall. **Do not
+wait** — guest time stays at `Installing packages`. Re-flash from this
+shared-INTx-hold pin. Do not F11 `34224368343` or `34220740109` or
+`34218742196` again expecting `ISO-INSTALL-OK`.
 
 If COM2 shows `linux PIC IRQ0` and `linux virtio PIC 11` then `Mounting boot
 media` with last virtio MMIO `n=1089` and **no** `Mounting boot media: ok`,
@@ -315,9 +318,12 @@ or CI logs do not close the gate.
   yield after `media: ok` and **still** froze at the same `n=1345`.
   `6cfabee` / `34218742196` printed `linux PIC IRQ11 yield until mount`
   then **still** froze at `n=1345` (3:1 is not the bottleneck).
-  This pin copies every virtio-blk data descriptor in the chain
-  (`DATA_SEGS` was 16; apk ISO reads use many 4K bio_vecs).
-  Do not F11 `34218742196`, `34172103709`, `34170268004`, `34149809660`, `34148045050`, `34145652767`, `34141401594`, `34135448354`,
+  `e717fb4` / `34220740109` `DATA_SEGS=128` still froze at `n=1345`.
+  `34968f7` / `34224368343` used.idx + stall dump: dump at usbdelay
+  `n=1118` (`last==used` `isr=0`) then same apk freeze at `n=1345` after
+  ISO notify `n=1281` + disk ISR ACK (no second dump). This pin holds PIC 11
+  while the sibling ISR is latched, drains before ISR ACK, and dumps again
+  after later MMIO. Do not F11 `34224368343`, `34220740109`, `34218742196`, `34172103709`, `34170268004`, `34149809660`, `34148045050`, `34145652767`, `34141401594`, `34135448354`,
   `34131274237`, or `34080595540`.
 - **PIT hold from firmware queue-arm during APIC setup** (2026-09-07,
   `c815ccc` / `34078335291`): Linux reached `APIC: ACPI MADT or MP tables
