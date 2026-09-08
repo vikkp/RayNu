@@ -142,6 +142,15 @@ fn apk_media_mounted_latches_boot_media_ok() {
     );
     reset();
     assert!(!apk_media_mounted());
+    for &b in b"Installing packages to root filesystem..." {
+        note_tx(b);
+    }
+    assert!(
+        apk_media_mounted(),
+        "linux PIC IRQ11 yield until mount"
+    );
+    reset();
+    assert!(!apk_media_mounted());
 }
 
 #[test]

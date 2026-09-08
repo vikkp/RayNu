@@ -12,7 +12,7 @@
 //! `try_inject_guest_irq`) so Linux EOI matches. This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 /// IOAPIC MMIO window (QEMU/ICH).
 pub const IOAPIC_GPA: u64 = 0xFEC0_0000;
@@ -142,12 +142,15 @@ fn product_live() -> bool {
 static PREFER_PIT_ONCE: AtomicBool = AtomicBool::new(false);
 static PREFER_PIT_HOLD: AtomicBool = AtomicBool::new(false);
 /// After PIC 11 is taken, the next peek/take prefers PIT if both are
-/// pending **until** Alpine prints `Mounting boot media: ok`.
+/// pending **1:1 until** Alpine usbdelay finishes, then every third
+/// PIC 11 (3:1) so apk overlay INTx and jiffies both move.
 /// Iron `fc3053a` / `34148045050`: level INTx starved IRQ0 during
-/// `usbdelay=30` (`n=1089`). Iron `6692898` / `34170268004`: yield then
-/// starved PIC 11 at apk `n=1345`. linux PIC IRQ11 yield PIT.
-/// linux PIC IRQ11 yield until mount.
+/// `usbdelay=30` (`n=1089`). Iron `c2cd099` / `34172103709`: stopping
+/// yield after `media: ok` still froze apk at `n=1345`.
+/// linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
+/// linux PIC IRQ11 yield 3 after mount.
 static IRQ11_YIELD_PIT: AtomicBool = AtomicBool::new(false);
+static PIC11_SINCE_PIT: AtomicU8 = AtomicU8::new(0);
 static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 /// Linux itself wrote IOAPIC pin 2. Firmware virtual-wire leftover does not
 /// count — that leftover made iron `c61942b` skip PIC virtio (no
@@ -158,6 +161,7 @@ pub fn reset() {
     PREFER_PIT_ONCE.store(false, Ordering::Release);
     PREFER_PIT_HOLD.store(false, Ordering::Release);
     IRQ11_YIELD_PIT.store(false, Ordering::Release);
+    PIC11_SINCE_PIT.store(0, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
     LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
@@ -184,6 +188,9 @@ pub fn prefer_pit_once() {
 /// Not `ISO-INSTALL-OK`.
 pub fn prefer_pit_hold(need: bool) {
     PREFER_PIT_HOLD.store(need, Ordering::Release);
+    if need {
+        crate::devices::guest_serial_answer::note_overlay_hold();
+    }
 }
 
 /// Prefer PIT over UART while virtio probe still needs kworker, or while
@@ -757,13 +764,15 @@ fn pic_pending_irq(c: &IrqChip) -> Option<u8> {
     };
     let pit = prefer_pit_priority() && (master_req & 1) != 0;
     // linux PIC IRQ11 yield PIT. linux PIC IRQ11 yield until mount.
-    // Level INTx starved IRQ0 during usbdelay (`fc3053a`). After
-    // `Mounting boot media: ok` (`6692898` / `34170268004`) the same
-    // yield starved PIC 11 at apk `n=1345`.
+    // linux PIC IRQ11 yield 3 after mount.
+    // Honor IRQ11_YIELD_PIT whenever it is armed. Mount status only
+    // changes how often pic_take arms it (1:1 before usbdelay, 3:1
+    // after). Iron `c2cd099` / `34172103709` gated this on
+    // `!apk_media_mounted()`, so the 3:1 counter never yielded PIT and
+    // apk froze at `n=1345` again.
     if slave_irq == Some(VIRTIO_PIC_IRQ)
         && pit
         && IRQ11_YIELD_PIT.load(Ordering::Acquire)
-        && !crate::devices::guest_serial_answer::apk_media_mounted()
     {
         return Some(0);
     }
@@ -802,8 +811,17 @@ fn pic_take(c: &mut IrqChip) -> Option<u8> {
     if irq == 0 {
         PREFER_PIT_ONCE.store(false, Ordering::Release);
         IRQ11_YIELD_PIT.store(false, Ordering::Release);
+        PIC11_SINCE_PIT.store(0, Ordering::Release);
     } else if irq == VIRTIO_PIC_IRQ {
-        if !crate::devices::guest_serial_answer::apk_media_mounted() {
+        if crate::devices::guest_serial_answer::apk_media_mounted() {
+            let n = PIC11_SINCE_PIT
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
+            IRQ11_YIELD_PIT.store(n >= 3, Ordering::Release);
+            if n >= 3 {
+                PIC11_SINCE_PIT.store(0, Ordering::Release);
+            }
+        } else {
             IRQ11_YIELD_PIT.store(true, Ordering::Release);
         }
     }

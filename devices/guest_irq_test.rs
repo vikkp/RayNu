@@ -1176,7 +1176,7 @@ fn product_iso_virtio_pic_irq11_yields_pit_during_hold() {
 }
 
 #[test]
-fn product_iso_virtio_pic_irq11_no_yield_after_mount() {
+fn product_iso_virtio_pic_irq11_three_to_one_after_mount() {
     use crate::devices::guest_serial_answer::{
         apk_media_mounted, note_tx, reset as reset_ans,
     };
@@ -1193,7 +1193,7 @@ fn product_iso_virtio_pic_irq11_no_yield_after_mount() {
     assert_eq!(
         take_pic_vector(),
         Some(0x20 + VIRTIO_PIC_IRQ),
-        "first collision still delivers virtio PIC 11"
+        "linux PIC IRQ11 yield 3 after mount: first"
     );
     let _ = pic_io(0xA0, false, 1, 0x20);
     let _ = pic_io(0x20, false, 1, 0x20);
@@ -1201,7 +1201,23 @@ fn product_iso_virtio_pic_irq11_no_yield_after_mount() {
     assert_eq!(
         take_pic_vector(),
         Some(0x20 + VIRTIO_PIC_IRQ),
-        "after mount, PIC 11 does not yield PIT"
+        "linux PIC IRQ11 yield 3 after mount: second"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + VIRTIO_PIC_IRQ),
+        "linux PIC IRQ11 yield 3 after mount: third arms yield"
+    );
+    let _ = pic_io(0xA0, false, 1, 0x20);
+    let _ = pic_io(0x20, false, 1, 0x20);
+    raise_pit();
+    assert_eq!(
+        take_pic_vector(),
+        Some(0x20 + PIT_IRQ),
+        "linux PIC IRQ11 yield 3 after mount"
     );
     reset();
     reset_cd();
