@@ -123,6 +123,8 @@ use super::{
     guest_uefi_virtio_stall_dump,
     guest_uefi_virtio_stall_dump_reset_on_mmio,
     guest_uefi_virtio_stall_dump_pit,
+    guest_uefi_virtio_stall_empty,
+    guest_uefi_virtio_stall_dump_intx,
     guest_uefi_virtio_mmio_heartbeat_kick,
     GUEST_UEFI_INTR_TYPE_NMI,
     guest_uefi_pt_paint_vga_uc, guest_uefi_pt_leaf_4k_for, guest_uefi_gpa_in_vga_fix_uc,
@@ -1727,6 +1729,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump again"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO heartbeat kick"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
     assert!(
         guest_uefi_virtio_drain_on_isr(false),
         "virtio drain on ISR"
@@ -1748,6 +1751,18 @@ fn marker_and_residual_honest() {
         "virtio stall dump PIT"
     );
     assert!(!guest_uefi_virtio_stall_dump_pit(false));
+    assert!(
+        guest_uefi_virtio_stall_empty(1093, 1093, 1052, 1052),
+        "virtio stall dump INTx"
+    );
+    assert!(!guest_uefi_virtio_stall_empty(1094, 1093, 1052, 1052));
+    assert!(
+        guest_uefi_virtio_stall_dump_intx(true, true),
+        "virtio stall dump INTx"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_intx(true, false));
+    assert!(!guest_uefi_virtio_stall_dump_intx(false, true));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
     assert!(
         guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true),
         "virtio MMIO heartbeat kick"

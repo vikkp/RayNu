@@ -762,6 +762,21 @@ pub fn virtio_live_avail_idx(iso: bool, translate: impl Fn(u64) -> Option<u64>) 
     read_u16(&translate, gpa.wrapping_add(2)).unwrap_or(0)
 }
 
+/// Pulse shared PIC IRQ 11 with ISR=1 on both functions so Linux
+/// re-harvests used.idx after an empty-ring stall dump.
+/// Iron `ba5bf8f` / `34290078274`: `virtio stall dump PIT` lived,
+/// `disk_live==disk_last` `iso_live==iso_last` `n=1373`, still hung.
+/// virtio stall dump INTx.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_stall_pulse_intx() {
+    with_box(|b| {
+        b.disk.isr = 1;
+        b.iso.isr = 1;
+    });
+    crate::devices::guest_irq::raise_virtio();
+    crate::devices::guest_irq::raise_virtio_iso();
+}
+
 /// After one function's ISR read dropped shared PIC IRQ 11, keep the line
 /// high if the sibling still has ISR=1. apk overlay uses vda+vdb on the
 /// same INTx. virtio shared INTx. Not `ISO-INSTALL-OK`.
