@@ -504,6 +504,38 @@ fn blk_queue_used_write_fail_retries() {
 }
 
 #[test]
+fn virtio_live_avail_idx_reads_driver_ring() {
+    // virtio stall dump PIT. Iron `a580299` / `34227607779` n=1373.
+    use crate::devices::ide_cdrom::{
+        present as present_iso, reset as reset_cd, write_placeholder_iso, ISO_SECTOR,
+        MOCK_EFI_ISO_BYTES,
+    };
+    reset();
+    reset_cd();
+    let extra = MOCK_EFI_ISO_BYTES + ISO_SECTOR;
+    let mut iso = vec![0u8; extra];
+    write_placeholder_iso(&mut iso[..MOCK_EFI_ISO_BYTES]);
+    assert!(present_iso(&iso, 9));
+    assert!(present());
+    assert!(super::queues_armed(), "virtio stall dump PIT");
+    mmio_write(0x28, 8, 256);
+    assert_eq!(mmio_read(0x28, 8), 256, "queue_driver GPA");
+    let mut mem = vec![0u8; 4096];
+    mem[258..260].copy_from_slice(&42u16.to_le_bytes());
+    let base = mem.as_ptr() as u64;
+    let live = super::virtio_live_avail_idx(false, |gpa| {
+        if gpa < 4096 {
+            Some(base + gpa)
+        } else {
+            None
+        }
+    });
+    assert_eq!(live, 42, "virtio stall dump PIT");
+    reset();
+    reset_cd();
+}
+
+#[test]
 fn blk_queue_get_id_ok() {
     // virtio GET_ID. Linux type 8 is not IOERR.
     let mut guest = vec![0u8; 4096];

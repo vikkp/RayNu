@@ -743,6 +743,25 @@ pub fn virtio_stall_snap() -> VirtioStallSnap {
     })
 }
 
+/// Guest avail.idx from the live driver ring (not last drain).
+/// Iron `a580299` / `34227607779`: second dump `seen_avail` matched
+/// `last`/`used`; live idx tells a lost kick from a true empty queue.
+/// virtio stall dump PIT.
+/// Not `ISO-INSTALL-OK`.
+pub fn virtio_live_avail_idx(iso: bool, translate: impl Fn(u64) -> Option<u64>) -> u16 {
+    let gpa = with_box(|b| {
+        if iso {
+            b.iso.queue_driver
+        } else {
+            b.disk.queue_driver
+        }
+    });
+    if gpa == 0 {
+        return 0;
+    }
+    read_u16(&translate, gpa.wrapping_add(2)).unwrap_or(0)
+}
+
 /// After one function's ISR read dropped shared PIC IRQ 11, keep the line
 /// high if the sibling still has ISR=1. apk overlay uses vda+vdb on the
 /// same INTx. virtio shared INTx. Not `ISO-INSTALL-OK`.
