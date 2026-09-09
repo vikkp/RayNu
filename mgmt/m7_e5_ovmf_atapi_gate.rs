@@ -542,6 +542,8 @@ pub fn ovmf_atapi_surface_present() -> bool {
         && guest.contains("fn guest_uefi_virtio_mmio_heartbeat")
         && guest.contains("virtio MMIO heartbeat 64")
         && uart.contains("UART reassert RX not THRE")
+        && uart.contains("UART THRE level until stop_tx")
+        && uart.contains("fn thre_pending")
         && guest.contains("fn guest_uefi_virtio_drain_every_resume")
         && guest.contains("virtio drain every resume")
         && guest.contains("linux virtio DRIVER_OK")

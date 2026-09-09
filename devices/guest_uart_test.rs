@@ -37,11 +37,64 @@ fn product_iso_thre_raises_irq4() {
     assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
     let (iir, _, _) = pio(0x03FA, true, 0);
     assert_eq!(iir, 0xC2);
+    crate::devices::guest_irq::ioapic_eoi(0x24);
     reassert_irq();
+    assert_eq!(
+        crate::devices::guest_irq::take_inject_vector(),
+        Some(0x24),
+        "UART THRE level until stop_tx: IIR read alone does not clear it"
+    );
+    crate::devices::guest_irq::ioapic_eoi(0x24);
+    // Linux __stop_tx: ETBEI off ends the level.
+    let _ = pio(0x03F9, false, 0x00);
+    reassert_irq();
+    assert!(crate::devices::guest_irq::take_inject_vector().is_none());
+    crate::devices::ide_cdrom::reset();
+    reset();
+    crate::devices::guest_irq::reset();
+}
+
+#[test]
+fn product_iso_thre_waits_for_sol_then_reasserts() {
+    // Iron `f229d14` / `34354322953`: apk in n_tty_write; THRE lost when LSR
+    // said 0 after the IIR read. UART THRE level until stop_tx.
+    reset();
+    crate::devices::guest_irq::reset();
+    arm_product_iso_for_irq();
+    crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
+    crate::devices::guest_irq::ioapic_write(0x10, 0x24);
+    guest_tx_clear();
+    set_linux_earlycon_share(true);
+    set_guest_tx_test_sol_not_ready(true);
+    let _ = pio(0x03FA, false, 0x01);
+    let _ = pio(0x03F9, false, 0x02);
+    let (_, thr, _) = pio(0x03F8, false, b'a');
+    assert_eq!(thr, Some(b'a'));
     assert!(
         crate::devices::guest_irq::take_inject_vector().is_none(),
-        "IIR read cleared THRE"
+        "THR not empty while SOL is back-pressured"
     );
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir, 0xC1, "no interrupt pending, latch kept");
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x20, 0);
+    reassert_irq();
+    assert!(crate::devices::guest_irq::take_inject_vector().is_none());
+    set_guest_tx_test_sol_not_ready(false);
+    reassert_irq();
+    assert_eq!(
+        crate::devices::guest_irq::take_inject_vector(),
+        Some(0x24),
+        "THRE re-asserted once the ring drains"
+    );
+    let (iir2, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir2, 0xC2);
+    let (lsr2, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr2 & 0x60, 0x60, "IIR and LSR agree so Linux loads tx_loadsz");
+    let src = include_str!("guest_uart.rs");
+    assert!(src.contains("UART THRE level until stop_tx"));
+    set_linux_earlycon_share(false);
+    guest_tx_clear();
     crate::devices::ide_cdrom::reset();
     reset();
     crate::devices::guest_irq::reset();
@@ -49,21 +102,20 @@ fn product_iso_thre_raises_irq4() {
 
 #[test]
 fn product_iso_reassert_rx_not_thre() {
+    // Name kept for the gate phrase; THRE now re-asserts only as a gated
+    // level (see product_iso_thre_raises_irq4). UART reassert RX not THRE.
     reset();
     crate::devices::guest_irq::reset();
     arm_product_iso_for_irq();
     crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
     crate::devices::guest_irq::ioapic_write(0x10, 0x24);
     let _ = pio(0x03FA, false, 0x01);
-    let _ = pio(0x03F9, false, 0x02);
-    assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
-    crate::devices::guest_irq::ioapic_eoi(0x24);
+    let _ = pio(0x03F9, false, 0x01);
     reassert_irq();
     assert!(
         crate::devices::guest_irq::take_inject_vector().is_none(),
-        "UART reassert RX not THRE"
+        "ETBEI off: nothing to reassert"
     );
-    let _ = pio(0x03F9, false, 0x01);
     assert!(push_host_rx(b'x'));
     assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
     crate::devices::guest_irq::ioapic_eoi(0x24);

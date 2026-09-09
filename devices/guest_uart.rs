@@ -11,6 +11,17 @@
 //! COM1 IRQ is ISA GSI 4. Host COM2 (iDRAC SOL) RX feeds guest COM1 RBR so
 //! the installer can take serial input. Host/CI never prints `ISO-INSTALL-OK`.
 //!
+//! THRE is a level: pending while IER.ETBEI is set and the shared TX ring
+//! is empty (`guest_tx_guest_lsr_thre`). Iron `f229d14` / `34354322953`
+//! SysRq `t`: `apk` slept in `n_tty_write` → `wait_woken` (stdout is the
+//! 8250 console) while userspace output advanced exactly one 16-byte
+//! `tx_loadsz` per *other* IRQ 4. The IIR read had cleared the THRE latch
+//! and the following LSR read said THRE=0 (SOL back-pressure or our own
+//! diag bytes in the ring), so `serial8250_handle_irq` skipped
+//! `tx_chars` and the interrupt was never re-raised: 4 KiB xmit buffer
+//! full, `apk` blocked forever, no more virtio kicks. UART THRE level
+//! until stop_tx.
+//!
 //! A line BREAK (LSR.BI with a NUL in RBR) followed by one key is the 8250
 //! console's magic-SysRq path (`uart_handle_break` then
 //! `uart_prepare_sysrq_char`). The hypervisor uses it at the apk stall so
@@ -112,8 +123,19 @@ fn rx_ready(u: &Uart) -> bool {
     u.rx_len > 0 || u.break_pending
 }
 
+/// THR empty for interrupt purposes: follows the shared TX ring / SOL when
+/// Linux earlycon share is on, else always empty. UART THRE level until
+/// stop_tx.
+fn tx_empty() -> bool {
+    crate::boot::serial::guest_tx_guest_lsr_thre()
+}
+
+fn thre_pending(u: &Uart) -> bool {
+    u.thre_irq && u.ier & 2 != 0 && tx_empty()
+}
+
 fn irq_pending(u: &Uart) -> bool {
-    (rx_ready(u) && u.ier & 1 != 0) || (u.thre_irq && u.ier & 2 != 0)
+    (rx_ready(u) && u.ier & 1 != 0) || thre_pending(u)
 }
 
 fn rx_push(u: &mut Uart, b: u8) -> bool {
@@ -176,18 +198,19 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
     (out, thr, irq)
 }
 
-/// Re-assert COM1 RX if Linux left IER set (edge inject consumed IRR).
+/// Re-assert COM1 RX / THRE if Linux left IER set (edge inject consumed IRR).
 ///
-/// Do not re-assert THRE. IER.ETBEI plus an always-empty THR keeps IRQ 4
-/// ahead of PIT on every resume, so `idle=poll` never sees jiffies and
-/// Alpine `sleep` after virtio DRIVER_OK hangs. THRE still latches on
-/// THR/IER writes via [`pio`]. After DRIVER_OK, virtio MMIO, VMX preempt,
-/// HLT (until login:), and UART LSR poll arm PIT-once so jiffies still
-/// move; after `login:` HLT keeps UART first for auto-answer.
-/// UART reassert RX not THRE.
+/// History: UART reassert RX not THRE — an ungated THRE (always-empty THR)
+/// re-raised IRQ 4 on every resume ahead of PIT so `idle=poll` never saw
+/// jiffies and Alpine `sleep` after virtio DRIVER_OK hung. THRE is now
+/// re-asserted only while [`tx_empty`] is true and IER.ETBEI is set, i.e.
+/// only when Linux will either load the next `tx_loadsz` bytes or
+/// `__stop_tx` (clear ETBEI). Rate is bounded by SOL drain (one IRQ per 16
+/// bytes at 115200 baud). Iron `f229d14` proved the lost-THRE deadlock
+/// (`apk` in `n_tty_write`). UART THRE level until stop_tx.
 /// Not `ISO-INSTALL-OK`.
 pub fn reassert_irq() {
-    let pending = with_uart(|u| rx_ready(&u.com1) && u.com1.ier & 1 != 0);
+    let pending = with_uart(|u| irq_pending(&u.com1));
     if pending {
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
     }
@@ -274,8 +297,13 @@ fn uart_read(u: &mut Uart, off: u8) -> u8 {
         2 => {
             if rx_ready(u) && u.ier & 1 != 0 {
                 iir_bits(0x04, u.fcr & 1 != 0)
-            } else if u.thre_irq && u.ier & 2 != 0 {
-                u.thre_irq = false;
+            } else if thre_pending(u) {
+                // Not cleared here: the shared ring can refill between this
+                // IIR read and Linux's LSR read, and a 16550 only re-asserts
+                // on a THR-empty transition we cannot replay. Linux ends
+                // every THRE service with a THR write or `__stop_tx`
+                // (ETBEI clear), so the level cannot storm. UART THRE level
+                // until stop_tx.
                 iir_bits(0x02, u.fcr & 1 != 0)
             } else {
                 iir_bits(0x01, u.fcr & 1 != 0)

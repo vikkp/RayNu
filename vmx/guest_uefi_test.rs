@@ -1812,6 +1812,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART sysrq break"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line sysrq_always_enabled"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("heuristic PIT/INTx pins frozen"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART THRE level until stop_tx"));
     assert!(
         guest_uefi_virtio_stall_empty(1093, 1093, 1052, 1052),
         "virtio stall dump INTx"

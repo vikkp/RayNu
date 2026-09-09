@@ -185,6 +185,7 @@ pub fn iso_install_surface_present() -> bool {
         && include_str!("../vmx/guest_uefi.rs").contains("handle_uart_product")
         && include_str!("../devices/guest_uart.rs").contains("fn reassert_irq(")
         && include_str!("../devices/guest_uart.rs").contains("UART reassert RX not THRE")
+        && include_str!("../devices/guest_uart.rs").contains("UART THRE level until stop_tx")
         && include_str!("../vmx/guest_uefi.rs").contains("fn guest_uefi_virtio_drain_every_resume")
         && include_str!("../vmx/guest_uefi.rs").contains("virtio drain every resume")
         && include_str!("../vmx/guest_uefi.rs").contains("linux virtio DRIVER_OK")
