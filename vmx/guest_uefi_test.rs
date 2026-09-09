@@ -122,6 +122,7 @@ use super::{
     guest_uefi_virtio_drain_on_isr,
     guest_uefi_virtio_stall_dump,
     guest_uefi_virtio_stall_dump_reset_on_mmio,
+    guest_uefi_virtio_stall_dump_reset_on_notify,
     guest_uefi_virtio_stall_dump_pit,
     guest_uefi_virtio_stall_empty,
     guest_uefi_virtio_stall_dump_intx,
@@ -1730,6 +1731,7 @@ fn marker_and_residual_honest() {
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio MMIO heartbeat kick"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump PIT"));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump notify reset"));
     assert!(
         guest_uefi_virtio_drain_on_isr(false),
         "virtio drain on ISR"
@@ -1747,6 +1749,24 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_virtio_stall_dump_reset_on_mmio(false));
     assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x300, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x50, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        guest_uefi_virtio_stall_dump_reset_on_notify(0x64, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(
+        !guest_uefi_virtio_stall_dump_reset_on_notify(0x100, true),
+        "virtio stall dump notify reset"
+    );
+    assert!(!guest_uefi_virtio_stall_dump_reset_on_notify(0x100, false));
+    assert!(!guest_uefi_virtio_stall_dump_reset_on_notify(0x300, false));
+    assert!(
         guest_uefi_virtio_stall_dump_pit(true),
         "virtio stall dump PIT"
     );
@@ -1763,6 +1783,7 @@ fn marker_and_residual_honest() {
     assert!(!guest_uefi_virtio_stall_dump_intx(true, false));
     assert!(!guest_uefi_virtio_stall_dump_intx(false, true));
     assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump INTx"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump notify reset"));
     assert!(
         guest_uefi_virtio_mmio_heartbeat_kick(100, 0x100, true),
         "virtio MMIO heartbeat kick"

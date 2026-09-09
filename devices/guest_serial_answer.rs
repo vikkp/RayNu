@@ -149,6 +149,11 @@ static MOUNT_SENT: AtomicBool = AtomicBool::new(false);
 /// linux PIC IRQ11 yield until mount. linux PIC IRQ11 yield 3 after mount.
 /// Not `ISO-INSTALL-OK`.
 static MEDIA_MOUNTED: AtomicBool = AtomicBool::new(false);
+/// Alpine `Installing packages` (UART, not usbdelay TSC). INTx pulse
+/// after empty-ring dump only then. Iron `6d0c58a` / `34292570282`
+/// pulsed during usbdelay and apk ISR ACK re-armed the dump.
+/// virtio stall dump notify reset. Not `ISO-INSTALL-OK`.
+static PACKAGES_OVERLAY: AtomicBool = AtomicBool::new(false);
 /// Host TSC when PIT-hold armed (DRIVER_OK). `usbdelay=30` fallback.
 static HOLD_TSC: AtomicU64 = AtomicU64::new(0);
 static MOUNT_LOG: AtomicBool = AtomicBool::new(false);
@@ -176,6 +181,7 @@ pub fn reset() {
     NEXT_YES_IS_NO.store(false, Ordering::Release);
     MOUNT_SENT.store(false, Ordering::Release);
     MEDIA_MOUNTED.store(false, Ordering::Release);
+    PACKAGES_OVERLAY.store(false, Ordering::Release);
     HOLD_TSC.store(0, Ordering::Release);
     MOUNT_LOG.store(false, Ordering::Release);
     REBOOT_SENT.store(false, Ordering::Release);
@@ -250,6 +256,13 @@ pub fn note_tx(b: u8) {
         } else {
             a.win.copy_within(1..WIN, 0);
             a.win[WIN - 1] = b;
+        }
+        if !PACKAGES_OVERLAY.load(Ordering::Acquire)
+            && (window_contains(&a.win, a.wlen, b"Installing p")
+                || window_contains(&a.win, a.wlen, b"packages to"))
+        {
+            PACKAGES_OVERLAY.store(true, Ordering::Release);
+            MEDIA_MOUNTED.store(true, Ordering::Release);
         }
         if !MEDIA_MOUNTED.load(Ordering::Acquire)
             && (window_contains(&a.win, a.wlen, b"media: ok")
@@ -392,6 +405,13 @@ pub fn apk_media_mounted() -> bool {
     } else {
         false
     }
+}
+
+/// True after guest COM1 printed `Installing packages` (not usbdelay TSC).
+/// Iron `6d0c58a` / `34292570282`: usbdelay dump+INTx loop before mount.
+/// virtio stall dump notify reset. Not `ISO-INSTALL-OK`.
+pub fn apk_packages_overlay_active() -> bool {
+    PACKAGES_OVERLAY.load(Ordering::Acquire)
 }
 
 /// One-shot COM2 note when usbdelay/mount latch first becomes true.

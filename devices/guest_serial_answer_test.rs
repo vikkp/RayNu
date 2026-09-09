@@ -1,5 +1,5 @@
 use super::{
-    apk_media_mounted, apk_overlay_needs_pit, begin_second_boot, note_tx, queued, reset, second_boot, take_rx,
+    apk_media_mounted, apk_overlay_needs_pit, apk_packages_overlay_active, begin_second_boot, note_tx, queued, reset, second_boot, take_rx,
     BOOTLOADER, DISK, GRUB_ENTER, MOUNT_EXIT, NO, PROVE, REBOOT, ROOT, SETUP, SYS, YES,
 };
 
@@ -151,6 +151,30 @@ fn apk_media_mounted_latches_boot_media_ok() {
     );
     reset();
     assert!(!apk_media_mounted());
+    assert!(!apk_packages_overlay_active());
+}
+
+#[test]
+fn apk_packages_overlay_latches_installing_not_media_ok() {
+    reset();
+    assert!(!apk_packages_overlay_active());
+    for &b in b"Mounting boot media: ok." {
+        note_tx(b);
+    }
+    assert!(apk_media_mounted(), "linux PIC IRQ11 yield until mount");
+    assert!(
+        !apk_packages_overlay_active(),
+        "virtio stall dump notify reset"
+    );
+    for &b in b"Installing packages to root filesystem..." {
+        note_tx(b);
+    }
+    assert!(
+        apk_packages_overlay_active(),
+        "virtio stall dump notify reset"
+    );
+    reset();
+    assert!(!apk_packages_overlay_active());
 }
 
 #[test]
