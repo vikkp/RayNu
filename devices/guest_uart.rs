@@ -10,6 +10,13 @@
 //! printk cannot outrun iDRAC SOL (iron hush-on-bootimg still cut at e820).
 //! COM1 IRQ is ISA GSI 4. Host COM2 (iDRAC SOL) RX feeds guest COM1 RBR so
 //! the installer can take serial input. Host/CI never prints `ISO-INSTALL-OK`.
+//!
+//! A line BREAK (LSR.BI with a NUL in RBR) followed by one key is the 8250
+//! console's magic-SysRq path (`uart_handle_break` then
+//! `uart_prepare_sysrq_char`). The hypervisor uses it at the apk stall so
+//! Linux prints its own task state (`w`/`m`/`t`/`l`). That is an architected
+//! serial-line input, not firmware state mutation (ADR-016).
+//! UART sysrq break. Not `ISO-INSTALL-OK`.
 
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -29,6 +36,9 @@ struct Uart {
     rx: [u8; RX_CAP],
     rx_head: u8,
     rx_len: u8,
+    /// Line BREAK ahead of the RX FIFO: LSR reads `DR|BI`, RBR reads 0x00
+    /// once and clears it. UART sysrq break.
+    break_pending: bool,
 }
 
 impl Uart {
@@ -45,6 +55,7 @@ impl Uart {
             rx: [0; RX_CAP],
             rx_head: 0,
             rx_len: 0,
+            break_pending: false,
         }
     }
 }
@@ -97,8 +108,12 @@ fn loopback(u: &Uart) -> bool {
     u.mcr & 0x10 != 0
 }
 
+fn rx_ready(u: &Uart) -> bool {
+    u.rx_len > 0 || u.break_pending
+}
+
 fn irq_pending(u: &Uart) -> bool {
-    (u.rx_len > 0 && u.ier & 1 != 0) || (u.thre_irq && u.ier & 2 != 0)
+    (rx_ready(u) && u.ier & 1 != 0) || (u.thre_irq && u.ier & 2 != 0)
 }
 
 fn rx_push(u: &mut Uart, b: u8) -> bool {
@@ -172,7 +187,7 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
 /// UART reassert RX not THRE.
 /// Not `ISO-INSTALL-OK`.
 pub fn reassert_irq() {
-    let pending = with_uart(|u| u.com1.rx_len > 0 && u.com1.ier & 1 != 0);
+    let pending = with_uart(|u| rx_ready(&u.com1) && u.com1.ier & 1 != 0);
     if pending {
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
     }
@@ -182,6 +197,28 @@ pub fn reassert_irq() {
 pub fn push_host_rx(b: u8) -> bool {
     let (ok, pending) = with_uart(|u| {
         let ok = rx_push(&mut u.com1, b);
+        (ok, irq_pending(&u.com1))
+    });
+    if pending {
+        crate::devices::guest_irq::raise_gsi(COM1_IRQ);
+    }
+    ok
+}
+
+/// Magic SysRq into guest COM1: a line BREAK then `key`. Returns false when
+/// a BREAK is still unread or the FIFO is full (caller retries later).
+/// Linux 8250 console: `uart_handle_break` arms `port->sysrq` for 5 s of
+/// jiffies; the next RBR byte goes to `handle_sysrq`. The BREAK and the key
+/// sit back to back so the window cannot lapse. `sysrq_always_enabled` is
+/// on the patched product-ISO cmdline. UART sysrq break.
+/// Not `ISO-INSTALL-OK`.
+pub fn inject_sysrq(key: u8) -> bool {
+    let (ok, pending) = with_uart(|u| {
+        if u.com1.break_pending || (u.com1.rx_len as usize) >= RX_CAP {
+            return (false, false);
+        }
+        u.com1.break_pending = true;
+        let ok = rx_push(&mut u.com1, key);
         (ok, irq_pending(&u.com1))
     });
     if pending {
@@ -223,11 +260,19 @@ fn dlab(u: &Uart) -> bool {
 fn uart_read(u: &mut Uart, off: u8) -> u8 {
     match off {
         0 if dlab(u) => u.dll,
-        0 => rx_pop(u),
+        0 => {
+            if u.break_pending {
+                // The BREAK's NUL is consumed before the queued sysrq key.
+                u.break_pending = false;
+                0
+            } else {
+                rx_pop(u)
+            }
+        }
         1 if dlab(u) => u.dlm,
         1 => u.ier,
         2 => {
-            if u.rx_len > 0 && u.ier & 1 != 0 {
+            if rx_ready(u) && u.ier & 1 != 0 {
                 iir_bits(0x04, u.fcr & 1 != 0)
             } else if u.thre_irq && u.ier & 2 != 0 {
                 u.thre_irq = false;
@@ -242,8 +287,8 @@ fn uart_read(u: &mut Uart, off: u8) -> u8 {
             // Nested QEMU `dcf8495` `/init` SIGSEGV 3/3 when every LSR IN
             // called into serial (share off). Keep the 0x60/0x61 path until
             // product-ISO earlycon share. linux earlycon pace LSR THRE.
-            if !crate::boot::serial::linux_earlycon_share() {
-                if u.rx_len > 0 {
+            let mut m = if !crate::boot::serial::linux_earlycon_share() {
+                if rx_ready(u) {
                     0x61
                 } else {
                     0x60
@@ -253,11 +298,17 @@ fn uart_read(u: &mut Uart, off: u8) -> u8 {
                 if crate::boot::serial::guest_tx_guest_lsr_thre() {
                     m |= 0x60;
                 }
-                if u.rx_len > 0 {
+                if rx_ready(u) {
                     m |= 0x01;
                 }
                 m
+            };
+            if u.break_pending {
+                // LSR.BI: 8250 `serial8250_read_char` calls
+                // `uart_handle_break` and drops the NUL. UART sysrq break.
+                m |= 0x10;
             }
+            m
         }
         6 => {
             if loopback(u) {
@@ -315,6 +366,7 @@ fn uart_write(u: &mut Uart, off: u8, val: u8) -> Option<u8> {
             if val & 2 != 0 {
                 u.rx_len = 0;
                 u.rx_head = 0;
+                u.break_pending = false;
             }
             None
         }

@@ -6,7 +6,7 @@
 # kernel -> shell -> SETUP -> setup-disk, then apk "no such package" for
 # both). alpine-extended (994 MiB) ships grub, grub-efi, dosfstools,
 # efibootmgr, mtools. Its grub.cfg is "Linux lts" with intel/amd ucode
-# initrds (Data Length 182 -> 299 after ISO_GRUB_LINUX_EXT grow; ucode
+# initrds (Data Length 182 -> 320 after ISO_GRUB_LINUX_EXT grow; ucode
 # dropped). run-qemu.sh puts an ESP above vvfat's ~516 MB cap on a real
 # FAT32 image. QEMU_MEM defaults 4096M for it (ISO is retained PRE-EBS).
 # Cruzer (977.5 MiB stick) cannot hold extended: iron needs a larger

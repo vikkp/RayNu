@@ -1,4 +1,4 @@
-use super::{pio, poll_host_rx, push_host_rx, reassert_irq, reset};
+use super::{inject_sysrq, pio, poll_host_rx, push_host_rx, reassert_irq, reset};
 use crate::boot::serial::{
     guest_tx_clear, set_guest_tx_test_sol_not_ready, set_linux_earlycon_share,
 };
@@ -127,6 +127,44 @@ fn host_rx_raises_irq4_and_iir_is_c4() {
     crate::devices::ide_cdrom::reset();
     reset();
     crate::devices::guest_irq::    reset();
+}
+
+#[test]
+fn sysrq_break_then_key_follows_8250_rx_loop() {
+    reset();
+    crate::devices::guest_irq::reset();
+    arm_product_iso_for_irq();
+    crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
+    crate::devices::guest_irq::ioapic_write(0x10, 0x24);
+    let _ = pio(0x03FA, false, 0x01);
+    let _ = pio(0x03F9, false, 0x01);
+    assert!(inject_sysrq(b'w'), "UART sysrq break");
+    assert_eq!(crate::devices::guest_irq::take_inject_vector(), Some(0x24));
+    assert!(!inject_sysrq(b't'), "second BREAK waits until the first is read");
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir, 0xC4, "RDA while only the BREAK is pending");
+    // serial8250_rx_chars: LSR (DR|BI) -> RBR NUL (uart_handle_break) ->
+    // LSR (DR) -> RBR key (uart_prepare_sysrq_char) -> LSR idle.
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr, 0x71);
+    let (rbr, _, _) = pio(0x03F8, true, 0);
+    assert_eq!(rbr, 0x00);
+    let (lsr2, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr2, 0x61, "BI cleared with the NUL; key still queued");
+    let (key, _, _) = pio(0x03F8, true, 0);
+    assert_eq!(key, b'w');
+    let (lsr3, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr3, 0x60);
+    assert!(inject_sysrq(b't'));
+    // FCR RX reset drops both the BREAK and the key.
+    let _ = pio(0x03FA, false, 0x03);
+    let (lsr4, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr4, 0x60);
+    let src = include_str!("guest_uart.rs");
+    assert!(src.contains("UART sysrq break"));
+    crate::devices::ide_cdrom::reset();
+    reset();
+    crate::devices::guest_irq::reset();
 }
 
 #[test]

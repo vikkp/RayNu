@@ -37,7 +37,7 @@ use crate::devices::guest_platform::{
     boot_order_cd_then_disk, pci_bdf, pci_cfg_offset, HOST_BRIDGE_DEVICE, HOST_BRIDGE_VENDOR,
     PCI_HEADER_MULTIFUNCTION,
 };
-use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// QEMU / serial marker when guest-UEFI sees virtio-blk + CD→disk order.
 pub const M7_E5_OVMF_VIRTIO_OK_MARKER: &str = "RAYNU-V-M7-E5-OVMF-VIRTIO-OK";
@@ -130,6 +130,12 @@ struct VirtioPci {
     /// Last guest avail.idx seen by drain (COM2 stall dump).
     seen_avail: u16,
     readonly: bool,
+    /// Last completed request (COM2 stall dump): avail head, status GPA,
+    /// header type and sector. virtio stall dump ring.
+    last_head: u16,
+    last_status_gpa: u64,
+    last_ty: u32,
+    last_sector: u64,
 }
 
 impl VirtioPci {
@@ -158,8 +164,22 @@ impl VirtioPci {
             notify_pending: false,
             seen_avail: 0,
             readonly: false,
+            last_head: 0,
+            last_status_gpa: 0,
+            last_ty: 0,
+            last_sector: 0,
         }
     }
+}
+
+/// Last request completed by [`process_blk_queue`] (COM2 stall dump).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LastReq {
+    pub head: u16,
+    pub status_gpa: u64,
+    pub ty: u32,
+    pub sector: u64,
+    pub any: bool,
 }
 
 struct VirtioBox {
@@ -197,6 +217,10 @@ static BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
 static ISO_PTR: AtomicU64 = AtomicU64::new(0);
 static ISO_LEN: AtomicU64 = AtomicU64::new(0);
 static ISO_READ: AtomicU64 = AtomicU64::new(0);
+/// GPA→HPA misses inside [`process_blk_queue`] (ring, header, status or
+/// used-ring write). Never reset; COM2 stall dump prints it.
+/// virtio stall dump ring.
+static XLATE_FAIL: AtomicU32 = AtomicU32::new(0);
 static ISO_VISIBLE: AtomicBool = AtomicBool::new(false);
 static ISO_OK: AtomicBool = AtomicBool::new(false);
 /// PEI `PciRead16(00:00.0 DID)` must be i440FX so `HostBridgeDevId==0x1237`.
@@ -762,6 +786,78 @@ pub fn virtio_live_avail_idx(iso: bool, translate: impl Fn(u64) -> Option<u64>) 
     read_u16(&translate, gpa.wrapping_add(2)).unwrap_or(0)
 }
 
+/// What Linux sees in its own ring for one function: in-guest `used.idx`,
+/// the last used element we wrote, the status byte at the last request's
+/// status GPA, and that request's header. Iron `09b5842` / `34302053558`:
+/// device-side counters all matched (`last==used==avail==live`) yet apk
+/// never kicked again; this shows whether the completion Linux is waiting
+/// for actually landed in guest memory. virtio stall dump ring.
+/// Not `ISO-INSTALL-OK`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VirtioRingLive {
+    pub qsize: u16,
+    pub used_idx_mem: u16,
+    pub avail_flags: u16,
+    pub used_flags: u16,
+    pub last_id: u32,
+    pub last_len: u32,
+    pub last_head: u16,
+    pub last_status: u8,
+    pub last_ty: u32,
+    pub last_sector: u64,
+}
+
+pub fn virtio_ring_live(iso: bool, translate: impl Fn(u64) -> Option<u64>) -> VirtioRingLive {
+    let (qsize, used_idx, avail_gpa, used_gpa, head, status_gpa, ty, sector) = with_box(|b| {
+        let v = if iso { &b.iso } else { &b.disk };
+        (
+            v.queue_size,
+            v.used_idx,
+            v.queue_driver,
+            v.queue_device,
+            v.last_head,
+            v.last_status_gpa,
+            v.last_ty,
+            v.last_sector,
+        )
+    });
+    let mut out = VirtioRingLive {
+        qsize,
+        last_head: head,
+        last_ty: ty,
+        last_sector: sector,
+        ..VirtioRingLive::default()
+    };
+    if used_gpa == 0 || qsize == 0 {
+        return out;
+    }
+    out.used_idx_mem = read_u16(&translate, used_gpa.wrapping_add(2)).unwrap_or(0xffff);
+    out.used_flags = read_u16(&translate, used_gpa).unwrap_or(0xffff);
+    if avail_gpa != 0 {
+        out.avail_flags = read_u16(&translate, avail_gpa).unwrap_or(0xffff);
+    }
+    let slot = (used_idx.wrapping_sub(1) as usize) % (qsize as usize);
+    let mut elt = [0u8; 8];
+    if read_bytes(&translate, used_gpa + 4 + (slot as u64) * 8, &mut elt) {
+        out.last_id = u32::from_le_bytes(elt[0..4].try_into().unwrap_or([0; 4]));
+        out.last_len = u32::from_le_bytes(elt[4..8].try_into().unwrap_or([0; 4]));
+    }
+    if status_gpa != 0 {
+        let mut st = [0u8; 1];
+        if read_bytes(&translate, status_gpa, &mut st) {
+            out.last_status = st[0];
+        } else {
+            out.last_status = 0xff;
+        }
+    }
+    out
+}
+
+/// GPA→HPA misses seen by the virtio drain since boot. virtio stall dump ring.
+pub fn virtio_xlate_fail_count() -> u32 {
+    XLATE_FAIL.load(Ordering::Acquire)
+}
+
 /// Pulse shared PIC IRQ 11 with ISR=1 on both functions so Linux
 /// re-harvests used.idx after an empty-ring stall dump.
 /// Iron `ba5bf8f` / `34290078274`: `virtio stall dump PIT` lived,
@@ -1196,6 +1292,7 @@ pub fn process_blk_queue_in(
         disk,
         &translate,
         false,
+        &mut LastReq::default(),
     )
     .0
 }
@@ -1230,6 +1327,7 @@ pub fn process_iso_queue_in(
         disk,
         &translate,
         true,
+        &mut LastReq::default(),
     )
     .0
 }
@@ -1345,11 +1443,13 @@ fn process_blk_queue(
     disk: &mut [u8],
     translate: &impl Fn(u64) -> Option<u64>,
     readonly: bool,
+    last_req: &mut LastReq,
 ) -> (u32, u16, u16) {
     if qsize == 0 {
         return (0, 0, 0);
     }
     let Some(avail_idx) = read_u16(translate, avail_gpa + 2) else {
+        XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
         return (0, 0, 0);
     };
     let mut written = 0u32;
@@ -1357,6 +1457,7 @@ fn process_blk_queue(
     while *last_avail != avail_idx {
         let slot = (*last_avail as usize) % (qsize as usize);
         let Some(head) = read_u16(translate, avail_gpa + 4 + (slot as u64) * 2) else {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
             break;
         };
         let mut desc = head;
@@ -1373,6 +1474,7 @@ fn process_blk_queue(
             let d_off = desc_gpa + u64::from(desc) * 16;
             let mut raw = [0u8; 16];
             if !read_bytes(translate, d_off, &mut raw) {
+                XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
                 break;
             }
             let addr = u64::from_le_bytes(raw[0..8].try_into().unwrap_or([0; 8]));
@@ -1381,6 +1483,7 @@ fn process_blk_queue(
             let next = u16::from_le_bytes(raw[14..16].try_into().unwrap_or([0; 2]));
             if !got_hdr && len >= 16 {
                 if !read_bytes(translate, addr, &mut hdr) {
+                    XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
                     break;
                 }
                 got_hdr = true;
@@ -1459,6 +1562,7 @@ fn process_blk_queue(
         }
         if status_gpa != 0 {
             if !write_bytes(translate, status_gpa, &[status]) {
+                XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
                 break;
             }
             in_len = in_len.saturating_add(1);
@@ -1468,15 +1572,24 @@ fn process_blk_queue(
         used_elt[0..4].copy_from_slice(&(u32::from(head)).to_le_bytes());
         used_elt[4..8].copy_from_slice(&in_len.to_le_bytes());
         if !write_bytes(translate, used_gpa + 4 + (uslot as u64) * 8, &used_elt) {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
             break;
         }
         if !write_u16(translate, used_gpa + 2, used_idx.wrapping_add(1)) {
+            XLATE_FAIL.fetch_add(1, Ordering::AcqRel);
             break;
         }
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
         *used_idx = used_idx.wrapping_add(1);
         *last_avail = last_avail.wrapping_add(1);
         nreq = nreq.saturating_add(1);
+        *last_req = LastReq {
+            head,
+            status_gpa,
+            ty,
+            sector,
+            any: true,
+        };
     }
     (written, nreq, avail_idx)
 }
@@ -1488,6 +1601,15 @@ pub fn take_iso_read_note() -> Option<u64> {
         None
     } else {
         Some(n)
+    }
+}
+
+fn note_last_req(v: &mut VirtioPci, r: &LastReq) {
+    if r.any {
+        v.last_head = r.head;
+        v.last_status_gpa = r.status_gpa;
+        v.last_ty = r.ty;
+        v.last_sector = r.sector;
     }
 }
 
@@ -1542,6 +1664,7 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
     let disk = unsafe { core::slice::from_raw_parts_mut(hpa as *mut u8, dlen) };
     let mut last_avail = last;
     let mut used_idx = used_i;
+    let mut last_req = LastReq::default();
     let (n, nreq, avail) = process_blk_queue(
         qsize,
         &mut last_avail,
@@ -1552,11 +1675,13 @@ fn drain_disk(translate: &impl Fn(u64) -> Option<u64>) -> u32 {
         disk,
         translate,
         false,
+        &mut last_req,
     );
     with_virtio(|v| {
         v.last_avail = last_avail;
         v.used_idx = used_idx;
         v.seen_avail = avail;
+        note_last_req(v, &last_req);
         // virtio drain FLUSH: used-idx moved even when OUT bytes are 0.
         if nreq > 0 {
             v.isr = 1;
@@ -1593,6 +1718,7 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
     let disk = unsafe { core::slice::from_raw_parts_mut(ptr as *mut u8, ilen) };
     let mut last_avail = last;
     let mut used_idx = used_i;
+    let mut last_req = LastReq::default();
     let (n, nreq, avail_seen) = process_blk_queue(
         qsize,
         &mut last_avail,
@@ -1603,11 +1729,13 @@ fn drain_iso(translate: &impl Fn(u64) -> Option<u64>) {
         disk,
         translate,
         true,
+        &mut last_req,
     );
     with_iso(|v| {
         v.last_avail = last_avail;
         v.used_idx = used_idx;
         v.seen_avail = avail_seen;
+        note_last_req(v, &last_req);
         if nreq > 0 {
             v.isr = 1;
         }

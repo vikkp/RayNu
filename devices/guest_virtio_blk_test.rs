@@ -497,6 +497,7 @@ fn blk_queue_used_write_fail_retries() {
         &mut disk,
         &translate,
         false,
+        &mut super::LastReq::default(),
     );
     assert_eq!(last, 0, "virtio used idx");
     assert_eq!(used_idx, 0, "virtio used idx shadow");
@@ -533,6 +534,93 @@ fn virtio_live_avail_idx_reads_driver_ring() {
     assert_eq!(live, 42, "virtio stall dump PIT");
     reset();
     reset_cd();
+}
+
+#[test]
+fn virtio_ring_live_reads_used_idx_and_last_status() {
+    // virtio stall dump ring. Iron `09b5842` / `34302053558`: device-side
+    // counters all matched at n=1373; this reads what Linux sees.
+    let mut guest = vec![0u8; 4096];
+    let qsize = 4u16;
+    let (desc, avail, used) = (0u64, 256u64, 512u64);
+    let hdr_gpa = 0x300u64;
+    guest[hdr_gpa as usize..hdr_gpa as usize + 4].copy_from_slice(&VIRTIO_BLK_T_IN.to_le_bytes());
+    guest[hdr_gpa as usize + 8..hdr_gpa as usize + 16].copy_from_slice(&7u64.to_le_bytes());
+    let data_gpa = 0x800u64;
+    let st_gpa = 0x700u64;
+    guest[st_gpa as usize] = 0xFF;
+    fn put_desc(mem: &mut [u8], i: u16, addr: u64, len: u32, flags: u16, next: u16) {
+        let o = (i as usize) * 16;
+        mem[o..o + 8].copy_from_slice(&addr.to_le_bytes());
+        mem[o + 8..o + 12].copy_from_slice(&len.to_le_bytes());
+        mem[o + 12..o + 14].copy_from_slice(&flags.to_le_bytes());
+        mem[o + 14..o + 16].copy_from_slice(&next.to_le_bytes());
+    }
+    put_desc(&mut guest, 2, hdr_gpa, 16, 1, 3);
+    put_desc(&mut guest, 3, data_gpa, 512, 3, 1);
+    put_desc(&mut guest, 1, st_gpa, 1, 2, 0);
+    guest[avail as usize + 2..avail as usize + 4].copy_from_slice(&1u16.to_le_bytes());
+    guest[avail as usize + 4..avail as usize + 6].copy_from_slice(&2u16.to_le_bytes());
+    let base = guest.as_mut_ptr() as u64;
+    let translate = |gpa: u64| if gpa < 4096 { Some(base + gpa) } else { None };
+    let mut last = 0u16;
+    let mut used_idx = 0u16;
+    let mut disk = vec![0u8; 8192];
+    let mut last_req = super::LastReq::default();
+    let before = super::virtio_xlate_fail_count();
+    let (_n, nreq, _avail) = super::process_blk_queue(
+        qsize,
+        &mut last,
+        &mut used_idx,
+        desc,
+        avail,
+        used,
+        &mut disk,
+        &translate,
+        false,
+        &mut last_req,
+    );
+    assert_eq!(nreq, 1);
+    assert_eq!(super::virtio_xlate_fail_count(), before, "no GPA miss");
+    assert_eq!(
+        last_req,
+        super::LastReq {
+            head: 2,
+            status_gpa: st_gpa,
+            ty: VIRTIO_BLK_T_IN,
+            sector: 7,
+            any: true,
+        },
+        "virtio stall dump ring"
+    );
+    assert_eq!(guest[st_gpa as usize], VIRTIO_BLK_S_OK);
+    let mem_used = u16::from_le_bytes([guest[used as usize + 2], guest[used as usize + 3]]);
+    assert_eq!(mem_used, 1, "in-guest used.idx");
+    let id = u32::from_le_bytes(guest[used as usize + 4..used as usize + 8].try_into().unwrap());
+    let len = u32::from_le_bytes(guest[used as usize + 8..used as usize + 12].try_into().unwrap());
+    assert_eq!((id, len), (2, 513));
+    // A ring that does not translate is counted, not skipped silently.
+    let mut last2 = 0u16;
+    let none = |_gpa: u64| None;
+    let (_n, nreq2, _a) = super::process_blk_queue(
+        qsize,
+        &mut last2,
+        &mut used_idx,
+        desc,
+        avail,
+        used,
+        &mut disk,
+        &none,
+        false,
+        &mut super::LastReq::default(),
+    );
+    assert_eq!(nreq2, 0);
+    assert_eq!(super::virtio_xlate_fail_count(), before + 1, "virtio stall dump ring");
+    // Unarmed function: nothing to read, default snapshot.
+    reset();
+    let live = super::virtio_ring_live(true, |_gpa| None);
+    assert_eq!(live.used_idx_mem, 0);
+    assert_eq!(live.qsize, 128);
 }
 
 #[test]

@@ -125,7 +125,8 @@ use super::{
     guest_uefi_virtio_stall_dump_reset_on_notify,
     guest_uefi_virtio_stall_dump_pit,
     guest_uefi_virtio_stall_dump_pit_hold,
-    guest_uefi_virtio_stall_dump_pit_paced,
+    guest_uefi_virtio_stall_dump_pit_paced, guest_uefi_virtio_stall_probe, StallProbe,
+    STALL_PROBE_TSC_PER_SEC,
     guest_uefi_virtio_stall_empty,
     guest_uefi_virtio_stall_dump_intx,
     guest_uefi_virtio_mmio_heartbeat_kick,
@@ -1787,6 +1788,30 @@ fn marker_and_residual_honest() {
     );
     assert!(!guest_uefi_virtio_stall_dump_pit_paced(true, false));
     assert!(!guest_uefi_virtio_stall_dump_pit_paced(false, true));
+    // virtio stall probe: samples, then SysRq w/m/t/l, then a final sample.
+    let s = STALL_PROBE_TSC_PER_SEC;
+    assert_eq!(guest_uefi_virtio_stall_probe(0, 0), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 4, 0), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 2 - 1, 1), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(s / 2, 1), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s, 2), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(s - 1, 3), None);
+    assert_eq!(
+        guest_uefi_virtio_stall_probe(s, 3),
+        Some(StallProbe::Sysrq(b'w')),
+        "virtio stall probe"
+    );
+    assert_eq!(guest_uefi_virtio_stall_probe(4 * s, 4), Some(StallProbe::Sysrq(b'm')));
+    assert_eq!(guest_uefi_virtio_stall_probe(8 * s, 5), Some(StallProbe::Sysrq(b't')));
+    assert_eq!(guest_uefi_virtio_stall_probe(39 * s, 6), None);
+    assert_eq!(guest_uefi_virtio_stall_probe(40 * s, 6), Some(StallProbe::Sysrq(b'l')));
+    assert_eq!(guest_uefi_virtio_stall_probe(60 * s, 7), Some(StallProbe::Sample));
+    assert_eq!(guest_uefi_virtio_stall_probe(u64::MAX, 8), None, "probe ends");
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall dump ring"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("virtio stall probe"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("UART sysrq break"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("linux-line sysrq_always_enabled"));
+    assert!(E5_OVMF_VMLAUNCH_RESIDUAL_NOTE.contains("heuristic PIT/INTx pins frozen"));
     assert!(
         guest_uefi_virtio_stall_empty(1093, 1093, 1052, 1052),
         "virtio stall dump INTx"
