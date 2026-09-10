@@ -3,7 +3,7 @@
 **Scaffold marker (host/CI):** `RAYNU-V-M7-ISO-INSTALL-SCAFFOLD-OK`  
 **Iron close (COM2):** the literal `RAYNU-V-M7-ISO-INSTALL-OK` — **printed on R640 2026-09-10** after a real Alpine `setup-disk -m sys /dev/vda` under RayNu-F (EFI `59ac070`, run `34425781629`); earlier 2026-08-16 close was the documented equivalent `RAYNU-V-M7-ISO-BOOTED-FROM-DISK` (LBA stamp persist)  
 **Evidence:** [2026-09-10-59ac070-iso-install-ok.md](../evidence/r640/2026-09-10-59ac070-iso-install-ok.md) (distro install) · [2026-08-16-e5-iso-install.md](../evidence/r640/2026-08-16-e5-iso-install.md) (stamp persist) — `STATUS-iso-install=closed`  
-**Iron residual:** reboot-to-disk (`RAYNU-V-RAYNU-F-DISK-BOOT-OK` nested-only; `59ac070` F7 relaunch failed VMCLEAR/VMPTRLD) — see [r640_f7_iso_iron.md](r640_f7_iso_iron.md)  
+**Iron reboot-to-disk (COM2):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second `Linux version` with `root=UUID=` from `vda` — **seen on R640 2026-09-10** (EFI `56a3ffd`, run `34480107961`; evidence [2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md](../evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md)). **E5 Phase A whole loop closed on iron.** Residual is Phase B (SPA/REST starts that installed disk; iron SPA still launches the SHELL stub) — see [r640_f7_iso_iron.md](r640_f7_iso_iron.md)  
 **Archive:** `docs/evidence/r640/`  
 **Plan:** [docs/m7_plan.md](../m7_plan.md) · ADR: [ADR-009](../adr/ADR-009.md) · product ISO: [ADR-014](../adr/ADR-014.md) · HDA E5  
 **Prior:** [iso.md](iso.md) (M7.3 deploy plan) · [mgmt_http.md](mgmt_http.md) (E3 network)

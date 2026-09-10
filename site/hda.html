@@ -6,12 +6,12 @@
     <title>RayNu-V — Honest Distance Assessment · Mount Everest</title>
     <meta
       name="description"
-      content="Honest Distance Assessment for RayNu-V: E2+E3+E3b+E4+E5-install closed on R640; residual reboot-to-disk on iron + TLS/console."
+      content="Honest Distance Assessment for RayNu-V: E2+E3+E3b+E5 closed on R640 (ISO install + reboot-to-disk); residual Phase B SPA glue + TLS/console."
     />
     <meta property="og:title" content="RayNu-V · Distance to Mount Everest" />
     <meta
       property="og:description"
-      content="Living tracker: E2+E3+E3b+E4+E5-install stamps closed on R640. Months 0.5 · overall 96% · ETA 2026-10. Residual: reboot-to-disk on iron + TLS/console."
+      content="Living tracker: E2+E3+E3b+E5 stamps closed on R640 (Alpine ISO installed to virtio disk, rebooted into it). Months 0.25 · overall 98% · ETA 2026-10. Residual: SPA starts the installed disk (Phase B) + TLS/console."
     />
     <meta property="og:type" content="website" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -108,9 +108,11 @@
           <h2 class="section__title">Four summits on the path</h2>
           <p class="section__lede">
             Core hypervisor work is advanced. E2 boot, E3/E3b network HTTP,
-            Phase F coexist, E4 SPA VMLAUNCH, and the E5 Alpine ISO install to
-            a virtio disk are closed on real R640. Residual: reboot into the
-            installed disk on iron, TLS/console — not “can it virtualize.”
+            Phase F coexist, E4 SPA VMLAUNCH, and the whole E5 loop — Alpine
+            ISO installed to a virtio disk, then rebooted into that disk to a
+            login prompt — are closed on real R640. Residual: the SPA must
+            start that installed disk (Phase B), TLS/console — not “can it
+            virtualize.”
           </p>
           <ol class="hda-summits" id="hda-summits">
             <li data-reveal>
@@ -126,12 +128,12 @@
             <li data-reveal>
               <span class="hda-summits__name">Network vSphere-like UI</span>
               <span class="hda-summits__pct" data-summit="ui">85%</span>
-              <span class="hda-summits__note">E3+E3b+Phase F+P0-14 closed; SPA SHELL stub; TLS/console residual</span>
+              <span class="hda-summits__note">E3+E3b+Phase F+P0-14 closed; Phase B open: SPA start must launch the RayNu-F ISO/disk path (today SHELL stub); TLS/console residual</span>
             </li>
             <li data-reveal>
               <span class="hda-summits__name">Deploy Linux ISO</span>
               <span class="hda-summits__pct" data-summit="iso">84%</span>
-              <span class="hda-summits__note">Alpine ISO installed to virtio disk on real R640 (2026-09-10, <code>RAYNU-V-M7-ISO-INSTALL-OK</code>); reboot-to-disk on iron next</span>
+              <span class="hda-summits__note">Closed on real R640 2026-09-10: Alpine ISO installed to virtio disk (<code>RAYNU-V-M7-ISO-INSTALL-OK</code>), rebooted into it (<code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code>, second Linux <code>root=UUID=</code>, login)</span>
             </li>
           </ol>
           <p class="hda-aside" data-reveal>
@@ -155,11 +157,14 @@
             <code>RAYNU-V-M7-HOST-NIC-HTTP-OK</code> after
             <code>BOOT-OK</code> on native BCM5720
             (<code>:38</code> / <code>10.99.99.144:8443</code>). Keep APE PHY.
-            <strong>E5 install</strong> closed on iron 2026-09-10:
+            <strong>E5</strong> closed on iron 2026-09-10:
             <code>RAYNU-V-M7-ISO-INSTALL-OK</code> — RayNu-F boots the Alpine
             3.21 ISO, <code>setup-disk</code> writes GPT + GRUB + initramfs to
-            virtio-blk <code>vda</code>. Residual: reboot into that disk on
-            iron (F7), TLS/console. E4 SPA VMLAUNCH
+            virtio-blk <code>vda</code>; then <code>reboot</code> → F7 relaunch
+            → installed GRUB → <code>RAYNU-V-RAYNU-F-DISK-BOOT-OK</code> →
+            second Linux <code>root=UUID=</code> → login (EFI
+            <code>56a3ffd</code>). Residual: Phase B — the SPA starts that
+            disk; TLS/console. E4 SPA VMLAUNCH
             (`RAYNU-V-M7-E4-SPA-LAUNCH-OK`) closed on iron 2026-08-21 — SHELL
             stub, not Everest.
           </p>

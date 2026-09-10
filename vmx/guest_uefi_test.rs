@@ -3388,7 +3388,8 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     // The queued `guest reset requested src=` line is flushed before share
     // mode ends (iron `59ac070` lost it).
     assert!(src.contains("serial::flush_guest_tx()"));
-    assert!(src.contains("iron reboot-to-disk (DISK-BOOT-OK) still open"));
+    assert!(src.contains("iron reboot-to-disk CLOSED on 56a3ffd run 34480107961"));
+    assert!(src.contains("Phase B SPA start not claimed"));
 }
 
 #[test]

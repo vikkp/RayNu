@@ -13,6 +13,8 @@ fn m7_e5_raynu_f_f7_gate_passes() {
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("VMCLEAR/VMPTRLD"));
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("975f8fc"));
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("RayNu-F wall cap"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("iron 56a3ffd"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("Phase B"));
     assert!(raynu_f_f7_surface_present());
     assert!(
         run_m7_e5_raynu_f_f7_gate(),

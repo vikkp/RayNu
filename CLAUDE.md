@@ -352,7 +352,7 @@ cargo verus --verify                                    # Formal proofs (Proven 
 ### Current progress (lived, not aspirational)
 
 **M6 closed** (EXT → `RAYNU-V-M6-EXT-OK`; `80 verified, 0 errors`). Production-ready bar met on Latitude/QEMU.  
-**Through M7.4 closed** (UI → `RAYNU-V-M7-UI-OK` host smoke; console/TLS/NIC residual). **M7.5 iron closed** (`RAYNU-V-R640-BOOT-OK`, 2026-08-15). Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
+**Through M7.4 closed** (UI → `RAYNU-V-M7-UI-OK` host smoke; console/TLS/NIC residual). **M7.5 iron closed** (`RAYNU-V-R640-BOOT-OK`, 2026-08-15). **E5 closed on iron** (2026-09-10, EFI `56a3ffd`: Alpine ISO → RayNu-F UEFI installer → virtio-blk → `RAYNU-V-M7-ISO-INSTALL-OK` → reboot → `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → login). Everest residual: Phase B — SPA start launches the RayNu-F path instead of the SHELL stub. Plan: [docs/m7_plan.md](docs/m7_plan.md). HDA: [docs/hda.md](docs/hda.md). Lived: [docs/progress.md](docs/progress.md).
 
 ### Risk Hotspots
 

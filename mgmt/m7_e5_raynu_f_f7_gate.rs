@@ -6,6 +6,10 @@
 //!
 //! Host/CI: F7 surfaces exist. Nested `fe4785a` on `raynuvsrv1` reached
 //! reboot-to-disk (second `Linux version`, `root=UUID=`, `DISK-BOOT-OK`).
+//! **Iron `56a3ffd` (run `34480107961`, 2026-09-10) closed it on the real
+//! R640:** install → `reboot` → F7 relaunch → installed GRUB countdown →
+//! `RAYNU-V-RAYNU-F-DISK-BOOT-OK` → second Linux `root=UUID=` → `login:`.
+//! Evidence: `docs/evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md`.
 //! Nested `088ab25` showed the reset lines: Alpine `reboot` pulsed the i8042
 //! (`src=kbc`), not `0xCF9` / FADT — the kernel runs `efi=noruntime`, so the
 //! CF9 and triple-fault classifiers stay host-tested only.
@@ -32,14 +36,14 @@
 //! per µs on the R640, so the 1 M exit count fired inside GRUB's own
 //! timeout (nested KVM exits are 10–50× slower and never reached it).
 //! Fix: RayNu-F wall cap — time bounds the loader phase, the exit count
-//! only guards a u32 wrap. Iron reboot-to-disk still open.
+//! only guards a u32 wrap. `56a3ffd` then closed reboot-to-disk on iron.
 
 /// Host / CI marker when the F7 surface gate passes.
 pub const M7_E5_RAYNU_F_F7_OK_MARKER: &str = "RAYNU-V-M7-E5-RAYNU-F-F7-OK";
 
 /// Honest residual: nested reboot-to-disk ≠ iron E5.
 pub const E5_RAYNU_F_F7_RESIDUAL_NOTE: &str =
-    "residual: nested fe4785a reboot-to-disk (DISK-BOOT-OK + second Linux root=UUID=) is proven on raynuvsrv1; iron 59ac070 installed to vda and printed the install marker but F7 relaunch failed VMCLEAR/VMPTRLD (host-stack overflow into the VMCS; fixed by RayNu-F F7 template reset + guest-UEFI host stack guard); iron 975f8fc relaunched and reached the installed GRUB menu, then the 1 M exit-cap fired inside GRUB's 2 s menu timeout (fixed by the RayNu-F wall cap: time, not exits, bounds the loader phase); iron DISK-BOOT-OK is not claimed and the ISO-INSTALL-OK marker is never printed from host/CI";
+    "residual: nested fe4785a reboot-to-disk (DISK-BOOT-OK + second Linux root=UUID=) is proven on raynuvsrv1; iron 59ac070 installed to vda and printed the install marker but F7 relaunch failed VMCLEAR/VMPTRLD (host-stack overflow into the VMCS; fixed by RayNu-F F7 template reset + guest-UEFI host stack guard); iron 975f8fc relaunched and reached the installed GRUB menu, then the 1 M exit-cap fired inside GRUB's 2 s menu timeout (fixed by the RayNu-F wall cap: time, not exits, bounds the loader phase); iron 56a3ffd (run 34480107961) closed reboot-to-disk on the real R640: countdown 2s/1s/0s, DISK-BOOT-OK, EBS-OK, second Linux root=UUID= from vda2, login; E5 Phase A is closed on iron; Phase B (SPA/REST start launches the RayNu-F ISO/installed-disk path instead of the SHELL stub) is not claimed and the ISO-INSTALL-OK marker is never printed from host/CI";
 
 /// True when F7 function names, markers, and honesty lines exist.
 pub fn raynu_f_f7_surface_present() -> bool {
@@ -104,6 +108,8 @@ pub fn raynu_f_f7_surface_present() -> bool {
 /// `fe4785a`. Not iron `ISO-INSTALL-OK`.
 pub fn run_m7_e5_raynu_f_f7_gate() -> bool {
     E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("not claimed")
+        && E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("iron 56a3ffd")
+        && E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("Phase B")
         && M7_E5_RAYNU_F_F7_OK_MARKER == "RAYNU-V-M7-E5-RAYNU-F-F7-OK"
         && crate::vmx::guest_uefi::GUEST_UEFI_HOST_STACK_PAGES >= 32
         && crate::vmx::guest_uefi::GUEST_UEFI_HOST_STACK_GUARD_PAGES >= 1

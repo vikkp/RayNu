@@ -8,9 +8,17 @@ STATUS=closed
 #   reported." (GPT + grub x86_64-efi + initramfs on the virtio disk).
 #   EFI 59ac070, CI run 34425781629, LogiLink UDisk front USB 2.
 #   Evidence: docs/evidence/r640/2026-09-10-59ac070-iso-install-ok.md
-#   Residual (OPEN): reboot-to-disk on iron — F7 relaunch failed
-#   VMCLEAR/VMPTRLD (host-stack overflow into the VMCS; fixed next pin).
-#   RAYNU-V-RAYNU-F-DISK-BOOT-OK is nested-only until that flash.
+#   Reboot-to-disk on iron — CLOSED 2026-09-10 (EFI 56a3ffd, CI run
+#   34480107961, same UDisk): `reboot` -> F7 relaunch -> GPT ESP -> installed
+#   GRUB 2.12 countdown -> RAYNU-V-RAYNU-F-DISK-BOOT-OK -> second
+#   `Linux version 6.12.13-0-lts` root=UUID=9af18543-... -> EXT4 vda2 ->
+#   OpenRC -> login: -> /proc/cmdline from the installed system.
+#   Evidence: docs/evidence/r640/2026-09-10-56a3ffd-e5-reboot-to-disk-disk-boot-ok.md
+#   History: 59ac070 F7 relaunch failed VMCLEAR/VMPTRLD (host-stack overflow
+#   into the VMCS); 975f8fc relaunched into the GRUB menu then hit the fixed
+#   1 M exit-count cap; 56a3ffd bounds the loader phase by wall time.
+#   E5 Phase A (ISO -> installer -> virtio disk -> reboot to disk) is closed
+#   on iron. Phase B (SPA/REST starts that disk) is the E4 residual.
 #
 # 2026-08-16 — stamp persist (first iron close, superseded in kind):
 # Iron close (documented equivalent of RAYNU-V-M7-ISO-INSTALL-OK):
