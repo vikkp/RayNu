@@ -1,9 +1,9 @@
 # Runbook — F7 product ISO on R640 (4 GB Cruzer)
 
-**Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK`  
-**Nested close (not this gate):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK`  
-**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (guest UART TX ring room + line-rate pace + COM2 FIFO burst + kick throttle — the fix for the link `916af96` named). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Check the second COM2 line: `build: sha=` must match the run's commit. Superseded: `916af96` run `34420783162` (UART THRE chain telemetry lived and **named the link**: every counted link agreed — `take4` ≈ `iir` THRE ≈ `lsr_thre` ON 1:1, PIC `irr/imr/isr` sane, `etbei` set — but `pend=0` even with `ring=0` because `com2_lsr=0x0` on every heartbeat: guest THRE was host COM2 THRE **and** empty ring, sampled only at ~15 idle exits/s, each draining one byte; `ring=2048` full from our own per-hit `virtio MMIO gpa=` lines; `apk` still in `n_tty_write`) · `8b6ed1a` run `34415711199` (UART THRE level until stop_tx lived, COM2 identical to the probe: `apk` still in `n_tty_write → wait_woken`, text still 16–32 bytes per SysRq IRQ 4, stall dump `n=1373`, `PIT paced n=1375` for minutes; the level model alone changed nothing visible) · `f229d14` run `34354322953` (probe answered: `apk` in `n_tty_write → wait_woken`, 16 bytes flushed per SysRq IRQ 4; lost 16550 THRE interrupt) · `09b5842` run `34302053558` (virtio stall dump PIT paced lived: no soft lockup, `PIT paced n=1375` for minutes, apk never kicked again; rings `last==used==avail==live`) · `2b3cc1e` run `34300317331` (virtio stall dump PIT hold lived: apk dump `disk_last=1100 iso_last=1057 live==last n=1373` then INTx + `PIT hold n=1375` then unpaced IRQ0 `soft lockup` in `handle_softirqs` 26s/52s/78s and `reason=0x1e`; watchdog proved jiffies already move) · `b8ac361` run `34297632324` (virtio stall dump notify reset lived: usbdelay dump PIT-only; apk dump `disk_last=1162 iso_last=1111 live==last n=1370` then INTx + ISR `n=1371/1372` and no further `0x300`; harvest no-op) · `6d0c58a` run `34292570282` (virtio stall dump INTx lived then dump/ISR flood: ISR ACK `off=0x100` re-armed dump; `n=+2` with no `0x300`) · `ba5bf8f` run `34290078274` (virtio stall dump PIT lived: `disk_live==disk_last` `iso_live==iso_last` then still apk freeze `n=1373`) · `a580299` run `34227607779` (shared INTx hold lived past `n=1345`; second stall dump `last==used==avail` `isr=0` `kick=0` `n=1373` during `Installing packages`; empty rings) · `34968f7` run `34224368343` (used.idx lived; usbdelay stall dump `disk_last=1048 iso_last=542 disk_used=1048 iso_used=542 disk_isr=0 iso_isr=0 n=1118` then apk freeze at `n=1345` after ISO notify `n=1281` + disk ISR ACK; stall dump one-shot fired too early) · `e717fb4` run `34220740109` (DATA_SEGS=128 still froze at apk `n=1345`; do not wait) · `6cfabee` run `34218742196` (`linux PIC IRQ11 yield until mount` lived, then apk freeze at virtio `n=1345`; 3:1 is not the bottleneck) · `c2cd099` run `34172103709` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; stopping yield after `media: ok` did not move apk) · `6692898` run `34170268004` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; FLUSH drain did not help; yield starved PIC 11) · `9652262` run `34149809660` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345` after disk ISR ACK; yield-PIT unblocked `usbdelay=30`; drain ignored FLUSH) · `fc3053a` run `34148045050` (`linux PIC IRQ0` + `linux virtio PIC 11` then freeze at mount virtio `n=1089` / `usbdelay=30`; level INTx starved IRQ0) · `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
-**Do not flash:** `34420783162` / `916af96` · `34415711199` / `8b6ed1a` · `34354322953` / `f229d14` · `34302053558` / `09b5842` · `34300317331` / `2b3cc1e` · `34297632324` / `b8ac361` · `34292570282` / `6d0c58a` · `34290078274` / `ba5bf8f` · `34227607779` / `a580299` · `34224368343` / `34968f7` · `34220740109` / `e717fb4` · `34218742196` / `6cfabee` · `34172103709` / `c2cd099` · `34170268004` / `6692898` · `34149809660` / `9652262` · `34148045050` / `fc3053a` · `34145652767` / `fcac0cd` · `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
+**Iron close (COM2 only):** `RAYNU-V-M7-ISO-INSTALL-OK` — **seen on R640 2026-09-10** (`59ac070`, run `34425781629`, evidence [`2026-09-10-59ac070-iso-install-ok.md`](../evidence/r640/2026-09-10-59ac070-iso-install-ok.md))  
+**Iron residual (this flash):** `RAYNU-V-RAYNU-F-DISK-BOOT-OK` + second `Linux version` from `vda` after the F7 `reboot` (nested only so far; `59ac070` failed the relaunch)  
+**EFI pin:** the **next** green UEFI-release artifact of `cursor/pit-during-apk-b7a8` (RayNu-F F7 template reset + 32-page guest-UEFI host stack with guard + split VMCLEAR/VMPTRLD diagnostics — the fix for the F7 relaunch failure `59ac070` showed after a **completed** install). `--run` takes a numeric GitHub Actions id with **no** angle brackets. Check the second COM2 line: `build: sha=` must match the run's commit. Superseded: `59ac070` run `34425781629` (**installed on iron**: apk 25 packages in 0.5 s, `setup-disk -m sys /dev/vda` GPT + grub x86_64-efi + initramfs, `Installation finished. No error reported.`, **`RAYNU-V-M7-ISO-INSTALL-OK` printed on COM2** — then `reboot` src=kbc → `RayNu-F relaunch after reset (F7)` → `launch failed: VMCLEAR/VMPTRLD (F2b)` → leave_to_e4 hold: `raynu_f_reset_relaunch` built a 79.7 KiB `FirmwareState::new()` on the 16 KiB guest-UEFI host stack and overwrote the VMCS revision dword one frame below; installs, cannot reboot to disk) · `916af96` run `34420783162` (UART THRE chain telemetry lived and **named the link**: every counted link agreed — `take4` ≈ `iir` THRE ≈ `lsr_thre` ON 1:1, PIC `irr/imr/isr` sane, `etbei` set — but `pend=0` even with `ring=0` because `com2_lsr=0x0` on every heartbeat: guest THRE was host COM2 THRE **and** empty ring, sampled only at ~15 idle exits/s, each draining one byte; `ring=2048` full from our own per-hit `virtio MMIO gpa=` lines; `apk` still in `n_tty_write`) · `8b6ed1a` run `34415711199` (UART THRE level until stop_tx lived, COM2 identical to the probe: `apk` still in `n_tty_write → wait_woken`, text still 16–32 bytes per SysRq IRQ 4, stall dump `n=1373`, `PIT paced n=1375` for minutes; the level model alone changed nothing visible) · `f229d14` run `34354322953` (probe answered: `apk` in `n_tty_write → wait_woken`, 16 bytes flushed per SysRq IRQ 4; lost 16550 THRE interrupt) · `09b5842` run `34302053558` (virtio stall dump PIT paced lived: no soft lockup, `PIT paced n=1375` for minutes, apk never kicked again; rings `last==used==avail==live`) · `2b3cc1e` run `34300317331` (virtio stall dump PIT hold lived: apk dump `disk_last=1100 iso_last=1057 live==last n=1373` then INTx + `PIT hold n=1375` then unpaced IRQ0 `soft lockup` in `handle_softirqs` 26s/52s/78s and `reason=0x1e`; watchdog proved jiffies already move) · `b8ac361` run `34297632324` (virtio stall dump notify reset lived: usbdelay dump PIT-only; apk dump `disk_last=1162 iso_last=1111 live==last n=1370` then INTx + ISR `n=1371/1372` and no further `0x300`; harvest no-op) · `6d0c58a` run `34292570282` (virtio stall dump INTx lived then dump/ISR flood: ISR ACK `off=0x100` re-armed dump; `n=+2` with no `0x300`) · `ba5bf8f` run `34290078274` (virtio stall dump PIT lived: `disk_live==disk_last` `iso_live==iso_last` then still apk freeze `n=1373`) · `a580299` run `34227607779` (shared INTx hold lived past `n=1345`; second stall dump `last==used==avail` `isr=0` `kick=0` `n=1373` during `Installing packages`; empty rings) · `34968f7` run `34224368343` (used.idx lived; usbdelay stall dump `disk_last=1048 iso_last=542 disk_used=1048 iso_used=542 disk_isr=0 iso_isr=0 n=1118` then apk freeze at `n=1345` after ISO notify `n=1281` + disk ISR ACK; stall dump one-shot fired too early) · `e717fb4` run `34220740109` (DATA_SEGS=128 still froze at apk `n=1345`; do not wait) · `6cfabee` run `34218742196` (`linux PIC IRQ11 yield until mount` lived, then apk freeze at virtio `n=1345`; 3:1 is not the bottleneck) · `c2cd099` run `34172103709` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; stopping yield after `media: ok` did not move apk) · `6692898` run `34170268004` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345`; FLUSH drain did not help; yield starved PIC 11) · `9652262` run `34149809660` (`Mounting boot media: ok.` then apk freeze at virtio `n=1345` after disk ISR ACK; yield-PIT unblocked `usbdelay=30`; drain ignored FLUSH) · `fc3053a` run `34148045050` (`linux PIC IRQ0` + `linux virtio PIC 11` then freeze at mount virtio `n=1089` / `usbdelay=30`; level INTx starved IRQ0) · `fcac0cd` run `34145652767` (`linux virtio INTx reassert` then apk freeze `n=1345`; eight `inject vec=0x30` is Linux PIC IRQ0, not NMI; PIC 11 log looked for 0x2b) · `0a9b552` run `34141401594` (leftover GSI 2 was a no-op on RayNu-F; same apk freeze `n=1345`) · `c61942b` run `34135448354` (DRIVER_OK + `linux PIT resume paced`, then apk freeze `n=1345` with **no** `linux PIC IRQ0`) · `896424f` run `34131274237` (DRIVER_OK then `virtblk_probe` `iowrite8` IRQ0 storm / soft lockup) · `69102aa` run `34080595540` (MADT live; virtio_pci_probe `vp_set_status` IRQ0 storm / soft lockup) · `c815ccc` run `34078335291` (PIT hold from firmware queue-arm; APIC MADT then I/O `reason=0x1e` hold) · `20e8b70` run `34076175624` (PIT-once on HLT; `idle=poll` never HLT; froze at apk `n=1345`) · `63c7e05` run `34074349118` (PIT-once printed, boot media ok, then froze at apk `n=1345`) · `46fd345` run `34069352671` (no PIT-once, stall n=1281) · `55a3602` run `34067879816` (RayNu-F direct, then cap=1 killed Linux WRMSR) · `088ab25` run `33978770315`.  
+**Do not flash:** `34425781629` / `59ac070` (installs, then F7 relaunch `VMCLEAR/VMPTRLD (F2b)` — no reboot-to-disk) · `34420783162` / `916af96` · `34415711199` / `8b6ed1a` · `34354322953` / `f229d14` · `34302053558` / `09b5842` · `34300317331` / `2b3cc1e` · `34297632324` / `b8ac361` · `34292570282` / `6d0c58a` · `34290078274` / `ba5bf8f` · `34227607779` / `a580299` · `34224368343` / `34968f7` · `34220740109` / `e717fb4` · `34218742196` / `6cfabee` · `34172103709` / `c2cd099` · `34170268004` / `6692898` · `34149809660` / `9652262` · `34148045050` / `fc3053a` · `34145652767` / `fcac0cd` · `34141401594` / `0a9b552` · `34135448354` / `c61942b` · `34131274237` / `896424f` (iron 2026-09-07: `linux virtio DRIVER_OK` then `virtblk_probe` soft lockup then `reason=0x1e`, no `ISO-INSTALL-OK`) · `34080595540` / `69102aa` · `34078335291` / `c815ccc` (MADT then `restore host xcr0 reason=0x1e`) · `34076175624` / `20e8b70` · `34074349118` / `63c7e05` · `34069352671` / `46fd345` · `34067879816` / `55a3602` · `088ab25` for F7 · P0-14 `2b795a0` · parked OVMF pins · PR #231  
 **Honesty:** Nested QEMU ≠ R640. Host/CI must never print `RAYNU-V-M7-ISO-INSTALL-OK`.
 
 Related: [`usb_idrac.md`](usb_idrac.md) · [`iso_install.md`](iso_install.md) ·
@@ -194,13 +194,14 @@ Grep the SOL log. Nested line numbers are not required; the strings are.
 | apk console output | `Installing packages to root filesystem... (1/25) Installing alpine-baselayout-data` … progress `%` lines **streaming**, not one 16-byte chunk per stray IRQ 4. `8b6ed1a` (THRE level) did **not** change this; expect the same stall unless the telemetry names a link we then fix. |
 | THRE chain heartbeat (this pin) | After the stall dump, every `PIT paced n=` line is followed by `virtio stall dump thre ier=0x.. latch= pend= brk= rx= ring= com2_lsr=0x.. iir=RX/THRE/NONE lsr_thre=ON/OFF thr= etbei=ON/OFF raise=REASSERT/PIO lower= pic irr=0x.. imr=0x.. isr=0x.. rdy= take0= take4=`. Copy **two consecutive** lines (the deltas matter). Read them with the table below. |
 | Probe (still armed) | Only if apk stalls again: two `virtio stall dump ring` lines, three `virtio stall probe rip=` samples, then `sysrq w`/`m`/`t`/`l`. On `f229d14` the `t` dump answered: `apk` `state:S` in `n_tty_write → wait_woken`. If it fires again, read the `apk` stack the same way. |
-| Install | `setup-disk -m sys` → `Installation is complete. Please reboot.` |
-| F7 reset | `guest reset requested src=` (`kbc` is what nested saw) · `relaunch after reset` |
-| Disk boot | `GPT ESP` · `disk whole-disk path` · `image=DISK-BOOTX64` |
-| Nested-style marker | `RAYNU-V-RAYNU-F-DISK-BOOT-OK` |
-| Second Linux | second `Linux version` · `root=UUID=` · ext4 `/dev/vda2` |
+| Host stack (this pin) | at guest-UEFI launch: `boot: guest-UEFI host stack top=0x… pages=32 guard=0x…` (the 4-page stack that `59ac070` overflowed is gone) |
+| Install | `setup-disk -m sys` → `Installation finished. No error reported.` (iron `59ac070` wording; nested printed `Installation is complete. Please reboot.`) |
 | Iron close | **`RAYNU-V-M7-ISO-INSTALL-OK`** (firmware prints this only when the
-  hypervisor CPUID bit is clear **and** GPT install evidence is real) |
+  hypervisor CPUID bit is clear **and** GPT install evidence is real) — **seen on `59ac070`** |
+| F7 reset | `guest reset requested src=kbc` (now flushed to COM2 before the earlycon share is dropped) · `RayNu-F relaunch after reset (F7)` — **not** `launch failed: VMCLEAR … guard=BREACHED` |
+| Disk boot | `GPT ESP` · `disk whole-disk path` · `image=DISK-BOOTX64` |
+| Iron residual marker | `RAYNU-V-RAYNU-F-DISK-BOOT-OK` (nested-proven; **this flash** is its first iron chance) |
+| Second Linux | second `Linux version` · `root=UUID=` · ext4 `/dev/vda2` |
 
 If COM2 dies at GRUB rescue `disk `,gpt2' not found`, that is the `3492ebc`
 HANDLE_DISK bug — you flashed the wrong EFI.
@@ -329,6 +330,62 @@ The line gains `room= pace= fifo= drained= win=`:
 | `room` < 1040 for many heartbeats with `drained` growing | guest is producing faster than SOL takes it (progress-bar redraws); expected during package install, not a stall | none — text is delayed, not lost, unless `ring` hits 4096 |
 | `pend=1`, `take4` growing, `thr=` +16 per IRQ, apk text streaming, then `login:` / `#` | console model fixed; apk finished | watch for `RAYNU-V-M7-ISO-INSTALL-OK` (iron COM2 only) |
 
+### What `59ac070` showed (run `34425781629`) — install closed, F7 relaunch failed
+
+`build: sha=59ac070…` confirmed the artifact. The console model held:
+heartbeats read `room=3177..4096 pace=3360→5811 fifo=1 drained→97346
+win→17488`, apk streamed `(1/25) … (25/25)` and `OK: 25 packages` in about
+half a second, `setup-disk -m sys /dev/vda` wrote the GPT, ran `grub-install
+--target=x86_64-efi`, built the initramfs and printed `Installation
+finished. No error reported.` The firmware then printed
+**`RAYNU-V-M7-ISO-INSTALL-OK`** from the iron-only path (hypervisor CPUID
+bit clear, product queues armed, GPT header on `vda`, ≥ 512 B written).
+That is the E5 install close on real R640. Evidence:
+[`2026-09-10-59ac070-iso-install-ok.md`](../evidence/r640/2026-09-10-59ac070-iso-install-ok.md).
+
+Then the auto-answer typed `reboot`. COM2 showed `restore host xcr0 …
+reason=0x1e` (the i8042 `0xFE` I/O exit), `RayNu-F relaunch after reset
+(F7)`, then `boot: RayNu-F launch failed: VMCLEAR/VMPTRLD (F2b)` and the
+leave_to_e4 hold. The `guest reset requested src=kbc` line never reached
+COM2 because the earlycon share was dropped with bytes still in the ring.
+
+Root cause, from the release asm (not a guess): `raynu_f_reset_relaunch`
+compiled to `movl $81024,%eax; call __rust_probestack` — `RAYNU_F_STATE =
+FirmwareState::new()` built the 79,704-byte `PagePool` on the stack and
+memcpy'd it. The guest-UEFI host stack was **4 pages** (16 KiB) and the
+private VMCS was the next frame down, so the 81 KiB frame overwrote the VMCS
+revision dword and VMPTRLD answered VMfailValid. Every VM exit re-enters at
+stack top, so only the deepest single exit matters; F7 is the deepest and it
+runs exactly once, after the install — nested KVM never tripped it because
+KVM's own stack layout differs. It is host-side (RayNu-F is ours; no OVMF
+state is touched — ADR-016).
+
+The pin after `59ac070` changes that, nothing else:
+
+- **RayNu-F F7 template reset** — `RAYNU_F_STATE` is reset by memcpy from a
+  `.rdata` `RAYNU_F_STATE_TEMPLATE`; the frame is now 40 bytes.
+- **guest-UEFI host stack pages** — 4 → 32 pages, plus one **guard page**
+  filled with `0x5A` below the stack. The launch banner prints
+  `boot: guest-UEFI host stack top=0x… pages=32 guard=0x…`.
+- **RayNu-F launch VMCS fail** — VMCLEAR and VMPTRLD failures are reported
+  separately with the VMCS revision seen vs wanted and the guard state:
+  `boot: RayNu-F launch failed: vmptrld rev=0x… want=0x… guard=ok|BREACHED`.
+  If the guard is breached before F7 VMCLEAR a `WARN host stack guard
+  breached` line prints first.
+- **guest UART TX flush** — the guest TX ring is flushed to COM2 before the
+  earlycon share is turned off, so `guest reset requested src=kbc` is now
+  visible.
+
+What this flash must show after `RAYNU-V-M7-ISO-INSTALL-OK`:
+
+| COM2 | Meaning |
+|---|---|
+| `guest reset requested src=kbc` · `RayNu-F relaunch after reset (F7)` · **no** `launch failed` | relaunch on the same VMCS worked |
+| `GPT ESP` · `disk whole-disk path` · `image=DISK-BOOTX64` · `RAYNU-V-RAYNU-F-DISK-BOOT-OK` | RayNu-F booted the installed GRUB from `vda` (iron first) |
+| second `Linux version 6.12.13-0-lts` with `root=UUID=` (not `modules=loop,squashfs`) then `login:` | reboot-to-disk on iron; E5 whole loop closed — capture the SOL log |
+| `launch failed: vmptrld rev=0x… want=0x… guard=BREACHED` | some other frame still overflows 32 pages: the `rev=` value is what overwrote the VMCS; copy the line |
+| `launch failed: vmclear …` or `vmptrld … guard=ok` with `rev==want` | not the stack: VMCS region/state issue (ADR-015 F2b class); copy the line and stop |
+
 ### Reading the probe (decision tree)
 
 `sysrq w` lists only TASK_UNINTERRUPTIBLE tasks; `sysrq t` lists all. Find
@@ -347,6 +404,14 @@ The line gains `room= pace= fifo= drained= win=`:
 Whatever it says, the next pin fixes that one thing and re-runs the probe.
 No PIT/INTx heuristic pin ships without a stack that names a timer or an
 interrupt as the wait.
+
+If COM2 shows `Installation finished. No error reported.` and
+`RAYNU-V-M7-ISO-INSTALL-OK`, then `restore host xcr0 … reason=0x1e`,
+`RayNu-F relaunch after reset (F7)` and `launch failed: VMCLEAR/VMPTRLD
+(F2b)` with **no** `guest-UEFI host stack top=` line at launch, you flashed
+`59ac070` / run `34425781629`. The install is real and already counted; the
+reboot-to-disk is not. **Do not wait.** Re-flash from this F7 template-reset
+pin. Do not F11 `34425781629` again expecting `RAYNU-V-RAYNU-F-DISK-BOOT-OK`.
 
 If COM2 shows `virtio stall dump ring` + `virtio stall probe rip=` + `sysrq
 w`/`m`/`t`/`l` with `apk` in `n_tty_write`, apk's text advancing 16–32

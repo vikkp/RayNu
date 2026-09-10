@@ -8,7 +8,7 @@
   "last_commit": "PENDING",
   "last_commit_short": "PENDING",
   "last_updated": "2026-09-10",
-  "months_to_everest": 0.75,
+  "months_to_everest": 0.5,
   "months_to_everest_prev": 0.75,
   "mount_everest_path": [
     "Ship EFI",
@@ -18,17 +18,17 @@
     "M7 single-host ship"
   ],
   "mount_everest_target": "Ship EFI on real R640 + network vSphere-like UI + deploy Linux ISO (M7 Mount Everest)",
-  "overall_pct": 94,
+  "overall_pct": 96,
   "source": "docs/hda.md",
   "summits": {
     "core": 88,
     "efi": 95,
-    "iso": 96,
+    "iso": 98,
     "prod": 100,
     "r640": 98,
     "ui": 96
   },
   "updated_by": "cursor",
-  "velocity_commits_30d": 381,
-  "velocity_gates_30d": 61
+  "velocity_commits_30d": 610,
+  "velocity_gates_30d": 62
 }

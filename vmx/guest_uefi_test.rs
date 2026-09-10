@@ -3,6 +3,10 @@ use super::{
     guest_uefi_report_ram_should_premap, GUEST_UEFI_REPORT_RAM_PRODUCT_EXTRA,
 };
 use super::{
+    guest_uefi_host_stack_guard_ok, guest_uefi_host_stack_headroom, GUEST_UEFI_HOST_STACK_GUARD_BYTE,
+    GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
+};
+use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
     xapic_eax_fallback_skip_len,
@@ -3339,6 +3343,48 @@ fn raynu_f_linux_cea_idt_pt_walk() {
     assert!(src.contains("begin_second_boot"));
     assert!(src.contains("boot: RayNu-F guest reset requested src="));
     assert!(src.contains("boot: RayNu-F relaunch after reset (F7; not ISO-INSTALL-OK)"));
+}
+
+#[test]
+fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
+    // Iron `59ac070` / `34425781629`: Alpine installed to vda and the
+    // install marker printed on the R640, then `reboot` → F7 relaunch failed
+    // `VMCLEAR/VMPTRLD`. Release asm: `raynu_f_reset_relaunch` reserved
+    // 81,024 bytes (`RAYNU_F_STATE = FirmwareState::new()` built PagePool on
+    // the stack) on a 16 KiB host stack; the private VMCS was the next frame
+    // down, so VMPTRLD read a foreign revision dword.
+    let src = include_str!("guest_uefi.rs");
+    assert!(src.contains("static RAYNU_F_STATE_TEMPLATE"));
+    assert!(src.contains("RayNu-F F7 template reset"));
+    assert!(
+        !src.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()"),
+        "F7 must memcpy the .rdata template, never construct on the stack"
+    );
+    assert!(src.contains("core::ptr::addr_of!(RAYNU_F_STATE_TEMPLATE)"));
+    // The FirmwareState is ~84 KiB; the old 4-page stack could not hold it.
+    assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() > 4 * 4096);
+    assert!(core::mem::size_of::<crate::raynu_f::FirmwareState>() < 128 * 1024);
+    // Host stack: 32 pages + 1 guard page; the guard is checked before VMCLEAR.
+    assert!(GUEST_UEFI_HOST_STACK_PAGES >= 32);
+    assert_eq!(GUEST_UEFI_HOST_STACK_GUARD_PAGES, 1);
+    assert!(guest_uefi_host_stack_headroom(4, 81_024) < 0, "16 KiB overflowed");
+    assert!(guest_uefi_host_stack_headroom(GUEST_UEFI_HOST_STACK_PAGES, 81_024) > 0);
+    let guard = [GUEST_UEFI_HOST_STACK_GUARD_BYTE; 4096];
+    assert!(guest_uefi_host_stack_guard_ok(&guard));
+    let mut breached = guard;
+    breached[4095] = 0;
+    assert!(!guest_uefi_host_stack_guard_ok(&breached));
+    assert!(!guest_uefi_host_stack_guard_ok(&[]));
+    assert!(src.contains("fn guest_uefi_host_stack_guard_intact"));
+    assert!(src.contains("fn raynu_f_launch_vmcs_fail"));
+    assert!(src.contains("boot: guest-UEFI host stack top=0x"));
+    assert!(src.contains("boot: RayNu-F launch failed: "));
+    assert!(src.contains("(F2b/F7; guest-UEFI host stack guard; not ISO-INSTALL-OK)"));
+    assert!(!src.contains("launch failed: VMCLEAR/VMPTRLD (F2b)\""));
+    // The queued `guest reset requested src=` line is flushed before share
+    // mode ends (iron `59ac070` lost it).
+    assert!(src.contains("serial::flush_guest_tx()"));
+    assert!(src.contains("iron reboot-to-disk (DISK-BOOT-OK) still open"));
 }
 
 #[test]

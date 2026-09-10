@@ -408,6 +408,38 @@ pub fn drain_guest_tx(max: usize) -> usize {
     n
 }
 
+/// Bounded spins for [`flush_guest_tx`] while COM2 THRE is low (~4 KiB at
+/// 115200 8N1 is ~360 ms; each spin re-polls LSR).
+pub const GUEST_TX_FLUSH_SPINS: u32 = 2_000_000;
+
+/// Push every queued guest UART byte out to COM2 before a mode change.
+///
+/// Iron `59ac070` / `34425781629`: Linux `reboot` → the F7 `guest reset
+/// requested src=` line was queued nowait during earlycon share and then
+/// share was switched off before any VM exit drained it, so COM2 never
+/// showed it. The guest is halted at these call sites, so a bounded wait
+/// on COM2 THRE is acceptable here (and nowhere else). guest UART TX flush.
+///
+/// INVARIANTS:
+/// - Returns the number of bytes written; ring is empty on return unless
+///   COM2 THRE stayed low for `GUEST_TX_FLUSH_SPINS` polls
+/// - Never touches liveness; never drops bytes itself
+///
+/// VERIFICATION: L1 (host tests)
+pub fn flush_guest_tx() -> usize {
+    let mut n = 0usize;
+    let mut spins = 0u32;
+    while guest_tx_len() != 0 && spins < GUEST_TX_FLUSH_SPINS {
+        let moved = drain_guest_tx(GUEST_TX_CAP);
+        n += moved;
+        if moved == 0 {
+            spins += 1;
+            core::hint::spin_loop();
+        }
+    }
+    n
+}
+
 /// Initialize COM1 + COM2 to 115200 8N1.
 ///
 /// # Safety
@@ -800,5 +832,32 @@ mod serial_test {
     #[test]
     fn host_try_read_byte_is_none() {
         assert!(try_read_byte().is_none());
+    }
+
+    #[test]
+    fn flush_guest_tx_empties_the_ring_before_a_mode_change() {
+        // Iron `59ac070`: the F7 `guest reset requested src=` line was queued
+        // nowait during earlycon share and lost when share ended before any
+        // exit drained it. `flush_guest_tx` pushes the ring out (bounded).
+        serial_log_clear();
+        guest_tx_clear();
+        set_linux_earlycon_share(true);
+        set_guest_tx_test_sol_not_ready(true);
+        for &b in b"boot: RayNu-F guest reset requested src=kbc n=1\n" {
+            write_byte_nowait(b);
+        }
+        let queued = guest_tx_len();
+        assert!(queued > 40, "ring holds the line while SOL is back-pressured");
+        set_guest_tx_test_sol_not_ready(false);
+        assert_eq!(flush_guest_tx(), queued);
+        assert_eq!(guest_tx_len(), 0);
+        assert_eq!(flush_guest_tx(), 0, "empty ring is a no-op");
+        assert!(GUEST_TX_FLUSH_SPINS >= 1_000_000);
+        let s = include_str!("serial.rs");
+        assert!(s.contains("guest UART TX flush"));
+        assert!(s.contains("pub fn flush_guest_tx"));
+        set_linux_earlycon_share(false);
+        serial_log_clear();
+        guest_tx_clear();
     }
 }

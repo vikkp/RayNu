@@ -9,14 +9,25 @@
 //! Nested `088ab25` showed the reset lines: Alpine `reboot` pulsed the i8042
 //! (`src=kbc`), not `0xCF9` / FADT — the kernel runs `efi=noruntime`, so the
 //! CF9 and triple-fault classifiers stay host-tested only.
-//! Never prints `RAYNU-V-M7-ISO-INSTALL-OK`. Iron E5 stays open.
+//! Never prints `RAYNU-V-M7-ISO-INSTALL-OK` from host/CI.
+//!
+//! Iron `59ac070` / run `34425781629` (R640, 2026-09-10): Alpine `setup-disk`
+//! finished on virtio-blk `vda` (GPT, grub-install, initramfs, `Installation
+//! finished. No error reported.`) and the iron-only install marker printed
+//! (`take_iso_install_ok`). `reboot` → `src=kbc` → F7 relaunch **failed**:
+//! `launch failed: VMCLEAR/VMPTRLD`. Release asm: `raynu_f_reset_relaunch`
+//! had an 81,024-byte frame (`RAYNU_F_STATE = FirmwareState::new()` built
+//! the 79,704-byte `PagePool` on the stack) on a 16 KiB host stack whose
+//! next-lower frame was the private VMCS — `VMPTRLD` saw a foreign revision
+//! dword. Fix: `.rdata` template `memcpy`, 32-page host stack + guard page,
+//! split VMCLEAR/VMPTRLD diagnostics. Iron reboot-to-disk stays open.
 
 /// Host / CI marker when the F7 surface gate passes.
 pub const M7_E5_RAYNU_F_F7_OK_MARKER: &str = "RAYNU-V-M7-E5-RAYNU-F-F7-OK";
 
 /// Honest residual: nested reboot-to-disk ≠ iron E5.
 pub const E5_RAYNU_F_F7_RESIDUAL_NOTE: &str =
-    "residual: nested fe4785a reboot-to-disk (DISK-BOOT-OK + second Linux root=UUID=) is proven on raynuvsrv1; iron ISO-INSTALL-OK is not claimed";
+    "residual: nested fe4785a reboot-to-disk (DISK-BOOT-OK + second Linux root=UUID=) is proven on raynuvsrv1; iron 59ac070 installed to vda and printed the install marker but F7 relaunch failed VMCLEAR/VMPTRLD (host-stack overflow into the VMCS; fixed by RayNu-F F7 template reset + guest-UEFI host stack guard); iron DISK-BOOT-OK is not claimed and the ISO-INSTALL-OK marker is never printed from host/CI";
 
 /// True when F7 function names, markers, and honesty lines exist.
 pub fn raynu_f_f7_surface_present() -> bool {
@@ -57,6 +68,13 @@ pub fn raynu_f_f7_surface_present() -> bool {
         && guest.contains("boot: RayNu-F disk whole-disk path (F7; not ISO-INSTALL-OK)")
         && guest.contains("(F7 disk; not ISO-INSTALL-OK)")
         && guest.contains("reset-cap")
+        && guest.contains("RayNu-F F7 template reset")
+        && guest.contains("static RAYNU_F_STATE_TEMPLATE")
+        && !guest.contains("RAYNU_F_STATE = crate::raynu_f::FirmwareState::new()")
+        && guest.contains("guest-UEFI host stack guard")
+        && guest.contains("fn guest_uefi_host_stack_guard_ok")
+        && guest.contains("fn raynu_f_launch_vmcs_fail")
+        && guest.contains("serial::flush_guest_tx()")
         && !guest.contains("RAYNU-V-M7-ISO-INSTALL-OK")
         && rf.contains("RAYNU-V-RAYNU-F-DISK-BOOT-OK")
         && harness.contains("RAYNU-V-RAYNU-F-DISK-BOOT-OK")
@@ -71,6 +89,13 @@ pub fn raynu_f_f7_surface_present() -> bool {
 pub fn run_m7_e5_raynu_f_f7_gate() -> bool {
     E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("not claimed")
         && M7_E5_RAYNU_F_F7_OK_MARKER == "RAYNU-V-M7-E5-RAYNU-F-F7-OK"
+        && crate::vmx::guest_uefi::GUEST_UEFI_HOST_STACK_PAGES >= 32
+        && crate::vmx::guest_uefi::GUEST_UEFI_HOST_STACK_GUARD_PAGES >= 1
+        && crate::vmx::guest_uefi::guest_uefi_host_stack_headroom(4, 81_024) < 0
+        && crate::vmx::guest_uefi::guest_uefi_host_stack_headroom(
+            crate::vmx::guest_uefi::GUEST_UEFI_HOST_STACK_PAGES,
+            81_024,
+        ) > 0
         && crate::raynu_f::RAYNU_F_DISK_BOOT_OK_MARKER == "RAYNU-V-RAYNU-F-DISK-BOOT-OK"
         && crate::vmx::guest_uefi::RAYNU_F_RESET_MAX == 1
         && crate::devices::guest_platform::reset_request_from_io(0xCF9, false, 1, 0x06)

@@ -9,6 +9,8 @@ fn m7_e5_raynu_f_f7_gate_passes() {
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("ISO-INSTALL-OK"));
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("fe4785a"));
     assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("not claimed"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("59ac070"));
+    assert!(E5_RAYNU_F_F7_RESIDUAL_NOTE.contains("VMCLEAR/VMPTRLD"));
     assert!(raynu_f_f7_surface_present());
     assert!(
         run_m7_e5_raynu_f_f7_gate(),
