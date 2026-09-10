@@ -7,6 +7,10 @@ use super::{
     GUEST_UEFI_HOST_STACK_GUARD_PAGES, GUEST_UEFI_HOST_STACK_PAGES,
 };
 use super::{
+    raynu_f_wall_cap_hit, raynu_f_wall_check_due, raynu_f_wall_elapsed_ms, RAYNU_F_EXIT_CAP, RAYNU_F_WALL_CAP_S,
+    RAYNU_F_WALL_CHECK_MASK,
+};
+use super::{
     apply_guest_cr4_write, atapi_read_evidence, both_pci_evidence, copy_flash_at, copy_low_ram_at, dxe_or_cd_boot_evidence,
     xapic_fetch_miss_eax_fallback,
     xapic_eax_fallback_skip_len,
@@ -3385,6 +3389,43 @@ fn f7_relaunch_resets_firmware_state_without_a_stack_temporary() {
     // mode ends (iron `59ac070` lost it).
     assert!(src.contains("serial::flush_guest_tx()"));
     assert!(src.contains("iron reboot-to-disk (DISK-BOOT-OK) still open"));
+}
+
+#[test]
+fn raynu_f_wall_cap_bounds_the_loader_phase_by_time_not_exits() {
+    // Iron `975f8fc` / `34474850361`: the F7 relaunch worked (GPT ESP, GRUB
+    // 2.12 menu on the installed disk, "executed automatically in 2s"), then
+    // `stop exit-cap exits=1048577 svc=492778`. GRUB's `run_menu` polls
+    // `grub_getkey_noblock` with no idle — ReadKeyStroke (svc) + serial LSR
+    // (I/O) per iteration — so an R640 made 1 M exits inside the 2 s timeout.
+    // A count is not a time bound; the wall clock is.
+    let src = include_str!("guest_uefi.rs");
+    assert!(RAYNU_F_EXIT_CAP >= 1 << 28, "count cap must not fire before GRUB's timeout on iron");
+    assert!((60..=600).contains(&RAYNU_F_WALL_CAP_S), "wall cap bounded but generous");
+    assert_eq!(RAYNU_F_WALL_CHECK_MASK, 0xFFF);
+    // 2.1 GHz TSC: 1 M exits at ~1 µs each is ~1 s — far under the cap.
+    let hz = 2_095_615_600u64;
+    assert_eq!(raynu_f_wall_elapsed_ms(1_000, 1_000 + hz, hz), 1_000);
+    assert_eq!(raynu_f_wall_elapsed_ms(1_000, 1_000 + hz / 2, hz), 500);
+    assert_eq!(raynu_f_wall_elapsed_ms(5_000, 1_000, hz), 0, "saturating");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + 2 * hz, hz, RAYNU_F_WALL_CAP_S), "2 s GRUB timeout survives");
+    assert!(!raynu_f_wall_cap_hit(1_000, 1_000 + RAYNU_F_WALL_CAP_S * hz, hz, RAYNU_F_WALL_CAP_S), "exactly cap: not hit");
+    assert!(raynu_f_wall_cap_hit(1_000, 1_000 + (RAYNU_F_WALL_CAP_S + 1) * hz, hz, RAYNU_F_WALL_CAP_S));
+    assert!(!raynu_f_wall_cap_hit(0, u64::MAX, hz, RAYNU_F_WALL_CAP_S), "unarmed base never trips");
+    // Uncalibrated clock falls back to 1 GHz like the service clock.
+    assert_eq!(raynu_f_wall_elapsed_ms(0, 3_000_000_000, 0), 3_000);
+    // rdtsc only every 4096 exits on the hot path.
+    assert!(raynu_f_wall_check_due(0));
+    assert!(raynu_f_wall_check_due(4096));
+    assert!(!raynu_f_wall_check_due(1));
+    assert!(!raynu_f_wall_check_due(1_048_577));
+    // Surface: launch stamps the base, the exit path checks it, the stop
+    // summary prints the elapsed wall time.
+    assert!(src.contains("RAYNU_F_LAUNCH_TSC.store(cpu::rdtsc().max(1)"));
+    assert!(src.contains("raynu_f_stop(\"wall-cap\")"));
+    assert!(src.contains("raynu_f_stop(\"exit-cap\")"));
+    assert!(src.contains(" wall_ms="));
+    assert!(src.contains("RayNu-F wall cap"));
 }
 
 #[test]
