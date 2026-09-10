@@ -343,6 +343,7 @@ pub mod m6_fault_gate;
 pub mod m6_ha_gate;
 pub mod m6_soak_gate;
 pub mod m7_e4_spa_gate;
+pub mod m7_e5_phase_b_gate;
 pub mod m7_e5_alias_ept_gate;
 pub mod m7_e5_boot_spec_gate;
 pub mod m7_e5_cdrom_attach_gate;
@@ -484,6 +485,7 @@ pub use m6_fault_gate::{run_m6_fault_gate, M6_FAULT_GATE_MARKER};
 pub use m6_ha_gate::{run_m6_ha_gate, M6_HA_GATE_MARKER};
 pub use m6_soak_gate::{run_m6_soak_gate, M6_SOAK_GATE_MARKER};
 pub use m7_e4_spa_gate::run_m7_e4_spa_gate;
+pub use m7_e5_phase_b_gate::{run_m7_phase_b_spa_wire_gate, M7_PHASE_B_SPA_WIRE_GATE_MARKER};
 pub use m7_e5_alias_ept_gate::{run_m7_e5_alias_ept_gate, M7_E5_ALIAS_EPT_OK_MARKER};
 pub use m7_e5_boot_spec_gate::{run_m7_e5_boot_spec_gate, M7_E5_BOOT_SPEC_OK_MARKER};
 pub use m7_e5_cdrom_attach_gate::{run_m7_e5_cdrom_attach_gate, M7_E5_CDROM_ATTACH_OK_MARKER};
@@ -556,7 +558,10 @@ pub use soak::{
     prop_soak_72h_thresholds, run_soak_simulation, thresholds_met, SoakMetrics, M6_SOAK_OK_MARKER,
     SOAK_GAP_NOTE, SOAK_TARGET_HOURS,
 };
-pub use spa_launch::{note_spa_start, note_spa_stop, take_spa_start, M7_E4_SPA_LAUNCH_OK_MARKER};
+pub use spa_launch::{
+    kind_for_record, note_spa_start, note_spa_start_kind, note_spa_stop, take_spa_start,
+    take_spa_start_kind, SpaStartKind, M7_E4_SPA_LAUNCH_OK_MARKER, M7_PHASE_B_SPA_WIRE_OK_MARKER,
+};
 pub use webui::{dispatch_webui_action, load_webui, prop_webui_list_start_stop, WebUiAction};
 
 #[cfg(test)]
