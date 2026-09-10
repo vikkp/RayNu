@@ -186,6 +186,25 @@ fn guest_tx_sol_ready() -> bool {
     }
 }
 
+/// Raw host COM2 LSR (iDRAC SOL) for the THRE chain heartbeat; `0x60` on
+/// host tests. Read-only. UART THRE chain telemetry. Not `ISO-INSTALL-OK`.
+pub fn com2_lsr_raw() -> u8 {
+    #[cfg(target_os = "uefi")]
+    {
+        // SAFETY: one LSR poll on the fixed legacy COM2 base.
+        unsafe { inb(COM2 + 5) }
+    }
+    #[cfg(not(target_os = "uefi"))]
+    {
+        0x60
+    }
+}
+
+/// [`guest_tx_sol_ready`] for the THRE chain heartbeat (no drain).
+pub fn guest_tx_sol_ready_peek() -> bool {
+    guest_tx_sol_ready()
+}
+
 #[cfg(test)]
 static GUEST_TX_TEST_SOL_NOT_READY: AtomicBool = AtomicBool::new(false);
 

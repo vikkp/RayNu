@@ -239,6 +239,87 @@ fn linux_earlycon_lsr_thre_follows_sol() {
 }
 
 #[test]
+fn thre_chain_counts_every_link() {
+    // UART THRE chain telemetry: iron `8b6ed1a` looked like `f229d14`, so
+    // the stall heartbeat now prints IER / latch / pending plus counters for
+    // IIR class, LSR THRE class, THR writes, ETBEI flips and IRQ 4 raises.
+    use super::thre_chain;
+    reset();
+    crate::devices::guest_irq::reset();
+    arm_product_iso_for_irq();
+    crate::devices::guest_irq::ioapic_write(0, 0x10 + 2 * 4);
+    crate::devices::guest_irq::ioapic_write(0x10, 0x24);
+    guest_tx_clear();
+    set_linux_earlycon_share(true);
+    set_guest_tx_test_sol_not_ready(false);
+    assert_eq!(thre_chain(), Default::default(), "counters start at zero");
+    let _ = pio(0x03FA, false, 0x01);
+    // IER: ETBEI on (THRE level armed while the ring is empty).
+    let _ = pio(0x03F9, false, 0x02);
+    let c = thre_chain();
+    assert_eq!(c.ier, 0x02);
+    assert!(c.thre_irq && c.thre_pending);
+    assert_eq!((c.ier_etbei_on, c.ier_etbei_off), (1, 0));
+    assert_eq!(c.pio_raise, 1, "IER write raised IRQ 4");
+    // Linux services: IIR says THRE, LSR says THRE, then 2 THR bytes.
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir & 0x07, 0x02);
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x20, 0x20);
+    let _ = pio(0x03F8, false, b'o');
+    let _ = pio(0x03F8, false, b'k');
+    let c = thre_chain();
+    assert_eq!((c.iir_rx, c.iir_thre, c.iir_none), (0, 1, 0));
+    assert_eq!((c.lsr_thre_on, c.lsr_thre_off), (1, 0));
+    assert_eq!(c.thr_wr, 2);
+    // reassert_irq on a later exit counts separately from PIO raises.
+    let before = c.reassert_raise;
+    reassert_irq();
+    assert_eq!(thre_chain().reassert_raise, before + 1);
+    // SOL back-pressure: LSR reports THRE off, IIR reports no interrupt.
+    set_guest_tx_test_sol_not_ready(true);
+    let (lsr, _, _) = pio(0x03FD, true, 0);
+    assert_eq!(lsr & 0x20, 0);
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir & 0x07, 0x01);
+    let c = thre_chain();
+    assert!(!c.thre_pending && c.thre_irq, "latch kept, level low");
+    assert_eq!((c.lsr_thre_on, c.lsr_thre_off), (1, 1));
+    assert_eq!((c.iir_rx, c.iir_thre, c.iir_none), (0, 1, 1));
+    assert!(c.pio_lower >= 1, "PIO with nothing pending lowers IRQ 4");
+    set_guest_tx_test_sol_not_ready(false);
+    // __stop_tx: ETBEI off ends the level.
+    let _ = pio(0x03F9, false, 0x00);
+    let c = thre_chain();
+    assert_eq!((c.ier_etbei_on, c.ier_etbei_off), (1, 1));
+    assert!(!c.thre_irq);
+    // LSR reads with ETBEI clear are not classified (console polling path).
+    let _ = pio(0x03FD, true, 0);
+    assert_eq!(thre_chain().lsr_thre_on, 1);
+    // SysRq BREAK shows up as rx / brk and an RX-class IIR.
+    let _ = pio(0x03F9, false, 0x01);
+    assert!(inject_sysrq(b't'));
+    let c = thre_chain();
+    assert!(c.break_pending);
+    assert_eq!(c.rx_len, 1);
+    let (iir, _, _) = pio(0x03FA, true, 0);
+    assert_eq!(iir & 0x07, 0x04);
+    assert_eq!(thre_chain().iir_rx, 1);
+    let src = include_str!("guest_uart.rs");
+    assert!(src.contains("UART THRE chain telemetry"));
+    assert!(src.contains("fn thre_chain"));
+    assert!(include_str!("guest_irq.rs").contains("fn pic_master_snap"));
+    assert!(include_str!("../vmx/guest_uefi.rs").contains("fn virtio_stall_dump_thre_chain"));
+    assert!(include_str!("../vmx/guest_uefi.rs").contains("virtio stall dump thre ier=0x"));
+    set_linux_earlycon_share(false);
+    guest_tx_clear();
+    reset();
+    assert_eq!(thre_chain(), Default::default(), "reset clears counters");
+    crate::devices::ide_cdrom::reset();
+    crate::devices::guest_irq::reset();
+}
+
+#[test]
 fn autoanswer_login_fills_rbr() {
     reset();
     let _ = pio(0x03FB, false, 0x00);

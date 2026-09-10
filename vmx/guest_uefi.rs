@@ -11581,8 +11581,79 @@ unsafe fn maybe_virtio_stall_dump_pit_hold() {
         return;
     }
     VIRTIO_STALL_PIT_HOLD_TSC.store(now, Ordering::Release);
+    // Snapshot before this heartbeat's own bytes land in the shared ring,
+    // otherwise `ring`/`pend` always show our text. UART THRE chain telemetry.
+    let ring = serial::guest_tx_len();
+    let com2_lsr = serial::com2_lsr_raw();
+    let chain = crate::devices::guest_uart::thre_chain();
+    let pic = crate::devices::guest_irq::pic_master_snap();
     serial::write_str_nowait("boot: guest-UEFI virtio stall dump PIT paced n=");
     write_dec_nowait(u64::from(LAST_VIRTIO_MMIO_HIT.load(Ordering::Acquire)));
+    serial::write_str_nowait(" (not ISO-INSTALL-OK)\n");
+    virtio_stall_dump_thre_chain(ring, com2_lsr, &chain, &pic);
+}
+
+/// One line per heartbeat naming every link of the COM1 THRE chain as the
+/// inject path sees it: device IER / latch / pending, shared TX ring and
+/// host COM2 LSR, COM1 register-class counters, master 8259 IRR/IMR/ISR and
+/// INTA counts for IRQ 0 / IRQ 4. Iron `8b6ed1a` / `34415711199` looked
+/// identical to the `f229d14` probe, so the next flash must name the broken
+/// link instead of guessing. UART THRE chain telemetry. Not `ISO-INSTALL-OK`.
+#[cfg(target_os = "uefi")]
+unsafe fn virtio_stall_dump_thre_chain(
+    ring: usize,
+    com2_lsr: u8,
+    t: &crate::devices::guest_uart::ThreChain,
+    p: &crate::devices::guest_irq::PicMasterSnap,
+) {
+    serial::write_str_nowait("boot: guest-UEFI virtio stall dump thre ier=0x");
+    write_hex_nowait(u64::from(t.ier));
+    serial::write_str_nowait(" latch=");
+    write_dec_nowait(u64::from(t.thre_irq));
+    serial::write_str_nowait(" pend=");
+    write_dec_nowait(u64::from(t.thre_pending));
+    serial::write_str_nowait(" brk=");
+    write_dec_nowait(u64::from(t.break_pending));
+    serial::write_str_nowait(" rx=");
+    write_dec_nowait(u64::from(t.rx_len));
+    serial::write_str_nowait(" ring=");
+    write_dec_nowait(ring as u64);
+    serial::write_str_nowait(" com2_lsr=0x");
+    write_hex_nowait(u64::from(com2_lsr));
+    serial::write_str_nowait(" iir=");
+    write_dec_nowait(u64::from(t.iir_rx));
+    serial::write_str_nowait("/");
+    write_dec_nowait(u64::from(t.iir_thre));
+    serial::write_str_nowait("/");
+    write_dec_nowait(u64::from(t.iir_none));
+    serial::write_str_nowait(" lsr_thre=");
+    write_dec_nowait(u64::from(t.lsr_thre_on));
+    serial::write_str_nowait("/");
+    write_dec_nowait(u64::from(t.lsr_thre_off));
+    serial::write_str_nowait(" thr=");
+    write_dec_nowait(u64::from(t.thr_wr));
+    serial::write_str_nowait(" etbei=");
+    write_dec_nowait(u64::from(t.ier_etbei_on));
+    serial::write_str_nowait("/");
+    write_dec_nowait(u64::from(t.ier_etbei_off));
+    serial::write_str_nowait(" raise=");
+    write_dec_nowait(u64::from(t.reassert_raise));
+    serial::write_str_nowait("/");
+    write_dec_nowait(u64::from(t.pio_raise));
+    serial::write_str_nowait(" lower=");
+    write_dec_nowait(u64::from(t.pio_lower));
+    serial::write_str_nowait(" pic irr=0x");
+    write_hex_nowait(u64::from(p.irr));
+    serial::write_str_nowait(" imr=0x");
+    write_hex_nowait(u64::from(p.imr));
+    serial::write_str_nowait(" isr=0x");
+    write_hex_nowait(u64::from(p.isr));
+    serial::write_str_nowait(" rdy=");
+    write_dec_nowait(u64::from(p.ready));
+    serial::write_str_nowait(" take0=");
+    write_dec_nowait(u64::from(p.take_irq0));
+    serial::write_str_nowait(" take4=");
+    write_dec_nowait(u64::from(p.take_irq4));
     serial::write_str_nowait(" (not ISO-INSTALL-OK)\n");
 }
 

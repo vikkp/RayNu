@@ -12,7 +12,7 @@
 //! `try_inject_guest_irq`) so Linux EOI matches. This module is live only
 //! while the product ISO window is armed. Host/CI never prints `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 
 /// IOAPIC MMIO window (QEMU/ICH).
 pub const IOAPIC_GPA: u64 = 0xFEC0_0000;
@@ -156,6 +156,33 @@ static FIRMWARE_WIRE: AtomicBool = AtomicBool::new(false);
 /// count — that leftover made iron `c61942b` skip PIC virtio (no
 /// `linux PIC IRQ0`, apk `n=1345`). linux PIC before leftover GSI 2.
 static LINUX_IOAPIC_GSI2: AtomicBool = AtomicBool::new(false);
+/// 8259 INTA counts for IRQ 0 (PIT) and IRQ 4 (COM1) since reset.
+/// UART THRE chain telemetry.
+static TAKE_IRQ0: AtomicU32 = AtomicU32::new(0);
+static TAKE_IRQ4: AtomicU32 = AtomicU32::new(0);
+
+/// Master 8259 registers plus INTA counts. UART THRE chain telemetry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PicMasterSnap {
+    pub irr: u8,
+    pub imr: u8,
+    pub isr: u8,
+    pub ready: bool,
+    pub take_irq0: u32,
+    pub take_irq4: u32,
+}
+
+/// Snapshot the master 8259 as the inject path sees it. Not `ISO-INSTALL-OK`.
+pub fn pic_master_snap() -> PicMasterSnap {
+    with_irq(|c| PicMasterSnap {
+        irr: c.master.irr,
+        imr: c.master.imr,
+        isr: c.master.isr,
+        ready: c.master.ready,
+        take_irq0: TAKE_IRQ0.load(Ordering::Acquire),
+        take_irq4: TAKE_IRQ4.load(Ordering::Acquire),
+    })
+}
 
 pub fn reset() {
     PREFER_PIT_ONCE.store(false, Ordering::Release);
@@ -164,6 +191,8 @@ pub fn reset() {
     PIC11_SINCE_PIT.store(0, Ordering::Release);
     FIRMWARE_WIRE.store(false, Ordering::Release);
     LINUX_IOAPIC_GSI2.store(false, Ordering::Release);
+    TAKE_IRQ0.store(0, Ordering::Release);
+    TAKE_IRQ4.store(0, Ordering::Release);
     with_irq(|c| *c = IrqChip::empty());
 }
 
@@ -808,6 +837,11 @@ fn pic_peek(c: &IrqChip) -> Option<u8> {
 
 fn pic_take(c: &mut IrqChip) -> Option<u8> {
     let irq = pic_pending_irq(c)?;
+    if irq == 0 {
+        TAKE_IRQ0.fetch_add(1, Ordering::AcqRel);
+    } else if irq == 4 {
+        TAKE_IRQ4.fetch_add(1, Ordering::AcqRel);
+    }
     if irq == 0 {
         PREFER_PIT_ONCE.store(false, Ordering::Release);
         IRQ11_YIELD_PIT.store(false, Ordering::Release);

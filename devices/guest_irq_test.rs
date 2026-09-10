@@ -1395,3 +1395,49 @@ fn ioapic_level_keeps_irr_until_eoi_then_retries() {
     reset_cd();
     guest_platform::reset();
 }
+
+#[test]
+fn pic_master_snap_counts_irq0_and_irq4_takes() {
+    // UART THRE chain telemetry: the stall heartbeat prints master
+    // IRR/IMR/ISR plus INTA counts so iron can say whether IRQ 4 was ever
+    // taken while `apk` sat in `n_tty_write`.
+    use crate::devices::guest_irq::pic_master_snap;
+    arm_product_iso();
+    let s0 = pic_master_snap();
+    assert_eq!((s0.take_irq0, s0.take_irq4), (0, 0));
+    assert!(!s0.ready, "8259 not programmed yet");
+    let _ = pic_io(0x20, false, 1, 0x11);
+    let _ = pic_io(0x21, false, 1, 0x20);
+    let _ = pic_io(0x21, false, 1, 0x04);
+    let _ = pic_io(0x21, false, 1, 0x01);
+    let _ = pic_io(0xA0, false, 1, 0x11);
+    let _ = pic_io(0xA1, false, 1, 0x28);
+    let _ = pic_io(0xA1, false, 1, 0x02);
+    let _ = pic_io(0xA1, false, 1, 0x01);
+    let _ = pic_io(0x21, false, 1, 0xEE);
+    let _ = pic_io(0xA1, false, 1, 0xFF);
+    raise_pit();
+    raise_gsi(4);
+    let s1 = pic_master_snap();
+    assert!(s1.ready);
+    assert_eq!(s1.imr, 0xEE);
+    assert_eq!(s1.irr & 0x11, 0x11, "IRQ 0 and IRQ 4 latched");
+    assert_eq!(s1.isr, 0);
+    // No PIT preference armed: UART beats PIT on the master.
+    assert_eq!(take_pic_vector(), Some(0x24));
+    let s2 = pic_master_snap();
+    assert_eq!((s2.take_irq0, s2.take_irq4), (0, 1));
+    assert_eq!(s2.isr & 0x10, 0x10, "IRQ 4 in service until EOI");
+    let _ = pic_io(0x20, false, 1, 0x64);
+    assert_eq!(take_pic_vector(), Some(0x20));
+    let s3 = pic_master_snap();
+    assert_eq!((s3.take_irq0, s3.take_irq4), (1, 1));
+    let _ = pic_io(0x20, false, 1, 0x60);
+    assert_eq!(pic_master_snap().isr, 0);
+    reset();
+    let s4 = pic_master_snap();
+    assert_eq!((s4.take_irq0, s4.take_irq4), (0, 0), "reset clears INTA counts");
+    assert_eq!((s4.irr, s4.imr, s4.isr, s4.ready), (0, 0xFF, 0, false));
+    reset_cd();
+    guest_platform::reset();
+}

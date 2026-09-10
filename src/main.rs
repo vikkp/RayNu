@@ -35,7 +35,9 @@
 
 extern crate alloc;
 
-use r640_hypervisor::{arch, audit, boot, devices, guest, memory, sched, vmx, BOOT_BANNER};
+use r640_hypervisor::{
+    arch, audit, boot, devices, guest, memory, sched, vmx, BOOT_BANNER, BUILD_SHA,
+};
 use uefi::prelude::*;
 use uefi::println;
 
@@ -45,9 +47,12 @@ fn main() -> Status {
 
     boot::early_init();
     boot::serial::print_m0_banner(BOOT_BANNER);
+    boot::serial::write_str("build: sha=");
+    boot::serial::write_line(BUILD_SHA);
 
     // ConOut / BIOS serial-redirect (what HTML5 + many SOL sessions show pre-EBS).
     println!("{BOOT_BANNER}");
+    println!("build: sha={BUILD_SHA}");
     println!("serial: COM1+COM2 mirror — iDRAC SOL: ssh idrac then 'console com2'");
     println!("{}", boot::serial::M0_BOOT_OK_MARKER);
 

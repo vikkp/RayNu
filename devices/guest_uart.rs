@@ -28,12 +28,104 @@
 //! Linux prints its own task state (`w`/`m`/`t`/`l`). That is an architected
 //! serial-line input, not firmware state mutation (ADR-016).
 //! UART sysrq break. Not `ISO-INSTALL-OK`.
+//!
+//! Iron `8b6ed1a` / `34415711199` ran the THRE level and COM2 looked
+//! identical to the `f229d14` probe: `apk` still asleep in `n_tty_write`,
+//! console text still moving only around SysRq IRQ 4s. Every link of the
+//! THRE chain (IER.ETBEI on the device, `thre_irq`, TX ring empty, COM2
+//! THRE, PIC IRR/IMR/ISR, IRQ 4 taken, IIR class, LSR class) is now
+//! counted and printed with the stall heartbeat so the next flash names
+//! the broken link instead of guessing. UART THRE chain telemetry.
+//! Not `ISO-INSTALL-OK`.
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// ISA COM1.
 pub const COM1_IRQ: u8 = 4;
 const RX_CAP: usize = 16;
+
+/// COM1 IIR reads that reported RX / THRE / no interrupt.
+static STAT_IIR_RX: AtomicU32 = AtomicU32::new(0);
+static STAT_IIR_THRE: AtomicU32 = AtomicU32::new(0);
+static STAT_IIR_NONE: AtomicU32 = AtomicU32::new(0);
+/// COM1 LSR reads while IER.ETBEI was set: THRE reported 1 / 0.
+static STAT_LSR_THRE_ON: AtomicU32 = AtomicU32::new(0);
+static STAT_LSR_THRE_OFF: AtomicU32 = AtomicU32::new(0);
+/// COM1 THR writes; IER writes with ETBEI set / clear.
+static STAT_THR_WR: AtomicU32 = AtomicU32::new(0);
+static STAT_IER_ETBEI_ON: AtomicU32 = AtomicU32::new(0);
+static STAT_IER_ETBEI_OFF: AtomicU32 = AtomicU32::new(0);
+/// IRQ 4 raised by [`reassert_irq`]; raised / lowered by a COM1 PIO.
+static STAT_REASSERT_RAISE: AtomicU32 = AtomicU32::new(0);
+static STAT_PIO_RAISE: AtomicU32 = AtomicU32::new(0);
+static STAT_PIO_LOWER: AtomicU32 = AtomicU32::new(0);
+
+/// One snapshot of the COM1 THRE interrupt chain. UART THRE chain telemetry.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ThreChain {
+    pub ier: u8,
+    pub thre_irq: bool,
+    pub break_pending: bool,
+    pub rx_len: u8,
+    /// [`thre_pending`] as the inject path sees it right now.
+    pub thre_pending: bool,
+    pub iir_rx: u32,
+    pub iir_thre: u32,
+    pub iir_none: u32,
+    pub lsr_thre_on: u32,
+    pub lsr_thre_off: u32,
+    pub thr_wr: u32,
+    pub ier_etbei_on: u32,
+    pub ier_etbei_off: u32,
+    pub reassert_raise: u32,
+    pub pio_raise: u32,
+    pub pio_lower: u32,
+}
+
+fn bump(c: &AtomicU32) {
+    c.fetch_add(1, Ordering::AcqRel);
+}
+
+/// Snapshot the COM1 THRE chain (device state + counters since reset).
+/// UART THRE chain telemetry. Not `ISO-INSTALL-OK`.
+pub fn thre_chain() -> ThreChain {
+    with_uart(|u| ThreChain {
+        ier: u.com1.ier,
+        thre_irq: u.com1.thre_irq,
+        break_pending: u.com1.break_pending,
+        rx_len: u.com1.rx_len,
+        thre_pending: thre_pending(&u.com1),
+        iir_rx: STAT_IIR_RX.load(Ordering::Acquire),
+        iir_thre: STAT_IIR_THRE.load(Ordering::Acquire),
+        iir_none: STAT_IIR_NONE.load(Ordering::Acquire),
+        lsr_thre_on: STAT_LSR_THRE_ON.load(Ordering::Acquire),
+        lsr_thre_off: STAT_LSR_THRE_OFF.load(Ordering::Acquire),
+        thr_wr: STAT_THR_WR.load(Ordering::Acquire),
+        ier_etbei_on: STAT_IER_ETBEI_ON.load(Ordering::Acquire),
+        ier_etbei_off: STAT_IER_ETBEI_OFF.load(Ordering::Acquire),
+        reassert_raise: STAT_REASSERT_RAISE.load(Ordering::Acquire),
+        pio_raise: STAT_PIO_RAISE.load(Ordering::Acquire),
+        pio_lower: STAT_PIO_LOWER.load(Ordering::Acquire),
+    })
+}
+
+fn stats_reset() {
+    for c in [
+        &STAT_IIR_RX,
+        &STAT_IIR_THRE,
+        &STAT_IIR_NONE,
+        &STAT_LSR_THRE_ON,
+        &STAT_LSR_THRE_OFF,
+        &STAT_THR_WR,
+        &STAT_IER_ETBEI_ON,
+        &STAT_IER_ETBEI_OFF,
+        &STAT_REASSERT_RAISE,
+        &STAT_PIO_RAISE,
+        &STAT_PIO_LOWER,
+    ] {
+        c.store(0, Ordering::Release);
+    }
+}
 
 struct Uart {
     lcr: u8,
@@ -104,6 +196,7 @@ pub fn reset() {
         com1: Uart::empty(),
         com2: Uart::empty(),
     });
+    stats_reset();
     crate::devices::guest_serial_answer::reset();
 }
 
@@ -168,8 +261,10 @@ fn iir_bits(id: u8, fifo: bool) -> u8 {
 
 fn sync_com1_irq(pending: bool) {
     if pending {
+        bump(&STAT_PIO_RAISE);
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
     } else {
+        bump(&STAT_PIO_LOWER);
         crate::devices::guest_irq::lower_gsi(COM1_IRQ);
     }
 }
@@ -182,9 +277,16 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
         let uart = port_uart(u, com1);
         if is_in {
             let out = uart_read(uart, off);
+            if com1 {
+                count_com1_read(uart, off, out);
+            }
             (out, None, irq_pending(uart))
         } else {
+            let dlab_before = dlab(uart);
             let thr = uart_write(uart, off, val);
+            if com1 {
+                count_com1_write(off, val, dlab_before, thr.is_some());
+            }
             (val, thr, irq_pending(uart))
         }
     });
@@ -196,6 +298,42 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
         drain_answers();
     }
     (out, thr, irq)
+}
+
+/// Classify a COM1 register read for the THRE chain counters.
+/// UART THRE chain telemetry.
+fn count_com1_read(u: &Uart, off: u8, out: u8) {
+    match off {
+        2 => match out & 0x07 {
+            0x04 => bump(&STAT_IIR_RX),
+            0x02 => bump(&STAT_IIR_THRE),
+            _ => bump(&STAT_IIR_NONE),
+        },
+        5 if u.ier & 2 != 0 => {
+            if out & 0x20 != 0 {
+                bump(&STAT_LSR_THRE_ON);
+            } else {
+                bump(&STAT_LSR_THRE_OFF);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Classify a COM1 register write for the THRE chain counters.
+/// UART THRE chain telemetry.
+fn count_com1_write(off: u8, val: u8, dlab_before: bool, thr: bool) {
+    match off {
+        0 if thr => bump(&STAT_THR_WR),
+        1 if !dlab_before => {
+            if val & 2 != 0 {
+                bump(&STAT_IER_ETBEI_ON);
+            } else {
+                bump(&STAT_IER_ETBEI_OFF);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Re-assert COM1 RX / THRE if Linux left IER set (edge inject consumed IRR).
@@ -212,6 +350,7 @@ pub fn pio(port: u16, is_in: bool, val: u8) -> (u8, Option<u8>, bool) {
 pub fn reassert_irq() {
     let pending = with_uart(|u| irq_pending(&u.com1));
     if pending {
+        bump(&STAT_REASSERT_RAISE);
         crate::devices::guest_irq::raise_gsi(COM1_IRQ);
     }
 }
